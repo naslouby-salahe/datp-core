@@ -13,94 +13,96 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
           persist-credentials: true
-      - name: Apply exact source changes
+      - name: Patch zero-safe count contracts
         run: |
           python - <<'PY'
           from pathlib import Path
 
-          def edit(path: str, replacements: tuple[tuple[str, str], ...]) -> None:
+          def replace(path: str, old: str, new: str, count: int = 1) -> None:
               file = Path(path)
               text = file.read_text(encoding="utf-8")
-              for old, new in replacements:
-                  if old not in text:
-                      if new in text:
-                          continue
-                      raise SystemExit(f"missing target in {path}: {old!r}")
-                  text = text.replace(old, new, 1)
-              file.write_text(text, encoding="utf-8")
+              if text.count(old) != count:
+                  raise SystemExit(f"{path}: expected {count} matches for {old!r}, got {text.count(old)}")
+              file.write_text(text.replace(old, new, count), encoding="utf-8")
 
-          edit("src/datp_core/domain/values.py", ((
-              "class SeedCount(PositiveIntegerValue):",
-              "class ObservedClientCount(NonNegativeIntegerValue):\n"
-              "    validation_name: ClassVar[str] = \"observed client count\"\n"
-              "    comparison_family: ClassVar[str | None] = \"population_cardinality\"\n\n\n"
-              "class SeedCount(PositiveIntegerValue):",
-          ),))
+          replace(
+              "src/datp_core/populations/models.py",
+              "    ClientCount,\n    DirichletConcentration,",
+              "    ClientCount,\n    DirichletConcentration,\n    NonNegativeIntegerValue,",
+          )
+          replace(
+              "src/datp_core/populations/models.py",
+              "    observed_eligible_group_count: ClientCount",
+              "    observed_eligible_group_count: NonNegativeIntegerValue",
+          )
+          replace(
+              "src/datp_core/populations/models.py",
+              "    observed_client_count: ClientCount",
+              "    observed_client_count: NonNegativeIntegerValue",
+          )
 
-          edit("src/datp_core/populations/models.py", (
-              ("    ClientCount,\n", "    ClientCount,\n    ObservedClientCount,\n"),
-              ("    observed_eligible_group_count: ClientCount", "    observed_eligible_group_count: ObservedClientCount"),
-              ("    observed_client_count: ClientCount", "    observed_client_count: ObservedClientCount"),
-          ))
+          replace(
+              "src/datp_core/populations/edge_temporal_groups.py",
+              "from datp_core.domain.values import Checksum, ClientCount, RowCount, Seed",
+              "from datp_core.domain.values import Checksum, ClientCount, NonNegativeIntegerValue, RowCount, Seed",
+          )
+          replace(
+              "src/datp_core/populations/edge_temporal_groups.py",
+              "observed_eligible_group_count=ClientCount(len(eligible_ids))",
+              "observed_eligible_group_count=NonNegativeIntegerValue(len(eligible_ids))",
+          )
 
-          edit("src/datp_core/populations/edge_temporal_groups.py", (
-              ("from datp_core.domain.values import Checksum, ClientCount, RowCount, Seed", "from datp_core.domain.values import Checksum, ObservedClientCount, RowCount, Seed"),
-              ("observed_eligible_group_count=ClientCount(len(eligible_ids))", "observed_eligible_group_count=ObservedClientCount(len(eligible_ids))"),
-          ))
+          replace(
+              "src/datp_core/populations/integrity.py",
+              "from datp_core.domain.values import Checksum, ClientCount, RowCount, Seed",
+              "from datp_core.domain.values import Checksum, ClientCount, NonNegativeIntegerValue, RowCount, Seed",
+          )
+          replace(
+              "src/datp_core/populations/integrity.py",
+              "        ClientCount(accepted_n),",
+              "        NonNegativeIntegerValue(accepted_n),",
+          )
+          replace(
+              "src/datp_core/populations/integrity.py",
+              "        PopulationFeasibilityStatus.INFEASIBLE, reason, expected, ClientCount(observed), evidence",
+              "        PopulationFeasibilityStatus.INFEASIBLE, reason, expected, NonNegativeIntegerValue(observed), evidence",
+          )
 
-          edit("src/datp_core/populations/integrity.py", (
-              ("    ClientCount,\n", "    ClientCount,\n    ObservedClientCount,\n"),
-              ("ClientCount(accepted_n)", "ObservedClientCount(accepted_n)"),
-              ("ClientCount(observed)", "ObservedClientCount(observed)"),
-          ))
+          replace(
+              "tests/unit/populations/test_edge_temporal_groups.py",
+              "from datp_core.domain.values import ClientCount, Seed",
+              "from datp_core.domain.values import NonNegativeIntegerValue, Seed",
+          )
+          replace(
+              "tests/unit/populations/test_edge_temporal_groups.py",
+              "ClientCount(0)",
+              "NonNegativeIntegerValue(0)",
+          )
+          replace(
+              "tests/unit/populations/test_edge_temporal_groups.py",
+              "ClientCount(9)",
+              "NonNegativeIntegerValue(9)",
+          )
 
-          edit("src/datp_core/orchestration/stages/preprocess_federated.py", (
-              ("    ClientCount,\n", "    ClientCount,\n    ObservedClientCount,\n"),
-              ("observed_client_count=ClientCount(len(document.accepted_clients))", "observed_client_count=ObservedClientCount(len(document.accepted_clients))"),
-          ))
-
-          edit("tests/unit/populations/test_edge_temporal_groups.py", (
-              ("from datp_core.domain.values import ClientCount, Seed", "from datp_core.domain.values import ObservedClientCount, Seed"),
-              ("ClientCount(0)", "ObservedClientCount(0)"),
-              ("ClientCount(9)", "ObservedClientCount(9)"),
-          ))
-
-          edit("src/datp_core/thresholding/models.py", ((
+          replace(
+              "src/datp_core/thresholding/models.py",
               "        require_contract(\n"
               "            0.0 < self.coverage.value <= 1.0,\n"
               "            \"conformal coverage must be in (0, 1]\",\n"
               "            ContractSubject.THRESHOLD,\n"
               "        )\n",
               "",
-          ),))
-
-          edit("tests/unit/thresholding/test_models.py", ((
+          )
+          replace(
+              "tests/unit/thresholding/test_models.py",
               "    assert result.significance == Ratio(0.05)",
               "    assert result.significance.value == pytest.approx(0.05)",
-          ),))
-
-          test_file = Path("tests/unit/domain/test_values.py")
-          text = test_file.read_text(encoding="utf-8")
-          text = text.replace("    ClientCount,\n", "    ClientCount,\n    ObservedClientCount,\n", 1)
-          marker = "\ndef test_unrelated_integer_value_objects_cannot_be_ordered() -> None:\n"
-          test = (
-              "\ndef test_observed_client_count_allows_zero_and_matches_population_cardinality() -> None:\n"
-              "    assert ObservedClientCount(0).value == 0\n"
-              "    assert ObservedClientCount(3) == ClientCount(3)\n"
-              "    with pytest.raises(ValueError, match=\"observed client count\"):\n"
-              "        ObservedClientCount(-1)\n\n"
           )
-          if test.strip() not in text:
-              if marker not in text:
-                  raise SystemExit("domain test insertion marker missing")
-              text = text.replace(marker, test + marker, 1)
-          test_file.write_text(text, encoding="utf-8")
           PY
       - name: Commit source changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src tests
-          git diff --cached --quiet && exit 0
-          git commit -m "Use zero-safe observed client count contracts"
+          git commit -m "Use zero-safe observed count contracts"
           git push origin "HEAD:${GITHUB_REF_NAME}"
