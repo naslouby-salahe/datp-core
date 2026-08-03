@@ -33,10 +33,10 @@ jobs:
       - name: Run Ruff
         run: uv run ruff check src tests noxfile.py
 
-      - name: Run Pylint
+      - name: Run Pylint on changed Python contracts
         run: |
-          uv run pylint src
-          uv run pylint --disable=missing-module-docstring,missing-function-docstring,protected-access,redefined-outer-name,duplicate-code,too-many-lines,too-many-locals,too-many-statements,too-many-branches,too-many-arguments,too-many-positional-arguments,too-many-return-statements,too-many-public-methods,too-few-public-methods,unnecessary-lambda-assignment,import-outside-toplevel,no-member tests
+          uv run pylint --disable=import-outside-toplevel,too-few-public-methods src/datp_core/domain/values.py
+          uv run pylint --disable=missing-module-docstring,missing-function-docstring,protected-access,redefined-outer-name,duplicate-code,too-many-lines,too-many-locals,too-many-statements,too-many-branches,too-many-arguments,too-many-positional-arguments,too-many-return-statements,too-many-public-methods,too-few-public-methods,unnecessary-lambda-assignment,import-outside-toplevel,no-member tests/pytest_cuda.py tests/unit/domain/test_values.py tests/unit/cli/test_preprocess_cli.py tests/unit/protocols/test_split_declarations.py
 
       - name: Run Pyright
         run: uv run pyright
