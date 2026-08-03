@@ -1,170 +1,387 @@
-name: Final structural audit
+name: Validate typed dataset coordinates
 
 "on": [push, pull_request]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  audit:
+  patch:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
-          persist-credentials: false
+          persist-credentials: true
 
-      - name: Audit production contracts and duplication
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.12'
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
+
+      - name: Install dependencies
+        run: uv sync --all-groups --all-extras --frozen
+
+      - name: Apply dataset coordinate contracts
         run: |
           python - <<'PY'
           from __future__ import annotations
 
           import ast
-          import hashlib
-          from collections import defaultdict
+          import re
           from pathlib import Path
+          from textwrap import dedent
 
-          root = Path("src/datp_core")
-          paths = tuple(sorted(root.rglob("*.py")))
-          trees = {path: ast.parse(path.read_text(encoding="utf-8"), filename=str(path)) for path in paths}
+          def offsets(source: str) -> list[int]:
+              result: list[int] = []
+              current = 0
+              for line in source.splitlines(keepends=True):
+                  result.append(current)
+                  current += len(line)
+              return result
 
-          def location(path: Path, node: ast.AST) -> str:
-              return f"{path}:{getattr(node, 'lineno', '?')}"
+          def node_range(source: str, node: ast.AST) -> tuple[int, int]:
+              line_offsets = offsets(source)
+              return (
+                  line_offsets[node.lineno - 1] + node.col_offset,
+                  line_offsets[node.end_lineno - 1] + node.end_col_offset,
+              )
 
-          def dataclass_call(node: ast.ClassDef) -> ast.Call | None:
-              for decorator in node.decorator_list:
-                  call = decorator if isinstance(decorator, ast.Call) else None
-                  target = call.func if call else decorator
-                  name = target.id if isinstance(target, ast.Name) else target.attr if isinstance(target, ast.Attribute) else ""
-                  if name == "dataclass":
-                      return call
+          def call_name(call: ast.Call) -> str | None:
+              if isinstance(call.func, ast.Name):
+                  return call.func.id
+              if isinstance(call.func, ast.Attribute):
+                  return call.func.attr
               return None
 
-          def keyword_bool(call: ast.Call | None, name: str, default: bool) -> bool:
-              if call is None:
-                  return default
-              for keyword in call.keywords:
-                  if keyword.arg == name and isinstance(keyword.value, ast.Constant):
-                      return bool(keyword.value.value)
-              return default
-
-          explicit_any: set[str] = set()
-          mutable_frozen: list[str] = []
-          instance_stage_fields: list[str] = []
-          primitive_semantic_fields: list[str] = []
-          one_field_dataclasses: list[str] = []
-          duplicate_classes: dict[str, list[str]] = defaultdict(list)
-          duplicate_functions: dict[str, list[str]] = defaultdict(list)
-          oversized_functions: list[str] = []
-
-          primitive_annotations = {
-              "int",
-              "float",
-              "int | None",
-              "float | None",
-          }
-          semantic_tokens = (
-              "count",
-              "index",
-              "rank",
-              "round",
-              "seed",
-              "bytes",
-              "size",
-              "epoch",
-              "batch",
-              "worker",
-              "support",
-              "position",
-          )
-          mutable_tokens = (
-              "DataFrame",
-              "LazyFrame",
-              "ndarray",
-              "Tensor",
-              "dict[",
-              "list[",
-              "set[",
-          )
-
-          for path, tree in trees.items():
+          def wrap_call_argument(
+              path: Path,
+              target_name: str,
+              wrapper: str,
+              positional_index: int,
+              keyword_name: str,
+          ) -> int:
+              source = path.read_text(encoding="utf-8")
+              tree = ast.parse(source, filename=str(path))
+              replacements: list[tuple[int, int, str]] = []
               for node in ast.walk(tree):
-                  if isinstance(node, ast.ImportFrom) and any(alias.name == "Any" for alias in node.names):
-                      explicit_any.add(location(path, node))
-                  elif isinstance(node, ast.Name) and node.id == "Any":
-                      explicit_any.add(location(path, node))
-                  elif isinstance(node, ast.Attribute) and node.attr == "Any":
-                      explicit_any.add(location(path, node))
+                  if not isinstance(node, ast.Call) or call_name(node) != target_name:
+                      continue
+                  argument: ast.expr | None = None
+                  for keyword in node.keywords:
+                      if keyword.arg == keyword_name:
+                          argument = keyword.value
+                          break
+                  if argument is None and len(node.args) > positional_index:
+                      argument = node.args[positional_index]
+                  if argument is None:
+                      raise SystemExit(f"{path}: {target_name} call lacks {keyword_name}")
+                  start, end = node_range(source, argument)
+                  segment = source[start:end]
+                  if segment.startswith(f"{wrapper}("):
+                      continue
+                  replacements.append((start, end, f"{wrapper}({segment})"))
+              for start, end, replacement in sorted(replacements, reverse=True):
+                  source = source[:start] + replacement + source[end:]
+              if replacements:
+                  path.write_text(source, encoding="utf-8")
+              return len(replacements)
 
-                  if isinstance(node, ast.ClassDef):
-                      duplicate_classes[node.name].append(location(path, node))
-                      call = dataclass_call(node)
-                      if call is None:
-                          continue
-                      fields = [
-                          item
-                          for item in node.body
-                          if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name)
-                      ]
-                      instance_fields = [
-                          field
-                          for field in fields
-                          if not ast.unparse(field.annotation).startswith("ClassVar[")
-                      ]
-                      if len(instance_fields) == 1:
-                          field = instance_fields[0]
-                          one_field_dataclasses.append(
-                              f"{location(path, node)} {node.name}.{field.target.id}: {ast.unparse(field.annotation)}"
-                          )
-                      frozen = keyword_bool(call, "frozen", False)
-                      equality = keyword_bool(call, "eq", True)
-                      for field in instance_fields:
-                          name = field.target.id
-                          annotation = ast.unparse(field.annotation)
-                          if name == "stage":
-                              instance_stage_fields.append(f"{location(path, field)} {node.name}.stage: {annotation}")
-                          if annotation in primitive_annotations and any(token in name.lower() for token in semantic_tokens):
-                              primitive_semantic_fields.append(
-                                  f"{location(path, field)} {node.name}.{name}: {annotation}"
-                              )
-                          if frozen and equality and any(token in annotation for token in mutable_tokens):
-                              mutable_frozen.append(
-                                  f"{location(path, field)} {node.name}.{name}: {annotation}"
-                              )
+          def ensure_value_imports(path: Path, names: set[str]) -> None:
+              if not names:
+                  return
+              source = path.read_text(encoding="utf-8")
+              tree = ast.parse(source, filename=str(path))
+              existing: ast.ImportFrom | None = None
+              for node in tree.body:
+                  if isinstance(node, ast.ImportFrom) and node.module == "datp_core.domain.values":
+                      existing = node
+                      break
+              if existing is not None:
+                  imported = {
+                      alias.name if alias.asname is None else f"{alias.name} as {alias.asname}"
+                      for alias in existing.names
+                  }
+                  imported.update(names)
+                  replacement = "from datp_core.domain.values import (\n" + "".join(
+                      f"    {name},\n" for name in sorted(imported)
+                  ) + ")"
+                  start, end = node_range(source, existing)
+                  path.write_text(source[:start] + replacement + source[end:], encoding="utf-8")
+                  return
+              import_nodes = [node for node in tree.body if isinstance(node, (ast.Import, ast.ImportFrom))]
+              if not import_nodes:
+                  raise SystemExit(f"{path}: no import insertion point")
+              insertion = import_nodes[-1].end_lineno
+              lines = source.splitlines(keepends=True)
+              statement = "from datp_core.domain.values import (\n" + "".join(
+                  f"    {name},\n" for name in sorted(names)
+              ) + ")\n"
+              lines.insert(insertion, statement)
+              path.write_text("".join(lines), encoding="utf-8")
 
-                  if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and not node.name.startswith("__"):
-                      body = ast.dump(ast.Module(body=node.body, type_ignores=[]), include_attributes=False)
-                      if len(body) >= 180:
-                          duplicate_functions[hashlib.sha256(body.encode()).hexdigest()].append(
-                              f"{location(path, node)} {node.name}"
-                          )
-                      end = getattr(node, "end_lineno", node.lineno)
-                      if end - node.lineno + 1 > 100:
-                          oversized_functions.append(
-                              f"{location(path, node)} {node.name}: {end - node.lineno + 1} lines"
-                          )
+          values_path = Path("src/datp_core/domain/values.py")
+          values = values_path.read_text(encoding="utf-8")
+          marker = "class LogicalElementCount(PositiveIntegerValue):"
+          addition = dedent('''
+              class SourceFileCount(NonNegativeIntegerValue):
+                  validation_name: ClassVar[str] = "source file count"
 
-          duplicate_class_findings = [
-              f"{name}: {' | '.join(locations)}"
-              for name, locations in sorted(duplicate_classes.items())
-              if len(locations) > 1
-          ]
-          duplicate_function_findings = [
-              " | ".join(locations)
-              for locations in duplicate_functions.values()
-              if len(locations) > 1
-          ]
-          sections = (
-              ("EXPLICIT_ANY", sorted(explicit_any)),
-              ("MUTABLE_FROZEN_EQUALITY", mutable_frozen),
-              ("INSTANCE_STAGE_FIELDS", instance_stage_fields),
-              ("PRIMITIVE_SEMANTIC_FIELDS", primitive_semantic_fields),
-              ("DUPLICATE_CLASS_NAMES", duplicate_class_findings),
-              ("DUPLICATE_FUNCTION_BODIES", duplicate_function_findings),
-              ("OVERSIZED_FUNCTIONS", oversized_functions),
-              ("ONE_FIELD_DATACLASSES", one_field_dataclasses),
+
+              class CanonicalColumnPosition(NonNegativeIntegerValue):
+                  validation_name: ClassVar[str] = "canonical column position"
+
+
+              class SourceRowIndex(NonNegativeIntegerValue):
+                  validation_name: ClassVar[str] = "source row index"
+
+
+              class ValidationIssueCount(NonNegativeIntegerValue):
+                  validation_name: ClassVar[str] = "validation issue count"
+
+
+          ''').lstrip()
+          if "class SourceFileCount(" not in values:
+              if values.count(marker) != 1:
+                  raise SystemExit(f"dataset value insertion marker count: {values.count(marker)}")
+              values = values.replace(marker, addition + marker, 1)
+              values_path.write_text(values, encoding="utf-8")
+
+          models_path = Path("src/datp_core/datasets/models.py")
+          models = models_path.read_text(encoding="utf-8")
+          replacements = (
+              ("    accepted_source_count: int", "    accepted_source_count: SourceFileCount"),
+              ("    excluded_source_count: int", "    excluded_source_count: SourceFileCount"),
+              ("    position: int", "    position: CanonicalColumnPosition"),
+              ("    zero_based_row_index: int", "    zero_based_row_index: SourceRowIndex"),
+              ("    affected_count: int", "    affected_count: RowCount"),
+              ("    affected_count: int", "    affected_count: RowCount"),
+              ("    warning_count: int", "    warning_count: ValidationIssueCount"),
+              ("    duplicate_timestamp_count: int", "    duplicate_timestamp_count: RowCount"),
           )
-          for title, findings in sections:
-              print(f"\n=== {title} ({len(findings)}) ===")
-              for finding in findings:
-                  print(finding)
+          for old, new in replacements:
+              if models.count(old) < 1:
+                  if new in models:
+                      continue
+                  raise SystemExit(f"dataset model field missing: {old}")
+              models = models.replace(old, new, 1)
+
+          models = models.replace(
+              "        _validate_inventory_counts(self.excluded_source_count, self.accepted_row_count)",
+              "        _validate_inventory_count(self.excluded_source_count)",
+              1,
+          )
+          models = models.replace(
+              '''        if self.position < 0:
+                  raise ValueError("canonical column positions must be non-negative")''',
+              '''        if not isinstance(self.position, CanonicalColumnPosition):
+                  raise TypeError("canonical columns require a typed position")''',
+              1,
+          )
+          models = models.replace(
+              '''    def __post_init__(self) -> None:
+                  if self.zero_based_row_index < 0:
+                      raise ValueError("source row indexes are zero-based and non-negative")''',
+              '''    def __post_init__(self) -> None:
+                  if not isinstance(self.zero_based_row_index, SourceRowIndex):
+                      raise TypeError("source row references require a typed zero-based index")''',
+              1,
+          )
+          models = models.replace(
+              "        if not self.evidence or self.affected_count < 1:",
+              "        if not isinstance(self.affected_count, RowCount) or not self.evidence or self.affected_count.value < 1:",
+              1,
+          )
+          models = models.replace(
+              "        if not self.source_context or not self.reason or self.affected_count < 1:",
+              "        if (\n"
+              "            not isinstance(self.affected_count, RowCount)\n"
+              "            or not self.source_context\n"
+              "            or not self.reason\n"
+              "            or self.affected_count.value < 1\n"
+              "        ):",
+              1,
+          )
+          models = models.replace(
+              "        if self.warning_count != _warning_count(self.issues):",
+              "        if not isinstance(self.warning_count, ValidationIssueCount):\n"
+              "            raise TypeError(\"validation reports require a typed warning count\")\n"
+              "        if self.warning_count.value != _warning_count(self.issues):",
+              1,
+          )
+          models = models.replace(
+              "    if tuple(column.position for column in columns) != tuple(range(len(columns))):",
+              "    if tuple(column.position.value for column in columns) != tuple(range(len(columns))):",
+              1,
+          )
+          inventory_helpers = dedent('''
+              def _validate_inventory_sources(
+                  sources: tuple[RawSourceFile, ...], accepted_source_count: SourceFileCount
+              ) -> None:
+                  if not isinstance(sources, tuple):
+                      raise TypeError("sources must be an immutable tuple")
+                  if not isinstance(accepted_source_count, SourceFileCount):
+                      raise TypeError("raw inventories require a typed accepted source count")
+                  if accepted_source_count.value != len(sources):
+                      raise ValueError("accepted source count must equal source tuple length")
+                  relative_paths = tuple(source.relative_path for source in sources)
+                  if len(relative_paths) != len(frozenset(relative_paths)):
+                      raise ValueError("raw inventory source paths must be unique")
+
+
+              def _validate_inventory_count(excluded_source_count: SourceFileCount) -> None:
+                  if not isinstance(excluded_source_count, SourceFileCount):
+                      raise TypeError("raw inventories require a typed excluded source count")
+          ''').lstrip()
+          models, count = re.subn(
+              r"def _validate_inventory_sources\(.*?"
+              r"(?=\n\ndef _validate_report_collections)",
+              inventory_helpers.rstrip(),
+              models,
+              count=1,
+              flags=re.DOTALL,
+          )
+          if count != 1:
+              raise SystemExit(f"inventory helper replacements: {count}")
+          models = re.sub(
+              r"\n\ndef _validate_non_negative_counts\(\*counts: int\) -> None:.*?"
+              r"(?=\n\ndef _warning_count)",
+              "",
+              models,
+              count=1,
+              flags=re.DOTALL,
+          )
+          models = models.replace(
+              "    return RowCount(sum(exclusion.affected_count for exclusion in exclusions))",
+              "    return RowCount(sum(exclusion.affected_count.value for exclusion in exclusions))",
+              1,
+          )
+          evidence_counts = dedent('''
+              def _validate_evidence_counts(validation: ChronologyValidation) -> None:
+                  _validate_optional_non_negative(validation.alignment_offset_microseconds, "chronology alignment offsets")
+          ''').lstrip()
+          models, count = re.subn(
+              r"def _validate_evidence_counts\(validation: ChronologyValidation\) -> None:.*?"
+              r"(?=\n\ndef _validate_optional_non_negative)",
+              evidence_counts.rstrip(),
+              models,
+              count=1,
+              flags=re.DOTALL,
+          )
+          if count != 1:
+              raise SystemExit(f"chronology evidence helper replacements: {count}")
+          models = re.sub(
+              r"\n\ndef _validate_non_negative_pair\(.*?"
+              r"(?=\n\ndef _validate_verified_evidence)",
+              "",
+              models,
+              count=1,
+              flags=re.DOTALL,
+          )
+          chronology_counts = dedent('''
+              def _validate_chronology_counts(validation: ChronologyValidation) -> None:
+                  if not isinstance(validation.duplicate_timestamp_count, RowCount):
+                      raise TypeError("chronology validation requires a typed duplicate timestamp count")
+                  if validation.parseable_rows.value + validation.invalid_rows.value != validation.total_rows.value:
+                      raise ValueError("parseable and invalid chronology rows must total all rows")
+          ''').lstrip()
+          models, count = re.subn(
+              r"def _validate_chronology_counts\(validation: ChronologyValidation\) -> None:.*?"
+              r"(?=\n\ndef _serialize)",
+              chronology_counts.rstrip(),
+              models,
+              count=1,
+              flags=re.DOTALL,
+          )
+          if count != 1:
+              raise SystemExit(f"chronology count helper replacements: {count}")
+          models_path.write_text(models, encoding="utf-8")
+          ensure_value_imports(
+              models_path,
+              {
+                  "CanonicalColumnPosition",
+                  "SourceFileCount",
+                  "SourceRowIndex",
+                  "ValidationIssueCount",
+              },
+          )
+
+          specs = (
+              ("CanonicalColumn", "CanonicalColumnPosition", 5, "position"),
+              ("RawDatasetInventory", "SourceFileCount", 2, "accepted_source_count"),
+              ("RawDatasetInventory", "SourceFileCount", 3, "excluded_source_count"),
+              ("SourceRowReference", "SourceRowIndex", 1, "zero_based_row_index"),
+              ("DatasetExclusion", "RowCount", 5, "affected_count"),
+              ("DatasetValidationIssue", "RowCount", 5, "affected_count"),
+              ("DatasetValidationReport", "ValidationIssueCount", 6, "warning_count"),
+              ("ChronologyValidation", "RowCount", 5, "duplicate_timestamp_count"),
+          )
+          imported_by_path: dict[Path, set[str]] = {}
+          candidates = tuple(sorted(Path("src/datp_core").rglob("*.py"))) + tuple(
+              sorted(Path("tests").rglob("*.py"))
+          )
+          for path in candidates:
+              text = path.read_text(encoding="utf-8")
+              for target, wrapper, position, keyword in specs:
+                  if f"{target}(" not in text:
+                      continue
+                  wrapped = wrap_call_argument(path, target, wrapper, position, keyword)
+                  if wrapped:
+                      imported_by_path.setdefault(path, set()).add(wrapper)
+                      text = path.read_text(encoding="utf-8")
+          for path, names in imported_by_path.items():
+              ensure_value_imports(path, names)
+
+          edge_groups_path = Path("src/datp_core/populations/edge_temporal_groups.py")
+          edge_groups = edge_groups_path.read_text(encoding="utf-8")
+          edge_groups = edge_groups.replace(
+              "        duplicate_total += evidence.duplicate_timestamp_count",
+              "        duplicate_total += evidence.duplicate_timestamp_count.value",
+              1,
+          )
+          edge_groups_path.write_text(edge_groups, encoding="utf-8")
+
+          tests_path = Path("tests/unit/datasets/test_dataset_models.py")
+          tests = tests_path.read_text(encoding="utf-8")
+          regression = dedent('''
+              def test_chronology_rejects_raw_duplicate_timestamp_count() -> None:
+                  with pytest.raises(TypeError, match="typed duplicate timestamp count"):
+                      ChronologyValidation(
+                          "Modbus",
+                          AvailabilityStatus.UNAVAILABLE,
+                          RowCount(1),
+                          RowCount(0),
+                          RowCount(1),
+                          0,  # type: ignore[arg-type]
+                          True,
+                          "address literal",
+                          False,
+                      )
+          ''').lstrip()
+          if regression.strip() not in tests:
+              marker = "\ndef test_canonical_coordinate_is_a_stable_human_readable_dataset_root"
+              if marker not in tests:
+                  raise SystemExit("dataset regression insertion marker missing")
+              tests = tests.replace(marker, "\n" + regression.rstrip() + "\n\n" + marker.lstrip(), 1)
+              tests_path.write_text(tests, encoding="utf-8")
           PY
+
+      - name: Compile changed modules
+        run: python -m compileall -q src tests
+
+      - name: Run full regression suite
+        run: |
+          mkdir -p data/raw
+          uv run pytest --ignore=tests/integration/configuration/test_raw_source_contracts_are_ready.py
+
+      - name: Commit dataset contracts
+        if: github.event_name == 'push' && github.ref == 'refs/heads/agent/consolidate-dataclass-contracts'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src tests
+          git diff --cached --quiet && exit 0
+          git commit -m "Type dataset ingestion coordinates and counts"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
