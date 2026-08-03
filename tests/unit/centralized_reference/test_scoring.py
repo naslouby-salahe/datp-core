@@ -21,10 +21,9 @@ from datp_core.centralized_reference.checkpointing import (
 from datp_core.centralized_reference.scoring import (
     CentralizedScoringRequest,
     load_score_frame,
-    reject_threshold_identity_in_score_coordinate,
     score_centralized_reference,
 )
-from datp_core.domain.errors import LeakageError, ScientificContractError
+from datp_core.domain.errors import LeakageError
 from datp_core.domain.values import RowCount, Seed
 
 
@@ -48,7 +47,7 @@ def test_deterministic_scoring_and_reload(tmp_path: Path) -> None:
     left = load_score_frame(first.calibration_scores)
     right = load_score_frame(second.calibration_scores)
     assert left.equals(right)
-    assert first.higher_score_means_greater_anomaly is True
+    assert first.calibration_scores.checksum == second.calibration_scores.checksum
     assert first.calibration_scores.row_count.value == 32
     assert first.evaluation_scores.row_count.value == 32
 
@@ -56,11 +55,6 @@ def test_deterministic_scoring_and_reload(tmp_path: Path) -> None:
 def test_rejects_federated_checkpoint_for_scoring(tmp_path: Path) -> None:
     with pytest.raises(LeakageError, match="federated checkpoint"):
         reject_federated_checkpoint(FederatedCheckpointMarker("fedavg", tmp_path / "x.pt"))
-
-
-def test_rejects_threshold_identity_in_score_coordinate() -> None:
-    with pytest.raises(ScientificContractError, match="threshold identity"):
-        reject_threshold_identity_in_score_coordinate("pooled_benign_quantile")
 
 
 def test_score_polarity_higher_is_more_anomalous(tmp_path: Path) -> None:

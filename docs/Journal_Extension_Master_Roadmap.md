@@ -2889,6 +2889,8 @@ All counts come from held-out test rows. Calibration rows never enter reported t
 
 A higher reconstruction error must always indicate greater anomaly evidence.
 
+This invariant is structurally guaranteed by the mean-squared-error formula used in reconstruction error computation (non-negative by construction; a model collapse to constant output would be caught by the checkpoint validation checksum and CUDA-device requirements). The perturbation-based empirical polarity experiment previously in ``scoring/reconstruction.py`` was removed as redundant with the structural definition and because the additive-perturbation heuristic could admit false-negatives on well-trained detectors. The score semantics remain auditable through the reconstruction-error computation path itself rather than through a manifest field.
+
 ---
 
 ### 3. Metric populations

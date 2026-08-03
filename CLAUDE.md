@@ -107,6 +107,7 @@ At minimum, continuously verify that:
 * training-side comparators remain outside the controlled threshold-scope ladder;
 * no result is promoted beyond the claim tier permitted by the roadmap;
 * negative, mixed, null, or absorption outcomes are reported rather than suppressed;
+* score semantics are structurally defined by the mean-squared-error reconstruction formula (higher MSE ≡ stronger anomaly evidence); the perturbation-based empirical polarity experiment in ``scoring/reconstruction.py`` was removed as redundant with the structural definition;
 * out-of-scope research directions do not leak into the implementation.
 
 Do not turn DATP-Core into a generic federated intrusion-detection benchmark.

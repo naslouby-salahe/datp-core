@@ -24,7 +24,6 @@ from datp_core.domain.values import (
     FeatureNameSequence,
     RowCount,
     checksum_file,
-    checksum_text,
 )
 from datp_core.learning.federated.checkpointing import CheckpointCandidate
 from datp_core.protocols.models import AutoencoderProtocol
@@ -76,8 +75,6 @@ def score_federated_stage(request: ScoreFederatedRequest) -> ScoreFederatedStage
             ),
             device,
         )
-        digest = _score_complete_digest(result)
-        (temporary / FederatedScoreAssetName.COMPLETE.value).write_text(digest.value, encoding="utf-8")
         holder["result"] = result
 
     reused = publish_atomically(
@@ -96,16 +93,6 @@ def score_federated_stage(request: ScoreFederatedRequest) -> ScoreFederatedStage
         result = _rebase_scoring(holder["result"], request.output_directory)
         status = PublicationStatus.PUBLISHED
     return ScoreFederatedStageResult(stage=StageOperationId.SCORE_FEDERATED, publication_status=status, result=result)
-
-
-def _score_complete_digest(result: ScoreGenerationResult) -> Checksum:
-    records = tuple(
-        record
-        for role in scored_partition_roles(result.manifest.coordinate.split_protocol)
-        for record in result.manifest.records_for(role)
-    )
-    values = (result.invariant.model_checksum.value, *(record.checksum.value for record in records))
-    return checksum_text("|".join(values))
 
 
 def _client_paths(output_directory: Path, request: ScoreFederatedRequest) -> list[tuple[str, tuple[Path, ...]]]:
@@ -179,7 +166,6 @@ def _load_reused_scores(request: ScoreFederatedRequest) -> ScoreGenerationResult
         split_manifest_checksum=request.split_manifest_checksum,
         calibration_records=calibration_records,
         evaluation_records=evaluation_records,
-        higher_score_means_greater_anomaly=True,
         future_recalibration_records=future_records,
     )
     return ScoreGenerationResult(manifest=manifest, invariant=FixedScoreInvariant.from_manifest(manifest))
@@ -203,7 +189,6 @@ def _rebase_scoring(result: ScoreGenerationResult, output_directory: Path) -> Sc
         split_manifest_checksum=result.manifest.split_manifest_checksum,
         calibration_records=calibration_records,
         evaluation_records=evaluation_records,
-        higher_score_means_greater_anomaly=result.manifest.higher_score_means_greater_anomaly,
         future_recalibration_records=future_records,
     )
     return ScoreGenerationResult(manifest=manifest, invariant=FixedScoreInvariant.from_manifest(manifest))

@@ -60,6 +60,7 @@ def calibrate_stage(request: CalibrateRequest) -> CalibrateStageResult:
     references_by_client = {}
     ordered_calibration_records = sorted(
         request.score_manifest.calibration_records,
+        key=lambda record: record.scored_client,
     )
     for record in ordered_calibration_records:
         references = load_benign_calibration_references(record)

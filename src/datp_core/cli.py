@@ -464,7 +464,7 @@ def _eligible_calibration_scores(score_manifest: ScoreArtifactManifest) -> tuple
             checksum_file(record.path),
             invariant.calibration_score_set_checksum,
         )
-        for record in sorted(score_manifest.calibration_records)
+        for record in sorted(score_manifest.calibration_records, key=lambda record: record.scored_client)
     )
 
 

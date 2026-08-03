@@ -1,7 +1,7 @@
 """Typed, immutable federated score-artifact records."""
 
+import json
 from dataclasses import dataclass
-from functools import total_ordering
 from pathlib import Path
 
 from datp_core.domain.enums import ContractSubject, PartitionRole, SerializationFormat, SplitProtocolId
@@ -11,7 +11,6 @@ from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.populations.models import ClientIdentity
 
 
-@total_ordering
 @dataclass(frozen=True, slots=True)
 class ScoreRecord:
     coordinate: FederatedTrainingCoordinate
@@ -41,9 +40,6 @@ class ScoreRecord:
                 subject=self.serialization_format,
             )
 
-    def __lt__(self, other: "ScoreRecord") -> bool:
-        return self.scored_client < other.scored_client
-
 
 @dataclass(frozen=True, slots=True)
 class ScoreArtifactManifest:
@@ -54,7 +50,6 @@ class ScoreArtifactManifest:
     split_manifest_checksum: Checksum
     calibration_records: tuple[ScoreRecord, ...]
     evaluation_records: tuple[ScoreRecord, ...]
-    higher_score_means_greater_anomaly: bool
     future_recalibration_records: tuple[ScoreRecord, ...] = ()
 
     def __post_init__(self) -> None:
@@ -62,11 +57,6 @@ class ScoreArtifactManifest:
             raise ScientificContractError(
                 "a score artifact manifest requires calibration and evaluation records",
                 subject=ContractSubject.SCORES,
-            )
-        if not self.higher_score_means_greater_anomaly:
-            raise ScientificContractError(
-                "federated reconstruction scores must satisfy the anomaly-polarity invariant",
-                subject=ContractSubject.RECONSTRUCTION_ERROR,
             )
         _require_consistent_partition_records(self, self.calibration_records, PartitionRole.CALIBRATION)
         _require_consistent_partition_records(self, self.evaluation_records, PartitionRole.EVALUATION)
@@ -84,6 +74,7 @@ class ScoreArtifactManifest:
             )
             _require_matching_client_inventory(self.calibration_records, self.future_recalibration_records)
         _require_matching_client_inventory(self.calibration_records, self.evaluation_records)
+        _require_consistent_feature_count(self)
 
     def records_for(self, role: PartitionRole) -> tuple[ScoreRecord, ...]:
         match role:
@@ -151,6 +142,12 @@ def _require_consistent_partition_records(
             subject=ContractSubject.CLIENT_IDENTITY,
         )
     for record in records:
+        if record.partition_role is not role:
+            raise ScientificContractError(
+                f"score record partition role {record.partition_role.value} does not match "
+                f"expected collection role {role.value}",
+                subject=ContractSubject.SCORES,
+            )
         _require_record_matches_manifest(manifest, record)
 
 
@@ -170,6 +167,11 @@ def _require_record_matches_manifest(manifest: "ScoreArtifactManifest", record: 
             "score record checkpoint round must match the manifest checkpoint round",
             subject=ContractSubject.CHECKPOINT_CANDIDATES,
         )
+    if record.serialization_format is not SerializationFormat.PARQUET:
+        raise ScientificContractError(
+            "score record serialization format must be Parquet",
+            subject=ContractSubject.SCHEMA,
+        )
 
 
 def _require_matching_client_inventory(left: tuple[ScoreRecord, ...], right: tuple[ScoreRecord, ...]) -> None:
@@ -180,7 +182,29 @@ def _require_matching_client_inventory(left: tuple[ScoreRecord, ...], right: tup
         )
 
 
+def _require_consistent_feature_count(manifest: "ScoreArtifactManifest") -> None:
+    all_records = (
+        *manifest.calibration_records,
+        *manifest.evaluation_records,
+        *manifest.future_recalibration_records,
+    )
+    counts = frozenset(record.feature_count for record in all_records)
+    if len(counts) != 1:
+        raise ScientificContractError(
+            "all score records must share the same feature count",
+            subject=ContractSubject.FEATURES,
+        )
+
+
 def _record_set_checksum(records: tuple[ScoreRecord, ...]) -> Checksum:
-    ordered = sorted(records)
-    payload = "|".join(f"{record.scored_client.client_id}:{record.checksum.value}" for record in ordered)
+    ordered = sorted(records, key=lambda record: record.scored_client)
+    payload = json.dumps(
+        [
+            {"client_id": record.scored_client.client_id, "checksum": record.checksum.value}
+            for record in ordered
+        ],
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+    )
     return checksum_text(payload)

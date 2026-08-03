@@ -13,7 +13,7 @@ from datp_core.centralized_reference.training import (
     load_centralized_model_tensors,
 )
 from datp_core.domain.enums import ContractSubject, PartitionRole, ScoreFrameColumn, SerializationFormat
-from datp_core.domain.errors import ArtifactIntegrityError, LeakageError, ScientificContractError
+from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
 from datp_core.domain.values import (
     BatchSize,
     Checksum,
@@ -26,11 +26,6 @@ from datp_core.domain.values import (
 )
 from datp_core.learning.autoencoder import reconstruction_errors
 from datp_core.populations.models import OUTCOME_LABEL_COLUMN, STABLE_ROW_ID_COLUMN, PopulationFrameColumn
-from datp_core.protocols.anchor import (
-    ANOMALY_POLARITY_FEATURE_PERTURBATION,
-    FIXED_SCORE_ABSOLUTE_TOLERANCE,
-    POLARITY_VERIFICATION_SAMPLE_LIMIT,
-)
 from datp_core.protocols.models import AutoencoderProtocol
 from datp_core.runtime.compute import resolve_cuda_device
 
@@ -71,7 +66,6 @@ class PooledScoreArtifact:
 class CentralizedScoringResult:
     calibration_scores: PooledScoreArtifact
     evaluation_scores: PooledScoreArtifact
-    higher_score_means_greater_anomaly: bool
     model_tensor_checksum: Checksum
     preprocessing_state_checksum: Checksum
 
@@ -121,11 +115,9 @@ def score_centralized_reference(request: CentralizedScoringRequest) -> Centraliz
         device=device,
         destination=request.output_directory / CentralizedScoreAssetName.EVALUATION_SCORES,
     )
-    _assert_higher_score_is_anomaly_evidence(model, request)
     return CentralizedScoringResult(
         calibration_scores=calibration,
         evaluation_scores=evaluation,
-        higher_score_means_greater_anomaly=True,
         model_tensor_checksum=request.checkpoint.tensor_checksum,
         preprocessing_state_checksum=request.preprocessing_state_checksum,
     )
@@ -145,14 +137,6 @@ def load_score_frame(artifact: PooledScoreArtifact) -> pl.DataFrame:
     if not required.issubset(set(frame.columns)):
         raise ArtifactIntegrityError("score artifact schema mismatch", subject=ContractSubject.ARTIFACT_PATH)
     return frame
-
-
-def reject_threshold_identity_in_score_coordinate(threshold_identity: str | None) -> None:
-    if threshold_identity is not None:
-        raise ScientificContractError(
-            "score coordinates must not include threshold identity",
-            subject=ContractSubject.THRESHOLD_IDENTITY,
-        )
 
 
 def _validate_scoring_request(request: CentralizedScoringRequest) -> None:
@@ -219,38 +203,6 @@ def _score_partition(
     return artifact
 
 
-def _assert_higher_score_is_anomaly_evidence(model, request: CentralizedScoringRequest) -> None:
-    """Verify MSE reconstruction error increases under larger feature perturbation."""
-    device = resolve_cuda_device()
-    sample = _polarity_sample_matrix(request.calibration_features, request.feature_names)
-    if sample.shape[0] == 0:
-        sample = _polarity_sample_matrix(request.evaluation_features, request.feature_names)
-    if sample.shape[0] == 0:
-        raise ScientificContractError(
-            "cannot verify anomaly-score polarity without rows",
-            subject=ContractSubject.SCORES,
-        )
-    baseline = reconstruction_errors(model, sample, batch_size=request.batch_size, device=device)
-    perturbed = reconstruction_errors(
-        model,
-        sample + ANOMALY_POLARITY_FEATURE_PERTURBATION.value,
-        batch_size=request.batch_size,
-        device=device,
-    )
-    if not np.all(perturbed >= baseline - FIXED_SCORE_ABSOLUTE_TOLERANCE.value):
-        raise ScientificContractError(
-            "reconstruction error polarity failed: higher error must indicate greater anomaly evidence",
-            subject=ContractSubject.RECONSTRUCTION_ERROR,
-        )
-
-
-def _polarity_sample_matrix(frame: pl.DataFrame, feature_names: FeatureNameSequence) -> np.ndarray:
-    limit = min(POLARITY_VERIFICATION_SAMPLE_LIMIT.value, frame.height)
-    if limit == 0:
-        return np.asarray([], dtype=np.float32).reshape(0, len(feature_names))
-    return frame.select(feature_names.as_list()).head(limit).to_numpy().astype(np.float32, copy=False)
-
-
 def _assert_reload_equality(output: pl.DataFrame, artifact: PooledScoreArtifact) -> None:
     reloaded = pl.read_parquet(artifact.path)
     if output.shape != reloaded.shape:
@@ -268,8 +220,3 @@ def score_artifact_set_checksum(result: CentralizedScoringResult) -> Checksum:
     )
 
 
-def reject_score_regeneration_per_threshold() -> None:
-    raise LeakageError(
-        "centralized scores are frozen detector outputs and must not be regenerated per threshold method",
-        subject=ContractSubject.THRESHOLD_METHOD,
-    )

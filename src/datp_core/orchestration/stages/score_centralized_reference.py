@@ -169,7 +169,6 @@ def _load_reused_scores(request: ScoreCentralizedReferenceRequest) -> Centralize
     return CentralizedScoringResult(
         calibration_scores=calibration,
         evaluation_scores=evaluation,
-        higher_score_means_greater_anomaly=True,
         model_tensor_checksum=request.checkpoint.tensor_checksum,
         preprocessing_state_checksum=request.preprocessing_state_checksum,
     )
@@ -193,7 +192,6 @@ def _rebase_scoring(
     return CentralizedScoringResult(
         calibration_scores=calibration,
         evaluation_scores=evaluation,
-        higher_score_means_greater_anomaly=scoring.higher_score_means_greater_anomaly,
         model_tensor_checksum=scoring.model_tensor_checksum,
         preprocessing_state_checksum=scoring.preprocessing_state_checksum,
     )

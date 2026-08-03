@@ -62,7 +62,6 @@ def _manifest(tmp_path: Path) -> ScoreArtifactManifest:
         split_manifest_checksum=calibration_records[0].checksum,
         calibration_records=calibration_records,
         evaluation_records=evaluation_records,
-        higher_score_means_greater_anomaly=True,
     )
 
 

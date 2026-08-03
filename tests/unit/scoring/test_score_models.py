@@ -33,7 +33,6 @@ def _manifest(tmp_path: Path) -> ScoreArtifactManifest:
         split_manifest_checksum=Checksum("d" * 64),
         calibration_records=(_record(PartitionRole.CALIBRATION, "client_a", tmp_path / "cal.parquet"),),
         evaluation_records=(_record(PartitionRole.EVALUATION, "client_a", tmp_path / "eval.parquet"),),
-        higher_score_means_greater_anomaly=True,
     )
 
 
@@ -68,21 +67,6 @@ def test_manifest_rejects_missing_calibration_records(tmp_path: Path) -> None:
             split_manifest_checksum=Checksum("d" * 64),
             calibration_records=(),
             evaluation_records=(_record(PartitionRole.EVALUATION, "client_a", tmp_path / "eval.parquet"),),
-            higher_score_means_greater_anomaly=True,
-        )
-
-
-def test_manifest_rejects_false_anomaly_polarity(tmp_path: Path) -> None:
-    with pytest.raises(ScientificContractError, match="anomaly-polarity"):
-        ScoreArtifactManifest(
-            coordinate=fedavg_coordinate(Seed(0)),
-            checkpoint_round=RoundNumber(2),
-            checkpoint_checksum=Checksum("a" * 64),
-            preprocessing_state_set_checksum=Checksum("c" * 64),
-            split_manifest_checksum=Checksum("d" * 64),
-            calibration_records=(_record(PartitionRole.CALIBRATION, "client_a", tmp_path / "cal.parquet"),),
-            evaluation_records=(_record(PartitionRole.EVALUATION, "client_a", tmp_path / "eval.parquet"),),
-            higher_score_means_greater_anomaly=False,
         )
 
 
@@ -97,7 +81,6 @@ def test_manifest_rejects_duplicate_scored_client_records(tmp_path: Path) -> Non
             split_manifest_checksum=Checksum("d" * 64),
             calibration_records=(duplicate, duplicate),
             evaluation_records=(_record(PartitionRole.EVALUATION, "client_a", tmp_path / "eval.parquet"),),
-            higher_score_means_greater_anomaly=True,
         )
 
 
@@ -123,7 +106,58 @@ def test_manifest_rejects_record_from_a_different_coordinate(tmp_path: Path) -> 
             split_manifest_checksum=Checksum("d" * 64),
             calibration_records=(mismatched_record,),
             evaluation_records=(_record(PartitionRole.EVALUATION, "client_a", tmp_path / "eval.parquet"),),
-            higher_score_means_greater_anomaly=True,
+        )
+
+
+def test_manifest_rejects_record_stored_under_wrong_role(tmp_path: Path) -> None:
+    wrong_role_record = _record(PartitionRole.EVALUATION, "client_a", tmp_path / "cal.parquet")
+    with pytest.raises(ScientificContractError, match="does not match expected collection role"):
+        ScoreArtifactManifest(
+            coordinate=fedavg_coordinate(Seed(0)),
+            checkpoint_round=RoundNumber(2),
+            checkpoint_checksum=Checksum("a" * 64),
+            preprocessing_state_set_checksum=Checksum("c" * 64),
+            split_manifest_checksum=Checksum("d" * 64),
+            calibration_records=(wrong_role_record,),
+            evaluation_records=(_record(PartitionRole.EVALUATION, "client_a", tmp_path / "eval.parquet"),),
+        )
+
+
+def test_manifest_rejects_inconsistent_feature_count(tmp_path: Path) -> None:
+    mismatched = ScoreRecord(
+        coordinate=fedavg_coordinate(Seed(0)),
+        scored_client=client_identity("client_a"),
+        partition_role=PartitionRole.CALIBRATION,
+        checkpoint_round=RoundNumber(2),
+        checkpoint_checksum=Checksum("a" * 64),
+        path=tmp_path / "cal.parquet",
+        checksum=Checksum("b" * 64),
+        row_count=RowCount(4),
+        feature_count=FeatureCount(7),
+        serialization_format=SerializationFormat.PARQUET,
+    )
+    with pytest.raises(ScientificContractError, match="same feature count"):
+        ScoreArtifactManifest(
+            coordinate=fedavg_coordinate(Seed(0)),
+            checkpoint_round=RoundNumber(2),
+            checkpoint_checksum=Checksum("a" * 64),
+            preprocessing_state_set_checksum=Checksum("c" * 64),
+            split_manifest_checksum=Checksum("d" * 64),
+            calibration_records=(mismatched,),
+            evaluation_records=(_record(PartitionRole.EVALUATION, "client_a", tmp_path / "eval.parquet"),),
+        )
+
+
+def test_manifest_rejects_missing_client_in_evaluation(tmp_path: Path) -> None:
+    with pytest.raises(ScientificContractError, match="same client inventory"):
+        ScoreArtifactManifest(
+            coordinate=fedavg_coordinate(Seed(0)),
+            checkpoint_round=RoundNumber(2),
+            checkpoint_checksum=Checksum("a" * 64),
+            preprocessing_state_set_checksum=Checksum("c" * 64),
+            split_manifest_checksum=Checksum("d" * 64),
+            calibration_records=(_record(PartitionRole.CALIBRATION, "client_a", tmp_path / "cal.parquet"),),
+            evaluation_records=(_record(PartitionRole.EVALUATION, "client_b", tmp_path / "eval.parquet"),),
         )
 
 

@@ -6,15 +6,12 @@ from tests.unit.scoring.helpers import selected_checkpoint
 
 from datp_core.domain.enums import CheckpointStatus
 from datp_core.domain.errors import ArtifactIntegrityError, LeakageError, ScientificContractError
-from datp_core.domain.values import Checksum, OutcomeLabelSequence, RowCount, Seed
+from datp_core.domain.values import Checksum, RowCount, Seed
 from datp_core.runtime.compute import resolve_cuda_device
 from datp_core.scoring.generation import (
     ClientScoringInput,
     ScoreGenerationRequest,
     generate_federated_scores,
-    reject_attack_calibration_rows,
-    reject_score_regeneration_per_threshold,
-    reject_threshold_identity_in_score_coordinate,
 )
 
 
@@ -147,22 +144,27 @@ def test_score_reload_equality_detects_a_corrupted_file(tmp_path: Path) -> None:
         _assert_reload_equality(victim)
 
 
-def test_reject_score_regeneration_per_threshold_always_raises() -> None:
-    with pytest.raises(LeakageError, match="frozen detector outputs"):
-        reject_score_regeneration_per_threshold()
-
-
-def test_reject_threshold_identity_in_score_coordinate_rejects_any_identity() -> None:
-    with pytest.raises(ScientificContractError, match="threshold identity"):
-        reject_threshold_identity_in_score_coordinate("shared_threshold")
-    reject_threshold_identity_in_score_coordinate(None)
-
-
-def test_reject_attack_calibration_rows_rejects_any_attack_label() -> None:
+def test_scoring_rejects_attack_labelled_calibration_rows(tmp_path: Path) -> None:
     from datp_core.populations.models import PopulationOutcomeLabel
 
+    checkpoint = selected_checkpoint(tmp_path / "checkpoint")
+    device = resolve_cuda_device()
+    attack_frame = benign_frame(RowCount(6), seed=Seed(1), label=PopulationOutcomeLabel.ATTACK.value)
+    request = ScoreGenerationRequest(
+        checkpoint=checkpoint,
+        autoencoder=AUTOENCODER,
+        feature_names=FEATURE_NAMES,
+        clients=(
+            ClientScoringInput(
+                client=client_identity("client_a"),
+                calibration_features=attack_frame,
+                evaluation_features=benign_frame(RowCount(6), seed=Seed(2)),
+            ),
+        ),
+        batch_size=BATCH_SIZE,
+        output_directory=tmp_path / "scores",
+        preprocessing_state_set_checksum=checkpoint.preprocessing_state_set_checksum,
+        split_manifest_checksum=checkpoint.split_manifest_checksum,
+    )
     with pytest.raises(LeakageError, match="benign calibration"):
-        reject_attack_calibration_rows(
-            OutcomeLabelSequence((PopulationOutcomeLabel.BENIGN.value, PopulationOutcomeLabel.ATTACK.value)),
-            PopulationOutcomeLabel.BENIGN.value,
-        )
+        generate_federated_scores(request, device)

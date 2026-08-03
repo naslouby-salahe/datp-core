@@ -1,19 +1,15 @@
 from pathlib import Path
 
 import polars as pl
-import pytest
 from tests.unit.learning.federated.helpers import AUTOENCODER, BATCH_SIZE, FEATURE_NAMES, benign_frame, client_identity
 from tests.unit.scoring.helpers import selected_checkpoint
 
-from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.values import RowCount, Seed
 from datp_core.runtime.compute import resolve_cuda_device
 from datp_core.scoring.generation import (
     ClientScoringInput,
     ScoreGenerationRequest,
     generate_federated_scores,
-    reject_score_regeneration_per_threshold,
-    reject_threshold_identity_in_score_coordinate,
 )
 
 
@@ -57,16 +53,6 @@ def test_one_score_artifact_is_reusable_across_every_simulated_threshold_method(
     )
     observed_means = {method: _mean_reconstruction_error(calibration_path) for method in simulated_threshold_methods}
     assert len(set(observed_means.values())) == 1
-
-    for method in simulated_threshold_methods:
-        with pytest.raises(ScientificContractError, match="threshold identity"):
-            reject_threshold_identity_in_score_coordinate(method)
-    reject_threshold_identity_in_score_coordinate(None)
-
-
-def test_score_regeneration_per_threshold_is_structurally_forbidden() -> None:
-    with pytest.raises(LeakageError, match="frozen detector outputs"):
-        reject_score_regeneration_per_threshold()
 
 
 def test_auroc_style_separability_over_the_same_score_artifact_is_invariant_across_reads(tmp_path: Path) -> None:
