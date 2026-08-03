@@ -10,7 +10,7 @@ from typing import ClassVar
 from datp_core.analysis.temporal import TemporalDeploymentProvenance
 from datp_core.artifacts.serialization import to_json_compatible
 from datp_core.artifacts.store import publish_atomically
-from datp_core.domain.enums import StageOperationId
+from datp_core.domain.enums import PublicationStatus, StageOperationId
 from datp_core.domain.values import Checksum, checksum_text
 from datp_core.scoring.models import ScoreArtifactManifest
 from datp_core.thresholding.dispatch import ThresholdConstructionRequest, dispatch_federated_threshold
@@ -40,7 +40,7 @@ class ConstructFederatedThresholdsRequest:
 class ConstructFederatedThresholdsResult:
     stage: ClassVar[StageOperationId] = StageOperationId.CONSTRUCT_FEDERATED_THRESHOLDS
     result: ThresholdConstructionResult
-    publication_status: object
+    publication_status: PublicationStatus
     complete_digest: Checksum
     temporal_provenance: TemporalDeploymentProvenance | None
 
