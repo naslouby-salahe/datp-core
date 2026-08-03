@@ -18,6 +18,7 @@ from datp_core.domain.values import (
     ByteCount,
     Checksum,
     ClusterIndex,
+    ConformalRankIndex,
     CoverageTarget,
     FamilyIdentity,
     GroupCount,
@@ -574,7 +575,7 @@ class ConformalAssignment:
 
     client: ClientIdentity
     calibration_count: RowCount
-    rank_index: int
+    rank_index: ConformalRankIndex
     effective_quantile: Quantile
     selected_score: ScoreValue
     tie_count: RowCount
@@ -582,7 +583,12 @@ class ConformalAssignment:
 
     def __post_init__(self) -> None:
         require_contract(
-            1 <= self.rank_index <= self.calibration_count.value,
+            isinstance(self.rank_index, ConformalRankIndex),
+            "conformal rank index must use the typed rank contract",
+            ContractSubject.THRESHOLD,
+        )
+        require_contract(
+            self.rank_index.value <= self.calibration_count.value,
             "conformal rank index must fall within the calibration sample",
             ContractSubject.THRESHOLD,
         )
@@ -591,15 +597,16 @@ class ConformalAssignment:
             "conformal threshold value must equal the selected score",
             ContractSubject.THRESHOLD,
         )
-        expected_quantile = self.rank_index / self.calibration_count.value
+        expected_quantile = self.rank_index.value / self.calibration_count.value
         require_contract(
             floats_absolutely_close(
-                self.effective_quantile.value, expected_quantile, FRACTION_TOTAL_ABSOLUTE_TOLERANCE
+                self.effective_quantile.value,
+                expected_quantile,
+                FRACTION_TOTAL_ABSOLUTE_TOLERANCE,
             ),
             "conformal effective quantile must equal rank_index / calibration_count",
             ContractSubject.THRESHOLD,
         )
-
 
 @dataclass(frozen=True, slots=True)
 class ConformalThresholdResult:

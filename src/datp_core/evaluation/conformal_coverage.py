@@ -7,7 +7,15 @@ import polars as pl
 
 from datp_core.domain.enums import MetricId, ScoreFrameColumn
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import CoverageTarget, Quantile, RowCount, Seed, ThresholdValue, checksum_file
+from datp_core.domain.values import (
+    ConformalRankIndex,
+    CoverageTarget,
+    Quantile,
+    RowCount,
+    Seed,
+    ThresholdValue,
+    checksum_file,
+)
 from datp_core.evaluation.metric_semantics import available, metric_value, unavailable
 from datp_core.evaluation.models import (
     HeldOutBenignScore,
@@ -41,15 +49,17 @@ class ConformalCoverageDiagnostic:
     training_seed: Seed
     target_coverage: CoverageTarget
     calibration_count: RowCount
-    finite_sample_rank_index: int
+    finite_sample_rank_index: ConformalRankIndex
     effective_quantile: Quantile
     tie_count: RowCount
     threshold: ThresholdValue
     metrics: tuple[MetricAvailability, ...]
 
     def __post_init__(self) -> None:
-        if self.calibration_count.value < 1 or self.finite_sample_rank_index < 1:
-            raise ScientificContractError("conformal diagnostics require a positive calibration count and rank")
+        if self.calibration_count.value < 1:
+            raise ScientificContractError("conformal diagnostics require a positive calibration count")
+        if not isinstance(self.finite_sample_rank_index, ConformalRankIndex):
+            raise ScientificContractError("conformal diagnostics require a typed finite-sample rank")
         if (
             self.coordinate.population is not self.client.population
             or self.coordinate.training_seed != self.training_seed

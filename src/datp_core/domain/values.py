@@ -298,6 +298,10 @@ class ReplicateIndex(NonNegativeIntegerValue):
     validation_name: ClassVar[str] = "replicate index"
 
 
+class ConformalRankIndex(PositiveIntegerValue):
+    validation_name: ClassVar[str] = "conformal rank index"
+
+
 class ClusterIndex(NonNegativeIntegerValue):
     validation_name: ClassVar[str] = "cluster index"
 

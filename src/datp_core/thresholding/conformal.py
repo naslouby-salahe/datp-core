@@ -38,7 +38,7 @@ def construct_local_conformal_threshold(
     for client_scores in sorted(eligible, key=lambda item: item.client):
         calibration_count_int = int(client_scores.as_array.size)
         rank_index = conformal_rank_index(RowCount(calibration_count_int), coverage)
-        if rank_index > calibration_count_int:
+        if rank_index.value > calibration_count_int:
             unavailable.append(client_scores.client)
             continue
         threshold, _, effective_quantile, tie_count = finite_sample_conformal_threshold(

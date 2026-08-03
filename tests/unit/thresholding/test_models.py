@@ -9,6 +9,7 @@ from datp_core.domain.values import (
     ByteCount,
     Checksum,
     ClusterIndex,
+    ConformalRankIndex,
     CoverageTarget,
     FamilyIdentity,
     GroupCount,
@@ -291,12 +292,24 @@ def test_shrinkage_threshold_result_requires_every_weight_over_same_clients() ->
         build()
 
 
+def test_conformal_assignment_rejects_raw_rank_integer() -> None:
+    with pytest.raises(ScientificContractError, match="typed rank contract"):
+        ConformalAssignment(
+            client=CLIENT_A,
+            calibration_count=RowCount(10),
+            rank_index=9,  # type: ignore[arg-type]
+            effective_quantile=Quantile(0.9),
+            selected_score=ScoreValue(1.0),
+            tie_count=RowCount(0),
+            threshold=ThresholdValue(1.0),
+        )
+
 def test_conformal_assignment_rejects_rank_index_out_of_bounds() -> None:
     def build() -> ConformalAssignment:
         return ConformalAssignment(
             client=CLIENT_A,
             calibration_count=RowCount(10),
-            rank_index=11,
+            rank_index=ConformalRankIndex(11),
             effective_quantile=Quantile(0.95),
             selected_score=ScoreValue(1.0),
             tie_count=RowCount(0),
@@ -311,7 +324,7 @@ def test_conformal_threshold_result_rejects_client_both_assigned_and_unavailable
     assignment = ConformalAssignment(
         client=CLIENT_A,
         calibration_count=RowCount(10),
-        rank_index=9,
+        rank_index=ConformalRankIndex(9),
         effective_quantile=Quantile(0.9),
         selected_score=ScoreValue(1.0),
         tie_count=RowCount(0),
@@ -379,7 +392,7 @@ def test_conformal_significance_is_derived_from_coverage() -> None:
             ConformalAssignment(
                 client=CLIENT_A,
                 calibration_count=RowCount(20),
-                rank_index=19,
+                rank_index=ConformalRankIndex(19),
                 effective_quantile=Quantile(0.95),
                 selected_score=ScoreValue(1.0),
                 tie_count=RowCount(1),
@@ -512,7 +525,7 @@ def test_conformal_threshold_result_rejects_duplicate_assignments() -> None:
     assignment = ConformalAssignment(
         client=CLIENT_A,
         calibration_count=RowCount(10),
-        rank_index=9,
+        rank_index=ConformalRankIndex(9),
         effective_quantile=Quantile(0.9),
         selected_score=ScoreValue(1.0),
         tie_count=RowCount(0),
@@ -537,7 +550,7 @@ def test_conformal_threshold_result_rejects_duplicate_unavailable_clients() -> N
     assignment = ConformalAssignment(
         client=CLIENT_A,
         calibration_count=RowCount(10),
-        rank_index=9,
+        rank_index=ConformalRankIndex(9),
         effective_quantile=Quantile(0.9),
         selected_score=ScoreValue(1.0),
         tie_count=RowCount(0),
@@ -573,7 +586,7 @@ def test_conformal_assignment_rejects_threshold_not_equal_to_selected_score() ->
         return ConformalAssignment(
             client=CLIENT_A,
             calibration_count=RowCount(10),
-            rank_index=5,
+            rank_index=ConformalRankIndex(5),
             effective_quantile=Quantile(0.5),
             selected_score=ScoreValue(3.0),
             tie_count=RowCount(0),
@@ -589,7 +602,7 @@ def test_conformal_assignment_rejects_effective_quantile_not_equal_to_rank_over_
         return ConformalAssignment(
             client=CLIENT_A,
             calibration_count=RowCount(10),
-            rank_index=5,
+            rank_index=ConformalRankIndex(5),
             effective_quantile=Quantile(0.9),
             selected_score=ScoreValue(3.0),
             tie_count=RowCount(0),
@@ -607,7 +620,7 @@ def test_conformal_threshold_result_rejects_incomplete_client_coverage() -> None
     assignment = ConformalAssignment(
         client=CLIENT_A,
         calibration_count=RowCount(10),
-        rank_index=9,
+        rank_index=ConformalRankIndex(9),
         effective_quantile=Quantile(0.9),
         selected_score=ScoreValue(1.0),
         tie_count=RowCount(0),
