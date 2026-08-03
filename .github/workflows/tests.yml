@@ -1,4 +1,4 @@
-name: Validate typed conformal ranks
+name: Validate cardinality value contracts
 
 "on": [push, pull_request]
 
@@ -24,111 +24,234 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-groups --all-extras --frozen
 
-      - name: Apply conformal rank typing
+      - name: Apply cardinality typing
         run: |
           python - <<'PY'
           from pathlib import Path
-          from textwrap import dedent
-          import re
-          import subprocess
 
-          values_path = Path("src/datp_core/domain/values.py")
-          if "class ConformalRankIndex(" not in values_path.read_text(encoding="utf-8"):
-              source_commit = "43f0de863b2d147f448acca6898b47db2282ed8f"
-              subprocess.run(
-                  ["git", "fetch", "origin", source_commit, "--depth=1"],
-                  check=True,
-                  stdout=subprocess.DEVNULL,
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text(encoding="utf-8")
+              if new in text and old not in text:
+                  return
+              if text.count(old) != 1:
+                  raise SystemExit(f"{path}: expected one occurrence, found {text.count(old)}: {old!r}")
+              file.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          replace_once(
+              "src/datp_core/domain/values.py",
+              '''class ByteCount(NonNegativeIntegerValue):
+                  validation_name: ClassVar[str] = "byte count"
+
+
+              class LearningRate'''.replace("              ", ""),
+              '''class ByteCount(NonNegativeIntegerValue):
+                  validation_name: ClassVar[str] = "byte count"
+
+
+              class LogicalElementCount(PositiveIntegerValue):
+                  validation_name: ClassVar[str] = "logical element count"
+
+
+              class CudaDeviceCount(NonNegativeIntegerValue):
+                  validation_name: ClassVar[str] = "CUDA device count"
+
+
+              class ClientPublicationCount(NonNegativeIntegerValue):
+                  validation_name: ClassVar[str] = "client publication count"
+
+
+              class LearningRate'''.replace("              ", ""),
+          )
+
+          communication_path = Path("src/datp_core/evaluation/communication.py")
+          communication = communication_path.read_text(encoding="utf-8")
+          communication = communication.replace(
+              "from datp_core.domain.values import ByteCount, Seed",
+              "from datp_core.domain.values import ByteCount, LogicalElementCount, Seed",
+              1,
+          )
+          communication = communication.replace(
+              "    logical_element_count: int",
+              "    logical_element_count: LogicalElementCount",
+              1,
+          )
+          communication = communication.replace(
+              '''    def __post_init__(self) -> None:
+                      if self.logical_element_count < 1:
+                          raise ScientificContractError("a communication payload requires at least one logical element")
+
+
+              '''.replace("              ", ""),
+              '''    def __post_init__(self) -> None:
+                      if not isinstance(self.logical_element_count, LogicalElementCount):
+                          raise ScientificContractError("communication payloads require a typed logical element count")
+
+
+              '''.replace("              ", ""),
+              1,
+          )
+          communication = communication.replace(
+              "    total_logical_element_count: int",
+              "    total_logical_element_count: LogicalElementCount",
+              1,
+          )
+          communication = communication.replace(
+              "        expected_elements = sum(message.payload.logical_element_count for message in self.messages)",
+              "        expected_elements = sum(message.payload.logical_element_count.value for message in self.messages)",
+              1,
+          )
+          communication = communication.replace(
+              "            self.total_logical_element_count != expected_elements",
+              "            self.total_logical_element_count.value != expected_elements",
+              1,
+          )
+          communication = communication.replace(
+              "        total_logical_element_count=sum(message.payload.logical_element_count for message in messages),",
+              "        total_logical_element_count=LogicalElementCount(\n"
+              "            sum(message.payload.logical_element_count.value for message in messages)\n"
+              "        ),",
+              1,
+          )
+          communication_path.write_text(communication, encoding="utf-8")
+
+          communication_test_path = Path("tests/unit/evaluation/test_communication.py")
+          communication_test = communication_test_path.read_text(encoding="utf-8")
+          communication_test = communication_test.replace(
+              "from datp_core.domain.values import Seed",
+              "from datp_core.domain.values import LogicalElementCount, Seed",
+              1,
+          )
+          communication_test = communication_test.replace(
+              "SerializedPayloadEvidence(b\"abc\", 1)",
+              "SerializedPayloadEvidence(b\"abc\", LogicalElementCount(1))",
+              1,
+          )
+          communication_test = communication_test.replace(
+              "        SerializedPayloadEvidence(b\"\", 0)",
+              "        SerializedPayloadEvidence(b\"\", 0)  # type: ignore[arg-type]",
+              1,
+          )
+          communication_test = communication_test.replace(
+              'with pytest.raises(ScientificContractError, match="at least one"):',
+              'with pytest.raises(ScientificContractError, match="typed logical element count"):',
+              1,
+          )
+          communication_test_path.write_text(communication_test, encoding="utf-8")
+
+          compute_path = Path("src/datp_core/runtime/compute.py")
+          compute = compute_path.read_text(encoding="utf-8")
+          compute = compute.replace(
+              "from datp_core.domain.values import WorkerCount",
+              "from datp_core.domain.values import CudaDeviceCount, WorkerCount",
+              1,
+          )
+          compute = compute.replace("    device_count: int", "    device_count: CudaDeviceCount", 1)
+          compute = compute.replace(
+              "    device_count = torch.cuda.device_count() if available else 0",
+              "    device_count = CudaDeviceCount(torch.cuda.device_count() if available else 0)",
+              1,
+          )
+          compute = compute.replace(
+              "available and device_count > 0",
+              "available and device_count.value > 0",
+              1,
+          )
+          compute_path.write_text(compute, encoding="utf-8")
+
+          threshold_path = Path("src/datp_core/evaluation/threshold_estimation.py")
+          threshold = threshold_path.read_text(encoding="utf-8")
+          if "    SubsampleReplicateCount,\n" not in threshold:
+              threshold = threshold.replace(
+                  "    Seed,\n",
+                  "    Seed,\n    SubsampleReplicateCount,\n",
+                  1,
               )
-              workflow = subprocess.check_output(
-                  ["git", "show", f"{source_commit}:.github/workflows/tests.yml"],
-                  text=True,
+          threshold = threshold.replace(
+              "    replicate_count: int",
+              "    replicate_count: SubsampleReplicateCount",
+              1,
+          )
+          threshold = threshold.replace(
+              "        if self.replicate_count < 1 or self.threshold_variance_across_nested_replicates < 0:",
+              "        if self.threshold_variance_across_nested_replicates < 0:",
+              1,
+          )
+          threshold = threshold.replace(
+              "                replicate_count=len(replicate_group),",
+              "                replicate_count=SubsampleReplicateCount(len(replicate_group)),",
+              1,
+          )
+          threshold_path.write_text(threshold, encoding="utf-8")
+
+          preprocess_path = Path("src/datp_core/orchestration/stages/preprocess_federated.py")
+          preprocess = preprocess_path.read_text(encoding="utf-8")
+          if "    ClientPublicationCount,\n" not in preprocess:
+              preprocess = preprocess.replace(
+                  "    Checksum,\n",
+                  "    Checksum,\n    ClientPublicationCount,\n",
+                  1,
               )
-              start_marker = "          python - <<'PY'\n"
-              start = workflow.index(start_marker) + len(start_marker)
-              end = workflow.index("\n          PY", start)
-              patch_script = dedent(workflow[start:end])
-              exec(compile(patch_script, "conformal-rank-patch", "exec"), {})
+          preprocess = preprocess.replace("    published_count: int", "    published_count: ClientPublicationCount", 1)
+          preprocess = preprocess.replace("    reused_count: int", "    reused_count: ClientPublicationCount", 1)
+          result_marker = '''    execution_identity: ExternalTemporalExecutionIdentity | None = None
 
-              models_path = Path("src/datp_core/thresholding/models.py")
-              models = models_path.read_text(encoding="utf-8")
-              assignment = dedent('''
-                  @dataclass(frozen=True, slots=True)
-                  class ConformalAssignment:
-                      """One client's finite-sample local conformal threshold."""
 
-                      client: ClientIdentity
-                      calibration_count: RowCount
-                      rank_index: ConformalRankIndex
-                      effective_quantile: Quantile
-                      selected_score: ScoreValue
-                      tie_count: RowCount
-                      threshold: ThresholdValue
+          @dataclass(frozen=True, slots=True)
+          class PreprocessFederatedArtifactsRequest:
+          '''.replace("          ", "")
+          result_replacement = '''    execution_identity: ExternalTemporalExecutionIdentity | None = None
 
-                      def __post_init__(self) -> None:
-                          require_contract(
-                              isinstance(self.rank_index, ConformalRankIndex),
-                              "conformal rank index must use the typed rank contract",
-                              ContractSubject.THRESHOLD,
-                          )
-                          require_contract(
-                              self.rank_index.value <= self.calibration_count.value,
-                              "conformal rank index must fall within the calibration sample",
-                              ContractSubject.THRESHOLD,
-                          )
-                          require_contract(
-                              floats_exactly_equal(self.threshold.value, self.selected_score.value),
-                              "conformal threshold value must equal the selected score",
-                              ContractSubject.THRESHOLD,
-                          )
-                          expected_quantile = self.rank_index.value / self.calibration_count.value
-                          require_contract(
-                              floats_absolutely_close(
-                                  self.effective_quantile.value,
-                                  expected_quantile,
-                                  FRACTION_TOTAL_ABSOLUTE_TOLERANCE,
-                              ),
-                              "conformal effective quantile must equal rank_index / calibration_count",
-                              ContractSubject.THRESHOLD,
-                          )
-              ''').lstrip()
-              models, count = re.subn(
-                  r"@dataclass\(frozen=True, slots=True\)\nclass ConformalAssignment:.*?"
-                  r"(?=\n\n@dataclass\(frozen=True, slots=True\)\nclass ConformalThresholdResult:)",
-                  assignment.rstrip(),
-                  models,
-                  count=1,
-                  flags=re.DOTALL,
-              )
-              if count != 1:
-                  raise SystemExit(f"ConformalAssignment replacements: {count}")
-              models_path.write_text(models, encoding="utf-8")
+              def __post_init__(self) -> None:
+                  if not isinstance(self.published_count, ClientPublicationCount) or not isinstance(
+                      self.reused_count, ClientPublicationCount
+                  ):
+                      raise TypeError("preprocessing results require typed publication counts")
+                  if self.published_count.value + self.reused_count.value != len(self.client_publications):
+                      raise ValueError("published and reused counts must cover every client publication")
+
+
+          @dataclass(frozen=True, slots=True)
+          class PreprocessFederatedArtifactsRequest:
+          '''.replace("          ", "")
+          if result_replacement not in preprocess:
+              if preprocess.count(result_marker) != 1:
+                  raise SystemExit("PreprocessFederatedResult insertion point did not match")
+              preprocess = preprocess.replace(result_marker, result_replacement, 1)
+          preprocess = preprocess.replace(
+              "        published_count=published_count,",
+              "        published_count=ClientPublicationCount(published_count),",
+          )
+          preprocess = preprocess.replace(
+              "        reused_count=reused_count,",
+              "        reused_count=ClientPublicationCount(reused_count),",
+          )
+          preprocess_path.write_text(preprocess, encoding="utf-8")
           PY
 
       - name: Compile changed modules
         run: |
           python -m compileall -q \
             src/datp_core/domain/values.py \
-            src/datp_core/thresholding/quantiles.py \
-            src/datp_core/thresholding/conformal.py \
-            src/datp_core/thresholding/models.py \
-            src/datp_core/evaluation/conformal_coverage.py
+            src/datp_core/evaluation/communication.py \
+            src/datp_core/evaluation/threshold_estimation.py \
+            src/datp_core/runtime/compute.py \
+            src/datp_core/orchestration/stages/preprocess_federated.py
 
-      - name: Run conformal rank tests
+      - name: Run cardinality regression tests
         run: |
           uv run pytest \
-            tests/unit/thresholding/test_quantiles.py \
-            tests/unit/thresholding/test_conformal.py \
-            tests/unit/thresholding/test_models.py \
-            tests/unit/evaluation/test_conformal_coverage.py \
-            tests/property/test_quantile_monotonicity.py
+            tests/unit/evaluation/test_communication.py \
+            tests/unit/evaluation/test_threshold_estimation.py \
+            tests/unit/runtime/test_compute_and_determinism.py \
+            tests/unit/orchestration/stages/test_preprocess_federated.py
 
-      - name: Commit typed rank contracts
+      - name: Commit cardinality contracts
         if: github.event_name == 'push' && github.ref == 'refs/heads/agent/consolidate-dataclass-contracts'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src tests
           git diff --cached --quiet && exit 0
-          git commit -m "Type finite-sample conformal rank indices"
+          git commit -m "Type remaining runtime cardinality contracts"
           git push origin "HEAD:${GITHUB_REF_NAME}"
