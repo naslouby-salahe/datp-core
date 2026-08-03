@@ -6,6 +6,44 @@ permissions:
   contents: read
 
 jobs:
+  quality:
+    name: Run quality gates
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.12'
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
+
+      - name: Install dependencies
+        run: uv sync --all-groups --all-extras --frozen
+
+      - name: Check formatting
+        run: uv run ruff format --check src tests noxfile.py
+
+      - name: Run Ruff
+        run: uv run ruff check src tests noxfile.py
+
+      - name: Run Pylint
+        run: |
+          uv run pylint src
+          uv run pylint --disable=missing-module-docstring,missing-function-docstring,protected-access,redefined-outer-name,duplicate-code,too-many-lines,too-many-locals,too-many-statements,too-many-branches,too-many-arguments,too-many-positional-arguments,too-many-return-statements,too-many-public-methods,too-few-public-methods,unnecessary-lambda-assignment,import-outside-toplevel,no-member tests
+
+      - name: Run Pyright
+        run: uv run pyright
+
+      - name: Check import contracts
+        run: uv run lint-imports
+
   test:
     name: Run test suite
     runs-on: ubuntu-latest
@@ -33,7 +71,7 @@ jobs:
       # The raw-source readiness audit below requires infrastructure a generic CI runner cannot
       # have: real licensed multi-GB datasets. It fails loudly by design rather than silently
       # downgrading; it is an environment-readiness check, not a portable unit test. CUDA-required
-      # training and scoring tests self-skip when no CUDA device is present.
+      # training and scoring tests are explicitly skipped when no CUDA device is present.
       - name: Run tests and collect coverage
         run: |
           uv run pytest \
