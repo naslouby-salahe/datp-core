@@ -4,11 +4,9 @@ from dataclasses import dataclass
 from functools import total_ordering
 from hashlib import file_digest, sha256
 from math import isclose, isfinite
-from operator import lt as _lt
 from pathlib import Path
 from typing import Any, ClassVar
 
-# Shared math.isclose controls for absolute-only floating comparisons.
 NUMERIC_ZERO: float = 0.0
 NO_RELATIVE_TOLERANCE: float = 0.0
 
@@ -21,7 +19,7 @@ def floats_absolutely_close(left: float, right: float, absolute_tolerance: float
 
 
 def floats_exactly_equal(left: float, right: float) -> bool:
-    """Full-precision equality with no absolute or relative tolerance band."""
+    """Compare floats at full precision with no tolerance band."""
     return isclose(left, right, rel_tol=NO_RELATIVE_TOLERANCE, abs_tol=NUMERIC_ZERO)
 
 
@@ -30,60 +28,62 @@ def is_numeric_zero(value: float) -> bool:
 
 
 def _integer(value: int, name: str, minimum: int) -> int:
-    # bool is a subclass of int; reject it explicitly.
-    if isinstance(value, bool) or value < minimum:
+    if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
         raise ValueError(f"{name} must be an integer greater than or equal to {minimum}")
     return value
 
 
 def _number(value: int | float, name: str) -> float:
-    # bool is a subclass of int; reject it explicitly.
-    if isinstance(value, bool) or not isfinite(float(value)):
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not isfinite(float(value)):
         raise ValueError(f"{name} must be a finite number")
     return float(value)
 
 
-def _ordering_compare(left: Any, right: object, op: Any = None) -> bool:
-    """Cross-type total ordering for integer and float value objects.
-
-    Accepts ``left`` (``self``) and ``right`` (another value object or a raw
-    ``int`` / ``float``).
-    Returns ``NotImplemented`` for unrecognized types so Python can try the
-    reflected operator on ``right``.
-    """
-    if isinstance(right, (int, float)) and not isinstance(right, bool):
-        return _lt(left.value, right)
-    other_value = getattr(right, "value", None)
-    if isinstance(other_value, (int, float)):
-        return _lt(left.value, other_value)
+def _compatible_value(self: Any, other: object) -> Any:
+    if isinstance(other, (int, float)) and not isinstance(other, bool):
+        return other
+    if type(other) is type(self):
+        return other.value
+    family = self.comparison_family
+    if family is not None and getattr(other, "comparison_family", None) == family:
+        return other.value
     return NotImplemented
 
 
+def _ordering_compare(self: Any, other: object) -> Any:
+    other_value = _compatible_value(self, other)
+    if other_value is NotImplemented:
+        return NotImplemented
+    return self.value < other_value
+
+
+def _typed_eq(self: Any, other: object) -> Any:
+    other_value = _compatible_value(self, other)
+    if other_value is NotImplemented:
+        return NotImplemented
+    return self.value == other_value
+
+
 def _add_impl(self: Any, other: object) -> Any:
-    """Shared __add__ for integer value types. Returns same type as self."""
     if isinstance(other, int) and not isinstance(other, bool):
         return type(self)(self.value + other)
-    other_value = getattr(other, "value", None)
-    if isinstance(other_value, int):
-        return type(self)(self.value + other_value)
+    if type(other) is type(self):
+        return type(self)(self.value + other.value)
     return NotImplemented
 
 
 def _radd_impl(self: Any, other: object) -> Any:
-    """Shared __radd__ for integer value types."""
     if isinstance(other, int) and not isinstance(other, bool):
         return type(self)(other + self.value)
     return NotImplemented
 
 
 def _pydantic_value_schema(cls, _source_type, _handler):
-    """Shared Pydantic v2 schema: validates raw scalar → cls, serializes as .value."""
+    """Validate a raw scalar into a value object and serialize its scalar value."""
     from pydantic_core import core_schema as _cs
 
-    def _validate(v):
-        if isinstance(v, cls):
-            return v
-        return cls(v)
+    def _validate(value):
+        return value if isinstance(value, cls) else cls(value)
 
     return _cs.no_info_plain_validator_function(
         _validate,
@@ -92,15 +92,15 @@ def _pydantic_value_schema(cls, _source_type, _handler):
 
 
 def _str_enum_schema(cls, _source_type, _handler):
-    """Pydantic v2 schema for StrEnum: validates raw str → cls, passes through members."""
+    """Validate a raw string into a StrEnum member."""
     from pydantic_core import core_schema as _cs
 
-    def _validate(v):
-        if isinstance(v, cls):
-            return v
-        if not isinstance(v, str):
+    def _validate(value):
+        if isinstance(value, cls):
+            return value
+        if not isinstance(value, str):
             raise TypeError(f"expected {cls.__name__} or str")
-        return cls(v)
+        return cls(value)
 
     return _cs.no_info_plain_validator_function(_validate)
 
@@ -108,10 +108,8 @@ def _str_enum_schema(cls, _source_type, _handler):
 def _str_subclass_schema(cls, _source_type, _handler):
     from pydantic_core import core_schema as _cs
 
-    def _validate(v):
-        if isinstance(v, cls):
-            return v
-        return cls(v)
+    def _validate(value):
+        return value if isinstance(value, cls) else cls(value)
 
     return _cs.no_info_plain_validator_function(
         _validate,
@@ -119,30 +117,24 @@ def _str_subclass_schema(cls, _source_type, _handler):
     )
 
 
-def _typed_eq(self: Any, other: object) -> bool:
-    """Equality: true if both are value objects with matching value, or against a raw scalar."""
-    if isinstance(other, (int, float)) and not isinstance(other, bool):
-        return self.value == other
-    other_value = getattr(other, "value", None)
-    if isinstance(other_value, (int, float)):
-        return self.value == other_value
-    return NotImplemented
-
-
 @total_ordering
 @dataclass(frozen=True, slots=True)
 class PositiveIntegerValue:
     value: int
     validation_name: ClassVar[str] = "value"
+    comparison_family: ClassVar[str | None] = None
 
     def __post_init__(self) -> None:
         _integer(self.value, self.validation_name, 1)
 
     def __lt__(self, other: object) -> bool:
-        return _ordering_compare(self, other, int.__lt__)
+        return _ordering_compare(self, other)
 
     def __eq__(self, other: object) -> bool:
         return _typed_eq(self, other)
+
+    def __hash__(self) -> int:
+        return hash(self.value)
 
     __add__ = _add_impl
     __radd__ = _radd_impl
@@ -154,15 +146,19 @@ class PositiveIntegerValue:
 class NonNegativeIntegerValue:
     value: int
     validation_name: ClassVar[str] = "value"
+    comparison_family: ClassVar[str | None] = None
 
     def __post_init__(self) -> None:
         _integer(self.value, self.validation_name, 0)
 
     def __lt__(self, other: object) -> bool:
-        return _ordering_compare(self, other, int.__lt__)
+        return _ordering_compare(self, other)
 
     def __eq__(self, other: object) -> bool:
         return _typed_eq(self, other)
+
+    def __hash__(self) -> int:
+        return hash(self.value)
 
     __add__ = _add_impl
     __radd__ = _radd_impl
@@ -171,88 +167,55 @@ class NonNegativeIntegerValue:
 
 @total_ordering
 @dataclass(frozen=True, slots=True)
-class PositiveFiniteFloatValue:
+class FiniteFloatValue:
     value: float
     validation_name: ClassVar[str] = "value"
+    comparison_family: ClassVar[str | None] = None
 
     def __post_init__(self) -> None:
-        if _number(self.value, self.validation_name) <= 0:
+        object.__setattr__(self, "value", _number(self.value, self.validation_name))
+
+    def __lt__(self, other: object) -> bool:
+        return _ordering_compare(self, other)
+
+    def __eq__(self, other: object) -> bool:
+        return _typed_eq(self, other)
+
+    def __hash__(self) -> int:
+        return hash(self.value)
+
+    def __float__(self) -> float:
+        return self.value
+
+    __get_pydantic_core_schema__ = classmethod(_pydantic_value_schema)
+
+
+class PositiveFiniteFloatValue(FiniteFloatValue):
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if self.value <= 0:
             raise ValueError(f"{self.validation_name} must be positive")
 
-    def __lt__(self, other: object) -> bool:
-        return _ordering_compare(self, other, float.__lt__)
 
-    def __eq__(self, other: object) -> bool:
-        return _typed_eq(self, other)
-
-    def __float__(self) -> float:
-        return self.value
-
-
-@total_ordering
-@dataclass(frozen=True, slots=True)
-class NonNegativeFiniteFloatValue:
-    value: float
-    validation_name: ClassVar[str] = "value"
-
+class NonNegativeFiniteFloatValue(FiniteFloatValue):
     def __post_init__(self) -> None:
-        if _number(self.value, self.validation_name) < 0:
+        super().__post_init__()
+        if self.value < 0:
             raise ValueError(f"{self.validation_name} must be non-negative")
 
-    def __lt__(self, other: object) -> bool:
-        return _ordering_compare(self, other, float.__lt__)
 
-    def __eq__(self, other: object) -> bool:
-        return _typed_eq(self, other)
-
-    def __float__(self) -> float:
-        return self.value
-
-    __get_pydantic_core_schema__ = classmethod(_pydantic_value_schema)
-
-
-@total_ordering
-@dataclass(frozen=True, slots=True)
-class OpenUnitIntervalValue:
-    value: float
-    validation_name: ClassVar[str] = "value"
-
+class OpenUnitIntervalValue(FiniteFloatValue):
     def __post_init__(self) -> None:
-        value = _number(self.value, self.validation_name)
-        if not 0 < value < 1:
+        super().__post_init__()
+        if not 0 < self.value < 1:
             raise ValueError(f"{self.validation_name} must be in (0, 1)")
 
-    def __lt__(self, other: object) -> bool:
-        return _ordering_compare(self, other, float.__lt__)
 
-    def __eq__(self, other: object) -> bool:
-        return _typed_eq(self, other)
-
-    def __float__(self) -> float:
-        return self.value
-
-    __get_pydantic_core_schema__ = classmethod(_pydantic_value_schema)
-
-
-@total_ordering
-@dataclass(frozen=True, slots=True)
-class ClosedUnitIntervalValue:
-    value: float
-    validation_name: ClassVar[str] = "value"
-
+class ClosedUnitIntervalValue(FiniteFloatValue):
     def __post_init__(self) -> None:
-        value = _number(self.value, self.validation_name)
-        if not 0 <= value <= 1:
+        super().__post_init__()
+        if not 0 <= self.value <= 1:
             raise ValueError(f"{self.validation_name} must be in [0, 1]")
-
-    def __lt__(self, other: object) -> bool:
-        return _ordering_compare(self, other, float.__lt__)
-
-    def __eq__(self, other: object) -> bool:
-        return _typed_eq(self, other)
-
-    def __float__(self) -> float:
-        return self.value
 
 
 class Seed(NonNegativeIntegerValue):
@@ -273,10 +236,12 @@ class CoverageTarget(OpenUnitIntervalValue):
 
 class CalibrationSize(PositiveIntegerValue):
     validation_name: ClassVar[str] = "calibration size"
+    comparison_family: ClassVar[str | None] = "row_count"
 
 
 class ClientCount(PositiveIntegerValue):
     validation_name: ClassVar[str] = "client count"
+    comparison_family: ClassVar[str | None] = "population_cardinality"
 
 
 class SeedCount(PositiveIntegerValue):
@@ -305,6 +270,7 @@ class SubsampleReplicateCount(PositiveIntegerValue):
 
 class GroupCount(PositiveIntegerValue):
     validation_name: ClassVar[str] = "group count"
+    comparison_family: ClassVar[str | None] = "population_cardinality"
 
 
 class ReplicateIndex(NonNegativeIntegerValue):
@@ -349,35 +315,36 @@ class FeatureCount(PositiveIntegerValue):
 
 class RowCount(NonNegativeIntegerValue):
     validation_name: ClassVar[str] = "row count"
+    comparison_family: ClassVar[str | None] = "row_count"
 
 
-class FeatureName(str):
-    def __new__(cls, value: str) -> "FeatureName":
+class _NonEmptyString(str):
+    validation_name: ClassVar[str] = "value"
+
+    def __new__(cls, value: str):
         if not isinstance(value, str) or not value:
-            raise ValueError("feature name must be a non-empty string")
+            raise ValueError(f"{cls.validation_name} must be a non-empty string")
         return super().__new__(cls, value)
 
     __get_pydantic_core_schema__ = classmethod(_str_subclass_schema)
 
 
-class OutcomeLabel(str):
-    def __new__(cls, value: str) -> "OutcomeLabel":
-        if not isinstance(value, str) or not value:
-            raise ValueError("outcome label must be a non-empty string")
-        return super().__new__(cls, value)
-
-    __get_pydantic_core_schema__ = classmethod(_str_subclass_schema)
+class FeatureName(_NonEmptyString):
+    validation_name: ClassVar[str] = "feature name"
 
 
-class StableRowId(str):
+class OutcomeLabel(_NonEmptyString):
+    validation_name: ClassVar[str] = "outcome label"
+
+
+class StableRowId(_NonEmptyString):
+    validation_name: ClassVar[str] = "stable row ID"
+
     def __new__(cls, value: str) -> "StableRowId":
-        if not isinstance(value, str) or not value:
-            raise ValueError("stable row ID must be a non-empty string")
-        if "/" in value or "\\" in value:
+        instance = super().__new__(cls, value)
+        if "/" in instance or "\\" in instance:
             raise ValueError("stable row ID must not contain path separators")
-        return super().__new__(cls, value)
-
-    __get_pydantic_core_schema__ = classmethod(_str_subclass_schema)
+        return instance
 
 
 def _validate_non_empty_tuple(values: tuple, field_name: str) -> None:
@@ -393,12 +360,12 @@ def _validate_unique(values: tuple, field_name: str) -> None:
 def _sequence_pydantic_schema(cls, _source_type, _handler):
     from pydantic_core import core_schema as _cs
 
-    def _validate(v):
-        if isinstance(v, cls):
-            return v
-        if isinstance(v, (list, tuple)):
-            return cls(tuple(v))
-        raise ValueError(f"expected sequence, got {type(v)}")
+    def _validate(value):
+        if isinstance(value, cls):
+            return value
+        if isinstance(value, (list, tuple)):
+            return cls(tuple(value))
+        raise ValueError(f"expected sequence, got {type(value)}")
 
     return _cs.no_info_plain_validator_function(
         _validate,
@@ -435,14 +402,19 @@ class OutcomeLabelSequence:
     def __post_init__(self) -> None:
         if not isinstance(self.labels, tuple):
             raise TypeError("outcome labels must be an immutable tuple")
-        wrapped = tuple(item if isinstance(item, OutcomeLabel) else OutcomeLabel(item) for item in self.labels)
-        object.__setattr__(self, "labels", wrapped)
+        object.__setattr__(
+            self,
+            "labels",
+            tuple(item if isinstance(item, OutcomeLabel) else OutcomeLabel(item) for item in self.labels),
+        )
 
     def __len__(self) -> int:
         return len(self.labels)
 
     def __iter__(self):
         return iter(self.labels)
+
+    __get_pydantic_core_schema__ = classmethod(_sequence_pydantic_schema)
 
 
 @dataclass(frozen=True, slots=True)
@@ -484,7 +456,7 @@ class DittoRegularization(NonNegativeFiniteFloatValue):
 
 
 class ModelCoefficientValue(NonNegativeFiniteFloatValue):
-    """Serialized form of either ProximalCoefficient or DittoRegularization at manifest boundaries."""
+    """Serialized form of a proximal or Ditto coefficient at manifest boundaries."""
 
     validation_name: ClassVar[str] = "model coefficient value"
 
@@ -501,60 +473,18 @@ class ConfidenceLevel(OpenUnitIntervalValue):
     validation_name: ClassVar[str] = "confidence level"
 
 
-@total_ordering
-@dataclass(frozen=True, slots=True)
-class ThresholdValue:
-    value: float
-
-    def __post_init__(self) -> None:
-        _number(self.value, "threshold")
-
-    def __lt__(self, other: object) -> bool:
-        return _ordering_compare(self, other, float.__lt__)
-
-    def __eq__(self, other: object) -> bool:
-        return _typed_eq(self, other)
-
-    def __float__(self) -> float:
-        return self.value
+class ThresholdValue(FiniteFloatValue):
+    validation_name: ClassVar[str] = "threshold"
+    comparison_family: ClassVar[str | None] = "anomaly_score"
 
 
-@total_ordering
-@dataclass(frozen=True, slots=True)
-class ScoreValue:
-    value: float
-
-    def __post_init__(self) -> None:
-        _number(self.value, "score")
-
-    def __lt__(self, other: object) -> bool:
-        return _ordering_compare(self, other, float.__lt__)
-
-    def __eq__(self, other: object) -> bool:
-        return _typed_eq(self, other)
-
-    def __float__(self) -> float:
-        return self.value
+class ScoreValue(FiniteFloatValue):
+    validation_name: ClassVar[str] = "score"
+    comparison_family: ClassVar[str | None] = "anomaly_score"
 
 
-@total_ordering
-@dataclass(frozen=True, slots=True)
-class MetricValue:
-    value: float
-
-    def __post_init__(self) -> None:
-        _number(self.value, "metric")
-
-    def __lt__(self, other: object) -> bool:
-        return _ordering_compare(self, other, float.__lt__)
-
-    def __eq__(self, other: object) -> bool:
-        return _typed_eq(self, other)
-
-    def __float__(self) -> float:
-        return self.value
-
-    __get_pydantic_core_schema__ = classmethod(_pydantic_value_schema)
+class MetricValue(FiniteFloatValue):
+    validation_name: ClassVar[str] = "metric"
 
 
 class TrafficRatePerDay(NonNegativeFiniteFloatValue):
@@ -594,29 +524,30 @@ class FamilyIdentity:
         if not isinstance(self.value, str) or not self.value:
             raise ValueError("family identity must be non-empty")
 
+    __get_pydantic_core_schema__ = classmethod(_pydantic_value_schema)
 
-class SafeTensorFilename(str):
+
+class SafeTensorFilename(_NonEmptyString):
+    validation_name: ClassVar[str] = "SafeTensors filename"
+
     def __new__(cls, value: str) -> "SafeTensorFilename":
-        if not isinstance(value, str) or not value:
-            raise ValueError("SafeTensors filename must be non-empty")
-        if not value.endswith(".safetensors"):
+        instance = super().__new__(cls, value)
+        if not instance.endswith(".safetensors"):
             raise ValueError("SafeTensors filename must end with .safetensors")
-        return super().__new__(cls, value)
-
-    __get_pydantic_core_schema__ = classmethod(_str_subclass_schema)
+        return instance
 
 
 class ManifestSchemaVersion(PositiveIntegerValue):
     validation_name: ClassVar[str] = "manifest schema version"
 
 
-class CudaDeviceName(str):
+class CudaDeviceName(_NonEmptyString):
+    validation_name: ClassVar[str] = "CUDA device name"
+
     def __new__(cls, value: str) -> "CudaDeviceName":
         if not isinstance(value, str) or not value.strip():
             raise ValueError("CUDA device name must be a non-empty string")
-        return super().__new__(cls, value)
-
-    __get_pydantic_core_schema__ = classmethod(_str_subclass_schema)
+        return str.__new__(cls, value)
 
 
 def checksum_text(payload: str) -> Checksum:
