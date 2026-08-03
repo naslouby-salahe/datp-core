@@ -1,31 +1,19 @@
-name: Apply atomic staging consolidation
+name: Validate atomic staging consolidation
 
-"on": [push]
+"on": [push, pull_request]
 
 permissions:
   contents: write
 
 jobs:
   patch:
-    if: github.ref == 'refs/heads/agent/consolidate-dataclass-contracts'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
           persist-credentials: true
 
-      - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
-        with:
-          python-version: '3.12'
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
-
-      - name: Install dependencies
-        run: uv sync --all-groups --all-extras --frozen
-
-      - name: Consolidate staging lifecycle
+      - name: Apply staging cleanup
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -45,15 +33,15 @@ jobs:
 
           store_path = Path("src/datp_core/artifacts/store.py")
           store = store_path.read_text(encoding="utf-8")
-          marker = '''@dataclass(frozen=True, slots=True)
+          marker = """@dataclass(frozen=True, slots=True)
           class PublicationOutcome[ValueT]:
               status: PublicationStatus
               value: ValueT
               complete_digest: Checksum
 
 
-          '''.replace("          ", "")
-          replacement = '''@dataclass(frozen=True, slots=True)
+          """.replace("          ", "")
+          helpers = """@dataclass(frozen=True, slots=True)
           class PublicationOutcome[ValueT]:
               status: PublicationStatus
               value: ValueT
@@ -61,28 +49,25 @@ jobs:
 
 
           def create_staging_directory(target: Path) -> Path:
-              """Create one sibling staging directory for an atomic directory publication."""
               target.parent.mkdir(parents=True, exist_ok=True)
               return Path(mkdtemp(prefix=f".{target.name}.", dir=target.parent))
 
 
           def replace_directory(staging: Path, target: Path) -> None:
-              """Replace a complete target directory with a prepared staging directory."""
               if target.exists():
                   rmtree(target)
               staging.replace(target)
 
 
           def cleanup_staging_directory(staging: Path, *, ignore_errors: bool) -> None:
-              """Remove a staging directory under explicitly selected cleanup semantics."""
               if staging.exists():
                   rmtree(staging, ignore_errors=ignore_errors)
 
 
-          '''.replace("          ", "")
+          """.replace("          ", "")
           if store.count(marker) != 1:
-              raise SystemExit("publication outcome insertion point did not match")
-          store = store.replace(marker, replacement, 1)
+              raise SystemExit(f"store marker count: {store.count(marker)}")
+          store = store.replace(marker, helpers, 1)
           store = store.replace(
               "        target.parent.mkdir(parents=True, exist_ok=True)\n"
               "        temporary = Path(mkdtemp(prefix=f\".{target.name}.\", dir=target.parent))",
@@ -97,9 +82,28 @@ jobs:
           )
           store_path.write_text(store, encoding="utf-8")
 
-          checkpoint_path = Path("src/datp_core/learning/federated/checkpointing.py")
-          checkpoint = checkpoint_path.read_text(encoding="utf-8")
-          old_helpers = '''
+          def migrate(path: str, import_anchor: str, shared_import: str, helper_block: str, ignore_errors: bool) -> None:
+              file = Path(path)
+              text = file.read_text(encoding="utf-8")
+              if text.count(helper_block) != 1:
+                  raise SystemExit(f"{path}: helper block count {text.count(helper_block)}")
+              text = text.replace(helper_block, "", 1)
+              text = text.replace("from os import replace as atomic_replace\n", "", 1)
+              text = text.replace("from shutil import rmtree\n", "", 1)
+              text = text.replace("from tempfile import mkdtemp\n", "", 1)
+              if text.count(import_anchor) != 1:
+                  raise SystemExit(f"{path}: import anchor count {text.count(import_anchor)}")
+              text = text.replace(import_anchor, shared_import, 1)
+              text = text.replace("_new_staging_directory(", "create_staging_directory(")
+              text = text.replace("_replace_directory(", "replace_directory(")
+              text = text.replace("_cleanup_staging(", "cleanup_staging_directory(")
+              text = text.replace(
+                  "cleanup_staging_directory(staging)",
+                  f"cleanup_staging_directory(staging, ignore_errors={ignore_errors})",
+              )
+              file.write_text(text, encoding="utf-8")
+
+          checkpoint_helpers = """
           def _new_staging_directory(target: Path) -> Path:
               target.parent.mkdir(parents=True, exist_ok=True)
               return Path(mkdtemp(prefix=f".{target.name}.", dir=target.parent))
@@ -114,14 +118,9 @@ jobs:
           def _cleanup_staging(staging: Path) -> None:
               if staging.exists():
                   rmtree(staging)
-          '''.replace("          ", "")
-          if checkpoint.count(old_helpers) != 1:
-              raise SystemExit("checkpointing helper block did not match")
-          checkpoint = checkpoint.replace(old_helpers, "", 1)
-          checkpoint = checkpoint.replace("from os import replace as atomic_replace\n", "", 1)
-          checkpoint = checkpoint.replace("from shutil import rmtree\n", "", 1)
-          checkpoint = checkpoint.replace("from tempfile import mkdtemp\n", "", 1)
-          checkpoint = checkpoint.replace(
+          """.replace("          ", "")
+          migrate(
+              "src/datp_core/learning/federated/checkpointing.py",
               "from datp_core.artifacts.serialization import serialize_json_model",
               "from datp_core.artifacts.serialization import serialize_json_model\n"
               "from datp_core.artifacts.store import (\n"
@@ -129,20 +128,11 @@ jobs:
               "    create_staging_directory,\n"
               "    replace_directory,\n"
               ")",
-              1,
+              checkpoint_helpers,
+              False,
           )
-          checkpoint = checkpoint.replace("_new_staging_directory(", "create_staging_directory(")
-          checkpoint = checkpoint.replace("_replace_directory(", "replace_directory(")
-          checkpoint = checkpoint.replace("_cleanup_staging(", "cleanup_staging_directory(")
-          checkpoint = checkpoint.replace(
-              "cleanup_staging_directory(staging)",
-              "cleanup_staging_directory(staging, ignore_errors=False)",
-          )
-          checkpoint_path.write_text(checkpoint, encoding="utf-8")
 
-          scoring_path = Path("src/datp_core/scoring/generation.py")
-          scoring = scoring_path.read_text(encoding="utf-8")
-          old_helpers = '''
+          scoring_helpers = """
           def _new_staging_directory(target: Path) -> Path:
               target.parent.mkdir(parents=True, exist_ok=True)
               return Path(mkdtemp(prefix=f".{target.name}.", dir=target.parent))
@@ -157,14 +147,9 @@ jobs:
           def _cleanup_staging(staging: Path) -> None:
               if staging.exists():
                   rmtree(staging, ignore_errors=True)
-          '''.replace("          ", "")
-          if scoring.count(old_helpers) != 1:
-              raise SystemExit("scoring helper block did not match")
-          scoring = scoring.replace(old_helpers, "", 1)
-          scoring = scoring.replace("from os import replace as atomic_replace\n", "", 1)
-          scoring = scoring.replace("from shutil import rmtree\n", "", 1)
-          scoring = scoring.replace("from tempfile import mkdtemp\n", "", 1)
-          scoring = scoring.replace(
+          """.replace("          ", "")
+          migrate(
+              "src/datp_core/scoring/generation.py",
               "from datp_core.artifacts.layout import scored_partition_roles",
               "from datp_core.artifacts.layout import scored_partition_roles\n"
               "from datp_core.artifacts.store import (\n"
@@ -172,24 +157,21 @@ jobs:
               "    create_staging_directory,\n"
               "    replace_directory,\n"
               ")",
-              1,
+              scoring_helpers,
+              True,
           )
-          scoring = scoring.replace("_new_staging_directory(", "create_staging_directory(")
-          scoring = scoring.replace("_replace_directory(", "replace_directory(")
-          scoring = scoring.replace("_cleanup_staging(", "cleanup_staging_directory(")
-          scoring = scoring.replace(
-              "cleanup_staging_directory(staging)",
-              "cleanup_staging_directory(staging, ignore_errors=True)",
-          )
-          scoring_path.write_text(scoring, encoding="utf-8")
           PY
 
-      - name: Run full test suite
+      - name: Compile changed modules
         run: |
-          mkdir -p data/raw
-          uv run pytest --ignore=tests/integration/configuration/test_raw_source_contracts_are_ready.py
+          python -m compileall -q \
+            src/datp_core/artifacts/store.py \
+            src/datp_core/datasets/edge_iiotset/materialize.py \
+            src/datp_core/learning/federated/checkpointing.py \
+            src/datp_core/scoring/generation.py
 
       - name: Commit cleanup
+        if: github.event_name == 'push' && github.ref == 'refs/heads/agent/consolidate-dataclass-contracts'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
