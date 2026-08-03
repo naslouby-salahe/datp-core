@@ -9,11 +9,7 @@ from tempfile import mkdtemp
 from filelock import FileLock
 from pydantic import BaseModel
 
-from datp_core.artifacts.completion import (
-    assert_complete_digest,
-    complete_digest,
-    write_complete_marker,
-)
+from datp_core.artifacts.completion import assert_complete_digest, complete_digest, write_complete_marker
 from datp_core.artifacts.layout import ProcessedAssetName
 from datp_core.artifacts.manifest import (
     read_preprocessing_manifest,
@@ -25,6 +21,7 @@ from datp_core.artifacts.manifest import (
 )
 from datp_core.domain.enums import ContractSubject, PublicationStatus
 from datp_core.domain.errors import ArtifactIntegrityError
+from datp_core.domain.values import Checksum, checksum_file
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,55 +45,66 @@ class ProcessedPublicationResult[ManifestT: BaseModel]:
 
 
 @dataclass(frozen=True, slots=True)
-class AtomicPublication:
-    target: Path
-    overwrite: bool
-    is_reusable: Callable[[Path], bool]
-    write: Callable[[Path], None]
-    remove_target: Callable[[Path], None]
+class PublicationOutcome[ValueT]:
+    status: PublicationStatus
+    value: ValueT
+    complete_digest: Checksum
 
 
-def publish_atomically(publication: AtomicPublication) -> bool:
-    """Run the common lock, temporary-directory, and atomic-replacement lifecycle."""
-    target = publication.target
+def publish_atomically[ValueT](
+    *,
+    target: Path,
+    overwrite: bool,
+    is_reusable: Callable[[Path], bool],
+    write: Callable[[Path], ValueT],
+    reusable_value: Callable[[Path], ValueT],
+    remove_target: Callable[[Path], None] = rmtree,
+    complete_marker: str | Path = "COMPLETE",
+) -> PublicationOutcome[ValueT]:
+    """Publish one typed value under a lock and return its definitive publication state."""
     with FileLock(f"{target}.lock"):
         _remove_stale_temporary_directories(target)
-        if not publication.overwrite and publication.is_reusable(target):
-            return True
+        if not overwrite and is_reusable(target):
+            return PublicationOutcome(
+                status=PublicationStatus.REUSED,
+                value=reusable_value(target),
+                complete_digest=checksum_file(target / complete_marker),
+            )
         if target.exists():
-            publication.remove_target(target)
+            remove_target(target)
         target.parent.mkdir(parents=True, exist_ok=True)
         temporary = Path(mkdtemp(prefix=f".{target.name}.", dir=target.parent))
         try:
-            publication.write(temporary)
+            value = write(temporary)
             temporary.replace(target)
         except Exception:
             rmtree(temporary, ignore_errors=True)
             raise
-    return False
+    return PublicationOutcome(
+        status=PublicationStatus.PUBLISHED,
+        value=value,
+        complete_digest=checksum_file(target / complete_marker),
+    )
 
 
 def publish_processed[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseModel](
     publication: ProcessedPublication[ManifestT, SchemaT, ReportT],
 ) -> ProcessedPublicationResult[ManifestT]:
     target = publication.coordinate_directory
-    reused = publish_atomically(
-        AtomicPublication(
-            target=target,
-            overwrite=publication.overwrite,
-            is_reusable=lambda directory: _is_reusable(directory, publication),
-            write=lambda temporary: _write_processed(temporary, publication),
-            remove_target=lambda directory: rmtree(directory),
-        )
+    outcome = publish_atomically(
+        target=target,
+        overwrite=publication.overwrite,
+        is_reusable=lambda directory: _is_reusable(directory, publication),
+        write=lambda temporary: _write_processed(temporary, publication),
+        reusable_value=lambda directory: read_preprocessing_manifest(directory, publication.manifest_type),
+        remove_target=rmtree,
     )
-    manifest = read_preprocessing_manifest(target, publication.manifest_type) if reused else publication.manifest
-    status = PublicationStatus.REUSED if reused else PublicationStatus.PUBLISHED
-    return ProcessedPublicationResult(target, status, manifest)
+    return ProcessedPublicationResult(target, outcome.status, outcome.value)
 
 
 def _write_processed[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseModel](
     temporary: Path, publication: ProcessedPublication[ManifestT, SchemaT, ReportT]
-) -> None:
+) -> ManifestT:
     report = publication.writer(temporary)
     write_preprocessing_manifest(temporary, publication.manifest)
     write_transformed_schema(temporary, publication.schema)
@@ -111,6 +119,7 @@ def _write_processed[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseMode
         raise ArtifactIntegrityError(
             "processed publication failed complete-asset validation", subject=ContractSubject.ARTIFACT_PATH
         )
+    return publication.manifest
 
 
 def _is_reusable[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseModel](
@@ -119,7 +128,7 @@ def _is_reusable[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseModel](
     try:
         manifest = read_preprocessing_manifest(target, publication.manifest_type)
         schema = read_transformed_schema(target, publication.schema_type)
-        _report = read_validation_report(target, publication.report_type)
+        read_validation_report(target, publication.report_type)
     except (OSError, ArtifactIntegrityError, ValueError):
         return False
     expected = complete_digest(
@@ -130,11 +139,9 @@ def _is_reusable[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseModel](
         assert_complete_digest(target, expected)
     except ArtifactIntegrityError:
         return False
-    if manifest != publication.manifest:
-        return False
-    if schema != publication.schema:
-        return False
-    return _assets_exist(target, publication.required_assets)
+    return manifest == publication.manifest and schema == publication.schema and _assets_exist(
+        target, publication.required_assets
+    )
 
 
 def _assets_exist(directory: Path, required_assets: tuple[ProcessedAssetName, ...]) -> bool:
