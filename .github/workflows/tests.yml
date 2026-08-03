@@ -1,267 +1,57 @@
-name: Apply publication and evaluation cleanup
+name: Diagnose publication cleanup
 
-"on": [push]
+"on": [push, pull_request]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  patch:
-    if: github.ref == 'refs/heads/agent/consolidate-dataclass-contracts'
+  diagnose:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
-          persist-credentials: true
-
-      - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
-        with:
-          python-version: '3.12'
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
-
-      - name: Install dependencies
-        run: uv sync --all-groups --all-extras --frozen
-
-      - name: Apply source cleanup
+          persist-credentials: false
+      - name: Inspect transformation targets
         run: |
           python - <<'PY'
           from pathlib import Path
           import re
 
-          def replace_once(path: str, old: str, new: str) -> None:
-              file = Path(path)
-              text = file.read_text(encoding="utf-8")
-              if new in text and old not in text:
-                  return
-              if text.count(old) != 1:
-                  raise SystemExit(f"{path}: expected one occurrence of {old!r}, found {text.count(old)}")
-              file.write_text(text.replace(old, new, 1), encoding="utf-8")
+          checks = {
+              "edge dataclass": ("src/datp_core/datasets/edge_iiotset/materialize.py", "@dataclass(frozen=True, slots=True)\nclass _EdgePublicationInputs:"),
+              "store outcome": ("src/datp_core/artifacts/store.py", "@dataclass(frozen=True, slots=True)\nclass PublicationOutcome[ValueT]:"),
+              "checkpoint helper start": ("src/datp_core/learning/federated/checkpointing.py", "def _new_staging_directory(target: Path) -> Path:"),
+              "checkpoint helper end": ("src/datp_core/learning/federated/checkpointing.py", "def _cleanup_staging(staging: Path) -> None:"),
+              "scoring helper start": ("src/datp_core/scoring/generation.py", "def _new_staging_directory(target: Path) -> Path:"),
+              "scoring helper end": ("src/datp_core/scoring/generation.py", "def _cleanup_staging(staging: Path) -> None:"),
+              "central confusion": ("src/datp_core/centralized_reference/evaluation.py", "class ConfusionCounts:"),
+              "central validation": ("src/datp_core/centralized_reference/evaluation.py", "    def __post_init__(self) -> None:\n        for name, value in ("),
+              "central rate": ("src/datp_core/centralized_reference/evaluation.py", "def _rate_metric(metric: MetricId, numerator: int, denominator: int) -> CentralizedMetricRecord:"),
+          }
+          for label, (path, pattern) in checks.items():
+              text = Path(path).read_text(encoding="utf-8")
+              print(f"{label}: {text.count(pattern)}")
 
-          replace_once(
-              "src/datp_core/datasets/edge_iiotset/materialize.py",
-              "@dataclass(frozen=True, slots=True)\nclass _EdgePublicationInputs:",
-              "@dataclass(frozen=True, slots=True, eq=False)\nclass _EdgePublicationInputs:",
-          )
-
-          store_path = Path("src/datp_core/artifacts/store.py")
-          store = store_path.read_text(encoding="utf-8")
-          marker = '''@dataclass(frozen=True, slots=True)
-          class PublicationOutcome[ValueT]:
-              status: PublicationStatus
-              value: ValueT
-              complete_digest: Checksum
-
-
-          '''.replace("          ", "")
-          helpers = '''@dataclass(frozen=True, slots=True)
-          class PublicationOutcome[ValueT]:
-              status: PublicationStatus
-              value: ValueT
-              complete_digest: Checksum
-
-
-          def create_staging_directory(target: Path) -> Path:
-              """Create one sibling staging directory for an atomic directory publication."""
-              target.parent.mkdir(parents=True, exist_ok=True)
-              return Path(mkdtemp(prefix=f".{target.name}.", dir=target.parent))
-
-
-          def replace_directory(staging: Path, target: Path) -> None:
-              """Replace a complete target directory with a prepared staging directory."""
-              if target.exists():
-                  rmtree(target)
-              staging.replace(target)
-
-
-          def cleanup_staging_directory(staging: Path, *, ignore_errors: bool) -> None:
-              """Remove a staging directory under explicitly selected cleanup semantics."""
-              if staging.exists():
-                  rmtree(staging, ignore_errors=ignore_errors)
-
-
-          '''.replace("          ", "")
-          if helpers not in store:
-              if store.count(marker) != 1:
-                  raise SystemExit("PublicationOutcome insertion point did not match")
-              store = store.replace(marker, helpers, 1)
-          store = store.replace(
-              "        target.parent.mkdir(parents=True, exist_ok=True)\n"
-              "        temporary = Path(mkdtemp(prefix=f\".{target.name}.\", dir=target.parent))",
-              "        temporary = create_staging_directory(target)",
-              1,
-          )
-          store = store.replace("            temporary.replace(target)", "            replace_directory(temporary, target)", 1)
-          store = store.replace(
-              "            rmtree(temporary, ignore_errors=True)",
-              "            cleanup_staging_directory(temporary, ignore_errors=True)",
-              1,
-          )
-          store_path.write_text(store, encoding="utf-8")
-
-          checkpoint_path = Path("src/datp_core/learning/federated/checkpointing.py")
-          checkpoint = checkpoint_path.read_text(encoding="utf-8")
-          checkpoint = checkpoint.replace("from os import replace as atomic_replace\n", "", 1)
-          checkpoint = checkpoint.replace("from shutil import rmtree\n", "", 1)
-          checkpoint = checkpoint.replace("from tempfile import mkdtemp\n", "", 1)
-          checkpoint = checkpoint.replace(
-              "from datp_core.artifacts.serialization import serialize_json_model",
-              "from datp_core.artifacts.serialization import serialize_json_model\n"
-              "from datp_core.artifacts.store import (\n"
-              "    cleanup_staging_directory,\n"
-              "    create_staging_directory,\n"
-              "    replace_directory,\n"
-              ")",
-              1,
-          )
-          checkpoint = checkpoint.replace("_new_staging_directory(", "create_staging_directory(")
-          checkpoint = checkpoint.replace("_replace_directory(", "replace_directory(")
-          checkpoint = re.sub(
-              r"_cleanup_staging\(([^\n)]+)\)",
-              r"cleanup_staging_directory(\1, ignore_errors=False)",
-              checkpoint,
-          )
-          checkpoint, removed = re.subn(
-              r"\ndef create_staging_directory\(target: Path\) -> Path:.*?"
-              r"\ndef cleanup_staging_directory\(staging: Path, ignore_errors=False\) -> None:.*?"
-              r"(?=\n\ndef persist_federated_training_history)",
-              "",
-              checkpoint,
-              count=1,
-              flags=re.DOTALL,
-          )
-          if removed != 1:
-              raise SystemExit("checkpointing staging helper block did not match after call renaming")
-          checkpoint_path.write_text(checkpoint, encoding="utf-8")
-
-          scoring_path = Path("src/datp_core/scoring/generation.py")
-          scoring = scoring_path.read_text(encoding="utf-8")
-          scoring = scoring.replace("from os import replace as atomic_replace\n", "", 1)
-          scoring = scoring.replace("from shutil import rmtree\n", "", 1)
-          scoring = scoring.replace("from tempfile import mkdtemp\n", "", 1)
-          scoring = scoring.replace(
-              "from datp_core.artifacts.layout import scored_partition_roles",
-              "from datp_core.artifacts.layout import scored_partition_roles\n"
-              "from datp_core.artifacts.store import (\n"
-              "    cleanup_staging_directory,\n"
-              "    create_staging_directory,\n"
-              "    replace_directory,\n"
-              ")",
-              1,
-          )
-          scoring = scoring.replace("_new_staging_directory(", "create_staging_directory(")
-          scoring = scoring.replace("_replace_directory(", "replace_directory(")
-          scoring = re.sub(
-              r"_cleanup_staging\(([^\n)]+)\)",
-              r"cleanup_staging_directory(\1, ignore_errors=True)",
-              scoring,
-          )
-          scoring, removed = re.subn(
-              r"\ndef create_staging_directory\(target: Path\) -> Path:.*?"
-              r"\ndef cleanup_staging_directory\(staging: Path, ignore_errors=True\) -> None:.*?"
-              r"(?=\n\ndef _write_complete_marker)",
-              "",
-              scoring,
-              count=1,
-              flags=re.DOTALL,
-          )
-          if removed != 1:
-              raise SystemExit("scoring staging helper block did not match after call renaming")
-          scoring_path.write_text(scoring, encoding="utf-8")
-
-          evaluation_path = Path("src/datp_core/centralized_reference/evaluation.py")
-          evaluation = evaluation_path.read_text(encoding="utf-8")
-          evaluation = evaluation.replace("class ConfusionCounts:", "class CentralizedConfusionCounts:", 1)
-          for field in ("true_negative", "false_positive", "true_positive", "false_negative"):
-              evaluation = evaluation.replace(f"    {field}: int", f"    {field}: RowCount", 1)
-          validation_block = '''
-              def __post_init__(self) -> None:
-                  for name, value in (
-                      ("true_negative", self.true_negative),
-                      ("false_positive", self.false_positive),
-                      ("true_positive", self.true_positive),
-                      ("false_negative", self.false_negative),
-                  ):
-                      if isinstance(value, bool) or value < 0:
-                          raise ValueError(f"{name} must be a non-negative integer")
-          '''.replace("          ", "")
-          if validation_block not in evaluation:
-              raise SystemExit("centralized confusion validation block did not match")
-          evaluation = evaluation.replace(validation_block, "", 1)
-          evaluation = evaluation.replace("    confusion: ConfusionCounts", "    confusion: CentralizedConfusionCounts", 1)
-          evaluation = evaluation.replace(") -> ConfusionCounts:", ") -> CentralizedConfusionCounts:", 1)
-          evaluation = evaluation.replace("    return ConfusionCounts(", "    return CentralizedConfusionCounts(", 1)
-          evaluation = evaluation.replace("        true_negative=true_negative,", "        true_negative=RowCount(true_negative),", 1)
-          evaluation = evaluation.replace("        false_positive=false_positive,", "        false_positive=RowCount(false_positive),", 1)
-          evaluation = evaluation.replace("        true_positive=true_positive,", "        true_positive=RowCount(true_positive),", 1)
-          evaluation = evaluation.replace("        false_negative=false_negative,", "        false_negative=RowCount(false_negative),", 1)
-          evaluation = evaluation.replace("    confusion: ConfusionCounts,", "    confusion: CentralizedConfusionCounts,", 1)
-          evaluation = evaluation.replace(
-              "def _rate_metric(metric: MetricId, numerator: int, denominator: int) -> CentralizedMetricRecord:",
-              "def _rate_metric(metric: MetricId, numerator: RowCount, denominator: RowCount) -> CentralizedMetricRecord:",
-              1,
-          )
-          evaluation = evaluation.replace(
-              "        value=MetricValue(numerator / denominator),",
-              "        value=MetricValue(numerator.value / denominator.value),",
-              1,
-          )
-          evaluation = evaluation.replace("def _binary_macro_f1(confusion: ConfusionCounts)", "def _binary_macro_f1(confusion: CentralizedConfusionCounts)", 1)
-          evaluation = evaluation.replace("def _pooled_macro_f1(confusion: ConfusionCounts)", "def _pooled_macro_f1(confusion: CentralizedConfusionCounts)", 1)
-          evaluation = evaluation.replace("def _macro_f1_record(metric: MetricId, confusion: ConfusionCounts)", "def _macro_f1_record(metric: MetricId, confusion: CentralizedConfusionCounts)", 1)
-          evaluation = evaluation.replace("    attack_precision = confusion.true_positive / attack_precision_den", "    attack_precision = confusion.true_positive.value / attack_precision_den.value", 1)
-          evaluation = evaluation.replace("    attack_recall = confusion.true_positive / attack_recall_den", "    attack_recall = confusion.true_positive.value / attack_recall_den.value", 1)
-          evaluation = evaluation.replace("    benign_precision = confusion.true_negative / benign_precision_den", "    benign_precision = confusion.true_negative.value / benign_precision_den.value", 1)
-          evaluation = evaluation.replace("    benign_recall = confusion.true_negative / benign_recall_den", "    benign_recall = confusion.true_negative.value / benign_recall_den.value", 1)
-          for field in ("true_negative", "false_positive", "true_positive", "false_negative"):
-              evaluation = evaluation.replace(
-                  f'            "{field}": evaluation.confusion.{field},',
-                  f'            "{field}": evaluation.confusion.{field}.value,',
-                  1,
+          for path in (
+              "src/datp_core/learning/federated/checkpointing.py",
+              "src/datp_core/scoring/generation.py",
+          ):
+              text = Path(path).read_text(encoding="utf-8")
+              renamed = text.replace("_new_staging_directory(", "create_staging_directory(")
+              renamed = renamed.replace("_replace_directory(", "replace_directory(")
+              strict = "checkpointing" in path
+              renamed = re.sub(
+                  r"_cleanup_staging\(([^\n)]+)\)",
+                  rf"cleanup_staging_directory(\1, ignore_errors={'False' if strict else 'True'})",
+                  renamed,
               )
-          evaluation = evaluation.replace(
-              '        f"{result.confusion.true_negative},{result.confusion.false_positive},"\n'
-              '        f"{result.confusion.true_positive},{result.confusion.false_negative}|{metric_payload}"',
-              '        f"{result.confusion.true_negative.value},{result.confusion.false_positive.value},"\n'
-              '        f"{result.confusion.true_positive.value},{result.confusion.false_negative.value}|{metric_payload}"',
-              1,
-          )
-          evaluation_path.write_text(evaluation, encoding="utf-8")
-
-          architecture_path = Path("tests/architecture/test_no_compatibility_surfaces.py")
-          architecture = architecture_path.read_text(encoding="utf-8")
-          guard = '''
-          def test_source_uses_no_explicit_any_type() -> None:
-              for source_path, tree in parsed_source_files():
-                  for node in ast.walk(tree):
-                      if isinstance(node, ast.ImportFrom):
-                          assert all(alias.name != "Any" for alias in node.names), source_path
-                      elif isinstance(node, ast.Name):
-                          assert node.id != "Any", source_path
-                      elif isinstance(node, ast.Attribute):
-                          assert node.attr != "Any", source_path
-          '''.replace("          ", "")
-          if guard.strip() not in architecture:
-              architecture = architecture.rstrip() + "\n\n" + guard
-          architecture_path.write_text(architecture, encoding="utf-8")
+              suffix = "persist_federated_training_history" if strict else "_write_complete_marker"
+              ignore = "False" if strict else "True"
+              pattern = (
+                  r"\ndef create_staging_directory\(target: Path\) -> Path:.*?"
+                  rf"\ndef cleanup_staging_directory\(staging: Path, ignore_errors={ignore}\) -> None:.*?"
+                  rf"(?=\n\ndef {suffix})"
+              )
+              print(f"{path} transformed helper matches: {len(re.findall(pattern, renamed, flags=re.DOTALL))}")
           PY
-
-      - name: Run focused tests
-        run: |
-          uv run pytest \
-            tests/architecture/test_no_compatibility_surfaces.py \
-            tests/integration/datasets/test_edge_iiotset_materialization.py \
-            tests/unit/centralized_reference/test_evaluation.py \
-            tests/unit/learning/federated/test_checkpointing.py \
-            tests/unit/scoring/test_generation.py
-
-      - name: Commit cleanup
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src tests
-          git diff --cached --quiet && exit 0
-          git commit -m "Centralize staging and disambiguate evaluation counts"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
