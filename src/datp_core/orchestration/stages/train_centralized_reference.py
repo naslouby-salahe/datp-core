@@ -5,7 +5,6 @@ from datp_core.centralized_reference.training import (
     declared_centralized_training_values,
     require_no_hidden_scientific_defaults,
 )
-from datp_core.domain.values import checksum_file
 from datp_core.learning.centralized.adapter import (
     CentralizedTrainingArtifacts,
     CentralizedTrainingPublicationRequest,
@@ -68,5 +67,5 @@ def train_centralized_reference_stage(
         publication_status=publication.status,
         training=artifacts.training,
         candidates=artifacts.candidates,
-        complete_digest=checksum_file(request.output_directory / CentralizedArtifactName.COMPLETE),
+        complete_digest=publication.complete_digest,
     )
