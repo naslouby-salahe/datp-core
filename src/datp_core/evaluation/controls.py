@@ -19,9 +19,10 @@ from datp_core.domain.enums import (
 )
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import (
+    NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
     AbsoluteTolerance,
     Checksum,
-    RowCount,
+    ScoreValue,
     ThresholdValue,
     floats_absolutely_close,
 )
@@ -30,6 +31,7 @@ from datp_core.evaluation.cohorts import (
     ClientEligibilityRecord,
     EvaluationCohortManifest,
     build_evaluation_cohort_manifest,
+    client_partition_counts_from_scores,
 )
 from datp_core.evaluation.confusion import calculate_confusion_counts
 from datp_core.evaluation.models import (
@@ -40,11 +42,7 @@ from datp_core.evaluation.models import (
 )
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.populations.capabilities import population_capabilities
-from datp_core.populations.models import (
-    ClientIdentity,
-    ClientPartitionCounts,
-    PopulationOutcomeLabel,
-)
+from datp_core.populations.models import ClientIdentity, PopulationOutcomeLabel
 from datp_core.scoring.models import (
     FixedScoreInvariant,
     ScoreArtifactManifest,
@@ -118,7 +116,7 @@ def build_federated_evaluation_inputs(
     cohort = build_evaluation_cohort_manifest(
         population=score_manifest.coordinate.population,
         partition_seed=score_manifest.coordinate.training_seed,
-        client_counts=_client_partition_counts(score_manifest),
+        client_counts=client_partition_counts_from_scores(score_manifest),
     )
     invariant = FixedScoreInvariant.from_manifest(score_manifest)
     return FederatedEvaluationInputs(
@@ -176,7 +174,7 @@ def validate_fixed_score_controls(
     *,
     auroc_absolute_tolerance: AbsoluteTolerance,
 ) -> None:
-    """Reject every changed fixed input; threshold policy is the sole permitted difference."""
+    """Reject every changed fixed input; threshold policy is the sole difference."""
     if first.threshold_method is second.threshold_method:
         raise ScientificContractError(
             "fixed-score comparison requires distinct threshold methods",
@@ -256,68 +254,6 @@ def validate_fixed_score_controls(
         first.aurocs,
         second.aurocs,
         auroc_absolute_tolerance,
-    )
-
-
-def _client_partition_counts(
-    manifest: ScoreArtifactManifest,
-) -> tuple[ClientPartitionCounts, ...]:
-    calibration = tuple(
-        sorted(
-            manifest.calibration_records,
-            key=lambda record: record.scored_client,
-        )
-    )
-    evaluation = tuple(
-        sorted(
-            manifest.evaluation_records,
-            key=lambda record: record.scored_client,
-        )
-    )
-    if tuple(record.scored_client for record in calibration) != tuple(
-        record.scored_client for record in evaluation
-    ):
-        raise ScientificContractError(
-            "evaluation inputs require matching calibration and evaluation score clients"
-        )
-    return tuple(
-        ClientPartitionCounts(
-            client_id=calibration_record.scored_client.client_id,
-            benign_calibration_count=_label_count(
-                calibration_record,
-                PopulationOutcomeLabel.BENIGN,
-            ),
-            benign_evaluation_count=_label_count(
-                evaluation_record,
-                PopulationOutcomeLabel.BENIGN,
-            ),
-            attack_evaluation_count=_label_count(
-                evaluation_record,
-                PopulationOutcomeLabel.ATTACK,
-            ),
-            accepted=True,
-            deployment_fallback=False,
-        )
-        for calibration_record, evaluation_record in zip(
-            calibration,
-            evaluation,
-            strict=True,
-        )
-    )
-
-
-def _label_count(
-    record: ScoreRecord,
-    label: PopulationOutcomeLabel,
-) -> RowCount:
-    frame = pl.read_parquet(record.path)
-    return RowCount(
-        int(
-            (
-                frame[ScoreFrameColumn.OUTCOME_LABEL.value]
-                == label.value
-            ).sum()
-        )
     )
 
 
@@ -443,7 +379,7 @@ def _client_auroc_evidence(
 ) -> ClientAurocEvidence:
     frame = pl.read_parquet(record.path)
     scores = tuple(
-        float(value)
+        ScoreValue(float(value))
         for value in frame[
             ScoreFrameColumn.RECONSTRUCTION_ERROR.value
         ].to_list()
@@ -694,7 +630,7 @@ def _require_matching_auroc(
         if not floats_absolutely_close(
             expected.value.value,
             observed.value.value,
-            AbsoluteTolerance(0.0).value,
+            NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE.value,
         ):
             raise ScientificContractError(
                 "fixed-score AUROC evidence does not match held-out evaluation"
