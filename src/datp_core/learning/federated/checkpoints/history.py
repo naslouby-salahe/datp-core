@@ -1,5 +1,6 @@
 """Federated training-history persistence and trusted reload."""
 
+from dataclasses import dataclass
 from os import replace as atomic_replace
 from pathlib import Path
 
@@ -33,6 +34,15 @@ from datp_core.learning.federated.models import (
 )
 from datp_core.populations.models import ClientIdentity
 from datp_core.protocols.models import CheckpointProtocol
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class RoundSummaryRecord:
+    round_number: RoundNumber
+    aggregate_loss: MetricValue
+    upload_bytes: ByteCount
+    download_bytes: ByteCount
+    global_state_checksum: Checksum
 
 
 def read_parquet(path: Path) -> pl.DataFrame:
@@ -272,13 +282,35 @@ def load_federated_training_history(
             coordinate=coordinate,
             personalized_coordinate=personalized_coordinate,
             identity_kind=identity_kind,
-            round_row=round_row,
+            summary=summary,
             client_frame=client_frame,
             personalized_frame=personalized_frame,
         )
-        for round_row in round_frame.iter_rows(named=True)
+        for summary in _round_summaries(round_frame)
     )
     return FederatedTrainingHistory(coordinate=coordinate, rounds=rounds)
+
+
+def _round_summaries(frame: pl.DataFrame) -> tuple[RoundSummaryRecord, ...]:
+    column = FederatedHistoryColumn
+    return tuple(
+        RoundSummaryRecord(
+            round_number=RoundNumber(int(round_number)),
+            aggregate_loss=MetricValue(float(aggregate_loss)),
+            upload_bytes=ByteCount(int(upload_bytes)),
+            download_bytes=ByteCount(int(download_bytes)),
+            global_state_checksum=Checksum(str(global_state_checksum)),
+        )
+        for round_number, aggregate_loss, upload_bytes, download_bytes, global_state_checksum in frame.select(
+            (
+                column.ROUND_NUMBER.value,
+                column.AGGREGATE_LOSS.value,
+                column.UPLOAD_BYTES.value,
+                column.DOWNLOAD_BYTES.value,
+                column.GLOBAL_STATE_CHECKSUM.value,
+            )
+        ).iter_rows()
+    )
 
 
 def _round_result(
@@ -286,20 +318,15 @@ def _round_result(
     coordinate: FederatedTrainingCoordinate,
     personalized_coordinate: FederatedTrainingCoordinate | None,
     identity_kind: PopulationIdentityKind,
-    round_row: dict[str, object],
+    summary: RoundSummaryRecord,
     client_frame: pl.DataFrame,
     personalized_frame: pl.DataFrame | None,
 ) -> FederatedRoundResult:
     column = FederatedHistoryColumn
-    round_number = RoundNumber(int(round_row[column.ROUND_NUMBER.value]))
-    client_rows = client_frame.filter(pl.col(column.ROUND_NUMBER.value) == round_number.value)
+    client_rows = client_frame.filter(pl.col(column.ROUND_NUMBER.value) == summary.round_number.value)
     client_results = tuple(
         ClientTrainingResult(
-            client=ClientIdentity(
-                coordinate.population,
-                str(client_id),
-                identity_kind,
-            ),
+            client=ClientIdentity(coordinate.population, str(client_id), identity_kind),
             sample_count=RowCount(int(sample_count)),
             local_loss=MetricValue(float(local_loss)),
         )
@@ -311,23 +338,23 @@ def _round_result(
         coordinate=coordinate,
         personalized_coordinate=personalized_coordinate,
         identity_kind=identity_kind,
-        round_number=round_number,
+        round_number=summary.round_number,
         personalized_frame=personalized_frame,
     )
     return FederatedRoundResult(
-        round_number=round_number,
+        round_number=summary.round_number,
         client_results=client_results,
-        aggregate_loss=MetricValue(float(round_row[column.AGGREGATE_LOSS.value])),
+        aggregate_loss=summary.aggregate_loss,
         communication=CommunicationRecord(
-            round_number=round_number,
-            estimated_upload_bytes=ByteCount(int(round_row[column.UPLOAD_BYTES.value])),
-            estimated_download_bytes=ByteCount(int(round_row[column.DOWNLOAD_BYTES.value])),
+            round_number=summary.round_number,
+            estimated_upload_bytes=summary.upload_bytes,
+            estimated_download_bytes=summary.download_bytes,
             estimation_basis=CommunicationEstimationMethod.SERIALIZED_MESSAGE_SIZE_ESTIMATE,
         ),
         global_state_reference=GlobalModelStateReference(
             coordinate=coordinate,
-            round_number=round_number,
-            state_checksum=Checksum(str(round_row[column.GLOBAL_STATE_CHECKSUM.value])),
+            round_number=summary.round_number,
+            state_checksum=summary.global_state_checksum,
             tensor_path=None,
         ),
         personalized_state_references=personalized_references,
