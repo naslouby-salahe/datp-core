@@ -20,23 +20,46 @@ from datp_core.domain.enums import (
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import Checksum, MetricValue, Seed
 from datp_core.experiments.models import ExternalTemporalExecutionIdentity
-from datp_core.orchestration.stages.analyze import TemporalAnalyzeRequest, analyze_temporal_stage
+from datp_core.orchestration.commands.analysis import TemporalAnalyzeRequest
+from datp_core.orchestration.stages.analyze import analyze_temporal_stage
 
 
 def test_recalibrated_future_can_change_only_calibration_window() -> None:
-    frozen = _future_provenance(TemporalState.FROZEN_FUTURE, "a" * 64, "b" * 64)
-    recalibrated = _future_provenance(TemporalState.RECALIBRATED_FUTURE, "c" * 64, "b" * 64)
+    frozen = _future_provenance(
+        TemporalState.FROZEN_FUTURE,
+        "a" * 64,
+        "b" * 64,
+    )
+    recalibrated = _future_provenance(
+        TemporalState.RECALIBRATED_FUTURE,
+        "c" * 64,
+        "b" * 64,
+    )
     validate_frozen_recalibrated_pair(frozen, recalibrated)
     with pytest.raises(ScientificContractError, match="evaluation scores"):
         validate_frozen_recalibrated_pair(
             frozen,
-            _future_provenance(TemporalState.RECALIBRATED_FUTURE, "c" * 64, "d" * 64),
+            _future_provenance(
+                TemporalState.RECALIBRATED_FUTURE,
+                "c" * 64,
+                "d" * 64,
+            ),
         )
 
 
-def test_temporal_analysis_publishes_decisions_for_each_record(tmp_path: Path) -> None:
-    frozen = _future_provenance(TemporalState.FROZEN_FUTURE, "1" * 64, "2" * 64)
-    recalibrated = _future_provenance(TemporalState.RECALIBRATED_FUTURE, "3" * 64, "2" * 64)
+def test_temporal_analysis_publishes_decisions_for_each_record(
+    tmp_path: Path,
+) -> None:
+    frozen = _future_provenance(
+        TemporalState.FROZEN_FUTURE,
+        "1" * 64,
+        "2" * 64,
+    )
+    recalibrated = _future_provenance(
+        TemporalState.RECALIBRATED_FUTURE,
+        "3" * 64,
+        "2" * 64,
+    )
     static = TemporalDeploymentProvenance(
         state=TemporalState.STATIC_REFERENCE,
         split_protocol=SplitProtocolId.RANDOM_FRACTIONAL_STATIC_REFERENCE,
@@ -44,7 +67,9 @@ def test_temporal_analysis_publishes_decisions_for_each_record(tmp_path: Path) -
         evaluation_role=PartitionRole.EVALUATION,
         coordinate_checksum=frozen.coordinate_checksum,
         checkpoint_checksum=frozen.checkpoint_checksum,
-        preprocessing_state_set_checksum=frozen.preprocessing_state_set_checksum,
+        preprocessing_state_set_checksum=(
+            frozen.preprocessing_state_set_checksum
+        ),
         split_manifest_checksum=Checksum("4" * 64),
         calibration_score_set_checksum=Checksum("5" * 64),
         evaluation_score_set_checksum=Checksum("6" * 64),
@@ -69,7 +94,9 @@ def test_temporal_analysis_publishes_decisions_for_each_record(tmp_path: Path) -
     )
     result = analyze_temporal_stage(request)
     assert result.records[0].decision.decision is ScientificDecision.SUPPORTED
-    document = loads((request.output_directory / "temporal_analysis.json").read_text())
+    document = loads(
+        (request.output_directory / "temporal_analysis.json").read_text()
+    )
     assert document["records"][0]["decision"]["decision"] == "supported"
 
 
@@ -91,7 +118,9 @@ def _future_provenance(
         state=state,
         split_protocol=SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE,
         calibration_role=(
-            PartitionRole.CALIBRATION if state is TemporalState.FROZEN_FUTURE else PartitionRole.FUTURE_RECALIBRATION
+            PartitionRole.CALIBRATION
+            if state is TemporalState.FROZEN_FUTURE
+            else PartitionRole.FUTURE_RECALIBRATION
         ),
         evaluation_role=PartitionRole.EVALUATION,
         coordinate_checksum=Checksum("e" * 64),
