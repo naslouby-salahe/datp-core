@@ -1,6 +1,5 @@
 """Stage: compose held-out federated evaluation publication."""
 
-from datp_core.domain.values import checksum_file
 from datp_core.evaluation.population import (
     FederatedEvaluationArtifacts,
     FederatedEvaluationAssetName,
@@ -61,7 +60,5 @@ def evaluate_federated_stage(
         clients=artifacts.clients,
         population=artifacts.population,
         diagnostics=artifacts.diagnostics,
-        complete_digest=checksum_file(
-            request.output_directory / FederatedEvaluationAssetName.COMPLETE
-        ),
+        complete_digest=publication.complete_digest,
     )
