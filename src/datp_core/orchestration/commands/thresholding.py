@@ -12,8 +12,8 @@ from datp_core.domain.enums import PublicationStatus, StageOperationId
 from datp_core.domain.values import Checksum
 from datp_core.protocols.models import CentralizedQuantileProtocol
 from datp_core.scoring.models import ScoreArtifactManifest
+from datp_core.thresholding.common import ThresholdConstructionResult
 from datp_core.thresholding.dispatch import ThresholdConstructionRequest
-from datp_core.thresholding.models import ThresholdConstructionResult
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,7 +27,9 @@ class ConstructCentralizedThresholdRequest:
 
 @dataclass(frozen=True, slots=True)
 class ConstructCentralizedThresholdResult:
-    stage: ClassVar[StageOperationId] = StageOperationId.CONSTRUCT_CENTRALIZED_REFERENCE_THRESHOLD
+    stage: ClassVar[StageOperationId] = (
+        StageOperationId.CONSTRUCT_CENTRALIZED_REFERENCE_THRESHOLD
+    )
     publication_status: PublicationStatus
     threshold: PooledThresholdResult
     complete_digest: Checksum
@@ -44,7 +46,9 @@ class ConstructFederatedThresholdsRequest:
 
 @dataclass(frozen=True, slots=True)
 class ConstructFederatedThresholdsResult:
-    stage: ClassVar[StageOperationId] = StageOperationId.CONSTRUCT_FEDERATED_THRESHOLDS
+    stage: ClassVar[StageOperationId] = (
+        StageOperationId.CONSTRUCT_FEDERATED_THRESHOLDS
+    )
     result: ThresholdConstructionResult
     publication_status: PublicationStatus
     complete_digest: Checksum
