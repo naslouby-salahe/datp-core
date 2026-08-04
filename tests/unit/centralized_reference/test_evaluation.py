@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import cast
 
 import pytest
 from tests.unit.centralized_reference.helpers import (
@@ -16,9 +17,9 @@ from datp_core.centralized_reference.checkpointing import retain_centralized_che
 from datp_core.centralized_reference.evaluation import (
     CentralizedConfusionCounts,
     evaluate_centralized_reference,
-    reject_b1_b4_insertion,
     reject_centralized_as_federated_threshold_policy,
-    reject_centralized_result_in_confirmatory_ladder,
+    reject_centralized_in_federated_threshold_comparison,
+    reject_centralized_result_in_confirmatory_threshold_comparison,
     reject_cross_client_cv_fpr_from_pooled_centralized,
 )
 from datp_core.centralized_reference.scoring import CentralizedScoringRequest, score_centralized_reference
@@ -46,27 +47,21 @@ def test_centralized_confusion_counts_require_row_count_values() -> None:
             confusion.false_negative,
         )
     ) == RowCount(20)
-    # A dict-splat (rather than a direct keyword argument) keeps the raw-int
-    # substitution a runtime-only concern: it is a deliberate scientific-contract
-    # probe, not a static call-signature error the type checker should flag.
-    fields_with_a_raw_int_true_negative = {
-        "true_negative": 10,
-        "false_positive": RowCount(2),
-        "true_positive": RowCount(7),
-        "false_negative": RowCount(1),
-    }
-
-    def build() -> CentralizedConfusionCounts:
-        return CentralizedConfusionCounts(**fields_with_a_raw_int_true_negative)
 
     with pytest.raises(TypeError, match="RowCount"):
-        build()
+        CentralizedConfusionCounts(
+            true_negative=cast(RowCount, 10),
+            false_positive=RowCount(2),
+            true_positive=RowCount(7),
+            false_negative=RowCount(1),
+        )
 
 
 def test_pooled_evaluation_metrics_and_confusion(tmp_path: Path) -> None:
     require_cuda()
-    training = run_miniature_training(tmp_path / "train")
-    candidates = retain_centralized_checkpoint_candidates(training, AUTOENCODER)
+    execution = run_miniature_training(tmp_path / "train")
+    training = execution.result
+    candidates = retain_centralized_checkpoint_candidates(execution, AUTOENCODER)
     scoring = score_centralized_reference(
         CentralizedScoringRequest(
             coordinate=training_coordinate(),
@@ -92,7 +87,6 @@ def test_pooled_evaluation_metrics_and_confusion(tmp_path: Path) -> None:
     )
     assert evaluation.threshold_method is CentralizedThresholdMethod.POOLED_BENIGN_QUANTILE
     assert evaluation.evidence_role is EvidenceRole.SUPPORTIVE
-    assert evaluation.is_confirmatory_ladder_member is False
     assert evaluation.evaluation_row_count == 40
     assert (
         sum(
@@ -110,10 +104,11 @@ def test_pooled_evaluation_metrics_and_confusion(tmp_path: Path) -> None:
     assert MetricId.AUROC in metric_ids
 
 
-def test_rejects_confirmatory_ladder_and_federated_policy_use(tmp_path: Path) -> None:
+def test_rejects_confirmatory_and_federated_threshold_use(tmp_path: Path) -> None:
     require_cuda()
-    training = run_miniature_training(tmp_path / "train")
-    candidates = retain_centralized_checkpoint_candidates(training, AUTOENCODER)
+    execution = run_miniature_training(tmp_path / "train")
+    training = execution.result
+    candidates = retain_centralized_checkpoint_candidates(execution, AUTOENCODER)
     scoring = score_centralized_reference(
         CentralizedScoringRequest(
             coordinate=training_coordinate(),
@@ -137,11 +132,11 @@ def test_rejects_confirmatory_ladder_and_federated_policy_use(tmp_path: Path) ->
         evaluation_scores=scoring.evaluation_scores,
         threshold_result=threshold,
     )
-    with pytest.raises(LeakageError, match="confirmatory"):
-        reject_centralized_result_in_confirmatory_ladder(evaluation)
+    with pytest.raises(LeakageError, match="confirmatory shared-versus-local"):
+        reject_centralized_result_in_confirmatory_threshold_comparison(evaluation)
     with pytest.raises(LeakageError, match="federated threshold policy"):
         reject_centralized_as_federated_threshold_policy(CentralizedThresholdMethod.POOLED_BENIGN_QUANTILE)
     with pytest.raises(LeakageError, match="CV\\(FPR\\)"):
         reject_cross_client_cv_fpr_from_pooled_centralized()
-    with pytest.raises(LeakageError, match="B1-B4"):
-        reject_b1_b4_insertion(FederatedThresholdMethod.SHARED_THRESHOLD)
+    with pytest.raises(LeakageError, match="federated threshold-policy comparisons"):
+        reject_centralized_in_federated_threshold_comparison(FederatedThresholdMethod.SHARED_THRESHOLD)
