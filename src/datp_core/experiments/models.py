@@ -1,21 +1,31 @@
 """Immutable execution identities for capability-constrained evidence."""
 
-from dataclasses import dataclass
+from pydantic import model_validator
 
+from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import EvidenceRole, ExperimentId, PopulationId, TemporalState
 from datp_core.domain.errors import ScientificContractError
 
+BOUNDED_EVIDENCE_POPULATIONS = frozenset(
+    {
+        PopulationId.EDGE_SENSOR_GROUPS,
+        PopulationId.CICIOT_FILE_CLIENTS,
+        PopulationId.EDGE_TEMPORAL_GROUPS,
+    }
+)
 
-@dataclass(frozen=True, slots=True)
-class ExternalTemporalExecutionIdentity:
+
+class ExternalTemporalExecutionIdentity(StrictModel):
     experiment: ExperimentId
     population: PopulationId
     evidence_role: EvidenceRole
     temporal_state: TemporalState | None
 
-    def __post_init__(self) -> None:
+    @model_validator(mode="after")
+    def validate_declared_identity(self) -> "ExternalTemporalExecutionIdentity":
         if not _is_declared_identity(self):
-            raise ScientificContractError("execution identity must be declared", subject=self.experiment)
+            raise ValueError("execution identity must be declared")
+        return self
 
     def require_population(self, population: PopulationId) -> None:
         if self.population is not population:
@@ -25,24 +35,12 @@ class ExternalTemporalExecutionIdentity:
         if self.evidence_role is not evidence_role:
             raise ScientificContractError("execution identity evidence role must match", subject=evidence_role)
 
-    def serialize(self) -> dict:
-        return {
-            "experiment": self.experiment.value,
-            "population": self.population.value,
-            "evidence_role": self.evidence_role.value,
-            "temporal_state": self.temporal_state.value if self.temporal_state is not None else None,
-        }
-
 
 def require_execution_identity(
-    identity: ExternalTemporalExecutionIdentity | None, population: PopulationId
+    identity: ExternalTemporalExecutionIdentity | None,
+    population: PopulationId,
 ) -> ExternalTemporalExecutionIdentity | None:
-    bounded = {
-        PopulationId.EDGE_SENSOR_GROUPS,
-        PopulationId.CICIOT_FILE_CLIENTS,
-        PopulationId.EDGE_TEMPORAL_GROUPS,
-    }
-    if population not in bounded:
+    if population not in BOUNDED_EVIDENCE_POPULATIONS:
         if identity is not None:
             raise ScientificContractError("execution identity is reserved for bounded evidence", subject=population)
         return None
