@@ -5,13 +5,12 @@ from typing import ClassVar
 
 from datp_core.domain.enums import StageOperationId
 from datp_core.domain.values import Checksum, MetricValue
-from datp_core.learning.federated.checkpointing import (
+from datp_core.learning.federated.checkpoints.selection import select_checkpoint, validate_candidate_coordinates
+from datp_core.learning.federated.models import (
     CheckpointCandidate,
     CheckpointDecision,
-    select_checkpoint,
-    validate_candidate_coordinates,
+    FederatedTrainingCoordinate,
 )
-from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.populations.models import ClientIdentity
 from datp_core.protocols.models import CheckpointProtocol
 from datp_core.protocols.training import CHECKPOINT_SELECTION_RULE
