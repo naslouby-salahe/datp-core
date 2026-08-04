@@ -11,16 +11,18 @@ from datp_core.domain.enums import (
 )
 from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.values import Checksum, MetricValue
-from datp_core.learning.federated.checkpoints.candidates import (
-    validate_candidate_rounds_and_paths,
-    verify_candidate_file,
-)
 from datp_core.learning.federated.models import (
     CheckpointCandidate,
     CheckpointDecision,
     FederatedTrainingCoordinate,
 )
-from datp_core.pipeline.checkpoints.service import select_terminal_checkpoint
+from datp_core.pipeline.checkpoints.persistence import (
+    validate_persisted_checkpoint_file,
+)
+from datp_core.pipeline.checkpoints.service import (
+    select_terminal_checkpoint,
+    validate_ordered_checkpoint_inventory,
+)
 from datp_core.populations.models import ClientIdentity
 from datp_core.protocols.models import CheckpointProtocol
 from datp_core.protocols.training import require_non_test_checkpoint_selection_inputs
@@ -36,10 +38,19 @@ def validate_candidate_coordinates(
 ) -> None:
     for candidate in candidates:
         checks = (
-            (candidate.coordinate == coordinate, "checkpoint candidate coordinate mismatch", ContractSubject.COORDINATE),
-            (candidate.client == client, "checkpoint candidate client mismatch", ContractSubject.CLIENT_IDENTITY),
             (
-                candidate.preprocessing_state_set_checksum == preprocessing_state_set_checksum,
+                candidate.coordinate == coordinate,
+                "checkpoint candidate coordinate mismatch",
+                ContractSubject.COORDINATE,
+            ),
+            (
+                candidate.client == client,
+                "checkpoint candidate client mismatch",
+                ContractSubject.CLIENT_IDENTITY,
+            ),
+            (
+                candidate.preprocessing_state_set_checksum
+                == preprocessing_state_set_checksum,
                 "checkpoint candidate preprocessing checksum mismatch",
                 ContractSubject.PREPROCESSING,
             ),
@@ -52,7 +63,10 @@ def validate_candidate_coordinates(
         for valid, message, subject in checks:
             if not valid:
                 raise ScientificContractError(message, subject=subject)
-        verify_candidate_file(candidate)
+        validate_persisted_checkpoint_file(
+            candidate.tensor_path,
+            candidate.tensor_checksum,
+        )
 
 
 def select_checkpoint(
@@ -73,8 +87,10 @@ def select_checkpoint(
         attack_labels_present=attack_labels_present,
         branch_label=ProcessedDataBranch.FEDERATED,
     )
-    ordered = tuple(candidates)
-    validate_candidate_rounds_and_paths(ordered, protocol)
+    ordered = validate_ordered_checkpoint_inventory(
+        candidates,
+        protocol.candidates,
+    )
     validate_candidate_coordinates(
         ordered,
         coordinate,
@@ -97,7 +113,9 @@ def select_checkpoint(
     )
 
 
-def reject_centralized_checkpoint(marker_identity: FederatedTrainingCoordinate) -> None:
+def reject_centralized_checkpoint(
+    marker_identity: FederatedTrainingCoordinate,
+) -> None:
     raise LeakageError(
         f"centralized checkpoint cannot enter federated selection ({marker_identity})",
         subject=ContractSubject.CHECKPOINT_CANDIDATES,
