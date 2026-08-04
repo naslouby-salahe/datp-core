@@ -10,7 +10,6 @@ SERIALIZATION_BYPASS_BASELINE = frozenset(
     {
         Path("src/datp_core/datasets/canonical_cache.py"),
         Path("src/datp_core/domain/provenance.py"),
-        Path("src/datp_core/learning/federated/checkpointing.py"),
     }
 )
 FORBIDDEN_PIPELINE_IMPORT_ROOTS = frozenset(
@@ -125,6 +124,11 @@ def test_neutral_publication_symbols_are_not_reexported_from_artifacts_store() -
             if leaked:
                 violations.append(f"{path.relative_to(REPOSITORY_ROOT)} imports {sorted(leaked)}")
     assert not violations, "\n".join(violations)
+
+
+def test_federated_checkpoint_monolith_cannot_return() -> None:
+    assert not (SOURCE_ROOT / "learning" / "federated" / "checkpointing.py").exists()
+    assert (SOURCE_ROOT / "learning" / "federated" / "checkpoints").is_dir()
 
 
 def test_persisted_documents_use_strict_models_and_runtime_payloads_do_not() -> None:
