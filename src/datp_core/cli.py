@@ -33,12 +33,12 @@ from datp_core.domain.values import (
     Seed,
     checksum_file,
 )
-from datp_core.evaluation.controls import FixedScoreEvidence
-from datp_core.evaluation.models import MetricStatus
-from datp_core.evaluation.population import (
-    FederatedEvaluationAssetName,
+from datp_core.evaluation.controls import (
+    FixedScoreEvidence,
     build_federated_evaluation_inputs,
 )
+from datp_core.evaluation.models import MetricStatus
+from datp_core.evaluation.population import FederatedEvaluationAssetName
 from datp_core.learning.federated.models import (
     ClientTrainingInput,
     FederatedTrainingCoordinate,
