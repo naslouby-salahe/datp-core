@@ -8,8 +8,8 @@ import torch
 
 from datp_core.centralized_reference.training import (
     CentralizedTrainingCoordinate,
+    CentralizedTrainingExecution,
     CentralizedTrainingRequest,
-    CentralizedTrainingResult,
     train_centralized_autoencoder,
 )
 from datp_core.domain.enums import (
@@ -128,7 +128,7 @@ def mixed_evaluation_frame(
     return pl.concat([benign, attack], how="vertical")
 
 
-def run_miniature_training(output_directory: Path) -> CentralizedTrainingResult:
+def run_miniature_training(output_directory: Path) -> CentralizedTrainingExecution:
     state = fitted_state(output_directory / "state.skops")
     return train_centralized_autoencoder(
         CentralizedTrainingRequest(
