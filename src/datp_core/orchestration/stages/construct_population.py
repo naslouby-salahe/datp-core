@@ -1,13 +1,13 @@
 """External and temporal population construction with deterministic publication."""
 
 from dataclasses import dataclass
-from json import dumps, loads
 from pathlib import Path
 from shutil import rmtree
 from typing import ClassVar
 
 import polars as pl
 
+from datp_core.artifacts.serialization import canonical_json_text, serialize_json_model
 from datp_core.artifacts.store import publish_atomically
 from datp_core.domain.enums import PopulationId, PublicationStatus, SplitProtocolId, StageOperationId
 from datp_core.domain.errors import ScientificContractError
@@ -26,6 +26,16 @@ from datp_core.populations.models import (
     PopulationManifest,
     PopulationManifestDocument,
 )
+
+EXECUTION_IDENTITY_ASSET = "execution_identity.json"
+POPULATION_MANIFEST_ASSET = "population_manifest.json"
+MEMBERSHIP_ASSET = "membership.parquet"
+CHRONOLOGY_ASSET = "chronology.json"
+MATCHED_STATIC_MANIFEST_ASSET = "matched_static_reference_manifest.json"
+MATCHED_STATIC_MEMBERSHIP_ASSET = "matched_static_reference_membership.parquet"
+CICIOT_EXCLUDED_ROWS_ASSET = "ciciot_excluded_rows.parquet"
+CICIOT_CLIENT_ELIGIBILITY_ASSET = "ciciot_client_eligibility.parquet"
+COMPLETE_ASSET = "COMPLETE"
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,37 +80,29 @@ class ConstructPopulationResult:
 def construct_population_stage(request: ConstructPopulationRequest) -> ConstructPopulationResult:
     """Build only declared external or temporal populations; confirmatory dispatch is excluded."""
     artifacts = _build(request)
-    payload = _manifest_payload(artifacts, request.execution_identity)
-    digest = checksum_text(payload)
+    digest = checksum_text(_manifest_payload(artifacts, request.execution_identity))
 
     def write(temporary: Path) -> _PopulationArtifacts:
-        (temporary / "execution_identity.json").write_text(
-            dumps(request.execution_identity.serialize(), indent=2) + "\n", encoding="utf-8"
-        )
-        (temporary / "population_manifest.json").write_text(
-            artifacts.population_manifest.document.model_dump_json(indent=2) + "\n",
-            encoding="utf-8",
-        )
-        artifacts.membership.write_parquet(temporary / "membership.parquet")
+        serialize_json_model(request.execution_identity, temporary / EXECUTION_IDENTITY_ASSET)
+        serialize_json_model(artifacts.population_manifest.document, temporary / POPULATION_MANIFEST_ASSET)
+        artifacts.membership.write_parquet(temporary / MEMBERSHIP_ASSET)
         if artifacts.chronology is not None:
-            (temporary / "chronology.json").write_text(
-                artifacts.chronology.model_dump_json(indent=2) + "\n", encoding="utf-8"
-            )
+            serialize_json_model(artifacts.chronology, temporary / CHRONOLOGY_ASSET)
         if (
             artifacts.matched_static_reference_manifest is not None
             and artifacts.matched_static_reference_membership is not None
         ):
-            (temporary / "matched_static_reference_manifest.json").write_text(
-                artifacts.matched_static_reference_manifest.document.model_dump_json(indent=2) + "\n",
-                encoding="utf-8",
+            serialize_json_model(
+                artifacts.matched_static_reference_manifest.document,
+                temporary / MATCHED_STATIC_MANIFEST_ASSET,
             )
             artifacts.matched_static_reference_membership.write_parquet(
-                temporary / "matched_static_reference_membership.parquet"
+                temporary / MATCHED_STATIC_MEMBERSHIP_ASSET
             )
         if artifacts.ciciot_excluded_rows is not None and artifacts.ciciot_client_eligibility is not None:
-            artifacts.ciciot_excluded_rows.write_parquet(temporary / "ciciot_excluded_rows.parquet")
-            artifacts.ciciot_client_eligibility.write_parquet(temporary / "ciciot_client_eligibility.parquet")
-        (temporary / "COMPLETE").write_text(digest.value, encoding="utf-8")
+            artifacts.ciciot_excluded_rows.write_parquet(temporary / CICIOT_EXCLUDED_ROWS_ASSET)
+            artifacts.ciciot_client_eligibility.write_parquet(temporary / CICIOT_CLIENT_ELIGIBILITY_ASSET)
+        (temporary / COMPLETE_ASSET).write_text(digest.value, encoding="utf-8")
         return artifacts
 
     outcome = publish_atomically(
@@ -129,12 +131,16 @@ def _build(request: ConstructPopulationRequest) -> _PopulationArtifacts:
     match request.population:
         case PopulationId.EDGE_SENSOR_GROUPS:
             manifest, membership = build_edge_sensor_groups(
-                request.canonical_root, partition_seed=request.partition_seed, split_protocol=request.split_protocol
+                request.canonical_root,
+                partition_seed=request.partition_seed,
+                split_protocol=request.split_protocol,
             )
             return _PopulationArtifacts(manifest, membership, None, None, None)
         case PopulationId.CICIOT_FILE_CLIENTS:
             manifest, membership = build_ciciot_file_clients(
-                request.canonical_root, partition_seed=request.partition_seed, split_protocol=request.split_protocol
+                request.canonical_root,
+                partition_seed=request.partition_seed,
+                split_protocol=request.split_protocol,
             )
             excluded_rows = ciciot_excluded_row_evidence(request.canonical_root)
             return _PopulationArtifacts(
@@ -148,25 +154,28 @@ def _build(request: ConstructPopulationRequest) -> _PopulationArtifacts:
             )
         case PopulationId.EDGE_TEMPORAL_GROUPS:
             manifest, membership, chronology, static_manifest, static_membership = build_edge_temporal_groups(
-                request.canonical_root, partition_seed=request.partition_seed, split_protocol=request.split_protocol
+                request.canonical_root,
+                partition_seed=request.partition_seed,
+                split_protocol=request.split_protocol,
             )
             return _PopulationArtifacts(manifest, membership, chronology, static_manifest, static_membership)
         case _:
             raise ScientificContractError(
-                "construction requires an external or temporal population", subject=request.population
+                "construction requires an external or temporal population",
+                subject=request.population,
             )
 
 
 def _manifest_payload(artifacts: _PopulationArtifacts, identity: ExternalTemporalExecutionIdentity) -> str:
     sections = [
-        dumps(identity.serialize(), indent=2),
-        artifacts.population_manifest.document.model_dump_json(indent=2),
+        canonical_json_text(identity),
+        canonical_json_text(artifacts.population_manifest.document),
     ]
     if artifacts.chronology is not None:
-        sections.append(artifacts.chronology.model_dump_json(indent=2))
+        sections.append(canonical_json_text(artifacts.chronology))
     if artifacts.matched_static_reference_manifest is not None:
-        sections.append(artifacts.matched_static_reference_manifest.document.model_dump_json(indent=2))
-    return "\n".join(sections) + "\n"
+        sections.append(canonical_json_text(artifacts.matched_static_reference_manifest.document))
+    return "\n".join(sections)
 
 
 def _is_reusable(
@@ -175,29 +184,30 @@ def _is_reusable(
     identity: ExternalTemporalExecutionIdentity,
     digest: Checksum,
 ) -> bool:
-    complete = directory / "COMPLETE"
-    identity_path = directory / "execution_identity.json"
-    manifest = directory / "population_manifest.json"
-    membership = directory / "membership.parquet"
+    complete = directory / COMPLETE_ASSET
+    identity_path = directory / EXECUTION_IDENTITY_ASSET
+    manifest_path = directory / POPULATION_MANIFEST_ASSET
+    membership_path = directory / MEMBERSHIP_ASSET
     if not (
         complete.is_file()
         and identity_path.is_file()
-        and manifest.is_file()
-        and membership.is_file()
+        and manifest_path.is_file()
+        and membership_path.is_file()
         and complete.read_text(encoding="utf-8").strip() == digest.value
     ):
         return False
     try:
-        if identity.serialize() != _read_execution_identity(identity_path):
+        persisted_identity = ExternalTemporalExecutionIdentity.model_validate_json(
+            identity_path.read_text(encoding="utf-8")
+        )
+        if persisted_identity != identity:
             return False
-        persisted = PopulationManifestDocument.model_validate_json(manifest.read_text(encoding="utf-8"))
+        persisted = PopulationManifestDocument.model_validate_json(
+            manifest_path.read_text(encoding="utf-8")
+        )
     except (OSError, ValueError):
         return False
-    return _matches_population_artifacts(directory, expected, persisted, membership)
-
-
-def _read_execution_identity(path: Path) -> dict:
-    return loads(path.read_text(encoding="utf-8"))
+    return _matches_population_artifacts(directory, expected, persisted, membership_path)
 
 
 def _matches_population_artifacts(
@@ -208,7 +218,10 @@ def _matches_population_artifacts(
 ) -> bool:
     if persisted != expected.population_manifest.document:
         return False
-    if membership_frame_checksum(pl.read_parquet(membership)) != persisted.membership_checksum:
+    try:
+        if membership_frame_checksum(pl.read_parquet(membership)) != persisted.membership_checksum:
+            return False
+    except (OSError, pl.exceptions.PolarsError):
         return False
     if expected.chronology is not None and not _matches_chronology(directory, expected.chronology):
         return False
@@ -221,9 +234,9 @@ def _matches_ciciot_evidence(directory: Path, expected: _PopulationArtifacts) ->
     if expected.ciciot_excluded_rows is None or expected.ciciot_client_eligibility is None:
         return True
     try:
-        excluded_rows = pl.read_parquet(directory / "ciciot_excluded_rows.parquet")
-        client_evidence = pl.read_parquet(directory / "ciciot_client_eligibility.parquet")
-    except OSError:
+        excluded_rows = pl.read_parquet(directory / CICIOT_EXCLUDED_ROWS_ASSET)
+        client_evidence = pl.read_parquet(directory / CICIOT_CLIENT_ELIGIBILITY_ASSET)
+    except (OSError, pl.exceptions.PolarsError):
         return False
     return excluded_rows.equals(expected.ciciot_excluded_rows) and client_evidence.equals(
         expected.ciciot_client_eligibility
@@ -233,7 +246,7 @@ def _matches_ciciot_evidence(directory: Path, expected: _PopulationArtifacts) ->
 def _matches_chronology(directory: Path, expected: ChronologicalPartitionDiagnosticsDocument) -> bool:
     try:
         persisted = ChronologicalPartitionDiagnosticsDocument.model_validate_json(
-            (directory / "chronology.json").read_text(encoding="utf-8")
+            (directory / CHRONOLOGY_ASSET).read_text(encoding="utf-8")
         )
     except (OSError, ValueError):
         return False
@@ -243,13 +256,13 @@ def _matches_chronology(directory: Path, expected: ChronologicalPartitionDiagnos
 def _matches_static_reference(directory: Path, expected: PopulationManifest) -> bool:
     try:
         persisted = PopulationManifestDocument.model_validate_json(
-            (directory / "matched_static_reference_manifest.json").read_text(encoding="utf-8")
+            (directory / MATCHED_STATIC_MANIFEST_ASSET).read_text(encoding="utf-8")
         )
-    except (OSError, ValueError):
+        membership = directory / MATCHED_STATIC_MEMBERSHIP_ASSET
+        return (
+            membership.is_file()
+            and persisted == expected.document
+            and membership_frame_checksum(pl.read_parquet(membership)) == persisted.membership_checksum
+        )
+    except (OSError, ValueError, pl.exceptions.PolarsError):
         return False
-    membership = directory / "matched_static_reference_membership.parquet"
-    return (
-        membership.is_file()
-        and persisted == expected.document
-        and membership_frame_checksum(pl.read_parquet(membership)) == persisted.membership_checksum
-    )
