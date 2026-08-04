@@ -12,15 +12,17 @@ from tests.unit.learning.federated.helpers import (
 from datp_core.domain.enums import CheckpointSelectionRule, CheckpointStatus
 from datp_core.domain.errors import ArtifactIntegrityError, LeakageError, ScientificContractError
 from datp_core.domain.values import Checksum, MetricValue, RoundNumber, Seed
-from datp_core.learning.federated.checkpointing import (
-    RoundSnapshot,
+from datp_core.learning.federated.checkpoints.candidates import (
     candidate_tensor_name,
     rebase_checkpoint_candidates,
-    reject_centralized_checkpoint,
     retain_checkpoint_candidates,
+)
+from datp_core.learning.federated.checkpoints.selection import (
+    reject_centralized_checkpoint,
     select_checkpoint,
     validate_candidate_coordinates,
 )
+from datp_core.learning.federated.models import RoundSnapshot
 
 
 def _snapshots() -> tuple[RoundSnapshot, ...]:
@@ -73,7 +75,7 @@ def test_select_checkpoint_chooses_maximum_round(tmp_path: Path) -> None:
     )
     assert decision.selected.round_number == CHECKPOINT.maximum_round
     assert decision.status is CheckpointStatus.SELECTED_BY_NON_TEST_RULE
-    non_terminal = [item for item in decision.candidates if item.round_number != CHECKPOINT.maximum_round]
+    non_terminal = tuple(item for item in decision.candidates if item.round_number != CHECKPOINT.maximum_round)
     assert all(item.status is CheckpointStatus.STABILITY_EVIDENCE for item in non_terminal)
 
 
@@ -223,9 +225,8 @@ def test_rebase_checkpoint_candidates_rejects_target_checksum_mismatch(tmp_path:
         client=None,
     )
 
-    # Create dummy files in dir_b with wrong content
-    for c in candidates:
-        target_path = dir_b / candidate_tensor_name(c.round_number)
+    for candidate in candidates:
+        target_path = dir_b / candidate_tensor_name(candidate.round_number)
         target_path.write_bytes(b"corrupted")
 
     with pytest.raises(
