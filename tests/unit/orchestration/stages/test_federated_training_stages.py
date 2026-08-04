@@ -20,12 +20,14 @@ from datp_core.domain.enums import PublicationStatus
 from datp_core.domain.values import Checksum, ClientPathToken, RowCount, Seed
 from datp_core.learning.federated.models import ClientTrainingInput
 from datp_core.learning.federated.training import FederatedTrainingRequest
-from datp_core.orchestration.stages.score_federated import ScoreFederatedRequest, score_federated_stage
+from datp_core.orchestration.commands.scoring import ScoreFederatedRequest
+from datp_core.orchestration.commands.training import TrainFederatedRequest
+from datp_core.orchestration.stages.score_federated import score_federated_stage
 from datp_core.orchestration.stages.select_federated_checkpoint import (
     SelectFederatedCheckpointRequest,
     select_federated_checkpoint_stage,
 )
-from datp_core.orchestration.stages.train_federated import TrainFederatedRequest, train_federated_stage
+from datp_core.orchestration.stages.train_federated import train_federated_stage
 from datp_core.preprocessing.models import (
     ClientPreprocessingResult,
     FederatedFittedPreprocessingState,
