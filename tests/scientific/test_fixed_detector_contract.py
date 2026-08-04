@@ -97,8 +97,8 @@ def test_every_threshold_method_receives_identical_detector_provenance(tmp_path)
     assert invariant.model_checksum == checkpoint.tensor_checksum
     assert invariant.preprocessing_state_set_checksum == checkpoint.preprocessing_state_set_checksum
     assert invariant.split_manifest_checksum == checkpoint.split_manifest_checksum
-    assert invariant.calibration_score_set_checksum == result.manifest.invariant.calibration_score_set_checksum
-    assert invariant.evaluation_score_set_checksum == result.manifest.invariant.evaluation_score_set_checksum
+    assert invariant.calibration_score_set_checksum == result.invariant.calibration_score_set_checksum
+    assert invariant.evaluation_score_set_checksum == result.invariant.evaluation_score_set_checksum
 
 
 def test_auroc_is_identical_for_every_threshold_method(tmp_path) -> None:
