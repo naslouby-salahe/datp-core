@@ -1,6 +1,8 @@
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
+import polars as pl
 import pytest
 from tests.unit.centralized_reference.helpers import (
     AUTOENCODER,
@@ -14,17 +16,38 @@ from tests.unit.centralized_reference.helpers import (
 )
 
 from datp_core.centralized_reference.checkpointing import (
+    CentralizedCheckpointCandidate,
     reject_federated_checkpoint,
     retain_centralized_checkpoint_candidates,
 )
 from datp_core.centralized_reference.scoring import (
+    CentralizedScoreAssetName,
     CentralizedScoringRequest,
+    CentralizedScoringResult,
+    PooledScoreArtifact,
+    centralized_scoring_is_reusable,
     load_score_frame,
+    score_artifact_set_checksum,
     score_centralized_reference,
 )
-from datp_core.domain.enums import ScoreFrameColumn, TrainingModelId
+from datp_core.domain.enums import (
+    CheckpointStatus,
+    PartitionRole,
+    ScoreFrameColumn,
+    SerializationFormat,
+    TrainingModelId,
+)
 from datp_core.domain.errors import LeakageError
-from datp_core.domain.values import RowCount, Seed
+from datp_core.domain.values import (
+    Checksum,
+    FeatureCount,
+    MetricValue,
+    RoundNumber,
+    RowCount,
+    Seed,
+    checksum_file,
+)
+from datp_core.pipeline.scoring.frame_contract import score_frame
 
 
 def test_deterministic_scoring_and_reload(tmp_path: Path) -> None:
@@ -82,3 +105,118 @@ def test_score_polarity_higher_is_more_anomalous(tmp_path: Path) -> None:
     benign = frame.filter(frame[label_column] == "benign")[score_column].to_numpy()
     attack = frame.filter(frame[label_column] == "attack")[score_column].to_numpy()
     assert float(np.mean(attack)) > float(np.mean(benign))
+
+
+def test_reuse_rejects_changed_calibration_row_identity(tmp_path: Path) -> None:
+    coordinate = training_coordinate()
+    preprocessing_checksum = Checksum("a" * 64)
+    split_checksum = Checksum("b" * 64)
+    checkpoint_path = tmp_path / "checkpoint.safetensors"
+    checkpoint_path.write_text("checkpoint", encoding="utf-8")
+    checkpoint = CentralizedCheckpointCandidate(
+        coordinate=coordinate,
+        round_number=RoundNumber(1),
+        tensor_path=checkpoint_path,
+        tensor_checksum=checksum_file(checkpoint_path),
+        mean_training_loss=MetricValue(0.1),
+        status=CheckpointStatus.CANDIDATE,
+        preprocessing_state_checksum=preprocessing_checksum,
+        split_manifest_checksum=split_checksum,
+        training_seed=Seed(1),
+        autoencoder_widths=tuple(AUTOENCODER.widths),
+    )
+    calibration = benign_frame(RowCount(4), seed=Seed(7))
+    evaluation = mixed_evaluation_frame(RowCount(4), seed=Seed(8))
+    directory = tmp_path / "scores"
+    directory.mkdir()
+    calibration_artifact = _persist_score_artifact(
+        coordinate,
+        checkpoint,
+        calibration,
+        PartitionRole.CALIBRATION,
+        directory / CentralizedScoreAssetName.CALIBRATION_SCORES,
+    )
+    evaluation_artifact = _persist_score_artifact(
+        coordinate,
+        checkpoint,
+        evaluation,
+        PartitionRole.EVALUATION,
+        directory / CentralizedScoreAssetName.EVALUATION_SCORES,
+    )
+    request = CentralizedScoringRequest(
+        coordinate=coordinate,
+        checkpoint=checkpoint,
+        autoencoder=AUTOENCODER,
+        feature_names=FEATURE_NAMES,
+        calibration_features=calibration,
+        evaluation_features=evaluation,
+        batch_size=BATCH_SIZE,
+        output_directory=directory,
+        preprocessing_state_checksum=preprocessing_checksum,
+    )
+    result = CentralizedScoringResult(
+        calibration_scores=calibration_artifact,
+        evaluation_scores=evaluation_artifact,
+        model_tensor_checksum=checkpoint.tensor_checksum,
+        preprocessing_state_checksum=preprocessing_checksum,
+    )
+    (directory / CentralizedScoreAssetName.COMPLETE).write_text(
+        score_artifact_set_checksum(request, result).value,
+        encoding="utf-8",
+    )
+    assert centralized_scoring_is_reusable(request, directory)
+
+    changed_ids = tuple(
+        "changed-row" if index == 0 else str(value)
+        for index, value in enumerate(
+            calibration.get_column(ScoreFrameColumn.STABLE_ROW_ID.value).to_list()
+        )
+    )
+    changed_calibration = calibration.with_columns(
+        pl.Series(
+            ScoreFrameColumn.STABLE_ROW_ID.value,
+            changed_ids,
+            dtype=pl.Utf8,
+        )
+    )
+    assert not centralized_scoring_is_reusable(
+        replace(request, calibration_features=changed_calibration),
+        directory,
+    )
+
+
+def _persist_score_artifact(
+    coordinate,
+    checkpoint: CentralizedCheckpointCandidate,
+    source: pl.DataFrame,
+    partition_role: PartitionRole,
+    path: Path,
+) -> PooledScoreArtifact:
+    row_ids = tuple(
+        str(value)
+        for value in source.get_column(
+            ScoreFrameColumn.STABLE_ROW_ID.value
+        ).to_list()
+    )
+    labels = tuple(
+        str(value)
+        for value in source.get_column(
+            ScoreFrameColumn.OUTCOME_LABEL.value
+        ).to_list()
+    )
+    score_frame(
+        row_ids,
+        labels,
+        np.zeros(source.height, dtype=np.float64),
+    ).write_parquet(path)
+    return PooledScoreArtifact(
+        coordinate=coordinate,
+        partition_role=partition_role,
+        checkpoint_round=checkpoint.round_number,
+        checkpoint_checksum=checkpoint.tensor_checksum,
+        path=path,
+        checksum=checksum_file(path),
+        row_count=RowCount(source.height),
+        feature_count=FeatureCount(len(FEATURE_NAMES)),
+        serialization_format=SerializationFormat.PARQUET,
+    )
