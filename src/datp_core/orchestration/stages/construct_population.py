@@ -8,11 +8,11 @@ from typing import ClassVar
 import polars as pl
 
 from datp_core.artifacts.serialization import canonical_json_text, serialize_json_model
-from datp_core.artifacts.store import publish_atomically
 from datp_core.domain.enums import PopulationId, PublicationStatus, SplitProtocolId, StageOperationId
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import Checksum, Seed, checksum_text
 from datp_core.experiments.models import ExternalTemporalExecutionIdentity, require_execution_identity
+from datp_core.pipeline.publication.atomic import publish_atomically
 from datp_core.populations.ciciot_file_clients import (
     build_ciciot_file_clients,
     ciciot_client_eligibility_evidence,
