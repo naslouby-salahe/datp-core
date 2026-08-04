@@ -17,7 +17,6 @@ from datp_core.domain.enums import (
     CheckpointSelectionRule,
     CheckpointStatus,
     ContractSubject,
-    SerializationFormat,
     TrainingModelId,
 )
 from datp_core.domain.errors import (
@@ -25,9 +24,15 @@ from datp_core.domain.errors import (
     LeakageError,
     ScientificContractError,
 )
-from datp_core.domain.values import Checksum, MetricValue, RoundNumber, Seed, checksum_file, checksum_text
+from datp_core.domain.values import Checksum, MetricValue, RoundNumber, Seed, checksum_text
+from datp_core.pipeline.checkpoints.models import RETAINED_CHECKPOINT_STATUSES
+from datp_core.pipeline.checkpoints.service import (
+    select_terminal_checkpoint,
+    validate_ordered_checkpoint_inventory,
+    validate_persisted_checkpoint_file,
+)
 from datp_core.protocols.models import AutoencoderProtocol, CheckpointProtocol
-from datp_core.protocols.training import fixed_terminal_checkpoint_status, require_non_test_checkpoint_selection_inputs
+from datp_core.protocols.training import require_non_test_checkpoint_selection_inputs
 from datp_core.runtime.compute import resolve_cuda_device
 
 
@@ -53,11 +58,7 @@ class CentralizedCheckpointCandidate:
     autoencoder_widths: tuple[int, ...]
 
     def __post_init__(self) -> None:
-        if self.status not in {
-            CheckpointStatus.CANDIDATE,
-            CheckpointStatus.STABILITY_EVIDENCE,
-            CheckpointStatus.SELECTED_BY_NON_TEST_RULE,
-        }:
+        if self.status not in RETAINED_CHECKPOINT_STATUSES:
             raise ScientificContractError(
                 "centralized checkpoint candidate has an invalid status",
                 subject=self.status,
@@ -76,8 +77,7 @@ class CentralizedCheckpointDecision:
     def __post_init__(self) -> None:
         if not self.candidates:
             raise ValueError("checkpoint decision requires retained candidates")
-        selected_rounds = frozenset(item.round_number for item in self.candidates)
-        if self.selected.round_number not in selected_rounds:
+        if self.selected not in self.candidates:
             raise ScientificContractError(
                 "selected checkpoint must be one of the retained candidates",
                 subject=ContractSubject.CHECKPOINT_CANDIDATES,
@@ -146,8 +146,7 @@ def retain_centralized_checkpoint_candidates(
                 autoencoder_widths=tuple(autoencoder.widths),
             )
         )
-    _reject_duplicate_or_missing_candidates(tuple(candidates), protocol)
-    return tuple(candidates)
+    return validate_ordered_checkpoint_inventory(tuple(candidates), protocol.candidates)
 
 
 def select_centralized_checkpoint(
@@ -165,27 +164,20 @@ def select_centralized_checkpoint(
         attack_labels_present=attack_labels_present,
         branch_label="centralized",
     )
-    ordered = tuple(candidates)
-    _reject_duplicate_or_missing_candidates(ordered, protocol)
+    ordered = validate_ordered_checkpoint_inventory(candidates, protocol.candidates)
     for candidate in ordered:
         if candidate.status is CheckpointStatus.HISTORICAL_ENDPOINT:
             raise ScientificContractError(
                 "historical federated endpoint status is incompatible with centralized candidates",
                 subject=candidate.status,
             )
-        _verify_candidate_file(candidate)
+        validate_persisted_checkpoint_file(candidate.tensor_path, candidate.tensor_checksum)
 
-    terminal = next(
-        (item for item in ordered if item.round_number == protocol.maximum_round),
-        None,
+    statused, selected = select_terminal_checkpoint(
+        ordered,
+        protocol.maximum_round,
+        rebuild=_rebuild_candidate_status,
     )
-    if terminal is None:
-        raise ArtifactIntegrityError(
-            "declared maximum-round checkpoint candidate is missing",
-            subject=ContractSubject.CHECKPOINT_CANDIDATES,
-        )
-
-    statused, selected = _statused_candidates(ordered, protocol.maximum_round)
     return CentralizedCheckpointDecision(
         coordinate=selected.coordinate,
         selected=selected,
@@ -196,35 +188,22 @@ def select_centralized_checkpoint(
     )
 
 
-def _statused_candidates(
-    ordered: tuple[CentralizedCheckpointCandidate, ...],
-    maximum_round: RoundNumber,
-) -> tuple[tuple[CentralizedCheckpointCandidate, ...], CentralizedCheckpointCandidate]:
-    statused: list[CentralizedCheckpointCandidate] = []
-    selected: CentralizedCheckpointCandidate | None = None
-    for item in ordered:
-        status = fixed_terminal_checkpoint_status(item.round_number, maximum_round)
-        rebuilt = CentralizedCheckpointCandidate(
-            coordinate=item.coordinate,
-            round_number=item.round_number,
-            tensor_path=item.tensor_path,
-            tensor_checksum=item.tensor_checksum,
-            mean_training_loss=item.mean_training_loss,
-            status=status,
-            preprocessing_state_checksum=item.preprocessing_state_checksum,
-            split_manifest_checksum=item.split_manifest_checksum,
-            training_seed=item.training_seed,
-            autoencoder_widths=item.autoencoder_widths,
-        )
-        statused.append(rebuilt)
-        if status is CheckpointStatus.SELECTED_BY_NON_TEST_RULE:
-            selected = rebuilt
-    if selected is None:
-        raise ArtifactIntegrityError(
-            "fixed-terminal selection failed to mark the maximum-round candidate",
-            subject=ContractSubject.CHECKPOINT_SELECTION_RULE,
-        )
-    return tuple(statused), selected
+def _rebuild_candidate_status(
+    candidate: CentralizedCheckpointCandidate,
+    status: CheckpointStatus,
+) -> CentralizedCheckpointCandidate:
+    return CentralizedCheckpointCandidate(
+        coordinate=candidate.coordinate,
+        round_number=candidate.round_number,
+        tensor_path=candidate.tensor_path,
+        tensor_checksum=candidate.tensor_checksum,
+        mean_training_loss=candidate.mean_training_loss,
+        status=status,
+        preprocessing_state_checksum=candidate.preprocessing_state_checksum,
+        split_manifest_checksum=candidate.split_manifest_checksum,
+        training_seed=candidate.training_seed,
+        autoencoder_widths=candidate.autoencoder_widths,
+    )
 
 
 def reject_federated_checkpoint(identity: TrainingModelId) -> None:
@@ -270,50 +249,6 @@ def candidate_set_checksum(candidates: Sequence[CentralizedCheckpointCandidate])
         f"{item.round_number.value}:{item.tensor_checksum.value}:{item.status.value}" for item in candidates
     )
     return checksum_text(payload)
-
-
-def _reject_duplicate_or_missing_candidates(
-    candidates: Sequence[CentralizedCheckpointCandidate],
-    protocol: CheckpointProtocol,
-) -> None:
-    observed = tuple(item.round_number.value for item in candidates)
-    expected = tuple(item.value for item in protocol.candidates)
-    if observed != expected:
-        raise ArtifactIntegrityError(
-            "checkpoint candidate rounds must equal the declared ordered protocol",
-            subject=ContractSubject.CHECKPOINT_CANDIDATES,
-        )
-    if len(frozenset(observed)) != len(observed):
-        raise ArtifactIntegrityError(
-            "duplicate checkpoint candidates are forbidden",
-            subject=ContractSubject.CHECKPOINT_CANDIDATES,
-        )
-    paths = tuple(item.tensor_path for item in candidates)
-    if len(frozenset(paths)) != len(paths):
-        raise ArtifactIntegrityError(
-            "checkpoint candidate paths must be unique",
-            subject=ContractSubject.CHECKPOINT_CANDIDATES,
-        )
-
-
-def _verify_candidate_file(candidate: CentralizedCheckpointCandidate) -> None:
-    if not candidate.tensor_path.is_file():
-        raise ArtifactIntegrityError(
-            "checkpoint candidate tensor file is missing",
-            subject=ContractSubject.ARTIFACT_PATH,
-        )
-    actual = checksum_file(candidate.tensor_path)
-    if actual != candidate.tensor_checksum:
-        raise ArtifactIntegrityError(
-            "checkpoint candidate checksum mismatch",
-            subject=ContractSubject.ARTIFACT_PATH,
-        )
-    suffix = f".{SerializationFormat.SAFETENSORS.value}"
-    if candidate.tensor_path.suffix != suffix:
-        raise ArtifactIntegrityError(
-            "centralized checkpoints must use SafeTensors serialization",
-            subject=ContractSubject.ARTIFACT_PATH,
-        )
 
 
 def _verify_candidate_reload(
