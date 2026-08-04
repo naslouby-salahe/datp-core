@@ -13,6 +13,14 @@ forbidden_modules =
     datp_core.thresholding
     datp_core.learning.federated
 
+[importlinter:contract:federated-scoring-isolation]
+name = Federated scoring must not import centralized reference
+type = forbidden
+source_modules =
+    datp_core.scoring
+forbidden_modules =
+    datp_core.centralized_reference
+
 [importlinter:contract:thresholding-isolation]
 name = Federated thresholding must not import centralized reference
 type = forbidden
@@ -20,6 +28,32 @@ source_modules =
     datp_core.thresholding
 forbidden_modules =
     datp_core.centralized_reference
+
+[importlinter:contract:pipeline-neutrality]
+name = Shared pipeline infrastructure must not import branch or application packages
+type = forbidden
+source_modules =
+    datp_core.pipeline
+forbidden_modules =
+    datp_core.centralized_reference
+    datp_core.scoring
+    datp_core.thresholding
+    datp_core.calibration
+    datp_core.evaluation
+    datp_core.analysis
+    datp_core.reporting
+    datp_core.orchestration
+    datp_core.cli
+
+[importlinter:contract:learning-isolation]
+name = Learning implementations must not import application composition layers
+type = forbidden
+source_modules =
+    datp_core.learning
+forbidden_modules =
+    datp_core.orchestration
+    datp_core.reporting
+    datp_core.cli
 
 [importlinter:contract:domain-independence]
 name = Domain package must not import application layers
@@ -43,6 +77,7 @@ forbidden_modules =
     datp_core.populations
     datp_core.datasets
     datp_core.artifacts
+    datp_core.pipeline
     datp_core.runtime
     datp_core.protocols
 
@@ -56,6 +91,7 @@ source_modules =
     datp_core.populations
     datp_core.preprocessing
     datp_core.learning
+    datp_core.pipeline
     datp_core.scoring
     datp_core.centralized_reference
     datp_core.thresholding
