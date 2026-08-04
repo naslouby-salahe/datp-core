@@ -1,13 +1,26 @@
-"""Shared threshold-result structure without collapsing method-specific science."""
+"""Shared threshold structure and publication without collapsing method-specific science."""
 
 from dataclasses import dataclass
+from enum import StrEnum
+from pathlib import Path
 from typing import ClassVar, Protocol, runtime_checkable
 
+from datp_core.analysis.temporal import TemporalDeploymentProvenance
+from datp_core.artifacts.serialization import canonical_json_text
 from datp_core.domain.enums import ContractSubject, FederatedThresholdMethod
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import Checksum, Quantile, ThresholdValue
+from datp_core.domain.values import Checksum, Quantile, ThresholdValue, checksum_text
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.populations.models import ClientIdentity
+from datp_core.scoring.models import ScoreArtifactManifest
+from datp_core.thresholding.dispatch import ThresholdConstructionRequest, dispatch_federated_threshold
+from datp_core.thresholding.models import ThresholdConstructionResult
+
+
+class FederatedThresholdAssetName(StrEnum):
+    RESULT = "threshold_result.json"
+    TEMPORAL_PROVENANCE = "temporal_threshold_provenance.json"
+    COMPLETE = "COMPLETE"
 
 
 @runtime_checkable
@@ -51,3 +64,102 @@ class FederatedThresholdResult(Protocol):
     coordinate: FederatedTrainingCoordinate
     assignments: tuple[ThresholdAssignmentLike, ...]
     method: ClassVar[FederatedThresholdMethod]
+
+
+@dataclass(frozen=True, slots=True)
+class FederatedThresholdPublicationRequest:
+    request: ThresholdConstructionRequest
+    temporal_provenance: TemporalDeploymentProvenance | None = None
+    temporal_score_manifest: ScoreArtifactManifest | None = None
+
+    def __post_init__(self) -> None:
+        if (self.temporal_provenance is None) != (self.temporal_score_manifest is None):
+            raise ValueError("temporal threshold construction requires both provenance and score manifest")
+        if self.temporal_provenance is not None:
+            if self.temporal_score_manifest is None:
+                raise AssertionError("temporal publication invariant was checked")
+            self.temporal_provenance.validate_score_manifest(self.temporal_score_manifest)
+
+
+@dataclass(frozen=True, slots=True)
+class _ThresholdPublicationProjection:
+    result: ThresholdConstructionResult
+    temporal_provenance: TemporalDeploymentProvenance | None
+
+
+def write_federated_threshold(
+    request: FederatedThresholdPublicationRequest,
+    directory: Path,
+) -> ThresholdConstructionResult:
+    result = dispatch_federated_threshold(request.request)
+    (directory / FederatedThresholdAssetName.RESULT).write_text(
+        canonical_json_text(result),
+        encoding="utf-8",
+    )
+    if request.temporal_provenance is not None:
+        (directory / FederatedThresholdAssetName.TEMPORAL_PROVENANCE).write_text(
+            canonical_json_text(request.temporal_provenance),
+            encoding="utf-8",
+        )
+    (directory / FederatedThresholdAssetName.COMPLETE).write_text(
+        federated_threshold_publication_checksum(result, request.temporal_provenance).value,
+        encoding="utf-8",
+    )
+    return result
+
+
+def federated_threshold_is_reusable(
+    request: FederatedThresholdPublicationRequest,
+    directory: Path,
+) -> bool:
+    complete = directory / FederatedThresholdAssetName.COMPLETE
+    document = directory / FederatedThresholdAssetName.RESULT
+    if not complete.is_file() or not document.is_file():
+        return False
+    provenance_document = directory / FederatedThresholdAssetName.TEMPORAL_PROVENANCE
+    if (request.temporal_provenance is None and provenance_document.exists()) or (
+        request.temporal_provenance is not None and not provenance_document.is_file()
+    ):
+        return False
+    expected = federated_threshold_publication_checksum(
+        dispatch_federated_threshold(request.request),
+        request.temporal_provenance,
+    )
+    try:
+        return complete.read_text(encoding="utf-8").strip() == expected.value
+    except OSError:
+        return False
+
+
+def load_reused_federated_threshold(
+    request: FederatedThresholdPublicationRequest,
+    directory: Path,
+) -> ThresholdConstructionResult:
+    del directory
+    return dispatch_federated_threshold(request.request)
+
+
+def rebase_federated_threshold(
+    result: ThresholdConstructionResult,
+    directory: Path,
+) -> ThresholdConstructionResult:
+    del directory
+    return result
+
+
+def threshold_result_checksum(result: ThresholdConstructionResult) -> Checksum:
+    return checksum_text(canonical_json_text(result))
+
+
+def federated_threshold_publication_checksum(
+    result: ThresholdConstructionResult,
+    temporal_provenance: TemporalDeploymentProvenance | None,
+) -> Checksum:
+    return checksum_text(
+        canonical_json_text(
+            _ThresholdPublicationProjection(
+                result=result,
+                temporal_provenance=temporal_provenance,
+            )
+        )
+    )
