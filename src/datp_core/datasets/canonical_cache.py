@@ -28,6 +28,7 @@ from datp_core.datasets.models import (
     ModelInputEligibilityPolicy,
     RawDatasetInventory,
     RawSourceFile,
+    SchemaChecksumDocument,
     SourceFileRole,
     SourceRowReference,
     SourceStateDocument,
@@ -86,14 +87,6 @@ class CanonicalAsset[AssetRoleT: StrEnum]:
             raise ValueError("canonical assets require a relative path and columns")
 
 
-@dataclass(frozen=True, slots=True)
-class _SchemaChecksumDocument:
-    canonicalization_contract: str
-    columns: tuple[CanonicalColumn, ...]
-    dataset: DatasetId
-    physical_schema: str
-
-
 def canonical_asset_path(root: Path, relative_path: Path) -> Path:
     if not _is_canonical_relative_path(relative_path):
         raise ValueError("canonical assets must remain below the data branch")
@@ -119,7 +112,7 @@ def schema_checksum_document_json(
     dataset: DatasetId, columns: tuple[CanonicalColumn, ...], physical_schema: pa.Schema
 ) -> str:
     return canonical_json_text(
-        _SchemaChecksumDocument(
+        SchemaChecksumDocument(
             canonicalization_contract=_CANONICAL_PUBLICATION_CONTRACT,
             columns=columns,
             dataset=dataset,
