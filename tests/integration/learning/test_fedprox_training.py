@@ -14,7 +14,7 @@ from tests.unit.learning.federated.helpers import (
 )
 
 from datp_core.domain.values import Checksum, RowCount, Seed
-from datp_core.learning.federated.checkpointing import select_checkpoint
+from datp_core.learning.federated.checkpoints.selection import select_checkpoint
 from datp_core.learning.federated.fedprox import train_fedprox
 from datp_core.learning.federated.training import FederatedTrainingRequest
 from datp_core.protocols.training import CHECKPOINT_SELECTION_RULE, FEDPROX_COEFFICIENTS
