@@ -2,6 +2,7 @@
 
 from enum import StrEnum
 
+import polars as pl
 from pydantic import model_validator
 
 from datp_core.domain.contracts import StrictModel
@@ -10,6 +11,7 @@ from datp_core.domain.enums import (
     EvaluationCohort,
     FederatedThresholdMethod,
     PopulationId,
+    ScoreFrameColumn,
 )
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import CalibrationSize, RowCount, Seed
@@ -18,8 +20,10 @@ from datp_core.populations.models import (
     ClientIdentity,
     ClientPartitionCounts,
     PopulationCapabilities,
+    PopulationOutcomeLabel,
 )
 from datp_core.protocols.calibration import MINIMUM_BENIGN_SUPPORT
+from datp_core.scoring.models import ScoreArtifactManifest, ScoreRecord
 
 
 class ClientExclusionReason(StrEnum):
@@ -136,10 +140,8 @@ def build_evaluation_cohort_manifest(
     population: PopulationId,
     partition_seed: Seed,
     client_counts: tuple[ClientPartitionCounts, ...],
-    threshold_method: FederatedThresholdMethod | None = None,
 ) -> EvaluationCohortManifest:
     """Construct threshold-independent cohorts."""
-    del threshold_method
     support = MINIMUM_BENIGN_SUPPORT
     capabilities = population_capabilities(population)
     records: list[ClientEligibilityRecord] = []
@@ -167,6 +169,53 @@ def build_evaluation_cohort_manifest(
     )
 
 
+def client_partition_counts_from_scores(
+    manifest: ScoreArtifactManifest,
+) -> tuple[ClientPartitionCounts, ...]:
+    calibration = tuple(
+        sorted(
+            manifest.calibration_records,
+            key=lambda record: record.scored_client,
+        )
+    )
+    evaluation = tuple(
+        sorted(
+            manifest.evaluation_records,
+            key=lambda record: record.scored_client,
+        )
+    )
+    if tuple(record.scored_client for record in calibration) != tuple(
+        record.scored_client for record in evaluation
+    ):
+        raise ScientificContractError(
+            "evaluation inputs require matching calibration and evaluation score clients"
+        )
+    return tuple(
+        ClientPartitionCounts(
+            client_id=calibration_record.scored_client.client_id,
+            benign_calibration_count=_label_count(
+                calibration_record,
+                PopulationOutcomeLabel.BENIGN,
+            ),
+            benign_evaluation_count=_label_count(
+                evaluation_record,
+                PopulationOutcomeLabel.BENIGN,
+            ),
+            attack_evaluation_count=_label_count(
+                evaluation_record,
+                PopulationOutcomeLabel.ATTACK,
+            ),
+            accepted=True,
+            deployment_fallback=False,
+        )
+        for calibration_record, evaluation_record in zip(
+            calibration,
+            evaluation,
+            strict=True,
+        )
+    )
+
+
 def assert_cohort_invariant_to_threshold_methods(
     *,
     population: PopulationId,
@@ -184,14 +233,12 @@ def assert_cohort_invariant_to_threshold_methods(
         population=population,
         partition_seed=partition_seed,
         client_counts=client_counts,
-        threshold_method=methods[0],
     )
-    for method in methods[1:]:
+    for _method in methods[1:]:
         candidate = build_evaluation_cohort_manifest(
             population=population,
             partition_seed=partition_seed,
             client_counts=client_counts,
-            threshold_method=method,
         )
         if candidate != baseline:
             raise ScientificContractError(
@@ -250,9 +297,24 @@ def _classify_client(
         fpr_evaluable=fpr_evaluable,
         attack_evaluable=attack_evaluable,
         deployment_fallback=counts.deployment_fallback,
-        exclusion_reasons=tuple(dict.fromkeys((*reasons, *attack_reasons))),
+        exclusion_reasons=_unique_reasons((*reasons, *attack_reasons)),
     )
     return record, memberships
+
+
+def _label_count(
+    record: ScoreRecord,
+    label: PopulationOutcomeLabel,
+) -> RowCount:
+    frame = pl.read_parquet(record.path)
+    return RowCount(
+        int(
+            (
+                frame[ScoreFrameColumn.OUTCOME_LABEL.value]
+                == label.value
+            ).sum()
+        )
+    )
 
 
 def _support_exclusion_reasons(
@@ -356,14 +418,24 @@ def _cohort_memberships(
             )
         )
     if not fpr_evaluable and not attack_evaluable:
-        unavailable = tuple(
-            dict.fromkeys((*reasons, *attack_reasons))
-        ) or (ClientExclusionReason.CLIENT_NOT_ACCEPTED,)
         memberships.append(
             EvaluationCohortMembership(
                 client=client,
                 cohort=EvaluationCohort.UNAVAILABLE,
-                reasons=unavailable,
+                reasons=(
+                    _unique_reasons((*reasons, *attack_reasons))
+                    or (ClientExclusionReason.CLIENT_NOT_ACCEPTED,)
+                ),
             )
         )
     return tuple(memberships)
+
+
+def _unique_reasons(
+    reasons: tuple[ClientExclusionReason, ...],
+) -> tuple[ClientExclusionReason, ...]:
+    unique: list[ClientExclusionReason] = []
+    for reason in reasons:
+        if reason not in unique:
+            unique.append(reason)
+    return tuple(unique)
