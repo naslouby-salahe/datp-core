@@ -1,7 +1,10 @@
 """Stage: compose confirmatory, supplementary, and temporal analysis publication."""
 
+from pathlib import Path
+
 from datp_core.analysis.decisions import (
     AnalysisAssetName,
+    AnalysisPublication,
     ConfirmatoryAnalysisRequest,
     ExternalAnalysisRequest,
     TemporalAnalysisRequest,
@@ -24,6 +27,7 @@ from datp_core.orchestration.commands.analysis import (
 )
 from datp_core.pipeline.publication.codec import (
     ArtifactPublication,
+    ArtifactPublicationResult,
     FunctionalArtifactCodec,
     publish_artifact,
 )
@@ -84,7 +88,11 @@ def analyze_temporal_stage(request: _TemporalAnalyzeRequest) -> _TemporalAnalyze
     )
 
 
-def _publish[DocumentT](output_directory, overwrite, prepared):
+def _publish[DocumentT](
+    output_directory: Path,
+    overwrite: bool,
+    prepared: AnalysisPublication[DocumentT],
+) -> ArtifactPublicationResult[DocumentT]:
     return publish_artifact(
         ArtifactPublication(
             target=output_directory,
