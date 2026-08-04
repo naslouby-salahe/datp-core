@@ -146,12 +146,16 @@ def build_evaluation_cohort_manifest(
     capabilities = population_capabilities(population)
     records: list[ClientEligibilityRecord] = []
     memberships: list[EvaluationCohortMembership] = []
-    for counts in sorted(client_counts, key=lambda item: item.client_id):
-        client = ClientIdentity(
-            population,
-            counts.client_id,
-            capabilities.identity_kind,
-        )
+    for counts in sorted(client_counts, key=lambda item: item.client):
+        client = counts.client
+        if (
+            client.population is not population
+            or client.identity_kind is not capabilities.identity_kind
+        ):
+            raise ScientificContractError(
+                "client support counts must match the cohort population identity contract",
+                subject=client,
+            )
         record, client_memberships = _classify_client(
             client,
             support,
@@ -192,7 +196,7 @@ def client_partition_counts_from_scores(
         )
     return tuple(
         ClientPartitionCounts(
-            client_id=calibration_record.scored_client.client_id,
+            client=calibration_record.scored_client,
             benign_calibration_count=_label_count(
                 calibration_record,
                 PopulationOutcomeLabel.BENIGN,
