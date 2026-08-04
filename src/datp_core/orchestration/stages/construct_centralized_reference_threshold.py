@@ -2,10 +2,8 @@
 
 from dataclasses import dataclass
 from pathlib import Path
-from shutil import rmtree
 from typing import ClassVar
 
-from datp_core.artifacts.store import publish_atomically
 from datp_core.centralized_reference.scoring import PooledScoreArtifact
 from datp_core.centralized_reference.thresholding import (
     CentralizedThresholdAssetName,
@@ -16,7 +14,8 @@ from datp_core.centralized_reference.thresholding import (
 )
 from datp_core.centralized_reference.training import CentralizedTrainingCoordinate
 from datp_core.domain.enums import PublicationStatus, StageOperationId
-from datp_core.domain.values import Checksum
+from datp_core.domain.values import Checksum, checksum_file
+from datp_core.pipeline.publication.codec import ArtifactPublication, publish_artifact
 from datp_core.protocols.models import CentralizedQuantileProtocol
 
 
@@ -37,35 +36,57 @@ class ConstructCentralizedThresholdResult:
     complete_digest: Checksum
 
 
+@dataclass(frozen=True, slots=True)
+class _CentralizedThresholdCodec:
+    def write(
+        self,
+        request: ConstructCentralizedThresholdRequest,
+        directory: Path,
+    ) -> PooledThresholdResult:
+        threshold = _construct(request)
+        write_threshold_document(threshold, directory)
+        digest = threshold_result_checksum(threshold)
+        (directory / CentralizedThresholdAssetName.COMPLETE).write_text(digest.value, encoding="utf-8")
+        return threshold
+
+    def validate(self, request: ConstructCentralizedThresholdRequest, directory: Path) -> bool:
+        return _is_reusable(directory, request)
+
+    def load(
+        self,
+        request: ConstructCentralizedThresholdRequest,
+        directory: Path,
+    ) -> PooledThresholdResult:
+        return _construct(request)
+
+    def rebase(self, result: PooledThresholdResult, directory: Path) -> PooledThresholdResult:
+        return result
+
+
 def construct_centralized_reference_threshold_stage(
     request: ConstructCentralizedThresholdRequest,
 ) -> ConstructCentralizedThresholdResult:
-    def construct() -> PooledThresholdResult:
-        return construct_pooled_benign_quantile(
-            coordinate=request.coordinate,
-            calibration_scores=request.calibration_scores,
-            protocol=request.protocol,
+    publication = publish_artifact(
+        ArtifactPublication(
+            target=request.output_directory,
+            request=request,
+            codec=_CentralizedThresholdCodec(),
+            overwrite=request.overwrite,
+            complete_marker=CentralizedThresholdAssetName.COMPLETE,
         )
-
-    def write(temporary: Path) -> PooledThresholdResult:
-        threshold = construct()
-        write_threshold_document(threshold, temporary)
-        digest = threshold_result_checksum(threshold)
-        (temporary / CentralizedThresholdAssetName.COMPLETE).write_text(digest.value, encoding="utf-8")
-        return threshold
-
-    outcome = publish_atomically(
-        target=request.output_directory,
-        overwrite=request.overwrite,
-        is_reusable=lambda directory: _is_reusable(directory, request),
-        write=write,
-        reusable_value=lambda _directory: construct(),
-        remove_target=rmtree,
     )
     return ConstructCentralizedThresholdResult(
-        publication_status=outcome.status,
-        threshold=outcome.value,
-        complete_digest=outcome.complete_digest,
+        publication_status=publication.status,
+        threshold=publication.value,
+        complete_digest=checksum_file(request.output_directory / CentralizedThresholdAssetName.COMPLETE),
+    )
+
+
+def _construct(request: ConstructCentralizedThresholdRequest) -> PooledThresholdResult:
+    return construct_pooled_benign_quantile(
+        coordinate=request.coordinate,
+        calibration_scores=request.calibration_scores,
+        protocol=request.protocol,
     )
 
 
@@ -74,11 +95,5 @@ def _is_reusable(directory: Path, request: ConstructCentralizedThresholdRequest)
     document = directory / CentralizedThresholdAssetName.THRESHOLD
     if not (complete.is_file() and document.is_file()):
         return False
-    expected = threshold_result_checksum(
-        construct_pooled_benign_quantile(
-            coordinate=request.coordinate,
-            calibration_scores=request.calibration_scores,
-            protocol=request.protocol,
-        )
-    )
+    expected = threshold_result_checksum(_construct(request))
     return complete.read_text(encoding="utf-8").strip() == expected.value
