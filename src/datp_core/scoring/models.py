@@ -1,50 +1,35 @@
 """Typed, immutable federated score-artifact records."""
 
 from dataclasses import dataclass
-from pathlib import Path
 
+from datp_core.artifacts.score_models import ScoreArtifact
 from datp_core.domain.enums import ContractSubject, PartitionRole, SerializationFormat, SplitProtocolId
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.provenance import canonical_checksum
-from datp_core.domain.values import Checksum, FeatureCount, RoundNumber, RowCount
+from datp_core.domain.values import Checksum
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.populations.models import ClientIdentity
 
 
 @dataclass(frozen=True, slots=True)
-class ScoreRecord:
-    coordinate: FederatedTrainingCoordinate
+class ScoreRecord(ScoreArtifact[FederatedTrainingCoordinate]):
+    """One client-owned score artifact."""
+
     scored_client: ClientIdentity
-    partition_role: PartitionRole
-    checkpoint_round: RoundNumber
-    checkpoint_checksum: Checksum
-    path: Path
-    checksum: Checksum
-    row_count: RowCount
-    feature_count: FeatureCount
-    serialization_format: SerializationFormat
 
     def __post_init__(self) -> None:
-        if self.partition_role not in {
-            PartitionRole.CALIBRATION,
-            PartitionRole.FUTURE_RECALIBRATION,
-            PartitionRole.EVALUATION,
-        }:
+        super().__post_init__()
+        if self.scored_client.population is not self.coordinate.population:
             raise ScientificContractError(
-                "federated score records are only defined for post-training partitions",
-                subject=self.partition_role,
-            )
-        if self.serialization_format is not SerializationFormat.PARQUET:
-            raise ScientificContractError(
-                "federated scores must use Parquet serialization",
-                subject=self.serialization_format,
+                "scored client population must match the training coordinate",
+                subject=ContractSubject.CLIENT_IDENTITY,
             )
 
 
 @dataclass(frozen=True, slots=True)
 class ScoreArtifactManifest:
     coordinate: FederatedTrainingCoordinate
-    checkpoint_round: RoundNumber
+    checkpoint_round: object
     checkpoint_checksum: Checksum
     preprocessing_state_set_checksum: Checksum
     split_manifest_checksum: Checksum
@@ -129,11 +114,17 @@ class ScoreGenerationResult:
         return FixedScoreInvariant.from_manifest(self.manifest)
 
 
+@dataclass(frozen=True, slots=True)
+class _ScoreRecordChecksumEntry:
+    client: ClientIdentity
+    checksum: Checksum
+
+
 def record_set_checksum(records: tuple[ScoreRecord, ...]) -> Checksum:
     """Checksum one deterministically ordered score-record inventory."""
     ordered = tuple(sorted(records, key=lambda record: record.scored_client))
     return canonical_checksum(
-        tuple({"client_id": record.scored_client.client_id, "checksum": record.checksum.value} for record in ordered)
+        tuple(_ScoreRecordChecksumEntry(record.scored_client, record.checksum) for record in ordered)
     )
 
 
