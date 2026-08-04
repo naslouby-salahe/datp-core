@@ -1,4 +1,4 @@
-"""Integration: one frozen score artifact is reusable, unchanged, across every threshold method."""
+"""One frozen score artifact is reusable unchanged across threshold methods."""
 
 from pathlib import Path
 
@@ -22,17 +22,21 @@ from datp_core.domain.enums import (
     PublicationStatus,
 )
 from datp_core.domain.values import CalibrationSize, ClientCount, Quantile, checksum_file
+from datp_core.orchestration.commands.thresholding import ConstructFederatedThresholdsRequest
 from datp_core.orchestration.stages.construct_federated_thresholds import (
-    ConstructFederatedThresholdsRequest,
     construct_federated_thresholds_stage,
 )
 from datp_core.populations.models import PopulationCapabilities
 from datp_core.protocols.models import CalibrationEligibilityProtocol
 from datp_core.scoring.models import FixedScoreInvariant, ScoreArtifactManifest
-from datp_core.thresholding.dispatch import ThresholdConstructionRequest, dispatch_federated_threshold
-from datp_core.thresholding.models import (
-    ConformalThresholdResult,
-    LocalThresholdResult,
+from datp_core.thresholding.common import ThresholdConstructionResult
+from datp_core.thresholding.dispatch import (
+    ThresholdConstructionRequest,
+    dispatch_federated_threshold,
+)
+from datp_core.thresholding.methods.conformal import ConformalThresholdResult
+from datp_core.thresholding.methods.local import LocalThresholdResult
+from datp_core.thresholding.methods.shared import (
     PooledSharedQuantileResult,
     SampleWeightedSharedThresholdResult,
     SharedThresholdResult,
@@ -47,11 +51,20 @@ CLIENT_IDS = ("client_a", "client_b", "client_c")
 def _manifest(tmp_path: Path) -> ScoreArtifactManifest:
     generator = np.random.default_rng(0)
     calibration_records = tuple(
-        benign_score_record(tmp_path, client_id, tuple(float(v) for v in generator.normal(size=150)))
+        benign_score_record(
+            tmp_path,
+            client_id,
+            tuple(float(value) for value in generator.normal(size=150)),
+        )
         for client_id in CLIENT_IDS
     )
     evaluation_records = tuple(
-        benign_score_record(tmp_path, client_id, (1.0, 2.0), partition_role=PartitionRole.EVALUATION)
+        benign_score_record(
+            tmp_path,
+            client_id,
+            (1.0, 2.0),
+            partition_role=PartitionRole.EVALUATION,
+        )
         for client_id in CLIENT_IDS
     )
     return ScoreArtifactManifest(
@@ -84,96 +97,130 @@ def _capabilities() -> PopulationCapabilities:
     )
 
 
-def test_every_threshold_method_reads_the_same_frozen_score_artifact_unchanged(tmp_path: Path) -> None:
+def test_every_threshold_method_reads_the_same_frozen_score_artifact_unchanged(
+    tmp_path: Path,
+) -> None:
     manifest = _manifest(tmp_path)
     invariant = FixedScoreInvariant.from_manifest(manifest)
-    checksums_before = {
-        record.scored_client.client_id: checksum_file(record.path) for record in manifest.calibration_records
-    }
-
-    eligible = []
-    for record in manifest.calibration_records:
-        references = load_benign_calibration_references(record)
-        support = calibration_support(record, references, invariant.calibration_score_set_checksum)
-        decision = decide_eligibility(support, PROTOCOL)
-        assert decision.status is EligibilityStatus.ELIGIBLE
-        eligible.append(
-            calibration_scores_from_references(
-                record.scored_client, manifest.coordinate, references, invariant.calibration_score_set_checksum
-            )
+    checksums_before = tuple(
+        (record.scored_client.client_id, checksum_file(record.path))
+        for record in manifest.calibration_records
+    )
+    eligible = tuple(
+        _eligible_client_scores(record, manifest, invariant)
+        for record in manifest.calibration_records
+    )
+    results = tuple(
+        (
+            method,
+            dispatch_federated_threshold(
+                ThresholdConstructionRequest(
+                    method=method,
+                    coordinate=manifest.coordinate,
+                    quantile=QUANTILE,
+                    capabilities=_capabilities(),
+                    eligible=eligible,
+                    family_by_client=(),
+                )
+            ),
         )
-    eligible = tuple(eligible)
-    capabilities = _capabilities()
-
-    results = {}
-    for method in (
-        FederatedThresholdMethod.SHARED_THRESHOLD,
-        FederatedThresholdMethod.LOCAL_THRESHOLD,
-        FederatedThresholdMethod.POOLED_SHARED_QUANTILE,
-        FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD,
-        FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD,
-    ):
-        request = ThresholdConstructionRequest(
-            method=method,
-            coordinate=manifest.coordinate,
-            quantile=QUANTILE,
-            capabilities=capabilities,
-            eligible=eligible,
-            family_by_client=(),
+        for method in (
+            FederatedThresholdMethod.SHARED_THRESHOLD,
+            FederatedThresholdMethod.LOCAL_THRESHOLD,
+            FederatedThresholdMethod.POOLED_SHARED_QUANTILE,
+            FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD,
+            FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD,
         )
-        results[method] = dispatch_federated_threshold(request)
-
-    # The frozen score files on disk must be byte-identical after every construction.
-    checksums_after = {
-        record.scored_client.client_id: checksum_file(record.path) for record in manifest.calibration_records
-    }
+    )
+    checksums_after = tuple(
+        (record.scored_client.client_id, checksum_file(record.path))
+        for record in manifest.calibration_records
+    )
     assert checksums_before == checksums_after
 
-    # Every result's provenance must trace to the one frozen calibration score set.
-    shared = results[FederatedThresholdMethod.SHARED_THRESHOLD]
+    shared = _result(results, FederatedThresholdMethod.SHARED_THRESHOLD)
     assert isinstance(shared, SharedThresholdResult)
     assert all(
-        item.diagnostic.score_set_checksum == invariant.calibration_score_set_checksum
+        item.diagnostic.score_set_checksum
+        == invariant.calibration_score_set_checksum
         for item in shared.contributing_local_quantiles
     )
-    local = results[FederatedThresholdMethod.LOCAL_THRESHOLD]
-    assert isinstance(local, LocalThresholdResult)
-    pooled = results[FederatedThresholdMethod.POOLED_SHARED_QUANTILE]
+    assert isinstance(
+        _result(results, FederatedThresholdMethod.LOCAL_THRESHOLD),
+        LocalThresholdResult,
+    )
+    pooled = _result(
+        results,
+        FederatedThresholdMethod.POOLED_SHARED_QUANTILE,
+    )
     assert isinstance(pooled, PooledSharedQuantileResult)
-    assert pooled.diagnostic.score_set_checksum == invariant.calibration_score_set_checksum
-    weighted = results[FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD]
-    assert isinstance(weighted, SampleWeightedSharedThresholdResult)
-    conformal = results[FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD]
-    assert isinstance(conformal, ConformalThresholdResult)
-
-    # Distinct construction rules over the same eligible cohort must not silently collapse
-    # to the identical value (they answer genuinely different scientific questions).
+    assert (
+        pooled.diagnostic.score_set_checksum
+        == invariant.calibration_score_set_checksum
+    )
+    assert isinstance(
+        _result(
+            results,
+            FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD,
+        ),
+        SampleWeightedSharedThresholdResult,
+    )
+    assert isinstance(
+        _result(
+            results,
+            FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD,
+        ),
+        ConformalThresholdResult,
+    )
     assert shared.shared_threshold.value != pooled.shared_threshold.value
 
 
-def test_construct_federated_thresholds_stage_reuses_a_completed_artifact_on_second_execution(tmp_path: Path) -> None:
+def test_construct_federated_thresholds_stage_reuses_a_completed_artifact_on_second_execution(
+    tmp_path: Path,
+) -> None:
     manifest = _manifest(tmp_path)
     invariant = FixedScoreInvariant.from_manifest(manifest)
     record = manifest.calibration_records[0]
-    references = load_benign_calibration_references(record)
-    client_scores = calibration_scores_from_references(
-        record.scored_client, manifest.coordinate, references, invariant.calibration_score_set_checksum
-    )
-    request = ThresholdConstructionRequest(
-        method=FederatedThresholdMethod.SHARED_THRESHOLD,
-        coordinate=manifest.coordinate,
-        quantile=QUANTILE,
-        capabilities=_capabilities(),
-        eligible=(client_scores,),
-        family_by_client=(),
-    )
-    output_directory = tmp_path / "threshold_output"
+    client_scores = _eligible_client_scores(record, manifest, invariant)
     stage_request = ConstructFederatedThresholdsRequest(
-        request=request, output_directory=output_directory, overwrite=False
+        request=ThresholdConstructionRequest(
+            method=FederatedThresholdMethod.SHARED_THRESHOLD,
+            coordinate=manifest.coordinate,
+            quantile=QUANTILE,
+            capabilities=_capabilities(),
+            eligible=(client_scores,),
+            family_by_client=(),
+        ),
+        output_directory=tmp_path / "threshold_output",
+        overwrite=False,
     )
-
     first = construct_federated_thresholds_stage(stage_request)
     second = construct_federated_thresholds_stage(stage_request)
     assert first.publication_status is PublicationStatus.PUBLISHED
     assert second.publication_status is PublicationStatus.REUSED
     assert first.complete_digest == second.complete_digest
+
+
+def _eligible_client_scores(record, manifest, invariant):
+    references = load_benign_calibration_references(record)
+    support = calibration_support(
+        record,
+        references,
+        invariant.calibration_score_set_checksum,
+    )
+    assert decide_eligibility(support, PROTOCOL).status is EligibilityStatus.ELIGIBLE
+    return calibration_scores_from_references(
+        record.scored_client,
+        manifest.coordinate,
+        references,
+        invariant.calibration_score_set_checksum,
+    )
+
+
+def _result(
+    results: tuple[tuple[FederatedThresholdMethod, ThresholdConstructionResult], ...],
+    method: FederatedThresholdMethod,
+) -> ThresholdConstructionResult:
+    matches = tuple(result for candidate, result in results if candidate is method)
+    assert len(matches) == 1
+    return matches[0]
