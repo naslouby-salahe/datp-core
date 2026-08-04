@@ -2,13 +2,11 @@
 
 from dataclasses import dataclass
 from pathlib import Path
-from shutil import rmtree
 from typing import ClassVar
 
 import polars as pl
 
 from datp_core.artifacts.layout import scored_partition_roles
-from datp_core.artifacts.store import publish_atomically
 from datp_core.domain.enums import (
     ContractSubject,
     PartitionRole,
@@ -20,6 +18,7 @@ from datp_core.domain.enums import (
 from datp_core.domain.errors import ArtifactIntegrityError
 from datp_core.domain.values import BatchSize, Checksum, FeatureCount, FeatureNameSequence, RowCount, checksum_file
 from datp_core.learning.federated.checkpointing import CheckpointCandidate
+from datp_core.pipeline.publication.codec import ArtifactPublication, publish_artifact
 from datp_core.protocols.models import AutoencoderProtocol
 from datp_core.runtime.compute import resolve_cuda_device
 from datp_core.scoring.generation import (
@@ -51,10 +50,9 @@ class ScoreFederatedStageResult:
     result: ScoreGenerationResult
 
 
-def score_federated_stage(request: ScoreFederatedRequest) -> ScoreFederatedStageResult:
-    device = resolve_cuda_device()
-
-    def write(temporary: Path) -> ScoreGenerationResult:
+@dataclass(frozen=True, slots=True)
+class _FederatedScoringCodec:
+    def write(self, request: ScoreFederatedRequest, directory: Path) -> ScoreGenerationResult:
         return generate_federated_scores(
             ScoreGenerationRequest(
                 checkpoint=request.checkpoint,
@@ -62,47 +60,55 @@ def score_federated_stage(request: ScoreFederatedRequest) -> ScoreFederatedStage
                 feature_names=request.feature_names,
                 clients=request.clients,
                 batch_size=request.batch_size,
-                output_directory=temporary,
+                output_directory=directory,
                 preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
                 split_manifest_checksum=request.split_manifest_checksum,
             ),
-            device,
+            resolve_cuda_device(),
         )
 
-    outcome = publish_atomically(
-        target=request.output_directory,
-        overwrite=request.overwrite,
-        is_reusable=lambda directory: _is_reusable(directory, request),
-        write=write,
-        reusable_value=lambda _directory: _load_reused_scores(request),
-        remove_target=rmtree,
-    )
-    result = (
-        _rebase_scoring(outcome.value, request.output_directory)
-        if outcome.status is PublicationStatus.PUBLISHED
-        else outcome.value
-    )
-    return ScoreFederatedStageResult(publication_status=outcome.status, result=result)
+    def validate(self, request: ScoreFederatedRequest, directory: Path) -> bool:
+        return _is_reusable(directory, request)
+
+    def load(self, request: ScoreFederatedRequest, directory: Path) -> ScoreGenerationResult:
+        return _load_reused_scores(request, directory)
+
+    def rebase(self, result: ScoreGenerationResult, directory: Path) -> ScoreGenerationResult:
+        return _rebase_scoring(result, directory)
 
 
-def _client_paths(output_directory: Path, request: ScoreFederatedRequest) -> list[tuple[str, tuple[Path, ...]]]:
-    return [
-        (
-            client_input.client.client_id,
-            tuple(
-                output_directory / client_input.client.client_id / _asset_name_for_partition(role).value
-                for role in scored_partition_roles(request.checkpoint.coordinate.split_protocol)
-            ),
+def score_federated_stage(request: ScoreFederatedRequest) -> ScoreFederatedStageResult:
+    publication = publish_artifact(
+        ArtifactPublication(
+            target=request.output_directory,
+            request=request,
+            codec=_FederatedScoringCodec(),
+            overwrite=request.overwrite,
+            complete_marker=FederatedScoreAssetName.COMPLETE.value,
+        )
+    )
+    return ScoreFederatedStageResult(
+        publication_status=publication.status,
+        result=publication.value,
+    )
+
+
+def _client_paths(
+    output_directory: Path,
+    request: ScoreFederatedRequest,
+) -> tuple[tuple[Path, ...], ...]:
+    return tuple(
+        tuple(
+            output_directory / client_input.client.client_id / _asset_name_for_partition(role).value
+            for role in scored_partition_roles(request.checkpoint.coordinate.split_protocol)
         )
         for client_input in sorted(request.clients, key=lambda item: item.client)
-    ]
+    )
 
 
 def _is_reusable(directory: Path, request: ScoreFederatedRequest) -> bool:
     complete = directory / FederatedScoreAssetName.COMPLETE.value
-    if not complete.is_file():
-        return False
-    return all(path.is_file() for _, paths in _client_paths(directory, request) for path in paths)
+    return complete.is_file() and all(path.is_file() for paths in _client_paths(directory, request) for path in paths)
 
 
 def _build_records(
@@ -112,8 +118,7 @@ def _build_records(
 ) -> tuple[ScoreRecord, ...]:
     records: list[ScoreRecord] = []
     for client_input in sorted(request.clients, key=lambda item: item.client):
-        client_directory = output_directory / client_input.client.client_id
-        path = client_directory / _asset_name_for_partition(partition_role).value
+        path = output_directory / client_input.client.client_id / _asset_name_for_partition(partition_role).value
         if not path.is_file():
             raise ArtifactIntegrityError(
                 f"expected federated score partition is missing: {path}",
@@ -137,11 +142,14 @@ def _build_records(
     return tuple(records)
 
 
-def _load_reused_scores(request: ScoreFederatedRequest) -> ScoreGenerationResult:
-    calibration_records = _build_records(request.output_directory, request, PartitionRole.CALIBRATION)
-    evaluation_records = _build_records(request.output_directory, request, PartitionRole.EVALUATION)
+def _load_reused_scores(
+    request: ScoreFederatedRequest,
+    output_directory: Path,
+) -> ScoreGenerationResult:
+    calibration_records = _build_records(output_directory, request, PartitionRole.CALIBRATION)
+    evaluation_records = _build_records(output_directory, request, PartitionRole.EVALUATION)
     future_records = (
-        _build_records(request.output_directory, request, PartitionRole.FUTURE_RECALIBRATION)
+        _build_records(output_directory, request, PartitionRole.FUTURE_RECALIBRATION)
         if request.checkpoint.coordinate.split_protocol is SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE
         else ()
     )
