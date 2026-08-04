@@ -12,7 +12,6 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from datp_core.artifacts.completion import complete_digest
-from datp_core.artifacts.store import publish_atomically
 from datp_core.datasets.canonical_cache import (
     CanonicalAsset,
     CanonicalAssetLayout,
@@ -54,6 +53,7 @@ from datp_core.domain.values import (
     checksum_file,
     checksum_text,
 )
+from datp_core.pipeline.publication.atomic import publish_atomically
 from datp_core.protocols.runtime import DATA_ROOT
 
 _COMPLETE_NAME, _MANIFEST_NAME, _SCHEMA_NAME, _SOURCE_STATE_NAME = publication_artifact_names()
