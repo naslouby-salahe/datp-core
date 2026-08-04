@@ -1,11 +1,10 @@
-"""Shared checkpoint inventory, file-integrity, and terminal-selection services."""
+"""Shared checkpoint inventory and terminal-selection services."""
 
 from collections.abc import Callable, Sequence
-from pathlib import Path
 
-from datp_core.domain.enums import CheckpointStatus, ContractSubject, SerializationFormat
+from datp_core.domain.enums import CheckpointStatus, ContractSubject
 from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
-from datp_core.domain.values import Checksum, RoundNumber, checksum_file
+from datp_core.domain.values import RoundNumber
 from datp_core.pipeline.checkpoints.models import PersistedCheckpoint
 
 
@@ -33,30 +32,6 @@ def validate_ordered_checkpoint_inventory[CandidateT: PersistedCheckpoint](
             subject=ContractSubject.CHECKPOINT_CANDIDATES,
         )
     return ordered
-
-
-def validate_persisted_checkpoint_file(
-    path: Path,
-    checksum: Checksum,
-    *,
-    serialization_format: SerializationFormat = SerializationFormat.SAFETENSORS,
-) -> None:
-    """Validate one persisted checkpoint without loading branch-specific model state."""
-    if not path.is_file():
-        raise ArtifactIntegrityError(
-            "checkpoint candidate tensor file is missing",
-            subject=ContractSubject.ARTIFACT_PATH,
-        )
-    if checksum_file(path) != checksum:
-        raise ArtifactIntegrityError(
-            "checkpoint candidate checksum mismatch",
-            subject=ContractSubject.ARTIFACT_PATH,
-        )
-    if path.suffix != f".{serialization_format.value}":
-        raise ArtifactIntegrityError(
-            f"checkpoint must use {serialization_format.value} serialization",
-            subject=ContractSubject.ARTIFACT_PATH,
-        )
 
 
 def select_terminal_checkpoint[CandidateT: PersistedCheckpoint](
