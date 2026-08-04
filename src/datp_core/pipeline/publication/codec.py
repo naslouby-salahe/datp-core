@@ -1,5 +1,6 @@
 """Typed artifact codecs for one shared write, validate, load, and rebase lifecycle."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -16,6 +17,28 @@ class ArtifactCodec[RequestT, ResultT](Protocol):
     def load(self, request: RequestT, directory: Path) -> ResultT: ...
 
     def rebase(self, result: ResultT, directory: Path) -> ResultT: ...
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class FunctionalArtifactCodec[RequestT, ResultT]:
+    """Callable-backed codec used by thin orchestration adapters."""
+
+    writer: Callable[[RequestT, Path], ResultT]
+    validator: Callable[[RequestT, Path], bool]
+    loader: Callable[[RequestT, Path], ResultT]
+    rebaser: Callable[[ResultT, Path], ResultT]
+
+    def write(self, request: RequestT, directory: Path) -> ResultT:
+        return self.writer(request, directory)
+
+    def validate(self, request: RequestT, directory: Path) -> bool:
+        return self.validator(request, directory)
+
+    def load(self, request: RequestT, directory: Path) -> ResultT:
+        return self.loader(request, directory)
+
+    def rebase(self, result: ResultT, directory: Path) -> ResultT:
+        return self.rebaser(result, directory)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
