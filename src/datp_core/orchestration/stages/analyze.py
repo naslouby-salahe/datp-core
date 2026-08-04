@@ -1,4 +1,4 @@
-"""Seed-paired confirmatory, external, and temporal-boundary analysis publication."""
+"""Paired confirmatory, supplementary, and temporal-boundary analysis publication."""
 
 from dataclasses import dataclass
 from enum import StrEnum
@@ -6,6 +6,8 @@ from json import dumps
 from pathlib import Path
 from shutil import rmtree
 from typing import ClassVar
+
+from pydantic import model_validator
 
 from datp_core.analysis.descriptive import (
     DescriptiveSummary,
@@ -16,40 +18,37 @@ from datp_core.analysis.descriptive import (
 )
 from datp_core.analysis.inference.bootstrap import (
     decide_confirmatory,
-    external_paired_bca_interval,
     paired_bca_interval,
+    supplementary_paired_bca_interval,
 )
 from datp_core.analysis.inference.paired import holm_adjust, matched_pairs_rank_biserial, paired_wilcoxon
-from datp_core.analysis.mechanisms import MechanismResult
+from datp_core.analysis.mechanisms import MechanismEvidence
 from datp_core.analysis.models import (
     BootstrapInterval,
-    ExternalPairedAnalysisPlan,
+    MultiplicityPlan,
     MultiplicityResult,
     PairedContrast,
     PairedDifferenceCounts,
     RankBiserialResult,
     ScientificDecisionResult,
+    SupplementaryPairedAnalysisPlan,
     WilcoxonResult,
 )
 from datp_core.analysis.temporal import (
+    TemporalAnalysisRecord,
     TemporalDeploymentProvenance,
     TemporalRecoveryResult,
+    temporal_analysis_record,
     validate_frozen_recalibrated_pair,
 )
 from datp_core.artifacts.store import publish_atomically
-from datp_core.domain.enums import (
-    AvailabilityStatus,
-    EvidenceRole,
-    PopulationId,
-    PublicationStatus,
-    StageOperationId,
-    TemporalState,
-)
+from datp_core.domain.contracts import StrictModel
+from datp_core.domain.enums import EvidenceRole, PopulationId, PublicationStatus, StageOperationId, TemporalState
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.provenance import canonical_mapping, canonical_value
-from datp_core.domain.values import BootstrapReplicateCount, Checksum, Ratio, Seed, checksum_text
+from datp_core.domain.provenance import canonical_value
+from datp_core.domain.values import BootstrapReplicateCount, Checksum, PairedObservationCount, Seed, checksum_text
 from datp_core.experiments.models import ExternalTemporalExecutionIdentity, require_execution_identity
-from datp_core.protocols.models import StatisticalInferenceProtocol
+from datp_core.protocols.statistics import PairedInferenceProtocol
 
 
 class AnalysisAssetName(StrEnum):
@@ -62,88 +61,102 @@ class AnalysisAssetName(StrEnum):
 @dataclass(frozen=True, slots=True)
 class AnalyzeRequest:
     contrasts: tuple[PairedContrast, ...]
-    inference_protocol: StatisticalInferenceProtocol
+    inference_protocol: PairedInferenceProtocol
     bootstrap_replicates: BootstrapReplicateCount
     analysis_seed: Seed
     output_directory: Path
     overwrite: bool
-    secondary_family_name: str | None = None
-    secondary_p_values: tuple[float, ...] = ()
-    secondary_alpha: Ratio | None = None
-    mechanisms: tuple[MechanismResult, ...] = ()
+    multiplicity_plan: MultiplicityPlan | None = None
+    mechanisms: tuple[MechanismEvidence, ...] = ()
 
     def __post_init__(self) -> None:
-        complete_secondary_family = (
-            self.secondary_family_name is not None
-            and bool(self.secondary_p_values)
-            and self.secondary_alpha is not None
-        )
-        if complete_secondary_family:
-            return
-        if self.secondary_family_name is not None or self.secondary_p_values or self.secondary_alpha is not None:
-            raise ValueError("secondary multiplicity requires a complete predeclared family")
+        if self.bootstrap_replicates != self.inference_protocol.bootstrap_replicates:
+            raise ValueError("analysis request bootstrap count must match its inference protocol")
 
 
-@dataclass(frozen=True, slots=True)
-class _AnalysisArtifacts:
+class AnalysisDocument(StrictModel):
+    inference_protocol: PairedInferenceProtocol
     interval: BootstrapInterval
     decision: ScientificDecisionResult
     descriptive: DescriptiveSummary
     sign_consistency: PairedDifferenceCounts
     wilcoxon: WilcoxonResult
     rank_biserial: RankBiserialResult
-    multiplicity: MultiplicityResult | None
-    multiplicity_availability: AvailabilityStatus
-    multiplicity_reason: str
-    mechanisms: tuple[MechanismResult, ...]
+    multiplicity_plan: MultiplicityPlan | None
+    multiplicity_result: MultiplicityResult | None
+    mechanisms: tuple[MechanismEvidence, ...]
 
-
-@dataclass(frozen=True, slots=True)
-class _ExternalAnalysisArtifacts:
-    interval: BootstrapInterval
-    descriptive: DescriptiveSummary
-    sign_consistency: PairedDifferenceCounts
-    wilcoxon: WilcoxonResult
-    rank_biserial: RankBiserialResult
+    @model_validator(mode="after")
+    def validate_multiplicity(self) -> "AnalysisDocument":
+        if (self.multiplicity_plan is None) != (self.multiplicity_result is None):
+            raise ValueError("multiplicity plan and result must occur together")
+        return self
 
 
 @dataclass(frozen=True, slots=True)
 class AnalyzeResult:
     stage: ClassVar[StageOperationId] = StageOperationId.ANALYZE
     publication_status: PublicationStatus
-    interval: BootstrapInterval
-    decision: ScientificDecisionResult
-    descriptive: DescriptiveSummary
-    sign_consistency: PairedDifferenceCounts
-    wilcoxon: WilcoxonResult
-    rank_biserial: RankBiserialResult
-    multiplicity: MultiplicityResult | None
-    multiplicity_availability: AvailabilityStatus
-    multiplicity_reason: str
-    mechanisms: tuple[MechanismResult, ...]
+    document: AnalysisDocument
     complete_digest: Checksum
+
+    @property
+    def interval(self) -> BootstrapInterval:
+        return self.document.interval
+
+    @property
+    def decision(self) -> ScientificDecisionResult:
+        return self.document.decision
+
+    @property
+    def descriptive(self) -> DescriptiveSummary:
+        return self.document.descriptive
+
+    @property
+    def sign_consistency(self) -> PairedDifferenceCounts:
+        return self.document.sign_consistency
+
+    @property
+    def wilcoxon(self) -> WilcoxonResult:
+        return self.document.wilcoxon
+
+    @property
+    def rank_biserial(self) -> RankBiserialResult:
+        return self.document.rank_biserial
+
+    @property
+    def multiplicity(self) -> MultiplicityResult | None:
+        return self.document.multiplicity_result
+
+    @property
+    def mechanisms(self) -> tuple[MechanismEvidence, ...]:
+        return self.document.mechanisms
 
 
 @dataclass(frozen=True, slots=True)
 class ExternalAnalyzeRequest:
     execution_identity: ExternalTemporalExecutionIdentity
     contrasts: tuple[PairedContrast, ...]
-    plan: ExternalPairedAnalysisPlan
-    bootstrap_replicates: BootstrapReplicateCount
+    plan: SupplementaryPairedAnalysisPlan
     analysis_seed: Seed
     output_directory: Path
     overwrite: bool
+
+
+class ExternalAnalysisDocument(StrictModel):
+    plan: SupplementaryPairedAnalysisPlan
+    interval: BootstrapInterval
+    descriptive: DescriptiveSummary
+    sign_consistency: PairedDifferenceCounts
+    wilcoxon: WilcoxonResult
+    rank_biserial: RankBiserialResult
 
 
 @dataclass(frozen=True, slots=True)
 class ExternalAnalyzeResult:
     stage: ClassVar[StageOperationId] = StageOperationId.ANALYZE
     publication_status: PublicationStatus
-    interval: BootstrapInterval
-    descriptive: DescriptiveSummary
-    sign_consistency: PairedDifferenceCounts
-    wilcoxon: WilcoxonResult
-    rank_biserial: RankBiserialResult
+    document: ExternalAnalysisDocument
     complete_digest: Checksum
 
 
@@ -160,68 +173,36 @@ class TemporalAnalyzeRequest:
     overwrite: bool
 
 
+class TemporalAnalysisDocument(StrictModel):
+    evidence_role: EvidenceRole
+    static_reference_provenance: TemporalDeploymentProvenance
+    frozen_provenance: TemporalDeploymentProvenance
+    recalibrated_provenance: TemporalDeploymentProvenance
+    records: tuple[TemporalAnalysisRecord, ...]
+
+    @model_validator(mode="after")
+    def validate_role(self) -> "TemporalAnalysisDocument":
+        if self.evidence_role is not EvidenceRole.TEMPORAL_BOUNDARY:
+            raise ValueError("temporal analysis must remain temporal-boundary evidence")
+        return self
+
+
 @dataclass(frozen=True, slots=True)
 class TemporalAnalyzeResult:
     stage: ClassVar[StageOperationId] = StageOperationId.ANALYZE
     publication_status: PublicationStatus
-    records: tuple[TemporalRecoveryResult, ...]
+    document: TemporalAnalysisDocument
     complete_digest: Checksum
 
-
-_DEFAULT_QUANTILES = QuantileRange(lower=Ratio(0.25), upper=Ratio(0.75))
-
-
-def _is_reusable(directory: Path, digest: Checksum) -> bool:
-    return _is_reusable_generic(directory, AnalysisAssetName.DOCUMENT, digest)
-
-
-def _is_reusable_generic(directory: Path, asset_name: AnalysisAssetName, digest: Checksum) -> bool:
-    complete = directory / AnalysisAssetName.COMPLETE
-    document = directory / asset_name
-    return complete.is_file() and document.is_file() and complete.read_text(encoding="utf-8").strip() == digest.value
+    @property
+    def records(self) -> tuple[TemporalAnalysisRecord, ...]:
+        return self.document.records
 
 
 def analyze_stage(request: AnalyzeRequest) -> AnalyzeResult:
-    artifacts = _analyze(
-        request,
-        paired_bca_interval(
-            request.contrasts,
-            protocol=request.inference_protocol,
-            replicate_count=request.bootstrap_replicates,
-            analysis_seed=request.analysis_seed,
-        ),
-    )
-    payload = dumps(canonical_value(artifacts), indent=2, sort_keys=True) + "\n"
-    digest = checksum_text(payload)
-
-    def write(temporary: Path) -> _AnalysisArtifacts:
-        (temporary / AnalysisAssetName.DOCUMENT).write_text(payload, encoding="utf-8")
-        (temporary / AnalysisAssetName.COMPLETE).write_text(digest.value, encoding="utf-8")
-        return artifacts
-
-    outcome = publish_atomically(
-        target=request.output_directory,
-        overwrite=request.overwrite,
-        is_reusable=lambda directory: _is_reusable(directory, digest),
-        write=write,
-        reusable_value=lambda _directory: artifacts,
-        remove_target=rmtree,
-    )
-    value = outcome.value
-    return AnalyzeResult(
-        publication_status=outcome.status,
-        interval=value.interval,
-        decision=value.decision,
-        descriptive=value.descriptive,
-        sign_consistency=value.sign_consistency,
-        wilcoxon=value.wilcoxon,
-        rank_biserial=value.rank_biserial,
-        multiplicity=value.multiplicity,
-        multiplicity_availability=value.multiplicity_availability,
-        multiplicity_reason=value.multiplicity_reason,
-        mechanisms=value.mechanisms,
-        complete_digest=outcome.complete_digest,
-    )
+    document = _analyze(request)
+    outcome = _publish(request.output_directory, request.overwrite, AnalysisAssetName.DOCUMENT, document)
+    return AnalyzeResult(outcome.status, outcome.value, outcome.complete_digest)
 
 
 def analyze_external_stage(request: ExternalAnalyzeRequest) -> ExternalAnalyzeResult:
@@ -229,142 +210,98 @@ def analyze_external_stage(request: ExternalAnalyzeRequest) -> ExternalAnalyzeRe
     if identity is None:
         raise RuntimeError("external analysis requires an execution identity")
     identity.require_evidence_role(request.plan.evidence_role)
+    protocol = request.plan.inference_protocol
     deltas = tuple(contrast.delta for contrast in request.contrasts)
-    artifacts = _ExternalAnalysisArtifacts(
-        interval=external_paired_bca_interval(
+    document = ExternalAnalysisDocument(
+        plan=request.plan,
+        interval=supplementary_paired_bca_interval(
             request.contrasts,
             plan=request.plan,
-            replicate_count=request.bootstrap_replicates,
             analysis_seed=request.analysis_seed,
         ),
         descriptive=summarize_values(
             deltas,
             evidence_role=request.plan.evidence_role,
-            counts=ObservationCounts(unavailable=0, excluded=0),
-            quantiles=_DEFAULT_QUANTILES,
+            counts=_zero_counts(),
+            quantiles=_quantile_range(protocol),
         ),
         sign_consistency=count_paired_differences(deltas),
-        wilcoxon=paired_wilcoxon(request.contrasts),
-        rank_biserial=matched_pairs_rank_biserial(request.contrasts),
+        wilcoxon=paired_wilcoxon(request.contrasts, protocol),
+        rank_biserial=matched_pairs_rank_biserial(request.contrasts, protocol),
     )
-    payload = (
-        dumps(
-            {"evidence_role": canonical_value(request.plan.evidence_role), **canonical_mapping(artifacts)},
-            indent=2,
-            sort_keys=True,
-        )
-        + "\n"
-    )
-    digest = checksum_text(payload)
-
-    def write(temporary: Path) -> _ExternalAnalysisArtifacts:
-        _write_external_analysis(temporary, payload, digest)
-        return artifacts
-
-    outcome = publish_atomically(
-        target=request.output_directory,
-        overwrite=request.overwrite,
-        is_reusable=lambda directory: _is_reusable_generic(directory, AnalysisAssetName.EXTERNAL_DOCUMENT, digest),
-        write=write,
-        reusable_value=lambda _directory: artifacts,
-        remove_target=rmtree,
-    )
-    value = outcome.value
-    return ExternalAnalyzeResult(
-        publication_status=outcome.status,
-        interval=value.interval,
-        descriptive=value.descriptive,
-        sign_consistency=value.sign_consistency,
-        wilcoxon=value.wilcoxon,
-        rank_biserial=value.rank_biserial,
-        complete_digest=outcome.complete_digest,
-    )
+    outcome = _publish(request.output_directory, request.overwrite, AnalysisAssetName.EXTERNAL_DOCUMENT, document)
+    return ExternalAnalyzeResult(outcome.status, outcome.value, outcome.complete_digest)
 
 
 def analyze_temporal_stage(request: TemporalAnalyzeRequest) -> TemporalAnalyzeResult:
     _validate_temporal_identities(request)
     _validate_temporal_provenance(request)
-    payload = (
-        dumps(
-            canonical_value(
-                {
-                    "evidence_role": EvidenceRole.TEMPORAL_BOUNDARY,
-                    "static_reference_provenance": request.static_reference_provenance,
-                    "frozen_provenance": request.frozen_provenance,
-                    "recalibrated_provenance": request.recalibrated_provenance,
-                    "records": request.records,
-                }
-            ),
-            indent=2,
-            sort_keys=True,
-        )
-        + "\n"
+    document = TemporalAnalysisDocument(
+        evidence_role=EvidenceRole.TEMPORAL_BOUNDARY,
+        static_reference_provenance=request.static_reference_provenance,
+        frozen_provenance=request.frozen_provenance,
+        recalibrated_provenance=request.recalibrated_provenance,
+        records=tuple(temporal_analysis_record(record) for record in request.records),
     )
-    digest = checksum_text(payload)
-
-    def write(temporary: Path) -> tuple[TemporalRecoveryResult, ...]:
-        _write_temporal_analysis(temporary, payload, digest)
-        return request.records
-
-    outcome = publish_atomically(
-        target=request.output_directory,
-        overwrite=request.overwrite,
-        is_reusable=lambda directory: _is_reusable_generic(directory, AnalysisAssetName.TEMPORAL_DOCUMENT, digest),
-        write=write,
-        reusable_value=lambda _directory: request.records,
-        remove_target=rmtree,
-    )
-    return TemporalAnalyzeResult(
-        publication_status=outcome.status,
-        records=outcome.value,
-        complete_digest=outcome.complete_digest,
-    )
+    outcome = _publish(request.output_directory, request.overwrite, AnalysisAssetName.TEMPORAL_DOCUMENT, document)
+    return TemporalAnalyzeResult(outcome.status, outcome.value, outcome.complete_digest)
 
 
-def _analyze(request: AnalyzeRequest, interval: BootstrapInterval) -> _AnalysisArtifacts:
+def _analyze(request: AnalyzeRequest) -> AnalysisDocument:
+    protocol = request.inference_protocol
+    interval = paired_bca_interval(request.contrasts, protocol=protocol, analysis_seed=request.analysis_seed)
     deltas = tuple(contrast.delta for contrast in request.contrasts)
-    multiplicity, multiplicity_availability, multiplicity_reason = _multiplicity(request)
-    return _AnalysisArtifacts(
+    multiplicity = None if request.multiplicity_plan is None else holm_adjust(request.multiplicity_plan, protocol)
+    return AnalysisDocument(
+        inference_protocol=protocol,
         interval=interval,
         decision=decide_confirmatory(interval),
         descriptive=summarize_values(
             deltas,
             evidence_role=EvidenceRole.CONFIRMATORY,
-            counts=ObservationCounts(unavailable=0, excluded=0),
-            quantiles=_DEFAULT_QUANTILES,
+            counts=_zero_counts(),
+            quantiles=_quantile_range(protocol),
         ),
         sign_consistency=count_paired_differences(deltas),
-        wilcoxon=paired_wilcoxon(request.contrasts),
-        rank_biserial=matched_pairs_rank_biserial(request.contrasts),
-        multiplicity=multiplicity,
-        multiplicity_availability=multiplicity_availability,
-        multiplicity_reason=multiplicity_reason,
+        wilcoxon=paired_wilcoxon(request.contrasts, protocol),
+        rank_biserial=matched_pairs_rank_biserial(request.contrasts, protocol),
+        multiplicity_plan=request.multiplicity_plan,
+        multiplicity_result=multiplicity,
         mechanisms=request.mechanisms,
     )
 
 
-def _multiplicity(request: AnalyzeRequest) -> tuple[MultiplicityResult | None, AvailabilityStatus, str]:
-    if not request.secondary_p_values:
-        return None, AvailabilityStatus.UNAVAILABLE, "no predeclared secondary multiplicity family"
-    if request.secondary_family_name is None or request.secondary_alpha is None:
-        raise ValueError("secondary multiplicity requires a complete predeclared family")
-    return (
-        holm_adjust(
-            request.secondary_p_values, family_name=request.secondary_family_name, alpha=request.secondary_alpha
-        ),
-        AvailabilityStatus.AVAILABLE,
-        "",
+def _quantile_range(protocol: PairedInferenceProtocol) -> QuantileRange:
+    return QuantileRange(protocol.descriptive_lower_quantile, protocol.descriptive_upper_quantile)
+
+
+def _zero_counts() -> ObservationCounts:
+    return ObservationCounts(PairedObservationCount(0), PairedObservationCount(0))
+
+
+def _publish[T](directory: Path, overwrite: bool, asset_name: AnalysisAssetName, document: T):
+    payload = dumps(canonical_value(document), indent=2, sort_keys=True) + "\n"
+    digest = checksum_text(payload)
+
+    def write(temporary: Path) -> T:
+        (temporary / asset_name).write_text(payload, encoding="utf-8")
+        (temporary / AnalysisAssetName.COMPLETE).write_text(digest.value, encoding="utf-8")
+        return document
+
+    return publish_atomically(
+        target=directory,
+        overwrite=overwrite,
+        is_reusable=lambda target: _is_reusable(target, asset_name, digest),
+        write=write,
+        reusable_value=lambda _target: document,
+        remove_target=rmtree,
     )
 
 
-def _write_external_analysis(temporary: Path, payload: str, digest: Checksum) -> None:
-    (temporary / AnalysisAssetName.EXTERNAL_DOCUMENT).write_text(payload, encoding="utf-8")
-    (temporary / AnalysisAssetName.COMPLETE).write_text(digest.value, encoding="utf-8")
-
-
-def _write_temporal_analysis(temporary: Path, payload: str, digest: Checksum) -> None:
-    (temporary / AnalysisAssetName.TEMPORAL_DOCUMENT).write_text(payload, encoding="utf-8")
-    (temporary / AnalysisAssetName.COMPLETE).write_text(digest.value, encoding="utf-8")
+def _is_reusable(directory: Path, asset_name: AnalysisAssetName, digest: Checksum) -> bool:
+    complete = directory / AnalysisAssetName.COMPLETE
+    document = directory / asset_name
+    return complete.is_file() and document.is_file() and complete.read_text(encoding="utf-8").strip() == digest.value
 
 
 def _validate_temporal_provenance(request: TemporalAnalyzeRequest) -> None:

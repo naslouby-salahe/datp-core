@@ -1,12 +1,12 @@
 """Typed, immutable federated score-artifact records."""
 
-import json
 from dataclasses import dataclass
 from pathlib import Path
 
 from datp_core.domain.enums import ContractSubject, PartitionRole, SerializationFormat, SplitProtocolId
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import Checksum, FeatureCount, RoundNumber, RowCount, checksum_text
+from datp_core.domain.provenance import canonical_checksum
+from datp_core.domain.values import Checksum, FeatureCount, RoundNumber, RowCount
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.populations.models import ClientIdentity
 
@@ -89,6 +89,9 @@ class ScoreArtifactManifest:
             case PartitionRole.STATIC_REFERENCE_RESERVE:
                 raise ScientificContractError("static-reference reserve is not a score artifact", subject=role)
 
+    def score_set_checksum(self, role: PartitionRole) -> Checksum:
+        return record_set_checksum(self.records_for(role))
+
 
 @dataclass(frozen=True, slots=True)
 class FixedScoreInvariant:
@@ -105,12 +108,12 @@ class FixedScoreInvariant:
     def from_manifest(manifest: ScoreArtifactManifest) -> "FixedScoreInvariant":
         return FixedScoreInvariant(
             model_checksum=manifest.checkpoint_checksum,
-            calibration_score_set_checksum=_record_set_checksum(manifest.calibration_records),
-            evaluation_score_set_checksum=_record_set_checksum(manifest.evaluation_records),
+            calibration_score_set_checksum=manifest.score_set_checksum(PartitionRole.CALIBRATION),
+            evaluation_score_set_checksum=manifest.score_set_checksum(PartitionRole.EVALUATION),
             preprocessing_state_set_checksum=manifest.preprocessing_state_set_checksum,
             split_manifest_checksum=manifest.split_manifest_checksum,
             future_recalibration_score_set_checksum=(
-                _record_set_checksum(manifest.future_recalibration_records)
+                manifest.score_set_checksum(PartitionRole.FUTURE_RECALIBRATION)
                 if manifest.future_recalibration_records
                 else None
             ),
@@ -126,8 +129,19 @@ class ScoreGenerationResult:
         return FixedScoreInvariant.from_manifest(self.manifest)
 
 
+def record_set_checksum(records: tuple[ScoreRecord, ...]) -> Checksum:
+    """Checksum one deterministically ordered score-record inventory."""
+    ordered = tuple(sorted(records, key=lambda record: record.scored_client))
+    return canonical_checksum(
+        tuple(
+            {"client_id": record.scored_client.client_id, "checksum": record.checksum.value}
+            for record in ordered
+        )
+    )
+
+
 def _require_consistent_partition_records(
-    manifest: "ScoreArtifactManifest",
+    manifest: ScoreArtifactManifest,
     records: tuple[ScoreRecord, ...],
     role: PartitionRole,
 ) -> None:
@@ -140,14 +154,13 @@ def _require_consistent_partition_records(
     for record in records:
         if record.partition_role is not role:
             raise ScientificContractError(
-                f"score record partition role {record.partition_role.value} does not match "
-                f"expected collection role {role.value}",
+                f"score record partition role {record.partition_role.value} does not match expected collection role {role.value}",
                 subject=ContractSubject.SCORES,
             )
         _require_record_matches_manifest(manifest, record)
 
 
-def _require_record_matches_manifest(manifest: "ScoreArtifactManifest", record: ScoreRecord) -> None:
+def _require_record_matches_manifest(manifest: ScoreArtifactManifest, record: ScoreRecord) -> None:
     if record.coordinate != manifest.coordinate:
         raise ScientificContractError(
             "score record coordinate must match the manifest coordinate",
@@ -178,26 +191,14 @@ def _require_matching_client_inventory(left: tuple[ScoreRecord, ...], right: tup
         )
 
 
-def _require_consistent_feature_count(manifest: "ScoreArtifactManifest") -> None:
+def _require_consistent_feature_count(manifest: ScoreArtifactManifest) -> None:
     all_records = (
         *manifest.calibration_records,
         *manifest.evaluation_records,
         *manifest.future_recalibration_records,
     )
-    counts = frozenset(record.feature_count for record in all_records)
-    if len(counts) != 1:
+    if len(frozenset(record.feature_count for record in all_records)) != 1:
         raise ScientificContractError(
             "all score records must share the same feature count",
             subject=ContractSubject.FEATURES,
         )
-
-
-def _record_set_checksum(records: tuple[ScoreRecord, ...]) -> Checksum:
-    ordered = sorted(records, key=lambda record: record.scored_client)
-    payload = json.dumps(
-        [{"client_id": record.scored_client.client_id, "checksum": record.checksum.value} for record in ordered],
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=True,
-    )
-    return checksum_text(payload)

@@ -1,5 +1,6 @@
 """Immutable provenance records and canonical value serialization."""
 
+import json
 from collections.abc import Mapping
 from dataclasses import dataclass, fields, is_dataclass
 from enum import Enum
@@ -9,7 +10,7 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from .enums import DatasetId, PopulationId, SerializationFormat, TrafficRateEvidenceType
-from .values import ByteCount, Checksum, RowCount
+from .values import ByteCount, Checksum, RowCount, checksum_text
 
 type CanonicalValue = (
     None
@@ -61,6 +62,18 @@ def canonical_mapping(value: object) -> dict[str, CanonicalValue]:
     return document
 
 
+def canonical_checksum(value: object) -> Checksum:
+    """Checksum one supported value under the canonical JSON contract."""
+    payload = json.dumps(
+        canonical_value(value),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+        allow_nan=False,
+    )
+    return checksum_text(payload)
+
+
 @dataclass(frozen=True, slots=True)
 class SourceFileProvenance:
     path: Path
@@ -105,7 +118,8 @@ class CitationProvenance:
 
     def __post_init__(self) -> None:
         if not all(
-            isinstance(value, str) and value for value in (self.citation_key, self.source_title, self.source_locator)
+            isinstance(value, str) and value
+            for value in (self.citation_key, self.source_title, self.source_locator)
         ):
             raise ValueError("citation fields must be non-empty strings")
 
