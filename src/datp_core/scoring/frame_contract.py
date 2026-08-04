@@ -1,6 +1,6 @@
 """Shared Polars contracts for centralized and federated score generation."""
 
-from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 import numpy.typing as npt
@@ -24,13 +24,6 @@ CALIBRATION_PARTITIONS = frozenset(
         PartitionRole.FUTURE_RECALIBRATION,
     }
 )
-
-
-@dataclass(frozen=True, slots=True)
-class PersistedScoreFrame:
-    path: object
-    checksum: Checksum
-    row_count: RowCount
 
 
 def validate_score_input_frame(
@@ -64,7 +57,7 @@ def extract_score_arrays(
 def score_frame(
     row_ids: tuple[str, ...],
     labels: tuple[str, ...],
-    scores: npt.NDArray[np.floating],
+    scores: npt.NDArray[np.float64],
 ) -> pl.DataFrame:
     if len(row_ids) != len(labels) or len(row_ids) != scores.shape[0]:
         raise ScientificContractError(
@@ -81,7 +74,7 @@ def score_frame(
 
 
 def validate_persisted_score_frame(
-    path,
+    path: Path,
     checksum: Checksum,
     row_count: RowCount,
 ) -> pl.DataFrame:
