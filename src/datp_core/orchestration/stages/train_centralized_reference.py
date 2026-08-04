@@ -2,13 +2,11 @@
 
 from dataclasses import dataclass
 from pathlib import Path
-from shutil import rmtree
 from typing import ClassVar
 
 import polars as pl
 import torch
 
-from datp_core.artifacts.store import publish_atomically
 from datp_core.centralized_reference.checkpointing import (
     CentralizedCheckpointCandidate,
     candidate_tensor_name,
@@ -50,6 +48,7 @@ from datp_core.domain.values import (
     checksum_file,
     checksum_text,
 )
+from datp_core.pipeline.publication.codec import ArtifactPublication, publish_artifact
 from datp_core.populations.models import PopulationOutcomeLabel
 from datp_core.preprocessing.models import CentralizedFittedPreprocessingState
 from datp_core.protocols.models import (
@@ -89,6 +88,73 @@ class TrainCentralizedReferenceResult:
     complete_digest: Checksum
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class _CentralizedTrainingCodec:
+    training_protocol: CentralizedTrainingProtocol
+    learning_rate: LearningRate
+    batch_size: BatchSize
+    weight_decay: WeightDecay
+
+    def write(
+        self,
+        request: TrainCentralizedReferenceRequest,
+        directory: Path,
+    ) -> _CentralizedTrainingArtifacts:
+        execution = train_centralized_autoencoder(
+            CentralizedTrainingRequest(
+                coordinate=request.coordinate,
+                training_features=request.training_features,
+                feature_names=request.feature_names,
+                preprocessing_state=request.preprocessing_state,
+                split_manifest_checksum=request.split_manifest_checksum,
+                output_directory=directory,
+                training_seed=request.training_seed,
+                autoencoder=request.autoencoder,
+                training_protocol=self.training_protocol,
+                checkpoint_protocol=request.checkpoint_protocol,
+                learning_rate=self.learning_rate,
+                batch_size=self.batch_size,
+                benign_label=PopulationOutcomeLabel.BENIGN,
+            )
+        )
+        training = execution.result
+        candidates = retain_centralized_checkpoint_candidates(execution, request.autoencoder)
+        training_history_frame(training).write_parquet(directory / CentralizedArtifactName.TRAINING_HISTORY)
+        (directory / CentralizedArtifactName.COMPLETE).write_text(
+            _complete_digest(training).value,
+            encoding="utf-8",
+        )
+        return _CentralizedTrainingArtifacts(training, candidates)
+
+    def validate(self, request: TrainCentralizedReferenceRequest, directory: Path) -> bool:
+        return _is_reusable(directory, request, self.batch_size)
+
+    def load(
+        self,
+        request: TrainCentralizedReferenceRequest,
+        directory: Path,
+    ) -> _CentralizedTrainingArtifacts:
+        training, candidates = _load_reused_training(
+            request,
+            directory,
+            self.training_protocol,
+            self.learning_rate,
+            self.batch_size,
+            self.weight_decay,
+        )
+        return _CentralizedTrainingArtifacts(training, candidates)
+
+    def rebase(
+        self,
+        result: _CentralizedTrainingArtifacts,
+        directory: Path,
+    ) -> _CentralizedTrainingArtifacts:
+        return _CentralizedTrainingArtifacts(
+            _rebase_training_paths(result.training, directory),
+            _rebase_candidates(result.candidates, directory),
+        )
+
+
 def train_centralized_reference_stage(
     request: TrainCentralizedReferenceRequest,
 ) -> TrainCentralizedReferenceResult:
@@ -97,55 +163,26 @@ def train_centralized_reference_stage(
         declared_centralized_training_values()
     )
     _validate_request(request)
-
-    def write(temporary: Path) -> _CentralizedTrainingArtifacts:
-        execution = train_centralized_autoencoder(
-            CentralizedTrainingRequest(
-                coordinate=request.coordinate,
-                training_features=request.training_features,
-                feature_names=request.feature_names,
-                preprocessing_state=request.preprocessing_state,
-                split_manifest_checksum=request.split_manifest_checksum,
-                output_directory=temporary,
-                training_seed=request.training_seed,
-                autoencoder=request.autoencoder,
+    publication = publish_artifact(
+        ArtifactPublication(
+            target=request.output_directory,
+            request=request,
+            codec=_CentralizedTrainingCodec(
                 training_protocol=training_protocol,
-                checkpoint_protocol=request.checkpoint_protocol,
                 learning_rate=learning_rate,
                 batch_size=batch_size,
-                benign_label=PopulationOutcomeLabel.BENIGN,
-            )
+                weight_decay=weight_decay,
+            ),
+            overwrite=request.overwrite,
+            complete_marker=CentralizedArtifactName.COMPLETE,
         )
-        training = execution.result
-        candidates = retain_centralized_checkpoint_candidates(execution, request.autoencoder)
-        training_history_frame(training).write_parquet(temporary / CentralizedArtifactName.TRAINING_HISTORY)
-        (temporary / CentralizedArtifactName.COMPLETE).write_text(
-            _complete_digest(training).value,
-            encoding="utf-8",
-        )
-        return _CentralizedTrainingArtifacts(training, candidates)
-
-    outcome = publish_atomically(
-        target=request.output_directory,
-        overwrite=request.overwrite,
-        is_reusable=lambda directory: _is_reusable(directory, request),
-        write=write,
-        reusable_value=lambda _directory: _CentralizedTrainingArtifacts(
-            *_load_reused_training(request, training_protocol, learning_rate, batch_size, weight_decay)
-        ),
-        remove_target=rmtree,
     )
-    artifacts = outcome.value
-    if outcome.status is PublicationStatus.PUBLISHED:
-        artifacts = _CentralizedTrainingArtifacts(
-            _rebase_training_paths(artifacts.training, request.output_directory),
-            _rebase_candidates(artifacts.candidates, request.output_directory),
-        )
+    artifacts = publication.value
     return TrainCentralizedReferenceResult(
-        publication_status=outcome.status,
+        publication_status=publication.status,
         training=artifacts.training,
         candidates=artifacts.candidates,
-        complete_digest=outcome.complete_digest,
+        complete_digest=checksum_file(request.output_directory / CentralizedArtifactName.COMPLETE),
     )
 
 
@@ -168,7 +205,11 @@ def _complete_digest(training: CentralizedTrainingResult) -> Checksum:
     )
 
 
-def _is_reusable(directory: Path, request: TrainCentralizedReferenceRequest) -> bool:
+def _is_reusable(
+    directory: Path,
+    request: TrainCentralizedReferenceRequest,
+    batch_size: BatchSize,
+) -> bool:
     complete = directory / CentralizedArtifactName.COMPLETE
     model = directory / CentralizedArtifactName.MODEL_TENSORS
     history = directory / CentralizedArtifactName.TRAINING_HISTORY
@@ -180,10 +221,8 @@ def _is_reusable(directory: Path, request: TrainCentralizedReferenceRequest) -> 
     ):
         return False
     try:
-        _, _, _, declared_batch_size, _ = declared_centralized_training_values()
         expected = checksum_text(
-            f"{checksum_file(model).value}|{request.checkpoint_protocol.maximum_round.value}|"
-            f"{declared_batch_size.value}"
+            f"{checksum_file(model).value}|{request.checkpoint_protocol.maximum_round.value}|{batch_size.value}"
         )
         return complete.read_text(encoding="utf-8").strip() == expected.value
     except (OSError, ValueError):
@@ -192,12 +231,13 @@ def _is_reusable(directory: Path, request: TrainCentralizedReferenceRequest) -> 
 
 def _load_reused_training(
     request: TrainCentralizedReferenceRequest,
+    directory: Path,
     training_protocol: CentralizedTrainingProtocol,
     learning_rate: LearningRate,
     batch_size: BatchSize,
     weight_decay: WeightDecay,
 ) -> tuple[CentralizedTrainingResult, tuple[CentralizedCheckpointCandidate, ...]]:
-    history = pl.read_parquet(request.output_directory / CentralizedArtifactName.TRAINING_HISTORY)
+    history = pl.read_parquet(directory / CentralizedArtifactName.TRAINING_HISTORY)
     epoch_losses = tuple(
         CentralizedEpochLoss(
             epoch=RoundNumber(int(epoch)),
@@ -211,10 +251,10 @@ def _load_reused_training(
         ).iter_rows()
     )
     candidates = tuple(
-        _load_reused_candidate(request, candidate_round, epoch_losses)
+        _load_reused_candidate(request, directory, candidate_round, epoch_losses)
         for candidate_round in request.checkpoint_protocol.candidates
     )
-    model_path = request.output_directory / CentralizedArtifactName.MODEL_TENSORS
+    model_path = directory / CentralizedArtifactName.MODEL_TENSORS
     training = CentralizedTrainingResult(
         coordinate=request.coordinate,
         autoencoder_widths=tuple(request.autoencoder.widths),
@@ -230,7 +270,7 @@ def _load_reused_training(
         train_row_count=RowCount(request.training_features.height),
         feature_count=FeatureCount(len(request.feature_names)),
         epoch_losses=epoch_losses,
-        model_directory=request.output_directory,
+        model_directory=directory,
         model_tensor_path=model_path,
         model_tensor_checksum=checksum_file(model_path),
         preprocessing_state_checksum=request.preprocessing_state.estimator_checksum,
@@ -244,10 +284,11 @@ def _load_reused_training(
 
 def _load_reused_candidate(
     request: TrainCentralizedReferenceRequest,
+    directory: Path,
     candidate_round: RoundNumber,
     epoch_losses: tuple[CentralizedEpochLoss, ...],
 ) -> CentralizedCheckpointCandidate:
-    path = request.output_directory / candidate_tensor_name(candidate_round)
+    path = directory / candidate_tensor_name(candidate_round)
     if not path.is_file():
         raise ArtifactIntegrityError(
             "reused checkpoint candidate missing",
@@ -302,10 +343,7 @@ def _rebase_candidates(
     candidates: tuple[CentralizedCheckpointCandidate, ...],
     directory: Path,
 ) -> tuple[CentralizedCheckpointCandidate, ...]:
-    return tuple(
-        _rebase_candidate(candidate, directory)
-        for candidate in candidates
-    )
+    return tuple(_rebase_candidate(candidate, directory) for candidate in candidates)
 
 
 def _rebase_candidate(
