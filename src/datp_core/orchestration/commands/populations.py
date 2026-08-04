@@ -6,14 +6,19 @@ from typing import ClassVar
 
 import polars as pl
 
-from datp_core.domain.enums import PopulationId, PublicationStatus, SplitProtocolId, StageOperationId
+from datp_core.domain.enums import (
+    PopulationId,
+    PublicationStatus,
+    SplitProtocolId,
+    StageOperationId,
+)
 from datp_core.domain.values import Checksum, Seed
-from datp_core.experiments.models import ExternalTemporalExecutionIdentity
 from datp_core.populations.models import (
     ChronologicalPartitionDiagnosticsDocument,
     PopulationManifest,
     SplitManifestDocument,
 )
+from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
 
 
 @dataclass(frozen=True, slots=True)
