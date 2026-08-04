@@ -10,11 +10,6 @@ import torch
 from safetensors.torch import load_file
 
 from datp_core.artifacts.layout import scored_partition_roles
-from datp_core.artifacts.store import (
-    cleanup_staging_directory,
-    create_staging_directory,
-    replace_directory,
-)
 from datp_core.domain.enums import (
     CheckpointStatus,
     ContractSubject,
@@ -33,6 +28,12 @@ from datp_core.domain.values import (
 )
 from datp_core.learning.autoencoder import ReconstructionAutoencoder, reconstruction_errors
 from datp_core.learning.federated.checkpointing import CheckpointCandidate
+from datp_core.pipeline.checkpoints.service import validate_persisted_checkpoint_file
+from datp_core.pipeline.publication.atomic import (
+    cleanup_staging_directory,
+    create_staging_directory,
+    replace_directory,
+)
 from datp_core.pipeline.scoring.frames import (
     extract_score_arrays,
     score_frame,
@@ -135,16 +136,7 @@ def load_checkpoint_model(
             "scoring requires a CUDA device",
             subject=ContractSubject.CUDA,
         )
-    if not checkpoint.tensor_path.is_file():
-        raise ArtifactIntegrityError(
-            "checkpoint tensor file is missing",
-            subject=ContractSubject.ARTIFACT_PATH,
-        )
-    if checksum_file(checkpoint.tensor_path) != checkpoint.tensor_checksum:
-        raise ArtifactIntegrityError(
-            "checkpoint tensor checksum mismatch before loading",
-            subject=ContractSubject.ARTIFACT_PATH,
-        )
+    validate_persisted_checkpoint_file(checkpoint.tensor_path, checkpoint.tensor_checksum)
     model = ReconstructionAutoencoder(autoencoder.widths).to(device)
     state = load_file(str(checkpoint.tensor_path), device=str(device))
     model.load_state_dict(state, strict=True)
@@ -276,7 +268,7 @@ def _validate_request(request: ScoreGenerationRequest) -> None:
             subject=ContractSubject.CLIENT,
         )
     client_ids = tuple(item.client.client_id for item in request.clients)
-    if len(set(client_ids)) != len(client_ids):
+    if len(frozenset(client_ids)) != len(client_ids):
         raise ScientificContractError(
             "score generation cannot receive duplicate client identities",
             subject=ContractSubject.CLIENT_IDENTITY,
