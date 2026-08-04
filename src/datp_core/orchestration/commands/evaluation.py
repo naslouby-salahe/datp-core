@@ -23,7 +23,7 @@ from datp_core.evaluation.population import (
 from datp_core.evaluation.traffic_rates import ValidatedTrafficRateEvidence
 from datp_core.experiments.models import ExternalTemporalExecutionIdentity
 from datp_core.scoring.models import ScoreArtifactManifest
-from datp_core.thresholding.models import ThresholdConstructionResult
+from datp_core.thresholding.common import ThresholdConstructionResult
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,7 +37,9 @@ class EvaluateCentralizedReferenceRequest:
 
 @dataclass(frozen=True, slots=True)
 class EvaluateCentralizedReferenceResult:
-    stage: ClassVar[StageOperationId] = StageOperationId.EVALUATE_CENTRALIZED_REFERENCE
+    stage: ClassVar[StageOperationId] = (
+        StageOperationId.EVALUATE_CENTRALIZED_REFERENCE
+    )
     publication_status: PublicationStatus
     evaluation: CentralizedEvaluationResult
     complete_digest: Checksum
