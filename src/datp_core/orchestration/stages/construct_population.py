@@ -1,6 +1,5 @@
 """Stage: compose external and temporal population publication."""
 
-from datp_core.domain.values import checksum_file
 from datp_core.orchestration.commands.populations import (
     ConstructPopulationRequest as _ConstructPopulationRequest,
     ConstructPopulationResult as _ConstructPopulationResult,
@@ -11,7 +10,6 @@ from datp_core.pipeline.publication.codec import (
     publish_artifact,
 )
 from datp_core.populations.membership import (
-    PopulationMembershipPublication,
     PopulationMembershipRequest,
     PopulationPublicationAsset,
     load_reused_population_membership,
@@ -56,9 +54,7 @@ def construct_population_stage(
         chronology=artifacts.chronology,
         matched_static_reference_manifest=artifacts.matched_static_reference_manifest,
         matched_static_reference_membership=artifacts.matched_static_reference_membership,
-        complete_digest=checksum_file(
-            request.output_directory / PopulationPublicationAsset.COMPLETE
-        ),
+        complete_digest=publication.complete_digest,
         ciciot_excluded_rows=artifacts.ciciot_excluded_rows,
         ciciot_client_eligibility=artifacts.ciciot_client_eligibility,
     )
