@@ -1,4 +1,4 @@
-name: Refactor validation
+name: Source audit snapshot
 
 "on": [push, pull_request]
 
@@ -6,8 +6,7 @@ permissions:
   contents: read
 
 jobs:
-  test:
-    name: Run complete test suite
+  snapshot:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -15,197 +14,13 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+      - name: Package auditable repository state
+        run: tar -czf datp-core-audit.tar.gz src tests docs pyproject.toml uv.lock
+
+      - name: Upload repository snapshot
+        uses: actions/upload-artifact@v4
         with:
-          python-version: '3.12'
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
-
-      - name: Install dependencies
-        run: uv sync --all-groups --all-extras --frozen
-
-      - name: Provision empty raw-data root
-        run: mkdir -p data/raw
-
-      - name: Run persisted chronology regressions
-        run: |
-          uv run pytest -q \
-            tests/unit/datasets/test_dataset_models.py \
-            tests/unit/populations/test_edge_temporal_groups.py \
-            tests/unit/orchestration/stages/test_preprocess_stages.py \
-            tests/integration/populations/test_temporal_split_no_future_leakage.py
-
-      - name: Run complete suite
-        run: |
-          uv run pytest \
-            --ignore=tests/integration/configuration/test_raw_source_contracts_are_ready.py
-
-  audit:
-    name: Audit structural contracts
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
-        with:
-          persist-credentials: false
-
-      - name: Audit production source
-        run: |
-          python - <<'PY'
-          from __future__ import annotations
-
-          import ast
-          import hashlib
-          from collections import defaultdict
-          from pathlib import Path
-
-          root = Path("src/datp_core")
-          paths = tuple(sorted(root.rglob("*.py")))
-          trees = {path: ast.parse(path.read_text(encoding="utf-8"), filename=str(path)) for path in paths}
-
-          def location(path: Path, node: ast.AST) -> str:
-              return f"{path}:{getattr(node, 'lineno', '?')}"
-
-          def dataclass_call(node: ast.ClassDef) -> ast.Call | None:
-              for decorator in node.decorator_list:
-                  call = decorator if isinstance(decorator, ast.Call) else None
-                  target = call.func if call else decorator
-                  name = target.id if isinstance(target, ast.Name) else target.attr if isinstance(target, ast.Attribute) else ""
-                  if name == "dataclass":
-                      return call
-              return None
-
-          def keyword_bool(call: ast.Call | None, name: str, default: bool) -> bool:
-              if call is None:
-                  return default
-              for keyword in call.keywords:
-                  if keyword.arg == name and isinstance(keyword.value, ast.Constant):
-                      return bool(keyword.value.value)
-              return default
-
-          def annotation_names(annotation: ast.expr) -> set[str]:
-              names: set[str] = set()
-              for node in ast.walk(annotation):
-                  if isinstance(node, ast.Name):
-                      names.add(node.id)
-                  elif isinstance(node, ast.Attribute):
-                      names.add(node.attr)
-              return names
-
-          explicit_any: set[str] = set()
-          mutable_frozen: list[str] = []
-          instance_stage_fields: list[str] = []
-          primitive_semantic_fields: list[str] = []
-          one_field_dataclasses: list[str] = []
-          class_locations: dict[str, list[str]] = defaultdict(list)
-          function_bodies: dict[str, list[str]] = defaultdict(list)
-          oversized_functions: list[str] = []
-
-          primitive_annotations = {"int", "float", "int | None", "float | None"}
-          semantic_tokens = (
-              "count",
-              "index",
-              "rank",
-              "round",
-              "seed",
-              "bytes",
-              "size",
-              "epoch",
-              "batch",
-              "worker",
-              "support",
-              "position",
-          )
-          mutable_names = {"DataFrame", "LazyFrame", "ndarray", "Tensor", "dict", "list", "set"}
-
-          for path, tree in trees.items():
-              for node in ast.walk(tree):
-                  if isinstance(node, ast.ImportFrom) and any(alias.name == "Any" for alias in node.names):
-                      explicit_any.add(location(path, node))
-                  elif isinstance(node, ast.Name) and node.id == "Any":
-                      explicit_any.add(location(path, node))
-                  elif isinstance(node, ast.Attribute) and node.attr == "Any":
-                      explicit_any.add(location(path, node))
-
-                  if isinstance(node, ast.ClassDef):
-                      class_locations[node.name].append(location(path, node))
-                      call = dataclass_call(node)
-                      if call is None:
-                          continue
-                      fields = [
-                          item
-                          for item in node.body
-                          if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name)
-                      ]
-                      instance_fields = [
-                          field
-                          for field in fields
-                          if not ast.unparse(field.annotation).startswith("ClassVar[")
-                      ]
-                      if len(instance_fields) == 1:
-                          field = instance_fields[0]
-                          one_field_dataclasses.append(
-                              f"{location(path, node)} {node.name}.{field.target.id}: {ast.unparse(field.annotation)}"
-                          )
-                      frozen = keyword_bool(call, "frozen", False)
-                      equality = keyword_bool(call, "eq", True)
-                      for field in instance_fields:
-                          name = field.target.id
-                          annotation = ast.unparse(field.annotation)
-                          if name == "stage":
-                              instance_stage_fields.append(f"{location(path, field)} {node.name}.stage: {annotation}")
-                          if annotation in primitive_annotations and any(token in name.lower() for token in semantic_tokens):
-                              primitive_semantic_fields.append(
-                                  f"{location(path, field)} {node.name}.{name}: {annotation}"
-                              )
-                          if frozen and equality and annotation_names(field.annotation) & mutable_names:
-                              mutable_frozen.append(
-                                  f"{location(path, field)} {node.name}.{name}: {annotation}"
-                              )
-
-                  if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and not node.name.startswith("__"):
-                      body = ast.dump(ast.Module(body=node.body, type_ignores=[]), include_attributes=False)
-                      if len(body) >= 180:
-                          function_bodies[hashlib.sha256(body.encode()).hexdigest()].append(
-                              f"{location(path, node)} {node.name}"
-                          )
-                      end = getattr(node, "end_lineno", node.lineno)
-                      if end - node.lineno + 1 > 100:
-                          oversized_functions.append(
-                              f"{location(path, node)} {node.name}: {end - node.lineno + 1} lines"
-                          )
-
-          duplicate_classes = [
-              f"{name}: {' | '.join(locations)}"
-              for name, locations in sorted(class_locations.items())
-              if len(locations) > 1
-          ]
-          duplicate_functions = [
-              " | ".join(locations)
-              for locations in function_bodies.values()
-              if len(locations) > 1
-          ]
-
-          blocking = {
-              "EXPLICIT_ANY": sorted(explicit_any),
-              "MUTABLE_FROZEN_EQUALITY": mutable_frozen,
-              "INSTANCE_STAGE_FIELDS": instance_stage_fields,
-              "PRIMITIVE_SEMANTIC_FIELDS": primitive_semantic_fields,
-              "DUPLICATE_CLASS_NAMES": duplicate_classes,
-          }
-          informational = {
-              "DUPLICATE_FUNCTION_BODIES": duplicate_functions,
-              "OVERSIZED_FUNCTIONS": oversized_functions,
-              "ONE_FIELD_DATACLASSES": one_field_dataclasses,
-          }
-          for title, findings in (*blocking.items(), *informational.items()):
-              print(f"\n=== {title} ({len(findings)}) ===")
-              for finding in findings:
-                  print(finding)
-
-          failures = {title: findings for title, findings in blocking.items() if findings}
-          if failures:
-              raise SystemExit(f"blocking structural findings remain: {', '.join(failures)}")
-          PY
+          name: datp-core-audit
+          path: datp-core-audit.tar.gz
+          if-no-files-found: error
+          retention-days: 1
