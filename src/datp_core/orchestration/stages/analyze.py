@@ -16,7 +16,6 @@ from datp_core.analysis.decisions import (
     rebase_analysis_publication,
     write_analysis_publication,
 )
-from datp_core.domain.values import checksum_file
 from datp_core.orchestration.commands.analysis import (
     AnalyzeRequest as _AnalyzeRequest,
     AnalyzeResult as _AnalyzeResult,
@@ -47,7 +46,7 @@ def analyze_stage(request: _AnalyzeRequest) -> _AnalyzeResult:
     return _AnalyzeResult(
         publication_status=publication.status,
         document=publication.value,
-        complete_digest=checksum_file(request.output_directory / AnalysisAssetName.COMPLETE),
+        complete_digest=publication.complete_digest,
     )
 
 
@@ -64,7 +63,7 @@ def analyze_external_stage(request: _ExternalAnalyzeRequest) -> _ExternalAnalyze
     return _ExternalAnalyzeResult(
         publication_status=publication.status,
         document=publication.value,
-        complete_digest=checksum_file(request.output_directory / AnalysisAssetName.COMPLETE),
+        complete_digest=publication.complete_digest,
     )
 
 
@@ -84,7 +83,7 @@ def analyze_temporal_stage(request: _TemporalAnalyzeRequest) -> _TemporalAnalyze
     return _TemporalAnalyzeResult(
         publication_status=publication.status,
         document=publication.value,
-        complete_digest=checksum_file(request.output_directory / AnalysisAssetName.COMPLETE),
+        complete_digest=publication.complete_digest,
     )
 
 
