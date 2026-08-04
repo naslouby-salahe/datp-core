@@ -6,7 +6,8 @@ from typing import ClassVar
 
 from datp_core.analysis.temporal import TemporalDeploymentProvenance
 from datp_core.domain.enums import EvidenceRole, PublicationStatus, StageOperationId
-from datp_core.domain.values import Checksum
+from datp_core.domain.values import Checksum, checksum_file
+from datp_core.evaluation.cohorts import EvaluationCohortManifest
 from datp_core.evaluation.communication import CommunicationMessageDiagnostic
 from datp_core.evaluation.controls import FixedScoreEvidence
 from datp_core.evaluation.models import ClientMetricResult, PopulationMetricResult
@@ -16,7 +17,6 @@ from datp_core.evaluation.population import (
     FederatedEvaluationArtifacts,
     FederatedEvaluationAssetName,
     FederatedEvaluationInputs,
-    FederatedEvaluationPublication,
     FederatedEvaluationRequest,
     ThresholdEstimationStageInput,
     build_federated_evaluation_inputs,
@@ -41,7 +41,7 @@ from datp_core.thresholding.models import ThresholdConstructionResult
 class EvaluateFederatedRequest:
     score_manifest: ScoreArtifactManifest
     threshold_result: ThresholdConstructionResult
-    cohort: object
+    cohort: EvaluationCohortManifest
     fixed_score_evidence: FixedScoreEvidence
     comparison_fixed_score_evidence: FixedScoreEvidence | None
     evidence_role: EvidenceRole
@@ -103,17 +103,7 @@ def evaluate_federated_stage(request: EvaluateFederatedRequest) -> FederatedEval
         clients=artifacts.clients,
         population=artifacts.population,
         diagnostics=artifacts.diagnostics,
-        complete_digest=prepared.digest,
+        complete_digest=checksum_file(
+            request.output_directory / FederatedEvaluationAssetName.COMPLETE
+        ),
     )
-
-
-__all__ = (
-    "ConformalCoverageStageInput",
-    "EvaluateFederatedRequest",
-    "FederatedEvaluationAssetName",
-    "FederatedEvaluationInputs",
-    "FederatedEvaluationResult",
-    "ThresholdEstimationStageInput",
-    "build_federated_evaluation_inputs",
-    "evaluate_federated_stage",
-)
