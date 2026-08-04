@@ -7,13 +7,6 @@ from pathlib import Path
 import polars as pl
 import torch
 
-from datp_core.artifacts.score_frames import (
-    extract_score_arrays,
-    score_frame,
-    validate_persisted_score_frame,
-    validate_score_input_frame,
-)
-from datp_core.artifacts.score_models import ScoreArtifact
 from datp_core.centralized_reference.checkpointing import CentralizedCheckpointCandidate
 from datp_core.centralized_reference.training import (
     CentralizedTrainingCoordinate,
@@ -31,6 +24,13 @@ from datp_core.domain.values import (
     checksum_text,
 )
 from datp_core.learning.autoencoder import ReconstructionAutoencoder, reconstruction_errors
+from datp_core.pipeline.scoring.frames import (
+    extract_score_arrays,
+    score_frame,
+    validate_persisted_score_frame,
+    validate_score_input_frame,
+)
+from datp_core.pipeline.scoring.models import ScoreArtifact
 from datp_core.protocols.models import AutoencoderProtocol
 from datp_core.runtime.compute import resolve_cuda_device
 
