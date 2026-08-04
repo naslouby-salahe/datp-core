@@ -242,7 +242,11 @@ class GroupedDispersionResult(StrictModel):
         if self.singleton_groups != expected_singletons or self.empty_groups != expected_empty:
             raise ValueError("group boundary indexes must be derived from group sizes")
         if self.availability is AvailabilityStatus.AVAILABLE:
-            if self.reason is not None or self.across_group_threshold_spread is None or self.across_group_mean_fpr_spread is None:
+            if (
+                self.reason is not None
+                or self.across_group_threshold_spread is None
+                or self.across_group_mean_fpr_spread is None
+            ):
                 raise ValueError("available grouped dispersion requires complete values and no reason")
         elif self.reason is None:
             raise ValueError("unavailable grouped dispersion requires an explicit reason")
@@ -300,7 +304,9 @@ def heterogeneity_benefit_association(observations: tuple[AssociationObservation
     )
 
 
-def cluster_stability(left: tuple[ClusterMembership, ...], right: tuple[ClusterMembership, ...]) -> ClusterStabilityResult:
+def cluster_stability(
+    left: tuple[ClusterMembership, ...], right: tuple[ClusterMembership, ...]
+) -> ClusterStabilityResult:
     left_assignments = _cluster_assignments(left)
     right_assignments = _cluster_assignments(right)
     left_clients = tuple(item.client for item in left_assignments)
@@ -407,7 +413,10 @@ def decide_model_absorption(
     if retention.value >= MODEL_EFFECT_FULL_RETENTION_CUTOFF.value:
         decision, rationale = ScientificDecision.SUPPORTED, "the personalized-model effect is retained"
     elif retention.value >= MODEL_EFFECT_PARTIAL_RETENTION_CUTOFF.value:
-        decision, rationale = ScientificDecision.PARTIAL_ABSORPTION, "the personalized-model effect is partially absorbed"
+        decision, rationale = (
+            ScientificDecision.PARTIAL_ABSORPTION,
+            "the personalized-model effect is partially absorbed",
+        )
     else:
         decision, rationale = ScientificDecision.FULL_ABSORPTION, "the personalized-model effect is largely absorbed"
     return ScientificDecisionResult(

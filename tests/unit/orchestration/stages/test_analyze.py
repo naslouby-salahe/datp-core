@@ -4,7 +4,7 @@ from json import loads
 from pathlib import Path
 
 from datp_core.analysis.mechanisms import GroupDispersionObservation, grouped_dispersion
-from datp_core.analysis.models import MultiplicityPlan, PValue, PairedContrast
+from datp_core.analysis.models import MultiplicityPlan, PairedContrast, PValue
 from datp_core.domain.enums import (
     AvailabilityStatus,
     EvidenceRole,
@@ -19,7 +19,7 @@ from datp_core.domain.enums import (
 from datp_core.domain.values import ClusterIndex, MetricValue, Ratio, Seed, ThresholdValue
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.orchestration.stages.analyze import AnalyzeRequest, analyze_stage
-from datp_core.protocols.statistics import BOOTSTRAP_REPLICATE_COUNT, CONFIRMATORY_INFERENCE_PROTOCOL
+from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL
 
 
 def test_analyze_stage_persists_protocol_mechanisms_and_reuses_document(tmp_path: Path) -> None:
@@ -35,7 +35,6 @@ def test_analyze_stage_persists_protocol_mechanisms_and_reuses_document(tmp_path
     request = AnalyzeRequest(
         contrasts=tuple(_contrast(seed) for seed in range(10)),
         inference_protocol=CONFIRMATORY_INFERENCE_PROTOCOL,
-        bootstrap_replicates=BOOTSTRAP_REPLICATE_COUNT,
         analysis_seed=Seed(31),
         output_directory=tmp_path / "analysis",
         overwrite=False,

@@ -91,9 +91,7 @@ def _future_provenance(
         state=state,
         split_protocol=SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE,
         calibration_role=(
-            PartitionRole.CALIBRATION
-            if state is TemporalState.FROZEN_FUTURE
-            else PartitionRole.FUTURE_RECALIBRATION
+            PartitionRole.CALIBRATION if state is TemporalState.FROZEN_FUTURE else PartitionRole.FUTURE_RECALIBRATION
         ),
         evaluation_role=PartitionRole.EVALUATION,
         coordinate_checksum=Checksum("e" * 64),

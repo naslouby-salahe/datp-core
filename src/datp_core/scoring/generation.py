@@ -47,7 +47,7 @@ from datp_core.scoring.models import (
     ScoreArtifactManifest,
     ScoreGenerationResult,
     ScoreRecord,
-    _record_set_checksum,
+    record_set_checksum,
 )
 
 
@@ -153,12 +153,12 @@ def generate_federated_scores(request: ScoreGenerationRequest, device: torch.dev
 
         invariant = FixedScoreInvariant(
             model_checksum=request.checkpoint.tensor_checksum,
-            calibration_score_set_checksum=_record_set_checksum(tuple(records_by_role[PartitionRole.CALIBRATION])),
-            evaluation_score_set_checksum=_record_set_checksum(tuple(records_by_role[PartitionRole.EVALUATION])),
+            calibration_score_set_checksum=record_set_checksum(tuple(records_by_role[PartitionRole.CALIBRATION])),
+            evaluation_score_set_checksum=record_set_checksum(tuple(records_by_role[PartitionRole.EVALUATION])),
             preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
             split_manifest_checksum=request.split_manifest_checksum,
             future_recalibration_score_set_checksum=(
-                _record_set_checksum(tuple(records_by_role.get(PartitionRole.FUTURE_RECALIBRATION, [])))
+                record_set_checksum(tuple(records_by_role.get(PartitionRole.FUTURE_RECALIBRATION, [])))
                 if PartitionRole.FUTURE_RECALIBRATION in records_by_role
                 and records_by_role[PartitionRole.FUTURE_RECALIBRATION]
                 else None

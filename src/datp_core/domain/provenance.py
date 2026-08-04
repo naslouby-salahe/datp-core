@@ -118,8 +118,7 @@ class CitationProvenance:
 
     def __post_init__(self) -> None:
         if not all(
-            isinstance(value, str) and value
-            for value in (self.citation_key, self.source_title, self.source_locator)
+            isinstance(value, str) and value for value in (self.citation_key, self.source_title, self.source_locator)
         ):
             raise ValueError("citation fields must be non-empty strings")
 

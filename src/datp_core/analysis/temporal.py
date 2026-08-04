@@ -72,7 +72,11 @@ class TemporalRecoveryResult(StrictModel):
 
     @property
     def reason(self) -> str | None:
-        return None if self.recovery_ratio is not None else "drift excess does not satisfy the declared positive-materiality rule"
+        return (
+            None
+            if self.recovery_ratio is not None
+            else "drift excess does not satisfy the declared positive-materiality rule"
+        )
 
 
 class TemporalAnalysisRecord(StrictModel):
@@ -136,7 +140,9 @@ class TemporalDeploymentProvenance(StrictModel):
         )
 
     @classmethod
-    def from_score_manifest(cls, state: TemporalState, manifest: ScoreArtifactManifest) -> "TemporalDeploymentProvenance":
+    def from_score_manifest(
+        cls, state: TemporalState, manifest: ScoreArtifactManifest
+    ) -> "TemporalDeploymentProvenance":
         calibration_role, evaluation_role = _partition_roles(state)
         if not manifest.records_for(calibration_role) or not manifest.records_for(evaluation_role):
             raise ScientificContractError(
@@ -165,7 +171,9 @@ class TemporalDeploymentProvenance(StrictModel):
             )
 
 
-def validate_frozen_recalibrated_pair(frozen: TemporalDeploymentProvenance, recalibrated: TemporalDeploymentProvenance) -> None:
+def validate_frozen_recalibrated_pair(
+    frozen: TemporalDeploymentProvenance, recalibrated: TemporalDeploymentProvenance
+) -> None:
     """Only the calibration window may differ."""
     if frozen.state is not TemporalState.FROZEN_FUTURE or recalibrated.state is not TemporalState.RECALIBRATED_FUTURE:
         raise ScientificContractError(

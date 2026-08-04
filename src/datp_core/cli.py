@@ -92,7 +92,7 @@ from datp_core.protocols.calibration import CANONICAL_QUANTILE
 from datp_core.protocols.populations import DIRICHLET_CONCENTRATIONS
 from datp_core.protocols.runtime import DATA_ROOT, OUTPUTS_ROOT
 from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT
-from datp_core.protocols.statistics import BOOTSTRAP_REPLICATE_COUNT, CONFIRMATORY_INFERENCE_PROTOCOL
+from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL
 from datp_core.protocols.training import (
     BATCH_SIZE,
     CHECKPOINT_PROTOCOL,
@@ -268,7 +268,6 @@ def analyze_confirmatory_grid() -> None:
         AnalyzeRequest(
             contrasts=tuple(_confirmatory_contrast(seed) for seed in CONFIRMATORY_SEED_COHORT.values),
             inference_protocol=CONFIRMATORY_INFERENCE_PROTOCOL,
-            bootstrap_replicates=BOOTSTRAP_REPLICATE_COUNT,
             analysis_seed=Seed(31),
             output_directory=OUTPUTS_ROOT / "confirmatory" / "nbaiot_natural_devices" / "analysis",
             overwrite=False,

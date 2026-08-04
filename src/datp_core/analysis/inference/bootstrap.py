@@ -99,7 +99,11 @@ def paired_bca_interval(
         protocol=protocol,
         analysis_seed=analysis_seed,
     )
-    return validated if isinstance(validated, BootstrapInterval) else _construct_bca_interval(validated, protocol, analysis_seed)
+    return (
+        validated
+        if isinstance(validated, BootstrapInterval)
+        else _construct_bca_interval(validated, protocol, analysis_seed)
+    )
 
 
 def supplementary_paired_bca_interval(
@@ -115,7 +119,11 @@ def supplementary_paired_bca_interval(
         protocol=protocol,
         analysis_seed=analysis_seed,
     )
-    return validated if isinstance(validated, BootstrapInterval) else _construct_bca_interval(validated, protocol, analysis_seed)
+    return (
+        validated
+        if isinstance(validated, BootstrapInterval)
+        else _construct_bca_interval(validated, protocol, analysis_seed)
+    )
 
 
 def decide_confirmatory(interval: BootstrapInterval) -> ScientificDecisionResult:

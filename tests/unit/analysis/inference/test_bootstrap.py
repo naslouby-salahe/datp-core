@@ -61,7 +61,9 @@ def test_supplementary_interval_cannot_be_promoted_to_confirmatory() -> None:
         inference_protocol=protocol,
     )
     result = supplementary_paired_bca_interval(
-        tuple(_contrast(seed, PopulationId.EDGE_SENSOR_GROUPS, EvidenceRole.EXTERNAL_VALIDATION) for seed in range(1, 5)),
+        tuple(
+            _contrast(seed, PopulationId.EDGE_SENSOR_GROUPS, EvidenceRole.EXTERNAL_VALIDATION) for seed in range(1, 5)
+        ),
         plan=plan,
         analysis_seed=Seed(73),
     )

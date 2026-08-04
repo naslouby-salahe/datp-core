@@ -41,12 +41,12 @@ from datp_core.analysis.temporal import (
     temporal_analysis_record,
     validate_frozen_recalibrated_pair,
 )
-from datp_core.artifacts.store import publish_atomically
+from datp_core.artifacts.store import PublicationOutcome, publish_atomically
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import EvidenceRole, PopulationId, PublicationStatus, StageOperationId, TemporalState
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.provenance import canonical_value
-from datp_core.domain.values import BootstrapReplicateCount, Checksum, PairedObservationCount, Seed, checksum_text
+from datp_core.domain.values import Checksum, PairedObservationCount, Seed, checksum_text
 from datp_core.experiments.models import ExternalTemporalExecutionIdentity, require_execution_identity
 from datp_core.protocols.statistics import PairedInferenceProtocol
 
@@ -62,16 +62,11 @@ class AnalysisAssetName(StrEnum):
 class AnalyzeRequest:
     contrasts: tuple[PairedContrast, ...]
     inference_protocol: PairedInferenceProtocol
-    bootstrap_replicates: BootstrapReplicateCount
     analysis_seed: Seed
     output_directory: Path
     overwrite: bool
     multiplicity_plan: MultiplicityPlan | None = None
     mechanisms: tuple[MechanismEvidence, ...] = ()
-
-    def __post_init__(self) -> None:
-        if self.bootstrap_replicates != self.inference_protocol.bootstrap_replicates:
-            raise ValueError("analysis request bootstrap count must match its inference protocol")
 
 
 class AnalysisDocument(StrictModel):
@@ -272,14 +267,14 @@ def _analyze(request: AnalyzeRequest) -> AnalysisDocument:
 
 
 def _quantile_range(protocol: PairedInferenceProtocol) -> QuantileRange:
-    return QuantileRange(protocol.descriptive_lower_quantile, protocol.descriptive_upper_quantile)
+    return QuantileRange(lower=protocol.descriptive_lower_quantile, upper=protocol.descriptive_upper_quantile)
 
 
 def _zero_counts() -> ObservationCounts:
-    return ObservationCounts(PairedObservationCount(0), PairedObservationCount(0))
+    return ObservationCounts(unavailable=PairedObservationCount(0), excluded=PairedObservationCount(0))
 
 
-def _publish[T](directory: Path, overwrite: bool, asset_name: AnalysisAssetName, document: T):
+def _publish[T](directory: Path, overwrite: bool, asset_name: AnalysisAssetName, document: T) -> PublicationOutcome[T]:
     payload = dumps(canonical_value(document), indent=2, sort_keys=True) + "\n"
     digest = checksum_text(payload)
 

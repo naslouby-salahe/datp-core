@@ -18,7 +18,7 @@ def test_descriptive_summary_preserves_typed_counts_and_statistics() -> None:
     summary = summarize_values(
         values,
         evidence_role=EvidenceRole.CONFIRMATORY,
-        counts=ObservationCounts(PairedObservationCount(2), PairedObservationCount(1)),
+        counts=ObservationCounts(unavailable=PairedObservationCount(2), excluded=PairedObservationCount(1)),
         quantiles=_DEFAULT_QUANTILES,
     )
     assert summary.availability is AvailabilityStatus.AVAILABLE
@@ -33,7 +33,7 @@ def test_empty_summary_is_explicitly_unavailable() -> None:
     summary = summarize_values(
         (),
         evidence_role=EvidenceRole.SUPPORTIVE,
-        counts=ObservationCounts(PairedObservationCount(1), PairedObservationCount(0)),
+        counts=ObservationCounts(unavailable=PairedObservationCount(1), excluded=PairedObservationCount(0)),
         quantiles=_DEFAULT_QUANTILES,
     )
     assert summary.availability is AvailabilityStatus.UNAVAILABLE
@@ -47,9 +47,7 @@ def test_quantile_range_rejects_reversed_bounds() -> None:
 
 
 def test_sign_counts_preserve_zeroes_with_semantic_counts() -> None:
-    result = count_paired_differences(
-        (MetricValue(0.4), MetricValue(0.0), MetricValue(-0.2), MetricValue(0.1))
-    )
+    result = count_paired_differences((MetricValue(0.4), MetricValue(0.0), MetricValue(-0.2), MetricValue(0.1)))
     assert (result.positive, result.zero, result.negative) == (
         PairedObservationCount(2),
         PairedObservationCount(1),

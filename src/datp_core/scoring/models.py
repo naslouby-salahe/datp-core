@@ -133,10 +133,7 @@ def record_set_checksum(records: tuple[ScoreRecord, ...]) -> Checksum:
     """Checksum one deterministically ordered score-record inventory."""
     ordered = tuple(sorted(records, key=lambda record: record.scored_client))
     return canonical_checksum(
-        tuple(
-            {"client_id": record.scored_client.client_id, "checksum": record.checksum.value}
-            for record in ordered
-        )
+        tuple({"client_id": record.scored_client.client_id, "checksum": record.checksum.value} for record in ordered)
     )
 
 
@@ -154,7 +151,8 @@ def _require_consistent_partition_records(
     for record in records:
         if record.partition_role is not role:
             raise ScientificContractError(
-                f"score record partition role {record.partition_role.value} does not match expected collection role {role.value}",
+                f"score record partition role {record.partition_role.value} does not match "
+                f"expected collection role {role.value}",
                 subject=ContractSubject.SCORES,
             )
         _require_record_matches_manifest(manifest, record)

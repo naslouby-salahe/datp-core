@@ -59,7 +59,8 @@ def test_grouped_dispersion_has_one_typed_result_per_group() -> None:
     assert result.availability is AvailabilityStatus.AVAILABLE
     assert result.group_sizes == (PairedObservationCount(2), PairedObservationCount(1))
     assert result.singleton_groups == (ClusterIndex(1),)
-    assert result.across_group_threshold_spread == MetricValue(0.3)
+    assert result.across_group_threshold_spread is not None
+    assert isclose(result.across_group_threshold_spread.value, 0.3)
 
 
 def test_cluster_stability_validates_contingency_margins() -> None:
@@ -71,7 +72,10 @@ def test_cluster_stability_validates_contingency_margins() -> None:
             compared_clients=(client_a, client_b),
             left_partition=ClusterPartitionSummary(group_sizes=(PairedObservationCount(1), PairedObservationCount(1))),
             right_partition=ClusterPartitionSummary(group_sizes=(PairedObservationCount(1), PairedObservationCount(1))),
-            contingency=((PairedObservationCount(0), PairedObservationCount(0)), (PairedObservationCount(1), PairedObservationCount(1))),
+            contingency=(
+                (PairedObservationCount(0), PairedObservationCount(0)),
+                (PairedObservationCount(1), PairedObservationCount(1)),
+            ),
         )
 
 
