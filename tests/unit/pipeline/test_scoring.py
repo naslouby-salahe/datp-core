@@ -4,7 +4,11 @@ import numpy as np
 import polars as pl
 import pytest
 
-from datp_core.domain.enums import PartitionRole, ScoreFrameColumn, SerializationFormat
+from datp_core.domain.enums import (
+    PartitionRole,
+    ScoreFrameColumn,
+    SerializationFormat,
+)
 from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.values import (
     Checksum,
@@ -27,14 +31,35 @@ from datp_core.pipeline.scoring.models import ScoreArtifact
 FEATURE_NAMES = FeatureNameSequence((FeatureName("f0"), FeatureName("f1")))
 
 
-def _input_frame(labels: tuple[str, ...], row_ids: tuple[str, ...] | None = None) -> pl.DataFrame:
-    resolved_row_ids = row_ids or tuple(f"row-{index}" for index in range(len(labels)))
+def _input_frame(
+    labels: tuple[str, ...],
+    row_ids: tuple[str, ...] | None = None,
+) -> pl.DataFrame:
+    resolved_row_ids = row_ids or tuple(
+        f"row-{index}" for index in range(len(labels))
+    )
     return pl.DataFrame(
         (
-            pl.Series(ScoreFrameColumn.STABLE_ROW_ID.value, resolved_row_ids, dtype=pl.Utf8),
-            pl.Series(ScoreFrameColumn.OUTCOME_LABEL.value, labels, dtype=pl.Utf8),
-            pl.Series("f0", tuple(float(index) for index in range(len(labels))), dtype=pl.Float64),
-            pl.Series("f1", tuple(float(index + 1) for index in range(len(labels))), dtype=pl.Float64),
+            pl.Series(
+                ScoreFrameColumn.STABLE_ROW_ID.value,
+                resolved_row_ids,
+                dtype=pl.Utf8,
+            ),
+            pl.Series(
+                ScoreFrameColumn.OUTCOME_LABEL.value,
+                labels,
+                dtype=pl.Utf8,
+            ),
+            pl.Series(
+                "f0",
+                tuple(float(index) for index in range(len(labels))),
+                dtype=pl.Float64,
+            ),
+            pl.Series(
+                "f1",
+                tuple(float(index + 1) for index in range(len(labels))),
+                dtype=pl.Float64,
+            ),
         )
     )
 
@@ -59,7 +84,22 @@ def test_shared_input_contract_rejects_attack_calibration() -> None:
 def test_shared_input_contract_rejects_duplicate_row_identity() -> None:
     with pytest.raises(ScientificContractError, match="unique"):
         validate_score_input_frame(
-            _input_frame(("benign", "benign"), row_ids=("row", "row")),
+            _input_frame(
+                ("benign", "benign"),
+                row_ids=("row", "row"),
+            ),
+            PartitionRole.CALIBRATION,
+            FEATURE_NAMES,
+        )
+
+
+def test_shared_input_contract_rejects_null_feature_value() -> None:
+    frame = _input_frame(("benign", "benign")).with_columns(
+        pl.Series("f0", (0.0, None), dtype=pl.Float64)
+    )
+    with pytest.raises(ScientificContractError, match="null values"):
+        validate_score_input_frame(
+            frame,
             PartitionRole.CALIBRATION,
             FEATURE_NAMES,
         )
@@ -73,12 +113,21 @@ def test_score_frame_persists_exact_schema(tmp_path: Path) -> None:
     )
     path = tmp_path / "scores.parquet"
     frame.write_parquet(path)
-    reloaded = validate_persisted_score_frame(path, checksum_file(path), RowCount(frame.height))
+    reloaded = validate_persisted_score_frame(
+        path,
+        checksum_file(path),
+        RowCount(frame.height),
+    )
     assert tuple(reloaded.columns) == SCORE_FRAME_COLUMNS
-    assert tuple(reloaded.schema[column] for column in SCORE_FRAME_COLUMNS) == SCORE_FRAME_DTYPES
+    assert (
+        tuple(reloaded.schema[column] for column in SCORE_FRAME_COLUMNS)
+        == SCORE_FRAME_DTYPES
+    )
 
 
-def test_shared_score_artifact_rejects_training_partition(tmp_path: Path) -> None:
+def test_shared_score_artifact_rejects_training_partition(
+    tmp_path: Path,
+) -> None:
     with pytest.raises(ScientificContractError, match="post-training"):
         ScoreArtifact(
             coordinate="detector",
