@@ -2,9 +2,7 @@
 
 from dataclasses import dataclass
 from enum import StrEnum
-from json import dumps
 from pathlib import Path
-from shutil import rmtree
 from typing import ClassVar
 
 from pydantic import model_validator
@@ -41,13 +39,13 @@ from datp_core.analysis.temporal import (
     temporal_analysis_record,
     validate_frozen_recalibrated_pair,
 )
-from datp_core.artifacts.store import PublicationOutcome, publish_atomically
+from datp_core.artifacts.serialization import canonical_json_text
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import EvidenceRole, PopulationId, PublicationStatus, StageOperationId, TemporalState
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.provenance import canonical_value
 from datp_core.domain.values import Checksum, PairedObservationCount, Seed, checksum_text
 from datp_core.experiments.models import ExternalTemporalExecutionIdentity, require_execution_identity
+from datp_core.pipeline.publication.atomic import PublicationOutcome, publish_atomically
 from datp_core.protocols.statistics import PairedInferenceProtocol
 
 
@@ -274,8 +272,13 @@ def _zero_counts() -> ObservationCounts:
     return ObservationCounts(unavailable=PairedObservationCount(0), excluded=PairedObservationCount(0))
 
 
-def _publish[T](directory: Path, overwrite: bool, asset_name: AnalysisAssetName, document: T) -> PublicationOutcome[T]:
-    payload = dumps(canonical_value(document), indent=2, sort_keys=True) + "\n"
+def _publish[T](
+    directory: Path,
+    overwrite: bool,
+    asset_name: AnalysisAssetName,
+    document: T,
+) -> PublicationOutcome[T]:
+    payload = canonical_json_text(document)
     digest = checksum_text(payload)
 
     def write(temporary: Path) -> T:
@@ -289,7 +292,6 @@ def _publish[T](directory: Path, overwrite: bool, asset_name: AnalysisAssetName,
         is_reusable=lambda target: _is_reusable(target, asset_name, digest),
         write=write,
         reusable_value=lambda _target: document,
-        remove_target=rmtree,
     )
 
 
