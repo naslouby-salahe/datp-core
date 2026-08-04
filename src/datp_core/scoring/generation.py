@@ -10,12 +10,6 @@ import torch
 from safetensors.torch import load_file
 
 from datp_core.artifacts.layout import scored_partition_roles
-from datp_core.artifacts.score_frames import (
-    extract_score_arrays,
-    score_frame,
-    validate_persisted_score_frame,
-    validate_score_input_frame,
-)
 from datp_core.artifacts.store import (
     cleanup_staging_directory,
     create_staging_directory,
@@ -39,6 +33,12 @@ from datp_core.domain.values import (
 )
 from datp_core.learning.autoencoder import ReconstructionAutoencoder, reconstruction_errors
 from datp_core.learning.federated.checkpointing import CheckpointCandidate
+from datp_core.pipeline.scoring.frames import (
+    extract_score_arrays,
+    score_frame,
+    validate_persisted_score_frame,
+    validate_score_input_frame,
+)
 from datp_core.populations.models import ClientIdentity
 from datp_core.protocols.models import AutoencoderProtocol
 from datp_core.scoring.models import (
