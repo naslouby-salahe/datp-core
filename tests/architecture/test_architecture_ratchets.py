@@ -4,14 +4,13 @@ from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).parents[2]
 SOURCE_ROOT = REPOSITORY_ROOT / "src" / "datp_core"
+TEST_ROOT = REPOSITORY_ROOT / "tests"
 PIPELINE_ROOT = SOURCE_ROOT / "pipeline"
+ARTIFACT_STORE = SOURCE_ROOT / "artifacts" / "store.py"
+LEGACY_CHECKPOINT_MODULE = SOURCE_ROOT / "learning" / "federated" / "checkpointing.py"
+LEGACY_CHECKPOINT_IMPORT = "datp_core.learning.federated.checkpointing"
 
-SERIALIZATION_BYPASS_BASELINE = frozenset(
-    {
-        Path("src/datp_core/datasets/canonical_cache.py"),
-        Path("src/datp_core/domain/provenance.py"),
-    }
-)
+SERIALIZATION_BYPASS_BASELINE: frozenset[Path] = frozenset()
 FORBIDDEN_PIPELINE_IMPORT_ROOTS = frozenset(
     {
         "datp_core.analysis",
@@ -99,20 +98,29 @@ def test_pipeline_is_branch_neutral_and_strictly_typed() -> None:
     assert not violations, "\n".join(violations)
 
 
-def test_serialization_bypass_cannot_expand() -> None:
+def test_serialization_bypass_is_eliminated() -> None:
     observed = frozenset(
         path.relative_to(REPOSITORY_ROOT)
         for path in _python_files(SOURCE_ROOT)
         if path != SOURCE_ROOT / "artifacts" / "serialization.py"
         and _uses_serialization_bypass(ast.parse(path.read_text(encoding="utf-8"), filename=str(path)))
     )
-    assert observed <= SERIALIZATION_BYPASS_BASELINE, (
+    assert observed == SERIALIZATION_BYPASS_BASELINE, (
         "direct JSON serialization must remain inside artifacts/serialization.py; "
-        f"new bypasses: {sorted(observed - SERIALIZATION_BYPASS_BASELINE)}"
+        f"observed bypasses: {sorted(observed)}"
     )
 
 
 def test_neutral_publication_symbols_are_not_reexported_from_artifacts_store() -> None:
+    store_tree = ast.parse(ARTIFACT_STORE.read_text(encoding="utf-8"), filename=str(ARTIFACT_STORE))
+    imported_from_atomic = frozenset(
+        alias.name
+        for node in ast.walk(store_tree)
+        if isinstance(node, ast.ImportFrom) and node.module == "datp_core.pipeline.publication.atomic"
+        for alias in node.names
+    )
+    assert not imported_from_atomic & NEUTRAL_PUBLICATION_SYMBOLS
+
     violations: list[str] = []
     for path in _python_files(SOURCE_ROOT):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
@@ -126,9 +134,16 @@ def test_neutral_publication_symbols_are_not_reexported_from_artifacts_store() -
     assert not violations, "\n".join(violations)
 
 
-def test_federated_checkpoint_monolith_cannot_return() -> None:
-    assert not (SOURCE_ROOT / "learning" / "federated" / "checkpointing.py").exists()
+def test_federated_checkpoint_monolith_and_imports_cannot_return() -> None:
+    assert not LEGACY_CHECKPOINT_MODULE.exists()
     assert (SOURCE_ROOT / "learning" / "federated" / "checkpoints").is_dir()
+    violations: list[str] = []
+    for root in (SOURCE_ROOT, TEST_ROOT):
+        for path in _python_files(root):
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            if LEGACY_CHECKPOINT_IMPORT in _module_imports(tree):
+                violations.append(str(path.relative_to(REPOSITORY_ROOT)))
+    assert not violations, f"legacy checkpointing imports remain in: {violations}"
 
 
 def test_persisted_documents_use_strict_models_and_runtime_payloads_do_not() -> None:
