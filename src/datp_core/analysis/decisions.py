@@ -1,9 +1,11 @@
 """Scientific analysis decisions and typed publication preparation."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Generic, TypeVar
+from typing import TYPE_CHECKING, Generic, TypeVar
 
 from pydantic import model_validator
 
@@ -124,14 +126,13 @@ def decide_confirmatory(interval: BootstrapInterval) -> ScientificDecisionResult
     )
 
 
-from datp_core.analysis.mechanisms import MechanismEvidence
-from datp_core.analysis.temporal import (
-    TemporalAnalysisRecord,
-    TemporalDeploymentProvenance,
-    TemporalRecoveryResult,
-    temporal_analysis_record,
-    validate_frozen_recalibrated_pair,
-)
+if TYPE_CHECKING:
+    from datp_core.analysis.mechanisms import MechanismEvidence
+    from datp_core.analysis.temporal import (
+        TemporalAnalysisRecord,
+        TemporalDeploymentProvenance,
+        TemporalRecoveryResult,
+    )
 
 
 class AnalysisAssetName(StrEnum):
@@ -224,6 +225,11 @@ class AnalysisPublication(Generic[DocumentT]):
 def prepare_confirmatory_analysis(
     request: ConfirmatoryAnalysisRequest,
 ) -> AnalysisPublication[AnalysisDocument]:
+    from datp_core.analysis.mechanisms import MechanismEvidence
+
+    AnalysisDocument.model_rebuild(
+        _types_namespace={"MechanismEvidence": MechanismEvidence}
+    )
     protocol = request.inference_protocol
     interval = paired_bca_interval(
         request.contrasts,
@@ -298,6 +304,18 @@ def prepare_external_analysis(
 def prepare_temporal_analysis(
     request: TemporalAnalysisRequest,
 ) -> AnalysisPublication[TemporalAnalysisDocument]:
+    from datp_core.analysis.temporal import (
+        TemporalAnalysisRecord,
+        TemporalDeploymentProvenance,
+        temporal_analysis_record,
+    )
+
+    TemporalAnalysisDocument.model_rebuild(
+        _types_namespace={
+            "TemporalAnalysisRecord": TemporalAnalysisRecord,
+            "TemporalDeploymentProvenance": TemporalDeploymentProvenance,
+        }
+    )
     _validate_temporal_identities(request)
     _validate_temporal_provenance(request)
     return _publication(
@@ -386,6 +404,8 @@ def _zero_counts() -> ObservationCounts:
 
 
 def _validate_temporal_provenance(request: TemporalAnalysisRequest) -> None:
+    from datp_core.analysis.temporal import validate_frozen_recalibrated_pair
+
     static = request.static_reference_provenance
     if static.state is not TemporalState.STATIC_REFERENCE:
         raise ValueError("temporal analysis requires static-reference provenance")
