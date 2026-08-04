@@ -12,6 +12,7 @@ from datp_core.calibration.models import (
 from datp_core.domain.enums import ContractSubject, PartitionRole, ScoreFrameColumn
 from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.values import Checksum, RowCount, ScoreValue, StableRowId
+from datp_core.populations.integrity import reject_non_benign_labels
 from datp_core.populations.models import ClientIdentity, PopulationOutcomeLabel
 from datp_core.protocols.models import CalibrationEligibilityProtocol
 from datp_core.scoring.models import ScoreRecord
@@ -53,11 +54,12 @@ def load_benign_calibration_references(
     reject_evaluation_partition_in_eligibility(record.partition_role)
     frame = pl.read_parquet(record.path)
     labels = tuple(str(value) for value in frame.get_column(ScoreFrameColumn.OUTCOME_LABEL.value).to_list())
-    if any(label != benign_label.value for label in labels):
-        raise LeakageError(
-            "attack-labelled rows cannot enter benign calibration construction",
-            subject=ContractSubject.CALIBRATION,
-        )
+    reject_non_benign_labels(
+        labels,
+        message="attack-labelled rows cannot enter benign calibration construction",
+        subject=ContractSubject.CALIBRATION,
+        benign_label=benign_label.value,
+    )
     stable_row_ids = tuple(str(value) for value in frame.get_column(ScoreFrameColumn.STABLE_ROW_ID.value).to_list())
     if len(set(stable_row_ids)) != len(stable_row_ids):
         raise ScientificContractError(

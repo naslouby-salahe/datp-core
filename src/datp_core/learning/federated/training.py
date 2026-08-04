@@ -3,7 +3,6 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import IntEnum
-from json import dumps
 from pathlib import Path
 
 import numpy as np
@@ -13,6 +12,7 @@ from safetensors.torch import save
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
+from datp_core.artifacts.serialization import canonical_json_text
 from datp_core.domain.enums import (
     CommunicationEstimationMethod,
     ContractSubject,
@@ -187,14 +187,12 @@ def prepare_federated_client_data(
 
 
 def _client_seed_component(client: ClientIdentity) -> int:
-    payload = dumps(
+    payload = canonical_json_text(
         {
             "population": client.population.value,
             "client_id": client.client_id,
             "identity_kind": client.identity_kind.value,
-        },
-        sort_keys=True,
-        separators=(",", ":"),
+        }
     )
     digest = checksum_text(payload).value
     return int(digest[:16], 16) & 0x7FFF_FFFF
@@ -445,7 +443,7 @@ def compute_weighted_aggregate_loss(updates: Sequence[ClientUpdate]) -> MetricVa
 def preprocessing_state_set_checksum(
     provenance: Sequence[PreparedClientProvenance],
 ) -> Checksum:
-    payload = dumps(
+    payload = canonical_json_text(
         [
             {
                 "population": item.client.population.value,
@@ -454,9 +452,7 @@ def preprocessing_state_set_checksum(
                 "preprocessing_checksum": item.preprocessing_checksum.value,
             }
             for item in sorted(provenance, key=lambda value: value.client)
-        ],
-        sort_keys=True,
-        separators=(",", ":"),
+        ]
     )
     return checksum_text(payload)
 

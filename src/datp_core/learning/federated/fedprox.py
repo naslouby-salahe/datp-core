@@ -2,18 +2,13 @@
 
 from datp_core.domain.enums import ContractSubject, TrainingModelId
 from datp_core.domain.errors import ScientificContractError
-from datp_core.learning.federated.checkpointing import publish_federated_training
+from datp_core.learning.federated.checkpoints.publication import write_federated_training
 from datp_core.learning.federated.models import FederatedTrainingOutcome
-from datp_core.learning.federated.training import (
-    FederatedTrainingRequest,
-    run_federated_training,
-)
+from datp_core.learning.federated.training import FederatedTrainingRequest, run_federated_training
 from datp_core.protocols.models import FedProxProtocol
 
 
-def train_fedprox(
-    request: FederatedTrainingRequest[FedProxProtocol],
-) -> FederatedTrainingOutcome:
+def train_fedprox(request: FederatedTrainingRequest[FedProxProtocol]) -> FederatedTrainingOutcome:
     if request.coordinate.model is not TrainingModelId.FEDPROX_AUTOENCODER:
         raise ScientificContractError(
             "FedProx requires the FEDPROX_AUTOENCODER coordinate",
@@ -34,8 +29,4 @@ def train_fedprox(
             "FedProx coordinate coefficient must match the protocol coefficient",
             subject=ContractSubject.COORDINATE,
         )
-    execution = run_federated_training(request)
-    return publish_federated_training(
-        execution,
-        request.output_directory,
-    )
+    return write_federated_training(run_federated_training(request), request.output_directory)

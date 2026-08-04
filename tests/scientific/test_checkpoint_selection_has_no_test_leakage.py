@@ -1,5 +1,6 @@
 """Scientific contract: FIXED_TERMINAL_MAXIMUM_ROUND selection ignores every test-derived signal."""
 
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
@@ -8,7 +9,22 @@ from tests.unit.learning.federated.helpers import AUTOENCODER, CHECKPOINT, fedav
 from datp_core.domain.enums import CheckpointSelectionRule, CheckpointStatus
 from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.values import Checksum, MetricValue, RoundNumber, Seed
-from datp_core.learning.federated.checkpointing import RoundSnapshot, retain_checkpoint_candidates, select_checkpoint
+from datp_core.learning.federated.checkpoints.candidates import retain_checkpoint_candidates
+from datp_core.learning.federated.checkpoints.selection import select_checkpoint
+from datp_core.learning.federated.models import RoundSnapshot
+
+
+@dataclass(frozen=True, slots=True)
+class _CandidateLoss:
+    round_number: RoundNumber
+    loss: MetricValue
+
+
+def _loss_for(entries: tuple[_CandidateLoss, ...], round_number: RoundNumber) -> MetricValue:
+    matches = tuple(entry.loss for entry in entries if entry.round_number == round_number)
+    if len(matches) != 1:
+        raise AssertionError("candidate loss must resolve exactly once")
+    return matches[0]
 
 
 def _candidates_with_favorable_non_terminal_loss(tmp_path: Path):
@@ -17,11 +33,13 @@ def _candidates_with_favorable_non_terminal_loss(tmp_path: Path):
     coordinate = fedavg_coordinate(Seed(0))
     model = ReconstructionAutoencoder(AUTOENCODER.widths)
     state = {name: tensor.detach().clone() for name, tensor in model.state_dict().items()}
-    # The non-terminal candidate is given a dramatically better ("lower") loss than the
-    # terminal candidate. If any test-adjacent signal ever entered selection, this would
-    # tempt a selector into picking the non-terminal round instead.
-    losses = {CHECKPOINT.candidates[0]: MetricValue(0.0001), CHECKPOINT.candidates[-1]: MetricValue(99.0)}
-    snapshots = tuple(RoundSnapshot(candidate, state, losses[candidate]) for candidate in CHECKPOINT.candidates)
+    losses = (
+        _CandidateLoss(CHECKPOINT.candidates[0], MetricValue(0.0001)),
+        _CandidateLoss(CHECKPOINT.candidates[-1], MetricValue(99.0)),
+    )
+    snapshots = tuple(
+        RoundSnapshot(candidate, state, _loss_for(losses, candidate)) for candidate in CHECKPOINT.candidates
+    )
     candidates = retain_checkpoint_candidates(
         coordinate,
         snapshots,
@@ -58,7 +76,10 @@ def test_selection_ignores_training_loss_even_when_a_non_terminal_round_looks_be
         (MetricValue(1.0),) * 5,
     ],
 )
-def test_selection_rejects_every_shape_of_held_out_metrics(tmp_path: Path, held_out_metrics) -> None:
+def test_selection_rejects_every_shape_of_held_out_metrics(
+    tmp_path: Path,
+    held_out_metrics: tuple[MetricValue, ...],
+) -> None:
     coordinate, candidates = _candidates_with_favorable_non_terminal_loss(tmp_path)
     with pytest.raises(LeakageError, match="held-out evaluation outcomes"):
         select_checkpoint(
@@ -89,8 +110,6 @@ def test_selection_rejects_attack_label_presence_regardless_of_other_arguments(t
 
 
 def test_historical_anchor_endpoint_status_can_never_be_constructed(tmp_path: Path) -> None:
-    """Conference anchor historical endpoints are isolated: a federated checkpoint candidate
-    cannot even be constructed with HISTORICAL_ENDPOINT status, let alone selected."""
     _coordinate, candidates = _candidates_with_favorable_non_terminal_loss(tmp_path)
     original = candidates[0]
     with pytest.raises(ScientificContractError, match="invalid status"):
@@ -118,12 +137,14 @@ def test_only_the_declared_maximum_round_is_ever_marked_selected(tmp_path: Path)
         preprocessing_state_set_checksum=Checksum("a" * 64),
         split_manifest_checksum=Checksum("b" * 64),
     )
-    selected_candidates = [
+    selected_candidates = tuple(
         item for item in decision.candidates if item.status is CheckpointStatus.SELECTED_BY_NON_TEST_RULE
-    ]
+    )
     assert len(selected_candidates) == 1
     assert selected_candidates[0].round_number == CHECKPOINT.maximum_round
-    stability_candidates = [item for item in decision.candidates if item.status is CheckpointStatus.STABILITY_EVIDENCE]
+    stability_candidates = tuple(
+        item for item in decision.candidates if item.status is CheckpointStatus.STABILITY_EVIDENCE
+    )
     assert all(item.round_number != CHECKPOINT.maximum_round for item in stability_candidates)
 
 

@@ -3,7 +3,6 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
-from json import dumps
 from pathlib import Path
 
 import pyarrow as pa
@@ -11,6 +10,7 @@ import pyarrow.parquet as pq
 from filelock import FileLock
 
 from datp_core.artifacts.completion import complete_digest
+from datp_core.artifacts.serialization import canonical_json_text, canonical_mapping, canonical_value
 from datp_core.datasets.models import (
     CanonicalAssetRole,
     CanonicalColumn,
@@ -28,6 +28,7 @@ from datp_core.datasets.models import (
     ModelInputEligibilityPolicy,
     RawDatasetInventory,
     RawSourceFile,
+    SchemaChecksumDocument,
     SourceFileRole,
     SourceRowReference,
     SourceStateDocument,
@@ -41,7 +42,6 @@ from datp_core.datasets.models import (
 )
 from datp_core.domain.enums import AvailabilityStatus, ContractSubject, DatasetId, PublicationStatus
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.provenance import canonical_mapping, canonical_value
 from datp_core.domain.values import (
     ByteCount,
     Checksum,
@@ -86,16 +86,6 @@ class CanonicalAsset[AssetRoleT: StrEnum]:
         if not self.columns:
             raise ValueError("canonical assets require a relative path and columns")
 
-    def serialize(self) -> dict[str, str | tuple[str, ...] | int | None]:
-        return {
-            "checksum": self.checksum.value,
-            "columns": self.columns,
-            "path": self.relative_path.as_posix(),
-            "row_count": self.row_count.value,
-            "role": self.role.value,
-            "source_identity": self.source_identity,
-        }
-
 
 def canonical_asset_path(root: Path, relative_path: Path) -> Path:
     if not _is_canonical_relative_path(relative_path):
@@ -115,20 +105,19 @@ def canonical_directory(canonical_root: Path, schema: CanonicalSchema) -> Path:
 
 
 def schema_content(schema: CanonicalSchema) -> str:
-    return dumps(canonical_value(schema), sort_keys=True)
+    return canonical_json_text(schema)
 
 
 def schema_checksum_document_json(
     dataset: DatasetId, columns: tuple[CanonicalColumn, ...], physical_schema: pa.Schema
 ) -> str:
-    return dumps(
-        {
-            "canonicalization_contract": _CANONICAL_PUBLICATION_CONTRACT,
-            "columns": [canonical_value(column) for column in columns],
-            "dataset": dataset.value,
-            "physical_schema": physical_schema.to_string(show_field_metadata=True, show_schema_metadata=True),
-        },
-        sort_keys=True,
+    return canonical_json_text(
+        SchemaChecksumDocument(
+            canonicalization_contract=_CANONICAL_PUBLICATION_CONTRACT,
+            columns=columns,
+            dataset=dataset,
+            physical_schema=physical_schema.to_string(show_field_metadata=True, show_schema_metadata=True),
+        )
     )
 
 
@@ -419,7 +408,8 @@ def write_source_state(
     state_path = target / _SOURCE_STATE_NAME
     temporary = state_path.with_name(f".{_SOURCE_STATE_NAME}")
     temporary.write_text(
-        _source_state(dataset, source_paths, manifest, source_path_resolver).model_dump_json(), encoding="utf-8"
+        canonical_json_text(_source_state(dataset, source_paths, manifest, source_path_resolver)),
+        encoding="utf-8",
     )
     temporary.replace(state_path)
 
@@ -510,7 +500,14 @@ def _validation_report_entry(value: DatasetValidationReport) -> _ValidationRepor
 
 
 def _asset_entry[AssetRoleT: StrEnum](asset: CanonicalAsset[AssetRoleT]) -> _AssetEntry:
-    return _AssetEntry.model_validate(asset.serialize())
+    return _AssetEntry(
+        checksum=asset.checksum.value,
+        columns=asset.columns,
+        path=asset.relative_path.as_posix(),
+        row_count=asset.row_count,
+        role=asset.role.value,
+        source_identity=asset.source_identity,
+    )
 
 
 def _manifest_matches_publication[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
@@ -595,16 +592,18 @@ def serialized_manifest_json[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
     request: ManifestSerializationRequest[EligibilityReasonT],
     assets: tuple[CanonicalAsset[AssetRoleT], ...],
 ) -> str:
-    return CanonicalManifestDocument(
-        assets=tuple(_asset_entry(asset) for asset in assets),
-        canonicalization_contract=request.canonicalization_contract,
-        chronology=tuple(_chronology_entry(item) for item in request.chronology),
-        dataset=request.dataset,
-        eligibility_policy=_eligibility_entry(request.eligibility_policy),
-        inventory=_inventory_entry(request.inventory),
-        schema_checksum=request.schema_checksum.value,
-        validation_report=_validation_report_entry(request.validation_report),
-    ).model_dump_json()
+    return canonical_json_text(
+        CanonicalManifestDocument(
+            assets=tuple(_asset_entry(asset) for asset in assets),
+            canonicalization_contract=request.canonicalization_contract,
+            chronology=tuple(_chronology_entry(item) for item in request.chronology),
+            dataset=request.dataset,
+            eligibility_policy=_eligibility_entry(request.eligibility_policy),
+            inventory=_inventory_entry(request.inventory),
+            schema_checksum=request.schema_checksum.value,
+            validation_report=_validation_report_entry(request.validation_report),
+        )
+    )
 
 
 def require_canonical_publication_complete(

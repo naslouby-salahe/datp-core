@@ -6,7 +6,11 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from datp_core.datasets.edge_iiotset.schema import EDGE_BENIGN_SENSOR_GROUPS, EdgeSensorGroup
+from datp_core.datasets.edge_iiotset.schema import (
+    EDGE_BENIGN_SENSOR_GROUPS,
+    EDGE_NUMERIC_FEATURE_COLUMNS,
+    EdgeSensorGroup,
+)
 from datp_core.datasets.nbaiot.schema import NBAIOT_DEVICE_FAMILIES, NBAIOT_DEVICE_IDENTITIES, NBaIoTDeviceFamily
 from datp_core.domain.values import Checksum
 
@@ -187,6 +191,7 @@ def edge_temporal_eligible_root(tmp_path: Path) -> Path:
                     "raw_timestamp": f"2021 00:00:{local:02d}.000000000",
                     "attack_label": "0",
                     "attack_type": "Normal",
+                    **{feature: "0" for feature in EDGE_NUMERIC_FEATURE_COLUMNS},
                 }
             )
         frame = pl.DataFrame(rows)

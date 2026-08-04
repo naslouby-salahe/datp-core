@@ -2,24 +2,183 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from enum import StrEnum
 
 import numpy as np
 from numpy.typing import NDArray
+from pydantic import model_validator
 from scipy import stats
 
-from datp_core.analysis.inference.paired import paired_deltas
-from datp_core.analysis.models import (
-    BcaAdjustment,
-    BcaReason,
-    BootstrapInterval,
+from datp_core.analysis.contrasts import (
     PairedContrasts,
-    ScientificDecisionResult,
     SupplementaryPairedAnalysisPlan,
 )
-from datp_core.domain.enums import AvailabilityStatus, EvidenceRole, FederatedThresholdMethod, ScientificDecision
-from datp_core.domain.values import MetricValue, Seed
+from datp_core.analysis.inference.wilcoxon import paired_deltas
+from datp_core.domain.contracts import StrictModel
+from datp_core.domain.enums import (
+    AvailabilityStatus,
+    EvidenceRole,
+    FederatedThresholdMethod,
+    IntervalMethod,
+)
+from datp_core.domain.values import (
+    BootstrapReplicateCount,
+    ConfidenceLevel,
+    MetricValue,
+    Seed,
+)
 from datp_core.protocols.statistics import PairedInferenceProtocol
 from datp_core.protocols.validation import CANONICAL_PROTOCOL_GRAPH
+
+
+class BcaOutcome(StrEnum):
+    AVAILABLE = "available"
+    BLOCKED = "blocked"
+    DEGENERATE = "degenerate"
+
+    @property
+    def availability(self) -> AvailabilityStatus:
+        match self:
+            case BcaOutcome.AVAILABLE:
+                return AvailabilityStatus.AVAILABLE
+            case BcaOutcome.BLOCKED:
+                return AvailabilityStatus.UNAVAILABLE
+            case BcaOutcome.DEGENERATE:
+                return AvailabilityStatus.UNDEFINED
+
+
+class BcaReason(StrEnum):
+    CANONICAL_PROTOCOL_MISMATCH = "canonical_protocol_mismatch"
+    DUPLICATE_SEED = "duplicate_seed"
+    SEED_COHORT_MISMATCH = "seed_cohort_mismatch"
+    CONFIRMATORY_ENDPOINT_MISMATCH = "confirmatory_endpoint_mismatch"
+    FIXED_COORDINATE_MISMATCH = "fixed_coordinate_mismatch"
+    IDENTICAL_PAIRED_DELTAS = "identical_paired_deltas"
+    DEGENERATE_BOOTSTRAP_DISTRIBUTION = "degenerate_bootstrap_distribution"
+    INFINITE_BIAS_CORRECTION = "infinite_bias_correction"
+    UNDEFINED_ACCELERATION = "undefined_acceleration"
+    INVALID_ADJUSTED_QUANTILES = "invalid_adjusted_quantiles"
+    SUPPLEMENTARY_ANALYSIS_PLAN_MISMATCH = "supplementary_analysis_plan_mismatch"
+    SUPPLEMENTARY_SEED_COHORT_MISMATCH = "supplementary_seed_cohort_mismatch"
+
+
+class BcaAdjustment(StrictModel):
+    bias_correction: MetricValue
+    acceleration: MetricValue
+
+
+class BootstrapInterval(StrictModel):
+    method: IntervalMethod
+    confidence_level: ConfidenceLevel
+    replicate_count: BootstrapReplicateCount
+    analysis_seed: Seed
+    point_estimate: MetricValue | None
+    lower_bound: MetricValue | None
+    upper_bound: MetricValue | None
+    adjustment: BcaAdjustment | None
+    outcome: BcaOutcome
+    reason: BcaReason | None
+
+    @model_validator(mode="after")
+    def validate_interval(self) -> "BootstrapInterval":
+        bounds_present = self.lower_bound is not None and self.upper_bound is not None
+        if (self.lower_bound is None) != (self.upper_bound is None):
+            raise ValueError("bootstrap interval bounds must occur together")
+        if bounds_present and self.lower_bound is not None and self.upper_bound is not None:
+            if self.lower_bound.value > self.upper_bound.value:
+                raise ValueError("bootstrap interval lower bound cannot exceed upper bound")
+        match self.outcome:
+            case BcaOutcome.AVAILABLE:
+                valid = (
+                    self.point_estimate is not None
+                    and bounds_present
+                    and self.adjustment is not None
+                    and self.reason is None
+                )
+            case BcaOutcome.BLOCKED:
+                valid = not bounds_present and self.adjustment is None and self.reason is not None
+            case BcaOutcome.DEGENERATE:
+                valid = (
+                    self.point_estimate is not None
+                    and not bounds_present
+                    and self.adjustment is None
+                    and self.reason is not None
+                )
+        if not valid:
+            raise ValueError(f"invalid {self.outcome.value} BCa interval state")
+        return self
+
+    @property
+    def availability(self) -> AvailabilityStatus:
+        return self.outcome.availability
+
+    @classmethod
+    def available(
+        cls,
+        *,
+        protocol: PairedInferenceProtocol,
+        analysis_seed: Seed,
+        point_estimate: MetricValue,
+        lower_bound: MetricValue,
+        upper_bound: MetricValue,
+        adjustment: BcaAdjustment,
+    ) -> "BootstrapInterval":
+        return cls(
+            method=protocol.interval_method,
+            confidence_level=protocol.confidence_level,
+            replicate_count=protocol.bootstrap_replicates,
+            analysis_seed=analysis_seed,
+            point_estimate=point_estimate,
+            lower_bound=lower_bound,
+            upper_bound=upper_bound,
+            adjustment=adjustment,
+            outcome=BcaOutcome.AVAILABLE,
+            reason=None,
+        )
+
+    @classmethod
+    def blocked(
+        cls,
+        *,
+        protocol: PairedInferenceProtocol,
+        analysis_seed: Seed,
+        point_estimate: MetricValue | None,
+        reason: BcaReason,
+    ) -> "BootstrapInterval":
+        return cls(
+            method=protocol.interval_method,
+            confidence_level=protocol.confidence_level,
+            replicate_count=protocol.bootstrap_replicates,
+            analysis_seed=analysis_seed,
+            point_estimate=point_estimate,
+            lower_bound=None,
+            upper_bound=None,
+            adjustment=None,
+            outcome=BcaOutcome.BLOCKED,
+            reason=reason,
+        )
+
+    @classmethod
+    def degenerate(
+        cls,
+        *,
+        protocol: PairedInferenceProtocol,
+        analysis_seed: Seed,
+        point_estimate: MetricValue,
+        reason: BcaReason,
+    ) -> "BootstrapInterval":
+        return cls(
+            method=protocol.interval_method,
+            confidence_level=protocol.confidence_level,
+            replicate_count=protocol.bootstrap_replicates,
+            analysis_seed=analysis_seed,
+            point_estimate=point_estimate,
+            lower_bound=None,
+            upper_bound=None,
+            adjustment=None,
+            outcome=BcaOutcome.DEGENERATE,
+            reason=reason,
+        )
 
 
 class _PairedAnalysisContractError(ValueError):
@@ -126,41 +285,6 @@ def supplementary_paired_bca_interval(
     )
 
 
-def decide_confirmatory(interval: BootstrapInterval) -> ScientificDecisionResult:
-    if (
-        interval.availability is not AvailabilityStatus.AVAILABLE
-        or interval.point_estimate is None
-        or interval.lower_bound is None
-        or interval.upper_bound is None
-    ):
-        return ScientificDecisionResult(
-            evidence_role=EvidenceRole.CONFIRMATORY,
-            decision=ScientificDecision.BLOCKED,
-            point_estimate=interval.point_estimate,
-            interval=interval,
-            rationale="confirmatory BCa interval is unavailable or degenerate",
-        )
-    if interval.lower_bound.value > 0.0:
-        decision = ScientificDecision.SUPPORTED
-        rationale = "the paired BCa interval supports lower CV(FPR) under local thresholds"
-    elif interval.upper_bound.value < 0.0:
-        decision = ScientificDecision.OPPOSITE_DIRECTION
-        rationale = "the paired BCa interval supports the opposite direction"
-    elif interval.point_estimate.value > 0.0:
-        decision = ScientificDecision.DIRECTIONAL_INCONCLUSIVE
-        rationale = "the point estimate is directional but the paired BCa interval crosses zero"
-    else:
-        decision = ScientificDecision.NO_OBSERVED_ADVANTAGE
-        rationale = "the paired BCa interval crosses zero without a positive point estimate"
-    return ScientificDecisionResult(
-        evidence_role=EvidenceRole.CONFIRMATORY,
-        decision=decision,
-        point_estimate=interval.point_estimate,
-        interval=interval,
-        rationale=rationale,
-    )
-
-
 def _validate_or_block(
     contrasts: PairedContrasts,
     *,
@@ -236,12 +360,26 @@ def _bootstrap_distribution(
         raise ValueError("bootstrap requires at least one paired contrast")
     estimate = MetricValue(float(np.mean(deltas)))
     if np.ptp(deltas) <= 0.0:
-        return _BootstrapDistribution(estimate, deltas, None, BcaReason.IDENTICAL_PAIRED_DELTAS)
+        return _BootstrapDistribution(
+            estimate,
+            deltas,
+            None,
+            BcaReason.IDENTICAL_PAIRED_DELTAS,
+        )
     rng = np.random.default_rng(analysis_seed.value)
-    indexes = rng.integers(0, deltas.size, size=(protocol.bootstrap_replicates.value, deltas.size))
+    indexes = rng.integers(
+        0,
+        deltas.size,
+        size=(protocol.bootstrap_replicates.value, deltas.size),
+    )
     values = np.mean(deltas[indexes], axis=1)
     if np.ptp(values) <= 0.0:
-        return _BootstrapDistribution(estimate, deltas, None, BcaReason.DEGENERATE_BOOTSTRAP_DISTRIBUTION)
+        return _BootstrapDistribution(
+            estimate,
+            deltas,
+            None,
+            BcaReason.DEGENERATE_BOOTSTRAP_DISTRIBUTION,
+        )
     return _BootstrapDistribution(estimate, deltas, values, None)
 
 
@@ -260,7 +398,10 @@ def _bca_interval_from_distribution(
     if acceleration is None:
         return BcaReason.UNDEFINED_ACCELERATION
     alpha = (1.0 - confidence_level) / 2.0
-    standard_quantiles = np.array([stats.norm.ppf(alpha), stats.norm.ppf(1.0 - alpha)], dtype=np.float64)
+    standard_quantiles = np.array(
+        [stats.norm.ppf(alpha), stats.norm.ppf(1.0 - alpha)],
+        dtype=np.float64,
+    )
     shifted = bias_correction + standard_quantiles
     denominator = 1.0 - acceleration * shifted
     if np.any(np.abs(denominator) <= np.finfo(np.float64).eps):
@@ -272,7 +413,10 @@ def _bca_interval_from_distribution(
     return (
         MetricValue(float(bounds[0])),
         MetricValue(float(bounds[1])),
-        BcaAdjustment(bias_correction=MetricValue(bias_correction), acceleration=MetricValue(acceleration)),
+        BcaAdjustment(
+            bias_correction=MetricValue(bias_correction),
+            acceleration=MetricValue(acceleration),
+        ),
     )
 
 

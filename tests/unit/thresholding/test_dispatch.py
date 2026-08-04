@@ -21,29 +21,37 @@ from datp_core.thresholding.dispatch import (
     reject_centralized_threshold_method,
     validate_population_capability,
 )
-from datp_core.thresholding.models import (
-    ConformalThresholdResult,
-    FamilyThresholdResult,
+from datp_core.thresholding.identities import ThresholdUnavailableResult
+from datp_core.thresholding.methods.cluster import GroupedThresholdResult
+from datp_core.thresholding.methods.conformal import ConformalThresholdResult
+from datp_core.thresholding.methods.family import FamilyThresholdResult
+from datp_core.thresholding.methods.federated_statistics import (
     FederatedStatisticsThresholdResult,
-    GroupedThresholdResult,
-    LocalThresholdResult,
+)
+from datp_core.thresholding.methods.local import LocalThresholdResult
+from datp_core.thresholding.methods.shared import (
     PooledSharedQuantileResult,
     SampleWeightedSharedThresholdResult,
     SharedThresholdResult,
-    ShrinkageThresholdResult,
-    ThresholdUnavailableResult,
 )
+from datp_core.thresholding.methods.shrinkage import ShrinkageThresholdResult
 from datp_core.thresholding.quantiles import ClientBenignCalibrationScores
 
 QUANTILE = Quantile(0.5)
 ELIGIBLE = tuple(
-    client_scores(f"client_{index}", tuple(float(index * 100 + value) for value in range(100))) for index in range(6)
+    client_scores(
+        f"client_{index}",
+        tuple(float(index * 100 + value) for value in range(100)),
+    )
+    for index in range(6)
 )
 FAMILY_A = FamilyIdentity("family_a")
-FAMILY_BY_CLIENT = tuple((client_scores.client, FAMILY_A) for client_scores in ELIGIBLE)
+FAMILY_BY_CLIENT = tuple((item.client, FAMILY_A) for item in ELIGIBLE)
 
 
-def _capabilities(valid_threshold_methods: tuple[FederatedThresholdMethod, ...]) -> PopulationCapabilities:
+def _capabilities(
+    valid_threshold_methods: tuple[FederatedThresholdMethod, ...],
+) -> PopulationCapabilities:
     return PopulationCapabilities(
         population=PopulationId.NBAIOT_NATURAL_DEVICES,
         dataset=DatasetId.NBAIOT,
@@ -87,59 +95,84 @@ def _request(
     [
         (FederatedThresholdMethod.SHARED_THRESHOLD, SharedThresholdResult),
         (FederatedThresholdMethod.LOCAL_THRESHOLD, LocalThresholdResult),
-        (FederatedThresholdMethod.POOLED_SHARED_QUANTILE, PooledSharedQuantileResult),
-        (FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD, SampleWeightedSharedThresholdResult),
+        (
+            FederatedThresholdMethod.POOLED_SHARED_QUANTILE,
+            PooledSharedQuantileResult,
+        ),
+        (
+            FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD,
+            SampleWeightedSharedThresholdResult,
+        ),
         (FederatedThresholdMethod.FAMILY_THRESHOLD, FamilyThresholdResult),
         (FederatedThresholdMethod.CLUSTER_THRESHOLD, GroupedThresholdResult),
-        (FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE, ShrinkageThresholdResult),
-        (FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE, ThresholdUnavailableResult),
-        (FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD, ConformalThresholdResult),
-        (FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS, FederatedStatisticsThresholdResult),
+        (
+            FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE,
+            ShrinkageThresholdResult,
+        ),
+        (
+            FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE,
+            ThresholdUnavailableResult,
+        ),
+        (
+            FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD,
+            ConformalThresholdResult,
+        ),
+        (
+            FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS,
+            FederatedStatisticsThresholdResult,
+        ),
     ],
 )
-def test_dispatch_returns_the_correct_result_type_for_every_method(method, expected_type) -> None:
-    result = dispatch_federated_threshold(_request(method))
-    assert isinstance(result, expected_type)
+def test_dispatch_returns_the_correct_result_type_for_every_method(
+    method,
+    expected_type,
+) -> None:
+    assert isinstance(
+        dispatch_federated_threshold(_request(method)),
+        expected_type,
+    )
 
 
 def test_dispatch_family_threshold_without_taxonomy_is_unavailable() -> None:
-    result = dispatch_federated_threshold(_request(FederatedThresholdMethod.FAMILY_THRESHOLD, family_by_client=()))
+    result = dispatch_federated_threshold(
+        _request(
+            FederatedThresholdMethod.FAMILY_THRESHOLD,
+            family_by_client=(),
+        )
+    )
     assert isinstance(result, ThresholdUnavailableResult)
 
 
 def test_dispatch_cluster_threshold_with_too_few_clients_is_unavailable() -> None:
-    small = ELIGIBLE[:2]
-    result = dispatch_federated_threshold(_request(FederatedThresholdMethod.CLUSTER_THRESHOLD, eligible=small))
+    result = dispatch_federated_threshold(
+        _request(
+            FederatedThresholdMethod.CLUSTER_THRESHOLD,
+            eligible=ELIGIBLE[:2],
+        )
+    )
     assert isinstance(result, ThresholdUnavailableResult)
 
 
 def test_dispatch_rejects_method_unsupported_by_population_capabilities() -> None:
-    capabilities = _capabilities((FederatedThresholdMethod.SHARED_THRESHOLD,))
-    request = _request(FederatedThresholdMethod.LOCAL_THRESHOLD, capabilities=capabilities)
-
-    def call():
-        return dispatch_federated_threshold(request)
-
+    request = _request(
+        FederatedThresholdMethod.LOCAL_THRESHOLD,
+        capabilities=_capabilities((FederatedThresholdMethod.SHARED_THRESHOLD,)),
+    )
     with pytest.raises(CapabilityError):
-        call()
+        dispatch_federated_threshold(request)
 
 
 def test_validate_population_capability_rejects_unsupported_method() -> None:
-    capabilities = _capabilities((FederatedThresholdMethod.SHARED_THRESHOLD,))
-
-    def call() -> None:
-        validate_population_capability(capabilities, FederatedThresholdMethod.LOCAL_THRESHOLD)
-
     with pytest.raises(CapabilityError):
-        call()
+        validate_population_capability(
+            _capabilities((FederatedThresholdMethod.SHARED_THRESHOLD,)),
+            FederatedThresholdMethod.LOCAL_THRESHOLD,
+        )
 
 
 def test_reject_centralized_threshold_method_raises_leakage_error() -> None:
-    def call() -> None:
-        reject_centralized_threshold_method(CentralizedThresholdMethod.POOLED_BENIGN_QUANTILE)
-
     with pytest.raises(LeakageError, match="cannot enter federated dispatch"):
-        call()
+        reject_centralized_threshold_method(CentralizedThresholdMethod.POOLED_BENIGN_QUANTILE)
 
 
 def test_reject_centralized_threshold_method_accepts_federated_methods() -> None:
@@ -147,34 +180,24 @@ def test_reject_centralized_threshold_method_accepts_federated_methods() -> None
 
 
 def test_dispatch_rejects_a_centralized_method_disguised_as_federated() -> None:
-    # A caller could only ever get a CentralizedThresholdMethod past ThresholdConstructionRequest's
-    # static typing via an explicit bypass; the cast constructs exactly that misuse so the
-    # runtime guard (not just the type system) is what is actually being verified here.
-    disguised = cast(FederatedThresholdMethod, CentralizedThresholdMethod.POOLED_BENIGN_QUANTILE)
-    request = _request(disguised)
-
-    def call():
-        return dispatch_federated_threshold(request)
-
+    disguised = cast(
+        FederatedThresholdMethod,
+        CentralizedThresholdMethod.POOLED_BENIGN_QUANTILE,
+    )
     with pytest.raises(LeakageError):
-        call()
+        dispatch_federated_threshold(_request(disguised))
 
 
 def test_threshold_construction_request_rejects_duplicate_eligible_clients() -> None:
-    duped = (ELIGIBLE[0], ELIGIBLE[0])
-
-    def call():
-        return ThresholdConstructionRequest(
+    with pytest.raises(ScientificContractError, match="unique identities"):
+        ThresholdConstructionRequest(
             method=FederatedThresholdMethod.SHARED_THRESHOLD,
             coordinate=COORDINATE,
             quantile=QUANTILE,
             capabilities=ALL_METHODS_CAPABILITIES,
-            eligible=duped,
+            eligible=(ELIGIBLE[0], ELIGIBLE[0]),
             family_by_client=(),
         )
-
-    with pytest.raises(ScientificContractError, match="unique identities"):
-        call()
 
 
 def test_threshold_construction_request_rejects_mixed_coordinates() -> None:
@@ -182,36 +205,36 @@ def test_threshold_construction_request_rejects_mixed_coordinates() -> None:
 
     from datp_core.domain.values import Seed
 
-    other_coordinate = fedavg_coordinate(Seed(1))
-    other = client_scores("client_mixed", (1.0, 2.0, 3.0), coordinate=other_coordinate)
-    mixed = (ELIGIBLE[0], other)
-
-    def call():
-        return ThresholdConstructionRequest(
+    other = client_scores(
+        "client_mixed",
+        (1.0, 2.0, 3.0),
+        coordinate=fedavg_coordinate(Seed(1)),
+    )
+    with pytest.raises(ScientificContractError, match="request coordinate"):
+        ThresholdConstructionRequest(
             method=FederatedThresholdMethod.SHARED_THRESHOLD,
             coordinate=COORDINATE,
             quantile=QUANTILE,
             capabilities=ALL_METHODS_CAPABILITIES,
-            eligible=mixed,
+            eligible=(ELIGIBLE[0], other),
             family_by_client=(),
         )
 
-    with pytest.raises(ScientificContractError, match="request coordinate"):
-        call()
-
 
 def test_threshold_construction_request_rejects_duplicate_family_taxonomy_client() -> None:
-    duped_family = ((ELIGIBLE[0].client, FAMILY_A), (ELIGIBLE[0].client, FAMILY_A))
-
-    def call():
-        return ThresholdConstructionRequest(
+    duplicated = (
+        (ELIGIBLE[0].client, FAMILY_A),
+        (ELIGIBLE[0].client, FAMILY_A),
+    )
+    with pytest.raises(
+        ScientificContractError,
+        match="unique client identities",
+    ):
+        ThresholdConstructionRequest(
             method=FederatedThresholdMethod.FAMILY_THRESHOLD,
             coordinate=COORDINATE,
             quantile=QUANTILE,
             capabilities=ALL_METHODS_CAPABILITIES,
             eligible=ELIGIBLE,
-            family_by_client=duped_family,
+            family_by_client=duplicated,
         )
-
-    with pytest.raises(ScientificContractError, match="unique client identities"):
-        call()

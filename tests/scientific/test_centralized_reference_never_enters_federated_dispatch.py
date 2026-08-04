@@ -4,8 +4,8 @@ from pathlib import Path
 import pytest
 
 from datp_core.centralized_reference.evaluation import (
-    reject_b1_b4_insertion,
     reject_centralized_as_federated_threshold_policy,
+    reject_centralized_in_federated_threshold_comparison,
     reject_cross_client_cv_fpr_from_pooled_centralized,
 )
 from datp_core.centralized_reference.thresholding import reject_centralized_threshold_in_federated_dispatch
@@ -58,4 +58,4 @@ def test_runtime_guards_block_ladder_and_dispatch_contamination() -> None:
     with pytest.raises(LeakageError):
         reject_cross_client_cv_fpr_from_pooled_centralized()
     with pytest.raises(LeakageError):
-        reject_b1_b4_insertion(FederatedThresholdMethod.LOCAL_THRESHOLD)
+        reject_centralized_in_federated_threshold_comparison(FederatedThresholdMethod.LOCAL_THRESHOLD)

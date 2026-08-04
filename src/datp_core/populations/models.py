@@ -31,8 +31,8 @@ from datp_core.domain.values import (
     checksum_text,
     floats_absolutely_close,
 )
-from datp_core.protocols.models import FRACTION_TOTAL_ABSOLUTE_TOLERANCE, UNIT_FRACTION_TOTAL
 from datp_core.protocols.runtime import DATA_ROOT
+from datp_core.protocols.splits import FRACTION_TOTAL_ABSOLUTE_TOLERANCE, UNIT_FRACTION_TOTAL
 
 
 class PopulationOutcomeLabel(StrEnum):
@@ -163,11 +163,28 @@ class PopulationManifestDocument(StrictModel):
 
     @model_validator(mode="after")
     def validate_manifest(self) -> "PopulationManifestDocument":
-        _require_unique_ordered(self.candidate_clients, PopulationManifestField.CANDIDATE_CLIENTS)
-        _require_unique_ordered(self.accepted_clients, PopulationManifestField.ACCEPTED_CLIENTS)
-        _require_unique_ordered(self.excluded_client_ids, PopulationManifestField.EXCLUDED_CLIENT_IDS)
-        _require_client_set_partition(self.candidate_clients, self.accepted_clients, self.excluded_client_ids)
-        _require_non_negative_row_counts(self.total_membership_rows, self.benign_row_count, self.attack_row_count)
+        _require_unique_ordered(
+            self.candidate_clients,
+            PopulationManifestField.CANDIDATE_CLIENTS,
+        )
+        _require_unique_ordered(
+            self.accepted_clients,
+            PopulationManifestField.ACCEPTED_CLIENTS,
+        )
+        _require_unique_ordered(
+            self.excluded_client_ids,
+            PopulationManifestField.EXCLUDED_CLIENT_IDS,
+        )
+        _require_client_set_partition(
+            self.candidate_clients,
+            self.accepted_clients,
+            self.excluded_client_ids,
+        )
+        _require_non_negative_row_counts(
+            self.total_membership_rows,
+            self.benign_row_count,
+            self.attack_row_count,
+        )
         return self
 
 
@@ -250,22 +267,6 @@ class ChronologicalPartitionDiagnosticsDocument(StrictModel):
         return self
 
 
-@dataclass(frozen=True, slots=True)
-class ClientPartitionCounts:
-    """Per-client partition support counts used to construct evaluation cohorts."""
-
-    client_id: str
-    benign_calibration_count: RowCount
-    benign_evaluation_count: RowCount
-    attack_evaluation_count: RowCount
-    accepted: bool
-    deployment_fallback: bool
-
-    def __post_init__(self) -> None:
-        if not self.client_id:
-            raise ValueError("client partition counts require a client identity")
-
-
 @total_ordering
 @dataclass(frozen=True, slots=True)
 class ClientIdentity:
@@ -278,7 +279,31 @@ class ClientIdentity:
             raise ValueError("client identity must be a non-empty path-safe token")
 
     def __lt__(self, other: "ClientIdentity") -> bool:
-        return self.client_id < other.client_id
+        return (
+            self.population.value,
+            self.identity_kind.value,
+            self.client_id,
+        ) < (
+            other.population.value,
+            other.identity_kind.value,
+            other.client_id,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ClientPartitionCounts:
+    """Per-client partition support counts used to construct evaluation cohorts."""
+
+    client: ClientIdentity
+    benign_calibration_count: RowCount
+    benign_evaluation_count: RowCount
+    attack_evaluation_count: RowCount
+    accepted: bool
+    deployment_fallback: bool
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.client, ClientIdentity):
+            raise TypeError("client partition counts require a ClientIdentity")
 
 
 @dataclass(frozen=True, slots=True)
@@ -357,8 +382,13 @@ class SplitConstructionRequest:
     capture_timestamp_column: str | None = None
 
 
-def dirichlet_condition(concentration: DirichletConcentration) -> ControlledPartitionCondition:
-    return ControlledPartitionCondition(ControlledPartitionKind.DIRICHLET, concentration)
+def dirichlet_condition(
+    concentration: DirichletConcentration,
+) -> ControlledPartitionCondition:
+    return ControlledPartitionCondition(
+        ControlledPartitionKind.DIRICHLET,
+        concentration,
+    )
 
 
 def iid_condition() -> ControlledPartitionCondition:
@@ -380,13 +410,20 @@ def build_population_manifest(
 ) -> PopulationManifest:
     return PopulationManifest(
         document,
-        client_identities(document.population, document.candidate_clients, document.identity_kind),
+        client_identities(
+            document.population,
+            document.candidate_clients,
+            document.identity_kind,
+        ),
         feasibility,
         family_by_client,
     )
 
 
-def hamilton_integer_counts(total: int, ratios: tuple[float, ...]) -> tuple[int, ...]:
+def hamilton_integer_counts(
+    total: int,
+    ratios: tuple[float, ...],
+) -> tuple[int, ...]:
     """Largest-remainder (Hamilton) integer allocation.
 
     For non-negative integer ``total`` and ratios that sum to one:
@@ -402,7 +439,10 @@ def hamilton_integer_counts(total: int, ratios: tuple[float, ...]) -> tuple[int,
     raw = tuple(total * ratio for ratio in ratios)
     floors = tuple(floor(value) for value in raw)
     residual = total - sum(floors)
-    order = sorted(range(len(ratios)), key=lambda index: (-(raw[index] - floors[index]), index))
+    order = sorted(
+        range(len(ratios)),
+        key=lambda index: (-(raw[index] - floors[index]), index),
+    )
     extras = [0] * len(ratios)
     for index in order[:residual]:
         extras[index] = 1
@@ -414,21 +454,34 @@ def synthetic_client_ids(client_count: ClientCount) -> tuple[str, ...]:
     return tuple(f"synthetic_client_{index:0{width}d}" for index in range(client_count.value))
 
 
-def membership_checksum(client_ids: tuple[str, ...], stable_row_ids: tuple[str, ...]) -> Checksum:
+def membership_checksum(
+    client_ids: tuple[str, ...],
+    stable_row_ids: tuple[str, ...],
+) -> Checksum:
     payload = "\n".join((*client_ids, *stable_row_ids))
     return checksum_text(payload)
 
 
-def _require_hamilton_inputs(total: int, ratios: tuple[float, ...]) -> None:
+def _require_hamilton_inputs(
+    total: int,
+    ratios: tuple[float, ...],
+) -> None:
     if total < 0:
         raise ValueError("Hamilton allocation requires a non-negative total")
     if not ratios or any(ratio < 0 for ratio in ratios):
         raise ValueError("Hamilton allocation requires non-negative ratios that sum to one")
-    if not floats_absolutely_close(fsum(ratios), UNIT_FRACTION_TOTAL, FRACTION_TOTAL_ABSOLUTE_TOLERANCE):
+    if not floats_absolutely_close(
+        fsum(ratios),
+        UNIT_FRACTION_TOTAL,
+        FRACTION_TOTAL_ABSOLUTE_TOLERANCE,
+    ):
         raise ValueError("Hamilton allocation requires non-negative ratios that sum to one")
 
 
-def _require_unique_ordered(values: tuple[str, ...], field: PopulationManifestField) -> None:
+def _require_unique_ordered(
+    values: tuple[str, ...],
+    field: PopulationManifestField,
+) -> None:
     if len(values) != len(frozenset(values)):
         raise ValueError(f"{field.value} must be unique")
 
@@ -445,28 +498,42 @@ def _require_client_set_partition(
         raise ValueError(f"{PopulationManifestField.EXCLUDED_CLIENT_IDS.value} cannot also be accepted")
 
 
-def _require_non_negative_row_counts(total: RowCount, benign: RowCount, attack: RowCount) -> None:
+def _require_non_negative_row_counts(
+    total: RowCount,
+    benign: RowCount,
+    attack: RowCount,
+) -> None:
     if benign + attack != total:
         raise ValueError("benign and attack rows must sum to total membership rows")
 
 
-def _require_client_series_shape(document: DirichletPartitionDiagnosticsDocument) -> None:
+def _require_client_series_shape(
+    document: DirichletPartitionDiagnosticsDocument,
+) -> None:
     expected = document.client_count.value
     if len(document.client_ids) != expected:
         raise ValueError("client identity count must match declared client count")
-    for series in (document.client_row_counts, document.benign_row_counts, document.attack_row_counts):
+    for series in (
+        document.client_row_counts,
+        document.benign_row_counts,
+        document.attack_row_counts,
+    ):
         if len(series) != expected:
             raise ValueError("per-client count series must be complete")
 
 
-def _require_row_conservation(document: DirichletPartitionDiagnosticsDocument) -> None:
+def _require_row_conservation(
+    document: DirichletPartitionDiagnosticsDocument,
+) -> None:
     if sum(document.client_row_counts) != document.total_rows:
         raise ValueError("client row counts must conserve total rows")
     if sum(document.benign_row_counts) + sum(document.attack_row_counts) != document.total_rows:
         raise ValueError("benign and attack counts must conserve total rows")
 
 
-def _require_partition_kind_fields(document: DirichletPartitionDiagnosticsDocument) -> None:
+def _require_partition_kind_fields(
+    document: DirichletPartitionDiagnosticsDocument,
+) -> None:
     match document.partition_kind:
         case ControlledPartitionKind.DIRICHLET:
             if document.concentration is None or document.concentration <= 0:

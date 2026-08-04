@@ -2,20 +2,28 @@ from math import isclose
 
 import pytest
 
-from datp_core.analysis.mechanisms import (
+from datp_core.analysis.inference.wilcoxon import CorrelationCoefficient
+from datp_core.analysis.mechanisms.absorption import decide_model_absorption
+from datp_core.analysis.mechanisms.association import (
     AssociationObservation,
+    heterogeneity_benefit_association,
+)
+from datp_core.analysis.mechanisms.clustering import (
     ClusterPartitionSummary,
     ClusterStabilityResult,
-    DivergenceBlocker,
+)
+from datp_core.analysis.mechanisms.dispersion import (
     GroupDispersionObservation,
-    ThresholdOperatingPoint,
-    blocked_jensen_shannon_divergence,
-    decide_model_absorption,
     grouped_dispersion,
-    heterogeneity_benefit_association,
+)
+from datp_core.analysis.mechanisms.divergence import (
+    DivergenceBlocker,
+    blocked_jensen_shannon_divergence,
+)
+from datp_core.analysis.mechanisms.movement import (
+    ThresholdOperatingPoint,
     threshold_movement,
 )
-from datp_core.analysis.models import CorrelationCoefficient
 from datp_core.domain.enums import (
     AvailabilityStatus,
     EvidenceRole,
@@ -23,15 +31,30 @@ from datp_core.domain.enums import (
     PopulationIdentityKind,
     ScientificDecision,
 )
-from datp_core.domain.values import ClusterIndex, MetricValue, PairedObservationCount, Ratio, ThresholdValue
+from datp_core.domain.values import (
+    ClusterIndex,
+    MetricValue,
+    PairedObservationCount,
+    Ratio,
+    ThresholdValue,
+)
 from datp_core.populations.models import ClientIdentity
 
 
 def test_association_reports_all_observations_with_typed_statistics() -> None:
     observations = (
-        AssociationObservation(heterogeneity=MetricValue(0.1), benefit=MetricValue(0.01)),
-        AssociationObservation(heterogeneity=MetricValue(0.3), benefit=MetricValue(0.04)),
-        AssociationObservation(heterogeneity=MetricValue(0.7), benefit=MetricValue(0.09)),
+        AssociationObservation(
+            heterogeneity=MetricValue(0.1),
+            benefit=MetricValue(0.01),
+        ),
+        AssociationObservation(
+            heterogeneity=MetricValue(0.3),
+            benefit=MetricValue(0.04),
+        ),
+        AssociationObservation(
+            heterogeneity=MetricValue(0.7),
+            benefit=MetricValue(0.09),
+        ),
     )
     result = heterogeneity_benefit_association(observations)
     assert result.availability is AvailabilityStatus.AVAILABLE
@@ -57,7 +80,10 @@ def test_grouped_dispersion_has_one_typed_result_per_group() -> None:
     )
     assert result.evidence_role is EvidenceRole.MECHANISM
     assert result.availability is AvailabilityStatus.AVAILABLE
-    assert result.group_sizes == (PairedObservationCount(2), PairedObservationCount(1))
+    assert result.group_sizes == (
+        PairedObservationCount(2),
+        PairedObservationCount(1),
+    )
     assert result.singleton_groups == (ClusterIndex(1),)
     assert result.across_group_threshold_spread is not None
     assert isclose(result.across_group_threshold_spread.value, 0.3)
@@ -70,8 +96,18 @@ def test_cluster_stability_validates_contingency_margins() -> None:
         ClusterStabilityResult(
             adjusted_rand_index=CorrelationCoefficient(1.0),
             compared_clients=(client_a, client_b),
-            left_partition=ClusterPartitionSummary(group_sizes=(PairedObservationCount(1), PairedObservationCount(1))),
-            right_partition=ClusterPartitionSummary(group_sizes=(PairedObservationCount(1), PairedObservationCount(1))),
+            left_partition=ClusterPartitionSummary(
+                group_sizes=(
+                    PairedObservationCount(1),
+                    PairedObservationCount(1),
+                )
+            ),
+            right_partition=ClusterPartitionSummary(
+                group_sizes=(
+                    PairedObservationCount(1),
+                    PairedObservationCount(1),
+                )
+            ),
             contingency=(
                 (PairedObservationCount(0), PairedObservationCount(0)),
                 (PairedObservationCount(1), PairedObservationCount(1)),
@@ -82,8 +118,16 @@ def test_cluster_stability_validates_contingency_margins() -> None:
 def test_threshold_movement_marks_attack_tradeoff_unavailable_without_attack_assignment() -> None:
     result = threshold_movement(
         client=_client("sensor_a", PopulationId.EDGE_SENSOR_GROUPS),
-        shared=ThresholdOperatingPoint(threshold=ThresholdValue(0.4), fpr=Ratio(0.2), tpr=None),
-        local=ThresholdOperatingPoint(threshold=ThresholdValue(0.6), fpr=Ratio(0.1), tpr=None),
+        shared=ThresholdOperatingPoint(
+            threshold=ThresholdValue(0.4),
+            fpr=Ratio(0.2),
+            tpr=None,
+        ),
+        local=ThresholdOperatingPoint(
+            threshold=ThresholdValue(0.6),
+            fpr=Ratio(0.1),
+            tpr=None,
+        ),
     )
     assert isclose(result.delta_threshold.value, 0.2)
     assert isclose(result.delta_fpr.value, -0.1)
@@ -92,13 +136,19 @@ def test_threshold_movement_marks_attack_tradeoff_unavailable_without_attack_ass
 
 def test_unresolved_jsd_and_absorption_remain_typed() -> None:
     clients = (_client("a"), _client("b"))
-    divergence = blocked_jensen_shannon_divergence(clients, DivergenceBlocker.BINNING_UNRESOLVED)
+    divergence = blocked_jensen_shannon_divergence(
+        clients,
+        DivergenceBlocker.BINNING_UNRESOLVED,
+    )
     absorption = decide_model_absorption(MetricValue(0.0), MetricValue(0.2))
     assert divergence.availability is AvailabilityStatus.UNAVAILABLE
     assert absorption.decision is ScientificDecision.BLOCKED
 
 
-def _client(client_id: str, population: PopulationId = PopulationId.NBAIOT_NATURAL_DEVICES) -> ClientIdentity:
+def _client(
+    client_id: str,
+    population: PopulationId = PopulationId.NBAIOT_NATURAL_DEVICES,
+) -> ClientIdentity:
     kind = (
         PopulationIdentityKind.SOURCE_DEFINED_SENSOR_GROUPS
         if population is PopulationId.EDGE_SENSOR_GROUPS

@@ -57,8 +57,12 @@ def test_rejects_attack_rows_in_training() -> None:
 
 def test_deterministic_cuda_training_and_safetensors_reload(tmp_path: Path) -> None:
     require_cuda()
-    first = run_miniature_training(tmp_path / "run_a")
-    second = run_miniature_training(tmp_path / "run_b")
+    first_execution = run_miniature_training(tmp_path / "run_a")
+    second_execution = run_miniature_training(tmp_path / "run_b")
+    first = first_execution.result
+    second = second_execution.result
+    assert first_execution.candidate_snapshots
+    assert second_execution.candidate_snapshots
     assert first.device_name
     assert first.batch_size_used == BATCH_SIZE
     assert first.final_epoch == CHECKPOINT.maximum_round

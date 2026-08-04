@@ -24,15 +24,12 @@ dependencies = [
     "pandas>=2.0",
     "statsmodels>=0.14",
     "typer>=0.20.1",
+    "rich>=13.7",
     "shellingham>=1.5.4",
     "skops>=0.14.0",
 ]
 
 [project.optional-dependencies]
-cli = [
-    "typer>=0.12",
-    "rich>=13.7",
-]
 hardware = [
     "psutil>=5.9",
     "pynvml>=11.5",
@@ -85,6 +82,7 @@ select = ["E", "F", "I", "N", "UP", "B", "ICN"]
 
 [tool.pyright]
 include = ["src", "tests"]
+strict = ["src/datp_core/pipeline"]
 pythonVersion = "3.12"
 typeCheckingMode = "standard"
 venvPath = "."

@@ -1,6 +1,5 @@
 """Frozen, typed scientific declarations."""
 
-from math import fsum
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -51,7 +50,12 @@ from datp_core.domain.values import (
     TrafficRatePerDay,
     WeightDecay,
     WorkerCount,
-    floats_absolutely_close,
+)
+
+from .splits import (
+    FractionalSplitProtocol,
+    StaticReferenceSplitProtocol,
+    TemporalSplitProtocol,
 )
 
 REQUIRED_CLUSTER_FINGERPRINT_FEATURES = (
@@ -65,14 +69,6 @@ LOCKED_CLUSTER_MAXIMUM_ITERATIONS = KMeansMaximumIterationCount(300)
 LOCKED_CLUSTER_RANDOM_STATE = Seed(42)
 LOCKED_CLUSTER_GROUP_COUNT = GroupCount(3)
 CONFIRMATORY_PAIRED_SEED_COUNT = SeedCount(10)
-
-UNIT_FRACTION_TOTAL = 1.0
-FRACTION_TOTAL_ABSOLUTE_TOLERANCE = 1e-12
-
-
-def _sums_to_unit_fraction(*values: Ratio | CoverageTarget) -> bool:
-    """Compare declared fractional quantities with one shared tolerance."""
-    return floats_absolutely_close(fsum(values), UNIT_FRACTION_TOTAL, FRACTION_TOTAL_ABSOLUTE_TOLERANCE)
 
 
 class Declaration(StrictModel):
@@ -93,65 +89,6 @@ class SeedCohort(Declaration):
     @property
     def member_count(self) -> SeedCount:
         return SeedCount(len(self.values))
-
-
-class FractionalSplitProtocol(Declaration):
-    training: Ratio
-    calibration: Ratio
-    evaluation: Ratio
-
-    @model_validator(mode="after")
-    def validate_total(self) -> "FractionalSplitProtocol":
-        if not _sums_to_unit_fraction(
-            self.training,
-            self.calibration,
-            self.evaluation,
-        ):
-            raise ValueError("fractional split must sum to one")
-        return self
-
-
-class TemporalSplitProtocol(Declaration):
-    historical_training: Ratio
-    historical_calibration: Ratio
-    future_recalibration: Ratio
-    future_evaluation: Ratio
-
-    @model_validator(mode="after")
-    def validate_total(self) -> "TemporalSplitProtocol":
-        if not _sums_to_unit_fraction(
-            self.historical_training,
-            self.historical_calibration,
-            self.future_recalibration,
-            self.future_evaluation,
-        ):
-            raise ValueError("temporal split must sum to one")
-        return self
-
-
-class StaticReferenceSplitProtocol(Declaration):
-    """Randomized counterpart to the temporal 55/15/10/20 row inventory.
-
-    The reserve is retained and checksummed but never fitted, calibrated, scored,
-    or evaluated.  This keeps the static comparison on the same row budget without
-    assigning a false temporal meaning to the 10 percent allocation.
-    """
-
-    training: Ratio
-    calibration: Ratio
-    reserve: Ratio
-    evaluation: Ratio
-
-    @model_validator(mode="after")
-    def validate_total(self) -> "StaticReferenceSplitProtocol":
-        if not _sums_to_unit_fraction(
-            self.training,
-            self.calibration,
-            self.reserve,
-            self.evaluation,
-        ):
-            raise ValueError("static-reference split must sum to one")
-        return self
 
 
 class CheckpointProtocol(Declaration):

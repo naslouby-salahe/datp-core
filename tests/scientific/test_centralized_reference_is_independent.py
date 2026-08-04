@@ -14,6 +14,7 @@ from datp_core.domain.enums import (
     PreprocessingFitScope,
     PreprocessingProtocolId,
     SerializationFormat,
+    TrainingModelId,
     TrustedEstimatorClassName,
 )
 from datp_core.domain.errors import LeakageError
@@ -57,7 +58,7 @@ def test_centralized_pipeline_rejects_all_federated_artifacts(tmp_path: Path) ->
     with pytest.raises(LeakageError):
         reject_federated_preprocessing_for_training(state)
     with pytest.raises(LeakageError):
-        reject_federated_checkpoint("fedavg")
+        reject_federated_checkpoint(TrainingModelId.FEDAVG_AUTOENCODER)
     with pytest.raises(LeakageError):
         reject_federated_scores_for_centralized_threshold(
             "scores",

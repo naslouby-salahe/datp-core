@@ -1,0 +1,121 @@
+"""Federated checkpoint validation and fixed-terminal non-test selection."""
+
+from collections.abc import Sequence
+from dataclasses import replace
+
+from datp_core.domain.enums import (
+    CheckpointSelectionRule,
+    CheckpointStatus,
+    ContractSubject,
+    ProcessedDataBranch,
+)
+from datp_core.domain.errors import LeakageError, ScientificContractError
+from datp_core.domain.values import Checksum, MetricValue
+from datp_core.learning.federated.models import (
+    CheckpointCandidate,
+    CheckpointDecision,
+    FederatedTrainingCoordinate,
+)
+from datp_core.pipeline.checkpoints.persistence import (
+    validate_persisted_checkpoint_file,
+)
+from datp_core.pipeline.checkpoints.service import (
+    select_terminal_checkpoint,
+    validate_ordered_checkpoint_inventory,
+)
+from datp_core.populations.models import ClientIdentity
+from datp_core.protocols.models import CheckpointProtocol
+from datp_core.protocols.training import require_non_test_checkpoint_selection_inputs
+
+
+def validate_candidate_coordinates(
+    candidates: Sequence[CheckpointCandidate],
+    coordinate: FederatedTrainingCoordinate,
+    *,
+    client: ClientIdentity | None,
+    preprocessing_state_set_checksum: Checksum,
+    split_manifest_checksum: Checksum,
+) -> None:
+    for candidate in candidates:
+        checks = (
+            (
+                candidate.coordinate == coordinate,
+                "checkpoint candidate coordinate mismatch",
+                ContractSubject.COORDINATE,
+            ),
+            (
+                candidate.client == client,
+                "checkpoint candidate client mismatch",
+                ContractSubject.CLIENT_IDENTITY,
+            ),
+            (
+                candidate.preprocessing_state_set_checksum == preprocessing_state_set_checksum,
+                "checkpoint candidate preprocessing checksum mismatch",
+                ContractSubject.PREPROCESSING,
+            ),
+            (
+                candidate.split_manifest_checksum == split_manifest_checksum,
+                "checkpoint candidate split checksum mismatch",
+                ContractSubject.SPLIT,
+            ),
+        )
+        for valid, message, subject in checks:
+            if not valid:
+                raise ScientificContractError(message, subject=subject)
+        validate_persisted_checkpoint_file(
+            candidate.tensor_path,
+            candidate.tensor_checksum,
+        )
+
+
+def select_checkpoint(
+    candidates: Sequence[CheckpointCandidate],
+    protocol: CheckpointProtocol,
+    *,
+    coordinate: FederatedTrainingCoordinate,
+    client: ClientIdentity | None,
+    selection_rule: CheckpointSelectionRule,
+    preprocessing_state_set_checksum: Checksum,
+    split_manifest_checksum: Checksum,
+    held_out_metrics: Sequence[MetricValue] | None = None,
+    attack_labels_present: bool = False,
+) -> CheckpointDecision:
+    require_non_test_checkpoint_selection_inputs(
+        selection_rule=selection_rule,
+        held_out_metrics=held_out_metrics,
+        attack_labels_present=attack_labels_present,
+        branch_label=ProcessedDataBranch.FEDERATED,
+    )
+    ordered = validate_ordered_checkpoint_inventory(
+        candidates,
+        protocol.candidates,
+    )
+    validate_candidate_coordinates(
+        ordered,
+        coordinate,
+        client=client,
+        preprocessing_state_set_checksum=preprocessing_state_set_checksum,
+        split_manifest_checksum=split_manifest_checksum,
+    )
+    statused, selected = select_terminal_checkpoint(
+        ordered,
+        protocol.maximum_round,
+        rebuild=lambda candidate, status: replace(candidate, status=status),
+    )
+    return CheckpointDecision(
+        coordinate=coordinate,
+        client=client,
+        selected=selected,
+        candidates=statused,
+        checkpoint_protocol=protocol,
+        status=CheckpointStatus.SELECTED_BY_NON_TEST_RULE,
+    )
+
+
+def reject_centralized_checkpoint(
+    marker_identity: FederatedTrainingCoordinate,
+) -> None:
+    raise LeakageError(
+        f"centralized checkpoint cannot enter federated selection ({marker_identity})",
+        subject=ContractSubject.CHECKPOINT_CANDIDATES,
+    )

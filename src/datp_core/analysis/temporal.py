@@ -4,7 +4,8 @@ from enum import StrEnum
 
 from pydantic import model_validator
 
-from datp_core.analysis.models import ScientificDecisionResult
+from datp_core.analysis.decisions import ScientificDecisionResult
+from datp_core.artifacts.serialization import canonical_checksum
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
     AvailabilityStatus,
@@ -15,7 +16,6 @@ from datp_core.domain.enums import (
     TemporalState,
 )
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.provenance import canonical_checksum
 from datp_core.domain.values import Checksum, MetricValue, Seed
 from datp_core.protocols.metrics import TEMPORAL_CV_MATERIALITY_CUTOFF
 from datp_core.scoring.models import ScoreArtifactManifest
@@ -141,7 +141,9 @@ class TemporalDeploymentProvenance(StrictModel):
 
     @classmethod
     def from_score_manifest(
-        cls, state: TemporalState, manifest: ScoreArtifactManifest
+        cls,
+        state: TemporalState,
+        manifest: ScoreArtifactManifest,
     ) -> "TemporalDeploymentProvenance":
         calibration_role, evaluation_role = _partition_roles(state)
         if not manifest.records_for(calibration_role) or not manifest.records_for(evaluation_role):
@@ -163,16 +165,23 @@ class TemporalDeploymentProvenance(StrictModel):
         )
 
     def validate_score_manifest(self, manifest: ScoreArtifactManifest) -> None:
-        if TemporalDeploymentProvenance.from_score_manifest(self.state, manifest) != self:
+        if (
+            TemporalDeploymentProvenance.from_score_manifest(
+                self.state,
+                manifest,
+            )
+            != self
+        ):
             raise ScientificContractError(
                 "temporal deployment provenance does not match immutable score artifacts",
                 subject=self.state,
-                reason="calibration, evaluation, model, preprocessing, or split evidence changed",
+                reason=("calibration, evaluation, model, preprocessing, or split evidence changed"),
             )
 
 
 def validate_frozen_recalibrated_pair(
-    frozen: TemporalDeploymentProvenance, recalibrated: TemporalDeploymentProvenance
+    frozen: TemporalDeploymentProvenance,
+    recalibrated: TemporalDeploymentProvenance,
 ) -> None:
     """Only the calibration window may differ."""
     if frozen.state is not TemporalState.FROZEN_FUTURE or recalibrated.state is not TemporalState.RECALIBRATED_FUTURE:
@@ -225,7 +234,9 @@ def decide_temporal(result: TemporalRecoveryResult) -> ScientificDecisionResult:
     )
 
 
-def temporal_analysis_record(result: TemporalRecoveryResult) -> TemporalAnalysisRecord:
+def temporal_analysis_record(
+    result: TemporalRecoveryResult,
+) -> TemporalAnalysisRecord:
     return TemporalAnalysisRecord(
         recovery=result,
         interpretation=result.interpretation,
@@ -233,7 +244,9 @@ def temporal_analysis_record(result: TemporalRecoveryResult) -> TemporalAnalysis
     )
 
 
-def _partition_roles(state: TemporalState) -> tuple[PartitionRole, PartitionRole]:
+def _partition_roles(
+    state: TemporalState,
+) -> tuple[PartitionRole, PartitionRole]:
     match state:
         case TemporalState.STATIC_REFERENCE | TemporalState.FROZEN_FUTURE:
             return PartitionRole.CALIBRATION, PartitionRole.EVALUATION

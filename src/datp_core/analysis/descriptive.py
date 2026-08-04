@@ -3,7 +3,7 @@
 import numpy as np
 from pydantic import model_validator
 
-from datp_core.analysis.models import MetricSeries, PairedDifferenceCounts
+from datp_core.analysis.contrasts import MetricSeries, PairedDifferenceCounts
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import AvailabilityStatus, EvidenceRole
 from datp_core.domain.values import MetricValue, PairedObservationCount, Ratio
@@ -102,8 +102,24 @@ def summarize_values(
         statistics=DescriptiveStatistics(
             mean=MetricValue(float(np.mean(array))),
             median=MetricValue(float(np.median(array))),
-            lower_quantile_value=MetricValue(float(np.quantile(array, quantiles.lower.value, method="linear"))),
-            upper_quantile_value=MetricValue(float(np.quantile(array, quantiles.upper.value, method="linear"))),
+            lower_quantile_value=MetricValue(
+                float(
+                    np.quantile(
+                        array,
+                        quantiles.lower.value,
+                        method="linear",
+                    )
+                )
+            ),
+            upper_quantile_value=MetricValue(
+                float(
+                    np.quantile(
+                        array,
+                        quantiles.upper.value,
+                        method="linear",
+                    )
+                )
+            ),
             minimum=MetricValue(float(np.min(array))),
             maximum=MetricValue(float(np.max(array))),
         ),
@@ -120,7 +136,11 @@ def count_paired_differences(values: MetricSeries) -> PairedDifferenceCounts:
 
 
 def _metric_array(values: MetricSeries) -> np.ndarray:
-    array = np.fromiter((value.value for value in values), dtype=np.float64, count=len(values))
+    array = np.fromiter(
+        (value.value for value in values),
+        dtype=np.float64,
+        count=len(values),
+    )
     if np.any(~np.isfinite(array)):
         raise ValueError("metric values must be finite")
     return array

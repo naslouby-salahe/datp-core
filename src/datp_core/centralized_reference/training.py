@@ -116,7 +116,9 @@ class CentralizedEpochLoss:
 
 
 @dataclass(frozen=True, slots=True, eq=False)
-class CentralizedModelSnapshot:
+class InMemoryCentralizedModelSnapshot:
+    """Transient model state captured only during one training execution."""
+
     round_number: RoundNumber
     state_dict: AutoencoderState
     mean_training_loss: MetricValue
@@ -124,6 +126,8 @@ class CentralizedModelSnapshot:
 
 @dataclass(frozen=True, slots=True)
 class CentralizedTrainingResult:
+    """Persistable centralized training result with no fabricated in-memory tensor state."""
+
     coordinate: CentralizedTrainingCoordinate
     autoencoder_widths: tuple[int, ...]
     optimizer: CentralizedOptimizerSummary
@@ -133,7 +137,6 @@ class CentralizedTrainingResult:
     train_row_count: RowCount
     feature_count: FeatureCount
     epoch_losses: tuple[CentralizedEpochLoss, ...]
-    candidate_snapshots: tuple[CentralizedModelSnapshot, ...]
     model_directory: Path
     model_tensor_path: Path
     model_tensor_checksum: Checksum
@@ -152,6 +155,27 @@ class CentralizedTrainingResult:
             raise ScientificContractError(
                 "recorded batch size must equal the declared optimizer batch size",
                 subject=ContractSubject.BATCH_SIZE,
+            )
+        if self.final_epoch != self.checkpoint_protocol.maximum_round:
+            raise ScientificContractError(
+                "centralized training terminal epoch must equal the declared maximum round",
+                subject=ContractSubject.CHECKPOINT_CANDIDATES,
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class CentralizedTrainingExecution:
+    """One live training execution plus transient checkpoint snapshots."""
+
+    result: CentralizedTrainingResult
+    candidate_snapshots: tuple[InMemoryCentralizedModelSnapshot, ...]
+
+    def __post_init__(self) -> None:
+        observed = tuple(snapshot.round_number for snapshot in self.candidate_snapshots)
+        if observed != self.result.checkpoint_protocol.candidates:
+            raise ScientificContractError(
+                "in-memory checkpoint snapshots must match the declared candidate rounds",
+                subject=ContractSubject.CHECKPOINT_CANDIDATES,
             )
 
 
@@ -181,7 +205,8 @@ def reject_federated_preprocessing_for_training(state: FittedPreprocessingState)
 
 
 def reject_attack_rows_in_centralized_training(
-    labels: OutcomeLabelSequence, benign_label: PopulationOutcomeLabel
+    labels: OutcomeLabelSequence,
+    benign_label: PopulationOutcomeLabel,
 ) -> None:
     if any(label != benign_label for label in labels):
         raise LeakageError(
@@ -191,11 +216,11 @@ def reject_attack_rows_in_centralized_training(
 
 
 def build_centralized_autoencoder(protocol: AutoencoderProtocol) -> ReconstructionAutoencoder:
-    """Construct the centralized AE shell; training applies the declared training seed via runtime determinism."""
+    """Construct the centralized AE shell; training applies the declared training seed."""
     return ReconstructionAutoencoder(protocol.widths)
 
 
-def train_centralized_autoencoder(request: CentralizedTrainingRequest) -> CentralizedTrainingResult:
+def train_centralized_autoencoder(request: CentralizedTrainingRequest) -> CentralizedTrainingExecution:
     """Train the independent pooled autoencoder on CUDA with declared hyperparameters."""
     _validate_training_request(request)
     reject_federated_preprocessing_for_training(request.preprocessing_state)
@@ -233,8 +258,7 @@ def train_centralized_autoencoder(request: CentralizedTrainingRequest) -> Centra
     tensor_path = request.output_directory / CentralizedArtifactName.MODEL_TENSORS
     tensor_checksum = persist_model_tensors(model, tensor_path)
     assert_safetensors_reload(model, tensor_path, device)
-    device_name = CudaDeviceName(torch.cuda.get_device_name(device))
-    return CentralizedTrainingResult(
+    result = CentralizedTrainingResult(
         coordinate=request.coordinate,
         autoencoder_widths=tuple(request.autoencoder.widths),
         optimizer=CentralizedOptimizerSummary(
@@ -249,16 +273,16 @@ def train_centralized_autoencoder(request: CentralizedTrainingRequest) -> Centra
         train_row_count=RowCount(int(feature_matrix.shape[0])),
         feature_count=FeatureCount(int(feature_matrix.shape[1])),
         epoch_losses=epoch_losses,
-        candidate_snapshots=snapshots,
         model_directory=request.output_directory,
         model_tensor_path=tensor_path,
         model_tensor_checksum=tensor_checksum,
         preprocessing_state_checksum=request.preprocessing_state.estimator_checksum,
         split_manifest_checksum=request.split_manifest_checksum,
-        device_name=device_name,
+        device_name=CudaDeviceName(torch.cuda.get_device_name(device)),
         batch_size_used=request.batch_size,
         final_epoch=request.checkpoint_protocol.maximum_round,
     )
+    return CentralizedTrainingExecution(result=result, candidate_snapshots=snapshots)
 
 
 def load_centralized_model_tensors(
@@ -277,8 +301,8 @@ def load_centralized_model_tensors(
     return model
 
 
-def model_from_snapshot(
-    snapshot: CentralizedModelSnapshot,
+def model_from_in_memory_snapshot(
+    snapshot: InMemoryCentralizedModelSnapshot,
     autoencoder: AutoencoderProtocol,
     device: torch.device | None = None,
 ) -> ReconstructionAutoencoder:
@@ -329,12 +353,16 @@ def assert_safetensors_reload(
 
 def training_history_frame(result: CentralizedTrainingResult) -> pl.DataFrame:
     return pl.DataFrame(
-        {
-            TrainingHistoryColumn.EPOCH.value: [item.epoch.value for item in result.epoch_losses],
-            TrainingHistoryColumn.MEAN_TRAINING_LOSS.value: [
-                item.mean_training_loss.value for item in result.epoch_losses
-            ],
-        }
+        (
+            pl.Series(
+                TrainingHistoryColumn.EPOCH.value,
+                tuple(item.epoch.value for item in result.epoch_losses),
+            ),
+            pl.Series(
+                TrainingHistoryColumn.MEAN_TRAINING_LOSS.value,
+                tuple(item.mean_training_loss.value for item in result.epoch_losses),
+            ),
+        )
     )
 
 
@@ -399,7 +427,7 @@ def _require_centralized_model_identities(request: CentralizedTrainingRequest) -
 
 
 def _require_training_frame_schema(request: CentralizedTrainingRequest) -> None:
-    missing = [name for name in request.feature_names if name not in request.training_features.columns]
+    missing = tuple(name for name in request.feature_names if name not in request.training_features.columns)
     if missing:
         raise ScientificContractError(
             f"training frame missing declared features: {', '.join(missing)}",
@@ -423,7 +451,10 @@ def _extract_training_arrays(
     row_ids = tuple(str(value) for value in frame.get_column(STABLE_ROW_ID_COLUMN).to_list())
     matrix = frame.select(request.feature_names.as_list()).to_numpy().astype(np.float32, copy=False)
     if not np.isfinite(matrix).all():
-        raise ScientificContractError("centralized training features must be finite", subject=ContractSubject.FEATURES)
+        raise ScientificContractError(
+            "centralized training features must be finite",
+            subject=ContractSubject.FEATURES,
+        )
     if len(labels) != matrix.shape[0] or len(row_ids) != matrix.shape[0]:
         raise ScientificContractError("training arrays must align by row", subject=ContractSubject.ROWS)
     return matrix, labels, row_ids
@@ -450,7 +481,6 @@ def _build_loader(
     seed: Seed,
     device: torch.device,
 ) -> DataLoader:
-    # DataLoader shuffle generators must live on CPU; model tensors remain on CUDA.
     require_cuda_available()
     tensor = torch.tensor(np.asarray(matrix, dtype=np.float32), dtype=torch.float32, device=device)
     dataset = TensorDataset(tensor)
@@ -473,10 +503,13 @@ def _run_training_epochs(
     loader: DataLoader,
     checkpoint_protocol: CheckpointProtocol,
     device: torch.device,
-) -> tuple[tuple[CentralizedEpochLoss, ...], tuple[CentralizedModelSnapshot, ...]]:
+) -> tuple[
+    tuple[CentralizedEpochLoss, ...],
+    tuple[InMemoryCentralizedModelSnapshot, ...],
+]:
     losses: list[CentralizedEpochLoss] = []
-    snapshots: list[CentralizedModelSnapshot] = []
-    candidate_rounds = {candidate.value for candidate in checkpoint_protocol.candidates}
+    snapshots: list[InMemoryCentralizedModelSnapshot] = []
+    candidate_rounds = frozenset(candidate.value for candidate in checkpoint_protocol.candidates)
     model.train()
     for epoch_index in range(1, checkpoint_protocol.maximum_round.value + 1):
         batch_losses: list[float] = []
@@ -498,7 +531,7 @@ def _run_training_epochs(
         losses.append(CentralizedEpochLoss(epoch=epoch, mean_training_loss=mean_loss))
         if epoch_index in candidate_rounds:
             snapshots.append(
-                CentralizedModelSnapshot(
+                InMemoryCentralizedModelSnapshot(
                     round_number=epoch,
                     state_dict={name: tensor.detach().cpu().clone() for name, tensor in model.state_dict().items()},
                     mean_training_loss=mean_loss,

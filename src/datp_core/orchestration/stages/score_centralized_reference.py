@@ -1,193 +1,80 @@
-"""Stage: score pooled partitions with the selected centralized checkpoint."""
+"""Stage: compose pooled scoring with shared publication infrastructure."""
 
-from dataclasses import dataclass
 from pathlib import Path
-from shutil import rmtree
-from typing import ClassVar
 
-import polars as pl
-
-from datp_core.artifacts.store import publish_atomically
-from datp_core.centralized_reference.checkpointing import CentralizedCheckpointCandidate
 from datp_core.centralized_reference.scoring import (
     CentralizedScoreAssetName,
     CentralizedScoringRequest,
-    CentralizedScoringResult,
-    PooledScoreArtifact,
-    score_artifact_set_checksum,
-    score_centralized_reference,
+    centralized_scoring_is_reusable,
+    load_reused_centralized_scoring,
+    rebase_centralized_scoring,
+    write_centralized_scoring,
 )
-from datp_core.centralized_reference.training import CentralizedTrainingCoordinate
-from datp_core.domain.enums import (
-    ContractSubject,
-    PartitionRole,
-    PublicationStatus,
-    SerializationFormat,
-    StageOperationId,
+from datp_core.domain.enums import ContractSubject
+from datp_core.domain.errors import ScientificContractError
+from datp_core.orchestration.commands.scoring import (
+    ScoreCentralizedReferenceRequest as _ScoreCentralizedReferenceRequest,
 )
-from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
-from datp_core.domain.values import (
-    BatchSize,
-    Checksum,
-    FeatureCount,
-    FeatureNameSequence,
-    RowCount,
-    checksum_file,
-    checksum_text,
+from datp_core.orchestration.commands.scoring import (
+    ScoreCentralizedReferenceResult as _ScoreCentralizedReferenceResult,
 )
-from datp_core.protocols.models import AutoencoderProtocol
-
-
-@dataclass(slots=True, eq=False)
-class ScoreCentralizedReferenceRequest:
-    coordinate: CentralizedTrainingCoordinate
-    checkpoint: CentralizedCheckpointCandidate
-    autoencoder: AutoencoderProtocol
-    feature_names: FeatureNameSequence
-    calibration_features: pl.DataFrame
-    evaluation_features: pl.DataFrame
-    batch_size: BatchSize
-    output_directory: Path
-    preprocessing_state_checksum: Checksum
-    overwrite: bool
-
-
-@dataclass(frozen=True, slots=True)
-class ScoreCentralizedReferenceResult:
-    stage: ClassVar[StageOperationId] = StageOperationId.SCORE_CENTRALIZED_REFERENCE
-    publication_status: PublicationStatus
-    scoring: CentralizedScoringResult
-    complete_digest: Checksum
+from datp_core.pipeline.publication.codec import (
+    ArtifactPublication,
+    FunctionalArtifactCodec,
+    publish_artifact,
+)
 
 
 def score_centralized_reference_stage(
-    request: ScoreCentralizedReferenceRequest,
-) -> ScoreCentralizedReferenceResult:
+    request: _ScoreCentralizedReferenceRequest,
+) -> _ScoreCentralizedReferenceResult:
     if request.checkpoint.coordinate != request.coordinate:
-        raise ScientificContractError("score stage checkpoint coordinate mismatch", subject=ContractSubject.COORDINATE)
-
-    def write(temporary: Path) -> CentralizedScoringResult:
-        scoring = score_centralized_reference(
-            CentralizedScoringRequest(
-                coordinate=request.coordinate,
-                checkpoint=request.checkpoint,
-                autoencoder=request.autoencoder,
-                feature_names=request.feature_names,
-                calibration_features=request.calibration_features,
-                evaluation_features=request.evaluation_features,
-                batch_size=request.batch_size,
-                output_directory=temporary,
-                preprocessing_state_checksum=request.preprocessing_state_checksum,
-            )
+        raise ScientificContractError(
+            "score stage checkpoint coordinate mismatch",
+            subject=ContractSubject.COORDINATE,
         )
-        (temporary / CentralizedScoreAssetName.COMPLETE).write_text(
-            score_artifact_set_checksum(scoring).value,
-            encoding="utf-8",
+    publication = publish_artifact(
+        ArtifactPublication(
+            target=request.output_directory,
+            request=request,
+            codec=FunctionalArtifactCodec(
+                writer=lambda stage_request, directory: write_centralized_scoring(
+                    _scoring_request(stage_request, directory),
+                    directory,
+                ),
+                validator=lambda stage_request, directory: centralized_scoring_is_reusable(
+                    _scoring_request(stage_request, directory),
+                    directory,
+                ),
+                loader=lambda stage_request, directory: load_reused_centralized_scoring(
+                    _scoring_request(stage_request, directory),
+                    directory,
+                ),
+                rebaser=rebase_centralized_scoring,
+            ),
+            overwrite=request.overwrite,
+            complete_marker=CentralizedScoreAssetName.COMPLETE,
         )
-        return scoring
-
-    outcome = publish_atomically(
-        target=request.output_directory,
-        overwrite=request.overwrite,
-        is_reusable=lambda directory: _is_reusable(directory, request),
-        write=write,
-        reusable_value=lambda _directory: _load_reused_scores(request),
-        remove_target=rmtree,
     )
-    scoring = (
-        _rebase_scoring(outcome.value, request) if outcome.status is PublicationStatus.PUBLISHED else outcome.value
-    )
-    return ScoreCentralizedReferenceResult(
-        publication_status=outcome.status,
-        scoring=scoring,
-        complete_digest=outcome.complete_digest,
+    return _ScoreCentralizedReferenceResult(
+        publication_status=publication.status,
+        scoring=publication.value,
+        complete_digest=publication.complete_digest,
     )
 
 
-def _is_reusable(directory: Path, request: ScoreCentralizedReferenceRequest) -> bool:
-    complete = directory / CentralizedScoreAssetName.COMPLETE
-    calibration = directory / CentralizedScoreAssetName.CALIBRATION_SCORES
-    evaluation = directory / CentralizedScoreAssetName.EVALUATION_SCORES
-    if not (complete.is_file() and calibration.is_file() and evaluation.is_file()):
-        return False
-    try:
-        expected = checksum_text(
-            f"{checksum_file(calibration).value}|{checksum_file(evaluation).value}|"
-            f"{request.checkpoint.tensor_checksum.value}"
-        )
-        return complete.read_text(encoding="utf-8").strip() == expected.value
-    except (OSError, ValueError):
-        return False
-
-
-def _score_artifact_pair(
-    request: ScoreCentralizedReferenceRequest,
-    *,
-    calibration_row_count: RowCount,
-    evaluation_row_count: RowCount,
-) -> tuple[PooledScoreArtifact, PooledScoreArtifact]:
-    calibration_path = request.output_directory / CentralizedScoreAssetName.CALIBRATION_SCORES
-    evaluation_path = request.output_directory / CentralizedScoreAssetName.EVALUATION_SCORES
-    return (
-        PooledScoreArtifact(
-            coordinate=request.coordinate,
-            partition_role=PartitionRole.CALIBRATION,
-            checkpoint_round=request.checkpoint.round_number,
-            checkpoint_checksum=request.checkpoint.tensor_checksum,
-            path=calibration_path,
-            checksum=checksum_file(calibration_path),
-            row_count=calibration_row_count,
-            feature_count=FeatureCount(len(request.feature_names)),
-            serialization_format=SerializationFormat.PARQUET,
-        ),
-        PooledScoreArtifact(
-            coordinate=request.coordinate,
-            partition_role=PartitionRole.EVALUATION,
-            checkpoint_round=request.checkpoint.round_number,
-            checkpoint_checksum=request.checkpoint.tensor_checksum,
-            path=evaluation_path,
-            checksum=checksum_file(evaluation_path),
-            row_count=evaluation_row_count,
-            feature_count=FeatureCount(len(request.feature_names)),
-            serialization_format=SerializationFormat.PARQUET,
-        ),
-    )
-
-
-def _load_reused_scores(request: ScoreCentralizedReferenceRequest) -> CentralizedScoringResult:
-    calibration_frame = pl.read_parquet(request.output_directory / CentralizedScoreAssetName.CALIBRATION_SCORES)
-    evaluation_frame = pl.read_parquet(request.output_directory / CentralizedScoreAssetName.EVALUATION_SCORES)
-    calibration, evaluation = _score_artifact_pair(
-        request,
-        calibration_row_count=RowCount(calibration_frame.height),
-        evaluation_row_count=RowCount(evaluation_frame.height),
-    )
-    return CentralizedScoringResult(
-        calibration_scores=calibration,
-        evaluation_scores=evaluation,
-        model_tensor_checksum=request.checkpoint.tensor_checksum,
+def _scoring_request(
+    request: _ScoreCentralizedReferenceRequest,
+    directory: Path,
+) -> CentralizedScoringRequest:
+    return CentralizedScoringRequest(
+        coordinate=request.coordinate,
+        checkpoint=request.checkpoint,
+        autoencoder=request.autoencoder,
+        feature_names=request.feature_names,
+        calibration_features=request.calibration_features,
+        evaluation_features=request.evaluation_features,
+        batch_size=request.batch_size,
+        output_directory=directory,
         preprocessing_state_checksum=request.preprocessing_state_checksum,
-    )
-
-
-def _rebase_scoring(
-    scoring: CentralizedScoringResult,
-    request: ScoreCentralizedReferenceRequest,
-) -> CentralizedScoringResult:
-    calibration_path = request.output_directory / CentralizedScoreAssetName.CALIBRATION_SCORES
-    evaluation_path = request.output_directory / CentralizedScoreAssetName.EVALUATION_SCORES
-    if not calibration_path.is_file() or not evaluation_path.is_file():
-        raise ArtifactIntegrityError(
-            "published score partitions missing after atomic replace", subject=ContractSubject.SCORES
-        )
-    calibration, evaluation = _score_artifact_pair(
-        request,
-        calibration_row_count=scoring.calibration_scores.row_count,
-        evaluation_row_count=scoring.evaluation_scores.row_count,
-    )
-    return CentralizedScoringResult(
-        calibration_scores=calibration,
-        evaluation_scores=evaluation,
-        model_tensor_checksum=scoring.model_tensor_checksum,
-        preprocessing_state_checksum=scoring.preprocessing_state_checksum,
     )

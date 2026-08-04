@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from math import isfinite
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, ClassVar, Literal
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
@@ -17,11 +17,20 @@ from datp_core.domain.enums import (
     FederatedThresholdMethod,
     MetricId,
     PopulationId,
+    StageOperationId,
     TrainingModelId,
 )
-from datp_core.domain.values import Checksum, ClientCount, MetricValue, Seed, SeedCount, _str_enum_schema
+from datp_core.domain.values import (
+    Checksum,
+    ClientCount,
+    MetricValue,
+    NonNegativeIntegerValue,
+    Seed,
+    SeedCount,
+    _str_enum_schema,
+)
 from datp_core.protocols.anchor import HISTORICAL_ANCHOR_SEED_COHORT
-from datp_core.protocols.models import SeedCohort
+from datp_core.protocols.models import AnchorDecisionProtocol, SeedCohort
 from datp_core.protocols.populations import NBAIOT_NATURAL_DEVICES
 from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT
 
@@ -465,6 +474,33 @@ class HistoricalMetricArtifactSource(StrictModel):
         }:
             raise ValueError("historical anchor artifacts support only shared and local thresholds")
         return self
+
+
+@dataclass(frozen=True, slots=True)
+class VerifyAnchorStageRequest:
+    protocol: AnchorDecisionProtocol
+    observations: tuple[AnchorObservedMetric, ...] | None = None
+    historical_sources: tuple[HistoricalMetricArtifactSource, ...] | None = None
+    diagnostics_directory: Path | None = None
+    request_independent_reproduction: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class VerifyAnchorStageStatus:
+    stage: ClassVar[StageOperationId] = StageOperationId.VERIFY_ANCHOR
+    gate_status: AnchorGateStatus
+    dependent_readiness: ExperimentReadiness
+    discrepancy_count: NonNegativeIntegerValue
+    observation_count: NonNegativeIntegerValue
+    reference_count: NonNegativeIntegerValue
+    dependency_blocker: str | None
+    diagnostics_checksum: Checksum
+
+
+@dataclass(frozen=True, slots=True)
+class VerifyAnchorStageResult:
+    status: VerifyAnchorStageStatus
+    gate: AnchorGateDecision
 
 
 # ---------------------------------------------------------------------------

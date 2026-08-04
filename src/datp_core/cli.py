@@ -5,8 +5,9 @@ from pathlib import Path
 
 import polars as pl
 import typer
+from pydantic import ValidationError
 
-from datp_core.analysis.models import PairedContrast
+from datp_core.analysis.contrasts import PairedContrast
 from datp_core.artifacts.coordinates import canonical_root_under
 from datp_core.datasets.catalogue import dataset_binding
 from datp_core.domain.enums import (
@@ -17,6 +18,7 @@ from datp_core.domain.enums import (
     MetricId,
     PopulationId,
     PreprocessingProtocolId,
+    ScoreFrameColumn,
     SplitProtocolId,
     TrainingModelId,
 )
@@ -29,48 +31,54 @@ from datp_core.domain.values import (
     FeatureName,
     FeatureNameSequence,
     MetricValue,
-    ProximalCoefficient,
     Seed,
     checksum_file,
 )
-from datp_core.evaluation.controls import FixedScoreEvidence
-from datp_core.evaluation.models import MetricStatus
+from datp_core.evaluation.controls import (
+    FixedScoreEvidence,
+    build_federated_evaluation_inputs,
+)
+from datp_core.evaluation.models import MetricStatus, metric_by_id
+from datp_core.evaluation.population import (
+    FederatedEvaluationAssetName,
+    FederatedEvaluationDocument,
+)
 from datp_core.learning.federated.models import (
     ClientTrainingInput,
     FederatedTrainingCoordinate,
     PreparedClientProvenance,
 )
-from datp_core.learning.federated.training import FederatedTrainingRequest, preprocessing_state_set_checksum
-from datp_core.orchestration.stages.analyze import AnalyzeRequest, analyze_stage
-from datp_core.orchestration.stages.construct_federated_thresholds import (
-    ConstructFederatedThresholdsRequest,
-    construct_federated_thresholds_stage,
+from datp_core.learning.federated.training import (
+    FederatedTrainingRequest,
+    preprocessing_state_set_checksum,
 )
-from datp_core.orchestration.stages.evaluate_federated import (
-    EvaluateFederatedRequest,
-    FederatedEvaluationAssetName,
-    build_federated_evaluation_inputs,
-    evaluate_federated_stage,
-)
-from datp_core.orchestration.stages.materialize import (
-    MaterializeCanonicalDatasetsRequest,
-    materialize_canonical_datasets_stage,
-)
-from datp_core.orchestration.stages.preprocess_centralized_reference import (
+from datp_core.orchestration.commands.analysis import AnalyzeRequest
+from datp_core.orchestration.commands.checkpoints import SelectFederatedCheckpointRequest
+from datp_core.orchestration.commands.datasets import MaterializeCanonicalDatasetsRequest
+from datp_core.orchestration.commands.evaluation import EvaluateFederatedRequest
+from datp_core.orchestration.commands.preprocessing import (
     PreprocessCentralizedPopulationRequest,
-    preprocess_centralized_reference_population_stage,
-)
-from datp_core.orchestration.stages.preprocess_federated import (
     PreprocessFederatedRequest,
     PreprocessFederatedResult,
-    preprocess_federated_stage,
 )
-from datp_core.orchestration.stages.score_federated import ScoreFederatedRequest, score_federated_stage
+from datp_core.orchestration.commands.scoring import ScoreFederatedRequest
+from datp_core.orchestration.commands.thresholding import ConstructFederatedThresholdsRequest
+from datp_core.orchestration.commands.training import TrainFederatedRequest
+from datp_core.orchestration.stages.analyze import analyze_stage
+from datp_core.orchestration.stages.construct_federated_thresholds import (
+    construct_federated_thresholds_stage,
+)
+from datp_core.orchestration.stages.evaluate_federated import evaluate_federated_stage
+from datp_core.orchestration.stages.materialize import materialize_canonical_datasets_stage
+from datp_core.orchestration.stages.preprocess_centralized_reference import (
+    preprocess_centralized_reference_population_stage,
+)
+from datp_core.orchestration.stages.preprocess_federated import preprocess_federated_stage
+from datp_core.orchestration.stages.score_federated import score_federated_stage
 from datp_core.orchestration.stages.select_federated_checkpoint import (
-    SelectFederatedCheckpointRequest,
     select_federated_checkpoint_stage,
 )
-from datp_core.orchestration.stages.train_federated import TrainFederatedRequest, train_federated_stage
+from datp_core.orchestration.stages.train_federated import train_federated_stage
 from datp_core.populations.capabilities import population_capabilities
 from datp_core.populations.catalogue import (
     PopulationConstructionRequest,
@@ -103,6 +111,7 @@ from datp_core.protocols.training import (
 from datp_core.scoring.generation import ClientScoringInput
 from datp_core.scoring.models import FixedScoreInvariant, ScoreArtifactManifest
 from datp_core.thresholding.dispatch import ThresholdConstructionRequest
+from datp_core.thresholding.identities import ThresholdUnavailableResult
 from datp_core.thresholding.quantiles import ClientBenignCalibrationScores
 
 app = typer.Typer(no_args_is_help=True)
@@ -194,20 +203,27 @@ def preprocess_federated(
             split_protocol=split_protocol,
             preprocessing_identity=preprocessing_identity,
             data_root=DATA_ROOT,
-            dirichlet_condition=_controlled_partition_condition(partition_kind, concentration),
+            dirichlet_condition=_controlled_partition_condition(
+                partition_kind,
+                concentration,
+            ),
             capture_timestamp_column=None,
         )
     )
     typer.echo(
-        f"{result.stage.value} population={result.population.value} dataset={result.dataset.value} "
-        f"seed={result.partition_seed.value} split={result.split_protocol.value} "
-        f"preprocessing={result.preprocessing_identity.value} clients={len(result.client_publications)} "
+        f"{result.stage.value} population={result.population.value} "
+        f"dataset={result.dataset.value} seed={result.partition_seed.value} "
+        f"split={result.split_protocol.value} "
+        f"preprocessing={result.preprocessing_identity.value} "
+        f"clients={len(result.client_publications)} "
         f"published={result.published_count} reused={result.reused_count}"
     )
     for publication in result.client_publications:
         typer.echo(
-            f"  {publication.client_identity.value} {publication.publication_status.value} "
-            f"train={publication.train_row_count} calibration={publication.calibration_row_count} "
+            f"  {publication.client_identity.value} "
+            f"{publication.publication_status.value} "
+            f"train={publication.train_row_count} "
+            f"calibration={publication.calibration_row_count} "
             f"evaluation={publication.evaluation_row_count}"
         )
 
@@ -234,21 +250,31 @@ def preprocess_centralized_reference(
             partition_seed=Seed(partition_seed),
             split_protocol=split_protocol,
             data_root=DATA_ROOT,
-            dirichlet_condition=_controlled_partition_condition(partition_kind, concentration),
+            dirichlet_condition=_controlled_partition_condition(
+                partition_kind,
+                concentration,
+            ),
             capture_timestamp_column=None,
         )
     )
     typer.echo(
-        f"{result.stage.value} population={result.population.value} dataset={result.dataset.value} "
-        f"seed={result.partition_seed.value} preprocessing={result.preprocessing_identity.value} "
-        f"status={result.publication_status.value} train={result.result.paths.train} "
-        f"calibration={result.result.paths.calibration} evaluation={result.result.paths.evaluation}"
+        f"{result.stage.value} population={result.population.value} "
+        f"dataset={result.dataset.value} seed={result.partition_seed.value} "
+        f"preprocessing={result.preprocessing_identity.value} "
+        f"status={result.publication_status.value} "
+        f"train={result.result.paths.train} "
+        f"calibration={result.result.paths.calibration} "
+        f"evaluation={result.result.paths.evaluation}"
     )
 
 
 @app.command("run-confirmatory-seed")
 def run_confirmatory_seed(
-    training_seed: int = typer.Option(..., min=0, help="One declared non-negative training seed."),
+    training_seed: int = typer.Option(
+        ...,
+        min=0,
+        help="One declared non-negative training seed.",
+    ),
 ) -> None:
     """Run the canonical N-BaIoT FedAvg path for one seed."""
     _run_confirmatory_seed(Seed(training_seed))
@@ -269,19 +295,23 @@ def analyze_confirmatory_grid() -> None:
             contrasts=tuple(_confirmatory_contrast(seed) for seed in CONFIRMATORY_SEED_COHORT.values),
             inference_protocol=CONFIRMATORY_INFERENCE_PROTOCOL,
             analysis_seed=Seed(31),
-            output_directory=OUTPUTS_ROOT / "confirmatory" / "nbaiot_natural_devices" / "analysis",
+            output_directory=(OUTPUTS_ROOT / "confirmatory" / "nbaiot_natural_devices" / "analysis"),
             overwrite=False,
         )
     )
     typer.echo(
-        f"analysis={result.publication_status.value} decision={result.decision.decision.value} "
+        f"analysis={result.publication_status.value} "
+        f"decision={result.decision.decision.value} "
         f"estimate={result.interval.point_estimate.value if result.interval.point_estimate else 'unavailable'}"
     )
 
 
 def _run_confirmatory_seed(training_seed: Seed) -> None:
     context = _prepare_confirmatory_seed(training_seed)
-    _evaluate_confirmatory_threshold_methods(context, _score_confirmatory_seed(context))
+    _evaluate_confirmatory_threshold_methods(
+        context,
+        _score_confirmatory_seed(context),
+    )
 
 
 def _prepare_confirmatory_seed(training_seed: Seed) -> ConfirmatorySeedContext:
@@ -330,7 +360,11 @@ def _prepare_confirmatory_seed(training_seed: Seed) -> ConfirmatorySeedContext:
     state_set_checksum = preprocessing_state_set_checksum(
         tuple(
             PreparedClientProvenance(
-                client=ClientIdentity(population, item.client_identity.value, identity_kind),
+                client=ClientIdentity(
+                    population,
+                    item.client_identity.value,
+                    identity_kind,
+                ),
                 preprocessing_checksum=item.fitted_state.estimator_checksum,
             )
             for item in preprocessing.client_publications
@@ -346,7 +380,9 @@ def _prepare_confirmatory_seed(training_seed: Seed) -> ConfirmatorySeedContext:
     )
 
 
-def _score_confirmatory_seed(context: ConfirmatorySeedContext) -> ScoreArtifactManifest:
+def _score_confirmatory_seed(
+    context: ConfirmatorySeedContext,
+) -> ScoreArtifactManifest:
     feature_names = FeatureNameSequence(
         tuple(FeatureName(name) for name in dataset_binding(DatasetId.NBAIOT).schema.feature_columns)
     )
@@ -389,7 +425,10 @@ def _score_confirmatory_seed(context: ConfirmatorySeedContext) -> ScoreArtifactM
             selected,
             NBAIOT_AUTOENCODER,
             feature_names,
-            _client_scoring_inputs(context.preprocessing.client_publications, context.construction.manifest.clients),
+            _client_scoring_inputs(
+                context.preprocessing.client_publications,
+                context.construction.manifest.clients,
+            ),
             BATCH_SIZE,
             context.training_directory / "scores",
             context.state_set_checksum,
@@ -399,17 +438,25 @@ def _score_confirmatory_seed(context: ConfirmatorySeedContext) -> ScoreArtifactM
     ).result.manifest
 
 
-def _evaluate_confirmatory_threshold_methods(context: ConfirmatorySeedContext, scores: ScoreArtifactManifest) -> None:
+def _evaluate_confirmatory_threshold_methods(
+    context: ConfirmatorySeedContext,
+    scores: ScoreArtifactManifest,
+) -> None:
     inputs = ConfirmatoryThresholdInputs(
         scores=scores,
         eligible=_eligible_calibration_scores(scores),
         family_by_client=_family_identities(
-            context.construction.manifest.clients, context.construction.manifest.family_by_client
+            context.construction.manifest.clients,
+            context.construction.manifest.family_by_client,
         ),
         previous_evidence=None,
     )
     for method in population_capabilities(context.coordinate.population).valid_threshold_methods:
-        inputs = _evaluate_confirmatory_threshold_method(context, inputs, method)
+        inputs = _evaluate_confirmatory_threshold_method(
+            context,
+            inputs,
+            method,
+        )
 
 
 def _evaluate_confirmatory_threshold_method(
@@ -431,7 +478,7 @@ def _evaluate_confirmatory_threshold_method(
             False,
         )
     ).result
-    if threshold.__class__.__name__ == "ThresholdUnavailableResult":
+    if isinstance(threshold, ThresholdUnavailableResult):
         typer.echo(f"seed={context.coordinate.training_seed.value} {method.value}=unavailable")
         return inputs
     evaluation_inputs = build_federated_evaluation_inputs(inputs.scores, method)
@@ -460,17 +507,25 @@ def _evaluate_confirmatory_threshold_method(
     )
 
 
-def _eligible_calibration_scores(score_manifest: ScoreArtifactManifest) -> tuple[ClientBenignCalibrationScores, ...]:
+def _eligible_calibration_scores(
+    score_manifest: ScoreArtifactManifest,
+) -> tuple[ClientBenignCalibrationScores, ...]:
     invariant = FixedScoreInvariant.from_manifest(score_manifest)
     return tuple(
         ClientBenignCalibrationScores(
             record.scored_client,
             score_manifest.coordinate,
-            tuple(float(value) for value in pl.read_parquet(record.path)["reconstruction_error"].to_list()),
+            tuple(
+                float(value)
+                for value in pl.read_parquet(record.path)[ScoreFrameColumn.RECONSTRUCTION_ERROR.value].to_list()
+            ),
             checksum_file(record.path),
             invariant.calibration_score_set_checksum,
         )
-        for record in sorted(score_manifest.calibration_records, key=lambda record: record.scored_client)
+        for record in sorted(
+            score_manifest.calibration_records,
+            key=lambda record: record.scored_client,
+        )
     )
 
 
@@ -481,7 +536,10 @@ def _client_training_inputs(
 ) -> tuple[ClientTrainingInput, ...]:
     return tuple(
         ClientTrainingInput(
-            client=_client_with_id(clients, publication.client_identity.value),
+            client=_client_with_id(
+                clients,
+                publication.client_identity.value,
+            ),
             training_features=pl.read_parquet(publication.paths.train),
             feature_names=feature_names,
             preprocessing_state=publication.fitted_state,
@@ -491,7 +549,8 @@ def _client_training_inputs(
 
 
 def _client_scoring_inputs(
-    publications: tuple[ClientPreprocessingResult, ...], clients: tuple[ClientIdentity, ...]
+    publications: tuple[ClientPreprocessingResult, ...],
+    clients: tuple[ClientIdentity, ...],
 ) -> tuple[ClientScoringInput, ...]:
     return tuple(
         ClientScoringInput(
@@ -504,43 +563,67 @@ def _client_scoring_inputs(
 
 
 def _family_identities(
-    clients: tuple[ClientIdentity, ...], family_by_client: tuple[tuple[str, str], ...]
+    clients: tuple[ClientIdentity, ...],
+    family_by_client: tuple[tuple[str, str], ...],
 ) -> tuple[tuple[ClientIdentity, FamilyIdentity], ...]:
     return tuple(
-        (_client_with_id(clients, client_id), FamilyIdentity(family)) for client_id, family in family_by_client
+        (
+            _client_with_id(clients, client_id),
+            FamilyIdentity(family),
+        )
+        for client_id, family in family_by_client
     )
 
 
-def _client_with_id(clients: tuple[ClientIdentity, ...], client_id: str) -> ClientIdentity:
-    client = next((candidate for candidate in clients if candidate.client_id == client_id), None)
+def _client_with_id(
+    clients: tuple[ClientIdentity, ...],
+    client_id: str,
+) -> ClientIdentity:
+    client = next(
+        (candidate for candidate in clients if candidate.client_id == client_id),
+        None,
+    )
     if client is None:
         raise ScientificContractError(f"population manifest is missing client {client_id}")
     return client
 
 
 def _confirmatory_contrast(training_seed: Seed) -> PairedContrast:
-    from json import loads
-
-    shared = loads(
-        _evaluation_path(training_seed, FederatedThresholdMethod.SHARED_THRESHOLD).read_text(encoding="utf-8")
+    shared = _load_evaluation_document(
+        _evaluation_path(
+            training_seed,
+            FederatedThresholdMethod.SHARED_THRESHOLD,
+        )
     )
-    local = loads(_evaluation_path(training_seed, FederatedThresholdMethod.LOCAL_THRESHOLD).read_text(encoding="utf-8"))
-    if shared["score_coordinate"] != local["score_coordinate"]:
+    local = _load_evaluation_document(
+        _evaluation_path(
+            training_seed,
+            FederatedThresholdMethod.LOCAL_THRESHOLD,
+        )
+    )
+    if shared.score_coordinate != local.score_coordinate:
         raise ScientificContractError("paired evaluation documents use different training coordinates")
-    shared_value = _population_metric(shared, MetricId.FPR_COEFFICIENT_OF_VARIATION)
-    local_value = _population_metric(local, MetricId.FPR_COEFFICIENT_OF_VARIATION)
     return PairedContrast(
-        coordinate=_deserialize_coordinate(shared["score_coordinate"]),
+        coordinate=shared.score_coordinate,
         evidence_role=EvidenceRole.CONFIRMATORY,
         metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
         left_method=FederatedThresholdMethod.SHARED_THRESHOLD,
         right_method=FederatedThresholdMethod.LOCAL_THRESHOLD,
-        left_value=shared_value,
-        right_value=local_value,
+        left_value=_population_metric(
+            shared,
+            MetricId.FPR_COEFFICIENT_OF_VARIATION,
+        ),
+        right_value=_population_metric(
+            local,
+            MetricId.FPR_COEFFICIENT_OF_VARIATION,
+        ),
     )
 
 
-def _evaluation_path(training_seed: Seed, method: FederatedThresholdMethod) -> Path:
+def _evaluation_path(
+    training_seed: Seed,
+    method: FederatedThresholdMethod,
+) -> Path:
     path = (
         _confirmatory_seed_directory(training_seed)
         / "evaluations"
@@ -552,32 +635,26 @@ def _evaluation_path(training_seed: Seed, method: FederatedThresholdMethod) -> P
     return path
 
 
-def _deserialize_coordinate(data: dict) -> FederatedTrainingCoordinate:
-    return FederatedTrainingCoordinate(
-        population=PopulationId(data["population"]),
-        training_seed=Seed(data["training_seed"]),
-        split_protocol=SplitProtocolId(data["split_protocol"]),
-        preprocessing_identity=PreprocessingProtocolId(data["preprocessing_identity"]),
-        model=TrainingModelId(data["model"]),
-        model_coefficient=_deserialize_model_coefficient(data.get("model_coefficient")),
-    )
+def _load_evaluation_document(path: Path) -> FederatedEvaluationDocument:
+    try:
+        return FederatedEvaluationDocument.model_validate_json(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValidationError, ValueError) as error:
+        raise ScientificContractError(f"completed evaluation document is unreadable or invalid: {path}") from error
 
 
-def _deserialize_model_coefficient(value: float | None) -> ProximalCoefficient | None:
-    return None if value is None else ProximalCoefficient(value)
-
-
-def _population_metric(document: dict, metric: MetricId) -> MetricValue:
-    population = document["population"]
-    result = next((item for item in population["metrics"] if item["metric"] == metric.value), None)
-    if result is None:
-        raise ScientificContractError(f"required confirmatory metric is missing: {metric.value}")
-    if result["status"] != MetricStatus.AVAILABLE.value or result["value"] is None:
+def _population_metric(
+    document: FederatedEvaluationDocument,
+    metric: MetricId,
+) -> MetricValue:
+    result = metric_by_id(document.population.metrics, metric)
+    if result.status is not MetricStatus.AVAILABLE or result.value is None:
         raise ScientificContractError(f"required confirmatory metric is unavailable: {metric.value}")
-    return MetricValue(result["value"])
+    return result.value
 
 
-def _federated_training_directory(coordinate: FederatedTrainingCoordinate) -> Path:
+def _federated_training_directory(
+    coordinate: FederatedTrainingCoordinate,
+) -> Path:
     return (
         OUTPUTS_ROOT
         / "federated"
@@ -631,8 +708,14 @@ def _controlled_partition_condition(
             try:
                 return dirichlet_condition(DirichletConcentration(concentration))
             except ValueError as error:
-                raise typer.BadParameter(str(error), param_hint="--concentration") from error
-    raise ScientificContractError("unsupported controlled partition kind", subject=partition_kind)
+                raise typer.BadParameter(
+                    str(error),
+                    param_hint="--concentration",
+                ) from error
+    raise ScientificContractError(
+        "unsupported controlled partition kind",
+        subject=partition_kind,
+    )
 
 
 if __name__ == "__main__":

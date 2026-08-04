@@ -1,53 +1,21 @@
 """Stage: verify historical five-seed anchor and emit the programme gate decision."""
 
-from dataclasses import dataclass
-from pathlib import Path
-from typing import ClassVar
-
 from datp_core.anchor.gate import assert_gate_not_bypassable, decide_anchor_gate, persist_anchor_gate_diagnostics
 from datp_core.anchor.models import (
     AnchorDependencyBlocker,
-    AnchorGateDecision,
-    AnchorGateStatus,
     AnchorObservedMetric,
-    HistoricalMetricArtifactSource,
+    VerifyAnchorStageRequest,
+    VerifyAnchorStageResult,
+    VerifyAnchorStageStatus,
 )
 from datp_core.anchor.reproduction import (
     independent_reproduction_dependency_blocker,
     load_historical_observations,
     reproduce_anchor,
 )
-from datp_core.domain.enums import ExperimentReadiness, StageOperationId
+from datp_core.domain.enums import StageOperationId
 from datp_core.domain.errors import AnchorReproductionError
-from datp_core.domain.values import Checksum, NonNegativeIntegerValue
-from datp_core.protocols.models import AnchorDecisionProtocol
-
-
-@dataclass(frozen=True, slots=True)
-class VerifyAnchorStageRequest:
-    protocol: AnchorDecisionProtocol
-    observations: tuple[AnchorObservedMetric, ...] | None = None
-    historical_sources: tuple[HistoricalMetricArtifactSource, ...] | None = None
-    diagnostics_directory: Path | None = None
-    request_independent_reproduction: bool = False
-
-
-@dataclass(frozen=True, slots=True)
-class VerifyAnchorStageStatus:
-    stage: ClassVar[StageOperationId] = StageOperationId.VERIFY_ANCHOR
-    gate_status: AnchorGateStatus
-    dependent_readiness: ExperimentReadiness
-    discrepancy_count: NonNegativeIntegerValue
-    observation_count: NonNegativeIntegerValue
-    reference_count: NonNegativeIntegerValue
-    dependency_blocker: str | None
-    diagnostics_checksum: Checksum
-
-
-@dataclass(frozen=True, slots=True)
-class VerifyAnchorStageResult:
-    status: VerifyAnchorStageStatus
-    gate: AnchorGateDecision
+from datp_core.domain.values import NonNegativeIntegerValue
 
 
 def verify_anchor_stage(request: VerifyAnchorStageRequest) -> VerifyAnchorStageResult:

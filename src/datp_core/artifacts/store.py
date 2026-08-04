@@ -1,12 +1,10 @@
-"""Atomic publication and reuse of processed-data coordinates."""
+"""Processed-data publication codec and artifact-specific validation."""
 
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from shutil import rmtree
-from tempfile import mkdtemp
+from typing import cast
 
-from filelock import FileLock
 from pydantic import BaseModel
 
 from datp_core.artifacts.completion import assert_complete_digest, complete_digest, write_complete_marker
@@ -21,7 +19,11 @@ from datp_core.artifacts.manifest import (
 )
 from datp_core.domain.enums import ContractSubject, PublicationStatus
 from datp_core.domain.errors import ArtifactIntegrityError
-from datp_core.domain.values import Checksum, checksum_file
+from datp_core.pipeline.publication.codec import (
+    ArtifactCodec,
+    ArtifactPublication,
+    publish_artifact,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,80 +47,58 @@ class ProcessedPublicationResult[ManifestT: BaseModel]:
 
 
 @dataclass(frozen=True, slots=True)
-class PublicationOutcome[ValueT]:
-    status: PublicationStatus
-    value: ValueT
-    complete_digest: Checksum
+class _ProcessedArtifactCodec[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseModel](
+    ArtifactCodec[ProcessedPublication[ManifestT, SchemaT, ReportT], ManifestT]
+):
+    def write(
+        self,
+        request: ProcessedPublication[ManifestT, SchemaT, ReportT],
+        directory: Path,
+    ) -> ManifestT:
+        return _write_processed(directory, request)
 
+    def validate(
+        self,
+        request: ProcessedPublication[ManifestT, SchemaT, ReportT],
+        directory: Path,
+    ) -> bool:
+        return _is_reusable(directory, request)
 
-def create_staging_directory(target: Path) -> Path:
-    target.parent.mkdir(parents=True, exist_ok=True)
-    return Path(mkdtemp(prefix=f".{target.name}.", dir=target.parent))
+    def load(
+        self,
+        request: ProcessedPublication[ManifestT, SchemaT, ReportT],
+        directory: Path,
+    ) -> ManifestT:
+        return read_preprocessing_manifest(directory, request.manifest_type)
 
-
-def replace_directory(staging: Path, target: Path) -> None:
-    if target.exists():
-        rmtree(target)
-    staging.replace(target)
-
-
-def cleanup_staging_directory(staging: Path, *, ignore_errors: bool) -> None:
-    if staging.exists():
-        rmtree(staging, ignore_errors=ignore_errors)
-
-
-def publish_atomically[ValueT](
-    *,
-    target: Path,
-    overwrite: bool,
-    is_reusable: Callable[[Path], bool],
-    write: Callable[[Path], ValueT],
-    reusable_value: Callable[[Path], ValueT],
-    remove_target: Callable[[Path], None] = rmtree,
-    complete_marker: str | Path = "COMPLETE",
-) -> PublicationOutcome[ValueT]:
-    """Publish one typed value under a lock and return its definitive publication state."""
-    with FileLock(f"{target}.lock"):
-        _remove_stale_temporary_directories(target)
-        if not overwrite and is_reusable(target):
-            return PublicationOutcome(
-                status=PublicationStatus.REUSED,
-                value=reusable_value(target),
-                complete_digest=checksum_file(target / complete_marker),
-            )
-        if target.exists():
-            remove_target(target)
-        temporary = create_staging_directory(target)
-        try:
-            value = write(temporary)
-            replace_directory(temporary, target)
-        except Exception:
-            cleanup_staging_directory(temporary, ignore_errors=True)
-            raise
-    return PublicationOutcome(
-        status=PublicationStatus.PUBLISHED,
-        value=value,
-        complete_digest=checksum_file(target / complete_marker),
-    )
+    def rebase(self, result: ManifestT, directory: Path) -> ManifestT:
+        return result
 
 
 def publish_processed[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseModel](
     publication: ProcessedPublication[ManifestT, SchemaT, ReportT],
 ) -> ProcessedPublicationResult[ManifestT]:
-    target = publication.coordinate_directory
-    outcome = publish_atomically(
-        target=target,
-        overwrite=publication.overwrite,
-        is_reusable=lambda directory: _is_reusable(directory, publication),
-        write=lambda temporary: _write_processed(temporary, publication),
-        reusable_value=lambda directory: read_preprocessing_manifest(directory, publication.manifest_type),
-        remove_target=rmtree,
+    outcome = publish_artifact(
+        ArtifactPublication(
+            target=publication.coordinate_directory,
+            request=publication,
+            codec=cast(
+                ArtifactCodec[ProcessedPublication[ManifestT, SchemaT, ReportT], ManifestT],
+                _ProcessedArtifactCodec(),
+            ),
+            overwrite=publication.overwrite,
+        )
     )
-    return ProcessedPublicationResult(target, outcome.status, outcome.value)
+    return ProcessedPublicationResult(
+        coordinate_directory=publication.coordinate_directory,
+        publication_status=outcome.status,
+        manifest=outcome.value,
+    )
 
 
 def _write_processed[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseModel](
-    temporary: Path, publication: ProcessedPublication[ManifestT, SchemaT, ReportT]
+    temporary: Path,
+    publication: ProcessedPublication[ManifestT, SchemaT, ReportT],
 ) -> ManifestT:
     report = publication.writer(temporary)
     write_preprocessing_manifest(temporary, publication.manifest)
@@ -132,13 +112,15 @@ def _write_processed[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseMode
     _assert_required_assets(temporary, publication.required_assets)
     if not _is_reusable(temporary, publication):
         raise ArtifactIntegrityError(
-            "processed publication failed complete-asset validation", subject=ContractSubject.ARTIFACT_PATH
+            "processed publication failed complete-asset validation",
+            subject=ContractSubject.ARTIFACT_PATH,
         )
     return publication.manifest
 
 
 def _is_reusable[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseModel](
-    target: Path, publication: ProcessedPublication[ManifestT, SchemaT, ReportT]
+    target: Path,
+    publication: ProcessedPublication[ManifestT, SchemaT, ReportT],
 ) -> bool:
     try:
         manifest = read_preprocessing_manifest(target, publication.manifest_type)
@@ -172,13 +154,3 @@ def _assert_required_assets(directory: Path, required_assets: tuple[ProcessedAss
             f"processed publication missing assets: {', '.join(asset.value for asset in missing)}",
             subject=ContractSubject.ARTIFACT_PATH,
         )
-
-
-def _remove_stale_temporary_directories(target: Path) -> None:
-    parent = target.parent
-    if not parent.is_dir():
-        return
-    prefix = f".{target.name}."
-    for candidate in sorted(parent.iterdir()):
-        if candidate.is_dir() and candidate.name.startswith(prefix):
-            rmtree(candidate, ignore_errors=True)

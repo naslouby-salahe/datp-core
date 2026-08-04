@@ -1,10 +1,12 @@
 """Centralized population, split, and cohort integrity checks."""
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 import polars as pl
 
 from datp_core.domain.enums import (
+    ContractSubject,
     DatasetId,
     PartitionRole,
     PopulationId,
@@ -40,6 +42,17 @@ _BENIGN = PopulationOutcomeLabel.BENIGN
 _ATTACK = PopulationOutcomeLabel.ATTACK
 _MAX_HIST = WorkingFrameColumn.MAX_HISTORICAL
 _MIN_FUT = WorkingFrameColumn.MIN_FUTURE
+
+
+def reject_non_benign_labels(
+    labels: Iterable[str],
+    *,
+    message: str,
+    subject: ContractSubject,
+    benign_label: str = PopulationOutcomeLabel.BENIGN.value,
+) -> None:
+    if any(label != benign_label for label in labels):
+        raise LeakageError(message, subject=subject)
 
 
 def membership_frame_checksum(membership: pl.DataFrame) -> Checksum:

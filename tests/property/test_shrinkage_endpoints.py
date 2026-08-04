@@ -3,14 +3,22 @@ from hypothesis import strategies as st
 from tests.unit.thresholding.helpers import identity
 
 from datp_core.domain.values import ShrinkageWeight, ThresholdValue
-from datp_core.thresholding.models import ShrinkageAssignment
+from datp_core.thresholding.methods.shrinkage import ShrinkageAssignment
 
 CLIENT = identity("client_a")
-_VALUE = st.floats(min_value=-1e6, max_value=1e6, allow_nan=False, allow_infinity=False)
+_VALUE = st.floats(
+    min_value=-1e6,
+    max_value=1e6,
+    allow_nan=False,
+    allow_infinity=False,
+)
 
 
 @given(local=_VALUE, shared=_VALUE)
-def test_shrinkage_lambda_zero_reproduces_the_shared_threshold_exactly(local: float, shared: float) -> None:
+def test_shrinkage_lambda_zero_reproduces_the_shared_threshold_exactly(
+    local: float,
+    shared: float,
+) -> None:
     assignment = ShrinkageAssignment(
         client=CLIENT,
         lambda_weight=ShrinkageWeight(0.0),
@@ -22,7 +30,10 @@ def test_shrinkage_lambda_zero_reproduces_the_shared_threshold_exactly(local: fl
 
 
 @given(local=_VALUE, shared=_VALUE)
-def test_shrinkage_lambda_one_reproduces_the_local_threshold_exactly(local: float, shared: float) -> None:
+def test_shrinkage_lambda_one_reproduces_the_local_threshold_exactly(
+    local: float,
+    shared: float,
+) -> None:
     assignment = ShrinkageAssignment(
         client=CLIENT,
         lambda_weight=ShrinkageWeight(1.0),
@@ -33,8 +44,16 @@ def test_shrinkage_lambda_one_reproduces_the_local_threshold_exactly(local: floa
     assert assignment.blended_threshold.value == local
 
 
-@given(local=_VALUE, shared=_VALUE, weight=st.floats(min_value=0.0, max_value=1.0, allow_nan=False))
-def test_shrinkage_blend_always_lies_between_local_and_shared(local: float, shared: float, weight: float) -> None:
+@given(
+    local=_VALUE,
+    shared=_VALUE,
+    weight=st.floats(min_value=0.0, max_value=1.0, allow_nan=False),
+)
+def test_shrinkage_blend_always_lies_between_local_and_shared(
+    local: float,
+    shared: float,
+    weight: float,
+) -> None:
     blended_value = weight * local + (1 - weight) * shared
     assignment = ShrinkageAssignment(
         client=CLIENT,

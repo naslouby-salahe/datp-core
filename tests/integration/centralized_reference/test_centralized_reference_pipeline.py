@@ -31,7 +31,7 @@ def test_end_to_end_centralized_pipeline_without_federated_artifacts(tmp_path: P
     require_cuda()
     coordinate = training_coordinate()
     state = fitted_state(tmp_path / "state.skops")
-    training = train_centralized_autoencoder(
+    execution = train_centralized_autoencoder(
         CentralizedTrainingRequest(
             coordinate=coordinate,
             training_features=benign_frame(RowCount(64), seed=Seed(0)),
@@ -48,7 +48,8 @@ def test_end_to_end_centralized_pipeline_without_federated_artifacts(tmp_path: P
             benign_label=PopulationOutcomeLabel.BENIGN,
         )
     )
-    candidates = retain_centralized_checkpoint_candidates(training, AUTOENCODER)
+    training = execution.result
+    candidates = retain_centralized_checkpoint_candidates(execution, AUTOENCODER)
     scoring = score_centralized_reference(
         CentralizedScoringRequest(
             coordinate=coordinate,
@@ -77,4 +78,3 @@ def test_end_to_end_centralized_pipeline_without_federated_artifacts(tmp_path: P
     assert scoring.calibration_scores.path.is_file()
     assert scoring.evaluation_scores.path.is_file()
     assert evaluation.evaluation_row_count == 40
-    assert evaluation.is_confirmatory_ladder_member is False

@@ -18,11 +18,14 @@ from datp_core.populations.models import iid_condition
 def test_catalogue_resolves_all_five_populations() -> None:
     for population in PopulationId:
         binding = resolve_population(population)
+        assert binding.population is population
         assert binding.declaration.id is population
         assert binding.capabilities.population is population
 
 
-def test_catalogue_constructs_and_hands_off(nbaiot_canonical_root: Path) -> None:
+def test_catalogue_constructs_and_hands_off(
+    nbaiot_canonical_root: Path,
+) -> None:
     construction = construct_population(
         PopulationConstructionRequest(
             PopulationId.NBAIOT_NATURAL_DEVICES,
@@ -40,13 +43,15 @@ def test_catalogue_constructs_and_hands_off(nbaiot_canonical_root: Path) -> None
     )
     assert handoff.assignments.height == construction.membership.height
     assert handoff.client_partition_counts
-    assert {item.client_id for item in handoff.client_partition_counts} == set(
+    assert {item.client.client_id for item in handoff.client_partition_counts} == set(
         construction.manifest.document.candidate_clients
     )
     assert all(not item.deployment_fallback for item in handoff.client_partition_counts)
 
 
-def test_dirichlet_construction_requires_explicit_condition(nbaiot_canonical_root: Path) -> None:
+def test_dirichlet_construction_requires_explicit_condition(
+    nbaiot_canonical_root: Path,
+) -> None:
     with pytest.raises(ScientificContractError):
         construct_population(
             PopulationConstructionRequest(

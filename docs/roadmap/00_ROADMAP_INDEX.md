@@ -2,12 +2,11 @@
 
 ## Scientific authority and interpretation rules
 
-- Before planning, editing, testing, or auditing this phase, read **`/home/naslouby/Projects/datp-core/docs/Journal_Extension_Master_Roadmap.md`** in full. It is the authoritative source for the scientific question, permitted evidence, dataset boundaries, numerical grids, metrics, inference, and claim restrictions.
+- Before planning, editing, testing, or auditing a phase, read **`/home/naslouby/Projects/datp-core/docs/Journal_Extension_Master_Roadmap.md`** in full. It is the authoritative source for the scientific question, permitted evidence, dataset boundaries, numerical grids, metrics, inference, and claim restrictions.
 - Use descriptive implementation identities only. Never introduce opaque lettered populations, numbered threshold policies, numbered baselines, compatibility aliases, redirects, deprecated names, or duplicated identifiers.
 - The centralized reference is an independent pooled-data pipeline. It is never a federated threshold method and never consumes scores produced by a federated model.
 - The confirmatory comparison reuses one selected FedAvg detector, one preprocessing state, one client population, one calibration set, and one held-out score set per seed. Only threshold-calibration scope changes.
 - Calibration is benign-only. Attack labels and held-out outcomes cannot select models, checkpoints, quantiles, shrinkage values, statistical coefficients, clients, or group assignments.
-- The implementation source tree is locked to the files already created under `datp_core/`. Do not create, rename, move, delete, or replace source files. Test files may be created only when explicitly named in this roadmap.
 - Scientific values absent from the source of truth must remain unresolved. Do not infer them from memory, historical repositories, convenient defaults, or common practice. Record the blocker in `01_PHASE_MASTER_LOG.md`.
 - Python protocol declarations replace YAML. Protocol objects are immutable, fully typed, explicitly constructed as `CANONICAL_PROTOCOL_GRAPH`, validated at startup without hidden defaults, and serialized into every resolved experiment manifest. `CANONICAL_RUNTIME` locks `require_cuda=True` and `worker_count=6`.
 - Do not add backward compatibility, migration adapters, aliases, generic registries, service locators, untyped dictionaries, `Any`, silent fallbacks, or catch-all modules.
@@ -16,20 +15,23 @@
 
 ## Purpose
 
-This roadmap is the implementation authority for the already-created `datp_core/` source tree. It converts the scientific programme in `/home/naslouby/Projects/datp-core/docs/Journal_Extension_Master_Roadmap.md` into a phased, testable, source-file-constrained implementation plan. It does not replace the scientific source of truth and must never be used to invent scientific values.
+This roadmap converts the scientific programme in `/home/naslouby/Projects/datp-core/docs/Journal_Extension_Master_Roadmap.md` into a phased, testable implementation plan. It does not replace the scientific source of truth and must never be used to invent scientific values.
+
+Phase documents define scientific responsibilities and expected evidence. Cross-cutting repository refactors may change internal source ownership only when they are explicitly approved, preserve the scientific contracts, migrate every caller, remove superseded modules, and update the architecture tests and roadmap records in the same pull request.
 
 ## Locked implementation principles
 
-1. **One source tree.** The source files listed in the user-approved tree are exhaustive. New behavior must be placed in the existing file whose responsibility matches it.
+1. **Bounded-context ownership.** Every concept has one authoritative owning module. Large mixed-responsibility modules must be split when the split removes duplication or dependency violations. Superseded modules are deleted; compatibility barrels are forbidden.
 2. **Python-native protocols.** Closed identities are enums. Numeric scientific quantities are validated values. Compound declarations are frozen Pydantic models or frozen slotted dataclasses. Experiment declarations are typed objects, never dictionaries.
 3. **Reusable data.** Canonical and transformed datasets are reusable assets under `data/`, keyed by scientific and preprocessing coordinates. They are not duplicated per experiment.
 4. **Independent centralized reference.** Pooled preprocessing, training, checkpointing, scoring, thresholding, and evaluation remain separate from federated execution.
 5. **Deterministic results.** Every output path is derived from descriptive scientific coordinates. No run IDs, job IDs, timestamps, random directory names, or hidden defaults are permitted.
 6. **Capability-driven feasibility.** Dataset and population capability contracts decide which metrics, threshold methods, temporal analyses, and claims are valid.
 7. **Explicit populations.** Confirmatory-eligible, attack-evaluable, unavailable, and deployment-fallback populations are separate typed cohorts. Fallback clients never enter confirmatory cross-client dispersion.
-8. **Safe persistence.** SafeTensors stores model tensors; skops stores fitted scikit-learn state; Parquet/PyArrow stores tables and schemas; Pydantic JSON stores manifests and summaries. Unsafe pickle is prohibited.
-9. **Honest negative evidence.** Null, reversed, unstable, unavailable, and infeasible results are first-class outputs.
-10. **No hidden extension.** Attacks, defenses, dynamic adaptation, and future datasets are supported only through typed boundaries. They are not implemented in DATP-Core.
+8. **Safe persistence.** SafeTensors stores model tensors; skops stores fitted scikit-learn state; Parquet/PyArrow stores tables and schemas; strict canonical JSON stores manifests and summaries. Unsafe pickle is prohibited.
+9. **One publication lifecycle.** Persisted artifacts use typed write, validate, load, and rebase operations. Atomic staging and replacement have one neutral owner; artifact-specific modules do not reimplement or re-export it.
+10. **Honest negative evidence.** Null, reversed, unstable, unavailable, and infeasible results are first-class outputs.
+11. **No hidden extension.** Attacks, defenses, dynamic adaptation, and future datasets are supported only through typed boundaries. They are not implemented in DATP-Core.
 
 ## Required libraries
 
@@ -90,9 +92,19 @@ test -n "${CS_ACCESS_TOKEN:-}"
 | `16_PHASE_15_EXTENSION_READINESS.md` | Future extension boundaries | Phases 01–14 | Extension hooks add no current scientific behavior |
 | `17_PHASE_16_FINAL_SCIENTIFIC_AND_ENGINEERING_AUDIT.md` | Final audit | All phases | Full scientific and engineering acceptance passes |
 
-## Source-addition rule
+## Cross-cutting architecture records
 
-Phase documents restrict additions under `src/`; they do not prohibit necessary edits to existing source files. A new source file requires explicit user approval, a focused responsibility, and an update to the locked-source architecture test. Existing source files may be corrected when a later phase discovers an upstream contract omission.
+| File | Scope | Acceptance gate |
+|---|---|---|
+| `18_REPOSITORY_ARCHITECTURE_AND_SCIENTIFIC_INVARIANTS.md` | Neutral pipeline infrastructure, bounded checkpoint ownership, publication lifecycle, canonical serialization, and scientific regression ratchets | No compatibility surfaces; zero serialization bypasses; fixed-detector and complete-suite gates pass |
+
+Cross-cutting records supplement the phase documents. They may correct stale internal file paths and implementation ownership, but they cannot relax or rewrite scientific contracts.
+
+## Source-addition and deletion rule
+
+A new source file requires explicit user approval, one focused responsibility, caller migration, architecture-test coverage, and a roadmap update. A source file may be deleted only after every caller has moved to its authoritative replacement. The repository-architecture refactor recorded in `18_REPOSITORY_ARCHITECTURE_AND_SCIENTIFIC_INVARIANTS.md` is an approved bounded-context reorganization; it does not authorize unrelated feature expansion.
+
+No source move may leave an alias, redirect, deprecated import, duplicated implementation, or compatibility shim.
 
 ## Test-tree rule
 
@@ -100,4 +112,4 @@ The roadmap may add focused tests beneath `tests/`. Test package markers and sma
 
 ## Completion discipline
 
-A phase is complete only when its implementation, focused tests, whole-suite tests, static checks, scientific audit, and source-tree audit all pass. “Code exists” is not completion.
+A phase or cross-cutting refactor is complete only when its implementation, focused tests, whole-suite tests, static checks, scientific audit, dependency audit, and source-tree audit all pass. “Code exists” is not completion. Documentation must distinguish implemented structure from a verified green final head.

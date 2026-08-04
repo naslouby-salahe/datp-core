@@ -15,29 +15,25 @@ from tests.unit.centralized_reference.helpers import (
 
 from datp_core.centralized_reference.checkpointing import reject_federated_checkpoint
 from datp_core.centralized_reference.thresholding import CENTRALIZED_POOLED_QUANTILE_PROTOCOL
-from datp_core.domain.enums import PublicationStatus, StageOperationId
+from datp_core.domain.enums import EvidenceRole, PublicationStatus, StageOperationId, TrainingModelId
 from datp_core.domain.errors import LeakageError
 from datp_core.domain.values import Checksum, RowCount, Seed
+from datp_core.orchestration.commands.checkpoints import SelectCentralizedCheckpointRequest
+from datp_core.orchestration.commands.evaluation import EvaluateCentralizedReferenceRequest
+from datp_core.orchestration.commands.scoring import ScoreCentralizedReferenceRequest
+from datp_core.orchestration.commands.thresholding import ConstructCentralizedThresholdRequest
+from datp_core.orchestration.commands.training import TrainCentralizedReferenceRequest
 from datp_core.orchestration.stages.construct_centralized_reference_threshold import (
-    ConstructCentralizedThresholdRequest,
     construct_centralized_reference_threshold_stage,
 )
 from datp_core.orchestration.stages.evaluate_centralized_reference import (
-    EvaluateCentralizedReferenceRequest,
     evaluate_centralized_reference_stage,
 )
-from datp_core.orchestration.stages.score_centralized_reference import (
-    ScoreCentralizedReferenceRequest,
-    score_centralized_reference_stage,
-)
+from datp_core.orchestration.stages.score_centralized_reference import score_centralized_reference_stage
 from datp_core.orchestration.stages.select_centralized_reference_checkpoint import (
-    SelectCentralizedCheckpointRequest,
     select_centralized_reference_checkpoint_stage,
 )
-from datp_core.orchestration.stages.train_centralized_reference import (
-    TrainCentralizedReferenceRequest,
-    train_centralized_reference_stage,
-)
+from datp_core.orchestration.stages.train_centralized_reference import train_centralized_reference_stage
 from datp_core.protocols.training import BATCH_SIZE as DECLARED_BATCH_SIZE
 
 
@@ -115,7 +111,7 @@ def test_train_score_threshold_evaluate_stage_chain(tmp_path: Path) -> None:
         )
     )
     assert evaluation_result.stage is StageOperationId.EVALUATE_CENTRALIZED_REFERENCE
-    assert evaluation_result.evaluation.is_confirmatory_ladder_member is False
+    assert evaluation_result.evaluation.evidence_role is EvidenceRole.SUPPORTIVE
 
     reused = train_centralized_reference_stage(
         TrainCentralizedReferenceRequest(
@@ -136,4 +132,4 @@ def test_train_score_threshold_evaluate_stage_chain(tmp_path: Path) -> None:
 
 def test_score_stage_rejects_federated_checkpoint() -> None:
     with pytest.raises(LeakageError, match="federated checkpoint"):
-        reject_federated_checkpoint("fedavg")
+        reject_federated_checkpoint(TrainingModelId.FEDAVG_AUTOENCODER)
