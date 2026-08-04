@@ -1,6 +1,5 @@
 """Stage: compose independent centralized held-out evaluation publication."""
 
-from datp_core.domain.values import checksum_file
 from datp_core.evaluation.operational import (
     CentralizedEvaluationPublicationAsset,
     CentralizedEvaluationPublicationRequest,
@@ -45,7 +44,5 @@ def evaluate_centralized_reference_stage(
     return _EvaluateCentralizedReferenceResult(
         publication_status=publication.status,
         evaluation=publication.value,
-        complete_digest=checksum_file(
-            request.output_directory / CentralizedEvaluationPublicationAsset.COMPLETE
-        ),
+        complete_digest=publication.complete_digest,
     )
