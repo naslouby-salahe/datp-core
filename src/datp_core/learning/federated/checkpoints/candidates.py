@@ -24,7 +24,10 @@ from datp_core.domain.values import (
     checksum_file,
 )
 from datp_core.learning.autoencoder import AutoencoderStateView, build_autoencoder_for_state
-from datp_core.learning.federated.checkpoints.documents import CandidateManifest, CandidateManifestEntry
+from datp_core.learning.federated.checkpoints.documents import (
+    CandidateManifest,
+    CandidateManifestEntry,
+)
 from datp_core.learning.federated.checkpoints.history import (
     history_frames,
     read_parquet,
@@ -42,6 +45,12 @@ from datp_core.learning.federated.models import (
     PersonalizedCandidateSet,
     PersonalizedSnapshotSet,
     RoundSnapshot,
+)
+from datp_core.pipeline.checkpoints.persistence import (
+    validate_persisted_checkpoint_file,
+)
+from datp_core.pipeline.checkpoints.service import (
+    validate_ordered_checkpoint_inventory,
 )
 from datp_core.populations.models import ClientIdentity
 from datp_core.protocols.models import AutoencoderProtocol, CheckpointProtocol
@@ -90,7 +99,7 @@ class RoundLoss:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ClientRoundLoss:
-    client_id: str
+    client_id: ClientPathToken
     round_number: RoundNumber
     loss: MetricValue
 
@@ -112,7 +121,10 @@ def persist_checkpoint_tensor(
 ) -> Checksum:
     path.parent.mkdir(parents=True, exist_ok=True)
     staging = path.with_name(f".{path.name}.tmp")
-    cpu_state = {name: tensor.detach().cpu().contiguous() for name, tensor in state_dict.items()}
+    cpu_state = {
+        name: tensor.detach().cpu().contiguous()
+        for name, tensor in state_dict.items()
+    }
     save_file(cpu_state, str(staging))
     _assert_checkpoint_reload_equality(state_dict, staging, autoencoder)
     atomic_replace(staging, path)
@@ -143,7 +155,11 @@ def _assert_checkpoint_reload_equality(
                 "checkpoint tensor values differ from the expected model state",
                 subject=ContractSubject.ARTIFACT_PATH,
             )
-    build_autoencoder_for_state(autoencoder, loaded, device=torch.device("cpu"))
+    build_autoencoder_for_state(
+        autoencoder,
+        loaded,
+        device=torch.device("cpu"),
+    )
 
 
 def retain_checkpoint_candidates(
@@ -175,8 +191,10 @@ def retain_checkpoint_candidates(
         )
         for snapshot in snapshots
     )
-    validate_candidate_rounds_and_paths(candidates, checkpoint_protocol)
-    return candidates
+    return validate_ordered_checkpoint_inventory(
+        candidates,
+        checkpoint_protocol.candidates,
+    )
 
 
 def _persist_candidate(
@@ -189,13 +207,20 @@ def _persist_candidate(
     split_manifest_checksum: Checksum,
     client: ClientIdentity | None,
 ) -> CheckpointCandidate:
-    path = output_directory / candidate_tensor_name(snapshot.round_number, client)
+    path = output_directory / candidate_tensor_name(
+        snapshot.round_number,
+        client,
+    )
     return CheckpointCandidate(
         coordinate=coordinate,
         round_number=snapshot.round_number,
         client=client,
         tensor_path=path,
-        tensor_checksum=persist_checkpoint_tensor(snapshot.state_dict, path, autoencoder),
+        tensor_checksum=persist_checkpoint_tensor(
+            snapshot.state_dict,
+            path,
+            autoencoder,
+        ),
         mean_training_loss=snapshot.mean_training_loss,
         status=CheckpointStatus.CANDIDATE,
         preprocessing_state_set_checksum=preprocessing_state_set_checksum,
@@ -237,7 +262,11 @@ def build_manifest(
         entries=tuple(
             CandidateManifestEntry(
                 round_number=candidate.round_number,
-                client_id=ClientPathToken(candidate.client.client_id) if candidate.client is not None else None,
+                client_id=(
+                    ClientPathToken(candidate.client.client_id)
+                    if candidate.client is not None
+                    else None
+                ),
                 tensor_name=SafeTensorFilename(candidate.tensor_path.name),
                 tensor_checksum=candidate.tensor_checksum,
             )
@@ -247,15 +276,23 @@ def build_manifest(
 
 
 def write_manifest(directory: Path, manifest: CandidateManifest) -> None:
-    serialize_json_model(manifest, directory / FederatedHistoryAssetName.CANDIDATE_MANIFEST.value)
+    serialize_json_model(
+        manifest,
+        directory / FederatedHistoryAssetName.CANDIDATE_MANIFEST.value,
+    )
 
 
 def load_manifest(directory: Path) -> CandidateManifest:
     path = directory / FederatedHistoryAssetName.CANDIDATE_MANIFEST.value
     if not path.is_file():
-        raise ArtifactIntegrityError("candidate manifest is missing", subject=ContractSubject.ARTIFACT_PATH)
+        raise ArtifactIntegrityError(
+            "candidate manifest is missing",
+            subject=ContractSubject.ARTIFACT_PATH,
+        )
     try:
-        manifest = CandidateManifest.model_validate_json(path.read_text(encoding="utf-8"))
+        manifest = CandidateManifest.model_validate_json(
+            path.read_text(encoding="utf-8")
+        )
     except (OSError, UnicodeError, ValidationError, ValueError) as error:
         raise ArtifactIntegrityError(
             "candidate manifest is unreadable or invalid",
@@ -269,7 +306,11 @@ def load_manifest(directory: Path) -> CandidateManifest:
     return manifest
 
 
-def expected_publication_files(manifest: CandidateManifest, *, include_history: bool) -> tuple[str, ...]:
+def expected_publication_files(
+    manifest: CandidateManifest,
+    *,
+    include_history: bool,
+) -> tuple[str, ...]:
     names = (
         FederatedHistoryAssetName.CANDIDATE_MANIFEST.value,
         *(entry.tensor_name for entry in manifest.entries),
@@ -289,24 +330,56 @@ def expected_publication_files(manifest: CandidateManifest, *, include_history: 
     return tuple(sorted((*names, *history_names, *personalized)))
 
 
-def publication_digest(directory: Path, expected_files: Sequence[str]) -> Checksum:
+def publication_digest(
+    directory: Path,
+    expected_files: Sequence[str],
+) -> Checksum:
     projection = tuple(
-        PublicationFileChecksum(name=name, checksum=checksum_file(directory / name))
+        PublicationFileChecksum(
+            name=name,
+            checksum=checksum_file(directory / name),
+        )
         for name in sorted(expected_files)
     )
     return canonical_checksum(projection)
 
 
-def write_completion(directory: Path, manifest: CandidateManifest, *, include_history: bool) -> Checksum:
-    digest = publication_digest(directory, expected_publication_files(manifest, include_history=include_history))
-    (directory / FederatedHistoryAssetName.COMPLETE.value).write_text(digest.value, encoding="utf-8")
+def write_completion(
+    directory: Path,
+    manifest: CandidateManifest,
+    *,
+    include_history: bool,
+) -> Checksum:
+    digest = publication_digest(
+        directory,
+        expected_publication_files(
+            manifest,
+            include_history=include_history,
+        ),
+    )
+    (directory / FederatedHistoryAssetName.COMPLETE.value).write_text(
+        digest.value,
+        encoding="utf-8",
+    )
     return digest
 
 
-def verify_completion(directory: Path, manifest: CandidateManifest, *, include_history: bool) -> Checksum:
-    expected_without_complete = expected_publication_files(manifest, include_history=include_history)
-    expected_all = frozenset((*expected_without_complete, FederatedHistoryAssetName.COMPLETE.value))
-    actual_files = frozenset(path.name for path in directory.iterdir() if path.is_file())
+def verify_completion(
+    directory: Path,
+    manifest: CandidateManifest,
+    *,
+    include_history: bool,
+) -> Checksum:
+    expected_without_complete = expected_publication_files(
+        manifest,
+        include_history=include_history,
+    )
+    expected_all = frozenset(
+        (*expected_without_complete, FederatedHistoryAssetName.COMPLETE.value)
+    )
+    actual_files = frozenset(
+        path.name for path in directory.iterdir() if path.is_file()
+    )
     if actual_files != expected_all:
         raise ArtifactIntegrityError(
             "publication files do not match the exact declared artifact set",
@@ -329,35 +402,6 @@ def verify_completion(directory: Path, manifest: CandidateManifest, *, include_h
     return recomputed
 
 
-def validate_candidate_rounds_and_paths(
-    candidates: Sequence[CheckpointCandidate],
-    protocol: CheckpointProtocol,
-) -> None:
-    if tuple(candidate.round_number for candidate in candidates) != protocol.candidates:
-        raise ArtifactIntegrityError(
-            "checkpoint candidate rounds do not match the protocol",
-            subject=ContractSubject.CHECKPOINT_CANDIDATES,
-        )
-    paths = tuple(candidate.tensor_path for candidate in candidates)
-    if len(frozenset(paths)) != len(paths):
-        raise ArtifactIntegrityError(
-            "checkpoint candidate paths must be unique",
-            subject=ContractSubject.ARTIFACT_PATH,
-        )
-
-
-def verify_candidate_file(candidate: CheckpointCandidate) -> None:
-    if candidate.tensor_path.suffix != _CANDIDATE_SUFFIX:
-        raise ArtifactIntegrityError(
-            "federated checkpoints must use SafeTensors",
-            subject=ContractSubject.ARTIFACT_PATH,
-        )
-    if not candidate.tensor_path.is_file():
-        raise ArtifactIntegrityError("checkpoint candidate file is missing", subject=ContractSubject.ARTIFACT_PATH)
-    if checksum_file(candidate.tensor_path) != candidate.tensor_checksum:
-        raise ArtifactIntegrityError("checkpoint candidate checksum mismatch", subject=ContractSubject.ARTIFACT_PATH)
-
-
 def rebase_checkpoint_candidates(
     candidates: Sequence[CheckpointCandidate],
     directory: Path,
@@ -365,18 +409,21 @@ def rebase_checkpoint_candidates(
     rebased = tuple(
         replace(
             candidate,
-            tensor_path=directory / candidate_tensor_name(candidate.round_number, candidate.client),
+            tensor_path=(
+                directory
+                / candidate_tensor_name(
+                    candidate.round_number,
+                    candidate.client,
+                )
+            ),
         )
         for candidate in candidates
     )
     for original, candidate in zip(candidates, rebased, strict=True):
-        if not candidate.tensor_path.is_file():
-            raise ArtifactIntegrityError("rebased checkpoint file is missing", subject=ContractSubject.ARTIFACT_PATH)
-        if checksum_file(candidate.tensor_path) != original.tensor_checksum:
-            raise ArtifactIntegrityError(
-                "rebased checkpoint checksum does not match the original candidate",
-                subject=ContractSubject.ARTIFACT_PATH,
-            )
+        validate_persisted_checkpoint_file(
+            candidate.tensor_path,
+            original.tensor_checksum,
+        )
     return rebased
 
 
@@ -400,7 +447,8 @@ def validate_manifest(
         manifest.coordinate_population == coordinate.population
         and manifest.coordinate_training_seed == coordinate.training_seed
         and manifest.coordinate_split_protocol == coordinate.split_protocol
-        and manifest.coordinate_preprocessing_identity == coordinate.preprocessing_identity
+        and manifest.coordinate_preprocessing_identity
+        == coordinate.preprocessing_identity
         and manifest.coordinate_model == coordinate.model
         and manifest.coordinate_model_coefficient == expected_coefficient
     )
@@ -410,9 +458,14 @@ def validate_manifest(
             subject=ContractSubject.COORDINATE,
         )
     checks = (
-        (manifest.kind is kind, "candidate manifest kind mismatch", ContractSubject.ARTIFACT_PATH),
         (
-            manifest.preprocessing_state_set_checksum == preprocessing_state_set_checksum,
+            manifest.kind is kind,
+            "candidate manifest kind mismatch",
+            ContractSubject.ARTIFACT_PATH,
+        ),
+        (
+            manifest.preprocessing_state_set_checksum
+            == preprocessing_state_set_checksum,
             "candidate manifest preprocessing checksum mismatch",
             ContractSubject.PREPROCESSING,
         ),
@@ -442,7 +495,9 @@ def validate_manifest(
             raise ArtifactIntegrityError(message, subject=subject)
 
 
-def validated_global_manifest(request: ReusedGlobalCandidatesRequest) -> CandidateManifest:
+def validated_global_manifest(
+    request: ReusedGlobalCandidatesRequest,
+) -> CandidateManifest:
     manifest = load_manifest(request.directory)
     validate_manifest(
         manifest,
@@ -451,7 +506,9 @@ def validated_global_manifest(request: ReusedGlobalCandidatesRequest) -> Candida
         checkpoint_protocol=request.checkpoint_protocol,
         autoencoder=request.autoencoder,
         batch_size=request.batch_size,
-        preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
+        preprocessing_state_set_checksum=(
+            request.preprocessing_state_set_checksum
+        ),
         split_manifest_checksum=request.split_manifest_checksum,
     )
     verify_completion(request.directory, manifest, include_history=True)
@@ -459,7 +516,10 @@ def validated_global_manifest(request: ReusedGlobalCandidatesRequest) -> Candida
         (round_number, None, candidate_tensor_name(round_number))
         for round_number in request.checkpoint_protocol.candidates
     )
-    observed_entries = tuple((entry.round_number, entry.client_id, entry.tensor_name) for entry in manifest.entries)
+    observed_entries = tuple(
+        (entry.round_number, entry.client_id, entry.tensor_name)
+        for entry in manifest.entries
+    )
     if observed_entries != expected_entries:
         raise ArtifactIntegrityError(
             "global candidate manifest entries are incomplete, duplicated, or out of order",
@@ -468,11 +528,17 @@ def validated_global_manifest(request: ReusedGlobalCandidatesRequest) -> Candida
     return manifest
 
 
-def load_reused_global_candidates(request: ReusedGlobalCandidatesRequest) -> tuple[CheckpointCandidate, ...]:
+def load_reused_global_candidates(
+    request: ReusedGlobalCandidatesRequest,
+) -> tuple[CheckpointCandidate, ...]:
     manifest = validated_global_manifest(request)
     round_frame, _, _ = history_frames(request.directory)
     expected_rounds = tuple(
-        RoundNumber(value) for value in range(1, request.checkpoint_protocol.maximum_round.value + 1)
+        RoundNumber(value)
+        for value in range(
+            1,
+            request.checkpoint_protocol.maximum_round.value + 1,
+        )
     )
     validate_round_summary(round_frame, expected_rounds)
     losses = tuple(
@@ -487,7 +553,10 @@ def load_reused_global_candidates(request: ReusedGlobalCandidatesRequest) -> tup
             )
         ).iter_rows()
     )
-    return tuple(_global_candidate(request, entry, losses) for entry in manifest.entries)
+    return tuple(
+        _global_candidate(request, entry, losses)
+        for entry in manifest.entries
+    )
 
 
 def _global_candidate(
@@ -496,13 +565,10 @@ def _global_candidate(
     losses: tuple[RoundLoss, ...],
 ) -> CheckpointCandidate:
     path = request.directory / entry.tensor_name
-    actual = checksum_file(path)
-    if actual != entry.tensor_checksum:
-        raise ArtifactIntegrityError(
-            "reused global checkpoint checksum mismatch",
-            subject=ContractSubject.ARTIFACT_PATH,
-        )
-    matching = tuple(item.loss for item in losses if item.round_number == entry.round_number)
+    validate_persisted_checkpoint_file(path, entry.tensor_checksum)
+    matching = tuple(
+        item.loss for item in losses if item.round_number == entry.round_number
+    )
     if len(matching) != 1:
         raise ArtifactIntegrityError(
             "global checkpoint requires exactly one matching round loss",
@@ -513,15 +579,19 @@ def _global_candidate(
         round_number=entry.round_number,
         client=None,
         tensor_path=path,
-        tensor_checksum=actual,
+        tensor_checksum=entry.tensor_checksum,
         mean_training_loss=matching[0],
         status=CheckpointStatus.CANDIDATE,
-        preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
+        preprocessing_state_set_checksum=(
+            request.preprocessing_state_set_checksum
+        ),
         split_manifest_checksum=request.split_manifest_checksum,
     )
 
 
-def validated_personalized_manifest(request: ReusedPersonalizedCandidatesRequest) -> CandidateManifest:
+def validated_personalized_manifest(
+    request: ReusedPersonalizedCandidatesRequest,
+) -> CandidateManifest:
     manifest = load_manifest(request.personalized_output_directory)
     validate_manifest(
         manifest,
@@ -530,16 +600,29 @@ def validated_personalized_manifest(request: ReusedPersonalizedCandidatesRequest
         checkpoint_protocol=request.checkpoint_protocol,
         autoencoder=request.autoencoder,
         batch_size=request.batch_size,
-        preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
+        preprocessing_state_set_checksum=(
+            request.preprocessing_state_set_checksum
+        ),
         split_manifest_checksum=request.split_manifest_checksum,
     )
-    verify_completion(request.personalized_output_directory, manifest, include_history=False)
+    verify_completion(
+        request.personalized_output_directory,
+        manifest,
+        include_history=False,
+    )
     expected_entries = tuple(
-        (round_number, client.client_id, candidate_tensor_name(round_number, client))
+        (
+            round_number,
+            ClientPathToken(client.client_id),
+            candidate_tensor_name(round_number, client),
+        )
         for client in request.clients
         for round_number in request.checkpoint_protocol.candidates
     )
-    observed_entries = tuple((entry.round_number, entry.client_id, entry.tensor_name) for entry in manifest.entries)
+    observed_entries = tuple(
+        (entry.round_number, entry.client_id, entry.tensor_name)
+        for entry in manifest.entries
+    )
     if observed_entries != expected_entries:
         raise ArtifactIntegrityError(
             "personalized candidate manifest entries do not match the expected clients and rounds",
@@ -553,10 +636,15 @@ def load_reused_personalized_candidates(
 ) -> tuple[PersonalizedCandidateSet, ...]:
     manifest = validated_personalized_manifest(request)
     personalized_frame = read_parquet(
-        request.global_history_directory / FederatedHistoryAssetName.PERSONALIZED_ROUNDS.value
+        request.global_history_directory
+        / FederatedHistoryAssetName.PERSONALIZED_ROUNDS.value
     )
     training_rounds = tuple(
-        RoundNumber(value) for value in range(1, request.checkpoint_protocol.maximum_round.value + 1)
+        RoundNumber(value)
+        for value in range(
+            1,
+            request.checkpoint_protocol.maximum_round.value + 1,
+        )
     )
     validate_personalized_history(
         personalized_frame,
@@ -565,7 +653,7 @@ def load_reused_personalized_candidates(
     )
     losses = tuple(
         ClientRoundLoss(
-            client_id=str(client_id),
+            client_id=ClientPathToken(str(client_id)),
             round_number=RoundNumber(int(round_number)),
             loss=MetricValue(float(loss)),
         )
@@ -597,16 +685,13 @@ def _personalized_candidate(
     losses: tuple[ClientRoundLoss, ...],
 ) -> CheckpointCandidate:
     path = request.personalized_output_directory / entry.tensor_name
-    actual = checksum_file(path)
-    if actual != entry.tensor_checksum:
-        raise ArtifactIntegrityError(
-            "reused personalized checkpoint checksum mismatch",
-            subject=ContractSubject.ARTIFACT_PATH,
-        )
+    validate_persisted_checkpoint_file(path, entry.tensor_checksum)
+    client_token = ClientPathToken(client.client_id)
     matching = tuple(
         item.loss
         for item in losses
-        if item.client_id == client.client_id and item.round_number == entry.round_number
+        if item.client_id == client_token
+        and item.round_number == entry.round_number
     )
     if len(matching) != 1:
         raise ArtifactIntegrityError(
@@ -618,10 +703,12 @@ def _personalized_candidate(
         round_number=entry.round_number,
         client=client,
         tensor_path=path,
-        tensor_checksum=actual,
+        tensor_checksum=entry.tensor_checksum,
         mean_training_loss=matching[0],
         status=CheckpointStatus.CANDIDATE,
-        preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
+        preprocessing_state_set_checksum=(
+            request.preprocessing_state_set_checksum
+        ),
         split_manifest_checksum=request.split_manifest_checksum,
     )
 
@@ -646,7 +733,9 @@ def stage_personalized_candidates(
                 checkpoint_protocol=checkpoint_protocol,
                 autoencoder=autoencoder,
                 output_directory=output_directory,
-                preprocessing_state_set_checksum=preprocessing_state_set_checksum,
+                preprocessing_state_set_checksum=(
+                    preprocessing_state_set_checksum
+                ),
                 split_manifest_checksum=split_manifest_checksum,
                 client=snapshot_set.client,
             ),
@@ -656,7 +745,11 @@ def stage_personalized_candidates(
     manifest = build_manifest(
         kind=CandidateManifestKind.PERSONALIZED,
         coordinate=coordinate,
-        candidates=tuple(candidate for item in candidate_sets for candidate in item.candidates),
+        candidates=tuple(
+            candidate
+            for item in candidate_sets
+            for candidate in item.candidates
+        ),
         checkpoint_protocol=checkpoint_protocol,
         autoencoder=autoencoder,
         batch_size=batch_size,
@@ -664,4 +757,8 @@ def stage_personalized_candidates(
         split_manifest_checksum=split_manifest_checksum,
     )
     write_manifest(output_directory, manifest)
-    return candidate_sets, write_completion(output_directory, manifest, include_history=False)
+    return candidate_sets, write_completion(
+        output_directory,
+        manifest,
+        include_history=False,
+    )
