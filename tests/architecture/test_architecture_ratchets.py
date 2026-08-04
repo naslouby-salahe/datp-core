@@ -9,6 +9,58 @@ PIPELINE_ROOT = SOURCE_ROOT / "pipeline"
 ARTIFACT_STORE = SOURCE_ROOT / "artifacts" / "store.py"
 LEGACY_CHECKPOINT_MODULE = SOURCE_ROOT / "learning" / "federated" / "checkpointing.py"
 LEGACY_CHECKPOINT_IMPORT = "datp_core.learning.federated.checkpointing"
+CHECKPOINT_PACKAGE = SOURCE_ROOT / "learning" / "federated" / "checkpoints"
+CHECKPOINT_CANDIDATE_MODULE = CHECKPOINT_PACKAGE / "candidates.py"
+CHECKPOINT_PUBLICATION_MODULE = CHECKPOINT_PACKAGE / "publication.py"
+CHECKPOINT_REUSE_MODULE = CHECKPOINT_PACKAGE / "reuse.py"
+CHECKPOINT_OWNERSHIP = (
+    (
+        CHECKPOINT_CANDIDATE_MODULE,
+        frozenset(
+            {
+                "candidate_tensor_name",
+                "persist_checkpoint_tensor",
+                "retain_checkpoint_candidates",
+                "rebase_checkpoint_candidates",
+            }
+        ),
+    ),
+    (
+        CHECKPOINT_PUBLICATION_MODULE,
+        frozenset(
+            {
+                "build_manifest",
+                "load_manifest",
+                "write_manifest",
+                "expected_publication_files",
+                "publication_digest",
+                "write_completion",
+                "verify_completion",
+                "validate_manifest",
+                "stage_personalized_candidates",
+                "write_federated_training",
+                "write_ditto_training",
+            }
+        ),
+    ),
+    (
+        CHECKPOINT_REUSE_MODULE,
+        frozenset(
+            {
+                "ReusedGlobalCandidatesRequest",
+                "ReusedPersonalizedCandidatesRequest",
+                "ReusedFederatedTrainingRequest",
+                "ReusedDittoTrainingRequest",
+                "validated_global_manifest",
+                "validated_personalized_manifest",
+                "load_reused_global_candidates",
+                "load_reused_personalized_candidates",
+                "load_reused_federated_training",
+                "load_reused_ditto_training",
+            }
+        ),
+    ),
+)
 LEGACY_ANALYSIS_MODULES = (
     SOURCE_ROOT / "analysis" / "models.py",
     SOURCE_ROOT / "analysis" / "mechanisms.py",
@@ -67,6 +119,15 @@ def _module_imports(tree: ast.AST) -> tuple[str, ...]:
         elif isinstance(node, ast.ImportFrom) and node.module is not None:
             imports.append(node.module)
     return tuple(imports)
+
+
+def _top_level_definitions(path: Path) -> frozenset[str]:
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    return frozenset(
+        node.name
+        for node in tree.body
+        if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+    )
 
 
 def _contains_any_annotation(tree: ast.AST) -> bool:
@@ -179,7 +240,7 @@ def test_neutral_publication_symbols_are_not_reexported_from_artifacts_store() -
 
 def test_federated_checkpoint_monolith_and_imports_cannot_return() -> None:
     assert not LEGACY_CHECKPOINT_MODULE.exists()
-    assert (SOURCE_ROOT / "learning" / "federated" / "checkpoints").is_dir()
+    assert CHECKPOINT_PACKAGE.is_dir()
     violations: list[str] = []
     for root in (SOURCE_ROOT, TEST_ROOT):
         for path in _python_files(root):
@@ -187,6 +248,36 @@ def test_federated_checkpoint_monolith_and_imports_cannot_return() -> None:
             if LEGACY_CHECKPOINT_IMPORT in _module_imports(tree):
                 violations.append(str(path.relative_to(REPOSITORY_ROOT)))
     assert not violations, f"legacy checkpointing imports remain in: {violations}"
+
+
+def test_federated_checkpoint_responsibilities_keep_one_owner() -> None:
+    definitions = tuple(
+        (path, _top_level_definitions(path))
+        for path, _symbols in CHECKPOINT_OWNERSHIP
+    )
+    violations: list[str] = []
+    for owner, expected_symbols in CHECKPOINT_OWNERSHIP:
+        owner_definitions = next(
+            observed
+            for path, observed in definitions
+            if path == owner
+        )
+        missing = expected_symbols - owner_definitions
+        if missing:
+            violations.append(
+                f"{owner.relative_to(REPOSITORY_ROOT)} missing {sorted(missing)}"
+            )
+        for other, other_definitions in definitions:
+            if other == owner:
+                continue
+            duplicated = expected_symbols & other_definitions
+            if duplicated:
+                violations.append(
+                    f"{other.relative_to(REPOSITORY_ROOT)} duplicates "
+                    f"{sorted(duplicated)} owned by "
+                    f"{owner.relative_to(REPOSITORY_ROOT)}"
+                )
+    assert not violations, "\n".join(violations)
 
 
 def test_analysis_aggregate_modules_and_imports_cannot_return() -> None:
