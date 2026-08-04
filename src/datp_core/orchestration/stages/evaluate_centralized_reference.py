@@ -3,10 +3,8 @@
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from shutil import rmtree
 from typing import ClassVar
 
-from datp_core.artifacts.store import publish_atomically
 from datp_core.centralized_reference.evaluation import (
     CentralizedEvaluationResult,
     evaluate_centralized_reference,
@@ -17,7 +15,8 @@ from datp_core.centralized_reference.scoring import PooledScoreArtifact
 from datp_core.centralized_reference.thresholding import PooledThresholdResult
 from datp_core.centralized_reference.training import CentralizedTrainingCoordinate
 from datp_core.domain.enums import PublicationStatus, StageOperationId
-from datp_core.domain.values import Checksum
+from datp_core.domain.values import Checksum, checksum_file
+from datp_core.pipeline.publication.codec import ArtifactPublication, publish_artifact
 
 
 class CentralizedEvaluationAssetName(StrEnum):
@@ -42,35 +41,61 @@ class EvaluateCentralizedReferenceResult:
     complete_digest: Checksum
 
 
+@dataclass(frozen=True, slots=True)
+class _CentralizedEvaluationCodec:
+    def write(
+        self,
+        request: EvaluateCentralizedReferenceRequest,
+        directory: Path,
+    ) -> CentralizedEvaluationResult:
+        evaluation = _evaluate(request)
+        write_evaluation_document(evaluation, directory)
+        digest = evaluation_result_checksum(evaluation)
+        (directory / CentralizedEvaluationAssetName.COMPLETE).write_text(digest.value, encoding="utf-8")
+        return evaluation
+
+    def validate(self, request: EvaluateCentralizedReferenceRequest, directory: Path) -> bool:
+        return _is_reusable(directory, request)
+
+    def load(
+        self,
+        request: EvaluateCentralizedReferenceRequest,
+        directory: Path,
+    ) -> CentralizedEvaluationResult:
+        return _evaluate(request)
+
+    def rebase(
+        self,
+        result: CentralizedEvaluationResult,
+        directory: Path,
+    ) -> CentralizedEvaluationResult:
+        return result
+
+
 def evaluate_centralized_reference_stage(
     request: EvaluateCentralizedReferenceRequest,
 ) -> EvaluateCentralizedReferenceResult:
-    def evaluate() -> CentralizedEvaluationResult:
-        return evaluate_centralized_reference(
-            coordinate=request.coordinate,
-            evaluation_scores=request.evaluation_scores,
-            threshold_result=request.threshold,
+    publication = publish_artifact(
+        ArtifactPublication(
+            target=request.output_directory,
+            request=request,
+            codec=_CentralizedEvaluationCodec(),
+            overwrite=request.overwrite,
+            complete_marker=CentralizedEvaluationAssetName.COMPLETE,
         )
-
-    def write(temporary: Path) -> CentralizedEvaluationResult:
-        evaluation = evaluate()
-        write_evaluation_document(evaluation, temporary)
-        digest = evaluation_result_checksum(evaluation)
-        (temporary / CentralizedEvaluationAssetName.COMPLETE).write_text(digest.value, encoding="utf-8")
-        return evaluation
-
-    outcome = publish_atomically(
-        target=request.output_directory,
-        overwrite=request.overwrite,
-        is_reusable=lambda directory: _is_reusable(directory, request),
-        write=write,
-        reusable_value=lambda _directory: evaluate(),
-        remove_target=rmtree,
     )
     return EvaluateCentralizedReferenceResult(
-        publication_status=outcome.status,
-        evaluation=outcome.value,
-        complete_digest=outcome.complete_digest,
+        publication_status=publication.status,
+        evaluation=publication.value,
+        complete_digest=checksum_file(request.output_directory / CentralizedEvaluationAssetName.COMPLETE),
+    )
+
+
+def _evaluate(request: EvaluateCentralizedReferenceRequest) -> CentralizedEvaluationResult:
+    return evaluate_centralized_reference(
+        coordinate=request.coordinate,
+        evaluation_scores=request.evaluation_scores,
+        threshold_result=request.threshold,
     )
 
 
@@ -79,11 +104,5 @@ def _is_reusable(directory: Path, request: EvaluateCentralizedReferenceRequest) 
     document = directory / CentralizedEvaluationAssetName.EVALUATION
     if not (complete.is_file() and document.is_file()):
         return False
-    expected = evaluation_result_checksum(
-        evaluate_centralized_reference(
-            coordinate=request.coordinate,
-            evaluation_scores=request.evaluation_scores,
-            threshold_result=request.threshold,
-        )
-    )
+    expected = evaluation_result_checksum(_evaluate(request))
     return complete.read_text(encoding="utf-8").strip() == expected.value
