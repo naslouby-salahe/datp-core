@@ -1,8 +1,18 @@
-"""Evidence-gated operational alert-burden diagnostics."""
+"""Operational diagnostics and typed evaluation publication lifecycles."""
 
 from dataclasses import dataclass
 from enum import StrEnum
+from pathlib import Path
 
+from datp_core.centralized_reference.evaluation import (
+    CentralizedEvaluationResult,
+    evaluate_centralized_reference,
+    evaluation_result_checksum,
+    write_evaluation_document,
+)
+from datp_core.centralized_reference.scoring import PooledScoreArtifact
+from datp_core.centralized_reference.thresholding import PooledThresholdResult
+from datp_core.centralized_reference.training import CentralizedTrainingCoordinate
 from datp_core.domain.enums import MetricId, WarningCode
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import Ratio, Seed
@@ -17,6 +27,11 @@ class AlertBurdenSuppressionReason(StrEnum):
     NO_APPLICABLE_TRAFFIC_RATE_EVIDENCE = "no_applicable_traffic_rate_evidence"
     POPULATION_MISMATCH = "traffic_rate_population_mismatch"
     NOT_PER_CLIENT_APPLICABLE = "traffic_rate_not_per_client_applicable"
+
+
+class CentralizedEvaluationPublicationAsset(StrEnum):
+    EVALUATION = "centralized_evaluation.json"
+    COMPLETE = "COMPLETE"
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,6 +63,67 @@ class AlertBurdenDiagnostic:
     @property
     def alerts_per_client_per_day(self) -> float | None:
         return metric_value(self.metric)
+
+
+@dataclass(frozen=True, slots=True)
+class CentralizedEvaluationPublicationRequest:
+    coordinate: CentralizedTrainingCoordinate
+    evaluation_scores: PooledScoreArtifact
+    threshold: PooledThresholdResult
+
+
+def write_centralized_evaluation(
+    request: CentralizedEvaluationPublicationRequest,
+    directory: Path,
+) -> CentralizedEvaluationResult:
+    evaluation = evaluate_centralized_publication(request)
+    write_evaluation_document(evaluation, directory)
+    (directory / CentralizedEvaluationPublicationAsset.COMPLETE).write_text(
+        evaluation_result_checksum(evaluation).value,
+        encoding="utf-8",
+    )
+    return evaluation
+
+
+def centralized_evaluation_is_reusable(
+    request: CentralizedEvaluationPublicationRequest,
+    directory: Path,
+) -> bool:
+    complete = directory / CentralizedEvaluationPublicationAsset.COMPLETE
+    document = directory / CentralizedEvaluationPublicationAsset.EVALUATION
+    if not complete.is_file() or not document.is_file():
+        return False
+    expected = evaluation_result_checksum(evaluate_centralized_publication(request))
+    try:
+        return complete.read_text(encoding="utf-8").strip() == expected.value
+    except OSError:
+        return False
+
+
+def load_reused_centralized_evaluation(
+    request: CentralizedEvaluationPublicationRequest,
+    directory: Path,
+) -> CentralizedEvaluationResult:
+    del directory
+    return evaluate_centralized_publication(request)
+
+
+def rebase_centralized_evaluation(
+    result: CentralizedEvaluationResult,
+    directory: Path,
+) -> CentralizedEvaluationResult:
+    del directory
+    return result
+
+
+def evaluate_centralized_publication(
+    request: CentralizedEvaluationPublicationRequest,
+) -> CentralizedEvaluationResult:
+    return evaluate_centralized_reference(
+        coordinate=request.coordinate,
+        evaluation_scores=request.evaluation_scores,
+        threshold_result=request.threshold,
+    )
 
 
 def calculate_alert_burden(
