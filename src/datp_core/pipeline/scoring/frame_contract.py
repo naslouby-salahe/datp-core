@@ -7,10 +7,23 @@ import numpy.typing as npt
 import polars as pl
 
 from datp_core.domain.enums import ContractSubject, PartitionRole, ScoreFrameColumn
-from datp_core.domain.errors import ArtifactIntegrityError, LeakageError, ScientificContractError
-from datp_core.domain.values import Checksum, FeatureNameSequence, RowCount, checksum_file
+from datp_core.domain.errors import (
+    ArtifactIntegrityError,
+    LeakageError,
+    ScientificContractError,
+)
+from datp_core.domain.values import (
+    Checksum,
+    FeatureNameSequence,
+    RowCount,
+    checksum_file,
+)
 from datp_core.learning.autoencoder import LEARNING_DTYPE
-from datp_core.populations.models import OUTCOME_LABEL_COLUMN, STABLE_ROW_ID_COLUMN, PopulationOutcomeLabel
+from datp_core.populations.models import (
+    OUTCOME_LABEL_COLUMN,
+    STABLE_ROW_ID_COLUMN,
+    PopulationOutcomeLabel,
+)
 
 SCORE_FRAME_COLUMNS = (
     ScoreFrameColumn.STABLE_ROW_ID.value,
@@ -48,9 +61,19 @@ def extract_score_arrays(
     frame: pl.DataFrame,
     feature_names: FeatureNameSequence,
 ) -> tuple[npt.NDArray[np.float32], tuple[str, ...], tuple[str, ...]]:
-    matrix = frame.select(feature_names.as_list()).to_numpy().astype(LEARNING_DTYPE, copy=False)
-    labels = tuple(str(value) for value in frame.get_column(OUTCOME_LABEL_COLUMN).to_list())
-    row_ids = tuple(str(value) for value in frame.get_column(STABLE_ROW_ID_COLUMN).to_list())
+    matrix = (
+        frame.select(feature_names.as_list())
+        .to_numpy()
+        .astype(LEARNING_DTYPE, copy=False)
+    )
+    labels = tuple(
+        str(value)
+        for value in frame.get_column(OUTCOME_LABEL_COLUMN).to_list()
+    )
+    row_ids = tuple(
+        str(value)
+        for value in frame.get_column(STABLE_ROW_ID_COLUMN).to_list()
+    )
     return matrix, labels, row_ids
 
 
@@ -68,7 +91,11 @@ def score_frame(
         (
             pl.Series(SCORE_FRAME_COLUMNS[0], row_ids, dtype=pl.Utf8),
             pl.Series(SCORE_FRAME_COLUMNS[1], labels, dtype=pl.Utf8),
-            pl.Series(SCORE_FRAME_COLUMNS[2], scores.tolist(), dtype=pl.Float64),
+            pl.Series(
+                SCORE_FRAME_COLUMNS[2],
+                scores.tolist(),
+                dtype=pl.Float64,
+            ),
         )
     )
 
@@ -79,17 +106,34 @@ def validate_persisted_score_frame(
     row_count: RowCount,
 ) -> pl.DataFrame:
     if not path.is_file():
-        raise ArtifactIntegrityError("score artifact is missing", subject=ContractSubject.ARTIFACT_PATH)
+        raise ArtifactIntegrityError(
+            "score artifact is missing",
+            subject=ContractSubject.ARTIFACT_PATH,
+        )
     if checksum_file(path) != checksum:
-        raise ArtifactIntegrityError("score checksum changed after write", subject=ContractSubject.ARTIFACT_PATH)
+        raise ArtifactIntegrityError(
+            "score checksum changed after write",
+            subject=ContractSubject.ARTIFACT_PATH,
+        )
     frame = pl.read_parquet(path)
     if frame.height != row_count.value:
-        raise ArtifactIntegrityError("score artifact row count mismatch", subject=ContractSubject.ARTIFACT_PATH)
+        raise ArtifactIntegrityError(
+            "score artifact row count mismatch",
+            subject=ContractSubject.ARTIFACT_PATH,
+        )
     if tuple(frame.columns) != SCORE_FRAME_COLUMNS:
-        raise ArtifactIntegrityError("score artifact schema mismatch", subject=ContractSubject.SCHEMA)
-    observed_dtypes = tuple(frame.schema[column] for column in SCORE_FRAME_COLUMNS)
+        raise ArtifactIntegrityError(
+            "score artifact schema mismatch",
+            subject=ContractSubject.SCHEMA,
+        )
+    observed_dtypes = tuple(
+        frame.schema[column] for column in SCORE_FRAME_COLUMNS
+    )
     if observed_dtypes != SCORE_FRAME_DTYPES:
-        raise ArtifactIntegrityError("score artifact column dtype mismatch", subject=ContractSubject.SCHEMA)
+        raise ArtifactIntegrityError(
+            "score artifact column dtype mismatch",
+            subject=ContractSubject.SCHEMA,
+        )
     return frame
 
 
@@ -102,12 +146,16 @@ def _require_columns(
     missing = tuple(name for name in required if name not in frame.columns)
     if missing:
         raise ScientificContractError(
-            f"{partition_role.value} frame missing declared columns: {', '.join(missing)}",
+            f"{partition_role.value} frame missing declared columns: "
+            f"{', '.join(missing)}",
             subject=ContractSubject.SCHEMA,
         )
 
 
-def _require_identity_columns(frame: pl.DataFrame, partition_role: PartitionRole) -> None:
+def _require_identity_columns(
+    frame: pl.DataFrame,
+    partition_role: PartitionRole,
+) -> None:
     row_ids = frame.get_column(STABLE_ROW_ID_COLUMN)
     if row_ids.null_count() > 0:
         raise ScientificContractError(
@@ -132,24 +180,35 @@ def _require_feature_columns(
     feature_names: FeatureNameSequence,
 ) -> None:
     for name in feature_names:
-        dtype = frame.schema[name]
+        column = frame.get_column(name)
+        dtype = column.dtype
         if not dtype.is_numeric():
             raise ScientificContractError(
-                f"feature column '{name}' in {partition_role.value} partition must be numeric, got {dtype}",
+                f"feature column '{name}' in {partition_role.value} partition "
+                f"must be numeric, got {dtype}",
+                subject=ContractSubject.FEATURES,
+            )
+        if column.null_count() > 0:
+            raise ScientificContractError(
+                f"feature column '{name}' in {partition_role.value} partition "
+                "contains null values",
                 subject=ContractSubject.FEATURES,
             )
         has_non_finite = frame.select(
-            (pl.col(name).is_not_null() & ~pl.col(name).is_finite()).any()
+            (~pl.col(name).is_finite()).any()
         ).item()
         if has_non_finite:
             raise ScientificContractError(
-                f"feature column '{name}' in {partition_role.value} partition contains non-finite values",
+                f"feature column '{name}' in {partition_role.value} partition "
+                "contains non-finite values",
                 subject=ContractSubject.FEATURES,
             )
 
 
 def _require_benign_calibration(frame: pl.DataFrame) -> None:
-    attack_rows = frame.filter(pl.col(OUTCOME_LABEL_COLUMN) != PopulationOutcomeLabel.BENIGN.value).height
+    attack_rows = frame.filter(
+        pl.col(OUTCOME_LABEL_COLUMN) != PopulationOutcomeLabel.BENIGN.value
+    ).height
     if attack_rows:
         raise LeakageError(
             "attack-labelled rows cannot enter benign calibration construction",
