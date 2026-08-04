@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
+from datp_core.artifacts.serialization import canonical_checksum
 from datp_core.centralized_reference.training import (
     CentralizedTrainingCoordinate,
     CentralizedTrainingExecution,
@@ -19,17 +20,12 @@ from datp_core.domain.enums import (
     ContractSubject,
     TrainingModelId,
 )
-from datp_core.domain.errors import (
-    ArtifactIntegrityError,
-    LeakageError,
-    ScientificContractError,
-)
+from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.values import (
     Checksum,
     MetricValue,
     RoundNumber,
     Seed,
-    checksum_text,
 )
 from datp_core.pipeline.checkpoints.models import RETAINED_CHECKPOINT_STATUSES
 from datp_core.pipeline.checkpoints.persistence import (
@@ -116,6 +112,13 @@ class CentralizedCheckpointDecision:
                 "selected candidate status must be SELECTED_BY_NON_TEST_RULE",
                 subject=self.selected.status,
             )
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class CentralizedCheckpointSetEntry:
+    round_number: RoundNumber
+    tensor_checksum: Checksum
+    status: CheckpointStatus
 
 
 def candidate_tensor_name(round_number: RoundNumber) -> str:
@@ -275,13 +278,16 @@ def validate_candidate_coordinates(
 def candidate_set_checksum(
     candidates: Sequence[CentralizedCheckpointCandidate],
 ) -> Checksum:
-    payload = "|".join(
-        f"{item.round_number.value}:"
-        f"{item.tensor_checksum.value}:"
-        f"{item.status.value}"
-        for item in candidates
+    return canonical_checksum(
+        tuple(
+            CentralizedCheckpointSetEntry(
+                round_number=item.round_number,
+                tensor_checksum=item.tensor_checksum,
+                status=item.status,
+            )
+            for item in candidates
+        )
     )
-    return checksum_text(payload)
 
 
 def _verify_candidate_reload(
