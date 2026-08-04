@@ -106,6 +106,7 @@ class PreprocessingHandoff:
     membership: pl.DataFrame
     assignments: pl.DataFrame
     client_partition_counts: tuple[ClientPartitionCounts, ...]
+    deployment_fallback_client_ids: frozenset[ClientIdentity] = frozenset()
 
 
 def resolve_population(population_id: PopulationId) -> PopulationBinding:
@@ -272,8 +273,8 @@ def build_preprocessing_handoff(
     document = construction.manifest.document
     membership = construction.membership
     candidate_clients = construction.manifest.clients
-    _validate_deployment_fallback_clients(
-        document.candidate_clients,
+    fallback_clients = _deployment_fallback_clients(
+        candidate_clients,
         request.deployment_fallback_client_ids,
     )
     role_column = PopulationFrameColumn.PARTITION_ROLE
@@ -288,17 +289,16 @@ def build_preprocessing_handoff(
                 benign_evaluation_count=RowCount(0),
                 attack_evaluation_count=RowCount(0),
                 accepted=False,
-                deployment_fallback=(
-                    client.client_id in request.deployment_fallback_client_ids
-                ),
+                deployment_fallback=client in fallback_clients,
             )
             for client in candidate_clients
         )
         return PreprocessingHandoff(
-            construction.manifest,
-            membership,
-            assignments,
-            counts,
+            population_manifest=construction.manifest,
+            membership=membership,
+            assignments=assignments,
+            client_partition_counts=counts,
+            deployment_fallback_client_ids=fallback_clients,
         )
     assignments, _ = split_membership(
         SplitConstructionRequest(
@@ -312,16 +312,15 @@ def build_preprocessing_handoff(
         )
     )
     return PreprocessingHandoff(
-        construction.manifest,
-        membership,
-        assignments,
-        _client_partition_counts(
+        population_manifest=construction.manifest,
+        membership=membership,
+        assignments=assignments,
+        client_partition_counts=_client_partition_counts(
             assignments,
             candidate_clients,
-            deployment_fallback_client_ids=(
-                request.deployment_fallback_client_ids
-            ),
+            deployment_fallback_clients=fallback_clients,
         ),
+        deployment_fallback_client_ids=fallback_clients,
     )
 
 
@@ -359,23 +358,26 @@ def join_handoff_with_canonical_features(
     return joined
 
 
-def _validate_deployment_fallback_clients(
-    candidate_clients: tuple[str, ...],
-    deployment_fallback_client_ids: frozenset[str],
-) -> None:
-    unknown = deployment_fallback_client_ids - frozenset(candidate_clients)
-    if unknown:
+def _deployment_fallback_clients(
+    candidate_clients: tuple[ClientIdentity, ...],
+    fallback_client_ids: frozenset[str],
+) -> frozenset[ClientIdentity]:
+    matches = frozenset(
+        client for client in candidate_clients if client.client_id in fallback_client_ids
+    )
+    if frozenset(client.client_id for client in matches) != fallback_client_ids:
         raise ScientificContractError(
             "deployment-fallback client ids must be subset of population candidate clients",
             subject=ContractSubject.CLIENT_IDENTITY,
         )
+    return matches
 
 
 def _client_partition_counts(
     assignments: pl.DataFrame,
     candidate_clients: tuple[ClientIdentity, ...],
     *,
-    deployment_fallback_client_ids: frozenset[str],
+    deployment_fallback_clients: frozenset[ClientIdentity],
 ) -> tuple[ClientPartitionCounts, ...]:
     client_column = PopulationFrameColumn.CLIENT_ID
     role_column = PopulationFrameColumn.PARTITION_ROLE
@@ -429,14 +431,12 @@ def _client_partition_counts(
     )
     return tuple(
         ClientPartitionCounts(
-            client=_client_identity(candidate_clients, str(row[0])),
+            client=(client := _client_identity(candidate_clients, str(row[0]))),
             benign_calibration_count=RowCount(int(row[1])),
             benign_evaluation_count=RowCount(int(row[2])),
             attack_evaluation_count=RowCount(int(row[3])),
             accepted=str(row[0]) in accepted,
-            deployment_fallback=(
-                str(row[0]) in deployment_fallback_client_ids
-            ),
+            deployment_fallback=client in deployment_fallback_clients,
         )
         for row in joined.iter_rows()
     )
