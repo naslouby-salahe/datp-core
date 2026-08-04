@@ -15,7 +15,12 @@ from datp_core.artifacts.layout import (
     processed_asset_names,
 )
 from datp_core.artifacts.reload_validation import TransformReloadCheck, reload_and_compare_transform
-from datp_core.artifacts.serialization import TrustedScaler, resolve_trusted_estimator_type, serialize_estimator
+from datp_core.artifacts.serialization import (
+    TrustedScaler,
+    canonical_checksum,
+    resolve_trusted_estimator_type,
+    serialize_estimator,
+)
 from datp_core.artifacts.store import ProcessedPublication, ProcessedPublicationResult, publish_processed
 from datp_core.domain.enums import (
     ContractSubject,
@@ -32,7 +37,6 @@ from datp_core.domain.values import (
     FeatureNameSequence,
     RowCount,
     checksum_file,
-    checksum_text,
 )
 from datp_core.populations.models import (
     OUTCOME_LABEL_COLUMN,
@@ -91,7 +95,7 @@ def extract_partitions(
 ) -> PreprocessingPartitions:
     require_columns(
         frame,
-        [PARTITION_ROLE_COLUMN, STABLE_ROW_ID_COLUMN, OUTCOME_LABEL_COLUMN, *feature_names.names],
+        (PARTITION_ROLE_COLUMN, STABLE_ROW_ID_COLUMN, OUTCOME_LABEL_COLUMN, *feature_names.names),
         subject=ContractSubject.SCHEMA,
     )
     normalized = frame.with_columns(pl.col(PARTITION_ROLE_COLUMN).cast(pl.String))
@@ -99,12 +103,12 @@ def extract_partitions(
     if role_series.null_count():
         raise ScientificContractError("partition role column contains null values", subject=ContractSubject.SCHEMA)
     expected_roles = partition_roles(split_protocol)
-    if set(role_series.unique().to_list()) != {role.value for role in expected_roles}:
+    if frozenset(role_series.unique().to_list()) != frozenset(role.value for role in expected_roles):
         raise ScientificContractError(
             f"extracted roles do not match {split_protocol.value}",
             subject=ContractSubject.SCHEMA,
         )
-    keep = [STABLE_ROW_ID_COLUMN, OUTCOME_LABEL_COLUMN, *feature_names.names]
+    keep = (STABLE_ROW_ID_COLUMN, OUTCOME_LABEL_COLUMN, *feature_names.names)
     extracted: list[PreprocessingPartition] = []
     for role in expected_roles:
         role_frame = normalized.filter(pl.col(PARTITION_ROLE_COLUMN) == role.value).select(keep)
@@ -163,7 +167,7 @@ def transform_feature_matrix(
 
 
 def protocol_content_checksum(protocol: PreprocessingProtocol) -> Checksum:
-    return checksum_text(protocol.model_dump_json())
+    return canonical_checksum(protocol)
 
 
 def build_preprocessing_manifest(
@@ -304,7 +308,7 @@ def write_fitted_transformed_partitions(
     feature_names = protocol.input_feature_names
     train = partitions.require(PartitionRole.TRAIN)
     require_columns(train.frame, feature_names.names, subject=ContractSubject.SCHEMA)
-    train_matrix = train.frame.select(list(feature_names)).to_numpy()
+    train_matrix = train.frame.select(feature_names.as_list()).to_numpy()
     train_transformed = transform_feature_matrix(
         fitted_estimator,
         train_matrix,
@@ -332,7 +336,7 @@ def write_fitted_transformed_partitions(
             if role is PartitionRole.TRAIN
             else transform_feature_matrix(
                 fitted_estimator,
-                partition.frame.select(list(feature_names)).to_numpy(),
+                partition.frame.select(feature_names.as_list()).to_numpy(),
                 feature_names,
                 role,
                 description=f"transformed {role.value} matrix",
@@ -341,8 +345,8 @@ def write_fitted_transformed_partitions(
         retained = partition.frame.drop(feature_names.as_list())
         transformed_frame = pl.from_numpy(transformed, schema=feature_names.as_list())
         output = transformed_frame if not retained.width else retained.hstack(transformed_frame)
-        expected_columns = [*retained.columns, *feature_names.as_list()]
-        if output.columns != expected_columns or len(output.columns) != len(frozenset(output.columns)):
+        expected_columns = (*retained.columns, *feature_names.names)
+        if tuple(output.columns) != expected_columns or len(output.columns) != len(frozenset(output.columns)):
             raise ScientificContractError("invalid output column ordering", subject=ContractSubject.SCHEMA)
         output.write_parquet(temporary / asset_for_partition(role))
         evidence.append(
