@@ -2,12 +2,12 @@
 
 from dataclasses import dataclass
 
-from datp_core.artifacts.score_models import ScoreArtifact
 from datp_core.domain.enums import ContractSubject, PartitionRole, SerializationFormat, SplitProtocolId
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.provenance import canonical_checksum
 from datp_core.domain.values import Checksum, RoundNumber
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
+from datp_core.pipeline.scoring.models import ScoreArtifact
 from datp_core.populations.models import ClientIdentity
 
 
