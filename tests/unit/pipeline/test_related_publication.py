@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from datp_core.domain.enums import PublicationStatus
-from datp_core.pipeline.publication.related import (
+from datp_core.pipeline.publication.codec import (
     RelatedArtifactPublication,
     RelatedPublicationMember,
     publish_related_artifacts,
