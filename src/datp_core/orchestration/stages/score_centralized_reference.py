@@ -14,8 +14,8 @@ from datp_core.domain.enums import ContractSubject
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import checksum_file
 from datp_core.orchestration.commands.scoring import (
-    ScoreCentralizedReferenceRequest,
-    ScoreCentralizedReferenceResult,
+    ScoreCentralizedReferenceRequest as _ScoreCentralizedReferenceRequest,
+    ScoreCentralizedReferenceResult as _ScoreCentralizedReferenceResult,
 )
 from datp_core.pipeline.publication.codec import (
     ArtifactPublication,
@@ -25,8 +25,8 @@ from datp_core.pipeline.publication.codec import (
 
 
 def score_centralized_reference_stage(
-    request: ScoreCentralizedReferenceRequest,
-) -> ScoreCentralizedReferenceResult:
+    request: _ScoreCentralizedReferenceRequest,
+) -> _ScoreCentralizedReferenceResult:
     if request.checkpoint.coordinate != request.coordinate:
         raise ScientificContractError(
             "score stage checkpoint coordinate mismatch",
@@ -55,7 +55,7 @@ def score_centralized_reference_stage(
             complete_marker=CentralizedScoreAssetName.COMPLETE,
         )
     )
-    return ScoreCentralizedReferenceResult(
+    return _ScoreCentralizedReferenceResult(
         publication_status=publication.status,
         scoring=publication.value,
         complete_digest=checksum_file(request.output_directory / CentralizedScoreAssetName.COMPLETE),
@@ -63,7 +63,7 @@ def score_centralized_reference_stage(
 
 
 def _scoring_request(
-    request: ScoreCentralizedReferenceRequest,
+    request: _ScoreCentralizedReferenceRequest,
     directory: Path,
 ) -> CentralizedScoringRequest:
     return CentralizedScoringRequest(
