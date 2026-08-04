@@ -8,10 +8,7 @@ from pathlib import Path
 import numpy as np
 
 from datp_core.artifacts.serialization import canonical_json_text
-from datp_core.centralized_reference.scoring import (
-    PooledScoreArtifact,
-    load_score_frame,
-)
+from datp_core.centralized_reference.scoring import PooledScoreArtifact, load_score_frame
 from datp_core.centralized_reference.training import CentralizedTrainingCoordinate
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
@@ -71,6 +68,13 @@ class PooledThresholdResult:
             raise ValueError("pooled threshold requires at least one benign calibration score")
 
 
+@dataclass(frozen=True, slots=True)
+class CentralizedThresholdPublicationRequest:
+    coordinate: CentralizedTrainingCoordinate
+    calibration_scores: PooledScoreArtifact
+    protocol: CentralizedQuantileProtocol
+
+
 class PooledThresholdDocument(StrictModel):
     method: CentralizedThresholdMethod
     quantile: Quantile
@@ -118,6 +122,60 @@ def construct_pooled_benign_quantile(
         score_artifact_checksum=calibration_scores.checksum,
         checkpoint_round=calibration_scores.checkpoint_round,
         score_coordinate_checksum=score_coordinate_checksum,
+    )
+
+
+def write_centralized_threshold(
+    request: CentralizedThresholdPublicationRequest,
+    directory: Path,
+) -> PooledThresholdResult:
+    result = construct_centralized_threshold(request)
+    write_threshold_document(result, directory)
+    (directory / CentralizedThresholdAssetName.COMPLETE).write_text(
+        threshold_result_checksum(result).value,
+        encoding="utf-8",
+    )
+    return result
+
+
+def centralized_threshold_is_reusable(
+    request: CentralizedThresholdPublicationRequest,
+    directory: Path,
+) -> bool:
+    complete = directory / CentralizedThresholdAssetName.COMPLETE
+    document = directory / CentralizedThresholdAssetName.THRESHOLD
+    if not complete.is_file() or not document.is_file():
+        return False
+    expected = threshold_result_checksum(construct_centralized_threshold(request))
+    try:
+        return complete.read_text(encoding="utf-8").strip() == expected.value
+    except OSError:
+        return False
+
+
+def load_reused_centralized_threshold(
+    request: CentralizedThresholdPublicationRequest,
+    directory: Path,
+) -> PooledThresholdResult:
+    del directory
+    return construct_centralized_threshold(request)
+
+
+def rebase_centralized_threshold(
+    result: PooledThresholdResult,
+    directory: Path,
+) -> PooledThresholdResult:
+    del directory
+    return result
+
+
+def construct_centralized_threshold(
+    request: CentralizedThresholdPublicationRequest,
+) -> PooledThresholdResult:
+    return construct_pooled_benign_quantile(
+        coordinate=request.coordinate,
+        calibration_scores=request.calibration_scores,
+        protocol=request.protocol,
     )
 
 
