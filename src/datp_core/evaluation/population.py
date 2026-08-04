@@ -23,7 +23,6 @@ from datp_core.domain.values import (
     NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
     Checksum,
     CoverageTarget,
-    MetricValue,
     RowCount,
     ScoreValue,
     ThresholdValue,
@@ -47,7 +46,11 @@ from datp_core.evaluation.conformal_coverage import (
     evaluate_held_out_conformal_coverage,
 )
 from datp_core.evaluation.confusion import calculate_confusion_counts
-from datp_core.evaluation.controls import ClientAurocEvidence, FixedScoreEvidence, validate_fixed_score_controls
+from datp_core.evaluation.controls import (
+    ClientAurocEvidence,
+    FixedScoreEvidence,
+    validate_fixed_score_controls,
+)
 from datp_core.evaluation.models import (
     ClientMetricResult,
     HeldOutBenignScore,
@@ -56,7 +59,10 @@ from datp_core.evaluation.models import (
     PopulationMetricResult,
     metric_by_id,
 )
-from datp_core.evaluation.operational import AlertBurdenDiagnostic, calculate_alert_burden
+from datp_core.evaluation.operational import (
+    AlertBurdenDiagnostic,
+    calculate_alert_burden,
+)
 from datp_core.evaluation.population_metrics import calculate_population_metrics
 from datp_core.evaluation.threshold_estimation import (
     ThresholdEstimationDiagnostic,
@@ -64,26 +70,41 @@ from datp_core.evaluation.threshold_estimation import (
     evaluate_threshold_estimate,
 )
 from datp_core.evaluation.traffic_rates import ValidatedTrafficRateEvidence
-from datp_core.experiments.models import ExternalTemporalExecutionIdentity, require_execution_identity
+from datp_core.experiments.models import (
+    ExternalTemporalExecutionIdentity,
+    require_execution_identity,
+)
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.populations.capabilities import population_capabilities
-from datp_core.populations.models import ClientIdentity, ClientPartitionCounts, PopulationOutcomeLabel
-from datp_core.scoring.models import FixedScoreInvariant, ScoreArtifactManifest, ScoreRecord
-from datp_core.thresholding.models import (
+from datp_core.populations.models import (
+    ClientIdentity,
+    ClientPartitionCounts,
+    PopulationOutcomeLabel,
+)
+from datp_core.scoring.models import (
+    FixedScoreInvariant,
+    ScoreArtifactManifest,
+    ScoreRecord,
+)
+from datp_core.thresholding.assignments import ThresholdAssignment
+from datp_core.thresholding.common import ThresholdConstructionResult
+from datp_core.thresholding.identities import ThresholdUnavailableResult
+from datp_core.thresholding.methods.cluster import GroupedThresholdResult
+from datp_core.thresholding.methods.conformal import (
     ConformalAssignment,
     ConformalThresholdResult,
-    FamilyThresholdResult,
+)
+from datp_core.thresholding.methods.family import FamilyThresholdResult
+from datp_core.thresholding.methods.federated_statistics import (
     FederatedStatisticsThresholdResult,
-    GroupedThresholdResult,
-    LocalThresholdResult,
+)
+from datp_core.thresholding.methods.local import LocalThresholdResult
+from datp_core.thresholding.methods.shared import (
     PooledSharedQuantileResult,
     SampleWeightedSharedThresholdResult,
     SharedThresholdResult,
-    ShrinkageThresholdResult,
-    ThresholdAssignment,
-    ThresholdConstructionResult,
-    ThresholdUnavailableResult,
 )
+from datp_core.thresholding.methods.shrinkage import ShrinkageThresholdResult
 
 
 class FederatedEvaluationAssetName(StrEnum):
@@ -175,23 +196,31 @@ class FederatedEvaluationPublication:
 def prepare_federated_evaluation(
     request: FederatedEvaluationRequest,
 ) -> FederatedEvaluationPublication:
-    """Evaluate pre-existing scores only; never train, rescore, or recalibrate."""
     _validate_temporal_provenance(request)
     clients, population = _evaluate(request)
     diagnostics = _evaluate_diagnostics(request, clients)
-    _validate_evaluation_evidence(request.fixed_score_evidence, request.score_manifest, request.cohort, clients)
+    _validate_evaluation_evidence(
+        request.fixed_score_evidence,
+        request.score_manifest,
+        request.cohort,
+        clients,
+    )
     if request.comparison_fixed_score_evidence is not None:
         validate_fixed_score_controls(
             request.fixed_score_evidence,
             request.comparison_fixed_score_evidence,
-            auroc_absolute_tolerance=NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
+            auroc_absolute_tolerance=(
+                NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE
+            ),
         )
     artifacts = FederatedEvaluationArtifacts(clients, population, diagnostics)
     document = FederatedEvaluationDocument(
         stage=StageOperationId.EVALUATE_FEDERATED,
         score_coordinate=request.score_manifest.coordinate,
         score_checkpoint_checksum=request.score_manifest.checkpoint_checksum,
-        preprocessing_state_set_checksum=request.score_manifest.preprocessing_state_set_checksum,
+        preprocessing_state_set_checksum=(
+            request.score_manifest.preprocessing_state_set_checksum
+        ),
         split_manifest_checksum=request.score_manifest.split_manifest_checksum,
         threshold_method=request.threshold_result.method,
         evidence_role=request.evidence_role,
@@ -234,7 +263,8 @@ def federated_evaluation_is_reusable(
         return (
             complete.is_file()
             and document.is_file()
-            and complete.read_text(encoding="utf-8").strip() == publication.digest.value
+            and complete.read_text(encoding="utf-8").strip()
+            == publication.digest.value
         )
     except OSError:
         return False
@@ -256,10 +286,15 @@ def rebase_federated_evaluation(
     return result
 
 
-def _validate_temporal_provenance(request: FederatedEvaluationRequest) -> None:
+def _validate_temporal_provenance(
+    request: FederatedEvaluationRequest,
+) -> None:
     provenance = request.temporal_provenance
     temporal = request.evidence_role is EvidenceRole.TEMPORAL_BOUNDARY
-    if not temporal and (provenance is not None or request.temporal_threshold_provenance is not None):
+    if not temporal and (
+        provenance is not None
+        or request.temporal_threshold_provenance is not None
+    ):
         raise ScientificContractError(
             "temporal provenance is valid only for temporal-boundary evaluation",
             subject=request.evidence_role,
@@ -277,7 +312,10 @@ def _validate_temporal_provenance(request: FederatedEvaluationRequest) -> None:
             subject=request.evidence_role,
         )
     provenance.validate_score_manifest(request.score_manifest)
-    identity = require_execution_identity(request.execution_identity, request.score_manifest.coordinate.population)
+    identity = require_execution_identity(
+        request.execution_identity,
+        request.score_manifest.coordinate.population,
+    )
     if identity is None or identity.temporal_state is not provenance.state:
         raise ScientificContractError(
             "temporal evaluation provenance must match the execution identity state",
@@ -292,25 +330,39 @@ def _evaluate(
     assignments = _assignments(request.threshold_result)
     clients = tuple(
         _evaluate_score_record(request, assignments, record)
-        for record in sorted(request.score_manifest.evaluation_records, key=lambda record: record.scored_client)
+        for record in sorted(
+            request.score_manifest.evaluation_records,
+            key=lambda item: item.scored_client,
+        )
     )
     return clients, calculate_population_metrics(clients)
 
 
-def _validate_evaluation_request(request: FederatedEvaluationRequest) -> None:
+def _validate_evaluation_request(
+    request: FederatedEvaluationRequest,
+) -> None:
     if isinstance(request.threshold_result, ThresholdUnavailableResult):
         raise ScientificContractError("unavailable threshold cannot be evaluated")
     if request.threshold_result.coordinate != request.score_manifest.coordinate:
-        raise ScientificContractError("threshold and score coordinates must match")
+        raise ScientificContractError(
+            "threshold and score coordinates must match"
+        )
     if request.cohort.population is not request.score_manifest.coordinate.population:
-        raise ScientificContractError("evaluation cohort must match score population")
-    capabilities = population_capabilities(request.score_manifest.coordinate.population)
+        raise ScientificContractError(
+            "evaluation cohort must match score population"
+        )
+    capabilities = population_capabilities(
+        request.score_manifest.coordinate.population
+    )
     if request.evidence_role is not capabilities.evidentiary_role:
         raise ScientificContractError(
             "evaluation evidence role must match the population capability contract",
             subject=request.evidence_role,
         )
-    identity = require_execution_identity(request.execution_identity, request.score_manifest.coordinate.population)
+    identity = require_execution_identity(
+        request.execution_identity,
+        request.score_manifest.coordinate.population,
+    )
     if identity is not None:
         identity.require_evidence_role(request.evidence_role)
 
@@ -320,12 +372,22 @@ def _evaluate_score_record(
     assignments: tuple[ThresholdAssignment, ...],
     record: ScoreRecord,
 ) -> ClientMetricResult:
-    threshold = _threshold_for_client(assignments, record.scored_client.client_id)
-    eligibility = _cohort_record_for_client(request.cohort, record.scored_client.client_id)
+    threshold = _threshold_for_client(
+        assignments,
+        record.scored_client.client_id,
+    )
+    eligibility = _cohort_record_for_client(
+        request.cohort,
+        record.scored_client.client_id,
+    )
     if threshold is None or eligibility is None:
-        raise ScientificContractError("threshold and cohort must cover every evaluated client")
+        raise ScientificContractError(
+            "threshold and cohort must cover every evaluated client"
+        )
     if not record.path.is_file() or checksum_file(record.path) != record.checksum:
-        raise ArtifactIntegrityError("evaluation score artifact is incomplete or changed")
+        raise ArtifactIntegrityError(
+            "evaluation score artifact is incomplete or changed"
+        )
     scores, labels, rows = _score_arrays(pl.read_parquet(record.path))
     confusion = calculate_confusion_counts(
         scores=scores,
@@ -342,16 +404,24 @@ def _evaluate_score_record(
         cohort=_evaluation_cohort(eligibility),
         threshold=threshold,
         confusion=confusion,
-        metrics=calculate_client_metrics(confusion=confusion, scores=scores, labels=labels),
+        metrics=calculate_client_metrics(
+            confusion=confusion,
+            scores=scores,
+            labels=labels,
+        ),
         warnings=(),
         evidence_role=request.evidence_role,
         evaluation_score_checksum=record.checksum,
-        evaluation_label_checksum=checksum_text("|".join(label.value for label in labels)),
+        evaluation_label_checksum=checksum_text(
+            "|".join(label.value for label in labels)
+        ),
         source_row_checksum=checksum_text("|".join(rows)),
     )
 
 
-def _evaluation_cohort(record: ClientEligibilityRecord) -> EvaluationCohort:
+def _evaluation_cohort(
+    record: ClientEligibilityRecord,
+) -> EvaluationCohort:
     if record.fpr_evaluable:
         return EvaluationCohort.FPR_EVALUABLE
     if record.deployment_fallback:
@@ -363,7 +433,6 @@ def build_federated_evaluation_inputs(
     score_manifest: ScoreArtifactManifest,
     threshold_method: FederatedThresholdMethod,
 ) -> FederatedEvaluationInputs:
-    """Derive cohort and fixed-score controls from unchanged federated score artifacts."""
     cohort = build_evaluation_cohort_manifest(
         population=score_manifest.coordinate.population,
         partition_seed=score_manifest.coordinate.training_seed,
@@ -376,12 +445,20 @@ def build_federated_evaluation_inputs(
             coordinate=score_manifest.coordinate,
             threshold_method=threshold_method,
             model_checksum=score_manifest.checkpoint_checksum,
-            preprocessing_checksum=score_manifest.preprocessing_state_set_checksum,
+            preprocessing_checksum=(
+                score_manifest.preprocessing_state_set_checksum
+            ),
             selected_checkpoint_checksum=score_manifest.checkpoint_checksum,
-            calibration_score_checksum=invariant.calibration_score_set_checksum,
+            calibration_score_checksum=(
+                invariant.calibration_score_set_checksum
+            ),
             evaluation_score_checksum=invariant.evaluation_score_set_checksum,
-            evaluation_label_checksum=_evaluation_label_checksum(score_manifest),
-            client_population_checksum=_client_population_checksum(score_manifest),
+            evaluation_label_checksum=_evaluation_label_checksum(
+                score_manifest
+            ),
+            client_population_checksum=_client_population_checksum(
+                score_manifest
+            ),
             eligibility_cohort_checksum=_cohort_checksum(cohort),
             source_row_checksum=_evaluation_row_checksum(score_manifest),
             score_order_checksum=_score_order_checksum(score_manifest),
@@ -390,59 +467,137 @@ def build_federated_evaluation_inputs(
     )
 
 
-def _client_partition_counts(manifest: ScoreArtifactManifest) -> tuple[ClientPartitionCounts, ...]:
-    calibration = tuple(sorted(manifest.calibration_records, key=lambda record: record.scored_client))
-    evaluation = tuple(sorted(manifest.evaluation_records, key=lambda record: record.scored_client))
-    if tuple(record.scored_client for record in calibration) != tuple(record.scored_client for record in evaluation):
-        raise ScientificContractError("evaluation inputs require matching calibration and evaluation score clients")
+def _client_partition_counts(
+    manifest: ScoreArtifactManifest,
+) -> tuple[ClientPartitionCounts, ...]:
+    calibration = tuple(
+        sorted(
+            manifest.calibration_records,
+            key=lambda item: item.scored_client,
+        )
+    )
+    evaluation = tuple(
+        sorted(
+            manifest.evaluation_records,
+            key=lambda item: item.scored_client,
+        )
+    )
+    if tuple(item.scored_client for item in calibration) != tuple(
+        item.scored_client for item in evaluation
+    ):
+        raise ScientificContractError(
+            "evaluation inputs require matching calibration and evaluation score clients"
+        )
     return tuple(
         ClientPartitionCounts(
             client_id=calibration_record.scored_client.client_id,
-            benign_calibration_count=_label_count(calibration_record, PopulationOutcomeLabel.BENIGN),
-            benign_evaluation_count=_label_count(evaluation_record, PopulationOutcomeLabel.BENIGN),
-            attack_evaluation_count=_label_count(evaluation_record, PopulationOutcomeLabel.ATTACK),
+            benign_calibration_count=_label_count(
+                calibration_record,
+                PopulationOutcomeLabel.BENIGN,
+            ),
+            benign_evaluation_count=_label_count(
+                evaluation_record,
+                PopulationOutcomeLabel.BENIGN,
+            ),
+            attack_evaluation_count=_label_count(
+                evaluation_record,
+                PopulationOutcomeLabel.ATTACK,
+            ),
             accepted=True,
             deployment_fallback=False,
         )
-        for calibration_record, evaluation_record in zip(calibration, evaluation, strict=True)
-    )
-
-
-def _label_count(record: ScoreRecord, label: PopulationOutcomeLabel) -> RowCount:
-    frame = pl.read_parquet(record.path)
-    return RowCount(int((frame[ScoreFrameColumn.OUTCOME_LABEL.value] == label.value).sum()))
-
-
-def _client_population_checksum(manifest: ScoreArtifactManifest) -> Checksum:
-    return checksum_text("|".join(sorted(record.scored_client.client_id for record in manifest.evaluation_records)))
-
-
-def _cohort_checksum(cohort: EvaluationCohortManifest) -> Checksum:
-    return checksum_text(
-        "|".join(
-            f"{record.client_id}:{record.calibration_eligible}:{record.fpr_evaluable}:"
-            f"{record.attack_evaluable}:{record.deployment_fallback}"
-            for record in sorted(cohort.records, key=lambda item: item.client_id)
+        for calibration_record, evaluation_record in zip(
+            calibration,
+            evaluation,
+            strict=True,
         )
     )
 
 
-def _evaluation_label_checksum(manifest: ScoreArtifactManifest) -> Checksum:
-    return _aggregate_score_record_checksum(manifest.evaluation_records, ScoreFrameColumn.OUTCOME_LABEL)
-
-
-def _evaluation_row_checksum(manifest: ScoreArtifactManifest) -> Checksum:
-    return _aggregate_score_record_checksum(manifest.evaluation_records, ScoreFrameColumn.STABLE_ROW_ID)
-
-
-def _aggregate_score_record_checksum(records: tuple[ScoreRecord, ...], column: ScoreFrameColumn) -> Checksum:
-    pairs = tuple(
-        sorted((record.scored_client.client_id, _score_column_checksum(record, column).value) for record in records)
+def _label_count(
+    record: ScoreRecord,
+    label: PopulationOutcomeLabel,
+) -> RowCount:
+    frame = pl.read_parquet(record.path)
+    return RowCount(
+        int(
+            (
+                frame[ScoreFrameColumn.OUTCOME_LABEL.value]
+                == label.value
+            ).sum()
+        )
     )
-    return checksum_text("|".join(f"{client}:{checksum}" for client, checksum in pairs))
 
 
-def _score_column_checksum(record: ScoreRecord, column: ScoreFrameColumn) -> Checksum:
+def _client_population_checksum(
+    manifest: ScoreArtifactManifest,
+) -> Checksum:
+    return checksum_text(
+        "|".join(
+            sorted(
+                item.scored_client.client_id
+                for item in manifest.evaluation_records
+            )
+        )
+    )
+
+
+def _cohort_checksum(
+    cohort: EvaluationCohortManifest,
+) -> Checksum:
+    return checksum_text(
+        "|".join(
+            f"{record.client_id}:{record.calibration_eligible}:"
+            f"{record.fpr_evaluable}:{record.attack_evaluable}:"
+            f"{record.deployment_fallback}"
+            for record in sorted(
+                cohort.records,
+                key=lambda item: item.client_id,
+            )
+        )
+    )
+
+
+def _evaluation_label_checksum(
+    manifest: ScoreArtifactManifest,
+) -> Checksum:
+    return _aggregate_score_record_checksum(
+        manifest.evaluation_records,
+        ScoreFrameColumn.OUTCOME_LABEL,
+    )
+
+
+def _evaluation_row_checksum(
+    manifest: ScoreArtifactManifest,
+) -> Checksum:
+    return _aggregate_score_record_checksum(
+        manifest.evaluation_records,
+        ScoreFrameColumn.STABLE_ROW_ID,
+    )
+
+
+def _aggregate_score_record_checksum(
+    records: tuple[ScoreRecord, ...],
+    column: ScoreFrameColumn,
+) -> Checksum:
+    pairs = tuple(
+        sorted(
+            (
+                item.scored_client.client_id,
+                _score_column_checksum(item, column).value,
+            )
+            for item in records
+        )
+    )
+    return checksum_text(
+        "|".join(f"{client}:{checksum}" for client, checksum in pairs)
+    )
+
+
+def _score_column_checksum(
+    record: ScoreRecord,
+    column: ScoreFrameColumn,
+) -> Checksum:
     values = pl.read_parquet(record.path)[column.value].to_list()
     return checksum_text("|".join(str(value) for value in values))
 
@@ -451,14 +606,36 @@ def _client_aurocs(
     manifest: ScoreArtifactManifest,
     cohort: EvaluationCohortManifest,
 ) -> tuple[ClientAurocEvidence, ...]:
-    eligibility = tuple(sorted(cohort.records, key=lambda item: item.client_id))
-    records = tuple(sorted(manifest.evaluation_records, key=lambda record: record.scored_client))
-    if tuple(item.client_id for item in eligibility) != tuple(record.scored_client.client_id for record in records):
-        raise ScientificContractError("evaluation inputs require cohort coverage for every score client")
-    evidence_role = population_capabilities(manifest.coordinate.population).evidentiary_role
+    eligibility = tuple(
+        sorted(cohort.records, key=lambda item: item.client_id)
+    )
+    records = tuple(
+        sorted(
+            manifest.evaluation_records,
+            key=lambda item: item.scored_client,
+        )
+    )
+    if tuple(item.client_id for item in eligibility) != tuple(
+        item.scored_client.client_id for item in records
+    ):
+        raise ScientificContractError(
+            "evaluation inputs require cohort coverage for every score client"
+        )
+    evidence_role = population_capabilities(
+        manifest.coordinate.population
+    ).evidentiary_role
     return tuple(
-        _client_auroc_evidence(manifest.coordinate, record, eligibility_record, evidence_role)
-        for record, eligibility_record in zip(records, eligibility, strict=True)
+        _client_auroc_evidence(
+            manifest.coordinate,
+            record,
+            eligibility_record,
+            evidence_role,
+        )
+        for record, eligibility_record in zip(
+            records,
+            eligibility,
+            strict=True,
+        )
     )
 
 
@@ -484,14 +661,23 @@ def _client_auroc_evidence(
         cohort=EvaluationCohort.FPR_EVALUABLE,
         threshold=ThresholdValue(0.0),
         confusion=confusion,
-        metrics=calculate_client_metrics(confusion=confusion, scores=scores, labels=labels),
+        metrics=calculate_client_metrics(
+            confusion=confusion,
+            scores=scores,
+            labels=labels,
+        ),
         warnings=(),
         evidence_role=evidence_role,
         evaluation_score_checksum=record.checksum,
-        evaluation_label_checksum=checksum_text("|".join(label.value for label in labels)),
+        evaluation_label_checksum=checksum_text(
+            "|".join(label.value for label in labels)
+        ),
         source_row_checksum=checksum_text("|".join(rows)),
     )
-    return ClientAurocEvidence(record.scored_client, metric_by_id(result.metrics, MetricId.AUROC))
+    return ClientAurocEvidence(
+        record.scored_client,
+        metric_by_id(result.metrics, MetricId.AUROC),
+    )
 
 
 def _evaluate_diagnostics(
@@ -516,13 +702,21 @@ def _evaluate_diagnostics(
     communication = (
         None
         if not request.communication_messages
-        else summarize_communication(coordinate.training_seed, coordinate, request.communication_messages)
+        else summarize_communication(
+            coordinate.training_seed,
+            coordinate,
+            request.communication_messages,
+        )
     )
     return EvaluationDiagnostics(
         conformal_coverage,
         threshold_estimation,
         communication,
-        _evaluate_alert_burden(request.traffic_rate_evidence, clients, coordinate),
+        _evaluate_alert_burden(
+            request.traffic_rate_evidence,
+            clients,
+            coordinate,
+        ),
     )
 
 
@@ -531,11 +725,15 @@ def _evaluate_threshold_estimation_input(
     coordinate: FederatedTrainingCoordinate,
 ) -> ThresholdEstimationDiagnostic:
     if diagnostic.provenance.coordinate != coordinate:
-        raise ScientificContractError("threshold-estimation diagnostics must use the evaluated score coordinate")
+        raise ScientificContractError(
+            "threshold-estimation diagnostics must use the evaluated score coordinate"
+        )
     return evaluate_threshold_estimate(
         provenance=diagnostic.provenance,
         estimated_threshold=diagnostic.estimated_threshold,
-        exact_pooled_benign_quantile_reference=diagnostic.exact_pooled_benign_quantile_reference,
+        exact_pooled_benign_quantile_reference=(
+            diagnostic.exact_pooled_benign_quantile_reference
+        ),
         held_out_benign_scores=diagnostic.held_out_benign_scores,
     )
 
@@ -549,7 +747,10 @@ def _evaluate_alert_burden(
         return ()
     diagnostics: list[AlertBurdenDiagnostic] = []
     for client in clients:
-        false_positive_rate = metric_by_id(client.metrics, MetricId.FALSE_POSITIVE_RATE).value
+        false_positive_rate = metric_by_id(
+            client.metrics,
+            MetricId.FALSE_POSITIVE_RATE,
+        ).value
         if false_positive_rate is not None:
             diagnostics.append(
                 calculate_alert_burden(
@@ -582,22 +783,44 @@ def _validate_evidence_manifest_binding(
     invariant: FixedScoreInvariant,
 ) -> None:
     if evidence.coordinate != manifest.coordinate:
-        raise ScientificContractError("fixed-score evidence must match the score coordinate")
+        raise ScientificContractError(
+            "fixed-score evidence must match the score coordinate"
+        )
     _require_manifest_checksums(
         (
             ("model", evidence.model_checksum, invariant.model_checksum),
-            ("preprocessing", evidence.preprocessing_checksum, invariant.preprocessing_state_set_checksum),
-            ("checkpoint", evidence.selected_checkpoint_checksum, manifest.checkpoint_checksum),
-            ("calibration score", evidence.calibration_score_checksum, invariant.calibration_score_set_checksum),
-            ("evaluation score", evidence.evaluation_score_checksum, invariant.evaluation_score_set_checksum),
+            (
+                "preprocessing",
+                evidence.preprocessing_checksum,
+                invariant.preprocessing_state_set_checksum,
+            ),
+            (
+                "checkpoint",
+                evidence.selected_checkpoint_checksum,
+                manifest.checkpoint_checksum,
+            ),
+            (
+                "calibration score",
+                evidence.calibration_score_checksum,
+                invariant.calibration_score_set_checksum,
+            ),
+            (
+                "evaluation score",
+                evidence.evaluation_score_checksum,
+                invariant.evaluation_score_set_checksum,
+            ),
         )
     )
 
 
-def _require_manifest_checksums(bindings: tuple[tuple[str, Checksum, Checksum], ...]) -> None:
+def _require_manifest_checksums(
+    bindings: tuple[tuple[str, Checksum, Checksum], ...],
+) -> None:
     for name, observed, expected in bindings:
         if observed != expected:
-            raise ScientificContractError(f"fixed-score evidence {name} checksum does not match the score manifest")
+            raise ScientificContractError(
+                f"fixed-score evidence {name} checksum does not match the score manifest"
+            )
 
 
 def _validate_evidence_cohort_binding(
@@ -605,18 +828,20 @@ def _validate_evidence_cohort_binding(
     cohort: EvaluationCohortManifest,
     clients: tuple[ClientMetricResult, ...],
 ) -> None:
-    expected_population = checksum_text("|".join(sorted(client.client.client_id for client in clients)))
-    if evidence.client_population_checksum != expected_population:
-        raise ScientificContractError("fixed-score evidence client population checksum does not match evaluation")
-    expected_cohort = checksum_text(
+    expected_population = checksum_text(
         "|".join(
-            f"{record.client_id}:{record.calibration_eligible}:{record.fpr_evaluable}:"
-            f"{record.attack_evaluable}:{record.deployment_fallback}"
-            for record in sorted(cohort.records, key=lambda item: item.client_id)
+            sorted(client.client.client_id for client in clients)
         )
     )
+    if evidence.client_population_checksum != expected_population:
+        raise ScientificContractError(
+            "fixed-score evidence client population checksum does not match evaluation"
+        )
+    expected_cohort = _cohort_checksum(cohort)
     if evidence.eligibility_cohort_checksum != expected_cohort:
-        raise ScientificContractError("fixed-score evidence eligibility cohort checksum does not match evaluation")
+        raise ScientificContractError(
+            "fixed-score evidence eligibility cohort checksum does not match evaluation"
+        )
 
 
 def _validate_evidence_held_out_rows(
@@ -625,18 +850,37 @@ def _validate_evidence_held_out_rows(
     clients: tuple[ClientMetricResult, ...],
 ) -> None:
     if evidence.score_order_checksum != _score_order_checksum(manifest):
-        raise ScientificContractError("fixed-score evidence score ordering checksum does not match evaluation")
-    expected_labels = _aggregate_client_checksum(clients, ClientChecksumField.EVALUATION_LABEL)
-    expected_rows = _aggregate_client_checksum(clients, ClientChecksumField.SOURCE_ROW)
-    if evidence.evaluation_label_checksum != expected_labels or evidence.source_row_checksum != expected_rows:
-        raise ScientificContractError("fixed-score evidence label or source-row checksum does not match evaluation")
+        raise ScientificContractError(
+            "fixed-score evidence score ordering checksum does not match evaluation"
+        )
+    expected_labels = _aggregate_client_checksum(
+        clients,
+        ClientChecksumField.EVALUATION_LABEL,
+    )
+    expected_rows = _aggregate_client_checksum(
+        clients,
+        ClientChecksumField.SOURCE_ROW,
+    )
+    if (
+        evidence.evaluation_label_checksum != expected_labels
+        or evidence.source_row_checksum != expected_rows
+    ):
+        raise ScientificContractError(
+            "fixed-score evidence label or source-row checksum does not match evaluation"
+        )
 
 
 def _validate_evidence_aurocs(
     evidence: FixedScoreEvidence,
     clients: tuple[ClientMetricResult, ...],
 ) -> None:
-    observed = tuple((client.client, metric_by_id(client.metrics, MetricId.AUROC)) for client in clients)
+    observed = tuple(
+        (
+            client.client,
+            metric_by_id(client.metrics, MetricId.AUROC),
+        )
+        for client in clients
+    )
     _require_auroc_client_order(evidence.aurocs, observed)
     _require_matching_aurocs(evidence.aurocs, observed)
 
@@ -645,28 +889,46 @@ def _require_auroc_client_order(
     expected: tuple[ClientAurocEvidence, ...],
     observed: tuple[tuple[ClientIdentity, MetricAvailability], ...],
 ) -> None:
-    if tuple(item.client for item in expected) != tuple(client for client, _ in observed):
-        raise ScientificContractError("fixed-score AUROC evidence client order does not match evaluation")
+    if tuple(item.client for item in expected) != tuple(
+        client for client, _ in observed
+    ):
+        raise ScientificContractError(
+            "fixed-score AUROC evidence client order does not match evaluation"
+        )
 
 
 def _require_matching_aurocs(
     expected: tuple[ClientAurocEvidence, ...],
     observed: tuple[tuple[ClientIdentity, MetricAvailability], ...],
 ) -> None:
-    for expected_item, (_, observed_outcome) in zip(expected, observed, strict=True):
+    for expected_item, (_, observed_outcome) in zip(
+        expected,
+        observed,
+        strict=True,
+    ):
         _require_matching_auroc(expected_item.outcome, observed_outcome)
 
 
-def _require_matching_auroc(expected: MetricAvailability, observed: MetricAvailability) -> None:
+def _require_matching_auroc(
+    expected: MetricAvailability,
+    observed: MetricAvailability,
+) -> None:
     if expected.status is not observed.status:
-        raise ScientificContractError("fixed-score AUROC availability does not match held-out evaluation")
+        raise ScientificContractError(
+            "fixed-score AUROC availability does not match held-out evaluation"
+        )
     if expected.status is MetricStatus.AVAILABLE:
         _require_matching_available_auroc(expected, observed)
     elif expected != observed:
-        raise ScientificContractError("fixed-score AUROC unavailable outcome does not match held-out evaluation")
+        raise ScientificContractError(
+            "fixed-score AUROC unavailable outcome does not match held-out evaluation"
+        )
 
 
-def _require_matching_available_auroc(expected: MetricAvailability, observed: MetricAvailability) -> None:
+def _require_matching_available_auroc(
+    expected: MetricAvailability,
+    observed: MetricAvailability,
+) -> None:
     if expected.value is None or observed.value is None:
         raise RuntimeError("available AUROC evidence must contain values")
     if not floats_absolutely_close(
@@ -674,7 +936,9 @@ def _require_matching_available_auroc(expected: MetricAvailability, observed: Me
         observed.value.value,
         NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE.value,
     ):
-        raise ScientificContractError("fixed-score AUROC evidence does not match held-out evaluation")
+        raise ScientificContractError(
+            "fixed-score AUROC evidence does not match held-out evaluation"
+        )
 
 
 def _aggregate_client_checksum(
@@ -683,32 +947,54 @@ def _aggregate_client_checksum(
 ) -> Checksum:
     match field:
         case ClientChecksumField.EVALUATION_LABEL:
-            pairs = tuple(sorted((item.client.client_id, item.evaluation_label_checksum.value) for item in clients))
+            pairs = tuple(
+                sorted(
+                    (
+                        item.client.client_id,
+                        item.evaluation_label_checksum.value,
+                    )
+                    for item in clients
+                )
+            )
         case ClientChecksumField.SOURCE_ROW:
-            pairs = tuple(sorted((item.client.client_id, item.source_row_checksum.value) for item in clients))
-    return checksum_text("|".join(f"{client}:{value}" for client, value in pairs))
+            pairs = tuple(
+                sorted(
+                    (
+                        item.client.client_id,
+                        item.source_row_checksum.value,
+                    )
+                    for item in clients
+                )
+            )
+    return checksum_text(
+        "|".join(f"{client}:{value}" for client, value in pairs)
+    )
 
 
-def _metric_value(result: ClientMetricResult, metric_id: MetricId) -> MetricValue | None:
-    return metric_by_id(result.metrics, metric_id).value
-
-
-def _metric_availability(result: ClientMetricResult, metric_id: MetricId) -> MetricAvailability:
-    return metric_by_id(result.metrics, metric_id)
-
-
-def _score_order_checksum(manifest: ScoreArtifactManifest) -> Checksum:
+def _score_order_checksum(
+    manifest: ScoreArtifactManifest,
+) -> Checksum:
     payloads: list[str] = []
-    for record in sorted(manifest.evaluation_records, key=lambda record: record.scored_client):
+    for record in sorted(
+        manifest.evaluation_records,
+        key=lambda item: item.scored_client,
+    ):
         frame = pl.read_parquet(record.path)
         payloads.append(
             f"{record.scored_client.client_id}:"
-            + "|".join(str(value) for value in frame[ScoreFrameColumn.RECONSTRUCTION_ERROR.value].to_list())
+            + "|".join(
+                str(value)
+                for value in frame[
+                    ScoreFrameColumn.RECONSTRUCTION_ERROR.value
+                ].to_list()
+            )
         )
     return checksum_text("\n".join(payloads))
 
 
-def _assignments(result: ThresholdConstructionResult) -> tuple[ThresholdAssignment, ...]:
+def _assignments(
+    result: ThresholdConstructionResult,
+) -> tuple[ThresholdAssignment, ...]:
     match result:
         case ThresholdUnavailableResult():
             return ()
@@ -723,15 +1009,30 @@ def _assignments(result: ThresholdConstructionResult) -> tuple[ThresholdAssignme
         ):
             return result.assignments
         case ShrinkageThresholdResult():
-            return tuple(ThresholdAssignment(item.client, item.blended_threshold) for item in result.assignments)
+            return tuple(
+                ThresholdAssignment(item.client, item.blended_threshold)
+                for item in result.assignments
+            )
         case ConformalThresholdResult():
-            return tuple(ThresholdAssignment(item.client, item.threshold) for item in result.assignments)
+            return tuple(
+                ThresholdAssignment(item.client, item.threshold)
+                for item in result.assignments
+            )
 
 
-def _threshold_for_client(assignments: tuple[ThresholdAssignment, ...], client_id: str) -> ThresholdValue | None:
-    matches = tuple(item.threshold for item in assignments if item.client.client_id == client_id)
+def _threshold_for_client(
+    assignments: tuple[ThresholdAssignment, ...],
+    client_id: str,
+) -> ThresholdValue | None:
+    matches = tuple(
+        item.threshold
+        for item in assignments
+        if item.client.client_id == client_id
+    )
     if len(matches) > 1:
-        raise ScientificContractError("threshold assignments cannot repeat a client")
+        raise ScientificContractError(
+            "threshold assignments cannot repeat a client"
+        )
     return matches[0] if matches else None
 
 
@@ -739,24 +1040,40 @@ def _cohort_record_for_client(
     cohort: EvaluationCohortManifest,
     client_id: str,
 ) -> ClientEligibilityRecord | None:
-    matches = tuple(record for record in cohort.records if record.client_id == client_id)
+    matches = tuple(
+        record for record in cohort.records if record.client_id == client_id
+    )
     if len(matches) > 1:
-        raise ScientificContractError("evaluation cohort cannot repeat a client")
+        raise ScientificContractError(
+            "evaluation cohort cannot repeat a client"
+        )
     return matches[0] if matches else None
 
 
 def _score_arrays(
     frame: pl.DataFrame,
-) -> tuple[tuple[ScoreValue, ...], tuple[PopulationOutcomeLabel, ...], tuple[str, ...]]:
+) -> tuple[
+    tuple[ScoreValue, ...],
+    tuple[PopulationOutcomeLabel, ...],
+    tuple[str, ...],
+]:
     required = (
         ScoreFrameColumn.STABLE_ROW_ID.value,
         ScoreFrameColumn.OUTCOME_LABEL.value,
         ScoreFrameColumn.RECONSTRUCTION_ERROR.value,
     )
     if any(column not in frame.columns for column in required):
-        raise ArtifactIntegrityError("evaluation score artifact has an invalid schema")
+        raise ArtifactIntegrityError(
+            "evaluation score artifact has an invalid schema"
+        )
     return (
-        tuple(ScoreValue(float(value)) for value in frame[required[2]].to_list()),
-        tuple(PopulationOutcomeLabel(str(value)) for value in frame[required[1]].to_list()),
+        tuple(
+            ScoreValue(float(value))
+            for value in frame[required[2]].to_list()
+        ),
+        tuple(
+            PopulationOutcomeLabel(str(value))
+            for value in frame[required[1]].to_list()
+        ),
         tuple(str(value) for value in frame[required[0]].to_list()),
     )
