@@ -33,7 +33,7 @@ from datp_core.analysis.temporal import (
 )
 from datp_core.domain.enums import PublicationStatus, StageOperationId
 from datp_core.domain.values import Checksum, Seed
-from datp_core.experiments.models import ExternalTemporalExecutionIdentity
+from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
 from datp_core.protocols.statistics import PairedInferenceProtocol
 
 
