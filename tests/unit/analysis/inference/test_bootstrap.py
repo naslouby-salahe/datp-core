@@ -1,14 +1,14 @@
-from datp_core.analysis.inference.bootstrap import (
-    decide_confirmatory,
-    paired_bca_interval,
-    supplementary_paired_bca_interval,
+from datp_core.analysis.contrasts import (
+    PairedContrast,
+    SupplementaryPairedAnalysisPlan,
 )
-from datp_core.analysis.models import (
+from datp_core.analysis.decisions import decide_confirmatory
+from datp_core.analysis.inference.bootstrap import (
     BcaAdjustment,
     BcaOutcome,
     BootstrapInterval,
-    PairedContrast,
-    SupplementaryPairedAnalysisPlan,
+    paired_bca_interval,
+    supplementary_paired_bca_interval,
 )
 from datp_core.domain.enums import (
     AvailabilityStatus,
@@ -24,27 +24,47 @@ from datp_core.domain.enums import (
 from datp_core.domain.values import MetricValue, Seed
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.protocols.models import SeedCohort
-from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL, PairedInferenceProtocol
+from datp_core.protocols.statistics import (
+    CONFIRMATORY_INFERENCE_PROTOCOL,
+    PairedInferenceProtocol,
+)
 
 
 def test_paired_bca_is_deterministic_and_uses_protocol_metadata() -> None:
     values = contrasts()
-    first = paired_bca_interval(values, protocol=CONFIRMATORY_INFERENCE_PROTOCOL, analysis_seed=Seed(73))
-    second = paired_bca_interval(values, protocol=CONFIRMATORY_INFERENCE_PROTOCOL, analysis_seed=Seed(73))
+    first = paired_bca_interval(
+        values,
+        protocol=CONFIRMATORY_INFERENCE_PROTOCOL,
+        analysis_seed=Seed(73),
+    )
+    second = paired_bca_interval(
+        values,
+        protocol=CONFIRMATORY_INFERENCE_PROTOCOL,
+        analysis_seed=Seed(73),
+    )
     assert first.outcome is BcaOutcome.AVAILABLE
     assert first == second
     assert first.method is CONFIRMATORY_INFERENCE_PROTOCOL.interval_method
-    assert first.replicate_count == CONFIRMATORY_INFERENCE_PROTOCOL.bootstrap_replicates
+    assert (
+        first.replicate_count
+        == CONFIRMATORY_INFERENCE_PROTOCOL.bootstrap_replicates
+    )
 
 
 def test_empty_pairs_are_blocked_without_a_fabricated_point_estimate() -> None:
-    result = paired_bca_interval((), protocol=CONFIRMATORY_INFERENCE_PROTOCOL, analysis_seed=Seed(73))
+    result = paired_bca_interval(
+        (),
+        protocol=CONFIRMATORY_INFERENCE_PROTOCOL,
+        analysis_seed=Seed(73),
+    )
     assert result.outcome is BcaOutcome.BLOCKED
     assert result.point_estimate is None
 
 
 def test_supplementary_interval_cannot_be_promoted_to_confirmatory() -> None:
-    seed_cohort = SeedCohort(values=tuple(Seed(seed) for seed in range(1, 5)))
+    seed_cohort = SeedCohort(
+        values=tuple(Seed(seed) for seed in range(1, 5))
+    )
     protocol = PairedInferenceProtocol(
         **{
             **CONFIRMATORY_INFERENCE_PROTOCOL.model_dump(),
@@ -62,7 +82,12 @@ def test_supplementary_interval_cannot_be_promoted_to_confirmatory() -> None:
     )
     result = supplementary_paired_bca_interval(
         tuple(
-            _contrast(seed, PopulationId.EDGE_SENSOR_GROUPS, EvidenceRole.EXTERNAL_VALIDATION) for seed in range(1, 5)
+            _contrast(
+                seed,
+                PopulationId.EDGE_SENSOR_GROUPS,
+                EvidenceRole.EXTERNAL_VALIDATION,
+            )
+            for seed in range(1, 5)
         ),
         plan=plan,
         analysis_seed=Seed(73),
@@ -77,7 +102,10 @@ def test_confirmatory_decision_uses_the_interval_only() -> None:
         point_estimate=MetricValue(0.2),
         lower_bound=MetricValue(0.01),
         upper_bound=MetricValue(0.4),
-        adjustment=BcaAdjustment(bias_correction=MetricValue(0.0), acceleration=MetricValue(0.0)),
+        adjustment=BcaAdjustment(
+            bias_correction=MetricValue(0.0),
+            acceleration=MetricValue(0.0),
+        ),
     )
     result = decide_confirmatory(interval)
     assert result.decision is ScientificDecision.SUPPORTED
@@ -85,10 +113,21 @@ def test_confirmatory_decision_uses_the_interval_only() -> None:
 
 
 def contrasts() -> tuple[PairedContrast, ...]:
-    return tuple(_contrast(seed, PopulationId.NBAIOT_NATURAL_DEVICES, EvidenceRole.CONFIRMATORY) for seed in range(10))
+    return tuple(
+        _contrast(
+            seed,
+            PopulationId.NBAIOT_NATURAL_DEVICES,
+            EvidenceRole.CONFIRMATORY,
+        )
+        for seed in range(10)
+    )
 
 
-def _contrast(seed: int, population: PopulationId, role: EvidenceRole) -> PairedContrast:
+def _contrast(
+    seed: int,
+    population: PopulationId,
+    role: EvidenceRole,
+) -> PairedContrast:
     local = MetricValue(0.02 + seed / 10_000)
     shared = MetricValue(local.value + 0.01 + seed / 100_000)
     return PairedContrast(
@@ -96,7 +135,9 @@ def _contrast(seed: int, population: PopulationId, role: EvidenceRole) -> Paired
             population=population,
             training_seed=Seed(seed),
             split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
-            preprocessing_identity=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
+            preprocessing_identity=(
+                PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD
+            ),
             model=TrainingModelId.FEDAVG_AUTOENCODER,
             model_coefficient=None,
         ),
