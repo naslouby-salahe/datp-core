@@ -1,16 +1,15 @@
 name: Publish audited source
 
-"on": [push]
+"on": [push, pull_request]
 
 permissions:
   contents: write
 
 jobs:
   publish:
-    if: github.ref == 'refs/heads/agent/consolidate-dataclass-contracts'
     runs-on: ubuntu-latest
     steps:
-      - name: Check out branch
+      - name: Check out repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
           persist-credentials: true
@@ -53,6 +52,7 @@ jobs:
             --ignore=tests/integration/configuration/test_raw_source_contracts_are_ready.py
 
       - name: Restore normal workflow and publish source
+        if: github.event_name == 'push' && github.ref == 'refs/heads/agent/consolidate-dataclass-contracts'
         run: |
           git fetch origin main --depth=1
           git show FETCH_HEAD:.github/workflows/tests.yml > .github/workflows/tests.yml
