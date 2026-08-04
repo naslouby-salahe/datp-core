@@ -15,6 +15,7 @@ from datp_core.domain.values import (
     floats_exactly_equal,
 )
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
+from datp_core.populations.models import ClientIdentity
 from datp_core.protocols.models import FixedShrinkageProtocol, QuantileProtocol
 from datp_core.thresholding.identities import (
     ThresholdInfeasibilityReason,
@@ -33,7 +34,7 @@ _SIZE_AWARE_SHRINKAGE_BLOCKER_DETAIL = (
 
 @dataclass(frozen=True, slots=True)
 class ShrinkageAssignment:
-    client: object
+    client: ClientIdentity
     lambda_weight: ShrinkageWeight
     local_threshold: ThresholdValue
     shared_threshold: ThresholdValue
