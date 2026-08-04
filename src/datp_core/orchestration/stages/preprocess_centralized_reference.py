@@ -9,7 +9,6 @@ from datp_core.preprocessing.centralized import (
     CentralizedPopulationPreprocessingRequest,
     CentralizedPreprocessingOutcome,
     CentralizedPreprocessingRequest,
-    build_centralized_preprocessing_protocol,
     preprocess_centralized,
     preprocess_centralized_population,
 )
@@ -56,6 +55,3 @@ def _stage_result(
         publication_status=outcome.publication_status,
         dataset=outcome.dataset,
     )
-
-
-__all__ = ("build_centralized_preprocessing_protocol",)
