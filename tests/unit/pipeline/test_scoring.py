@@ -15,7 +15,7 @@ from datp_core.domain.values import (
     RowCount,
     checksum_file,
 )
-from datp_core.pipeline.scoring.frames import (
+from datp_core.pipeline.scoring.frame_contract import (
     SCORE_FRAME_COLUMNS,
     SCORE_FRAME_DTYPES,
     score_frame,
