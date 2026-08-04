@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from datp_core.domain.enums import PublicationStatus
+from datp_core.domain.values import checksum_file
 from datp_core.pipeline.publication.codec import (
     ArtifactPublication,
     publish_artifact,
@@ -44,7 +45,9 @@ class _Codec:
         return _Result(path=directory / result.path.name, payload=result.payload)
 
 
-def test_artifact_codec_publishes_reuses_and_rebases(tmp_path: Path) -> None:
+def test_artifact_codec_publishes_reuses_rebases_and_returns_completion_digest(
+    tmp_path: Path,
+) -> None:
     target = tmp_path / "artifact"
     publication = ArtifactPublication(
         target=target,
@@ -58,3 +61,5 @@ def test_artifact_codec_publishes_reuses_and_rebases(tmp_path: Path) -> None:
     assert second.status is PublicationStatus.REUSED
     assert first.value.path == target / "payload.txt"
     assert second.value == first.value
+    assert first.complete_digest == second.complete_digest
+    assert first.complete_digest == checksum_file(target / "COMPLETE")
