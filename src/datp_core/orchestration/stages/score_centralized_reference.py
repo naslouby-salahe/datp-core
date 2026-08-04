@@ -1,53 +1,27 @@
 """Stage: compose pooled scoring with shared publication infrastructure."""
 
-from dataclasses import dataclass
 from pathlib import Path
-from typing import ClassVar
 
-import polars as pl
-
-from datp_core.centralized_reference.checkpointing import CentralizedCheckpointCandidate
 from datp_core.centralized_reference.scoring import (
     CentralizedScoreAssetName,
     CentralizedScoringRequest,
-    CentralizedScoringResult,
     centralized_scoring_is_reusable,
     load_reused_centralized_scoring,
     rebase_centralized_scoring,
     write_centralized_scoring,
 )
-from datp_core.centralized_reference.training import CentralizedTrainingCoordinate
-from datp_core.domain.enums import ContractSubject, PublicationStatus, StageOperationId
+from datp_core.domain.enums import ContractSubject
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import BatchSize, Checksum, FeatureNameSequence, checksum_file
+from datp_core.domain.values import checksum_file
+from datp_core.orchestration.commands.scoring import (
+    ScoreCentralizedReferenceRequest,
+    ScoreCentralizedReferenceResult,
+)
 from datp_core.pipeline.publication.codec import (
     ArtifactPublication,
     FunctionalArtifactCodec,
     publish_artifact,
 )
-from datp_core.protocols.models import AutoencoderProtocol
-
-
-@dataclass(slots=True, eq=False)
-class ScoreCentralizedReferenceRequest:
-    coordinate: CentralizedTrainingCoordinate
-    checkpoint: CentralizedCheckpointCandidate
-    autoencoder: AutoencoderProtocol
-    feature_names: FeatureNameSequence
-    calibration_features: pl.DataFrame
-    evaluation_features: pl.DataFrame
-    batch_size: BatchSize
-    output_directory: Path
-    preprocessing_state_checksum: Checksum
-    overwrite: bool
-
-
-@dataclass(frozen=True, slots=True)
-class ScoreCentralizedReferenceResult:
-    stage: ClassVar[StageOperationId] = StageOperationId.SCORE_CENTRALIZED_REFERENCE
-    publication_status: PublicationStatus
-    scoring: CentralizedScoringResult
-    complete_digest: Checksum
 
 
 def score_centralized_reference_stage(
