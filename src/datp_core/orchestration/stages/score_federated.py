@@ -1,21 +1,18 @@
 """Stage: compose federated scoring with shared publication infrastructure."""
 
-from dataclasses import dataclass
 from pathlib import Path
-from typing import ClassVar
 
-from datp_core.domain.enums import PublicationStatus, StageOperationId
-from datp_core.domain.values import BatchSize, Checksum, FeatureNameSequence
-from datp_core.learning.federated.models import CheckpointCandidate
+from datp_core.orchestration.commands.scoring import (
+    ScoreFederatedRequest,
+    ScoreFederatedStageResult,
+)
 from datp_core.pipeline.publication.codec import (
     ArtifactPublication,
     FunctionalArtifactCodec,
     publish_artifact,
 )
-from datp_core.protocols.models import AutoencoderProtocol
 from datp_core.runtime.compute import resolve_cuda_device
 from datp_core.scoring.generation import (
-    ClientScoringInput,
     FederatedScoreAssetName,
     ScoreGenerationRequest,
     federated_scoring_is_reusable,
@@ -23,27 +20,6 @@ from datp_core.scoring.generation import (
     rebase_federated_scores,
     write_federated_scores,
 )
-from datp_core.scoring.models import ScoreGenerationResult
-
-
-@dataclass(slots=True, eq=False)
-class ScoreFederatedRequest:
-    checkpoint: CheckpointCandidate
-    autoencoder: AutoencoderProtocol
-    feature_names: FeatureNameSequence
-    clients: tuple[ClientScoringInput, ...]
-    batch_size: BatchSize
-    output_directory: Path
-    preprocessing_state_set_checksum: Checksum
-    split_manifest_checksum: Checksum
-    overwrite: bool
-
-
-@dataclass(frozen=True, slots=True)
-class ScoreFederatedStageResult:
-    stage: ClassVar[StageOperationId] = StageOperationId.SCORE_FEDERATED
-    publication_status: PublicationStatus
-    result: ScoreGenerationResult
 
 
 def score_federated_stage(request: ScoreFederatedRequest) -> ScoreFederatedStageResult:
