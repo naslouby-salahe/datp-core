@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Protocol
 
 from datp_core.domain.enums import PublicationStatus
+from datp_core.domain.values import Checksum
 from datp_core.pipeline.publication.atomic import publish_atomically, publish_related_atomically
 
 
@@ -86,6 +87,7 @@ class ArtifactPublication[RequestT, ResultT]:
 class ArtifactPublicationResult[ResultT]:
     status: PublicationStatus
     value: ResultT
+    complete_digest: Checksum
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -139,6 +141,7 @@ def publish_artifact[RequestT, ResultT](
     return ArtifactPublicationResult(
         status=outcome.status,
         value=codec.rebase(outcome.value, publication.target),
+        complete_digest=outcome.complete_digest,
     )
 
 
