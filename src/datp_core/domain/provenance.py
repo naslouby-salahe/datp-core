@@ -3,55 +3,66 @@
 from collections.abc import Mapping
 from dataclasses import dataclass, fields, is_dataclass
 from enum import Enum
-from functools import singledispatch
 from math import isfinite
 from pathlib import Path
+
+from pydantic import BaseModel
 
 from .enums import DatasetId, PopulationId, SerializationFormat, TrafficRateEvidenceType
 from .values import ByteCount, Checksum, RowCount
 
 
-@singledispatch
-def canonical_value(value: object) -> object:
-    """Convert a typed domain value into a deterministic JSON-serializable form."""
+type CanonicalValue = (
+    None
+    | bool
+    | int
+    | float
+    | str
+    | tuple["CanonicalValue", ...]
+    | list["CanonicalValue"]
+    | dict[str, "CanonicalValue"]
+)
+
+
+def canonical_value(value: object) -> CanonicalValue:
+    """Convert a supported value into a deterministic, finite JSON document value."""
+    if value is None or isinstance(value, (bool, int, str)):
+        return value
+    if isinstance(value, float):
+        if not isfinite(value):
+            raise ValueError("canonical scientific provenance cannot contain non-finite floats")
+        return value
+    if isinstance(value, Path):
+        return value.as_posix()
+    if isinstance(value, Enum):
+        return canonical_value(value.value)
+    if isinstance(value, BaseModel):
+        return {
+            name: canonical_value(getattr(value, name))
+            for name in type(value).model_fields
+        }
     if is_dataclass(value) and not isinstance(value, type):
-        return {field.name: canonical_value(getattr(value, field.name)) for field in fields(value)}
-
-    wrapped = getattr(value, "value", None)
-    if wrapped is not None and wrapped is not value:
-        return canonical_value(wrapped)
-
+        own_fields = fields(value)
+        if len(own_fields) == 1 and own_fields[0].name == "value":
+            return canonical_value(getattr(value, "value"))
+        return {field.name: canonical_value(getattr(value, field.name)) for field in own_fields}
+    if isinstance(value, Mapping):
+        if not all(isinstance(key, str) for key in value):
+            raise TypeError("canonical JSON object keys must be strings")
+        return {key: canonical_value(value[key]) for key in sorted(value)}
+    if isinstance(value, tuple):
+        return tuple(canonical_value(item) for item in value)
+    if isinstance(value, list):
+        return [canonical_value(item) for item in value]
     raise TypeError(f"unsupported canonical provenance value: {type(value).__qualname__}")
 
 
-@canonical_value.register(type(None))
-@canonical_value.register(str)
-@canonical_value.register(int)
-def _(value: object) -> object:
-    return value
-
-
-@canonical_value.register(float)
-def _(value: float) -> float:
-    if not isfinite(value):
-        raise ValueError("canonical scientific provenance cannot contain non-finite floats")
-    return value
-
-
-@canonical_value.register(Enum)
-def _(value: Enum) -> object:
-    return canonical_value(value.value)
-
-
-@canonical_value.register(Mapping)
-def _(value: Mapping) -> dict:
-    return {str(key): canonical_value(item) for key, item in sorted(value.items(), key=lambda pair: str(pair[0]))}
-
-
-@canonical_value.register(tuple)
-@canonical_value.register(list)
-def _(value: tuple | list) -> list:
-    return [canonical_value(item) for item in value]
+def canonical_mapping(value: object) -> dict[str, CanonicalValue]:
+    """Return a canonical JSON object and reject non-mapping roots."""
+    document = canonical_value(value)
+    if not isinstance(document, dict):
+        raise TypeError("canonical document root must be a mapping")
+    return document
 
 
 @dataclass(frozen=True, slots=True)
