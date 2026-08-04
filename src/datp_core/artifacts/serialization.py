@@ -1,7 +1,7 @@
 """Generic safe serialization for trusted estimators, models, and domain values."""
 
 from collections.abc import Callable
-from dataclasses import dataclass, fields, is_dataclass
+from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import cast
@@ -17,7 +17,6 @@ from datp_core.domain.errors import SerializationSafetyError
 from datp_core.domain.values import AbsoluteTolerance, Checksum, checksum_file, checksum_text
 
 TrustedScaler = StandardScaler | MinMaxScaler
-JsonCompatible = None | bool | int | float | str | list["JsonCompatible"] | dict[str, "JsonCompatible"]
 
 
 class SerializationSubject(StrEnum):
@@ -101,30 +100,6 @@ def serialize_json_model(model: BaseModel, destination: Path) -> Checksum:
     payload = model.model_dump_json()
     destination.write_text(payload, encoding="utf-8")
     return checksum_text(payload)
-
-
-def to_json_compatible(value: object) -> JsonCompatible:
-    """Convert supported domain values to deterministic JSON-compatible primitives."""
-    if value is None or isinstance(value, (bool, int, float, str)):
-        return value
-    if isinstance(value, Path):
-        return value.as_posix()
-    if isinstance(value, StrEnum):
-        return value.value
-    if isinstance(value, BaseModel):
-        return cast(JsonCompatible, value.model_dump(mode="json"))
-    if isinstance(value, (tuple, list)):
-        return [to_json_compatible(item) for item in value]
-    if isinstance(value, dict):
-        if not all(isinstance(key, str) for key in value):
-            raise TypeError("JSON object keys must be strings")
-        return {key: to_json_compatible(item) for key, item in value.items()}
-    if is_dataclass(value) and not isinstance(value, type):
-        own_fields = fields(value)
-        if len(own_fields) == 1 and own_fields[0].name == "value":
-            return to_json_compatible(getattr(value, "value"))
-        return {field.name: to_json_compatible(getattr(value, field.name)) for field in own_fields}
-    raise TypeError(f"cannot serialize {type(value)}")
 
 
 def transforms_are_equivalent(
