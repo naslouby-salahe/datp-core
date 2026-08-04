@@ -46,13 +46,22 @@ def test_centralized_confusion_counts_require_row_count_values() -> None:
             confusion.false_negative,
         )
     ) == RowCount(20)
+    # A dict-splat (rather than a direct keyword argument) keeps the raw-int
+    # substitution a runtime-only concern: it is a deliberate scientific-contract
+    # probe, not a static call-signature error the type checker should flag.
+    fields_with_a_raw_int_true_negative = {
+        "true_negative": 10,
+        "false_positive": RowCount(2),
+        "true_positive": RowCount(7),
+        "false_negative": RowCount(1),
+    }
+
+    def build() -> CentralizedConfusionCounts:
+        return CentralizedConfusionCounts(**fields_with_a_raw_int_true_negative)
+
     with pytest.raises(TypeError, match="RowCount"):
-        CentralizedConfusionCounts(  # type: ignore[arg-type]
-            true_negative=10,
-            false_positive=RowCount(2),
-            true_positive=RowCount(7),
-            false_negative=RowCount(1),
-        )
+        build()
+
 
 def test_pooled_evaluation_metrics_and_confusion(tmp_path: Path) -> None:
     require_cuda()

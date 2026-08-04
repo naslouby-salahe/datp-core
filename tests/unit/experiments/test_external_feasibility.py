@@ -38,8 +38,6 @@ def test_grouped_assignment_and_confirmatory_route_are_rejected() -> None:
     grouped = assess_external_temporal_feasibility(
         replace(_edge_request(), threshold_method=FederatedThresholdMethod.CLUSTER_THRESHOLD)
     )
-    routed = assess_external_temporal_feasibility(
-        replace(_edge_request(), routed_through_confirmatory_command=True)
-    )
+    routed = assess_external_temporal_feasibility(replace(_edge_request(), routed_through_confirmatory_command=True))
     assert grouped.reason is FeasibilityReason.GROUP_ASSIGNMENT_UNAVAILABLE
     assert routed.reason is FeasibilityReason.CONFIRMATORY_ROUTE_PROHIBITED

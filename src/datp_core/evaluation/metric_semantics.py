@@ -2,7 +2,13 @@
 
 from datp_core.domain.enums import MetricId
 from datp_core.domain.values import MetricValue, RowCount
-from datp_core.evaluation.models import AvailableMetric, MetricAvailability, MetricReason, MetricStatus, UnavailableMetric
+from datp_core.evaluation.models import (
+    AvailableMetric,
+    MetricAvailability,
+    MetricReason,
+    MetricStatus,
+    UnavailableMetric,
+)
 
 
 def available(metric: MetricId, value: float, *, denominator: int | None = None) -> AvailableMetric:

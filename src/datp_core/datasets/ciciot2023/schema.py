@@ -138,7 +138,12 @@ CICIOT2023_PROVENANCE_COLUMNS: tuple[str, ...] = tuple(CanonicalProvenanceColumn
 def _canonical_columns() -> tuple[CanonicalColumn, ...]:
     feature_columns = tuple(
         CanonicalColumn(
-            canonical_name(column), column, ColumnLogicalType.FLOAT64, CanonicalColumnRole.FEATURE, True, CanonicalColumnPosition(position)
+            canonical_name(column),
+            column,
+            ColumnLogicalType.FLOAT64,
+            CanonicalColumnRole.FEATURE,
+            True,
+            CanonicalColumnPosition(position),
         )
         for position, column in enumerate(CICIOT2023_FEATURE_COLUMNS)
     )

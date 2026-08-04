@@ -11,7 +11,6 @@ from pydantic import BaseModel
 from .enums import DatasetId, PopulationId, SerializationFormat, TrafficRateEvidenceType
 from .values import ByteCount, Checksum, RowCount
 
-
 type CanonicalValue = (
     None
     | bool
@@ -37,14 +36,11 @@ def canonical_value(value: object) -> CanonicalValue:
     if isinstance(value, Enum):
         return canonical_value(value.value)
     if isinstance(value, BaseModel):
-        return {
-            name: canonical_value(getattr(value, name))
-            for name in type(value).model_fields
-        }
+        return {name: canonical_value(getattr(value, name)) for name in type(value).model_fields}
     if is_dataclass(value) and not isinstance(value, type):
         own_fields = fields(value)
         if len(own_fields) == 1 and own_fields[0].name == "value":
-            return canonical_value(getattr(value, "value"))
+            return canonical_value(getattr(value, own_fields[0].name))
         return {field.name: canonical_value(getattr(value, field.name)) for field in own_fields}
     if isinstance(value, Mapping):
         if not all(isinstance(key, str) for key in value):

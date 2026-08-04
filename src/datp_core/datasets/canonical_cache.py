@@ -491,7 +491,6 @@ def _documents_match_publication(
     )
 
 
-
 def _chronology_entry(value: ChronologyValidation) -> _ChronologyEntry:
     return _ChronologyEntry.model_validate(canonical_mapping(value))
 
@@ -512,6 +511,7 @@ def _validation_report_entry(value: DatasetValidationReport) -> _ValidationRepor
 
 def _asset_entry[AssetRoleT: StrEnum](asset: CanonicalAsset[AssetRoleT]) -> _AssetEntry:
     return _AssetEntry.model_validate(asset.serialize())
+
 
 def _manifest_matches_publication[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
     manifest: CanonicalManifestDocument, publication: PublicationMatchRequest[AssetRoleT, EligibilityReasonT]
@@ -564,9 +564,7 @@ def asset_is_valid(root: Path, asset: _AssetEntry, expected_physical_schema: str
         return False
 
 
-def _assets_have_declared_metadata(
-    root: Path, assets: tuple[_AssetEntry, ...], expected_physical_schema: str
-) -> bool:
+def _assets_have_declared_metadata(root: Path, assets: tuple[_AssetEntry, ...], expected_physical_schema: str) -> bool:
     return all(_asset_has_declared_metadata(root, asset, expected_physical_schema) for asset in assets)
 
 

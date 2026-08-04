@@ -61,7 +61,10 @@ def test_client_summaries_never_carry_a_benign_exceedance_count_for_this_constru
     assert all(summary.benign_exceedance_count is None for summary in result.client_summaries)
 
 
-def test_estimated_communication_bytes_are_reported_directly() -> None:
+def test_estimated_communication_bytes_count_three_float64_scalars_per_client() -> None:
+    # Each client reports exactly count, mean, and variance for this construction
+    # (never a benign_exceedance_count — see the dedicated test above), so the
+    # estimate is deterministic: clients * 3 scalars * 8 bytes (float64).
     clients = _homogeneous_clients()
     result = construct_federated_benign_statistics(clients, FEDERATED_STATISTICS_PROTOCOL, QUANTILE)
-    assert result.estimated_communication_bytes.value > 0
+    assert result.estimated_communication_bytes.value == len(clients) * 3 * 8

@@ -65,11 +65,9 @@ def _decomposition(summaries: tuple[ClientBenignSummary, ...]) -> PooledVariance
     total_count = sum(summary.count.value for summary in summaries)
     global_mean = sum(summary.count.value * summary.mean for summary in summaries) / total_count
     within = sum(summary.count.value * summary.variance for summary in summaries) / total_count
-    between = (
-        sum(summary.count.value * (summary.mean - global_mean) ** 2 for summary in summaries) / total_count
-    )
+    between = sum(summary.count.value * (summary.mean - global_mean) ** 2 for summary in summaries) / total_count
     full = within + between
-    between_ratio = Ratio(between / full if full > 0 else 0.0)
+    between_ratio = Ratio(between / full) if full > 0 else None
     return PooledVarianceDecomposition(
         global_mean=global_mean,
         within_client_variance=within,
@@ -80,10 +78,10 @@ def _decomposition(summaries: tuple[ClientBenignSummary, ...]) -> PooledVariance
 
 
 def _communication_bytes(summaries: tuple[ClientBenignSummary, ...]) -> ByteCount:
-    scalar_count = sum(
-        3 + (1 if summary.benign_exceedance_count is not None else 0)
-        for summary in summaries
-    )
+    # Estimates the federated payload as its fixed per-client scalar count
+    # (count, mean, variance, plus benign_exceedance_count when reported) encoded
+    # as IEEE-754 float64, not the byte length of any particular wire serialization.
+    scalar_count = sum(3 + (1 if summary.benign_exceedance_count is not None else 0) for summary in summaries)
     return ByteCount(scalar_count * np.dtype(np.float64).itemsize)
 
 
@@ -140,9 +138,7 @@ def construct_federated_benign_statistics(
         )
         for coefficient in protocol.coefficients
     )
-    assignments = tuple(
-        ThresholdAssignment(client_scores.client, matched_threshold) for client_scores in ordered
-    )
+    assignments = tuple(ThresholdAssignment(client_scores.client, matched_threshold) for client_scores in ordered)
     return FederatedStatisticsThresholdResult(
         coordinate=ordered[0].coordinate,
         quantile=quantile,

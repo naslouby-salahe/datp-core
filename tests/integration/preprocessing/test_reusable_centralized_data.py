@@ -48,12 +48,8 @@ def test_centralized_publication_is_independent_and_reusable(tmp_path: Path) -> 
             "f1": [1.0, 3.0],
         }
     )
-    frame_cal = pl.DataFrame(
-        {"stable_row_id": ["c0"], "outcome_label": ["benign"], "f0": [1.0], "f1": [2.0]}
-    )
-    frame_eval = pl.DataFrame(
-        {"stable_row_id": ["e0"], "outcome_label": ["benign"], "f0": [3.0], "f1": [4.0]}
-    )
+    frame_cal = pl.DataFrame({"stable_row_id": ["c0"], "outcome_label": ["benign"], "f0": [1.0], "f1": [2.0]})
+    frame_eval = pl.DataFrame({"stable_row_id": ["e0"], "outcome_label": ["benign"], "f0": [3.0], "f1": [4.0]})
     partitions = PreprocessingPartitions(
         (
             PreprocessingPartition(PartitionRole.TRAIN, frame_train),

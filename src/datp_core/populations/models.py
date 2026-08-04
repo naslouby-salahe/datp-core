@@ -17,7 +17,6 @@ from datp_core.domain.enums import (
     DatasetId,
     EvidenceRole,
     FederatedThresholdMethod,
-    PartitionRole,
     PopulationId,
     PopulationIdentityKind,
     SplitProtocolId,
@@ -239,11 +238,14 @@ class ChronologicalPartitionDiagnosticsDocument(StrictModel):
             raise ValueError("observed eligible count must match eligible identities")
         if len(self.excluded_group_ids) != len(self.exclusion_reasons):
             raise ValueError("each excluded group requires one typed reason")
-        if min(
-            self.duplicate_timestamp_rows.value,
-            self.total_temporal_rows.value,
-            self.observed_eligible_group_count.value,
-        ) < 0:
+        if (
+            min(
+                self.duplicate_timestamp_rows.value,
+                self.total_temporal_rows.value,
+                self.observed_eligible_group_count.value,
+            )
+            < 0
+        ):
             raise ValueError("chronology diagnostic counts must be non-negative")
         return self
 

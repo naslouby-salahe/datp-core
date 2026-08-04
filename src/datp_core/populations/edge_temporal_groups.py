@@ -19,7 +19,7 @@ from datp_core.datasets.models import (
 )
 from datp_core.domain.enums import DatasetId, PopulationId, PopulationIdentityKind, SplitProtocolId
 from datp_core.domain.errors import DataIntegrityError, ScientificContractError
-from datp_core.domain.values import Checksum, ClientCount, NonNegativeIntegerValue, RowCount, Seed
+from datp_core.domain.values import Checksum, NonNegativeIntegerValue, RowCount, Seed
 from datp_core.populations.capabilities import population_declaration
 from datp_core.populations.integrity import (
     PopulationFinalizationRequest,

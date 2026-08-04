@@ -269,8 +269,7 @@ def partition_assets[AssetRoleT: StrEnum](
     if partition_count < 1:
         raise ValueError("canonical partition publication requires at least one partition")
     return tuple(
-        CanonicalAssetLayout(DATA_ROOT / branch / f"part-{index:05d}.parquet", role)
-        for index in range(partition_count)
+        CanonicalAssetLayout(DATA_ROOT / branch / f"part-{index:05d}.parquet", role) for index in range(partition_count)
     )
 
 

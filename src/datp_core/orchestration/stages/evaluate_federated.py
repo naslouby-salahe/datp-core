@@ -11,7 +11,6 @@ import polars as pl
 
 from datp_core.analysis.temporal import TemporalDeploymentProvenance
 from datp_core.artifacts.store import publish_atomically
-from datp_core.domain.provenance import canonical_value
 from datp_core.domain.enums import (
     EvaluationCohort,
     EvidenceRole,
@@ -23,6 +22,7 @@ from datp_core.domain.enums import (
     StageOperationId,
 )
 from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
+from datp_core.domain.provenance import canonical_value
 from datp_core.domain.values import (
     NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
     Checksum,
@@ -195,11 +195,14 @@ def evaluate_federated_stage(request: EvaluateFederatedRequest) -> FederatedEval
             request.comparison_fixed_score_evidence,
             auroc_absolute_tolerance=NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
         )
-    payload = dumps(
-        _evaluation_payload(request, clients, population, diagnostics),
-        indent=2,
-        sort_keys=True,
-    ) + "\n"
+    payload = (
+        dumps(
+            _evaluation_payload(request, clients, population, diagnostics),
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n"
+    )
     digest = checksum_text(payload)
 
     def write(temporary: Path) -> EvaluationDiagnostics:
@@ -374,10 +377,7 @@ def _evaluation_row_checksum(manifest: ScoreArtifactManifest) -> Checksum:
 
 def _aggregate_score_record_checksum(records: tuple[ScoreRecord, ...], column: ScoreFrameColumn) -> Checksum:
     pairs = tuple(
-        sorted(
-            (record.scored_client.client_id, _score_column_checksum(record, column).value)
-            for record in records
-        )
+        sorted((record.scored_client.client_id, _score_column_checksum(record, column).value) for record in records)
     )
     return checksum_text("|".join(f"{client}:{checksum}" for client, checksum in pairs))
 

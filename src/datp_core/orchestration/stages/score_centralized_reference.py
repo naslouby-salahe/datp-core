@@ -95,9 +95,7 @@ def score_centralized_reference_stage(
         remove_target=rmtree,
     )
     scoring = (
-        _rebase_scoring(outcome.value, request)
-        if outcome.status is PublicationStatus.PUBLISHED
-        else outcome.value
+        _rebase_scoring(outcome.value, request) if outcome.status is PublicationStatus.PUBLISHED else outcome.value
     )
     return ScoreCentralizedReferenceResult(
         publication_status=outcome.status,

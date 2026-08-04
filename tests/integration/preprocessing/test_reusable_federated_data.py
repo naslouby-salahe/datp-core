@@ -52,12 +52,8 @@ def _partitions() -> PreprocessingPartitions:
             "f1": [1.0, 2.0],
         }
     )
-    frame_cal = pl.DataFrame(
-        {"stable_row_id": ["c0"], "outcome_label": ["benign"], "f0": [0.5], "f1": [1.5]}
-    )
-    frame_eval = pl.DataFrame(
-        {"stable_row_id": ["e0"], "outcome_label": ["benign"], "f0": [1.5], "f1": [2.5]}
-    )
+    frame_cal = pl.DataFrame({"stable_row_id": ["c0"], "outcome_label": ["benign"], "f0": [0.5], "f1": [1.5]})
+    frame_eval = pl.DataFrame({"stable_row_id": ["e0"], "outcome_label": ["benign"], "f0": [1.5], "f1": [2.5]})
     return PreprocessingPartitions(
         (
             PreprocessingPartition(PartitionRole.TRAIN, frame_train),

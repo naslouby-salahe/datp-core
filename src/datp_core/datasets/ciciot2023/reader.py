@@ -94,7 +94,9 @@ class CICIoT2023Reader:
         ).collect(engine="streaming")
         return CICIoT2023AuditSummary(
             total_rows=RowCount(int(summary.item(0, CICIoT2023AuditField.TOTAL_ROWS))),
-            missing_or_unrecognized_labels=RowCount(int(summary.item(0, CICIoT2023AuditField.MISSING_OR_UNRECOGNIZED_LABELS))),
+            missing_or_unrecognized_labels=RowCount(
+                int(summary.item(0, CICIoT2023AuditField.MISSING_OR_UNRECOGNIZED_LABELS))
+            ),
             nonfinite_feature_rows=RowCount(int(summary.item(0, CICIoT2023AuditField.NONFINITE_FEATURE_ROWS))),
             eligible_rows=RowCount(int(summary.item(0, CICIoT2023AuditField.ELIGIBLE_ROWS))),
             infinite_rates=RowCount(int(summary.item(0, CICIoT2023AuditField.INFINITE_RATES))),

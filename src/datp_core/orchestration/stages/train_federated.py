@@ -3,7 +3,7 @@
 from dataclasses import dataclass, replace
 from pathlib import Path
 from shutil import rmtree
-from typing import ClassVar
+from typing import ClassVar, cast
 
 from datp_core.artifacts.store import publish_atomically
 from datp_core.domain.contracts import ClientCollection, ClientOwned
@@ -31,7 +31,6 @@ from datp_core.learning.federated.training import FederatedTrainingRequest, prep
 from datp_core.populations.catalogue import resolve_population
 from datp_core.populations.models import ClientIdentity
 from datp_core.protocols.models import FedAvgProtocol, FedProxProtocol
-
 
 type GlobalFederatedProtocol = FedAvgProtocol | FedProxProtocol
 
@@ -74,9 +73,9 @@ def train_federated_stage(stage_request: TrainFederatedRequest) -> TrainFederate
         temporary_request = replace(request, output_directory=temporary)
         match request.training_protocol:
             case FedAvgProtocol():
-                train_fedavg(temporary_request)
+                train_fedavg(cast(FederatedTrainingRequest[FedAvgProtocol], temporary_request))
             case FedProxProtocol():
-                train_fedprox(temporary_request)
+                train_fedprox(cast(FederatedTrainingRequest[FedProxProtocol], temporary_request))
 
     outcome = publish_atomically(
         target=request.output_directory,

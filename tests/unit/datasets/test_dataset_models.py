@@ -78,6 +78,7 @@ def test_chronology_rejects_raw_duplicate_timestamp_count() -> None:
             False,
         )
 
+
 def test_manifest_chronology_rehydrates_typed_duplicate_count() -> None:
     entry = _ChronologyEntry.model_validate_json(
         """{

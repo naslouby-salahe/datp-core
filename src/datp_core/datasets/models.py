@@ -237,7 +237,9 @@ class DatasetValidationReport:
 
     def __post_init__(self) -> None:
         _validate_report_collections(self.issues, self.exclusions)
-        if not all(isinstance(value, RowCount) for value in (self.accepted_rows, self.excluded_rows, self.invalid_rows)):
+        if not all(
+            isinstance(value, RowCount) for value in (self.accepted_rows, self.excluded_rows, self.invalid_rows)
+        ):
             raise TypeError("validation reports require typed row counts")
         if not isinstance(self.status, AvailabilityStatus):
             raise TypeError("validation reports require a typed availability status")
@@ -296,9 +298,7 @@ def _validate_declared_columns(
         raise ValueError(f"{subject} columns must match ordered canonical {subject} declarations")
 
 
-def _validate_inventory_sources(
-    sources: tuple[RawSourceFile, ...], accepted_source_count: SourceFileCount
-) -> None:
+def _validate_inventory_sources(sources: tuple[RawSourceFile, ...], accepted_source_count: SourceFileCount) -> None:
     if not isinstance(sources, tuple):
         raise TypeError("sources must be an immutable tuple")
     if not isinstance(accepted_source_count, SourceFileCount):
@@ -313,6 +313,7 @@ def _validate_inventory_sources(
 def _validate_inventory_count(excluded_source_count: SourceFileCount) -> None:
     if not isinstance(excluded_source_count, SourceFileCount):
         raise TypeError("raw inventories require a typed excluded source count")
+
 
 def _validate_report_collections(
     issues: tuple[DatasetValidationIssue, ...], exclusions: tuple[DatasetExclusion, ...]
@@ -400,6 +401,7 @@ def _validate_chronology_evidence(validation: ChronologyValidation) -> None:
 
 def _validate_evidence_counts(validation: ChronologyValidation) -> None:
     _validate_optional_non_negative(validation.alignment_offset_microseconds, "chronology alignment offsets")
+
 
 def _validate_optional_non_negative(value: int | None, subject: str) -> None:
     if value is not None and value < 0:

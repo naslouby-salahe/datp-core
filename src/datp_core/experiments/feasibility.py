@@ -215,7 +215,10 @@ def _threshold_and_artifact_decision(request: ExternalTemporalFeasibilityRequest
             FeasibilityReason.FAMILY_THRESHOLD_UNAVAILABLE,
             "these populations have no audited family taxonomy",
         )
-    if request.threshold_method is FederatedThresholdMethod.CLUSTER_THRESHOLD and not request.grouped_assignment_available:
+    if (
+        request.threshold_method is FederatedThresholdMethod.CLUSTER_THRESHOLD
+        and not request.grouped_assignment_available
+    ):
         return _infeasible(
             FeasibilityReason.GROUP_ASSIGNMENT_UNAVAILABLE,
             "grouped thresholds require a completed assignment artifact",

@@ -114,7 +114,7 @@ class PreparedFederatedClientData:
 
 
 @dataclass(frozen=True, slots=True)
-class FederatedTrainingRequest[T: (FedAvgProtocol, FedProxProtocol)]:
+class FederatedTrainingRequest[T: FedAvgProtocol | FedProxProtocol]:
     coordinate: FederatedTrainingCoordinate
     clients: tuple[ClientTrainingInput, ...]
     population_client_count: ClientCount

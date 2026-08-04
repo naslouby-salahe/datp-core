@@ -611,6 +611,7 @@ class ConformalAssignment:
             ContractSubject.THRESHOLD,
         )
 
+
 @dataclass(frozen=True, slots=True)
 class ConformalThresholdResult:
     """`LOCAL_CONFORMAL_THRESHOLD`: finite-sample local conformal thresholds."""
@@ -713,9 +714,8 @@ class CentralizedAttainmentDiagnostic:
             raise TypeError("centralized attainment requires a typed signed error")
         if not isinstance(self.absolute_threshold_error_vs_pooled_quantile, AbsoluteThresholdError):
             raise TypeError("centralized attainment requires a typed absolute threshold error")
-        if (
-            self.relative_threshold_error_vs_pooled_quantile is not None
-            and not isinstance(self.relative_threshold_error_vs_pooled_quantile, RelativeThresholdError)
+        if self.relative_threshold_error_vs_pooled_quantile is not None and not isinstance(
+            self.relative_threshold_error_vs_pooled_quantile, RelativeThresholdError
         ):
             raise TypeError("centralized attainment requires a typed relative threshold error")
         require_contract(

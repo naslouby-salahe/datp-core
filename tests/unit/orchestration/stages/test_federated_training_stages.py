@@ -101,7 +101,7 @@ def _training_request(
     )
 
 
-def test_train_fedavg_stage_publishes_then_reuses(tmp_path: Path) -> None:
+def test_train_federated_stage_publishes_then_reuses(tmp_path: Path) -> None:
     publications = tuple(
         _client_publication(client_id, tmp_path / "preprocessed" / client_id) for client_id in CLIENT_IDS
     )

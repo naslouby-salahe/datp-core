@@ -67,7 +67,6 @@ def test_fractional_protocols_reject_totals_outside_the_shared_tolerance() -> No
     assert conformal.significance.value == pytest.approx(0.2)
 
 
-
 def test_conformal_protocol_serializes_one_authoritative_probability() -> None:
     assert CONFORMAL_PROTOCOL.significance.value == pytest.approx(0.05)
     assert CONFORMAL_PROTOCOL.model_dump(mode="json") == {

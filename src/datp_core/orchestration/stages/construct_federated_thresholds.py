@@ -9,8 +9,8 @@ from typing import ClassVar
 
 from datp_core.analysis.temporal import TemporalDeploymentProvenance
 from datp_core.artifacts.store import publish_atomically
-from datp_core.domain.provenance import canonical_value
 from datp_core.domain.enums import PublicationStatus, StageOperationId
+from datp_core.domain.provenance import canonical_value
 from datp_core.domain.values import Checksum, checksum_text
 from datp_core.scoring.models import ScoreArtifactManifest
 from datp_core.thresholding.dispatch import ThresholdConstructionRequest, dispatch_federated_threshold
@@ -77,9 +77,7 @@ def construct_federated_thresholds_stage(
 
     def write(temporary: Path) -> ThresholdConstructionResult:
         result = construct()
-        (temporary / ConstructFederatedThresholdsAssetName.RESULT).write_text(
-            _json_payload(result), encoding="utf-8"
-        )
+        (temporary / ConstructFederatedThresholdsAssetName.RESULT).write_text(_json_payload(result), encoding="utf-8")
         if stage_request.temporal_provenance is not None:
             (temporary / ConstructFederatedThresholdsAssetName.TEMPORAL_PROVENANCE).write_text(
                 _json_payload(stage_request.temporal_provenance),

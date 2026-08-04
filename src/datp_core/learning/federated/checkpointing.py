@@ -2,9 +2,9 @@
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
-from os import replace as atomic_replace
 from enum import StrEnum
 from json import dumps
+from os import replace as atomic_replace
 from pathlib import Path
 
 import polars as pl
@@ -580,7 +580,6 @@ def _verify_completion(
     return recomputed
 
 
-
 def persist_federated_training_history(
     history: FederatedTrainingHistory,
     directory: Path,
@@ -865,9 +864,9 @@ def publish_ditto_training(
         )
     finally:
         if personalized_staging is not None:
-            cleanup_staging_directory(personalized_staging)
+            cleanup_staging_directory(personalized_staging, ignore_errors=True)
         if global_staging is not None:
-            cleanup_staging_directory(global_staging)
+            cleanup_staging_directory(global_staging, ignore_errors=True)
 
     personalized_candidates = tuple(
         PersonalizedCandidateSet(

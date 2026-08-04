@@ -35,6 +35,7 @@ def test_threshold_types_have_no_compatibility_alias_or_overlap() -> None:
     assert len(CentralizedThresholdMethod.__members__) == len(CentralizedThresholdMethod)
     assert set(FederatedThresholdMethod).isdisjoint(set(CentralizedThresholdMethod))
 
+
 def test_source_uses_no_explicit_any_type() -> None:
     for source_path, tree in parsed_source_files():
         for node in ast.walk(tree):

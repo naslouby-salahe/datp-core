@@ -209,7 +209,7 @@ def generate_federated_scores(request: ScoreGenerationRequest, device: torch.dev
         evaluation_records=rebased_by_role[PartitionRole.EVALUATION],
         future_recalibration_records=rebased_by_role.get(PartitionRole.FUTURE_RECALIBRATION, ()),
     )
-    return ScoreGenerationResult(manifest=manifest, invariant=invariant)
+    return ScoreGenerationResult(manifest=manifest)
 
 
 def _validate_frame(
@@ -394,7 +394,6 @@ def _asset_name_for_partition(role: PartitionRole) -> FederatedScoreAssetName:
             raise ScientificContractError("training rows are never scored", subject=role)
         case PartitionRole.STATIC_REFERENCE_RESERVE:
             raise ScientificContractError("static-reference reserve rows are never scored", subject=role)
-
 
 
 def _write_complete_marker(directory: Path, invariant: FixedScoreInvariant) -> None:

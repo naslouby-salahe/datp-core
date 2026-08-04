@@ -168,8 +168,12 @@ def _rebase_scoring(result: ScoreGenerationResult, output_directory: Path) -> Sc
             checkpoint_checksum=manifest.checkpoint_checksum,
             preprocessing_state_set_checksum=manifest.preprocessing_state_set_checksum,
             split_manifest_checksum=manifest.split_manifest_checksum,
-            calibration_records=tuple(_rebased_record(record, output_directory) for record in manifest.calibration_records),
-            evaluation_records=tuple(_rebased_record(record, output_directory) for record in manifest.evaluation_records),
+            calibration_records=tuple(
+                _rebased_record(record, output_directory) for record in manifest.calibration_records
+            ),
+            evaluation_records=tuple(
+                _rebased_record(record, output_directory) for record in manifest.evaluation_records
+            ),
             future_recalibration_records=tuple(
                 _rebased_record(record, output_directory) for record in manifest.future_recalibration_records
             ),

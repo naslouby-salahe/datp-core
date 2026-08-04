@@ -29,11 +29,12 @@ from datp_core.domain.enums import (
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import (
     Checksum,
-    ClientPublicationCount,
     ClientCount,
     ClientPathToken,
+    ClientPublicationCount,
     FeatureName,
     FeatureNameSequence,
+    NonNegativeIntegerValue,
     Seed,
     checksum_text,
 )
@@ -118,6 +119,7 @@ class PreprocessFederatedResult:
             raise TypeError("preprocessing results require typed publication counts")
         if self.published_count.value + self.reused_count.value != len(self.client_publications):
             raise ValueError("published and reused counts must cover every client publication")
+
 
 @dataclass(frozen=True, slots=True)
 class PreprocessFederatedArtifactsRequest:
@@ -256,8 +258,7 @@ def _client_partitions(
     split_protocol: SplitProtocolId,
 ) -> ClientCollection[ClientPathToken, PreprocessingPartitions]:
     client_ids = tuple(
-        ClientPathToken(str(value))
-        for value in sorted(joined.get_column(CLIENT_ID_COLUMN).unique().to_list())
+        ClientPathToken(str(value)) for value in sorted(joined.get_column(CLIENT_ID_COLUMN).unique().to_list())
     )
     return ClientCollection(
         tuple(
@@ -285,8 +286,7 @@ def _preprocess_ciciot_client_local(
     identity: ExternalTemporalExecutionIdentity,
 ) -> PreprocessFederatedResult:
     client_ids = tuple(
-        ClientPathToken(str(value))
-        for value in sorted(assignments.get_column(CLIENT_ID_COLUMN).unique().to_list())
+        ClientPathToken(str(value)) for value in sorted(assignments.get_column(CLIENT_ID_COLUMN).unique().to_list())
     )
     source_files = _ciciot_source_files(canonical_root)
     publications: list[ClientPreprocessingResult] = []
@@ -317,9 +317,7 @@ def _preprocess_ciciot_client_local(
         collection = ClientCollection((ClientOwned(client_id, partitions),))
         estimators = fit_estimators_for_federated_clients(context.protocol, collection)
         estimator = _estimator_for_client(estimators, client_id)
-        publication = publish_client_preprocessing(
-            ClientPublishRequest(context, client_id, estimator, partitions)
-        )
+        publication = publish_client_preprocessing(ClientPublishRequest(context, client_id, estimator, partitions))
         if publication.publication_status is PublicationStatus.REUSED:
             reused_count += 1
         else:
@@ -511,9 +509,9 @@ def _validate_population_publication(directory: Path, identity: ExternalTemporal
         sections.extend(
             (
                 _read_chronology_document(directory / "chronology.json").model_dump_json(indent=2),
-                _read_population_document(
-                    directory / "matched_static_reference_manifest.json"
-                ).model_dump_json(indent=2),
+                _read_population_document(directory / "matched_static_reference_manifest.json").model_dump_json(
+                    indent=2
+                ),
             )
         )
     if complete != checksum_text("\n".join(sections) + "\n"):
@@ -585,7 +583,7 @@ def _population_manifest_from_document(document: PopulationManifestDocument) -> 
             status=document.feasibility_status,
             reason=document.feasibility_reason,
             expected_client_count=ClientCount(len(document.candidate_clients)),
-            observed_client_count=ClientCount(len(document.accepted_clients)),
+            observed_client_count=NonNegativeIntegerValue(len(document.accepted_clients)),
             evidence="persisted population manifest",
         ),
         family_by_client=(),
@@ -602,9 +600,13 @@ def _validate_published_pair(
 ) -> None:
     document = population_manifest.document
     if document.population is not identity.population or split_manifest.population is not identity.population:
-        raise ScientificContractError("published coordinates do not match execution identity", subject=identity.population)
+        raise ScientificContractError(
+            "published coordinates do not match execution identity", subject=identity.population
+        )
     if document.dataset is not split_manifest.dataset or document.partition_seed != split_manifest.partition_seed:
-        raise ScientificContractError("published population and split coordinates disagree", subject=identity.population)
+        raise ScientificContractError(
+            "published population and split coordinates disagree", subject=identity.population
+        )
     if membership_frame_checksum(membership) != document.membership_checksum:
         raise ScientificContractError("published membership checksum mismatch", subject=identity.population)
     if split_manifest.population_manifest_checksum != document.membership_checksum:

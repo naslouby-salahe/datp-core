@@ -154,8 +154,10 @@ def _is_reusable[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseModel](
         assert_complete_digest(target, expected)
     except ArtifactIntegrityError:
         return False
-    return manifest == publication.manifest and schema == publication.schema and _assets_exist(
-        target, publication.required_assets
+    return (
+        manifest == publication.manifest
+        and schema == publication.schema
+        and _assets_exist(target, publication.required_assets)
     )
 
 

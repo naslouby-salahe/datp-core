@@ -333,14 +333,18 @@ def _client_partition_counts(
         .len()
         .alias(attack_evaluation_count),
     )
-    joined = pl.DataFrame({client_column.value: list(candidate_clients)}).join(
-        summary,
-        on=client_column.value,
-        how="left",
-    ).with_columns(
-        pl.col(calibration_count).fill_null(0),
-        pl.col(benign_evaluation_count).fill_null(0),
-        pl.col(attack_evaluation_count).fill_null(0),
+    joined = (
+        pl.DataFrame({client_column.value: list(candidate_clients)})
+        .join(
+            summary,
+            on=client_column.value,
+            how="left",
+        )
+        .with_columns(
+            pl.col(calibration_count).fill_null(0),
+            pl.col(benign_evaluation_count).fill_null(0),
+            pl.col(attack_evaluation_count).fill_null(0),
+        )
     )
     accepted = frozenset(assignments.get_column(client_column).unique().to_list())
     return tuple(

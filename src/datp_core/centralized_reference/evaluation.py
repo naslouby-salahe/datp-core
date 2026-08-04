@@ -49,6 +49,7 @@ class CentralizedConfusionCounts:
             if not isinstance(value, RowCount):
                 raise TypeError(f"{name} must be a RowCount")
 
+
 @dataclass(frozen=True, slots=True)
 class CentralizedMetricRecord:
     metric: MetricId

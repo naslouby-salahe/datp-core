@@ -306,6 +306,7 @@ def test_conformal_assignment_rejects_raw_rank_integer() -> None:
             threshold=ThresholdValue(1.0),
         )
 
+
 def test_conformal_assignment_rejects_rank_index_out_of_bounds() -> None:
     def build() -> ConformalAssignment:
         return ConformalAssignment(

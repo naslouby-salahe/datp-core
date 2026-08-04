@@ -37,7 +37,6 @@ from datp_core.analysis.temporal import (
     validate_frozen_recalibrated_pair,
 )
 from datp_core.artifacts.store import publish_atomically
-from datp_core.domain.provenance import canonical_mapping, canonical_value
 from datp_core.domain.enums import (
     AvailabilityStatus,
     EvidenceRole,
@@ -47,6 +46,7 @@ from datp_core.domain.enums import (
     TemporalState,
 )
 from datp_core.domain.errors import ScientificContractError
+from datp_core.domain.provenance import canonical_mapping, canonical_value
 from datp_core.domain.values import BootstrapReplicateCount, Checksum, Ratio, Seed, checksum_text
 from datp_core.experiments.models import ExternalTemporalExecutionIdentity, require_execution_identity
 from datp_core.protocols.models import StatisticalInferenceProtocol
@@ -247,11 +247,14 @@ def analyze_external_stage(request: ExternalAnalyzeRequest) -> ExternalAnalyzeRe
         wilcoxon=paired_wilcoxon(request.contrasts),
         rank_biserial=matched_pairs_rank_biserial(request.contrasts),
     )
-    payload = dumps(
-        {"evidence_role": canonical_value(request.plan.evidence_role), **canonical_mapping(artifacts)},
-        indent=2,
-        sort_keys=True,
-    ) + "\n"
+    payload = (
+        dumps(
+            {"evidence_role": canonical_value(request.plan.evidence_role), **canonical_mapping(artifacts)},
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n"
+    )
     digest = checksum_text(payload)
 
     def write(temporary: Path) -> _ExternalAnalysisArtifacts:
@@ -281,19 +284,22 @@ def analyze_external_stage(request: ExternalAnalyzeRequest) -> ExternalAnalyzeRe
 def analyze_temporal_stage(request: TemporalAnalyzeRequest) -> TemporalAnalyzeResult:
     _validate_temporal_identities(request)
     _validate_temporal_provenance(request)
-    payload = dumps(
-        canonical_value(
-            {
-                "evidence_role": EvidenceRole.TEMPORAL_BOUNDARY,
-                "static_reference_provenance": request.static_reference_provenance,
-                "frozen_provenance": request.frozen_provenance,
-                "recalibrated_provenance": request.recalibrated_provenance,
-                "records": request.records,
-            }
-        ),
-        indent=2,
-        sort_keys=True,
-    ) + "\n"
+    payload = (
+        dumps(
+            canonical_value(
+                {
+                    "evidence_role": EvidenceRole.TEMPORAL_BOUNDARY,
+                    "static_reference_provenance": request.static_reference_provenance,
+                    "frozen_provenance": request.frozen_provenance,
+                    "recalibrated_provenance": request.recalibrated_provenance,
+                    "records": request.records,
+                }
+            ),
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n"
+    )
     digest = checksum_text(payload)
 
     def write(temporary: Path) -> tuple[TemporalRecoveryResult, ...]:

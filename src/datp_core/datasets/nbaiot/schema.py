@@ -100,7 +100,14 @@ NBAIOT_PROVENANCE_COLUMNS: tuple[str, ...] = tuple(CanonicalProvenanceColumn)
 
 def _canonical_columns() -> tuple[CanonicalColumn, ...]:
     feature_columns = tuple(
-        CanonicalColumn(column, column, ColumnLogicalType.FLOAT64, CanonicalColumnRole.FEATURE, True, CanonicalColumnPosition(position))
+        CanonicalColumn(
+            column,
+            column,
+            ColumnLogicalType.FLOAT64,
+            CanonicalColumnRole.FEATURE,
+            True,
+            CanonicalColumnPosition(position),
+        )
         for position, column in enumerate(NBAIOT_FEATURE_COLUMNS)
     )
     provenance_columns = tuple(

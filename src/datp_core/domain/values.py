@@ -1,12 +1,13 @@
 """Validated scalar scientific values."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from functools import total_ordering
 from hashlib import file_digest, sha256
 from math import isclose, isfinite
 from pathlib import Path
 from types import NotImplementedType
-from typing import Callable, ClassVar, cast
+from typing import ClassVar, cast
 
 NUMERIC_ZERO: float = 0.0
 NO_RELATIVE_TOLERANCE: float = 0.0
@@ -75,15 +76,11 @@ def _typed_eq(self: object, other: object) -> bool | NotImplementedType:
     return _numeric_value(self) == other_value
 
 
-def _integer_constructor(instance: object) -> Callable[[int], object]:
-    return cast(Callable[[int], object], type(instance))
-
-
-def _add_impl(self: object, other: object) -> object | NotImplementedType:
+def _add_impl[T: (PositiveIntegerValue, NonNegativeIntegerValue)](self: T, other: object) -> T | NotImplementedType:
     self_value = _numeric_value(self)
     if not isinstance(self_value, int):
         return NotImplemented
-    constructor = _integer_constructor(self)
+    constructor = cast(Callable[[int], T], type(self))
     if isinstance(other, int) and not isinstance(other, bool):
         return constructor(self_value + other)
     if type(other) is type(self):
@@ -92,10 +89,11 @@ def _add_impl(self: object, other: object) -> object | NotImplementedType:
     return NotImplemented
 
 
-def _radd_impl(self: object, other: object) -> object | NotImplementedType:
+def _radd_impl[T: (PositiveIntegerValue, NonNegativeIntegerValue)](self: T, other: object) -> T | NotImplementedType:
     self_value = _numeric_value(self)
     if isinstance(self_value, int) and isinstance(other, int) and not isinstance(other, bool):
-        return _integer_constructor(self)(other + self_value)
+        constructor = cast(Callable[[int], T], type(self))
+        return constructor(other + self_value)
     return NotImplemented
 
 

@@ -143,7 +143,14 @@ EDGE_PROVENANCE_COLUMNS: tuple[str, ...] = (
 
 def _canonical_columns() -> tuple[CanonicalColumn, ...]:
     feature_columns = tuple(
-        CanonicalColumn(column, source, ColumnLogicalType.STRING, CanonicalColumnRole.FEATURE, True, CanonicalColumnPosition(position))
+        CanonicalColumn(
+            column,
+            source,
+            ColumnLogicalType.STRING,
+            CanonicalColumnRole.FEATURE,
+            True,
+            CanonicalColumnPosition(position),
+        )
         for position, (column, source) in enumerate(
             zip(EDGE_CANONICAL_FEATURE_COLUMNS, EDGE_FEATURE_COLUMNS, strict=True)
         )

@@ -324,12 +324,7 @@ class WilcoxonResult(StrictModel):
     def _validate(self) -> "WilcoxonResult":
         available = self.availability is AvailabilityStatus.AVAILABLE
         if available:
-            if (
-                self.statistic is None
-                or self.p_value is None
-                or self.computation_method is None
-                or self.reason
-            ):
+            if self.statistic is None or self.p_value is None or self.computation_method is None or self.reason:
                 raise ValueError("available Wilcoxon result requires finite values and no reason")
         elif self.statistic is not None or self.p_value is not None or not self.reason:
             raise ValueError("unavailable Wilcoxon result requires no values and an explicit reason")
