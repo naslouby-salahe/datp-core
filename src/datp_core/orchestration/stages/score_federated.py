@@ -17,7 +17,7 @@ from datp_core.domain.enums import (
 )
 from datp_core.domain.errors import ArtifactIntegrityError
 from datp_core.domain.values import BatchSize, Checksum, FeatureCount, FeatureNameSequence, RowCount, checksum_file
-from datp_core.learning.federated.checkpointing import CheckpointCandidate
+from datp_core.learning.federated.models import CheckpointCandidate
 from datp_core.pipeline.publication.codec import ArtifactPublication, publish_artifact
 from datp_core.protocols.models import AutoencoderProtocol
 from datp_core.runtime.compute import resolve_cuda_device
