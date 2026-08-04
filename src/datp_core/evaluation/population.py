@@ -67,13 +67,13 @@ from datp_core.evaluation.threshold_estimation import (
     evaluate_threshold_estimate,
 )
 from datp_core.evaluation.traffic_rates import ValidatedTrafficRateEvidence
-from datp_core.experiments.models import (
-    ExternalTemporalExecutionIdentity,
-    require_execution_identity,
-)
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.populations.capabilities import population_capabilities
 from datp_core.populations.models import ClientIdentity, PopulationOutcomeLabel
+from datp_core.protocols.experiments import (
+    ExternalTemporalExecutionIdentity,
+    require_execution_identity,
+)
 from datp_core.scoring.models import ScoreArtifactManifest, ScoreRecord
 from datp_core.thresholding.assignments import ThresholdAssignment
 from datp_core.thresholding.common import ThresholdConstructionResult
