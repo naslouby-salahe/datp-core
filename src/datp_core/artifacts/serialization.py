@@ -1,5 +1,6 @@
-"""Generic safe serialization for trusted estimators, models, and domain values."""
+"""Safe serialization for trusted estimators and canonical domain documents."""
 
+import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
@@ -14,9 +15,17 @@ from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 from datp_core.domain.enums import TrustedEstimatorClassName
 from datp_core.domain.errors import SerializationSafetyError
+from datp_core.domain.provenance import canonical_value
 from datp_core.domain.values import AbsoluteTolerance, Checksum, checksum_file, checksum_text
 
 TrustedScaler = StandardScaler | MinMaxScaler
+
+STANDARD_SCALER_WITH_MEAN = True
+STANDARD_SCALER_WITH_STANDARD_DEVIATION = True
+MIN_MAX_LOWER_BOUND = 0.0
+MIN_MAX_UPPER_BOUND = 1.0
+MIN_MAX_CLIP = False
+JSON_SEPARATORS = (",", ":")
 
 
 class SerializationSubject(StrEnum):
@@ -26,36 +35,55 @@ class SerializationSubject(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class TrustedEstimatorDefinition:
+    identity: TrustedEstimatorClassName
     estimator_type: type[TrustedScaler]
     constructor: Callable[[], TrustedScaler]
 
 
-_TRUSTED_ESTIMATORS: dict[TrustedEstimatorClassName, TrustedEstimatorDefinition] = {
-    TrustedEstimatorClassName.STANDARD_SCALER: TrustedEstimatorDefinition(
-        StandardScaler,
-        lambda: StandardScaler(with_mean=True, with_std=True),
+_TRUSTED_ESTIMATORS: tuple[TrustedEstimatorDefinition, ...] = (
+    TrustedEstimatorDefinition(
+        identity=TrustedEstimatorClassName.STANDARD_SCALER,
+        estimator_type=StandardScaler,
+        constructor=lambda: StandardScaler(
+            with_mean=STANDARD_SCALER_WITH_MEAN,
+            with_std=STANDARD_SCALER_WITH_STANDARD_DEVIATION,
+        ),
     ),
-    TrustedEstimatorClassName.MIN_MAX_SCALER: TrustedEstimatorDefinition(
-        MinMaxScaler,
-        lambda: MinMaxScaler(feature_range=(0, 1), clip=False),
+    TrustedEstimatorDefinition(
+        identity=TrustedEstimatorClassName.MIN_MAX_SCALER,
+        estimator_type=MinMaxScaler,
+        constructor=lambda: MinMaxScaler(
+            feature_range=(MIN_MAX_LOWER_BOUND, MIN_MAX_UPPER_BOUND),
+            clip=MIN_MAX_CLIP,
+        ),
     ),
-}
+)
+
+
+def _definition_for(identity: TrustedEstimatorClassName) -> TrustedEstimatorDefinition:
+    matches = tuple(definition for definition in _TRUSTED_ESTIMATORS if definition.identity is identity)
+    if len(matches) != 1:
+        raise SerializationSafetyError(
+            "trusted estimator identity must resolve exactly once",
+            subject=SerializationSubject.ESTIMATOR,
+        )
+    return matches[0]
 
 
 def trusted_estimator_type_names() -> frozenset[str]:
     return frozenset(
         f"{definition.estimator_type.__module__}.{definition.estimator_type.__name__}"
-        for definition in _TRUSTED_ESTIMATORS.values()
+        for definition in _TRUSTED_ESTIMATORS
     )
 
 
 def resolve_trusted_estimator_type(class_name: TrustedEstimatorClassName) -> type[TrustedScaler]:
-    return _TRUSTED_ESTIMATORS[class_name].estimator_type
+    return _definition_for(class_name).estimator_type
 
 
 def construct_trusted_estimator(class_name: TrustedEstimatorClassName) -> TrustedScaler:
-    """Build a scientific estimator with locked constructor arguments."""
-    return _TRUSTED_ESTIMATORS[class_name].constructor()
+    """Build a scientific estimator with explicit locked constructor arguments."""
+    return _definition_for(class_name).constructor()
 
 
 def clone_trusted_scaler(estimator: TrustedScaler, class_name: TrustedEstimatorClassName) -> TrustedScaler:
@@ -69,7 +97,8 @@ def clone_trusted_scaler(estimator: TrustedScaler, class_name: TrustedEstimatorC
 
 def serialize_estimator(estimator: BaseEstimator, destination: Path) -> Checksum:
     estimator_type = type(estimator)
-    if estimator_type not in {definition.estimator_type for definition in _TRUSTED_ESTIMATORS.values()}:
+    trusted_types = tuple(definition.estimator_type for definition in _TRUSTED_ESTIMATORS)
+    if estimator_type not in trusted_types:
         raise SerializationSafetyError(
             f"untrusted preprocessing estimator type {estimator_type.__module__}.{estimator_type.__name__}",
             subject=SerializationSubject.PREPROCESSING_ESTIMATOR,
@@ -96,8 +125,15 @@ def load_estimator(path: Path, class_name: TrustedEstimatorClassName) -> Trusted
 
 
 def serialize_json_model(model: BaseModel, destination: Path) -> Checksum:
+    """Persist one strict model through the repository canonical JSON contract."""
     destination.parent.mkdir(parents=True, exist_ok=True)
-    payload = model.model_dump_json()
+    payload = json.dumps(
+        canonical_value(model),
+        sort_keys=True,
+        separators=JSON_SEPARATORS,
+        ensure_ascii=True,
+        allow_nan=False,
+    )
     destination.write_text(payload, encoding="utf-8")
     return checksum_text(payload)
 
@@ -105,9 +141,16 @@ def serialize_json_model(model: BaseModel, destination: Path) -> Checksum:
 def transforms_are_equivalent(
     left: np.ndarray,
     right: np.ndarray,
-    absolute_tolerance: float | AbsoluteTolerance,
+    absolute_tolerance: AbsoluteTolerance,
 ) -> bool:
     if left.shape != right.shape:
         return False
-    tolerance = absolute_tolerance.value if isinstance(absolute_tolerance, AbsoluteTolerance) else absolute_tolerance
-    return bool(np.allclose(left, right, rtol=0.0, atol=tolerance, equal_nan=False))
+    return bool(
+        np.allclose(
+            left,
+            right,
+            rtol=0.0,
+            atol=absolute_tolerance.value,
+            equal_nan=False,
+        )
+    )
