@@ -82,6 +82,7 @@ select = ["E", "F", "I", "N", "UP", "B", "ICN"]
 
 [tool.pyright]
 include = ["src", "tests"]
+strict = ["src/datp_core/pipeline"]
 pythonVersion = "3.12"
 typeCheckingMode = "standard"
 venvPath = "."
