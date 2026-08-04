@@ -16,7 +16,11 @@ from datp_core.domain.values import (
     ThresholdValue,
     checksum_file,
 )
-from datp_core.evaluation.metric_semantics import available, metric_value, unavailable
+from datp_core.evaluation.metric_semantics import (
+    available,
+    metric_value,
+    unavailable,
+)
 from datp_core.evaluation.models import (
     HeldOutBenignScore,
     MetricAvailability,
@@ -28,7 +32,7 @@ from datp_core.evaluation.models import (
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.populations.models import ClientIdentity, PopulationOutcomeLabel
 from datp_core.scoring.models import ScoreRecord
-from datp_core.thresholding.models import ConformalAssignment
+from datp_core.thresholding.methods.conformal import ConformalAssignment
 
 _COVERAGE_METRICS = frozenset(
     {
@@ -42,8 +46,6 @@ _COVERAGE_METRICS = frozenset(
 
 @dataclass(frozen=True, slots=True)
 class ConformalCoverageDiagnostic:
-    """Coverage evidence for one client and one training seed."""
-
     client: ClientIdentity
     coordinate: FederatedTrainingCoordinate
     training_seed: Seed
@@ -57,43 +59,73 @@ class ConformalCoverageDiagnostic:
 
     def __post_init__(self) -> None:
         if self.calibration_count.value < 1:
-            raise ScientificContractError("conformal diagnostics require a positive calibration count")
-        if not isinstance(self.finite_sample_rank_index, ConformalRankIndex):
-            raise ScientificContractError("conformal diagnostics require a typed finite-sample rank")
+            raise ScientificContractError(
+                "conformal diagnostics require a positive calibration count"
+            )
         if (
             self.coordinate.population is not self.client.population
             or self.coordinate.training_seed != self.training_seed
         ):
-            raise ScientificContractError("conformal coverage coordinate must match the client and training seed")
-        if not isfinite(self.effective_quantile.value) or not 0 < self.effective_quantile.value <= 1:
-            raise ScientificContractError("conformal effective quantile must be finite and in (0, 1]")
+            raise ScientificContractError(
+                "conformal coverage coordinate must match the client and training seed"
+            )
+        if (
+            not isfinite(self.effective_quantile.value)
+            or not 0 < self.effective_quantile.value <= 1
+        ):
+            raise ScientificContractError(
+                "conformal effective quantile must be finite and in (0, 1]"
+            )
         if not isfinite(self.threshold.value):
-            raise ScientificContractError("conformal threshold provenance must be finite")
+            raise ScientificContractError(
+                "conformal threshold provenance must be finite"
+            )
         validate_metric_set(self.metrics, _COVERAGE_METRICS)
         target = metric_by_id(self.metrics, MetricId.TARGET_COVERAGE)
-        if target.value is None or target.value.value != self.target_coverage.value:
-            raise ScientificContractError("coverage target metric must match the declared target")
-        achieved = metric_by_id(self.metrics, MetricId.ACHIEVED_COVERAGE)
-        signed = metric_by_id(self.metrics, MetricId.SIGNED_COVERAGE_ERROR)
-        absolute = metric_by_id(self.metrics, MetricId.ABSOLUTE_COVERAGE_ERROR)
-        if len({achieved.status, signed.status, absolute.status}) != 1:
-            raise ScientificContractError("coverage outcome metrics must share one availability state")
+        if (
+            target.value is None
+            or target.value.value != self.target_coverage.value
+        ):
+            raise ScientificContractError(
+                "coverage target metric must match the declared target"
+            )
+        outcomes = tuple(
+            metric_by_id(self.metrics, metric)
+            for metric in (
+                MetricId.ACHIEVED_COVERAGE,
+                MetricId.SIGNED_COVERAGE_ERROR,
+                MetricId.ABSOLUTE_COVERAGE_ERROR,
+            )
+        )
+        if len({item.status for item in outcomes}) != 1:
+            raise ScientificContractError(
+                "coverage outcome metrics must share one availability state"
+            )
 
     @property
     def achieved_held_out_benign_coverage(self) -> float | None:
-        return metric_value(metric_by_id(self.metrics, MetricId.ACHIEVED_COVERAGE))
+        return metric_value(
+            metric_by_id(self.metrics, MetricId.ACHIEVED_COVERAGE)
+        )
 
     @property
     def signed_coverage_error(self) -> float | None:
-        return metric_value(metric_by_id(self.metrics, MetricId.SIGNED_COVERAGE_ERROR))
+        return metric_value(
+            metric_by_id(self.metrics, MetricId.SIGNED_COVERAGE_ERROR)
+        )
 
     @property
     def absolute_coverage_error(self) -> float | None:
-        return metric_value(metric_by_id(self.metrics, MetricId.ABSOLUTE_COVERAGE_ERROR))
+        return metric_value(
+            metric_by_id(self.metrics, MetricId.ABSOLUTE_COVERAGE_ERROR)
+        )
 
     @property
     def unavailable_reason(self) -> MetricReason | None:
-        return metric_by_id(self.metrics, MetricId.ACHIEVED_COVERAGE).reason
+        return metric_by_id(
+            self.metrics,
+            MetricId.ACHIEVED_COVERAGE,
+        ).reason
 
 
 def evaluate_held_out_conformal_coverage(
@@ -103,46 +135,19 @@ def evaluate_held_out_conformal_coverage(
     target_coverage: CoverageTarget,
     held_out_benign_scores: tuple[HeldOutBenignScore, ...],
 ) -> ConformalCoverageDiagnostic:
-    """Evaluate a persisted conformal threshold on held-out benign rows only."""
     _validate_scores(assignment.client, coordinate, held_out_benign_scores)
-    if coordinate.population is not assignment.client.population or coordinate.training_seed != training_seed:
+    if (
+        coordinate.population is not assignment.client.population
+        or coordinate.training_seed != training_seed
+    ):
         raise ScientificContractError(
             "conformal coverage coordinate must match the assignment client and training seed"
         )
-    if not held_out_benign_scores:
-        metrics: tuple[MetricAvailability, ...] = (
-            available(MetricId.TARGET_COVERAGE, target_coverage.value),
-            unavailable(
-                MetricId.ACHIEVED_COVERAGE,
-                MetricStatus.UNAVAILABLE,
-                MetricReason.EMPTY_BENIGN_DENOMINATOR,
-                denominator=0,
-            ),
-            unavailable(
-                MetricId.SIGNED_COVERAGE_ERROR,
-                MetricStatus.UNAVAILABLE,
-                MetricReason.EMPTY_BENIGN_DENOMINATOR,
-                denominator=0,
-            ),
-            unavailable(
-                MetricId.ABSOLUTE_COVERAGE_ERROR,
-                MetricStatus.UNAVAILABLE,
-                MetricReason.EMPTY_BENIGN_DENOMINATOR,
-                denominator=0,
-            ),
-        )
-    else:
-        achieved = sum(score.score <= assignment.threshold for score in held_out_benign_scores) / len(
-            held_out_benign_scores
-        )
-        signed_error = achieved - target_coverage.value
-        denominator = len(held_out_benign_scores)
-        metrics = (
-            available(MetricId.TARGET_COVERAGE, target_coverage.value),
-            available(MetricId.ACHIEVED_COVERAGE, achieved, denominator=denominator),
-            available(MetricId.SIGNED_COVERAGE_ERROR, signed_error, denominator=denominator),
-            available(MetricId.ABSOLUTE_COVERAGE_ERROR, abs(signed_error), denominator=denominator),
-        )
+    metrics = _coverage_metrics(
+        assignment,
+        target_coverage,
+        held_out_benign_scores,
+    )
     return ConformalCoverageDiagnostic(
         client=assignment.client,
         coordinate=coordinate,
@@ -157,6 +162,54 @@ def evaluate_held_out_conformal_coverage(
     )
 
 
+def _coverage_metrics(
+    assignment: ConformalAssignment,
+    target_coverage: CoverageTarget,
+    scores: tuple[HeldOutBenignScore, ...],
+) -> tuple[MetricAvailability, ...]:
+    if not scores:
+        return (
+            available(MetricId.TARGET_COVERAGE, target_coverage.value),
+            *tuple(
+                unavailable(
+                    metric,
+                    MetricStatus.UNAVAILABLE,
+                    MetricReason.EMPTY_BENIGN_DENOMINATOR,
+                    denominator=0,
+                )
+                for metric in (
+                    MetricId.ACHIEVED_COVERAGE,
+                    MetricId.SIGNED_COVERAGE_ERROR,
+                    MetricId.ABSOLUTE_COVERAGE_ERROR,
+                )
+            ),
+        )
+    denominator = len(scores)
+    achieved = (
+        sum(item.score <= assignment.threshold for item in scores)
+        / denominator
+    )
+    signed_error = achieved - target_coverage.value
+    return (
+        available(MetricId.TARGET_COVERAGE, target_coverage.value),
+        available(
+            MetricId.ACHIEVED_COVERAGE,
+            achieved,
+            denominator=denominator,
+        ),
+        available(
+            MetricId.SIGNED_COVERAGE_ERROR,
+            signed_error,
+            denominator=denominator,
+        ),
+        available(
+            MetricId.ABSOLUTE_COVERAGE_ERROR,
+            abs(signed_error),
+            denominator=denominator,
+        ),
+    )
+
+
 def _validate_scores(
     client: ClientIdentity,
     coordinate: FederatedTrainingCoordinate,
@@ -166,46 +219,81 @@ def _validate_scores(
     if len(stable_row_ids) != len(frozenset(stable_row_ids)):
         raise ScientificContractError("held-out coverage rows must be unique")
     if any(item.client != client for item in scores):
-        raise ScientificContractError("held-out coverage scores must belong to the threshold-assigned client")
+        raise ScientificContractError(
+            "held-out coverage scores must belong to the threshold-assigned client"
+        )
     if any(item.score_record.coordinate != coordinate for item in scores):
-        raise ScientificContractError("held-out coverage score provenance must match the evaluation coordinate")
+        raise ScientificContractError(
+            "held-out coverage score provenance must match the evaluation coordinate"
+        )
     _verify_score_rows(scores)
 
 
-def _verify_score_rows(scores: tuple[HeldOutBenignScore, ...]) -> None:
-    """Reject rows not demonstrably present in an unchanged held-out score artifact."""
-    by_record: dict[ScoreRecord, list[HeldOutBenignScore]] = {}
+def _verify_score_rows(
+    scores: tuple[HeldOutBenignScore, ...],
+) -> None:
+    records: list[ScoreRecord] = []
     for item in scores:
-        by_record.setdefault(item.score_record, []).append(item)
+        if item.score_record not in records:
+            records.append(item.score_record)
+    for record in records:
+        supplied_rows = tuple(
+            item for item in scores if item.score_record == record
+        )
+        _verify_record_rows(record, supplied_rows)
+
+
+def _verify_record_rows(
+    record: ScoreRecord,
+    supplied_rows: tuple[HeldOutBenignScore, ...],
+) -> None:
     required = (
         ScoreFrameColumn.STABLE_ROW_ID.value,
         ScoreFrameColumn.OUTCOME_LABEL.value,
         ScoreFrameColumn.RECONSTRUCTION_ERROR.value,
     )
-    for record, supplied_rows in by_record.items():
-        if not record.path.is_file() or checksum_file(record.path) != record.checksum:
-            raise ScientificContractError("held-out coverage score provenance is unavailable or changed")
-        frame = pl.read_parquet(record.path)
-        if any(column not in frame.columns for column in required) or frame.height != record.row_count.value:
-            raise ScientificContractError("held-out coverage score provenance has an invalid schema or row count")
-        stable_row_ids = [item.stable_row_id for item in supplied_rows]
-        observed_rows = frame.filter(pl.col(ScoreFrameColumn.STABLE_ROW_ID.value).is_in(stable_row_ids))
-        if observed_rows.height != len(supplied_rows):
+    if not record.path.is_file() or checksum_file(record.path) != record.checksum:
+        raise ScientificContractError(
+            "held-out coverage score provenance is unavailable or changed"
+        )
+    frame = pl.read_parquet(record.path)
+    if (
+        any(column not in frame.columns for column in required)
+        or frame.height != record.row_count.value
+    ):
+        raise ScientificContractError(
+            "held-out coverage score provenance has an invalid schema or row count"
+        )
+    stable_row_ids = tuple(item.stable_row_id for item in supplied_rows)
+    observed_rows = frame.filter(
+        pl.col(ScoreFrameColumn.STABLE_ROW_ID.value).is_in(stable_row_ids)
+    ).select(required)
+    if observed_rows.height != len(supplied_rows):
+        raise ScientificContractError(
+            "held-out coverage score rows are not uniquely proven by their score artifact"
+        )
+    observed = tuple(
+        (
+            str(row[0]),
+            PopulationOutcomeLabel(str(row[1])),
+            float(row[2]),
+        )
+        for row in observed_rows.iter_rows()
+    )
+    if len({item[0] for item in observed}) != len(supplied_rows):
+        raise ScientificContractError(
+            "held-out coverage score rows are not uniquely proven by their score artifact"
+        )
+    for item in supplied_rows:
+        matches = tuple(
+            (label, score)
+            for stable_row_id, label, score in observed
+            if stable_row_id == item.stable_row_id
+        )
+        if len(matches) != 1 or matches[0] != (
+            item.outcome_label,
+            item.score.value,
+        ):
             raise ScientificContractError(
-                "held-out coverage score rows are not uniquely proven by their score artifact"
+                "held-out coverage score row is not proven by its score artifact"
             )
-        observed = {
-            str(row[ScoreFrameColumn.STABLE_ROW_ID.value]): (
-                PopulationOutcomeLabel(str(row[ScoreFrameColumn.OUTCOME_LABEL.value])),
-                float(row[ScoreFrameColumn.RECONSTRUCTION_ERROR.value]),
-            )
-            for row in observed_rows.select(required).iter_rows(named=True)
-        }
-        if len(observed) != len(supplied_rows):
-            raise ScientificContractError(
-                "held-out coverage score rows are not uniquely proven by their score artifact"
-            )
-        for item in supplied_rows:
-            provenance = observed.get(item.stable_row_id)
-            if provenance != (item.outcome_label, item.score.value):
-                raise ScientificContractError("held-out coverage score row is not proven by its score artifact")
