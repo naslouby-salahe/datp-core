@@ -1,21 +1,11 @@
 """Stage: compose independent centralized autoencoder training publication."""
 
-from dataclasses import dataclass
-from pathlib import Path
-from typing import ClassVar
-
-import polars as pl
-
-from datp_core.centralized_reference.checkpointing import CentralizedCheckpointCandidate
 from datp_core.centralized_reference.training import (
     CentralizedArtifactName,
-    CentralizedTrainingCoordinate,
-    CentralizedTrainingResult,
     declared_centralized_training_values,
     require_no_hidden_scientific_defaults,
 )
-from datp_core.domain.enums import PublicationStatus, StageOperationId
-from datp_core.domain.values import Checksum, FeatureNameSequence, Seed, checksum_file
+from datp_core.domain.values import checksum_file
 from datp_core.learning.centralized.adapter import (
     CentralizedTrainingArtifacts,
     CentralizedTrainingPublicationRequest,
@@ -25,36 +15,15 @@ from datp_core.learning.centralized.adapter import (
     validate_centralized_training_request,
     write_centralized_training,
 )
+from datp_core.orchestration.commands.training import (
+    TrainCentralizedReferenceRequest,
+    TrainCentralizedReferenceResult,
+)
 from datp_core.pipeline.publication.codec import (
     ArtifactPublication,
     FunctionalArtifactCodec,
     publish_artifact,
 )
-from datp_core.preprocessing.models import CentralizedFittedPreprocessingState
-from datp_core.protocols.models import AutoencoderProtocol, CheckpointProtocol
-
-
-@dataclass(slots=True, eq=False)
-class TrainCentralizedReferenceRequest:
-    coordinate: CentralizedTrainingCoordinate
-    training_features: pl.DataFrame
-    feature_names: FeatureNameSequence
-    preprocessing_state: CentralizedFittedPreprocessingState
-    split_manifest_checksum: Checksum
-    output_directory: Path
-    training_seed: Seed
-    autoencoder: AutoencoderProtocol
-    checkpoint_protocol: CheckpointProtocol
-    overwrite: bool
-
-
-@dataclass(frozen=True, slots=True)
-class TrainCentralizedReferenceResult:
-    stage: ClassVar[StageOperationId] = StageOperationId.TRAIN_CENTRALIZED_REFERENCE
-    publication_status: PublicationStatus
-    training: CentralizedTrainingResult
-    candidates: tuple[CentralizedCheckpointCandidate, ...]
-    complete_digest: Checksum
 
 
 def train_centralized_reference_stage(
