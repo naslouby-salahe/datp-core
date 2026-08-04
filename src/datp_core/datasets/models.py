@@ -1,6 +1,6 @@
 """Immutable records for audited dataset ingestion and publication."""
 
-from dataclasses import dataclass, fields
+from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
@@ -99,6 +99,16 @@ class RawSourceFile:
     observed_row_count: RowCount | None
 
     def __post_init__(self) -> None:
+        if not isinstance(self.dataset, DatasetId):
+            raise TypeError("raw sources require a typed dataset")
+        if not isinstance(self.size_bytes, ByteCount):
+            raise TypeError("raw sources require a typed byte count")
+        if not isinstance(self.checksum, Checksum):
+            raise TypeError("raw sources require a typed checksum")
+        if not isinstance(self.role, SourceFileRole):
+            raise TypeError("raw sources require a typed role")
+        if self.observed_row_count is not None and not isinstance(self.observed_row_count, RowCount):
+            raise TypeError("raw sources require a typed observed row count")
         if self.relative_path.is_absolute():
             raise ValueError("raw source paths must be relative")
 
@@ -130,9 +140,13 @@ class CanonicalColumn:
         if not self.name or not self.source_name:
             raise ValueError("canonical columns require non-empty names")
         if not isinstance(self.dtype, ColumnLogicalType):
-            raise ValueError("canonical columns require a ColumnLogicalType dtype")
-        if self.position < 0:
-            raise ValueError("canonical column positions must be non-negative")
+            raise TypeError("canonical columns require a ColumnLogicalType dtype")
+        if not isinstance(self.role, CanonicalColumnRole):
+            raise TypeError("canonical columns require a typed role")
+        if not isinstance(self.nullable, bool):
+            raise TypeError("canonical column nullability must be boolean")
+        if not isinstance(self.position, CanonicalColumnPosition):
+            raise TypeError("canonical columns require a typed position")
 
 
 @dataclass(frozen=True, slots=True)
@@ -223,6 +237,10 @@ class DatasetValidationReport:
 
     def __post_init__(self) -> None:
         _validate_report_collections(self.issues, self.exclusions)
+        if not all(isinstance(value, RowCount) for value in (self.accepted_rows, self.excluded_rows, self.invalid_rows)):
+            raise TypeError("validation reports require typed row counts")
+        if not isinstance(self.status, AvailabilityStatus):
+            raise TypeError("validation reports require a typed availability status")
         if not isinstance(self.warning_count, ValidationIssueCount):
             raise TypeError("validation reports require a typed warning count")
         if self.warning_count.value != _warning_count(self.issues):
@@ -400,35 +418,20 @@ def _validate_evidence_path(validation: ChronologyValidation) -> None:
 
 
 def _validate_chronology_counts(validation: ChronologyValidation) -> None:
-    if not isinstance(validation.duplicate_timestamp_count, RowCount):
-        raise TypeError("chronology validation requires a typed duplicate timestamp count")
+    required_counts = (
+        validation.total_rows,
+        validation.parseable_rows,
+        validation.invalid_rows,
+        validation.duplicate_timestamp_count,
+        validation.skipped_evidence_rows,
+        validation.trailing_evidence_rows,
+    )
+    if not all(isinstance(value, RowCount) for value in required_counts):
+        raise TypeError("chronology validation requires typed row counts")
+    if validation.evidence_row_count is not None and not isinstance(validation.evidence_row_count, RowCount):
+        raise TypeError("chronology evidence requires a typed row count")
     if validation.parseable_rows.value + validation.invalid_rows.value != validation.total_rows.value:
         raise ValueError("parseable and invalid chronology rows must total all rows")
-
-def _serialize(obj):  # noqa: C901, PLR0911
-    """Serialize domain value objects, enums, dataclasses, and tuples to JSON-compatible primitives."""
-    if obj is None:
-        return None
-    if isinstance(obj, (bool, int, float, str)):
-        return obj
-    if isinstance(obj, Path):
-        return obj.as_posix()
-    if isinstance(obj, StrEnum):
-        return obj.value
-    if isinstance(obj, tuple):
-        return tuple(_serialize(item) for item in obj)
-    if isinstance(obj, list):
-        return [_serialize(item) for item in obj]
-    if isinstance(obj, dict):
-        return {key: _serialize(value) for key, value in obj.items()}
-    if hasattr(obj, "model_dump"):
-        return obj.model_dump(mode="json")
-    if hasattr(obj, "__dataclass_fields__"):
-        own_fields = fields(obj)
-        if len(own_fields) == 1 and own_fields[0].name == "value":
-            return obj.value
-        return {field.name: _serialize(getattr(obj, field.name)) for field in own_fields}
-    raise TypeError(f"cannot serialize {type(obj)}")
 
 
 class SchemaChecksumDocument(StrictModel):
@@ -442,7 +445,7 @@ class _AssetEntry(StrictModel):
     checksum: str
     columns: tuple[str, ...]
     path: str
-    row_count: int
+    row_count: RowCount
     role: str
     source_identity: str | None = None
 
@@ -450,42 +453,42 @@ class _AssetEntry(StrictModel):
 class _ChronologyEntry(StrictModel):
     group_identity: str
     status: str
-    total_rows: int
-    parseable_rows: int
-    invalid_rows: int
+    total_rows: RowCount
+    parseable_rows: RowCount
+    invalid_rows: RowCount
     duplicate_timestamp_count: RowCount
     is_monotonic: bool
     reason: str
     temporal_eligible: bool
     evidence_source_path: str | None = None
-    evidence_row_count: int | None = None
+    evidence_row_count: RowCount | None = None
     alignment_verified: bool = False
     alignment_offset_microseconds: int | None = None
-    skipped_evidence_rows: int = 0
-    trailing_evidence_rows: int = 0
+    skipped_evidence_rows: RowCount = RowCount(0)
+    trailing_evidence_rows: RowCount = RowCount(0)
 
 
 class _RawSourceEntry(StrictModel):
     dataset: str = ""
     relative_path: str
-    size_bytes: int
+    size_bytes: ByteCount
     checksum: str
     role: str
-    observed_row_count: int | None = None
+    observed_row_count: RowCount | None = None
 
 
 class _InventoryEntry(StrictModel):
     dataset: str = ""
     sources: tuple[_RawSourceEntry, ...]
-    accepted_source_count: int
-    excluded_source_count: int
-    accepted_row_count: int | None = None
+    accepted_source_count: SourceFileCount
+    excluded_source_count: SourceFileCount
+    accepted_row_count: RowCount | None = None
     checksum: str
 
 
 class _SourceRowEntry(StrictModel):
     source: _RawSourceEntry
-    zero_based_row_index: int
+    zero_based_row_index: SourceRowIndex
 
 
 class _ExclusionEntry(StrictModel):
@@ -494,7 +497,7 @@ class _ExclusionEntry(StrictModel):
     source_row: _SourceRowEntry | None = None
     reason: str
     evidence: str
-    affected_count: int
+    affected_count: RowCount
 
 
 class _ValidationIssueEntry(StrictModel):
@@ -503,17 +506,17 @@ class _ValidationIssueEntry(StrictModel):
     dataset: str = ""
     source_context: str
     reason: str
-    affected_count: int
+    affected_count: RowCount
 
 
 class _ValidationReportEntry(StrictModel):
     dataset: str = ""
     issues: tuple[_ValidationIssueEntry, ...]
     exclusions: tuple[_ExclusionEntry, ...]
-    accepted_rows: int
-    excluded_rows: int
-    invalid_rows: int
-    warning_count: int
+    accepted_rows: RowCount
+    excluded_rows: RowCount
+    invalid_rows: RowCount
+    warning_count: ValidationIssueCount
     status: str
 
 
@@ -538,7 +541,7 @@ class CanonicalManifestDocument(StrictModel):
 class SourceStateEntryDocument(StrictModel):
     modified_time_nanoseconds: int
     path: str
-    size_bytes: int
+    size_bytes: ByteCount
 
 
 class SourceStateDocument(StrictModel):

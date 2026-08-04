@@ -385,7 +385,7 @@ def _bca_interval_from_distribution(
     return (
         MetricValue(float(bounds[0])),
         MetricValue(float(bounds[1])),
-        BcaAdjustment(bias_correction=bias_correction, acceleration=acceleration),
+        BcaAdjustment(bias_correction=MetricValue(bias_correction), acceleration=MetricValue(acceleration)),
     )
 
 

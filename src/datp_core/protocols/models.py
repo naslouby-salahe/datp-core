@@ -247,13 +247,10 @@ class SizeAwareShrinkageProtocol(Declaration):
 class ConformalProtocol(Declaration):
     method: Literal[FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD]
     coverage: CoverageTarget
-    significance: Ratio
 
-    @model_validator(mode="after")
-    def validate_complement(self) -> "ConformalProtocol":
-        if not _sums_to_unit_fraction(self.coverage, self.significance):
-            raise ValueError("coverage and significance must be complements")
-        return self
+    @property
+    def significance(self) -> Ratio:
+        return Ratio(1.0 - self.coverage.value)
 
 
 class FederatedStatisticsProtocol(Declaration):
@@ -371,7 +368,7 @@ class PopulationDeclaration(Declaration):
 
     @property
     def requires_family_taxonomy(self) -> bool:
-        return self.identity_kind is PopulationIdentityKind.PHYSICAL_DEVICES
+        return self.is_confirmatory_population
 
     @property
     def requires_verified_chronology(self) -> bool:

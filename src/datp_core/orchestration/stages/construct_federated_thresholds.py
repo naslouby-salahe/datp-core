@@ -8,8 +8,8 @@ from shutil import rmtree
 from typing import ClassVar
 
 from datp_core.analysis.temporal import TemporalDeploymentProvenance
-from datp_core.artifacts.serialization import to_json_compatible
 from datp_core.artifacts.store import publish_atomically
+from datp_core.domain.provenance import canonical_value
 from datp_core.domain.enums import PublicationStatus, StageOperationId
 from datp_core.domain.values import Checksum, checksum_text
 from datp_core.scoring.models import ScoreArtifactManifest
@@ -46,7 +46,7 @@ class ConstructFederatedThresholdsResult:
 
 
 def _json_payload(value: object) -> str:
-    return dumps(to_json_compatible(value), indent=2, sort_keys=True) + "\n"
+    return dumps(canonical_value(value), indent=2, sort_keys=True) + "\n"
 
 
 def threshold_result_checksum(result: ThresholdConstructionResult) -> Checksum:

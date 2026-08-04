@@ -16,7 +16,7 @@ from datp_core.analysis.models import (
 )
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import AvailabilityStatus, EvidenceRole, ScientificDecision
-from datp_core.domain.values import MetricValue, Ratio, ThresholdValue
+from datp_core.domain.values import ClusterIndex, MetricValue, Ratio, ThresholdValue
 from datp_core.populations.models import ClientIdentity
 from datp_core.thresholding.models import ClusterMembership
 
@@ -120,7 +120,7 @@ class ClusterPartitionSummary(StrictModel):
 
 class ClusterAssignment(StrictModel):
     client: ClientIdentity
-    cluster_index: int
+    cluster_index: ClusterIndex
 
     def __lt__(self, other: "ClusterAssignment") -> bool:
         return self.client < other.client
@@ -267,8 +267,8 @@ def cluster_stability(
     if left_clients != right_clients:
         raise ValueError("cluster stability requires identical persisted client memberships")
 
-    left_labels = tuple(assignment.cluster_index for assignment in left_assignments)
-    right_labels = tuple(assignment.cluster_index for assignment in right_assignments)
+    left_labels = tuple(assignment.cluster_index.value for assignment in left_assignments)
+    right_labels = tuple(assignment.cluster_index.value for assignment in right_assignments)
 
     return ClusterStabilityResult(
         adjusted_rand_index=MetricValue(float(adjusted_rand_score(left_labels, right_labels))),
@@ -360,7 +360,7 @@ def _cluster_assignments(
     memberships: tuple[ClusterMembership, ...],
 ) -> tuple[ClusterAssignment, ...]:
     assignments = tuple(
-        ClusterAssignment(client=client, cluster_index=cluster_index)
+        ClusterAssignment(client=client, cluster_index=ClusterIndex(cluster_index))
         for cluster_index, membership in enumerate(memberships)
         for client in membership.members
     )

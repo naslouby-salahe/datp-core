@@ -15,6 +15,7 @@ from datp_core.domain.enums import (
 )
 from datp_core.domain.errors import require_contract
 from datp_core.domain.values import (
+    AbsoluteThresholdError,
     ByteCount,
     Checksum,
     ClusterIndex,
@@ -24,8 +25,10 @@ from datp_core.domain.values import (
     GroupCount,
     KMeansInitializationCount,
     KMeansMaximumIterationCount,
+    MetricValue,
     Quantile,
     Ratio,
+    RelativeThresholdError,
     RowCount,
     ScoreValue,
     Seed,
@@ -700,45 +703,33 @@ class CentralizedAttainmentDiagnostic:
 
     target_exceedance: Quantile
     achieved_exceedance: Ratio
-    signed_attainment_error: float
+    signed_attainment_error: MetricValue
     absolute_attainment_error: Ratio
-    absolute_threshold_error_vs_pooled_quantile: float
-    relative_threshold_error_vs_pooled_quantile: float | None
+    absolute_threshold_error_vs_pooled_quantile: AbsoluteThresholdError
+    relative_threshold_error_vs_pooled_quantile: RelativeThresholdError | None
 
     def __post_init__(self) -> None:
-        require_contract(
-            math.isfinite(self.signed_attainment_error)
-            and math.isfinite(self.absolute_threshold_error_vs_pooled_quantile)
-            and (
-                self.relative_threshold_error_vs_pooled_quantile is None
-                or math.isfinite(self.relative_threshold_error_vs_pooled_quantile)
-            ),
-            "every numeric field in attainment diagnostic must be finite",
-            ContractSubject.THRESHOLD,
-        )
+        if not isinstance(self.signed_attainment_error, MetricValue):
+            raise TypeError("centralized attainment requires a typed signed error")
+        if not isinstance(self.absolute_threshold_error_vs_pooled_quantile, AbsoluteThresholdError):
+            raise TypeError("centralized attainment requires a typed absolute threshold error")
+        if (
+            self.relative_threshold_error_vs_pooled_quantile is not None
+            and not isinstance(self.relative_threshold_error_vs_pooled_quantile, RelativeThresholdError)
+        ):
+            raise TypeError("centralized attainment requires a typed relative threshold error")
         require_contract(
             floats_exactly_equal(
-                self.signed_attainment_error, self.achieved_exceedance.value - self.target_exceedance.value
+                self.signed_attainment_error.value, self.achieved_exceedance.value - self.target_exceedance.value
             ),
             "signed attainment error must equal achieved_exceedance - target_exceedance",
             ContractSubject.THRESHOLD,
         )
         require_contract(
-            floats_exactly_equal(self.absolute_attainment_error.value, abs(self.signed_attainment_error)),
+            floats_exactly_equal(self.absolute_attainment_error.value, abs(self.signed_attainment_error.value)),
             "absolute attainment error must equal abs(signed_attainment_error)",
             ContractSubject.THRESHOLD,
         )
-        require_contract(
-            self.absolute_threshold_error_vs_pooled_quantile >= 0,
-            "absolute threshold error must be non-negative",
-            ContractSubject.THRESHOLD,
-        )
-        if self.relative_threshold_error_vs_pooled_quantile is not None:
-            require_contract(
-                self.relative_threshold_error_vs_pooled_quantile >= 0,
-                "relative threshold error must be non-negative when present",
-                ContractSubject.THRESHOLD,
-            )
 
 
 @dataclass(frozen=True, slots=True)

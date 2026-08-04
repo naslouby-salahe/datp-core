@@ -99,15 +99,16 @@ def _radd_impl(self: object, other: object) -> object | NotImplementedType:
     return NotImplemented
 
 
+def _coerce_instance(cls, value):
+    return value if isinstance(value, cls) else cls(value)
+
+
 def _pydantic_value_schema(cls, _source_type, _handler):
     """Validate a raw scalar into a value object and serialize its scalar value."""
     from pydantic_core import core_schema as _cs
 
-    def _validate(value):
-        return value if isinstance(value, cls) else cls(value)
-
     return _cs.no_info_plain_validator_function(
-        _validate,
+        lambda value: _coerce_instance(cls, value),
         serialization=_cs.plain_serializer_function_ser_schema(lambda instance: instance.value),
     )
 
@@ -129,11 +130,8 @@ def _str_enum_schema(cls, _source_type, _handler):
 def _str_subclass_schema(cls, _source_type, _handler):
     from pydantic_core import core_schema as _cs
 
-    def _validate(value):
-        return value if isinstance(value, cls) else cls(value)
-
     return _cs.no_info_plain_validator_function(
-        _validate,
+        lambda value: _coerce_instance(cls, value),
         serialization=_cs.plain_serializer_function_ser_schema(str),
     )
 
@@ -332,6 +330,26 @@ class SourceRowIndex(NonNegativeIntegerValue):
 
 class ValidationIssueCount(NonNegativeIntegerValue):
     validation_name: ClassVar[str] = "validation issue count"
+
+
+class PairedObservationCount(NonNegativeIntegerValue):
+    validation_name: ClassVar[str] = "paired observation count"
+
+
+class RankSum(NonNegativeFiniteFloatValue):
+    validation_name: ClassVar[str] = "rank sum"
+
+
+class ThresholdVariance(NonNegativeFiniteFloatValue):
+    validation_name: ClassVar[str] = "threshold variance"
+
+
+class AbsoluteThresholdError(NonNegativeFiniteFloatValue):
+    validation_name: ClassVar[str] = "absolute threshold error"
+
+
+class RelativeThresholdError(NonNegativeFiniteFloatValue):
+    validation_name: ClassVar[str] = "relative threshold error"
 
 
 class LogicalElementCount(PositiveIntegerValue):

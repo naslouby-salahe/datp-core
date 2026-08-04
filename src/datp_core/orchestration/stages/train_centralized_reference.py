@@ -37,6 +37,7 @@ from datp_core.domain.enums import (
 from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
 from datp_core.domain.values import (
     Checksum,
+    CudaDeviceName,
     FeatureCount,
     FeatureNameSequence,
     MetricValue,
@@ -252,7 +253,7 @@ def _load_reused_training(
         model_tensor_checksum=checksum_file(model_path),
         preprocessing_state_checksum=request.preprocessing_state.estimator_checksum,
         split_manifest_checksum=request.split_manifest_checksum,
-        device_name=str(resolve_cuda_device()),
+        device_name=CudaDeviceName(str(resolve_cuda_device())),
         batch_size_used=batch_size,
         final_epoch=request.checkpoint_protocol.maximum_round,
     )

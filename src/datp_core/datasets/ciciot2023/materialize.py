@@ -114,7 +114,7 @@ def _audited_sources(
 def _source_inventory(paths: tuple[Path, ...], summaries: tuple[CICIoT2023AuditSummary, ...]) -> RawDatasetInventory:
     sources = tuple(
         raw_source_file(
-            DatasetId.CICIOT2023, path, SourceFileRole.MERGED, RowCount(summary.total_rows), source_relative_path
+            DatasetId.CICIOT2023, path, SourceFileRole.MERGED, summary.total_rows, source_relative_path
         )
         for path, summary in zip(paths, summaries, strict=True)
     )
@@ -122,26 +122,26 @@ def _source_inventory(paths: tuple[Path, ...], summaries: tuple[CICIoT2023AuditS
 
 
 def _validation_report(summaries: tuple[CICIoT2023AuditSummary, ...]) -> DatasetValidationReport:
-    invalid_labels = sum(summary.missing_or_unrecognized_labels for summary in summaries)
-    nonfinite_features = sum(summary.nonfinite_feature_rows for summary in summaries)
-    infinite_rates = sum(summary.infinite_rates for summary in summaries)
-    empty_rates = sum(summary.empty_rates for summary in summaries)
-    ineligible_rows = sum(summary.total_rows - summary.eligible_rows for summary in summaries)
+    invalid_labels = RowCount(sum(summary.missing_or_unrecognized_labels.value for summary in summaries))
+    nonfinite_features = RowCount(sum(summary.nonfinite_feature_rows.value for summary in summaries))
+    infinite_rates = RowCount(sum(summary.infinite_rates.value for summary in summaries))
+    empty_rates = RowCount(sum(summary.empty_rates.value for summary in summaries))
+    ineligible_rows = RowCount(sum(summary.total_rows.value - summary.eligible_rows.value for summary in summaries))
     issues = _validation_issues(invalid_labels, nonfinite_features, infinite_rates, empty_rates)
     return DatasetValidationReport(
         DatasetId.CICIOT2023,
         issues,
         (),
-        RowCount(sum(summary.total_rows for summary in summaries)),
+        RowCount(sum(summary.total_rows.value for summary in summaries)),
         RowCount(0),
-        RowCount(ineligible_rows),
+        ineligible_rows,
         ValidationIssueCount(sum(issue.severity is ValidationSeverity.WARNING for issue in issues)),
         AvailabilityStatus.AVAILABLE if not issues else AvailabilityStatus.UNAVAILABLE,
     )
 
 
 def _validation_issues(
-    invalid_labels: int, nonfinite_features: int, infinite_rates: int, empty_rates: int
+    invalid_labels: RowCount, nonfinite_features: RowCount, infinite_rates: RowCount, empty_rates: RowCount
 ) -> tuple[DatasetValidationIssue, ...]:
     issues: tuple[DatasetValidationIssue, ...] = ()
     for issue in (
@@ -155,7 +155,7 @@ def _validation_issues(
     return issues
 
 
-def _label_issue(affected_count: int) -> DatasetValidationIssue | None:
+def _label_issue(affected_count: RowCount) -> DatasetValidationIssue | None:
     return _validation_issue(
         affected_count,
         DatasetValidationCode.UNRECOGNIZED_OR_EMPTY_LABEL,
@@ -163,7 +163,7 @@ def _label_issue(affected_count: int) -> DatasetValidationIssue | None:
     )
 
 
-def _infinite_rate_issue(affected_count: int) -> DatasetValidationIssue | None:
+def _infinite_rate_issue(affected_count: RowCount) -> DatasetValidationIssue | None:
     return _validation_issue(
         affected_count,
         DatasetValidationCode.INFINITE_RATE,
@@ -171,7 +171,7 @@ def _infinite_rate_issue(affected_count: int) -> DatasetValidationIssue | None:
     )
 
 
-def _nonfinite_feature_issue(affected_count: int) -> DatasetValidationIssue | None:
+def _nonfinite_feature_issue(affected_count: RowCount) -> DatasetValidationIssue | None:
     return _validation_issue(
         affected_count,
         DatasetValidationCode.NONFINITE_MODEL_INPUT_FEATURE,
@@ -179,7 +179,7 @@ def _nonfinite_feature_issue(affected_count: int) -> DatasetValidationIssue | No
     )
 
 
-def _empty_rate_issue(affected_count: int) -> DatasetValidationIssue | None:
+def _empty_rate_issue(affected_count: RowCount) -> DatasetValidationIssue | None:
     return _validation_issue(
         affected_count,
         DatasetValidationCode.EMPTY_RATE,
@@ -187,8 +187,8 @@ def _empty_rate_issue(affected_count: int) -> DatasetValidationIssue | None:
     )
 
 
-def _validation_issue(affected_count: int, code: DatasetValidationCode, reason: str) -> DatasetValidationIssue | None:
-    if affected_count == 0:
+def _validation_issue(affected_count: RowCount, code: DatasetValidationCode, reason: str) -> DatasetValidationIssue | None:
+    if affected_count.value == 0:
         return None
     return DatasetValidationIssue(
         ValidationSeverity.ERROR,
@@ -196,5 +196,5 @@ def _validation_issue(affected_count: int, code: DatasetValidationCode, reason: 
         DatasetId.CICIOT2023,
         CICIoT2023ArtifactName.MERGED_CSV_DIRECTORY,
         reason,
-        RowCount(affected_count),
+        affected_count,
     )

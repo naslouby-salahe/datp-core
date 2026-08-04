@@ -36,8 +36,8 @@ from datp_core.analysis.temporal import (
     TemporalRecoveryResult,
     validate_frozen_recalibrated_pair,
 )
-from datp_core.artifacts.serialization import to_json_compatible
 from datp_core.artifacts.store import publish_atomically
+from datp_core.domain.provenance import canonical_mapping, canonical_value
 from datp_core.domain.enums import (
     AvailabilityStatus,
     EvidenceRole,
@@ -191,7 +191,7 @@ def analyze_stage(request: AnalyzeRequest) -> AnalyzeResult:
             analysis_seed=request.analysis_seed,
         ),
     )
-    payload = dumps(to_json_compatible(artifacts), indent=2, sort_keys=True) + "\n"
+    payload = dumps(canonical_value(artifacts), indent=2, sort_keys=True) + "\n"
     digest = checksum_text(payload)
 
     def write(temporary: Path) -> _AnalysisArtifacts:
@@ -248,7 +248,7 @@ def analyze_external_stage(request: ExternalAnalyzeRequest) -> ExternalAnalyzeRe
         rank_biserial=matched_pairs_rank_biserial(request.contrasts),
     )
     payload = dumps(
-        to_json_compatible({"evidence_role": request.plan.evidence_role, **to_json_compatible(artifacts)}),
+        {"evidence_role": canonical_value(request.plan.evidence_role), **canonical_mapping(artifacts)},
         indent=2,
         sort_keys=True,
     ) + "\n"
@@ -282,7 +282,7 @@ def analyze_temporal_stage(request: TemporalAnalyzeRequest) -> TemporalAnalyzeRe
     _validate_temporal_identities(request)
     _validate_temporal_provenance(request)
     payload = dumps(
-        to_json_compatible(
+        canonical_value(
             {
                 "evidence_role": EvidenceRole.TEMPORAL_BOUNDARY,
                 "static_reference_provenance": request.static_reference_provenance,

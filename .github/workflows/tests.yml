@@ -1,38 +1,20 @@
-name: Publish audited source
+name: Tests
 
-"on": [push, pull_request]
+"on": [push]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  publish:
+  test:
+    name: Run test suite
     runs-on: ubuntu-latest
+
     steps:
       - name: Check out repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
-          persist-credentials: true
-
-      - name: Apply audited source patches
-        run: |
-          python - <<'PY'
-          import base64
-          import gzip
-          from pathlib import Path
-
-          remaining = "".join(
-              path.read_text(encoding="ascii")
-              for path in sorted(Path(".github").glob("final-remaining.b64.part*"))
-          )
-          correction = Path(".github/final-correction.b64").read_text(encoding="ascii")
-          Path("/tmp/final-audit.patch").write_bytes(gzip.decompress(base64.b64decode(remaining, validate=True)))
-          Path("/tmp/final-correction.patch").write_bytes(gzip.decompress(base64.b64decode(correction, validate=True)))
-          PY
-          git apply --check /tmp/final-audit.patch
-          git apply /tmp/final-audit.patch
-          git apply --check /tmp/final-correction.patch
-          git apply /tmp/final-correction.patch
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
@@ -45,34 +27,16 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-groups --all-extras --frozen
 
-      - name: Compile source and tests
-        run: python -m compileall -q src tests
+      - name: Provision empty raw-data root
+        run: mkdir -p data/raw
 
-      - name: Run focused regression tests
-        run: |
-          mkdir -p data/raw
-          uv run pytest -q \
-            tests/unit/analysis/inference/test_bootstrap.py \
-            tests/unit/artifacts/test_preprocessing_serialization.py \
-            tests/unit/datasets/test_dataset_models.py \
-            tests/unit/datasets/ciciot2023/test_reader.py \
-            tests/unit/orchestration/stages/test_analyze.py \
-            tests/unit/protocols/test_models.py \
-            tests/unit/thresholding/test_models.py
-
-      - name: Run complete test suite
+      # The raw-source readiness audit below requires infrastructure a generic CI runner cannot
+      # have: real licensed multi-GB datasets. It fails loudly by design (configs/runtime.yaml:
+      # raw_source_policy) rather than silently downgrading -- it is an environment-readiness
+      # check, not a portable unit test, and is exercised on real developer hardware instead.
+      # CUDA-required training/scoring tests self-skip via torch.cuda.is_available() when no
+      # CUDA device is present, so they need no CI-side exclusion.
+      - name: Run tests and collect coverage
         run: |
           uv run pytest \
             --ignore=tests/integration/configuration/test_raw_source_contracts_are_ready.py
-
-      - name: Restore normal workflow and publish source
-        if: github.event_name == 'push' && github.ref == 'refs/heads/agent/consolidate-dataclass-contracts'
-        run: |
-          git fetch origin main --depth=1
-          git show FETCH_HEAD:.github/workflows/tests.yml > .github/workflows/tests.yml
-          rm -f .github/final-audit.patch.part* .github/final-remaining.b64.part* .github/final-correction.b64
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src tests .github
-          git commit -m "Complete semantic contract and provenance audit"
-          git push origin "HEAD:${GITHUB_REF_NAME}"

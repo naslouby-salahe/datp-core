@@ -121,10 +121,12 @@ def construct_federated_benign_statistics(
     centralized_attainment_diagnostic = CentralizedAttainmentDiagnostic(
         target_exceedance=target_exceedance,
         achieved_exceedance=achieved_exceedance,
-        signed_attainment_error=signed_attainment_error,
+        signed_attainment_error=MetricValue(signed_attainment_error),
         absolute_attainment_error=Ratio(abs(signed_attainment_error)),
-        absolute_threshold_error_vs_pooled_quantile=absolute_threshold_error,
-        relative_threshold_error_vs_pooled_quantile=relative_threshold_error,
+        absolute_threshold_error_vs_pooled_quantile=AbsoluteThresholdError(absolute_threshold_error),
+        relative_threshold_error_vs_pooled_quantile=(
+            None if relative_threshold_error is None else RelativeThresholdError(relative_threshold_error)
+        ),
     )
 
     fixed_coefficient_curve = tuple(

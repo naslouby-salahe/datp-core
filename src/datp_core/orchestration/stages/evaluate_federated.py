@@ -10,8 +10,8 @@ from typing import ClassVar
 import polars as pl
 
 from datp_core.analysis.temporal import TemporalDeploymentProvenance
-from datp_core.artifacts.serialization import to_json_compatible
 from datp_core.artifacts.store import publish_atomically
+from datp_core.domain.provenance import canonical_value
 from datp_core.domain.enums import (
     EvaluationCohort,
     EvidenceRole,
@@ -507,7 +507,7 @@ def _evaluation_payload(
     diagnostics: EvaluationDiagnostics,
 ):
     manifest = request.score_manifest
-    return to_json_compatible(
+    return canonical_value(
         {
             "stage": StageOperationId.EVALUATE_FEDERATED,
             "score_coordinate": manifest.coordinate,

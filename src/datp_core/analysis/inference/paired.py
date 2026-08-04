@@ -19,14 +19,14 @@ from datp_core.domain.enums import (
     AvailabilityStatus,
     MultiplicityCorrectionId,
 )
-from datp_core.domain.values import Ratio
+from datp_core.domain.values import MetricValue, PairedObservationCount, RankSum, Ratio
 
 
 def paired_wilcoxon(contrasts: PairedContrasts) -> WilcoxonResult:
     deltas = contrast_deltas(contrasts)
-    nonzero_pair_count = int(np.count_nonzero(deltas))
+    nonzero_pair_count = PairedObservationCount(int(np.count_nonzero(deltas)))
 
-    if not nonzero_pair_count:
+    if nonzero_pair_count.value == 0:
         return WilcoxonResult(
             statistic=None,
             p_value=None,
@@ -56,7 +56,7 @@ def paired_wilcoxon(contrasts: PairedContrasts) -> WilcoxonResult:
 
     statistic_val, pvalue_val = extracted
     return WilcoxonResult(
-        statistic=statistic_val,
+        statistic=RankSum(statistic_val),
         p_value=PValue(value=pvalue_val),
         nonzero_pair_count=nonzero_pair_count,
         computation_method=WilcoxonComputationMethod.SCIPY_ASYMPTOTIC,
@@ -74,7 +74,7 @@ def matched_pairs_rank_biserial(contrasts: PairedContrasts) -> RankBiserialResul
             value=None,
             positive_rank_sum=None,
             negative_rank_sum=None,
-            nonzero_pair_count=0,
+            nonzero_pair_count=PairedObservationCount(0),
             availability=AvailabilityStatus.UNDEFINED,
             reason="rank-biserial correlation requires at least one nonzero paired difference",
         )
@@ -86,10 +86,10 @@ def matched_pairs_rank_biserial(contrasts: PairedContrasts) -> RankBiserialResul
     rank_total = float(ranks.sum())
 
     return RankBiserialResult(
-        value=(positive_rank_sum - negative_rank_sum) / rank_total,
-        positive_rank_sum=positive_rank_sum,
-        negative_rank_sum=negative_rank_sum,
-        nonzero_pair_count=nonzero.size,
+        value=MetricValue((positive_rank_sum - negative_rank_sum) / rank_total),
+        positive_rank_sum=RankSum(positive_rank_sum),
+        negative_rank_sum=RankSum(negative_rank_sum),
+        nonzero_pair_count=PairedObservationCount(int(nonzero.size)),
         availability=AvailabilityStatus.AVAILABLE,
         reason="",
     )

@@ -8,6 +8,7 @@ from datp_core.domain.enums import (
     OptimizerId,
 )
 from datp_core.domain.values import CoverageTarget, Quantile, Ratio, WeightDecay
+from datp_core.protocols.calibration import CONFORMAL_PROTOCOL
 from datp_core.protocols.models import (
     CentralizedQuantileProtocol,
     CentralizedTrainingProtocol,
@@ -59,9 +60,17 @@ def test_fractional_protocols_reject_totals_outside_the_shared_tolerance() -> No
             calibration=Ratio(0.3),
             evaluation=Ratio(0.1),
         )
-    with pytest.raises(ValidationError):
-        ConformalProtocol(
-            method=FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD,
-            coverage=CoverageTarget(0.8),
-            significance=Ratio(0.1),
-        )
+    conformal = ConformalProtocol(
+        method=FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD,
+        coverage=CoverageTarget(0.8),
+    )
+    assert conformal.significance.value == pytest.approx(0.2)
+
+
+
+def test_conformal_protocol_serializes_one_authoritative_probability() -> None:
+    assert CONFORMAL_PROTOCOL.significance.value == pytest.approx(0.05)
+    assert CONFORMAL_PROTOCOL.model_dump(mode="json") == {
+        "method": FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD.value,
+        "coverage": 0.95,
+    }

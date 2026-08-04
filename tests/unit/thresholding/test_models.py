@@ -6,6 +6,7 @@ from tests.unit.thresholding.helpers import COORDINATE, identity
 from datp_core.domain.enums import AvailabilityStatus, FederatedThresholdMethod, KMeansInitialization
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import (
+    AbsoluteThresholdError,
     ByteCount,
     Checksum,
     ClusterIndex,
@@ -15,6 +16,7 @@ from datp_core.domain.values import (
     GroupCount,
     KMeansInitializationCount,
     KMeansMaximumIterationCount,
+    MetricValue,
     Quantile,
     Ratio,
     RowCount,
@@ -373,9 +375,9 @@ def test_centralized_attainment_diagnostic_rejects_out_of_range_target() -> None
         return CentralizedAttainmentDiagnostic(
             target_exceedance=Quantile(1.5),
             achieved_exceedance=Ratio(0.1),
-            signed_attainment_error=0.0,
+            signed_attainment_error=MetricValue(0.0),
             absolute_attainment_error=Ratio(0.0),
-            absolute_threshold_error_vs_pooled_quantile=0.0,
+            absolute_threshold_error_vs_pooled_quantile=AbsoluteThresholdError(0.0),
             relative_threshold_error_vs_pooled_quantile=None,
         )
 
@@ -857,9 +859,9 @@ def test_federated_statistics_result_rejects_duplicate_client_summaries() -> Non
             centralized_attainment_diagnostic=CentralizedAttainmentDiagnostic(
                 target_exceedance=Quantile(0.05),
                 achieved_exceedance=Ratio(0.05),
-                signed_attainment_error=0.0,
+                signed_attainment_error=MetricValue(0.0),
                 absolute_attainment_error=Ratio(0.0),
-                absolute_threshold_error_vs_pooled_quantile=0.0,
+                absolute_threshold_error_vs_pooled_quantile=AbsoluteThresholdError(0.0),
                 relative_threshold_error_vs_pooled_quantile=None,
             ),
             centralized_pooled_quantile_diagnostic=ThresholdValue(1.0),
@@ -1045,9 +1047,9 @@ def test_centralized_attainment_diagnostic_rejects_inconsistent_signed_error() -
         CentralizedAttainmentDiagnostic(
             target_exceedance=Quantile(0.05),
             achieved_exceedance=Ratio(0.10),
-            signed_attainment_error=0.0,
+            signed_attainment_error=MetricValue(0.0),
             absolute_attainment_error=Ratio(0.05),
-            absolute_threshold_error_vs_pooled_quantile=0.0,
+            absolute_threshold_error_vs_pooled_quantile=AbsoluteThresholdError(0.0),
             relative_threshold_error_vs_pooled_quantile=None,
         )
 
@@ -1057,9 +1059,9 @@ def test_centralized_attainment_diagnostic_rejects_inconsistent_absolute_error()
         CentralizedAttainmentDiagnostic(
             target_exceedance=Quantile(0.05),
             achieved_exceedance=Ratio(0.10),
-            signed_attainment_error=0.05,
+            signed_attainment_error=MetricValue(0.05),
             absolute_attainment_error=Ratio(0.99),
-            absolute_threshold_error_vs_pooled_quantile=0.0,
+            absolute_threshold_error_vs_pooled_quantile=AbsoluteThresholdError(0.0),
             relative_threshold_error_vs_pooled_quantile=None,
         )
 
@@ -1069,8 +1071,8 @@ def test_centralized_attainment_diagnostic_rejects_non_finite_fields() -> None:
         CentralizedAttainmentDiagnostic(
             target_exceedance=Quantile(float("nan")),
             achieved_exceedance=Ratio(0.10),
-            signed_attainment_error=0.05,
+            signed_attainment_error=MetricValue(0.05),
             absolute_attainment_error=Ratio(0.05),
-            absolute_threshold_error_vs_pooled_quantile=0.0,
+            absolute_threshold_error_vs_pooled_quantile=AbsoluteThresholdError(0.0),
             relative_threshold_error_vs_pooled_quantile=None,
         )

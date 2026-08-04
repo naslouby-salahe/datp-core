@@ -6,6 +6,7 @@ from pathlib import Path
 import polars as pl
 
 from datp_core.datasets.materialization import provenance_expressions
+from datp_core.domain.values import RowCount
 
 from .schema import (
     CICIOT2023_FEATURE_COLUMNS,
@@ -29,12 +30,12 @@ from .schema import (
 
 @dataclass(frozen=True, slots=True)
 class CICIoT2023AuditSummary:
-    total_rows: int
-    missing_or_unrecognized_labels: int
-    nonfinite_feature_rows: int
-    eligible_rows: int
-    infinite_rates: int
-    empty_rates: int
+    total_rows: RowCount
+    missing_or_unrecognized_labels: RowCount
+    nonfinite_feature_rows: RowCount
+    eligible_rows: RowCount
+    infinite_rates: RowCount
+    empty_rates: RowCount
 
 
 class CICIoT2023Reader:
@@ -92,15 +93,15 @@ class CICIoT2023Reader:
             pl.col(CICIoT2023Column.RATE).is_null().sum().alias(CICIoT2023AuditField.EMPTY_RATES),
         ).collect(engine="streaming")
         return CICIoT2023AuditSummary(
-            total_rows=int(summary.item(0, CICIoT2023AuditField.TOTAL_ROWS)),
-            missing_or_unrecognized_labels=int(summary.item(0, CICIoT2023AuditField.MISSING_OR_UNRECOGNIZED_LABELS)),
-            nonfinite_feature_rows=int(summary.item(0, CICIoT2023AuditField.NONFINITE_FEATURE_ROWS)),
-            eligible_rows=int(summary.item(0, CICIoT2023AuditField.ELIGIBLE_ROWS)),
-            infinite_rates=int(summary.item(0, CICIoT2023AuditField.INFINITE_RATES)),
-            empty_rates=int(summary.item(0, CICIoT2023AuditField.EMPTY_RATES)),
+            total_rows=RowCount(int(summary.item(0, CICIoT2023AuditField.TOTAL_ROWS))),
+            missing_or_unrecognized_labels=RowCount(int(summary.item(0, CICIoT2023AuditField.MISSING_OR_UNRECOGNIZED_LABELS))),
+            nonfinite_feature_rows=RowCount(int(summary.item(0, CICIoT2023AuditField.NONFINITE_FEATURE_ROWS))),
+            eligible_rows=RowCount(int(summary.item(0, CICIoT2023AuditField.ELIGIBLE_ROWS))),
+            infinite_rates=RowCount(int(summary.item(0, CICIoT2023AuditField.INFINITE_RATES))),
+            empty_rates=RowCount(int(summary.item(0, CICIoT2023AuditField.EMPTY_RATES))),
         )
 
-    def validation_summary(self, frame: pl.LazyFrame) -> tuple[int, int, int, int]:
+    def validation_summary(self, frame: pl.LazyFrame) -> tuple[RowCount, RowCount, RowCount, RowCount]:
         summary = self.audit_summary(frame)
         return (
             summary.total_rows,
@@ -109,9 +110,9 @@ class CICIoT2023Reader:
             summary.empty_rates,
         )
 
-    def validate_labels(self, frame: pl.LazyFrame) -> int:
+    def validate_labels(self, frame: pl.LazyFrame) -> RowCount:
         total_rows, invalid, _, _ = self.validation_summary(frame)
-        if invalid:
+        if invalid.value > 0:
             raise ValueError("CICIoT2023 contains empty or unrecognized labels")
         return total_rows
 
@@ -138,7 +139,7 @@ class CICIoT2023Reader:
             raise ValueError("CICIoT2023 model input requires persisted eligibility evidence")
         return frame.filter(pl.col(CICIOT2023_MODEL_INPUT_ELIGIBLE_COLUMN))
 
-    def model_input_eligibility_summary(self, frame: pl.LazyFrame) -> tuple[int, int, int, int]:
+    def model_input_eligibility_summary(self, frame: pl.LazyFrame) -> tuple[RowCount, RowCount, RowCount, RowCount]:
         summary = self.audit_summary(frame)
         return (
             summary.total_rows,

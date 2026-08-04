@@ -31,6 +31,7 @@ from datp_core.domain.errors import (
 from datp_core.domain.values import (
     BatchSize,
     Checksum,
+    CudaDeviceName,
     FeatureCount,
     FeatureNameSequence,
     LearningRate,
@@ -138,11 +139,13 @@ class CentralizedTrainingResult:
     model_tensor_checksum: Checksum
     preprocessing_state_checksum: Checksum
     split_manifest_checksum: Checksum
-    device_name: str
+    device_name: CudaDeviceName
     batch_size_used: BatchSize
     final_epoch: RoundNumber
 
     def __post_init__(self) -> None:
+        if not isinstance(self.device_name, CudaDeviceName):
+            raise TypeError("centralized training results require a typed CUDA device name")
         if self.train_row_count < 1:
             raise ValueError("centralized training requires at least one benign training row")
         if self.batch_size_used != self.optimizer.batch_size:
@@ -230,7 +233,7 @@ def train_centralized_autoencoder(request: CentralizedTrainingRequest) -> Centra
     tensor_path = request.output_directory / CentralizedArtifactName.MODEL_TENSORS
     tensor_checksum = persist_model_tensors(model, tensor_path)
     assert_safetensors_reload(model, tensor_path, device)
-    device_name = torch.cuda.get_device_name(device)
+    device_name = CudaDeviceName(torch.cuda.get_device_name(device))
     return CentralizedTrainingResult(
         coordinate=request.coordinate,
         autoencoder_widths=tuple(request.autoencoder.widths),

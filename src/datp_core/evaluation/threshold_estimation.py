@@ -16,6 +16,7 @@ from datp_core.domain.values import (
     Seed,
     SubsampleReplicateCount,
     ThresholdValue,
+    ThresholdVariance,
     checksum_file,
 )
 from datp_core.evaluation.metric_semantics import available, metric_value, unavailable
@@ -130,8 +131,8 @@ class SampleEfficiencyPoint:
     training_seed: Seed
     calibration_size: CalibrationSize
     replicate_count: SubsampleReplicateCount
-    mean_threshold: float
-    threshold_variance_across_nested_replicates: float
+    mean_threshold: ThresholdValue
+    threshold_variance_across_nested_replicates: ThresholdVariance
 
     def __post_init__(self) -> None:
         if (
@@ -139,8 +140,6 @@ class SampleEfficiencyPoint:
             or self.coordinate.training_seed != self.training_seed
         ):
             raise ScientificContractError("sample-efficiency coordinate must match client and training seed")
-        if self.threshold_variance_across_nested_replicates < 0:
-            raise ScientificContractError("sample-efficiency points require non-negative population variance")
 
 
 def evaluate_threshold_estimate(
@@ -219,8 +218,8 @@ def sample_efficiency_curve(
                 training_seed=key[2],
                 calibration_size=key[3],
                 replicate_count=SubsampleReplicateCount(len(replicate_group)),
-                mean_threshold=float(np.mean(values)),
-                threshold_variance_across_nested_replicates=float(np.var(values, ddof=0)),
+                mean_threshold=ThresholdValue(float(np.mean(values))),
+                threshold_variance_across_nested_replicates=ThresholdVariance(float(np.var(values, ddof=0))),
             )
         )
     return tuple(points)
