@@ -9,8 +9,11 @@ from tests.unit.scoring.helpers import selected_checkpoint
 
 from datp_core.domain.enums import FederatedThresholdMethod, ScoreFrameColumn
 from datp_core.domain.values import RowCount, Seed
-from datp_core.learning.federated.checkpointing import CheckpointDecision
-from datp_core.learning.federated.models import CheckpointCandidate, FederatedTrainingCoordinate
+from datp_core.learning.federated.models import (
+    CheckpointCandidate,
+    CheckpointDecision,
+    FederatedTrainingCoordinate,
+)
 from datp_core.populations.models import PopulationOutcomeLabel
 from datp_core.runtime.compute import resolve_cuda_device
 from datp_core.scoring.generation import ClientScoringInput, ScoreGenerationRequest, generate_federated_scores
