@@ -5,7 +5,7 @@ from datp_core.domain.enums import FederatedThresholdMethod
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import Quantile
 from datp_core.protocols.models import QuantileProtocol
-from datp_core.thresholding.shared import (
+from datp_core.thresholding.methods.shared import (
     construct_pooled_shared_quantile,
     construct_sample_weighted_shared_threshold,
     construct_shared_threshold,
@@ -17,50 +17,91 @@ CLIENT_B = client_scores("client_b", (10.0, 20.0, 30.0))
 
 
 def test_construct_shared_threshold_is_the_unweighted_mean_of_local_quantiles() -> None:
-    protocol = QuantileProtocol(method=FederatedThresholdMethod.SHARED_THRESHOLD, quantile=QUANTILE)
+    protocol = QuantileProtocol(
+        method=FederatedThresholdMethod.SHARED_THRESHOLD,
+        quantile=QUANTILE,
+    )
     result = construct_shared_threshold((CLIENT_A, CLIENT_B), protocol)
-    manual_mean = (
-        result.contributing_local_quantiles[0].value.value + result.contributing_local_quantiles[1].value.value
-    ) / 2
+    manual_mean = sum(
+        item.value.value for item in result.contributing_local_quantiles
+    ) / len(result.contributing_local_quantiles)
     assert result.shared_threshold.value == manual_mean
-    assert {assignment.client.client_id for assignment in result.assignments} == {"client_a", "client_b"}
+    assert frozenset(
+        assignment.client.client_id for assignment in result.assignments
+    ) == frozenset({"client_a", "client_b"})
 
 
 def test_construct_shared_threshold_rejects_wrong_protocol_method() -> None:
-    protocol = QuantileProtocol(method=FederatedThresholdMethod.LOCAL_THRESHOLD, quantile=QUANTILE)
-
-    def call():
-        return construct_shared_threshold((CLIENT_A,), protocol)
-
-    with pytest.raises(ScientificContractError, match="SHARED_THRESHOLD protocol"):
-        call()
+    protocol = QuantileProtocol(
+        method=FederatedThresholdMethod.LOCAL_THRESHOLD,
+        quantile=QUANTILE,
+    )
+    with pytest.raises(
+        ScientificContractError,
+        match="SHARED_THRESHOLD protocol",
+    ):
+        construct_shared_threshold((CLIENT_A,), protocol)
 
 
 def test_construct_pooled_shared_quantile_pools_every_eligible_score() -> None:
-    protocol = QuantileProtocol(method=FederatedThresholdMethod.POOLED_SHARED_QUANTILE, quantile=QUANTILE)
+    protocol = QuantileProtocol(
+        method=FederatedThresholdMethod.POOLED_SHARED_QUANTILE,
+        quantile=QUANTILE,
+    )
     result = construct_pooled_shared_quantile((CLIENT_A, CLIENT_B), protocol)
     assert result.pooled_benign_score_count.value == 8
-    assert all(assignment.threshold == result.shared_threshold for assignment in result.assignments)
+    assert all(
+        assignment.threshold == result.shared_threshold
+        for assignment in result.assignments
+    )
 
 
 def test_construct_pooled_shared_quantile_differs_from_the_mean_of_local_quantiles() -> None:
-    protocol_shared = QuantileProtocol(method=FederatedThresholdMethod.SHARED_THRESHOLD, quantile=QUANTILE)
-    protocol_pooled = QuantileProtocol(method=FederatedThresholdMethod.POOLED_SHARED_QUANTILE, quantile=QUANTILE)
-    shared = construct_shared_threshold((CLIENT_A, CLIENT_B), protocol_shared)
-    pooled = construct_pooled_shared_quantile((CLIENT_A, CLIENT_B), protocol_pooled)
+    shared = construct_shared_threshold(
+        (CLIENT_A, CLIENT_B),
+        QuantileProtocol(
+            method=FederatedThresholdMethod.SHARED_THRESHOLD,
+            quantile=QUANTILE,
+        ),
+    )
+    pooled = construct_pooled_shared_quantile(
+        (CLIENT_A, CLIENT_B),
+        QuantileProtocol(
+            method=FederatedThresholdMethod.POOLED_SHARED_QUANTILE,
+            quantile=QUANTILE,
+        ),
+    )
     assert shared.shared_threshold.value != pooled.shared_threshold.value
 
 
 def test_construct_sample_weighted_shared_threshold_weights_sum_to_one() -> None:
-    protocol = QuantileProtocol(method=FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD, quantile=QUANTILE)
-    result = construct_sample_weighted_shared_threshold((CLIENT_A, CLIENT_B), protocol)
+    result = construct_sample_weighted_shared_threshold(
+        (CLIENT_A, CLIENT_B),
+        QuantileProtocol(
+            method=(
+                FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD
+            ),
+            quantile=QUANTILE,
+        ),
+    )
     assert abs(sum(result.normalized_weights) - 1.0) < 1e-12
 
 
 def test_construct_sample_weighted_shared_threshold_matches_manual_weighted_mean() -> None:
-    protocol = QuantileProtocol(method=FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD, quantile=QUANTILE)
-    result = construct_sample_weighted_shared_threshold((CLIENT_A, CLIENT_B), protocol)
-    values = [item.value.value for item in result.contributing_local_quantiles]
-    counts = [item.calibration_count.value for item in result.contributing_local_quantiles]
-    manual = sum(v * c for v, c in zip(values, counts, strict=True)) / sum(counts)
+    result = construct_sample_weighted_shared_threshold(
+        (CLIENT_A, CLIENT_B),
+        QuantileProtocol(
+            method=(
+                FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD
+            ),
+            quantile=QUANTILE,
+        ),
+    )
+    manual = sum(
+        item.value.value * item.calibration_count.value
+        for item in result.contributing_local_quantiles
+    ) / sum(
+        item.calibration_count.value
+        for item in result.contributing_local_quantiles
+    )
     assert result.shared_threshold.value == manual
