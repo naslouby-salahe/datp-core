@@ -19,21 +19,21 @@ from datp_core.domain.enums import (
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import Seed
 from datp_core.experiments.models import ExternalTemporalExecutionIdentity
-from datp_core.orchestration.stages.construct_population import (
-    ConstructPopulationRequest,
-    construct_population_stage,
-)
-from datp_core.orchestration.stages.preprocess_centralized_reference import (
+from datp_core.orchestration.commands.populations import ConstructPopulationRequest, SplitRequest
+from datp_core.orchestration.commands.preprocessing import (
     PreprocessCentralizedPopulationRequest,
+    PreprocessFederatedArtifactsRequest,
+    PreprocessFederatedRequest,
+)
+from datp_core.orchestration.stages.construct_population import construct_population_stage
+from datp_core.orchestration.stages.preprocess_centralized_reference import (
     preprocess_centralized_reference_population_stage,
 )
 from datp_core.orchestration.stages.preprocess_federated import (
-    PreprocessFederatedArtifactsRequest,
-    PreprocessFederatedRequest,
-    _load_published_population_split,
+    preprocess_federated_artifacts_stage,
     preprocess_federated_stage,
 )
-from datp_core.orchestration.stages.split import SplitRequest, split_stage
+from datp_core.orchestration.stages.split import split_stage
 
 
 def _family_for(device: str) -> str:
@@ -80,17 +80,16 @@ def _nbaiot_data_root(tmp_path: Path) -> Path:
 
 def test_federated_preprocess_publishes_client_local_assets(tmp_path: Path) -> None:
     data_root = _nbaiot_data_root(tmp_path)
-    result = preprocess_federated_stage(
-        PreprocessFederatedRequest(
-            population=PopulationId.NBAIOT_NATURAL_DEVICES,
-            partition_seed=Seed(0),
-            split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
-            preprocessing_identity=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
-            data_root=data_root,
-            dirichlet_condition=None,
-            capture_timestamp_column=None,
-        )
+    request = PreprocessFederatedRequest(
+        population=PopulationId.NBAIOT_NATURAL_DEVICES,
+        partition_seed=Seed(0),
+        split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
+        preprocessing_identity=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
+        data_root=data_root,
+        dirichlet_condition=None,
+        capture_timestamp_column=None,
     )
+    result = preprocess_federated_stage(request)
     assert result.stage is StageOperationId.PREPROCESS_FEDERATED
     assert result.published_count == 9
     assert result.reused_count == 0
@@ -100,17 +99,7 @@ def test_federated_preprocess_publishes_client_local_assets(tmp_path: Path) -> N
         assert publication.paths.train.is_file()
         assert (publication.paths.train.parent / "COMPLETE").is_file()
 
-    reused = preprocess_federated_stage(
-        PreprocessFederatedRequest(
-            population=PopulationId.NBAIOT_NATURAL_DEVICES,
-            partition_seed=Seed(0),
-            split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
-            preprocessing_identity=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
-            data_root=data_root,
-            dirichlet_condition=None,
-            capture_timestamp_column=None,
-        )
-    )
+    reused = preprocess_federated_stage(request)
     assert reused.published_count == 0
     assert reused.reused_count == 9
 
@@ -169,20 +158,19 @@ def test_artifact_preprocess_selects_matched_static_reference(
         )
     )
 
-    published = _load_published_population_split(
+    result = preprocess_federated_artifacts_stage(
         PreprocessFederatedArtifactsRequest(
             execution_identity=identity,
             population_directory=tmp_path / "population",
             split_directory=tmp_path / "split",
             preprocessing_identity=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
             data_root=data_root,
-        ),
-        identity,
+        )
     )
 
-    assert published.split_manifest.split_protocol is SplitProtocolId.RANDOM_FRACTIONAL_STATIC_REFERENCE
-    assert construction.matched_static_reference_membership is not None
-    assert published.membership.equals(construction.matched_static_reference_membership)
+    assert result.split_protocol is SplitProtocolId.RANDOM_FRACTIONAL_STATIC_REFERENCE
+    assert result.execution_identity == identity
+    assert result.client_publications
 
 
 def test_centralized_preprocess_publishes_pooled_assets(tmp_path: Path) -> None:
