@@ -5,12 +5,17 @@ from enum import StrEnum
 from pathlib import Path
 
 import numpy as np
-import numpy.typing as npt
 import polars as pl
 import torch
 from safetensors.torch import load_file
 
 from datp_core.artifacts.layout import scored_partition_roles
+from datp_core.artifacts.score_frames import (
+    extract_score_arrays,
+    score_frame,
+    validate_persisted_score_frame,
+    validate_score_input_frame,
+)
 from datp_core.artifacts.store import (
     cleanup_staging_directory,
     create_staging_directory,
@@ -20,10 +25,10 @@ from datp_core.domain.enums import (
     CheckpointStatus,
     ContractSubject,
     PartitionRole,
-    ScoreFrameColumn,
     SerializationFormat,
 )
-from datp_core.domain.errors import ArtifactIntegrityError, LeakageError, ScientificContractError
+from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
+from datp_core.domain.provenance import canonical_checksum
 from datp_core.domain.values import (
     BatchSize,
     Checksum,
@@ -31,16 +36,10 @@ from datp_core.domain.values import (
     FeatureNameSequence,
     RowCount,
     checksum_file,
-    checksum_text,
 )
-from datp_core.learning.autoencoder import LEARNING_DTYPE, ReconstructionAutoencoder, reconstruction_errors
+from datp_core.learning.autoencoder import ReconstructionAutoencoder, reconstruction_errors
 from datp_core.learning.federated.checkpointing import CheckpointCandidate
-from datp_core.populations.models import (
-    OUTCOME_LABEL_COLUMN,
-    STABLE_ROW_ID_COLUMN,
-    ClientIdentity,
-    PopulationOutcomeLabel,
-)
+from datp_core.populations.models import ClientIdentity
 from datp_core.protocols.models import AutoencoderProtocol
 from datp_core.scoring.models import (
     FixedScoreInvariant,
@@ -96,6 +95,36 @@ class ScoreGenerationRequest:
     split_manifest_checksum: Checksum
 
 
+@dataclass(slots=True)
+class _ScoreRecordInventory:
+    calibration: list[ScoreRecord]
+    evaluation: list[ScoreRecord]
+    future_recalibration: list[ScoreRecord]
+
+    @classmethod
+    def empty(cls) -> "_ScoreRecordInventory":
+        return cls(calibration=[], evaluation=[], future_recalibration=[])
+
+    def records_for(self, role: PartitionRole) -> list[ScoreRecord]:
+        match role:
+            case PartitionRole.CALIBRATION:
+                return self.calibration
+            case PartitionRole.EVALUATION:
+                return self.evaluation
+            case PartitionRole.FUTURE_RECALIBRATION:
+                return self.future_recalibration
+            case PartitionRole.TRAIN:
+                raise ScientificContractError("training rows are never score artifacts", subject=role)
+            case PartitionRole.STATIC_REFERENCE_RESERVE:
+                raise ScientificContractError("static-reference reserve rows are never score artifacts", subject=role)
+
+    def append(self, role: PartitionRole, record: ScoreRecord) -> None:
+        self.records_for(role).append(record)
+
+    def immutable_records_for(self, role: PartitionRole) -> tuple[ScoreRecord, ...]:
+        return tuple(self.records_for(role))
+
+
 def load_checkpoint_model(
     checkpoint: CheckpointCandidate,
     autoencoder: AutoencoderProtocol,
@@ -126,17 +155,17 @@ def load_checkpoint_model(
 def generate_federated_scores(request: ScoreGenerationRequest, device: torch.device) -> ScoreGenerationResult:
     _validate_request(request)
     model = load_checkpoint_model(request.checkpoint, request.autoencoder, device)
+    scored_roles = scored_partition_roles(request.checkpoint.coordinate.split_protocol)
+    records = _ScoreRecordInventory.empty()
 
     staging = create_staging_directory(request.output_directory)
     try:
-        scored_roles = scored_partition_roles(request.checkpoint.coordinate.split_protocol)
-        records_by_role: dict[PartitionRole, list[ScoreRecord]] = {role: [] for role in scored_roles}
         for client_input in sorted(request.clients, key=lambda item: item.client):
             client_directory = staging / client_input.client.client_id
-            for role in records_by_role:
+            for role in scored_roles:
                 frame = client_input.features_for(role)
-                _validate_frame(frame, role, request.feature_names)
-                result = _score_partition(
+                validate_score_input_frame(frame, role, request.feature_names)
+                record = _score_partition(
                     frame=frame,
                     client=client_input.client,
                     partition_role=role,
@@ -145,49 +174,72 @@ def generate_federated_scores(request: ScoreGenerationRequest, device: torch.dev
                     device=device,
                     destination=client_directory / _asset_name_for_partition(role).value,
                 )
-                records_by_role[role].append(result)
+                records.append(role, record)
 
-        for records in records_by_role.values():
-            for record in records:
-                _assert_reload_equality(record)
+        for role in scored_roles:
+            for record in records.records_for(role):
+                validate_persisted_score_frame(record.path, record.checksum, record.row_count)
 
-        invariant = FixedScoreInvariant(
-            model_checksum=request.checkpoint.tensor_checksum,
-            calibration_score_set_checksum=record_set_checksum(tuple(records_by_role[PartitionRole.CALIBRATION])),
-            evaluation_score_set_checksum=record_set_checksum(tuple(records_by_role[PartitionRole.EVALUATION])),
-            preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
-            split_manifest_checksum=request.split_manifest_checksum,
-            future_recalibration_score_set_checksum=(
-                record_set_checksum(tuple(records_by_role.get(PartitionRole.FUTURE_RECALIBRATION, [])))
-                if PartitionRole.FUTURE_RECALIBRATION in records_by_role
-                and records_by_role[PartitionRole.FUTURE_RECALIBRATION]
-                else None
-            ),
-        )
+        invariant = _fixed_score_invariant(request, records)
         _write_complete_marker(staging, invariant)
         replace_directory(staging, request.output_directory)
     except Exception:
         cleanup_staging_directory(staging, ignore_errors=True)
         raise
 
-    rebased_by_role: dict[PartitionRole, tuple[ScoreRecord, ...]] = {}
-    for role, records in records_by_role.items():
-        rebased: list[ScoreRecord] = []
-        for record in records:
-            path = (
-                request.output_directory
-                / record.scored_client.client_id
-                / _asset_name_for_partition(record.partition_role).value
-            )
+    rebased = _rebase_records(request.output_directory, scored_roles, records)
+    manifest = ScoreArtifactManifest(
+        coordinate=request.checkpoint.coordinate,
+        checkpoint_round=request.checkpoint.round_number,
+        checkpoint_checksum=request.checkpoint.tensor_checksum,
+        preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
+        split_manifest_checksum=request.split_manifest_checksum,
+        calibration_records=rebased.immutable_records_for(PartitionRole.CALIBRATION),
+        evaluation_records=rebased.immutable_records_for(PartitionRole.EVALUATION),
+        future_recalibration_records=rebased.immutable_records_for(PartitionRole.FUTURE_RECALIBRATION),
+    )
+    return ScoreGenerationResult(manifest=manifest)
+
+
+def _fixed_score_invariant(
+    request: ScoreGenerationRequest,
+    records: _ScoreRecordInventory,
+) -> FixedScoreInvariant:
+    future_records = records.immutable_records_for(PartitionRole.FUTURE_RECALIBRATION)
+    return FixedScoreInvariant(
+        model_checksum=request.checkpoint.tensor_checksum,
+        calibration_score_set_checksum=record_set_checksum(
+            records.immutable_records_for(PartitionRole.CALIBRATION)
+        ),
+        evaluation_score_set_checksum=record_set_checksum(
+            records.immutable_records_for(PartitionRole.EVALUATION)
+        ),
+        preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
+        split_manifest_checksum=request.split_manifest_checksum,
+        future_recalibration_score_set_checksum=(
+            record_set_checksum(future_records) if future_records else None
+        ),
+    )
+
+
+def _rebase_records(
+    output_directory: Path,
+    scored_roles: tuple[PartitionRole, ...],
+    records: _ScoreRecordInventory,
+) -> _ScoreRecordInventory:
+    rebased = _ScoreRecordInventory.empty()
+    for role in scored_roles:
+        for record in records.records_for(role):
+            path = output_directory / record.scored_client.client_id / _asset_name_for_partition(role).value
             if not path.is_file():
                 raise ArtifactIntegrityError(
                     "published score partition missing after atomic replace",
                     subject=ContractSubject.SCORES,
                 )
             rebased.append(
+                role,
                 ScoreRecord(
                     coordinate=record.coordinate,
-                    scored_client=record.scored_client,
                     partition_role=record.partition_role,
                     checkpoint_round=record.checkpoint_round,
                     checkpoint_checksum=record.checkpoint_checksum,
@@ -196,94 +248,10 @@ def generate_federated_scores(request: ScoreGenerationRequest, device: torch.dev
                     row_count=record.row_count,
                     feature_count=record.feature_count,
                     serialization_format=record.serialization_format,
-                )
+                    scored_client=record.scored_client,
+                ),
             )
-        rebased_by_role[role] = tuple(rebased)
-    manifest = ScoreArtifactManifest(
-        coordinate=request.checkpoint.coordinate,
-        checkpoint_round=request.checkpoint.round_number,
-        checkpoint_checksum=request.checkpoint.tensor_checksum,
-        preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
-        split_manifest_checksum=request.split_manifest_checksum,
-        calibration_records=rebased_by_role[PartitionRole.CALIBRATION],
-        evaluation_records=rebased_by_role[PartitionRole.EVALUATION],
-        future_recalibration_records=rebased_by_role.get(PartitionRole.FUTURE_RECALIBRATION, ()),
-    )
-    return ScoreGenerationResult(manifest=manifest)
-
-
-def _validate_frame(
-    frame: pl.DataFrame,
-    role: PartitionRole,
-    feature_names: FeatureNameSequence,
-) -> None:
-    if frame.height == 0 and role in {PartitionRole.CALIBRATION, PartitionRole.FUTURE_RECALIBRATION}:
-        raise ScientificContractError(
-            f"{role.value} partition must not be empty",
-            subject=ContractSubject.ROWS,
-        )
-    if STABLE_ROW_ID_COLUMN not in frame.columns:
-        raise ScientificContractError(
-            f"frame missing stable row ID column '{STABLE_ROW_ID_COLUMN}'",
-            subject=ContractSubject.SCHEMA,
-        )
-    if OUTCOME_LABEL_COLUMN not in frame.columns:
-        raise ScientificContractError(
-            f"frame missing outcome label column '{OUTCOME_LABEL_COLUMN}'",
-            subject=ContractSubject.SCHEMA,
-        )
-    row_ids = tuple(str(v) for v in frame.get_column(STABLE_ROW_ID_COLUMN).to_list())
-    if any(v is None for v in frame.get_column(STABLE_ROW_ID_COLUMN).to_list()):
-        raise ScientificContractError(
-            f"stable row IDs must not be null in {role.value} partition",
-            subject=ContractSubject.ROWS,
-        )
-    if len(set(row_ids)) != len(row_ids):
-        raise ScientificContractError(
-            f"stable row IDs must be unique within {role.value} partition",
-            subject=ContractSubject.ROWS,
-        )
-    labels = tuple(str(v) for v in frame.get_column(OUTCOME_LABEL_COLUMN).to_list())
-    if any(v is None for v in frame.get_column(OUTCOME_LABEL_COLUMN).to_list()):
-        raise ScientificContractError(
-            f"outcome labels must not be null in {role.value} partition",
-            subject=ContractSubject.LABEL,
-        )
-    if role in {PartitionRole.CALIBRATION, PartitionRole.FUTURE_RECALIBRATION}:
-        if any(label != PopulationOutcomeLabel.BENIGN.value for label in labels):
-            raise LeakageError(
-                "attack-labelled rows cannot enter benign calibration construction",
-                subject=ContractSubject.CALIBRATION,
-            )
-    missing = [name for name in feature_names if name not in frame.columns]
-    if missing:
-        raise ScientificContractError(
-            f"{role.value} frame missing declared features: {', '.join(missing)}",
-            subject=ContractSubject.FEATURES,
-        )
-    for name in feature_names:
-        dtype = frame.schema[name]
-        if not dtype.is_numeric():
-            raise ScientificContractError(
-                f"feature column '{name}' in {role.value} partition must be numeric, got {dtype}",
-                subject=ContractSubject.FEATURES,
-            )
-        col = frame.get_column(name)
-        if any(not np.isfinite(v) for v in col.to_list() if v is not None):
-            raise ScientificContractError(
-                f"feature column '{name}' in {role.value} partition contains non-finite values",
-                subject=ContractSubject.FEATURES,
-            )
-
-
-def _extract_feature_arrays(
-    frame: pl.DataFrame,
-    feature_names: FeatureNameSequence,
-) -> tuple[npt.NDArray[np.float32], tuple[str, ...], tuple[str, ...]]:
-    matrix = frame.select(feature_names.as_list()).to_numpy().astype(LEARNING_DTYPE, copy=False)
-    labels = tuple(str(v) for v in frame.get_column(OUTCOME_LABEL_COLUMN).to_list())
-    row_ids = tuple(str(v) for v in frame.get_column(STABLE_ROW_ID_COLUMN).to_list())
-    return matrix, labels, row_ids
+    return rebased
 
 
 def _validate_request(request: ScoreGenerationRequest) -> None:
@@ -313,7 +281,7 @@ def _validate_request(request: ScoreGenerationRequest) -> None:
             "score generation cannot receive duplicate client identities",
             subject=ContractSubject.CLIENT_IDENTITY,
         )
-    expected_roles = set(scored_partition_roles(request.checkpoint.coordinate.split_protocol))
+    expected_roles = scored_partition_roles(request.checkpoint.coordinate.split_protocol)
     for client in request.clients:
         for role in expected_roles:
             client.features_for(role)
@@ -329,7 +297,7 @@ def _score_partition(
     device: torch.device,
     destination: Path,
 ) -> ScoreRecord:
-    matrix, labels, row_ids = _extract_feature_arrays(frame, request.feature_names)
+    matrix, labels, row_ids = extract_score_arrays(frame, request.feature_names)
     scores = reconstruction_errors(model, matrix, batch_size=request.batch_size, device=device)
     if scores.shape[0] != matrix.shape[0]:
         raise ScientificContractError("score count must equal partition row count", subject=partition_role)
@@ -338,18 +306,11 @@ def _score_partition(
             f"generated scores must be finite in {partition_role.value} partition",
             subject=ContractSubject.SCORES,
         )
-    output = pl.DataFrame(
-        {
-            ScoreFrameColumn.STABLE_ROW_ID.value: list(row_ids),
-            ScoreFrameColumn.OUTCOME_LABEL.value: list(labels),
-            ScoreFrameColumn.RECONSTRUCTION_ERROR.value: scores.tolist(),
-        }
-    )
+    output = score_frame(row_ids, labels, scores)
     destination.parent.mkdir(parents=True, exist_ok=True)
     output.write_parquet(destination)
     return ScoreRecord(
         coordinate=request.checkpoint.coordinate,
-        scored_client=client,
         partition_role=partition_role,
         checkpoint_round=request.checkpoint.round_number,
         checkpoint_checksum=request.checkpoint.tensor_checksum,
@@ -358,28 +319,8 @@ def _score_partition(
         row_count=RowCount(output.height),
         feature_count=FeatureCount(len(request.feature_names)),
         serialization_format=SerializationFormat.PARQUET,
+        scored_client=client,
     )
-
-
-def _assert_reload_equality(record: ScoreRecord) -> None:
-    if not record.path.is_file():
-        raise ArtifactIntegrityError("score artifact is missing", subject=ContractSubject.ARTIFACT_PATH)
-    reloaded = pl.read_parquet(record.path)
-    if checksum_file(record.path) != record.checksum:
-        raise ArtifactIntegrityError("score checksum changed after write", subject=ContractSubject.ARTIFACT_PATH)
-    if reloaded.height != record.row_count.value:
-        raise ArtifactIntegrityError("score artifact row count mismatch", subject=ContractSubject.ARTIFACT_PATH)
-    expected_columns = (
-        ScoreFrameColumn.STABLE_ROW_ID.value,
-        ScoreFrameColumn.OUTCOME_LABEL.value,
-        ScoreFrameColumn.RECONSTRUCTION_ERROR.value,
-    )
-    if tuple(reloaded.columns) != expected_columns:
-        raise ArtifactIntegrityError("score artifact schema mismatch", subject=ContractSubject.SCHEMA)
-    expected_dtypes = (pl.Utf8, pl.Utf8, pl.Float64)
-    observed_dtypes = tuple(reloaded.schema[col] for col in expected_columns)
-    if observed_dtypes != expected_dtypes:
-        raise ArtifactIntegrityError("score artifact column dtype mismatch", subject=ContractSubject.SCHEMA)
 
 
 def _asset_name_for_partition(role: PartitionRole) -> FederatedScoreAssetName:
@@ -397,24 +338,5 @@ def _asset_name_for_partition(role: PartitionRole) -> FederatedScoreAssetName:
 
 
 def _write_complete_marker(directory: Path, invariant: FixedScoreInvariant) -> None:
-    import json
-
-    payload = json.dumps(
-        {
-            "model_checksum": invariant.model_checksum.value,
-            "calibration_score_set_checksum": invariant.calibration_score_set_checksum.value,
-            "evaluation_score_set_checksum": invariant.evaluation_score_set_checksum.value,
-            "preprocessing_state_set_checksum": invariant.preprocessing_state_set_checksum.value,
-            "split_manifest_checksum": invariant.split_manifest_checksum.value,
-            "future_recalibration_score_set_checksum": (
-                invariant.future_recalibration_score_set_checksum.value
-                if invariant.future_recalibration_score_set_checksum is not None
-                else None
-            ),
-        },
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=True,
-    )
-    digest = checksum_text(payload)
+    digest = canonical_checksum(invariant)
     (directory / FederatedScoreAssetName.COMPLETE.value).write_text(digest.value, encoding="utf-8")
