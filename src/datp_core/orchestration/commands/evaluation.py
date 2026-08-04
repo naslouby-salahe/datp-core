@@ -21,7 +21,7 @@ from datp_core.evaluation.population import (
     ThresholdEstimationStageInput,
 )
 from datp_core.evaluation.traffic_rates import ValidatedTrafficRateEvidence
-from datp_core.experiments.models import ExternalTemporalExecutionIdentity
+from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
 from datp_core.scoring.models import ScoreArtifactManifest
 from datp_core.thresholding.common import ThresholdConstructionResult
 
