@@ -6,6 +6,7 @@ from shutil import rmtree
 from typing import ClassVar
 
 import polars as pl
+import torch
 
 from datp_core.artifacts.store import publish_atomically
 from datp_core.centralized_reference.checkpointing import (
@@ -16,7 +17,6 @@ from datp_core.centralized_reference.checkpointing import (
 from datp_core.centralized_reference.training import (
     CentralizedArtifactName,
     CentralizedEpochLoss,
-    CentralizedModelSnapshot,
     CentralizedOptimizerSummary,
     CentralizedTrainingCoordinate,
     CentralizedTrainingRequest,
@@ -36,10 +36,12 @@ from datp_core.domain.enums import (
 )
 from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
 from datp_core.domain.values import (
+    BatchSize,
     Checksum,
     CudaDeviceName,
     FeatureCount,
     FeatureNameSequence,
+    LearningRate,
     MetricValue,
     RoundNumber,
     RowCount,
@@ -50,7 +52,11 @@ from datp_core.domain.values import (
 )
 from datp_core.populations.models import PopulationOutcomeLabel
 from datp_core.preprocessing.models import CentralizedFittedPreprocessingState
-from datp_core.protocols.models import AutoencoderProtocol, CheckpointProtocol
+from datp_core.protocols.models import (
+    AutoencoderProtocol,
+    CentralizedTrainingProtocol,
+    CheckpointProtocol,
+)
 from datp_core.runtime.compute import resolve_cuda_device
 
 
@@ -93,7 +99,7 @@ def train_centralized_reference_stage(
     _validate_request(request)
 
     def write(temporary: Path) -> _CentralizedTrainingArtifacts:
-        training = train_centralized_autoencoder(
+        execution = train_centralized_autoencoder(
             CentralizedTrainingRequest(
                 coordinate=request.coordinate,
                 training_features=request.training_features,
@@ -110,7 +116,8 @@ def train_centralized_reference_stage(
                 benign_label=PopulationOutcomeLabel.BENIGN,
             )
         )
-        candidates = retain_centralized_checkpoint_candidates(training, request.autoencoder)
+        training = execution.result
+        candidates = retain_centralized_checkpoint_candidates(execution, request.autoencoder)
         training_history_frame(training).write_parquet(temporary / CentralizedArtifactName.TRAINING_HISTORY)
         (temporary / CentralizedArtifactName.COMPLETE).write_text(
             _complete_digest(training).value,
@@ -173,9 +180,10 @@ def _is_reusable(directory: Path, request: TrainCentralizedReferenceRequest) -> 
     ):
         return False
     try:
+        _, _, _, declared_batch_size, _ = declared_centralized_training_values()
         expected = checksum_text(
             f"{checksum_file(model).value}|{request.checkpoint_protocol.maximum_round.value}|"
-            f"{declared_centralized_training_values()[3].value}"
+            f"{declared_batch_size.value}"
         )
         return complete.read_text(encoding="utf-8").strip() == expected.value
     except (OSError, ValueError):
@@ -184,9 +192,9 @@ def _is_reusable(directory: Path, request: TrainCentralizedReferenceRequest) -> 
 
 def _load_reused_training(
     request: TrainCentralizedReferenceRequest,
-    training_protocol,
-    learning_rate,
-    batch_size,
+    training_protocol: CentralizedTrainingProtocol,
+    learning_rate: LearningRate,
+    batch_size: BatchSize,
     weight_decay: WeightDecay,
 ) -> tuple[CentralizedTrainingResult, tuple[CentralizedCheckpointCandidate, ...]]:
     history = pl.read_parquet(request.output_directory / CentralizedArtifactName.TRAINING_HISTORY)
@@ -196,41 +204,16 @@ def _load_reused_training(
             mean_training_loss=MetricValue(float(loss)),
         )
         for epoch, loss in history.select(
-            [
+            (
                 TrainingHistoryColumn.EPOCH.value,
                 TrainingHistoryColumn.MEAN_TRAINING_LOSS.value,
-            ]
+            )
         ).iter_rows()
     )
-    loss_by_epoch = {item.epoch.value: item.mean_training_loss for item in epoch_losses}
-    snapshots: list[CentralizedModelSnapshot] = []
-    candidates: list[CentralizedCheckpointCandidate] = []
-    for candidate_round in request.checkpoint_protocol.candidates:
-        path = request.output_directory / candidate_tensor_name(candidate_round)
-        if not path.is_file():
-            raise ArtifactIntegrityError("reused checkpoint candidate missing", subject=ContractSubject.ARTIFACT_PATH)
-        mean_loss = loss_by_epoch[candidate_round.value]
-        snapshots.append(
-            CentralizedModelSnapshot(
-                round_number=candidate_round,
-                state_dict={},
-                mean_training_loss=mean_loss,
-            )
-        )
-        candidates.append(
-            CentralizedCheckpointCandidate(
-                coordinate=request.coordinate,
-                round_number=candidate_round,
-                tensor_path=path,
-                tensor_checksum=checksum_file(path),
-                mean_training_loss=mean_loss,
-                status=CheckpointStatus.CANDIDATE,
-                preprocessing_state_checksum=request.preprocessing_state.estimator_checksum,
-                split_manifest_checksum=request.split_manifest_checksum,
-                training_seed=request.training_seed,
-                autoencoder_widths=tuple(request.autoencoder.widths),
-            )
-        )
+    candidates = tuple(
+        _load_reused_candidate(request, candidate_round, epoch_losses)
+        for candidate_round in request.checkpoint_protocol.candidates
+    )
     model_path = request.output_directory / CentralizedArtifactName.MODEL_TENSORS
     training = CentralizedTrainingResult(
         coordinate=request.coordinate,
@@ -247,20 +230,53 @@ def _load_reused_training(
         train_row_count=RowCount(request.training_features.height),
         feature_count=FeatureCount(len(request.feature_names)),
         epoch_losses=epoch_losses,
-        candidate_snapshots=tuple(snapshots),
         model_directory=request.output_directory,
         model_tensor_path=model_path,
         model_tensor_checksum=checksum_file(model_path),
         preprocessing_state_checksum=request.preprocessing_state.estimator_checksum,
         split_manifest_checksum=request.split_manifest_checksum,
-        device_name=CudaDeviceName(str(resolve_cuda_device())),
+        device_name=CudaDeviceName(torch.cuda.get_device_name(resolve_cuda_device())),
         batch_size_used=batch_size,
         final_epoch=request.checkpoint_protocol.maximum_round,
     )
-    return training, tuple(candidates)
+    return training, candidates
+
+
+def _load_reused_candidate(
+    request: TrainCentralizedReferenceRequest,
+    candidate_round: RoundNumber,
+    epoch_losses: tuple[CentralizedEpochLoss, ...],
+) -> CentralizedCheckpointCandidate:
+    path = request.output_directory / candidate_tensor_name(candidate_round)
+    if not path.is_file():
+        raise ArtifactIntegrityError(
+            "reused checkpoint candidate missing",
+            subject=ContractSubject.ARTIFACT_PATH,
+        )
+    matching_losses = tuple(
+        item.mean_training_loss for item in epoch_losses if item.epoch == candidate_round
+    )
+    if len(matching_losses) != 1:
+        raise ArtifactIntegrityError(
+            "reused checkpoint candidate requires exactly one matching training loss",
+            subject=ContractSubject.CHECKPOINT_CANDIDATES,
+        )
+    return CentralizedCheckpointCandidate(
+        coordinate=request.coordinate,
+        round_number=candidate_round,
+        tensor_path=path,
+        tensor_checksum=checksum_file(path),
+        mean_training_loss=matching_losses[0],
+        status=CheckpointStatus.CANDIDATE,
+        preprocessing_state_checksum=request.preprocessing_state.estimator_checksum,
+        split_manifest_checksum=request.split_manifest_checksum,
+        training_seed=request.training_seed,
+        autoencoder_widths=tuple(request.autoencoder.widths),
+    )
 
 
 def _rebase_training_paths(training: CentralizedTrainingResult, directory: Path) -> CentralizedTrainingResult:
+    model_path = directory / CentralizedArtifactName.MODEL_TENSORS
     return CentralizedTrainingResult(
         coordinate=training.coordinate,
         autoencoder_widths=training.autoencoder_widths,
@@ -271,10 +287,9 @@ def _rebase_training_paths(training: CentralizedTrainingResult, directory: Path)
         train_row_count=training.train_row_count,
         feature_count=training.feature_count,
         epoch_losses=training.epoch_losses,
-        candidate_snapshots=training.candidate_snapshots,
         model_directory=directory,
-        model_tensor_path=directory / CentralizedArtifactName.MODEL_TENSORS,
-        model_tensor_checksum=checksum_file(directory / CentralizedArtifactName.MODEL_TENSORS),
+        model_tensor_path=model_path,
+        model_tensor_checksum=checksum_file(model_path),
         preprocessing_state_checksum=training.preprocessing_state_checksum,
         split_manifest_checksum=training.split_manifest_checksum,
         device_name=training.device_name,
@@ -288,17 +303,25 @@ def _rebase_candidates(
     directory: Path,
 ) -> tuple[CentralizedCheckpointCandidate, ...]:
     return tuple(
-        CentralizedCheckpointCandidate(
-            coordinate=candidate.coordinate,
-            round_number=candidate.round_number,
-            tensor_path=directory / candidate_tensor_name(candidate.round_number),
-            tensor_checksum=checksum_file(directory / candidate_tensor_name(candidate.round_number)),
-            mean_training_loss=candidate.mean_training_loss,
-            status=candidate.status,
-            preprocessing_state_checksum=candidate.preprocessing_state_checksum,
-            split_manifest_checksum=candidate.split_manifest_checksum,
-            training_seed=candidate.training_seed,
-            autoencoder_widths=candidate.autoencoder_widths,
-        )
+        _rebase_candidate(candidate, directory)
         for candidate in candidates
+    )
+
+
+def _rebase_candidate(
+    candidate: CentralizedCheckpointCandidate,
+    directory: Path,
+) -> CentralizedCheckpointCandidate:
+    tensor_path = directory / candidate_tensor_name(candidate.round_number)
+    return CentralizedCheckpointCandidate(
+        coordinate=candidate.coordinate,
+        round_number=candidate.round_number,
+        tensor_path=tensor_path,
+        tensor_checksum=checksum_file(tensor_path),
+        mean_training_loss=candidate.mean_training_loss,
+        status=candidate.status,
+        preprocessing_state_checksum=candidate.preprocessing_state_checksum,
+        split_manifest_checksum=candidate.split_manifest_checksum,
+        training_seed=candidate.training_seed,
+        autoencoder_widths=candidate.autoencoder_widths,
     )
