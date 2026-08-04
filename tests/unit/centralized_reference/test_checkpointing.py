@@ -8,7 +8,7 @@ from datp_core.centralized_reference.checkpointing import (
     retain_centralized_checkpoint_candidates,
     select_centralized_checkpoint,
 )
-from datp_core.domain.enums import CheckpointSelectionRule, CheckpointStatus
+from datp_core.domain.enums import CheckpointSelectionRule, CheckpointStatus, TrainingModelId
 from datp_core.domain.errors import LeakageError
 from datp_core.domain.values import MetricValue
 from datp_core.protocols.training import CHECKPOINT_SELECTION_RULE
@@ -16,8 +16,8 @@ from datp_core.protocols.training import CHECKPOINT_SELECTION_RULE
 
 def test_retains_declared_checkpoint_candidates(tmp_path: Path) -> None:
     require_cuda()
-    training = run_miniature_training(tmp_path / "train")
-    candidates = retain_centralized_checkpoint_candidates(training, AUTOENCODER)
+    execution = run_miniature_training(tmp_path / "train")
+    candidates = retain_centralized_checkpoint_candidates(execution, AUTOENCODER)
     assert len(candidates) == len(CHECKPOINT.candidates)
     assert candidates[0].round_number == CHECKPOINT.candidates[0]
     assert candidates[0].tensor_path.is_file()
@@ -25,8 +25,8 @@ def test_retains_declared_checkpoint_candidates(tmp_path: Path) -> None:
 
 def test_selection_uses_fixed_terminal_maximum_round(tmp_path: Path) -> None:
     require_cuda()
-    training = run_miniature_training(tmp_path / "train")
-    candidates = retain_centralized_checkpoint_candidates(training, AUTOENCODER)
+    execution = run_miniature_training(tmp_path / "train")
+    candidates = retain_centralized_checkpoint_candidates(execution, AUTOENCODER)
     decision = select_centralized_checkpoint(
         candidates,
         CHECKPOINT,
@@ -46,8 +46,8 @@ def test_selection_uses_fixed_terminal_maximum_round(tmp_path: Path) -> None:
 
 def test_selection_rejects_held_out_metrics(tmp_path: Path) -> None:
     require_cuda()
-    training = run_miniature_training(tmp_path / "train")
-    candidates = retain_centralized_checkpoint_candidates(training, AUTOENCODER)
+    execution = run_miniature_training(tmp_path / "train")
+    candidates = retain_centralized_checkpoint_candidates(execution, AUTOENCODER)
     with pytest.raises(LeakageError, match="held-out"):
         select_centralized_checkpoint(
             candidates,
@@ -59,4 +59,4 @@ def test_selection_rejects_held_out_metrics(tmp_path: Path) -> None:
 
 def test_rejects_federated_checkpoint_identity() -> None:
     with pytest.raises(LeakageError, match="federated checkpoint"):
-        reject_federated_checkpoint("fedavg")
+        reject_federated_checkpoint(TrainingModelId.FEDAVG_AUTOENCODER)
