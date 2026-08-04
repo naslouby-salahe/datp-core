@@ -1,15 +1,6 @@
 """Stage: compose independent centralized held-out evaluation publication."""
 
-from dataclasses import dataclass
-from pathlib import Path
-from typing import ClassVar
-
-from datp_core.centralized_reference.evaluation import CentralizedEvaluationResult
-from datp_core.centralized_reference.scoring import PooledScoreArtifact
-from datp_core.centralized_reference.thresholding import PooledThresholdResult
-from datp_core.centralized_reference.training import CentralizedTrainingCoordinate
-from datp_core.domain.enums import PublicationStatus, StageOperationId
-from datp_core.domain.values import Checksum, checksum_file
+from datp_core.domain.values import checksum_file
 from datp_core.evaluation.operational import (
     CentralizedEvaluationPublicationAsset,
     CentralizedEvaluationPublicationRequest,
@@ -18,6 +9,10 @@ from datp_core.evaluation.operational import (
     rebase_centralized_evaluation,
     write_centralized_evaluation,
 )
+from datp_core.orchestration.commands.evaluation import (
+    EvaluateCentralizedReferenceRequest as _EvaluateCentralizedReferenceRequest,
+    EvaluateCentralizedReferenceResult as _EvaluateCentralizedReferenceResult,
+)
 from datp_core.pipeline.publication.codec import (
     ArtifactPublication,
     FunctionalArtifactCodec,
@@ -25,26 +20,9 @@ from datp_core.pipeline.publication.codec import (
 )
 
 
-@dataclass(frozen=True, slots=True)
-class EvaluateCentralizedReferenceRequest:
-    coordinate: CentralizedTrainingCoordinate
-    evaluation_scores: PooledScoreArtifact
-    threshold: PooledThresholdResult
-    output_directory: Path
-    overwrite: bool
-
-
-@dataclass(frozen=True, slots=True)
-class EvaluateCentralizedReferenceResult:
-    stage: ClassVar[StageOperationId] = StageOperationId.EVALUATE_CENTRALIZED_REFERENCE
-    publication_status: PublicationStatus
-    evaluation: CentralizedEvaluationResult
-    complete_digest: Checksum
-
-
 def evaluate_centralized_reference_stage(
-    request: EvaluateCentralizedReferenceRequest,
-) -> EvaluateCentralizedReferenceResult:
+    request: _EvaluateCentralizedReferenceRequest,
+) -> _EvaluateCentralizedReferenceResult:
     publication_request = CentralizedEvaluationPublicationRequest(
         coordinate=request.coordinate,
         evaluation_scores=request.evaluation_scores,
@@ -64,7 +42,7 @@ def evaluate_centralized_reference_stage(
             complete_marker=CentralizedEvaluationPublicationAsset.COMPLETE,
         )
     )
-    return EvaluateCentralizedReferenceResult(
+    return _EvaluateCentralizedReferenceResult(
         publication_status=publication.status,
         evaluation=publication.value,
         complete_digest=checksum_file(
