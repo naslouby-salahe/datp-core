@@ -1,6 +1,5 @@
 """Stage: compose and publish one federated threshold cell."""
 
-from datp_core.domain.values import checksum_file
 from datp_core.orchestration.commands.thresholding import (
     ConstructFederatedThresholdsRequest as _ConstructFederatedThresholdsRequest,
     ConstructFederatedThresholdsResult as _ConstructFederatedThresholdsResult,
@@ -45,8 +44,6 @@ def construct_federated_thresholds_stage(
     return _ConstructFederatedThresholdsResult(
         result=publication.value,
         publication_status=publication.status,
-        complete_digest=checksum_file(
-            stage_request.output_directory / FederatedThresholdAssetName.COMPLETE
-        ),
+        complete_digest=publication.complete_digest,
         temporal_provenance=stage_request.temporal_provenance,
     )
