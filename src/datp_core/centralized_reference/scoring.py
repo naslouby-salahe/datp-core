@@ -5,6 +5,7 @@ from enum import StrEnum
 from pathlib import Path
 
 import polars as pl
+import torch
 
 from datp_core.centralized_reference.checkpointing import CentralizedCheckpointCandidate
 from datp_core.centralized_reference.training import (
@@ -22,6 +23,7 @@ from datp_core.domain.values import (
     checksum_file,
     checksum_text,
 )
+from datp_core.learning.autoencoder import ReconstructionAutoencoder
 from datp_core.pipeline.scoring.frame_contract import validate_persisted_score_frame
 from datp_core.pipeline.scoring.models import ScoreArtifact
 from datp_core.pipeline.scoring.service import score_and_persist_autoencoder_frame
@@ -224,8 +226,8 @@ def _score_partition(
     frame: pl.DataFrame,
     partition_role: PartitionRole,
     request: CentralizedScoringRequest,
-    model: object,
-    device: object,
+    model: ReconstructionAutoencoder,
+    device: torch.device,
     destination: Path,
 ) -> PooledScoreArtifact:
     persisted = score_and_persist_autoencoder_frame(
