@@ -6,11 +6,11 @@ from enum import StrEnum
 from pathlib import Path
 
 from datp_core.centralized_reference.training import (
-    CentralizedModelSnapshot,
     CentralizedTrainingCoordinate,
-    CentralizedTrainingResult,
+    CentralizedTrainingExecution,
+    InMemoryCentralizedModelSnapshot,
     assert_safetensors_reload,
-    model_from_snapshot,
+    model_from_in_memory_snapshot,
     persist_state_dict_tensors,
 )
 from datp_core.domain.enums import (
@@ -18,6 +18,7 @@ from datp_core.domain.enums import (
     CheckpointStatus,
     ContractSubject,
     SerializationFormat,
+    TrainingModelId,
 )
 from datp_core.domain.errors import (
     ArtifactIntegrityError,
@@ -75,8 +76,8 @@ class CentralizedCheckpointDecision:
     def __post_init__(self) -> None:
         if not self.candidates:
             raise ValueError("checkpoint decision requires retained candidates")
-        selected_rounds = {item.round_number.value for item in self.candidates}
-        if self.selected.round_number.value not in selected_rounds:
+        selected_rounds = frozenset(item.round_number for item in self.candidates)
+        if self.selected.round_number not in selected_rounds:
             raise ScientificContractError(
                 "selected checkpoint must be one of the retained candidates",
                 subject=ContractSubject.CHECKPOINT_CANDIDATES,
@@ -112,12 +113,13 @@ def candidate_tensor_name(round_number: RoundNumber) -> str:
 
 
 def retain_centralized_checkpoint_candidates(
-    training_result: CentralizedTrainingResult,
+    execution: CentralizedTrainingExecution,
     autoencoder: AutoencoderProtocol,
 ) -> tuple[CentralizedCheckpointCandidate, ...]:
-    """Persist every declared candidate snapshot and return typed candidate records."""
+    """Persist every declared in-memory snapshot and return persisted candidate records."""
+    training_result = execution.result
     protocol = training_result.checkpoint_protocol
-    snapshots = training_result.candidate_snapshots
+    snapshots = execution.candidate_snapshots
     declared = tuple(candidate.value for candidate in protocol.candidates)
     observed = tuple(snapshot.round_number.value for snapshot in snapshots)
     if observed != declared:
@@ -156,11 +158,7 @@ def select_centralized_checkpoint(
     held_out_metrics: Sequence[MetricValue] | None = None,
     attack_labels_present: bool = False,
 ) -> CentralizedCheckpointDecision:
-    """Select the primary centralized checkpoint under FIXED_TERMINAL_MAXIMUM_ROUND.
-
-    Among declared candidates, the primary is always the candidate at
-    CheckpointProtocol.maximum_round. Training losses are stability evidence only.
-    """
+    """Select the maximum-round candidate without held-out or attack evidence."""
     require_non_test_checkpoint_selection_inputs(
         selection_rule=selection_rule,
         held_out_metrics=held_out_metrics,
@@ -229,9 +227,9 @@ def _statused_candidates(
     return tuple(statused), selected
 
 
-def reject_federated_checkpoint(identity: str) -> None:
+def reject_federated_checkpoint(identity: TrainingModelId) -> None:
     raise LeakageError(
-        f"federated checkpoint cannot enter centralized scoring or selection ({identity})",
+        f"federated checkpoint cannot enter centralized scoring or selection ({identity.value})",
         subject=ContractSubject.CHECKPOINT_CANDIDATES,
     )
 
@@ -247,7 +245,8 @@ def validate_candidate_coordinates(
     for candidate in candidates:
         if candidate.coordinate != coordinate:
             raise ScientificContractError(
-                "checkpoint candidate coordinate mismatch", subject=ContractSubject.COORDINATE
+                "checkpoint candidate coordinate mismatch",
+                subject=ContractSubject.COORDINATE,
             )
         if candidate.preprocessing_state_checksum != preprocessing_checksum:
             raise ScientificContractError(
@@ -284,21 +283,24 @@ def _reject_duplicate_or_missing_candidates(
             "checkpoint candidate rounds must equal the declared ordered protocol",
             subject=ContractSubject.CHECKPOINT_CANDIDATES,
         )
-    if len(set(observed)) != len(observed):
+    if len(frozenset(observed)) != len(observed):
         raise ArtifactIntegrityError(
-            "duplicate checkpoint candidates are forbidden", subject=ContractSubject.CHECKPOINT_CANDIDATES
+            "duplicate checkpoint candidates are forbidden",
+            subject=ContractSubject.CHECKPOINT_CANDIDATES,
         )
     paths = tuple(item.tensor_path for item in candidates)
-    if len(set(paths)) != len(paths):
+    if len(frozenset(paths)) != len(paths):
         raise ArtifactIntegrityError(
-            "checkpoint candidate paths must be unique", subject=ContractSubject.CHECKPOINT_CANDIDATES
+            "checkpoint candidate paths must be unique",
+            subject=ContractSubject.CHECKPOINT_CANDIDATES,
         )
 
 
 def _verify_candidate_file(candidate: CentralizedCheckpointCandidate) -> None:
     if not candidate.tensor_path.is_file():
         raise ArtifactIntegrityError(
-            "checkpoint candidate tensor file is missing", subject=ContractSubject.ARTIFACT_PATH
+            "checkpoint candidate tensor file is missing",
+            subject=ContractSubject.ARTIFACT_PATH,
         )
     actual = checksum_file(candidate.tensor_path)
     if actual != candidate.tensor_checksum:
@@ -315,10 +317,10 @@ def _verify_candidate_file(candidate: CentralizedCheckpointCandidate) -> None:
 
 
 def _verify_candidate_reload(
-    snapshot: CentralizedModelSnapshot,
+    snapshot: InMemoryCentralizedModelSnapshot,
     path: Path,
     autoencoder: AutoencoderProtocol,
 ) -> None:
     device = resolve_cuda_device()
-    model = model_from_snapshot(snapshot, autoencoder, device)
+    model = model_from_in_memory_snapshot(snapshot, autoencoder, device)
     assert_safetensors_reload(model, path, device)
