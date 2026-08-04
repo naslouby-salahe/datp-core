@@ -3,7 +3,7 @@
 import numpy as np
 from pydantic import model_validator
 
-from datp_core.analysis.models import MetricSeries, PairedDifferenceCounts
+from datp_core.analysis.contrasts import MetricSeries, PairedDifferenceCounts
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import AvailabilityStatus, EvidenceRole
 from datp_core.domain.values import MetricValue, PairedObservationCount, Ratio
@@ -16,7 +16,9 @@ class QuantileRange(StrictModel):
     @model_validator(mode="after")
     def validate_range(self) -> "QuantileRange":
         if self.lower.value > self.upper.value:
-            raise ValueError("descriptive lower quantile cannot exceed the upper quantile")
+            raise ValueError(
+                "descriptive lower quantile cannot exceed the upper quantile"
+            )
         return self
 
 
@@ -43,7 +45,9 @@ class DescriptiveStatistics(StrictModel):
             self.maximum.value,
         )
         if values != tuple(sorted(values)):
-            raise ValueError("descriptive statistics must preserve their declared order")
+            raise ValueError(
+                "descriptive statistics must preserve their declared order"
+            )
         return self
 
     @property
@@ -63,9 +67,13 @@ class DescriptiveSummary(StrictModel):
     def validate_summary(self) -> "DescriptiveSummary":
         if self.values:
             if self.statistics is None or self.reason is not None:
-                raise ValueError("available descriptive values require statistics and no reason")
+                raise ValueError(
+                    "available descriptive values require statistics and no reason"
+                )
         elif self.statistics is not None or self.reason is None:
-            raise ValueError("unavailable descriptive values require no statistics and an explicit reason")
+            raise ValueError(
+                "unavailable descriptive values require no statistics and an explicit reason"
+            )
         return self
 
     @property
@@ -74,7 +82,11 @@ class DescriptiveSummary(StrictModel):
 
     @property
     def availability(self) -> AvailabilityStatus:
-        return AvailabilityStatus.AVAILABLE if self.values else AvailabilityStatus.UNAVAILABLE
+        return (
+            AvailabilityStatus.AVAILABLE
+            if self.values
+            else AvailabilityStatus.UNAVAILABLE
+        )
 
 
 def summarize_values(
@@ -102,8 +114,24 @@ def summarize_values(
         statistics=DescriptiveStatistics(
             mean=MetricValue(float(np.mean(array))),
             median=MetricValue(float(np.median(array))),
-            lower_quantile_value=MetricValue(float(np.quantile(array, quantiles.lower.value, method="linear"))),
-            upper_quantile_value=MetricValue(float(np.quantile(array, quantiles.upper.value, method="linear"))),
+            lower_quantile_value=MetricValue(
+                float(
+                    np.quantile(
+                        array,
+                        quantiles.lower.value,
+                        method="linear",
+                    )
+                )
+            ),
+            upper_quantile_value=MetricValue(
+                float(
+                    np.quantile(
+                        array,
+                        quantiles.upper.value,
+                        method="linear",
+                    )
+                )
+            ),
             minimum=MetricValue(float(np.min(array))),
             maximum=MetricValue(float(np.max(array))),
         ),
@@ -113,14 +141,22 @@ def summarize_values(
 
 def count_paired_differences(values: MetricSeries) -> PairedDifferenceCounts:
     return PairedDifferenceCounts(
-        positive=PairedObservationCount(sum(value.value > 0.0 for value in values)),
+        positive=PairedObservationCount(
+            sum(value.value > 0.0 for value in values)
+        ),
         zero=PairedObservationCount(sum(value.value == 0.0 for value in values)),
-        negative=PairedObservationCount(sum(value.value < 0.0 for value in values)),
+        negative=PairedObservationCount(
+            sum(value.value < 0.0 for value in values)
+        ),
     )
 
 
 def _metric_array(values: MetricSeries) -> np.ndarray:
-    array = np.fromiter((value.value for value in values), dtype=np.float64, count=len(values))
+    array = np.fromiter(
+        (value.value for value in values),
+        dtype=np.float64,
+        count=len(values),
+    )
     if np.any(~np.isfinite(array)):
         raise ValueError("metric values must be finite")
     return array
