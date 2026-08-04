@@ -124,16 +124,21 @@ def load_estimator(path: Path, class_name: TrustedEstimatorClassName) -> Trusted
     return loaded
 
 
-def serialize_json_model(model: BaseModel, destination: Path) -> Checksum:
-    """Persist one strict model through the repository canonical JSON contract."""
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    payload = json.dumps(
-        canonical_value(model),
+def canonical_json_text(value: object) -> str:
+    """Serialize one supported value using the repository canonical JSON contract."""
+    return json.dumps(
+        canonical_value(value),
         sort_keys=True,
         separators=JSON_SEPARATORS,
         ensure_ascii=True,
         allow_nan=False,
     )
+
+
+def serialize_json_model(model: BaseModel, destination: Path) -> Checksum:
+    """Persist one strict model through the repository canonical JSON contract."""
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    payload = canonical_json_text(model)
     destination.write_text(payload, encoding="utf-8")
     return checksum_text(payload)
 
