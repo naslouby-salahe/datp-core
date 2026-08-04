@@ -9,19 +9,19 @@ from datp_core.domain.contracts import ClientCollection, ClientOwned
 from datp_core.domain.enums import ContractSubject, PublicationStatus, StageOperationId
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import Checksum
-from datp_core.learning.federated.checkpointing import (
-    CheckpointCandidate,
-    FederatedHistoryAssetName,
+from datp_core.learning.federated.checkpoints.candidates import rebase_checkpoint_candidates
+from datp_core.learning.federated.checkpoints.identities import FederatedHistoryAssetName
+from datp_core.learning.federated.checkpoints.reuse import (
     ReusedDittoTrainingRequest,
     ReusedFederatedTrainingRequest,
     load_reused_ditto_training,
     load_reused_federated_training,
-    rebase_checkpoint_candidates,
 )
 from datp_core.learning.federated.ditto import DittoTrainingRequest, train_ditto
 from datp_core.learning.federated.fedavg import train_fedavg
 from datp_core.learning.federated.fedprox import train_fedprox
 from datp_core.learning.federated.models import (
+    CheckpointCandidate,
     ClientTrainingInput,
     FederatedTrainingResult,
     PersonalizedCandidateSet,
