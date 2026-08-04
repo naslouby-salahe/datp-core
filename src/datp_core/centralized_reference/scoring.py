@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, replace
 from enum import StrEnum
+from hashlib import sha256
 from pathlib import Path
 
 import polars as pl
@@ -30,10 +31,8 @@ from datp_core.domain.values import (
     Checksum,
     FeatureCount,
     FeatureNameSequence,
-    OutcomeLabel,
     RoundNumber,
     RowCount,
-    StableRowId,
     checksum_file,
 )
 from datp_core.learning.autoencoder import ReconstructionAutoencoder
@@ -45,6 +44,8 @@ from datp_core.pipeline.scoring.models import ScoreArtifact
 from datp_core.pipeline.scoring.service import score_and_persist_autoencoder_frame
 from datp_core.protocols.models import AutoencoderProtocol
 from datp_core.runtime.compute import resolve_cuda_device
+
+IDENTITY_LENGTH_PREFIX_BYTES = 8
 
 
 class CentralizedScoreAssetName(StrEnum):
@@ -126,15 +127,8 @@ class CentralizedScoringRequest:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ScorePartitionBinding:
     partition_role: PartitionRole
-    row_ids: tuple[StableRowId, ...]
-    labels: tuple[OutcomeLabel, ...]
-
-    def __post_init__(self) -> None:
-        if len(self.row_ids) != len(self.labels):
-            raise ScientificContractError(
-                "score partition binding must align row identities and labels",
-                subject=ContractSubject.ROWS,
-            )
+    row_count: RowCount
+    ordered_identity_checksum: Checksum
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -443,23 +437,10 @@ def _validated_reused_score_frame(
         score_checksum,
         RowCount(score.height),
     )
-    expected = _score_partition_binding(source, partition_role)
-    observed = ScorePartitionBinding(
-        partition_role=partition_role,
-        row_ids=tuple(
-            StableRowId(str(value))
-            for value in validated.get_column(
-                ScoreFrameColumn.STABLE_ROW_ID.value
-            ).to_list()
-        ),
-        labels=tuple(
-            OutcomeLabel(str(value))
-            for value in validated.get_column(
-                ScoreFrameColumn.OUTCOME_LABEL.value
-            ).to_list()
-        ),
-    )
-    if observed != expected:
+    if _score_partition_binding(validated, partition_role) != _score_partition_binding(
+        source,
+        partition_role,
+    ):
         raise ArtifactIntegrityError(
             "persisted score row identities or labels do not match the current partition",
             subject=ContractSubject.ROWS,
@@ -473,19 +454,29 @@ def _score_partition_binding(
 ) -> ScorePartitionBinding:
     return ScorePartitionBinding(
         partition_role=partition_role,
-        row_ids=tuple(
-            StableRowId(str(value))
-            for value in frame.get_column(
-                ScoreFrameColumn.STABLE_ROW_ID.value
-            ).to_list()
-        ),
-        labels=tuple(
-            OutcomeLabel(str(value))
-            for value in frame.get_column(
-                ScoreFrameColumn.OUTCOME_LABEL.value
-            ).to_list()
-        ),
+        row_count=RowCount(frame.height),
+        ordered_identity_checksum=_ordered_identity_checksum(frame),
     )
+
+
+def _ordered_identity_checksum(frame: pl.DataFrame) -> Checksum:
+    digest = sha256()
+    columns = (
+        ScoreFrameColumn.STABLE_ROW_ID.value,
+        ScoreFrameColumn.OUTCOME_LABEL.value,
+    )
+    for row_id, label in frame.select(columns).iter_rows():
+        for value in (str(row_id), str(label)):
+            encoded = value.encode("utf-8")
+            digest.update(
+                len(encoded).to_bytes(
+                    IDENTITY_LENGTH_PREFIX_BYTES,
+                    byteorder="big",
+                    signed=False,
+                )
+            )
+            digest.update(encoded)
+    return Checksum(digest.hexdigest())
 
 
 def _rebase_artifact(
