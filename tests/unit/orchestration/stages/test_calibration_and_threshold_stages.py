@@ -19,8 +19,9 @@ from datp_core.domain.enums import (
     PublicationStatus,
 )
 from datp_core.domain.values import CalibrationSize, ClientCount, Quantile, SubsampleReplicateCount
+from datp_core.orchestration.commands.calibration import CalibrateRequest
 from datp_core.orchestration.commands.thresholding import ConstructFederatedThresholdsRequest
-from datp_core.orchestration.stages.calibrate import CalibrateRequest, calibrate_stage
+from datp_core.orchestration.stages.calibrate import calibrate_stage
 from datp_core.orchestration.stages.construct_federated_thresholds import (
     construct_federated_thresholds_stage,
 )
