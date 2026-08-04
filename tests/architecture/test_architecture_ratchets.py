@@ -6,6 +6,7 @@ REPOSITORY_ROOT = Path(__file__).parents[2]
 SOURCE_ROOT = REPOSITORY_ROOT / "src" / "datp_core"
 TEST_ROOT = REPOSITORY_ROOT / "tests"
 PIPELINE_ROOT = SOURCE_ROOT / "pipeline"
+ORCHESTRATION_STAGE_ROOT = SOURCE_ROOT / "orchestration" / "stages"
 ARTIFACT_STORE = SOURCE_ROOT / "artifacts" / "store.py"
 LEGACY_CHECKPOINT_MODULE = SOURCE_ROOT / "learning" / "federated" / "checkpointing.py"
 LEGACY_CHECKPOINT_IMPORT = "datp_core.learning.federated.checkpointing"
@@ -86,6 +87,17 @@ FORBIDDEN_PIPELINE_IMPORT_ROOTS = frozenset(
         "datp_core.reporting",
         "datp_core.scoring",
         "datp_core.thresholding",
+    }
+)
+FORBIDDEN_STAGE_LIBRARY_ROOTS = frozenset(
+    {
+        "numpy",
+        "pandas",
+        "polars",
+        "scipy",
+        "sklearn",
+        "statsmodels",
+        "torch",
     }
 )
 NEUTRAL_PUBLICATION_SYMBOLS = frozenset(
@@ -174,6 +186,13 @@ def _annotation_names(class_node: ast.ClassDef) -> frozenset[str]:
     return frozenset(names)
 
 
+def _is_dataclass(class_node: ast.ClassDef) -> bool:
+    return any(
+        ast.unparse(decorator).split("(")[0].split(".")[-1] == "dataclass"
+        for decorator in class_node.decorator_list
+    )
+
+
 def test_pipeline_is_branch_neutral_and_strictly_typed() -> None:
     violations: list[str] = []
     for path in _python_files(PIPELINE_ROOT):
@@ -188,6 +207,35 @@ def test_pipeline_is_branch_neutral_and_strictly_typed() -> None:
                 )
         if _contains_any_annotation(tree):
             violations.append(f"{path.relative_to(REPOSITORY_ROOT)} uses Any")
+    assert not violations, "\n".join(violations)
+
+
+def test_orchestration_stages_remain_thin_composition_only() -> None:
+    violations: list[str] = []
+    for path in _python_files(ORCHESTRATION_STAGE_ROOT):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        relative = path.relative_to(REPOSITORY_ROOT)
+        for imported in _module_imports(tree):
+            root = imported.split(".")[0]
+            if root in FORBIDDEN_STAGE_LIBRARY_ROOTS:
+                violations.append(f"{relative} imports scientific/runtime library {imported}")
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.ImportFrom)
+                and node.module == "datp_core.domain.values"
+                and any(alias.name == "checksum_file" for alias in node.names)
+            ):
+                violations.append(
+                    f"{relative} recomputes a publication checksum instead of using the publication result"
+                )
+        for node in tree.body:
+            if not isinstance(node, ast.ClassDef):
+                continue
+            bases = _base_names(node)
+            if _is_dataclass(node) or bases & {"BaseModel", "StrictModel"}:
+                violations.append(
+                    f"{relative}:{node.name} defines a domain/persistence model in orchestration"
+                )
     assert not violations, "\n".join(violations)
 
 
