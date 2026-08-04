@@ -10,6 +10,7 @@ import torch
 from safetensors.torch import load_file
 
 from datp_core.artifacts.layout import scored_partition_roles
+from datp_core.artifacts.serialization import canonical_checksum
 from datp_core.domain.enums import (
     CheckpointStatus,
     ContractSubject,
@@ -17,7 +18,6 @@ from datp_core.domain.enums import (
     SerializationFormat,
 )
 from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
-from datp_core.domain.provenance import canonical_checksum
 from datp_core.domain.values import (
     BatchSize,
     Checksum,
