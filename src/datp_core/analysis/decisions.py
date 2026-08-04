@@ -54,7 +54,7 @@ from datp_core.domain.values import (
     Seed,
     checksum_text,
 )
-from datp_core.experiments.models import (
+from datp_core.protocols.experiments import (
     ExternalTemporalExecutionIdentity,
     require_execution_identity,
 )
@@ -325,7 +325,9 @@ def prepare_temporal_analysis(
             static_reference_provenance=request.static_reference_provenance,
             frozen_provenance=request.frozen_provenance,
             recalibrated_provenance=request.recalibrated_provenance,
-            records=tuple(temporal_analysis_record(record) for record in request.records),
+            records=tuple(
+                temporal_analysis_record(record) for record in request.records
+            ),
         ),
     )
 
