@@ -7,24 +7,40 @@ from pathlib import Path
 import polars as pl
 import torch
 
-from datp_core.centralized_reference.checkpointing import CentralizedCheckpointCandidate
+from datp_core.artifacts.serialization import canonical_checksum
+from datp_core.centralized_reference.checkpointing import (
+    CentralizedCheckpointCandidate,
+)
 from datp_core.centralized_reference.training import (
     CentralizedTrainingCoordinate,
     load_centralized_model_tensors,
 )
-from datp_core.domain.enums import ContractSubject, PartitionRole, SerializationFormat
-from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
+from datp_core.domain.enums import (
+    ContractSubject,
+    PartitionRole,
+    ScoreFrameColumn,
+    SerializationFormat,
+)
+from datp_core.domain.errors import (
+    ArtifactIntegrityError,
+    ScientificContractError,
+)
 from datp_core.domain.values import (
     BatchSize,
     Checksum,
     FeatureCount,
     FeatureNameSequence,
+    OutcomeLabel,
+    RoundNumber,
     RowCount,
+    StableRowId,
     checksum_file,
-    checksum_text,
 )
 from datp_core.learning.autoencoder import ReconstructionAutoencoder
-from datp_core.pipeline.scoring.frame_contract import validate_persisted_score_frame
+from datp_core.pipeline.scoring.frame_contract import (
+    validate_persisted_score_frame,
+    validate_score_input_frame,
+)
 from datp_core.pipeline.scoring.models import ScoreArtifact
 from datp_core.pipeline.scoring.service import score_and_persist_autoencoder_frame
 from datp_core.protocols.models import AutoencoderProtocol
@@ -44,7 +60,10 @@ class PooledScoreArtifact(ScoreArtifact[CentralizedTrainingCoordinate]):
 
     def __post_init__(self) -> None:
         ScoreArtifact.__post_init__(self)
-        if self.partition_role not in {PartitionRole.CALIBRATION, PartitionRole.EVALUATION}:
+        if self.partition_role not in {
+            PartitionRole.CALIBRATION,
+            PartitionRole.EVALUATION,
+        }:
             raise ScientificContractError(
                 "centralized score artifacts are only defined for calibration and evaluation",
                 subject=self.partition_role,
@@ -74,7 +93,10 @@ class CentralizedScoringResult:
                 "centralized score artifacts must share one training coordinate",
                 subject=ContractSubject.COORDINATE,
             )
-        if self.calibration_scores.checkpoint_checksum != self.model_tensor_checksum:
+        if (
+            self.calibration_scores.checkpoint_checksum
+            != self.model_tensor_checksum
+        ):
             raise ScientificContractError(
                 "centralized calibration scores must reference the selected model checksum",
                 subject=ContractSubject.CHECKPOINT_CANDIDATES,
@@ -101,11 +123,46 @@ class CentralizedScoringRequest:
     preprocessing_state_checksum: Checksum
 
 
-def score_centralized_reference(request: CentralizedScoringRequest) -> CentralizedScoringResult:
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ScorePartitionBinding:
+    partition_role: PartitionRole
+    row_ids: tuple[StableRowId, ...]
+    labels: tuple[OutcomeLabel, ...]
+
+    def __post_init__(self) -> None:
+        if len(self.row_ids) != len(self.labels):
+            raise ScientificContractError(
+                "score partition binding must align row identities and labels",
+                subject=ContractSubject.ROWS,
+            )
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class CentralizedScoringPublicationBinding:
+    coordinate: CentralizedTrainingCoordinate
+    checkpoint_round: RoundNumber
+    checkpoint_checksum: Checksum
+    preprocessing_state_checksum: Checksum
+    split_manifest_checksum: Checksum
+    feature_names: FeatureNameSequence
+    batch_size: BatchSize
+    calibration_input: ScorePartitionBinding
+    evaluation_input: ScorePartitionBinding
+    calibration_score_checksum: Checksum
+    evaluation_score_checksum: Checksum
+
+
+def score_centralized_reference(
+    request: CentralizedScoringRequest,
+) -> CentralizedScoringResult:
     """Generate deterministic pooled reconstruction scores for calibration and evaluation."""
     _validate_scoring_request(request)
     device = resolve_cuda_device()
-    model = load_centralized_model_tensors(request.checkpoint.tensor_path, request.autoencoder, device)
+    model = load_centralized_model_tensors(
+        request.checkpoint.tensor_path,
+        request.autoencoder,
+        device,
+    )
     request.output_directory.mkdir(parents=True, exist_ok=True)
     calibration = _score_partition(
         frame=request.calibration_features,
@@ -113,7 +170,10 @@ def score_centralized_reference(request: CentralizedScoringRequest) -> Centraliz
         request=request,
         model=model,
         device=device,
-        destination=request.output_directory / CentralizedScoreAssetName.CALIBRATION_SCORES,
+        destination=(
+            request.output_directory
+            / CentralizedScoreAssetName.CALIBRATION_SCORES
+        ),
     )
     evaluation = _score_partition(
         frame=request.evaluation_features,
@@ -121,7 +181,10 @@ def score_centralized_reference(request: CentralizedScoringRequest) -> Centraliz
         request=request,
         model=model,
         device=device,
-        destination=request.output_directory / CentralizedScoreAssetName.EVALUATION_SCORES,
+        destination=(
+            request.output_directory
+            / CentralizedScoreAssetName.EVALUATION_SCORES
+        ),
     )
     return CentralizedScoringResult(
         calibration_scores=calibration,
@@ -136,9 +199,10 @@ def write_centralized_scoring(
     directory: Path,
 ) -> CentralizedScoringResult:
     """Write a complete centralized score publication into a caller-owned directory."""
-    scoring = score_centralized_reference(replace(request, output_directory=directory))
+    published_request = replace(request, output_directory=directory)
+    scoring = score_centralized_reference(published_request)
     (directory / CentralizedScoreAssetName.COMPLETE).write_text(
-        score_artifact_set_checksum(scoring).value,
+        score_artifact_set_checksum(published_request, scoring).value,
         encoding="utf-8",
     )
     return scoring
@@ -149,17 +213,43 @@ def centralized_scoring_is_reusable(
     directory: Path,
 ) -> bool:
     complete = directory / CentralizedScoreAssetName.COMPLETE
-    calibration = directory / CentralizedScoreAssetName.CALIBRATION_SCORES
-    evaluation = directory / CentralizedScoreAssetName.EVALUATION_SCORES
-    if not (complete.is_file() and calibration.is_file() and evaluation.is_file()):
+    calibration_path = (
+        directory / CentralizedScoreAssetName.CALIBRATION_SCORES
+    )
+    evaluation_path = directory / CentralizedScoreAssetName.EVALUATION_SCORES
+    if not (
+        complete.is_file()
+        and calibration_path.is_file()
+        and evaluation_path.is_file()
+    ):
         return False
     try:
-        expected = checksum_text(
-            f"{checksum_file(calibration).value}|{checksum_file(evaluation).value}|"
-            f"{request.checkpoint.tensor_checksum.value}"
+        _validate_scoring_request(request)
+        calibration = _validated_reused_score_frame(
+            request.calibration_features,
+            calibration_path,
+            PartitionRole.CALIBRATION,
         )
+        evaluation = _validated_reused_score_frame(
+            request.evaluation_features,
+            evaluation_path,
+            PartitionRole.EVALUATION,
+        )
+        scoring = _score_artifact_result(
+            request,
+            directory,
+            calibration_row_count=RowCount(calibration.height),
+            evaluation_row_count=RowCount(evaluation.height),
+        )
+        expected = score_artifact_set_checksum(request, scoring)
         return complete.read_text(encoding="utf-8").strip() == expected.value
-    except (OSError, ValueError):
+    except (
+        ArtifactIntegrityError,
+        OSError,
+        ScientificContractError,
+        UnicodeError,
+        ValueError,
+    ):
         return False
 
 
@@ -167,19 +257,25 @@ def load_reused_centralized_scoring(
     request: CentralizedScoringRequest,
     directory: Path,
 ) -> CentralizedScoringResult:
-    calibration_frame = pl.read_parquet(directory / CentralizedScoreAssetName.CALIBRATION_SCORES)
-    evaluation_frame = pl.read_parquet(directory / CentralizedScoreAssetName.EVALUATION_SCORES)
-    calibration, evaluation = _score_artifact_pair(
+    calibration_path = (
+        directory / CentralizedScoreAssetName.CALIBRATION_SCORES
+    )
+    evaluation_path = directory / CentralizedScoreAssetName.EVALUATION_SCORES
+    calibration = _validated_reused_score_frame(
+        request.calibration_features,
+        calibration_path,
+        PartitionRole.CALIBRATION,
+    )
+    evaluation = _validated_reused_score_frame(
+        request.evaluation_features,
+        evaluation_path,
+        PartitionRole.EVALUATION,
+    )
+    return _score_artifact_result(
         request,
         directory,
-        calibration_row_count=RowCount(calibration_frame.height),
-        evaluation_row_count=RowCount(evaluation_frame.height),
-    )
-    return CentralizedScoringResult(
-        calibration_scores=calibration,
-        evaluation_scores=evaluation,
-        model_tensor_checksum=request.checkpoint.tensor_checksum,
-        preprocessing_state_checksum=request.preprocessing_state_checksum,
+        calibration_row_count=RowCount(calibration.height),
+        evaluation_row_count=RowCount(evaluation.height),
     )
 
 
@@ -187,15 +283,23 @@ def rebase_centralized_scoring(
     scoring: CentralizedScoringResult,
     directory: Path,
 ) -> CentralizedScoringResult:
-    calibration_path = directory / CentralizedScoreAssetName.CALIBRATION_SCORES
+    calibration_path = (
+        directory / CentralizedScoreAssetName.CALIBRATION_SCORES
+    )
     evaluation_path = directory / CentralizedScoreAssetName.EVALUATION_SCORES
     if not calibration_path.is_file() or not evaluation_path.is_file():
         raise ArtifactIntegrityError(
             "published score partitions missing after atomic replace",
             subject=ContractSubject.SCORES,
         )
-    calibration = _rebase_artifact(scoring.calibration_scores, calibration_path)
-    evaluation = _rebase_artifact(scoring.evaluation_scores, evaluation_path)
+    calibration = _rebase_artifact(
+        scoring.calibration_scores,
+        calibration_path,
+    )
+    evaluation = _rebase_artifact(
+        scoring.evaluation_scores,
+        evaluation_path,
+    )
     return CentralizedScoringResult(
         calibration_scores=calibration,
         evaluation_scores=evaluation,
@@ -205,7 +309,11 @@ def rebase_centralized_scoring(
 
 
 def load_score_frame(artifact: PooledScoreArtifact) -> pl.DataFrame:
-    return validate_persisted_score_frame(artifact.path, artifact.checksum, artifact.row_count)
+    return validate_persisted_score_frame(
+        artifact.path,
+        artifact.checksum,
+        artifact.row_count,
+    )
 
 
 def _validate_scoring_request(request: CentralizedScoringRequest) -> None:
@@ -214,11 +322,24 @@ def _validate_scoring_request(request: CentralizedScoringRequest) -> None:
             "checkpoint coordinate mismatch during scoring",
             subject=ContractSubject.COORDINATE,
         )
-    if request.checkpoint.preprocessing_state_checksum != request.preprocessing_state_checksum:
+    if (
+        request.checkpoint.preprocessing_state_checksum
+        != request.preprocessing_state_checksum
+    ):
         raise ScientificContractError(
             "checkpoint preprocessing checksum mismatch during scoring",
             subject=ContractSubject.PREPROCESSING,
         )
+    validate_score_input_frame(
+        request.calibration_features,
+        PartitionRole.CALIBRATION,
+        request.feature_names,
+    )
+    validate_score_input_frame(
+        request.evaluation_features,
+        PartitionRole.EVALUATION,
+        request.feature_names,
+    )
 
 
 def _score_partition(
@@ -252,6 +373,27 @@ def _score_partition(
     )
 
 
+def _score_artifact_result(
+    request: CentralizedScoringRequest,
+    directory: Path,
+    *,
+    calibration_row_count: RowCount,
+    evaluation_row_count: RowCount,
+) -> CentralizedScoringResult:
+    calibration, evaluation = _score_artifact_pair(
+        request,
+        directory,
+        calibration_row_count=calibration_row_count,
+        evaluation_row_count=evaluation_row_count,
+    )
+    return CentralizedScoringResult(
+        calibration_scores=calibration,
+        evaluation_scores=evaluation,
+        model_tensor_checksum=request.checkpoint.tensor_checksum,
+        preprocessing_state_checksum=request.preprocessing_state_checksum,
+    )
+
+
 def _score_artifact_pair(
     request: CentralizedScoringRequest,
     directory: Path,
@@ -259,7 +401,9 @@ def _score_artifact_pair(
     calibration_row_count: RowCount,
     evaluation_row_count: RowCount,
 ) -> tuple[PooledScoreArtifact, PooledScoreArtifact]:
-    calibration_path = directory / CentralizedScoreAssetName.CALIBRATION_SCORES
+    calibration_path = (
+        directory / CentralizedScoreAssetName.CALIBRATION_SCORES
+    )
     evaluation_path = directory / CentralizedScoreAssetName.EVALUATION_SCORES
     return (
         PooledScoreArtifact(
@@ -287,7 +431,67 @@ def _score_artifact_pair(
     )
 
 
-def _rebase_artifact(artifact: PooledScoreArtifact, path: Path) -> PooledScoreArtifact:
+def _validated_reused_score_frame(
+    source: pl.DataFrame,
+    score_path: Path,
+    partition_role: PartitionRole,
+) -> pl.DataFrame:
+    score_checksum = checksum_file(score_path)
+    score = pl.read_parquet(score_path)
+    validated = validate_persisted_score_frame(
+        score_path,
+        score_checksum,
+        RowCount(score.height),
+    )
+    expected = _score_partition_binding(source, partition_role)
+    observed = ScorePartitionBinding(
+        partition_role=partition_role,
+        row_ids=tuple(
+            StableRowId(str(value))
+            for value in validated.get_column(
+                ScoreFrameColumn.STABLE_ROW_ID.value
+            ).to_list()
+        ),
+        labels=tuple(
+            OutcomeLabel(str(value))
+            for value in validated.get_column(
+                ScoreFrameColumn.OUTCOME_LABEL.value
+            ).to_list()
+        ),
+    )
+    if observed != expected:
+        raise ArtifactIntegrityError(
+            "persisted score row identities or labels do not match the current partition",
+            subject=ContractSubject.ROWS,
+        )
+    return validated
+
+
+def _score_partition_binding(
+    frame: pl.DataFrame,
+    partition_role: PartitionRole,
+) -> ScorePartitionBinding:
+    return ScorePartitionBinding(
+        partition_role=partition_role,
+        row_ids=tuple(
+            StableRowId(str(value))
+            for value in frame.get_column(
+                ScoreFrameColumn.STABLE_ROW_ID.value
+            ).to_list()
+        ),
+        labels=tuple(
+            OutcomeLabel(str(value))
+            for value in frame.get_column(
+                ScoreFrameColumn.OUTCOME_LABEL.value
+            ).to_list()
+        ),
+    )
+
+
+def _rebase_artifact(
+    artifact: PooledScoreArtifact,
+    path: Path,
+) -> PooledScoreArtifact:
     return PooledScoreArtifact(
         coordinate=artifact.coordinate,
         partition_role=artifact.partition_role,
@@ -301,8 +505,28 @@ def _rebase_artifact(artifact: PooledScoreArtifact, path: Path) -> PooledScoreAr
     )
 
 
-def score_artifact_set_checksum(result: CentralizedScoringResult) -> Checksum:
-    return checksum_text(
-        f"{result.calibration_scores.checksum.value}|{result.evaluation_scores.checksum.value}|"
-        f"{result.model_tensor_checksum.value}"
+def score_artifact_set_checksum(
+    request: CentralizedScoringRequest,
+    result: CentralizedScoringResult,
+) -> Checksum:
+    return canonical_checksum(
+        CentralizedScoringPublicationBinding(
+            coordinate=request.coordinate,
+            checkpoint_round=request.checkpoint.round_number,
+            checkpoint_checksum=request.checkpoint.tensor_checksum,
+            preprocessing_state_checksum=request.preprocessing_state_checksum,
+            split_manifest_checksum=request.checkpoint.split_manifest_checksum,
+            feature_names=request.feature_names,
+            batch_size=request.batch_size,
+            calibration_input=_score_partition_binding(
+                request.calibration_features,
+                PartitionRole.CALIBRATION,
+            ),
+            evaluation_input=_score_partition_binding(
+                request.evaluation_features,
+                PartitionRole.EVALUATION,
+            ),
+            calibration_score_checksum=result.calibration_scores.checksum,
+            evaluation_score_checksum=result.evaluation_scores.checksum,
+        )
     )
