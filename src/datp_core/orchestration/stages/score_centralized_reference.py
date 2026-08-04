@@ -12,7 +12,6 @@ from datp_core.centralized_reference.scoring import (
 )
 from datp_core.domain.enums import ContractSubject
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import checksum_file
 from datp_core.orchestration.commands.scoring import (
     ScoreCentralizedReferenceRequest as _ScoreCentralizedReferenceRequest,
     ScoreCentralizedReferenceResult as _ScoreCentralizedReferenceResult,
@@ -58,7 +57,7 @@ def score_centralized_reference_stage(
     return _ScoreCentralizedReferenceResult(
         publication_status=publication.status,
         scoring=publication.value,
-        complete_digest=checksum_file(request.output_directory / CentralizedScoreAssetName.COMPLETE),
+        complete_digest=publication.complete_digest,
     )
 
 
