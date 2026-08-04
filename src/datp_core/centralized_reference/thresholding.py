@@ -7,11 +7,13 @@ from pathlib import Path
 
 import numpy as np
 
+from datp_core.artifacts.serialization import canonical_json_text
 from datp_core.centralized_reference.scoring import (
     PooledScoreArtifact,
     load_score_frame,
 )
 from datp_core.centralized_reference.training import CentralizedTrainingCoordinate
+from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
     CentralizedThresholdMethod,
     ContractSubject,
@@ -67,6 +69,28 @@ class PooledThresholdResult:
             )
         if self.calibration_score_count < 1:
             raise ValueError("pooled threshold requires at least one benign calibration score")
+
+
+class PooledThresholdDocument(StrictModel):
+    method: CentralizedThresholdMethod
+    quantile: Quantile
+    quantile_interpolation: QuantileInterpolationSemantics
+    threshold: ThresholdValue
+    calibration_score_count: RowCount
+    checkpoint_round: RoundNumber
+    score_artifact_checksum: Checksum
+
+    @classmethod
+    def from_result(cls, result: PooledThresholdResult) -> "PooledThresholdDocument":
+        return cls(
+            method=result.method,
+            quantile=result.quantile,
+            quantile_interpolation=result.quantile_interpolation,
+            threshold=result.threshold,
+            calibration_score_count=result.calibration_score_count,
+            checkpoint_round=result.checkpoint_round,
+            score_artifact_checksum=result.score_artifact_checksum,
+        )
 
 
 def construct_pooled_benign_quantile(
@@ -193,24 +217,9 @@ def reject_centralized_threshold_in_federated_dispatch(method: CentralizedThresh
 
 
 def write_threshold_document(result: PooledThresholdResult, directory: Path) -> Path:
-    from json import dumps
-
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / CentralizedThresholdAssetName.THRESHOLD
-    payload = dumps(
-        {
-            "method": result.method.value,
-            "quantile": result.quantile.value,
-            "quantile_interpolation": result.quantile_interpolation.value,
-            "threshold": result.threshold.value,
-            "calibration_score_count": result.calibration_score_count.value,
-            "checkpoint_round": result.checkpoint_round.value,
-            "score_artifact_checksum": result.score_artifact_checksum.value,
-        },
-        indent=2,
-        sort_keys=True,
-    )
-    path.write_text(payload + "\n", encoding="utf-8")
+    path.write_text(canonical_json_text(PooledThresholdDocument.from_result(result)), encoding="utf-8")
     return path
 
 
