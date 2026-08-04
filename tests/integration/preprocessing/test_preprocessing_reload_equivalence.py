@@ -15,17 +15,27 @@ from datp_core.domain.enums import (
     SplitProtocolId,
     TrustedEstimatorClassName,
 )
-from datp_core.domain.values import AbsoluteTolerance, Checksum, ClientPathToken, FeatureName, FeatureNameSequence, Seed
-from datp_core.preprocessing.federated import ClientPublishRequest, publish_client_preprocessing
+from datp_core.domain.values import (
+    AbsoluteTolerance,
+    Checksum,
+    ClientPathToken,
+    FeatureName,
+    FeatureNameSequence,
+    Seed,
+)
+from datp_core.preprocessing.federated import publish_client_preprocessing
 from datp_core.preprocessing.models import (
+    ClientPublishRequest,
     PreprocessingPartition,
-    PreprocessingPartitionSet,
+    PreprocessingPartitions,
     PreprocessingProtocol,
     PreprocessingPublishContext,
 )
 
 
-def _protocol(fit_scope=PreprocessingFitScope.CLIENT_LOCAL_TRAINING) -> PreprocessingProtocol:
+def _protocol(
+    fit_scope: PreprocessingFitScope = PreprocessingFitScope.CLIENT_LOCAL_TRAINING,
+) -> PreprocessingProtocol:
     return PreprocessingProtocol(
         identity=PreprocessingProtocolId.TEST_COLUMN_ORDER_PROJECTION,
         fit_scope=fit_scope,
@@ -36,14 +46,19 @@ def _protocol(fit_scope=PreprocessingFitScope.CLIENT_LOCAL_TRAINING) -> Preproce
     )
 
 
-def _partitions() -> PreprocessingPartitionSet:
+def _partitions() -> PreprocessingPartitions:
     frame_train = pl.DataFrame(
-        {"stable_row_id": ["t0", "t1"], "outcome_label": ["benign", "benign"], "f0": [0.0, 1.0], "f1": [1.0, 2.0]}
+        {
+            "stable_row_id": ["t0", "t1"],
+            "outcome_label": ["benign", "benign"],
+            "f0": [0.0, 1.0],
+            "f1": [1.0, 2.0],
+        }
     )
     frame_cal = pl.DataFrame({"stable_row_id": ["c0"], "outcome_label": ["benign"], "f0": [0.5], "f1": [1.5]})
     frame_eval = pl.DataFrame({"stable_row_id": ["e0"], "outcome_label": ["benign"], "f0": [1.5], "f1": [2.5]})
-    return PreprocessingPartitionSet(
-        partitions=(
+    return PreprocessingPartitions(
+        (
             PreprocessingPartition(PartitionRole.TRAIN, frame_train),
             PreprocessingPartition(PartitionRole.CALIBRATION, frame_cal),
             PreprocessingPartition(PartitionRole.EVALUATION, frame_eval),

@@ -17,24 +17,24 @@ from tests.unit.learning.federated.helpers import (
 )
 
 from datp_core.domain.enums import PublicationStatus
-from datp_core.domain.values import Checksum, RowCount, Seed
-from datp_core.domain.values import ClientPathToken as PreprocessingClientPathToken
+from datp_core.domain.values import Checksum, ClientPathToken, RowCount, Seed
+from datp_core.learning.federated.models import ClientTrainingInput
+from datp_core.learning.federated.training import FederatedTrainingRequest
 from datp_core.orchestration.stages.score_federated import ScoreFederatedRequest, score_federated_stage
 from datp_core.orchestration.stages.select_federated_checkpoint import (
     SelectFederatedCheckpointRequest,
     select_federated_checkpoint_stage,
 )
-from datp_core.orchestration.stages.train_federated import TrainFedAvgRequest, train_fedavg_stage
+from datp_core.orchestration.stages.train_federated import TrainFederatedRequest, train_federated_stage
 from datp_core.preprocessing.models import (
     ClientPreprocessingResult,
-    ClientPreprocessPublication,
     FederatedFittedPreprocessingState,
     PreprocessedPartitionPaths,
 )
 from datp_core.scoring.generation import ClientScoringInput
 
 
-def _client_publication(client_id: str, directory: Path) -> ClientPreprocessPublication:
+def _client_publication(client_id: str, directory: Path) -> ClientPreprocessingResult:
     directory.mkdir(parents=True, exist_ok=True)
     train_path = directory / "train.parquet"
     calibration_path = directory / "calibration.parquet"
@@ -44,17 +44,15 @@ def _client_publication(client_id: str, directory: Path) -> ClientPreprocessPubl
     benign_frame(RowCount(8), seed=Seed((hash(client_id) + 2) % 1000)).write_parquet(evaluation_path)
     estimator_path = directory / "state.skops"
     estimator_path.write_bytes(b"placeholder")
-    protocol = feature_protocol()
-
     fitted_state = FederatedFittedPreprocessingState(
-        protocol=protocol,
-        client_identity=PreprocessingClientPathToken(client_id),
+        protocol=feature_protocol(),
+        client_identity=ClientPathToken(client_id),
         estimator_path=estimator_path,
         estimator_checksum=Checksum(f"{client_id[-1]}" * 64),
         fit_row_count=RowCount(16),
     )
-    result = ClientPreprocessingResult(
-        client_identity=PreprocessingClientPathToken(client_id),
+    return ClientPreprocessingResult(
+        client_identity=ClientPathToken(client_id),
         paths=PreprocessedPartitionPaths(
             train=train_path,
             calibration=calibration_path,
@@ -64,10 +62,6 @@ def _client_publication(client_id: str, directory: Path) -> ClientPreprocessPubl
         ),
         fitted_state=fitted_state,
         publication_status=PublicationStatus.PUBLISHED,
-    )
-
-    return ClientPreprocessPublication(
-        result=result,
         train_row_count=RowCount(16),
         calibration_row_count=RowCount(8),
         evaluation_row_count=RowCount(8),
@@ -76,31 +70,51 @@ def _client_publication(client_id: str, directory: Path) -> ClientPreprocessPubl
     )
 
 
-def test_train_fedavg_stage_publishes_then_reuses(tmp_path: Path) -> None:
+def _training_request(
+    publications: tuple[ClientPreprocessingResult, ...], output_directory: Path
+) -> TrainFederatedRequest:
+    coordinate = fedavg_coordinate(Seed(0))
+    clients = tuple(
+        ClientTrainingInput(
+            client=client_identity(publication.client_identity.value),
+            training_features=pl.read_parquet(publication.paths.train),
+            feature_names=FEATURE_NAMES,
+            preprocessing_state=publication.fitted_state,
+        )
+        for publication in publications
+    )
+    return TrainFederatedRequest(
+        request=FederatedTrainingRequest(
+            coordinate=coordinate,
+            clients=clients,
+            population_client_count=POPULATION_CLIENT_COUNT,
+            autoencoder=AUTOENCODER,
+            training_protocol=FEDAVG_PROTOCOL,
+            checkpoint_protocol=CHECKPOINT,
+            training_seed=Seed(0),
+            batch_size=BATCH_SIZE,
+            learning_rate=LEARNING_RATE,
+            split_manifest_checksum=Checksum("a" * 64),
+            output_directory=output_directory,
+        ),
+        overwrite=False,
+    )
+
+
+def test_train_federated_stage_publishes_then_reuses(tmp_path: Path) -> None:
     publications = tuple(
         _client_publication(client_id, tmp_path / "preprocessed" / client_id) for client_id in CLIENT_IDS
     )
-    request = TrainFedAvgRequest(
-        coordinate=fedavg_coordinate(Seed(0)),
-        client_publications=publications,
-        population_client_count=POPULATION_CLIENT_COUNT,
-        autoencoder=AUTOENCODER,
-        training_protocol=FEDAVG_PROTOCOL,
-        checkpoint_protocol=CHECKPOINT,
-        training_seed=Seed(0),
-        batch_size=BATCH_SIZE,
-        learning_rate=LEARNING_RATE,
-        split_manifest_checksum=Checksum("a" * 64),
-        output_directory=tmp_path / "training",
-        overwrite=False,
-    )
-    first = train_fedavg_stage(request)
+    request = _training_request(publications, tmp_path / "training")
+
+    first = train_federated_stage(request)
+    second = train_federated_stage(request)
+
     assert first.publication_status is PublicationStatus.PUBLISHED
-    second = train_fedavg_stage(request)
     assert second.publication_status is PublicationStatus.REUSED
-    first_checksums = tuple(candidate.tensor_checksum for candidate in first.candidates)
-    second_checksums = tuple(candidate.tensor_checksum for candidate in second.candidates)
-    assert first_checksums == second_checksums
+    assert tuple(candidate.tensor_checksum for candidate in first.candidates) == tuple(
+        candidate.tensor_checksum for candidate in second.candidates
+    )
 
 
 def test_select_and_score_federated_stages(tmp_path: Path) -> None:
@@ -108,21 +122,7 @@ def test_select_and_score_federated_stages(tmp_path: Path) -> None:
         _client_publication(client_id, tmp_path / "preprocessed" / client_id) for client_id in CLIENT_IDS
     )
     coordinate = fedavg_coordinate(Seed(0))
-    training_request = TrainFedAvgRequest(
-        coordinate=coordinate,
-        client_publications=publications,
-        population_client_count=POPULATION_CLIENT_COUNT,
-        autoencoder=AUTOENCODER,
-        training_protocol=FEDAVG_PROTOCOL,
-        checkpoint_protocol=CHECKPOINT,
-        training_seed=Seed(0),
-        batch_size=BATCH_SIZE,
-        learning_rate=LEARNING_RATE,
-        split_manifest_checksum=Checksum("a" * 64),
-        output_directory=tmp_path / "training",
-        overwrite=False,
-    )
-    training = train_fedavg_stage(training_request)
+    training = train_federated_stage(_training_request(publications, tmp_path / "training"))
 
     selection = select_federated_checkpoint_stage(
         SelectFederatedCheckpointRequest(
@@ -140,9 +140,9 @@ def test_select_and_score_federated_stages(tmp_path: Path) -> None:
 
     clients = tuple(
         ClientScoringInput(
-            client=client_identity(publication.result.client_identity.value),
-            calibration_features=pl.read_parquet(publication.result.paths.calibration),
-            evaluation_features=pl.read_parquet(publication.result.paths.evaluation),
+            client=client_identity(publication.client_identity.value),
+            calibration_features=pl.read_parquet(publication.paths.calibration),
+            evaluation_features=pl.read_parquet(publication.paths.evaluation),
         )
         for publication in publications
     )
@@ -158,7 +158,8 @@ def test_select_and_score_federated_stages(tmp_path: Path) -> None:
         overwrite=False,
     )
     first_scoring = score_federated_stage(score_request)
-    assert first_scoring.publication_status is PublicationStatus.PUBLISHED
     second_scoring = score_federated_stage(score_request)
+
+    assert first_scoring.publication_status is PublicationStatus.PUBLISHED
     assert second_scoring.publication_status is PublicationStatus.REUSED
     assert first_scoring.result.invariant == second_scoring.result.invariant

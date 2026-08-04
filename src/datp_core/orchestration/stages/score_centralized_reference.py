@@ -3,10 +3,11 @@
 from dataclasses import dataclass
 from pathlib import Path
 from shutil import rmtree
+from typing import ClassVar
 
 import polars as pl
 
-from datp_core.artifacts.store import AtomicPublication, publish_atomically
+from datp_core.artifacts.store import publish_atomically
 from datp_core.centralized_reference.checkpointing import CentralizedCheckpointCandidate
 from datp_core.centralized_reference.scoring import (
     CentralizedScoreAssetName,
@@ -37,7 +38,7 @@ from datp_core.domain.values import (
 from datp_core.protocols.models import AutoencoderProtocol
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True, eq=False)
 class ScoreCentralizedReferenceRequest:
     coordinate: CentralizedTrainingCoordinate
     checkpoint: CentralizedCheckpointCandidate
@@ -53,7 +54,7 @@ class ScoreCentralizedReferenceRequest:
 
 @dataclass(frozen=True, slots=True)
 class ScoreCentralizedReferenceResult:
-    stage: StageOperationId
+    stage: ClassVar[StageOperationId] = StageOperationId.SCORE_CENTRALIZED_REFERENCE
     publication_status: PublicationStatus
     scoring: CentralizedScoringResult
     complete_digest: Checksum
@@ -65,9 +66,7 @@ def score_centralized_reference_stage(
     if request.checkpoint.coordinate != request.coordinate:
         raise ScientificContractError("score stage checkpoint coordinate mismatch", subject=ContractSubject.COORDINATE)
 
-    holder: dict[str, CentralizedScoringResult] = {}
-
-    def write(temporary: Path) -> None:
+    def write(temporary: Path) -> CentralizedScoringResult:
         scoring = score_centralized_reference(
             CentralizedScoringRequest(
                 coordinate=request.coordinate,
@@ -81,31 +80,27 @@ def score_centralized_reference_stage(
                 preprocessing_state_checksum=request.preprocessing_state_checksum,
             )
         )
-        digest = score_artifact_set_checksum(scoring)
-        (temporary / CentralizedScoreAssetName.COMPLETE).write_text(digest.value, encoding="utf-8")
-        holder["scoring"] = scoring
-
-    reused = publish_atomically(
-        AtomicPublication(
-            target=request.output_directory,
-            overwrite=request.overwrite,
-            is_reusable=lambda directory: _is_reusable(directory, request),
-            write=write,
-            remove_target=lambda directory: rmtree(directory),
+        (temporary / CentralizedScoreAssetName.COMPLETE).write_text(
+            score_artifact_set_checksum(scoring).value,
+            encoding="utf-8",
         )
+        return scoring
+
+    outcome = publish_atomically(
+        target=request.output_directory,
+        overwrite=request.overwrite,
+        is_reusable=lambda directory: _is_reusable(directory, request),
+        write=write,
+        reusable_value=lambda _directory: _load_reused_scores(request),
+        remove_target=rmtree,
     )
-    if reused:
-        scoring = _load_reused_scores(request)
-        status = PublicationStatus.REUSED
-    else:
-        scoring = holder["scoring"]
-        scoring = _rebase_scoring(scoring, request)
-        status = PublicationStatus.PUBLISHED
+    scoring = (
+        _rebase_scoring(outcome.value, request) if outcome.status is PublicationStatus.PUBLISHED else outcome.value
+    )
     return ScoreCentralizedReferenceResult(
-        stage=StageOperationId.SCORE_CENTRALIZED_REFERENCE,
-        publication_status=status,
+        publication_status=outcome.status,
         scoring=scoring,
-        complete_digest=checksum_file(request.output_directory / CentralizedScoreAssetName.COMPLETE),
+        complete_digest=outcome.complete_digest,
     )
 
 
@@ -133,29 +128,30 @@ def _score_artifact_pair(
 ) -> tuple[PooledScoreArtifact, PooledScoreArtifact]:
     calibration_path = request.output_directory / CentralizedScoreAssetName.CALIBRATION_SCORES
     evaluation_path = request.output_directory / CentralizedScoreAssetName.EVALUATION_SCORES
-    calibration = PooledScoreArtifact(
-        coordinate=request.coordinate,
-        partition_role=PartitionRole.CALIBRATION,
-        checkpoint_round=request.checkpoint.round_number,
-        checkpoint_checksum=request.checkpoint.tensor_checksum,
-        path=calibration_path,
-        checksum=checksum_file(calibration_path),
-        row_count=calibration_row_count,
-        feature_count=FeatureCount(len(request.feature_names)),
-        serialization_format=SerializationFormat.PARQUET,
+    return (
+        PooledScoreArtifact(
+            coordinate=request.coordinate,
+            partition_role=PartitionRole.CALIBRATION,
+            checkpoint_round=request.checkpoint.round_number,
+            checkpoint_checksum=request.checkpoint.tensor_checksum,
+            path=calibration_path,
+            checksum=checksum_file(calibration_path),
+            row_count=calibration_row_count,
+            feature_count=FeatureCount(len(request.feature_names)),
+            serialization_format=SerializationFormat.PARQUET,
+        ),
+        PooledScoreArtifact(
+            coordinate=request.coordinate,
+            partition_role=PartitionRole.EVALUATION,
+            checkpoint_round=request.checkpoint.round_number,
+            checkpoint_checksum=request.checkpoint.tensor_checksum,
+            path=evaluation_path,
+            checksum=checksum_file(evaluation_path),
+            row_count=evaluation_row_count,
+            feature_count=FeatureCount(len(request.feature_names)),
+            serialization_format=SerializationFormat.PARQUET,
+        ),
     )
-    evaluation = PooledScoreArtifact(
-        coordinate=request.coordinate,
-        partition_role=PartitionRole.EVALUATION,
-        checkpoint_round=request.checkpoint.round_number,
-        checkpoint_checksum=request.checkpoint.tensor_checksum,
-        path=evaluation_path,
-        checksum=checksum_file(evaluation_path),
-        row_count=evaluation_row_count,
-        feature_count=FeatureCount(len(request.feature_names)),
-        serialization_format=SerializationFormat.PARQUET,
-    )
-    return calibration, evaluation
 
 
 def _load_reused_scores(request: ScoreCentralizedReferenceRequest) -> CentralizedScoringResult:

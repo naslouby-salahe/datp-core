@@ -18,13 +18,14 @@ from datp_core.domain.enums import PartitionRole, PreprocessingFitScope, Process
 from datp_core.domain.errors import LeakageError
 from datp_core.domain.values import RowCount
 from datp_core.preprocessing.models import (
-    CentralizedFittedStatePublishSpec,
     FederatedFittedPreprocessingState,
     FittedPreprocessingState,
+    FittedStatePublishSpec,
+    PooledPreprocessingOwner,
     PooledPreprocessingResult,
     PreprocessedPartitionPaths,
     PreprocessingFitBatch,
-    PreprocessingPartitionSet,
+    PreprocessingPartitions,
     PreprocessingProtocol,
     PreprocessingPublishContext,
 )
@@ -35,11 +36,11 @@ from datp_core.preprocessing.validation import (
 )
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True, eq=False)
 class PooledPublishRequest:
     context: PreprocessingPublishContext
     fitted_estimator: TrustedScaler
-    partitions: PreprocessingPartitionSet
+    partitions: PreprocessingPartitions
 
 
 def fit_pooled_preprocessing(
@@ -79,23 +80,23 @@ def publish_pooled_preprocessing(request: PooledPublishRequest) -> PooledPreproc
         asset_paths=asset_paths,
     )
     state = centralized_fitted_state_after_publish(
-        CentralizedFittedStatePublishSpec(
+        FittedStatePublishSpec(
             protocol=context.protocol,
             estimator_path=branch_asset_path(result.coordinate_directory, ProcessedAssetName.STATE),
             fit_row_count=RowCount(request.partitions.require(PartitionRole.TRAIN).frame.height),
+            owner=PooledPreprocessingOwner.POOLED,
         )
     )
     roles = partition_roles(context.split_protocol_identity)
     paths_by_role = {role: branch_asset_path(result.coordinate_directory, asset_for_partition(role)) for role in roles}
-    paths = PreprocessedPartitionPaths(
-        train=paths_by_role[PartitionRole.TRAIN],
-        calibration=paths_by_role[PartitionRole.CALIBRATION],
-        evaluation=paths_by_role[PartitionRole.EVALUATION],
-        future_recalibration=paths_by_role.get(PartitionRole.FUTURE_RECALIBRATION),
-        static_reference_reserve=paths_by_role.get(PartitionRole.STATIC_REFERENCE_RESERVE),
-    )
     return PooledPreprocessingResult(
-        paths=paths,
+        paths=PreprocessedPartitionPaths(
+            train=paths_by_role[PartitionRole.TRAIN],
+            calibration=paths_by_role[PartitionRole.CALIBRATION],
+            evaluation=paths_by_role[PartitionRole.EVALUATION],
+            future_recalibration=paths_by_role.get(PartitionRole.FUTURE_RECALIBRATION),
+            static_reference_reserve=paths_by_role.get(PartitionRole.STATIC_REFERENCE_RESERVE),
+        ),
         fitted_state=state,
         publication_status=result.publication_status,
     )

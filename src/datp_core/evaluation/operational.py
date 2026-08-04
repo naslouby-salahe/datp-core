@@ -2,13 +2,12 @@
 
 from dataclasses import dataclass
 from enum import StrEnum
-from math import isfinite
 
 from datp_core.domain.enums import MetricId, WarningCode
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import Seed
-from datp_core.evaluation.metric_semantics import available, unavailable
-from datp_core.evaluation.models import AlertBurdenResult, MetricReason, MetricStatus
+from datp_core.domain.values import Ratio, Seed
+from datp_core.evaluation.metric_semantics import available, metric_value, unavailable
+from datp_core.evaluation.models import MetricAvailability, MetricReason, MetricStatus
 from datp_core.evaluation.traffic_rates import ValidatedTrafficRateEvidence, validate_traffic_rate_evidence
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.populations.models import ClientIdentity
@@ -27,11 +26,10 @@ class AlertBurdenDiagnostic:
     client: ClientIdentity
     coordinate: FederatedTrainingCoordinate
     training_seed: Seed
-    false_positive_rate: float
-    alerts_per_client_per_day: float | None
+    false_positive_rate: Ratio
+    metric: MetricAvailability
     suppression_reason: AlertBurdenSuppressionReason | None
     warning: WarningCode | None
-    result: AlertBurdenResult
 
     def __post_init__(self) -> None:
         if (
@@ -39,13 +37,17 @@ class AlertBurdenDiagnostic:
             or self.coordinate.training_seed != self.training_seed
         ):
             raise ScientificContractError("alert-burden coordinate must match client and training seed")
-        if not isfinite(self.false_positive_rate) or not 0 <= self.false_positive_rate <= 1:
-            raise ScientificContractError("alert burden requires a finite false-positive rate in [0, 1]")
-        is_available = self.result.alerts_per_client_per_day.status is MetricStatus.AVAILABLE
-        if is_available != (self.alerts_per_client_per_day is not None):
-            raise ScientificContractError("alert-burden availability must match its numeric value")
+        if self.metric.metric is not MetricId.ALERTS_PER_DAY:
+            raise ScientificContractError("alert-burden diagnostics require the alerts-per-day metric")
+        is_available = self.metric.status is MetricStatus.AVAILABLE
         if is_available == (self.suppression_reason is not None):
             raise ScientificContractError("alert burden must carry exactly one of a value or suppression reason")
+        if is_available != (self.warning is None):
+            raise ScientificContractError("suppressed alert burden requires an explicit warning")
+
+    @property
+    def alerts_per_client_per_day(self) -> float | None:
+        return metric_value(self.metric)
 
 
 def calculate_alert_burden(
@@ -57,12 +59,13 @@ def calculate_alert_burden(
     evidence: ValidatedTrafficRateEvidence | None,
 ) -> AlertBurdenDiagnostic:
     """Calculate FPR × benign decisions/client/day only for applicable valid evidence."""
+    fpr = Ratio(false_positive_rate)
     if evidence is None:
         return _suppressed(
             client,
             coordinate,
             training_seed,
-            false_positive_rate,
+            fpr,
             AlertBurdenSuppressionReason.NO_APPLICABLE_TRAFFIC_RATE_EVIDENCE,
         )
     validated = validate_traffic_rate_evidence(evidence)
@@ -71,7 +74,7 @@ def calculate_alert_burden(
             client,
             coordinate,
             training_seed,
-            false_positive_rate,
+            fpr,
             AlertBurdenSuppressionReason.POPULATION_MISMATCH,
         )
     if not validated.applicable_to_each_client:
@@ -79,23 +82,20 @@ def calculate_alert_burden(
             client,
             coordinate,
             training_seed,
-            false_positive_rate,
+            fpr,
             AlertBurdenSuppressionReason.NOT_PER_CLIENT_APPLICABLE,
         )
     return AlertBurdenDiagnostic(
         client=client,
         coordinate=coordinate,
         training_seed=training_seed,
-        false_positive_rate=false_positive_rate,
-        alerts_per_client_per_day=false_positive_rate * validated.rate_per_day.value,
+        false_positive_rate=fpr,
+        metric=available(
+            MetricId.ALERTS_PER_DAY,
+            fpr.value * validated.rate_per_day.value,
+        ),
         suppression_reason=None,
         warning=None,
-        result=AlertBurdenResult(
-            alerts_per_client_per_day=available(
-                MetricId.ALERTS_PER_DAY,
-                false_positive_rate * validated.rate_per_day.value,
-            )
-        ),
     )
 
 
@@ -103,7 +103,7 @@ def _suppressed(
     client: ClientIdentity,
     coordinate: FederatedTrainingCoordinate,
     training_seed: Seed,
-    false_positive_rate: float,
+    false_positive_rate: Ratio,
     reason: AlertBurdenSuppressionReason,
 ) -> AlertBurdenDiagnostic:
     return AlertBurdenDiagnostic(
@@ -111,14 +111,11 @@ def _suppressed(
         coordinate=coordinate,
         training_seed=training_seed,
         false_positive_rate=false_positive_rate,
-        alerts_per_client_per_day=None,
+        metric=unavailable(
+            MetricId.ALERTS_PER_DAY,
+            MetricStatus.SUPPRESSED,
+            MetricReason.MISSING_CAPABILITY,
+        ),
         suppression_reason=reason,
         warning=WarningCode.MISSING_TRAFFIC_RATE_EVIDENCE,
-        result=AlertBurdenResult(
-            alerts_per_client_per_day=unavailable(
-                MetricId.ALERTS_PER_DAY,
-                MetricStatus.SUPPRESSED,
-                MetricReason.MISSING_CAPABILITY,
-            )
-        ),
     )

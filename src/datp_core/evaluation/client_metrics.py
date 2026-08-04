@@ -7,7 +7,7 @@ import numpy as np
 
 from datp_core.domain.enums import ContractSubject, MetricId
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import ScoreValue
+from datp_core.domain.values import RowCount, ScoreValue
 from datp_core.evaluation.metric_semantics import available, unavailable
 from datp_core.evaluation.models import ConfusionCounts, MetricAvailability, MetricReason, MetricStatus
 from datp_core.populations.models import PopulationOutcomeLabel
@@ -34,7 +34,7 @@ def calculate_client_metrics(
         )
     if any(not isfinite(score.value) for score in scores):
         raise ScientificContractError("client evaluation scores must be finite", subject=ContractSubject.SCORES)
-    fpr = _rate(MetricId.FALSE_POSITIVE_RATE, confusion.false_positive, confusion.benign_denominator.value)
+    fpr = _rate(MetricId.FALSE_POSITIVE_RATE, confusion.false_positive, confusion.benign_denominator)
     tpr = _attack_rate(confusion)
     return (
         fpr,
@@ -45,10 +45,10 @@ def calculate_client_metrics(
     )
 
 
-def _rate(metric: MetricId, numerator: int, denominator: int) -> MetricAvailability:
-    if denominator == 0:
+def _rate(metric: MetricId, numerator: RowCount, denominator: RowCount) -> MetricAvailability:
+    if denominator.value == 0:
         return unavailable(metric, MetricStatus.UNAVAILABLE, MetricReason.EMPTY_BENIGN_DENOMINATOR, denominator=0)
-    return available(metric, numerator / denominator, denominator=denominator)
+    return available(metric, numerator.value / denominator.value, denominator=denominator.value)
 
 
 def _attack_rate(confusion: ConfusionCounts) -> MetricAvailability:
@@ -67,7 +67,11 @@ def _attack_rate(confusion: ConfusionCounts) -> MetricAvailability:
             MetricReason.EMPTY_ATTACK_DENOMINATOR,
             denominator=0,
         )
-    return available(MetricId.TRUE_POSITIVE_RATE, confusion.true_positive / denominator, denominator=denominator)
+    return available(
+        MetricId.TRUE_POSITIVE_RATE,
+        confusion.true_positive.value / denominator,
+        denominator=denominator,
+    )
 
 
 def _balanced_accuracy(fpr: MetricAvailability, tpr: MetricAvailability) -> MetricAvailability:
@@ -87,16 +91,20 @@ def _binary_macro_f1(confusion: ConfusionCounts) -> MetricAvailability:
             MetricStatus.UNAVAILABLE,
             MetricReason.INVALID_ATTACK_ASSIGNMENT,
         )
-    attack_denominator = 2 * confusion.true_positive + confusion.false_positive + confusion.false_negative
-    benign_denominator = 2 * confusion.true_negative + confusion.false_positive + confusion.false_negative
+    true_positive = confusion.true_positive.value
+    false_positive = confusion.false_positive.value
+    false_negative = confusion.false_negative.value
+    true_negative = confusion.true_negative.value
+    attack_denominator = 2 * true_positive + false_positive + false_negative
+    benign_denominator = 2 * true_negative + false_positive + false_negative
     if attack_denominator == 0 or benign_denominator == 0:
         return unavailable(
             MetricId.BINARY_MACRO_F1,
             MetricStatus.UNDEFINED,
             MetricReason.UNDEFINED_CLASS_F1,
         )
-    attack_f1 = 2.0 * confusion.true_positive / attack_denominator
-    benign_f1 = 2.0 * confusion.true_negative / benign_denominator
+    attack_f1 = 2.0 * true_positive / attack_denominator
+    benign_f1 = 2.0 * true_negative / benign_denominator
     return available(MetricId.BINARY_MACRO_F1, (attack_f1 + benign_f1) / 2.0)
 
 

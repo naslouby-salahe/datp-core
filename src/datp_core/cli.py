@@ -35,8 +35,12 @@ from datp_core.domain.values import (
 )
 from datp_core.evaluation.controls import FixedScoreEvidence
 from datp_core.evaluation.models import MetricStatus
-from datp_core.learning.federated.models import FederatedTrainingCoordinate, PreparedClientProvenance
-from datp_core.learning.federated.training import preprocessing_state_set_checksum
+from datp_core.learning.federated.models import (
+    ClientTrainingInput,
+    FederatedTrainingCoordinate,
+    PreparedClientProvenance,
+)
+from datp_core.learning.federated.training import FederatedTrainingRequest, preprocessing_state_set_checksum
 from datp_core.orchestration.stages.analyze import AnalyzeRequest, analyze_stage
 from datp_core.orchestration.stages.construct_federated_thresholds import (
     ConstructFederatedThresholdsRequest,
@@ -66,7 +70,7 @@ from datp_core.orchestration.stages.select_federated_checkpoint import (
     SelectFederatedCheckpointRequest,
     select_federated_checkpoint_stage,
 )
-from datp_core.orchestration.stages.train_federated import TrainFedAvgRequest, train_fedavg_stage
+from datp_core.orchestration.stages.train_federated import TrainFederatedRequest, train_federated_stage
 from datp_core.populations.capabilities import population_capabilities
 from datp_core.populations.catalogue import (
     PopulationConstructionRequest,
@@ -83,7 +87,7 @@ from datp_core.populations.models import (
     iid_condition,
 )
 from datp_core.populations.splits import split_membership
-from datp_core.preprocessing.models import ClientPreprocessPublication
+from datp_core.preprocessing.models import ClientPreprocessingResult
 from datp_core.protocols.calibration import CANONICAL_QUANTILE
 from datp_core.protocols.populations import DIRICHLET_CONCENTRATIONS
 from datp_core.protocols.runtime import DATA_ROOT, OUTPUTS_ROOT
@@ -183,7 +187,6 @@ def preprocess_federated(
             param_hint="--preprocessing-identity",
         )
 
-    condition = _controlled_partition_condition(partition_kind, concentration)
     result = preprocess_federated_stage(
         PreprocessFederatedRequest(
             population=population,
@@ -191,22 +194,20 @@ def preprocess_federated(
             split_protocol=split_protocol,
             preprocessing_identity=preprocessing_identity,
             data_root=DATA_ROOT,
-            dirichlet_condition=condition,
+            dirichlet_condition=_controlled_partition_condition(partition_kind, concentration),
             capture_timestamp_column=None,
         )
     )
     typer.echo(
         f"{result.stage.value} population={result.population.value} dataset={result.dataset.value} "
         f"seed={result.partition_seed.value} split={result.split_protocol.value} "
-        f"preprocessing={result.preprocessing_identity.value} "
-        f"clients={len(result.client_publications)} "
+        f"preprocessing={result.preprocessing_identity.value} clients={len(result.client_publications)} "
         f"published={result.published_count} reused={result.reused_count}"
     )
     for publication in result.client_publications:
         typer.echo(
-            f"  {publication.result.client_identity.value} {publication.result.publication_status.value} "
-            f"train={publication.train_row_count} "
-            f"calibration={publication.calibration_row_count} "
+            f"  {publication.client_identity.value} {publication.publication_status.value} "
+            f"train={publication.train_row_count} calibration={publication.calibration_row_count} "
             f"evaluation={publication.evaluation_row_count}"
         )
 
@@ -227,25 +228,21 @@ def preprocess_centralized_reference(
     ),
 ) -> None:
     """Construct partitions and publish centralized-reference processed assets under data/processed."""
-    condition = _controlled_partition_condition(partition_kind, concentration)
     result = preprocess_centralized_reference_population_stage(
         PreprocessCentralizedPopulationRequest(
             population=population,
             partition_seed=Seed(partition_seed),
             split_protocol=split_protocol,
             data_root=DATA_ROOT,
-            dirichlet_condition=condition,
+            dirichlet_condition=_controlled_partition_condition(partition_kind, concentration),
             capture_timestamp_column=None,
         )
     )
     typer.echo(
         f"{result.stage.value} population={result.population.value} dataset={result.dataset.value} "
-        f"seed={result.partition_seed.value} "
-        f"preprocessing={result.preprocessing_identity.value} "
-        f"status={result.publication_status.value} "
-        f"train={result.result.paths.train} "
-        f"calibration={result.result.paths.calibration} "
-        f"evaluation={result.result.paths.evaluation}"
+        f"seed={result.partition_seed.value} preprocessing={result.preprocessing_identity.value} "
+        f"status={result.publication_status.value} train={result.result.paths.train} "
+        f"calibration={result.result.paths.calibration} evaluation={result.result.paths.evaluation}"
     )
 
 
@@ -334,8 +331,8 @@ def _prepare_confirmatory_seed(training_seed: Seed) -> ConfirmatorySeedContext:
     state_set_checksum = preprocessing_state_set_checksum(
         tuple(
             PreparedClientProvenance(
-                client=ClientIdentity(population, item.result.client_identity.value, identity_kind),
-                preprocessing_checksum=item.result.fitted_state.estimator_checksum,
+                client=ClientIdentity(population, item.client_identity.value, identity_kind),
+                preprocessing_checksum=item.fitted_state.estimator_checksum,
             )
             for item in preprocessing.client_publications
         )
@@ -351,20 +348,29 @@ def _prepare_confirmatory_seed(training_seed: Seed) -> ConfirmatorySeedContext:
 
 
 def _score_confirmatory_seed(context: ConfirmatorySeedContext) -> ScoreArtifactManifest:
-    training = train_fedavg_stage(
-        TrainFedAvgRequest(
-            context.coordinate,
-            context.preprocessing.client_publications,
-            ClientCount(len(context.construction.manifest.document.accepted_clients)),
-            NBAIOT_AUTOENCODER,
-            FEDAVG_TRAINING_PROTOCOL,
-            CHECKPOINT_PROTOCOL,
-            context.coordinate.training_seed,
-            BATCH_SIZE,
-            LEARNING_RATE,
-            context.split_manifest.assignment_checksum,
-            context.training_directory,
-            False,
+    feature_names = FeatureNameSequence(
+        tuple(FeatureName(name) for name in dataset_binding(DatasetId.NBAIOT).schema.feature_columns)
+    )
+    training = train_federated_stage(
+        TrainFederatedRequest(
+            request=FederatedTrainingRequest(
+                coordinate=context.coordinate,
+                clients=_client_training_inputs(
+                    context.preprocessing.client_publications,
+                    context.construction.manifest.clients,
+                    feature_names,
+                ),
+                population_client_count=ClientCount(len(context.construction.manifest.document.accepted_clients)),
+                autoencoder=NBAIOT_AUTOENCODER,
+                training_protocol=FEDAVG_TRAINING_PROTOCOL,
+                checkpoint_protocol=CHECKPOINT_PROTOCOL,
+                training_seed=context.coordinate.training_seed,
+                batch_size=BATCH_SIZE,
+                learning_rate=LEARNING_RATE,
+                split_manifest_checksum=context.split_manifest.assignment_checksum,
+                output_directory=context.training_directory,
+            ),
+            overwrite=False,
         )
     )
     selected = select_federated_checkpoint_stage(
@@ -383,9 +389,7 @@ def _score_confirmatory_seed(context: ConfirmatorySeedContext) -> ScoreArtifactM
         ScoreFederatedRequest(
             selected,
             NBAIOT_AUTOENCODER,
-            FeatureNameSequence(
-                tuple(FeatureName(name) for name in dataset_binding(DatasetId.NBAIOT).schema.feature_columns)
-            ),
+            feature_names,
             _client_scoring_inputs(context.preprocessing.client_publications, context.construction.manifest.clients),
             BATCH_SIZE,
             context.training_directory / "scores",
@@ -471,14 +475,30 @@ def _eligible_calibration_scores(score_manifest: ScoreArtifactManifest) -> tuple
     )
 
 
+def _client_training_inputs(
+    publications: tuple[ClientPreprocessingResult, ...],
+    clients: tuple[ClientIdentity, ...],
+    feature_names: FeatureNameSequence,
+) -> tuple[ClientTrainingInput, ...]:
+    return tuple(
+        ClientTrainingInput(
+            client=_client_with_id(clients, publication.client_identity.value),
+            training_features=pl.read_parquet(publication.paths.train),
+            feature_names=feature_names,
+            preprocessing_state=publication.fitted_state,
+        )
+        for publication in publications
+    )
+
+
 def _client_scoring_inputs(
-    publications: tuple[ClientPreprocessPublication, ...], clients: tuple[ClientIdentity, ...]
+    publications: tuple[ClientPreprocessingResult, ...], clients: tuple[ClientIdentity, ...]
 ) -> tuple[ClientScoringInput, ...]:
     return tuple(
         ClientScoringInput(
-            _client_with_id(clients, publication.result.client_identity.value),
-            pl.read_parquet(publication.result.paths.calibration),
-            pl.read_parquet(publication.result.paths.evaluation),
+            _client_with_id(clients, publication.client_identity.value),
+            pl.read_parquet(publication.paths.calibration),
+            pl.read_parquet(publication.paths.evaluation),
         )
         for publication in publications
     )
@@ -545,9 +565,7 @@ def _deserialize_coordinate(data: dict) -> FederatedTrainingCoordinate:
 
 
 def _deserialize_model_coefficient(value: float | None) -> ProximalCoefficient | None:
-    if value is None:
-        return None
-    return ProximalCoefficient(value)
+    return None if value is None else ProximalCoefficient(value)
 
 
 def _population_metric(document: dict, metric: MetricId) -> MetricValue:
@@ -555,9 +573,7 @@ def _population_metric(document: dict, metric: MetricId) -> MetricValue:
     result = next((item for item in population["metrics"] if item["metric"] == metric.value), None)
     if result is None:
         raise ScientificContractError(f"required confirmatory metric is missing: {metric.value}")
-    if result["status"] != MetricStatus.AVAILABLE.value:
-        raise ScientificContractError(f"required confirmatory metric is unavailable: {metric.value}")
-    if result["value"] is None:
+    if result["status"] != MetricStatus.AVAILABLE.value or result["value"] is None:
         raise ScientificContractError(f"required confirmatory metric is unavailable: {metric.value}")
     return MetricValue(result["value"])
 
@@ -617,10 +633,7 @@ def _controlled_partition_condition(
                 return dirichlet_condition(DirichletConcentration(concentration))
             except ValueError as error:
                 raise typer.BadParameter(str(error), param_hint="--concentration") from error
-    raise ScientificContractError(
-        "unsupported controlled partition kind",
-        subject=partition_kind,
-    )
+    raise ScientificContractError("unsupported controlled partition kind", subject=partition_kind)
 
 
 if __name__ == "__main__":

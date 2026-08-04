@@ -4,7 +4,7 @@ from hypothesis import strategies as st
 from tests.unit.learning.federated.helpers import client_identity, fedavg_coordinate
 
 from datp_core.domain.enums import EvaluationCohort, EvidenceRole, FederatedThresholdMethod, MetricId
-from datp_core.domain.values import Checksum, ScoreValue, Seed, ThresholdValue
+from datp_core.domain.values import Checksum, RowCount, ScoreValue, Seed, ThresholdValue
 from datp_core.evaluation.client_metrics import calculate_client_metrics
 from datp_core.evaluation.models import ClientMetricResult, ConfusionCounts
 from datp_core.evaluation.population_metrics import calculate_population_metrics
@@ -34,7 +34,13 @@ def test_population_fpr_aggregates_stay_within_the_client_fpr_envelope(false_pos
 def _client_result(index: int, false_positive: int) -> ClientMetricResult:
     coordinate = fedavg_coordinate(Seed(9))
     client = client_identity(f"client_{index}")
-    confusion = ConfusionCounts(10 - false_positive, false_positive, 1, 0, True)
+    confusion = ConfusionCounts(
+        true_negative=RowCount(10 - false_positive),
+        false_positive=RowCount(false_positive),
+        true_positive=RowCount(1),
+        false_negative=RowCount(0),
+        attack_assignment_valid=True,
+    )
     benign_scores = tuple(ScoreValue(0.1) for _ in range(10 - false_positive)) + tuple(
         ScoreValue(0.9) for _ in range(false_positive)
     )

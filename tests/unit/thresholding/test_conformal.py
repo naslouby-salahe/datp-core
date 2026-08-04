@@ -2,7 +2,7 @@ import pytest
 from tests.unit.thresholding.helpers import client_scores
 
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import Quantile
+from datp_core.domain.values import ConformalRankIndex, Quantile
 from datp_core.thresholding.conformal import construct_local_conformal_threshold
 
 QUANTILE = Quantile(0.95)
@@ -15,7 +15,7 @@ def test_construct_local_conformal_threshold_assigns_sufficient_clients() -> Non
     assert len(result.assignments) == 1
     assert not result.unavailable_clients
     assignment = result.assignments[0]
-    assert assignment.rank_index == 96
+    assert assignment.rank_index == ConformalRankIndex(96)
     assert assignment.threshold.value == 96.0
 
 

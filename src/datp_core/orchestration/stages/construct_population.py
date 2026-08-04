@@ -4,17 +4,15 @@ from dataclasses import dataclass
 from json import dumps, loads
 from pathlib import Path
 from shutil import rmtree
+from typing import ClassVar
 
 import polars as pl
 
-from datp_core.artifacts.store import AtomicPublication, publish_atomically
+from datp_core.artifacts.store import publish_atomically
 from datp_core.domain.enums import PopulationId, PublicationStatus, SplitProtocolId, StageOperationId
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import Checksum, Seed, checksum_file, checksum_text
-from datp_core.experiments.models import (
-    ExternalTemporalExecutionIdentity,
-    require_execution_identity,
-)
+from datp_core.domain.values import Checksum, Seed, checksum_text
+from datp_core.experiments.models import ExternalTemporalExecutionIdentity, require_execution_identity
 from datp_core.populations.ciciot_file_clients import (
     build_ciciot_file_clients,
     ciciot_client_eligibility_evidence,
@@ -44,9 +42,20 @@ class ConstructPopulationRequest:
         require_execution_identity(self.execution_identity, self.population)
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True, eq=False)
+class _PopulationArtifacts:
+    population_manifest: PopulationManifest
+    membership: pl.DataFrame
+    chronology: ChronologicalPartitionDiagnosticsDocument | None
+    matched_static_reference_manifest: PopulationManifest | None
+    matched_static_reference_membership: pl.DataFrame | None
+    ciciot_excluded_rows: pl.DataFrame | None = None
+    ciciot_client_eligibility: pl.DataFrame | None = None
+
+
+@dataclass(slots=True, eq=False)
 class ConstructPopulationResult:
-    stage: StageOperationId
+    stage: ClassVar[StageOperationId] = StageOperationId.CONSTRUCT_POPULATION
     publication_status: PublicationStatus
     population_manifest: PopulationManifest
     membership: pl.DataFrame
@@ -60,89 +69,80 @@ class ConstructPopulationResult:
 
 def construct_population_stage(request: ConstructPopulationRequest) -> ConstructPopulationResult:
     """Build only declared external or temporal populations; confirmatory dispatch is excluded."""
-    result = _build(request)
-    payload = _manifest_payload(result, request.execution_identity)
+    artifacts = _build(request)
+    payload = _manifest_payload(artifacts, request.execution_identity)
     digest = checksum_text(payload)
 
-    def write(temporary: Path) -> None:
+    def write(temporary: Path) -> _PopulationArtifacts:
         (temporary / "execution_identity.json").write_text(
             dumps(request.execution_identity.serialize(), indent=2) + "\n", encoding="utf-8"
         )
         (temporary / "population_manifest.json").write_text(
-            result.population_manifest.document.model_dump_json(indent=2) + "\n",
+            artifacts.population_manifest.document.model_dump_json(indent=2) + "\n",
             encoding="utf-8",
         )
-        result.membership.write_parquet(temporary / "membership.parquet")
-        if result.chronology is not None:
+        artifacts.membership.write_parquet(temporary / "membership.parquet")
+        if artifacts.chronology is not None:
             (temporary / "chronology.json").write_text(
-                result.chronology.model_dump_json(indent=2) + "\n", encoding="utf-8"
+                artifacts.chronology.model_dump_json(indent=2) + "\n", encoding="utf-8"
             )
         if (
-            result.matched_static_reference_manifest is not None
-            and result.matched_static_reference_membership is not None
+            artifacts.matched_static_reference_manifest is not None
+            and artifacts.matched_static_reference_membership is not None
         ):
             (temporary / "matched_static_reference_manifest.json").write_text(
-                result.matched_static_reference_manifest.document.model_dump_json(indent=2) + "\n", encoding="utf-8"
+                artifacts.matched_static_reference_manifest.document.model_dump_json(indent=2) + "\n",
+                encoding="utf-8",
             )
-            result.matched_static_reference_membership.write_parquet(
+            artifacts.matched_static_reference_membership.write_parquet(
                 temporary / "matched_static_reference_membership.parquet"
             )
-        if result.ciciot_excluded_rows is not None and result.ciciot_client_eligibility is not None:
-            result.ciciot_excluded_rows.write_parquet(temporary / "ciciot_excluded_rows.parquet")
-            result.ciciot_client_eligibility.write_parquet(temporary / "ciciot_client_eligibility.parquet")
+        if artifacts.ciciot_excluded_rows is not None and artifacts.ciciot_client_eligibility is not None:
+            artifacts.ciciot_excluded_rows.write_parquet(temporary / "ciciot_excluded_rows.parquet")
+            artifacts.ciciot_client_eligibility.write_parquet(temporary / "ciciot_client_eligibility.parquet")
         (temporary / "COMPLETE").write_text(digest.value, encoding="utf-8")
+        return artifacts
 
-    reused = publish_atomically(
-        AtomicPublication(
-            request.output_directory,
-            request.overwrite,
-            lambda directory: _is_reusable(directory, result, request.execution_identity, digest),
-            write,
-            rmtree,
-        )
+    outcome = publish_atomically(
+        target=request.output_directory,
+        overwrite=request.overwrite,
+        is_reusable=lambda directory: _is_reusable(directory, artifacts, request.execution_identity, digest),
+        write=write,
+        reusable_value=lambda _directory: artifacts,
+        remove_target=rmtree,
     )
+    value = outcome.value
     return ConstructPopulationResult(
-        StageOperationId.CONSTRUCT_POPULATION,
-        PublicationStatus.REUSED if reused else PublicationStatus.PUBLISHED,
-        result.population_manifest,
-        result.membership,
-        result.chronology,
-        result.matched_static_reference_manifest,
-        result.matched_static_reference_membership,
-        checksum_file(request.output_directory / "COMPLETE"),
+        publication_status=outcome.status,
+        population_manifest=value.population_manifest,
+        membership=value.membership,
+        chronology=value.chronology,
+        matched_static_reference_manifest=value.matched_static_reference_manifest,
+        matched_static_reference_membership=value.matched_static_reference_membership,
+        complete_digest=outcome.complete_digest,
+        ciciot_excluded_rows=value.ciciot_excluded_rows,
+        ciciot_client_eligibility=value.ciciot_client_eligibility,
     )
 
 
-def _build(request: ConstructPopulationRequest) -> ConstructPopulationResult:
+def _build(request: ConstructPopulationRequest) -> _PopulationArtifacts:
     match request.population:
         case PopulationId.EDGE_SENSOR_GROUPS:
             manifest, membership = build_edge_sensor_groups(
                 request.canonical_root, partition_seed=request.partition_seed, split_protocol=request.split_protocol
             )
-            return ConstructPopulationResult(
-                StageOperationId.CONSTRUCT_POPULATION,
-                PublicationStatus.PUBLISHED,
-                manifest,
-                membership,
-                None,
-                None,
-                None,
-                checksum_text("unpublished"),
-            )
+            return _PopulationArtifacts(manifest, membership, None, None, None)
         case PopulationId.CICIOT_FILE_CLIENTS:
             manifest, membership = build_ciciot_file_clients(
                 request.canonical_root, partition_seed=request.partition_seed, split_protocol=request.split_protocol
             )
             excluded_rows = ciciot_excluded_row_evidence(request.canonical_root)
-            return ConstructPopulationResult(
-                StageOperationId.CONSTRUCT_POPULATION,
-                PublicationStatus.PUBLISHED,
+            return _PopulationArtifacts(
                 manifest,
                 membership,
                 None,
                 None,
                 None,
-                checksum_text("unpublished"),
                 excluded_rows,
                 ciciot_client_eligibility_evidence(excluded_rows),
             )
@@ -150,37 +150,28 @@ def _build(request: ConstructPopulationRequest) -> ConstructPopulationResult:
             manifest, membership, chronology, static_manifest, static_membership = build_edge_temporal_groups(
                 request.canonical_root, partition_seed=request.partition_seed, split_protocol=request.split_protocol
             )
-            return ConstructPopulationResult(
-                StageOperationId.CONSTRUCT_POPULATION,
-                PublicationStatus.PUBLISHED,
-                manifest,
-                membership,
-                chronology,
-                static_manifest,
-                static_membership,
-                checksum_text("unpublished"),
-            )
+            return _PopulationArtifacts(manifest, membership, chronology, static_manifest, static_membership)
         case _:
             raise ScientificContractError(
                 "construction requires an external or temporal population", subject=request.population
             )
 
 
-def _manifest_payload(result: ConstructPopulationResult, identity: ExternalTemporalExecutionIdentity) -> str:
+def _manifest_payload(artifacts: _PopulationArtifacts, identity: ExternalTemporalExecutionIdentity) -> str:
     sections = [
         dumps(identity.serialize(), indent=2),
-        result.population_manifest.document.model_dump_json(indent=2),
+        artifacts.population_manifest.document.model_dump_json(indent=2),
     ]
-    if result.chronology is not None:
-        sections.append(result.chronology.model_dump_json(indent=2))
-    if result.matched_static_reference_manifest is not None:
-        sections.append(result.matched_static_reference_manifest.document.model_dump_json(indent=2))
+    if artifacts.chronology is not None:
+        sections.append(artifacts.chronology.model_dump_json(indent=2))
+    if artifacts.matched_static_reference_manifest is not None:
+        sections.append(artifacts.matched_static_reference_manifest.document.model_dump_json(indent=2))
     return "\n".join(sections) + "\n"
 
 
 def _is_reusable(
     directory: Path,
-    expected: ConstructPopulationResult,
+    expected: _PopulationArtifacts,
     identity: ExternalTemporalExecutionIdentity,
     digest: Checksum,
 ) -> bool:
@@ -211,7 +202,7 @@ def _read_execution_identity(path: Path) -> dict:
 
 def _matches_population_artifacts(
     directory: Path,
-    expected: ConstructPopulationResult,
+    expected: _PopulationArtifacts,
     persisted: PopulationManifestDocument,
     membership: Path,
 ) -> bool:
@@ -226,7 +217,7 @@ def _matches_population_artifacts(
     return _matches_static_reference(directory, expected.matched_static_reference_manifest)
 
 
-def _matches_ciciot_evidence(directory: Path, expected: ConstructPopulationResult) -> bool:
+def _matches_ciciot_evidence(directory: Path, expected: _PopulationArtifacts) -> bool:
     if expected.ciciot_excluded_rows is None or expected.ciciot_client_eligibility is None:
         return True
     try:

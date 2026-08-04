@@ -9,7 +9,6 @@ import polars as pl
 from datp_core.domain.enums import (
     ContractSubject,
     ControlledPartitionKind,
-    DatasetId,
     EvidenceRole,
     PartitionRole,
     PopulationId,
@@ -59,12 +58,15 @@ class PopulationBinding:
     construct: Callable[["PopulationConstructionRequest"], "PopulationConstructionResult"]
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True, eq=False)
 class PopulationConstructionResult:
-    population: PopulationId
     manifest: PopulationManifest
     membership: pl.DataFrame
     diagnostics: DirichletPartitionDiagnosticsDocument | ChronologicalPartitionDiagnosticsDocument | None
+
+    @property
+    def population(self) -> PopulationId:
+        return self.manifest.document.population
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,14 +81,11 @@ class PopulationConstructionRequest:
 @dataclass(frozen=True, slots=True)
 class PreprocessingHandoffRequest:
     construction: PopulationConstructionResult
-    partition_seed: Seed
-    split_protocol: SplitProtocolId
-    dataset: DatasetId
     deployment_fallback_client_ids: frozenset[str]
     capture_timestamp_column: str | None = None
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True, eq=False)
 class PreprocessingHandoff:
     """Typed boundary from populations/splits into preprocessing."""
 
@@ -141,14 +140,14 @@ def _construct_nbaiot_natural(request: PopulationConstructionRequest) -> Populat
     manifest, membership = build_nbaiot_natural_devices(
         request.canonical_root, partition_seed=request.partition_seed, split_protocol=request.split_protocol
     )
-    return PopulationConstructionResult(request.population_id, manifest, membership, None)
+    return PopulationConstructionResult(manifest, membership, None)
 
 
 def _construct_ciciot_file_clients(request: PopulationConstructionRequest) -> PopulationConstructionResult:
     manifest, membership = build_ciciot_file_clients(
         request.canonical_root, partition_seed=request.partition_seed, split_protocol=request.split_protocol
     )
-    return PopulationConstructionResult(request.population_id, manifest, membership, None)
+    return PopulationConstructionResult(manifest, membership, None)
 
 
 def _construct_nbaiot_dirichlet(request: PopulationConstructionRequest) -> PopulationConstructionResult:
@@ -161,21 +160,21 @@ def _construct_nbaiot_dirichlet(request: PopulationConstructionRequest) -> Popul
         condition=condition,
         split_protocol=request.split_protocol,
     )
-    return PopulationConstructionResult(request.population_id, manifest, membership, diagnostics)
+    return PopulationConstructionResult(manifest, membership, diagnostics)
 
 
 def _construct_edge_sensor_groups(request: PopulationConstructionRequest) -> PopulationConstructionResult:
     manifest, membership = build_edge_sensor_groups(
         request.canonical_root, partition_seed=request.partition_seed, split_protocol=request.split_protocol
     )
-    return PopulationConstructionResult(request.population_id, manifest, membership, None)
+    return PopulationConstructionResult(manifest, membership, None)
 
 
 def _construct_edge_temporal_groups(request: PopulationConstructionRequest) -> PopulationConstructionResult:
     manifest, membership, diagnostics, _, _ = build_edge_temporal_groups(
         request.canonical_root, partition_seed=request.partition_seed, split_protocol=request.split_protocol
     )
-    return PopulationConstructionResult(request.population_id, manifest, membership, diagnostics)
+    return PopulationConstructionResult(manifest, membership, diagnostics)
 
 
 _POPULATION_BINDINGS: dict[PopulationId, PopulationBinding] = {
@@ -219,16 +218,13 @@ _POPULATION_BINDINGS: dict[PopulationId, PopulationBinding] = {
 
 def build_preprocessing_handoff(request: PreprocessingHandoffRequest) -> PreprocessingHandoff:
     construction = request.construction
-    partition_seed = request.partition_seed
-    split_protocol = request.split_protocol
-    dataset = request.dataset
-    capture_timestamp_column = request.capture_timestamp_column
+    document = construction.manifest.document
     membership = construction.membership
-    candidate_clients = construction.manifest.document.candidate_clients
+    candidate_clients = document.candidate_clients
     _validate_deployment_fallback_clients(candidate_clients, request.deployment_fallback_client_ids)
-    role_col = PopulationFrameColumn.PARTITION_ROLE
+    role_column = PopulationFrameColumn.PARTITION_ROLE
     if membership.height == 0:
-        empty_assignments = membership.clear().with_columns(pl.lit(None, dtype=pl.String).alias(role_col))
+        assignments = membership.clear().with_columns(pl.lit(None, dtype=pl.String).alias(role_column))
         counts = tuple(
             ClientPartitionCounts(
                 client_id=client_id,
@@ -240,25 +236,28 @@ def build_preprocessing_handoff(request: PreprocessingHandoffRequest) -> Preproc
             )
             for client_id in candidate_clients
         )
-        return PreprocessingHandoff(construction.manifest, membership, empty_assignments, counts)
-
-    assignments, _split_manifest = split_membership(
+        return PreprocessingHandoff(construction.manifest, membership, assignments, counts)
+    assignments, _ = split_membership(
         SplitConstructionRequest(
             membership=membership,
-            population=construction.population,
-            dataset=dataset,
-            partition_seed=partition_seed,
-            split_protocol=split_protocol,
-            population_manifest_checksum=construction.manifest.document.membership_checksum,
-            capture_timestamp_column=capture_timestamp_column,
+            population=document.population,
+            dataset=document.dataset,
+            partition_seed=document.partition_seed,
+            split_protocol=document.split_protocol,
+            population_manifest_checksum=document.membership_checksum,
+            capture_timestamp_column=request.capture_timestamp_column,
         )
     )
-    counts = _client_partition_counts(
+    return PreprocessingHandoff(
+        construction.manifest,
+        membership,
         assignments,
-        candidate_clients,
-        deployment_fallback_client_ids=request.deployment_fallback_client_ids,
+        _client_partition_counts(
+            assignments,
+            candidate_clients,
+            deployment_fallback_client_ids=request.deployment_fallback_client_ids,
+        ),
     )
-    return PreprocessingHandoff(construction.manifest, membership, assignments, counts)
 
 
 def join_handoff_with_canonical_features(
@@ -266,7 +265,6 @@ def join_handoff_with_canonical_features(
     handoff: PreprocessingHandoff,
     feature_names: FeatureNameSequence,
 ) -> pl.DataFrame:
-    """Join split assignments to canonical feature columns for preprocess publication."""
     assignments = handoff.assignments
     if assignments.height == 0:
         raise ScientificContractError(
@@ -292,8 +290,7 @@ def _validate_deployment_fallback_clients(
     candidate_clients: tuple[str, ...],
     deployment_fallback_client_ids: frozenset[str],
 ) -> None:
-    candidates = frozenset(candidate_clients)
-    unknown = deployment_fallback_client_ids - candidates
+    unknown = deployment_fallback_client_ids - frozenset(candidate_clients)
     if unknown:
         raise ScientificContractError(
             "deployment-fallback client ids must be subset of population candidate clients",
@@ -307,33 +304,49 @@ def _client_partition_counts(
     *,
     deployment_fallback_client_ids: frozenset[str],
 ) -> tuple[ClientPartitionCounts, ...]:
-    client_col = PopulationFrameColumn.CLIENT_ID
-    role_col = PopulationFrameColumn.PARTITION_ROLE
-    outcome_col = PopulationFrameColumn.OUTCOME_LABEL
-    cal_count = CohortAggregationColumn.BENIGN_CALIBRATION_COUNT
-    eval_benign_count = CohortAggregationColumn.BENIGN_EVALUATION_COUNT
-    attack_count = CohortAggregationColumn.ATTACK_EVALUATION_COUNT
-    cal_benign = (pl.col(role_col) == PartitionRole.CALIBRATION) & (
-        pl.col(outcome_col) == PopulationOutcomeLabel.BENIGN
+    client_column = PopulationFrameColumn.CLIENT_ID
+    role_column = PopulationFrameColumn.PARTITION_ROLE
+    outcome_column = PopulationFrameColumn.OUTCOME_LABEL
+    calibration_count = CohortAggregationColumn.BENIGN_CALIBRATION_COUNT
+    benign_evaluation_count = CohortAggregationColumn.BENIGN_EVALUATION_COUNT
+    attack_evaluation_count = CohortAggregationColumn.ATTACK_EVALUATION_COUNT
+    summary = assignments.group_by(client_column).agg(
+        pl.col(role_column)
+        .filter(
+            (pl.col(role_column) == PartitionRole.CALIBRATION)
+            & (pl.col(outcome_column) == PopulationOutcomeLabel.BENIGN)
+        )
+        .len()
+        .alias(calibration_count),
+        pl.col(role_column)
+        .filter(
+            (pl.col(role_column) == PartitionRole.EVALUATION)
+            & (pl.col(outcome_column) == PopulationOutcomeLabel.BENIGN)
+        )
+        .len()
+        .alias(benign_evaluation_count),
+        pl.col(role_column)
+        .filter(
+            (pl.col(role_column) == PartitionRole.EVALUATION)
+            & (pl.col(outcome_column) == PopulationOutcomeLabel.ATTACK)
+        )
+        .len()
+        .alias(attack_evaluation_count),
     )
-    eval_benign = (pl.col(role_col) == PartitionRole.EVALUATION) & (
-        pl.col(outcome_col) == PopulationOutcomeLabel.BENIGN
+    joined = (
+        pl.DataFrame({client_column.value: list(candidate_clients)})
+        .join(
+            summary,
+            on=client_column.value,
+            how="left",
+        )
+        .with_columns(
+            pl.col(calibration_count).fill_null(0),
+            pl.col(benign_evaluation_count).fill_null(0),
+            pl.col(attack_evaluation_count).fill_null(0),
+        )
     )
-    eval_attack = (pl.col(role_col) == PartitionRole.EVALUATION) & (
-        pl.col(outcome_col) == PopulationOutcomeLabel.ATTACK
-    )
-    summary = assignments.group_by(client_col).agg(
-        pl.col(role_col).filter(cal_benign).len().alias(cal_count),
-        pl.col(role_col).filter(eval_benign).len().alias(eval_benign_count),
-        pl.col(role_col).filter(eval_attack).len().alias(attack_count),
-    )
-    candidates = pl.DataFrame({client_col.value: list(candidate_clients)})
-    joined = candidates.join(summary, on=client_col.value, how="left").with_columns(
-        pl.col(cal_count).fill_null(0),
-        pl.col(eval_benign_count).fill_null(0),
-        pl.col(attack_count).fill_null(0),
-    )
-    accepted = frozenset(assignments.get_column(client_col).unique().to_list())
+    accepted = frozenset(assignments.get_column(client_column).unique().to_list())
     return tuple(
         ClientPartitionCounts(
             client_id=str(row[0]),

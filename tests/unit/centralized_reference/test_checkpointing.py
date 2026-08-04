@@ -4,7 +4,6 @@ import pytest
 from tests.unit.centralized_reference.helpers import AUTOENCODER, CHECKPOINT, require_cuda, run_miniature_training
 
 from datp_core.centralized_reference.checkpointing import (
-    FederatedCheckpointMarker,
     reject_federated_checkpoint,
     retain_centralized_checkpoint_candidates,
     select_centralized_checkpoint,
@@ -58,6 +57,6 @@ def test_selection_rejects_held_out_metrics(tmp_path: Path) -> None:
         )
 
 
-def test_rejects_federated_checkpoint_marker(tmp_path: Path) -> None:
+def test_rejects_federated_checkpoint_identity() -> None:
     with pytest.raises(LeakageError, match="federated checkpoint"):
-        reject_federated_checkpoint(FederatedCheckpointMarker("fedavg", tmp_path / "model.pt"))
+        reject_federated_checkpoint("fedavg")

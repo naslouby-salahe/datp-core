@@ -4,7 +4,7 @@ import pytest
 
 from datp_core.domain.enums import SplitProtocolId
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import Seed
+from datp_core.domain.values import NonNegativeIntegerValue, Seed
 from datp_core.populations.edge_temporal_groups import build_edge_temporal_groups
 from datp_core.populations.models import PopulationFeasibilityStatus
 
@@ -16,7 +16,7 @@ def test_temporal_population_excludes_invalid_chronology(edge_canonical_root: Pa
         split_protocol=SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE,
     )
     assert manifest.document.feasibility_status is PopulationFeasibilityStatus.INFEASIBLE
-    assert diagnostics.observed_eligible_group_count == 0
+    assert diagnostics.observed_eligible_group_count == NonNegativeIntegerValue(0)
     assert "Modbus" not in diagnostics.eligible_group_ids
     assert membership.height == 0
     assert static_membership.height == 0
@@ -29,7 +29,7 @@ def test_temporal_population_accepts_only_verified_groups(edge_temporal_eligible
         partition_seed=Seed(1),
         split_protocol=SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE,
     )
-    assert diagnostics.observed_eligible_group_count == 9
+    assert diagnostics.observed_eligible_group_count == NonNegativeIntegerValue(9)
     assert "Modbus" not in manifest.document.accepted_clients
     assert manifest.document.feasibility_status is PopulationFeasibilityStatus.FEASIBLE
     assert membership.get_column("client_id").n_unique() == 9

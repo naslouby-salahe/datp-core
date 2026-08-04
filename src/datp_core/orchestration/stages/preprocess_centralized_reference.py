@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import ClassVar
 
 from datp_core.artifacts.coordinates import canonical_root_under
 from datp_core.centralized_reference.preprocessing import (
@@ -39,7 +40,7 @@ from datp_core.preprocessing.models import (
     SCIENTIFIC_CENTRALIZED_PREPROCESSING_METHOD,
     PooledPreprocessingResult,
     PreprocessingFitBatch,
-    PreprocessingPartitionSet,
+    PreprocessingPartitions,
     PreprocessingProtocol,
     PreprocessingPublishContext,
     build_preprocessing_protocol,
@@ -47,10 +48,10 @@ from datp_core.preprocessing.models import (
 from datp_core.preprocessing.validation import extract_partitions
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True, eq=False)
 class PreprocessCentralizedReferenceRequest:
     dataset_context: PreprocessingPublishContext
-    partitions: PreprocessingPartitionSet
+    partitions: PreprocessingPartitions
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,7 +66,7 @@ class PreprocessCentralizedPopulationRequest:
 
 @dataclass(frozen=True, slots=True)
 class PreprocessCentralizedReferenceResult:
-    stage: StageOperationId
+    stage: ClassVar[StageOperationId] = StageOperationId.PREPROCESS_CENTRALIZED_REFERENCE
     result: PooledPreprocessingResult
     population: PopulationId
     partition_seed: Seed
@@ -84,17 +85,14 @@ def preprocess_centralized_reference_stage(
             subject=context.protocol.identity,
         )
     train_partition = request.partitions.require(PartitionRole.TRAIN)
-    feature_names = context.protocol.input_feature_names
-    matrix = train_partition.frame.select(list(feature_names)).to_numpy()
     fitted = fit_pooled_preprocessing(
         context.protocol,
         PreprocessingFitBatch(
-            training_matrix=matrix,
+            training_matrix=train_partition.frame.select(list(context.protocol.input_feature_names)).to_numpy(),
             training_row_ids=train_partition.row_ids,
             training_labels=train_partition.outcome_labels,
         ),
     )
-
     published = publish_pooled_preprocessing(
         PooledPublishRequest(
             context=context,
@@ -104,7 +102,6 @@ def preprocess_centralized_reference_stage(
     )
     reject_federated_state_for_pooled(published.fitted_state)
     return PreprocessCentralizedReferenceResult(
-        stage=StageOperationId.PREPROCESS_CENTRALIZED_REFERENCE,
         result=published,
         population=context.population,
         partition_seed=context.partition_seed,
@@ -123,8 +120,7 @@ def preprocess_centralized_reference_population_stage(
             "temporal split preprocessing requires future_recalibration assets not yet in the core publish set",
             subject=request.split_protocol,
         )
-    binding = resolve_population(request.population)
-    dataset = binding.declaration.dataset
+    dataset = resolve_population(request.population).declaration.dataset
     canonical_root = canonical_root_under(request.data_root, dataset)
     require_canonical_publication_complete(canonical_root, dataset, ContractSubject.PREPROCESSING)
     construction = construct_population(
@@ -139,9 +135,6 @@ def preprocess_centralized_reference_population_stage(
     handoff = build_preprocessing_handoff(
         PreprocessingHandoffRequest(
             construction=construction,
-            partition_seed=request.partition_seed,
-            split_protocol=request.split_protocol,
-            dataset=dataset,
             deployment_fallback_client_ids=frozenset(),
             capture_timestamp_column=request.capture_timestamp_column,
         )
@@ -149,26 +142,25 @@ def preprocess_centralized_reference_population_stage(
     schema = dataset_binding(dataset).schema
     feature_names = FeatureNameSequence(tuple(FeatureName(name) for name in schema.feature_columns))
     protocol = build_centralized_preprocessing_protocol(feature_names)
-    joined = join_handoff_with_canonical_features(canonical_root, handoff, feature_names)
     partitions = extract_partitions(
-        joined,
+        join_handoff_with_canonical_features(canonical_root, handoff, feature_names),
         feature_names,
-        split_protocol=request.split_protocol,
+        split_protocol=construction.manifest.document.split_protocol,
         branch=ProcessedDataBranch.CENTRALIZED_REFERENCE,
         ordering=PartitionOrdering.STABLE_ROW_ID,
     )
-    context = PreprocessingPublishContext(
-        dataset=dataset,
-        population=request.population,
-        partition_seed=request.partition_seed,
-        split_protocol_identity=request.split_protocol,
-        protocol=protocol,
-        canonical_schema_checksum=schema.checksum,
-        data_root=request.data_root,
-    )
+    document = construction.manifest.document
     return preprocess_centralized_reference_stage(
         PreprocessCentralizedReferenceRequest(
-            dataset_context=context,
+            dataset_context=PreprocessingPublishContext(
+                dataset=document.dataset,
+                population=document.population,
+                partition_seed=document.partition_seed,
+                split_protocol_identity=document.split_protocol,
+                protocol=protocol,
+                canonical_schema_checksum=schema.checksum,
+                data_root=request.data_root,
+            ),
             partitions=partitions,
         )
     )

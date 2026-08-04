@@ -22,6 +22,8 @@ from datp_core.domain.values import (
     BootstrapReplicateCount,
     ConfidenceLevel,
     MetricValue,
+    PairedObservationCount,
+    RankSum,
     Seed,
 )
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
@@ -158,15 +160,8 @@ class ExternalPairedAnalysisPlan(StrictModel):
 
 
 class BcaAdjustment(StrictModel):
-    bias_correction: float
-    acceleration: float
-
-    @field_validator("bias_correction", "acceleration")
-    @classmethod
-    def _validate_finite(cls, v: float) -> float:
-        if not isfinite(v):
-            raise ValueError("BCa adjustment values must be finite")
-        return v
+    bias_correction: MetricValue
+    acceleration: MetricValue
 
 
 class BootstrapInterval(StrictModel):
@@ -318,26 +313,18 @@ class ScientificDecisionResult(StrictModel):
 
 
 class WilcoxonResult(StrictModel):
-    statistic: float | None
+    statistic: RankSum | None
     p_value: PValue | None
-    nonzero_pair_count: int
+    nonzero_pair_count: PairedObservationCount
     computation_method: WilcoxonComputationMethod | None
     availability: AvailabilityStatus
     reason: str
 
     @model_validator(mode="after")
     def _validate(self) -> "WilcoxonResult":
-        if self.nonzero_pair_count < 0:
-            raise ValueError("nonzero pair count must be non-negative")
         available = self.availability is AvailabilityStatus.AVAILABLE
         if available:
-            if (
-                self.statistic is None
-                or not isfinite(self.statistic)
-                or self.p_value is None
-                or self.computation_method is None
-                or self.reason
-            ):
+            if self.statistic is None or self.p_value is None or self.computation_method is None or self.reason:
                 raise ValueError("available Wilcoxon result requires finite values and no reason")
         elif self.statistic is not None or self.p_value is not None or not self.reason:
             raise ValueError("unavailable Wilcoxon result requires no values and an explicit reason")
@@ -357,17 +344,15 @@ class WilcoxonResult(StrictModel):
 
 
 class RankBiserialResult(StrictModel):
-    value: float | None
-    positive_rank_sum: float | None
-    negative_rank_sum: float | None
-    nonzero_pair_count: int
+    value: MetricValue | None
+    positive_rank_sum: RankSum | None
+    negative_rank_sum: RankSum | None
+    nonzero_pair_count: PairedObservationCount
     availability: AvailabilityStatus
     reason: str
 
     @model_validator(mode="after")
     def _validate(self) -> "RankBiserialResult":
-        if self.nonzero_pair_count < 0:
-            raise ValueError("nonzero pair count must be non-negative")
         available = self.availability is AvailabilityStatus.AVAILABLE
         values = (
             self.value,
@@ -375,7 +360,7 @@ class RankBiserialResult(StrictModel):
             self.negative_rank_sum,
         )
         if available:
-            if any(value is None or not isfinite(value) for value in values) or self.reason:
+            if any(value is None for value in values) or self.reason:
                 raise ValueError("available rank-biserial result requires finite values and no reason")
             if self.value is not None and not -1.0 <= self.value <= 1.0:
                 raise ValueError("rank-biserial correlation must lie in [-1, 1]")

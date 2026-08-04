@@ -1,23 +1,20 @@
-from datp_core.domain.enums import EvidenceRole, ExperimentId, FederatedThresholdMethod, MetricId, PopulationId
+from datp_core.domain.enums import FederatedThresholdMethod, MetricId
 from datp_core.experiments.feasibility import (
-    ExternalTemporalFeasibilityRequest,
+    EdgeExternalFeasibilityRequest,
     FeasibilityReason,
     assess_external_temporal_feasibility,
 )
 
 
-def test_external_evidence_cannot_be_promoted_to_confirmatory() -> None:
+def test_external_evidence_cannot_use_the_confirmatory_route() -> None:
     result = assess_external_temporal_feasibility(
-        ExternalTemporalFeasibilityRequest(
-            ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION,
-            PopulationId.EDGE_SENSOR_GROUPS,
-            EvidenceRole.CONFIRMATORY,
-            FederatedThresholdMethod.SHARED_THRESHOLD,
-            (MetricId.FALSE_POSITIVE_RATE,),
-            False,
-            False,
-            True,
-            False,
+        EdgeExternalFeasibilityRequest(
+            threshold_method=FederatedThresholdMethod.SHARED_THRESHOLD,
+            requested_metrics=(MetricId.FALSE_POSITIVE_RATE,),
+            routed_through_confirmatory_command=True,
+            grouped_assignment_available=False,
+            required_artifacts_available=True,
+            attack_assignment_claimed_available=False,
         )
     )
-    assert result.reason is FeasibilityReason.EXTERNAL_PROMOTED_TO_CONFIRMATORY
+    assert result.reason is FeasibilityReason.CONFIRMATORY_ROUTE_PROHIBITED

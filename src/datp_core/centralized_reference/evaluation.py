@@ -33,11 +33,11 @@ class CentralizedDecisionRule(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
-class ConfusionCounts:
-    true_negative: int
-    false_positive: int
-    true_positive: int
-    false_negative: int
+class CentralizedConfusionCounts:
+    true_negative: RowCount
+    false_positive: RowCount
+    true_positive: RowCount
+    false_negative: RowCount
 
     def __post_init__(self) -> None:
         for name, value in (
@@ -46,8 +46,8 @@ class ConfusionCounts:
             ("true_positive", self.true_positive),
             ("false_negative", self.false_negative),
         ):
-            if isinstance(value, bool) or value < 0:
-                raise ValueError(f"{name} must be a non-negative integer")
+            if not isinstance(value, RowCount):
+                raise TypeError(f"{name} must be a RowCount")
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,7 +70,7 @@ class CentralizedEvaluationResult:
     threshold_method: CentralizedThresholdMethod
     decision_rule: CentralizedDecisionRule
     threshold: ThresholdValue
-    confusion: ConfusionCounts
+    confusion: CentralizedConfusionCounts
     metrics: tuple[CentralizedMetricRecord, ...]
     evaluation_row_count: RowCount
     evidence_role: EvidenceRole
@@ -94,8 +94,6 @@ class CentralizedEvaluationResult:
                 "centralized evaluation cannot claim confirmatory evidence role",
                 subject=self.evidence_role,
             )
-        if self.evaluation_row_count < 0:
-            raise ValueError("evaluation row count must be non-negative")
 
 
 CENTRALIZED_POOLED_METRICS = (
@@ -213,10 +211,10 @@ def write_evaluation_document(evaluation: CentralizedEvaluationResult, directory
             "threshold_method": evaluation.threshold_method.value,
             "decision_rule": evaluation.decision_rule.value,
             "threshold": evaluation.threshold.value,
-            "true_negative": evaluation.confusion.true_negative,
-            "false_positive": evaluation.confusion.false_positive,
-            "true_positive": evaluation.confusion.true_positive,
-            "false_negative": evaluation.confusion.false_negative,
+            "true_negative": evaluation.confusion.true_negative.value,
+            "false_positive": evaluation.confusion.false_positive.value,
+            "true_positive": evaluation.confusion.true_positive.value,
+            "false_negative": evaluation.confusion.false_negative.value,
             "evaluation_row_count": evaluation.evaluation_row_count.value,
             "evidence_role": evaluation.evidence_role.value,
             "is_confirmatory_ladder_member": evaluation.is_confirmatory_ladder_member,
@@ -242,8 +240,8 @@ def evaluation_result_checksum(result: CentralizedEvaluationResult) -> Checksum:
         for item in result.metrics
     )
     return checksum_text(
-        f"{result.confusion.true_negative},{result.confusion.false_positive},"
-        f"{result.confusion.true_positive},{result.confusion.false_negative}|{metric_payload}"
+        f"{result.confusion.true_negative.value},{result.confusion.false_positive.value},"
+        f"{result.confusion.true_positive.value},{result.confusion.false_negative.value}|{metric_payload}"
     )
 
 
@@ -253,7 +251,7 @@ def _confusion_counts(
     *,
     benign_label: PopulationOutcomeLabel,
     attack_label: PopulationOutcomeLabel,
-) -> ConfusionCounts:
+) -> CentralizedConfusionCounts:
     true_negative = 0
     false_positive = 0
     true_positive = 0
@@ -275,11 +273,11 @@ def _confusion_counts(
                 f"unrecognized evaluation label {label_text!r}",
                 subject=ContractSubject.LABEL,
             )
-    return ConfusionCounts(
-        true_negative=true_negative,
-        false_positive=false_positive,
-        true_positive=true_positive,
-        false_negative=false_negative,
+    return CentralizedConfusionCounts(
+        true_negative=RowCount(true_negative),
+        false_positive=RowCount(false_positive),
+        true_positive=RowCount(true_positive),
+        false_negative=RowCount(false_negative),
     )
 
 
@@ -287,7 +285,7 @@ def _pooled_metrics(
     labels: np.ndarray,
     scores: np.ndarray,
     predictions: np.ndarray,
-    confusion: ConfusionCounts,
+    confusion: CentralizedConfusionCounts,
     *,
     benign_label: str,
     attack_label: str,
@@ -313,13 +311,13 @@ def _pooled_metrics(
     return tuple(ordered[metric] for metric in CENTRALIZED_POOLED_METRICS)
 
 
-def _rate_metric(metric: MetricId, numerator: int, denominator: int) -> CentralizedMetricRecord:
+def _rate_metric(metric: MetricId, numerator: RowCount, denominator: RowCount) -> CentralizedMetricRecord:
     if denominator == 0:
         return CentralizedMetricRecord(metric=metric, status=AvailabilityStatus.UNAVAILABLE, value=None)
     return CentralizedMetricRecord(
         metric=metric,
         status=AvailabilityStatus.AVAILABLE,
-        value=MetricValue(numerator / denominator),
+        value=MetricValue(numerator.value / denominator.value),
     )
 
 
@@ -347,25 +345,25 @@ def _balanced_accuracy(
     )
 
 
-def _binary_macro_f1(confusion: ConfusionCounts) -> CentralizedMetricRecord:
+def _binary_macro_f1(confusion: CentralizedConfusionCounts) -> CentralizedMetricRecord:
     return _macro_f1_record(MetricId.BINARY_MACRO_F1, confusion)
 
 
-def _pooled_macro_f1(confusion: ConfusionCounts) -> CentralizedMetricRecord:
+def _pooled_macro_f1(confusion: CentralizedConfusionCounts) -> CentralizedMetricRecord:
     return _macro_f1_record(MetricId.POOLED_MACRO_F1, confusion)
 
 
-def _macro_f1_record(metric: MetricId, confusion: ConfusionCounts) -> CentralizedMetricRecord:
+def _macro_f1_record(metric: MetricId, confusion: CentralizedConfusionCounts) -> CentralizedMetricRecord:
     attack_precision_den = confusion.true_positive + confusion.false_positive
     attack_recall_den = confusion.true_positive + confusion.false_negative
     benign_precision_den = confusion.true_negative + confusion.false_negative
     benign_recall_den = confusion.true_negative + confusion.false_positive
     if min(attack_precision_den, attack_recall_den, benign_precision_den, benign_recall_den) == 0:
         return CentralizedMetricRecord(metric=metric, status=AvailabilityStatus.UNAVAILABLE, value=None)
-    attack_precision = confusion.true_positive / attack_precision_den
-    attack_recall = confusion.true_positive / attack_recall_den
-    benign_precision = confusion.true_negative / benign_precision_den
-    benign_recall = confusion.true_negative / benign_recall_den
+    attack_precision = confusion.true_positive.value / attack_precision_den.value
+    attack_recall = confusion.true_positive.value / attack_recall_den.value
+    benign_precision = confusion.true_negative.value / benign_precision_den.value
+    benign_recall = confusion.true_negative.value / benign_recall_den.value
     attack_f1 = _f1(attack_precision, attack_recall)
     benign_f1 = _f1(benign_precision, benign_recall)
     if attack_f1 is None or benign_f1 is None:

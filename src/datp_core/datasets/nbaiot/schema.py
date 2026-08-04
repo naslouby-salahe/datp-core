@@ -18,6 +18,9 @@ from datp_core.datasets.models import (
     ColumnLogicalType,
 )
 from datp_core.domain.enums import DatasetId
+from datp_core.domain.values import (
+    CanonicalColumnPosition,
+)
 
 
 class NBaIoTDevice(StrEnum):
@@ -97,7 +100,14 @@ NBAIOT_PROVENANCE_COLUMNS: tuple[str, ...] = tuple(CanonicalProvenanceColumn)
 
 def _canonical_columns() -> tuple[CanonicalColumn, ...]:
     feature_columns = tuple(
-        CanonicalColumn(column, column, ColumnLogicalType.FLOAT64, CanonicalColumnRole.FEATURE, True, position)
+        CanonicalColumn(
+            column,
+            column,
+            ColumnLogicalType.FLOAT64,
+            CanonicalColumnRole.FEATURE,
+            True,
+            CanonicalColumnPosition(position),
+        )
         for position, column in enumerate(NBAIOT_FEATURE_COLUMNS)
     )
     provenance_columns = tuple(
@@ -112,7 +122,7 @@ def _canonical_columns() -> tuple[CanonicalColumn, ...]:
             ColumnLogicalType.STRING,
             CanonicalColumnRole.IDENTITY,
             True,
-            evidence_start,
+            CanonicalColumnPosition(evidence_start),
         ),
         CanonicalColumn(
             NBaIoTCanonicalColumn.PHYSICAL_DEVICE_FAMILY,
@@ -120,7 +130,7 @@ def _canonical_columns() -> tuple[CanonicalColumn, ...]:
             ColumnLogicalType.STRING,
             CanonicalColumnRole.IDENTITY,
             True,
-            evidence_start + 1,
+            CanonicalColumnPosition(evidence_start + 1),
         ),
         CanonicalColumn(
             NBaIoTCanonicalColumn.RAW_LABEL,
@@ -128,7 +138,7 @@ def _canonical_columns() -> tuple[CanonicalColumn, ...]:
             ColumnLogicalType.STRING,
             CanonicalColumnRole.LABEL,
             True,
-            evidence_start + 2,
+            CanonicalColumnPosition(evidence_start + 2),
         ),
         CanonicalColumn(
             NBaIoTCanonicalColumn.ATTACK_FAMILY,
@@ -136,7 +146,7 @@ def _canonical_columns() -> tuple[CanonicalColumn, ...]:
             ColumnLogicalType.STRING,
             CanonicalColumnRole.RAW_EVIDENCE,
             True,
-            evidence_start + 3,
+            CanonicalColumnPosition(evidence_start + 3),
         ),
         CanonicalColumn(
             NBaIoTCanonicalColumn.ATTACK_SUBTYPE,
@@ -144,7 +154,7 @@ def _canonical_columns() -> tuple[CanonicalColumn, ...]:
             ColumnLogicalType.STRING,
             CanonicalColumnRole.RAW_EVIDENCE,
             True,
-            evidence_start + 4,
+            CanonicalColumnPosition(evidence_start + 4),
         ),
     )
     stable_identity = canonical_provenance_column(

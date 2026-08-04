@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from datp_core.domain.enums import DatasetId, PopulationId, SplitProtocolId
+from datp_core.domain.enums import PopulationId, SplitProtocolId
 from datp_core.domain.values import Seed
 from datp_core.populations.catalogue import (
     PopulationConstructionRequest,
@@ -23,10 +23,7 @@ def test_end_to_end_manifest_handoff_for_natural_and_dirichlet(nbaiot_canonical_
     )
     handoff = build_preprocessing_handoff(
         PreprocessingHandoffRequest(
-            natural,
-            Seed(0),
-            SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
-            DatasetId.NBAIOT,
+            construction=natural,
             deployment_fallback_client_ids=frozenset(),
         )
     )

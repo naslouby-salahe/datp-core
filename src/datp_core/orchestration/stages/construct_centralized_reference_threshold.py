@@ -3,8 +3,9 @@
 from dataclasses import dataclass
 from pathlib import Path
 from shutil import rmtree
+from typing import ClassVar
 
-from datp_core.artifacts.store import AtomicPublication, publish_atomically
+from datp_core.artifacts.store import publish_atomically
 from datp_core.centralized_reference.scoring import PooledScoreArtifact
 from datp_core.centralized_reference.thresholding import (
     CentralizedThresholdAssetName,
@@ -14,10 +15,8 @@ from datp_core.centralized_reference.thresholding import (
     write_threshold_document,
 )
 from datp_core.centralized_reference.training import CentralizedTrainingCoordinate
-from datp_core.domain.enums import ContractSubject, PublicationStatus, StageOperationId
-from datp_core.domain.errors import ArtifactIntegrityError
-from datp_core.domain.values import Checksum, checksum_file
-from datp_core.orchestration.stages import _Box
+from datp_core.domain.enums import PublicationStatus, StageOperationId
+from datp_core.domain.values import Checksum
 from datp_core.protocols.models import CentralizedQuantileProtocol
 
 
@@ -32,7 +31,7 @@ class ConstructCentralizedThresholdRequest:
 
 @dataclass(frozen=True, slots=True)
 class ConstructCentralizedThresholdResult:
-    stage: StageOperationId
+    stage: ClassVar[StageOperationId] = StageOperationId.CONSTRUCT_CENTRALIZED_REFERENCE_THRESHOLD
     publication_status: PublicationStatus
     threshold: PooledThresholdResult
     complete_digest: Checksum
@@ -41,47 +40,32 @@ class ConstructCentralizedThresholdResult:
 def construct_centralized_reference_threshold_stage(
     request: ConstructCentralizedThresholdRequest,
 ) -> ConstructCentralizedThresholdResult:
-    box = _Box[PooledThresholdResult]()
-
-    def write(temporary: Path) -> None:
-        threshold = construct_pooled_benign_quantile(
+    def construct() -> PooledThresholdResult:
+        return construct_pooled_benign_quantile(
             coordinate=request.coordinate,
             calibration_scores=request.calibration_scores,
             protocol=request.protocol,
         )
+
+    def write(temporary: Path) -> PooledThresholdResult:
+        threshold = construct()
         write_threshold_document(threshold, temporary)
         digest = threshold_result_checksum(threshold)
         (temporary / CentralizedThresholdAssetName.COMPLETE).write_text(digest.value, encoding="utf-8")
-        box.value = threshold
+        return threshold
 
-    reused = publish_atomically(
-        AtomicPublication(
-            target=request.output_directory,
-            overwrite=request.overwrite,
-            is_reusable=lambda directory: _is_reusable(directory, request),
-            write=write,
-            remove_target=lambda directory: rmtree(directory),
-        )
+    outcome = publish_atomically(
+        target=request.output_directory,
+        overwrite=request.overwrite,
+        is_reusable=lambda directory: _is_reusable(directory, request),
+        write=write,
+        reusable_value=lambda _directory: construct(),
+        remove_target=rmtree,
     )
-    if reused:
-        threshold = construct_pooled_benign_quantile(
-            coordinate=request.coordinate,
-            calibration_scores=request.calibration_scores,
-            protocol=request.protocol,
-        )
-        status = PublicationStatus.REUSED
-    else:
-        if box.value is None:
-            raise ArtifactIntegrityError(
-                "centralized threshold write did not populate a result", subject=ContractSubject.THRESHOLD
-            )
-        threshold = box.value
-        status = PublicationStatus.PUBLISHED
     return ConstructCentralizedThresholdResult(
-        stage=StageOperationId.CONSTRUCT_CENTRALIZED_REFERENCE_THRESHOLD,
-        publication_status=status,
-        threshold=threshold,
-        complete_digest=checksum_file(request.output_directory / CentralizedThresholdAssetName.COMPLETE),
+        publication_status=outcome.status,
+        threshold=outcome.value,
+        complete_digest=outcome.complete_digest,
     )
 
 
@@ -90,10 +74,11 @@ def _is_reusable(directory: Path, request: ConstructCentralizedThresholdRequest)
     document = directory / CentralizedThresholdAssetName.THRESHOLD
     if not (complete.is_file() and document.is_file()):
         return False
-    threshold = construct_pooled_benign_quantile(
-        coordinate=request.coordinate,
-        calibration_scores=request.calibration_scores,
-        protocol=request.protocol,
+    expected = threshold_result_checksum(
+        construct_pooled_benign_quantile(
+            coordinate=request.coordinate,
+            calibration_scores=request.calibration_scores,
+            protocol=request.protocol,
+        )
     )
-    expected = threshold_result_checksum(threshold)
     return complete.read_text(encoding="utf-8").strip() == expected.value

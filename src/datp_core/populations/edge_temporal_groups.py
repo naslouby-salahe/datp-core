@@ -19,7 +19,7 @@ from datp_core.datasets.models import (
 )
 from datp_core.domain.enums import DatasetId, PopulationId, PopulationIdentityKind, SplitProtocolId
 from datp_core.domain.errors import DataIntegrityError, ScientificContractError
-from datp_core.domain.values import Checksum, RowCount, Seed
+from datp_core.domain.values import Checksum, NonNegativeIntegerValue, RowCount, Seed
 from datp_core.populations.capabilities import population_declaration
 from datp_core.populations.integrity import (
     PopulationFinalizationRequest,
@@ -74,7 +74,7 @@ def build_edge_temporal_groups(
     diagnostics = ChronologicalPartitionDiagnosticsDocument(
         population=_POPULATION,
         expected_group_count=declaration.client_count,
-        observed_eligible_group_count=len(eligible_ids),
+        observed_eligible_group_count=NonNegativeIntegerValue(len(eligible_ids)),
         eligible_group_ids=eligible_ids,
         excluded_group_ids=excluded_ids,
         exclusion_reasons=exclusion_reasons,
@@ -152,7 +152,7 @@ def _chronology_eligibility(
             excluded.append(group_id)
             reasons.append(ChronologyExclusionReason.CANONICAL_CHRONOLOGY_MISSING)
             continue
-        duplicate_total += evidence.duplicate_timestamp_count
+        duplicate_total += evidence.duplicate_timestamp_count.value
         if evidence.temporal_eligible:
             eligible.append(group_id)
         else:

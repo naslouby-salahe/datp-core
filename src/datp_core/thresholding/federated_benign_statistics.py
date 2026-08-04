@@ -23,12 +23,19 @@ import numpy as np
 
 from datp_core.domain.enums import ContractSubject
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import ByteCount, Quantile, Ratio, RowCount
+from datp_core.domain.values import (
+    AbsoluteThresholdError,
+    ByteCount,
+    MetricValue,
+    Quantile,
+    Ratio,
+    RelativeThresholdError,
+    RowCount,
+)
 from datp_core.protocols.models import FederatedStatisticsProtocol
 from datp_core.thresholding.models import (
     CentralizedAttainmentDiagnostic,
     ClientBenignSummary,
-    CommunicationPayload,
     FederatedStatisticsThresholdResult,
     FixedCoefficientResult,
     PooledVarianceDecomposition,
@@ -47,7 +54,7 @@ def _client_summary(client_scores: ClientBenignCalibrationScores) -> ClientBenig
     scores = client_scores.as_array
     return ClientBenignSummary(
         client=client_scores.client,
-        count=RowCount(int(scores.size)),
+        count=RowCount(scores.size),
         mean=float(np.mean(scores)),
         variance=float(np.var(scores, ddof=0)),
         benign_exceedance_count=None,
@@ -55,30 +62,27 @@ def _client_summary(client_scores: ClientBenignCalibrationScores) -> ClientBenig
 
 
 def _decomposition(summaries: tuple[ClientBenignSummary, ...]) -> PooledVarianceDecomposition:
-    counts = tuple(float(summary.count.value) for summary in summaries)
-    total = sum(counts)
-    global_mean = sum(count * summary.mean for count, summary in zip(counts, summaries, strict=True)) / total
-    within = sum(count * summary.variance for count, summary in zip(counts, summaries, strict=True)) / total
-    between = (
-        sum(count * (summary.mean - global_mean) ** 2 for count, summary in zip(counts, summaries, strict=True)) / total
-    )
-    full_pooled_variance = within + between
-    between_ratio = Ratio(between / full_pooled_variance) if full_pooled_variance > 0 else None
+    total_count = sum(summary.count.value for summary in summaries)
+    global_mean = sum(summary.count.value * summary.mean for summary in summaries) / total_count
+    within = sum(summary.count.value * summary.variance for summary in summaries) / total_count
+    between = sum(summary.count.value * (summary.mean - global_mean) ** 2 for summary in summaries) / total_count
+    full = within + between
+    between_ratio = Ratio(between / full) if full > 0 else None
     return PooledVarianceDecomposition(
         global_mean=global_mean,
         within_client_variance=within,
         between_client_variance=between,
-        full_pooled_variance=full_pooled_variance,
+        full_pooled_variance=full,
         between_ratio=between_ratio,
     )
 
 
-def _serialized_payload_bytes(summaries: tuple[ClientBenignSummary, ...]) -> ByteCount:
-    payload = "|".join(
-        f"{summary.client.client_id}:count={summary.count.value}:mean={summary.mean}:variance={summary.variance}"
-        for summary in summaries
-    )
-    return ByteCount(len(payload.encode("utf-8")))
+def _communication_bytes(summaries: tuple[ClientBenignSummary, ...]) -> ByteCount:
+    # Estimates the federated payload as its fixed per-client scalar count
+    # (count, mean, variance, plus benign_exceedance_count when reported) encoded
+    # as IEEE-754 float64, not the byte length of any particular wire serialization.
+    scalar_count = sum(3 + (1 if summary.benign_exceedance_count is not None else 0) for summary in summaries)
+    return ByteCount(scalar_count * np.dtype(np.float64).itemsize)
 
 
 def construct_federated_benign_statistics(
@@ -115,23 +119,26 @@ def construct_federated_benign_statistics(
     centralized_attainment_diagnostic = CentralizedAttainmentDiagnostic(
         target_exceedance=target_exceedance,
         achieved_exceedance=achieved_exceedance,
-        signed_attainment_error=signed_attainment_error,
+        signed_attainment_error=MetricValue(signed_attainment_error),
         absolute_attainment_error=Ratio(abs(signed_attainment_error)),
-        absolute_threshold_error_vs_pooled_quantile=absolute_threshold_error,
-        relative_threshold_error_vs_pooled_quantile=relative_threshold_error,
+        absolute_threshold_error_vs_pooled_quantile=AbsoluteThresholdError(absolute_threshold_error),
+        relative_threshold_error_vs_pooled_quantile=(
+            None if relative_threshold_error is None else RelativeThresholdError(relative_threshold_error)
+        ),
     )
 
     fixed_coefficient_curve = tuple(
         FixedCoefficientResult(
             coefficient=coefficient,
             threshold=fixed_coefficient_threshold(
-                decomposition.global_mean, decomposition.full_pooled_variance, coefficient
+                decomposition.global_mean,
+                decomposition.full_pooled_variance,
+                coefficient,
             ),
         )
         for coefficient in protocol.coefficients
     )
     assignments = tuple(ThresholdAssignment(client_scores.client, matched_threshold) for client_scores in ordered)
-    communication_payload = CommunicationPayload(estimated_bytes=_serialized_payload_bytes(summaries))
     return FederatedStatisticsThresholdResult(
         coordinate=ordered[0].coordinate,
         quantile=quantile,
@@ -142,5 +149,5 @@ def construct_federated_benign_statistics(
         centralized_pooled_quantile_diagnostic=centralized_pooled_quantile_diagnostic,
         fixed_coefficient_curve=fixed_coefficient_curve,
         assignments=assignments,
-        communication_payload=communication_payload,
+        estimated_communication_bytes=_communication_bytes(summaries),
     )

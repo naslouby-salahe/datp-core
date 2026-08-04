@@ -6,7 +6,14 @@ from tests.unit.thresholding.helpers import client_scores
 
 from datp_core.domain.enums import QuantileInterpolationSemantics
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import CoverageTarget, Quantile, RowCount, SummaryCoefficient, ThresholdValue
+from datp_core.domain.values import (
+    ConformalRankIndex,
+    CoverageTarget,
+    Quantile,
+    RowCount,
+    SummaryCoefficient,
+    ThresholdValue,
+)
 from datp_core.thresholding.quantiles import (
     achieved_benign_exceedance,
     conformal_rank_index,
@@ -50,7 +57,7 @@ def test_sample_weighted_mean_matches_manual_computation() -> None:
 
 def test_conformal_rank_index_matches_classical_split_conformal_formula() -> None:
     coverage = CoverageTarget(0.95)
-    assert conformal_rank_index(RowCount(99), coverage) == math.ceil(100 * 0.95)
+    assert conformal_rank_index(RowCount(99), coverage) == ConformalRankIndex(math.ceil(100 * 0.95))
 
 
 def test_finite_sample_conformal_threshold_selects_the_expected_order_statistic() -> None:
@@ -58,7 +65,7 @@ def test_finite_sample_conformal_threshold_selects_the_expected_order_statistic(
     threshold, rank_index, effective_quantile, tie_count = finite_sample_conformal_threshold(
         scores, CoverageTarget(0.95)
     )
-    assert rank_index == 96
+    assert rank_index == ConformalRankIndex(96)
     assert threshold.value == 96.0
     assert effective_quantile == 96 / 100
     assert tie_count == 0

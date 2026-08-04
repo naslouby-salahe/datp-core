@@ -70,8 +70,10 @@ class CentralizedScoringResult:
     preprocessing_state_checksum: Checksum
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class CentralizedScoringRequest:
+    """Identity-based scoring command containing mutable Polars frames."""
+
     coordinate: CentralizedTrainingCoordinate
     checkpoint: CentralizedCheckpointCandidate
     autoencoder: AutoencoderProtocol

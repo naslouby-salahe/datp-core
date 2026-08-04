@@ -12,8 +12,10 @@ from datp_core.domain.errors import ArtifactIntegrityError, SerializationSafetyE
 from datp_core.domain.values import AbsoluteTolerance
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class TransformReloadCheck:
+    """Identity-based request containing mutable NumPy buffers for one reload check."""
+
     state_path: Path
     class_name: TrustedEstimatorClassName
     absolute_tolerance: AbsoluteTolerance

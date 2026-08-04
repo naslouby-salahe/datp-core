@@ -13,7 +13,7 @@ from datp_core.domain.enums import (
     StageOperationId,
 )
 from datp_core.domain.errors import DataIntegrityError, LeakageError, ScientificContractError
-from datp_core.domain.values import Checksum, ClientCount, RowCount, Seed
+from datp_core.domain.values import Checksum, ClientCount, NonNegativeIntegerValue, RowCount, Seed
 from datp_core.populations.capabilities import population_capabilities, population_declaration
 from datp_core.populations.models import (
     CLIENT_ID_COLUMN,
@@ -146,7 +146,7 @@ class FeasibilityAssessmentRequest:
     chronology_required: bool
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class PopulationFinalizationRequest:
     population: PopulationId
     dataset: DatasetId
@@ -264,7 +264,7 @@ def feasibility_from_candidates(request: FeasibilityAssessmentRequest) -> Popula
         PopulationFeasibilityStatus.FEASIBLE,
         PopulationFeasibilityReason.CANDIDATE_SET_MATCHES_DECLARATION,
         expected,
-        accepted_n,
+        NonNegativeIntegerValue(accepted_n),
         "candidate and accepted client sets match the locked construction contract",
     )
 
@@ -275,7 +275,9 @@ def _infeasible(
     observed: int,
     evidence: str,
 ) -> PopulationFeasibility:
-    return PopulationFeasibility(PopulationFeasibilityStatus.INFEASIBLE, reason, expected, observed, evidence)
+    return PopulationFeasibility(
+        PopulationFeasibilityStatus.INFEASIBLE, reason, expected, NonNegativeIntegerValue(observed), evidence
+    )
 
 
 def _require_membership_row_contract(

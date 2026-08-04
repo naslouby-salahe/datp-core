@@ -13,7 +13,7 @@ from tests.unit.centralized_reference.helpers import (
     training_coordinate,
 )
 
-from datp_core.centralized_reference.checkpointing import FederatedCheckpointMarker, reject_federated_checkpoint
+from datp_core.centralized_reference.checkpointing import reject_federated_checkpoint
 from datp_core.centralized_reference.thresholding import CENTRALIZED_POOLED_QUANTILE_PROTOCOL
 from datp_core.domain.enums import PublicationStatus, StageOperationId
 from datp_core.domain.errors import LeakageError
@@ -134,6 +134,6 @@ def test_train_score_threshold_evaluate_stage_chain(tmp_path: Path) -> None:
     assert reused.publication_status is PublicationStatus.REUSED
 
 
-def test_score_stage_rejects_federated_checkpoint(tmp_path: Path) -> None:
+def test_score_stage_rejects_federated_checkpoint() -> None:
     with pytest.raises(LeakageError, match="federated checkpoint"):
-        reject_federated_checkpoint(FederatedCheckpointMarker("fedavg", tmp_path / "m.pt"))
+        reject_federated_checkpoint("fedavg")

@@ -13,20 +13,26 @@ from datp_core.artifacts.layout import (
     partition_roles,
     processed_asset_names,
 )
+from datp_core.artifacts.serialization import TrustedScaler
+from datp_core.domain.contracts import ClientCollection, ClientOwned
 from datp_core.domain.enums import ContractSubject, PartitionRole, PreprocessingFitScope, ProcessedDataBranch
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import OutcomeLabelSequence, RowCount, StableRowIdSequence
+from datp_core.domain.values import (
+    ClientPathToken,
+    FeatureNameSequence,
+    OutcomeLabelSequence,
+    RowCount,
+    StableRowIdSequence,
+)
 from datp_core.preprocessing.models import (
-    ClientFittedEstimator,
-    ClientLocalFittedEstimators,
-    ClientPreprocessingPartitionSet,
     ClientPreprocessingResult,
     ClientPublishRequest,
     FederatedFittedEstimators,
-    FederatedFittedStatePublishSpec,
-    PooledFittedEstimator,
+    FittedStatePublishSpec,
     PreprocessedPartitionPaths,
     PreprocessingFitBatch,
+    PreprocessingPartition,
+    PreprocessingPartitions,
     PreprocessingProtocol,
 )
 from datp_core.preprocessing.validation import (
@@ -39,14 +45,14 @@ from datp_core.preprocessing.validation import (
 
 def fit_estimators_for_federated_clients(
     protocol: PreprocessingProtocol,
-    client_partitions: ClientPreprocessingPartitionSet,
+    client_partitions: ClientCollection[ClientPathToken, PreprocessingPartitions],
 ) -> FederatedFittedEstimators:
-    """Fit client-local or pooled federated estimators from extracted partition sets."""
+    """Fit client-local or pooled estimators from benign training partitions only."""
     match protocol.fit_scope:
         case PreprocessingFitScope.CLIENT_LOCAL_TRAINING:
             return _fit_client_local_estimators(protocol, client_partitions)
         case PreprocessingFitScope.POOLED_TRAINING:
-            return _fit_pooled_estimators(protocol, client_partitions)
+            return _fit_pooled_estimator(protocol, client_partitions)
         case _:
             raise ScientificContractError(
                 "unsupported federated preprocessing fit scope",
@@ -56,61 +62,68 @@ def fit_estimators_for_federated_clients(
 
 def _fit_client_local_estimators(
     protocol: PreprocessingProtocol,
-    client_partitions: ClientPreprocessingPartitionSet,
-) -> ClientLocalFittedEstimators:
-    fitted_list: list[ClientFittedEstimator] = []
+    client_partitions: ClientCollection[ClientPathToken, PreprocessingPartitions],
+) -> ClientCollection[ClientPathToken, TrustedScaler]:
     feature_names = protocol.input_feature_names
-    for client_item in client_partitions.clients:
-        train_partition = client_item.partitions.require(PartitionRole.TRAIN)
-        require_columns(train_partition.frame, feature_names.names, subject=ContractSubject.SCHEMA)
-        matrix = train_partition.frame.select(list(feature_names)).to_numpy()
-        fitted = fit_trusted_batch(
-            protocol,
-            PreprocessingFitBatch(
-                training_matrix=matrix,
-                training_row_ids=train_partition.row_ids,
-                training_labels=train_partition.outcome_labels,
+    fitted = tuple(
+        ClientOwned(
+            item.client,
+            fit_trusted_batch(
+                protocol,
+                _fit_batch(item.value.require(PartitionRole.TRAIN), feature_names),
+                subject=PreprocessingFitScope.CLIENT_LOCAL_TRAINING,
             ),
-            subject=PreprocessingFitScope.CLIENT_LOCAL_TRAINING,
         )
-        fitted_list.append(ClientFittedEstimator(client_identity=client_item.client_identity, estimator=fitted))
-    return ClientLocalFittedEstimators(estimators=tuple(fitted_list))
+        for item in client_partitions.items
+    )
+    if len({id(item.value) for item in fitted}) != len(fitted):
+        raise ScientificContractError(
+            "client-local estimators must be distinct objects",
+            subject=ContractSubject.CLIENT_IDENTITY,
+        )
+    return ClientCollection(fitted)
 
 
-def _fit_pooled_estimators(
+def _fit_pooled_estimator(
     protocol: PreprocessingProtocol,
-    client_partitions: ClientPreprocessingPartitionSet,
-) -> PooledFittedEstimator:
+    client_partitions: ClientCollection[ClientPathToken, PreprocessingPartitions],
+) -> TrustedScaler:
     feature_names = protocol.input_feature_names
-    train_partitions = tuple(
-        client_item.partitions.require(PartitionRole.TRAIN) for client_item in client_partitions.clients
-    )
-    for partition in train_partitions:
+    training = tuple(item.value.require(PartitionRole.TRAIN) for item in client_partitions.items)
+    for partition in training:
         require_columns(partition.frame, feature_names.names, subject=ContractSubject.SCHEMA)
-    matrices = tuple(partition.frame.select(list(feature_names)).to_numpy() for partition in train_partitions)
-    pooled_matrix = np.vstack(matrices)
-    pooled_row_ids = StableRowIdSequence(
-        tuple(item for partition in train_partitions for item in partition.row_ids.row_ids)
-    )
-    pooled_labels = OutcomeLabelSequence(
-        tuple(item for partition in train_partitions for item in partition.outcome_labels.labels)
-    )
-
-    pooled = fit_trusted_batch(
+    return fit_trusted_batch(
         protocol,
         PreprocessingFitBatch(
-            training_matrix=pooled_matrix,
-            training_row_ids=pooled_row_ids,
-            training_labels=pooled_labels,
+            training_matrix=np.vstack(
+                tuple(partition.frame.select(list(feature_names)).to_numpy() for partition in training)
+            ),
+            training_row_ids=StableRowIdSequence(
+                tuple(row_id for partition in training for row_id in partition.row_ids.row_ids)
+            ),
+            training_labels=OutcomeLabelSequence(
+                tuple(label for partition in training for label in partition.outcome_labels.labels)
+            ),
         ),
         subject=PreprocessingFitScope.POOLED_TRAINING,
     )
-    return PooledFittedEstimator(estimator=pooled)
+
+
+def _fit_batch(
+    partition: PreprocessingPartition,
+    feature_names: FeatureNameSequence,
+) -> PreprocessingFitBatch:
+    require_columns(partition.frame, feature_names.names, subject=ContractSubject.SCHEMA)
+    return PreprocessingFitBatch(
+        training_matrix=partition.frame.select(list(feature_names)).to_numpy(),
+        training_row_ids=partition.row_ids,
+        training_labels=partition.outcome_labels,
+    )
 
 
 def publish_client_preprocessing(request: ClientPublishRequest) -> ClientPreprocessingResult:
     context = request.context
-    client_coordinate_directory = federated_client_directory(
+    coordinate_directory = federated_client_directory(
         context.data_root,
         ReusableDataCoordinate(
             dataset=context.dataset,
@@ -122,41 +135,50 @@ def publish_client_preprocessing(request: ClientPublishRequest) -> ClientPreproc
             client_identity=request.client_identity,
         ),
     )
-    asset_names = processed_asset_names(context.split_protocol_identity)
     asset_paths = RelativeAssetPathSequence(
         tuple(
             canonical_relative_asset_path(asset, ProcessedDataBranch.FEDERATED, request.client_identity)
-            for asset in asset_names
+            for asset in processed_asset_names(context.split_protocol_identity)
         )
     )
-    result = publish_preprocessed_partitions(
+    publication = publish_preprocessed_partitions(
         context=context,
         branch=ProcessedDataBranch.FEDERATED,
-        coordinate_directory=client_coordinate_directory,
+        coordinate_directory=coordinate_directory,
         fitted_estimator=request.fitted_estimator,
         partitions=request.partitions,
         asset_paths=asset_paths,
     )
     state = federated_fitted_state_after_publish(
-        FederatedFittedStatePublishSpec(
+        FittedStatePublishSpec(
             protocol=context.protocol,
-            estimator_path=client_asset_path(result.coordinate_directory, ProcessedAssetName.STATE),
+            estimator_path=client_asset_path(publication.coordinate_directory, ProcessedAssetName.STATE),
             fit_row_count=RowCount(request.partitions.require(PartitionRole.TRAIN).frame.height),
-            client_identity=request.client_identity,
+            owner=request.client_identity,
         )
     )
     roles = partition_roles(context.split_protocol_identity)
-    paths_by_role = {role: client_asset_path(result.coordinate_directory, asset_for_partition(role)) for role in roles}
-    paths = PreprocessedPartitionPaths(
-        train=paths_by_role[PartitionRole.TRAIN],
-        calibration=paths_by_role[PartitionRole.CALIBRATION],
-        evaluation=paths_by_role[PartitionRole.EVALUATION],
-        future_recalibration=paths_by_role.get(PartitionRole.FUTURE_RECALIBRATION),
-        static_reference_reserve=paths_by_role.get(PartitionRole.STATIC_REFERENCE_RESERVE),
-    )
+    paths_by_role = {
+        role: client_asset_path(publication.coordinate_directory, asset_for_partition(role)) for role in roles
+    }
+
+    def row_count(role: PartitionRole) -> RowCount:
+        return RowCount(request.partitions.require(role).frame.height) if role in roles else RowCount(0)
+
     return ClientPreprocessingResult(
         client_identity=request.client_identity,
-        paths=paths,
+        paths=PreprocessedPartitionPaths(
+            train=paths_by_role[PartitionRole.TRAIN],
+            calibration=paths_by_role[PartitionRole.CALIBRATION],
+            evaluation=paths_by_role[PartitionRole.EVALUATION],
+            future_recalibration=paths_by_role.get(PartitionRole.FUTURE_RECALIBRATION),
+            static_reference_reserve=paths_by_role.get(PartitionRole.STATIC_REFERENCE_RESERVE),
+        ),
         fitted_state=state,
-        publication_status=result.publication_status,
+        publication_status=publication.publication_status,
+        train_row_count=row_count(PartitionRole.TRAIN),
+        calibration_row_count=row_count(PartitionRole.CALIBRATION),
+        evaluation_row_count=row_count(PartitionRole.EVALUATION),
+        future_recalibration_row_count=row_count(PartitionRole.FUTURE_RECALIBRATION),
+        static_reference_reserve_row_count=row_count(PartitionRole.STATIC_REFERENCE_RESERVE),
     )

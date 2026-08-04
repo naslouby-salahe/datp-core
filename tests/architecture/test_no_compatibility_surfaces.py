@@ -34,3 +34,14 @@ def test_threshold_types_have_no_compatibility_alias_or_overlap() -> None:
     assert len(FederatedThresholdMethod.__members__) == len(FederatedThresholdMethod)
     assert len(CentralizedThresholdMethod.__members__) == len(CentralizedThresholdMethod)
     assert set(FederatedThresholdMethod).isdisjoint(set(CentralizedThresholdMethod))
+
+
+def test_source_uses_no_explicit_any_type() -> None:
+    for source_path, tree in parsed_source_files():
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                assert all(alias.name != "Any" for alias in node.names), source_path
+            elif isinstance(node, ast.Name):
+                assert node.id != "Any", source_path
+            elif isinstance(node, ast.Attribute):
+                assert node.attr != "Any", source_path

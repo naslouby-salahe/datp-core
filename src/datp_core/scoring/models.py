@@ -120,14 +120,10 @@ class FixedScoreInvariant:
 @dataclass(frozen=True, slots=True)
 class ScoreGenerationResult:
     manifest: ScoreArtifactManifest
-    invariant: FixedScoreInvariant
 
-    def __post_init__(self) -> None:
-        if self.invariant != FixedScoreInvariant.from_manifest(self.manifest):
-            raise ScientificContractError(
-                "the fixed-score invariant must be derived from its own manifest",
-                subject=ContractSubject.SCORES,
-            )
+    @property
+    def invariant(self) -> FixedScoreInvariant:
+        return FixedScoreInvariant.from_manifest(self.manifest)
 
 
 def _require_consistent_partition_records(

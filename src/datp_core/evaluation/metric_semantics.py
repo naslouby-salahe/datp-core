@@ -2,13 +2,18 @@
 
 from datp_core.domain.enums import MetricId
 from datp_core.domain.values import MetricValue, RowCount
-from datp_core.evaluation.models import MetricAvailability, MetricReason, MetricStatus, UnavailableOutcome
+from datp_core.evaluation.models import (
+    AvailableMetric,
+    MetricAvailability,
+    MetricReason,
+    MetricStatus,
+    UnavailableMetric,
+)
 
 
-def available(metric: MetricId, value: float, *, denominator: int | None = None) -> MetricAvailability:
-    return MetricAvailability(
+def available(metric: MetricId, value: float, *, denominator: int | None = None) -> AvailableMetric:
+    return AvailableMetric(
         metric=metric,
-        status=MetricStatus.AVAILABLE,
         value=MetricValue(value),
         denominator=None if denominator is None else RowCount(denominator),
     )
@@ -20,14 +25,14 @@ def unavailable(
     reason: MetricReason,
     *,
     denominator: int | None = None,
-) -> MetricAvailability:
-    if status is MetricStatus.AVAILABLE:
-        raise ValueError("available status requires a numeric value")
-    count = None if denominator is None else RowCount(denominator)
-    return MetricAvailability(
+) -> UnavailableMetric:
+    return UnavailableMetric(
         metric=metric,
         status=status,
-        value=None,
-        denominator=count,
-        outcome=UnavailableOutcome(status=status, reason=reason, denominator=count),
+        reason=reason,
+        denominator=None if denominator is None else RowCount(denominator),
     )
+
+
+def metric_value(metric: MetricAvailability) -> float | None:
+    return None if metric.value is None else metric.value.value

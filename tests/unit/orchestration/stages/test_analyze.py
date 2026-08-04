@@ -14,7 +14,7 @@ from datp_core.domain.enums import (
     SplitProtocolId,
     TrainingModelId,
 )
-from datp_core.domain.values import MetricValue, Ratio, Seed
+from datp_core.domain.values import MetricValue, PairedObservationCount, RankSum, Ratio, Seed
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.orchestration.stages.analyze import AnalyzeRequest, analyze_stage
 from datp_core.protocols.statistics import BOOTSTRAP_REPLICATE_COUNT, CONFIRMATORY_INFERENCE_PROTOCOL
@@ -41,7 +41,12 @@ def test_analyze_stage_persists_secondary_and_descriptive_outputs_and_reuses_the
     assert second.descriptive.values == tuple(item.delta for item in request.contrasts)
     assert second.sign_consistency.total == 10
     assert second.wilcoxon.availability is AvailabilityStatus.AVAILABLE
+    assert isinstance(second.wilcoxon.statistic, RankSum)
+    assert second.wilcoxon.nonzero_pair_count == PairedObservationCount(10)
     assert second.rank_biserial.availability is AvailabilityStatus.AVAILABLE
+    assert isinstance(second.rank_biserial.value, MetricValue)
+    assert isinstance(second.rank_biserial.positive_rank_sum, RankSum)
+    assert second.rank_biserial.nonzero_pair_count == PairedObservationCount(10)
     assert second.multiplicity is not None
     assert second.multiplicity.adjusted_p_values[0].value <= second.multiplicity.adjusted_p_values[1].value
     assert (request.output_directory / "analysis.json").is_file()

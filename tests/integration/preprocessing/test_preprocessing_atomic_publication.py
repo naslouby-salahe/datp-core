@@ -14,11 +14,19 @@ from datp_core.domain.enums import (
     SplitProtocolId,
     TrustedEstimatorClassName,
 )
-from datp_core.domain.values import AbsoluteTolerance, Checksum, ClientPathToken, FeatureName, FeatureNameSequence, Seed
-from datp_core.preprocessing.federated import ClientPublishRequest, publish_client_preprocessing
+from datp_core.domain.values import (
+    AbsoluteTolerance,
+    Checksum,
+    ClientPathToken,
+    FeatureName,
+    FeatureNameSequence,
+    Seed,
+)
+from datp_core.preprocessing.federated import publish_client_preprocessing
 from datp_core.preprocessing.models import (
+    ClientPublishRequest,
     PreprocessingPartition,
-    PreprocessingPartitionSet,
+    PreprocessingPartitions,
     PreprocessingProtocol,
     PreprocessingPublishContext,
 )
@@ -34,12 +42,31 @@ def test_partial_asset_is_rebuilt_after_cleanup(tmp_path: Path) -> None:
         numerical_equivalence_absolute_tolerance=AbsoluteTolerance(1e-12),
     )
     frame_train = pl.DataFrame(
-        {"stable_row_id": ["t0", "t1"], "outcome_label": ["benign", "benign"], "f0": [0.0, 1.0], "f1": [1.0, 2.0]}
+        {
+            "stable_row_id": ["t0", "t1"],
+            "outcome_label": ["benign", "benign"],
+            "f0": [0.0, 1.0],
+            "f1": [1.0, 2.0],
+        }
     )
-    frame_cal = pl.DataFrame({"stable_row_id": ["c0"], "outcome_label": ["benign"], "f0": [0.5], "f1": [1.5]})
-    frame_eval = pl.DataFrame({"stable_row_id": ["e0"], "outcome_label": ["benign"], "f0": [1.5], "f1": [2.5]})
-    partitions = PreprocessingPartitionSet(
-        partitions=(
+    frame_cal = pl.DataFrame(
+        {
+            "stable_row_id": ["c0"],
+            "outcome_label": ["benign"],
+            "f0": [0.5],
+            "f1": [1.5],
+        }
+    )
+    frame_eval = pl.DataFrame(
+        {
+            "stable_row_id": ["e0"],
+            "outcome_label": ["benign"],
+            "f0": [1.5],
+            "f1": [2.5],
+        }
+    )
+    partitions = PreprocessingPartitions(
+        (
             PreprocessingPartition(PartitionRole.TRAIN, frame_train),
             PreprocessingPartition(PartitionRole.CALIBRATION, frame_cal),
             PreprocessingPartition(PartitionRole.EVALUATION, frame_eval),
@@ -48,38 +75,25 @@ def test_partial_asset_is_rebuilt_after_cleanup(tmp_path: Path) -> None:
     fitted = construct_trusted_estimator(TrustedEstimatorClassName.STANDARD_SCALER).fit(
         frame_train.select(list(protocol.input_feature_names)).to_numpy()
     )
-    first = publish_client_preprocessing(
-        ClientPublishRequest(
-            context=PreprocessingPublishContext(
-                dataset=DatasetId.NBAIOT,
-                population=PopulationId.NBAIOT_NATURAL_DEVICES,
-                partition_seed=Seed(0),
-                split_protocol_identity=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
-                protocol=protocol,
-                canonical_schema_checksum=Checksum("a" * 64),
-                data_root=tmp_path / "data",
-            ),
-            client_identity=ClientPathToken("device_a"),
-            fitted_estimator=fitted,
-            partitions=partitions,
-        )
+    context = PreprocessingPublishContext(
+        dataset=DatasetId.NBAIOT,
+        population=PopulationId.NBAIOT_NATURAL_DEVICES,
+        partition_seed=Seed(0),
+        split_protocol_identity=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
+        protocol=protocol,
+        canonical_schema_checksum=Checksum("a" * 64),
+        data_root=tmp_path / "data",
     )
+    request = ClientPublishRequest(
+        context=context,
+        client_identity=ClientPathToken("device_a"),
+        fitted_estimator=fitted,
+        partitions=partitions,
+    )
+
+    first = publish_client_preprocessing(request)
     (first.paths.train.parent / ProcessedAssetName.COMPLETE).unlink()
-    rebuilt = publish_client_preprocessing(
-        ClientPublishRequest(
-            context=PreprocessingPublishContext(
-                dataset=DatasetId.NBAIOT,
-                population=PopulationId.NBAIOT_NATURAL_DEVICES,
-                partition_seed=Seed(0),
-                split_protocol_identity=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
-                protocol=protocol,
-                canonical_schema_checksum=Checksum("a" * 64),
-                data_root=tmp_path / "data",
-            ),
-            client_identity=ClientPathToken("device_a"),
-            fitted_estimator=fitted,
-            partitions=partitions,
-        )
-    )
+    rebuilt = publish_client_preprocessing(request)
+
     assert rebuilt.paths.train.parent == first.paths.train.parent
     assert (rebuilt.paths.train.parent / ProcessedAssetName.COMPLETE).is_file()

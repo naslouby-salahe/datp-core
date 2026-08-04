@@ -1,6 +1,6 @@
-"""Immutable records shared by held-out federated evaluation."""
+"""Typed records shared by held-out federated evaluation."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 
 from datp_core.domain.enums import (
@@ -30,8 +30,6 @@ class HeldOutBenignScore:
     score_record: ScoreRecord
 
     def __post_init__(self) -> None:
-        if not self.stable_row_id:
-            raise ScientificContractError("held-out score evidence requires a stable row identity")
         if self.partition_role is not PartitionRole.EVALUATION:
             raise ScientificContractError("held-out score evidence rejects non-evaluation score rows")
         if self.outcome_label is not PopulationOutcomeLabel.BENIGN:
@@ -96,32 +94,53 @@ POPULATION_METRIC_IDS: frozenset[MetricId] = frozenset(
 
 
 @dataclass(frozen=True, slots=True)
-class UnavailableOutcome:
+class AvailableMetric:
+    """A metric with exactly one finite value and optional denominator evidence."""
+
+    metric: MetricId
+    value: MetricValue
+    denominator: RowCount | None = None
+    status: MetricStatus = field(init=False, default=MetricStatus.AVAILABLE)
+
+    @property
+    def reason(self) -> None:
+        return None
+
+
+@dataclass(frozen=True, slots=True)
+class UnavailableMetric:
+    """A metric with exactly one closed non-available state and reason."""
+
+    metric: MetricId
     status: MetricStatus
     reason: MetricReason
     denominator: RowCount | None = None
 
     def __post_init__(self) -> None:
         if self.status is MetricStatus.AVAILABLE:
-            raise ValueError("an unavailable outcome cannot be available")
+            raise ValueError("available status requires an AvailableMetric")
+
+    @property
+    def value(self) -> None:
+        return None
 
 
-@dataclass(frozen=True, slots=True)
-class MetricAvailability:
-    metric: MetricId
-    status: MetricStatus
-    value: MetricValue | None
-    denominator: RowCount | None = None
-    outcome: UnavailableOutcome | None = None
+type MetricAvailability = AvailableMetric | UnavailableMetric
 
-    def __post_init__(self) -> None:
-        if self.status is MetricStatus.AVAILABLE:
-            if self.value is None or self.outcome is not None:
-                raise ValueError("available metrics require exactly one value")
-        elif self.value is not None or self.outcome is None:
-            raise ValueError("non-available metrics require exactly one unavailable outcome")
-        elif self.outcome.status is not self.status or self.outcome.denominator != self.denominator:
-            raise ValueError("metric and outcome statuses and denominators must agree")
+
+def metric_by_id(metrics: tuple[MetricAvailability, ...], metric: MetricId) -> MetricAvailability:
+    matches = tuple(item for item in metrics if item.metric is metric)
+    if len(matches) != 1:
+        raise ValueError(f"expected exactly one {metric.value} metric")
+    return matches[0]
+
+
+def validate_metric_set(metrics: tuple[MetricAvailability, ...], expected: frozenset[MetricId]) -> None:
+    metric_ids = tuple(item.metric for item in metrics)
+    if len(metric_ids) != len(frozenset(metric_ids)):
+        raise ValueError("metrics must be unique by metric identity")
+    if frozenset(metric_ids) != expected:
+        raise ValueError("metrics do not match the declared metric identities")
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,50 +152,53 @@ class MetricWarning:
 
 @dataclass(frozen=True, slots=True)
 class ConfusionCounts:
-    true_negative: int
-    false_positive: int
-    true_positive: int
-    false_negative: int
+    true_negative: RowCount
+    false_positive: RowCount
+    true_positive: RowCount
+    false_negative: RowCount
     attack_assignment_valid: bool
 
     def __post_init__(self) -> None:
-        for name, value in (
-            ("true_negative", self.true_negative),
-            ("false_positive", self.false_positive),
-            ("true_positive", self.true_positive),
-            ("false_negative", self.false_negative),
-        ):
-            if not isinstance(value, int) or isinstance(value, bool) or value < 0:
-                raise ValueError(f"{name} must be a non-negative integer")
         if not isinstance(self.attack_assignment_valid, bool):
             raise ValueError("attack assignment validity must be boolean")
-        if not self.attack_assignment_valid and (self.true_positive or self.false_negative):
+        if not self.attack_assignment_valid and (self.true_positive.value or self.false_negative.value):
             raise ValueError("invalid attack assignments cannot contribute attack counts")
 
     @property
     def benign_denominator(self) -> RowCount:
-        return RowCount(self.true_negative + self.false_positive)
+        return self.true_negative + self.false_positive
 
     @property
     def attack_denominator(self) -> RowCount:
-        return RowCount(self.true_positive + self.false_negative)
+        return self.true_positive + self.false_negative
 
     @property
     def evaluation_row_count(self) -> RowCount:
-        return RowCount(self.benign_denominator.value + self.attack_denominator.value)
+        return self.benign_denominator + self.attack_denominator
 
 
-@dataclass(frozen=True, slots=True)
-class ClientMetricResult:
+@dataclass(frozen=True, slots=True, kw_only=True)
+class MetricResultHeader:
     coordinate: FederatedTrainingCoordinate
     threshold_method: FederatedThresholdMethod
-    client: ClientIdentity
     cohort: EvaluationCohort
-    threshold: ThresholdValue
-    confusion: ConfusionCounts
     metrics: tuple[MetricAvailability, ...]
     warnings: tuple[MetricWarning, ...]
     evidence_role: EvidenceRole
+
+    def _validate_warnings(self, valid_metrics: frozenset[MetricId]) -> None:
+        warning_metrics = tuple(warning.metric for warning in self.warnings)
+        if len(warning_metrics) != len(frozenset(warning_metrics)):
+            raise ValueError("metric warnings must be unique by metric identity")
+        if any(metric not in valid_metrics for metric in warning_metrics):
+            raise ValueError("metric warnings must target a declared metric")
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ClientMetricResult(MetricResultHeader):
+    client: ClientIdentity
+    threshold: ThresholdValue
+    confusion: ConfusionCounts
     evaluation_score_checksum: Checksum
     evaluation_label_checksum: Checksum
     source_row_checksum: Checksum
@@ -184,30 +206,18 @@ class ClientMetricResult:
     def __post_init__(self) -> None:
         if self.client.population != self.coordinate.population:
             raise ValueError("metric client and coordinate populations must agree")
-        metric_ids = tuple(item.metric for item in self.metrics)
-        if len(metric_ids) != len(frozenset(metric_ids)):
-            raise ValueError("client metrics must be unique by metric identity")
-        if frozenset(metric_ids) != CLIENT_METRIC_IDS:
-            raise ValueError("client metrics must contain exactly the declared client metric identities")
-        warning_metrics = tuple(warning.metric for warning in self.warnings)
-        if len(warning_metrics) != len(frozenset(warning_metrics)):
-            raise ValueError("client metric warnings must be unique by metric identity")
-        if any(metric not in CLIENT_METRIC_IDS for metric in warning_metrics):
-            raise ValueError("client metric warnings must target a declared client metric")
+        validate_metric_set(self.metrics, CLIENT_METRIC_IDS)
+        self._validate_warnings(CLIENT_METRIC_IDS)
 
     @property
     def attack_evaluable(self) -> bool:
-        return self.confusion.attack_assignment_valid and any(
-            metric.metric is MetricId.TRUE_POSITIVE_RATE and metric.value is not None for metric in self.metrics
+        return self.confusion.attack_assignment_valid and isinstance(
+            metric_by_id(self.metrics, MetricId.TRUE_POSITIVE_RATE), AvailableMetric
         )
 
 
-@dataclass(frozen=True, slots=True)
-class PopulationMetricResult:
-    coordinate: FederatedTrainingCoordinate
-    threshold_method: FederatedThresholdMethod
-    cohort: EvaluationCohort
-    metrics: tuple[MetricAvailability, ...]
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PopulationMetricResult(MetricResultHeader):
     candidate_client_count: RowCount
     calibration_eligible_client_count: RowCount
     fpr_evaluable_client_count: RowCount
@@ -215,59 +225,20 @@ class PopulationMetricResult:
     deployment_fallback_count: RowCount
     unavailable_client_count: RowCount
     excluded_clients: tuple[ClientIdentity, ...]
-    warnings: tuple[MetricWarning, ...]
-    evidence_role: EvidenceRole
 
     def __post_init__(self) -> None:
-        metric_ids = tuple(item.metric for item in self.metrics)
-        if len(metric_ids) != len(frozenset(metric_ids)):
-            raise ValueError("population metrics must be unique by metric identity")
-        if frozenset(metric_ids) != POPULATION_METRIC_IDS:
-            raise ValueError("population metrics must contain exactly the declared population metric identities")
+        validate_metric_set(self.metrics, POPULATION_METRIC_IDS)
+        self._validate_warnings(POPULATION_METRIC_IDS)
         if self.cohort is not EvaluationCohort.FPR_EVALUABLE:
             raise ValueError("population aggregates must be labelled as FPR-evaluable")
         if self.fpr_evaluable_client_count > self.calibration_eligible_client_count:
             raise ValueError("FPR-evaluable clients must belong to the calibration-eligible cohort")
         if self.attack_evaluable_client_count > self.calibration_eligible_client_count:
             raise ValueError("attack-evaluable clients must belong to the calibration-eligible cohort")
-        if self.calibration_eligible_client_count.value > self.candidate_client_count.value:
+        if self.calibration_eligible_client_count > self.candidate_client_count:
             raise ValueError("calibration-eligible client count cannot exceed the candidate count")
-        if (
-            self.deployment_fallback_count.value + self.unavailable_client_count.value
-            > self.candidate_client_count.value
-        ):
+        if self.deployment_fallback_count + self.unavailable_client_count > self.candidate_client_count:
             raise ValueError("excluded client counts cannot exceed the candidate count")
         excluded = tuple(client.client_id for client in self.excluded_clients)
         if len(excluded) != len(frozenset(excluded)):
             raise ValueError("excluded clients must be unique")
-        warning_metrics = tuple(warning.metric for warning in self.warnings)
-        if len(warning_metrics) != len(frozenset(warning_metrics)):
-            raise ValueError("population metric warnings must be unique by metric identity")
-        if any(metric not in POPULATION_METRIC_IDS for metric in warning_metrics):
-            raise ValueError("population metric warnings must target a declared population metric")
-
-
-@dataclass(frozen=True, slots=True)
-class CoverageResult:
-    target_coverage: MetricAvailability
-    achieved_held_out_benign_coverage: MetricAvailability
-    signed_coverage_error: MetricAvailability
-    absolute_coverage_error: MetricAvailability
-
-
-@dataclass(frozen=True, slots=True)
-class ThresholdEstimationResult:
-    absolute_threshold_error: MetricAvailability
-    relative_threshold_error: MetricAvailability
-    signed_attainment_error: MetricAvailability
-    absolute_attainment_error: MetricAvailability
-
-
-@dataclass(frozen=True, slots=True)
-class CommunicationResult:
-    estimated_serialized_bytes: MetricAvailability
-
-
-@dataclass(frozen=True, slots=True)
-class AlertBurdenResult:
-    alerts_per_client_per_day: MetricAvailability

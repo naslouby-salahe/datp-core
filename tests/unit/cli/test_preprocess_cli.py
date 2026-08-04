@@ -1,3 +1,4 @@
+from click import unstyle
 from typer.testing import CliRunner
 
 from datp_core.cli import app
@@ -5,10 +6,14 @@ from datp_core.cli import app
 runner = CliRunner()
 
 
+def _plain_output(text: str) -> str:
+    return unstyle(text)
+
+
 def test_preprocess_federated_requires_declared_options() -> None:
     result = runner.invoke(app, ["preprocess-federated", "--help"])
     assert result.exit_code == 0
-    compact = result.stdout.replace("\n", " ").replace(" ", "")
+    compact = _plain_output(result.stdout).replace("\n", " ").replace(" ", "")
     assert "--population" in compact
     assert "--partition-seed" in compact
     assert "--split-protocol" in compact
@@ -31,7 +36,7 @@ def test_preprocess_federated_rejects_centralized_identity() -> None:
         ],
     )
     assert result.exit_code != 0
-    assert "federated_client_local_standard" in result.output
+    assert "federated_client_local_standard" in _plain_output(result.output)
 
 
 def test_preprocess_federated_rejects_undeclared_concentration() -> None:
@@ -54,7 +59,7 @@ def test_preprocess_federated_rejects_undeclared_concentration() -> None:
         ],
     )
     assert result.exit_code != 0
-    compact = result.output.replace("\n", " ")
+    compact = _plain_output(result.output).replace("\n", " ")
     assert "declared" in compact
     assert "Dirichlet grid" in compact
 
@@ -62,5 +67,6 @@ def test_preprocess_federated_rejects_undeclared_concentration() -> None:
 def test_preprocess_centralized_reference_help() -> None:
     result = runner.invoke(app, ["preprocess-centralized-reference", "--help"])
     assert result.exit_code == 0
-    assert "--population" in result.stdout
-    assert "centralized" in result.stdout.lower()
+    output = _plain_output(result.stdout)
+    assert "--population" in output
+    assert "centralized" in output.lower()

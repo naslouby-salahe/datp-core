@@ -24,11 +24,6 @@ from datp_core.protocols.models import AnchorDecisionProtocol
 
 
 @dataclass(frozen=True, slots=True)
-class CollectionCount(NonNegativeIntegerValue):
-    validation_name: ClassVar[str] = "collection count"
-
-
-@dataclass(frozen=True, slots=True)
 class VerifyAnchorStageRequest:
     protocol: AnchorDecisionProtocol
     observations: tuple[AnchorObservedMetric, ...] | None = None
@@ -39,12 +34,12 @@ class VerifyAnchorStageRequest:
 
 @dataclass(frozen=True, slots=True)
 class VerifyAnchorStageStatus:
-    stage: StageOperationId
+    stage: ClassVar[StageOperationId] = StageOperationId.VERIFY_ANCHOR
     gate_status: AnchorGateStatus
     dependent_readiness: ExperimentReadiness
-    discrepancy_count: CollectionCount
-    observation_count: CollectionCount
-    reference_count: CollectionCount
+    discrepancy_count: NonNegativeIntegerValue
+    observation_count: NonNegativeIntegerValue
+    reference_count: NonNegativeIntegerValue
     dependency_blocker: str | None
     diagnostics_checksum: Checksum
 
@@ -80,12 +75,11 @@ def verify_anchor_stage(request: VerifyAnchorStageRequest) -> VerifyAnchorStageR
         None if decision.reproduction.dependency_blocker is None else decision.reproduction.dependency_blocker.detail
     )
     status = VerifyAnchorStageStatus(
-        stage=StageOperationId.VERIFY_ANCHOR,
         gate_status=decision.status,
         dependent_readiness=decision.dependent_readiness,
-        discrepancy_count=CollectionCount(len(decision.reproduction.discrepancies)),
-        observation_count=CollectionCount(len(decision.reproduction.observations)),
-        reference_count=CollectionCount(len(decision.reproduction.references)),
+        discrepancy_count=NonNegativeIntegerValue(len(decision.reproduction.discrepancies)),
+        observation_count=NonNegativeIntegerValue(len(decision.reproduction.observations)),
+        reference_count=NonNegativeIntegerValue(len(decision.reproduction.references)),
         dependency_blocker=blocker_detail,
         diagnostics_checksum=diagnostics_checksum,
     )

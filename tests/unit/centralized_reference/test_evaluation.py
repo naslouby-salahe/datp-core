@@ -14,6 +14,7 @@ from tests.unit.centralized_reference.helpers import (
 
 from datp_core.centralized_reference.checkpointing import retain_centralized_checkpoint_candidates
 from datp_core.centralized_reference.evaluation import (
+    CentralizedConfusionCounts,
     evaluate_centralized_reference,
     reject_b1_b4_insertion,
     reject_centralized_as_federated_threshold_policy,
@@ -28,6 +29,38 @@ from datp_core.centralized_reference.thresholding import (
 from datp_core.domain.enums import CentralizedThresholdMethod, EvidenceRole, FederatedThresholdMethod, MetricId
 from datp_core.domain.errors import LeakageError
 from datp_core.domain.values import RowCount, Seed
+
+
+def test_centralized_confusion_counts_require_row_count_values() -> None:
+    confusion = CentralizedConfusionCounts(
+        true_negative=RowCount(10),
+        false_positive=RowCount(2),
+        true_positive=RowCount(7),
+        false_negative=RowCount(1),
+    )
+    assert sum(
+        (
+            confusion.true_negative,
+            confusion.false_positive,
+            confusion.true_positive,
+            confusion.false_negative,
+        )
+    ) == RowCount(20)
+    # A dict-splat (rather than a direct keyword argument) keeps the raw-int
+    # substitution a runtime-only concern: it is a deliberate scientific-contract
+    # probe, not a static call-signature error the type checker should flag.
+    fields_with_a_raw_int_true_negative = {
+        "true_negative": 10,
+        "false_positive": RowCount(2),
+        "true_positive": RowCount(7),
+        "false_negative": RowCount(1),
+    }
+
+    def build() -> CentralizedConfusionCounts:
+        return CentralizedConfusionCounts(**fields_with_a_raw_int_true_negative)
+
+    with pytest.raises(TypeError, match="RowCount"):
+        build()
 
 
 def test_pooled_evaluation_metrics_and_confusion(tmp_path: Path) -> None:

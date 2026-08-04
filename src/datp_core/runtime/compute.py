@@ -6,17 +6,29 @@ import torch
 
 from datp_core.domain.enums import ContractSubject
 from datp_core.domain.errors import ExecutionStateError
-from datp_core.domain.values import WorkerCount
+from datp_core.domain.values import CudaDeviceCount, CudaDeviceName, WorkerCount
 from datp_core.protocols.runtime import CANONICAL_RUNTIME
 
 
 @dataclass(frozen=True, slots=True)
 class CudaProvenance:
     cuda_available: bool
-    device_count: int
-    device_name: str | None
+    device_count: CudaDeviceCount
+    device_name: CudaDeviceName | None
     cuda_version: str | None
     torch_version: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.cuda_available, bool):
+            raise TypeError("CUDA availability must be boolean")
+        if not isinstance(self.device_count, CudaDeviceCount):
+            raise TypeError("CUDA provenance requires a typed device count")
+        if self.device_name is not None and not isinstance(self.device_name, CudaDeviceName):
+            raise TypeError("CUDA provenance requires a typed device name")
+        if self.cuda_available != (self.device_count.value > 0 and self.device_name is not None):
+            raise ValueError("CUDA availability must match the recorded devices")
+        if not self.torch_version:
+            raise ValueError("CUDA provenance requires the PyTorch version")
 
 
 def require_cuda_available() -> None:
@@ -45,8 +57,8 @@ def canonical_worker_count() -> WorkerCount:
 
 def cuda_provenance() -> CudaProvenance:
     available = torch.cuda.is_available()
-    device_count = torch.cuda.device_count() if available else 0
-    device_name = torch.cuda.get_device_name(0) if available and device_count > 0 else None
+    device_count = CudaDeviceCount(torch.cuda.device_count() if available else 0)
+    device_name = CudaDeviceName(torch.cuda.get_device_name(0)) if available and device_count.value > 0 else None
     cuda_version = torch.version.cuda if available else None
     return CudaProvenance(
         cuda_available=available,

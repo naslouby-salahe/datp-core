@@ -1,6 +1,7 @@
 """Stage: select the federated primary checkpoint under FIXED_TERMINAL_MAXIMUM_ROUND."""
 
 from dataclasses import dataclass
+from typing import ClassVar
 
 from datp_core.domain.enums import StageOperationId
 from datp_core.domain.values import Checksum, MetricValue
@@ -30,7 +31,7 @@ class SelectFederatedCheckpointRequest:
 
 @dataclass(frozen=True, slots=True)
 class SelectFederatedCheckpointResult:
-    stage: StageOperationId
+    stage: ClassVar[StageOperationId] = StageOperationId.SELECT_FEDERATED_CHECKPOINT
     decision: CheckpointDecision
 
 
@@ -55,7 +56,4 @@ def select_federated_checkpoint_stage(
         preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
         split_manifest_checksum=request.split_manifest_checksum,
     )
-    return SelectFederatedCheckpointResult(
-        stage=StageOperationId.SELECT_FEDERATED_CHECKPOINT,
-        decision=decision,
-    )
+    return SelectFederatedCheckpointResult(decision=decision)

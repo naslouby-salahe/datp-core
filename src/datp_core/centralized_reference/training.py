@@ -31,6 +31,7 @@ from datp_core.domain.errors import (
 from datp_core.domain.values import (
     BatchSize,
     Checksum,
+    CudaDeviceName,
     FeatureCount,
     FeatureNameSequence,
     LearningRate,
@@ -44,7 +45,11 @@ from datp_core.domain.values import (
     checksum_file,
     checksum_text,
 )
-from datp_core.learning.autoencoder import ReconstructionAutoencoder
+from datp_core.learning.autoencoder import (
+    AutoencoderState,
+    AutoencoderStateView,
+    ReconstructionAutoencoder,
+)
 from datp_core.populations.models import (
     OUTCOME_LABEL_COLUMN,
     STABLE_ROW_ID_COLUMN,
@@ -110,10 +115,10 @@ class CentralizedEpochLoss:
     mean_training_loss: MetricValue
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class CentralizedModelSnapshot:
     round_number: RoundNumber
-    state_dict: dict[str, torch.Tensor]
+    state_dict: AutoencoderState
     mean_training_loss: MetricValue
 
 
@@ -134,11 +139,13 @@ class CentralizedTrainingResult:
     model_tensor_checksum: Checksum
     preprocessing_state_checksum: Checksum
     split_manifest_checksum: Checksum
-    device_name: str
+    device_name: CudaDeviceName
     batch_size_used: BatchSize
     final_epoch: RoundNumber
 
     def __post_init__(self) -> None:
+        if not isinstance(self.device_name, CudaDeviceName):
+            raise TypeError("centralized training results require a typed CUDA device name")
         if self.train_row_count < 1:
             raise ValueError("centralized training requires at least one benign training row")
         if self.batch_size_used != self.optimizer.batch_size:
@@ -148,7 +155,7 @@ class CentralizedTrainingResult:
             )
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class CentralizedTrainingRequest:
     coordinate: CentralizedTrainingCoordinate
     training_features: pl.DataFrame
@@ -226,7 +233,7 @@ def train_centralized_autoencoder(request: CentralizedTrainingRequest) -> Centra
     tensor_path = request.output_directory / CentralizedArtifactName.MODEL_TENSORS
     tensor_checksum = persist_model_tensors(model, tensor_path)
     assert_safetensors_reload(model, tensor_path, device)
-    device_name = torch.cuda.get_device_name(device)
+    device_name = CudaDeviceName(torch.cuda.get_device_name(device))
     return CentralizedTrainingResult(
         coordinate=request.coordinate,
         autoencoder_widths=tuple(request.autoencoder.widths),
@@ -293,7 +300,7 @@ def declared_centralized_training_values() -> tuple[
     return CENTRALIZED_TRAINING_PROTOCOL, NBAIOT_AUTOENCODER, LEARNING_RATE, BATCH_SIZE, WEIGHT_DECAY
 
 
-def persist_state_dict_tensors(state_dict: dict[str, torch.Tensor], path: Path) -> Checksum:
+def persist_state_dict_tensors(state_dict: AutoencoderStateView, path: Path) -> Checksum:
     path.parent.mkdir(parents=True, exist_ok=True)
     cpu_state = {name: tensor.detach().cpu().contiguous() for name, tensor in state_dict.items()}
     save_file(cpu_state, str(path))

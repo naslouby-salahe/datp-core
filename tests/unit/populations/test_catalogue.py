@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from datp_core.domain.enums import DatasetId, PopulationId, SplitProtocolId
+from datp_core.domain.enums import PopulationId, SplitProtocolId
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import Seed
 from datp_core.populations.catalogue import (
@@ -34,10 +34,7 @@ def test_catalogue_constructs_and_hands_off(nbaiot_canonical_root: Path) -> None
     )
     handoff = build_preprocessing_handoff(
         PreprocessingHandoffRequest(
-            construction,
-            Seed(0),
-            SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
-            DatasetId.NBAIOT,
+            construction=construction,
             deployment_fallback_client_ids=frozenset(),
         )
     )

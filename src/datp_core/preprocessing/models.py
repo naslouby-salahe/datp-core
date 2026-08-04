@@ -1,6 +1,7 @@
 """Typed preprocessing protocol and fitted-state records."""
 
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 
 import numpy as np
@@ -9,7 +10,7 @@ from pydantic import model_validator
 
 from datp_core.artifacts.layout import RelativeAssetPathSequence
 from datp_core.artifacts.serialization import TrustedScaler
-from datp_core.domain.contracts import StrictModel
+from datp_core.domain.contracts import ClientCollection, StrictModel
 from datp_core.domain.enums import (
     ContractSubject,
     DatasetId,
@@ -62,109 +63,57 @@ class PreprocessingProtocol(StrictModel):
         return self
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True, eq=False)
 class PreprocessingPartition:
     role: PartitionRole
     frame: pl.DataFrame
 
     def __post_init__(self) -> None:
         if self.frame.height == 0:
-            raise ValueError(f"PreprocessingPartition frame for role {self.role.value} cannot be empty")
-        for col in (STABLE_ROW_ID_COLUMN, OUTCOME_LABEL_COLUMN):
-            if col not in self.frame.columns:
-                raise ScientificContractError(f"missing structural column {col}", subject=ContractSubject.SCHEMA)
-        if self.frame.get_column(STABLE_ROW_ID_COLUMN).null_count() > 0:
-            raise ValueError("STABLE_ROW_ID_COLUMN cannot contain null values")
-        if self.frame.get_column(OUTCOME_LABEL_COLUMN).null_count() > 0:
-            raise ValueError("OUTCOME_LABEL_COLUMN cannot contain null values")
+            raise ValueError(f"preprocessing partition {self.role.value} cannot be empty")
+        for column in (STABLE_ROW_ID_COLUMN, OUTCOME_LABEL_COLUMN):
+            if column not in self.frame.columns:
+                raise ScientificContractError(f"missing structural column {column}", subject=ContractSubject.SCHEMA)
+            if self.frame.get_column(column).null_count() > 0:
+                raise ValueError(f"{column} cannot contain null values")
         _ = self.row_ids
         _ = self.outcome_labels
 
     @property
     def row_ids(self) -> StableRowIdSequence:
-        ids = tuple(StableRowId(str(v)) for v in self.frame.get_column(STABLE_ROW_ID_COLUMN).to_list())
-        return StableRowIdSequence(ids)
+        return StableRowIdSequence(
+            tuple(StableRowId(str(value)) for value in self.frame.get_column(STABLE_ROW_ID_COLUMN).to_list())
+        )
 
     @property
     def outcome_labels(self) -> OutcomeLabelSequence:
-        labels = tuple(OutcomeLabel(str(v)) for v in self.frame.get_column(OUTCOME_LABEL_COLUMN).to_list())
-        return OutcomeLabelSequence(labels)
+        return OutcomeLabelSequence(
+            tuple(OutcomeLabel(str(value)) for value in self.frame.get_column(OUTCOME_LABEL_COLUMN).to_list())
+        )
 
 
-@dataclass(frozen=True, slots=True)
-class PreprocessingPartitionSet:
+@dataclass(slots=True, eq=False)
+class PreprocessingPartitions:
     partitions: tuple[PreprocessingPartition, ...]
 
     def __post_init__(self) -> None:
         if not self.partitions:
-            raise ValueError("PreprocessingPartitionSet cannot be empty")
-        roles = tuple(p.role for p in self.partitions)
-        if len(frozenset(roles)) != len(roles):
-            raise ValueError("PreprocessingPartitionSet cannot contain duplicate partition roles")
+            raise ValueError("preprocessing partitions cannot be empty")
+        roles = tuple(partition.role for partition in self.partitions)
+        if len(roles) != len(frozenset(roles)):
+            raise ValueError("preprocessing partitions cannot contain duplicate roles")
 
     def require(self, role: PartitionRole) -> PreprocessingPartition:
-        for partition in self.partitions:
-            if partition.role is role:
-                return partition
-        raise ScientificContractError(f"missing preprocessing partition {role.value}", subject=role)
+        matches = tuple(partition for partition in self.partitions if partition.role is role)
+        if len(matches) != 1:
+            raise ScientificContractError(f"missing preprocessing partition {role.value}", subject=role)
+        return matches[0]
 
     def roles(self) -> tuple[PartitionRole, ...]:
-        return tuple(p.role for p in self.partitions)
+        return tuple(partition.role for partition in self.partitions)
 
 
-@dataclass(frozen=True, slots=True)
-class ClientPreprocessingPartitions:
-    client_identity: ClientPathToken
-    partitions: PreprocessingPartitionSet
-
-
-@dataclass(frozen=True, slots=True)
-class ClientPreprocessingPartitionSet:
-    clients: tuple[ClientPreprocessingPartitions, ...]
-
-    def __post_init__(self) -> None:
-        if not self.clients:
-            raise ValueError("ClientPreprocessingPartitionSet cannot be empty")
-        identities = tuple(item.client_identity for item in self.clients)
-        if len(frozenset(identities)) != len(identities):
-            raise ValueError("ClientPreprocessingPartitionSet cannot contain duplicate client identities")
-
-
-@dataclass(frozen=True, slots=True)
-class ClientFittedEstimator:
-    client_identity: ClientPathToken
-    estimator: TrustedScaler
-
-
-@dataclass(frozen=True, slots=True)
-class ClientLocalFittedEstimators:
-    estimators: tuple[ClientFittedEstimator, ...]
-
-    def __post_init__(self) -> None:
-        if not self.estimators:
-            raise ValueError("ClientLocalFittedEstimators cannot be empty")
-        clients = tuple(item.client_identity for item in self.estimators)
-        if len(frozenset(clients)) != len(clients):
-            raise ValueError("ClientLocalFittedEstimators cannot contain duplicate client identities")
-        if len({id(item.estimator) for item in self.estimators}) != len(self.estimators):
-            raise ValueError("client-local estimators must be distinct objects")
-
-    def require(self, client_identity: ClientPathToken) -> TrustedScaler:
-        for item in self.estimators:
-            if item.client_identity == client_identity:
-                return item.estimator
-        raise ScientificContractError(
-            f"missing estimator for client {client_identity.value}",
-            subject=ContractSubject.CLIENT_IDENTITY,
-        )
-
-
-@dataclass(frozen=True, slots=True)
-class PooledFittedEstimator:
-    estimator: TrustedScaler
-
-
-type FederatedFittedEstimators = ClientLocalFittedEstimators | PooledFittedEstimator
+type FederatedFittedEstimators = ClientCollection[ClientPathToken, TrustedScaler] | TrustedScaler
 
 
 @dataclass(frozen=True, slots=True)
@@ -175,7 +124,7 @@ class _FittedPreprocessingStateBase:
     fit_row_count: RowCount
 
     def __post_init__(self) -> None:
-        if self.fit_row_count < 1:
+        if self.fit_row_count.value < 1:
             raise ValueError("fitted preprocessing requires at least one training row")
 
     @property
@@ -211,11 +160,6 @@ class ClientPreprocessingResult:
     paths: PreprocessedPartitionPaths
     fitted_state: FederatedFittedPreprocessingState
     publication_status: PublicationStatus
-
-
-@dataclass(frozen=True, slots=True)
-class ClientPreprocessPublication:
-    result: ClientPreprocessingResult
     train_row_count: RowCount
     calibration_row_count: RowCount
     evaluation_row_count: RowCount
@@ -274,9 +218,8 @@ class PreprocessingValidationReport(StrictModel):
             raise ValueError("partition evidence roles must be unique")
         if PartitionRole.TRAIN not in roles:
             raise ValueError("partition evidence must contain TRAIN")
-        for item in self.partition_evidence:
-            if item.source_row_count != item.output_row_count:
-                raise ValueError("source and output row counts must match")
+        if any(item.source_row_count != item.output_row_count for item in self.partition_evidence):
+            raise ValueError("source and output row counts must match")
         return self
 
 
@@ -302,34 +245,31 @@ class PreprocessingPublishContext:
     execution_identity: ExternalTemporalExecutionIdentity | None = None
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True, eq=False)
 class ClientPublishRequest:
     context: PreprocessingPublishContext
     client_identity: ClientPathToken
     fitted_estimator: TrustedScaler
-    partitions: PreprocessingPartitionSet
+    partitions: PreprocessingPartitions
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True, eq=False)
 class PreprocessingFitBatch:
     training_matrix: np.ndarray
     training_row_ids: StableRowIdSequence
     training_labels: OutcomeLabelSequence
 
 
-@dataclass(frozen=True, slots=True)
-class CentralizedFittedStatePublishSpec:
-    protocol: PreprocessingProtocol
-    estimator_path: Path
-    fit_row_count: RowCount
+class PooledPreprocessingOwner(StrEnum):
+    POOLED = "pooled"
 
 
 @dataclass(frozen=True, slots=True)
-class FederatedFittedStatePublishSpec:
+class FittedStatePublishSpec[OwnerT]:
     protocol: PreprocessingProtocol
     estimator_path: Path
     fit_row_count: RowCount
-    client_identity: ClientPathToken
+    owner: OwnerT
 
 
 @dataclass(frozen=True, slots=True)

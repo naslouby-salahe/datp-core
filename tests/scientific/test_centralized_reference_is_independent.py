@@ -2,10 +2,9 @@ from pathlib import Path
 
 import pytest
 
-from datp_core.centralized_reference.checkpointing import FederatedCheckpointMarker, reject_federated_checkpoint
+from datp_core.centralized_reference.checkpointing import reject_federated_checkpoint
 from datp_core.centralized_reference.preprocessing import reject_federated_state_for_pooled
 from datp_core.centralized_reference.thresholding import (
-    FederatedScoreMarker,
     reject_federated_scores_for_centralized_threshold,
     reject_local_quantile_mean_as_centralized,
 )
@@ -58,12 +57,11 @@ def test_centralized_pipeline_rejects_all_federated_artifacts(tmp_path: Path) ->
     with pytest.raises(LeakageError):
         reject_federated_preprocessing_for_training(state)
     with pytest.raises(LeakageError):
-        reject_federated_checkpoint(FederatedCheckpointMarker("fedavg", tmp_path / "m.pt"))
-    with pytest.raises(LeakageError):
-        reject_federated_checkpoint(FederatedCheckpointMarker("fedavg", tmp_path / "m.pt"))
+        reject_federated_checkpoint("fedavg")
     with pytest.raises(LeakageError):
         reject_federated_scores_for_centralized_threshold(
-            FederatedScoreMarker("scores", FederatedThresholdMethod.LOCAL_THRESHOLD)
+            "scores",
+            FederatedThresholdMethod.LOCAL_THRESHOLD,
         )
     with pytest.raises(LeakageError):
         reject_local_quantile_mean_as_centralized((1.0, 2.0))

@@ -1,26 +1,43 @@
 """Held-out benign coverage diagnostics for persisted conformal thresholds."""
 
 from dataclasses import dataclass
-from enum import StrEnum
 from math import isfinite
 
 import polars as pl
 
 from datp_core.domain.enums import MetricId, ScoreFrameColumn
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import CoverageTarget, Quantile, RowCount, Seed, ThresholdValue, checksum_file
-from datp_core.evaluation.metric_semantics import available, unavailable
-from datp_core.evaluation.models import CoverageResult, HeldOutBenignScore, MetricReason, MetricStatus
+from datp_core.domain.values import (
+    ConformalRankIndex,
+    CoverageTarget,
+    Quantile,
+    RowCount,
+    Seed,
+    ThresholdValue,
+    checksum_file,
+)
+from datp_core.evaluation.metric_semantics import available, metric_value, unavailable
+from datp_core.evaluation.models import (
+    HeldOutBenignScore,
+    MetricAvailability,
+    MetricReason,
+    MetricStatus,
+    metric_by_id,
+    validate_metric_set,
+)
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.populations.models import ClientIdentity, PopulationOutcomeLabel
 from datp_core.scoring.models import ScoreRecord
 from datp_core.thresholding.models import ConformalAssignment
 
-
-class CoverageUnavailableReason(StrEnum):
-    """Closed reasons held-out conformal coverage cannot be calculated."""
-
-    NO_HELD_OUT_BENIGN_SCORES = "no_held_out_benign_scores"
+_COVERAGE_METRICS = frozenset(
+    {
+        MetricId.TARGET_COVERAGE,
+        MetricId.ACHIEVED_COVERAGE,
+        MetricId.SIGNED_COVERAGE_ERROR,
+        MetricId.ABSOLUTE_COVERAGE_ERROR,
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,25 +49,17 @@ class ConformalCoverageDiagnostic:
     training_seed: Seed
     target_coverage: CoverageTarget
     calibration_count: RowCount
-    finite_sample_rank_index: int
+    finite_sample_rank_index: ConformalRankIndex
     effective_quantile: Quantile
     tie_count: RowCount
     threshold: ThresholdValue
-    achieved_held_out_benign_coverage: float | None
-    signed_coverage_error: float | None
-    absolute_coverage_error: float | None
-    unavailable_reason: CoverageUnavailableReason | None
-    result: CoverageResult
+    metrics: tuple[MetricAvailability, ...]
 
     def __post_init__(self) -> None:
-        is_available = self.result.achieved_held_out_benign_coverage.status is MetricStatus.AVAILABLE
-        values = (
-            self.achieved_held_out_benign_coverage,
-            self.signed_coverage_error,
-            self.absolute_coverage_error,
-        )
-        if self.calibration_count.value < 1 or self.finite_sample_rank_index < 1:
-            raise ScientificContractError("conformal diagnostics require a positive calibration count and rank")
+        if self.calibration_count.value < 1:
+            raise ScientificContractError("conformal diagnostics require a positive calibration count")
+        if not isinstance(self.finite_sample_rank_index, ConformalRankIndex):
+            raise ScientificContractError("conformal diagnostics require a typed finite-sample rank")
         if (
             self.coordinate.population is not self.client.population
             or self.coordinate.training_seed != self.training_seed
@@ -58,13 +67,33 @@ class ConformalCoverageDiagnostic:
             raise ScientificContractError("conformal coverage coordinate must match the client and training seed")
         if not isfinite(self.effective_quantile.value) or not 0 < self.effective_quantile.value <= 1:
             raise ScientificContractError("conformal effective quantile must be finite and in (0, 1]")
-        if self.tie_count.value < 0 or not isfinite(self.threshold.value):
+        if not isfinite(self.threshold.value):
             raise ScientificContractError("conformal threshold provenance must be finite")
-        if is_available:
-            if any(value is None for value in values) or self.unavailable_reason is not None:
-                raise ScientificContractError("available coverage requires all values and no unavailable reason")
-        elif any(value is not None for value in values) or self.unavailable_reason is None:
-            raise ScientificContractError("unavailable coverage requires a reason and no metric values")
+        validate_metric_set(self.metrics, _COVERAGE_METRICS)
+        target = metric_by_id(self.metrics, MetricId.TARGET_COVERAGE)
+        if target.value is None or target.value.value != self.target_coverage.value:
+            raise ScientificContractError("coverage target metric must match the declared target")
+        achieved = metric_by_id(self.metrics, MetricId.ACHIEVED_COVERAGE)
+        signed = metric_by_id(self.metrics, MetricId.SIGNED_COVERAGE_ERROR)
+        absolute = metric_by_id(self.metrics, MetricId.ABSOLUTE_COVERAGE_ERROR)
+        if len({achieved.status, signed.status, absolute.status}) != 1:
+            raise ScientificContractError("coverage outcome metrics must share one availability state")
+
+    @property
+    def achieved_held_out_benign_coverage(self) -> float | None:
+        return metric_value(metric_by_id(self.metrics, MetricId.ACHIEVED_COVERAGE))
+
+    @property
+    def signed_coverage_error(self) -> float | None:
+        return metric_value(metric_by_id(self.metrics, MetricId.SIGNED_COVERAGE_ERROR))
+
+    @property
+    def absolute_coverage_error(self) -> float | None:
+        return metric_value(metric_by_id(self.metrics, MetricId.ABSOLUTE_COVERAGE_ERROR))
+
+    @property
+    def unavailable_reason(self) -> MetricReason | None:
+        return metric_by_id(self.metrics, MetricId.ACHIEVED_COVERAGE).reason
 
 
 def evaluate_held_out_conformal_coverage(
@@ -81,46 +110,39 @@ def evaluate_held_out_conformal_coverage(
             "conformal coverage coordinate must match the assignment client and training seed"
         )
     if not held_out_benign_scores:
-        return ConformalCoverageDiagnostic(
-            client=assignment.client,
-            coordinate=coordinate,
-            training_seed=training_seed,
-            target_coverage=target_coverage,
-            calibration_count=assignment.calibration_count,
-            finite_sample_rank_index=assignment.rank_index,
-            effective_quantile=assignment.effective_quantile,
-            tie_count=assignment.tie_count,
-            threshold=assignment.threshold,
-            achieved_held_out_benign_coverage=None,
-            signed_coverage_error=None,
-            absolute_coverage_error=None,
-            unavailable_reason=CoverageUnavailableReason.NO_HELD_OUT_BENIGN_SCORES,
-            result=CoverageResult(
-                target_coverage=available(MetricId.TARGET_COVERAGE, target_coverage.value),
-                achieved_held_out_benign_coverage=unavailable(
-                    MetricId.ACHIEVED_COVERAGE,
-                    MetricStatus.UNAVAILABLE,
-                    MetricReason.EMPTY_BENIGN_DENOMINATOR,
-                    denominator=0,
-                ),
-                signed_coverage_error=unavailable(
-                    MetricId.SIGNED_COVERAGE_ERROR,
-                    MetricStatus.UNAVAILABLE,
-                    MetricReason.EMPTY_BENIGN_DENOMINATOR,
-                    denominator=0,
-                ),
-                absolute_coverage_error=unavailable(
-                    MetricId.ABSOLUTE_COVERAGE_ERROR,
-                    MetricStatus.UNAVAILABLE,
-                    MetricReason.EMPTY_BENIGN_DENOMINATOR,
-                    denominator=0,
-                ),
+        metrics: tuple[MetricAvailability, ...] = (
+            available(MetricId.TARGET_COVERAGE, target_coverage.value),
+            unavailable(
+                MetricId.ACHIEVED_COVERAGE,
+                MetricStatus.UNAVAILABLE,
+                MetricReason.EMPTY_BENIGN_DENOMINATOR,
+                denominator=0,
+            ),
+            unavailable(
+                MetricId.SIGNED_COVERAGE_ERROR,
+                MetricStatus.UNAVAILABLE,
+                MetricReason.EMPTY_BENIGN_DENOMINATOR,
+                denominator=0,
+            ),
+            unavailable(
+                MetricId.ABSOLUTE_COVERAGE_ERROR,
+                MetricStatus.UNAVAILABLE,
+                MetricReason.EMPTY_BENIGN_DENOMINATOR,
+                denominator=0,
             ),
         )
-    achieved = sum(score.score <= assignment.threshold for score in held_out_benign_scores) / len(
-        held_out_benign_scores
-    )
-    signed_error = achieved - target_coverage.value
+    else:
+        achieved = sum(score.score <= assignment.threshold for score in held_out_benign_scores) / len(
+            held_out_benign_scores
+        )
+        signed_error = achieved - target_coverage.value
+        denominator = len(held_out_benign_scores)
+        metrics = (
+            available(MetricId.TARGET_COVERAGE, target_coverage.value),
+            available(MetricId.ACHIEVED_COVERAGE, achieved, denominator=denominator),
+            available(MetricId.SIGNED_COVERAGE_ERROR, signed_error, denominator=denominator),
+            available(MetricId.ABSOLUTE_COVERAGE_ERROR, abs(signed_error), denominator=denominator),
+        )
     return ConformalCoverageDiagnostic(
         client=assignment.client,
         coordinate=coordinate,
@@ -131,24 +153,7 @@ def evaluate_held_out_conformal_coverage(
         effective_quantile=assignment.effective_quantile,
         tie_count=assignment.tie_count,
         threshold=assignment.threshold,
-        achieved_held_out_benign_coverage=achieved,
-        signed_coverage_error=signed_error,
-        absolute_coverage_error=abs(signed_error),
-        unavailable_reason=None,
-        result=CoverageResult(
-            target_coverage=available(MetricId.TARGET_COVERAGE, target_coverage.value),
-            achieved_held_out_benign_coverage=available(
-                MetricId.ACHIEVED_COVERAGE, achieved, denominator=len(held_out_benign_scores)
-            ),
-            signed_coverage_error=available(
-                MetricId.SIGNED_COVERAGE_ERROR, signed_error, denominator=len(held_out_benign_scores)
-            ),
-            absolute_coverage_error=available(
-                MetricId.ABSOLUTE_COVERAGE_ERROR,
-                abs(signed_error),
-                denominator=len(held_out_benign_scores),
-            ),
-        ),
+        metrics=metrics,
     )
 
 

@@ -11,7 +11,6 @@ from datp_core.domain.values import (
     CalibrationSize,
     CoverageTarget,
     Quantile,
-    Ratio,
     ShrinkageWeight,
     SummaryCoefficient,
 )
@@ -38,7 +37,6 @@ MINIMUM_BENIGN_SUPPORT = CalibrationSize(100)
 CALIBRATION_SIZES = tuple(CalibrationSize(value) for value in (50, 100, 250, 500, 1000, 5000))
 FIXED_SHRINKAGE_WEIGHTS = tuple(ShrinkageWeight(value) for value in (0, 0.25, 0.5, 0.75, 1))
 CONFORMAL_COVERAGE = CoverageTarget(0.95)
-CONFORMAL_SIGNIFICANCE = Ratio(0.05)
 SUMMARY_COEFFICIENTS = tuple(SummaryCoefficient(value) for value in (2, 2.5, 3))
 CALIBRATION_ELIGIBILITY_PROTOCOL = CalibrationEligibilityProtocol(minimum_support=MINIMUM_BENIGN_SUPPORT)
 CALIBRATION_SIZE_PROTOCOL = CalibrationSizeProtocol(sizes=CALIBRATION_SIZES)
@@ -69,7 +67,6 @@ SIZE_AWARE_SHRINKAGE_PROTOCOL = SizeAwareShrinkageProtocol(
 CONFORMAL_PROTOCOL = ConformalProtocol(
     method=FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD,
     coverage=CONFORMAL_COVERAGE,
-    significance=CONFORMAL_SIGNIFICANCE,
 )
 FEDERATED_STATISTICS_PROTOCOL = FederatedStatisticsProtocol(
     method=FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS,

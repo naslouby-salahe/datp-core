@@ -12,7 +12,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from datp_core.artifacts.completion import complete_digest
-from datp_core.artifacts.store import AtomicPublication, publish_atomically
+from datp_core.artifacts.store import publish_atomically
 from datp_core.datasets.canonical_cache import (
     CanonicalAsset,
     CanonicalAssetLayout,
@@ -45,7 +45,15 @@ from datp_core.datasets.models import (
     SourceFileRole,
 )
 from datp_core.domain.enums import DatasetId, PublicationStatus
-from datp_core.domain.values import ByteCount, Checksum, RowCount, checksum_file, checksum_text
+from datp_core.domain.values import (
+    ByteCount,
+    CanonicalColumnPosition,
+    Checksum,
+    RowCount,
+    SourceFileCount,
+    checksum_file,
+    checksum_text,
+)
 from datp_core.protocols.runtime import DATA_ROOT
 
 _COMPLETE_NAME, _MANIFEST_NAME, _SCHEMA_NAME, _SOURCE_STATE_NAME = publication_artifact_names()
@@ -175,8 +183,8 @@ def raw_inventory(dataset: DatasetId, sources: tuple[RawSourceFile, ...]) -> Raw
     return RawDatasetInventory(
         dataset=dataset,
         sources=ordered_sources,
-        accepted_source_count=len(ordered_sources),
-        excluded_source_count=0,
+        accepted_source_count=SourceFileCount(len(ordered_sources)),
+        excluded_source_count=SourceFileCount(0),
         accepted_row_count=total_rows,
         checksum=_inventory_checksum(ordered_sources),
     )
@@ -220,8 +228,7 @@ def canonical_schema_checksum(
 ) -> Checksum:
     if tuple(column.nullable for column in columns) != tuple(field.nullable for field in physical_schema):
         raise ValueError("canonical column nullability must match the physical schema")
-    content = schema_checksum_document_json(dataset, columns, physical_schema)
-    return checksum_text(content)
+    return checksum_text(schema_checksum_document_json(dataset, columns, physical_schema))
 
 
 def canonical_provenance_column(column: CanonicalProvenanceColumn, position: int) -> CanonicalColumn:
@@ -232,7 +239,7 @@ def canonical_provenance_column(column: CanonicalProvenanceColumn, position: int
         dtype,
         CanonicalColumnRole.PROVENANCE,
         True,
-        position,
+        CanonicalColumnPosition(position),
     )
 
 
@@ -312,24 +319,28 @@ def publish_canonical[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
     publication: CanonicalPublication[AssetRoleT, EligibilityReasonT],
 ) -> MaterializedDataset[AssetRoleT, EligibilityReasonT]:
     target = canonical_directory(publication.canonical_root, publication.schema)
-    reused = publish_atomically(
-        AtomicPublication(
-            target=target,
-            overwrite=False,
-            is_reusable=lambda directory: completed_publication_is_reusable(directory, publication.match_request()),
-            write=lambda temporary: _write_canonical(temporary, publication),
-            remove_target=lambda directory: _remove_target(directory, publication.canonical_root),
-        )
+
+    def write(temporary: Path) -> Path:
+        _write_canonical(temporary, publication)
+        return target
+
+    outcome = publish_atomically(
+        target=target,
+        overwrite=False,
+        is_reusable=lambda directory: completed_publication_is_reusable(directory, publication.match_request()),
+        write=write,
+        reusable_value=lambda directory: directory,
+        remove_target=lambda directory: _remove_target(directory, publication.canonical_root),
+        complete_marker=_COMPLETE_NAME,
     )
-    if reused:
+    if outcome.status is PublicationStatus.REUSED:
         write_source_state(
             target,
             publication.schema.dataset,
             publication.source_paths,
             publication.source_path_resolver,
         )
-    status = PublicationStatus.REUSED if reused else PublicationStatus.PUBLISHED
-    return _materialized_dataset(target, publication, status)
+    return _materialized_dataset(outcome.value, publication, outcome.status)
 
 
 def _write_canonical[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](

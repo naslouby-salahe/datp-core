@@ -6,14 +6,17 @@ from tests.unit.thresholding.helpers import COORDINATE, identity
 from datp_core.domain.enums import AvailabilityStatus, FederatedThresholdMethod, KMeansInitialization
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import (
+    AbsoluteThresholdError,
     ByteCount,
     Checksum,
     ClusterIndex,
+    ConformalRankIndex,
     CoverageTarget,
     FamilyIdentity,
     GroupCount,
     KMeansInitializationCount,
     KMeansMaximumIterationCount,
+    MetricValue,
     Quantile,
     Ratio,
     RowCount,
@@ -28,7 +31,6 @@ from datp_core.thresholding.models import (
     ClientBenignSummary,
     ClusterFingerprint,
     ClusterMembership,
-    CommunicationPayload,
     ConformalAssignment,
     ConformalThresholdResult,
     FamilyMembership,
@@ -292,12 +294,25 @@ def test_shrinkage_threshold_result_requires_every_weight_over_same_clients() ->
         build()
 
 
+def test_conformal_assignment_rejects_raw_rank_integer() -> None:
+    with pytest.raises(ScientificContractError, match="typed rank contract"):
+        ConformalAssignment(
+            client=CLIENT_A,
+            calibration_count=RowCount(10),
+            rank_index=9,  # type: ignore[arg-type]
+            effective_quantile=Quantile(0.9),
+            selected_score=ScoreValue(1.0),
+            tie_count=RowCount(0),
+            threshold=ThresholdValue(1.0),
+        )
+
+
 def test_conformal_assignment_rejects_rank_index_out_of_bounds() -> None:
     def build() -> ConformalAssignment:
         return ConformalAssignment(
             client=CLIENT_A,
             calibration_count=RowCount(10),
-            rank_index=11,
+            rank_index=ConformalRankIndex(11),
             effective_quantile=Quantile(0.95),
             selected_score=ScoreValue(1.0),
             tie_count=RowCount(0),
@@ -312,7 +327,7 @@ def test_conformal_threshold_result_rejects_client_both_assigned_and_unavailable
     assignment = ConformalAssignment(
         client=CLIENT_A,
         calibration_count=RowCount(10),
-        rank_index=9,
+        rank_index=ConformalRankIndex(9),
         effective_quantile=Quantile(0.9),
         selected_score=ScoreValue(1.0),
         tie_count=RowCount(0),
@@ -323,7 +338,6 @@ def test_conformal_threshold_result_rejects_client_both_assigned_and_unavailable
         return ConformalThresholdResult(
             coordinate=COORDINATE,
             coverage=CoverageTarget(0.95),
-            significance=Ratio(0.05),
             eligible_clients=(CLIENT_A,),
             assignments=(assignment,),
             unavailable_clients=(CLIENT_A,),
@@ -362,9 +376,9 @@ def test_centralized_attainment_diagnostic_rejects_out_of_range_target() -> None
         return CentralizedAttainmentDiagnostic(
             target_exceedance=Quantile(1.5),
             achieved_exceedance=Ratio(0.1),
-            signed_attainment_error=0.0,
+            signed_attainment_error=MetricValue(0.0),
             absolute_attainment_error=Ratio(0.0),
-            absolute_threshold_error_vs_pooled_quantile=0.0,
+            absolute_threshold_error_vs_pooled_quantile=AbsoluteThresholdError(0.0),
             relative_threshold_error_vs_pooled_quantile=None,
         )
 
@@ -372,10 +386,25 @@ def test_centralized_attainment_diagnostic_rejects_out_of_range_target() -> None
         build()
 
 
-def test_communication_payload_declares_fixed_fields() -> None:
-    payload = CommunicationPayload(estimated_bytes=ByteCount(10))
-    assert payload.fields == ("count", "mean", "variance")
-    assert payload.estimated_bytes == ByteCount(10)
+def test_conformal_significance_is_derived_from_coverage() -> None:
+    result = ConformalThresholdResult(
+        coordinate=COORDINATE,
+        coverage=CoverageTarget(0.95),
+        eligible_clients=(CLIENT_A,),
+        assignments=(
+            ConformalAssignment(
+                client=CLIENT_A,
+                calibration_count=RowCount(20),
+                rank_index=ConformalRankIndex(19),
+                effective_quantile=Quantile(0.95),
+                selected_score=ScoreValue(1.0),
+                tie_count=RowCount(1),
+                threshold=ThresholdValue(1.0),
+            ),
+        ),
+        unavailable_clients=(),
+    )
+    assert result.significance.value == pytest.approx(0.05)
 
 
 def test_fixed_coefficient_result_holds_its_value() -> None:
@@ -486,7 +515,6 @@ def test_conformal_threshold_result_requires_at_least_one_assignment() -> None:
         return ConformalThresholdResult(
             coordinate=COORDINATE,
             coverage=CoverageTarget(0.95),
-            significance=Ratio(0.05),
             eligible_clients=(),
             assignments=(),
             unavailable_clients=(),
@@ -500,7 +528,7 @@ def test_conformal_threshold_result_rejects_duplicate_assignments() -> None:
     assignment = ConformalAssignment(
         client=CLIENT_A,
         calibration_count=RowCount(10),
-        rank_index=9,
+        rank_index=ConformalRankIndex(9),
         effective_quantile=Quantile(0.9),
         selected_score=ScoreValue(1.0),
         tie_count=RowCount(0),
@@ -512,7 +540,6 @@ def test_conformal_threshold_result_rejects_duplicate_assignments() -> None:
         return ConformalThresholdResult(
             coordinate=COORDINATE,
             coverage=CoverageTarget(0.95),
-            significance=Ratio(0.05),
             eligible_clients=(CLIENT_A,),
             assignments=duped,
             unavailable_clients=(),
@@ -526,7 +553,7 @@ def test_conformal_threshold_result_rejects_duplicate_unavailable_clients() -> N
     assignment = ConformalAssignment(
         client=CLIENT_A,
         calibration_count=RowCount(10),
-        rank_index=9,
+        rank_index=ConformalRankIndex(9),
         effective_quantile=Quantile(0.9),
         selected_score=ScoreValue(1.0),
         tie_count=RowCount(0),
@@ -537,7 +564,6 @@ def test_conformal_threshold_result_rejects_duplicate_unavailable_clients() -> N
         return ConformalThresholdResult(
             coordinate=COORDINATE,
             coverage=CoverageTarget(0.95),
-            significance=Ratio(0.05),
             eligible_clients=(CLIENT_A, CLIENT_B),
             assignments=(assignment,),
             unavailable_clients=(CLIENT_B, CLIENT_B),
@@ -563,7 +589,7 @@ def test_conformal_assignment_rejects_threshold_not_equal_to_selected_score() ->
         return ConformalAssignment(
             client=CLIENT_A,
             calibration_count=RowCount(10),
-            rank_index=5,
+            rank_index=ConformalRankIndex(5),
             effective_quantile=Quantile(0.5),
             selected_score=ScoreValue(3.0),
             tie_count=RowCount(0),
@@ -579,7 +605,7 @@ def test_conformal_assignment_rejects_effective_quantile_not_equal_to_rank_over_
         return ConformalAssignment(
             client=CLIENT_A,
             calibration_count=RowCount(10),
-            rank_index=5,
+            rank_index=ConformalRankIndex(5),
             effective_quantile=Quantile(0.9),
             selected_score=ScoreValue(3.0),
             tie_count=RowCount(0),
@@ -597,7 +623,7 @@ def test_conformal_threshold_result_rejects_incomplete_client_coverage() -> None
     assignment = ConformalAssignment(
         client=CLIENT_A,
         calibration_count=RowCount(10),
-        rank_index=9,
+        rank_index=ConformalRankIndex(9),
         effective_quantile=Quantile(0.9),
         selected_score=ScoreValue(1.0),
         tie_count=RowCount(0),
@@ -608,7 +634,6 @@ def test_conformal_threshold_result_rejects_incomplete_client_coverage() -> None
         return ConformalThresholdResult(
             coordinate=COORDINATE,
             coverage=CoverageTarget(0.95),
-            significance=Ratio(0.05),
             eligible_clients=(CLIENT_A, CLIENT_B),
             assignments=(assignment,),
             unavailable_clients=(),
@@ -835,15 +860,15 @@ def test_federated_statistics_result_rejects_duplicate_client_summaries() -> Non
             centralized_attainment_diagnostic=CentralizedAttainmentDiagnostic(
                 target_exceedance=Quantile(0.05),
                 achieved_exceedance=Ratio(0.05),
-                signed_attainment_error=0.0,
+                signed_attainment_error=MetricValue(0.0),
                 absolute_attainment_error=Ratio(0.0),
-                absolute_threshold_error_vs_pooled_quantile=0.0,
+                absolute_threshold_error_vs_pooled_quantile=AbsoluteThresholdError(0.0),
                 relative_threshold_error_vs_pooled_quantile=None,
             ),
             centralized_pooled_quantile_diagnostic=ThresholdValue(1.0),
             fixed_coefficient_curve=(),
             assignments=(ThresholdAssignment(CLIENT_A, ThresholdValue(1.0)),),
-            communication_payload=CommunicationPayload(estimated_bytes=ByteCount(10)),
+            estimated_communication_bytes=ByteCount(10),
         )
 
     with pytest.raises(ScientificContractError, match="unique client identities"):
@@ -1023,9 +1048,9 @@ def test_centralized_attainment_diagnostic_rejects_inconsistent_signed_error() -
         CentralizedAttainmentDiagnostic(
             target_exceedance=Quantile(0.05),
             achieved_exceedance=Ratio(0.10),
-            signed_attainment_error=0.0,
+            signed_attainment_error=MetricValue(0.0),
             absolute_attainment_error=Ratio(0.05),
-            absolute_threshold_error_vs_pooled_quantile=0.0,
+            absolute_threshold_error_vs_pooled_quantile=AbsoluteThresholdError(0.0),
             relative_threshold_error_vs_pooled_quantile=None,
         )
 
@@ -1035,9 +1060,9 @@ def test_centralized_attainment_diagnostic_rejects_inconsistent_absolute_error()
         CentralizedAttainmentDiagnostic(
             target_exceedance=Quantile(0.05),
             achieved_exceedance=Ratio(0.10),
-            signed_attainment_error=0.05,
+            signed_attainment_error=MetricValue(0.05),
             absolute_attainment_error=Ratio(0.99),
-            absolute_threshold_error_vs_pooled_quantile=0.0,
+            absolute_threshold_error_vs_pooled_quantile=AbsoluteThresholdError(0.0),
             relative_threshold_error_vs_pooled_quantile=None,
         )
 
@@ -1047,8 +1072,8 @@ def test_centralized_attainment_diagnostic_rejects_non_finite_fields() -> None:
         CentralizedAttainmentDiagnostic(
             target_exceedance=Quantile(float("nan")),
             achieved_exceedance=Ratio(0.10),
-            signed_attainment_error=0.05,
+            signed_attainment_error=MetricValue(0.05),
             absolute_attainment_error=Ratio(0.05),
-            absolute_threshold_error_vs_pooled_quantile=0.0,
+            absolute_threshold_error_vs_pooled_quantile=AbsoluteThresholdError(0.0),
             relative_threshold_error_vs_pooled_quantile=None,
         )

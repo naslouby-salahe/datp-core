@@ -89,7 +89,7 @@ def test_confirmatory_decision_uses_positive_bca_interval_not_secondary_evidence
         point_estimate=MetricValue(0.2),
         lower_bound=MetricValue(0.01),
         upper_bound=MetricValue(0.4),
-        adjustment=BcaAdjustment(bias_correction=0.0, acceleration=0.0),
+        adjustment=BcaAdjustment(bias_correction=MetricValue(0.0), acceleration=MetricValue(0.0)),
         outcome=BcaOutcome.AVAILABLE,
         reason=BcaReason.NONE,
     )

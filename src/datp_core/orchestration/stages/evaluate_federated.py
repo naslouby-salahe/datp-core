@@ -1,15 +1,16 @@
 """Held-out federated evaluation over immutable scores and thresholds."""
 
-from dataclasses import dataclass, fields
+from dataclasses import dataclass
 from enum import StrEnum
 from json import dumps
 from pathlib import Path
 from shutil import rmtree
+from typing import ClassVar
 
 import polars as pl
 
 from datp_core.analysis.temporal import TemporalDeploymentProvenance
-from datp_core.artifacts.store import AtomicPublication, publish_atomically
+from datp_core.artifacts.store import publish_atomically
 from datp_core.domain.enums import (
     EvaluationCohort,
     EvidenceRole,
@@ -21,6 +22,7 @@ from datp_core.domain.enums import (
     StageOperationId,
 )
 from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
+from datp_core.domain.provenance import canonical_value
 from datp_core.domain.values import (
     NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
     Checksum,
@@ -52,16 +54,12 @@ from datp_core.evaluation.confusion import calculate_confusion_counts
 from datp_core.evaluation.controls import ClientAurocEvidence, FixedScoreEvidence, validate_fixed_score_controls
 from datp_core.evaluation.models import (
     ClientMetricResult,
+    HeldOutBenignScore,
     MetricAvailability,
     MetricStatus,
     MetricWarning,
     PopulationMetricResult,
-)
-from datp_core.evaluation.models import (
-    HeldOutBenignScore as ConformalHeldOutBenignScore,
-)
-from datp_core.evaluation.models import (
-    HeldOutBenignScore as ThresholdEstimationHeldOutBenignScore,
+    metric_by_id,
 )
 from datp_core.evaluation.operational import AlertBurdenDiagnostic, calculate_alert_burden
 from datp_core.evaluation.population_metrics import calculate_population_metrics
@@ -98,35 +96,11 @@ class FederatedEvaluationAssetName(StrEnum):
     COMPLETE = "COMPLETE"
 
 
-def _serialize(obj):  # noqa: C901, PLR0911
-    """Serialize domain value objects, enums, dataclasses, and tuples to JSON-compatible primitives."""
-    if obj is None:
-        return None
-    if isinstance(obj, (bool, int, float, str)):
-        return obj
-    if isinstance(obj, StrEnum):
-        return obj.value
-    if isinstance(obj, tuple):
-        return tuple(_serialize(item) for item in obj)
-    if isinstance(obj, list):
-        return [_serialize(item) for item in obj]
-    if isinstance(obj, dict):
-        return {key: _serialize(value) for key, value in obj.items()}
-    if hasattr(obj, "model_dump"):
-        return obj.model_dump(mode="json")
-    if hasattr(obj, "__dataclass_fields__"):
-        own_fields = fields(obj)
-        if len(own_fields) == 1 and own_fields[0].name == "value":
-            return obj.value
-        return {field.name: _serialize(getattr(obj, field.name)) for field in own_fields}
-    raise TypeError(f"cannot serialize {type(obj)}")
-
-
 @dataclass(frozen=True, slots=True)
 class ConformalCoverageStageInput:
     assignment: ConformalAssignment
     target_coverage: CoverageTarget
-    held_out_benign_scores: tuple[ConformalHeldOutBenignScore, ...]
+    held_out_benign_scores: tuple[HeldOutBenignScore, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,7 +108,7 @@ class ThresholdEstimationStageInput:
     provenance: ThresholdEstimationProvenance
     estimated_threshold: ThresholdValue
     exact_pooled_benign_quantile_reference: ThresholdValue
-    held_out_benign_scores: tuple[ThresholdEstimationHeldOutBenignScore, ...]
+    held_out_benign_scores: tuple[HeldOutBenignScore, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -172,7 +146,7 @@ class EvaluateFederatedRequest:
 
 @dataclass(frozen=True, slots=True)
 class FederatedEvaluationResult:
-    stage: StageOperationId
+    stage: ClassVar[StageOperationId] = StageOperationId.EVALUATE_FEDERATED
     publication_status: PublicationStatus
     clients: tuple[ClientMetricResult, ...]
     population: PopulationMetricResult
@@ -221,42 +195,46 @@ def evaluate_federated_stage(request: EvaluateFederatedRequest) -> FederatedEval
             request.comparison_fixed_score_evidence,
             auroc_absolute_tolerance=NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
         )
-
-    document = _evaluation_payload(request, clients, population, diagnostics)
-    payload = dumps(document, indent=2, sort_keys=True) + "\n"
+    payload = (
+        dumps(
+            _evaluation_payload(request, clients, population, diagnostics),
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n"
+    )
     digest = checksum_text(payload)
 
-    def write(temporary: Path) -> None:
+    def write(temporary: Path) -> EvaluationDiagnostics:
         (temporary / FederatedEvaluationAssetName.DOCUMENT).write_text(payload, encoding="utf-8")
         (temporary / FederatedEvaluationAssetName.COMPLETE).write_text(digest.value, encoding="utf-8")
+        return diagnostics
 
-    publication = AtomicPublication(
-        request.output_directory,
-        request.overwrite,
-        lambda directory: _is_reusable(directory, digest),
-        write,
-        rmtree,
+    outcome = publish_atomically(
+        target=request.output_directory,
+        overwrite=request.overwrite,
+        is_reusable=lambda directory: _is_reusable(directory, digest),
+        write=write,
+        reusable_value=lambda _directory: diagnostics,
+        remove_target=rmtree,
     )
-    reused = publish_atomically(publication)
     return FederatedEvaluationResult(
-        stage=StageOperationId.EVALUATE_FEDERATED,
-        publication_status=PublicationStatus.REUSED if reused else PublicationStatus.PUBLISHED,
+        publication_status=outcome.status,
         clients=clients,
         population=population,
-        diagnostics=diagnostics,
-        complete_digest=checksum_file(request.output_directory / FederatedEvaluationAssetName.COMPLETE),
+        diagnostics=outcome.value,
+        complete_digest=outcome.complete_digest,
     )
 
 
 def _evaluate(request: EvaluateFederatedRequest) -> tuple[tuple[ClientMetricResult, ...], PopulationMetricResult]:
-    manifest = request.score_manifest
     _validate_evaluation_request(request)
     assignments = _assignments(request.threshold_result)
-    ordered = tuple(
+    clients = tuple(
         _evaluate_score_record(request, assignments, record)
-        for record in sorted(manifest.evaluation_records, key=lambda record: record.scored_client)
+        for record in sorted(request.score_manifest.evaluation_records, key=lambda record: record.scored_client)
     )
-    return ordered, calculate_population_metrics(ordered)
+    return clients, calculate_population_metrics(clients)
 
 
 def _validate_evaluation_request(request: EvaluateFederatedRequest) -> None:
@@ -331,6 +309,7 @@ def build_federated_evaluation_inputs(
         partition_seed=score_manifest.coordinate.training_seed,
         client_counts=_client_partition_counts(score_manifest),
     )
+    invariant = FixedScoreInvariant.from_manifest(score_manifest)
     return FederatedEvaluationInputs(
         cohort=cohort,
         fixed_score_evidence=FixedScoreEvidence(
@@ -339,8 +318,8 @@ def build_federated_evaluation_inputs(
             model_checksum=score_manifest.checkpoint_checksum,
             preprocessing_checksum=score_manifest.preprocessing_state_set_checksum,
             selected_checkpoint_checksum=score_manifest.checkpoint_checksum,
-            calibration_score_checksum=FixedScoreInvariant.from_manifest(score_manifest).calibration_score_set_checksum,
-            evaluation_score_checksum=FixedScoreInvariant.from_manifest(score_manifest).evaluation_score_set_checksum,
+            calibration_score_checksum=invariant.calibration_score_set_checksum,
+            evaluation_score_checksum=invariant.evaluation_score_set_checksum,
             evaluation_label_checksum=_evaluation_label_checksum(score_manifest),
             client_population_checksum=_client_population_checksum(score_manifest),
             eligibility_cohort_checksum=_cohort_checksum(cohort),
@@ -398,13 +377,7 @@ def _evaluation_row_checksum(manifest: ScoreArtifactManifest) -> Checksum:
 
 def _aggregate_score_record_checksum(records: tuple[ScoreRecord, ...], column: ScoreFrameColumn) -> Checksum:
     pairs = tuple(
-        sorted(
-            (
-                record.scored_client.client_id,
-                _score_column_checksum(record, column).value,
-            )
-            for record in records
-        )
+        sorted((record.scored_client.client_id, _score_column_checksum(record, column).value) for record in records)
     )
     return checksum_text("|".join(f"{client}:{checksum}" for client, checksum in pairs))
 
@@ -421,13 +394,9 @@ def _client_aurocs(
     records = tuple(sorted(manifest.evaluation_records, key=lambda record: record.scored_client))
     if tuple(item.client_id for item in eligibility) != tuple(record.scored_client.client_id for record in records):
         raise ScientificContractError("evaluation inputs require cohort coverage for every score client")
+    evidence_role = population_capabilities(manifest.coordinate.population).evidentiary_role
     return tuple(
-        _client_auroc_evidence(
-            manifest.coordinate,
-            record,
-            eligibility_record,
-            population_capabilities(manifest.coordinate.population).evidentiary_role,
-        )
+        _client_auroc_evidence(manifest.coordinate, record, eligibility_record, evidence_role)
         for record, eligibility_record in zip(records, eligibility, strict=True)
     )
 
@@ -447,24 +416,21 @@ def _client_auroc_evidence(
         partition_role=PartitionRole.EVALUATION,
         attack_assignment_valid=eligibility.attack_evaluable,
     )
-    auroc = _metric_availability(
-        ClientMetricResult(
-            coordinate=coordinate,
-            threshold_method=FederatedThresholdMethod.SHARED_THRESHOLD,
-            client=record.scored_client,
-            cohort=EvaluationCohort.FPR_EVALUABLE,
-            threshold=ThresholdValue(0.0),
-            confusion=confusion,
-            metrics=calculate_client_metrics(confusion=confusion, scores=scores, labels=labels),
-            warnings=(),
-            evidence_role=evidence_role,
-            evaluation_score_checksum=record.checksum,
-            evaluation_label_checksum=checksum_text("|".join(label.value for label in labels)),
-            source_row_checksum=checksum_text("|".join(rows)),
-        ),
-        MetricId.AUROC,
+    result = ClientMetricResult(
+        coordinate=coordinate,
+        threshold_method=FederatedThresholdMethod.SHARED_THRESHOLD,
+        client=record.scored_client,
+        cohort=EvaluationCohort.FPR_EVALUABLE,
+        threshold=ThresholdValue(0.0),
+        confusion=confusion,
+        metrics=calculate_client_metrics(confusion=confusion, scores=scores, labels=labels),
+        warnings=(),
+        evidence_role=evidence_role,
+        evaluation_score_checksum=record.checksum,
+        evaluation_label_checksum=checksum_text("|".join(label.value for label in labels)),
+        source_row_checksum=checksum_text("|".join(rows)),
     )
-    return ClientAurocEvidence(record.scored_client, auroc)
+    return ClientAurocEvidence(record.scored_client, metric_by_id(result.metrics, MetricId.AUROC))
 
 
 def _evaluate_diagnostics(
@@ -490,8 +456,12 @@ def _evaluate_diagnostics(
         if not request.communication_messages
         else summarize_communication(coordinate.training_seed, coordinate, request.communication_messages)
     )
-    alert_burden = _evaluate_alert_burden(request.traffic_rate_evidence, clients, coordinate)
-    return EvaluationDiagnostics(conformal_coverage, threshold_estimation, communication, alert_burden)
+    return EvaluationDiagnostics(
+        conformal_coverage,
+        threshold_estimation,
+        communication,
+        _evaluate_alert_burden(request.traffic_rate_evidence, clients, coordinate),
+    )
 
 
 def _evaluate_threshold_estimation_input(
@@ -516,7 +486,7 @@ def _evaluate_alert_burden(
         return ()
     diagnostics: list[AlertBurdenDiagnostic] = []
     for client in clients:
-        false_positive_rate = _metric_value(client, MetricId.FALSE_POSITIVE_RATE)
+        false_positive_rate = metric_by_id(client.metrics, MetricId.FALSE_POSITIVE_RATE).value
         if false_positive_rate is not None:
             diagnostics.append(
                 calculate_alert_burden(
@@ -537,7 +507,7 @@ def _evaluation_payload(
     diagnostics: EvaluationDiagnostics,
 ):
     manifest = request.score_manifest
-    return _serialize(
+    return canonical_value(
         {
             "stage": StageOperationId.EVALUATE_FEDERATED,
             "score_coordinate": manifest.coordinate,
@@ -600,7 +570,7 @@ def _metric_payload(result: MetricAvailability) -> dict:
         "status": result.status,
         "value": result.value,
         "denominator": result.denominator,
-        "unavailable_reason": None if result.outcome is None else result.outcome.reason,
+        "unavailable_reason": result.reason,
     }
 
 
@@ -650,8 +620,7 @@ def _validate_evidence_cohort_binding(
     cohort: EvaluationCohortManifest,
     clients: tuple[ClientMetricResult, ...],
 ) -> None:
-    client_ids = tuple(sorted(client.client.client_id for client in clients))
-    expected_population = checksum_text("|".join(client_ids))
+    expected_population = checksum_text("|".join(sorted(client.client.client_id for client in clients)))
     if evidence.client_population_checksum != expected_population:
         raise ScientificContractError("fixed-score evidence client population checksum does not match evaluation")
     expected_cohort = checksum_text(
@@ -682,9 +651,9 @@ def _validate_evidence_aurocs(
     evidence: FixedScoreEvidence,
     clients: tuple[ClientMetricResult, ...],
 ) -> None:
-    observed_aurocs = tuple((client.client, _metric_availability(client, MetricId.AUROC)) for client in clients)
-    _require_auroc_client_order(evidence.aurocs, observed_aurocs)
-    _require_matching_aurocs(evidence.aurocs, observed_aurocs)
+    observed = tuple((client.client, metric_by_id(client.metrics, MetricId.AUROC)) for client in clients)
+    _require_auroc_client_order(evidence.aurocs, observed)
+    _require_matching_aurocs(evidence.aurocs, observed)
 
 
 def _require_auroc_client_order(
@@ -706,8 +675,7 @@ def _require_matching_auroc(expected: MetricAvailability, observed: MetricAvaila
         raise ScientificContractError("fixed-score AUROC availability does not match held-out evaluation")
     if expected.status is MetricStatus.AVAILABLE:
         _require_matching_available_auroc(expected, observed)
-        return
-    if expected != observed:
+    elif expected != observed:
         raise ScientificContractError("fixed-score AUROC unavailable outcome does not match held-out evaluation")
 
 
@@ -734,17 +702,11 @@ def _aggregate_client_checksum(clients: tuple[ClientMetricResult, ...], field: s
 
 
 def _metric_value(result: ClientMetricResult, metric_id: MetricId) -> MetricValue | None:
-    for metric in result.metrics:
-        if metric.metric is metric_id:
-            return metric.value
-    raise ScientificContractError("client result is missing a required metric")
+    return metric_by_id(result.metrics, metric_id).value
 
 
 def _metric_availability(result: ClientMetricResult, metric_id: MetricId) -> MetricAvailability:
-    for metric in result.metrics:
-        if metric.metric is metric_id:
-            return metric
-    raise ScientificContractError("client result is missing a required metric")
+    return metric_by_id(result.metrics, metric_id)
 
 
 def _score_order_checksum(manifest: ScoreArtifactManifest) -> Checksum:
@@ -812,6 +774,4 @@ def _score_arrays(
 def _is_reusable(directory: Path, digest: Checksum) -> bool:
     complete = directory / FederatedEvaluationAssetName.COMPLETE
     document = directory / FederatedEvaluationAssetName.DOCUMENT
-    if not complete.is_file() or not document.is_file():
-        return False
-    return complete.read_text(encoding="utf-8").strip() == digest.value
+    return complete.is_file() and document.is_file() and complete.read_text(encoding="utf-8").strip() == digest.value

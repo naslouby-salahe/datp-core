@@ -5,9 +5,9 @@ from enum import StrEnum
 
 from datp_core.domain.enums import CommunicationEstimationMethod, MetricId
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import ByteCount, Seed
+from datp_core.domain.values import ByteCount, LogicalElementCount, Seed
 from datp_core.evaluation.metric_semantics import available
-from datp_core.evaluation.models import CommunicationResult
+from datp_core.evaluation.models import AvailableMetric
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.populations.models import ClientIdentity
 
@@ -30,11 +30,11 @@ class SerializedPayloadEvidence:
     """Actual persisted or typed serialized payload bytes, never object-size estimates."""
 
     serialized_bytes: bytes
-    logical_element_count: int
+    logical_element_count: LogicalElementCount
 
     def __post_init__(self) -> None:
-        if self.logical_element_count < 1:
-            raise ScientificContractError("a communication payload requires at least one logical element")
+        if not isinstance(self.logical_element_count, LogicalElementCount):
+            raise ScientificContractError("communication payloads require a typed logical element count")
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,9 +76,8 @@ class CommunicationDiagnostic:
     training_seed: Seed
     coordinate: FederatedTrainingCoordinate
     messages: tuple[CommunicationMessageDiagnostic, ...]
-    total_logical_element_count: int
+    total_logical_element_count: LogicalElementCount
     total_estimated_serialized_bytes: ByteCount
-    result: CommunicationResult
 
     def __post_init__(self) -> None:
         if not self.messages:
@@ -89,15 +88,17 @@ class CommunicationDiagnostic:
             message.coordinate != self.coordinate for message in self.messages
         ):
             raise ScientificContractError("communication messages must share their full training coordinate")
-        expected_elements = sum(message.payload.logical_element_count for message in self.messages)
+        expected_elements = sum(message.payload.logical_element_count.value for message in self.messages)
         expected_bytes = sum(message.estimated_serialized_bytes.value for message in self.messages)
         if (
-            self.total_logical_element_count != expected_elements
+            self.total_logical_element_count.value != expected_elements
             or self.total_estimated_serialized_bytes.value != expected_bytes
         ):
             raise ScientificContractError("communication totals must equal exact message payload totals")
-        if self.result.estimated_serialized_bytes.value is None:
-            raise ScientificContractError("communication payload bytes must be available when messages exist")
+
+    @property
+    def estimated_serialized_bytes_metric(self) -> AvailableMetric:
+        return available(MetricId.COMMUNICATION_BYTES, float(self.total_estimated_serialized_bytes.value))
 
 
 def summarize_communication(
@@ -110,14 +111,10 @@ def summarize_communication(
         training_seed=training_seed,
         coordinate=coordinate,
         messages=messages,
-        total_logical_element_count=sum(message.payload.logical_element_count for message in messages),
+        total_logical_element_count=LogicalElementCount(
+            sum(message.payload.logical_element_count.value for message in messages)
+        ),
         total_estimated_serialized_bytes=ByteCount(
             sum(message.estimated_serialized_bytes.value for message in messages)
-        ),
-        result=CommunicationResult(
-            estimated_serialized_bytes=available(
-                MetricId.COMMUNICATION_BYTES,
-                float(sum(message.estimated_serialized_bytes.value for message in messages)),
-            )
         ),
     )

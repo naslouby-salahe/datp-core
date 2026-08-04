@@ -38,6 +38,7 @@ from datp_core.domain.enums import AvailabilityStatus, ContractSubject, Quantile
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import (
     Checksum,
+    ConformalRankIndex,
     CoverageTarget,
     Quantile,
     Ratio,
@@ -156,32 +157,32 @@ def sample_weighted_mean(values: tuple[float, ...], weights: tuple[float, ...]) 
     return sum(v * w for v, w in zip(values, weights, strict=True)) / total_weight
 
 
-def conformal_rank_index(calibration_count: RowCount, coverage: CoverageTarget) -> int:
+def conformal_rank_index(calibration_count: RowCount, coverage: CoverageTarget) -> ConformalRankIndex:
     """Classical split-conformal rank correction: `ceil((n + 1) * coverage)`."""
     n = calibration_count.value
     if n < 1:
         raise ScientificContractError(
             "conformal rank requires at least one calibration score", subject=ContractSubject.CALIBRATION
         )
-    return ceil((n + 1) * coverage.value)
+    return ConformalRankIndex(ceil((n + 1) * coverage.value))
 
 
 def finite_sample_conformal_threshold(
     scores: np.ndarray, coverage: CoverageTarget
-) -> tuple[ThresholdValue, int, Quantile, RowCount]:
+) -> tuple[ThresholdValue, ConformalRankIndex, Quantile, RowCount]:
     """Return (threshold, rank_index, effective_quantile, tie_count) or raise if infeasible."""
     _require_score_vector(scores)
     calibration_count = int(scores.size)
     rank_index = conformal_rank_index(RowCount(calibration_count), coverage)
-    if rank_index > calibration_count:
+    if rank_index.value > calibration_count:
         raise ScientificContractError(
             "finite-sample conformal rank exceeds the available calibration count",
             subject=ContractSubject.CALIBRATION,
         )
     ordered = np.sort(scores)
-    selected = float(ordered[rank_index - 1])
+    selected = float(ordered[rank_index.value - 1])
     tie_count = RowCount(int(np.count_nonzero(ordered == selected)) - 1)
-    effective_quantile = Quantile(rank_index / calibration_count)
+    effective_quantile = Quantile(rank_index.value / calibration_count)
     return ThresholdValue(selected), rank_index, effective_quantile, tie_count
 
 

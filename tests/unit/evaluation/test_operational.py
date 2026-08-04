@@ -21,7 +21,8 @@ def test_alert_burden_is_suppressed_without_traffic_evidence() -> None:
     )
 
     assert result.suppression_reason is AlertBurdenSuppressionReason.NO_APPLICABLE_TRAFFIC_RATE_EVIDENCE
-    assert result.result.alerts_per_client_per_day.status is MetricStatus.SUPPRESSED
+    assert result.metric.status is MetricStatus.SUPPRESSED
+    assert result.alerts_per_client_per_day is None
 
 
 def test_alert_burden_uses_valid_per_client_rate() -> None:

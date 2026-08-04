@@ -3,7 +3,9 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 import pytest
+from sklearn.preprocessing import StandardScaler
 
+from datp_core.domain.contracts import ClientCollection, ClientOwned
 from datp_core.domain.enums import (
     PartitionRole,
     PreprocessingFitScope,
@@ -25,19 +27,13 @@ from datp_core.domain.values import (
     StableRowIdSequence,
 )
 from datp_core.populations.models import OUTCOME_LABEL_COLUMN, STABLE_ROW_ID_COLUMN, PopulationOutcomeLabel
-from datp_core.preprocessing.federated import (
-    fit_estimators_for_federated_clients,
-)
+from datp_core.preprocessing.federated import fit_estimators_for_federated_clients
 from datp_core.preprocessing.models import (
     CentralizedFittedPreprocessingState,
-    ClientLocalFittedEstimators,
-    ClientPreprocessingPartitions,
-    ClientPreprocessingPartitionSet,
     FederatedFittedPreprocessingState,
-    PooledFittedEstimator,
     PreprocessingFitBatch,
     PreprocessingPartition,
-    PreprocessingPartitionSet,
+    PreprocessingPartitions,
     PreprocessingProtocol,
 )
 from datp_core.preprocessing.validation import fit_trusted_batch
@@ -54,7 +50,7 @@ def _protocol(scope: PreprocessingFitScope = PreprocessingFitScope.CLIENT_LOCAL_
     )
 
 
-def _partition_set(row_prefix: str = "r") -> PreprocessingPartitionSet:
+def _partitions(row_prefix: str = "r") -> PreprocessingPartitions:
     frame = pl.DataFrame(
         {
             STABLE_ROW_ID_COLUMN: [f"{row_prefix}_0", f"{row_prefix}_1"],
@@ -63,54 +59,48 @@ def _partition_set(row_prefix: str = "r") -> PreprocessingPartitionSet:
             "f1": [1.0, 2.0],
         }
     )
-    return PreprocessingPartitionSet(
-        partitions=(
-            PreprocessingPartition(role=PartitionRole.TRAIN, frame=frame),
-            PreprocessingPartition(role=PartitionRole.CALIBRATION, frame=frame),
-            PreprocessingPartition(role=PartitionRole.EVALUATION, frame=frame),
+    return PreprocessingPartitions(
+        (
+            PreprocessingPartition(PartitionRole.TRAIN, frame),
+            PreprocessingPartition(PartitionRole.CALIBRATION, frame),
+            PreprocessingPartition(PartitionRole.EVALUATION, frame),
+        )
+    )
+
+
+def _client_partitions() -> ClientCollection[ClientPathToken, PreprocessingPartitions]:
+    return ClientCollection(
+        (
+            ClientOwned(ClientPathToken("client_a"), _partitions("a")),
+            ClientOwned(ClientPathToken("client_b"), _partitions("b")),
         )
     )
 
 
 def test_fit_estimators_client_local_returns_distinct_instances() -> None:
-    protocol = _protocol(PreprocessingFitScope.CLIENT_LOCAL_TRAINING)
-    client_a = ClientPathToken("client_a")
-    client_b = ClientPathToken("client_b")
-    partition_set = ClientPreprocessingPartitionSet(
-        clients=(
-            ClientPreprocessingPartitions(client_identity=client_a, partitions=_partition_set("a")),
-            ClientPreprocessingPartitions(client_identity=client_b, partitions=_partition_set("b")),
-        )
+    result = fit_estimators_for_federated_clients(
+        _protocol(PreprocessingFitScope.CLIENT_LOCAL_TRAINING),
+        _client_partitions(),
     )
-    result = fit_estimators_for_federated_clients(protocol, partition_set)
-    assert isinstance(result, ClientLocalFittedEstimators)
-    estimator_a = result.require(client_a)
-    estimator_b = result.require(client_b)
-    assert estimator_a is not estimator_b
+
+    assert isinstance(result, ClientCollection)
+    assert result.require(ClientPathToken("client_a")) is not result.require(ClientPathToken("client_b"))
 
 
-def test_fit_estimators_pooled_returns_single_pooled_estimator() -> None:
-    protocol = _protocol(PreprocessingFitScope.POOLED_TRAINING)
-    client_a = ClientPathToken("client_a")
-    client_b = ClientPathToken("client_b")
-    partition_set = ClientPreprocessingPartitionSet(
-        clients=(
-            ClientPreprocessingPartitions(client_identity=client_a, partitions=_partition_set("a")),
-            ClientPreprocessingPartitions(client_identity=client_b, partitions=_partition_set("b")),
-        )
+def test_fit_estimators_pooled_returns_scaler_directly() -> None:
+    result = fit_estimators_for_federated_clients(
+        _protocol(PreprocessingFitScope.POOLED_TRAINING),
+        _client_partitions(),
     )
-    result = fit_estimators_for_federated_clients(protocol, partition_set)
-    assert isinstance(result, PooledFittedEstimator)
-    assert result.estimator is not None
+
+    assert isinstance(result, StandardScaler)
 
 
 def test_fit_trusted_batch_rejects_attack_labels() -> None:
-    protocol = _protocol()
     matrix = np.asarray([[0.0, 1.0], [1.0, 2.0]], dtype=float)
-
     with pytest.raises(LeakageError):
         fit_trusted_batch(
-            protocol,
+            _protocol(),
             PreprocessingFitBatch(
                 training_matrix=matrix,
                 training_row_ids=StableRowIdSequence((StableRowId("r0"), StableRowId("r1"))),
@@ -120,7 +110,7 @@ def test_fit_trusted_batch_rejects_attack_labels() -> None:
         )
 
 
-def test_fitted_state_types() -> None:
+def test_fitted_state_types_keep_scientific_boundary() -> None:
     protocol = _protocol()
     centralized_state = CentralizedFittedPreprocessingState(
         protocol=protocol,
@@ -132,9 +122,9 @@ def test_fitted_state_types() -> None:
 
     federated_state = FederatedFittedPreprocessingState(
         protocol=protocol,
-        client_identity=ClientPathToken("client_a"),
         estimator_path=Path("state.skops"),
         estimator_checksum=Checksum("a" * 64),
         fit_row_count=RowCount(2),
+        client_identity=ClientPathToken("client_a"),
     )
     assert federated_state.client_identity == ClientPathToken("client_a")

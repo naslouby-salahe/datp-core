@@ -61,7 +61,6 @@ def build_calibration_replicate(
             continue
         subsamples.append(
             CalibrationSubsample(
-                client=client,
                 size=size,
                 replicate_index=replicate_index,
                 references=permuted[: size.value],
