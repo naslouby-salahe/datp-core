@@ -74,7 +74,10 @@ class ExternalTemporalExecutionIdentity(StrictModel):
             if declaration.matches(self)
         )
         if len(matches) != 1:
-            raise ScientificContractError("execution identity must resolve exactly once", subject=self.experiment)
+            raise ScientificContractError(
+                "execution identity must be declared exactly once",
+                subject=self.experiment,
+            )
         return self
 
     def require_population(self, population: PopulationId) -> None:
