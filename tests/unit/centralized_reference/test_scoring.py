@@ -30,6 +30,9 @@ from datp_core.centralized_reference.scoring import (
     score_artifact_set_checksum,
     score_centralized_reference,
 )
+from datp_core.centralized_reference.training import (
+    CentralizedTrainingCoordinate,
+)
 from datp_core.domain.enums import (
     CheckpointStatus,
     PartitionRole,
@@ -186,7 +189,7 @@ def test_reuse_rejects_changed_calibration_row_identity(tmp_path: Path) -> None:
 
 
 def _persist_score_artifact(
-    coordinate,
+    coordinate: CentralizedTrainingCoordinate,
     checkpoint: CentralizedCheckpointCandidate,
     source: pl.DataFrame,
     partition_role: PartitionRole,
