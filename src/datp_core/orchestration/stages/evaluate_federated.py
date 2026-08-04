@@ -1,72 +1,30 @@
 """Stage: compose held-out federated evaluation publication."""
 
-from dataclasses import dataclass
-from pathlib import Path
-from typing import ClassVar
-
-from datp_core.analysis.temporal import TemporalDeploymentProvenance
-from datp_core.domain.enums import EvidenceRole, PublicationStatus, StageOperationId
-from datp_core.domain.values import Checksum, checksum_file
-from datp_core.evaluation.cohorts import EvaluationCohortManifest
-from datp_core.evaluation.communication import CommunicationMessageDiagnostic
-from datp_core.evaluation.controls import FixedScoreEvidence
-from datp_core.evaluation.models import ClientMetricResult, PopulationMetricResult
+from datp_core.domain.values import checksum_file
 from datp_core.evaluation.population import (
-    ConformalCoverageStageInput,
-    EvaluationDiagnostics,
     FederatedEvaluationArtifacts,
     FederatedEvaluationAssetName,
-    FederatedEvaluationInputs,
     FederatedEvaluationRequest,
-    ThresholdEstimationStageInput,
-    build_federated_evaluation_inputs,
     federated_evaluation_is_reusable,
     load_reused_federated_evaluation,
     prepare_federated_evaluation,
     rebase_federated_evaluation,
     write_federated_evaluation,
 )
-from datp_core.evaluation.traffic_rates import ValidatedTrafficRateEvidence
-from datp_core.experiments.models import ExternalTemporalExecutionIdentity
+from datp_core.orchestration.commands.evaluation import (
+    EvaluateFederatedRequest as _EvaluateFederatedRequest,
+    FederatedEvaluationResult as _FederatedEvaluationResult,
+)
 from datp_core.pipeline.publication.codec import (
     ArtifactPublication,
     FunctionalArtifactCodec,
     publish_artifact,
 )
-from datp_core.scoring.models import ScoreArtifactManifest
-from datp_core.thresholding.models import ThresholdConstructionResult
 
 
-@dataclass(frozen=True, slots=True)
-class EvaluateFederatedRequest:
-    score_manifest: ScoreArtifactManifest
-    threshold_result: ThresholdConstructionResult
-    cohort: EvaluationCohortManifest
-    fixed_score_evidence: FixedScoreEvidence
-    comparison_fixed_score_evidence: FixedScoreEvidence | None
-    evidence_role: EvidenceRole
-    conformal_coverage_inputs: tuple[ConformalCoverageStageInput, ...]
-    threshold_estimation_inputs: tuple[ThresholdEstimationStageInput, ...]
-    communication_messages: tuple[CommunicationMessageDiagnostic, ...]
-    traffic_rate_evidence: ValidatedTrafficRateEvidence | None
-    output_directory: Path
-    overwrite: bool
-    temporal_provenance: TemporalDeploymentProvenance | None = None
-    temporal_threshold_provenance: TemporalDeploymentProvenance | None = None
-    execution_identity: ExternalTemporalExecutionIdentity | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class FederatedEvaluationResult:
-    stage: ClassVar[StageOperationId] = StageOperationId.EVALUATE_FEDERATED
-    publication_status: PublicationStatus
-    clients: tuple[ClientMetricResult, ...]
-    population: PopulationMetricResult
-    diagnostics: EvaluationDiagnostics
-    complete_digest: Checksum
-
-
-def evaluate_federated_stage(request: EvaluateFederatedRequest) -> FederatedEvaluationResult:
+def evaluate_federated_stage(
+    request: _EvaluateFederatedRequest,
+) -> _FederatedEvaluationResult:
     evaluation_request = FederatedEvaluationRequest(
         score_manifest=request.score_manifest,
         threshold_result=request.threshold_result,
@@ -98,7 +56,7 @@ def evaluate_federated_stage(request: EvaluateFederatedRequest) -> FederatedEval
         )
     )
     artifacts: FederatedEvaluationArtifacts = publication.value
-    return FederatedEvaluationResult(
+    return _FederatedEvaluationResult(
         publication_status=publication.status,
         clients=artifacts.clients,
         population=artifacts.population,
