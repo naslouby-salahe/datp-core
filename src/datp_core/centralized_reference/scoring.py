@@ -1,11 +1,10 @@
 """Independent centralized reconstruction scoring on pooled partitions."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from pathlib import Path
 
 import polars as pl
-import torch
 
 from datp_core.centralized_reference.checkpointing import CentralizedCheckpointCandidate
 from datp_core.centralized_reference.training import (
@@ -23,14 +22,9 @@ from datp_core.domain.values import (
     checksum_file,
     checksum_text,
 )
-from datp_core.learning.autoencoder import ReconstructionAutoencoder, reconstruction_errors
-from datp_core.pipeline.scoring.frames import (
-    extract_score_arrays,
-    score_frame,
-    validate_persisted_score_frame,
-    validate_score_input_frame,
-)
+from datp_core.pipeline.scoring.frame_contract import validate_persisted_score_frame
 from datp_core.pipeline.scoring.models import ScoreArtifact
+from datp_core.pipeline.scoring.service import score_and_persist_autoencoder_frame
 from datp_core.protocols.models import AutoencoderProtocol
 from datp_core.runtime.compute import resolve_cuda_device
 
@@ -135,6 +129,79 @@ def score_centralized_reference(request: CentralizedScoringRequest) -> Centraliz
     )
 
 
+def write_centralized_scoring(
+    request: CentralizedScoringRequest,
+    directory: Path,
+) -> CentralizedScoringResult:
+    """Write a complete centralized score publication into a caller-owned directory."""
+    scoring = score_centralized_reference(replace(request, output_directory=directory))
+    (directory / CentralizedScoreAssetName.COMPLETE).write_text(
+        score_artifact_set_checksum(scoring).value,
+        encoding="utf-8",
+    )
+    return scoring
+
+
+def centralized_scoring_is_reusable(
+    request: CentralizedScoringRequest,
+    directory: Path,
+) -> bool:
+    complete = directory / CentralizedScoreAssetName.COMPLETE
+    calibration = directory / CentralizedScoreAssetName.CALIBRATION_SCORES
+    evaluation = directory / CentralizedScoreAssetName.EVALUATION_SCORES
+    if not (complete.is_file() and calibration.is_file() and evaluation.is_file()):
+        return False
+    try:
+        expected = checksum_text(
+            f"{checksum_file(calibration).value}|{checksum_file(evaluation).value}|"
+            f"{request.checkpoint.tensor_checksum.value}"
+        )
+        return complete.read_text(encoding="utf-8").strip() == expected.value
+    except (OSError, ValueError):
+        return False
+
+
+def load_reused_centralized_scoring(
+    request: CentralizedScoringRequest,
+    directory: Path,
+) -> CentralizedScoringResult:
+    calibration_frame = pl.read_parquet(directory / CentralizedScoreAssetName.CALIBRATION_SCORES)
+    evaluation_frame = pl.read_parquet(directory / CentralizedScoreAssetName.EVALUATION_SCORES)
+    calibration, evaluation = _score_artifact_pair(
+        request,
+        directory,
+        calibration_row_count=RowCount(calibration_frame.height),
+        evaluation_row_count=RowCount(evaluation_frame.height),
+    )
+    return CentralizedScoringResult(
+        calibration_scores=calibration,
+        evaluation_scores=evaluation,
+        model_tensor_checksum=request.checkpoint.tensor_checksum,
+        preprocessing_state_checksum=request.preprocessing_state_checksum,
+    )
+
+
+def rebase_centralized_scoring(
+    scoring: CentralizedScoringResult,
+    directory: Path,
+) -> CentralizedScoringResult:
+    calibration_path = directory / CentralizedScoreAssetName.CALIBRATION_SCORES
+    evaluation_path = directory / CentralizedScoreAssetName.EVALUATION_SCORES
+    if not calibration_path.is_file() or not evaluation_path.is_file():
+        raise ArtifactIntegrityError(
+            "published score partitions missing after atomic replace",
+            subject=ContractSubject.SCORES,
+        )
+    calibration = _rebase_artifact(scoring.calibration_scores, calibration_path)
+    evaluation = _rebase_artifact(scoring.evaluation_scores, evaluation_path)
+    return CentralizedScoringResult(
+        calibration_scores=calibration,
+        evaluation_scores=evaluation,
+        model_tensor_checksum=scoring.model_tensor_checksum,
+        preprocessing_state_checksum=scoring.preprocessing_state_checksum,
+    )
+
+
 def load_score_frame(artifact: PooledScoreArtifact) -> pl.DataFrame:
     return validate_persisted_score_frame(artifact.path, artifact.checksum, artifact.row_count)
 
@@ -150,16 +217,6 @@ def _validate_scoring_request(request: CentralizedScoringRequest) -> None:
             "checkpoint preprocessing checksum mismatch during scoring",
             subject=ContractSubject.PREPROCESSING,
         )
-    validate_score_input_frame(
-        request.calibration_features,
-        PartitionRole.CALIBRATION,
-        request.feature_names,
-    )
-    validate_score_input_frame(
-        request.evaluation_features,
-        PartitionRole.EVALUATION,
-        request.feature_names,
-    )
 
 
 def _score_partition(
@@ -167,38 +224,79 @@ def _score_partition(
     frame: pl.DataFrame,
     partition_role: PartitionRole,
     request: CentralizedScoringRequest,
-    model: ReconstructionAutoencoder,
-    device: torch.device,
+    model: object,
+    device: object,
     destination: Path,
 ) -> PooledScoreArtifact:
-    matrix, labels, row_ids = extract_score_arrays(frame, request.feature_names)
-    scores = reconstruction_errors(model, matrix, batch_size=request.batch_size, device=device)
-    if scores.shape[0] != matrix.shape[0]:
-        raise ScientificContractError("score count must equal partition row count", subject=partition_role)
-    output = score_frame(row_ids, labels, scores)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    output.write_parquet(destination)
-    artifact = PooledScoreArtifact(
+    persisted = score_and_persist_autoencoder_frame(
+        frame=frame,
+        partition_role=partition_role,
+        feature_names=request.feature_names,
+        model=model,
+        batch_size=request.batch_size,
+        device=device,
+        destination=destination,
+    )
+    return PooledScoreArtifact(
         coordinate=request.coordinate,
         partition_role=partition_role,
         checkpoint_round=request.checkpoint.round_number,
         checkpoint_checksum=request.checkpoint.tensor_checksum,
-        path=destination,
-        checksum=checksum_file(destination),
-        row_count=RowCount(output.height),
-        feature_count=FeatureCount(len(request.feature_names)),
+        path=persisted.path,
+        checksum=persisted.checksum,
+        row_count=persisted.row_count,
+        feature_count=persisted.feature_count,
         serialization_format=SerializationFormat.PARQUET,
     )
-    _assert_reload_equality(output, artifact)
-    return artifact
 
 
-def _assert_reload_equality(output: pl.DataFrame, artifact: PooledScoreArtifact) -> None:
-    reloaded = validate_persisted_score_frame(artifact.path, artifact.checksum, artifact.row_count)
-    if output.shape != reloaded.shape:
-        raise ArtifactIntegrityError("score reload shape mismatch", subject=ContractSubject.ARTIFACT_PATH)
-    if not output.equals(reloaded):
-        raise ArtifactIntegrityError("score reload equality failed", subject=ContractSubject.ARTIFACT_PATH)
+def _score_artifact_pair(
+    request: CentralizedScoringRequest,
+    directory: Path,
+    *,
+    calibration_row_count: RowCount,
+    evaluation_row_count: RowCount,
+) -> tuple[PooledScoreArtifact, PooledScoreArtifact]:
+    calibration_path = directory / CentralizedScoreAssetName.CALIBRATION_SCORES
+    evaluation_path = directory / CentralizedScoreAssetName.EVALUATION_SCORES
+    return (
+        PooledScoreArtifact(
+            coordinate=request.coordinate,
+            partition_role=PartitionRole.CALIBRATION,
+            checkpoint_round=request.checkpoint.round_number,
+            checkpoint_checksum=request.checkpoint.tensor_checksum,
+            path=calibration_path,
+            checksum=checksum_file(calibration_path),
+            row_count=calibration_row_count,
+            feature_count=FeatureCount(len(request.feature_names)),
+            serialization_format=SerializationFormat.PARQUET,
+        ),
+        PooledScoreArtifact(
+            coordinate=request.coordinate,
+            partition_role=PartitionRole.EVALUATION,
+            checkpoint_round=request.checkpoint.round_number,
+            checkpoint_checksum=request.checkpoint.tensor_checksum,
+            path=evaluation_path,
+            checksum=checksum_file(evaluation_path),
+            row_count=evaluation_row_count,
+            feature_count=FeatureCount(len(request.feature_names)),
+            serialization_format=SerializationFormat.PARQUET,
+        ),
+    )
+
+
+def _rebase_artifact(artifact: PooledScoreArtifact, path: Path) -> PooledScoreArtifact:
+    return PooledScoreArtifact(
+        coordinate=artifact.coordinate,
+        partition_role=artifact.partition_role,
+        checkpoint_round=artifact.checkpoint_round,
+        checkpoint_checksum=artifact.checkpoint_checksum,
+        path=path,
+        checksum=checksum_file(path),
+        row_count=artifact.row_count,
+        feature_count=artifact.feature_count,
+        serialization_format=artifact.serialization_format,
+    )
 
 
 def score_artifact_set_checksum(result: CentralizedScoringResult) -> Checksum:
