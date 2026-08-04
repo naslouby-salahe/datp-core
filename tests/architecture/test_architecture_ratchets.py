@@ -8,7 +8,9 @@ TEST_ROOT = REPOSITORY_ROOT / "tests"
 PIPELINE_ROOT = SOURCE_ROOT / "pipeline"
 ORCHESTRATION_STAGE_ROOT = SOURCE_ROOT / "orchestration" / "stages"
 ARTIFACT_STORE = SOURCE_ROOT / "artifacts" / "store.py"
-LEGACY_CHECKPOINT_MODULE = SOURCE_ROOT / "learning" / "federated" / "checkpointing.py"
+LEGACY_CHECKPOINT_MODULE = (
+    SOURCE_ROOT / "learning" / "federated" / "checkpointing.py"
+)
 LEGACY_CHECKPOINT_IMPORT = "datp_core.learning.federated.checkpointing"
 CHECKPOINT_PACKAGE = SOURCE_ROOT / "learning" / "federated" / "checkpoints"
 CHECKPOINT_CANDIDATE_MODULE = CHECKPOINT_PACKAGE / "candidates.py"
@@ -73,6 +75,10 @@ LEGACY_ANALYSIS_IMPORTS = frozenset(
         "datp_core.analysis.inference.paired",
     }
 )
+LEGACY_EXPERIMENT_IDENTITY_MODULE = (
+    SOURCE_ROOT / "experiments" / "models.py"
+)
+LEGACY_EXPERIMENT_IDENTITY_IMPORT = "datp_core.experiments.models"
 ANALYSIS_PACKAGE_INITIALIZER = SOURCE_ROOT / "analysis" / "__init__.py"
 
 SERIALIZATION_BYPASS_BASELINE: frozenset[Path] = frozenset()
@@ -138,7 +144,10 @@ def _top_level_definitions(path: Path) -> frozenset[str]:
     return frozenset(
         node.name
         for node in tree.body
-        if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+        if isinstance(
+            node,
+            (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef),
+        )
     )
 
 
@@ -154,7 +163,10 @@ def _uses_serialization_bypass(tree: ast.AST) -> bool:
         if not isinstance(node, ast.Call):
             continue
         function = node.func
-        if isinstance(function, ast.Attribute) and function.attr == "model_dump_json":
+        if (
+            isinstance(function, ast.Attribute)
+            and function.attr == "model_dump_json"
+        ):
             return True
         if isinstance(function, ast.Name) and function.id == "dumps":
             return True
@@ -188,7 +200,8 @@ def _annotation_names(class_node: ast.ClassDef) -> frozenset[str]:
 
 def _is_dataclass(class_node: ast.ClassDef) -> bool:
     return any(
-        ast.unparse(decorator).split("(")[0].split(".")[-1] == "dataclass"
+        ast.unparse(decorator).split("(")[0].split(".")[-1]
+        == "dataclass"
         for decorator in class_node.decorator_list
     )
 
@@ -196,7 +209,10 @@ def _is_dataclass(class_node: ast.ClassDef) -> bool:
 def test_pipeline_is_branch_neutral_and_strictly_typed() -> None:
     violations: list[str] = []
     for path in _python_files(PIPELINE_ROOT):
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        tree = ast.parse(
+            path.read_text(encoding="utf-8"),
+            filename=str(path),
+        )
         for imported in _module_imports(tree):
             if any(
                 imported == root or imported.startswith(f"{root}.")
@@ -206,24 +222,33 @@ def test_pipeline_is_branch_neutral_and_strictly_typed() -> None:
                     f"{path.relative_to(REPOSITORY_ROOT)} imports {imported}"
                 )
         if _contains_any_annotation(tree):
-            violations.append(f"{path.relative_to(REPOSITORY_ROOT)} uses Any")
+            violations.append(
+                f"{path.relative_to(REPOSITORY_ROOT)} uses Any"
+            )
     assert not violations, "\n".join(violations)
 
 
 def test_orchestration_stages_remain_thin_composition_only() -> None:
     violations: list[str] = []
     for path in _python_files(ORCHESTRATION_STAGE_ROOT):
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        tree = ast.parse(
+            path.read_text(encoding="utf-8"),
+            filename=str(path),
+        )
         relative = path.relative_to(REPOSITORY_ROOT)
         for imported in _module_imports(tree):
             root = imported.split(".")[0]
             if root in FORBIDDEN_STAGE_LIBRARY_ROOTS:
-                violations.append(f"{relative} imports scientific/runtime library {imported}")
+                violations.append(
+                    f"{relative} imports scientific/runtime library {imported}"
+                )
         for node in ast.walk(tree):
             if (
                 isinstance(node, ast.ImportFrom)
                 and node.module == "datp_core.domain.values"
-                and any(alias.name == "checksum_file" for alias in node.names)
+                and any(
+                    alias.name == "checksum_file" for alias in node.names
+                )
             ):
                 violations.append(
                     f"{relative} recomputes a publication checksum instead of using the publication result"
@@ -232,7 +257,10 @@ def test_orchestration_stages_remain_thin_composition_only() -> None:
             if not isinstance(node, ast.ClassDef):
                 continue
             bases = _base_names(node)
-            if _is_dataclass(node) or bases & {"BaseModel", "StrictModel"}:
+            if _is_dataclass(node) or bases & {
+                "BaseModel",
+                "StrictModel",
+            }:
                 violations.append(
                     f"{relative}:{node.name} defines a domain/persistence model in orchestration"
                 )
@@ -245,7 +273,10 @@ def test_serialization_bypass_is_eliminated() -> None:
         for path in _python_files(SOURCE_ROOT)
         if path != SOURCE_ROOT / "artifacts" / "serialization.py"
         and _uses_serialization_bypass(
-            ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            ast.parse(
+                path.read_text(encoding="utf-8"),
+                filename=str(path),
+            )
         )
     )
     assert observed == SERIALIZATION_BYPASS_BASELINE, (
@@ -270,7 +301,10 @@ def test_neutral_publication_symbols_are_not_reexported_from_artifacts_store() -
 
     violations: list[str] = []
     for path in _python_files(SOURCE_ROOT):
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        tree = ast.parse(
+            path.read_text(encoding="utf-8"),
+            filename=str(path),
+        )
         for node in ast.walk(tree):
             if (
                 not isinstance(node, ast.ImportFrom)
@@ -292,10 +326,15 @@ def test_federated_checkpoint_monolith_and_imports_cannot_return() -> None:
     violations: list[str] = []
     for root in (SOURCE_ROOT, TEST_ROOT):
         for path in _python_files(root):
-            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            tree = ast.parse(
+                path.read_text(encoding="utf-8"),
+                filename=str(path),
+            )
             if LEGACY_CHECKPOINT_IMPORT in _module_imports(tree):
                 violations.append(str(path.relative_to(REPOSITORY_ROOT)))
-    assert not violations, f"legacy checkpointing imports remain in: {violations}"
+    assert not violations, (
+        f"legacy checkpointing imports remain in: {violations}"
+    )
 
 
 def test_federated_checkpoint_responsibilities_keep_one_owner() -> None:
@@ -334,7 +373,10 @@ def test_analysis_aggregate_modules_and_imports_cannot_return() -> None:
     for root in (SOURCE_ROOT, TEST_ROOT):
         for path in _python_files(root):
             imports = _module_imports(
-                ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+                ast.parse(
+                    path.read_text(encoding="utf-8"),
+                    filename=str(path),
+                )
             )
             leaked = LEGACY_ANALYSIS_IMPORTS.intersection(imports)
             if leaked:
@@ -342,6 +384,24 @@ def test_analysis_aggregate_modules_and_imports_cannot_return() -> None:
                     f"{path.relative_to(REPOSITORY_ROOT)} imports {sorted(leaked)}"
                 )
     assert not violations, "\n".join(violations)
+
+
+def test_experiment_identity_compatibility_module_cannot_return() -> None:
+    assert not LEGACY_EXPERIMENT_IDENTITY_MODULE.exists()
+    violations: list[str] = []
+    for root in (SOURCE_ROOT, TEST_ROOT):
+        for path in _python_files(root):
+            imports = _module_imports(
+                ast.parse(
+                    path.read_text(encoding="utf-8"),
+                    filename=str(path),
+                )
+            )
+            if LEGACY_EXPERIMENT_IDENTITY_IMPORT in imports:
+                violations.append(str(path.relative_to(REPOSITORY_ROOT)))
+    assert not violations, (
+        f"legacy experiment identity imports remain in: {violations}"
+    )
 
 
 def test_analysis_package_initializer_is_not_a_reexport_barrel() -> None:
@@ -352,7 +412,10 @@ def test_analysis_package_initializer_is_not_a_reexport_barrel() -> None:
     exported_statements = tuple(
         node
         for node in tree.body
-        if isinstance(node, (ast.Import, ast.ImportFrom, ast.Assign, ast.AnnAssign))
+        if isinstance(
+            node,
+            (ast.Import, ast.ImportFrom, ast.Assign, ast.AnnAssign),
+        )
     )
     assert not exported_statements
 
@@ -360,7 +423,10 @@ def test_analysis_package_initializer_is_not_a_reexport_barrel() -> None:
 def test_persisted_documents_use_strict_models_and_runtime_payloads_do_not() -> None:
     violations: list[str] = []
     for path in _python_files(SOURCE_ROOT):
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        tree = ast.parse(
+            path.read_text(encoding="utf-8"),
+            filename=str(path),
+        )
         for node in tree.body:
             if not isinstance(node, ast.ClassDef):
                 continue
@@ -392,7 +458,9 @@ def test_no_canonical_threshold_numbering_in_source() -> None:
     violations = tuple(
         str(path.relative_to(REPOSITORY_ROOT))
         for path in _python_files(SOURCE_ROOT)
-        if CANONICAL_THRESHOLD_TOKEN.search(path.read_text(encoding="utf-8"))
+        if CANONICAL_THRESHOLD_TOKEN.search(
+            path.read_text(encoding="utf-8")
+        )
     )
     assert not violations, (
         f"canonical threshold numbering remains in: {violations}"
