@@ -1,9 +1,10 @@
-"""Safe serialization for trusted estimators and canonical domain documents."""
+"""Safe serialization for trusted estimators and canonical artifact documents."""
 
 import json
-from collections.abc import Callable
-from dataclasses import dataclass
-from enum import StrEnum
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass, fields, is_dataclass
+from enum import Enum, StrEnum
+from math import isfinite
 from pathlib import Path
 from typing import cast
 
@@ -15,10 +16,20 @@ from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 from datp_core.domain.enums import TrustedEstimatorClassName
 from datp_core.domain.errors import SerializationSafetyError
-from datp_core.domain.provenance import canonical_value
 from datp_core.domain.values import AbsoluteTolerance, Checksum, checksum_file, checksum_text
 
 TrustedScaler = StandardScaler | MinMaxScaler
+
+type CanonicalValue = (
+    None
+    | bool
+    | int
+    | float
+    | str
+    | tuple["CanonicalValue", ...]
+    | list["CanonicalValue"]
+    | dict[str, "CanonicalValue"]
+)
 
 STANDARD_SCALER_WITH_MEAN = True
 STANDARD_SCALER_WITH_STANDARD_DEVIATION = True
@@ -58,6 +69,60 @@ _TRUSTED_ESTIMATORS: tuple[TrustedEstimatorDefinition, ...] = (
         ),
     ),
 )
+
+
+def canonical_value(value: object) -> CanonicalValue:
+    """Convert a supported value into a deterministic, finite JSON document value."""
+    if value is None or isinstance(value, (bool, int, str)):
+        return value
+    if isinstance(value, float):
+        if not isfinite(value):
+            raise ValueError("canonical scientific artifacts cannot contain non-finite floats")
+        return value
+    if isinstance(value, Path):
+        return value.as_posix()
+    if isinstance(value, Enum):
+        return canonical_value(value.value)
+    if isinstance(value, BaseModel):
+        return {name: canonical_value(getattr(value, name)) for name in type(value).model_fields}
+    if is_dataclass(value) and not isinstance(value, type):
+        own_fields = fields(value)
+        if len(own_fields) == 1 and own_fields[0].name == "value":
+            return canonical_value(getattr(value, own_fields[0].name))
+        return {field.name: canonical_value(getattr(value, field.name)) for field in own_fields}
+    if isinstance(value, Mapping):
+        if not all(isinstance(key, str) for key in value):
+            raise TypeError("canonical JSON object keys must be strings")
+        return {key: canonical_value(value[key]) for key in sorted(value)}
+    if isinstance(value, tuple):
+        return tuple(canonical_value(item) for item in value)
+    if isinstance(value, list):
+        return [canonical_value(item) for item in value]
+    raise TypeError(f"unsupported canonical artifact value: {type(value).__qualname__}")
+
+
+def canonical_mapping(value: object) -> dict[str, CanonicalValue]:
+    """Return a canonical JSON object and reject non-mapping roots."""
+    document = canonical_value(value)
+    if not isinstance(document, dict):
+        raise TypeError("canonical document root must be a mapping")
+    return document
+
+
+def canonical_json_text(value: object) -> str:
+    """Serialize one supported value using the repository canonical JSON contract."""
+    return json.dumps(
+        canonical_value(value),
+        sort_keys=True,
+        separators=JSON_SEPARATORS,
+        ensure_ascii=True,
+        allow_nan=False,
+    )
+
+
+def canonical_checksum(value: object) -> Checksum:
+    """Checksum one supported value under the canonical JSON contract."""
+    return checksum_text(canonical_json_text(value))
 
 
 def _definition_for(identity: TrustedEstimatorClassName) -> TrustedEstimatorDefinition:
@@ -122,17 +187,6 @@ def load_estimator(path: Path, class_name: TrustedEstimatorClassName) -> Trusted
             subject=SerializationSubject.PREPROCESSING_ESTIMATOR,
         )
     return loaded
-
-
-def canonical_json_text(value: object) -> str:
-    """Serialize one supported value using the repository canonical JSON contract."""
-    return json.dumps(
-        canonical_value(value),
-        sort_keys=True,
-        separators=JSON_SEPARATORS,
-        ensure_ascii=True,
-        allow_nan=False,
-    )
 
 
 def serialize_json_model(model: BaseModel, destination: Path) -> Checksum:
