@@ -22,7 +22,7 @@ from datp_core.learning.autoencoder import (
     clone_autoencoder_state,
     clone_state,
 )
-from datp_core.learning.federated.checkpointing import publish_ditto_training
+from datp_core.learning.federated.checkpoints.publication import write_ditto_training
 from datp_core.learning.federated.models import (
     ClientTrainingInput,
     ClientTrainingResult,
@@ -73,6 +73,44 @@ class DittoTrainingRequest:
     split_manifest_checksum: Checksum
     global_output_directory: Path
     personalized_output_directory: Path
+
+
+@dataclass(slots=True)
+class _PersonalizedState:
+    client: ClientIdentity
+    state: AutoencoderState
+
+
+@dataclass(slots=True)
+class _PersonalizedSnapshotBuffer:
+    client: ClientIdentity
+    snapshots: list[RoundSnapshot]
+
+
+def _require_personalized_state(
+    states: tuple[_PersonalizedState, ...],
+    client: ClientIdentity,
+) -> _PersonalizedState:
+    matches = tuple(state for state in states if state.client == client)
+    if len(matches) != 1:
+        raise ScientificContractError(
+            "Ditto personalized state must resolve exactly once per client",
+            subject=ContractSubject.CLIENT_IDENTITY,
+        )
+    return matches[0]
+
+
+def _require_snapshot_buffer(
+    buffers: tuple[_PersonalizedSnapshotBuffer, ...],
+    client: ClientIdentity,
+) -> _PersonalizedSnapshotBuffer:
+    matches = tuple(buffer for buffer in buffers if buffer.client == client)
+    if len(matches) != 1:
+        raise ScientificContractError(
+            "Ditto personalized snapshot buffer must resolve exactly once per client",
+            subject=ContractSubject.CLIENT_IDENTITY,
+        )
+    return matches[0]
 
 
 def _validate_request(request: DittoTrainingRequest) -> None:
@@ -135,14 +173,16 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
         initialization_seed=request.training_seed,
     )
     global_state = clone_autoencoder_state(initial_model)
-    personalized_states: dict[ClientIdentity, AutoencoderState] = {
-        item.client: clone_state(global_state) for item in prepared
-    }
+    personalized_states = tuple(
+        _PersonalizedState(client=item.client, state=clone_state(global_state)) for item in prepared
+    )
+    personalized_snapshots = tuple(
+        _PersonalizedSnapshotBuffer(client=item.client, snapshots=[]) for item in prepared
+    )
 
     candidate_rounds = frozenset(request.checkpoint_protocol.candidates)
     rounds: list[FederatedRoundResult] = []
     global_snapshots: list[RoundSnapshot] = []
-    personalized_snapshots: dict[ClientIdentity, list[RoundSnapshot]] = {item.client: [] for item in prepared}
 
     for round_value in range(1, request.checkpoint_protocol.maximum_round.value + 1):
         round_number = RoundNumber(round_value)
@@ -150,6 +190,7 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
         personalized_references: list[PersonalizedModelStateReference] = []
 
         for client_data in prepared:
+            personalized_state = _require_personalized_state(personalized_states, client_data.client)
             global_update = train_client_update(
                 client_data=client_data,
                 initial_state=global_state,
@@ -167,7 +208,7 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
             )
             personalized_update = train_client_update(
                 client_data=client_data,
-                initial_state=personalized_states[client_data.client],
+                initial_state=personalized_state.state,
                 autoencoder=request.autoencoder,
                 optimizer_protocol=request.training_protocol.optimizer,
                 learning_rate=request.learning_rate,
@@ -191,7 +232,7 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
                 )
 
             global_updates.append(global_update)
-            personalized_states[client_data.client] = personalized_update.state_dict
+            personalized_state.state = personalized_update.state_dict
             personalized_checksum, _ = serialize_and_checksum_state_dict(personalized_update.state_dict)
             personalized_references.append(
                 PersonalizedModelStateReference(
@@ -204,7 +245,7 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
                 )
             )
             if round_number in candidate_rounds:
-                personalized_snapshots[client_data.client].append(
+                _require_snapshot_buffer(personalized_snapshots, client_data.client).snapshots.append(
                     create_round_snapshot(
                         round_number,
                         personalized_update.state_dict,
@@ -237,13 +278,7 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
         )
         global_state = aggregated
         if round_number in candidate_rounds:
-            global_snapshots.append(
-                create_round_snapshot(
-                    round_number,
-                    global_state,
-                    aggregate_loss,
-                )
-            )
+            global_snapshots.append(create_round_snapshot(round_number, global_state, aggregate_loss))
 
     global_result = FederatedTrainingResult(
         coordinate=request.global_coordinate,
@@ -258,16 +293,13 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
         device_name=CudaDeviceName(torch.cuda.get_device_name(device).strip()),
         batch_size_used=request.batch_size,
     )
-    return publish_ditto_training(
+    return write_ditto_training(
         global_result=global_result,
         global_snapshots=tuple(global_snapshots),
         personalized_coordinate=request.personalized_coordinate,
         personalized_snapshot_sets=tuple(
-            PersonalizedSnapshotSet(
-                client=item.client,
-                snapshots=tuple(personalized_snapshots[item.client]),
-            )
-            for item in prepared
+            PersonalizedSnapshotSet(client=buffer.client, snapshots=tuple(buffer.snapshots))
+            for buffer in personalized_snapshots
         ),
         global_output_directory=request.global_output_directory,
         personalized_output_directory=request.personalized_output_directory,
