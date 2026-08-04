@@ -3,8 +3,13 @@
 from json import loads
 from pathlib import Path
 
-from datp_core.analysis.mechanisms import GroupDispersionObservation, grouped_dispersion
-from datp_core.analysis.models import MultiplicityPlan, PairedContrast, PValue
+from datp_core.analysis.contrasts import PairedContrast
+from datp_core.analysis.inference.multiplicity import MultiplicityPlan
+from datp_core.analysis.inference.wilcoxon import PValue
+from datp_core.analysis.mechanisms.dispersion import (
+    GroupDispersionObservation,
+    grouped_dispersion,
+)
 from datp_core.domain.enums import (
     AvailabilityStatus,
     EvidenceRole,
@@ -16,13 +21,22 @@ from datp_core.domain.enums import (
     SplitProtocolId,
     TrainingModelId,
 )
-from datp_core.domain.values import ClusterIndex, MetricValue, Ratio, Seed, ThresholdValue
+from datp_core.domain.values import (
+    ClusterIndex,
+    MetricValue,
+    Ratio,
+    Seed,
+    ThresholdValue,
+)
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.orchestration.stages.analyze import AnalyzeRequest, analyze_stage
+from datp_core.orchestration.commands.analysis import AnalyzeRequest
+from datp_core.orchestration.stages.analyze import analyze_stage
 from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL
 
 
-def test_analyze_stage_persists_protocol_mechanisms_and_reuses_document(tmp_path: Path) -> None:
+def test_analyze_stage_persists_protocol_mechanisms_and_reuses_document(
+    tmp_path: Path,
+) -> None:
     mechanism = grouped_dispersion(
         (
             GroupDispersionObservation(
@@ -70,7 +84,9 @@ def _contrast(seed: int) -> PairedContrast:
             population=PopulationId.NBAIOT_NATURAL_DEVICES,
             training_seed=Seed(seed),
             split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
-            preprocessing_identity=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
+            preprocessing_identity=(
+                PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD
+            ),
             model=TrainingModelId.FEDAVG_AUTOENCODER,
             model_coefficient=None,
         ),
