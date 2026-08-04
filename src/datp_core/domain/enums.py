@@ -426,6 +426,7 @@ class ContractSubject(StrEnum):
     HELD_OUT_METRICS = "held_out_metrics"
     LABEL = "label"
     LOCAL_QUANTILE_MEAN = "local_quantile_mean"
+    METRICS = "metrics"
     OPTIMIZER = "optimizer"
     PREPROCESSING = "preprocessing"
     QUANTILE = "quantile"
@@ -467,3 +468,173 @@ class QuantileInterpolationSemantics(StrEnum):
 class PartitionOrdering(StrEnum):
     PRESERVE_SOURCE_ORDER = "preserve_source_order"
     STABLE_ROW_ID = "stable_row_id"
+
+
+class ProvenanceComparisonMode(StrEnum):
+    EXACT = "exact"
+    SET = "set"
+    SEQUENCE = "sequence"
+
+
+class CanonicalizationContract(StrEnum):
+    SORTED_KEYS_COMPACT_JSON = "sorted_keys_compact_json"
+
+
+class MetricDecisionRule(StrEnum):
+    """Closed threshold-decision semantics for evaluation records."""
+
+    SCORE_STRICTLY_GREATER_THAN_THRESHOLD = "score_strictly_greater_than_threshold"
+
+
+class AggregateMetricSemantics(StrEnum):
+    MACRO_ARITHMETIC_MEAN = "macro_arithmetic_mean"
+    POOLED_CONFUSION = "pooled_confusion"
+    DISPERSION_POPULATION_STANDARD_DEVIATION = "dispersion_population_standard_deviation"
+    COEFFICIENT_OF_VARIATION_POPULATION_SD_OVER_MEAN = "coefficient_of_variation_population_sd_over_mean"
+    INTERQUARTILE_RANGE_NUMPY_LINEAR = "interquartile_range_numpy_linear"
+    PERCENTILE_NUMPY_LINEAR = "percentile_numpy_linear"
+    MAXIMUM = "maximum"
+    MINIMUM = "minimum"
+
+
+class MetricSemanticConstraint(StrEnum):
+    REQUIRES_ATTACK_LABELS = "requires_attack_labels"
+    REQUIRES_POSITIVE_MEAN_FPR = "requires_positive_mean_fpr"
+    REQUIRES_FPR_EVALUABLE_COHORT = "requires_fpr_evaluable_cohort"
+    REQUIRES_ATTACK_EVALUABLE_COHORT = "requires_attack_evaluable_cohort"
+    REQUIRES_PER_CLIENT_VALUES = "requires_per_client_values"
+
+
+class MetricScope(StrEnum):
+    CLIENT = "client"
+    POPULATION = "population"
+    OPERATIONAL = "operational"
+    COMMUNICATION = "communication"
+
+
+class ThresholdPolicyInvariant(StrEnum):
+    MODEL_CHECKSUM = "model_checksum"
+    CALIBRATION_SCORE_SET_CHECKSUM = "calibration_score_set_checksum"
+    EVALUATION_SCORE_SET_CHECKSUM = "evaluation_score_set_checksum"
+    PREPROCESSING_STATE_SET_CHECKSUM = "preprocessing_state_set_checksum"
+    SPLIT_MANIFEST_CHECKSUM = "split_manifest_checksum"
+    ELIGIBILITY_INVENTORY = "eligibility_inventory"
+
+
+class ThresholdConstructionIdentity(StrEnum):
+    EXACT_LOCAL_LINEAR_QUANTILE = "exact_local_linear_quantile"
+    UNWEIGHTED_MEAN_OF_ELIGIBLE_LOCAL_QUANTILES = "unweighted_mean_of_eligible_local_quantiles"
+    EXACT_POOLED_LINEAR_QUANTILE = "exact_pooled_linear_quantile"
+    CALIBRATION_SUPPORT_WEIGHTED_LOCAL_QUANTILE_MEAN = "calibration_support_weighted_local_quantile_mean"
+    FIXED_WEIGHT_LOCAL_GLOBAL_SHRINKAGE = "fixed_weight_local_global_shrinkage"
+    SIZE_AWARE_LOCAL_GLOBAL_SHRINKAGE = "size_aware_local_global_shrinkage"
+    FINITE_SAMPLE_LOCAL_CONFORMAL_ORDER_STATISTIC = "finite_sample_local_conformal_order_statistic"
+    FIXED_COEFFICIENT_FEDERATED_BENIGN_STATISTICS = "fixed_coefficient_federated_benign_statistics"
+    FAMILY_MEAN_OF_LOCAL_QUANTILES = "family_mean_of_local_quantiles"
+    KMEANS_CLUSTER_MEAN_OF_LOCAL_QUANTILES = "kmeans_cluster_mean_of_local_quantiles"
+
+
+class ConformalAttainmentState(StrEnum):
+    OBSERVED = "observed"
+    TARGET_BELOW_EMPIRICAL_GRID = "target_below_empirical_grid"
+    TARGET_ABOVE_EMPIRICAL_GRID = "target_above_empirical_grid"
+
+
+class AnalysisAvailabilityReason(StrEnum):
+    NO_AVAILABLE_VALUES = "no_available_values"
+    SINGLETON_POPULATION = "singleton_population"
+    ZERO_MEAN = "zero_mean"
+    ZERO_TOTAL_VARIANCE = "zero_total_variance"
+    ZERO_WITHIN_GROUP_VARIANCE = "zero_within_group_variance"
+    INSUFFICIENT_GROUP_COUNT = "insufficient_group_count"
+    GROUP_PARTITION_MISMATCH = "group_partition_mismatch"
+    DISJOINT_GROUP_SEED_SETS = "disjoint_group_seed_sets"
+
+
+class GroupingKind(StrEnum):
+    FAMILY = "family"
+    CLUSTER = "cluster"
+
+
+class CorrelationMethod(StrEnum):
+    PEARSON = "pearson"
+    SPEARMAN = "spearman"
+
+
+class TieHandlingMethod(StrEnum):
+    AVERAGE_RANK = "average_rank"
+
+
+class TemporalRecoveryDefinition(StrEnum):
+    FROZEN_MINUS_RECALIBRATED_OVER_FROZEN_MINUS_STATIC = (
+        "frozen_minus_recalibrated_over_frozen_minus_static"
+    )
+
+
+class ThresholdMovementDirection(StrEnum):
+    INCREASED = "increased"
+    DECREASED = "decreased"
+    UNCHANGED = "unchanged"
+
+
+class PairingKey(StrEnum):
+    TRAINING_SEED = "training_seed"
+    CLIENT_IDENTITY = "client_identity"
+    REPLICATE_INDEX = "replicate_index"
+
+
+class PairedDifferenceDirection(StrEnum):
+    LEFT_MINUS_RIGHT = "left_minus_right"
+
+
+class AnalysisUnit(StrEnum):
+    SEED = "seed"
+    CLIENT = "client"
+    CALIBRATION_SUBSAMPLE_REPLICATE = "calibration_subsample_replicate"
+
+
+class BcaQuantileInterpolation(StrEnum):
+    NUMPY_LINEAR = "numpy_linear"
+
+
+class WilcoxonAlternative(StrEnum):
+    TWO_SIDED = "two_sided"
+
+
+class WilcoxonZeroMethod(StrEnum):
+    WILCOX = "wilcox"
+
+
+class WilcoxonComputationMethod(StrEnum):
+    EXACT = "exact"
+    ASYMPTOTIC = "asymptotic"
+    UNAVAILABLE = "unavailable"
+
+
+class JensenShannonLogBase(StrEnum):
+    BASE_TWO = "base_two"
+
+
+class TemporalPairingRule(StrEnum):
+    EXACT_COORDINATE_EXCEPT_TEMPORAL_STATE = "exact_coordinate_except_temporal_state"
+
+
+class TestFamilyId(StrEnum):
+    CONFIRMATORY_PRIMARY = "confirmatory_primary"
+    SUPPORTIVE_SECONDARY = "supportive_secondary"
+
+
+class SerializationSubject(StrEnum):
+    DATASET_MANIFEST = "dataset_manifest"
+    SPLIT_MANIFEST = "split_manifest"
+    ANALYSIS_DOCUMENT = "analysis_document"
+
+
+class AnalysisArtifactName(StrEnum):
+    DESCRIPTIVE = "descriptive.json"
+    CONFIRMATORY_INFERENCE = "confirmatory_inference.json"
+    SUPPLEMENTARY_INFERENCE = "supplementary_inference.json"
+    MULTIPLICITY = "multiplicity.json"
+    MECHANISM = "mechanism.json"
+    TEMPORAL = "temporal.json"
+    COMPLETE = "COMPLETE"
