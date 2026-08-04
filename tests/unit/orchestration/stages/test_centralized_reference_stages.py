@@ -18,6 +18,8 @@ from datp_core.centralized_reference.thresholding import CENTRALIZED_POOLED_QUAN
 from datp_core.domain.enums import PublicationStatus, StageOperationId
 from datp_core.domain.errors import LeakageError
 from datp_core.domain.values import Checksum, RowCount, Seed
+from datp_core.orchestration.commands.scoring import ScoreCentralizedReferenceRequest
+from datp_core.orchestration.commands.training import TrainCentralizedReferenceRequest
 from datp_core.orchestration.stages.construct_centralized_reference_threshold import (
     ConstructCentralizedThresholdRequest,
     construct_centralized_reference_threshold_stage,
@@ -26,18 +28,12 @@ from datp_core.orchestration.stages.evaluate_centralized_reference import (
     EvaluateCentralizedReferenceRequest,
     evaluate_centralized_reference_stage,
 )
-from datp_core.orchestration.stages.score_centralized_reference import (
-    ScoreCentralizedReferenceRequest,
-    score_centralized_reference_stage,
-)
+from datp_core.orchestration.stages.score_centralized_reference import score_centralized_reference_stage
 from datp_core.orchestration.stages.select_centralized_reference_checkpoint import (
     SelectCentralizedCheckpointRequest,
     select_centralized_reference_checkpoint_stage,
 )
-from datp_core.orchestration.stages.train_centralized_reference import (
-    TrainCentralizedReferenceRequest,
-    train_centralized_reference_stage,
-)
+from datp_core.orchestration.stages.train_centralized_reference import train_centralized_reference_stage
 from datp_core.protocols.training import BATCH_SIZE as DECLARED_BATCH_SIZE
 
 
