@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar
 
-from datp_core.datasets.models import DatasetMaterializationResult
+from datp_core.datasets.catalogue import DatasetPublication
 from datp_core.domain.enums import DatasetId, StageOperationId
 
 
@@ -16,5 +16,5 @@ class MaterializeCanonicalDatasetsRequest:
 
 @dataclass(frozen=True, slots=True)
 class MaterializeCanonicalDatasetsResult:
-    stage: ClassVar[StageOperationId] = StageOperationId.MATERIALIZE_CANONICAL_DATASETS
-    publications: tuple[DatasetMaterializationResult, ...]
+    stage: ClassVar[StageOperationId] = StageOperationId.MATERIALIZE
+    publications: tuple[DatasetPublication, ...]
