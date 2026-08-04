@@ -29,11 +29,6 @@ from datp_core.domain.values import (
 from datp_core.learning.autoencoder import ReconstructionAutoencoder, reconstruction_errors
 from datp_core.learning.federated.checkpointing import CheckpointCandidate
 from datp_core.pipeline.checkpoints.service import validate_persisted_checkpoint_file
-from datp_core.pipeline.publication.atomic import (
-    cleanup_staging_directory,
-    create_staging_directory,
-    replace_directory,
-)
 from datp_core.pipeline.scoring.frames import (
     extract_score_arrays,
     score_frame,
@@ -145,52 +140,55 @@ def load_checkpoint_model(
 
 
 def generate_federated_scores(request: ScoreGenerationRequest, device: torch.device) -> ScoreGenerationResult:
+    """Write one complete score artifact inventory to an empty caller-owned directory."""
     _validate_request(request)
+    _require_empty_output_directory(request.output_directory)
     model = load_checkpoint_model(request.checkpoint, request.autoencoder, device)
     scored_roles = scored_partition_roles(request.checkpoint.coordinate.split_protocol)
     records = _ScoreRecordInventory.empty()
 
-    staging = create_staging_directory(request.output_directory)
-    try:
-        for client_input in sorted(request.clients, key=lambda item: item.client):
-            client_directory = staging / client_input.client.client_id
-            for role in scored_roles:
-                frame = client_input.features_for(role)
-                validate_score_input_frame(frame, role, request.feature_names)
-                record = _score_partition(
-                    frame=frame,
-                    client=client_input.client,
-                    partition_role=role,
-                    request=request,
-                    model=model,
-                    device=device,
-                    destination=client_directory / _asset_name_for_partition(role).value,
-                )
-                records.append(role, record)
-
+    for client_input in sorted(request.clients, key=lambda item: item.client):
+        client_directory = request.output_directory / client_input.client.client_id
         for role in scored_roles:
-            for record in records.records_for(role):
-                validate_persisted_score_frame(record.path, record.checksum, record.row_count)
+            frame = client_input.features_for(role)
+            validate_score_input_frame(frame, role, request.feature_names)
+            record = _score_partition(
+                frame=frame,
+                client=client_input.client,
+                partition_role=role,
+                request=request,
+                model=model,
+                device=device,
+                destination=client_directory / _asset_name_for_partition(role).value,
+            )
+            records.append(role, record)
 
-        invariant = _fixed_score_invariant(request, records)
-        _write_complete_marker(staging, invariant)
-        replace_directory(staging, request.output_directory)
-    except Exception:
-        cleanup_staging_directory(staging, ignore_errors=True)
-        raise
+    for role in scored_roles:
+        for record in records.records_for(role):
+            validate_persisted_score_frame(record.path, record.checksum, record.row_count)
 
-    rebased = _rebase_records(request.output_directory, scored_roles, records)
+    invariant = _fixed_score_invariant(request, records)
+    _write_complete_marker(request.output_directory, invariant)
     manifest = ScoreArtifactManifest(
         coordinate=request.checkpoint.coordinate,
         checkpoint_round=request.checkpoint.round_number,
         checkpoint_checksum=request.checkpoint.tensor_checksum,
         preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
         split_manifest_checksum=request.split_manifest_checksum,
-        calibration_records=rebased.immutable_records_for(PartitionRole.CALIBRATION),
-        evaluation_records=rebased.immutable_records_for(PartitionRole.EVALUATION),
-        future_recalibration_records=rebased.immutable_records_for(PartitionRole.FUTURE_RECALIBRATION),
+        calibration_records=records.immutable_records_for(PartitionRole.CALIBRATION),
+        evaluation_records=records.immutable_records_for(PartitionRole.EVALUATION),
+        future_recalibration_records=records.immutable_records_for(PartitionRole.FUTURE_RECALIBRATION),
     )
     return ScoreGenerationResult(manifest=manifest)
+
+
+def _require_empty_output_directory(directory: Path) -> None:
+    directory.mkdir(parents=True, exist_ok=True)
+    if any(directory.iterdir()):
+        raise ArtifactIntegrityError(
+            "score generation output directory must be empty",
+            subject=ContractSubject.ARTIFACT_PATH,
+        )
 
 
 def _fixed_score_invariant(
@@ -212,38 +210,6 @@ def _fixed_score_invariant(
             record_set_checksum(future_records) if future_records else None
         ),
     )
-
-
-def _rebase_records(
-    output_directory: Path,
-    scored_roles: tuple[PartitionRole, ...],
-    records: _ScoreRecordInventory,
-) -> _ScoreRecordInventory:
-    rebased = _ScoreRecordInventory.empty()
-    for role in scored_roles:
-        for record in records.records_for(role):
-            path = output_directory / record.scored_client.client_id / _asset_name_for_partition(role).value
-            if not path.is_file():
-                raise ArtifactIntegrityError(
-                    "published score partition missing after atomic replace",
-                    subject=ContractSubject.SCORES,
-                )
-            rebased.append(
-                role,
-                ScoreRecord(
-                    coordinate=record.coordinate,
-                    partition_role=record.partition_role,
-                    checkpoint_round=record.checkpoint_round,
-                    checkpoint_checksum=record.checkpoint_checksum,
-                    path=path,
-                    checksum=checksum_file(path),
-                    row_count=record.row_count,
-                    feature_count=record.feature_count,
-                    serialization_format=record.serialization_format,
-                    scored_client=record.scored_client,
-                ),
-            )
-    return rebased
 
 
 def _validate_request(request: ScoreGenerationRequest) -> None:
