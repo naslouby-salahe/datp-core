@@ -31,8 +31,8 @@ from datp_core.domain.values import (
     checksum_text,
     floats_absolutely_close,
 )
-from datp_core.protocols.models import FRACTION_TOTAL_ABSOLUTE_TOLERANCE, UNIT_FRACTION_TOTAL
 from datp_core.protocols.runtime import DATA_ROOT
+from datp_core.protocols.splits import FRACTION_TOTAL_ABSOLUTE_TOLERANCE, UNIT_FRACTION_TOTAL
 
 
 class PopulationOutcomeLabel(StrEnum):
@@ -97,9 +97,7 @@ MEMBERSHIP_COLUMNS: tuple[PopulationFrameColumn, ...] = (
     PopulationFrameColumn.SOURCE_PATH,
     PopulationFrameColumn.SOURCE_ROW_INDEX,
 )
-ASSIGNMENT_COLUMNS: tuple[PopulationFrameColumn, ...] = MEMBERSHIP_COLUMNS + (
-    PopulationFrameColumn.PARTITION_ROLE,
-)
+ASSIGNMENT_COLUMNS: tuple[PopulationFrameColumn, ...] = MEMBERSHIP_COLUMNS + (PopulationFrameColumn.PARTITION_ROLE,)
 PARQUET_GLOB = "*.parquet"
 
 
@@ -277,9 +275,7 @@ class ClientIdentity:
     identity_kind: PopulationIdentityKind
 
     def __post_init__(self) -> None:
-        if not self.client_id or any(
-            separator in self.client_id for separator in ("=", "/", "\\")
-        ):
+        if not self.client_id or any(separator in self.client_id for separator in ("=", "/", "\\")):
             raise ValueError("client identity must be a non-empty path-safe token")
 
     def __lt__(self, other: "ClientIdentity") -> bool:
@@ -328,9 +324,7 @@ class PopulationCapabilities:
     confirmatory_eligible: bool
 
     def __post_init__(self) -> None:
-        if len(self.valid_threshold_methods) != len(
-            frozenset(self.valid_threshold_methods)
-        ):
+        if len(self.valid_threshold_methods) != len(frozenset(self.valid_threshold_methods)):
             raise ValueError("valid threshold methods must be unique")
 
 
@@ -357,9 +351,7 @@ class PopulationManifest:
     def __post_init__(self) -> None:
         client_ids = tuple(client.client_id for client in self.clients)
         if client_ids != self.document.candidate_clients:
-            raise ValueError(
-                "manifest clients must match candidate client identities in order"
-            )
+            raise ValueError("manifest clients must match candidate client identities in order")
 
 
 @dataclass(frozen=True, slots=True)
@@ -371,14 +363,10 @@ class ControlledPartitionCondition:
         match self.kind:
             case ControlledPartitionKind.DIRICHLET:
                 if self.concentration is None:
-                    raise ValueError(
-                        "Dirichlet construction requires a positive concentration"
-                    )
+                    raise ValueError("Dirichlet construction requires a positive concentration")
             case ControlledPartitionKind.IID:
                 if self.concentration is not None:
-                    raise ValueError(
-                        "IID construction must not carry a concentration"
-                    )
+                    raise ValueError("IID construction must not carry a concentration")
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -412,10 +400,7 @@ def client_identities(
     client_ids: tuple[str, ...],
     identity_kind: PopulationIdentityKind,
 ) -> tuple[ClientIdentity, ...]:
-    return tuple(
-        ClientIdentity(population, client_id, identity_kind)
-        for client_id in client_ids
-    )
+    return tuple(ClientIdentity(population, client_id, identity_kind) for client_id in client_ids)
 
 
 def build_population_manifest(
@@ -461,18 +446,12 @@ def hamilton_integer_counts(
     extras = [0] * len(ratios)
     for index in order[:residual]:
         extras[index] = 1
-    return tuple(
-        floor_value + extra
-        for floor_value, extra in zip(floors, extras, strict=True)
-    )
+    return tuple(floor_value + extra for floor_value, extra in zip(floors, extras, strict=True))
 
 
 def synthetic_client_ids(client_count: ClientCount) -> tuple[str, ...]:
     width = max(2, len(str(client_count.value - 1)))
-    return tuple(
-        f"synthetic_client_{index:0{width}d}"
-        for index in range(client_count.value)
-    )
+    return tuple(f"synthetic_client_{index:0{width}d}" for index in range(client_count.value))
 
 
 def membership_checksum(
@@ -490,17 +469,13 @@ def _require_hamilton_inputs(
     if total < 0:
         raise ValueError("Hamilton allocation requires a non-negative total")
     if not ratios or any(ratio < 0 for ratio in ratios):
-        raise ValueError(
-            "Hamilton allocation requires non-negative ratios that sum to one"
-        )
+        raise ValueError("Hamilton allocation requires non-negative ratios that sum to one")
     if not floats_absolutely_close(
         fsum(ratios),
         UNIT_FRACTION_TOTAL,
         FRACTION_TOTAL_ABSOLUTE_TOLERANCE,
     ):
-        raise ValueError(
-            "Hamilton allocation requires non-negative ratios that sum to one"
-        )
+        raise ValueError("Hamilton allocation requires non-negative ratios that sum to one")
 
 
 def _require_unique_ordered(
@@ -518,13 +493,9 @@ def _require_client_set_partition(
 ) -> None:
     accepted_set = frozenset(accepted)
     if not accepted_set <= frozenset(candidates):
-        raise ValueError(
-            f"{PopulationManifestField.ACCEPTED_CLIENTS.value} must be a subset of candidates"
-        )
+        raise ValueError(f"{PopulationManifestField.ACCEPTED_CLIENTS.value} must be a subset of candidates")
     if frozenset(excluded) & accepted_set:
-        raise ValueError(
-            f"{PopulationManifestField.EXCLUDED_CLIENT_IDS.value} cannot also be accepted"
-        )
+        raise ValueError(f"{PopulationManifestField.EXCLUDED_CLIENT_IDS.value} cannot also be accepted")
 
 
 def _require_non_negative_row_counts(
@@ -533,9 +504,7 @@ def _require_non_negative_row_counts(
     attack: RowCount,
 ) -> None:
     if benign + attack != total:
-        raise ValueError(
-            "benign and attack rows must sum to total membership rows"
-        )
+        raise ValueError("benign and attack rows must sum to total membership rows")
 
 
 def _require_client_series_shape(
@@ -543,9 +512,7 @@ def _require_client_series_shape(
 ) -> None:
     expected = document.client_count.value
     if len(document.client_ids) != expected:
-        raise ValueError(
-            "client identity count must match declared client count"
-        )
+        raise ValueError("client identity count must match declared client count")
     for series in (
         document.client_row_counts,
         document.benign_row_counts,
@@ -560,10 +527,7 @@ def _require_row_conservation(
 ) -> None:
     if sum(document.client_row_counts) != document.total_rows:
         raise ValueError("client row counts must conserve total rows")
-    if (
-        sum(document.benign_row_counts) + sum(document.attack_row_counts)
-        != document.total_rows
-    ):
+    if sum(document.benign_row_counts) + sum(document.attack_row_counts) != document.total_rows:
         raise ValueError("benign and attack counts must conserve total rows")
 
 
@@ -573,11 +537,7 @@ def _require_partition_kind_fields(
     match document.partition_kind:
         case ControlledPartitionKind.DIRICHLET:
             if document.concentration is None or document.concentration <= 0:
-                raise ValueError(
-                    "Dirichlet diagnostics require a positive concentration"
-                )
+                raise ValueError("Dirichlet diagnostics require a positive concentration")
         case ControlledPartitionKind.IID:
             if document.concentration is not None:
-                raise ValueError(
-                    "IID diagnostics must not carry a Dirichlet concentration"
-                )
+                raise ValueError("IID diagnostics must not carry a Dirichlet concentration")

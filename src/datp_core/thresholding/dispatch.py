@@ -138,9 +138,7 @@ def dispatch_federated_threshold(
             return construct_sample_weighted_shared_threshold(
                 request.eligible,
                 QuantileProtocol(
-                    method=(
-                        FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD
-                    ),
+                    method=(FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD),
                     quantile=request.quantile,
                 ),
             )
@@ -195,14 +193,8 @@ def _cluster_threshold_or_unavailable(
         return ThresholdUnavailableResult(
             method=FederatedThresholdMethod.CLUSTER_THRESHOLD,
             coordinate=request.coordinate,
-            reason=(
-                ThresholdInfeasibilityReason.GROUP_COUNT_EXCEEDS_ELIGIBLE_POPULATION
-            ),
-            detail=(
-                "The eligible population does not exceed the locked cluster group count."
-            ),
+            reason=(ThresholdInfeasibilityReason.GROUP_COUNT_EXCEEDS_ELIGIBLE_POPULATION),
+            detail=("The eligible population does not exceed the locked cluster group count."),
         )
-    protocol = CLUSTER_THRESHOLD_PROTOCOL.model_copy(
-        update={"quantile": request.quantile}
-    )
+    protocol = CLUSTER_THRESHOLD_PROTOCOL.model_copy(update={"quantile": request.quantile})
     return construct_grouped_threshold(request.eligible, protocol)

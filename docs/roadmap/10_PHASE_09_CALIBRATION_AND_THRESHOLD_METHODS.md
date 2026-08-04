@@ -30,15 +30,18 @@ Implement benign-only eligibility, deterministic calibration subsampling, shared
 - `datp_core/calibration/models.py`
 - `datp_core/calibration/eligibility.py`
 - `datp_core/calibration/sampling.py`
-- `datp_core/thresholding/models.py`
+- `datp_core/calibration/service.py`
+- `datp_core/thresholding/assignments.py`
+- `datp_core/thresholding/common.py`
+- `datp_core/thresholding/identities.py`
 - `datp_core/thresholding/quantiles.py`
-- `datp_core/thresholding/shared.py`
-- `datp_core/thresholding/local.py`
-- `datp_core/thresholding/family.py`
-- `datp_core/thresholding/grouped.py`
-- `datp_core/thresholding/shrinkage.py`
-- `datp_core/thresholding/conformal.py`
-- `datp_core/thresholding/federated_benign_statistics.py`
+- `datp_core/thresholding/methods/shared.py`
+- `datp_core/thresholding/methods/local.py`
+- `datp_core/thresholding/methods/family.py`
+- `datp_core/thresholding/methods/cluster.py`
+- `datp_core/thresholding/methods/shrinkage.py`
+- `datp_core/thresholding/methods/conformal.py`
+- `datp_core/thresholding/methods/federated_statistics.py`
 - `datp_core/thresholding/dispatch.py`
 - `datp_core/orchestration/stages/calibrate.py`
 - `datp_core/orchestration/stages/construct_federated_thresholds.py`
@@ -54,7 +57,7 @@ In `calibration/models.py`:
 - `CalibrationReplicateManifest`
 - `CalibrationUnavailableReason`
 
-In `thresholding/models.py`:
+In `thresholding/assignments.py` and `thresholding/methods/*.py`:
 
 - `LocalQuantile`
 - `ThresholdAssignment`

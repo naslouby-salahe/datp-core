@@ -223,15 +223,10 @@ def rebase_federated_scores(
             checkpoint_checksum=manifest.checkpoint_checksum,
             preprocessing_state_set_checksum=manifest.preprocessing_state_set_checksum,
             split_manifest_checksum=manifest.split_manifest_checksum,
-            calibration_records=tuple(
-                _rebased_record(record, directory) for record in manifest.calibration_records
-            ),
-            evaluation_records=tuple(
-                _rebased_record(record, directory) for record in manifest.evaluation_records
-            ),
+            calibration_records=tuple(_rebased_record(record, directory) for record in manifest.calibration_records),
+            evaluation_records=tuple(_rebased_record(record, directory) for record in manifest.evaluation_records),
             future_recalibration_records=tuple(
-                _rebased_record(record, directory)
-                for record in manifest.future_recalibration_records
+                _rebased_record(record, directory) for record in manifest.future_recalibration_records
             ),
         )
     )
@@ -250,9 +245,7 @@ def _result_from_inventory(
             split_manifest_checksum=request.split_manifest_checksum,
             calibration_records=records.immutable_records_for(PartitionRole.CALIBRATION),
             evaluation_records=records.immutable_records_for(PartitionRole.EVALUATION),
-            future_recalibration_records=records.immutable_records_for(
-                PartitionRole.FUTURE_RECALIBRATION
-            ),
+            future_recalibration_records=records.immutable_records_for(PartitionRole.FUTURE_RECALIBRATION),
         )
     )
 
@@ -272,9 +265,7 @@ def _build_records(
 ) -> tuple[ScoreRecord, ...]:
     records: list[ScoreRecord] = []
     for client_input in sorted(request.clients, key=lambda item: item.client):
-        path = output_directory / client_input.client.client_id / _asset_name_for_partition(
-            partition_role
-        ).value
+        path = output_directory / client_input.client.client_id / _asset_name_for_partition(partition_role).value
         if not path.is_file():
             raise ArtifactIntegrityError(
                 f"expected federated score partition is missing: {path}",
@@ -299,9 +290,7 @@ def _build_records(
 
 
 def _rebased_record(record: ScoreRecord, output_directory: Path) -> ScoreRecord:
-    path = output_directory / record.scored_client.client_id / _asset_name_for_partition(
-        record.partition_role
-    ).value
+    path = output_directory / record.scored_client.client_id / _asset_name_for_partition(record.partition_role).value
     if not path.is_file():
         raise ArtifactIntegrityError(
             "published score partition missing after atomic replace",
@@ -337,17 +326,11 @@ def _fixed_score_invariant(
     future_records = records.immutable_records_for(PartitionRole.FUTURE_RECALIBRATION)
     return FixedScoreInvariant(
         model_checksum=request.checkpoint.tensor_checksum,
-        calibration_score_set_checksum=record_set_checksum(
-            records.immutable_records_for(PartitionRole.CALIBRATION)
-        ),
-        evaluation_score_set_checksum=record_set_checksum(
-            records.immutable_records_for(PartitionRole.EVALUATION)
-        ),
+        calibration_score_set_checksum=record_set_checksum(records.immutable_records_for(PartitionRole.CALIBRATION)),
+        evaluation_score_set_checksum=record_set_checksum(records.immutable_records_for(PartitionRole.EVALUATION)),
         preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
         split_manifest_checksum=request.split_manifest_checksum,
-        future_recalibration_score_set_checksum=(
-            record_set_checksum(future_records) if future_records else None
-        ),
+        future_recalibration_score_set_checksum=(record_set_checksum(future_records) if future_records else None),
     )
 
 

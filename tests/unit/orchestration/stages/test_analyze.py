@@ -84,9 +84,7 @@ def _contrast(seed: int) -> PairedContrast:
             population=PopulationId.NBAIOT_NATURAL_DEVICES,
             training_seed=Seed(seed),
             split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
-            preprocessing_identity=(
-                PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD
-            ),
+            preprocessing_identity=(PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD),
             model=TrainingModelId.FEDAVG_AUTOENCODER,
             model_coefficient=None,
         ),

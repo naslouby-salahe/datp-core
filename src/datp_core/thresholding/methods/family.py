@@ -54,9 +54,7 @@ class FamilyMembership:
             ContractSubject.THRESHOLD,
         )
         require_unique_clients(self.members, "family members")
-        quantile_clients = tuple(
-            item.client for item in self.contributing_local_quantiles
-        )
+        quantile_clients = tuple(item.client for item in self.contributing_local_quantiles)
         require_unique_clients(quantile_clients, "contributing local quantiles")
         if self.members or quantile_clients:
             require_contract(
@@ -80,9 +78,7 @@ class FamilyThresholdResult:
     coordinate: FederatedTrainingCoordinate
     families: tuple[FamilyMembership, ...]
     assignments: tuple[ThresholdAssignment, ...]
-    method: ClassVar[FederatedThresholdMethod] = (
-        FederatedThresholdMethod.FAMILY_THRESHOLD
-    )
+    method: ClassVar[FederatedThresholdMethod] = FederatedThresholdMethod.FAMILY_THRESHOLD
 
     def __post_init__(self) -> None:
         require_contract(
@@ -106,17 +102,14 @@ class FamilyThresholdResult:
         expected_pairs = tuple(
             (client, family.family_threshold)
             for family in self.families
-            if family.status is AvailabilityStatus.AVAILABLE
-            and family.family_threshold is not None
+            if family.status is AvailabilityStatus.AVAILABLE and family.family_threshold is not None
             for client in family.members
         )
         validate_assignments(
             self.assignments,
             expected_pairs,
             label="threshold assignments",
-            mismatch_message=(
-                "a family threshold assignment must use its family's constructed threshold"
-            ),
+            mismatch_message=("a family threshold assignment must use its family's constructed threshold"),
         )
 
 
@@ -141,11 +134,7 @@ def construct_family_threshold(
         "eligible clients in family threshold construction",
     )
     for client in eligible_clients:
-        matching = tuple(
-            family
-            for candidate, family in family_by_client
-            if candidate == client
-        )
+        matching = tuple(family for candidate, family in family_by_client if candidate == client)
         if not matching:
             raise ScientificContractError(
                 f"eligible client {client} is missing a family taxonomy entry",
@@ -165,11 +154,7 @@ def construct_family_threshold(
     memberships: list[FamilyMembership] = []
     assignments: list[ThresholdAssignment] = []
     for family_id in family_ids:
-        declared_members = tuple(
-            client
-            for client, declared_family in family_by_client
-            if declared_family == family_id
-        )
+        declared_members = tuple(client for client, declared_family in family_by_client if declared_family == family_id)
         membership, family_assignments = _build_family_membership(
             family_id,
             declared_members,
@@ -191,11 +176,7 @@ def _build_family_membership(
     eligible: tuple[ClientBenignCalibrationScores, ...],
     quantile: Quantile,
 ) -> tuple[FamilyMembership, tuple[ThresholdAssignment, ...]]:
-    eligible_members = tuple(
-        client
-        for client in declared_members
-        if any(item.client == client for item in eligible)
-    )
+    eligible_members = tuple(client for client in declared_members if any(item.client == client for item in eligible))
     if not eligible_members:
         return (
             FamilyMembership(
@@ -207,13 +188,8 @@ def _build_family_membership(
             ),
             (),
         )
-    local_quantiles = tuple(
-        local_quantile(_eligible_scores(eligible, client), quantile)
-        for client in eligible_members
-    )
-    family_threshold = ThresholdValue(
-        unweighted_mean(tuple(item.value.value for item in local_quantiles))
-    )
+    local_quantiles = tuple(local_quantile(_eligible_scores(eligible, client), quantile) for client in eligible_members)
+    family_threshold = ThresholdValue(unweighted_mean(tuple(item.value.value for item in local_quantiles)))
     return (
         FamilyMembership(
             family_id=family_id,
@@ -222,10 +198,7 @@ def _build_family_membership(
             status=AvailabilityStatus.AVAILABLE,
             family_threshold=family_threshold,
         ),
-        tuple(
-            ThresholdAssignment(client, family_threshold)
-            for client in eligible_members
-        ),
+        tuple(ThresholdAssignment(client, family_threshold) for client in eligible_members),
     )
 
 

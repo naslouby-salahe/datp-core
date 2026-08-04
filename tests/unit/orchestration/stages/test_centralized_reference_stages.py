@@ -15,7 +15,7 @@ from tests.unit.centralized_reference.helpers import (
 
 from datp_core.centralized_reference.checkpointing import reject_federated_checkpoint
 from datp_core.centralized_reference.thresholding import CENTRALIZED_POOLED_QUANTILE_PROTOCOL
-from datp_core.domain.enums import PublicationStatus, StageOperationId
+from datp_core.domain.enums import EvidenceRole, PublicationStatus, StageOperationId, TrainingModelId
 from datp_core.domain.errors import LeakageError
 from datp_core.domain.values import Checksum, RowCount, Seed
 from datp_core.orchestration.commands.checkpoints import SelectCentralizedCheckpointRequest
@@ -111,7 +111,7 @@ def test_train_score_threshold_evaluate_stage_chain(tmp_path: Path) -> None:
         )
     )
     assert evaluation_result.stage is StageOperationId.EVALUATE_CENTRALIZED_REFERENCE
-    assert evaluation_result.evaluation.is_confirmatory_ladder_member is False
+    assert evaluation_result.evaluation.evidence_role is EvidenceRole.SUPPORTIVE
 
     reused = train_centralized_reference_stage(
         TrainCentralizedReferenceRequest(
@@ -132,4 +132,4 @@ def test_train_score_threshold_evaluate_stage_chain(tmp_path: Path) -> None:
 
 def test_score_stage_rejects_federated_checkpoint() -> None:
     with pytest.raises(LeakageError, match="federated checkpoint"):
-        reject_federated_checkpoint("fedavg")
+        reject_federated_checkpoint(TrainingModelId.FEDAVG_AUTOENCODER)

@@ -103,13 +103,9 @@ def test_every_threshold_method_reads_the_same_frozen_score_artifact_unchanged(
     manifest = _manifest(tmp_path)
     invariant = FixedScoreInvariant.from_manifest(manifest)
     checksums_before = tuple(
-        (record.scored_client.client_id, checksum_file(record.path))
-        for record in manifest.calibration_records
+        (record.scored_client.client_id, checksum_file(record.path)) for record in manifest.calibration_records
     )
-    eligible = tuple(
-        _eligible_client_scores(record, manifest, invariant)
-        for record in manifest.calibration_records
-    )
+    eligible = tuple(_eligible_client_scores(record, manifest, invariant) for record in manifest.calibration_records)
     results = tuple(
         (
             method,
@@ -133,16 +129,14 @@ def test_every_threshold_method_reads_the_same_frozen_score_artifact_unchanged(
         )
     )
     checksums_after = tuple(
-        (record.scored_client.client_id, checksum_file(record.path))
-        for record in manifest.calibration_records
+        (record.scored_client.client_id, checksum_file(record.path)) for record in manifest.calibration_records
     )
     assert checksums_before == checksums_after
 
     shared = _result(results, FederatedThresholdMethod.SHARED_THRESHOLD)
     assert isinstance(shared, SharedThresholdResult)
     assert all(
-        item.diagnostic.score_set_checksum
-        == invariant.calibration_score_set_checksum
+        item.diagnostic.score_set_checksum == invariant.calibration_score_set_checksum
         for item in shared.contributing_local_quantiles
     )
     assert isinstance(
@@ -154,10 +148,7 @@ def test_every_threshold_method_reads_the_same_frozen_score_artifact_unchanged(
         FederatedThresholdMethod.POOLED_SHARED_QUANTILE,
     )
     assert isinstance(pooled, PooledSharedQuantileResult)
-    assert (
-        pooled.diagnostic.score_set_checksum
-        == invariant.calibration_score_set_checksum
-    )
+    assert pooled.diagnostic.score_set_checksum == invariant.calibration_score_set_checksum
     assert isinstance(
         _result(
             results,

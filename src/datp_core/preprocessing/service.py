@@ -93,18 +93,10 @@ POPULATION_MANIFEST_ASSET = "population_manifest.json"
 POPULATION_MEMBERSHIP_ASSET = "membership.parquet"
 SPLIT_MANIFEST_ASSET = "split_manifest.json"
 SPLIT_ASSIGNMENTS_ASSET = "split_assignments.parquet"
-MATCHED_STATIC_POPULATION_MANIFEST_ASSET = (
-    "matched_static_reference_manifest.json"
-)
-MATCHED_STATIC_POPULATION_MEMBERSHIP_ASSET = (
-    "matched_static_reference_membership.parquet"
-)
-MATCHED_STATIC_SPLIT_MANIFEST_ASSET = (
-    "matched_static_reference_split_manifest.json"
-)
-MATCHED_STATIC_SPLIT_ASSIGNMENTS_ASSET = (
-    "matched_static_reference_assignments.parquet"
-)
+MATCHED_STATIC_POPULATION_MANIFEST_ASSET = "matched_static_reference_manifest.json"
+MATCHED_STATIC_POPULATION_MEMBERSHIP_ASSET = "matched_static_reference_membership.parquet"
+MATCHED_STATIC_SPLIT_MANIFEST_ASSET = "matched_static_reference_split_manifest.json"
+MATCHED_STATIC_SPLIT_ASSIGNMENTS_ASSET = "matched_static_reference_assignments.parquet"
 CHRONOLOGY_ASSET = "chronology.json"
 COMPLETE_ASSET = "COMPLETE"
 CANONICAL_DATA_DIRECTORY = "data"
@@ -159,13 +151,8 @@ class FederatedPreprocessingOutcome:
     execution_identity: ExternalTemporalExecutionIdentity | None = None
 
     def __post_init__(self) -> None:
-        if (
-            self.published_count.value + self.reused_count.value
-            != len(self.client_publications)
-        ):
-            raise ValueError(
-                "published and reused counts must cover every client publication"
-            )
+        if self.published_count.value + self.reused_count.value != len(self.client_publications):
+            raise ValueError("published and reused counts must cover every client publication")
 
 
 @dataclass(slots=True, eq=False)
@@ -261,9 +248,7 @@ def preprocess_published_federated(
         request.execution_identity.population,
     )
     if identity is None:
-        raise AssertionError(
-            "published artifact preprocessing requires an execution identity"
-        )
+        raise AssertionError("published artifact preprocessing requires an execution identity")
     _validate_artifact_request(request)
     published = _load_published_population_split(request, identity)
     document = published.population_manifest.document
@@ -290,10 +275,7 @@ def preprocess_published_federated(
         data_root=request.data_root,
         execution_identity=identity,
     )
-    if (
-        dataset is DatasetId.CICIOT2023
-        and protocol.fit_scope is PreprocessingFitScope.CLIENT_LOCAL_TRAINING
-    ):
+    if dataset is DatasetId.CICIOT2023 and protocol.fit_scope is PreprocessingFitScope.CLIENT_LOCAL_TRAINING:
         return _preprocess_ciciot_client_local(
             context=context,
             assignments=published.assignments,
@@ -343,19 +325,14 @@ def _client_partitions(
     split_protocol: SplitProtocolId,
 ) -> ClientCollection[ClientPathToken, PreprocessingPartitions]:
     client_ids = tuple(
-        ClientPathToken(str(value))
-        for value in sorted(
-            joined.get_column(CLIENT_ID_COLUMN).unique().to_list()
-        )
+        ClientPathToken(str(value)) for value in sorted(joined.get_column(CLIENT_ID_COLUMN).unique().to_list())
     )
     return ClientCollection(
         tuple(
             ClientOwned(
                 client_id,
                 extract_partitions(
-                    joined.filter(
-                        pl.col(CLIENT_ID_COLUMN) == client_id.value
-                    ),
+                    joined.filter(pl.col(CLIENT_ID_COLUMN) == client_id.value),
                     feature_names,
                     split_protocol=split_protocol,
                     branch=ProcessedDataBranch.FEDERATED,
@@ -376,23 +353,18 @@ def _preprocess_ciciot_client_local(
     identity: ExternalTemporalExecutionIdentity,
 ) -> FederatedPreprocessingOutcome:
     client_ids = tuple(
-        ClientPathToken(str(value))
-        for value in sorted(
-            assignments.get_column(CLIENT_ID_COLUMN).unique().to_list()
-        )
+        ClientPathToken(str(value)) for value in sorted(assignments.get_column(CLIENT_ID_COLUMN).unique().to_list())
     )
     source_files = _ciciot_source_files(canonical_root)
     publications: list[ClientPreprocessingResult] = []
     published_count = 0
     reused_count = 0
     for client_id in client_ids:
-        client_assignments = assignments.filter(
-            pl.col(CLIENT_ID_COLUMN) == client_id.value
-        )
+        client_assignments = assignments.filter(pl.col(CLIENT_ID_COLUMN) == client_id.value)
         source_path = _single_client_source_path(client_assignments)
         features = pl.read_parquet(
             _canonical_source_file(source_files, source_path).parquet_path,
-            columns=(STABLE_ROW_ID_COLUMN, *feature_names),
+            columns=[STABLE_ROW_ID_COLUMN, *feature_names],
         )
         joined = client_assignments.join(
             features,
@@ -465,10 +437,7 @@ def _publish_client_partitions(
         )
         for item in client_partitions.items
     )
-    reused = sum(
-        item.publication_status is PublicationStatus.REUSED
-        for item in publications
-    )
+    reused = sum(item.publication_status is PublicationStatus.REUSED for item in publications)
     return publications, len(publications) - reused, reused
 
 
@@ -489,17 +458,13 @@ def _ciciot_source_files(
             source_path=str(
                 pl.read_parquet(
                     path,
-                    columns=(SOURCE_PATH_COLUMN,),
+                    columns=[SOURCE_PATH_COLUMN],
                     n_rows=1,
                 ).item(0, 0)
             ),
             parquet_path=path,
         )
-        for path in sorted(
-            (canonical_root / CANONICAL_DATA_DIRECTORY).glob(
-                PARQUET_PATTERN
-            )
-        )
+        for path in sorted((canonical_root / CANONICAL_DATA_DIRECTORY).glob(PARQUET_PATTERN))
     )
     if not sources:
         raise ScientificContractError(
@@ -519,11 +484,7 @@ def _canonical_source_file(
     source_files: tuple[_CanonicalSourceFile, ...],
     source_path: str,
 ) -> _CanonicalSourceFile:
-    matches = tuple(
-        source
-        for source in source_files
-        if source.source_path == source_path
-    )
+    matches = tuple(source for source in source_files if source.source_path == source_path)
     if len(matches) != 1:
         raise ScientificContractError(
             "file-defined client source must resolve exactly once",
@@ -533,14 +494,7 @@ def _canonical_source_file(
 
 
 def _single_client_source_path(assignments: pl.DataFrame) -> str:
-    sources = tuple(
-        sorted(
-            str(value)
-            for value in assignments.get_column(
-                SOURCE_PATH_COLUMN
-            ).unique().to_list()
-        )
-    )
+    sources = tuple(sorted(str(value) for value in assignments.get_column(SOURCE_PATH_COLUMN).unique().to_list()))
     if len(sources) != 1:
         raise ScientificContractError(
             "file-defined client assignments must originate from exactly one source file",
@@ -568,19 +522,11 @@ def _join_published_handoff(
     )
     assignments = handoff.assignments
     feature_scan = pl.scan_parquet(
-        str(
-            canonical_root
-            / CANONICAL_DATA_DIRECTORY
-            / asset_role.value
-            / PARQUET_PATTERN
-        )
+        str(canonical_root / CANONICAL_DATA_DIRECTORY / asset_role.value / PARQUET_PATTERN)
     ).select(
         (
             STABLE_ROW_ID_COLUMN,
-            *(
-                pl.col(name).cast(pl.Float64, strict=True).alias(name)
-                for name in feature_names
-            ),
+            *(pl.col(name).cast(pl.Float64, strict=True).alias(name) for name in feature_names),
         )
     )
     joined = (
@@ -608,16 +554,10 @@ def _model_feature_names(
     feature_names: tuple[str, ...],
 ) -> FeatureNameSequence:
     if dataset is not DatasetId.EDGE_IIOTSET:
-        return FeatureNameSequence(
-            tuple(FeatureName(name) for name in feature_names)
-        )
+        return FeatureNameSequence(tuple(FeatureName(name) for name in feature_names))
     if frozenset(EDGE_NUMERIC_FEATURE_COLUMNS) - frozenset(feature_names):
-        raise ScientificContractError(
-            "Edge numeric feature declaration must be a canonical feature subset"
-        )
-    return FeatureNameSequence(
-        tuple(FeatureName(name) for name in EDGE_NUMERIC_FEATURE_COLUMNS)
-    )
+        raise ScientificContractError("Edge numeric feature declaration must be a canonical feature subset")
+    return FeatureNameSequence(tuple(FeatureName(name) for name in EDGE_NUMERIC_FEATURE_COLUMNS))
 
 
 def _validate_federated_request(
@@ -646,10 +586,7 @@ def _validate_artifact_request(
             "federated preprocessing requires a federated preprocessing identity",
             subject=request.preprocessing_identity,
         )
-    if (
-        request.execution_identity.population
-        is PopulationId.EDGE_TEMPORAL_GROUPS
-    ):
+    if request.execution_identity.population is PopulationId.EDGE_TEMPORAL_GROUPS:
         _capture_timestamp_column_for(
             request.execution_identity.population,
             SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE,
@@ -667,32 +604,12 @@ def _load_published_population_split(
     identity: ExternalTemporalExecutionIdentity,
 ) -> _PublishedPopulationSplit:
     use_static = identity.temporal_state is TemporalState.STATIC_REFERENCE
-    population_manifest_name = (
-        MATCHED_STATIC_POPULATION_MANIFEST_ASSET
-        if use_static
-        else POPULATION_MANIFEST_ASSET
-    )
-    membership_name = (
-        MATCHED_STATIC_POPULATION_MEMBERSHIP_ASSET
-        if use_static
-        else POPULATION_MEMBERSHIP_ASSET
-    )
-    split_manifest_name = (
-        MATCHED_STATIC_SPLIT_MANIFEST_ASSET
-        if use_static
-        else SPLIT_MANIFEST_ASSET
-    )
-    assignments_name = (
-        MATCHED_STATIC_SPLIT_ASSIGNMENTS_ASSET
-        if use_static
-        else SPLIT_ASSIGNMENTS_ASSET
-    )
-    population_document = _read_population_document(
-        request.population_directory / population_manifest_name
-    )
-    split_document = _read_split_document(
-        request.split_directory / split_manifest_name
-    )
+    population_manifest_name = MATCHED_STATIC_POPULATION_MANIFEST_ASSET if use_static else POPULATION_MANIFEST_ASSET
+    membership_name = MATCHED_STATIC_POPULATION_MEMBERSHIP_ASSET if use_static else POPULATION_MEMBERSHIP_ASSET
+    split_manifest_name = MATCHED_STATIC_SPLIT_MANIFEST_ASSET if use_static else SPLIT_MANIFEST_ASSET
+    assignments_name = MATCHED_STATIC_SPLIT_ASSIGNMENTS_ASSET if use_static else SPLIT_ASSIGNMENTS_ASSET
+    population_document = _read_population_document(request.population_directory / population_manifest_name)
+    split_document = _read_split_document(request.split_directory / split_manifest_name)
     membership = _read_parquet(
         request.population_directory / membership_name,
         identity.population,
@@ -725,24 +642,16 @@ def _load_published_population_split(
 
 def _read_population_document(path: Path) -> PopulationManifestDocument:
     try:
-        return PopulationManifestDocument.model_validate_json(
-            path.read_text(encoding="utf-8")
-        )
+        return PopulationManifestDocument.model_validate_json(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as error:
-        raise ScientificContractError(
-            "published population manifest is missing or invalid"
-        ) from error
+        raise ScientificContractError("published population manifest is missing or invalid") from error
 
 
 def _read_split_document(path: Path) -> SplitManifestDocument:
     try:
-        return SplitManifestDocument.model_validate_json(
-            path.read_text(encoding="utf-8")
-        )
+        return SplitManifestDocument.model_validate_json(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as error:
-        raise ScientificContractError(
-            "published split manifest is missing or invalid"
-        ) from error
+        raise ScientificContractError("published split manifest is missing or invalid") from error
 
 
 def _read_parquet(path: Path, population: PopulationId) -> pl.DataFrame:
@@ -761,22 +670,13 @@ def _validate_population_publication(
 ) -> None:
     complete = _read_complete_digest(directory, identity.population)
     _validate_persisted_execution_identity(directory, identity)
-    primary = _read_population_document(
-        directory / POPULATION_MANIFEST_ASSET
-    )
+    primary = _read_population_document(directory / POPULATION_MANIFEST_ASSET)
     sections = [canonical_json_text(identity), canonical_json_text(primary)]
     if primary.population is PopulationId.EDGE_TEMPORAL_GROUPS:
         sections.extend(
             (
-                canonical_json_text(
-                    _read_chronology_document(directory / CHRONOLOGY_ASSET)
-                ),
-                canonical_json_text(
-                    _read_population_document(
-                        directory
-                        / MATCHED_STATIC_POPULATION_MANIFEST_ASSET
-                    )
-                ),
+                canonical_json_text(_read_chronology_document(directory / CHRONOLOGY_ASSET)),
+                canonical_json_text(_read_population_document(directory / MATCHED_STATIC_POPULATION_MANIFEST_ASSET)),
             )
         )
     if complete != checksum_text("\n".join(sections)):
@@ -795,13 +695,7 @@ def _validate_split_publication(
     primary = _read_split_document(directory / SPLIT_MANIFEST_ASSET)
     sections = [canonical_json_text(identity), canonical_json_text(primary)]
     if primary.population is PopulationId.EDGE_TEMPORAL_GROUPS:
-        sections.append(
-            canonical_json_text(
-                _read_split_document(
-                    directory / MATCHED_STATIC_SPLIT_MANIFEST_ASSET
-                )
-            )
-        )
+        sections.append(canonical_json_text(_read_split_document(directory / MATCHED_STATIC_SPLIT_MANIFEST_ASSET)))
     if complete != checksum_text("\n".join(sections)):
         raise ScientificContractError(
             "published split COMPLETE digest does not match its manifests",
@@ -815,9 +709,7 @@ def _validate_persisted_execution_identity(
 ) -> None:
     try:
         persisted = ExternalTemporalExecutionIdentity.model_validate_json(
-            (directory / EXECUTION_IDENTITY_ASSET).read_text(
-                encoding="utf-8"
-            )
+            (directory / EXECUTION_IDENTITY_ASSET).read_text(encoding="utf-8")
         )
     except (OSError, ValueError) as error:
         raise ScientificContractError(
@@ -836,11 +728,7 @@ def _read_complete_digest(
     population: PopulationId,
 ) -> Checksum:
     try:
-        return Checksum(
-            (directory / COMPLETE_ASSET).read_text(
-                encoding="utf-8"
-            ).strip()
-        )
+        return Checksum((directory / COMPLETE_ASSET).read_text(encoding="utf-8").strip())
     except (OSError, ValueError) as error:
         raise ScientificContractError(
             "published artifact COMPLETE marker is missing or invalid",
@@ -852,9 +740,7 @@ def _read_chronology_document(
     path: Path,
 ) -> ChronologicalPartitionDiagnosticsDocument:
     try:
-        return ChronologicalPartitionDiagnosticsDocument.model_validate_json(
-            path.read_text(encoding="utf-8")
-        )
+        return ChronologicalPartitionDiagnosticsDocument.model_validate_json(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as error:
         raise ScientificContractError(
             "temporal population lacks valid chronology evidence",
@@ -875,12 +761,8 @@ def _population_manifest_from_document(
         feasibility=PopulationFeasibility(
             status=document.feasibility_status,
             reason=document.feasibility_reason,
-            expected_client_count=ClientCount(
-                len(document.candidate_clients)
-            ),
-            observed_client_count=NonNegativeIntegerValue(
-                len(document.accepted_clients)
-            ),
+            expected_client_count=ClientCount(len(document.candidate_clients)),
+            observed_client_count=NonNegativeIntegerValue(len(document.accepted_clients)),
             evidence=PERSISTED_MANIFEST_EVIDENCE,
         ),
         family_by_client=(),
@@ -896,18 +778,12 @@ def _validate_published_pair(
     use_static_reference: bool,
 ) -> None:
     document = population_manifest.document
-    if (
-        document.population is not identity.population
-        or split_manifest.population is not identity.population
-    ):
+    if document.population is not identity.population or split_manifest.population is not identity.population:
         raise ScientificContractError(
             "published coordinates do not match execution identity",
             subject=identity.population,
         )
-    if (
-        document.dataset is not split_manifest.dataset
-        or document.partition_seed != split_manifest.partition_seed
-    ):
+    if document.dataset is not split_manifest.dataset or document.partition_seed != split_manifest.partition_seed:
         raise ScientificContractError(
             "published population and split coordinates disagree",
             subject=identity.population,
@@ -917,10 +793,7 @@ def _validate_published_pair(
             "published membership checksum mismatch",
             subject=identity.population,
         )
-    if (
-        split_manifest.population_manifest_checksum
-        != document.membership_checksum
-    ):
+    if split_manifest.population_manifest_checksum != document.membership_checksum:
         raise ScientificContractError(
             "split manifest is not bound to its population",
             subject=identity.population,
@@ -935,10 +808,7 @@ def _validate_published_pair(
         )
     validate_population_manifest(population_manifest, membership)
     validate_split_manifest(membership, assignments, split_manifest)
-    if (
-        identity.population is PopulationId.EDGE_TEMPORAL_GROUPS
-        and not use_static_reference
-    ):
+    if identity.population is PopulationId.EDGE_TEMPORAL_GROUPS and not use_static_reference:
         validate_no_future_history_leakage(
             assignments,
             EdgeCanonicalColumn.CAPTURE_TIMESTAMP.value,

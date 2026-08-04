@@ -24,19 +24,11 @@ class ThresholdMovement(StrictModel):
 
     @property
     def attack_availability(self) -> AvailabilityStatus:
-        return (
-            AvailabilityStatus.AVAILABLE
-            if self.delta_tpr is not None
-            else AvailabilityStatus.UNAVAILABLE
-        )
+        return AvailabilityStatus.AVAILABLE if self.delta_tpr is not None else AvailabilityStatus.UNAVAILABLE
 
     @property
     def reason(self) -> str | None:
-        return (
-            None
-            if self.delta_tpr is not None
-            else "attack-sensitive movement unavailable"
-        )
+        return None if self.delta_tpr is not None else "attack-sensitive movement unavailable"
 
 
 def threshold_movement(
@@ -52,15 +44,11 @@ def threshold_movement(
     else:
         local_tpr = local.tpr
         if local_tpr is None:
-            raise ValueError(
-                "TPR movement requires both operating points or neither"
-            )
+            raise ValueError("TPR movement requires both operating points or neither")
         delta_tpr = MetricValue(local_tpr.value - shared.tpr.value)
     return ThresholdMovement(
         client=client,
-        delta_threshold=MetricValue(
-            local.threshold.value - shared.threshold.value
-        ),
+        delta_threshold=MetricValue(local.threshold.value - shared.threshold.value),
         delta_fpr=MetricValue(local.fpr.value - shared.fpr.value),
         delta_tpr=delta_tpr,
     )

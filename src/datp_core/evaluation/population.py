@@ -187,9 +187,7 @@ def prepare_federated_evaluation(
         validate_fixed_score_controls(
             request.fixed_score_evidence,
             request.comparison_fixed_score_evidence,
-            auroc_absolute_tolerance=(
-                NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE
-            ),
+            auroc_absolute_tolerance=(NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE),
         )
     artifacts = FederatedEvaluationArtifacts(
         clients=clients,
@@ -200,9 +198,7 @@ def prepare_federated_evaluation(
         stage=StageOperationId.EVALUATE_FEDERATED,
         score_coordinate=request.score_manifest.coordinate,
         score_checkpoint_checksum=request.score_manifest.checkpoint_checksum,
-        preprocessing_state_set_checksum=(
-            request.score_manifest.preprocessing_state_set_checksum
-        ),
+        preprocessing_state_set_checksum=(request.score_manifest.preprocessing_state_set_checksum),
         split_manifest_checksum=request.score_manifest.split_manifest_checksum,
         threshold_method=request.threshold_result.method,
         evidence_role=request.evidence_role,
@@ -245,8 +241,7 @@ def federated_evaluation_is_reusable(
         return (
             complete.is_file()
             and document.is_file()
-            and complete.read_text(encoding="utf-8").strip()
-            == publication.digest.value
+            and complete.read_text(encoding="utf-8").strip() == publication.digest.value
         )
     except OSError:
         return False
@@ -273,10 +268,7 @@ def _validate_temporal_provenance(
 ) -> None:
     provenance = request.temporal_provenance
     temporal = request.evidence_role is EvidenceRole.TEMPORAL_BOUNDARY
-    if not temporal and (
-        provenance is not None
-        or request.temporal_threshold_provenance is not None
-    ):
+    if not temporal and (provenance is not None or request.temporal_threshold_provenance is not None):
         raise ScientificContractError(
             "temporal provenance is valid only for temporal-boundary evaluation",
             subject=request.evidence_role,
@@ -326,16 +318,10 @@ def _validate_evaluation_request(
     if isinstance(request.threshold_result, ThresholdUnavailableResult):
         raise ScientificContractError("unavailable threshold cannot be evaluated")
     if request.threshold_result.coordinate != request.score_manifest.coordinate:
-        raise ScientificContractError(
-            "threshold and score coordinates must match"
-        )
+        raise ScientificContractError("threshold and score coordinates must match")
     if request.cohort.population is not request.score_manifest.coordinate.population:
-        raise ScientificContractError(
-            "evaluation cohort must match score population"
-        )
-    capabilities = population_capabilities(
-        request.score_manifest.coordinate.population
-    )
+        raise ScientificContractError("evaluation cohort must match score population")
+    capabilities = population_capabilities(request.score_manifest.coordinate.population)
     if request.evidence_role is not capabilities.evidentiary_role:
         raise ScientificContractError(
             "evaluation evidence role must match the population capability contract",
@@ -360,13 +346,9 @@ def _evaluate_score_record(
         record.scored_client,
     )
     if threshold is None or eligibility is None:
-        raise ScientificContractError(
-            "threshold and cohort must cover every evaluated client"
-        )
+        raise ScientificContractError("threshold and cohort must cover every evaluated client")
     if not record.path.is_file() or checksum_file(record.path) != record.checksum:
-        raise ArtifactIntegrityError(
-            "evaluation score artifact is incomplete or changed"
-        )
+        raise ArtifactIntegrityError("evaluation score artifact is incomplete or changed")
     scores, labels, rows = _score_arrays(pl.read_parquet(record.path))
     confusion = calculate_confusion_counts(
         scores=scores,
@@ -451,15 +433,11 @@ def _evaluate_threshold_estimation_input(
     coordinate: FederatedTrainingCoordinate,
 ) -> ThresholdEstimationDiagnostic:
     if diagnostic.provenance.coordinate != coordinate:
-        raise ScientificContractError(
-            "threshold-estimation diagnostics must use the evaluated score coordinate"
-        )
+        raise ScientificContractError("threshold-estimation diagnostics must use the evaluated score coordinate")
     return evaluate_threshold_estimate(
         provenance=diagnostic.provenance,
         estimated_threshold=diagnostic.estimated_threshold,
-        exact_pooled_benign_quantile_reference=(
-            diagnostic.exact_pooled_benign_quantile_reference
-        ),
+        exact_pooled_benign_quantile_reference=(diagnostic.exact_pooled_benign_quantile_reference),
         held_out_benign_scores=diagnostic.held_out_benign_scores,
     )
 
@@ -507,28 +485,18 @@ def _assignments(
         ):
             return result.assignments
         case ShrinkageThresholdResult():
-            return tuple(
-                ThresholdAssignment(item.client, item.blended_threshold)
-                for item in result.assignments
-            )
+            return tuple(ThresholdAssignment(item.client, item.blended_threshold) for item in result.assignments)
         case ConformalThresholdResult():
-            return tuple(
-                ThresholdAssignment(item.client, item.threshold)
-                for item in result.assignments
-            )
+            return tuple(ThresholdAssignment(item.client, item.threshold) for item in result.assignments)
 
 
 def _threshold_for_client(
     assignments: tuple[ThresholdAssignment, ...],
     client: ClientIdentity,
 ) -> ThresholdValue | None:
-    matches = tuple(
-        item.threshold for item in assignments if item.client == client
-    )
+    matches = tuple(item.threshold for item in assignments if item.client == client)
     if len(matches) > 1:
-        raise ScientificContractError(
-            "threshold assignments cannot repeat a client"
-        )
+        raise ScientificContractError("threshold assignments cannot repeat a client")
     return matches[0] if matches else None
 
 
@@ -545,17 +513,9 @@ def _score_arrays(
         ScoreFrameColumn.RECONSTRUCTION_ERROR.value,
     )
     if any(column not in frame.columns for column in required):
-        raise ArtifactIntegrityError(
-            "evaluation score artifact has an invalid schema"
-        )
+        raise ArtifactIntegrityError("evaluation score artifact has an invalid schema")
     return (
-        tuple(
-            ScoreValue(float(value))
-            for value in frame[required[2]].to_list()
-        ),
-        tuple(
-            PopulationOutcomeLabel(str(value))
-            for value in frame[required[1]].to_list()
-        ),
+        tuple(ScoreValue(float(value)) for value in frame[required[2]].to_list()),
+        tuple(PopulationOutcomeLabel(str(value)) for value in frame[required[1]].to_list()),
         tuple(str(value) for value in frame[required[0]].to_list()),
     )

@@ -12,6 +12,8 @@ from datp_core.evaluation.population import (
 )
 from datp_core.orchestration.commands.evaluation import (
     EvaluateFederatedRequest as _EvaluateFederatedRequest,
+)
+from datp_core.orchestration.commands.evaluation import (
     FederatedEvaluationResult as _FederatedEvaluationResult,
 )
 from datp_core.pipeline.publication.codec import (

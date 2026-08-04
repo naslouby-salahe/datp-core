@@ -19,7 +19,7 @@ from datp_core.domain.values import (
 )
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.populations.models import ClientIdentity
-from datp_core.protocols.models import FRACTION_TOTAL_ABSOLUTE_TOLERANCE
+from datp_core.protocols.splits import FRACTION_TOTAL_ABSOLUTE_TOLERANCE
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,9 +106,7 @@ def validate_assignments(
         "threshold assignments must cover exactly the contributing client set",
         ContractSubject.CLIENT_IDENTITY,
     )
-    actual_pairs = frozenset(
-        (item.client, item.threshold) for item in assignments
-    )
+    actual_pairs = frozenset((item.client, item.threshold) for item in assignments)
     require_contract(
         actual_pairs == frozenset(expected_pairs),
         mismatch_message,
@@ -150,9 +148,7 @@ def validate_group_membership(
     match_message: str,
 ) -> None:
     require_unique_clients(members, members_label)
-    quantile_clients = tuple(
-        item.client for item in contributing_local_quantiles
-    )
+    quantile_clients = tuple(item.client for item in contributing_local_quantiles)
     require_unique_clients(quantile_clients, "contributing local quantiles")
     require_contract(
         frozenset(quantile_clients) == frozenset(members),

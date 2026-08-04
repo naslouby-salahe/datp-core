@@ -85,9 +85,7 @@ def test_ditto_end_to_end_train_select_and_score_global_and_personalized(tmp_pat
             coordinate=personalized_coordinate,
             client=client,
             selection_rule=CHECKPOINT_SELECTION_RULE,
-            preprocessing_state_set_checksum=(
-                personalized_candidates.candidates[0].preprocessing_state_set_checksum
-            ),
+            preprocessing_state_set_checksum=(personalized_candidates.candidates[0].preprocessing_state_set_checksum),
             split_manifest_checksum=personalized_candidates.candidates[0].split_manifest_checksum,
         )
         personalized_scores = generate_federated_scores(

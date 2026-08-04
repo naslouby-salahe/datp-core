@@ -17,20 +17,21 @@ class LinearRegressionResult(Protocol):
 
 
 def statistic_p_value(result: StatisticPValueResult) -> tuple[float, float] | None:
-    return _finite_values(result.statistic, result.pvalue)
+    statistic, pvalue = float(result.statistic), float(result.pvalue)
+    if not all(isfinite(value) for value in (statistic, pvalue)):
+        return None
+    return statistic, pvalue
 
 
 def linear_regression_values(
     result: LinearRegressionResult,
 ) -> tuple[float, float, float, float] | None:
-    return _finite_values(
-        result.intercept,
-        result.slope,
-        result.stderr,
-        result.rvalue,
+    intercept, slope, stderr, rvalue = (
+        float(result.intercept),
+        float(result.slope),
+        float(result.stderr),
+        float(result.rvalue),
     )
-
-
-def _finite_values(*values: SupportsFloat) -> tuple[float, ...] | None:
-    converted = tuple(float(value) for value in values)
-    return converted if all(isfinite(value) for value in converted) else None
+    if not all(isfinite(value) for value in (intercept, slope, stderr, rvalue)):
+        return None
+    return intercept, slope, stderr, rvalue

@@ -6,6 +6,8 @@ from datp_core.learning.federated.checkpoints.selection import (
 )
 from datp_core.orchestration.commands.checkpoints import (
     SelectFederatedCheckpointRequest as _SelectFederatedCheckpointRequest,
+)
+from datp_core.orchestration.commands.checkpoints import (
     SelectFederatedCheckpointResult as _SelectFederatedCheckpointResult,
 )
 from datp_core.protocols.training import CHECKPOINT_SELECTION_RULE

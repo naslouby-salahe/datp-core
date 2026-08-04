@@ -110,8 +110,7 @@ def test_auroc_is_identical_for_every_threshold_method(tmp_path) -> None:
     label_column = ScoreFrameColumn.OUTCOME_LABEL.value
     score_column = ScoreFrameColumn.RECONSTRUCTION_ERROR.value
     labels = tuple(
-        1 if label == PopulationOutcomeLabel.ATTACK.value else 0
-        for label in frame.get_column(label_column).to_list()
+        1 if label == PopulationOutcomeLabel.ATTACK.value else 0 for label in frame.get_column(label_column).to_list()
     )
     scores = tuple(float(score) for score in frame.get_column(score_column).to_list())
     auroc = float(roc_auc_score(labels, scores))

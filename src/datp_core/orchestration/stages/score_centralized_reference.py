@@ -14,6 +14,8 @@ from datp_core.domain.enums import ContractSubject
 from datp_core.domain.errors import ScientificContractError
 from datp_core.orchestration.commands.scoring import (
     ScoreCentralizedReferenceRequest as _ScoreCentralizedReferenceRequest,
+)
+from datp_core.orchestration.commands.scoring import (
     ScoreCentralizedReferenceResult as _ScoreCentralizedReferenceResult,
 )
 from datp_core.pipeline.publication.codec import (

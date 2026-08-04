@@ -13,10 +13,9 @@ from datp_core.protocols.models import (
     CentralizedQuantileProtocol,
     CentralizedTrainingProtocol,
     ConformalProtocol,
-    FractionalSplitProtocol,
     OptimizerProtocol,
-    TemporalSplitProtocol,
 )
+from datp_core.protocols.splits import FractionalSplitProtocol, TemporalSplitProtocol
 
 
 def test_models_are_frozen_and_reject_extra_fields() -> None:

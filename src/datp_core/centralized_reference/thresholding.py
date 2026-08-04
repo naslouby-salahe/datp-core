@@ -11,6 +11,7 @@ from datp_core.artifacts.serialization import canonical_checksum, canonical_json
 from datp_core.centralized_reference.scoring import (
     PooledScoreArtifact,
     load_score_frame,
+    reject_non_finite_scores,
 )
 from datp_core.centralized_reference.training import (
     CentralizedTrainingCoordinate,
@@ -34,6 +35,7 @@ from datp_core.domain.values import (
     RowCount,
     ThresholdValue,
 )
+from datp_core.populations.integrity import reject_non_benign_labels
 from datp_core.populations.models import PopulationOutcomeLabel
 from datp_core.protocols.calibration import CANONICAL_QUANTILE
 from datp_core.protocols.models import CentralizedQuantileProtocol
@@ -79,9 +81,7 @@ class PooledThresholdResult:
                 subject=self.method,
             )
         if self.calibration_score_count < 1:
-            raise ValueError(
-                "pooled threshold requires at least one benign calibration score"
-            )
+            raise ValueError("pooled threshold requires at least one benign calibration score")
 
 
 @dataclass(frozen=True, slots=True)
@@ -232,21 +232,14 @@ def _benign_calibration_scores(
 ) -> np.ndarray:
     frame = load_score_frame(calibration_scores)
     labels = OutcomeLabelSequence(
-        tuple(
-            OutcomeLabel(str(value))
-            for value in frame.get_column(
-                ScoreFrameColumn.OUTCOME_LABEL.value
-            ).to_list()
-        )
+        tuple(OutcomeLabel(str(value)) for value in frame.get_column(ScoreFrameColumn.OUTCOME_LABEL.value).to_list())
     )
     reject_attack_rows_in_benign_calibration(
         labels,
         PopulationOutcomeLabel.BENIGN,
     )
     scores = np.asarray(
-        frame.get_column(
-            ScoreFrameColumn.RECONSTRUCTION_ERROR.value
-        ).to_list(),
+        frame.get_column(ScoreFrameColumn.RECONSTRUCTION_ERROR.value).to_list(),
         dtype=np.float64,
     )
     if scores.size == 0:
@@ -254,11 +247,11 @@ def _benign_calibration_scores(
             "benign calibration score set is empty",
             subject=ContractSubject.CALIBRATION,
         )
-    if not np.isfinite(scores).all():
-        raise ScientificContractError(
-            "calibration scores must be finite",
-            subject=ContractSubject.CALIBRATION,
-        )
+    reject_non_finite_scores(
+        scores,
+        message="calibration scores must be finite",
+        subject=ContractSubject.CALIBRATION,
+    )
     return scores
 
 
@@ -285,11 +278,12 @@ def reject_attack_rows_in_benign_calibration(
     labels: OutcomeLabelSequence,
     benign_label: PopulationOutcomeLabel,
 ) -> None:
-    if any(label != benign_label.value for label in labels):
-        raise LeakageError(
-            "attack-labelled rows cannot enter centralized benign calibration",
-            subject=ContractSubject.LABEL,
-        )
+    reject_non_benign_labels(
+        labels,
+        message="attack-labelled rows cannot enter centralized benign calibration",
+        subject=ContractSubject.LABEL,
+        benign_label=benign_label.value,
+    )
 
 
 def reject_federated_scores_for_centralized_threshold(

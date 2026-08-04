@@ -108,9 +108,7 @@ def test_shared_and_local_results_reject_inconsistent_assignments() -> None:
         LocalThresholdResult(
             coordinate=COORDINATE,
             local_quantiles=(local_quantiles[0],),
-            assignments=(
-                ThresholdAssignment(CLIENT_A, ThresholdValue(9.0)),
-            ),
+            assignments=(ThresholdAssignment(CLIENT_A, ThresholdValue(9.0)),),
         )
 
 
@@ -137,9 +135,7 @@ def test_family_contracts_enforce_membership_and_assignment_coverage() -> None:
         FamilyThresholdResult(
             coordinate=COORDINATE,
             families=(family,),
-            assignments=(
-                ThresholdAssignment(CLIENT_B, ThresholdValue(1.0)),
-            ),
+            assignments=(ThresholdAssignment(CLIENT_B, ThresholdValue(1.0)),),
         )
 
 
@@ -167,9 +163,7 @@ def test_cluster_contracts_require_four_features_and_declared_group_count() -> N
             coordinate=COORDINATE,
             fingerprints=(fingerprint,),
             clusters=(membership,),
-            assignments=(
-                ThresholdAssignment(CLIENT_A, ThresholdValue(1.0)),
-            ),
+            assignments=(ThresholdAssignment(CLIENT_A, ThresholdValue(1.0)),),
             initialization=KMeansInitialization.KMEANS_PLUS_PLUS,
             initialization_count=KMeansInitializationCount(10),
             maximum_iterations=KMeansMaximumIterationCount(300),
@@ -277,9 +271,7 @@ def test_federated_statistics_contracts_enforce_variance_identities() -> None:
             achieved_exceedance=Ratio(0.1),
             signed_attainment_error=MetricValue(0.0),
             absolute_attainment_error=Ratio(0.0),
-            absolute_threshold_error_vs_pooled_quantile=(
-                AbsoluteThresholdError(0.0)
-            ),
+            absolute_threshold_error_vs_pooled_quantile=(AbsoluteThresholdError(0.0)),
             relative_threshold_error_vs_pooled_quantile=None,
         )
 
@@ -292,8 +284,6 @@ def test_unavailable_threshold_requires_human_readable_detail() -> None:
         ThresholdUnavailableResult(
             method=FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE,
             coordinate=COORDINATE,
-            reason=(
-                ThresholdInfeasibilityReason.SIZE_AWARE_SHRINKAGE_FUNCTION_UNRESOLVED
-            ),
+            reason=(ThresholdInfeasibilityReason.SIZE_AWARE_SHRINKAGE_FUNCTION_UNRESOLVED),
             detail="   ",
         )

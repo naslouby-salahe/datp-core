@@ -176,9 +176,7 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
     personalized_states = tuple(
         _PersonalizedState(client=item.client, state=clone_state(global_state)) for item in prepared
     )
-    personalized_snapshots = tuple(
-        _PersonalizedSnapshotBuffer(client=item.client, snapshots=[]) for item in prepared
-    )
+    personalized_snapshots = tuple(_PersonalizedSnapshotBuffer(client=item.client, snapshots=[]) for item in prepared)
 
     candidate_rounds = frozenset(request.checkpoint_protocol.candidates)
     rounds: list[FederatedRoundResult] = []

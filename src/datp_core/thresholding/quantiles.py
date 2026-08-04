@@ -60,11 +60,7 @@ def calibration_scores_from_references(
     references: tuple[CalibrationSampleReference, ...],
     score_set_checksum: Checksum,
 ) -> ClientBenignCalibrationScores:
-    manifest_checksum = checksum_text(
-        "|".join(
-            sorted(reference.stable_row_id for reference in references)
-        )
-    )
+    manifest_checksum = checksum_text("|".join(sorted(reference.stable_row_id for reference in references)))
     return ClientBenignCalibrationScores(
         client=client,
         coordinate=coordinate,
@@ -88,9 +84,7 @@ def local_quantile(
         diagnostic=ThresholdDiagnostic(
             quantile_interpolation=quantile_interpolation_semantics(),
             score_set_checksum=client_scores.score_set_checksum,
-            calibration_manifest_checksum=(
-                client_scores.calibration_manifest_checksum
-            ),
+            calibration_manifest_checksum=(client_scores.calibration_manifest_checksum),
             tie_count=RowCount(0),
             availability=AvailabilityStatus.AVAILABLE,
         ),
@@ -139,10 +133,7 @@ def sample_weighted_mean(
             "sample-weighted mean requires positive total support",
             subject=ContractSubject.THRESHOLD,
         )
-    return sum(
-        value * weight
-        for value, weight in zip(values, weights, strict=True)
-    ) / total_weight
+    return sum(value * weight for value, weight in zip(values, weights, strict=True)) / total_weight
 
 
 def conformal_rank_index(
@@ -154,9 +145,7 @@ def conformal_rank_index(
             "conformal rank requires at least one calibration score",
             subject=ContractSubject.CALIBRATION,
         )
-    return ConformalRankIndex(
-        ceil((calibration_count.value + 1) * coverage.value)
-    )
+    return ConformalRankIndex(ceil((calibration_count.value + 1) * coverage.value))
 
 
 def finite_sample_conformal_threshold(

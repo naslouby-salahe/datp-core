@@ -23,27 +23,15 @@ class ClusterPartitionSummary(StrictModel):
         cls,
         memberships: tuple[ClusterMembership, ...],
     ) -> "ClusterPartitionSummary":
-        return cls(
-            group_sizes=tuple(
-                PairedObservationCount(len(item.members)) for item in memberships
-            )
-        )
+        return cls(group_sizes=tuple(PairedObservationCount(len(item.members)) for item in memberships))
 
     @property
     def singleton_groups(self) -> tuple[ClusterIndex, ...]:
-        return tuple(
-            ClusterIndex(index)
-            for index, size in enumerate(self.group_sizes)
-            if size.value == 1
-        )
+        return tuple(ClusterIndex(index) for index, size in enumerate(self.group_sizes) if size.value == 1)
 
     @property
     def empty_groups(self) -> tuple[ClusterIndex, ...]:
-        return tuple(
-            ClusterIndex(index)
-            for index, size in enumerate(self.group_sizes)
-            if size.value == 0
-        )
+        return tuple(ClusterIndex(index) for index, size in enumerate(self.group_sizes) if size.value == 0)
 
 
 class ClusterStabilityResult(StrictModel):
@@ -62,35 +50,18 @@ class ClusterStabilityResult(StrictModel):
         if len(set(self.compared_clients)) != len(self.compared_clients):
             raise ValueError("cluster stability requires unique compared clients")
         if len(self.contingency) != len(self.left_partition.group_sizes):
-            raise ValueError(
-                "cluster contingency row count must match the left partition"
-            )
-        if any(
-            len(row) != len(self.right_partition.group_sizes)
-            for row in self.contingency
-        ):
-            raise ValueError(
-                "cluster contingency column count must match the right partition"
-            )
-        row_totals = tuple(
-            sum(value.value for value in row) for row in self.contingency
-        )
-        if row_totals != tuple(
-            value.value for value in self.left_partition.group_sizes
-        ):
-            raise ValueError(
-                "cluster contingency row totals must match the left partition"
-            )
+            raise ValueError("cluster contingency row count must match the left partition")
+        if any(len(row) != len(self.right_partition.group_sizes) for row in self.contingency):
+            raise ValueError("cluster contingency column count must match the right partition")
+        row_totals = tuple(sum(value.value for value in row) for row in self.contingency)
+        if row_totals != tuple(value.value for value in self.left_partition.group_sizes):
+            raise ValueError("cluster contingency row totals must match the left partition")
         column_totals = tuple(
             sum(row[column].value for row in self.contingency)
             for column in range(len(self.right_partition.group_sizes))
         )
-        if column_totals != tuple(
-            value.value for value in self.right_partition.group_sizes
-        ):
-            raise ValueError(
-                "cluster contingency column totals must match the right partition"
-            )
+        if column_totals != tuple(value.value for value in self.right_partition.group_sizes):
+            raise ValueError("cluster contingency column totals must match the right partition")
         if sum(row_totals) != len(self.compared_clients):
             raise ValueError("cluster contingency must account for every client")
         return self
@@ -105,15 +76,11 @@ def cluster_stability(
     left_clients = tuple(item.client for item in left_assignments)
     right_clients = tuple(item.client for item in right_assignments)
     if left_clients != right_clients:
-        raise ValueError(
-            "cluster stability requires identical persisted client memberships"
-        )
+        raise ValueError("cluster stability requires identical persisted client memberships")
     left_labels = tuple(item.value.value for item in left_assignments)
     right_labels = tuple(item.value.value for item in right_assignments)
     return ClusterStabilityResult(
-        adjusted_rand_index=CorrelationCoefficient(
-            float(adjusted_rand_score(left_labels, right_labels))
-        ),
+        adjusted_rand_index=CorrelationCoefficient(float(adjusted_rand_score(left_labels, right_labels))),
         compared_clients=left_clients,
         left_partition=ClusterPartitionSummary.from_memberships(left),
         right_partition=ClusterPartitionSummary.from_memberships(right),

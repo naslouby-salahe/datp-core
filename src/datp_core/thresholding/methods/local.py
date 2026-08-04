@@ -24,9 +24,7 @@ class LocalThresholdResult:
     coordinate: FederatedTrainingCoordinate
     local_quantiles: tuple[LocalQuantile, ...]
     assignments: tuple[ThresholdAssignment, ...]
-    method: ClassVar[FederatedThresholdMethod] = (
-        FederatedThresholdMethod.LOCAL_THRESHOLD
-    )
+    method: ClassVar[FederatedThresholdMethod] = FederatedThresholdMethod.LOCAL_THRESHOLD
 
     def __post_init__(self) -> None:
         validate_local_quantiles(
@@ -38,9 +36,7 @@ class LocalThresholdResult:
             self.assignments,
             tuple((item.client, item.value) for item in self.local_quantiles),
             label="threshold assignments",
-            mismatch_message=(
-                "a local threshold assignment must equal the client's own local quantile"
-            ),
+            mismatch_message=("a local threshold assignment must equal the client's own local quantile"),
         )
 
 
@@ -58,14 +54,8 @@ def construct_local_threshold(
             "local threshold construction requires at least one eligible client",
             subject=ContractSubject.THRESHOLD,
         )
-    local_quantiles = tuple(
-        local_quantile(client_scores, protocol.quantile)
-        for client_scores in eligible
-    )
-    assignments = tuple(
-        ThresholdAssignment(item.client, item.value)
-        for item in local_quantiles
-    )
+    local_quantiles = tuple(local_quantile(client_scores, protocol.quantile) for client_scores in eligible)
+    assignments = tuple(ThresholdAssignment(item.client, item.value) for item in local_quantiles)
     return LocalThresholdResult(
         coordinate=eligible[0].coordinate,
         local_quantiles=local_quantiles,

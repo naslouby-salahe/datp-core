@@ -171,9 +171,7 @@ def test_reuse_rejects_changed_calibration_row_identity(tmp_path: Path) -> None:
 
     changed_ids = tuple(
         "changed-row" if index == 0 else str(value)
-        for index, value in enumerate(
-            calibration.get_column(ScoreFrameColumn.STABLE_ROW_ID.value).to_list()
-        )
+        for index, value in enumerate(calibration.get_column(ScoreFrameColumn.STABLE_ROW_ID.value).to_list())
     )
     changed_calibration = calibration.with_columns(
         pl.Series(
@@ -195,18 +193,8 @@ def _persist_score_artifact(
     partition_role: PartitionRole,
     path: Path,
 ) -> PooledScoreArtifact:
-    row_ids = tuple(
-        str(value)
-        for value in source.get_column(
-            ScoreFrameColumn.STABLE_ROW_ID.value
-        ).to_list()
-    )
-    labels = tuple(
-        str(value)
-        for value in source.get_column(
-            ScoreFrameColumn.OUTCOME_LABEL.value
-        ).to_list()
-    )
+    row_ids = tuple(str(value) for value in source.get_column(ScoreFrameColumn.STABLE_ROW_ID.value).to_list())
+    labels = tuple(str(value) for value in source.get_column(ScoreFrameColumn.OUTCOME_LABEL.value).to_list())
     score_frame(
         row_ids,
         labels,

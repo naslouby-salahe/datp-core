@@ -165,7 +165,7 @@ def test_select_checkpoint_rejects_missing_tensor_file(tmp_path: Path) -> None:
         client=None,
     )
     candidates[0].tensor_path.unlink()
-    with pytest.raises(ArtifactIntegrityError, match="checkpoint candidate file is missing"):
+    with pytest.raises(ArtifactIntegrityError, match="checkpoint candidate tensor file is missing"):
         select_checkpoint(
             candidates,
             CHECKPOINT,
@@ -229,9 +229,7 @@ def test_rebase_checkpoint_candidates_rejects_target_checksum_mismatch(tmp_path:
         target_path = dir_b / candidate_tensor_name(candidate.round_number)
         target_path.write_bytes(b"corrupted")
 
-    with pytest.raises(
-        ArtifactIntegrityError, match="rebased checkpoint checksum does not match the original candidate"
-    ):
+    with pytest.raises(ArtifactIntegrityError, match="checkpoint candidate checksum mismatch"):
         rebase_checkpoint_candidates(candidates, dir_b)
 
 

@@ -19,8 +19,17 @@ RETAINED_CHECKPOINT_STATUSES = frozenset(
 class PersistedCheckpoint(Protocol):
     """Minimum persisted-checkpoint shape shared by centralized and federated branches."""
 
-    round_number: RoundNumber
-    tensor_path: Path
-    tensor_checksum: Checksum
-    mean_training_loss: MetricValue
-    status: CheckpointStatus
+    @property
+    def round_number(self) -> RoundNumber: ...
+
+    @property
+    def tensor_path(self) -> Path: ...
+
+    @property
+    def tensor_checksum(self) -> Checksum: ...
+
+    @property
+    def mean_training_loss(self) -> MetricValue: ...
+
+    @property
+    def status(self) -> CheckpointStatus: ...

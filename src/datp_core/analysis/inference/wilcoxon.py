@@ -55,11 +55,7 @@ class WilcoxonResult(StrictModel):
                 and self.reason is None
             )
         else:
-            valid = (
-                self.statistic is None
-                and self.p_value is None
-                and self.reason is not None
-            )
+            valid = self.statistic is None and self.p_value is None and self.reason is not None
         if not valid:
             raise ValueError("Wilcoxon availability and values are inconsistent")
         return self
@@ -132,9 +128,7 @@ def paired_wilcoxon(
             nonzero_pair_count=nonzero_pair_count,
             computation_method=WilcoxonComputationMethod.SCIPY_ASYMPTOTIC,
             availability=AvailabilityStatus.UNAVAILABLE,
-            reason=(
-                "SciPy Wilcoxon result does not expose finite statistic and p-value values"
-            ),
+            reason=("SciPy Wilcoxon result does not expose finite statistic and p-value values"),
         )
     statistic, p_value = extracted
     return WilcoxonResult(
@@ -152,9 +146,7 @@ def matched_pairs_rank_biserial(
     protocol: PairedInferenceProtocol,
 ) -> RankBiserialResult:
     if protocol.effect_size is not EffectSizeId.MATCHED_PAIRS_RANK_BISERIAL:
-        raise ValueError(
-            "paired effect size requires matched-pairs rank-biserial correlation"
-        )
+        raise ValueError("paired effect size requires matched-pairs rank-biserial correlation")
     deltas = paired_deltas(contrasts)
     nonzero = deltas[deltas != 0.0]
     if not nonzero.size:
@@ -164,18 +156,14 @@ def matched_pairs_rank_biserial(
             negative_rank_sum=None,
             nonzero_pair_count=PairedObservationCount(0),
             availability=AvailabilityStatus.UNDEFINED,
-            reason=(
-                "rank-biserial correlation requires at least one nonzero paired difference"
-            ),
+            reason=("rank-biserial correlation requires at least one nonzero paired difference"),
         )
     ranks = stats.rankdata(np.abs(nonzero), method="average")
     positive_rank_sum = float(np.sum(ranks[nonzero > 0.0]))
     negative_rank_sum = float(np.sum(ranks[nonzero < 0.0]))
     rank_total = float(ranks.sum())
     return RankBiserialResult(
-        value=CorrelationCoefficient(
-            (positive_rank_sum - negative_rank_sum) / rank_total
-        ),
+        value=CorrelationCoefficient((positive_rank_sum - negative_rank_sum) / rank_total),
         positive_rank_sum=RankSum(positive_rank_sum),
         negative_rank_sum=RankSum(negative_rank_sum),
         nonzero_pair_count=PairedObservationCount(int(nonzero.size)),

@@ -63,22 +63,14 @@ class AssociationResult(StrictModel):
     @model_validator(mode="after")
     def validate_result(self) -> "AssociationResult":
         if (self.statistics is None) == (self.issue is None):
-            raise ValueError(
-                "association result requires either statistics or one issue"
-            )
-        if self.statistics is not None and len(self.statistics.leverage) != len(
-            self.observations
-        ):
+            raise ValueError("association result requires either statistics or one issue")
+        if self.statistics is not None and len(self.statistics.leverage) != len(self.observations):
             raise ValueError("association leverage must cover every observation")
         return self
 
     @property
     def availability(self) -> AvailabilityStatus:
-        return (
-            AvailabilityStatus.AVAILABLE
-            if self.issue is None
-            else self.issue.availability
-        )
+        return AvailabilityStatus.AVAILABLE if self.issue is None else self.issue.availability
 
     @property
     def reason(self) -> str | None:

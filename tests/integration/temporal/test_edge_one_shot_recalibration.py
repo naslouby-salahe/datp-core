@@ -67,9 +67,7 @@ def test_temporal_analysis_publishes_decisions_for_each_record(
         evaluation_role=PartitionRole.EVALUATION,
         coordinate_checksum=frozen.coordinate_checksum,
         checkpoint_checksum=frozen.checkpoint_checksum,
-        preprocessing_state_set_checksum=(
-            frozen.preprocessing_state_set_checksum
-        ),
+        preprocessing_state_set_checksum=(frozen.preprocessing_state_set_checksum),
         split_manifest_checksum=Checksum("4" * 64),
         calibration_score_set_checksum=Checksum("5" * 64),
         evaluation_score_set_checksum=Checksum("6" * 64),
@@ -77,9 +75,7 @@ def test_temporal_analysis_publishes_decisions_for_each_record(
     request = TemporalAnalyzeRequest(
         static_reference_identity=_identity(TemporalState.STATIC_REFERENCE),
         frozen_identity=_identity(TemporalState.FROZEN_FUTURE),
-        recalibrated_identity=_identity(
-            TemporalState.RECALIBRATED_FUTURE
-        ),
+        recalibrated_identity=_identity(TemporalState.RECALIBRATED_FUTURE),
         static_reference_provenance=static,
         frozen_provenance=frozen,
         recalibrated_provenance=recalibrated,
@@ -95,13 +91,8 @@ def test_temporal_analysis_publishes_decisions_for_each_record(
         overwrite=False,
     )
     result = analyze_temporal_stage(request)
-    assert (
-        result.records[0].decision.decision
-        is ScientificDecision.SUPPORTED
-    )
-    document = loads(
-        (request.output_directory / "temporal_analysis.json").read_text()
-    )
+    assert result.records[0].decision.decision is ScientificDecision.SUPPORTED
+    document = loads((request.output_directory / "temporal_analysis.json").read_text())
     assert document["records"][0]["decision"]["decision"] == "supported"
 
 
@@ -123,9 +114,7 @@ def _future_provenance(
         state=state,
         split_protocol=SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE,
         calibration_role=(
-            PartitionRole.CALIBRATION
-            if state is TemporalState.FROZEN_FUTURE
-            else PartitionRole.FUTURE_RECALIBRATION
+            PartitionRole.CALIBRATION if state is TemporalState.FROZEN_FUTURE else PartitionRole.FUTURE_RECALIBRATION
         ),
         evaluation_role=PartitionRole.EVALUATION,
         coordinate_checksum=Checksum("e" * 64),

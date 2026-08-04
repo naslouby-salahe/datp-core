@@ -14,6 +14,7 @@ from datp_core.artifacts.serialization import (
 from datp_core.centralized_reference.scoring import (
     PooledScoreArtifact,
     load_score_frame,
+    reject_non_finite_scores,
 )
 from datp_core.centralized_reference.thresholding import (
     PooledThresholdResult,
@@ -52,9 +53,7 @@ MANN_WHITNEY_PAIR_FACTOR = 2.0
 
 
 class CentralizedDecisionRule(StrEnum):
-    SCORE_STRICTLY_GREATER_THAN_THRESHOLD = (
-        "score_strictly_greater_than_threshold"
-    )
+    SCORE_STRICTLY_GREATER_THAN_THRESHOLD = "score_strictly_greater_than_threshold"
 
 
 class CentralizedEvaluationAssetName(StrEnum):
@@ -90,9 +89,7 @@ class CentralizedMetricRecord:
             if self.value is None:
                 raise ValueError("available metrics require a numeric value")
         elif self.value is not None:
-            raise ValueError(
-                "unavailable or undefined metrics must not carry a numeric value"
-            )
+            raise ValueError("unavailable or undefined metrics must not carry a numeric value")
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,10 +106,7 @@ class CentralizedEvaluationResult:
     threshold_checksum: Checksum
 
     def __post_init__(self) -> None:
-        if (
-            self.threshold_method
-            is not CentralizedThresholdMethod.POOLED_BENIGN_QUANTILE
-        ):
+        if self.threshold_method is not CentralizedThresholdMethod.POOLED_BENIGN_QUANTILE:
             raise ScientificContractError(
                 "centralized evaluation requires the pooled benign quantile threshold",
                 subject=self.threshold_method,
@@ -122,9 +116,7 @@ class CentralizedEvaluationResult:
                 "centralized evaluation cannot claim confirmatory evidence role",
                 subject=self.evidence_role,
             )
-        if tuple(record.metric for record in self.metrics) != (
-            CENTRALIZED_POOLED_METRICS
-        ):
+        if tuple(record.metric for record in self.metrics) != (CENTRALIZED_POOLED_METRICS):
             raise ScientificContractError(
                 "centralized evaluation metrics must follow the declared pooled metric order",
                 subject=ContractSubject.METRICS,
@@ -204,9 +196,7 @@ def evaluate_centralized_reference(
     return CentralizedEvaluationResult(
         coordinate=coordinate,
         threshold_method=threshold_result.method,
-        decision_rule=(
-            CentralizedDecisionRule.SCORE_STRICTLY_GREATER_THAN_THRESHOLD
-        ),
+        decision_rule=(CentralizedDecisionRule.SCORE_STRICTLY_GREATER_THAN_THRESHOLD),
         threshold=threshold_result.threshold,
         confusion=confusion,
         metrics=metrics,
@@ -222,10 +212,7 @@ def _validate_evaluation_inputs(
     evaluation_scores: PooledScoreArtifact,
     threshold_result: PooledThresholdResult,
 ) -> None:
-    if (
-        evaluation_scores.coordinate != coordinate
-        or threshold_result.coordinate != coordinate
-    ):
+    if evaluation_scores.coordinate != coordinate or threshold_result.coordinate != coordinate:
         raise ScientificContractError(
             "evaluation coordinate mismatch",
             subject=ContractSubject.COORDINATE,
@@ -235,19 +222,14 @@ def _validate_evaluation_inputs(
             "centralized evaluation requires evaluation scores",
             subject=evaluation_scores.partition_role,
         )
-    if (
-        threshold_result.method
-        is not CentralizedThresholdMethod.POOLED_BENIGN_QUANTILE
-    ):
+    if threshold_result.method is not CentralizedThresholdMethod.POOLED_BENIGN_QUANTILE:
         raise ScientificContractError(
             "centralized evaluation requires the pooled benign quantile",
             subject=threshold_result.method,
         )
     if (
-        evaluation_scores.checkpoint_round
-        != threshold_result.checkpoint_round
-        or evaluation_scores.checkpoint_checksum
-        != threshold_result.checkpoint_checksum
+        evaluation_scores.checkpoint_round != threshold_result.checkpoint_round
+        or evaluation_scores.checkpoint_checksum != threshold_result.checkpoint_checksum
     ):
         raise ScientificContractError(
             "centralized threshold and evaluation scores must share one frozen checkpoint",
@@ -264,9 +246,7 @@ def _evaluation_arrays(
         dtype=object,
     )
     scores = np.asarray(
-        frame.get_column(
-            ScoreFrameColumn.RECONSTRUCTION_ERROR.value
-        ).to_list(),
+        frame.get_column(ScoreFrameColumn.RECONSTRUCTION_ERROR.value).to_list(),
         dtype=np.float64,
     )
     if scores.shape[0] != labels.shape[0]:
@@ -274,11 +254,11 @@ def _evaluation_arrays(
             "evaluation scores and labels must align",
             subject=ContractSubject.ROWS,
         )
-    if not np.isfinite(scores).all():
-        raise ScientificContractError(
-            "evaluation scores must be finite",
-            subject=ContractSubject.SCORES,
-        )
+    reject_non_finite_scores(
+        scores,
+        message="evaluation scores must be finite",
+        subject=ContractSubject.SCORES,
+    )
     return labels, scores
 
 
@@ -286,8 +266,7 @@ def reject_centralized_result_in_confirmatory_threshold_comparison(
     result: CentralizedEvaluationResult,
 ) -> None:
     raise LeakageError(
-        "centralized reference evaluation cannot enter the confirmatory "
-        "shared-versus-local threshold comparison",
+        "centralized reference evaluation cannot enter the confirmatory shared-versus-local threshold comparison",
         subject=result.threshold_method,
     )
 
@@ -303,8 +282,7 @@ def reject_centralized_as_federated_threshold_policy(
 
 def reject_cross_client_cv_fpr_from_pooled_centralized() -> None:
     raise LeakageError(
-        "confirmatory cross-client CV(FPR) cannot be computed from the pooled "
-        "centralized result",
+        "confirmatory cross-client CV(FPR) cannot be computed from the pooled centralized result",
         subject=MetricId.FPR_COEFFICIENT_OF_VARIATION,
     )
 
@@ -313,8 +291,7 @@ def reject_centralized_in_federated_threshold_comparison(
     method: FederatedThresholdMethod,
 ) -> None:
     raise LeakageError(
-        "centralized reference cannot be inserted into federated threshold-policy "
-        "comparisons",
+        "centralized reference cannot be inserted into federated threshold-policy comparisons",
         subject=method,
     )
 
@@ -423,10 +400,7 @@ def _balanced_accuracy(
     fpr: CentralizedMetricRecord,
     tpr: CentralizedMetricRecord,
 ) -> CentralizedMetricRecord:
-    if (
-        fpr.status is not AvailabilityStatus.AVAILABLE
-        or tpr.status is not AvailabilityStatus.AVAILABLE
-    ):
+    if fpr.status is not AvailabilityStatus.AVAILABLE or tpr.status is not AvailabilityStatus.AVAILABLE:
         return CentralizedMetricRecord(
             metric=MetricId.BALANCED_ACCURACY,
             status=AvailabilityStatus.UNAVAILABLE,
@@ -442,10 +416,7 @@ def _balanced_accuracy(
     return CentralizedMetricRecord(
         metric=MetricId.BALANCED_ACCURACY,
         status=AvailabilityStatus.AVAILABLE,
-        value=MetricValue(
-            BINARY_CLASS_AVERAGE_WEIGHT
-            * (tpr.value.value + specificity)
-        ),
+        value=MetricValue(BINARY_CLASS_AVERAGE_WEIGHT * (tpr.value.value + specificity)),
     )
 
 
@@ -453,18 +424,10 @@ def _macro_f1_record(
     metric: MetricId,
     confusion: CentralizedConfusionCounts,
 ) -> CentralizedMetricRecord:
-    attack_precision_denominator = (
-        confusion.true_positive + confusion.false_positive
-    )
-    attack_recall_denominator = (
-        confusion.true_positive + confusion.false_negative
-    )
-    benign_precision_denominator = (
-        confusion.true_negative + confusion.false_negative
-    )
-    benign_recall_denominator = (
-        confusion.true_negative + confusion.false_positive
-    )
+    attack_precision_denominator = confusion.true_positive + confusion.false_positive
+    attack_recall_denominator = confusion.true_positive + confusion.false_negative
+    benign_precision_denominator = confusion.true_negative + confusion.false_negative
+    benign_recall_denominator = confusion.true_negative + confusion.false_positive
     denominators = (
         attack_precision_denominator,
         attack_recall_denominator,
@@ -477,18 +440,10 @@ def _macro_f1_record(
             status=AvailabilityStatus.UNAVAILABLE,
             value=None,
         )
-    attack_precision = (
-        confusion.true_positive.value / attack_precision_denominator.value
-    )
-    attack_recall = (
-        confusion.true_positive.value / attack_recall_denominator.value
-    )
-    benign_precision = (
-        confusion.true_negative.value / benign_precision_denominator.value
-    )
-    benign_recall = (
-        confusion.true_negative.value / benign_recall_denominator.value
-    )
+    attack_precision = confusion.true_positive.value / attack_precision_denominator.value
+    attack_recall = confusion.true_positive.value / attack_recall_denominator.value
+    benign_precision = confusion.true_negative.value / benign_precision_denominator.value
+    benign_recall = confusion.true_negative.value / benign_recall_denominator.value
     attack_f1 = _f1(attack_precision, attack_recall)
     benign_f1 = _f1(benign_precision, benign_recall)
     if attack_f1 is None or benign_f1 is None:
@@ -500,9 +455,7 @@ def _macro_f1_record(
     return CentralizedMetricRecord(
         metric=metric,
         status=AvailabilityStatus.AVAILABLE,
-        value=MetricValue(
-            BINARY_CLASS_AVERAGE_WEIGHT * (attack_f1 + benign_f1)
-        ),
+        value=MetricValue(BINARY_CLASS_AVERAGE_WEIGHT * (attack_f1 + benign_f1)),
     )
 
 
@@ -519,11 +472,7 @@ def _auroc(
 ) -> CentralizedMetricRecord:
     binary = np.asarray(
         [
-            1
-            if str(label) == ATTACK_OUTCOME_LABEL
-            else 0
-            if str(label) == BENIGN_OUTCOME_LABEL
-            else -1
+            1 if str(label) == ATTACK_OUTCOME_LABEL else 0 if str(label) == BENIGN_OUTCOME_LABEL else -1
             for label in labels
         ]
     )
@@ -551,12 +500,9 @@ def _auroc(
         )
     ranks = _average_ranks(sorted_scores)
     positive_rank_sum = float(ranks[sorted_labels == 1].sum())
-    auc = (
-        positive_rank_sum
-        - positive_count
-        * (positive_count + ONE_BASED_RANK_OFFSET)
-        / MANN_WHITNEY_PAIR_FACTOR
-    ) / (positive_count * negative_count)
+    auc = (positive_rank_sum - positive_count * (positive_count + ONE_BASED_RANK_OFFSET) / MANN_WHITNEY_PAIR_FACTOR) / (
+        positive_count * negative_count
+    )
     if not isfinite(auc):
         return CentralizedMetricRecord(
             metric=MetricId.AUROC,
@@ -575,15 +521,9 @@ def _average_ranks(sorted_scores: np.ndarray) -> np.ndarray:
     start = 0
     while start < sorted_scores.shape[0]:
         end = start + 1
-        while (
-            end < sorted_scores.shape[0]
-            and sorted_scores[end] == sorted_scores[start]
-        ):
+        while end < sorted_scores.shape[0] and sorted_scores[end] == sorted_scores[start]:
             end += 1
-        average = (
-            RANK_MIDPOINT_WEIGHT * (start + end - 1)
-            + ONE_BASED_RANK_OFFSET
-        )
+        average = RANK_MIDPOINT_WEIGHT * (start + end - 1) + ONE_BASED_RANK_OFFSET
         ranks[start:end] = average
         start = end
     return ranks

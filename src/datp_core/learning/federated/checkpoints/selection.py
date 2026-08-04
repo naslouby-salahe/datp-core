@@ -49,8 +49,7 @@ def validate_candidate_coordinates(
                 ContractSubject.CLIENT_IDENTITY,
             ),
             (
-                candidate.preprocessing_state_set_checksum
-                == preprocessing_state_set_checksum,
+                candidate.preprocessing_state_set_checksum == preprocessing_state_set_checksum,
                 "checkpoint candidate preprocessing checksum mismatch",
                 ContractSubject.PREPROCESSING,
             ),

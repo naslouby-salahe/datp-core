@@ -31,6 +31,7 @@ Only threshold construction and assignment may vary across the core ladder.
 `datp_core.pipeline` owns branch-neutral mechanics only:
 
 - `pipeline/checkpoints/` — shared checkpoint file validation and neutral checkpoint records;
+- `pipeline/coordinates.py` — branch-neutral pipeline coordinate mechanics shared by checkpoint, scoring, and publication services;
 - `pipeline/scoring/` — score-frame extraction, construction, persistence validation, and generic score-artifact structure;
 - `pipeline/publication/atomic.py` — single-directory and related-directory locking, staging, rollback, replacement, cleanup, and reuse outcomes;
 - `pipeline/publication/codec.py` — typed single-directory and related-directory `write`, `validate`, `load`, `rebase`, and publication lifecycles;

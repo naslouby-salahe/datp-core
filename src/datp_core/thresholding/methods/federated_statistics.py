@@ -120,16 +120,13 @@ class CentralizedAttainmentDiagnostic:
     signed_attainment_error: MetricValue
     absolute_attainment_error: Ratio
     absolute_threshold_error_vs_pooled_quantile: AbsoluteThresholdError
-    relative_threshold_error_vs_pooled_quantile: (
-        RelativeThresholdError | None
-    )
+    relative_threshold_error_vs_pooled_quantile: RelativeThresholdError | None
 
     def __post_init__(self) -> None:
         require_contract(
             floats_exactly_equal(
                 self.signed_attainment_error.value,
-                self.achieved_exceedance.value
-                - self.target_exceedance.value,
+                self.achieved_exceedance.value - self.target_exceedance.value,
             ),
             "signed attainment error must equal achieved_exceedance - target_exceedance",
             ContractSubject.THRESHOLD,
@@ -162,9 +159,7 @@ class FederatedStatisticsThresholdResult:
     fixed_coefficient_curve: tuple[FixedCoefficientResult, ...]
     assignments: tuple[ThresholdAssignment, ...]
     estimated_communication_bytes: ByteCount
-    method: ClassVar[FederatedThresholdMethod] = (
-        FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS
-    )
+    method: ClassVar[FederatedThresholdMethod] = FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS
 
     def __post_init__(self) -> None:
         require_contract(
@@ -172,20 +167,13 @@ class FederatedStatisticsThresholdResult:
             "the federated benign-statistics comparator requires at least one client summary",
             ContractSubject.THRESHOLD,
         )
-        summary_clients = tuple(
-            item.client for item in self.client_summaries
-        )
+        summary_clients = tuple(item.client for item in self.client_summaries)
         require_unique_clients(summary_clients, "client summaries")
         validate_assignments(
             self.assignments,
-            tuple(
-                (client, self.matched_threshold) for client in summary_clients
-            ),
+            tuple((client, self.matched_threshold) for client in summary_clients),
             label="threshold assignments",
-            mismatch_message=(
-                "every assignment in a shared threshold result must carry the "
-                "identical shared value"
-            ),
+            mismatch_message=("every assignment in a shared threshold result must carry the identical shared value"),
         )
 
 
@@ -214,12 +202,8 @@ def construct_federated_benign_statistics(
         pooled_scores,
         matched_threshold,
     )
-    signed_attainment_error = (
-        achieved_exceedance.value - target_exceedance.value
-    )
-    absolute_threshold_error = abs(
-        matched_threshold.value - pooled_quantile.value
-    )
+    signed_attainment_error = achieved_exceedance.value - target_exceedance.value
+    absolute_threshold_error = abs(matched_threshold.value - pooled_quantile.value)
     relative_threshold_error = _relative_threshold_error(
         absolute_threshold_error,
         pooled_quantile,
@@ -229,13 +213,9 @@ def construct_federated_benign_statistics(
         achieved_exceedance=achieved_exceedance,
         signed_attainment_error=MetricValue(signed_attainment_error),
         absolute_attainment_error=Ratio(abs(signed_attainment_error)),
-        absolute_threshold_error_vs_pooled_quantile=(
-            AbsoluteThresholdError(absolute_threshold_error)
-        ),
+        absolute_threshold_error_vs_pooled_quantile=(AbsoluteThresholdError(absolute_threshold_error)),
         relative_threshold_error_vs_pooled_quantile=(
-            None
-            if relative_threshold_error is None
-            else RelativeThresholdError(relative_threshold_error)
+            None if relative_threshold_error is None else RelativeThresholdError(relative_threshold_error)
         ),
     )
     fixed_coefficient_curve = tuple(
@@ -249,9 +229,7 @@ def construct_federated_benign_statistics(
         )
         for coefficient in protocol.coefficients
     )
-    assignments = tuple(
-        ThresholdAssignment(item.client, matched_threshold) for item in ordered
-    )
+    assignments = tuple(ThresholdAssignment(item.client, matched_threshold) for item in ordered)
     return FederatedStatisticsThresholdResult(
         coordinate=ordered[0].coordinate,
         quantile=quantile,
@@ -283,21 +261,9 @@ def _decomposition(
     summaries: tuple[ClientBenignSummary, ...],
 ) -> PooledVarianceDecomposition:
     total_count = sum(item.count.value for item in summaries)
-    global_mean = (
-        sum(item.count.value * item.mean for item in summaries)
-        / total_count
-    )
-    within = (
-        sum(item.count.value * item.variance for item in summaries)
-        / total_count
-    )
-    between = (
-        sum(
-            item.count.value * (item.mean - global_mean) ** 2
-            for item in summaries
-        )
-        / total_count
-    )
+    global_mean = sum(item.count.value * item.mean for item in summaries) / total_count
+    within = sum(item.count.value * item.variance for item in summaries) / total_count
+    between = sum(item.count.value * (item.mean - global_mean) ** 2 for item in summaries) / total_count
     full = within + between
     return PooledVarianceDecomposition(
         global_mean=global_mean,
@@ -311,10 +277,7 @@ def _decomposition(
 def _communication_bytes(
     summaries: tuple[ClientBenignSummary, ...],
 ) -> ByteCount:
-    scalar_count = sum(
-        3 + (1 if item.benign_exceedance_count is not None else 0)
-        for item in summaries
-    )
+    scalar_count = sum(3 + (1 if item.benign_exceedance_count is not None else 0) for item in summaries)
     return ByteCount(scalar_count * np.dtype(np.float64).itemsize)
 
 

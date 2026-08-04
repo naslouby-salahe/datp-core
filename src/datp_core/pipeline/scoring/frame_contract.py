@@ -61,19 +61,9 @@ def extract_score_arrays(
     frame: pl.DataFrame,
     feature_names: FeatureNameSequence,
 ) -> tuple[npt.NDArray[np.float32], tuple[str, ...], tuple[str, ...]]:
-    matrix = (
-        frame.select(feature_names.as_list())
-        .to_numpy()
-        .astype(LEARNING_DTYPE, copy=False)
-    )
-    labels = tuple(
-        str(value)
-        for value in frame.get_column(OUTCOME_LABEL_COLUMN).to_list()
-    )
-    row_ids = tuple(
-        str(value)
-        for value in frame.get_column(STABLE_ROW_ID_COLUMN).to_list()
-    )
+    matrix = frame.select(feature_names.as_list()).to_numpy().astype(LEARNING_DTYPE, copy=False)
+    labels = tuple(str(value) for value in frame.get_column(OUTCOME_LABEL_COLUMN).to_list())
+    row_ids = tuple(str(value) for value in frame.get_column(STABLE_ROW_ID_COLUMN).to_list())
     return matrix, labels, row_ids
 
 
@@ -126,9 +116,7 @@ def validate_persisted_score_frame(
             "score artifact schema mismatch",
             subject=ContractSubject.SCHEMA,
         )
-    observed_dtypes = tuple(
-        frame.schema[column] for column in SCORE_FRAME_COLUMNS
-    )
+    observed_dtypes = tuple(frame.schema[column] for column in SCORE_FRAME_COLUMNS)
     if observed_dtypes != SCORE_FRAME_DTYPES:
         raise ArtifactIntegrityError(
             "score artifact column dtype mismatch",
@@ -146,8 +134,7 @@ def _require_columns(
     missing = tuple(name for name in required if name not in frame.columns)
     if missing:
         raise ScientificContractError(
-            f"{partition_role.value} frame missing declared columns: "
-            f"{', '.join(missing)}",
+            f"{partition_role.value} frame missing declared columns: {', '.join(missing)}",
             subject=ContractSubject.SCHEMA,
         )
 
@@ -184,31 +171,24 @@ def _require_feature_columns(
         dtype = column.dtype
         if not dtype.is_numeric():
             raise ScientificContractError(
-                f"feature column '{name}' in {partition_role.value} partition "
-                f"must be numeric, got {dtype}",
+                f"feature column '{name}' in {partition_role.value} partition must be numeric, got {dtype}",
                 subject=ContractSubject.FEATURES,
             )
         if column.null_count() > 0:
             raise ScientificContractError(
-                f"feature column '{name}' in {partition_role.value} partition "
-                "contains null values",
+                f"feature column '{name}' in {partition_role.value} partition contains null values",
                 subject=ContractSubject.FEATURES,
             )
-        has_non_finite = frame.select(
-            (~pl.col(name).is_finite()).any()
-        ).item()
+        has_non_finite = frame.select((~pl.col(name).is_finite()).any()).item()
         if has_non_finite:
             raise ScientificContractError(
-                f"feature column '{name}' in {partition_role.value} partition "
-                "contains non-finite values",
+                f"feature column '{name}' in {partition_role.value} partition contains non-finite values",
                 subject=ContractSubject.FEATURES,
             )
 
 
 def _require_benign_calibration(frame: pl.DataFrame) -> None:
-    attack_rows = frame.filter(
-        pl.col(OUTCOME_LABEL_COLUMN) != PopulationOutcomeLabel.BENIGN.value
-    ).height
+    attack_rows = frame.filter(pl.col(OUTCOME_LABEL_COLUMN) != PopulationOutcomeLabel.BENIGN.value).height
     if attack_rows:
         raise LeakageError(
             "attack-labelled rows cannot enter benign calibration construction",

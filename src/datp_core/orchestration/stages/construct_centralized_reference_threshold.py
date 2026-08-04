@@ -10,6 +10,8 @@ from datp_core.centralized_reference.thresholding import (
 )
 from datp_core.orchestration.commands.thresholding import (
     ConstructCentralizedThresholdRequest as _ConstructCentralizedThresholdRequest,
+)
+from datp_core.orchestration.commands.thresholding import (
     ConstructCentralizedThresholdResult as _ConstructCentralizedThresholdResult,
 )
 from datp_core.pipeline.publication.codec import (

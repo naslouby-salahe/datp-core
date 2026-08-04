@@ -84,9 +84,7 @@ class ClusterMembership:
             self.contributing_local_quantiles,
             self.cluster_threshold,
             members_label="cluster members",
-            match_message=(
-                "contributing local quantile clients must exactly equal cluster members"
-            ),
+            match_message=("contributing local quantile clients must exactly equal cluster members"),
         )
 
 
@@ -101,9 +99,7 @@ class GroupedThresholdResult:
     maximum_iterations: KMeansMaximumIterationCount
     random_state: Seed
     group_count: GroupCount
-    method: ClassVar[FederatedThresholdMethod] = (
-        FederatedThresholdMethod.CLUSTER_THRESHOLD
-    )
+    method: ClassVar[FederatedThresholdMethod] = FederatedThresholdMethod.CLUSTER_THRESHOLD
 
     def __post_init__(self) -> None:
         require_contract(
@@ -118,8 +114,7 @@ class GroupedThresholdResult:
         cluster_indices = tuple(item.cluster_index.value for item in self.clusters)
         expected_indices = set(range(self.group_count.value))
         require_contract(
-            set(cluster_indices) == expected_indices
-            and len(cluster_indices) == len(expected_indices),
+            set(cluster_indices) == expected_indices and len(cluster_indices) == len(expected_indices),
             "cluster indices must equal exactly 0..group_count.value - 1",
             ContractSubject.THRESHOLD,
         )
@@ -130,31 +125,22 @@ class GroupedThresholdResult:
                     "every nested quantile must carry the containing result coordinate",
                     ContractSubject.COORDINATE,
                 )
-        all_members = tuple(
-            client for cluster in self.clusters for client in cluster.members
-        )
+        all_members = tuple(client for cluster in self.clusters for client in cluster.members)
         require_contract(
             len(set(all_members)) == len(all_members),
             "a client cannot belong to more than one cluster",
             ContractSubject.CLIENT_IDENTITY,
         )
         require_contract(
-            frozenset(all_members)
-            == frozenset(item.client for item in self.fingerprints),
+            frozenset(all_members) == frozenset(item.client for item in self.fingerprints),
             "cluster membership must cover exactly the fingerprinted client set",
             ContractSubject.CLIENT_IDENTITY,
         )
         validate_assignments(
             self.assignments,
-            tuple(
-                (client, cluster.cluster_threshold)
-                for cluster in self.clusters
-                for client in cluster.members
-            ),
+            tuple((client, cluster.cluster_threshold) for cluster in self.clusters for client in cluster.members),
             label="threshold assignments",
-            mismatch_message=(
-                "a cluster threshold assignment must use its cluster's threshold"
-            ),
+            mismatch_message=("a cluster threshold assignment must use its cluster's threshold"),
         )
 
 
@@ -168,9 +154,7 @@ def construct_grouped_threshold(
             subject=ContractSubject.THRESHOLD,
         )
     ordered = tuple(sorted(eligible, key=lambda item: item.client))
-    raw_features = tuple(
-        _raw_fingerprint(item.as_array) for item in ordered
-    )
+    raw_features = tuple(_raw_fingerprint(item.as_array) for item in ordered)
     matrix = np.asarray(raw_features, dtype=np.float64)
     if not np.isfinite(matrix).all():
         raise ScientificContractError(
@@ -199,9 +183,7 @@ def construct_grouped_threshold(
             strict=True,
         )
     )
-    local_quantiles = tuple(
-        local_quantile(item, protocol.quantile) for item in ordered
-    )
+    local_quantiles = tuple(local_quantile(item, protocol.quantile) for item in ordered)
     clusters, assignments = _build_clusters(
         ordered,
         labels,
@@ -256,14 +238,8 @@ def _build_clusters(
     for index in range(group_count.value):
         cluster_index = ClusterIndex(index)
         members = _cluster_members(ordered, labels, cluster_index)
-        contributing = tuple(
-            _local_quantile(local_quantiles, client) for client in members
-        )
-        cluster_value = ThresholdValue(
-            unweighted_mean(
-                tuple(item.value.value for item in contributing)
-            )
-        )
+        contributing = tuple(_local_quantile(local_quantiles, client) for client in members)
+        cluster_value = ThresholdValue(unweighted_mean(tuple(item.value.value for item in contributing)))
         clusters.append(
             ClusterMembership(
                 cluster_index=cluster_index,
@@ -272,9 +248,7 @@ def _build_clusters(
                 cluster_threshold=cluster_value,
             )
         )
-        assignments.extend(
-            ThresholdAssignment(client, cluster_value) for client in members
-        )
+        assignments.extend(ThresholdAssignment(client, cluster_value) for client in members)
     return tuple(clusters), tuple(assignments)
 
 
@@ -283,11 +257,7 @@ def _cluster_members(
     labels: np.ndarray,
     cluster_index: ClusterIndex,
 ) -> tuple[ClientIdentity, ...]:
-    members = tuple(
-        item.client
-        for item, label in zip(ordered, labels, strict=True)
-        if label == cluster_index.value
-    )
+    members = tuple(item.client for item, label in zip(ordered, labels, strict=True) if label == cluster_index.value)
     if not members:
         raise ScientificContractError(
             "k-means produced an empty cluster; grouped thresholding requires every cluster to be non-empty",

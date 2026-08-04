@@ -2,6 +2,8 @@
 
 from datp_core.orchestration.commands.populations import (
     SplitRequest as _SplitRequest,
+)
+from datp_core.orchestration.commands.populations import (
     SplitResult as _SplitResult,
 )
 from datp_core.pipeline.publication.codec import (

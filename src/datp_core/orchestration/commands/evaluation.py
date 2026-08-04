@@ -37,9 +37,7 @@ class EvaluateCentralizedReferenceRequest:
 
 @dataclass(frozen=True, slots=True)
 class EvaluateCentralizedReferenceResult:
-    stage: ClassVar[StageOperationId] = (
-        StageOperationId.EVALUATE_CENTRALIZED_REFERENCE
-    )
+    stage: ClassVar[StageOperationId] = StageOperationId.EVALUATE_CENTRALIZED_REFERENCE
     publication_status: PublicationStatus
     evaluation: CentralizedEvaluationResult
     complete_digest: Checksum

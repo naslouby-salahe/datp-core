@@ -104,8 +104,7 @@ def benign_frame(
     generator = np.random.default_rng(seed.value)
     matrix = generator.normal(size=(row_count.value, len(FEATURE_NAMES))).astype(np.float32)
     feature_series = tuple(
-        pl.Series(name, matrix[:, index], dtype=pl.Float32)
-        for index, name in enumerate(FEATURE_NAMES.names)
+        pl.Series(name, matrix[:, index], dtype=pl.Float32) for index, name in enumerate(FEATURE_NAMES.names)
     )
     return pl.DataFrame(
         (

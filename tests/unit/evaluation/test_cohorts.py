@@ -28,20 +28,12 @@ def test_fpr_eligibility_requires_support_and_benign_evaluation() -> None:
         client_counts=counts,
     )
     fpr_evaluable = {
-        item.client.client_id
-        for item in manifest.memberships
-        if item.cohort is EvaluationCohort.FPR_EVALUABLE
+        item.client.client_id for item in manifest.memberships if item.cohort is EvaluationCohort.FPR_EVALUABLE
     }
     assert fpr_evaluable == {"device_a"}
     by_id = {record.client.client_id: record for record in manifest.records}
-    assert (
-        ClientExclusionReason.INSUFFICIENT_BENIGN_CALIBRATION
-        in by_id["device_b"].exclusion_reasons
-    )
-    assert (
-        ClientExclusionReason.EMPTY_BENIGN_EVALUATION
-        in by_id["device_c"].exclusion_reasons
-    )
+    assert ClientExclusionReason.INSUFFICIENT_BENIGN_CALIBRATION in by_id["device_b"].exclusion_reasons
+    assert ClientExclusionReason.EMPTY_BENIGN_EVALUATION in by_id["device_c"].exclusion_reasons
 
 
 def test_fallback_cannot_enter_fpr_cohort() -> None:
@@ -59,11 +51,7 @@ def test_fallback_cannot_enter_fpr_cohort() -> None:
         partition_seed=Seed(0),
         client_counts=counts,
     )
-    cohorts = {
-        item.cohort
-        for item in manifest.memberships
-        if item.client.client_id == "fallback_client"
-    }
+    cohorts = {item.cohort for item in manifest.memberships if item.client.client_id == "fallback_client"}
     assert EvaluationCohort.DEPLOYMENT_FALLBACK in cohorts
     assert EvaluationCohort.FPR_EVALUABLE not in cohorts
 
@@ -84,14 +72,9 @@ def test_edge_clients_are_not_attack_evaluable() -> None:
         partition_seed=Seed(0),
         client_counts=counts,
     )
-    assert not any(
-        item.cohort is EvaluationCohort.ATTACK_EVALUABLE
-        for item in manifest.memberships
-    )
+    assert not any(item.cohort is EvaluationCohort.ATTACK_EVALUABLE for item in manifest.memberships)
     assert any(
-        ClientExclusionReason.INVALID_ATTACK_ASSIGNMENT
-        in record.exclusion_reasons
-        for record in manifest.records
+        ClientExclusionReason.INVALID_ATTACK_ASSIGNMENT in record.exclusion_reasons for record in manifest.records
     )
 
 
@@ -111,10 +94,7 @@ def test_cohort_membership_is_invariant_to_threshold_method() -> None:
         client_counts=counts,
         methods=methods,
     )
-    assert any(
-        item.cohort is EvaluationCohort.FPR_EVALUABLE
-        for item in manifest.memberships
-    )
+    assert any(item.cohort is EvaluationCohort.FPR_EVALUABLE for item in manifest.memberships)
 
 
 def test_cohort_rejects_identity_kind_drift() -> None:
@@ -124,7 +104,7 @@ def test_cohort_rejects_identity_kind_drift() -> None:
             150,
             20,
             8,
-            identity_kind=PopulationIdentityKind.SYNTHETIC_PARTITIONS,
+            identity_kind=PopulationIdentityKind.SYNTHETIC_DIRICHLET_CLIENTS,
         ),
     )
     with pytest.raises(ScientificContractError, match="identity contract"):

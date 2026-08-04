@@ -18,7 +18,7 @@ from datp_core.domain.values import (
 )
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.populations.models import ClientIdentity
-from datp_core.protocols.models import FRACTION_TOTAL_ABSOLUTE_TOLERANCE
+from datp_core.protocols.splits import FRACTION_TOTAL_ABSOLUTE_TOLERANCE
 from datp_core.thresholding.assignments import validate_client_partition
 from datp_core.thresholding.quantiles import (
     ClientBenignCalibrationScores,
@@ -69,9 +69,7 @@ class ConformalThresholdResult:
     eligible_clients: tuple[ClientIdentity, ...]
     assignments: tuple[ConformalAssignment, ...]
     unavailable_clients: tuple[ClientIdentity, ...]
-    method: ClassVar[FederatedThresholdMethod] = (
-        FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD
-    )
+    method: ClassVar[FederatedThresholdMethod] = FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD
 
     def __post_init__(self) -> None:
         require_contract(
@@ -108,11 +106,9 @@ def construct_local_conformal_threshold(
         if rank_index.value > calibration_count.value:
             unavailable.append(client_scores.client)
             continue
-        threshold, _, effective_quantile, tie_count = (
-            finite_sample_conformal_threshold(
-                client_scores.as_array,
-                coverage,
-            )
+        threshold, _, effective_quantile, tie_count = finite_sample_conformal_threshold(
+            client_scores.as_array,
+            coverage,
         )
         assignments.append(
             ConformalAssignment(

@@ -10,6 +10,8 @@ from datp_core.evaluation.operational import (
 )
 from datp_core.orchestration.commands.evaluation import (
     EvaluateCentralizedReferenceRequest as _EvaluateCentralizedReferenceRequest,
+)
+from datp_core.orchestration.commands.evaluation import (
     EvaluateCentralizedReferenceResult as _EvaluateCentralizedReferenceResult,
 )
 from datp_core.pipeline.publication.codec import (

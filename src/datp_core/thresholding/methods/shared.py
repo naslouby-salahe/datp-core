@@ -48,9 +48,7 @@ class SharedThresholdResult:
     contributing_local_quantiles: tuple[LocalQuantile, ...]
     shared_threshold: ThresholdValue
     assignments: tuple[ThresholdAssignment, ...]
-    method: ClassVar[FederatedThresholdMethod] = (
-        FederatedThresholdMethod.SHARED_THRESHOLD
-    )
+    method: ClassVar[FederatedThresholdMethod] = FederatedThresholdMethod.SHARED_THRESHOLD
 
     def __post_init__(self) -> None:
         validate_local_quantiles(
@@ -60,15 +58,9 @@ class SharedThresholdResult:
         )
         validate_assignments(
             self.assignments,
-            tuple(
-                (item.client, self.shared_threshold)
-                for item in self.contributing_local_quantiles
-            ),
+            tuple((item.client, self.shared_threshold) for item in self.contributing_local_quantiles),
             label="threshold assignments",
-            mismatch_message=(
-                "every assignment in a shared threshold result must carry the "
-                "identical shared value"
-            ),
+            mismatch_message=("every assignment in a shared threshold result must carry the identical shared value"),
         )
         require_contract(
             floats_exactly_equal(
@@ -88,9 +80,7 @@ class PooledSharedQuantileResult:
     diagnostic: ThresholdDiagnostic
     shared_threshold: ThresholdValue
     assignments: tuple[ThresholdAssignment, ...]
-    method: ClassVar[FederatedThresholdMethod] = (
-        FederatedThresholdMethod.POOLED_SHARED_QUANTILE
-    )
+    method: ClassVar[FederatedThresholdMethod] = FederatedThresholdMethod.POOLED_SHARED_QUANTILE
 
     def __post_init__(self) -> None:
         require_contract(
@@ -128,9 +118,7 @@ class SampleWeightedSharedThresholdResult:
     normalized_weights: tuple[float, ...]
     shared_threshold: ThresholdValue
     assignments: tuple[ThresholdAssignment, ...]
-    method: ClassVar[FederatedThresholdMethod] = (
-        FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD
-    )
+    method: ClassVar[FederatedThresholdMethod] = FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD
 
     def __post_init__(self) -> None:
         validate_normalized_weights(
@@ -144,15 +132,9 @@ class SampleWeightedSharedThresholdResult:
         )
         validate_assignments(
             self.assignments,
-            tuple(
-                (item.client, self.shared_threshold)
-                for item in self.contributing_local_quantiles
-            ),
+            tuple((item.client, self.shared_threshold) for item in self.contributing_local_quantiles),
             label="threshold assignments",
-            mismatch_message=(
-                "every assignment in a shared threshold result must carry the "
-                "identical shared value"
-            ),
+            mismatch_message=("every assignment in a shared threshold result must carry the identical shared value"),
         )
         expected_shared = sum(
             item.value.value * weight
@@ -179,17 +161,9 @@ def construct_shared_threshold(
             subject=protocol.method,
         )
     _require_eligible(eligible)
-    local_quantiles = tuple(
-        local_quantile(client_scores, protocol.quantile)
-        for client_scores in eligible
-    )
-    shared_value = ThresholdValue(
-        unweighted_mean(tuple(item.value.value for item in local_quantiles))
-    )
-    assignments = tuple(
-        ThresholdAssignment(item.client, shared_value)
-        for item in local_quantiles
-    )
+    local_quantiles = tuple(local_quantile(client_scores, protocol.quantile) for client_scores in eligible)
+    shared_value = ThresholdValue(unweighted_mean(tuple(item.value.value for item in local_quantiles)))
+    assignments = tuple(ThresholdAssignment(item.client, shared_value) for item in local_quantiles)
     return SharedThresholdResult(
         coordinate=eligible[0].coordinate,
         quantile=protocol.quantile,
@@ -209,11 +183,7 @@ def construct_pooled_shared_quantile(
             subject=protocol.method,
         )
     _require_eligible(eligible)
-    pooled_scores = tuple(
-        score
-        for client_scores in eligible
-        for score in client_scores.scores
-    )
+    pooled_scores = tuple(score for client_scores in eligible for score in client_scores.scores)
     shared_value = exact_empirical_quantile(
         np.asarray(pooled_scores, dtype=np.float64),
         protocol.quantile,
@@ -221,16 +191,11 @@ def construct_pooled_shared_quantile(
     diagnostic = ThresholdDiagnostic(
         quantile_interpolation=quantile_interpolation_semantics(),
         score_set_checksum=_require_common_score_set_checksum(eligible),
-        calibration_manifest_checksum=(
-            _pooled_calibration_manifest_checksum(eligible)
-        ),
+        calibration_manifest_checksum=(_pooled_calibration_manifest_checksum(eligible)),
         tie_count=RowCount(0),
         availability=AvailabilityStatus.AVAILABLE,
     )
-    assignments = tuple(
-        ThresholdAssignment(client_scores.client, shared_value)
-        for client_scores in eligible
-    )
+    assignments = tuple(ThresholdAssignment(client_scores.client, shared_value) for client_scores in eligible)
     return PooledSharedQuantileResult(
         coordinate=eligible[0].coordinate,
         quantile=protocol.quantile,
@@ -245,22 +210,14 @@ def construct_sample_weighted_shared_threshold(
     eligible: tuple[ClientBenignCalibrationScores, ...],
     protocol: QuantileProtocol,
 ) -> SampleWeightedSharedThresholdResult:
-    if (
-        protocol.method
-        is not FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD
-    ):
+    if protocol.method is not FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD:
         raise ScientificContractError(
             "sample-weighted shared threshold construction requires the SAMPLE_WEIGHTED_SHARED_THRESHOLD protocol",
             subject=protocol.method,
         )
     _require_eligible(eligible)
-    local_quantiles = tuple(
-        local_quantile(client_scores, protocol.quantile)
-        for client_scores in eligible
-    )
-    counts = tuple(
-        float(item.calibration_count.value) for item in local_quantiles
-    )
+    local_quantiles = tuple(local_quantile(client_scores, protocol.quantile) for client_scores in eligible)
+    counts = tuple(float(item.calibration_count.value) for item in local_quantiles)
     total = sum(counts)
     normalized_weights = tuple(count / total for count in counts)
     shared_value = ThresholdValue(
@@ -269,10 +226,7 @@ def construct_sample_weighted_shared_threshold(
             counts,
         )
     )
-    assignments = tuple(
-        ThresholdAssignment(item.client, shared_value)
-        for item in local_quantiles
-    )
+    assignments = tuple(ThresholdAssignment(item.client, shared_value) for item in local_quantiles)
     return SampleWeightedSharedThresholdResult(
         coordinate=eligible[0].coordinate,
         quantile=protocol.quantile,
@@ -296,9 +250,7 @@ def _require_eligible(
 def _require_common_score_set_checksum(
     eligible: tuple[ClientBenignCalibrationScores, ...],
 ) -> Checksum:
-    checksums = frozenset(
-        client_scores.score_set_checksum for client_scores in eligible
-    )
+    checksums = frozenset(client_scores.score_set_checksum for client_scores in eligible)
     if len(checksums) != 1:
         raise ScientificContractError(
             "pooled shared quantile construction requires one common score-set checksum",
@@ -311,8 +263,5 @@ def _pooled_calibration_manifest_checksum(
     eligible: tuple[ClientBenignCalibrationScores, ...],
 ) -> Checksum:
     ordered = sorted(eligible, key=lambda item: item.client)
-    payload = "|".join(
-        f"{item.client.client_id}:{item.calibration_manifest_checksum.value}"
-        for item in ordered
-    )
+    payload = "|".join(f"{item.client.client_id}:{item.calibration_manifest_checksum.value}" for item in ordered)
     return checksum_text(payload)

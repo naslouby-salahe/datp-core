@@ -30,7 +30,6 @@ Generate traceable tables, figures, machine-readable exports, warnings, suppress
 - `datp_core/reporting/figures.py`
 - `datp_core/reporting/export.py`
 - `datp_core/reporting/validation.py`
-- `datp_core/orchestration/stages/report.py`
 
 ## Reporting records
 

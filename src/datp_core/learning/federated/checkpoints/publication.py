@@ -88,11 +88,7 @@ def build_manifest(
         entries=tuple(
             CandidateManifestEntry(
                 round_number=candidate.round_number,
-                client_id=(
-                    ClientPathToken(candidate.client.client_id)
-                    if candidate.client is not None
-                    else None
-                ),
+                client_id=(ClientPathToken(candidate.client.client_id) if candidate.client is not None else None),
                 tensor_name=SafeTensorFilename(candidate.tensor_path.name),
                 tensor_checksum=candidate.tensor_checksum,
             )
@@ -116,9 +112,7 @@ def load_manifest(directory: Path) -> CandidateManifest:
             subject=ContractSubject.ARTIFACT_PATH,
         )
     try:
-        manifest = CandidateManifest.model_validate_json(
-            path.read_text(encoding="utf-8")
-        )
+        manifest = CandidateManifest.model_validate_json(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, ValidationError, ValueError) as error:
         raise ArtifactIntegrityError(
             "candidate manifest is unreadable or invalid",
@@ -200,12 +194,8 @@ def verify_completion(
         manifest,
         include_history=include_history,
     )
-    expected_all = frozenset(
-        (*expected_without_complete, FederatedHistoryAssetName.COMPLETE.value)
-    )
-    actual_files = frozenset(
-        path.name for path in directory.iterdir() if path.is_file()
-    )
+    expected_all = frozenset((*expected_without_complete, FederatedHistoryAssetName.COMPLETE.value))
+    actual_files = frozenset(path.name for path in directory.iterdir() if path.is_file())
     if actual_files != expected_all:
         raise ArtifactIntegrityError(
             "publication files do not match the exact declared artifact set",
@@ -240,16 +230,13 @@ def validate_manifest(
     split_manifest_checksum: Checksum,
 ) -> None:
     expected_coefficient = (
-        ModelCoefficientValue(coordinate.model_coefficient.value)
-        if coordinate.model_coefficient is not None
-        else None
+        ModelCoefficientValue(coordinate.model_coefficient.value) if coordinate.model_coefficient is not None else None
     )
     coordinate_matches = (
         manifest.coordinate_population == coordinate.population
         and manifest.coordinate_training_seed == coordinate.training_seed
         and manifest.coordinate_split_protocol == coordinate.split_protocol
-        and manifest.coordinate_preprocessing_identity
-        == coordinate.preprocessing_identity
+        and manifest.coordinate_preprocessing_identity == coordinate.preprocessing_identity
         and manifest.coordinate_model == coordinate.model
         and manifest.coordinate_model_coefficient == expected_coefficient
     )
@@ -265,8 +252,7 @@ def validate_manifest(
             ContractSubject.ARTIFACT_PATH,
         ),
         (
-            manifest.preprocessing_state_set_checksum
-            == preprocessing_state_set_checksum,
+            manifest.preprocessing_state_set_checksum == preprocessing_state_set_checksum,
             "candidate manifest preprocessing checksum mismatch",
             ContractSubject.PREPROCESSING,
         ),
@@ -316,9 +302,7 @@ def stage_personalized_candidates(
                 checkpoint_protocol=checkpoint_protocol,
                 autoencoder=autoencoder,
                 output_directory=output_directory,
-                preprocessing_state_set_checksum=(
-                    preprocessing_state_set_checksum
-                ),
+                preprocessing_state_set_checksum=(preprocessing_state_set_checksum),
                 split_manifest_checksum=split_manifest_checksum,
                 client=snapshot_set.client,
             ),
@@ -328,11 +312,7 @@ def stage_personalized_candidates(
     manifest = build_manifest(
         kind=CandidateManifestKind.PERSONALIZED,
         coordinate=coordinate,
-        candidates=tuple(
-            candidate
-            for candidate_set in candidate_sets
-            for candidate in candidate_set.candidates
-        ),
+        candidates=tuple(candidate for candidate_set in candidate_sets for candidate in candidate_set.candidates),
         checkpoint_protocol=checkpoint_protocol,
         autoencoder=autoencoder,
         batch_size=batch_size,
@@ -365,9 +345,7 @@ def write_federated_training(
         checkpoint_protocol=result.checkpoint_protocol,
         autoencoder=result.autoencoder,
         output_directory=output_directory,
-        preprocessing_state_set_checksum=(
-            result.preprocessing_state_set_checksum
-        ),
+        preprocessing_state_set_checksum=(result.preprocessing_state_set_checksum),
         split_manifest_checksum=result.split_manifest_checksum,
         client=None,
     )
@@ -378,9 +356,7 @@ def write_federated_training(
         checkpoint_protocol=result.checkpoint_protocol,
         autoencoder=result.autoencoder,
         batch_size=result.batch_size_used,
-        preprocessing_state_set_checksum=(
-            result.preprocessing_state_set_checksum
-        ),
+        preprocessing_state_set_checksum=(result.preprocessing_state_set_checksum),
         split_manifest_checksum=result.split_manifest_checksum,
     )
     write_manifest(output_directory, manifest)
@@ -413,9 +389,7 @@ def write_ditto_training(
         checkpoint_protocol=global_result.checkpoint_protocol,
         autoencoder=global_result.autoencoder,
         batch_size=global_result.batch_size_used,
-        preprocessing_state_set_checksum=(
-            global_result.preprocessing_state_set_checksum
-        ),
+        preprocessing_state_set_checksum=(global_result.preprocessing_state_set_checksum),
         split_manifest_checksum=global_result.split_manifest_checksum,
         output_directory=personalized_output_directory,
     )
@@ -430,9 +404,7 @@ def write_ditto_training(
         checkpoint_protocol=global_result.checkpoint_protocol,
         autoencoder=global_result.autoencoder,
         output_directory=global_output_directory,
-        preprocessing_state_set_checksum=(
-            global_result.preprocessing_state_set_checksum
-        ),
+        preprocessing_state_set_checksum=(global_result.preprocessing_state_set_checksum),
         split_manifest_checksum=global_result.split_manifest_checksum,
         client=None,
     )
@@ -443,9 +415,7 @@ def write_ditto_training(
         checkpoint_protocol=global_result.checkpoint_protocol,
         autoencoder=global_result.autoencoder,
         batch_size=global_result.batch_size_used,
-        preprocessing_state_set_checksum=(
-            global_result.preprocessing_state_set_checksum
-        ),
+        preprocessing_state_set_checksum=(global_result.preprocessing_state_set_checksum),
         split_manifest_checksum=global_result.split_manifest_checksum,
         linked_personalized_digest=personalized_digest,
     )

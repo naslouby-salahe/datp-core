@@ -46,9 +46,7 @@ ELIGIBLE = tuple(
     for index in range(6)
 )
 FAMILY_A = FamilyIdentity("family_a")
-FAMILY_BY_CLIENT = tuple(
-    (item.client, FAMILY_A) for item in ELIGIBLE
-)
+FAMILY_BY_CLIENT = tuple((item.client, FAMILY_A) for item in ELIGIBLE)
 
 
 def _capabilities(
@@ -80,9 +78,7 @@ def _request(
     *,
     capabilities: PopulationCapabilities = ALL_METHODS_CAPABILITIES,
     eligible: tuple[ClientBenignCalibrationScores, ...] = ELIGIBLE,
-    family_by_client: tuple[
-        tuple[ClientIdentity, FamilyIdentity], ...
-    ] = FAMILY_BY_CLIENT,
+    family_by_client: tuple[tuple[ClientIdentity, FamilyIdentity], ...] = FAMILY_BY_CLIENT,
 ) -> ThresholdConstructionRequest:
     return ThresholdConstructionRequest(
         method=method,
@@ -160,9 +156,7 @@ def test_dispatch_cluster_threshold_with_too_few_clients_is_unavailable() -> Non
 def test_dispatch_rejects_method_unsupported_by_population_capabilities() -> None:
     request = _request(
         FederatedThresholdMethod.LOCAL_THRESHOLD,
-        capabilities=_capabilities(
-            (FederatedThresholdMethod.SHARED_THRESHOLD,)
-        ),
+        capabilities=_capabilities((FederatedThresholdMethod.SHARED_THRESHOLD,)),
     )
     with pytest.raises(CapabilityError):
         dispatch_federated_threshold(request)
@@ -178,15 +172,11 @@ def test_validate_population_capability_rejects_unsupported_method() -> None:
 
 def test_reject_centralized_threshold_method_raises_leakage_error() -> None:
     with pytest.raises(LeakageError, match="cannot enter federated dispatch"):
-        reject_centralized_threshold_method(
-            CentralizedThresholdMethod.POOLED_BENIGN_QUANTILE
-        )
+        reject_centralized_threshold_method(CentralizedThresholdMethod.POOLED_BENIGN_QUANTILE)
 
 
 def test_reject_centralized_threshold_method_accepts_federated_methods() -> None:
-    reject_centralized_threshold_method(
-        FederatedThresholdMethod.SHARED_THRESHOLD
-    )
+    reject_centralized_threshold_method(FederatedThresholdMethod.SHARED_THRESHOLD)
 
 
 def test_dispatch_rejects_a_centralized_method_disguised_as_federated() -> None:

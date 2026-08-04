@@ -133,9 +133,7 @@ def validated_global_manifest(
         checkpoint_protocol=request.checkpoint_protocol,
         autoencoder=request.autoencoder,
         batch_size=request.batch_size,
-        preprocessing_state_set_checksum=(
-            request.preprocessing_state_set_checksum
-        ),
+        preprocessing_state_set_checksum=(request.preprocessing_state_set_checksum),
         split_manifest_checksum=request.split_manifest_checksum,
     )
     verify_completion(request.directory, manifest, include_history=True)
@@ -143,10 +141,7 @@ def validated_global_manifest(
         (round_number, None, candidate_tensor_name(round_number))
         for round_number in request.checkpoint_protocol.candidates
     )
-    observed_entries = tuple(
-        (entry.round_number, entry.client_id, entry.tensor_name)
-        for entry in manifest.entries
-    )
+    observed_entries = tuple((entry.round_number, entry.client_id, entry.tensor_name) for entry in manifest.entries)
     if observed_entries != expected_entries:
         raise ArtifactIntegrityError(
             "global candidate manifest entries are incomplete, duplicated, or out of order",
@@ -180,10 +175,7 @@ def load_reused_global_candidates(
             )
         ).iter_rows()
     )
-    return tuple(
-        _global_candidate(request, entry, losses)
-        for entry in manifest.entries
-    )
+    return tuple(_global_candidate(request, entry, losses) for entry in manifest.entries)
 
 
 def _global_candidate(
@@ -193,9 +185,7 @@ def _global_candidate(
 ) -> CheckpointCandidate:
     path = request.directory / entry.tensor_name
     validate_persisted_checkpoint_file(path, entry.tensor_checksum)
-    matching = tuple(
-        item.loss for item in losses if item.round_number == entry.round_number
-    )
+    matching = tuple(item.loss for item in losses if item.round_number == entry.round_number)
     if len(matching) != 1:
         raise ArtifactIntegrityError(
             "global checkpoint requires exactly one matching round loss",
@@ -209,9 +199,7 @@ def _global_candidate(
         tensor_checksum=entry.tensor_checksum,
         mean_training_loss=matching[0],
         status=CheckpointStatus.CANDIDATE,
-        preprocessing_state_set_checksum=(
-            request.preprocessing_state_set_checksum
-        ),
+        preprocessing_state_set_checksum=(request.preprocessing_state_set_checksum),
         split_manifest_checksum=request.split_manifest_checksum,
     )
 
@@ -227,9 +215,7 @@ def validated_personalized_manifest(
         checkpoint_protocol=request.checkpoint_protocol,
         autoencoder=request.autoencoder,
         batch_size=request.batch_size,
-        preprocessing_state_set_checksum=(
-            request.preprocessing_state_set_checksum
-        ),
+        preprocessing_state_set_checksum=(request.preprocessing_state_set_checksum),
         split_manifest_checksum=request.split_manifest_checksum,
     )
     verify_completion(
@@ -246,10 +232,7 @@ def validated_personalized_manifest(
         for client in request.clients
         for round_number in request.checkpoint_protocol.candidates
     )
-    observed_entries = tuple(
-        (entry.round_number, entry.client_id, entry.tensor_name)
-        for entry in manifest.entries
-    )
+    observed_entries = tuple((entry.round_number, entry.client_id, entry.tensor_name) for entry in manifest.entries)
     if observed_entries != expected_entries:
         raise ArtifactIntegrityError(
             "personalized candidate manifest entries do not match the expected clients and rounds",
@@ -263,8 +246,7 @@ def load_reused_personalized_candidates(
 ) -> tuple[PersonalizedCandidateSet, ...]:
     manifest = validated_personalized_manifest(request)
     personalized_frame = read_parquet(
-        request.global_history_directory
-        / FederatedHistoryAssetName.PERSONALIZED_ROUNDS.value
+        request.global_history_directory / FederatedHistoryAssetName.PERSONALIZED_ROUNDS.value
     )
     training_rounds = tuple(
         RoundNumber(value)
@@ -315,10 +297,7 @@ def _personalized_candidate(
     validate_persisted_checkpoint_file(path, entry.tensor_checksum)
     client_token = ClientPathToken(client.client_id)
     matching = tuple(
-        item.loss
-        for item in losses
-        if item.client_id == client_token
-        and item.round_number == entry.round_number
+        item.loss for item in losses if item.client_id == client_token and item.round_number == entry.round_number
     )
     if len(matching) != 1:
         raise ArtifactIntegrityError(
@@ -333,9 +312,7 @@ def _personalized_candidate(
         tensor_checksum=entry.tensor_checksum,
         mean_training_loss=matching[0],
         status=CheckpointStatus.CANDIDATE,
-        preprocessing_state_set_checksum=(
-            request.preprocessing_state_set_checksum
-        ),
+        preprocessing_state_set_checksum=(request.preprocessing_state_set_checksum),
         split_manifest_checksum=request.split_manifest_checksum,
     )
 
@@ -356,9 +333,7 @@ def load_reused_federated_training(
             coordinate=request.coordinate,
             directory=request.directory,
             checkpoint_protocol=request.checkpoint_protocol,
-            preprocessing_state_set_checksum=(
-                request.preprocessing_state_set_checksum
-            ),
+            preprocessing_state_set_checksum=(request.preprocessing_state_set_checksum),
             split_manifest_checksum=request.split_manifest_checksum,
             autoencoder=request.autoencoder,
             batch_size=request.batch_size,
@@ -377,9 +352,7 @@ def load_reused_federated_training(
             autoencoder=request.autoencoder,
             checkpoint_protocol=request.checkpoint_protocol,
             history=history,
-            preprocessing_state_set_checksum=(
-                request.preprocessing_state_set_checksum
-            ),
+            preprocessing_state_set_checksum=(request.preprocessing_state_set_checksum),
             split_manifest_checksum=request.split_manifest_checksum,
             device_name=load_published_device_name(request.directory),
             batch_size_used=request.batch_size,
@@ -395,9 +368,7 @@ def load_reused_ditto_training(
         coordinate=request.global_coordinate,
         directory=request.global_directory,
         checkpoint_protocol=request.checkpoint_protocol,
-        preprocessing_state_set_checksum=(
-            request.preprocessing_state_set_checksum
-        ),
+        preprocessing_state_set_checksum=(request.preprocessing_state_set_checksum),
         split_manifest_checksum=request.split_manifest_checksum,
         autoencoder=request.autoencoder,
         batch_size=request.batch_size,
@@ -408,9 +379,7 @@ def load_reused_ditto_training(
         global_history_directory=request.global_directory,
         clients=request.clients,
         checkpoint_protocol=request.checkpoint_protocol,
-        preprocessing_state_set_checksum=(
-            request.preprocessing_state_set_checksum
-        ),
+        preprocessing_state_set_checksum=(request.preprocessing_state_set_checksum),
         split_manifest_checksum=request.split_manifest_checksum,
         autoencoder=request.autoencoder,
         batch_size=request.batch_size,
@@ -428,9 +397,7 @@ def load_reused_ditto_training(
             subject=ContractSubject.ARTIFACT_PATH,
         )
     global_candidates = load_reused_global_candidates(global_request)
-    personalized_candidates = load_reused_personalized_candidates(
-        personalized_request
-    )
+    personalized_candidates = load_reused_personalized_candidates(personalized_request)
     history = load_federated_training_history(
         request.global_coordinate,
         request.global_directory,
@@ -444,9 +411,7 @@ def load_reused_ditto_training(
         autoencoder=request.autoencoder,
         checkpoint_protocol=request.checkpoint_protocol,
         history=history,
-        preprocessing_state_set_checksum=(
-            request.preprocessing_state_set_checksum
-        ),
+        preprocessing_state_set_checksum=(request.preprocessing_state_set_checksum),
         split_manifest_checksum=request.split_manifest_checksum,
         device_name=load_published_device_name(request.global_directory),
         batch_size_used=request.batch_size,

@@ -16,6 +16,8 @@ from datp_core.learning.centralized.adapter import (
 )
 from datp_core.orchestration.commands.training import (
     TrainCentralizedReferenceRequest as _TrainCentralizedReferenceRequest,
+)
+from datp_core.orchestration.commands.training import (
     TrainCentralizedReferenceResult as _TrainCentralizedReferenceResult,
 )
 from datp_core.pipeline.publication.codec import (

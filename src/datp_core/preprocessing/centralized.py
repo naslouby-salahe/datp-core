@@ -85,9 +85,7 @@ def preprocess_centralized(
     fitted = fit_pooled_preprocessing(
         context.protocol,
         PreprocessingFitBatch(
-            training_matrix=train_partition.frame.select(
-                list(context.protocol.input_feature_names)
-            ).to_numpy(),
+            training_matrix=train_partition.frame.select(list(context.protocol.input_feature_names)).to_numpy(),
             training_row_ids=train_partition.row_ids,
             training_labels=train_partition.outcome_labels,
         ),
@@ -143,9 +141,7 @@ def preprocess_centralized_population(
         )
     )
     schema = dataset_binding(dataset).schema
-    feature_names = FeatureNameSequence(
-        tuple(FeatureName(name) for name in schema.feature_columns)
-    )
+    feature_names = FeatureNameSequence(tuple(FeatureName(name) for name in schema.feature_columns))
     protocol = build_centralized_preprocessing_protocol(feature_names)
     partitions = extract_partitions(
         join_handoff_with_canonical_features(

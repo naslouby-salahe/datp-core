@@ -29,19 +29,23 @@ from .models import (
     ConfirmatoryEndpoint,
     ExperimentDeclaration,
     FedAvgProtocol,
-    FractionalSplitProtocol,
     PopulationDeclaration,
     ResolvedProtocolGraph,
     RuntimeProtocol,
-    StaticReferenceSplitProtocol,
     StatisticalInferenceProtocol,
-    TemporalSplitProtocol,
     TrafficRateEvidence,
 )
 from .populations import POPULATIONS
 from .runtime import CANONICAL_RUNTIME
 from .seeds import CONFIRMATORY_SEED_COHORT
-from .splits import NON_TEMPORAL_SPLIT, STATIC_REFERENCE_SPLIT, TEMPORAL_SPLIT
+from .splits import (
+    NON_TEMPORAL_SPLIT,
+    STATIC_REFERENCE_SPLIT,
+    TEMPORAL_SPLIT,
+    FractionalSplitProtocol,
+    StaticReferenceSplitProtocol,
+    TemporalSplitProtocol,
+)
 from .statistics import CONFIRMATORY_INFERENCE_PROTOCOL
 from .traffic_rates import TRAFFIC_RATE_EVIDENCE
 from .training import CHECKPOINT_PROTOCOL, FEDAVG_TRAINING_PROTOCOL

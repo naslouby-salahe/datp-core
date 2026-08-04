@@ -45,10 +45,7 @@ def test_paired_bca_is_deterministic_and_uses_protocol_metadata() -> None:
     assert first.outcome is BcaOutcome.AVAILABLE
     assert first == second
     assert first.method is CONFIRMATORY_INFERENCE_PROTOCOL.interval_method
-    assert (
-        first.replicate_count
-        == CONFIRMATORY_INFERENCE_PROTOCOL.bootstrap_replicates
-    )
+    assert first.replicate_count == CONFIRMATORY_INFERENCE_PROTOCOL.bootstrap_replicates
 
 
 def test_empty_pairs_are_blocked_without_a_fabricated_point_estimate() -> None:
@@ -62,9 +59,7 @@ def test_empty_pairs_are_blocked_without_a_fabricated_point_estimate() -> None:
 
 
 def test_supplementary_interval_cannot_be_promoted_to_confirmatory() -> None:
-    seed_cohort = SeedCohort(
-        values=tuple(Seed(seed) for seed in range(1, 5))
-    )
+    seed_cohort = SeedCohort(values=tuple(Seed(seed) for seed in range(1, 5)))
     protocol = PairedInferenceProtocol(
         **{
             **CONFIRMATORY_INFERENCE_PROTOCOL.model_dump(),
@@ -135,9 +130,7 @@ def _contrast(
             population=population,
             training_seed=Seed(seed),
             split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
-            preprocessing_identity=(
-                PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD
-            ),
+            preprocessing_identity=(PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD),
             model=TrainingModelId.FEDAVG_AUTOENCODER,
             model_coefficient=None,
         ),

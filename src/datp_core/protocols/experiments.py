@@ -48,9 +48,7 @@ _CALIBRATION_SIZE_METHODS = _SHARED_LOCAL_AND_GROUPED_METHODS + (
     FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE,
     FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD,
 )
-_TEMPORAL_METHODS = _SHARED_LOCAL_AND_GROUPED_METHODS + (
-    FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE,
-)
+_TEMPORAL_METHODS = _SHARED_LOCAL_AND_GROUPED_METHODS + (FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE,)
 _EXPERIMENT_COORDINATES = (
     (
         ExperimentId.HISTORICAL_DATP_REPRODUCTION,
@@ -137,8 +135,7 @@ _EXPERIMENT_COORDINATES = (
         EvidenceRole.SUPPORTIVE,
         PopulationId.NBAIOT_NATURAL_DEVICES,
         TrainingModelId.FEDAVG_AUTOENCODER,
-        _SHARED_AND_LOCAL_METHODS
-        + (FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE,),
+        _SHARED_AND_LOCAL_METHODS + (FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE,),
         CONFIRMATORY_METRICS,
     ),
     (
@@ -146,8 +143,7 @@ _EXPERIMENT_COORDINATES = (
         EvidenceRole.SUPPORTIVE,
         PopulationId.NBAIOT_NATURAL_DEVICES,
         TrainingModelId.FEDAVG_AUTOENCODER,
-        _SHARED_AND_LOCAL_METHODS
-        + (FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE,),
+        _SHARED_AND_LOCAL_METHODS + (FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE,),
         CONFIRMATORY_METRICS,
     ),
     (
@@ -155,8 +151,7 @@ _EXPERIMENT_COORDINATES = (
         EvidenceRole.SUPPORTIVE,
         PopulationId.NBAIOT_NATURAL_DEVICES,
         TrainingModelId.FEDAVG_AUTOENCODER,
-        _SHARED_AND_LOCAL_METHODS
-        + (FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD,),
+        _SHARED_AND_LOCAL_METHODS + (FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD,),
         CONFIRMATORY_METRICS,
     ),
     (
@@ -180,8 +175,7 @@ _EXPERIMENT_COORDINATES = (
         EvidenceRole.THRESHOLD_VARIANT,
         PopulationId.NBAIOT_NATURAL_DEVICES,
         TrainingModelId.FEDAVG_AUTOENCODER,
-        _SHARED_AND_LOCAL_METHODS
-        + (FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS,),
+        _SHARED_AND_LOCAL_METHODS + (FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS,),
         OPERATING_POINT_METRICS,
     ),
     (
@@ -260,13 +254,9 @@ class ExecutionIdentityDeclaration:
 
     def __post_init__(self) -> None:
         if not self.temporal_states:
-            raise ValueError(
-                "execution identity declarations require at least one temporal state"
-            )
+            raise ValueError("execution identity declarations require at least one temporal state")
         if len(frozenset(self.temporal_states)) != len(self.temporal_states):
-            raise ValueError(
-                "execution identity declaration temporal states must be unique"
-            )
+            raise ValueError("execution identity declaration temporal states must be unique")
 
     def matches(self, identity: "ExternalTemporalExecutionIdentity") -> bool:
         return (
@@ -301,9 +291,7 @@ EXECUTION_IDENTITY_DECLARATIONS = (
         ),
     ),
 )
-BOUNDED_EVIDENCE_POPULATIONS = frozenset(
-    declaration.population for declaration in EXECUTION_IDENTITY_DECLARATIONS
-)
+BOUNDED_EVIDENCE_POPULATIONS = frozenset(declaration.population for declaration in EXECUTION_IDENTITY_DECLARATIONS)
 
 
 class ExternalTemporalExecutionIdentity(StrictModel):
@@ -314,11 +302,7 @@ class ExternalTemporalExecutionIdentity(StrictModel):
 
     @model_validator(mode="after")
     def validate_declared_identity(self) -> "ExternalTemporalExecutionIdentity":
-        matches = tuple(
-            declaration
-            for declaration in EXECUTION_IDENTITY_DECLARATIONS
-            if declaration.matches(self)
-        )
+        matches = tuple(declaration for declaration in EXECUTION_IDENTITY_DECLARATIONS if declaration.matches(self))
         if len(matches) != 1:
             raise ScientificContractError(
                 "execution identity must be declared exactly once",

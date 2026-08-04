@@ -35,9 +35,7 @@ def _input_frame(
     labels: tuple[str, ...],
     row_ids: tuple[str, ...] | None = None,
 ) -> pl.DataFrame:
-    resolved_row_ids = row_ids or tuple(
-        f"row-{index}" for index in range(len(labels))
-    )
+    resolved_row_ids = row_ids or tuple(f"row-{index}" for index in range(len(labels)))
     return pl.DataFrame(
         (
             pl.Series(
@@ -94,9 +92,7 @@ def test_shared_input_contract_rejects_duplicate_row_identity() -> None:
 
 
 def test_shared_input_contract_rejects_null_feature_value() -> None:
-    frame = _input_frame(("benign", "benign")).with_columns(
-        pl.Series("f0", (0.0, None), dtype=pl.Float64)
-    )
+    frame = _input_frame(("benign", "benign")).with_columns(pl.Series("f0", (0.0, None), dtype=pl.Float64))
     with pytest.raises(ScientificContractError, match="null values"):
         validate_score_input_frame(
             frame,
@@ -119,10 +115,7 @@ def test_score_frame_persists_exact_schema(tmp_path: Path) -> None:
         RowCount(frame.height),
     )
     assert tuple(reloaded.columns) == SCORE_FRAME_COLUMNS
-    assert (
-        tuple(reloaded.schema[column] for column in SCORE_FRAME_COLUMNS)
-        == SCORE_FRAME_DTYPES
-    )
+    assert tuple(reloaded.schema[column] for column in SCORE_FRAME_COLUMNS) == SCORE_FRAME_DTYPES
 
 
 def test_shared_score_artifact_rejects_training_partition(

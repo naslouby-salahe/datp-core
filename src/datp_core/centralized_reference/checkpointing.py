@@ -91,10 +91,7 @@ class CentralizedCheckpointDecision:
                 "centralized checkpoint decision status must be SELECTED_BY_NON_TEST_RULE",
                 subject=self.status,
             )
-        if (
-            self.selection_rule
-            is not CheckpointSelectionRule.FIXED_TERMINAL_MAXIMUM_ROUND
-        ):
+        if self.selection_rule is not CheckpointSelectionRule.FIXED_TERMINAL_MAXIMUM_ROUND:
             raise ScientificContractError(
                 "centralized checkpoint decision must use FIXED_TERMINAL_MAXIMUM_ROUND",
                 subject=ContractSubject.CHECKPOINT_SELECTION_RULE,
@@ -104,10 +101,7 @@ class CentralizedCheckpointDecision:
                 "selected checkpoint must equal the declared maximum round",
                 subject=ContractSubject.CHECKPOINT_SELECTION_RULE,
             )
-        if (
-            self.selected.status
-            is not CheckpointStatus.SELECTED_BY_NON_TEST_RULE
-        ):
+        if self.selected.status is not CheckpointStatus.SELECTED_BY_NON_TEST_RULE:
             raise ScientificContractError(
                 "selected candidate status must be SELECTED_BY_NON_TEST_RULE",
                 subject=self.selected.status,
@@ -146,9 +140,7 @@ def retain_centralized_checkpoint_candidates(
         )
     candidates: list[CentralizedCheckpointCandidate] = []
     for snapshot in snapshots:
-        path = training_result.model_directory / candidate_tensor_name(
-            snapshot.round_number
-        )
+        path = training_result.model_directory / candidate_tensor_name(snapshot.round_number)
         checksum = persist_state_dict_tensors(snapshot.state_dict, path)
         _verify_candidate_reload(snapshot, path, autoencoder)
         candidates.append(
@@ -159,9 +151,7 @@ def retain_centralized_checkpoint_candidates(
                 tensor_checksum=checksum,
                 mean_training_loss=snapshot.mean_training_loss,
                 status=CheckpointStatus.CANDIDATE,
-                preprocessing_state_checksum=(
-                    training_result.preprocessing_state_checksum
-                ),
+                preprocessing_state_checksum=(training_result.preprocessing_state_checksum),
                 split_manifest_checksum=training_result.split_manifest_checksum,
                 training_seed=training_result.training_seed,
                 autoencoder_widths=tuple(autoencoder.widths),
@@ -238,8 +228,7 @@ def _rebuild_candidate_status(
 
 def reject_federated_checkpoint(identity: TrainingModelId) -> None:
     raise LeakageError(
-        "federated checkpoint cannot enter centralized scoring or selection "
-        f"({identity.value})",
+        f"federated checkpoint cannot enter centralized scoring or selection ({identity.value})",
         subject=ContractSubject.CHECKPOINT_CANDIDATES,
     )
 

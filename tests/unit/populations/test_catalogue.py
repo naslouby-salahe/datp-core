@@ -43,13 +43,10 @@ def test_catalogue_constructs_and_hands_off(
     )
     assert handoff.assignments.height == construction.membership.height
     assert handoff.client_partition_counts
-    assert {
-        item.client.client_id for item in handoff.client_partition_counts
-    } == set(construction.manifest.document.candidate_clients)
-    assert all(
-        not item.deployment_fallback
-        for item in handoff.client_partition_counts
+    assert {item.client.client_id for item in handoff.client_partition_counts} == set(
+        construction.manifest.document.candidate_clients
     )
+    assert all(not item.deployment_fallback for item in handoff.client_partition_counts)
 
 
 def test_dirichlet_construction_requires_explicit_condition(

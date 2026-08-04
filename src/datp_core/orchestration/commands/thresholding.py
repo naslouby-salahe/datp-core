@@ -27,9 +27,7 @@ class ConstructCentralizedThresholdRequest:
 
 @dataclass(frozen=True, slots=True)
 class ConstructCentralizedThresholdResult:
-    stage: ClassVar[StageOperationId] = (
-        StageOperationId.CONSTRUCT_CENTRALIZED_REFERENCE_THRESHOLD
-    )
+    stage: ClassVar[StageOperationId] = StageOperationId.CONSTRUCT_CENTRALIZED_REFERENCE_THRESHOLD
     publication_status: PublicationStatus
     threshold: PooledThresholdResult
     complete_digest: Checksum
@@ -46,9 +44,7 @@ class ConstructFederatedThresholdsRequest:
 
 @dataclass(frozen=True, slots=True)
 class ConstructFederatedThresholdsResult:
-    stage: ClassVar[StageOperationId] = (
-        StageOperationId.CONSTRUCT_FEDERATED_THRESHOLDS
-    )
+    stage: ClassVar[StageOperationId] = StageOperationId.CONSTRUCT_FEDERATED_THRESHOLDS
     result: ThresholdConstructionResult
     publication_status: PublicationStatus
     complete_digest: Checksum

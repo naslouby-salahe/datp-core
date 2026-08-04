@@ -42,20 +42,14 @@ class DivergenceResult(StrictModel):
             raise ValueError("divergence analysis requires unique clients")
         available = self.blocker is None
         if available and (not self.pairwise_values or self.aggregate is None):
-            raise ValueError(
-                "available divergence requires pairwise values and an aggregate"
-            )
+            raise ValueError("available divergence requires pairwise values and an aggregate")
         if not available and (self.pairwise_values or self.aggregate is not None):
             raise ValueError("blocked divergence cannot contain calculated values")
         return self
 
     @property
     def availability(self) -> AvailabilityStatus:
-        return (
-            AvailabilityStatus.AVAILABLE
-            if self.blocker is None
-            else AvailabilityStatus.UNAVAILABLE
-        )
+        return AvailabilityStatus.AVAILABLE if self.blocker is None else AvailabilityStatus.UNAVAILABLE
 
     @property
     def reason(self) -> str | None:

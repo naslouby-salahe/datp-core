@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, Generic, TypeVar
+from typing import TYPE_CHECKING
 
 from pydantic import model_validator
 
@@ -69,7 +69,7 @@ class ScientificDecisionResult(StrictModel):
     rationale: str
 
     @model_validator(mode="after")
-    def validate_decision(self) -> "ScientificDecisionResult":
+    def validate_decision(self) -> ScientificDecisionResult:
         if not self.rationale.strip():
             raise ValueError("scientific decisions require a rationale")
         if self.interval is not None and self.point_estimate != self.interval.point_estimate:
@@ -101,22 +101,16 @@ def decide_confirmatory(interval: BootstrapInterval) -> ScientificDecisionResult
         )
     if interval.lower_bound.value > 0.0:
         decision = ScientificDecision.SUPPORTED
-        rationale = (
-            "the paired BCa interval supports lower CV(FPR) under local thresholds"
-        )
+        rationale = "the paired BCa interval supports lower CV(FPR) under local thresholds"
     elif interval.upper_bound.value < 0.0:
         decision = ScientificDecision.OPPOSITE_DIRECTION
         rationale = "the paired BCa interval supports the opposite direction"
     elif interval.point_estimate.value > 0.0:
         decision = ScientificDecision.DIRECTIONAL_INCONCLUSIVE
-        rationale = (
-            "the point estimate is directional but the paired BCa interval crosses zero"
-        )
+        rationale = "the point estimate is directional but the paired BCa interval crosses zero"
     else:
         decision = ScientificDecision.NO_OBSERVED_ADVANTAGE
-        rationale = (
-            "the paired BCa interval crosses zero without a positive point estimate"
-        )
+        rationale = "the paired BCa interval crosses zero without a positive point estimate"
     return ScientificDecisionResult(
         evidence_role=EvidenceRole.CONFIRMATORY,
         decision=decision,
@@ -164,7 +158,7 @@ class AnalysisDocument(StrictModel):
     mechanisms: tuple[MechanismEvidence, ...]
 
     @model_validator(mode="after")
-    def validate_multiplicity(self) -> "AnalysisDocument":
+    def validate_multiplicity(self) -> AnalysisDocument:
         if (self.multiplicity_plan is None) != (self.multiplicity_result is None):
             raise ValueError("multiplicity plan and result must occur together")
         return self
@@ -206,17 +200,14 @@ class TemporalAnalysisDocument(StrictModel):
     records: tuple[TemporalAnalysisRecord, ...]
 
     @model_validator(mode="after")
-    def validate_role(self) -> "TemporalAnalysisDocument":
+    def validate_role(self) -> TemporalAnalysisDocument:
         if self.evidence_role is not EvidenceRole.TEMPORAL_BOUNDARY:
             raise ValueError("temporal analysis must remain temporal-boundary evidence")
         return self
 
 
-DocumentT = TypeVar("DocumentT")
-
-
 @dataclass(frozen=True, slots=True)
-class AnalysisPublication(Generic[DocumentT]):
+class AnalysisPublication[DocumentT]:
     asset_name: AnalysisAssetName
     document: DocumentT
     digest: Checksum
@@ -227,9 +218,7 @@ def prepare_confirmatory_analysis(
 ) -> AnalysisPublication[AnalysisDocument]:
     from datp_core.analysis.mechanisms import MechanismEvidence
 
-    AnalysisDocument.model_rebuild(
-        _types_namespace={"MechanismEvidence": MechanismEvidence}
-    )
+    AnalysisDocument.model_rebuild(_types_namespace={"MechanismEvidence": MechanismEvidence})
     protocol = request.inference_protocol
     interval = paired_bca_interval(
         request.contrasts,
@@ -237,11 +226,7 @@ def prepare_confirmatory_analysis(
         analysis_seed=request.analysis_seed,
     )
     deltas = tuple(contrast.delta for contrast in request.contrasts)
-    multiplicity = (
-        None
-        if request.multiplicity_plan is None
-        else holm_adjust(request.multiplicity_plan, protocol)
-    )
+    multiplicity = None if request.multiplicity_plan is None else holm_adjust(request.multiplicity_plan, protocol)
     return _publication(
         AnalysisAssetName.DOCUMENT,
         AnalysisDocument(
@@ -325,14 +310,12 @@ def prepare_temporal_analysis(
             static_reference_provenance=request.static_reference_provenance,
             frozen_provenance=request.frozen_provenance,
             recalibrated_provenance=request.recalibrated_provenance,
-            records=tuple(
-                temporal_analysis_record(record) for record in request.records
-            ),
+            records=tuple(temporal_analysis_record(record) for record in request.records),
         ),
     )
 
 
-def write_analysis_publication(
+def write_analysis_publication[DocumentT](
     publication: AnalysisPublication[DocumentT],
     directory: Path,
 ) -> DocumentT:
@@ -347,7 +330,7 @@ def write_analysis_publication(
     return publication.document
 
 
-def analysis_publication_is_reusable(
+def analysis_publication_is_reusable[DocumentT](
     publication: AnalysisPublication[DocumentT],
     directory: Path,
 ) -> bool:
@@ -357,14 +340,13 @@ def analysis_publication_is_reusable(
         return (
             complete.is_file()
             and document.is_file()
-            and complete.read_text(encoding="utf-8").strip()
-            == publication.digest.value
+            and complete.read_text(encoding="utf-8").strip() == publication.digest.value
         )
     except OSError:
         return False
 
 
-def load_reused_analysis_publication(
+def load_reused_analysis_publication[DocumentT](
     publication: AnalysisPublication[DocumentT],
     directory: Path,
 ) -> DocumentT:
@@ -372,7 +354,7 @@ def load_reused_analysis_publication(
     return publication.document
 
 
-def rebase_analysis_publication(
+def rebase_analysis_publication[DocumentT](
     document: DocumentT,
     directory: Path,
 ) -> DocumentT:
@@ -380,7 +362,7 @@ def rebase_analysis_publication(
     return document
 
 
-def _publication(
+def _publication[DocumentT](
     asset_name: AnalysisAssetName,
     document: DocumentT,
 ) -> AnalysisPublication[DocumentT]:
@@ -431,6 +413,4 @@ def _validate_temporal_identities(request: TemporalAnalysisRequest) -> None:
             PopulationId.EDGE_TEMPORAL_GROUPS,
         )
         if bound is None or bound.temporal_state is not expected_state:
-            raise ScientificContractError(
-                "temporal analysis identity must match its deployment state"
-            )
+            raise ScientificContractError("temporal analysis identity must match its deployment state")

@@ -7,6 +7,7 @@ from datp_core.learning.federated.common import (
     DittoTrainingArtifacts,
     FederatedTrainingArtifacts,
     ditto_training_is_reusable,
+    federated_training_is_reusable,
     load_reused_ditto_artifacts,
     load_reused_federated_artifacts,
     rebase_ditto_training,
@@ -17,8 +18,14 @@ from datp_core.learning.federated.common import (
 )
 from datp_core.orchestration.commands.training import (
     TrainDittoRequest as _TrainDittoRequest,
+)
+from datp_core.orchestration.commands.training import (
     TrainDittoStageResult as _TrainDittoStageResult,
+)
+from datp_core.orchestration.commands.training import (
     TrainFederatedRequest as _TrainFederatedRequest,
+)
+from datp_core.orchestration.commands.training import (
     TrainFederatedStageResult as _TrainFederatedStageResult,
 )
 from datp_core.pipeline.publication.codec import (

@@ -144,10 +144,9 @@ def ditto_training_is_reusable(
 ) -> bool:
     del request
     global_directory, personalized_directory = ditto_directories(directories)
-    return (
-        (global_directory / FederatedHistoryAssetName.COMPLETE.value).is_file()
-        and (personalized_directory / FederatedHistoryAssetName.COMPLETE.value).is_file()
-    )
+    return (global_directory / FederatedHistoryAssetName.COMPLETE.value).is_file() and (
+        personalized_directory / FederatedHistoryAssetName.COMPLETE.value
+    ).is_file()
 
 
 def load_reused_ditto_artifacts(

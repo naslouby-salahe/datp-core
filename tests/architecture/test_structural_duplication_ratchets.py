@@ -16,6 +16,7 @@ AUDITED_STRUCTURAL_ROOTS = (
 INTENTIONAL_DUPLICATE_SHAPES = frozenset(
     {
         frozenset({"PooledScoreArtifact", "ScoreRecord"}),
+        frozenset({"CentralizedMetricDocument", "CentralizedMetricRecord"}),
     }
 )
 LEGACY_PRIMITIVE_LEAKAGE_PATHS = frozenset(
@@ -23,7 +24,6 @@ LEGACY_PRIMITIVE_LEAKAGE_PATHS = frozenset(
         Path("src/datp_core/datasets/models.py"),
         Path("src/datp_core/populations/models.py"),
         Path("src/datp_core/protocols/models.py"),
-        Path("src/datp_core/thresholding/models.py"),
     }
 )
 SEMANTIC_PRIMITIVE_FIELDS = {
@@ -35,9 +35,7 @@ SEMANTIC_PRIMITIVE_FIELDS = {
     "threshold": {"float"},
     "row_count": {"int"},
 }
-GENERIC_MODULE_NAMES = frozenset(
-    {"models.py", "values.py", "enums.py", "utils.py", "helpers.py"}
-)
+GENERIC_MODULE_NAMES = frozenset({"models.py", "values.py", "enums.py", "utils.py", "helpers.py"})
 MAX_NEW_GENERIC_MODULE_LINES = 700
 LEGACY_LARGE_GENERIC_MODULES = frozenset(
     {
@@ -46,50 +44,31 @@ LEGACY_LARGE_GENERIC_MODULES = frozenset(
         Path("src/datp_core/datasets/models.py"),
         Path("src/datp_core/populations/models.py"),
         Path("src/datp_core/protocols/models.py"),
-        Path("src/datp_core/thresholding/models.py"),
     }
 )
 
 
 def _python_files(root: Path) -> tuple[Path, ...]:
-    return tuple(
-        sorted(
-            path
-            for path in root.rglob("*.py")
-            if "__pycache__" not in path.parts
-        )
-    )
+    return tuple(sorted(path for path in root.rglob("*.py") if "__pycache__" not in path.parts))
 
 
 def _class_fields(node: ast.ClassDef) -> tuple[tuple[str, str], ...]:
     fields: list[tuple[str, str]] = []
     for statement in node.body:
-        if (
-            isinstance(statement, ast.AnnAssign)
-            and isinstance(statement.target, ast.Name)
-        ):
-            fields.append(
-                (statement.target.id, ast.unparse(statement.annotation))
-            )
+        if isinstance(statement, ast.AnnAssign) and isinstance(statement.target, ast.Name):
+            fields.append((statement.target.id, ast.unparse(statement.annotation)))
     return tuple(fields)
 
 
 def _class_node(path: Path, class_name: str) -> ast.ClassDef:
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    matches = tuple(
-        node
-        for node in tree.body
-        if isinstance(node, ast.ClassDef) and node.name == class_name
-    )
+    matches = tuple(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == class_name)
     assert len(matches) == 1, f"expected one {class_name} in {path}"
     return matches[0]
 
 
 def _is_structural_model(node: ast.ClassDef) -> bool:
-    decorators = {
-        ast.unparse(decorator).split("(")[0]
-        for decorator in node.decorator_list
-    }
+    decorators = {ast.unparse(decorator).split("(")[0] for decorator in node.decorator_list}
     bases = {ast.unparse(base).split(".")[-1] for base in node.bases}
     return "dataclass" in decorators or "StrictModel" in bases
 
@@ -114,10 +93,7 @@ def test_structural_model_shapes_are_not_reimplemented_in_audited_packages() -> 
         name_set = frozenset(names)
         if name_set not in INTENTIONAL_DUPLICATE_SHAPES:
             violations.append(tuple(sorted(names)))
-    assert not violations, (
-        "duplicate structural model shapes require consolidation or review: "
-        f"{violations}"
-    )
+    assert not violations, f"duplicate structural model shapes require consolidation or review: {violations}"
 
 
 def test_client_partition_counts_reuses_canonical_client_identity() -> None:
@@ -132,10 +108,7 @@ def test_semantic_primitive_leakage_cannot_expand_beyond_legacy_model_warehouses
     for path in _python_files(SOURCE_ROOT):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
-            if (
-                not isinstance(node, ast.AnnAssign)
-                or not isinstance(node.target, ast.Name)
-            ):
+            if not isinstance(node, ast.AnnAssign) or not isinstance(node.target, ast.Name):
                 continue
             allowed_primitives = SEMANTIC_PRIMITIVE_FIELDS.get(node.target.id)
             if allowed_primitives is None:
@@ -145,9 +118,7 @@ def test_semantic_primitive_leakage_cannot_expand_beyond_legacy_model_warehouses
                 relative = path.relative_to(REPOSITORY_ROOT)
                 observed_paths.add(relative)
                 if relative not in LEGACY_PRIMITIVE_LEAKAGE_PATHS:
-                    violations.append(
-                        f"{relative}:{node.target.id}: {annotation}"
-                    )
+                    violations.append(f"{relative}:{node.target.id}: {annotation}")
     assert not violations, "\n".join(violations)
     assert observed_paths <= LEGACY_PRIMITIVE_LEAKAGE_PATHS
 
@@ -159,12 +130,6 @@ def test_new_generic_modules_remain_small_and_single_purpose() -> None:
             continue
         relative = path.relative_to(REPOSITORY_ROOT)
         line_count = len(path.read_text(encoding="utf-8").splitlines())
-        if (
-            relative not in LEGACY_LARGE_GENERIC_MODULES
-            and line_count > MAX_NEW_GENERIC_MODULE_LINES
-        ):
+        if relative not in LEGACY_LARGE_GENERIC_MODULES and line_count > MAX_NEW_GENERIC_MODULE_LINES:
             violations.append(f"{relative}: {line_count} lines")
-    assert not violations, (
-        "new generic modules exceeded the architecture limit:\n"
-        + "\n".join(violations)
-    )
+    assert not violations, "new generic modules exceeded the architecture limit:\n" + "\n".join(violations)

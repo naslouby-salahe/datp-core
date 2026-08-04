@@ -50,22 +50,12 @@ def _family_for(device: str) -> str:
         "danmini_doorbell": NBaIoTDeviceFamily.DOORBELL.value,
         "ecobee_thermostat": NBaIoTDeviceFamily.THERMOSTAT.value,
         "ennio_doorbell": NBaIoTDeviceFamily.DOORBELL.value,
-        "philips_b120n10_baby_monitor": (
-            NBaIoTDeviceFamily.BABY_MONITOR.value
-        ),
-        "provision_pt_737e_security_camera": (
-            NBaIoTDeviceFamily.SECURITY_CAMERA.value
-        ),
-        "provision_pt_838_security_camera": (
-            NBaIoTDeviceFamily.SECURITY_CAMERA.value
-        ),
+        "philips_b120n10_baby_monitor": (NBaIoTDeviceFamily.BABY_MONITOR.value),
+        "provision_pt_737e_security_camera": (NBaIoTDeviceFamily.SECURITY_CAMERA.value),
+        "provision_pt_838_security_camera": (NBaIoTDeviceFamily.SECURITY_CAMERA.value),
         "samsung_snh_1011_n_webcam": NBaIoTDeviceFamily.WEBCAM.value,
-        "simplehome_xcs7_1002_wht_security_camera": (
-            NBaIoTDeviceFamily.SECURITY_CAMERA.value
-        ),
-        "simplehome_xcs7_1003_wht_security_camera": (
-            NBaIoTDeviceFamily.SECURITY_CAMERA.value
-        ),
+        "simplehome_xcs7_1002_wht_security_camera": (NBaIoTDeviceFamily.SECURITY_CAMERA.value),
+        "simplehome_xcs7_1003_wht_security_camera": (NBaIoTDeviceFamily.SECURITY_CAMERA.value),
     }
     return mapping[device]
 
@@ -83,19 +73,13 @@ def _nbaiot_data_root(tmp_path: Path) -> Path:
                     "physical_client_id": device,
                     "physical_device_family": _family_for(device),
                     "raw_label": label,
-                    "attack_family": (
-                        None if label == "benign" else "mirai"
-                    ),
-                    "attack_subtype": (
-                        None if label == "benign" else "udp"
-                    ),
+                    "attack_family": (None if label == "benign" else "mirai"),
+                    "attack_subtype": (None if label == "benign" else "udp"),
                     "source_path": f"{device}/{label}_{local}.csv",
                     "source_row_index": local,
                     "stable_row_id": f"{device}:{label}:{local}",
                 }
-                for feature_index, feature in enumerate(
-                    NBAIOT_FEATURE_COLUMNS
-                ):
+                for feature_index, feature in enumerate(NBAIOT_FEATURE_COLUMNS):
                     row[feature] = float(local + feature_index)
                 rows.append(row)
     pl.DataFrame(rows).write_parquet(data / "part-00000.parquet")
@@ -114,9 +98,7 @@ def test_federated_preprocess_publishes_client_local_assets(
         population=PopulationId.NBAIOT_NATURAL_DEVICES,
         partition_seed=Seed(0),
         split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
-        preprocessing_identity=(
-            PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD
-        ),
+        preprocessing_identity=(PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD),
         data_root=data_root,
         dirichlet_condition=None,
         capture_timestamp_column=None,
@@ -147,12 +129,8 @@ def test_federated_preprocess_rejects_centralized_identity(
             PreprocessFederatedRequest(
                 population=PopulationId.NBAIOT_NATURAL_DEVICES,
                 partition_seed=Seed(0),
-                split_protocol=(
-                    SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS
-                ),
-                preprocessing_identity=(
-                    PreprocessingProtocolId.CENTRALIZED_POOLED_MIN_MAX
-                ),
+                split_protocol=(SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS),
+                preprocessing_identity=(PreprocessingProtocolId.CENTRALIZED_POOLED_MIN_MAX),
                 data_root=tmp_path,
                 dirichlet_condition=None,
                 capture_timestamp_column=None,
@@ -197,12 +175,8 @@ def test_artifact_preprocess_selects_matched_static_reference(
             partition_seed=Seed(0),
             output_directory=tmp_path / "split",
             overwrite=False,
-            matched_static_reference_manifest=(
-                construction.matched_static_reference_manifest
-            ),
-            matched_static_reference_membership=(
-                construction.matched_static_reference_membership
-            ),
+            matched_static_reference_manifest=(construction.matched_static_reference_manifest),
+            matched_static_reference_membership=(construction.matched_static_reference_membership),
         )
     )
 
@@ -211,17 +185,12 @@ def test_artifact_preprocess_selects_matched_static_reference(
             execution_identity=identity,
             population_directory=tmp_path / "population",
             split_directory=tmp_path / "split",
-            preprocessing_identity=(
-                PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD
-            ),
+            preprocessing_identity=(PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD),
             data_root=data_root,
         )
     )
 
-    assert (
-        result.split_protocol
-        is SplitProtocolId.RANDOM_FRACTIONAL_STATIC_REFERENCE
-    )
+    assert result.split_protocol is SplitProtocolId.RANDOM_FRACTIONAL_STATIC_REFERENCE
     assert result.execution_identity == identity
     assert result.client_publications
 
@@ -240,10 +209,7 @@ def test_centralized_preprocess_publishes_pooled_assets(
             capture_timestamp_column=None,
         )
     )
-    assert (
-        result.stage
-        is StageOperationId.PREPROCESS_CENTRALIZED_REFERENCE
-    )
+    assert result.stage is StageOperationId.PREPROCESS_CENTRALIZED_REFERENCE
     assert result.publication_status is PublicationStatus.PUBLISHED
     assert result.result.paths.train.is_file()
     assert (result.result.paths.train.parent / "COMPLETE").is_file()

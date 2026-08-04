@@ -5,6 +5,7 @@ from enum import StrEnum
 from hashlib import sha256
 from pathlib import Path
 
+import numpy as np
 import polars as pl
 import torch
 
@@ -94,10 +95,7 @@ class CentralizedScoringResult:
                 "centralized score artifacts must share one training coordinate",
                 subject=ContractSubject.COORDINATE,
             )
-        if (
-            self.calibration_scores.checkpoint_checksum
-            != self.model_tensor_checksum
-        ):
+        if self.calibration_scores.checkpoint_checksum != self.model_tensor_checksum:
             raise ScientificContractError(
                 "centralized calibration scores must reference the selected model checksum",
                 subject=ContractSubject.CHECKPOINT_CANDIDATES,
@@ -164,10 +162,7 @@ def score_centralized_reference(
         request=request,
         model=model,
         device=device,
-        destination=(
-            request.output_directory
-            / CentralizedScoreAssetName.CALIBRATION_SCORES
-        ),
+        destination=(request.output_directory / CentralizedScoreAssetName.CALIBRATION_SCORES),
     )
     evaluation = _score_partition(
         frame=request.evaluation_features,
@@ -175,10 +170,7 @@ def score_centralized_reference(
         request=request,
         model=model,
         device=device,
-        destination=(
-            request.output_directory
-            / CentralizedScoreAssetName.EVALUATION_SCORES
-        ),
+        destination=(request.output_directory / CentralizedScoreAssetName.EVALUATION_SCORES),
     )
     return CentralizedScoringResult(
         calibration_scores=calibration,
@@ -207,15 +199,9 @@ def centralized_scoring_is_reusable(
     directory: Path,
 ) -> bool:
     complete = directory / CentralizedScoreAssetName.COMPLETE
-    calibration_path = (
-        directory / CentralizedScoreAssetName.CALIBRATION_SCORES
-    )
+    calibration_path = directory / CentralizedScoreAssetName.CALIBRATION_SCORES
     evaluation_path = directory / CentralizedScoreAssetName.EVALUATION_SCORES
-    if not (
-        complete.is_file()
-        and calibration_path.is_file()
-        and evaluation_path.is_file()
-    ):
+    if not (complete.is_file() and calibration_path.is_file() and evaluation_path.is_file()):
         return False
     try:
         _validate_scoring_request(request)
@@ -251,9 +237,7 @@ def load_reused_centralized_scoring(
     request: CentralizedScoringRequest,
     directory: Path,
 ) -> CentralizedScoringResult:
-    calibration_path = (
-        directory / CentralizedScoreAssetName.CALIBRATION_SCORES
-    )
+    calibration_path = directory / CentralizedScoreAssetName.CALIBRATION_SCORES
     evaluation_path = directory / CentralizedScoreAssetName.EVALUATION_SCORES
     calibration = _validated_reused_score_frame(
         request.calibration_features,
@@ -277,9 +261,7 @@ def rebase_centralized_scoring(
     scoring: CentralizedScoringResult,
     directory: Path,
 ) -> CentralizedScoringResult:
-    calibration_path = (
-        directory / CentralizedScoreAssetName.CALIBRATION_SCORES
-    )
+    calibration_path = directory / CentralizedScoreAssetName.CALIBRATION_SCORES
     evaluation_path = directory / CentralizedScoreAssetName.EVALUATION_SCORES
     if not calibration_path.is_file() or not evaluation_path.is_file():
         raise ArtifactIntegrityError(
@@ -310,16 +292,23 @@ def load_score_frame(artifact: PooledScoreArtifact) -> pl.DataFrame:
     )
 
 
+def reject_non_finite_scores(
+    scores: np.ndarray,
+    *,
+    message: str,
+    subject: ContractSubject,
+) -> None:
+    if not np.isfinite(scores).all():
+        raise ScientificContractError(message, subject=subject)
+
+
 def _validate_scoring_request(request: CentralizedScoringRequest) -> None:
     if request.checkpoint.coordinate != request.coordinate:
         raise ScientificContractError(
             "checkpoint coordinate mismatch during scoring",
             subject=ContractSubject.COORDINATE,
         )
-    if (
-        request.checkpoint.preprocessing_state_checksum
-        != request.preprocessing_state_checksum
-    ):
+    if request.checkpoint.preprocessing_state_checksum != request.preprocessing_state_checksum:
         raise ScientificContractError(
             "checkpoint preprocessing checksum mismatch during scoring",
             subject=ContractSubject.PREPROCESSING,
@@ -395,9 +384,7 @@ def _score_artifact_pair(
     calibration_row_count: RowCount,
     evaluation_row_count: RowCount,
 ) -> tuple[PooledScoreArtifact, PooledScoreArtifact]:
-    calibration_path = (
-        directory / CentralizedScoreAssetName.CALIBRATION_SCORES
-    )
+    calibration_path = directory / CentralizedScoreAssetName.CALIBRATION_SCORES
     evaluation_path = directory / CentralizedScoreAssetName.EVALUATION_SCORES
     return (
         PooledScoreArtifact(

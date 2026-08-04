@@ -2,6 +2,8 @@
 
 from datp_core.orchestration.commands.thresholding import (
     ConstructFederatedThresholdsRequest as _ConstructFederatedThresholdsRequest,
+)
+from datp_core.orchestration.commands.thresholding import (
     ConstructFederatedThresholdsResult as _ConstructFederatedThresholdsResult,
 )
 from datp_core.pipeline.publication.codec import (

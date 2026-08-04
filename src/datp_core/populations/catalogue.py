@@ -71,11 +71,7 @@ class PopulationBinding:
 class PopulationConstructionResult:
     manifest: PopulationManifest
     membership: pl.DataFrame
-    diagnostics: (
-        DirichletPartitionDiagnosticsDocument
-        | ChronologicalPartitionDiagnosticsDocument
-        | None
-    )
+    diagnostics: DirichletPartitionDiagnosticsDocument | ChronologicalPartitionDiagnosticsDocument | None
 
     @property
     def population(self) -> PopulationId:
@@ -110,11 +106,7 @@ class PreprocessingHandoff:
 
 
 def resolve_population(population_id: PopulationId) -> PopulationBinding:
-    matches = tuple(
-        binding
-        for binding in _POPULATION_BINDINGS
-        if binding.population is population_id
-    )
+    matches = tuple(binding for binding in _POPULATION_BINDINGS if binding.population is population_id)
     if len(matches) != 1:
         raise CapabilityError(
             "unsupported population identity",
@@ -142,9 +134,7 @@ def _require_partition_condition(
             raise ScientificContractError(
                 "population construction does not accept a controlled partition condition",
                 subject=request.population_id,
-                reason=(
-                    "only populations with declared controlled partition capability accept one"
-                ),
+                reason=("only populations with declared controlled partition capability accept one"),
             )
         return
     if condition is None:
@@ -188,9 +178,7 @@ def _construct_nbaiot_dirichlet(
 ) -> PopulationConstructionResult:
     condition = request.dirichlet_condition
     if condition is None:
-        raise AssertionError(
-            "partition condition was validated before binding dispatch"
-        )
+        raise AssertionError("partition condition was validated before binding dispatch")
     manifest, membership, diagnostics = build_nbaiot_dirichlet_clients(
         request.canonical_root,
         partition_seed=request.partition_seed,
@@ -279,9 +267,7 @@ def build_preprocessing_handoff(
     )
     role_column = PopulationFrameColumn.PARTITION_ROLE
     if membership.height == 0:
-        assignments = membership.clear().with_columns(
-            pl.lit(None, dtype=pl.String).alias(role_column)
-        )
+        assignments = membership.clear().with_columns(pl.lit(None, dtype=pl.String).alias(role_column))
         counts = tuple(
             ClientPartitionCounts(
                 client=client,
@@ -335,9 +321,7 @@ def join_handoff_with_canonical_features(
             "preprocessing handoff produced empty split assignments",
             subject=handoff.population_manifest.document.population,
         )
-    feature_scan = pl.scan_parquet(canonical_data_glob(canonical_root)).select(
-        [STABLE_ROW_ID_COLUMN, *feature_names]
-    )
+    feature_scan = pl.scan_parquet(canonical_data_glob(canonical_root)).select([STABLE_ROW_ID_COLUMN, *feature_names])
     joined = (
         assignments.lazy()
         .join(feature_scan, on=STABLE_ROW_ID_COLUMN, how="inner")
@@ -362,9 +346,7 @@ def _deployment_fallback_clients(
     candidate_clients: tuple[ClientIdentity, ...],
     fallback_client_ids: frozenset[str],
 ) -> frozenset[ClientIdentity]:
-    matches = frozenset(
-        client for client in candidate_clients if client.client_id in fallback_client_ids
-    )
+    matches = frozenset(client for client in candidate_clients if client.client_id in fallback_client_ids)
     if frozenset(client.client_id for client in matches) != fallback_client_ids:
         raise ScientificContractError(
             "deployment-fallback client ids must be subset of population candidate clients",
@@ -425,10 +407,7 @@ def _client_partition_counts(
             pl.col(attack_evaluation_count).fill_null(0),
         )
     )
-    accepted = frozenset(
-        str(value)
-        for value in assignments.get_column(client_column).unique().to_list()
-    )
+    accepted = frozenset(str(value) for value in assignments.get_column(client_column).unique().to_list())
     return tuple(
         ClientPartitionCounts(
             client=(client := _client_identity(candidate_clients, str(row[0]))),
@@ -446,9 +425,7 @@ def _client_identity(
     clients: tuple[ClientIdentity, ...],
     client_id: str,
 ) -> ClientIdentity:
-    matches = tuple(
-        client for client in clients if client.client_id == client_id
-    )
+    matches = tuple(client for client in clients if client.client_id == client_id)
     if len(matches) != 1:
         raise ScientificContractError(
             "population manifest client identity lookup failed",

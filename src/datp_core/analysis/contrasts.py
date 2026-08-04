@@ -34,9 +34,7 @@ class PairedDifferenceCounts(StrictModel):
 
     @property
     def total(self) -> PairedObservationCount:
-        return PairedObservationCount(
-            self.positive.value + self.zero.value + self.negative.value
-        )
+        return PairedObservationCount(self.positive.value + self.zero.value + self.negative.value)
 
     @property
     def positive_proportion(self) -> Ratio | None:
@@ -113,15 +111,9 @@ class SupplementaryPairedAnalysisPlan(StrictModel):
             EvidenceRole.APPLICABILITY_BOUNDARY,
             EvidenceRole.TEMPORAL_BOUNDARY,
         }:
-            raise ValueError(
-                "supplementary paired analysis requires non-confirmatory evidence"
-            )
+            raise ValueError("supplementary paired analysis requires non-confirmatory evidence")
         if self.left_method is self.right_method:
-            raise ValueError(
-                "supplementary paired analysis requires two distinct threshold methods"
-            )
+            raise ValueError("supplementary paired analysis requires two distinct threshold methods")
         if self.seed_cohort != self.inference_protocol.seed_cohort:
-            raise ValueError(
-                "supplementary plan and inference protocol must share one seed cohort"
-            )
+            raise ValueError("supplementary plan and inference protocol must share one seed cohort")
         return self

@@ -12,11 +12,7 @@ def decide_model_absorption(
     reference_effect: MetricValue | None,
     personalized_effect: MetricValue | None,
 ) -> ScientificDecisionResult:
-    if (
-        reference_effect is None
-        or personalized_effect is None
-        or reference_effect.value <= 0.0
-    ):
+    if reference_effect is None or personalized_effect is None or reference_effect.value <= 0.0:
         return ScientificDecisionResult(
             evidence_role=EvidenceRole.SUPPORTIVE,
             decision=ScientificDecision.BLOCKED,

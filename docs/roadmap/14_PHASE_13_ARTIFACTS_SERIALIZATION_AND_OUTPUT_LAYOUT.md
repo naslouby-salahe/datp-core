@@ -35,7 +35,6 @@ Phase 4 established the artifact package as generic infrastructure: atomic publi
 - `datp_core/artifacts/reload_validation.py`
 - `datp_core/artifacts/store.py`
 - `datp_core/artifacts/completion.py`
-- `datp_core/orchestration/stages/finalize.py`
 
 ## Output root contract
 

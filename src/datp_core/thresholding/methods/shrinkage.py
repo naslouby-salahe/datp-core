@@ -57,9 +57,7 @@ class ShrinkageThresholdResult:
     coordinate: FederatedTrainingCoordinate
     weights: tuple[ShrinkageWeight, ...]
     assignments: tuple[ShrinkageAssignment, ...]
-    method: ClassVar[FederatedThresholdMethod] = (
-        FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE
-    )
+    method: ClassVar[FederatedThresholdMethod] = FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE
 
     def __post_init__(self) -> None:
         require_contract(
@@ -84,23 +82,16 @@ class ShrinkageThresholdResult:
                 "every shrinkage assignment must use a declared lambda weight",
                 ContractSubject.THRESHOLD,
             )
-        actual_keys = tuple(
-            (assignment.client, assignment.lambda_weight)
-            for assignment in self.assignments
-        )
+        actual_keys = tuple((assignment.client, assignment.lambda_weight) for assignment in self.assignments)
         require_contract(
             len(set(actual_keys)) == len(actual_keys),
             "exactly one shrinkage assignment is required per (client, lambda_weight) pair",
             ContractSubject.THRESHOLD,
         )
-        clients = frozenset(
-            assignment.client for assignment in self.assignments
-        )
+        clients = frozenset(assignment.client for assignment in self.assignments)
         for weight in self.weights:
             observed = frozenset(
-                assignment.client
-                for assignment in self.assignments
-                if assignment.lambda_weight == weight
+                assignment.client for assignment in self.assignments if assignment.lambda_weight == weight
             )
             require_contract(
                 observed == clients,
@@ -143,8 +134,7 @@ def construct_fixed_shrinkage(
             local_threshold=local.value,
             shared_threshold=shared_value,
             blended_threshold=ThresholdValue(
-                weight.value * local.value.value
-                + (1 - weight.value) * shared_value.value
+                weight.value * local.value.value + (1 - weight.value) * shared_value.value
             ),
         )
         for weight in protocol.weights
@@ -163,8 +153,6 @@ def construct_size_aware_shrinkage(
     return ThresholdUnavailableResult(
         method=FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE,
         coordinate=coordinate,
-        reason=(
-            ThresholdInfeasibilityReason.SIZE_AWARE_SHRINKAGE_FUNCTION_UNRESOLVED
-        ),
+        reason=(ThresholdInfeasibilityReason.SIZE_AWARE_SHRINKAGE_FUNCTION_UNRESOLVED),
         detail=_SIZE_AWARE_SHRINKAGE_BLOCKER_DETAIL,
     )

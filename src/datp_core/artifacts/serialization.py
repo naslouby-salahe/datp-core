@@ -6,17 +6,20 @@ from dataclasses import dataclass, fields, is_dataclass
 from enum import Enum, StrEnum
 from math import isfinite
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 import skops.io as skops_io
-from pydantic import BaseModel
+from pydantic import BaseModel, TypeAdapter
 from sklearn.base import BaseEstimator, clone
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 from datp_core.domain.enums import TrustedEstimatorClassName
 from datp_core.domain.errors import SerializationSafetyError
 from datp_core.domain.values import AbsoluteTolerance, Checksum, checksum_file, checksum_text
+
+if TYPE_CHECKING:
+    from _typeshed import DataclassInstance
 
 TrustedScaler = StandardScaler | MinMaxScaler
 
@@ -71,6 +74,15 @@ _TRUSTED_ESTIMATORS: tuple[TrustedEstimatorDefinition, ...] = (
 )
 
 
+def _canonical_dataclass_value(value: "DataclassInstance") -> CanonicalValue:
+    if getattr(type(value), "__get_pydantic_core_schema__", None) is not None:
+        return canonical_value(TypeAdapter(type(value)).dump_python(value))
+    own_fields = fields(value)
+    if len(own_fields) == 1 and own_fields[0].name == "value":
+        return canonical_value(getattr(value, own_fields[0].name))
+    return {field.name: canonical_value(getattr(value, field.name)) for field in own_fields}
+
+
 def canonical_value(value: object) -> CanonicalValue:
     """Convert a supported value into a deterministic, finite JSON document value."""
     if value is None or isinstance(value, (bool, int, str)):
@@ -86,10 +98,7 @@ def canonical_value(value: object) -> CanonicalValue:
     if isinstance(value, BaseModel):
         return {name: canonical_value(getattr(value, name)) for name in type(value).model_fields}
     if is_dataclass(value) and not isinstance(value, type):
-        own_fields = fields(value)
-        if len(own_fields) == 1 and own_fields[0].name == "value":
-            return canonical_value(getattr(value, own_fields[0].name))
-        return {field.name: canonical_value(getattr(value, field.name)) for field in own_fields}
+        return _canonical_dataclass_value(value)
     if isinstance(value, Mapping):
         if not all(isinstance(key, str) for key in value):
             raise TypeError("canonical JSON object keys must be strings")

@@ -136,8 +136,7 @@ def centralized_training_is_reusable(
         return False
     try:
         expected = checksum_text(
-            f"{checksum_file(model).value}|{request.checkpoint_protocol.maximum_round.value}|"
-            f"{request.batch_size.value}"
+            f"{checksum_file(model).value}|{request.checkpoint_protocol.maximum_round.value}|{request.batch_size.value}"
         )
         return complete.read_text(encoding="utf-8").strip() == expected.value
     except (OSError, ValueError):
@@ -208,9 +207,7 @@ def rebase_centralized_training(
         replace(
             candidate,
             tensor_path=directory / candidate_tensor_name(candidate.round_number),
-            tensor_checksum=checksum_file(
-                directory / candidate_tensor_name(candidate.round_number)
-            ),
+            tensor_checksum=checksum_file(directory / candidate_tensor_name(candidate.round_number)),
         )
         for candidate in result.candidates
     )
@@ -219,8 +216,7 @@ def rebase_centralized_training(
 
 def centralized_training_complete_digest(training: CentralizedTrainingResult) -> Checksum:
     return checksum_text(
-        f"{training.model_tensor_checksum.value}|{training.final_epoch.value}|"
-        f"{training.batch_size_used.value}"
+        f"{training.model_tensor_checksum.value}|{training.final_epoch.value}|{training.batch_size_used.value}"
     )
 
 
@@ -236,9 +232,7 @@ def _load_reused_candidate(
             "reused checkpoint candidate missing",
             subject=ContractSubject.ARTIFACT_PATH,
         )
-    matching_losses = tuple(
-        item.mean_training_loss for item in epoch_losses if item.epoch == candidate_round
-    )
+    matching_losses = tuple(item.mean_training_loss for item in epoch_losses if item.epoch == candidate_round)
     if len(matching_losses) != 1:
         raise ArtifactIntegrityError(
             "reused checkpoint candidate requires exactly one matching training loss",

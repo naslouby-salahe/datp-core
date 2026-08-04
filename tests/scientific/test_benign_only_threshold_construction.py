@@ -182,12 +182,8 @@ def test_eligibility_covers_every_candidate_client_never_silently_drops_one(
         for record in records
     )
     assert len(decisions) == 2
-    assert frozenset(item.client.client_id for item in decisions) == frozenset(
-        {"client_a", "client_b"}
-    )
-    assert tuple(client.client_id for client in eligible_clients(decisions)) == (
-        "client_a",
-    )
+    assert frozenset(item.client.client_id for item in decisions) == frozenset({"client_a", "client_b"})
+    assert tuple(client.client_id for client in eligible_clients(decisions)) == ("client_a",)
 
 
 def test_family_threshold_without_taxonomy_reports_typed_unavailability_not_a_crash() -> None:
@@ -229,18 +225,13 @@ def test_grouped_threshold_fingerprint_matches_locked_formula() -> None:
     clients = tuple(
         client_scores(
             f"client_{index}",
-            tuple(
-                float(value)
-                for value in generator.normal(loc=index * 5, size=30)
-            ),
+            tuple(float(value) for value in generator.normal(loc=index * 5, size=30)),
         )
         for index in range(6)
     )
     result = construct_grouped_threshold(clients, CLUSTER_THRESHOLD_PROTOCOL)
     for fingerprint in result.fingerprints:
-        scores = next(
-            item.as_array for item in clients if item.client == fingerprint.client
-        )
+        scores = next(item.as_array for item in clients if item.client == fingerprint.client)
         assert fingerprint.raw == (
             float(np.mean(scores)),
             float(np.std(scores, ddof=0)),
@@ -254,21 +245,15 @@ def test_cluster_threshold_protocol_locks_reject_non_canonical_hyperparameters()
         ClusterThresholdProtocol(
             method=CLUSTER_THRESHOLD_PROTOCOL.method,
             quantile=CLUSTER_THRESHOLD_PROTOCOL.quantile,
-            fingerprint_features=(
-                CLUSTER_THRESHOLD_PROTOCOL.fingerprint_features
-            ),
-            feature_standardization=(
-                CLUSTER_THRESHOLD_PROTOCOL.feature_standardization
-            ),
+            fingerprint_features=(CLUSTER_THRESHOLD_PROTOCOL.fingerprint_features),
+            feature_standardization=(CLUSTER_THRESHOLD_PROTOCOL.feature_standardization),
             assignment_algorithm=CLUSTER_THRESHOLD_PROTOCOL.assignment_algorithm,
             initialization=CLUSTER_THRESHOLD_PROTOCOL.initialization,
             initialization_count=CLUSTER_THRESHOLD_PROTOCOL.initialization_count,
             maximum_iterations=CLUSTER_THRESHOLD_PROTOCOL.maximum_iterations,
             random_state=CLUSTER_THRESHOLD_PROTOCOL.random_state,
             group_count=GroupCount(9),
-            threshold_aggregation=(
-                CLUSTER_THRESHOLD_PROTOCOL.threshold_aggregation
-            ),
+            threshold_aggregation=(CLUSTER_THRESHOLD_PROTOCOL.threshold_aggregation),
         )
 
 
@@ -277,28 +262,19 @@ def test_grouped_threshold_assignment_is_identical_across_repeated_runs() -> Non
     clients = tuple(
         client_scores(
             f"client_{index}",
-            tuple(
-                float(value)
-                for value in generator.normal(loc=index * 5, size=30)
-            ),
+            tuple(float(value) for value in generator.normal(loc=index * 5, size=30)),
         )
         for index in range(6)
     )
     first = construct_grouped_threshold(clients, CLUSTER_THRESHOLD_PROTOCOL)
     second = construct_grouped_threshold(clients, CLUSTER_THRESHOLD_PROTOCOL)
-    assert tuple(
-        (item.client.client_id, item.threshold.value)
-        for item in first.assignments
-    ) == tuple(
-        (item.client.client_id, item.threshold.value)
-        for item in second.assignments
+    assert tuple((item.client.client_id, item.threshold.value) for item in first.assignments) == tuple(
+        (item.client.client_id, item.threshold.value) for item in second.assignments
     )
 
 
 def test_size_aware_shrinkage_never_fabricates_a_lambda_function() -> None:
-    result = construct_size_aware_shrinkage(
-        client_scores("client_a", (1.0, 2.0, 3.0)).coordinate
-    )
+    result = construct_size_aware_shrinkage(client_scores("client_a", (1.0, 2.0, 3.0)).coordinate)
     assert isinstance(result, ThresholdUnavailableResult)
     assert "lambda" in result.detail.lower() or "function" in result.detail.lower()
 
@@ -314,9 +290,7 @@ def test_conformal_threshold_never_silently_falls_back_for_insufficient_support(
         QUANTILE,
     )
     assert result.unavailable_clients == (insufficient.client,)
-    assert insufficient.client not in frozenset(
-        assignment.client for assignment in result.assignments
-    )
+    assert insufficient.client not in frozenset(assignment.client for assignment in result.assignments)
 
 
 def test_pooled_variance_decomposition_requires_between_client_term() -> None:
@@ -338,10 +312,7 @@ def test_fixed_coefficients_remain_a_separate_supplementary_curve() -> None:
         ),
         client_scores(
             "client_b",
-            tuple(
-                float(value)
-                for value in generator.normal(loc=50.0, size=100)
-            ),
+            tuple(float(value) for value in generator.normal(loc=50.0, size=100)),
         ),
     )
     result = construct_federated_benign_statistics(
@@ -360,26 +331,21 @@ def test_benign_statistics_comparator_only_accepts_benign_calibration_scores() -
         "protocol",
         "quantile",
     )
-    assert "attack" not in FEDERATED_STATISTICS_MODULE.read_text(
-        encoding="utf-8"
-    ).lower()
+    assert "attack" not in FEDERATED_STATISTICS_MODULE.read_text(encoding="utf-8").lower()
 
 
 def test_centralized_threshold_method_cannot_enter_federated_dispatch() -> None:
     with pytest.raises(LeakageError):
-        reject_centralized_threshold_method(
-            CentralizedThresholdMethod.POOLED_BENIGN_QUANTILE
-        )
+        reject_centralized_threshold_method(CentralizedThresholdMethod.POOLED_BENIGN_QUANTILE)
 
 
 def test_thresholding_package_never_imports_training_or_scoring_generation_code() -> None:
     for path in sorted(THRESHOLDING_ROOT.rglob("*.py")):
         modules = _imported_modules(path)
         for forbidden in FORBIDDEN_RETRAINING_IMPORTS:
-            assert not any(
-                module == forbidden or module.startswith(f"{forbidden}.")
-                for module in modules
-            ), f"{path} imports {forbidden}"
+            assert not any(module == forbidden or module.startswith(f"{forbidden}.") for module in modules), (
+                f"{path} imports {forbidden}"
+            )
 
 
 def test_score_coordinate_mismatch_across_calibration_records_is_rejected(
@@ -438,13 +404,9 @@ def test_dispatch_rejects_method_unsupported_by_population_capabilities() -> Non
         physical_client_validity=capabilities.physical_client_validity,
         family_taxonomy=capabilities.family_taxonomy,
         chronology=capabilities.chronology,
-        client_level_attack_assignment=(
-            capabilities.client_level_attack_assignment
-        ),
+        client_level_attack_assignment=(capabilities.client_level_attack_assignment),
         fpr_evaluation=capabilities.fpr_evaluation,
-        attack_sensitive_evaluation=(
-            capabilities.attack_sensitive_evaluation
-        ),
+        attack_sensitive_evaluation=(capabilities.attack_sensitive_evaluation),
         temporal_support=capabilities.temporal_support,
         valid_threshold_methods=(FederatedThresholdMethod.SHARED_THRESHOLD,),
         evidentiary_role=capabilities.evidentiary_role,

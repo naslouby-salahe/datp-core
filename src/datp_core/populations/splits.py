@@ -117,18 +117,10 @@ def _non_temporal_assignments(
         PartitionRole.EVALUATION,
     )
     pieces: list[pl.DataFrame] = []
-    for client_id in (
-        membership.get_column(CLIENT_ID_COLUMN).unique().sort().to_list()
-    ):
-        client_rows = membership.filter(
-            pl.col(CLIENT_ID_COLUMN) == client_id
-        )
-        benign = client_rows.filter(
-            pl.col(OUTCOME_LABEL_COLUMN) == _BENIGN
-        )
-        attack = client_rows.filter(
-            pl.col(OUTCOME_LABEL_COLUMN) == _ATTACK
-        )
+    for client_id in membership.get_column(CLIENT_ID_COLUMN).unique().sort().to_list():
+        client_rows = membership.filter(pl.col(CLIENT_ID_COLUMN) == client_id)
+        benign = client_rows.filter(pl.col(OUTCOME_LABEL_COLUMN) == _BENIGN)
+        attack = client_rows.filter(pl.col(OUTCOME_LABEL_COLUMN) == _ATTACK)
         pieces.append(
             _fractional_role_frame(
                 benign,
@@ -139,17 +131,9 @@ def _non_temporal_assignments(
             )
         )
         if attack.height > 0:
-            pieces.append(
-                attack.with_columns(
-                    pl.lit(PartitionRole.EVALUATION.value).alias(
-                        PARTITION_ROLE_COLUMN
-                    )
-                )
-            )
+            pieces.append(attack.with_columns(pl.lit(PartitionRole.EVALUATION.value).alias(PARTITION_ROLE_COLUMN)))
     if not pieces:
-        return membership.clear().with_columns(
-            pl.lit(None, dtype=pl.String).alias(PARTITION_ROLE_COLUMN)
-        )
+        return membership.clear().with_columns(pl.lit(None, dtype=pl.String).alias(PARTITION_ROLE_COLUMN))
     return (
         pl.concat(pieces, how="vertical_relaxed")
         .select(assignment_column_names())
@@ -186,10 +170,7 @@ def _temporal_assignments(
         PartitionRole.FUTURE_RECALIBRATION,
         PartitionRole.EVALUATION,
     )
-    if (
-        membership.filter(pl.col(OUTCOME_LABEL_COLUMN) == _ATTACK).height
-        > 0
-    ):
+    if membership.filter(pl.col(OUTCOME_LABEL_COLUMN) == _ATTACK).height > 0:
         raise LeakageError(
             "temporal populations cannot carry client-assigned attack rows",
             subject=SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE,
@@ -205,20 +186,11 @@ def _temporal_assignments(
             ratios,
             roles,
         )
-        for client_id in (
-            membership.get_column(CLIENT_ID_COLUMN)
-            .unique()
-            .sort()
-            .to_list()
-        )
+        for client_id in (membership.get_column(CLIENT_ID_COLUMN).unique().sort().to_list())
     ]
     if not pieces:
-        return membership.clear().with_columns(
-            pl.lit(None, dtype=pl.String).alias(PARTITION_ROLE_COLUMN)
-        )
-    output_columns = assignment_column_names() + (
-        (capture_timestamp_column,) if capture_timestamp_column else ()
-    )
+        return membership.clear().with_columns(pl.lit(None, dtype=pl.String).alias(PARTITION_ROLE_COLUMN))
+    output_columns = assignment_column_names() + ((capture_timestamp_column,) if capture_timestamp_column else ())
     return (
         pl.concat(pieces, how="vertical_relaxed")
         .select(output_columns)
@@ -237,10 +209,7 @@ def _static_reference_assignments(
     partition_seed: Seed,
 ) -> pl.DataFrame:
     """Randomize the same 55/15/10/20 inventory without temporal ordering."""
-    if (
-        membership.filter(pl.col(OUTCOME_LABEL_COLUMN) == _ATTACK).height
-        > 0
-    ):
+    if membership.filter(pl.col(OUTCOME_LABEL_COLUMN) == _ATTACK).height > 0:
         raise LeakageError(
             "the matched static reference is benign-only",
             subject=SplitProtocolId.RANDOM_FRACTIONAL_STATIC_REFERENCE,
@@ -266,17 +235,10 @@ def _static_reference_assignments(
             partition_seed,
             str(client_id),
         )
-        for client_id in (
-            membership.get_column(CLIENT_ID_COLUMN)
-            .unique()
-            .sort()
-            .to_list()
-        )
+        for client_id in (membership.get_column(CLIENT_ID_COLUMN).unique().sort().to_list())
     ]
     if not pieces:
-        return membership.clear().with_columns(
-            pl.lit(None, dtype=pl.String).alias(PARTITION_ROLE_COLUMN)
-        )
+        return membership.clear().with_columns(pl.lit(None, dtype=pl.String).alias(PARTITION_ROLE_COLUMN))
     return (
         pl.concat(pieces, how="vertical_relaxed")
         .select(assignment_column_names())
@@ -295,9 +257,7 @@ def _require_sorted_client_rows(
     client_id: str,
     capture_timestamp_column: str,
 ) -> pl.DataFrame:
-    client_rows = membership.filter(
-        pl.col(CLIENT_ID_COLUMN) == client_id
-    ).sort(
+    client_rows = membership.filter(pl.col(CLIENT_ID_COLUMN) == client_id).sort(
         [
             capture_timestamp_column,
             SOURCE_ROW_INDEX_COLUMN,
@@ -321,9 +281,7 @@ def _fractional_role_frame(
     client_id: str,
 ) -> pl.DataFrame:
     if frame.height == 0:
-        return frame.with_columns(
-            pl.lit(None, dtype=pl.String).alias(PARTITION_ROLE_COLUMN)
-        )
+        return frame.with_columns(pl.lit(None, dtype=pl.String).alias(PARTITION_ROLE_COLUMN))
     ordered = frame.sort(STABLE_ROW_ID_COLUMN)
     permutation = _client_permutation(
         RowCount(ordered.height),
@@ -354,9 +312,7 @@ def _sequential_role_frame(
     role_values: list[str] = []
     for role, count in zip(roles, counts, strict=True):
         role_values.extend([role.value] * count)
-    return ordered.with_columns(
-        pl.Series(PARTITION_ROLE_COLUMN, role_values)
-    )
+    return ordered.with_columns(pl.Series(PARTITION_ROLE_COLUMN, role_values))
 
 
 def _client_permutation(
@@ -381,14 +337,9 @@ def _assert_split_invariants(
 ) -> None:
     _require_conserved_identities(assignments, membership)
     train_or_cal = assignments.filter(
-        pl.col(PARTITION_ROLE_COLUMN).is_in(
-            [PartitionRole.TRAIN, PartitionRole.CALIBRATION]
-        )
+        pl.col(PARTITION_ROLE_COLUMN).is_in([PartitionRole.TRAIN, PartitionRole.CALIBRATION])
     )
-    if (
-        train_or_cal.filter(pl.col(OUTCOME_LABEL_COLUMN) == _ATTACK).height
-        > 0
-    ):
+    if train_or_cal.filter(pl.col(OUTCOME_LABEL_COLUMN) == _ATTACK).height > 0:
         raise LeakageError(
             "attack rows entered training or calibration",
             subject=StageOperationId.SPLIT,
@@ -406,10 +357,7 @@ def _require_conserved_identities(
             subject=StageOperationId.SPLIT,
             reason="every membership row requires exactly one partition role",
         )
-    if (
-        assignments.get_column(STABLE_ROW_ID_COLUMN).n_unique()
-        != assignments.height
-    ):
+    if assignments.get_column(STABLE_ROW_ID_COLUMN).n_unique() != assignments.height:
         raise DataIntegrityError(
             "split assignments contain duplicated stable row identities",
             subject=StageOperationId.SPLIT,
@@ -430,15 +378,9 @@ def _split_manifest(
     request: SplitConstructionRequest,
 ) -> SplitManifestDocument:
     def count(role: PartitionRole) -> int:
-        return int(
-            assignments.filter(
-                pl.col(PARTITION_ROLE_COLUMN) == role
-            ).height
-        )
+        return int(assignments.filter(pl.col(PARTITION_ROLE_COLUMN) == role).height)
 
-    ordered = assignments.sort(
-        [CLIENT_ID_COLUMN, STABLE_ROW_ID_COLUMN]
-    )
+    ordered = assignments.sort([CLIENT_ID_COLUMN, STABLE_ROW_ID_COLUMN])
     payload = "\n".join(
         (
             request.population.value,
@@ -458,12 +400,8 @@ def _split_manifest(
         train_row_count=RowCount(count(PartitionRole.TRAIN)),
         calibration_row_count=RowCount(count(PartitionRole.CALIBRATION)),
         evaluation_row_count=RowCount(count(PartitionRole.EVALUATION)),
-        future_recalibration_row_count=RowCount(
-            count(PartitionRole.FUTURE_RECALIBRATION)
-        ),
-        static_reference_reserve_row_count=RowCount(
-            count(PartitionRole.STATIC_REFERENCE_RESERVE)
-        ),
+        future_recalibration_row_count=RowCount(count(PartitionRole.FUTURE_RECALIBRATION)),
+        static_reference_reserve_row_count=RowCount(count(PartitionRole.STATIC_REFERENCE_RESERVE)),
         assignment_checksum=checksum_text(payload),
         population_manifest_checksum=request.population_manifest_checksum,
     )
@@ -471,9 +409,7 @@ def _split_manifest(
 
 def _require_membership_schema(membership: pl.DataFrame) -> None:
     names = membership_column_names()
-    missing = [
-        column for column in names if column not in membership.columns
-    ]
+    missing = [column for column in names if column not in membership.columns]
     if missing:
         raise DataIntegrityError(
             "membership frame is missing required columns",

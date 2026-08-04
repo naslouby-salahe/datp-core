@@ -2,6 +2,8 @@
 
 from datp_core.orchestration.commands.populations import (
     ConstructPopulationRequest as _ConstructPopulationRequest,
+)
+from datp_core.orchestration.commands.populations import (
     ConstructPopulationResult as _ConstructPopulationResult,
 )
 from datp_core.pipeline.publication.codec import (

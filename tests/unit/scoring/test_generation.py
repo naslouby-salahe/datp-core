@@ -138,10 +138,10 @@ def test_score_reload_equality_detects_a_corrupted_file(tmp_path: Path) -> None:
         }
     )
     replacement.write_parquet(victim.path)
-    from datp_core.scoring.generation import _assert_reload_equality
+    from datp_core.pipeline.scoring.frame_contract import validate_persisted_score_frame
 
     with pytest.raises(ArtifactIntegrityError, match="checksum changed"):
-        _assert_reload_equality(victim)
+        validate_persisted_score_frame(victim.path, victim.checksum, victim.row_count)
 
 
 def test_scoring_rejects_attack_labelled_calibration_rows(tmp_path: Path) -> None:

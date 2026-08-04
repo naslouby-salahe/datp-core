@@ -61,9 +61,7 @@ def test_pooled_benign_quantile_matches_declared_linear_quantile(tmp_path: Path)
     assert result.quantile == CENTRALIZED_POOLED_QUANTILE_PROTOCOL.quantile
     assert result.calibration_score_count == 48
     scores = np.asarray(
-        load_score_frame(scoring.calibration_scores)
-        .get_column(ScoreFrameColumn.RECONSTRUCTION_ERROR.value)
-        .to_list(),
+        load_score_frame(scoring.calibration_scores).get_column(ScoreFrameColumn.RECONSTRUCTION_ERROR.value).to_list(),
         dtype=float,
     )
     expected = float(

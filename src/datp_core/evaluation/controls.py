@@ -125,18 +125,12 @@ def build_federated_evaluation_inputs(
             coordinate=score_manifest.coordinate,
             threshold_method=threshold_method,
             model_checksum=score_manifest.checkpoint_checksum,
-            preprocessing_checksum=(
-                score_manifest.preprocessing_state_set_checksum
-            ),
+            preprocessing_checksum=(score_manifest.preprocessing_state_set_checksum),
             selected_checkpoint_checksum=score_manifest.checkpoint_checksum,
-            calibration_score_checksum=(
-                invariant.calibration_score_set_checksum
-            ),
+            calibration_score_checksum=(invariant.calibration_score_set_checksum),
             evaluation_score_checksum=invariant.evaluation_score_set_checksum,
             evaluation_label_checksum=_evaluation_label_checksum(score_manifest),
-            client_population_checksum=_client_population_checksum(
-                score_manifest
-            ),
+            client_population_checksum=_client_population_checksum(score_manifest),
             eligibility_cohort_checksum=canonical_checksum(cohort),
             source_row_checksum=_evaluation_row_checksum(score_manifest),
             score_order_checksum=_score_order_checksum(score_manifest),
@@ -260,14 +254,7 @@ def validate_fixed_score_controls(
 def _client_population_checksum(
     manifest: ScoreArtifactManifest,
 ) -> Checksum:
-    return canonical_checksum(
-        tuple(
-            sorted(
-                record.scored_client
-                for record in manifest.evaluation_records
-            )
-        )
-    )
+    return canonical_checksum(tuple(sorted(record.scored_client for record in manifest.evaluation_records)))
 
 
 def _evaluation_label_checksum(
@@ -338,24 +325,16 @@ def _client_aurocs(
     manifest: ScoreArtifactManifest,
     cohort: EvaluationCohortManifest,
 ) -> tuple[ClientAurocEvidence, ...]:
-    eligibility = tuple(
-        sorted(cohort.records, key=lambda record: record.client)
-    )
+    eligibility = tuple(sorted(cohort.records, key=lambda record: record.client))
     records = tuple(
         sorted(
             manifest.evaluation_records,
             key=lambda record: record.scored_client,
         )
     )
-    if tuple(record.client for record in eligibility) != tuple(
-        record.scored_client for record in records
-    ):
-        raise ScientificContractError(
-            "evaluation inputs require cohort coverage for every score client"
-        )
-    evidence_role = population_capabilities(
-        manifest.coordinate.population
-    ).evidentiary_role
+    if tuple(record.client for record in eligibility) != tuple(record.scored_client for record in records):
+        raise ScientificContractError("evaluation inputs require cohort coverage for every score client")
+    evidence_role = population_capabilities(manifest.coordinate.population).evidentiary_role
     return tuple(
         _client_auroc_evidence(
             manifest.coordinate,
@@ -378,20 +357,11 @@ def _client_auroc_evidence(
     evidence_role: EvidenceRole,
 ) -> ClientAurocEvidence:
     frame = pl.read_parquet(record.path)
-    scores = tuple(
-        ScoreValue(float(value))
-        for value in frame[
-            ScoreFrameColumn.RECONSTRUCTION_ERROR.value
-        ].to_list()
-    )
+    scores = tuple(ScoreValue(float(value)) for value in frame[ScoreFrameColumn.RECONSTRUCTION_ERROR.value].to_list())
     labels = tuple(
-        PopulationOutcomeLabel(str(value))
-        for value in frame[ScoreFrameColumn.OUTCOME_LABEL.value].to_list()
+        PopulationOutcomeLabel(str(value)) for value in frame[ScoreFrameColumn.OUTCOME_LABEL.value].to_list()
     )
-    rows = tuple(
-        str(value)
-        for value in frame[ScoreFrameColumn.STABLE_ROW_ID.value].to_list()
-    )
+    rows = tuple(str(value) for value in frame[ScoreFrameColumn.STABLE_ROW_ID.value].to_list())
     confusion = calculate_confusion_counts(
         scores=scores,
         labels=labels,
@@ -430,9 +400,7 @@ def _validate_evidence_manifest_binding(
     invariant: FixedScoreInvariant,
 ) -> None:
     if evidence.coordinate != manifest.coordinate:
-        raise ScientificContractError(
-            "fixed-score evidence must match the score coordinate"
-        )
+        raise ScientificContractError("fixed-score evidence must match the score coordinate")
     bindings = (
         ("model", evidence.model_checksum, invariant.model_checksum),
         (
@@ -458,9 +426,7 @@ def _validate_evidence_manifest_binding(
     )
     for name, observed, expected in bindings:
         if observed != expected:
-            raise ScientificContractError(
-                f"fixed-score evidence {name} checksum does not match the score manifest"
-            )
+            raise ScientificContractError(f"fixed-score evidence {name} checksum does not match the score manifest")
 
 
 def _validate_evidence_cohort_binding(
@@ -468,17 +434,11 @@ def _validate_evidence_cohort_binding(
     cohort: EvaluationCohortManifest,
     clients: tuple[ClientMetricResult, ...],
 ) -> None:
-    expected_population = canonical_checksum(
-        tuple(sorted(client.client for client in clients))
-    )
+    expected_population = canonical_checksum(tuple(sorted(client.client for client in clients)))
     if evidence.client_population_checksum != expected_population:
-        raise ScientificContractError(
-            "fixed-score evidence client population checksum does not match evaluation"
-        )
+        raise ScientificContractError("fixed-score evidence client population checksum does not match evaluation")
     if evidence.eligibility_cohort_checksum != canonical_checksum(cohort):
-        raise ScientificContractError(
-            "fixed-score evidence eligibility cohort checksum does not match evaluation"
-        )
+        raise ScientificContractError("fixed-score evidence eligibility cohort checksum does not match evaluation")
 
 
 def _validate_evidence_held_out_rows(
@@ -487,9 +447,7 @@ def _validate_evidence_held_out_rows(
     clients: tuple[ClientMetricResult, ...],
 ) -> None:
     if evidence.score_order_checksum != _score_order_checksum(manifest):
-        raise ScientificContractError(
-            "fixed-score evidence score ordering checksum does not match evaluation"
-        )
+        raise ScientificContractError("fixed-score evidence score ordering checksum does not match evaluation")
     expected_labels = _aggregate_client_checksum(
         clients,
         ClientChecksumField.EVALUATION_LABEL,
@@ -498,13 +456,8 @@ def _validate_evidence_held_out_rows(
         clients,
         ClientChecksumField.SOURCE_ROW,
     )
-    if (
-        evidence.evaluation_label_checksum != expected_labels
-        or evidence.source_row_checksum != expected_rows
-    ):
-        raise ScientificContractError(
-            "fixed-score evidence label or source-row checksum does not match evaluation"
-        )
+    if evidence.evaluation_label_checksum != expected_labels or evidence.source_row_checksum != expected_rows:
+        raise ScientificContractError("fixed-score evidence label or source-row checksum does not match evaluation")
 
 
 def _validate_evidence_aurocs(
@@ -518,12 +471,8 @@ def _validate_evidence_aurocs(
         )
         for client in clients
     )
-    if tuple(item.client for item in evidence.aurocs) != tuple(
-        client for client, _outcome in observed
-    ):
-        raise ScientificContractError(
-            "fixed-score AUROC evidence client order does not match evaluation"
-        )
+    if tuple(item.client for item in evidence.aurocs) != tuple(client for client, _outcome in observed):
+        raise ScientificContractError("fixed-score AUROC evidence client order does not match evaluation")
     for expected_item, (_client, observed_outcome) in zip(
         evidence.aurocs,
         observed,
@@ -583,9 +532,7 @@ def _require_auroc_invariance(
     second: tuple[ClientAurocEvidence, ...],
     tolerance: AbsoluteTolerance,
 ) -> None:
-    if tuple(item.client for item in first) != tuple(
-        item.client for item in second
-    ):
+    if tuple(item.client for item in first) != tuple(item.client for item in second):
         raise ScientificContractError(
             "fixed-score control failed: AUROC clients differ",
             subject=ContractSubject.CLIENT_IDENTITY,
@@ -621,9 +568,7 @@ def _require_matching_auroc(
     observed: MetricAvailability,
 ) -> None:
     if expected.status is not observed.status:
-        raise ScientificContractError(
-            "fixed-score AUROC availability does not match held-out evaluation"
-        )
+        raise ScientificContractError("fixed-score AUROC availability does not match held-out evaluation")
     if expected.status is MetricStatus.AVAILABLE:
         if expected.value is None or observed.value is None:
             raise RuntimeError("available AUROC evidence must contain values")
@@ -632,10 +577,6 @@ def _require_matching_auroc(
             observed.value.value,
             NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE.value,
         ):
-            raise ScientificContractError(
-                "fixed-score AUROC evidence does not match held-out evaluation"
-            )
+            raise ScientificContractError("fixed-score AUROC evidence does not match held-out evaluation")
     elif expected != observed:
-        raise ScientificContractError(
-            "fixed-score AUROC unavailable outcome does not match held-out evaluation"
-        )
+        raise ScientificContractError("fixed-score AUROC unavailable outcome does not match held-out evaluation")

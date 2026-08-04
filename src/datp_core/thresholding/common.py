@@ -56,8 +56,11 @@ class FederatedThresholdAssetName(StrEnum):
 
 @runtime_checkable
 class ThresholdAssignmentLike(Protocol):
-    client: ClientIdentity
-    threshold: ThresholdValue
+    @property
+    def client(self) -> ClientIdentity: ...
+
+    @property
+    def threshold(self) -> ThresholdValue: ...
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -104,18 +107,12 @@ class FederatedThresholdPublicationRequest:
     temporal_score_manifest: ScoreArtifactManifest | None = None
 
     def __post_init__(self) -> None:
-        if (self.temporal_provenance is None) != (
-            self.temporal_score_manifest is None
-        ):
-            raise ValueError(
-                "temporal threshold construction requires both provenance and score manifest"
-            )
+        if (self.temporal_provenance is None) != (self.temporal_score_manifest is None):
+            raise ValueError("temporal threshold construction requires both provenance and score manifest")
         if self.temporal_provenance is not None:
             if self.temporal_score_manifest is None:
                 raise AssertionError("temporal publication invariant was checked")
-            self.temporal_provenance.validate_score_manifest(
-                self.temporal_score_manifest
-            )
+            self.temporal_provenance.validate_score_manifest(self.temporal_score_manifest)
 
 
 @dataclass(frozen=True, slots=True)
@@ -156,14 +153,9 @@ def federated_threshold_is_reusable(
     document = directory / FederatedThresholdAssetName.RESULT
     if not complete.is_file() or not document.is_file():
         return False
-    provenance_document = (
-        directory / FederatedThresholdAssetName.TEMPORAL_PROVENANCE
-    )
-    if (
-        request.temporal_provenance is None and provenance_document.exists()
-    ) or (
-        request.temporal_provenance is not None
-        and not provenance_document.is_file()
+    provenance_document = directory / FederatedThresholdAssetName.TEMPORAL_PROVENANCE
+    if (request.temporal_provenance is None and provenance_document.exists()) or (
+        request.temporal_provenance is not None and not provenance_document.is_file()
     ):
         return False
     expected = federated_threshold_publication_checksum(

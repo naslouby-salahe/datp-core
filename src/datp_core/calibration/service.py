@@ -80,7 +80,4 @@ def calibrate(request: CalibrationRequest) -> CalibrationResult:
 
 def _evaluation_stable_row_ids(record: ScoreRecord) -> frozenset[str]:
     frame = pl.read_parquet(record.path)
-    return frozenset(
-        str(value)
-        for value in frame.get_column(ScoreFrameColumn.STABLE_ROW_ID.value).to_list()
-    )
+    return frozenset(str(value) for value in frame.get_column(ScoreFrameColumn.STABLE_ROW_ID.value).to_list())

@@ -96,10 +96,7 @@ def test_pooled_evaluation_metrics_and_confusion(tmp_path: Path) -> None:
         evaluation_scores=scoring.evaluation_scores,
         threshold_result=threshold,
     )
-    assert (
-        evaluation.threshold_method
-        is CentralizedThresholdMethod.POOLED_BENIGN_QUANTILE
-    )
+    assert evaluation.threshold_method is CentralizedThresholdMethod.POOLED_BENIGN_QUANTILE
     assert evaluation.evidence_role is EvidenceRole.SUPPORTIVE
     assert evaluation.evaluation_row_count == 40
     assert (
@@ -163,19 +160,13 @@ def test_rejects_confirmatory_and_federated_threshold_use(
         LeakageError,
         match="confirmatory shared-versus-local",
     ):
-        reject_centralized_result_in_confirmatory_threshold_comparison(
-            evaluation
-        )
+        reject_centralized_result_in_confirmatory_threshold_comparison(evaluation)
     with pytest.raises(LeakageError, match="federated threshold policy"):
-        reject_centralized_as_federated_threshold_policy(
-            CentralizedThresholdMethod.POOLED_BENIGN_QUANTILE
-        )
+        reject_centralized_as_federated_threshold_policy(CentralizedThresholdMethod.POOLED_BENIGN_QUANTILE)
     with pytest.raises(LeakageError, match="CV\\(FPR\\)"):
         reject_cross_client_cv_fpr_from_pooled_centralized()
     with pytest.raises(
         LeakageError,
         match="federated threshold-policy comparisons",
     ):
-        reject_centralized_in_federated_threshold_comparison(
-            FederatedThresholdMethod.SHARED_THRESHOLD
-        )
+        reject_centralized_in_federated_threshold_comparison(FederatedThresholdMethod.SHARED_THRESHOLD)

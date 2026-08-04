@@ -117,7 +117,7 @@ The existing stage files define the only stage graph:
 14. reporting;
 15. finalization.
 
-Dagster definitions express dependencies and reusable assets. Stage modules remain thin orchestration adapters.
+Dagster definitions express dependencies and reusable assets. Stage modules remain thin orchestration adapters: checkpoint validation, score-frame contracts, and publication/reuse mechanics are owned by `datp_core.pipeline` (per `18_REPOSITORY_ARCHITECTURE_AND_SCIENTIFIC_INVARIANTS.md`), and a stage must bind a typed command to its owning domain or pipeline service rather than reimplementing that mechanics inline.
 
 ## Reuse behavior
 

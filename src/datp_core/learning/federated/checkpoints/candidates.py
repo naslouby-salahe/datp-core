@@ -48,10 +48,7 @@ def persist_checkpoint_tensor(
 ) -> Checksum:
     path.parent.mkdir(parents=True, exist_ok=True)
     staging = path.with_name(f".{path.name}.tmp")
-    cpu_state = {
-        name: tensor.detach().cpu().contiguous()
-        for name, tensor in state_dict.items()
-    }
+    cpu_state = {name: tensor.detach().cpu().contiguous() for name, tensor in state_dict.items()}
     save_file(cpu_state, str(staging))
     _assert_checkpoint_reload_equality(state_dict, staging, autoencoder)
     atomic_replace(staging, path)

@@ -8,6 +8,7 @@ from pydantic import model_validator
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
     CapabilityStatus,
+    ContractSubject,
     EvaluationCohort,
     FederatedThresholdMethod,
     PopulationId,
@@ -51,26 +52,24 @@ class ClientEligibilityRecord(StrictModel):
 
     @model_validator(mode="after")
     def validate_record(self) -> "ClientEligibilityRecord":
-        if min(
-            self.benign_calibration_count,
-            self.benign_evaluation_count,
-            self.attack_evaluation_count,
-        ) < 0:
+        if (
+            min(
+                self.benign_calibration_count,
+                self.benign_evaluation_count,
+                self.attack_evaluation_count,
+            )
+            < 0
+        ):
             raise ValueError("cohort counts must be non-negative")
         if self.calibration_eligible and self.deployment_fallback:
-            raise ValueError(
-                "deployment-fallback clients cannot be calibration eligible"
-            )
+            raise ValueError("deployment-fallback clients cannot be calibration eligible")
         if self.fpr_evaluable and not self.calibration_eligible:
             raise ValueError("FPR-evaluable clients must be calibration eligible")
         if (
             self.calibration_eligible
-            and ClientExclusionReason.INSUFFICIENT_BENIGN_CALIBRATION
-            in self.exclusion_reasons
+            and ClientExclusionReason.INSUFFICIENT_BENIGN_CALIBRATION in self.exclusion_reasons
         ):
-            raise ValueError(
-                "calibration-eligible clients cannot record insufficient calibration"
-            )
+            raise ValueError("calibration-eligible clients cannot record insufficient calibration")
         return self
 
 
@@ -82,13 +81,9 @@ class EvaluationCohortMembership(StrictModel):
     @model_validator(mode="after")
     def validate_membership(self) -> "EvaluationCohortMembership":
         if self.cohort is EvaluationCohort.FPR_EVALUABLE and self.reasons:
-            raise ValueError(
-                "FPR-evaluable membership cannot carry exclusion reasons"
-            )
+            raise ValueError("FPR-evaluable membership cannot carry exclusion reasons")
         if self.cohort is EvaluationCohort.UNAVAILABLE and not self.reasons:
-            raise ValueError(
-                "unavailable membership requires at least one exclusion reason"
-            )
+            raise ValueError("unavailable membership requires at least one exclusion reason")
         return self
 
 
@@ -107,31 +102,18 @@ class EvaluationCohortManifest(StrictModel):
         if any(client.population is not self.population for client in record_clients):
             raise ValueError("cohort record clients must match the manifest population")
         membership_clients = tuple(item.client for item in self.memberships)
-        if any(
-            client.population is not self.population
-            for client in membership_clients
-        ):
-            raise ValueError(
-                "cohort membership clients must match the manifest population"
-            )
+        if any(client.population is not self.population for client in membership_clients):
+            raise ValueError("cohort membership clients must match the manifest population")
         if self.minimum_benign_calibration_support != MINIMUM_BENIGN_SUPPORT:
-            raise ValueError(
-                "cohort manifests must use the locked minimum benign calibration support"
-            )
+            raise ValueError("cohort manifests must use the locked minimum benign calibration support")
         fpr_evaluable = frozenset(
-            item.client
-            for item in self.memberships
-            if item.cohort is EvaluationCohort.FPR_EVALUABLE
+            item.client for item in self.memberships if item.cohort is EvaluationCohort.FPR_EVALUABLE
         )
         fallback = frozenset(
-            item.client
-            for item in self.memberships
-            if item.cohort is EvaluationCohort.DEPLOYMENT_FALLBACK
+            item.client for item in self.memberships if item.cohort is EvaluationCohort.DEPLOYMENT_FALLBACK
         )
         if fpr_evaluable & fallback:
-            raise ValueError(
-                "deployment-fallback clients cannot enter the FPR-evaluable cohort"
-            )
+            raise ValueError("deployment-fallback clients cannot enter the FPR-evaluable cohort")
         return self
 
 
@@ -148,13 +130,10 @@ def build_evaluation_cohort_manifest(
     memberships: list[EvaluationCohortMembership] = []
     for counts in sorted(client_counts, key=lambda item: item.client):
         client = counts.client
-        if (
-            client.population is not population
-            or client.identity_kind is not capabilities.identity_kind
-        ):
+        if client.population is not population or client.identity_kind is not capabilities.identity_kind:
             raise ScientificContractError(
                 "client support counts must match the cohort population identity contract",
-                subject=client,
+                subject=ContractSubject.CLIENT_IDENTITY,
             )
         record, client_memberships = _classify_client(
             client,
@@ -188,12 +167,8 @@ def client_partition_counts_from_scores(
             key=lambda record: record.scored_client,
         )
     )
-    if tuple(record.scored_client for record in calibration) != tuple(
-        record.scored_client for record in evaluation
-    ):
-        raise ScientificContractError(
-            "evaluation inputs require matching calibration and evaluation score clients"
-        )
+    if tuple(record.scored_client for record in calibration) != tuple(record.scored_client for record in evaluation):
+        raise ScientificContractError("evaluation inputs require matching calibration and evaluation score clients")
     return tuple(
         ClientPartitionCounts(
             client=calibration_record.scored_client,
@@ -248,9 +223,7 @@ def assert_cohort_invariant_to_threshold_methods(
             raise ScientificContractError(
                 "evaluation cohorts changed across threshold methods",
                 subject=population,
-                reason=(
-                    "eligibility is decided before threshold construction and must be reused"
-                ),
+                reason=("eligibility is decided before threshold construction and must be reused"),
             )
     return baseline
 
@@ -259,13 +232,9 @@ def cohort_record_for_client(
     cohort: EvaluationCohortManifest,
     client: ClientIdentity,
 ) -> ClientEligibilityRecord | None:
-    matches = tuple(
-        record for record in cohort.records if record.client == client
-    )
+    matches = tuple(record for record in cohort.records if record.client == client)
     if len(matches) > 1:
-        raise ScientificContractError(
-            "evaluation cohort cannot repeat a client"
-        )
+        raise ScientificContractError("evaluation cohort cannot repeat a client")
     return matches[0] if matches else None
 
 
@@ -311,14 +280,7 @@ def _label_count(
     label: PopulationOutcomeLabel,
 ) -> RowCount:
     frame = pl.read_parquet(record.path)
-    return RowCount(
-        int(
-            (
-                frame[ScoreFrameColumn.OUTCOME_LABEL.value]
-                == label.value
-            ).sum()
-        )
-    )
+    return RowCount(int((frame[ScoreFrameColumn.OUTCOME_LABEL.value] == label.value).sum()))
 
 
 def _support_exclusion_reasons(
@@ -342,11 +304,7 @@ def _is_calibration_eligible(
     counts: ClientPartitionCounts,
     support: CalibrationSize,
 ) -> bool:
-    return (
-        counts.accepted
-        and counts.benign_calibration_count >= support
-        and not counts.deployment_fallback
-    )
+    return counts.accepted and counts.benign_calibration_count >= support and not counts.deployment_fallback
 
 
 def _is_fpr_evaluable(
@@ -377,9 +335,7 @@ def _attack_exclusion_reasons(
         CapabilityStatus.UNAVAILABLE,
         CapabilityStatus.NOT_APPLICABLE,
     }:
-        reasons.append(
-            ClientExclusionReason.POPULATION_PROHIBITS_ATTACK_METRICS
-        )
+        reasons.append(ClientExclusionReason.POPULATION_PROHIBITS_ATTACK_METRICS)
     if counts.attack_evaluation_count < 1:
         reasons.append(ClientExclusionReason.NO_HELD_OUT_ATTACK_ROWS)
     return reasons
@@ -426,10 +382,7 @@ def _cohort_memberships(
             EvaluationCohortMembership(
                 client=client,
                 cohort=EvaluationCohort.UNAVAILABLE,
-                reasons=(
-                    _unique_reasons((*reasons, *attack_reasons))
-                    or (ClientExclusionReason.CLIENT_NOT_ACCEPTED,)
-                ),
+                reasons=(_unique_reasons((*reasons, *attack_reasons)) or (ClientExclusionReason.CLIENT_NOT_ACCEPTED,)),
             )
         )
     return tuple(memberships)

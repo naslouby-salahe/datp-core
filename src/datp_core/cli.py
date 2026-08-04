@@ -190,9 +190,7 @@ def preprocess_federated(
 ) -> None:
     """Construct partitions and publish federated processed assets under data/processed."""
     if preprocessing_identity not in _FEDERATED_PREPROCESSING_IDENTITIES:
-        allowed = ", ".join(
-            sorted(identity.value for identity in _FEDERATED_PREPROCESSING_IDENTITIES)
-        )
+        allowed = ", ".join(sorted(identity.value for identity in _FEDERATED_PREPROCESSING_IDENTITIES))
         raise typer.BadParameter(
             f"preprocessing-identity must be one of: {allowed}",
             param_hint="--preprocessing-identity",
@@ -294,18 +292,10 @@ def analyze_confirmatory_grid() -> None:
     """Publish the declared paired inference from completed seed evaluations."""
     result = analyze_stage(
         AnalyzeRequest(
-            contrasts=tuple(
-                _confirmatory_contrast(seed)
-                for seed in CONFIRMATORY_SEED_COHORT.values
-            ),
+            contrasts=tuple(_confirmatory_contrast(seed) for seed in CONFIRMATORY_SEED_COHORT.values),
             inference_protocol=CONFIRMATORY_INFERENCE_PROTOCOL,
             analysis_seed=Seed(31),
-            output_directory=(
-                OUTPUTS_ROOT
-                / "confirmatory"
-                / "nbaiot_natural_devices"
-                / "analysis"
-            ),
+            output_directory=(OUTPUTS_ROOT / "confirmatory" / "nbaiot_natural_devices" / "analysis"),
             overwrite=False,
         )
     )
@@ -394,12 +384,7 @@ def _score_confirmatory_seed(
     context: ConfirmatorySeedContext,
 ) -> ScoreArtifactManifest:
     feature_names = FeatureNameSequence(
-        tuple(
-            FeatureName(name)
-            for name in dataset_binding(
-                DatasetId.NBAIOT
-            ).schema.feature_columns
-        )
+        tuple(FeatureName(name) for name in dataset_binding(DatasetId.NBAIOT).schema.feature_columns)
     )
     training = train_federated_stage(
         TrainFederatedRequest(
@@ -410,9 +395,7 @@ def _score_confirmatory_seed(
                     context.construction.manifest.clients,
                     feature_names,
                 ),
-                population_client_count=ClientCount(
-                    len(context.construction.manifest.document.accepted_clients)
-                ),
+                population_client_count=ClientCount(len(context.construction.manifest.document.accepted_clients)),
                 autoencoder=NBAIOT_AUTOENCODER,
                 training_protocol=FEDAVG_TRAINING_PROTOCOL,
                 checkpoint_protocol=CHECKPOINT_PROTOCOL,
@@ -468,9 +451,7 @@ def _evaluate_confirmatory_threshold_methods(
         ),
         previous_evidence=None,
     )
-    for method in population_capabilities(
-        context.coordinate.population
-    ).valid_threshold_methods:
+    for method in population_capabilities(context.coordinate.population).valid_threshold_methods:
         inputs = _evaluate_confirmatory_threshold_method(
             context,
             inputs,
@@ -493,17 +474,12 @@ def _evaluate_confirmatory_threshold_method(
                 inputs.eligible,
                 inputs.family_by_client,
             ),
-            _confirmatory_seed_directory(context.coordinate.training_seed)
-            / "thresholds"
-            / method.value,
+            _confirmatory_seed_directory(context.coordinate.training_seed) / "thresholds" / method.value,
             False,
         )
     ).result
     if isinstance(threshold, ThresholdUnavailableResult):
-        typer.echo(
-            f"seed={context.coordinate.training_seed.value} "
-            f"{method.value}=unavailable"
-        )
+        typer.echo(f"seed={context.coordinate.training_seed.value} {method.value}=unavailable")
         return inputs
     evaluation_inputs = build_federated_evaluation_inputs(inputs.scores, method)
     evaluation = evaluate_federated_stage(
@@ -518,16 +494,11 @@ def _evaluate_confirmatory_threshold_method(
             (),
             (),
             None,
-            _confirmatory_seed_directory(context.coordinate.training_seed)
-            / "evaluations"
-            / method.value,
+            _confirmatory_seed_directory(context.coordinate.training_seed) / "evaluations" / method.value,
             False,
         )
     )
-    typer.echo(
-        f"seed={context.coordinate.training_seed.value} "
-        f"{method.value}={evaluation.publication_status.value}"
-    )
+    typer.echo(f"seed={context.coordinate.training_seed.value} {method.value}={evaluation.publication_status.value}")
     return ConfirmatoryThresholdInputs(
         scores=inputs.scores,
         eligible=inputs.eligible,
@@ -546,9 +517,7 @@ def _eligible_calibration_scores(
             score_manifest.coordinate,
             tuple(
                 float(value)
-                for value in pl.read_parquet(record.path)[
-                    ScoreFrameColumn.RECONSTRUCTION_ERROR.value
-                ].to_list()
+                for value in pl.read_parquet(record.path)[ScoreFrameColumn.RECONSTRUCTION_ERROR.value].to_list()
             ),
             checksum_file(record.path),
             invariant.calibration_score_set_checksum,
@@ -611,17 +580,11 @@ def _client_with_id(
     client_id: str,
 ) -> ClientIdentity:
     client = next(
-        (
-            candidate
-            for candidate in clients
-            if candidate.client_id == client_id
-        ),
+        (candidate for candidate in clients if candidate.client_id == client_id),
         None,
     )
     if client is None:
-        raise ScientificContractError(
-            f"population manifest is missing client {client_id}"
-        )
+        raise ScientificContractError(f"population manifest is missing client {client_id}")
     return client
 
 
@@ -639,9 +602,7 @@ def _confirmatory_contrast(training_seed: Seed) -> PairedContrast:
         )
     )
     if shared.score_coordinate != local.score_coordinate:
-        raise ScientificContractError(
-            "paired evaluation documents use different training coordinates"
-        )
+        raise ScientificContractError("paired evaluation documents use different training coordinates")
     return PairedContrast(
         coordinate=shared.score_coordinate,
         evidence_role=EvidenceRole.CONFIRMATORY,
@@ -670,21 +631,15 @@ def _evaluation_path(
         / FederatedEvaluationAssetName.DOCUMENT
     )
     if not path.is_file():
-        raise ScientificContractError(
-            f"missing completed evaluation document: {path}"
-        )
+        raise ScientificContractError(f"missing completed evaluation document: {path}")
     return path
 
 
 def _load_evaluation_document(path: Path) -> FederatedEvaluationDocument:
     try:
-        return FederatedEvaluationDocument.model_validate_json(
-            path.read_text(encoding="utf-8")
-        )
+        return FederatedEvaluationDocument.model_validate_json(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, ValidationError, ValueError) as error:
-        raise ScientificContractError(
-            f"completed evaluation document is unreadable or invalid: {path}"
-        ) from error
+        raise ScientificContractError(f"completed evaluation document is unreadable or invalid: {path}") from error
 
 
 def _population_metric(
@@ -693,9 +648,7 @@ def _population_metric(
 ) -> MetricValue:
     result = metric_by_id(document.population.metrics, metric)
     if result.status is not MetricStatus.AVAILABLE or result.value is None:
-        raise ScientificContractError(
-            f"required confirmatory metric is unavailable: {metric.value}"
-        )
+        raise ScientificContractError(f"required confirmatory metric is unavailable: {metric.value}")
     return result.value
 
 
@@ -714,12 +667,7 @@ def _federated_training_directory(
 
 
 def _confirmatory_seed_directory(training_seed: Seed) -> Path:
-    return (
-        OUTPUTS_ROOT
-        / "confirmatory"
-        / "nbaiot_natural_devices"
-        / str(training_seed.value)
-    )
+    return OUTPUTS_ROOT / "confirmatory" / "nbaiot_natural_devices" / str(training_seed.value)
 
 
 def main() -> None:
@@ -733,8 +681,7 @@ def _controlled_partition_condition(
     if partition_kind is None:
         if concentration is not None:
             raise typer.BadParameter(
-                f"concentration requires --partition-kind "
-                f"{ControlledPartitionKind.DIRICHLET.value}",
+                f"concentration requires --partition-kind {ControlledPartitionKind.DIRICHLET.value}",
                 param_hint="--concentration",
             )
         return None
@@ -749,25 +696,17 @@ def _controlled_partition_condition(
         case ControlledPartitionKind.DIRICHLET:
             if concentration is None:
                 raise typer.BadParameter(
-                    f"--partition-kind "
-                    f"{ControlledPartitionKind.DIRICHLET.value} "
-                    f"requires --concentration",
+                    f"--partition-kind {ControlledPartitionKind.DIRICHLET.value} requires --concentration",
                     param_hint="--concentration",
                 )
             if concentration not in _DECLARED_DIRICHLET_VALUES:
-                allowed = ", ".join(
-                    str(value)
-                    for value in sorted(_DECLARED_DIRICHLET_VALUES)
-                )
+                allowed = ", ".join(str(value) for value in sorted(_DECLARED_DIRICHLET_VALUES))
                 raise typer.BadParameter(
-                    f"concentration must be one of the declared "
-                    f"Dirichlet grid values: {allowed}",
+                    f"concentration must be one of the declared Dirichlet grid values: {allowed}",
                     param_hint="--concentration",
                 )
             try:
-                return dirichlet_condition(
-                    DirichletConcentration(concentration)
-                )
+                return dirichlet_condition(DirichletConcentration(concentration))
             except ValueError as error:
                 raise typer.BadParameter(
                     str(error),

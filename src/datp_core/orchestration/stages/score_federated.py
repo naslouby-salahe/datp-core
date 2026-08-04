@@ -4,6 +4,8 @@ from pathlib import Path
 
 from datp_core.orchestration.commands.scoring import (
     ScoreFederatedRequest as _ScoreFederatedRequest,
+)
+from datp_core.orchestration.commands.scoring import (
     ScoreFederatedStageResult as _ScoreFederatedStageResult,
 )
 from datp_core.pipeline.publication.codec import (

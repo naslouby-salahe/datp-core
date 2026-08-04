@@ -63,8 +63,4 @@ def test_shrinkage_blend_always_lies_between_local_and_shared(
         blended_threshold=ThresholdValue(blended_value),
     )
     lower_bound, upper_bound = sorted((local, shared))
-    assert (
-        lower_bound - 1e-9
-        <= assignment.blended_threshold.value
-        <= upper_bound + 1e-9
-    )
+    assert lower_bound - 1e-9 <= assignment.blended_threshold.value <= upper_bound + 1e-9

@@ -57,9 +57,7 @@ def test_execution_identity_round_trips_through_canonical_json() -> None:
         evidence_role=EvidenceRole.APPLICABILITY_BOUNDARY,
         temporal_state=None,
     )
-    persisted = ExternalTemporalExecutionIdentity.model_validate_json(
-        canonical_json_text(identity)
-    )
+    persisted = ExternalTemporalExecutionIdentity.model_validate_json(canonical_json_text(identity))
     assert persisted == identity
 
 

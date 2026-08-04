@@ -20,10 +20,7 @@ def test_paired_inference_uses_the_declared_protocol() -> None:
     )
     assert wilcoxon.availability is AvailabilityStatus.AVAILABLE
     assert wilcoxon.computation_method is not None
-    assert (
-        wilcoxon.computation_method.value
-        == CONFIRMATORY_INFERENCE_PROTOCOL.wilcoxon_computation_method
-    )
+    assert wilcoxon.computation_method.value == CONFIRMATORY_INFERENCE_PROTOCOL.wilcoxon_computation_method
     assert effect.availability is AvailabilityStatus.AVAILABLE
     assert effect.value is not None and -1.0 <= effect.value.value <= 1.0
 
@@ -37,9 +34,6 @@ def test_multiplicity_uses_a_complete_typed_plan() -> None:
         ),
         CONFIRMATORY_INFERENCE_PROTOCOL,
     )
-    assert (
-        result.correction
-        is CONFIRMATORY_INFERENCE_PROTOCOL.multiplicity_correction
-    )
+    assert result.correction is CONFIRMATORY_INFERENCE_PROTOCOL.multiplicity_correction
     assert result.raw_p_values == (PValue(0.01), PValue(0.04))
     assert result.adjusted_p_values[0].value <= result.adjusted_p_values[1].value

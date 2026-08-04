@@ -3,6 +3,8 @@
 from datp_core.calibration.service import CalibrationRequest, calibrate
 from datp_core.orchestration.commands.calibration import (
     CalibrateRequest as _CalibrateRequest,
+)
+from datp_core.orchestration.commands.calibration import (
     CalibrateStageResult as _CalibrateStageResult,
 )
 

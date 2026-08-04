@@ -6,6 +6,8 @@ from datp_core.centralized_reference.checkpointing import (
 )
 from datp_core.orchestration.commands.checkpoints import (
     SelectCentralizedCheckpointRequest as _SelectCentralizedCheckpointRequest,
+)
+from datp_core.orchestration.commands.checkpoints import (
     SelectCentralizedCheckpointResult as _SelectCentralizedCheckpointResult,
 )
 from datp_core.protocols.training import CHECKPOINT_SELECTION_RULE

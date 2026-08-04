@@ -86,9 +86,7 @@ class BootstrapInterval(StrictModel):
             raise ValueError("bootstrap interval bounds must occur together")
         if bounds_present and self.lower_bound is not None and self.upper_bound is not None:
             if self.lower_bound.value > self.upper_bound.value:
-                raise ValueError(
-                    "bootstrap interval lower bound cannot exceed upper bound"
-                )
+                raise ValueError("bootstrap interval lower bound cannot exceed upper bound")
         match self.outcome:
             case BcaOutcome.AVAILABLE:
                 valid = (
@@ -98,11 +96,7 @@ class BootstrapInterval(StrictModel):
                     and self.reason is None
                 )
             case BcaOutcome.BLOCKED:
-                valid = (
-                    not bounds_present
-                    and self.adjustment is None
-                    and self.reason is not None
-                )
+                valid = not bounds_present and self.adjustment is None and self.reason is not None
             case BcaOutcome.DEGENERATE:
                 valid = (
                     self.point_estimate is not None
@@ -225,9 +219,7 @@ def validate_confirmatory_contrasts(
             or contrast.left_method is not FederatedThresholdMethod.SHARED_THRESHOLD
             or contrast.right_method is not FederatedThresholdMethod.LOCAL_THRESHOLD
         ):
-            raise _PairedAnalysisContractError(
-                BcaReason.CONFIRMATORY_ENDPOINT_MISMATCH
-            )
+            raise _PairedAnalysisContractError(BcaReason.CONFIRMATORY_ENDPOINT_MISMATCH)
     _require_fixed_design(contrasts)
     return tuple(sorted(contrasts, key=lambda contrast: contrast.seed.value))
 
@@ -240,9 +232,7 @@ def validate_supplementary_contrasts(
     if len(observed_seeds) != len(contrasts):
         raise _PairedAnalysisContractError(BcaReason.DUPLICATE_SEED)
     if observed_seeds != set(plan.seed_cohort.values):
-        raise _PairedAnalysisContractError(
-            BcaReason.SUPPLEMENTARY_SEED_COHORT_MISMATCH
-        )
+        raise _PairedAnalysisContractError(BcaReason.SUPPLEMENTARY_SEED_COHORT_MISMATCH)
     for contrast in contrasts:
         if (
             contrast.coordinate.population is not plan.population
@@ -251,9 +241,7 @@ def validate_supplementary_contrasts(
             or contrast.left_method is not plan.left_method
             or contrast.right_method is not plan.right_method
         ):
-            raise _PairedAnalysisContractError(
-                BcaReason.SUPPLEMENTARY_ANALYSIS_PLAN_MISMATCH
-            )
+            raise _PairedAnalysisContractError(BcaReason.SUPPLEMENTARY_ANALYSIS_PLAN_MISMATCH)
     _require_fixed_design(contrasts)
     return tuple(sorted(contrasts, key=lambda contrast: contrast.seed.value))
 
@@ -419,9 +407,7 @@ def _bca_interval_from_distribution(
     if np.any(np.abs(denominator) <= np.finfo(np.float64).eps):
         return BcaReason.INVALID_ADJUSTED_QUANTILES
     adjusted_quantiles = stats.norm.cdf(bias_correction + shifted / denominator)
-    if np.any(~np.isfinite(adjusted_quantiles)) or np.any(
-        (adjusted_quantiles < 0.0) | (adjusted_quantiles > 1.0)
-    ):
+    if np.any(~np.isfinite(adjusted_quantiles)) or np.any((adjusted_quantiles < 0.0) | (adjusted_quantiles > 1.0)):
         return BcaReason.INVALID_ADJUSTED_QUANTILES
     bounds = np.quantile(distribution, adjusted_quantiles, method="linear")
     return (

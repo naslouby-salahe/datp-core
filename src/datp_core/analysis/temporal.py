@@ -44,9 +44,7 @@ class TemporalRecoveryResult(StrictModel):
 
     @property
     def recovered_amount(self) -> MetricValue:
-        return MetricValue(
-            self.frozen_future_cv.value - self.recalibrated_future_cv.value
-        )
+        return MetricValue(self.frozen_future_cv.value - self.recalibrated_future_cv.value)
 
     @property
     def materiality_cutoff(self) -> MetricValue:
@@ -60,11 +58,7 @@ class TemporalRecoveryResult(StrictModel):
 
     @property
     def availability(self) -> AvailabilityStatus:
-        return (
-            AvailabilityStatus.UNDEFINED
-            if self.recovery_ratio is None
-            else AvailabilityStatus.AVAILABLE
-        )
+        return AvailabilityStatus.UNDEFINED if self.recovery_ratio is None else AvailabilityStatus.AVAILABLE
 
     @property
     def interpretation(self) -> TemporalInterpretation:
@@ -93,13 +87,9 @@ class TemporalAnalysisRecord(StrictModel):
     @model_validator(mode="after")
     def validate_record(self) -> "TemporalAnalysisRecord":
         if self.interpretation is not self.recovery.interpretation:
-            raise ValueError(
-                "temporal interpretation must be derived from the recovery quantities"
-            )
+            raise ValueError("temporal interpretation must be derived from the recovery quantities")
         if self.decision.evidence_role is not EvidenceRole.TEMPORAL_BOUNDARY:
-            raise ValueError(
-                "temporal decisions must remain temporal-boundary evidence"
-            )
+            raise ValueError("temporal decisions must remain temporal-boundary evidence")
         if self.decision.point_estimate != self.recovery.recovery_ratio:
             raise ValueError("temporal decision estimate must equal the recovery ratio")
         return self
@@ -131,16 +121,10 @@ class TemporalDeploymentProvenance(StrictModel):
 
     @model_validator(mode="after")
     def validate_binding(self) -> "TemporalDeploymentProvenance":
-        if (self.calibration_role, self.evaluation_role) != _partition_roles(
-            self.state
-        ):
-            raise ValueError(
-                "temporal deployment state has an invalid partition binding"
-            )
+        if (self.calibration_role, self.evaluation_role) != _partition_roles(self.state):
+            raise ValueError("temporal deployment state has an invalid partition binding")
         if self.split_protocol is not _split_protocol(self.state):
-            raise ValueError(
-                f"{self.state.name.lower()} requires its designated split protocol"
-            )
+            raise ValueError(f"{self.state.name.lower()} requires its designated split protocol")
         return self
 
     @property
@@ -162,9 +146,7 @@ class TemporalDeploymentProvenance(StrictModel):
         manifest: ScoreArtifactManifest,
     ) -> "TemporalDeploymentProvenance":
         calibration_role, evaluation_role = _partition_roles(state)
-        if not manifest.records_for(calibration_role) or not manifest.records_for(
-            evaluation_role
-        ):
+        if not manifest.records_for(calibration_role) or not manifest.records_for(evaluation_role):
             raise ScientificContractError(
                 "temporal provenance requires non-empty calibration and evaluation score sets",
                 subject=state,
@@ -178,25 +160,22 @@ class TemporalDeploymentProvenance(StrictModel):
             checkpoint_checksum=manifest.checkpoint_checksum,
             preprocessing_state_set_checksum=manifest.preprocessing_state_set_checksum,
             split_manifest_checksum=manifest.split_manifest_checksum,
-            calibration_score_set_checksum=manifest.score_set_checksum(
-                calibration_role
-            ),
-            evaluation_score_set_checksum=manifest.score_set_checksum(
-                evaluation_role
-            ),
+            calibration_score_set_checksum=manifest.score_set_checksum(calibration_role),
+            evaluation_score_set_checksum=manifest.score_set_checksum(evaluation_role),
         )
 
     def validate_score_manifest(self, manifest: ScoreArtifactManifest) -> None:
-        if TemporalDeploymentProvenance.from_score_manifest(
-            self.state,
-            manifest,
-        ) != self:
+        if (
+            TemporalDeploymentProvenance.from_score_manifest(
+                self.state,
+                manifest,
+            )
+            != self
+        ):
             raise ScientificContractError(
                 "temporal deployment provenance does not match immutable score artifacts",
                 subject=self.state,
-                reason=(
-                    "calibration, evaluation, model, preprocessing, or split evidence changed"
-                ),
+                reason=("calibration, evaluation, model, preprocessing, or split evidence changed"),
             )
 
 
@@ -205,10 +184,7 @@ def validate_frozen_recalibrated_pair(
     recalibrated: TemporalDeploymentProvenance,
 ) -> None:
     """Only the calibration window may differ."""
-    if (
-        frozen.state is not TemporalState.FROZEN_FUTURE
-        or recalibrated.state is not TemporalState.RECALIBRATED_FUTURE
-    ):
+    if frozen.state is not TemporalState.FROZEN_FUTURE or recalibrated.state is not TemporalState.RECALIBRATED_FUTURE:
         raise ScientificContractError(
             "temporal comparison requires frozen and recalibrated future states",
             subject=EvidenceRole.TEMPORAL_BOUNDARY,
@@ -239,22 +215,16 @@ def decide_temporal(result: TemporalRecoveryResult) -> ScientificDecisionResult:
     match result.interpretation:
         case TemporalInterpretation.TEMPORAL_DEGRADATION_WITH_RECOVERY:
             decision = ScientificDecision.SUPPORTED
-            rationale = (
-                "temporal degradation has positive one-shot recalibration recovery"
-            )
+            rationale = "temporal degradation has positive one-shot recalibration recovery"
         case TemporalInterpretation.TEMPORAL_DEGRADATION_WITHOUT_RECOVERY:
             decision = ScientificDecision.BOUNDARY_RESULT
-            rationale = (
-                "temporal degradation has no positive one-shot recalibration recovery"
-            )
+            rationale = "temporal degradation has no positive one-shot recalibration recovery"
         case TemporalInterpretation.NO_DETECTABLE_TEMPORAL_DEGRADATION:
             decision = ScientificDecision.BOUNDARY_RESULT
             rationale = "no materially positive temporal degradation was detected"
         case TemporalInterpretation.OPPOSITE_TEMPORAL_MOVEMENT:
             decision = ScientificDecision.OPPOSITE_DIRECTION
-            rationale = (
-                "future CV(FPR) moved opposite to the declared degradation direction"
-            )
+            rationale = "future CV(FPR) moved opposite to the declared degradation direction"
     return ScientificDecisionResult(
         evidence_role=EvidenceRole.TEMPORAL_BOUNDARY,
         decision=decision,
