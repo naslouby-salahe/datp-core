@@ -2,6 +2,7 @@
 
 from enum import StrEnum
 from math import isfinite
+from typing import ClassVar
 
 from pydantic import model_validator
 
@@ -33,7 +34,7 @@ from datp_core.domain.values import (
 )
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.protocols.models import SeedCohort
-from datp_core.protocols.statistics import PairedInferenceProtocol
+from datp_core.protocols.statistics import PairedInferenceProtocol, WilcoxonComputationMethod
 
 type MetricSeries = tuple[MetricValue, ...]
 
@@ -69,16 +70,12 @@ class BcaReason(StrEnum):
     SUPPLEMENTARY_SEED_COHORT_MISMATCH = "supplementary_seed_cohort_mismatch"
 
 
-class WilcoxonComputationMethod(StrEnum):
-    SCIPY_ASYMPTOTIC = "asymptotic"
-
-
 class PValue(ClosedUnitIntervalValue):
-    validation_name = "p-value"
+    validation_name: ClassVar[str] = "p-value"
 
 
 class CorrelationCoefficient(MetricValue):
-    validation_name = "correlation coefficient"
+    validation_name: ClassVar[str] = "correlation coefficient"
 
     def __post_init__(self) -> None:
         super().__post_init__()
@@ -311,7 +308,11 @@ class ScientificDecisionResult(StrictModel):
 
     @property
     def availability(self) -> AvailabilityStatus:
-        return AvailabilityStatus.UNAVAILABLE if self.decision is ScientificDecision.BLOCKED else AvailabilityStatus.AVAILABLE
+        return (
+            AvailabilityStatus.UNAVAILABLE
+            if self.decision is ScientificDecision.BLOCKED
+            else AvailabilityStatus.AVAILABLE
+        )
 
 
 class WilcoxonResult(StrictModel):
@@ -326,7 +327,12 @@ class WilcoxonResult(StrictModel):
     def validate_result(self) -> "WilcoxonResult":
         available = self.availability is AvailabilityStatus.AVAILABLE
         if available:
-            valid = self.statistic is not None and self.p_value is not None and self.computation_method is not None and self.reason is None
+            valid = (
+                self.statistic is not None
+                and self.p_value is not None
+                and self.computation_method is not None
+                and self.reason is None
+            )
         else:
             valid = self.statistic is None and self.p_value is None and self.reason is not None
         if not valid:
@@ -346,7 +352,11 @@ class RankBiserialResult(StrictModel):
     def validate_result(self) -> "RankBiserialResult":
         values = (self.value, self.positive_rank_sum, self.negative_rank_sum)
         available = self.availability is AvailabilityStatus.AVAILABLE
-        valid = (all(item is not None for item in values) and self.reason is None) if available else (all(item is None for item in values) and self.reason is not None)
+        valid = (
+            all(item is not None for item in values) and self.reason is None
+            if available
+            else all(item is None for item in values) and self.reason is not None
+        )
         if not valid:
             raise ValueError("rank-biserial availability and values are inconsistent")
         return self
