@@ -1,10 +1,9 @@
 """Immutable, reusable-across-thresholds federated score generation."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from pathlib import Path
 
-import numpy as np
 import polars as pl
 import torch
 from safetensors.torch import load_file
@@ -26,15 +25,11 @@ from datp_core.domain.values import (
     RowCount,
     checksum_file,
 )
-from datp_core.learning.autoencoder import ReconstructionAutoencoder, reconstruction_errors
+from datp_core.learning.autoencoder import ReconstructionAutoencoder
 from datp_core.learning.federated.models import CheckpointCandidate
 from datp_core.pipeline.checkpoints.service import validate_persisted_checkpoint_file
-from datp_core.pipeline.scoring.frames import (
-    extract_score_arrays,
-    score_frame,
-    validate_persisted_score_frame,
-    validate_score_input_frame,
-)
+from datp_core.pipeline.scoring.frame_contract import validate_persisted_score_frame
+from datp_core.pipeline.scoring.service import score_and_persist_autoencoder_frame
 from datp_core.populations.models import ClientIdentity
 from datp_core.protocols.models import AutoencoderProtocol
 from datp_core.scoring.models import (
@@ -150,36 +145,182 @@ def generate_federated_scores(request: ScoreGenerationRequest, device: torch.dev
     for client_input in sorted(request.clients, key=lambda item: item.client):
         client_directory = request.output_directory / client_input.client.client_id
         for role in scored_roles:
-            frame = client_input.features_for(role)
-            validate_score_input_frame(frame, role, request.feature_names)
-            record = _score_partition(
-                frame=frame,
-                client=client_input.client,
+            persisted = score_and_persist_autoencoder_frame(
+                frame=client_input.features_for(role),
                 partition_role=role,
-                request=request,
+                feature_names=request.feature_names,
                 model=model,
+                batch_size=request.batch_size,
                 device=device,
                 destination=client_directory / _asset_name_for_partition(role).value,
             )
-            records.append(role, record)
-
-    for role in scored_roles:
-        for record in records.records_for(role):
-            validate_persisted_score_frame(record.path, record.checksum, record.row_count)
+            records.append(
+                role,
+                ScoreRecord(
+                    coordinate=request.checkpoint.coordinate,
+                    partition_role=role,
+                    checkpoint_round=request.checkpoint.round_number,
+                    checkpoint_checksum=request.checkpoint.tensor_checksum,
+                    path=persisted.path,
+                    checksum=persisted.checksum,
+                    row_count=persisted.row_count,
+                    feature_count=persisted.feature_count,
+                    serialization_format=SerializationFormat.PARQUET,
+                    scored_client=client_input.client,
+                ),
+            )
 
     invariant = _fixed_score_invariant(request, records)
     _write_complete_marker(request.output_directory, invariant)
-    manifest = ScoreArtifactManifest(
-        coordinate=request.checkpoint.coordinate,
-        checkpoint_round=request.checkpoint.round_number,
-        checkpoint_checksum=request.checkpoint.tensor_checksum,
-        preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
-        split_manifest_checksum=request.split_manifest_checksum,
-        calibration_records=records.immutable_records_for(PartitionRole.CALIBRATION),
-        evaluation_records=records.immutable_records_for(PartitionRole.EVALUATION),
-        future_recalibration_records=records.immutable_records_for(PartitionRole.FUTURE_RECALIBRATION),
+    return ScoreGenerationResult(
+        manifest=ScoreArtifactManifest(
+            coordinate=request.checkpoint.coordinate,
+            checkpoint_round=request.checkpoint.round_number,
+            checkpoint_checksum=request.checkpoint.tensor_checksum,
+            preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
+            split_manifest_checksum=request.split_manifest_checksum,
+            calibration_records=records.immutable_records_for(PartitionRole.CALIBRATION),
+            evaluation_records=records.immutable_records_for(PartitionRole.EVALUATION),
+            future_recalibration_records=records.immutable_records_for(
+                PartitionRole.FUTURE_RECALIBRATION
+            ),
+        )
     )
-    return ScoreGenerationResult(manifest=manifest)
+
+
+def write_federated_scores(
+    request: ScoreGenerationRequest,
+    directory: Path,
+    device: torch.device,
+) -> ScoreGenerationResult:
+    return generate_federated_scores(replace(request, output_directory=directory), device)
+
+
+def federated_scoring_is_reusable(
+    request: ScoreGenerationRequest,
+    directory: Path,
+) -> bool:
+    complete = directory / FederatedScoreAssetName.COMPLETE.value
+    if not complete.is_file() or not all(path.is_file() for path in _client_paths(directory, request)):
+        return False
+    try:
+        loaded = load_reused_federated_scores(request, directory)
+        expected = canonical_checksum(_invariant_from_manifest(loaded.manifest))
+        return complete.read_text(encoding="utf-8").strip() == expected.value
+    except (ArtifactIntegrityError, OSError, ValueError):
+        return False
+
+
+def load_reused_federated_scores(
+    request: ScoreGenerationRequest,
+    directory: Path,
+) -> ScoreGenerationResult:
+    records = {
+        role: _build_records(directory, request, role)
+        for role in scored_partition_roles(request.checkpoint.coordinate.split_protocol)
+    }
+    return ScoreGenerationResult(
+        manifest=ScoreArtifactManifest(
+            coordinate=request.checkpoint.coordinate,
+            checkpoint_round=request.checkpoint.round_number,
+            checkpoint_checksum=request.checkpoint.tensor_checksum,
+            preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
+            split_manifest_checksum=request.split_manifest_checksum,
+            calibration_records=records.get(PartitionRole.CALIBRATION, ()),
+            evaluation_records=records.get(PartitionRole.EVALUATION, ()),
+            future_recalibration_records=records.get(PartitionRole.FUTURE_RECALIBRATION, ()),
+        )
+    )
+
+
+def rebase_federated_scores(
+    result: ScoreGenerationResult,
+    directory: Path,
+) -> ScoreGenerationResult:
+    manifest = result.manifest
+    return ScoreGenerationResult(
+        manifest=ScoreArtifactManifest(
+            coordinate=manifest.coordinate,
+            checkpoint_round=manifest.checkpoint_round,
+            checkpoint_checksum=manifest.checkpoint_checksum,
+            preprocessing_state_set_checksum=manifest.preprocessing_state_set_checksum,
+            split_manifest_checksum=manifest.split_manifest_checksum,
+            calibration_records=tuple(
+                _rebased_record(record, directory) for record in manifest.calibration_records
+            ),
+            evaluation_records=tuple(
+                _rebased_record(record, directory) for record in manifest.evaluation_records
+            ),
+            future_recalibration_records=tuple(
+                _rebased_record(record, directory)
+                for record in manifest.future_recalibration_records
+            ),
+        )
+    )
+
+
+def _client_paths(output_directory: Path, request: ScoreGenerationRequest) -> tuple[Path, ...]:
+    return tuple(
+        output_directory / client_input.client.client_id / _asset_name_for_partition(role).value
+        for client_input in sorted(request.clients, key=lambda item: item.client)
+        for role in scored_partition_roles(request.checkpoint.coordinate.split_protocol)
+    )
+
+
+def _build_records(
+    output_directory: Path,
+    request: ScoreGenerationRequest,
+    partition_role: PartitionRole,
+) -> tuple[ScoreRecord, ...]:
+    records: list[ScoreRecord] = []
+    for client_input in sorted(request.clients, key=lambda item: item.client):
+        path = output_directory / client_input.client.client_id / _asset_name_for_partition(
+            partition_role
+        ).value
+        if not path.is_file():
+            raise ArtifactIntegrityError(
+                f"expected federated score partition is missing: {path}",
+                subject=ContractSubject.ARTIFACT_PATH,
+            )
+        frame = pl.read_parquet(path)
+        record = ScoreRecord(
+            coordinate=request.checkpoint.coordinate,
+            scored_client=client_input.client,
+            partition_role=partition_role,
+            checkpoint_round=request.checkpoint.round_number,
+            checkpoint_checksum=request.checkpoint.tensor_checksum,
+            path=path,
+            checksum=checksum_file(path),
+            row_count=RowCount(frame.height),
+            feature_count=FeatureCount(len(request.feature_names)),
+            serialization_format=SerializationFormat.PARQUET,
+        )
+        validate_persisted_score_frame(record.path, record.checksum, record.row_count)
+        records.append(record)
+    return tuple(records)
+
+
+def _rebased_record(record: ScoreRecord, output_directory: Path) -> ScoreRecord:
+    path = output_directory / record.scored_client.client_id / _asset_name_for_partition(
+        record.partition_role
+    ).value
+    if not path.is_file():
+        raise ArtifactIntegrityError(
+            "published score partition missing after atomic replace",
+            subject=ContractSubject.SCORES,
+        )
+    return ScoreRecord(
+        coordinate=record.coordinate,
+        scored_client=record.scored_client,
+        partition_role=record.partition_role,
+        checkpoint_round=record.checkpoint_round,
+        checkpoint_checksum=record.checkpoint_checksum,
+        path=path,
+        checksum=checksum_file(path),
+        row_count=record.row_count,
+        feature_count=record.feature_count,
+        serialization_format=record.serialization_format,
+    )
 
 
 def _require_empty_output_directory(directory: Path) -> None:
@@ -208,6 +349,21 @@ def _fixed_score_invariant(
         split_manifest_checksum=request.split_manifest_checksum,
         future_recalibration_score_set_checksum=(
             record_set_checksum(future_records) if future_records else None
+        ),
+    )
+
+
+def _invariant_from_manifest(manifest: ScoreArtifactManifest) -> FixedScoreInvariant:
+    return FixedScoreInvariant(
+        model_checksum=manifest.checkpoint_checksum,
+        calibration_score_set_checksum=record_set_checksum(manifest.calibration_records),
+        evaluation_score_set_checksum=record_set_checksum(manifest.evaluation_records),
+        preprocessing_state_set_checksum=manifest.preprocessing_state_set_checksum,
+        split_manifest_checksum=manifest.split_manifest_checksum,
+        future_recalibration_score_set_checksum=(
+            record_set_checksum(manifest.future_recalibration_records)
+            if manifest.future_recalibration_records
+            else None
         ),
     )
 
@@ -243,42 +399,6 @@ def _validate_request(request: ScoreGenerationRequest) -> None:
     for client in request.clients:
         for role in expected_roles:
             client.features_for(role)
-
-
-def _score_partition(
-    *,
-    frame: pl.DataFrame,
-    client: ClientIdentity,
-    partition_role: PartitionRole,
-    request: ScoreGenerationRequest,
-    model: ReconstructionAutoencoder,
-    device: torch.device,
-    destination: Path,
-) -> ScoreRecord:
-    matrix, labels, row_ids = extract_score_arrays(frame, request.feature_names)
-    scores = reconstruction_errors(model, matrix, batch_size=request.batch_size, device=device)
-    if scores.shape[0] != matrix.shape[0]:
-        raise ScientificContractError("score count must equal partition row count", subject=partition_role)
-    if not np.isfinite(scores).all():
-        raise ScientificContractError(
-            f"generated scores must be finite in {partition_role.value} partition",
-            subject=ContractSubject.SCORES,
-        )
-    output = score_frame(row_ids, labels, scores)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    output.write_parquet(destination)
-    return ScoreRecord(
-        coordinate=request.checkpoint.coordinate,
-        partition_role=partition_role,
-        checkpoint_round=request.checkpoint.round_number,
-        checkpoint_checksum=request.checkpoint.tensor_checksum,
-        path=destination,
-        checksum=checksum_file(destination),
-        row_count=RowCount(output.height),
-        feature_count=FeatureCount(len(request.feature_names)),
-        serialization_format=SerializationFormat.PARQUET,
-        scored_client=client,
-    )
 
 
 def _asset_name_for_partition(role: PartitionRole) -> FederatedScoreAssetName:
