@@ -14,7 +14,7 @@ jobs:
         with:
           persist-credentials: true
 
-      - name: Apply audited source patch
+      - name: Apply remaining audited source patch
         run: |
           python - <<'PY'
           import base64
@@ -22,21 +22,13 @@ jobs:
           from pathlib import Path
 
           encoded = "".join(
-              path.read_text(encoding="ascii").strip()
-              for path in sorted(Path(".github").glob("final-audit.patch.part*"))
+              path.read_text(encoding="ascii")
+              for path in sorted(Path(".github").glob("final-remaining.b64.part*"))
           )
           Path("/tmp/final-audit.patch").write_bytes(gzip.decompress(base64.b64decode(encoded, validate=True)))
           PY
-          git apply --check \
-            --exclude=src/datp_core/domain/provenance.py \
-            --exclude=src/datp_core/artifacts/serialization.py \
-            --exclude=src/datp_core/protocols/calibration.py \
-            /tmp/final-audit.patch
-          git apply \
-            --exclude=src/datp_core/domain/provenance.py \
-            --exclude=src/datp_core/artifacts/serialization.py \
-            --exclude=src/datp_core/protocols/calibration.py \
-            /tmp/final-audit.patch
+          git apply --check /tmp/final-audit.patch
+          git apply /tmp/final-audit.patch
 
       - name: Set up Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
@@ -74,7 +66,7 @@ jobs:
         run: |
           git fetch origin main --depth=1
           git show FETCH_HEAD:.github/workflows/tests.yml > .github/workflows/tests.yml
-          rm .github/final-audit.patch.part*
+          rm -f .github/final-audit.patch.part* .github/final-remaining.b64.part*
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src tests .github
