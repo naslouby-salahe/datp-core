@@ -10,7 +10,7 @@ from datp_core.domain.contracts import ClientOwned, StrictModel
 from datp_core.domain.enums import EvidenceRole
 from datp_core.domain.values import ClusterIndex, PairedObservationCount
 from datp_core.populations.models import ClientIdentity
-from datp_core.thresholding.models import ClusterMembership
+from datp_core.thresholding.methods.cluster import ClusterMembership
 
 MINIMUM_STABILITY_CLIENTS = PairedObservationCount(2)
 
