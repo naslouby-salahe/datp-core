@@ -55,6 +55,58 @@ forbidden_modules =
     datp_core.reporting
     datp_core.cli
 
+[importlinter:contract:dataset-direction]
+name = Dataset implementations must not depend on populations or application composition
+type = forbidden
+source_modules =
+    datp_core.datasets
+forbidden_modules =
+    datp_core.populations
+    datp_core.orchestration
+    datp_core.reporting
+    datp_core.cli
+
+[importlinter:contract:population-direction]
+name = Population implementations must not depend on application composition
+type = forbidden
+source_modules =
+    datp_core.populations
+forbidden_modules =
+    datp_core.orchestration
+    datp_core.reporting
+    datp_core.cli
+
+[importlinter:contract:preprocessing-direction]
+name = Preprocessing implementations must not depend on application composition
+type = forbidden
+source_modules =
+    datp_core.preprocessing
+forbidden_modules =
+    datp_core.orchestration
+    datp_core.reporting
+    datp_core.cli
+
+[importlinter:contract:artifact-direction]
+name = Artifact infrastructure must not depend on application composition
+type = forbidden
+source_modules =
+    datp_core.artifacts
+forbidden_modules =
+    datp_core.orchestration
+    datp_core.reporting
+    datp_core.analysis
+    datp_core.cli
+
+[importlinter:contract:protocol-direction]
+name = Protocol declarations must not depend on orchestration, reporting, or CLI
+type = forbidden
+source_modules =
+    datp_core.protocols
+forbidden_modules =
+    datp_core.orchestration
+    datp_core.reporting
+    datp_core.cli
+
 [importlinter:contract:domain-independence]
 name = Domain package must not import application layers
 type = forbidden
