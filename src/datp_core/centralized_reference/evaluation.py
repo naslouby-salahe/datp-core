@@ -28,13 +28,19 @@ from datp_core.populations.models import PopulationOutcomeLabel
 
 BENIGN_OUTCOME_LABEL = PopulationOutcomeLabel.BENIGN
 ATTACK_OUTCOME_LABEL = PopulationOutcomeLabel.ATTACK
-BINARY_CLASS_MEAN_WEIGHT = 0.5
-F1_NUMERATOR_FACTOR = 2.0
-RANK_POSITION_OFFSET = 1.0
+BINARY_CLASS_AVERAGE_WEIGHT = 0.5
+F1_HARMONIC_MEAN_FACTOR = 2.0
+RANK_MIDPOINT_WEIGHT = 0.5
+ONE_BASED_RANK_OFFSET = 1.0
+MANN_WHITNEY_PAIR_FACTOR = 2.0
 
 
 class CentralizedDecisionRule(StrEnum):
     SCORE_STRICTLY_GREATER_THAN_THRESHOLD = "score_strictly_greater_than_threshold"
+
+
+class CentralizedEvaluationAssetName(StrEnum):
+    EVALUATION = "centralized_evaluation.json"
 
 
 @dataclass(frozen=True, slots=True)
@@ -245,7 +251,7 @@ def reject_centralized_in_federated_threshold_comparison(method: FederatedThresh
 def write_evaluation_document(evaluation: CentralizedEvaluationResult, directory: Path) -> Path:
     """Persist centralized evaluation through the strict canonical JSON boundary."""
     directory.mkdir(parents=True, exist_ok=True)
-    path = directory / "centralized_evaluation.json"
+    path = directory / CentralizedEvaluationAssetName.EVALUATION.value
     serialize_json_model(CentralizedEvaluationDocument.from_result(evaluation), path)
     return path
 
@@ -349,7 +355,7 @@ def _balanced_accuracy(
     return CentralizedMetricRecord(
         metric=MetricId.BALANCED_ACCURACY,
         status=AvailabilityStatus.AVAILABLE,
-        value=MetricValue(BINARY_CLASS_MEAN_WEIGHT * (tpr.value.value + specificity)),
+        value=MetricValue(BINARY_CLASS_AVERAGE_WEIGHT * (tpr.value.value + specificity)),
     )
 
 
@@ -377,7 +383,7 @@ def _macro_f1_record(metric: MetricId, confusion: CentralizedConfusionCounts) ->
     return CentralizedMetricRecord(
         metric=metric,
         status=AvailabilityStatus.AVAILABLE,
-        value=MetricValue(BINARY_CLASS_MEAN_WEIGHT * (attack_f1 + benign_f1)),
+        value=MetricValue(BINARY_CLASS_AVERAGE_WEIGHT * (attack_f1 + benign_f1)),
     )
 
 
@@ -385,7 +391,7 @@ def _f1(precision: float, recall: float) -> float | None:
     total = precision + recall
     if total == 0:
         return None
-    return F1_NUMERATOR_FACTOR * precision * recall / total
+    return F1_HARMONIC_MEAN_FACTOR * precision * recall / total
 
 
 def _auroc(labels: np.ndarray, scores: np.ndarray) -> CentralizedMetricRecord:
@@ -422,7 +428,7 @@ def _auroc(labels: np.ndarray, scores: np.ndarray) -> CentralizedMetricRecord:
     positive_rank_sum = float(ranks[sorted_labels == 1].sum())
     auc = (
         positive_rank_sum
-        - positive_count * (positive_count + RANK_POSITION_OFFSET) / F1_NUMERATOR_FACTOR
+        - positive_count * (positive_count + ONE_BASED_RANK_OFFSET) / MANN_WHITNEY_PAIR_FACTOR
     ) / (positive_count * negative_count)
     if not isfinite(auc):
         return CentralizedMetricRecord(
@@ -444,7 +450,7 @@ def _average_ranks(sorted_scores: np.ndarray) -> np.ndarray:
         end = start + 1
         while end < sorted_scores.shape[0] and sorted_scores[end] == sorted_scores[start]:
             end += 1
-        average = BINARY_CLASS_MEAN_WEIGHT * (start + end - 1) + RANK_POSITION_OFFSET
+        average = RANK_MIDPOINT_WEIGHT * (start + end - 1) + ONE_BASED_RANK_OFFSET
         ranks[start:end] = average
         start = end
     return ranks
