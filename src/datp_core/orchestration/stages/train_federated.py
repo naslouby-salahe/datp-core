@@ -16,10 +16,10 @@ from datp_core.learning.federated.common import (
     write_federated_training,
 )
 from datp_core.orchestration.commands.training import (
-    TrainDittoRequest,
-    TrainDittoStageResult,
-    TrainFederatedRequest,
-    TrainFederatedStageResult,
+    TrainDittoRequest as _TrainDittoRequest,
+    TrainDittoStageResult as _TrainDittoStageResult,
+    TrainFederatedRequest as _TrainFederatedRequest,
+    TrainFederatedStageResult as _TrainFederatedStageResult,
 )
 from datp_core.pipeline.publication.codec import (
     ArtifactPublication,
@@ -37,7 +37,9 @@ class DittoPublicationMember(StrEnum):
     PERSONALIZED = "personalized"
 
 
-def train_federated_stage(stage_request: TrainFederatedRequest) -> TrainFederatedStageResult:
+def train_federated_stage(
+    stage_request: _TrainFederatedRequest,
+) -> _TrainFederatedStageResult:
     request = stage_request.request
     validate_federated_training_inputs(request.clients, request.autoencoder.widths[0])
     publication = publish_artifact(
@@ -54,14 +56,14 @@ def train_federated_stage(stage_request: TrainFederatedRequest) -> TrainFederate
         )
     )
     artifacts: FederatedTrainingArtifacts = publication.value
-    return TrainFederatedStageResult(
+    return _TrainFederatedStageResult(
         publication_status=publication.status,
         training=artifacts.training,
         candidates=artifacts.candidates,
     )
 
 
-def train_ditto_stage(stage_request: TrainDittoRequest) -> TrainDittoStageResult:
+def train_ditto_stage(stage_request: _TrainDittoRequest) -> _TrainDittoStageResult:
     request = stage_request.request
     validate_federated_training_inputs(request.clients, request.autoencoder.widths[0])
     publication = publish_related_artifacts(
@@ -87,7 +89,7 @@ def train_ditto_stage(stage_request: TrainDittoRequest) -> TrainDittoStageResult
         )
     )
     artifacts: DittoTrainingArtifacts = publication.value
-    return TrainDittoStageResult(
+    return _TrainDittoStageResult(
         publication_status=publication.status,
         global_training=artifacts.global_training,
         global_candidates=artifacts.global_candidates,
