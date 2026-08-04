@@ -1,6 +1,5 @@
 """Gate decision for historical anchor reproduction and dependent-experiment readiness."""
 
-from json import dumps
 from pathlib import Path
 
 from datp_core.anchor.models import (
@@ -12,6 +11,7 @@ from datp_core.anchor.models import (
     AnchorGateStatus,
     AnchorReproductionResult,
 )
+from datp_core.artifacts.serialization import canonical_json_text
 from datp_core.domain.enums import ExperimentReadiness
 from datp_core.domain.errors import AnchorReproductionError
 from datp_core.domain.values import Checksum, checksum_text
@@ -107,19 +107,15 @@ def _partition_discrepancies(
 
 def persist_anchor_gate_diagnostics(decision: AnchorGateDecision, diagnostics_directory: Path | None) -> Checksum:
     """Write gate decision and discrepancy diagnostics, returning a deterministic checksum."""
-    gate_payload = decision.model_dump(mode="json")
-    gate_json = dumps(gate_payload, sort_keys=True, separators=(",", ":"))
+    gate_json = canonical_json_text(decision)
     checksum = checksum_text(gate_json)
     if diagnostics_directory is None:
         return checksum
     diagnostics_directory.mkdir(parents=True, exist_ok=True)
     (diagnostics_directory / AnchorArtifactFileName.GATE_DECISION.value).write_text(gate_json, encoding="utf-8")
-    discrepancies_json = dumps(
-        gate_payload["reproduction"]["discrepancies"],
-        sort_keys=True,
-        separators=(",", ":"),
-    )
+    discrepancies_json = canonical_json_text(decision.reproduction.discrepancies)
     (diagnostics_directory / AnchorArtifactFileName.DISCREPANCIES.value).write_text(
-        discrepancies_json, encoding="utf-8"
+        discrepancies_json,
+        encoding="utf-8",
     )
     return checksum
