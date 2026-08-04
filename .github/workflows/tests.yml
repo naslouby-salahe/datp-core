@@ -1,4 +1,4 @@
-name: Publish final audit fixes
+name: Publish audited source
 
 "on": [push]
 
