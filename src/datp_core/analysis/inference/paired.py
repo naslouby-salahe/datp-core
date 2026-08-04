@@ -23,7 +23,11 @@ from datp_core.protocols.statistics import PairedInferenceProtocol
 
 
 def paired_deltas(contrasts: PairedContrasts) -> NDArray[np.float64]:
-    values = np.fromiter((contrast.delta.value for contrast in contrasts), dtype=np.float64, count=len(contrasts))
+    values = np.fromiter(
+        (contrast.delta.value for contrast in contrasts),
+        dtype=np.float64,
+        count=len(contrasts),
+    )
     if np.any(~np.isfinite(values)):
         raise ValueError("paired contrasts must be finite")
     return values
@@ -45,9 +49,9 @@ def paired_wilcoxon(contrasts: PairedContrasts, protocol: PairedInferenceProtoco
         )
     result = stats.wilcoxon(
         deltas,
-        alternative=protocol.wilcoxon_alternative,
-        zero_method=protocol.wilcoxon_zero_method,
-        method=protocol.wilcoxon_computation_method,
+        alternative=protocol.wilcoxon_alternative.value,
+        zero_method=protocol.wilcoxon_zero_method.value,
+        method=protocol.wilcoxon_computation_method.value,
     )
     extracted = extract_named_numeric_attributes(result, ("statistic", "pvalue"))
     if extracted is None:
@@ -118,6 +122,11 @@ def holm_adjust(plan: MultiplicityPlan, protocol: PairedInferenceProtocol) -> Mu
                 adjusted_p_value=PValue(float(corrected)),
                 rejected=bool(is_rejected),
             )
-            for raw, corrected, is_rejected in zip(plan.raw_p_values, adjusted, rejected, strict=True)
+            for raw, corrected, is_rejected in zip(
+                plan.raw_p_values,
+                adjusted,
+                rejected,
+                strict=True,
+            )
         ),
     )
