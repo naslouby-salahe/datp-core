@@ -1,6 +1,5 @@
 """Stage: compose external and temporal population split publication."""
 
-from datp_core.domain.values import checksum_file
 from datp_core.orchestration.commands.populations import (
     SplitRequest as _SplitRequest,
     SplitResult as _SplitResult,
@@ -54,5 +53,5 @@ def split_stage(request: _SplitRequest) -> _SplitResult:
         manifest=artifacts.manifest,
         matched_static_reference_assignments=artifacts.matched_static_reference_assignments,
         matched_static_reference_manifest=artifacts.matched_static_reference_manifest,
-        complete_digest=checksum_file(request.output_directory / SplitPublicationAsset.COMPLETE),
+        complete_digest=publication.complete_digest,
     )
