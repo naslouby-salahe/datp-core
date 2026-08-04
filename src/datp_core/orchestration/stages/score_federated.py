@@ -3,8 +3,8 @@
 from pathlib import Path
 
 from datp_core.orchestration.commands.scoring import (
-    ScoreFederatedRequest,
-    ScoreFederatedStageResult,
+    ScoreFederatedRequest as _ScoreFederatedRequest,
+    ScoreFederatedStageResult as _ScoreFederatedStageResult,
 )
 from datp_core.pipeline.publication.codec import (
     ArtifactPublication,
@@ -22,7 +22,7 @@ from datp_core.scoring.generation import (
 )
 
 
-def score_federated_stage(request: ScoreFederatedRequest) -> ScoreFederatedStageResult:
+def score_federated_stage(request: _ScoreFederatedRequest) -> _ScoreFederatedStageResult:
     publication = publish_artifact(
         ArtifactPublication(
             target=request.output_directory,
@@ -47,14 +47,14 @@ def score_federated_stage(request: ScoreFederatedRequest) -> ScoreFederatedStage
             complete_marker=FederatedScoreAssetName.COMPLETE.value,
         )
     )
-    return ScoreFederatedStageResult(
+    return _ScoreFederatedStageResult(
         publication_status=publication.status,
         result=publication.value,
     )
 
 
 def _generation_request(
-    request: ScoreFederatedRequest,
+    request: _ScoreFederatedRequest,
     directory: Path,
 ) -> ScoreGenerationRequest:
     return ScoreGenerationRequest(
