@@ -24,12 +24,20 @@ from datp_core.domain.errors import (
     LeakageError,
     ScientificContractError,
 )
-from datp_core.domain.values import Checksum, MetricValue, RoundNumber, Seed, checksum_text
+from datp_core.domain.values import (
+    Checksum,
+    MetricValue,
+    RoundNumber,
+    Seed,
+    checksum_text,
+)
 from datp_core.pipeline.checkpoints.models import RETAINED_CHECKPOINT_STATUSES
+from datp_core.pipeline.checkpoints.persistence import (
+    validate_persisted_checkpoint_file,
+)
 from datp_core.pipeline.checkpoints.service import (
     select_terminal_checkpoint,
     validate_ordered_checkpoint_inventory,
-    validate_persisted_checkpoint_file,
 )
 from datp_core.protocols.models import AutoencoderProtocol, CheckpointProtocol
 from datp_core.protocols.training import require_non_test_checkpoint_selection_inputs
@@ -87,7 +95,10 @@ class CentralizedCheckpointDecision:
                 "centralized checkpoint decision status must be SELECTED_BY_NON_TEST_RULE",
                 subject=self.status,
             )
-        if self.selection_rule is not CheckpointSelectionRule.FIXED_TERMINAL_MAXIMUM_ROUND:
+        if (
+            self.selection_rule
+            is not CheckpointSelectionRule.FIXED_TERMINAL_MAXIMUM_ROUND
+        ):
             raise ScientificContractError(
                 "centralized checkpoint decision must use FIXED_TERMINAL_MAXIMUM_ROUND",
                 subject=ContractSubject.CHECKPOINT_SELECTION_RULE,
@@ -97,7 +108,10 @@ class CentralizedCheckpointDecision:
                 "selected checkpoint must equal the declared maximum round",
                 subject=ContractSubject.CHECKPOINT_SELECTION_RULE,
             )
-        if self.selected.status is not CheckpointStatus.SELECTED_BY_NON_TEST_RULE:
+        if (
+            self.selected.status
+            is not CheckpointStatus.SELECTED_BY_NON_TEST_RULE
+        ):
             raise ScientificContractError(
                 "selected candidate status must be SELECTED_BY_NON_TEST_RULE",
                 subject=self.selected.status,
@@ -129,7 +143,9 @@ def retain_centralized_checkpoint_candidates(
         )
     candidates: list[CentralizedCheckpointCandidate] = []
     for snapshot in snapshots:
-        path = training_result.model_directory / candidate_tensor_name(snapshot.round_number)
+        path = training_result.model_directory / candidate_tensor_name(
+            snapshot.round_number
+        )
         checksum = persist_state_dict_tensors(snapshot.state_dict, path)
         _verify_candidate_reload(snapshot, path, autoencoder)
         candidates.append(
@@ -140,13 +156,18 @@ def retain_centralized_checkpoint_candidates(
                 tensor_checksum=checksum,
                 mean_training_loss=snapshot.mean_training_loss,
                 status=CheckpointStatus.CANDIDATE,
-                preprocessing_state_checksum=training_result.preprocessing_state_checksum,
+                preprocessing_state_checksum=(
+                    training_result.preprocessing_state_checksum
+                ),
                 split_manifest_checksum=training_result.split_manifest_checksum,
                 training_seed=training_result.training_seed,
                 autoencoder_widths=tuple(autoencoder.widths),
             )
         )
-    return validate_ordered_checkpoint_inventory(tuple(candidates), protocol.candidates)
+    return validate_ordered_checkpoint_inventory(
+        tuple(candidates),
+        protocol.candidates,
+    )
 
 
 def select_centralized_checkpoint(
@@ -164,14 +185,20 @@ def select_centralized_checkpoint(
         attack_labels_present=attack_labels_present,
         branch_label="centralized",
     )
-    ordered = validate_ordered_checkpoint_inventory(candidates, protocol.candidates)
+    ordered = validate_ordered_checkpoint_inventory(
+        candidates,
+        protocol.candidates,
+    )
     for candidate in ordered:
         if candidate.status is CheckpointStatus.HISTORICAL_ENDPOINT:
             raise ScientificContractError(
                 "historical federated endpoint status is incompatible with centralized candidates",
                 subject=candidate.status,
             )
-        validate_persisted_checkpoint_file(candidate.tensor_path, candidate.tensor_checksum)
+        validate_persisted_checkpoint_file(
+            candidate.tensor_path,
+            candidate.tensor_checksum,
+        )
 
     statused, selected = select_terminal_checkpoint(
         ordered,
@@ -208,7 +235,8 @@ def _rebuild_candidate_status(
 
 def reject_federated_checkpoint(identity: TrainingModelId) -> None:
     raise LeakageError(
-        f"federated checkpoint cannot enter centralized scoring or selection ({identity.value})",
+        "federated checkpoint cannot enter centralized scoring or selection "
+        f"({identity.value})",
         subject=ContractSubject.CHECKPOINT_CANDIDATES,
     )
 
@@ -244,9 +272,14 @@ def validate_candidate_coordinates(
             )
 
 
-def candidate_set_checksum(candidates: Sequence[CentralizedCheckpointCandidate]) -> Checksum:
+def candidate_set_checksum(
+    candidates: Sequence[CentralizedCheckpointCandidate],
+) -> Checksum:
     payload = "|".join(
-        f"{item.round_number.value}:{item.tensor_checksum.value}:{item.status.value}" for item in candidates
+        f"{item.round_number.value}:"
+        f"{item.tensor_checksum.value}:"
+        f"{item.status.value}"
+        for item in candidates
     )
     return checksum_text(payload)
 
