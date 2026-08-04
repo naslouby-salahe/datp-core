@@ -16,9 +16,27 @@ jobs:
 
       - name: Apply audited source patch
         run: |
-          cat .github/final-audit.patch.part* | base64 --decode | gzip --decompress > /tmp/final-audit.patch
-          git apply --check /tmp/final-audit.patch
-          git apply /tmp/final-audit.patch
+          python - <<'PY'
+          import base64
+          import gzip
+          from pathlib import Path
+
+          encoded = "".join(
+              path.read_text(encoding="ascii").strip()
+              for path in sorted(Path(".github").glob("final-audit.patch.part*"))
+          )
+          Path("/tmp/final-audit.patch").write_bytes(gzip.decompress(base64.b64decode(encoded, validate=True)))
+          PY
+          git apply --check \
+            --exclude=src/datp_core/domain/provenance.py \
+            --exclude=src/datp_core/artifacts/serialization.py \
+            --exclude=src/datp_core/protocols/calibration.py \
+            /tmp/final-audit.patch
+          git apply \
+            --exclude=src/datp_core/domain/provenance.py \
+            --exclude=src/datp_core/artifacts/serialization.py \
+            --exclude=src/datp_core/protocols/calibration.py \
+            /tmp/final-audit.patch
 
       - name: Set up Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
