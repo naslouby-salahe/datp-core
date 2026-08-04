@@ -6,7 +6,7 @@ from datp_core.artifacts.score_models import ScoreArtifact
 from datp_core.domain.enums import ContractSubject, PartitionRole, SerializationFormat, SplitProtocolId
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.provenance import canonical_checksum
-from datp_core.domain.values import Checksum
+from datp_core.domain.values import Checksum, RoundNumber
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.populations.models import ClientIdentity
 
@@ -18,7 +18,7 @@ class ScoreRecord(ScoreArtifact[FederatedTrainingCoordinate]):
     scored_client: ClientIdentity
 
     def __post_init__(self) -> None:
-        super().__post_init__()
+        ScoreArtifact.__post_init__(self)
         if self.scored_client.population is not self.coordinate.population:
             raise ScientificContractError(
                 "scored client population must match the training coordinate",
@@ -29,7 +29,7 @@ class ScoreRecord(ScoreArtifact[FederatedTrainingCoordinate]):
 @dataclass(frozen=True, slots=True)
 class ScoreArtifactManifest:
     coordinate: FederatedTrainingCoordinate
-    checkpoint_round: object
+    checkpoint_round: RoundNumber
     checkpoint_checksum: Checksum
     preprocessing_state_set_checksum: Checksum
     split_manifest_checksum: Checksum
