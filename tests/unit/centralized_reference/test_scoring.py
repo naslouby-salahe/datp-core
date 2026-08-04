@@ -22,14 +22,16 @@ from datp_core.centralized_reference.scoring import (
     load_score_frame,
     score_centralized_reference,
 )
+from datp_core.domain.enums import ScoreFrameColumn, TrainingModelId
 from datp_core.domain.errors import LeakageError
 from datp_core.domain.values import RowCount, Seed
 
 
 def test_deterministic_scoring_and_reload(tmp_path: Path) -> None:
     require_cuda()
-    training = run_miniature_training(tmp_path / "train")
-    candidates = retain_centralized_checkpoint_candidates(training, AUTOENCODER)
+    execution = run_miniature_training(tmp_path / "train")
+    training = execution.result
+    candidates = retain_centralized_checkpoint_candidates(execution, AUTOENCODER)
     request = CentralizedScoringRequest(
         coordinate=training_coordinate(),
         checkpoint=candidates[0],
@@ -53,13 +55,14 @@ def test_deterministic_scoring_and_reload(tmp_path: Path) -> None:
 
 def test_rejects_federated_checkpoint_for_scoring() -> None:
     with pytest.raises(LeakageError, match="federated checkpoint"):
-        reject_federated_checkpoint("fedavg")
+        reject_federated_checkpoint(TrainingModelId.FEDAVG_AUTOENCODER)
 
 
 def test_score_polarity_higher_is_more_anomalous(tmp_path: Path) -> None:
     require_cuda()
-    training = run_miniature_training(tmp_path / "train")
-    candidates = retain_centralized_checkpoint_candidates(training, AUTOENCODER)
+    execution = run_miniature_training(tmp_path / "train")
+    training = execution.result
+    candidates = retain_centralized_checkpoint_candidates(execution, AUTOENCODER)
     result = score_centralized_reference(
         CentralizedScoringRequest(
             coordinate=training_coordinate(),
@@ -74,6 +77,8 @@ def test_score_polarity_higher_is_more_anomalous(tmp_path: Path) -> None:
         )
     )
     frame = load_score_frame(result.evaluation_scores)
-    benign = frame.filter(frame["outcome_label"] == "benign")["reconstruction_error"].to_numpy()
-    attack = frame.filter(frame["outcome_label"] == "attack")["reconstruction_error"].to_numpy()
+    label_column = ScoreFrameColumn.OUTCOME_LABEL.value
+    score_column = ScoreFrameColumn.RECONSTRUCTION_ERROR.value
+    benign = frame.filter(frame[label_column] == "benign")[score_column].to_numpy()
+    attack = frame.filter(frame[label_column] == "attack")[score_column].to_numpy()
     assert float(np.mean(attack)) > float(np.mean(benign))
