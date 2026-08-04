@@ -1,15 +1,11 @@
 """Stage: compose federated training publication across declared algorithms."""
 
-from dataclasses import dataclass
 from enum import StrEnum
-from typing import ClassVar
 
 from datp_core.domain.contracts import ClientCollection, ClientOwned
-from datp_core.domain.enums import PublicationStatus, StageOperationId
 from datp_core.learning.federated.common import (
     DittoTrainingArtifacts,
     FederatedTrainingArtifacts,
-    GlobalFederatedProtocol,
     ditto_training_is_reusable,
     load_reused_ditto_artifacts,
     load_reused_federated_artifacts,
@@ -19,12 +15,12 @@ from datp_core.learning.federated.common import (
     write_ditto_training,
     write_federated_training,
 )
-from datp_core.learning.federated.ditto import DittoTrainingRequest
-from datp_core.learning.federated.models import (
-    CheckpointCandidate,
-    FederatedTrainingResult,
+from datp_core.orchestration.commands.training import (
+    TrainDittoRequest,
+    TrainDittoStageResult,
+    TrainFederatedRequest,
+    TrainFederatedStageResult,
 )
-from datp_core.learning.federated.training import FederatedTrainingRequest
 from datp_core.pipeline.publication.codec import (
     ArtifactPublication,
     FunctionalArtifactCodec,
@@ -34,41 +30,11 @@ from datp_core.pipeline.publication.codec import (
     publish_artifact,
     publish_related_artifacts,
 )
-from datp_core.populations.models import ClientIdentity
 
 
 class DittoPublicationMember(StrEnum):
     GLOBAL = "global"
     PERSONALIZED = "personalized"
-
-
-@dataclass(frozen=True, slots=True)
-class TrainFederatedRequest:
-    request: FederatedTrainingRequest[GlobalFederatedProtocol]
-    overwrite: bool
-
-
-@dataclass(frozen=True, slots=True)
-class TrainDittoRequest:
-    request: DittoTrainingRequest
-    overwrite: bool
-
-
-@dataclass(frozen=True, slots=True)
-class TrainFederatedStageResult:
-    stage: ClassVar[StageOperationId] = StageOperationId.TRAIN_FEDERATED
-    publication_status: PublicationStatus
-    training: FederatedTrainingResult
-    candidates: tuple[CheckpointCandidate, ...]
-
-
-@dataclass(frozen=True, slots=True)
-class TrainDittoStageResult:
-    stage: ClassVar[StageOperationId] = StageOperationId.TRAIN_FEDERATED
-    publication_status: PublicationStatus
-    global_training: FederatedTrainingResult
-    global_candidates: tuple[CheckpointCandidate, ...]
-    personalized_candidates: ClientCollection[ClientIdentity, tuple[CheckpointCandidate, ...]]
 
 
 def train_federated_stage(stage_request: TrainFederatedRequest) -> TrainFederatedStageResult:
