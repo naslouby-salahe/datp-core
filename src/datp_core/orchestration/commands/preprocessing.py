@@ -13,7 +13,6 @@ from datp_core.domain.enums import (
     StageOperationId,
 )
 from datp_core.domain.values import ClientPublicationCount, Seed
-from datp_core.experiments.models import ExternalTemporalExecutionIdentity
 from datp_core.populations.models import ControlledPartitionCondition
 from datp_core.preprocessing.models import (
     ClientPreprocessingResult,
@@ -21,6 +20,7 @@ from datp_core.preprocessing.models import (
     PreprocessingPartitions,
     PreprocessingPublishContext,
 )
+from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
 
 
 @dataclass(frozen=True, slots=True)
