@@ -8,7 +8,6 @@ from datp_core.centralized_reference.thresholding import (
     rebase_centralized_threshold,
     write_centralized_threshold,
 )
-from datp_core.domain.values import checksum_file
 from datp_core.orchestration.commands.thresholding import (
     ConstructCentralizedThresholdRequest as _ConstructCentralizedThresholdRequest,
     ConstructCentralizedThresholdResult as _ConstructCentralizedThresholdResult,
@@ -45,7 +44,5 @@ def construct_centralized_reference_threshold_stage(
     return _ConstructCentralizedThresholdResult(
         publication_status=publication.status,
         threshold=publication.value,
-        complete_digest=checksum_file(
-            request.output_directory / CentralizedThresholdAssetName.COMPLETE
-        ),
+        complete_digest=publication.complete_digest,
     )
