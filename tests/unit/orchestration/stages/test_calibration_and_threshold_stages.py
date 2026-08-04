@@ -19,15 +19,15 @@ from datp_core.domain.enums import (
     PublicationStatus,
 )
 from datp_core.domain.values import CalibrationSize, ClientCount, Quantile, SubsampleReplicateCount
+from datp_core.orchestration.commands.thresholding import ConstructFederatedThresholdsRequest
 from datp_core.orchestration.stages.calibrate import CalibrateRequest, calibrate_stage
 from datp_core.orchestration.stages.construct_federated_thresholds import (
-    ConstructFederatedThresholdsAssetName,
-    ConstructFederatedThresholdsRequest,
     construct_federated_thresholds_stage,
 )
 from datp_core.populations.models import PopulationCapabilities
 from datp_core.protocols.models import CalibrationEligibilityProtocol
 from datp_core.scoring.models import FixedScoreInvariant, ScoreArtifactManifest
+from datp_core.thresholding.common import FederatedThresholdAssetName
 from datp_core.thresholding.dispatch import ThresholdConstructionRequest
 from datp_core.thresholding.quantiles import calibration_scores_from_references
 
@@ -65,7 +65,7 @@ def test_calibrate_stage_marks_sufficient_client_eligible_and_insufficient_clien
     assert statuses["client_a"] is EligibilityStatus.ELIGIBLE
     assert statuses["client_b"] is EligibilityStatus.EXCLUDED
     assert [client.client_id for client in result.eligible_clients] == ["client_a"]
-    assert len(result.replicate_manifests) == 2  # two replicates for the one eligible client
+    assert len(result.replicate_manifests) == 2
 
 
 def test_calibrate_stage_produces_nested_deterministic_replicates(tmp_path: Path) -> None:
@@ -146,11 +146,11 @@ def test_construct_federated_thresholds_stage_rebuilds_when_result_document_is_m
     )
 
     construct_federated_thresholds_stage(stage_request)
-    (output_directory / ConstructFederatedThresholdsAssetName.RESULT).unlink()
+    (output_directory / FederatedThresholdAssetName.RESULT).unlink()
 
     result = construct_federated_thresholds_stage(stage_request)
     assert result.publication_status is PublicationStatus.PUBLISHED
-    assert (output_directory / ConstructFederatedThresholdsAssetName.RESULT).is_file()
+    assert (output_directory / FederatedThresholdAssetName.RESULT).is_file()
 
 
 def test_construct_federated_thresholds_stage_overwrite_forces_rebuild(tmp_path: Path) -> None:
