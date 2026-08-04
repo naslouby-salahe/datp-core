@@ -18,7 +18,8 @@ from datp_core.domain.values import Checksum, RowCount, Seed
 from datp_core.learning.federated.checkpoints.selection import select_checkpoint
 from datp_core.learning.federated.fedavg import train_fedavg
 from datp_core.learning.federated.training import FederatedTrainingRequest
-from datp_core.orchestration.stages.train_federated import TrainFederatedRequest, train_federated_stage
+from datp_core.orchestration.commands.training import TrainFederatedRequest
+from datp_core.orchestration.stages.train_federated import train_federated_stage
 from datp_core.protocols.training import CHECKPOINT_SELECTION_RULE
 from datp_core.runtime.compute import resolve_cuda_device
 from datp_core.scoring.generation import ClientScoringInput, ScoreGenerationRequest, generate_federated_scores
