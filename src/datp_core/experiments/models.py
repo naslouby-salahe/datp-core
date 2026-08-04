@@ -1,6 +1,6 @@
 """Immutable execution identities for capability-constrained evidence."""
 
-from dataclasses import dataclass
+from pydantic import model_validator
 
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import EvidenceRole, ExperimentId, PopulationId, TemporalState
@@ -15,16 +15,17 @@ BOUNDED_EVIDENCE_POPULATIONS = frozenset(
 )
 
 
-@dataclass(frozen=True, slots=True)
-class ExternalTemporalExecutionIdentity:
+class ExternalTemporalExecutionIdentity(StrictModel):
     experiment: ExperimentId
     population: PopulationId
     evidence_role: EvidenceRole
     temporal_state: TemporalState | None
 
-    def __post_init__(self) -> None:
+    @model_validator(mode="after")
+    def validate_declared_identity(self) -> "ExternalTemporalExecutionIdentity":
         if not _is_declared_identity(self):
             raise ScientificContractError("execution identity must be declared", subject=self.experiment)
+        return self
 
     def require_population(self, population: PopulationId) -> None:
         if self.population is not population:
@@ -33,33 +34,6 @@ class ExternalTemporalExecutionIdentity:
     def require_evidence_role(self, evidence_role: EvidenceRole) -> None:
         if self.evidence_role is not evidence_role:
             raise ScientificContractError("execution identity evidence role must match", subject=evidence_role)
-
-
-class ExternalTemporalExecutionIdentityDocument(StrictModel):
-    experiment: ExperimentId
-    population: PopulationId
-    evidence_role: EvidenceRole
-    temporal_state: TemporalState | None
-
-    @classmethod
-    def from_identity(
-        cls,
-        identity: ExternalTemporalExecutionIdentity,
-    ) -> "ExternalTemporalExecutionIdentityDocument":
-        return cls(
-            experiment=identity.experiment,
-            population=identity.population,
-            evidence_role=identity.evidence_role,
-            temporal_state=identity.temporal_state,
-        )
-
-    def to_identity(self) -> ExternalTemporalExecutionIdentity:
-        return ExternalTemporalExecutionIdentity(
-            experiment=self.experiment,
-            population=self.population,
-            evidence_role=self.evidence_role,
-            temporal_state=self.temporal_state,
-        )
 
 
 def require_execution_identity(
