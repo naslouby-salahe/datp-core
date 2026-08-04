@@ -4,6 +4,7 @@ from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).parents[2]
 SOURCE_ROOT = REPOSITORY_ROOT / "src" / "datp_core"
+POPULATION_MODELS = SOURCE_ROOT / "populations" / "models.py"
 
 AUDITED_STRUCTURAL_ROOTS = (
     SOURCE_ROOT / "pipeline",
@@ -73,6 +74,17 @@ def _class_fields(node: ast.ClassDef) -> tuple[tuple[str, str], ...]:
     return tuple(fields)
 
 
+def _class_node(path: Path, class_name: str) -> ast.ClassDef:
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    matches = tuple(
+        node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name == class_name
+    )
+    assert len(matches) == 1, f"expected one {class_name} in {path}"
+    return matches[0]
+
+
 def _is_structural_model(node: ast.ClassDef) -> bool:
     decorators = {
         ast.unparse(decorator).split("(")[0]
@@ -106,6 +118,12 @@ def test_structural_model_shapes_are_not_reimplemented_in_audited_packages() -> 
         "duplicate structural model shapes require consolidation or review: "
         f"{violations}"
     )
+
+
+def test_client_partition_counts_reuses_canonical_client_identity() -> None:
+    fields = dict(_class_fields(_class_node(POPULATION_MODELS, "ClientPartitionCounts")))
+    assert fields.get("client") == "ClientIdentity"
+    assert "client_id" not in fields
 
 
 def test_semantic_primitive_leakage_cannot_expand_beyond_legacy_model_warehouses() -> None:
