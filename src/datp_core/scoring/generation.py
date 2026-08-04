@@ -27,7 +27,7 @@ from datp_core.domain.values import (
     checksum_file,
 )
 from datp_core.learning.autoencoder import ReconstructionAutoencoder, reconstruction_errors
-from datp_core.learning.federated.checkpointing import CheckpointCandidate
+from datp_core.learning.federated.models import CheckpointCandidate
 from datp_core.pipeline.checkpoints.service import validate_persisted_checkpoint_file
 from datp_core.pipeline.scoring.frames import (
     extract_score_arrays,
