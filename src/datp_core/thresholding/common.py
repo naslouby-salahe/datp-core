@@ -1,9 +1,11 @@
-"""Shared threshold structure and publication without collapsing method-specific science."""
+"""Closed threshold result union and publication lifecycle."""
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import ClassVar, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, ClassVar, Protocol, runtime_checkable
 
 from datp_core.analysis.temporal import TemporalDeploymentProvenance
 from datp_core.artifacts.serialization import canonical_json_text
@@ -13,8 +15,37 @@ from datp_core.domain.values import Checksum, Quantile, ThresholdValue, checksum
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.populations.models import ClientIdentity
 from datp_core.scoring.models import ScoreArtifactManifest
-from datp_core.thresholding.dispatch import ThresholdConstructionRequest, dispatch_federated_threshold
-from datp_core.thresholding.models import ThresholdConstructionResult
+from datp_core.thresholding.identities import ThresholdUnavailableResult
+from datp_core.thresholding.methods.cluster import GroupedThresholdResult
+from datp_core.thresholding.methods.conformal import ConformalThresholdResult
+from datp_core.thresholding.methods.family import FamilyThresholdResult
+from datp_core.thresholding.methods.federated_statistics import (
+    FederatedStatisticsThresholdResult,
+)
+from datp_core.thresholding.methods.local import LocalThresholdResult
+from datp_core.thresholding.methods.shared import (
+    PooledSharedQuantileResult,
+    SampleWeightedSharedThresholdResult,
+    SharedThresholdResult,
+)
+from datp_core.thresholding.methods.shrinkage import ShrinkageThresholdResult
+
+if TYPE_CHECKING:
+    from datp_core.thresholding.dispatch import ThresholdConstructionRequest
+
+
+type ThresholdConstructionResult = (
+    SharedThresholdResult
+    | PooledSharedQuantileResult
+    | SampleWeightedSharedThresholdResult
+    | LocalThresholdResult
+    | FamilyThresholdResult
+    | GroupedThresholdResult
+    | ShrinkageThresholdResult
+    | ConformalThresholdResult
+    | FederatedStatisticsThresholdResult
+    | ThresholdUnavailableResult
+)
 
 
 class FederatedThresholdAssetName(StrEnum):
@@ -39,7 +70,7 @@ class ThresholdAssignmentSet[AssignmentT: ThresholdAssignmentLike]:
                 "threshold assignment set requires at least one assignment",
                 subject=ContractSubject.THRESHOLD,
             )
-        clients = tuple(assignment.client for assignment in self.assignments)
+        clients = tuple(item.client for item in self.assignments)
         if len(frozenset(clients)) != len(clients):
             raise ScientificContractError(
                 "threshold assignment clients must be unique",
@@ -48,7 +79,7 @@ class ThresholdAssignmentSet[AssignmentT: ThresholdAssignmentLike]:
 
     @property
     def clients(self) -> tuple[ClientIdentity, ...]:
-        return tuple(assignment.client for assignment in self.assignments)
+        return tuple(item.client for item in self.assignments)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -73,12 +104,18 @@ class FederatedThresholdPublicationRequest:
     temporal_score_manifest: ScoreArtifactManifest | None = None
 
     def __post_init__(self) -> None:
-        if (self.temporal_provenance is None) != (self.temporal_score_manifest is None):
-            raise ValueError("temporal threshold construction requires both provenance and score manifest")
+        if (self.temporal_provenance is None) != (
+            self.temporal_score_manifest is None
+        ):
+            raise ValueError(
+                "temporal threshold construction requires both provenance and score manifest"
+            )
         if self.temporal_provenance is not None:
             if self.temporal_score_manifest is None:
                 raise AssertionError("temporal publication invariant was checked")
-            self.temporal_provenance.validate_score_manifest(self.temporal_score_manifest)
+            self.temporal_provenance.validate_score_manifest(
+                self.temporal_score_manifest
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,7 +128,7 @@ def write_federated_threshold(
     request: FederatedThresholdPublicationRequest,
     directory: Path,
 ) -> ThresholdConstructionResult:
-    result = dispatch_federated_threshold(request.request)
+    result = _dispatch(request.request)
     (directory / FederatedThresholdAssetName.RESULT).write_text(
         canonical_json_text(result),
         encoding="utf-8",
@@ -102,7 +139,10 @@ def write_federated_threshold(
             encoding="utf-8",
         )
     (directory / FederatedThresholdAssetName.COMPLETE).write_text(
-        federated_threshold_publication_checksum(result, request.temporal_provenance).value,
+        federated_threshold_publication_checksum(
+            result,
+            request.temporal_provenance,
+        ).value,
         encoding="utf-8",
     )
     return result
@@ -116,13 +156,18 @@ def federated_threshold_is_reusable(
     document = directory / FederatedThresholdAssetName.RESULT
     if not complete.is_file() or not document.is_file():
         return False
-    provenance_document = directory / FederatedThresholdAssetName.TEMPORAL_PROVENANCE
-    if (request.temporal_provenance is None and provenance_document.exists()) or (
-        request.temporal_provenance is not None and not provenance_document.is_file()
+    provenance_document = (
+        directory / FederatedThresholdAssetName.TEMPORAL_PROVENANCE
+    )
+    if (
+        request.temporal_provenance is None and provenance_document.exists()
+    ) or (
+        request.temporal_provenance is not None
+        and not provenance_document.is_file()
     ):
         return False
     expected = federated_threshold_publication_checksum(
-        dispatch_federated_threshold(request.request),
+        _dispatch(request.request),
         request.temporal_provenance,
     )
     try:
@@ -136,7 +181,7 @@ def load_reused_federated_threshold(
     directory: Path,
 ) -> ThresholdConstructionResult:
     del directory
-    return dispatch_federated_threshold(request.request)
+    return _dispatch(request.request)
 
 
 def rebase_federated_threshold(
@@ -163,3 +208,11 @@ def federated_threshold_publication_checksum(
             )
         )
     )
+
+
+def _dispatch(
+    request: ThresholdConstructionRequest,
+) -> ThresholdConstructionResult:
+    from datp_core.thresholding.dispatch import dispatch_federated_threshold
+
+    return dispatch_federated_threshold(request)
