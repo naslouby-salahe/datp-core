@@ -1,11 +1,17 @@
-"""Confirmatory, supplementary, and temporal analysis decisions and publication."""
+"""Scientific analysis decisions and typed publication preparation."""
 
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+from typing import Generic, TypeVar
 
 from pydantic import model_validator
 
+from datp_core.analysis.contrasts import (
+    PairedContrast,
+    PairedDifferenceCounts,
+    SupplementaryPairedAnalysisPlan,
+)
 from datp_core.analysis.descriptive import (
     DescriptiveSummary,
     ObservationCounts,
@@ -14,23 +20,111 @@ from datp_core.analysis.descriptive import (
     summarize_values,
 )
 from datp_core.analysis.inference.bootstrap import (
-    decide_confirmatory,
+    BootstrapInterval,
     paired_bca_interval,
     supplementary_paired_bca_interval,
 )
-from datp_core.analysis.inference.paired import holm_adjust, matched_pairs_rank_biserial, paired_wilcoxon
-from datp_core.analysis.mechanisms import MechanismEvidence
-from datp_core.analysis.models import (
-    BootstrapInterval,
+from datp_core.analysis.inference.multiplicity import (
     MultiplicityPlan,
     MultiplicityResult,
-    PairedContrast,
-    PairedDifferenceCounts,
-    RankBiserialResult,
-    ScientificDecisionResult,
-    SupplementaryPairedAnalysisPlan,
-    WilcoxonResult,
+    holm_adjust,
 )
+from datp_core.analysis.inference.wilcoxon import (
+    RankBiserialResult,
+    WilcoxonResult,
+    matched_pairs_rank_biserial,
+    paired_wilcoxon,
+)
+from datp_core.artifacts.serialization import canonical_json_text
+from datp_core.domain.contracts import StrictModel
+from datp_core.domain.enums import (
+    AvailabilityStatus,
+    EvidenceRole,
+    PopulationId,
+    ScientificDecision,
+    TemporalState,
+)
+from datp_core.domain.errors import ScientificContractError
+from datp_core.domain.values import (
+    Checksum,
+    MetricValue,
+    PairedObservationCount,
+    Seed,
+    checksum_text,
+)
+from datp_core.experiments.models import (
+    ExternalTemporalExecutionIdentity,
+    require_execution_identity,
+)
+from datp_core.protocols.statistics import PairedInferenceProtocol
+
+
+class ScientificDecisionResult(StrictModel):
+    evidence_role: EvidenceRole
+    decision: ScientificDecision
+    point_estimate: MetricValue | None
+    interval: BootstrapInterval | None
+    rationale: str
+
+    @model_validator(mode="after")
+    def validate_decision(self) -> "ScientificDecisionResult":
+        if not self.rationale.strip():
+            raise ValueError("scientific decisions require a rationale")
+        if self.interval is not None and self.point_estimate != self.interval.point_estimate:
+            raise ValueError("decision estimate must match its interval estimate")
+        return self
+
+    @property
+    def availability(self) -> AvailabilityStatus:
+        return (
+            AvailabilityStatus.UNAVAILABLE
+            if self.decision is ScientificDecision.BLOCKED
+            else AvailabilityStatus.AVAILABLE
+        )
+
+
+def decide_confirmatory(interval: BootstrapInterval) -> ScientificDecisionResult:
+    if (
+        interval.availability is not AvailabilityStatus.AVAILABLE
+        or interval.point_estimate is None
+        or interval.lower_bound is None
+        or interval.upper_bound is None
+    ):
+        return ScientificDecisionResult(
+            evidence_role=EvidenceRole.CONFIRMATORY,
+            decision=ScientificDecision.BLOCKED,
+            point_estimate=interval.point_estimate,
+            interval=interval,
+            rationale="confirmatory BCa interval is unavailable or degenerate",
+        )
+    if interval.lower_bound.value > 0.0:
+        decision = ScientificDecision.SUPPORTED
+        rationale = (
+            "the paired BCa interval supports lower CV(FPR) under local thresholds"
+        )
+    elif interval.upper_bound.value < 0.0:
+        decision = ScientificDecision.OPPOSITE_DIRECTION
+        rationale = "the paired BCa interval supports the opposite direction"
+    elif interval.point_estimate.value > 0.0:
+        decision = ScientificDecision.DIRECTIONAL_INCONCLUSIVE
+        rationale = (
+            "the point estimate is directional but the paired BCa interval crosses zero"
+        )
+    else:
+        decision = ScientificDecision.NO_OBSERVED_ADVANTAGE
+        rationale = (
+            "the paired BCa interval crosses zero without a positive point estimate"
+        )
+    return ScientificDecisionResult(
+        evidence_role=EvidenceRole.CONFIRMATORY,
+        decision=decision,
+        point_estimate=interval.point_estimate,
+        interval=interval,
+        rationale=rationale,
+    )
+
+
+from datp_core.analysis.mechanisms import MechanismEvidence
 from datp_core.analysis.temporal import (
     TemporalAnalysisRecord,
     TemporalDeploymentProvenance,
@@ -38,13 +132,6 @@ from datp_core.analysis.temporal import (
     temporal_analysis_record,
     validate_frozen_recalibrated_pair,
 )
-from datp_core.artifacts.serialization import canonical_json_text
-from datp_core.domain.contracts import StrictModel
-from datp_core.domain.enums import EvidenceRole, PopulationId, TemporalState
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import Checksum, PairedObservationCount, Seed, checksum_text
-from datp_core.experiments.models import ExternalTemporalExecutionIdentity, require_execution_identity
-from datp_core.protocols.statistics import PairedInferenceProtocol
 
 
 class AnalysisAssetName(StrEnum):
@@ -124,8 +211,11 @@ class TemporalAnalysisDocument(StrictModel):
         return self
 
 
+DocumentT = TypeVar("DocumentT")
+
+
 @dataclass(frozen=True, slots=True)
-class AnalysisPublication[DocumentT]:
+class AnalysisPublication(Generic[DocumentT]):
     asset_name: AnalysisAssetName
     document: DocumentT
     digest: Checksum
@@ -171,7 +261,10 @@ def prepare_confirmatory_analysis(
 def prepare_external_analysis(
     request: ExternalAnalysisRequest,
 ) -> AnalysisPublication[ExternalAnalysisDocument]:
-    identity = require_execution_identity(request.execution_identity, request.plan.population)
+    identity = require_execution_identity(
+        request.execution_identity,
+        request.plan.population,
+    )
     if identity is None:
         raise RuntimeError("external analysis requires an execution identity")
     identity.require_evidence_role(request.plan.evidence_role)
@@ -194,7 +287,10 @@ def prepare_external_analysis(
             ),
             sign_consistency=count_paired_differences(deltas),
             wilcoxon=paired_wilcoxon(request.contrasts, protocol),
-            rank_biserial=matched_pairs_rank_biserial(request.contrasts, protocol),
+            rank_biserial=matched_pairs_rank_biserial(
+                request.contrasts,
+                protocol,
+            ),
         ),
     )
 
@@ -232,7 +328,7 @@ def write_analysis_publication(
 
 
 def analysis_publication_is_reusable(
-    publication: AnalysisPublication[object],
+    publication: AnalysisPublication[DocumentT],
     directory: Path,
 ) -> bool:
     complete = directory / AnalysisAssetName.COMPLETE
@@ -241,7 +337,8 @@ def analysis_publication_is_reusable(
         return (
             complete.is_file()
             and document.is_file()
-            and complete.read_text(encoding="utf-8").strip() == publication.digest.value
+            and complete.read_text(encoding="utf-8").strip()
+            == publication.digest.value
         )
     except OSError:
         return False
@@ -255,12 +352,15 @@ def load_reused_analysis_publication(
     return publication.document
 
 
-def rebase_analysis_publication(document: DocumentT, directory: Path) -> DocumentT:
+def rebase_analysis_publication(
+    document: DocumentT,
+    directory: Path,
+) -> DocumentT:
     del directory
     return document
 
 
-def _publication[DocumentT](
+def _publication(
     asset_name: AnalysisAssetName,
     document: DocumentT,
 ) -> AnalysisPublication[DocumentT]:
@@ -304,7 +404,10 @@ def _validate_temporal_identities(request: TemporalAnalysisRequest) -> None:
         (request.recalibrated_identity, TemporalState.RECALIBRATED_FUTURE),
     )
     for identity, expected_state in bindings:
-        bound = require_execution_identity(identity, PopulationId.EDGE_TEMPORAL_GROUPS)
+        bound = require_execution_identity(
+            identity,
+            PopulationId.EDGE_TEMPORAL_GROUPS,
+        )
         if bound is None or bound.temporal_state is not expected_state:
             raise ScientificContractError(
                 "temporal analysis identity must match its deployment state"
