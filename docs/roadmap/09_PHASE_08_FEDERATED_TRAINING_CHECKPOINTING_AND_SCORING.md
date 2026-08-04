@@ -1,233 +1,188 @@
 # Phase 08 — Federated Training, Checkpointing, and Scoring
 
-## Scientific authority and interpretation rules
+## Scientific authority
 
-- Before planning, editing, testing, or auditing this phase, read **`/home/naslouby/Projects/datp-core/docs/Journal_Extension_Master_Roadmap.md`** in full. It is the authoritative source for the scientific question, permitted evidence, dataset boundaries, numerical grids, metrics, inference, and claim restrictions.
-- Use descriptive implementation identities only. Never introduce opaque lettered populations, numbered threshold policies, numbered baselines, compatibility aliases, redirects, deprecated names, or duplicated identifiers.
-- The centralized reference is an independent pooled-data pipeline. It is never a federated threshold method and never consumes scores produced by a federated model.
-- The confirmatory comparison reuses one selected FedAvg detector, one preprocessing state, one client population, one calibration set, and one held-out score set per seed. Only threshold-calibration scope changes.
-- Calibration is benign-only. Attack labels and held-out outcomes cannot select models, checkpoints, quantiles, shrinkage values, statistical coefficients, clients, or group assignments.
-- The implementation source tree is locked to the files already created under `datp_core/`. Do not create, rename, move, delete, or replace source files. Test files may be created only when explicitly named in this roadmap.
-- Scientific values absent from the source of truth must remain unresolved. Do not infer them from memory, historical repositories, convenient defaults, or common practice. Record the blocker in `01_PHASE_MASTER_LOG.md`.
-- Python protocol declarations replace YAML. Protocol objects are immutable, fully typed, explicitly constructed, validated as one graph at startup, and serialized into every resolved experiment manifest.
-- Do not add backward compatibility, migration adapters, aliases, generic registries, service locators, untyped dictionaries, `Any`, silent fallbacks, or catch-all modules.
-- Do not add comments that restate code. Express intent through names, enums, types, validated records, and small functions.
-- Reusable canonical and preprocessed data belong under `data/`. Experiment-specific trained states, scores, thresholds, evaluations, analyses, and reports belong under `outputs/`.
+`docs/Journal_Extension_Master_Roadmap.md` remains authoritative for the scientific question, evidence tiers, datasets, training protocol, checkpoint candidates, fixed-detector comparison, and permitted claims. The cross-cutting ownership rules in `18_REPOSITORY_ARCHITECTURE_AND_SCIENTIFIC_INVARIANTS.md` govern the internal package layout without changing those scientific contracts.
 
 ## Objective
 
-Implement the FedAvg core detector, FedProx training stress test, genuine Ditto model-personalization stress test, common autoencoder architecture, model-specific checkpoint selection, and reusable immutable score artifacts.
+Implement and verify:
+
+- the FedAvg confirmatory detector;
+- the FedProx training stress-test grid;
+- genuine Ditto global and persistent client-personalized models;
+- fixed-terminal, non-test checkpoint selection;
+- immutable calibration and evaluation score artifacts reusable across threshold methods;
+- typed publication and trusted reuse for every model family.
+
+## Fixed scientific contract
+
+Within one seed, population, preprocessing protocol, split protocol, and model coordinate:
+
+- training occurs once;
+- one selected detector is frozen;
+- calibration and evaluation scores are generated once;
+- threshold methods receive identical model, preprocessing, split, client, score, label, and row evidence;
+- threshold identity never enters training, checkpoint, or scoring coordinates;
+- attack labels and held-out metrics never enter checkpoint selection;
+- AUROC is a fixed-score control rather than a threshold verdict.
 
 ## Preprocessing ownership
 
-Federated training for the confirmatory ladder consumes processed features produced under `FEDERATED_CLIENT_LOCAL_STANDARD` (client-local `StandardScaler` on benign training). Supportive pooled-MinMax runs use `FEDERATED_POOLED_MIN_MAX` only under that protocol identity. Training must not refit or replace the selected preprocessing method. See Journal §2.2.1.
+Confirmatory federated training consumes `FEDERATED_CLIENT_LOCAL_STANDARD`: one client-local `StandardScaler` fitted only on that client’s benign training partition. Supportive pooled-MinMax execution uses `FEDERATED_POOLED_MIN_MAX` under a distinct protocol identity. Training must not fit, replace, or infer preprocessing.
 
-## Entry criteria
+## Model requirements
 
-- Phases 05 and 06 are complete.
-- Required training values are resolved.
-- Reusable federated preprocessed data exist.
-- Anchor gate behavior is available even when currently blocked.
+### Shared autoencoder
 
-## Source files permitted to change
-
-- `datp_core/learning/autoencoder.py`
-- `datp_core/learning/federated/models.py`
-- `datp_core/learning/federated/training.py`
-- `datp_core/learning/federated/fedavg.py`
-- `datp_core/learning/federated/fedprox.py`
-- `datp_core/learning/federated/ditto.py`
-- `datp_core/learning/federated/checkpointing.py`
-- `datp_core/scoring/models.py`
-- `datp_core/scoring/reconstruction.py`
-- `datp_core/scoring/generation.py`
-- `datp_core/runtime/compute.py`
-- `datp_core/runtime/determinism.py`
-- `datp_core/orchestration/stages/train_federated.py`
-- `datp_core/orchestration/stages/select_federated_checkpoint.py`
-- `datp_core/orchestration/stages/score_federated.py`
-
-## Libraries
-
-- PyTorch for model/training.
-- Flower for federated coordination and tested strategy abstractions.
-- SafeTensors for model states.
-- Polars/PyArrow for histories, communication records, and scores.
-- NumPy only at clear library boundaries.
-
-## Required dataclasses
-
-In `learning/federated/models.py`:
-
-- `ClientTrainingInput`
-- `ClientTrainingResult`
-- `ClientUpdate`
-- `FederatedRoundResult`
-- `FederatedTrainingHistory`
-- `GlobalModelStateReference`
-- `PersonalizedModelStateReference`
-- `FederatedTrainingResult`
-- `CheckpointCandidate`
-- `CheckpointDecision`
-- `CommunicationRecord`
-
-In `scoring/models.py`:
-
-- `ScoreRecord`
-- `ScoreArtifactManifest`
-- `FixedScoreInvariant`
-- `ScoreGenerationResult`
-
-## Autoencoder requirements
-
-- Architecture is protocol-driven and dataset input dimension is explicit.
-- No BatchNorm is introduced.
+- Architecture is protocol-driven and the dataset input width is explicit.
+- Initialization is deterministic from the declared training seed.
 - Forward output shape equals input shape.
-- Reconstruction error semantics are centralized in scoring, not embedded differently per trainer.
-- Initialization is deterministic from the declared seed.
-- No model-specific threshold code exists in the model class.
+- No BatchNorm or threshold-specific behavior is introduced.
+- Reconstruction-error semantics have one scoring implementation.
 
-## FedAvg core
+### FedAvg
 
-- One local epoch per round.
-- Full participation.
-- Aggregation weighting and optimizer values come only from source-backed protocols.
-- One global model state per seed/population.
-- Record round-level client participation, local sample counts, losses, communication bytes, and global state reference.
-- Never retrain per threshold method.
+- one local epoch per round;
+- full client participation;
+- sample-count-weighted aggregation;
+- declared optimizer, batch size, learning rate, and round budget only;
+- one global model state per coordinate;
+- round-level client participation, loss, state checksum, and communication evidence are persisted.
 
-## FedProx stress test
+### FedProx
 
-- Implement the proximal term relative to the current global parameters.
-- Execute only declared positive coefficients.
-- Coefficient selection follows a predeclared non-test rule.
-- Produce separate models, histories, checkpoints, and scores.
-- Never merge FedProx results into the FedAvg confirmatory ladder.
+- the proximal term is computed against the current global state;
+- every declared positive coefficient is an independent training coordinate;
+- the stress-test grid is reportable without promoting a primary coefficient;
+- FedProx results never enter the FedAvg confirmatory ladder.
 
-## Genuine Ditto
+The primary FedProx coefficient-selection rule remains scientifically unresolved. The implementation must retain the complete declared grid and return typed unresolved selection rather than inventing a primary coefficient.
 
-- Maintain one global federated state and persistent personalized state per client.
-- Personalized states persist across rounds.
-- Apply the correct personalized proximal objective toward the global state.
-- Never aggregate personalized states as global updates.
-- Generate global-model and personalized-model scores as distinct model coordinates.
-- If genuine semantics cannot be implemented from the locked model contract, mark the experiment infeasible. Do not implement a differently named algorithm under `DITTO`.
+### Ditto
+
+- one global state and one persistent personalized state per client;
+- personalized states persist across rounds;
+- the personalized proximal objective is computed toward the current global state;
+- personalized states are never aggregated as global updates;
+- global and personalized checkpoints and scores use distinct coordinates;
+- the global and personalized artifact trees are one related publication and must commit or roll back together.
+
+## Checkpoint bounded context
+
+The checkpoint implementation is owned by `datp_core.learning.federated.checkpoints`:
+
+- `identities.py` — asset and manifest identities;
+- `documents.py` — strict persisted checkpoint documents;
+- `history.py` — training-history persistence and validation;
+- `candidates.py` — tensor names, candidate retention, validation, and rebasing;
+- `selection.py` — fixed-terminal selection and leakage rejection;
+- `publication.py` — checkpoint and history writing;
+- `reuse.py` — trusted loading and provenance validation.
+
+The former `learning/federated/checkpointing.py` module is deleted. It must not be restored, aliased, or re-exported.
 
 ## Checkpoint protocol
 
-- Train to the declared maximum round and evaluate only declared candidates.
-- Primary journal round number \(R^\* = \texttt{CheckpointProtocol.maximum\_round}\) (`200`) under research amendment `FIXED_TERMINAL_MAXIMUM_ROUND` (same locked rule as Phase 07 / Journal §13.2).
-- \(R^\*\) is applied consistently wherever the candidate exists; tensors remain seed/population/model-specific.
-- Model-specific checkpoint handling means distinct model tensors at \(R^\*\), not independent data-dependent round searches per training algorithm.
-- Prohibit test AUROC, test FPR, cross-client dispersion, attack labels, threshold effects, external results, or policy-specific outcomes as selectors.
-- Preserve all candidate trajectories as stability evidence only.
-- Conference anchor historical endpoints remain isolated from this rule.
+- Candidate rounds are exactly `{25, 50, 75, 100, 125, 150, 200}`.
+- The primary journal checkpoint is always `CheckpointProtocol.maximum_round` (`200`) under `FIXED_TERMINAL_MAXIMUM_ROUND`.
+- Non-terminal candidates are stability evidence only.
+- Training loss may be recorded but cannot select the primary checkpoint.
+- Held-out AUROC, FPR, CV(FPR), Macro-F1, balanced accuracy, attack labels, threshold effects, external outcomes, and policy-specific outcomes are rejected as selection inputs.
+- Centralized and federated candidate inventories remain independent.
+- Historical anchor endpoints remain isolated from the journal rule.
 
 ## Scoring and reuse
 
-Score path coordinates include population, seed, model, model coefficient when applicable, and selected checkpoint. They do not include threshold method, quantile, calibration size, or analysis method.
+A federated score coordinate includes population, seed, model identity, model coefficient when applicable, preprocessing identity, split identity, and selected checkpoint. It excludes threshold method, quantile, calibration-size ablation, and analysis method.
 
-A score artifact is reusable across all threshold methods when:
+A completed score inventory is reusable only when all of the following match:
 
-- selected model checksum matches;
-- preprocessing manifest matches;
-- split manifest matches;
-- scoring protocol matches;
-- source row identities match.
+- selected checkpoint checksum and round;
+- preprocessing-state-set checksum;
+- split-manifest checksum;
+- client inventory;
+- scored partition inventory;
+- feature schema and count;
+- source rows and labels;
+- persisted Parquet checksums.
 
-Generate calibration and evaluation scores once per model coordinate. Preserve labels but prevent calibration code from seeing attack-labelled calibration rows.
+The scoring service writes into a caller-owned empty directory. The orchestration artifact codec is the sole owner of atomic staging, replacement, reuse loading, and path rebasing. Nested atomic publication is forbidden.
 
-## Runtime requirements
+## Publication architecture
 
-- Fail when mandatory CUDA is unavailable.
-- Never reduce batch size silently.
-- Deterministic algorithms, seeds, worker seeding, and device settings are explicit.
-- Any unavoidable nondeterministic operation fails preflight or is recorded as a blocked scientific dependency.
+Federated training and scoring use the neutral lifecycle in `pipeline/publication`:
 
-## Test files to implement
+1. write a typed complete artifact into staging;
+2. validate scientific compatibility and file integrity;
+3. load a trusted persisted result for reuse;
+4. rebase paths after atomic publication.
 
-- `tests/unit/learning/test_autoencoder.py`
-- `tests/unit/learning/federated/test_models.py`
-- `tests/unit/learning/federated/test_training.py`
-- `tests/unit/learning/federated/test_fedavg.py`
-- `tests/unit/learning/federated/test_fedprox.py`
-- `tests/unit/learning/federated/test_ditto.py`
-- `tests/unit/learning/federated/test_checkpointing.py`
-- `tests/unit/scoring/test_models.py`
-- `tests/unit/scoring/test_reconstruction.py`
-- `tests/unit/scoring/test_generation.py`
-- `tests/unit/runtime/test_compute.py`
-- `tests/unit/runtime/test_determinism.py`
-- `tests/unit/orchestration/stages/test_federated_training_stages.py`
-- `tests/integration/learning/test_fedavg_training.py`
-- `tests/integration/learning/test_fedprox_training.py`
-- `tests/integration/learning/test_ditto_training.py`
-- `tests/integration/scoring/test_score_reuse_across_thresholds.py`
-- `tests/scientific/test_fixed_detector_contract.py`
-- `tests/scientific/test_checkpoint_selection_has_no_test_leakage.py`
+Ditto uses related-directory publication so its global and personalized trees are validated and committed as one unit with rollback.
 
 ## Required scientific tests
 
-- All threshold methods for one FedAvg cell reference the same model and score checksums.
-- Policy-specific retraining is impossible through planner types.
-- AUROC over the same score artifact is invariant across threshold methods.
-- Ditto personalized states differ by client and persist across rounds.
-- FedProx zero is not exposed as a stress-test condition.
-- Batch size is never silently altered.
+- Every threshold method for one frozen FedAvg cell sees identical model, calibration-score, evaluation-score, preprocessing, and split checksums.
+- Score files and source-row order remain byte-identical after all threshold constructions.
+- AUROC over unchanged scores is invariant across threshold methods.
+- Training, checkpoint, and score dataclasses expose no threshold-policy field.
+- Held-out metrics and attack-label presence are rejected by checkpoint selection.
+- Only the maximum-round candidate receives selected status.
+- Ditto personalized states differ across clients and persist across rounds.
+- Ditto global and personalized directories cannot be partially published or reused.
+- FedProx zero is not exposed as a stress-test coefficient.
+- Batch size is never reduced silently.
+
+## Implementation record
+
+Implemented source ownership includes:
+
+- `learning/autoencoder.py`;
+- `learning/federated/models.py` and `training.py`;
+- `learning/federated/{fedavg,fedprox,ditto}.py`;
+- `learning/federated/checkpoints/` split bounded context;
+- `pipeline/checkpoints/`, `pipeline/scoring/`, and `pipeline/publication/`;
+- `scoring/{models,generation}.py`;
+- orchestration stages for federated training, checkpoint selection, and scoring.
+
+The refactor removed:
+
+- the checkpoint god module;
+- compatibility imports from that path;
+- nested score publication;
+- artifact-store re-exports of neutral publication helpers;
+- duplicate checkpoint-file validation;
+- direct canonical serialization outside the artifact boundary.
+
+## Unchanged scientific blockers
+
+- FedProx primary-coefficient promotion remains unresolved; the complete grid remains executable and reportable.
+- No threshold algorithm, metric, cohort, dataset rule, seed cohort, or evidence tier is changed by the architecture refactor.
+
+## Status
+
+The Phase 08 scientific implementation remains complete. The repository-architecture refactor is **implemented but requires final-head validation** before merge acceptance.
+
+Do not claim the refactor is fully audited until the current PR head passes:
+
+- Ruff format and lint;
+- Pyright;
+- Pylint;
+- import-linter;
+- architecture tests;
+- Phase 08 unit tests;
+- FedAvg, FedProx, and Ditto integration tests;
+- fixed-detector and checkpoint-leakage scientific tests;
+- the complete pytest suite.
+
+At the time of this update, no GitHub Actions run had been observed for the then-current PR head. This is an explicit validation status, not a scientific blocker.
 
 ## Exit criteria
 
 - FedAvg, FedProx, and genuine Ditto produce independent safe model artifacts.
-- Checkpoint selection is non-test and model-specific.
+- Ditto related artifacts cannot be partially committed or reused.
+- Checkpoint selection is fixed-terminal, non-test, and model-specific.
 - Scores are immutable and reusable across threshold methods.
 - Fixed-detector invariants are machine-verifiable.
-- All Phase 08 tests and audits pass.
-
-## Implementation status
-
-- Status: `COMPLETE`.
-- Implemented: shared protocol-driven autoencoder (`learning/autoencoder.py`); full typed federated model/checkpoint/communication contract set (`learning/federated/models.py`); shared client-local training mechanics including sample-count-weighted FedAvg aggregation, the `ProximalTerm` proximal-penalty primitive, and serialized-message-size communication estimation (`learning/federated/training.py`); FedAvg core, FedProx full declared grid, and genuine Ditto with structurally distinct global/personalized coordinates (`learning/federated/{fedavg,fedprox,ditto}.py`); `FIXED_TERMINAL_MAXIMUM_ROUND` checkpoint retention/selection reusing the Phase 07 rule (`learning/federated/checkpointing.py`); reusable, fixed-detector-verifiable score generation (`scoring/{models,reconstruction,generation}.py`); and the three orchestration stages with atomic publish/reuse semantics (`orchestration/stages/{train_federated,select_federated_checkpoint,score_federated}.py`).
-- FedProx primary-coefficient selection rule remains undeclared in the scientific source of truth; the complete declared grid (`0.001, 0.01, 0.1, 1.0`) trains and is reportable, and `fedprox_primary_selection_outcome()` returns a typed unresolved result rather than an invented rule. This does not block this phase's exit criteria, none of which require a promoted primary FedProx run.
-- Real-data controlled N-BaIoT natural-device verification: federated preprocessing published and reuse-verified for all nine physical clients; canonical FedAvg trained the full declared `200` rounds with full participation and batch size `256` on CUDA, all seven checkpoint candidates persisted and reload-verified, round `200` selected under `FIXED_TERMINAL_MAXIMUM_ROUND`, calibration/evaluation scores generated and reload-verified for all nine clients, and re-running the identical training and scoring coordinates reused the completed artifacts with byte-identical checksums. FedProx (`mu=0.001`) and genuine Ditto (`lambda=0.1`) controlled engineering smoke executions completed on the same real data under an explicitly short, declared checkpoint protocol; smoke artifacts were removed after verification and are not canonical outputs.
-
-## External code-health gate
-
-Before phase closure, run the credentials-safe SonarQube CLI and CodeScene procedure in [the roadmap index](00_ROADMAP_INDEX.md#mandatory-external-code-health-gates). Resolve actionable `src/` findings or record the gate as blocked.
-
-## Mandatory closing audit
-
-Before marking this phase complete, the implementing agent must perform and record all applicable checks:
-
-### Scientific audit
-- [x] Every scientific statement and numeric value is traceable to the source of truth or marked unresolved.
-- [x] No attack-labelled record influences training of the benign autoencoder, calibration, threshold construction, checkpoint selection, eligibility, or parameter selection.
-- [x] The fixed-detector contract is preserved wherever threshold methods are compared.
-- [x] Unsupported dataset capabilities produce typed unavailability or infeasibility, never imputation.
-- [x] Confirmatory, supportive, mechanism, external, stress-test, boundary, exploratory, and operational evidence remain separated.
-
-### Architecture audit
-- [x] Only source files explicitly assigned to this phase were modified.
-- [x] No source file was added, renamed, moved, or deleted.
-- [x] No circular dependency was introduced.
-- [x] Domain and protocol modules do not import orchestration, reporting, or concrete storage implementations.
-- [x] No compatibility alias, redirect, deprecated identifier, generic registry, or string-key dispatch was added.
-
-### Typing and validation audit
-- [x] Ruff formatting and linting pass.
-- [x] Pyright strict mode passes for all changed files.
-- [x] Pylint passes at the project threshold without suppressing newly introduced defects.
-- [x] Pydantic models reject extra fields and are frozen.
-- [x] Dataclasses are frozen and slotted unless mutability is scientifically necessary and documented.
-- [x] No `Any`, unchecked cast, mutable module-level collection, or raw configuration dictionary remains.
-
-### Test audit
-- [x] Every test file listed by this phase exists and contains meaningful assertions.
-- [x] Tests verify scientific invariants, invalid inputs, unavailable outcomes, and deterministic behavior—not only happy paths.
-- [x] Tests do not duplicate implementation logic or merely assert that functions return a value.
-- [x] Focused tests pass first; then the complete test suite passes with pytest-xdist.
-- [x] Hypothesis tests use bounded strategies consistent with scientific domains.
-
-### Repository audit
-- [x] `git diff --stat` contains only intended files.
-- [x] No generated output, cache, temporary file, notebook, profiling file, or local path leaked into the repository.
-- [x] No commit or push was performed by the implementing agent.
+- The checkpoint monolith and all legacy imports remain absent.
+- The final PR head passes the focused and complete verification gates.
