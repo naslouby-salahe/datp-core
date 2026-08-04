@@ -16,8 +16,8 @@ from datp_core.learning.centralized.adapter import (
     write_centralized_training,
 )
 from datp_core.orchestration.commands.training import (
-    TrainCentralizedReferenceRequest,
-    TrainCentralizedReferenceResult,
+    TrainCentralizedReferenceRequest as _TrainCentralizedReferenceRequest,
+    TrainCentralizedReferenceResult as _TrainCentralizedReferenceResult,
 )
 from datp_core.pipeline.publication.codec import (
     ArtifactPublication,
@@ -27,8 +27,8 @@ from datp_core.pipeline.publication.codec import (
 
 
 def train_centralized_reference_stage(
-    request: TrainCentralizedReferenceRequest,
-) -> TrainCentralizedReferenceResult:
+    request: _TrainCentralizedReferenceRequest,
+) -> _TrainCentralizedReferenceResult:
     require_no_hidden_scientific_defaults()
     training_protocol, _declared_autoencoder, learning_rate, batch_size, weight_decay = (
         declared_centralized_training_values()
@@ -64,7 +64,7 @@ def train_centralized_reference_stage(
         )
     )
     artifacts: CentralizedTrainingArtifacts = publication.value
-    return TrainCentralizedReferenceResult(
+    return _TrainCentralizedReferenceResult(
         publication_status=publication.status,
         training=artifacts.training,
         candidates=artifacts.candidates,
