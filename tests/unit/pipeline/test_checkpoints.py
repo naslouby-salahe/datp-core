@@ -6,10 +6,10 @@ import pytest
 from datp_core.domain.enums import CheckpointStatus
 from datp_core.domain.errors import ArtifactIntegrityError
 from datp_core.domain.values import Checksum, MetricValue, RoundNumber
+from datp_core.pipeline.checkpoints.persistence import validate_persisted_checkpoint_file
 from datp_core.pipeline.checkpoints.service import (
     select_terminal_checkpoint,
     validate_ordered_checkpoint_inventory,
-    validate_persisted_checkpoint_file,
 )
 
 
