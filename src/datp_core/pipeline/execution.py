@@ -1,4 +1,4 @@
-"""Single execution spine shared by CLI, campaigns, and Dagster adapters."""
+"""Canonical experiment execution order and reusable execution contracts."""
 
 from __future__ import annotations
 
@@ -7,7 +7,6 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Protocol
 
-from datp_core.pipeline.campaign import CampaignPlan
 from datp_core.pipeline.planning import ExperimentCoordinate
 
 
@@ -65,12 +64,6 @@ class ExperimentExecution:
         )
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
-class CampaignExecution:
-    campaign_digest: str
-    experiments: tuple[ExperimentExecution, ...]
-
-
 class StageRunner(Protocol):
     def run(self, stage: PipelineStage, coordinate: ExperimentCoordinate) -> StageExecution: ...
 
@@ -96,22 +89,3 @@ def execute_experiment(
         if result.outcome in {StageOutcome.BLOCKED, StageOutcome.FAILED}:
             break
     return ExperimentExecution(coordinate=coordinate, stages=tuple(executions))
-
-
-def execute_campaign(
-    *,
-    campaign: CampaignPlan,
-    stage_runner: StageRunner,
-    cleaner: IncompleteExperimentCleaner,
-    output_root: Path,
-) -> CampaignExecution:
-    experiments = tuple(
-        execute_experiment(
-            coordinate=entry.coordinate,
-            stage_runner=stage_runner,
-            cleaner=cleaner,
-            output_root=output_root,
-        )
-        for entry in campaign.entries
-    )
-    return CampaignExecution(campaign_digest=campaign.digest, experiments=experiments)

@@ -1,4 +1,4 @@
-"""Population construction and deterministic publication stage."""
+"""Population construction, splitting, and deterministic publication."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pathlib import Path
 
 import polars as pl
 
-from datp_core.domain.enums import PopulationId, PublicationStatus, SplitProtocolId
+from datp_core.domain.enums import DatasetId, PopulationId, PublicationStatus, SplitProtocolId
 from datp_core.domain.values import Checksum, Seed
 from datp_core.pipeline.execution import PipelineStage
 from datp_core.pipeline.publication.codec import (
@@ -15,6 +15,13 @@ from datp_core.pipeline.publication.codec import (
     FunctionalArtifactCodec,
     publish_artifact,
 )
+from datp_core.populations.catalogue import (
+    PopulationConstructionRequest as CapabilityPopulationConstructionRequest,
+)
+from datp_core.populations.catalogue import (
+    PopulationConstructionResult as CapabilityPopulationConstructionResult,
+)
+from datp_core.populations.catalogue import construct_population as construct_population_capability
 from datp_core.populations.membership import (
     PopulationMembershipRequest,
     PopulationPublicationAsset,
@@ -26,13 +33,65 @@ from datp_core.populations.membership import (
 )
 from datp_core.populations.models import (
     ChronologicalPartitionDiagnosticsDocument,
+    ControlledPartitionCondition,
     PopulationManifest,
+    SplitConstructionRequest,
+    SplitManifestDocument,
 )
+from datp_core.populations.splits import split_membership
 from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class ConstructPopulationRequest:
+class ConstructDeclaredPopulationRequest:
+    population: PopulationId
+    dataset: DatasetId
+    canonical_root: Path
+    partition_seed: Seed
+    split_protocol: SplitProtocolId
+    controlled_condition: ControlledPartitionCondition | None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ConstructDeclaredPopulationResult:
+    stage: PipelineStage
+    construction: CapabilityPopulationConstructionResult
+    split_assignments: pl.DataFrame
+    split_manifest: SplitManifestDocument
+
+
+def construct_declared_population(
+    request: ConstructDeclaredPopulationRequest,
+) -> ConstructDeclaredPopulationResult:
+    construction = construct_population_capability(
+        CapabilityPopulationConstructionRequest(
+            request.population,
+            request.canonical_root,
+            request.partition_seed,
+            request.split_protocol,
+            request.controlled_condition,
+        )
+    )
+    assignments, manifest = split_membership(
+        SplitConstructionRequest(
+            construction.membership,
+            request.population,
+            request.dataset,
+            request.partition_seed,
+            request.split_protocol,
+            construction.manifest.document.membership_checksum,
+        )
+    )
+    return ConstructDeclaredPopulationResult(
+        stage=PipelineStage.CONSTRUCT_POPULATION,
+        construction=construction,
+        split_assignments=assignments,
+        split_manifest=manifest,
+    )
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ConstructPublishedPopulationRequest:
     canonical_root: Path
     population: PopulationId
     execution_identity: ExternalTemporalExecutionIdentity
@@ -43,7 +102,7 @@ class ConstructPopulationRequest:
 
 
 @dataclass(slots=True, eq=False, kw_only=True)
-class ConstructPopulationResult:
+class ConstructPublishedPopulationResult:
     stage: PipelineStage
     publication_status: PublicationStatus
     population_manifest: PopulationManifest
@@ -56,7 +115,9 @@ class ConstructPopulationResult:
     ciciot_client_eligibility: pl.DataFrame | None = None
 
 
-def construct_population(request: ConstructPopulationRequest) -> ConstructPopulationResult:
+def construct_published_population(
+    request: ConstructPublishedPopulationRequest,
+) -> ConstructPublishedPopulationResult:
     prepared = prepare_population_membership(
         PopulationMembershipRequest(
             canonical_root=request.canonical_root,
@@ -81,7 +142,7 @@ def construct_population(request: ConstructPopulationRequest) -> ConstructPopula
         )
     )
     artifacts = publication.value
-    return ConstructPopulationResult(
+    return ConstructPublishedPopulationResult(
         stage=PipelineStage.CONSTRUCT_POPULATION,
         publication_status=publication.status,
         population_manifest=artifacts.population_manifest,
