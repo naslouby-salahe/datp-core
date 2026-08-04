@@ -2,9 +2,9 @@
 
 from dataclasses import dataclass
 
+from datp_core.artifacts.serialization import canonical_checksum
 from datp_core.domain.enums import ContractSubject, PartitionRole, SerializationFormat, SplitProtocolId
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.provenance import canonical_checksum
 from datp_core.domain.values import Checksum, RoundNumber
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.pipeline.scoring.models import ScoreArtifact
@@ -134,7 +134,7 @@ def _require_consistent_partition_records(
     role: PartitionRole,
 ) -> None:
     client_ids = tuple(record.scored_client.client_id for record in records)
-    if len(set(client_ids)) != len(client_ids):
+    if len(frozenset(client_ids)) != len(client_ids):
         raise ScientificContractError(
             f"duplicate scored-client records in {role.value} partition",
             subject=ContractSubject.CLIENT_IDENTITY,
@@ -173,7 +173,7 @@ def _require_record_matches_manifest(manifest: ScoreArtifactManifest, record: Sc
 
 
 def _require_matching_client_inventory(left: tuple[ScoreRecord, ...], right: tuple[ScoreRecord, ...]) -> None:
-    if {record.scored_client for record in left} != {record.scored_client for record in right}:
+    if frozenset(record.scored_client for record in left) != frozenset(record.scored_client for record in right):
         raise ScientificContractError(
             "every scored partition must cover the same client inventory",
             subject=ContractSubject.CLIENT_IDENTITY,
