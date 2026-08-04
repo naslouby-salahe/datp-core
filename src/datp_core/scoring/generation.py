@@ -27,7 +27,7 @@ from datp_core.domain.values import (
 )
 from datp_core.learning.autoencoder import ReconstructionAutoencoder
 from datp_core.learning.federated.models import CheckpointCandidate
-from datp_core.pipeline.checkpoints.service import validate_persisted_checkpoint_file
+from datp_core.pipeline.checkpoints.persistence import validate_persisted_checkpoint_file
 from datp_core.pipeline.scoring.frame_contract import validate_persisted_score_frame
 from datp_core.pipeline.scoring.service import score_and_persist_autoencoder_frame
 from datp_core.populations.models import ClientIdentity
@@ -112,6 +112,9 @@ class _ScoreRecordInventory:
     def append(self, role: PartitionRole, record: ScoreRecord) -> None:
         self.records_for(role).append(record)
 
+    def extend(self, role: PartitionRole, records: tuple[ScoreRecord, ...]) -> None:
+        self.records_for(role).extend(records)
+
     def immutable_records_for(self, role: PartitionRole) -> tuple[ScoreRecord, ...]:
         return tuple(self.records_for(role))
 
@@ -172,20 +175,7 @@ def generate_federated_scores(request: ScoreGenerationRequest, device: torch.dev
 
     invariant = _fixed_score_invariant(request, records)
     _write_complete_marker(request.output_directory, invariant)
-    return ScoreGenerationResult(
-        manifest=ScoreArtifactManifest(
-            coordinate=request.checkpoint.coordinate,
-            checkpoint_round=request.checkpoint.round_number,
-            checkpoint_checksum=request.checkpoint.tensor_checksum,
-            preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
-            split_manifest_checksum=request.split_manifest_checksum,
-            calibration_records=records.immutable_records_for(PartitionRole.CALIBRATION),
-            evaluation_records=records.immutable_records_for(PartitionRole.EVALUATION),
-            future_recalibration_records=records.immutable_records_for(
-                PartitionRole.FUTURE_RECALIBRATION
-            ),
-        )
-    )
+    return _result_from_inventory(request, records)
 
 
 def write_federated_scores(
@@ -215,22 +205,10 @@ def load_reused_federated_scores(
     request: ScoreGenerationRequest,
     directory: Path,
 ) -> ScoreGenerationResult:
-    records = {
-        role: _build_records(directory, request, role)
-        for role in scored_partition_roles(request.checkpoint.coordinate.split_protocol)
-    }
-    return ScoreGenerationResult(
-        manifest=ScoreArtifactManifest(
-            coordinate=request.checkpoint.coordinate,
-            checkpoint_round=request.checkpoint.round_number,
-            checkpoint_checksum=request.checkpoint.tensor_checksum,
-            preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
-            split_manifest_checksum=request.split_manifest_checksum,
-            calibration_records=records.get(PartitionRole.CALIBRATION, ()),
-            evaluation_records=records.get(PartitionRole.EVALUATION, ()),
-            future_recalibration_records=records.get(PartitionRole.FUTURE_RECALIBRATION, ()),
-        )
-    )
+    records = _ScoreRecordInventory.empty()
+    for role in scored_partition_roles(request.checkpoint.coordinate.split_protocol):
+        records.extend(role, _build_records(directory, request, role))
+    return _result_from_inventory(request, records)
 
 
 def rebase_federated_scores(
@@ -254,6 +232,26 @@ def rebase_federated_scores(
             future_recalibration_records=tuple(
                 _rebased_record(record, directory)
                 for record in manifest.future_recalibration_records
+            ),
+        )
+    )
+
+
+def _result_from_inventory(
+    request: ScoreGenerationRequest,
+    records: _ScoreRecordInventory,
+) -> ScoreGenerationResult:
+    return ScoreGenerationResult(
+        manifest=ScoreArtifactManifest(
+            coordinate=request.checkpoint.coordinate,
+            checkpoint_round=request.checkpoint.round_number,
+            checkpoint_checksum=request.checkpoint.tensor_checksum,
+            preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
+            split_manifest_checksum=request.split_manifest_checksum,
+            calibration_records=records.immutable_records_for(PartitionRole.CALIBRATION),
+            evaluation_records=records.immutable_records_for(PartitionRole.EVALUATION),
+            future_recalibration_records=records.immutable_records_for(
+                PartitionRole.FUTURE_RECALIBRATION
             ),
         )
     )
