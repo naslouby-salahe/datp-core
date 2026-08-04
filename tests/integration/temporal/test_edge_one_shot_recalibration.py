@@ -19,9 +19,9 @@ from datp_core.domain.enums import (
 )
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import Checksum, MetricValue, Seed
-from datp_core.experiments.models import ExternalTemporalExecutionIdentity
 from datp_core.orchestration.commands.analysis import TemporalAnalyzeRequest
 from datp_core.orchestration.stages.analyze import analyze_temporal_stage
+from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
 
 
 def test_recalibrated_future_can_change_only_calibration_window() -> None:
@@ -77,7 +77,9 @@ def test_temporal_analysis_publishes_decisions_for_each_record(
     request = TemporalAnalyzeRequest(
         static_reference_identity=_identity(TemporalState.STATIC_REFERENCE),
         frozen_identity=_identity(TemporalState.FROZEN_FUTURE),
-        recalibrated_identity=_identity(TemporalState.RECALIBRATED_FUTURE),
+        recalibrated_identity=_identity(
+            TemporalState.RECALIBRATED_FUTURE
+        ),
         static_reference_provenance=static,
         frozen_provenance=frozen,
         recalibrated_provenance=recalibrated,
@@ -93,7 +95,10 @@ def test_temporal_analysis_publishes_decisions_for_each_record(
         overwrite=False,
     )
     result = analyze_temporal_stage(request)
-    assert result.records[0].decision.decision is ScientificDecision.SUPPORTED
+    assert (
+        result.records[0].decision.decision
+        is ScientificDecision.SUPPORTED
+    )
     document = loads(
         (request.output_directory / "temporal_analysis.json").read_text()
     )
