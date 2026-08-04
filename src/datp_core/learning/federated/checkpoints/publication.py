@@ -7,7 +7,6 @@ from datp_core.domain.enums import ContractSubject
 from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
 from datp_core.learning.federated.checkpoints.candidates import (
     build_manifest,
-    rebase_checkpoint_candidates,
     retain_checkpoint_candidates,
     stage_personalized_candidates,
     write_completion,
@@ -17,16 +16,13 @@ from datp_core.learning.federated.checkpoints.history import persist_federated_t
 from datp_core.learning.federated.checkpoints.identities import CandidateManifestKind
 from datp_core.learning.federated.models import (
     DittoTrainingOutcome,
+    FederatedTrainingCoordinate,
     FederatedTrainingExecution,
     FederatedTrainingOutcome,
     FederatedTrainingResult,
-    PersonalizedCandidateSet,
     PersonalizedSnapshotSet,
     RoundSnapshot,
 )
-from datp_core.protocols.models import AutoencoderProtocol, CheckpointProtocol
-from datp_core.domain.values import BatchSize, Checksum
-from datp_core.learning.federated.models import FederatedTrainingCoordinate
 
 
 def write_federated_training(
