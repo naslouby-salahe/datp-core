@@ -1,0 +1,196 @@
+"""Cross-method threshold diagnostics, local quantiles, and assignments."""
+
+from dataclasses import dataclass
+from statistics import fmean
+
+from datp_core.domain.enums import (
+    AvailabilityStatus,
+    ContractSubject,
+    QuantileInterpolationSemantics,
+)
+from datp_core.domain.errors import require_contract
+from datp_core.domain.values import (
+    Checksum,
+    Quantile,
+    RowCount,
+    ThresholdValue,
+    floats_absolutely_close,
+    floats_exactly_equal,
+)
+from datp_core.learning.federated.models import FederatedTrainingCoordinate
+from datp_core.populations.models import ClientIdentity
+from datp_core.protocols.models import FRACTION_TOTAL_ABSOLUTE_TOLERANCE
+
+
+@dataclass(frozen=True, slots=True)
+class ThresholdDiagnostic:
+    quantile_interpolation: QuantileInterpolationSemantics | None
+    score_set_checksum: Checksum
+    calibration_manifest_checksum: Checksum
+    tie_count: RowCount
+    availability: AvailabilityStatus
+
+
+@dataclass(frozen=True, slots=True)
+class LocalQuantile:
+    client: ClientIdentity
+    coordinate: FederatedTrainingCoordinate
+    quantile: Quantile
+    value: ThresholdValue
+    calibration_count: RowCount
+    diagnostic: ThresholdDiagnostic
+
+    def __post_init__(self) -> None:
+        require_contract(
+            self.calibration_count.value >= 1,
+            "a local quantile requires at least one benign calibration score",
+            ContractSubject.CALIBRATION,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ThresholdAssignment:
+    client: ClientIdentity
+    threshold: ThresholdValue
+
+
+def mean_local_threshold(quantiles: tuple[LocalQuantile, ...]) -> float:
+    return fmean(item.value.value for item in quantiles)
+
+
+def require_unique_clients(
+    clients: tuple[ClientIdentity, ...],
+    label: str,
+) -> None:
+    require_contract(
+        len(set(clients)) == len(clients),
+        f"{label} must have unique client identities",
+        ContractSubject.CLIENT_IDENTITY,
+    )
+
+
+def validate_local_quantiles(
+    quantiles: tuple[LocalQuantile, ...],
+    coordinate: FederatedTrainingCoordinate,
+    *,
+    label: str,
+) -> None:
+    message = (
+        "shared threshold construction requires at least one contributing local quantile"
+        if label == "contributing local quantiles"
+        else "local threshold construction requires at least one eligible client"
+    )
+    require_contract(bool(quantiles), message, ContractSubject.THRESHOLD)
+    require_unique_clients(tuple(item.client for item in quantiles), label)
+    for item in quantiles:
+        require_contract(
+            item.coordinate == coordinate,
+            "every nested quantile must carry the containing result coordinate",
+            ContractSubject.COORDINATE,
+        )
+
+
+def validate_assignments(
+    assignments: tuple[ThresholdAssignment, ...],
+    expected_pairs: tuple[tuple[ClientIdentity, ThresholdValue], ...],
+    *,
+    label: str,
+    mismatch_message: str,
+) -> None:
+    assigned_clients = tuple(item.client for item in assignments)
+    require_unique_clients(assigned_clients, label)
+    expected_clients = tuple(pair[0] for pair in expected_pairs)
+    require_unique_clients(expected_clients, "expected clients")
+    require_contract(
+        frozenset(assigned_clients) == frozenset(expected_clients),
+        "threshold assignments must cover exactly the contributing client set",
+        ContractSubject.CLIENT_IDENTITY,
+    )
+    actual_pairs = frozenset(
+        (item.client, item.threshold) for item in assignments
+    )
+    require_contract(
+        actual_pairs == frozenset(expected_pairs),
+        mismatch_message,
+        ContractSubject.THRESHOLD,
+    )
+
+
+def validate_normalized_weights(
+    weights: tuple[float, ...],
+    expected_count: int,
+) -> None:
+    require_contract(
+        len(weights) == expected_count,
+        "one normalized weight is required per contributing local quantile",
+        ContractSubject.THRESHOLD,
+    )
+    require_contract(
+        all(weight >= 0 for weight in weights),
+        "normalized weights must be non-negative",
+        ContractSubject.THRESHOLD,
+    )
+    require_contract(
+        floats_absolutely_close(
+            sum(weights),
+            1.0,
+            FRACTION_TOTAL_ABSOLUTE_TOLERANCE,
+        ),
+        "normalized weights must sum to one",
+        ContractSubject.THRESHOLD,
+    )
+
+
+def validate_group_membership(
+    members: tuple[ClientIdentity, ...],
+    contributing_local_quantiles: tuple[LocalQuantile, ...],
+    group_threshold: ThresholdValue,
+    *,
+    members_label: str,
+    match_message: str,
+) -> None:
+    require_unique_clients(members, members_label)
+    quantile_clients = tuple(
+        item.client for item in contributing_local_quantiles
+    )
+    require_unique_clients(quantile_clients, "contributing local quantiles")
+    require_contract(
+        frozenset(quantile_clients) == frozenset(members),
+        match_message,
+        ContractSubject.CLIENT_IDENTITY,
+    )
+    threshold_message = (
+        "family_threshold must equal the unweighted mean of contributing local quantiles"
+        if "family" in match_message
+        else "cluster_threshold must equal the unweighted mean of contributing local quantiles"
+    )
+    require_contract(
+        floats_exactly_equal(
+            group_threshold.value,
+            mean_local_threshold(contributing_local_quantiles),
+        ),
+        threshold_message,
+        ContractSubject.THRESHOLD,
+    )
+
+
+def validate_client_partition(
+    eligible_clients: tuple[ClientIdentity, ...],
+    assigned_clients: tuple[ClientIdentity, ...],
+    unavailable_clients: tuple[ClientIdentity, ...],
+) -> None:
+    require_unique_clients(eligible_clients, "eligible clients")
+    require_unique_clients(assigned_clients, "conformal assignments")
+    require_unique_clients(unavailable_clients, "unavailable clients")
+    assigned_set = frozenset(assigned_clients)
+    unavailable_set = frozenset(unavailable_clients)
+    require_contract(
+        not (assigned_set & unavailable_set),
+        "a client cannot be both assigned and unavailable",
+        ContractSubject.CLIENT_IDENTITY,
+    )
+    require_contract(
+        (assigned_set | unavailable_set) == frozenset(eligible_clients),
+        "assigned and unavailable clients must exactly cover the eligible client set",
+        ContractSubject.CLIENT_IDENTITY,
+    )
