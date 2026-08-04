@@ -1,31 +1,43 @@
-"""Wilcoxon, rank-biserial correlation, Holm correction, and sign consistency."""
+"""Paired contrasts, non-parametric inference, and multiplicity."""
 
 import numpy as np
+from numpy.typing import NDArray
 from scipy import stats
 from statsmodels.stats.multitest import multipletests
 
-from datp_core.analysis.inference.bootstrap import contrast_deltas
 from datp_core.analysis.models import (
+    CorrelationCoefficient,
     MultiplicityDecision,
+    MultiplicityPlan,
     MultiplicityResult,
     PairedContrasts,
     PValue,
     RankBiserialResult,
     WilcoxonComputationMethod,
     WilcoxonResult,
-    _extract_named_attributes,
+    extract_named_numeric_attributes,
 )
-from datp_core.domain.enums import (
-    AvailabilityStatus,
-    MultiplicityCorrectionId,
-)
-from datp_core.domain.values import MetricValue, PairedObservationCount, RankSum, Ratio
+from datp_core.domain.enums import AvailabilityStatus, EffectSizeId, StatisticalTestId
+from datp_core.domain.values import PairedObservationCount, RankSum
+from datp_core.protocols.statistics import PairedInferenceProtocol
 
 
-def paired_wilcoxon(contrasts: PairedContrasts) -> WilcoxonResult:
-    deltas = contrast_deltas(contrasts)
+def paired_deltas(contrasts: PairedContrasts) -> NDArray[np.float64]:
+    values = np.fromiter(
+        (contrast.delta.value for contrast in contrasts),
+        dtype=np.float64,
+        count=len(contrasts),
+    )
+    if np.any(~np.isfinite(values)):
+        raise ValueError("paired contrasts must be finite")
+    return values
+
+
+def paired_wilcoxon(contrasts: PairedContrasts, protocol: PairedInferenceProtocol) -> WilcoxonResult:
+    if protocol.statistical_test is not StatisticalTestId.WILCOXON_SIGNED_RANK:
+        raise ValueError("paired Wilcoxon requires the Wilcoxon signed-rank protocol")
+    deltas = paired_deltas(contrasts)
     nonzero_pair_count = PairedObservationCount(int(np.count_nonzero(deltas)))
-
     if nonzero_pair_count.value == 0:
         return WilcoxonResult(
             statistic=None,
@@ -35,15 +47,13 @@ def paired_wilcoxon(contrasts: PairedContrasts) -> WilcoxonResult:
             availability=AvailabilityStatus.UNDEFINED,
             reason="Wilcoxon requires at least one nonzero paired difference",
         )
-
-    res = stats.wilcoxon(
+    result = stats.wilcoxon(
         deltas,
-        alternative="two-sided",
-        zero_method="pratt",
-        method="asymptotic",
+        alternative=protocol.wilcoxon_alternative.value,
+        zero_method=protocol.wilcoxon_zero_method.value,
+        method=protocol.wilcoxon_computation_method.value,
     )
-
-    extracted = _extract_named_attributes(res, ("statistic", "pvalue"))
+    extracted = extract_named_numeric_attributes(result, ("statistic", "pvalue"))
     if extracted is None:
         return WilcoxonResult(
             statistic=None,
@@ -53,22 +63,25 @@ def paired_wilcoxon(contrasts: PairedContrasts) -> WilcoxonResult:
             availability=AvailabilityStatus.UNAVAILABLE,
             reason="SciPy Wilcoxon result does not expose finite statistic and p-value values",
         )
-
-    statistic_val, pvalue_val = extracted
+    statistic, p_value = extracted
     return WilcoxonResult(
-        statistic=RankSum(statistic_val),
-        p_value=PValue(value=pvalue_val),
+        statistic=RankSum(statistic),
+        p_value=PValue(p_value),
         nonzero_pair_count=nonzero_pair_count,
         computation_method=WilcoxonComputationMethod.SCIPY_ASYMPTOTIC,
         availability=AvailabilityStatus.AVAILABLE,
-        reason="",
+        reason=None,
     )
 
 
-def matched_pairs_rank_biserial(contrasts: PairedContrasts) -> RankBiserialResult:
-    deltas = contrast_deltas(contrasts)
+def matched_pairs_rank_biserial(
+    contrasts: PairedContrasts,
+    protocol: PairedInferenceProtocol,
+) -> RankBiserialResult:
+    if protocol.effect_size is not EffectSizeId.MATCHED_PAIRS_RANK_BISERIAL:
+        raise ValueError("paired effect size requires matched-pairs rank-biserial correlation")
+    deltas = paired_deltas(contrasts)
     nonzero = deltas[deltas != 0.0]
-
     if not nonzero.size:
         return RankBiserialResult(
             value=None,
@@ -78,52 +91,42 @@ def matched_pairs_rank_biserial(contrasts: PairedContrasts) -> RankBiserialResul
             availability=AvailabilityStatus.UNDEFINED,
             reason="rank-biserial correlation requires at least one nonzero paired difference",
         )
-
     ranks = stats.rankdata(np.abs(nonzero), method="average")
-    pos_mask = nonzero > 0.0
-    positive_rank_sum = float(np.sum(ranks[pos_mask]))
-    negative_rank_sum = float(np.sum(ranks[~pos_mask]))
+    positive_rank_sum = float(np.sum(ranks[nonzero > 0.0]))
+    negative_rank_sum = float(np.sum(ranks[nonzero < 0.0]))
     rank_total = float(ranks.sum())
-
     return RankBiserialResult(
-        value=MetricValue((positive_rank_sum - negative_rank_sum) / rank_total),
+        value=CorrelationCoefficient((positive_rank_sum - negative_rank_sum) / rank_total),
         positive_rank_sum=RankSum(positive_rank_sum),
         negative_rank_sum=RankSum(negative_rank_sum),
         nonzero_pair_count=PairedObservationCount(int(nonzero.size)),
         availability=AvailabilityStatus.AVAILABLE,
-        reason="",
+        reason=None,
     )
 
 
-def holm_adjust(
-    raw_p_values: tuple[float, ...],
-    *,
-    family_name: str,
-    alpha: Ratio,
-) -> MultiplicityResult:
-    if not family_name.strip() or not raw_p_values:
-        raise ValueError("Holm correction requires a named non-empty test family")
-
-    raw_pvs = tuple(PValue(value=v) for v in raw_p_values)
+def holm_adjust(plan: MultiplicityPlan, protocol: PairedInferenceProtocol) -> MultiplicityResult:
     rejected, adjusted, _, _ = multipletests(
-        tuple(pv.value for pv in raw_pvs),
-        alpha=alpha.value,
-        method="holm",
+        tuple(value.value for value in plan.raw_p_values),
+        alpha=plan.alpha.value,
+        method=protocol.multiplicity_correction.value,
         is_sorted=False,
         returnsorted=False,
     )
-
-    decisions = tuple(
-        MultiplicityDecision(
-            raw_p_value=raw_pvs[i],
-            adjusted_p_value=PValue(value=float(corrected)),
-            rejected=bool(is_rejected),
-        )
-        for i, (corrected, is_rejected) in enumerate(zip(adjusted, rejected, strict=True))
-    )
-
     return MultiplicityResult(
-        correction=MultiplicityCorrectionId.HOLM,
-        family_name=family_name,
-        decisions=decisions,
+        correction=protocol.multiplicity_correction,
+        family_name=plan.family_name,
+        decisions=tuple(
+            MultiplicityDecision(
+                raw_p_value=raw,
+                adjusted_p_value=PValue(float(corrected)),
+                rejected=bool(is_rejected),
+            )
+            for raw, corrected, is_rejected in zip(
+                plan.raw_p_values,
+                adjusted,
+                rejected,
+                strict=True,
+            )
+        ),
     )

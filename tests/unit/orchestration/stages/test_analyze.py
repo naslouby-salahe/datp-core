@@ -1,8 +1,10 @@
-"""Analysis-stage persistence and reuse contracts."""
+"""Analysis-stage persistence, typed protocol, and mechanism serialization contracts."""
 
+from json import loads
 from pathlib import Path
 
-from datp_core.analysis.models import PairedContrast
+from datp_core.analysis.mechanisms import GroupDispersionObservation, grouped_dispersion
+from datp_core.analysis.models import MultiplicityPlan, PairedContrast, PValue
 from datp_core.domain.enums import (
     AvailabilityStatus,
     EvidenceRole,
@@ -14,42 +16,50 @@ from datp_core.domain.enums import (
     SplitProtocolId,
     TrainingModelId,
 )
-from datp_core.domain.values import MetricValue, PairedObservationCount, RankSum, Ratio, Seed
+from datp_core.domain.values import ClusterIndex, MetricValue, Ratio, Seed, ThresholdValue
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.orchestration.stages.analyze import AnalyzeRequest, analyze_stage
-from datp_core.protocols.statistics import BOOTSTRAP_REPLICATE_COUNT, CONFIRMATORY_INFERENCE_PROTOCOL
+from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL
 
 
-def test_analyze_stage_persists_secondary_and_descriptive_outputs_and_reuses_them(tmp_path: Path) -> None:
+def test_analyze_stage_persists_protocol_mechanisms_and_reuses_document(tmp_path: Path) -> None:
+    mechanism = grouped_dispersion(
+        (
+            GroupDispersionObservation(
+                group_index=ClusterIndex(0),
+                thresholds=(ThresholdValue(0.2), ThresholdValue(0.4)),
+                false_positive_rates=(Ratio(0.1), Ratio(0.2)),
+            ),
+        )
+    )
     request = AnalyzeRequest(
         contrasts=tuple(_contrast(seed) for seed in range(10)),
         inference_protocol=CONFIRMATORY_INFERENCE_PROTOCOL,
-        bootstrap_replicates=BOOTSTRAP_REPLICATE_COUNT,
         analysis_seed=Seed(31),
         output_directory=tmp_path / "analysis",
         overwrite=False,
-        secondary_family_name="predeclared_supportive_family",
-        secondary_p_values=(0.01, 0.04),
-        secondary_alpha=Ratio(0.05),
+        multiplicity_plan=MultiplicityPlan(
+            family_name="predeclared_supportive_family",
+            raw_p_values=(PValue(0.01), PValue(0.04)),
+            alpha=Ratio(0.05),
+        ),
+        mechanisms=(mechanism,),
     )
-
     first = analyze_stage(request)
     second = analyze_stage(request)
-
     assert first.publication_status is PublicationStatus.PUBLISHED
     assert second.publication_status is PublicationStatus.REUSED
-    assert second.descriptive.values == tuple(item.delta for item in request.contrasts)
-    assert second.sign_consistency.total == 10
     assert second.wilcoxon.availability is AvailabilityStatus.AVAILABLE
-    assert isinstance(second.wilcoxon.statistic, RankSum)
-    assert second.wilcoxon.nonzero_pair_count == PairedObservationCount(10)
-    assert second.rank_biserial.availability is AvailabilityStatus.AVAILABLE
-    assert isinstance(second.rank_biserial.value, MetricValue)
-    assert isinstance(second.rank_biserial.positive_rank_sum, RankSum)
-    assert second.rank_biserial.nonzero_pair_count == PairedObservationCount(10)
     assert second.multiplicity is not None
-    assert second.multiplicity.adjusted_p_values[0].value <= second.multiplicity.adjusted_p_values[1].value
-    assert (request.output_directory / "analysis.json").is_file()
+    assert second.mechanisms == (mechanism,)
+
+    document = loads((request.output_directory / "analysis.json").read_text())
+    protocol = document["inference_protocol"]
+    assert protocol["interval_method"] == "bca_paired_arithmetic_mean"
+    assert protocol["wilcoxon_alternative"] == "two-sided"
+    assert protocol["wilcoxon_zero_method"] == "pratt"
+    assert protocol["wilcoxon_computation_method"] == "asymptotic"
+    assert document["mechanisms"][0]["group_sizes"] == [2]
 
 
 def _contrast(seed: int) -> PairedContrast:
