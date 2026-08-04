@@ -14,7 +14,7 @@ from tests.unit.learning.federated.helpers import (
 )
 
 from datp_core.domain.values import Checksum, RowCount, Seed
-from datp_core.learning.federated.checkpointing import select_checkpoint
+from datp_core.learning.federated.checkpoints.selection import select_checkpoint
 from datp_core.learning.federated.ditto import DittoTrainingRequest, train_ditto
 from datp_core.protocols.training import CHECKPOINT_SELECTION_RULE
 from datp_core.runtime.compute import resolve_cuda_device
@@ -77,16 +77,18 @@ def test_ditto_end_to_end_train_select_and_score_global_and_personalized(tmp_pat
     )
 
     personalized_score_checksums = []
-    for pcs in outcome.personalized_candidates:
-        client = pcs.client
+    for personalized_candidates in outcome.personalized_candidates:
+        client = personalized_candidates.client
         decision = select_checkpoint(
-            pcs.candidates,
+            personalized_candidates.candidates,
             CHECKPOINT,
             coordinate=personalized_coordinate,
             client=client,
             selection_rule=CHECKPOINT_SELECTION_RULE,
-            preprocessing_state_set_checksum=pcs.candidates[0].preprocessing_state_set_checksum,
-            split_manifest_checksum=pcs.candidates[0].split_manifest_checksum,
+            preprocessing_state_set_checksum=(
+                personalized_candidates.candidates[0].preprocessing_state_set_checksum
+            ),
+            split_manifest_checksum=personalized_candidates.candidates[0].split_manifest_checksum,
         )
         personalized_scores = generate_federated_scores(
             ScoreGenerationRequest(
