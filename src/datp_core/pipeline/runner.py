@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 from shutil import rmtree
 
 from datp_core.anchor.models import VerifyAnchorStageRequest
-from datp_core.domain.enums import ExperimentId
+from datp_core.domain.enums import ExperimentId, PublicationStatus
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.provenance import canonical_checksum
 from datp_core.domain.values import ByteCount, Checksum, ClientCount, checksum_file
@@ -43,7 +44,7 @@ from datp_core.pipeline.publication.completion import (
     read_completion_record,
     write_completion_record,
 )
-from datp_core.pipeline.publication.layout import experiment_output_directory
+from datp_core.pipeline.publication.layout import evaluation_run_directory, experiment_output_directory
 from datp_core.pipeline.publication.records import (
     ArtifactKind,
     ArtifactRecord,
@@ -51,6 +52,7 @@ from datp_core.pipeline.publication.records import (
     CompletionState,
 )
 from datp_core.pipeline.publication.reload_validation import validate_reload
+from datp_core.pipeline.scoring.service import FederatedScoreArtifactManifest
 from datp_core.pipeline.select_checkpoint import (
     SelectFederatedCheckpointRequest,
     SelectFederatedCheckpointResult,
@@ -74,8 +76,15 @@ from datp_core.protocols.graph import (
 from datp_core.protocols.inference import FixedScoreInvariant
 from datp_core.protocols.runtime import DATA_ROOT, OUTPUTS_ROOT
 from datp_core.protocols.training import BATCH_SIZE, CHECKPOINT_PROTOCOL, LEARNING_RATE
+from datp_core.thresholding.common import ThresholdConstructionResult
 from datp_core.thresholding.dispatch import ThresholdConstructionRequest
 from datp_core.thresholding.identities import ThresholdUnavailableResult
+
+
+class EvaluationRunAssetDirectory(StrEnum):
+    THRESHOLD = "threshold"
+    EVALUATION = "evaluation"
+    ANCHOR = "anchor"
 
 
 @dataclass(frozen=True, slots=True)
@@ -177,6 +186,9 @@ class StageRunner:
     def _context(self, coordinate: ExperimentCoordinate) -> FederatedExecutionContext:
         return resolve_execution_context(coordinate)
 
+    def _run_directory(self, coordinate: ExperimentCoordinate) -> Path:
+        return evaluation_run_directory(OUTPUTS_ROOT, coordinate)
+
     def _materialize_dataset(self, stage: PipelineStage, coordinate: ExperimentCoordinate) -> StageExecution:
         result = materialize_dataset(MaterializeDatasetRequest(data_root=DATA_ROOT, datasets=(coordinate.dataset,)))
         publication = result.publications[0]
@@ -252,7 +264,11 @@ class StageRunner:
 
     def _train_detector(self, stage: PipelineStage, coordinate: ExperimentCoordinate) -> StageExecution:
         _, result = self._training(coordinate)
-        outcome = StageOutcome.COMPLETED if result.publication_status.value == "published" else StageOutcome.REUSED
+        outcome = (
+            StageOutcome.COMPLETED
+            if result.publication_status is PublicationStatus.PUBLISHED
+            else StageOutcome.REUSED
+        )
         return StageExecution(
             stage=stage,
             outcome=outcome,
@@ -267,7 +283,10 @@ class StageRunner:
             evidence=f"selected_round={selection.decision.selected.round_number.value}",
         )
 
-    def _scores(self, coordinate: ExperimentCoordinate):
+    def _scores(
+        self,
+        coordinate: ExperimentCoordinate,
+    ) -> tuple[FederatedExecutionContext, FederatedScoreArtifactManifest]:
         context = self._context(coordinate)
         scores = score_execution_context(
             context,
@@ -308,7 +327,10 @@ class StageRunner:
             evidence=f"eligible_clients={len(eligible)} checksum={checksum.value}",
         )
 
-    def _threshold(self, coordinate: ExperimentCoordinate):
+    def _threshold(
+        self,
+        coordinate: ExperimentCoordinate,
+    ) -> tuple[FederatedExecutionContext, FederatedScoreArtifactManifest, ThresholdConstructionResult]:
         context, scores = self._scores(coordinate)
         threshold = construct_federated_thresholds(
             ConstructFederatedThresholdsRequest(
@@ -320,7 +342,7 @@ class StageRunner:
                     eligible_calibration_scores(scores),
                     family_identities(context.clients, context.family_by_client),
                 ),
-                output_directory=experiment_output_directory(OUTPUTS_ROOT, coordinate) / "threshold",
+                output_directory=self._run_directory(coordinate) / EvaluationRunAssetDirectory.THRESHOLD.value,
                 overwrite=False,
             )
         ).result
@@ -357,7 +379,7 @@ class StageRunner:
                 communication_messages=(),
                 traffic_rate_evidence=None,
                 execution_identity=context.execution_identity,
-                output_directory=experiment_output_directory(OUTPUTS_ROOT, coordinate) / "evaluation",
+                output_directory=self._run_directory(coordinate) / EvaluationRunAssetDirectory.EVALUATION.value,
                 overwrite=False,
             )
         )
@@ -373,8 +395,12 @@ class StageRunner:
         )
 
     def _evaluation(self, coordinate: ExperimentCoordinate) -> FederatedEvaluationDocument:
-        directory = experiment_output_directory(OUTPUTS_ROOT, coordinate)
-        return load_evaluation_document(directory / "evaluation" / FederatedEvaluationAssetName.DOCUMENT)
+        path = (
+            self._run_directory(coordinate)
+            / EvaluationRunAssetDirectory.EVALUATION.value
+            / FederatedEvaluationAssetName.DOCUMENT
+        )
+        return load_evaluation_document(path)
 
     def _analyze_evidence(self, stage: PipelineStage, coordinate: ExperimentCoordinate) -> StageExecution:
         result = metric_by_id(self._evaluation(coordinate).population.metrics, coordinate.metric)
@@ -393,7 +419,7 @@ class StageRunner:
         result = verify_anchor(
             VerifyAnchorStageRequest(
                 protocol=ANCHOR_DECISION_PROTOCOL,
-                diagnostics_directory=experiment_output_directory(OUTPUTS_ROOT, coordinate) / "anchor",
+                diagnostics_directory=self._run_directory(coordinate) / EvaluationRunAssetDirectory.ANCHOR.value,
                 observations=None,
                 historical_sources=None,
                 request_independent_reproduction=False,
@@ -414,7 +440,9 @@ class StageRunner:
         _, selection = self._selection(coordinate)
         selected = selection.decision.selected
         evaluation_document_path = (
-            experiment_output_directory(OUTPUTS_ROOT, coordinate) / "evaluation" / FederatedEvaluationAssetName.DOCUMENT
+            self._run_directory(coordinate)
+            / EvaluationRunAssetDirectory.EVALUATION.value
+            / FederatedEvaluationAssetName.DOCUMENT
         )
         if not evaluation_document_path.is_file():
             raise ScientificContractError(
@@ -437,12 +465,13 @@ class StageRunner:
                 state=ArtifactState.PUBLISHED,
             ),
         )
+        directory = experiment_output_directory(OUTPUTS_ROOT, coordinate)
         record = build_completion_record(
             plan_digest=provenance.plan_digest,
             campaign_digest=provenance.campaign_digest,
             artifacts=artifacts,
         )
-        write_completion_record(experiment_output_directory(OUTPUTS_ROOT, coordinate), record)
+        write_completion_record(directory, record)
         return StageExecution(
             stage=stage,
             outcome=StageOutcome.COMPLETED,
