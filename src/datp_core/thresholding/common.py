@@ -8,9 +8,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar, Protocol, runtime_checkable
 
 from datp_core.analysis.temporal import TemporalDeploymentProvenance
-from datp_core.artifacts.serialization import canonical_json_text
 from datp_core.domain.enums import ContractSubject, FederatedThresholdMethod
 from datp_core.domain.errors import ScientificContractError
+from datp_core.domain.provenance import canonical_json_text
 from datp_core.domain.values import Checksum, Quantile, ThresholdValue, checksum_text
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.populations.models import ClientIdentity
