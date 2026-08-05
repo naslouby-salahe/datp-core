@@ -11,6 +11,7 @@ from datp_core.pipeline.planning import ExperimentCoordinate
 
 
 class PipelineStage(StrEnum):
+    PREFLIGHT = "preflight"
     MATERIALIZE_DATASET = "materialize_dataset"
     CONSTRUCT_POPULATION = "construct_population"
     FIT_PREPROCESSING = "fit_preprocessing"
@@ -23,6 +24,7 @@ class PipelineStage(StrEnum):
     ANALYZE_EVIDENCE = "analyze_evidence"
     VERIFY_ANCHOR = "verify_anchor"
     PUBLISH_REPORT = "publish_report"
+    FINALIZE_PUBLICATION = "finalize_publication"
 
 
 PIPELINE_SEQUENCE = tuple(PipelineStage)
