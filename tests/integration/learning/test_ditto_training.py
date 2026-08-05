@@ -65,6 +65,7 @@ def test_ditto_end_to_end_train_select_and_score_global_and_personalized(tmp_pat
     global_scores = generate_federated_scores(
         ScoreGenerationRequest(
             checkpoint=global_decision.selected,
+            scored_split_protocol=global_decision.selected.coordinate.split_protocol,
             autoencoder=AUTOENCODER,
             feature_names=FEATURE_NAMES,
             clients=scoring_clients,
@@ -91,6 +92,7 @@ def test_ditto_end_to_end_train_select_and_score_global_and_personalized(tmp_pat
         personalized_scores = generate_federated_scores(
             ScoreGenerationRequest(
                 checkpoint=decision.selected,
+                scored_split_protocol=decision.selected.coordinate.split_protocol,
                 autoencoder=AUTOENCODER,
                 feature_names=FEATURE_NAMES,
                 clients=(
