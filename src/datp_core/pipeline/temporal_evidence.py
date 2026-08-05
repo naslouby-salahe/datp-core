@@ -64,7 +64,8 @@ class TemporalStateExecution:
 
 
 def run_temporal_static_reference_seed(partition_seed: Seed) -> TemporalStateResult:
-    coordinate = _coordinate(partition_seed, TemporalState.STATIC_REFERENCE)
+    declaration = _temporal_declaration()
+    coordinate = _coordinate(partition_seed, TemporalState.STATIC_REFERENCE, declaration)
     context = resolve_execution_context(coordinate, OUTPUTS_ROOT)
     scores = _score_context(context, coordinate)
     execution = _evaluate_state(
@@ -72,6 +73,7 @@ def run_temporal_static_reference_seed(partition_seed: Seed) -> TemporalStateRes
         identity=_execution_identity(coordinate),
         scores=scores,
         calibration_role=PartitionRole.CALIBRATION,
+        threshold_methods=declaration.federated_thresholds,
         provenance=None,
         comparison_fixed_score_evidence=None,
     )
@@ -82,7 +84,8 @@ def run_temporal_static_reference_seed(partition_seed: Seed) -> TemporalStateRes
 
 
 def run_temporal_future_pair(partition_seed: Seed) -> TemporalFuturePairResult:
-    frozen_coordinate = _coordinate(partition_seed, TemporalState.FROZEN_FUTURE)
+    declaration = _temporal_declaration()
+    frozen_coordinate = _coordinate(partition_seed, TemporalState.FROZEN_FUTURE, declaration)
     context = resolve_execution_context(frozen_coordinate, OUTPUTS_ROOT)
     scores = _score_context(context, frozen_coordinate)
     frozen_provenance = TemporalDeploymentProvenance.from_score_manifest(TemporalState.FROZEN_FUTURE, scores)
@@ -96,15 +99,21 @@ def run_temporal_future_pair(partition_seed: Seed) -> TemporalFuturePairResult:
         identity=_execution_identity(frozen_coordinate),
         scores=scores,
         calibration_role=PartitionRole.CALIBRATION,
+        threshold_methods=declaration.federated_thresholds,
         provenance=frozen_provenance,
         comparison_fixed_score_evidence=None,
     )
-    recalibrated_coordinate = _coordinate(partition_seed, TemporalState.RECALIBRATED_FUTURE)
+    recalibrated_coordinate = _coordinate(
+        partition_seed,
+        TemporalState.RECALIBRATED_FUTURE,
+        declaration,
+    )
     recalibrated = _evaluate_state(
         context=context,
         identity=_execution_identity(recalibrated_coordinate),
         scores=scores,
         calibration_role=PartitionRole.FUTURE_RECALIBRATION,
+        threshold_methods=declaration.federated_thresholds,
         provenance=recalibrated_provenance,
         comparison_fixed_score_evidence=frozen.fixed_score_evidence,
     )
@@ -137,6 +146,7 @@ def _evaluate_state(
     identity: ExternalTemporalExecutionIdentity,
     scores: FederatedScoreArtifactManifest,
     calibration_role: PartitionRole,
+    threshold_methods: tuple[FederatedThresholdMethod, ...],
     provenance: TemporalDeploymentProvenance | None,
     comparison_fixed_score_evidence: FixedScoreEvidence | None,
 ) -> TemporalStateExecution:
@@ -150,7 +160,7 @@ def _evaluate_state(
         context.coordinate.training_seed,
         OUTPUTS_ROOT,
     )
-    for method in capabilities.valid_threshold_methods:
+    for method in threshold_methods:
         threshold = construct_federated_thresholds(
             ConstructFederatedThresholdsRequest(
                 request=ThresholdConstructionRequest(
@@ -221,8 +231,11 @@ def _execution_identity(coordinate: ExperimentCoordinate) -> ExternalTemporalExe
     )
 
 
-def _coordinate(partition_seed: Seed, state: TemporalState) -> ExperimentCoordinate:
-    declaration = _temporal_declaration()
+def _coordinate(
+    partition_seed: Seed,
+    state: TemporalState,
+    declaration: ExperimentDeclaration,
+) -> ExperimentCoordinate:
     plan = expand_experiment_plan(
         declarations=(declaration,),
         seed_cohort=SeedCohort(values=(partition_seed,)),
