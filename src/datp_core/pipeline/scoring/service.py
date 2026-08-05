@@ -35,14 +35,15 @@ from datp_core.pipeline.scoring.frame_contract import (
     validate_persisted_score_frame,
     validate_score_input_frame,
 )
-from datp_core.pipeline.scoring.records import (
+from datp_core.pipeline.scoring.records import PersistedScoreFrame
+from datp_core.populations.models import ClientIdentity
+from datp_core.protocols.inference import (
     FixedScoreInvariant,
     ScoreArtifactManifest,
     ScoreGenerationResult,
     ScoreRecord,
     record_set_checksum,
 )
-from datp_core.populations.models import ClientIdentity
 from datp_core.protocols.models import AutoencoderProtocol
 
 
@@ -51,14 +52,6 @@ class FederatedScoreAssetName(StrEnum):
     EVALUATION = "evaluation.parquet"
     FUTURE_RECALIBRATION = "future_recalibration.parquet"
     COMPLETE = "COMPLETE"
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class PersistedScoreFrame:
-    path: Path
-    checksum: Checksum
-    row_count: RowCount
-    feature_count: FeatureCount
 
 
 @dataclass(frozen=True, slots=True, eq=False)

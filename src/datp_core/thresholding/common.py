@@ -13,8 +13,8 @@ from datp_core.domain.enums import ContractSubject, FederatedThresholdMethod
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import Checksum, Quantile, ThresholdValue, checksum_text
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.pipeline.scoring.records import ScoreArtifactManifest
 from datp_core.populations.models import ClientIdentity
+from datp_core.protocols.inference import ScoreArtifactManifest
 from datp_core.thresholding.identities import ThresholdUnavailableResult
 from datp_core.thresholding.methods.cluster import GroupedThresholdResult
 from datp_core.thresholding.methods.conformal import ConformalThresholdResult
