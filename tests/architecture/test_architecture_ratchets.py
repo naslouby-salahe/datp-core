@@ -4,6 +4,9 @@ from pathlib import Path
 REPOSITORY_ROOT = Path(__file__).parents[2]
 SOURCE_ROOT = REPOSITORY_ROOT / "src" / "datp_core"
 TEST_ROOT = REPOSITORY_ROOT / "tests"
+PROHIBITED_WORKFLOW_PATHS = (
+    REPOSITORY_ROOT / ".github" / "workflows" / "remove-artifacts-package.yml",
+)
 CAPABILITY_PACKAGES = (
     "datasets",
     "populations",
@@ -51,6 +54,10 @@ def _imports(path: Path) -> tuple[str, ...]:
         elif isinstance(node, ast.ImportFrom) and node.module is not None:
             imports.append(node.module)
     return tuple(imports)
+
+
+def test_prohibited_migration_workflows_cannot_return() -> None:
+    assert all(not path.exists() for path in PROHIBITED_WORKFLOW_PATHS)
 
 
 def test_legacy_execution_and_ownership_packages_cannot_return() -> None:
