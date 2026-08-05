@@ -25,13 +25,13 @@ from datp_core.pipeline.preparation.populations import (
     ConstructDeclaredPopulationRequest,
     construct_declared_population,
 )
-from datp_core.pipeline.preparation.preprocessing import (
-    FitCentralizedPopulationPreprocessingRequest,
-    fit_centralized_population_preprocessing,
-)
 from datp_core.pipeline.scoring.centralized import generate_centralized_scores
 from datp_core.pipeline.scoring.models import GenerateCentralizedScoresRequest
 from datp_core.pipeline.training.centralized import TrainCentralizedDetectorRequest, train_centralized_detector
+from datp_core.preprocessing.centralized import (
+    CentralizedPopulationPreprocessingRequest,
+    preprocess_centralized_population,
+)
 from datp_core.protocols.training import BATCH_SIZE, CHECKPOINT_PROTOCOL, NBAIOT_AUTOENCODER
 from datp_core.runtime.configuration import DATA_ROOT, OUTPUTS_ROOT
 
@@ -57,8 +57,8 @@ def run_centralized_reference_seed(training_seed: Seed) -> EvaluateCentralizedDe
             controlled_condition=None,
         )
     )
-    preprocessing = fit_centralized_population_preprocessing(
-        FitCentralizedPopulationPreprocessingRequest(
+    preprocessing = preprocess_centralized_population(
+        CentralizedPopulationPreprocessingRequest(
             population=population,
             partition_seed=training_seed,
             split_protocol=split_protocol,
