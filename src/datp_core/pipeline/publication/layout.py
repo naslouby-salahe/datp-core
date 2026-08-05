@@ -3,13 +3,11 @@
 from enum import StrEnum
 from pathlib import Path
 
-from datp_core.pipeline.planning import ExperimentCoordinate
+from datp_core.pipeline.planning import CoordinateIdentitySegment, ExperimentCoordinate
 
 
-class PublicationPathSegment(StrEnum):
+class PublicationArtifactDirectory(StrEnum):
     METRICS = "metrics"
-    NO_MODEL_COEFFICIENT = "no_model_coefficient"
-    NON_TEMPORAL = "non_temporal"
 
 
 def evaluation_run_directory(root: Path, coordinate: ExperimentCoordinate) -> Path:
@@ -17,12 +15,12 @@ def evaluation_run_directory(root: Path, coordinate: ExperimentCoordinate) -> Pa
     temporal = (
         coordinate.temporal_state.value
         if coordinate.temporal_state is not None
-        else PublicationPathSegment.NON_TEMPORAL.value
+        else CoordinateIdentitySegment.NON_TEMPORAL.value
     )
     coefficient = (
         str(coordinate.model_coefficient.value)
         if coordinate.model_coefficient is not None
-        else PublicationPathSegment.NO_MODEL_COEFFICIENT.value
+        else CoordinateIdentitySegment.NO_MODEL_COEFFICIENT.value
     )
     return (
         root
@@ -44,7 +42,7 @@ def experiment_output_directory(root: Path, coordinate: ExperimentCoordinate) ->
     """Metric-specific analysis and completion root."""
     return (
         evaluation_run_directory(root, coordinate)
-        / PublicationPathSegment.METRICS.value
+        / PublicationArtifactDirectory.METRICS.value
         / coordinate.metric.value
     )
 
