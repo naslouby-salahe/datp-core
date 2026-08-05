@@ -52,18 +52,17 @@ jobs:
           from pathlib import Path
 
           path = Path('src/datp_core/preprocessing/publication.py')
-          text = path.read_text(encoding='utf-8')
-          old = (
-              '        if not publication.overwrite and _is_reusable(target, publication):\n'
-              '        return ProcessedPublicationResult(\n'
-          )
-          new = (
-              '        if not publication.overwrite and _is_reusable(target, publication):\n'
-              '            return ProcessedPublicationResult(\n'
-          )
-          if text.count(old) != 1:
-              raise SystemExit('generated reuse-return indentation did not match exactly once')
-          path.write_text(text.replace(old, new), encoding='utf-8')
+          lines = path.read_text(encoding='utf-8').splitlines()
+          target = 'if not publication.overwrite and _is_reusable(target, publication):'
+          matches = tuple(index for index, line in enumerate(lines) if line.strip() == target)
+          if len(matches) != 1:
+              raise SystemExit(f'expected one generated reuse branch, found {len(matches)}')
+          index = matches[0]
+          if index + 1 >= len(lines) or lines[index + 1].strip() != 'return ProcessedPublicationResult(':
+              raise SystemExit('generated reuse branch does not contain the expected return')
+          indentation = len(lines[index]) - len(lines[index].lstrip())
+          lines[index + 1] = ' ' * (indentation + 4) + lines[index + 1].strip()
+          path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
           PY
 
       - run: uv sync --all-groups --all-extras --frozen
