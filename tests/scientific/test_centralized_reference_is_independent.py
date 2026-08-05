@@ -3,7 +3,6 @@ from pathlib import Path
 import pytest
 
 from datp_core.centralized_reference.checkpointing import reject_federated_checkpoint
-from datp_core.centralized_reference.preprocessing import reject_federated_state_for_pooled
 from datp_core.centralized_reference.thresholding import (
     reject_federated_scores_for_centralized_threshold,
     reject_local_quantile_mean_as_centralized,
@@ -26,6 +25,7 @@ from datp_core.domain.values import (
     FeatureNameSequence,
     RowCount,
 )
+from datp_core.preprocessing.centralized import reject_federated_state_for_pooled
 from datp_core.preprocessing.models import (
     FederatedFittedPreprocessingState,
     PreprocessingProtocol,

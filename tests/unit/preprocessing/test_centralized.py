@@ -3,7 +3,6 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from datp_core.centralized_reference.preprocessing import fit_pooled_preprocessing, reject_federated_state_for_pooled
 from datp_core.domain.enums import (
     PreprocessingFitScope,
     PreprocessingProtocolId,
@@ -23,6 +22,7 @@ from datp_core.domain.values import (
     StableRowId,
     StableRowIdSequence,
 )
+from datp_core.preprocessing.centralized import fit_pooled_preprocessing, reject_federated_state_for_pooled
 from datp_core.preprocessing.models import (
     FederatedFittedPreprocessingState,
     PreprocessingFitBatch,

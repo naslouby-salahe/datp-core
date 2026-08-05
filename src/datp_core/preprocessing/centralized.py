@@ -3,13 +3,18 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from datp_core.artifacts.coordinates import canonical_root_under
-from datp_core.centralized_reference.preprocessing import (
-    PooledPublishRequest,
-    fit_pooled_preprocessing,
-    publish_pooled_preprocessing,
-    reject_federated_state_for_pooled,
+from datp_core.artifacts.coordinates import ReusableDataCoordinate, canonical_root_under
+from datp_core.artifacts.layout import (
+    ProcessedAssetName,
+    RelativeAssetPathSequence,
+    asset_for_partition,
+    branch_asset_path,
+    canonical_relative_asset_path,
+    centralized_branch_directory,
+    partition_roles,
+    processed_asset_names,
 )
+from datp_core.artifacts.serialization import TrustedScaler
 from datp_core.datasets.canonical_cache import require_canonical_publication_complete
 from datp_core.datasets.catalogue import dataset_binding
 from datp_core.domain.enums import (
@@ -18,13 +23,14 @@ from datp_core.domain.enums import (
     PartitionOrdering,
     PartitionRole,
     PopulationId,
+    PreprocessingFitScope,
     PreprocessingProtocolId,
     ProcessedDataBranch,
     PublicationStatus,
     SplitProtocolId,
 )
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import FeatureName, FeatureNameSequence, Seed
+from datp_core.domain.errors import LeakageError, ScientificContractError
+from datp_core.domain.values import FeatureName, FeatureNameSequence, RowCount, Seed
 from datp_core.populations.catalogue import (
     PopulationConstructionRequest,
     PreprocessingHandoffRequest,
@@ -36,14 +42,31 @@ from datp_core.populations.catalogue import (
 from datp_core.populations.models import ControlledPartitionCondition
 from datp_core.preprocessing.models import (
     SCIENTIFIC_CENTRALIZED_PREPROCESSING_METHOD,
+    FederatedFittedPreprocessingState,
+    FittedPreprocessingState,
+    FittedStatePublishSpec,
+    PooledPreprocessingOwner,
     PooledPreprocessingResult,
+    PreprocessedPartitionPaths,
     PreprocessingFitBatch,
     PreprocessingPartitions,
     PreprocessingProtocol,
     PreprocessingPublishContext,
     build_preprocessing_protocol,
 )
-from datp_core.preprocessing.validation import extract_partitions
+from datp_core.preprocessing.validation import (
+    centralized_fitted_state_after_publish,
+    extract_partitions,
+    fit_trusted_batch,
+    publish_preprocessed_partitions,
+)
+
+
+@dataclass(slots=True, eq=False)
+class PooledPublishRequest:
+    context: PreprocessingPublishContext
+    fitted_estimator: TrustedScaler
+    partitions: PreprocessingPartitions
 
 
 @dataclass(slots=True, eq=False)
@@ -70,6 +93,75 @@ class CentralizedPreprocessingOutcome:
     preprocessing_identity: PreprocessingProtocolId
     publication_status: PublicationStatus
     dataset: DatasetId
+
+
+def fit_pooled_preprocessing(
+    protocol: PreprocessingProtocol,
+    batch: PreprocessingFitBatch,
+) -> TrustedScaler:
+    return fit_trusted_batch(protocol, batch, subject=PreprocessingFitScope.POOLED_TRAINING)
+
+
+def publish_pooled_preprocessing(request: PooledPublishRequest) -> PooledPreprocessingResult:
+    context = request.context
+    branch_coordinate_directory = centralized_branch_directory(
+        context.data_root,
+        ReusableDataCoordinate(
+            dataset=context.dataset,
+            population=context.population,
+            partition_seed=context.partition_seed,
+            split_protocol_identity=context.split_protocol_identity,
+            preprocessing_identity=context.protocol.identity,
+            branch=ProcessedDataBranch.CENTRALIZED_REFERENCE,
+            client_identity=None,
+        ),
+    )
+    asset_names = processed_asset_names(context.split_protocol_identity)
+    asset_paths = RelativeAssetPathSequence(
+        tuple(
+            canonical_relative_asset_path(asset, ProcessedDataBranch.CENTRALIZED_REFERENCE, None)
+            for asset in asset_names
+        )
+    )
+    result = publish_preprocessed_partitions(
+        context=context,
+        branch=ProcessedDataBranch.CENTRALIZED_REFERENCE,
+        coordinate_directory=branch_coordinate_directory,
+        fitted_estimator=request.fitted_estimator,
+        partitions=request.partitions,
+        asset_paths=asset_paths,
+    )
+    state = centralized_fitted_state_after_publish(
+        FittedStatePublishSpec(
+            protocol=context.protocol,
+            estimator_path=branch_asset_path(result.coordinate_directory, ProcessedAssetName.STATE),
+            fit_row_count=RowCount(request.partitions.require(PartitionRole.TRAIN).frame.height),
+            owner=PooledPreprocessingOwner.POOLED,
+        )
+    )
+    paths_by_role = {
+        role: branch_asset_path(result.coordinate_directory, asset_for_partition(role))
+        for role in partition_roles(context.split_protocol_identity)
+    }
+    return PooledPreprocessingResult(
+        paths=PreprocessedPartitionPaths(
+            train=paths_by_role[PartitionRole.TRAIN],
+            calibration=paths_by_role[PartitionRole.CALIBRATION],
+            evaluation=paths_by_role[PartitionRole.EVALUATION],
+            future_recalibration=paths_by_role.get(PartitionRole.FUTURE_RECALIBRATION),
+            static_reference_reserve=paths_by_role.get(PartitionRole.STATIC_REFERENCE_RESERVE),
+        ),
+        fitted_state=state,
+        publication_status=result.publication_status,
+    )
+
+
+def reject_federated_state_for_pooled(state: FittedPreprocessingState) -> None:
+    if isinstance(state, FederatedFittedPreprocessingState):
+        raise LeakageError(
+            "federated client fitted state cannot be reused by the centralized reference",
+            subject=ProcessedDataBranch.FEDERATED,
+        )
 
 
 def preprocess_centralized(
@@ -111,7 +203,6 @@ def preprocess_centralized(
 def preprocess_centralized_population(
     request: CentralizedPopulationPreprocessingRequest,
 ) -> CentralizedPreprocessingOutcome:
-    """Construct population partitions, pool roles, and publish centralized assets."""
     if request.split_protocol is SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE:
         raise ScientificContractError(
             "temporal split preprocessing requires future_recalibration assets not yet in the core publish set",
