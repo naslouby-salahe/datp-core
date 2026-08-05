@@ -5,12 +5,12 @@ from math import isfinite
 
 import numpy as np
 
+from datp_core.datasets.partitioning.contracts import PopulationOutcomeLabel
 from datp_core.domain.enums import ContractSubject, MetricId
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import RowCount, ScoreValue
 from datp_core.evaluation.metric_semantics import available, unavailable
 from datp_core.evaluation.models import ConfusionCounts, MetricAvailability, MetricReason, MetricStatus
-from datp_core.populations.models import PopulationOutcomeLabel
 
 CLIENT_METRICS: tuple[MetricId, ...] = (
     MetricId.FALSE_POSITIVE_RATE,

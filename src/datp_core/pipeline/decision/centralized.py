@@ -8,6 +8,8 @@ from pathlib import Path
 
 import numpy as np
 
+from datp_core.datasets.partitioning.contracts import PopulationOutcomeLabel
+from datp_core.datasets.partitioning.integrity import reject_non_benign_labels
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
     AvailabilityStatus,
@@ -42,8 +44,6 @@ from datp_core.pipeline.publication.service import (
 )
 from datp_core.pipeline.scoring.centralized import load_score_frame, reject_non_finite_scores
 from datp_core.pipeline.scoring.models import PooledScoreArtifact
-from datp_core.populations.integrity import reject_non_benign_labels
-from datp_core.populations.models import PopulationOutcomeLabel
 from datp_core.protocols.calibration import CANONICAL_QUANTILE
 from datp_core.protocols.models import CentralizedQuantileProtocol
 

@@ -10,11 +10,19 @@ from pathlib import Path
 import polars as pl
 from pydantic import ValidationError
 
-from datp_core.datasets.catalogue import dataset_binding
 from datp_core.datasets.edge_iiotset.schema import (
     EDGE_NUMERIC_FEATURE_COLUMNS,
     EdgeAssetRole,
 )
+from datp_core.datasets.partitioning.contracts import (
+    CLIENT_ID_COLUMN,
+    OUTCOME_LABEL_COLUMN,
+    PARTITION_ROLE_COLUMN,
+    STABLE_ROW_ID_COLUMN,
+    ClientIdentity,
+    SplitManifestDocument,
+)
+from datp_core.datasets.registry import dataset_binding, population_capabilities
 from datp_core.domain.enums import (
     ContractSubject,
     DatasetId,
@@ -91,15 +99,6 @@ from datp_core.pipeline.training.federated import (
     TrainFederatedDetectorRequest,
     TrainFederatedDetectorResult,
     train_federated_detector,
-)
-from datp_core.populations.capabilities import population_capabilities
-from datp_core.populations.models import (
-    CLIENT_ID_COLUMN,
-    OUTCOME_LABEL_COLUMN,
-    PARTITION_ROLE_COLUMN,
-    STABLE_ROW_ID_COLUMN,
-    ClientIdentity,
-    SplitManifestDocument,
 )
 from datp_core.preprocessing.models import ClientPreprocessingResult
 from datp_core.preprocessing.service import (

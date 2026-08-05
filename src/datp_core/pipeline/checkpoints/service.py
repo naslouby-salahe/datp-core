@@ -4,6 +4,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.enums import (
     CheckpointSelectionRule,
     CheckpointStatus,
@@ -37,7 +38,6 @@ from datp_core.pipeline.checkpoints.models import (
     CentralizedCheckpointSetEntry,
     PersistedCheckpoint,
 )
-from datp_core.populations.models import ClientIdentity
 from datp_core.protocols.checkpoints import (
     select_terminal_checkpoint as apply_terminal_selection,
 )

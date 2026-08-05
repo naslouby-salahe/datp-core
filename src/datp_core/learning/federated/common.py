@@ -4,6 +4,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import cast
 
+from datp_core.datasets.registry import resolve_population
 from datp_core.domain.enums import ContractSubject
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import Checksum
@@ -26,7 +27,6 @@ from datp_core.learning.federated.models import (
     PreparedClientProvenance,
 )
 from datp_core.learning.federated.training import FederatedTrainingRequest, preprocessing_state_set_checksum
-from datp_core.populations.catalogue import resolve_population
 from datp_core.protocols.models import FedAvgProtocol, FedProxProtocol
 
 type GlobalFederatedProtocol = FedAvgProtocol | FedProxProtocol

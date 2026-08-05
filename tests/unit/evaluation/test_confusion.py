@@ -1,10 +1,10 @@
 import pytest
 
+from datp_core.datasets.partitioning.contracts import PopulationOutcomeLabel
 from datp_core.domain.enums import PartitionRole
 from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.values import ScoreValue, ThresholdValue
 from datp_core.evaluation.confusion import calculate_confusion_counts, predicted_attack
-from datp_core.populations.models import PopulationOutcomeLabel
 
 
 def test_prediction_boundary_is_benign_and_counts_conserve_rows() -> None:

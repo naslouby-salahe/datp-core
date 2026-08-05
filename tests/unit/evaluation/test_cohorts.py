@@ -1,5 +1,6 @@
 import pytest
 
+from datp_core.datasets.partitioning.contracts import ClientIdentity, ClientPartitionCounts
 from datp_core.domain.enums import (
     EvaluationCohort,
     FederatedThresholdMethod,
@@ -13,7 +14,6 @@ from datp_core.evaluation.cohorts import (
     assert_cohort_invariant_to_threshold_methods,
     build_evaluation_cohort_manifest,
 )
-from datp_core.populations.models import ClientIdentity, ClientPartitionCounts
 
 
 def test_fpr_eligibility_requires_support_and_benign_evaluation() -> None:

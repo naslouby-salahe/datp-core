@@ -3,20 +3,29 @@ from pathlib import Path
 
 import polars as pl
 
-from datp_core.domain.enums import PartitionRole, SplitProtocolId
+from datp_core.datasets.edge_iiotset.populations import construct_edge_temporal_groups
+from datp_core.datasets.partitioning.contracts import SplitConstructionRequest
+from datp_core.datasets.partitioning.integrity import validate_no_future_history_leakage
+from datp_core.datasets.partitioning.splits import split_membership
+from datp_core.domain.enums import DatasetId, PartitionRole, PopulationId, SplitProtocolId
 from datp_core.domain.values import Seed
-from datp_core.populations.edge_temporal_groups import build_edge_temporal_groups, split_temporal_membership
-from datp_core.populations.integrity import validate_no_future_history_leakage
 
 
 def test_temporal_split_preserves_history_before_future(edge_temporal_eligible_root: Path) -> None:
-    manifest, membership, _, _, _ = build_edge_temporal_groups(
+    construction = construct_edge_temporal_groups(
         edge_temporal_eligible_root, partition_seed=Seed(0), split_protocol=SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE
     )
-    assignments, split_manifest = split_temporal_membership(
-        membership,
-        partition_seed=Seed(0),
-        population_manifest_checksum=manifest.document.membership_checksum,
+    manifest, membership = construction.manifest, construction.membership
+    assignments, split_manifest = split_membership(
+        SplitConstructionRequest(
+            membership=membership,
+            population=PopulationId.EDGE_TEMPORAL_GROUPS,
+            dataset=DatasetId.EDGE_IIOTSET,
+            partition_seed=Seed(0),
+            split_protocol=SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE,
+            population_manifest_checksum=manifest.document.membership_checksum,
+            capture_timestamp_column="capture_timestamp",
+        )
     )
     assert split_manifest.split_protocol is SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE
     assert assignments.height == membership.height

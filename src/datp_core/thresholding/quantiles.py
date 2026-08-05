@@ -7,6 +7,7 @@ import numpy as np
 from scipy.stats import norm
 
 from datp_core.calibration.models import CalibrationSampleReference
+from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.enums import (
     AvailabilityStatus,
     ContractSubject,
@@ -25,7 +26,6 @@ from datp_core.domain.values import (
     checksum_text,
 )
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.populations.models import ClientIdentity
 from datp_core.thresholding.assignments import LocalQuantile, ThresholdDiagnostic
 
 

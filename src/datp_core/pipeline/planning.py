@@ -7,6 +7,7 @@ from enum import StrEnum
 from hashlib import blake2b
 from typing import ClassVar
 
+from datp_core.datasets.registry import population_capabilities, population_declaration
 from datp_core.domain.enums import (
     AvailabilityStatus,
     DatasetId,
@@ -22,7 +23,6 @@ from datp_core.domain.enums import (
     TrainingModelId,
 )
 from datp_core.domain.values import ModelCoefficientValue, Seed
-from datp_core.populations.capabilities import population_capabilities, population_declaration
 from datp_core.preprocessing.models import SCIENTIFIC_FEDERATED_PREPROCESSING_METHOD
 from datp_core.protocols.experiments import EXECUTION_IDENTITY_DECLARATIONS, EXPERIMENTS
 from datp_core.protocols.models import ExperimentDeclaration, SeedCohort

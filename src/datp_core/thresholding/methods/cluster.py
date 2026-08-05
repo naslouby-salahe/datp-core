@@ -9,6 +9,7 @@ from scipy.stats import skew
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 
+from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.enums import (
     ContractSubject,
     FederatedThresholdMethod,
@@ -24,7 +25,6 @@ from datp_core.domain.values import (
     ThresholdValue,
 )
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.populations.models import ClientIdentity
 from datp_core.protocols.calibration import CANONICAL_QUANTILE
 from datp_core.protocols.models import ClusterThresholdProtocol
 from datp_core.thresholding.assignments import (

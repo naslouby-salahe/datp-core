@@ -18,6 +18,7 @@ from tests.unit.learning.centralized.helpers import (
     training_coordinate,
 )
 
+from datp_core.datasets.partitioning.contracts import PopulationOutcomeLabel
 from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.values import Checksum, ClientPathToken, OutcomeLabel, OutcomeLabelSequence, RowCount, Seed
 from datp_core.learning.centralized.training import (
@@ -28,7 +29,6 @@ from datp_core.learning.centralized.training import (
     reject_federated_preprocessing_for_training,
     train_centralized_autoencoder,
 )
-from datp_core.populations.models import PopulationOutcomeLabel
 from datp_core.preprocessing.models import FederatedFittedPreprocessingState
 
 

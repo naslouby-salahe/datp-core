@@ -1,12 +1,45 @@
-"""Controlled N-BaIoT Dirichlet and IID synthetic-client construction."""
+"""N-BaIoT natural physical-device and controlled Dirichlet/IID population construction."""
 
 from pathlib import Path
 
 import numpy as np
 import polars as pl
 
-from datp_core.datasets.models import CanonicalProvenanceColumn
-from datp_core.datasets.nbaiot.schema import NBAIOT_SCHEMA, NBaIoTCanonicalColumn, NBaIoTSourceLabel
+from datp_core.datasets.contracts import CanonicalProvenanceColumn
+from datp_core.datasets.nbaiot.capabilities import NBAIOT_CAPABILITIES
+from datp_core.datasets.nbaiot.schema import (
+    NBAIOT_DEVICE_IDENTITIES,
+    NBAIOT_SCHEMA,
+    NBaIoTCanonicalColumn,
+    NBaIoTSourceLabel,
+)
+from datp_core.datasets.partitioning.construction import PopulationFinalizationRequest, finalize_population
+from datp_core.datasets.partitioning.contracts import (
+    CLIENT_ID_COLUMN,
+    FAMILY_ID_COLUMN,
+    ORDER_COLUMN,
+    OUTCOME_LABEL_COLUMN,
+    PERM_COLUMN,
+    SOURCE_PATH_COLUMN,
+    SOURCE_ROW_INDEX_COLUMN,
+    STABLE_ROW_ID_COLUMN,
+    Checksum,
+    ClientCount,
+    ControlledPartitionCondition,
+    DirichletPartitionDiagnosticsDocument,
+    PopulationConstructionResult,
+    PopulationFrameColumn,
+    PopulationOutcomeLabel,
+    build_population_capabilities,
+    canonical_data_glob,
+    checksum_text,
+    membership_column_names,
+    population_evidence_role,
+    select_membership_frame,
+    synthetic_client_ids,
+)
+from datp_core.datasets.partitioning.integrity import validate_dirichlet_conservation
+from datp_core.datasets.partitioning.splits import hamilton_integer_counts
 from datp_core.domain.enums import (
     ControlledPartitionKind,
     DatasetId,
@@ -15,58 +48,87 @@ from datp_core.domain.enums import (
     SplitProtocolId,
 )
 from datp_core.domain.errors import DataIntegrityError, ScientificContractError
-from datp_core.domain.values import Checksum, ClientCount, RowCount, Seed, checksum_text
-from datp_core.populations.capabilities import population_declaration
-from datp_core.populations.integrity import (
-    PopulationFinalizationRequest,
-    finalize_population,
-    validate_dirichlet_conservation,
-)
-from datp_core.populations.models import (
-    CLIENT_ID_COLUMN,
-    ORDER_COLUMN,
-    OUTCOME_LABEL_COLUMN,
-    PERM_COLUMN,
-    SOURCE_PATH_COLUMN,
-    SOURCE_ROW_INDEX_COLUMN,
-    STABLE_ROW_ID_COLUMN,
-    ControlledPartitionCondition,
-    DirichletPartitionDiagnosticsDocument,
-    PopulationManifest,
-    PopulationOutcomeLabel,
-    canonical_data_glob,
-    hamilton_integer_counts,
-    membership_column_names,
-    synthetic_client_ids,
-)
-from datp_core.protocols.calibration import MINIMUM_BENIGN_SUPPORT
+from datp_core.domain.values import RowCount, Seed
+from datp_core.protocols.populations import NBAIOT_DIRICHLET_CLIENTS, NBAIOT_NATURAL_DEVICES
 
+_SOURCE_CLIENT = NBaIoTCanonicalColumn.PHYSICAL_CLIENT_ID
+_SOURCE_FAMILY = NBaIoTCanonicalColumn.PHYSICAL_DEVICE_FAMILY
 _SOURCE_LABEL = NBaIoTCanonicalColumn.RAW_LABEL
-_POPULATION = PopulationId.NBAIOT_DIRICHLET_CLIENTS
-_IDENTITY = PopulationIdentityKind.SYNTHETIC_DIRICHLET_CLIENTS
+_NATURAL_POPULATION = PopulationId.NBAIOT_NATURAL_DEVICES
+_NATURAL_IDENTITY = PopulationIdentityKind.PHYSICAL_DEVICES
+_DIRICHLET_POPULATION = PopulationId.NBAIOT_DIRICHLET_CLIENTS
+_DIRICHLET_IDENTITY = PopulationIdentityKind.SYNTHETIC_DIRICHLET_CLIENTS
 
 
-def build_nbaiot_dirichlet_clients(
+def construct_nbaiot_natural_devices(
+    canonical_root: Path,
+    *,
+    partition_seed: Seed,
+    split_protocol: SplitProtocolId,
+) -> PopulationConstructionResult:
+    frame = _load_identity_frame(canonical_root)
+    candidates = tuple(sorted(NBAIOT_DEVICE_IDENTITIES))
+    observed = tuple(frame.get_column(CLIENT_ID_COLUMN).unique().sort().to_list())
+    if observed != candidates:
+        raise DataIntegrityError(
+            "N-BaIoT physical-client identities disagree with the audited set",
+            subject=_NATURAL_POPULATION,
+            reason="natural-device construction requires exactly the nine audited devices",
+        )
+    membership = select_membership_frame(frame).sort([CLIENT_ID_COLUMN, STABLE_ROW_ID_COLUMN])
+    family_by_client = tuple(
+        (str(client_id), str(family))
+        for client_id, family in frame.select([CLIENT_ID_COLUMN, FAMILY_ID_COLUMN])
+        .unique()
+        .sort(CLIENT_ID_COLUMN)
+        .iter_rows()
+    )
+    manifest = finalize_population(
+        PopulationFinalizationRequest(
+            population=_NATURAL_POPULATION,
+            dataset=DatasetId.NBAIOT,
+            identity_kind=_NATURAL_IDENTITY,
+            declaration=NBAIOT_NATURAL_DEVICES,
+            capabilities=build_population_capabilities(
+                NBAIOT_NATURAL_DEVICES,
+                population_evidence_role(_NATURAL_POPULATION),
+                NBAIOT_CAPABILITIES,
+            ),
+            partition_seed=partition_seed,
+            split_protocol=split_protocol,
+            candidate_ids=candidates,
+            accepted_ids=candidates,
+            excluded_ids=(),
+            expected_identities=candidates,
+            chronology_required=False,
+            membership=membership,
+            canonical_schema_checksum=NBAIOT_SCHEMA.checksum,
+            family_by_client=family_by_client,
+        )
+    )
+    return PopulationConstructionResult(manifest, membership, None)
+
+
+def construct_nbaiot_dirichlet_clients(
     canonical_root: Path,
     *,
     partition_seed: Seed,
     condition: ControlledPartitionCondition,
     split_protocol: SplitProtocolId,
-) -> tuple[PopulationManifest, pl.DataFrame, DirichletPartitionDiagnosticsDocument]:
-    declaration = population_declaration(_POPULATION)
+) -> PopulationConstructionResult:
     source = _load_source_rows(canonical_root)
-    client_ids = synthetic_client_ids(declaration.client_count)
+    client_ids = synthetic_client_ids(NBAIOT_DIRICHLET_CLIENTS.client_count)
     membership, benign_counts, attack_counts = _partition_source(
         source,
         client_ids=client_ids,
-        client_count=declaration.client_count,
+        client_count=NBAIOT_DIRICHLET_CLIENTS.client_count,
         condition=condition,
         partition_seed=partition_seed,
     )
-    validate_dirichlet_conservation(membership, RowCount(source.height), declaration.client_count)
+    validate_dirichlet_conservation(membership, RowCount(source.height), NBAIOT_DIRICHLET_CLIENTS.client_count)
     diagnostics = _build_diagnostics(
         client_ids=client_ids,
-        client_count=declaration.client_count,
+        client_count=NBAIOT_DIRICHLET_CLIENTS.client_count,
         membership_height=RowCount(source.height),
         benign_counts=benign_counts,
         attack_counts=attack_counts,
@@ -75,9 +137,15 @@ def build_nbaiot_dirichlet_clients(
     )
     manifest = finalize_population(
         PopulationFinalizationRequest(
-            population=_POPULATION,
+            population=_DIRICHLET_POPULATION,
             dataset=DatasetId.NBAIOT,
-            identity_kind=_IDENTITY,
+            identity_kind=_DIRICHLET_IDENTITY,
+            declaration=NBAIOT_DIRICHLET_CLIENTS,
+            capabilities=build_population_capabilities(
+                NBAIOT_DIRICHLET_CLIENTS,
+                population_evidence_role(_DIRICHLET_POPULATION),
+                NBAIOT_CAPABILITIES,
+            ),
             partition_seed=partition_seed,
             split_protocol=split_protocol,
             candidate_ids=client_ids,
@@ -89,7 +157,37 @@ def build_nbaiot_dirichlet_clients(
             canonical_schema_checksum=NBAIOT_SCHEMA.checksum,
         )
     )
-    return manifest, membership, diagnostics
+    return PopulationConstructionResult(manifest, membership, diagnostics)
+
+
+def _load_identity_frame(canonical_root: Path) -> pl.DataFrame:
+    frame = (
+        pl.scan_parquet(canonical_data_glob(canonical_root))
+        .select(
+            pl.col(_SOURCE_CLIENT).alias(CLIENT_ID_COLUMN),
+            pl.col(_SOURCE_FAMILY).alias(FAMILY_ID_COLUMN),
+            pl.col(_SOURCE_LABEL),
+            pl.col(CanonicalProvenanceColumn.STABLE_ROW_ID).alias(STABLE_ROW_ID_COLUMN),
+            pl.col(CanonicalProvenanceColumn.SOURCE_PATH).alias(PopulationFrameColumn.SOURCE_PATH),
+            pl.col(CanonicalProvenanceColumn.SOURCE_ROW_INDEX).alias(PopulationFrameColumn.SOURCE_ROW_INDEX),
+        )
+        .with_columns(
+            pl.when(pl.col(_SOURCE_LABEL) == NBaIoTSourceLabel.BENIGN)
+            .then(pl.lit(PopulationOutcomeLabel.BENIGN.value))
+            .when(pl.col(_SOURCE_LABEL) == NBaIoTSourceLabel.ATTACK)
+            .then(pl.lit(PopulationOutcomeLabel.ATTACK.value))
+            .otherwise(pl.lit(None))
+            .alias(OUTCOME_LABEL_COLUMN)
+        )
+        .collect(engine="streaming")
+    )
+    if frame.get_column(OUTCOME_LABEL_COLUMN).null_count() > 0:
+        raise DataIntegrityError(
+            "N-BaIoT rows with unrecognized labels cannot enter the natural population",
+            subject=_NATURAL_POPULATION,
+            reason="only audited benign and attack labels are admissible",
+        )
+    return frame
 
 
 def _partition_source(
@@ -130,6 +228,8 @@ def _build_diagnostics(
     condition: ControlledPartitionCondition,
     partition_seed: Seed,
 ) -> DirichletPartitionDiagnosticsDocument:
+    from datp_core.protocols.calibration import MINIMUM_BENIGN_SUPPORT
+
     client_row_counts = tuple(benign + attack for benign, attack in zip(benign_counts, attack_counts, strict=True))
     empty_ids = tuple(client_id for client_id, count in zip(client_ids, client_row_counts, strict=True) if count == 0)
     insufficient = tuple(
@@ -138,7 +238,7 @@ def _build_diagnostics(
         if benign < MINIMUM_BENIGN_SUPPORT.value
     )
     return DirichletPartitionDiagnosticsDocument(
-        population=_POPULATION,
+        population=_DIRICHLET_POPULATION,
         partition_seed=partition_seed,
         partition_kind=condition.kind,
         concentration=condition.concentration,
@@ -169,7 +269,7 @@ def _allocate_stratum(
             if condition.concentration is None:
                 raise ScientificContractError(
                     "Dirichlet construction requires a concentration",
-                    subject=_POPULATION,
+                    subject=_DIRICHLET_POPULATION,
                     reason="concentration cannot be invented",
                 )
             alpha = np.full(client_count.value, condition.concentration.value, dtype=np.float64)
@@ -184,7 +284,7 @@ def _allocate_stratum(
     if sum(counts) != row_count:
         raise DataIntegrityError(
             "controlled partition allocation failed to conserve stratum rows",
-            subject=_POPULATION,
+            subject=_DIRICHLET_POPULATION,
             reason="Hamilton residual allocation must preserve every row",
         )
     return counts
@@ -219,7 +319,7 @@ def _assign_stratum(
     if len(client_column) != stratum.height:
         raise DataIntegrityError(
             "stratum assignment length mismatch",
-            subject=_POPULATION,
+            subject=_DIRICHLET_POPULATION,
             reason="allocation counts must cover the stratum exactly once",
         )
     return stratum.with_columns(

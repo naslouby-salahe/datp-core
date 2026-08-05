@@ -3,20 +3,27 @@ from pathlib import Path
 import polars as pl
 import pytest
 
+from datp_core.datasets.nbaiot.populations import construct_nbaiot_natural_devices
+from datp_core.datasets.partitioning.contracts import SplitConstructionRequest, SplitManifestDocument
+from datp_core.datasets.partitioning.integrity import validate_population_manifest, validate_split_manifest
+from datp_core.datasets.partitioning.splits import split_membership
+from datp_core.datasets.registry import population_capabilities, population_declaration
 from datp_core.domain.enums import DatasetId, PartitionRole, PopulationId, SplitProtocolId
 from datp_core.domain.errors import DataIntegrityError, LeakageError
 from datp_core.domain.values import Checksum, RowCount, Seed
-from datp_core.populations.integrity import validate_population_manifest, validate_split_manifest
-from datp_core.populations.models import SplitConstructionRequest, SplitManifestDocument
-from datp_core.populations.nbaiot_natural_devices import build_nbaiot_natural_devices
-from datp_core.populations.splits import split_membership
 
 
 def test_integrity_accepts_valid_population_and_split(nbaiot_canonical_root: Path) -> None:
-    manifest, membership = build_nbaiot_natural_devices(
+    construction = construct_nbaiot_natural_devices(
         nbaiot_canonical_root, partition_seed=Seed(0), split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS
     )
-    validate_population_manifest(manifest, membership)
+    manifest, membership = construction.manifest, construction.membership
+    validate_population_manifest(
+        manifest,
+        membership,
+        population_declaration(PopulationId.NBAIOT_NATURAL_DEVICES),
+        population_capabilities(PopulationId.NBAIOT_NATURAL_DEVICES),
+    )
     assignments, split_manifest = split_membership(
         SplitConstructionRequest(
             membership=membership,
@@ -31,9 +38,10 @@ def test_integrity_accepts_valid_population_and_split(nbaiot_canonical_root: Pat
 
 
 def test_integrity_detects_duplicate_split_assignment(nbaiot_canonical_root: Path) -> None:
-    manifest, membership = build_nbaiot_natural_devices(
+    construction = construct_nbaiot_natural_devices(
         nbaiot_canonical_root, partition_seed=Seed(0), split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS
     )
+    manifest, membership = construction.manifest, construction.membership
     assignments, split_manifest = split_membership(
         SplitConstructionRequest(
             membership=membership,

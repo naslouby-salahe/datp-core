@@ -10,8 +10,8 @@ from pathlib import Path
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from datp_core.datasets.contracts import CanonicalProvenanceColumn, ChronologyValidation
 from datp_core.datasets.materialization import canonical_provenance_arrow_field
-from datp_core.datasets.models import CanonicalProvenanceColumn, ChronologyValidation
 from datp_core.domain.enums import AvailabilityStatus
 from datp_core.domain.values import (
     RowCount,

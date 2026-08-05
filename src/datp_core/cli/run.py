@@ -6,6 +6,7 @@ from typing import Annotated
 
 import typer
 
+from datp_core.datasets.partitioning.contracts import ControlledPartitionCondition, dirichlet_condition, iid_condition
 from datp_core.domain.enums import (
     ControlledPartitionKind,
     DatasetId,
@@ -30,7 +31,6 @@ from datp_core.pipeline.workflows.confirmatory import (
 from datp_core.pipeline.workflows.external import run_ciciot_boundary_seed, run_external_validation_seed
 from datp_core.pipeline.workflows.personalization import run_ditto_stress_test_seed
 from datp_core.pipeline.workflows.temporal import run_temporal_campaign, run_temporal_seed
-from datp_core.populations.models import ControlledPartitionCondition, dirichlet_condition, iid_condition
 from datp_core.protocols.populations import DIRICHLET_CONCENTRATIONS
 from datp_core.protocols.runtime import DATA_ROOT
 from datp_core.protocols.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_SEED_COHORT

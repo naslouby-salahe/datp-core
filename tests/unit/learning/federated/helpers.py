@@ -6,6 +6,12 @@ import numpy as np
 import polars as pl
 import torch
 
+from datp_core.datasets.partitioning.contracts import (
+    OUTCOME_LABEL_COLUMN,
+    STABLE_ROW_ID_COLUMN,
+    ClientIdentity,
+    PopulationOutcomeLabel,
+)
 from datp_core.domain.enums import (
     OptimizerId,
     PopulationId,
@@ -34,12 +40,6 @@ from datp_core.domain.values import (
 )
 from datp_core.domain.values import ClientPathToken as PreprocessingClientIdentity
 from datp_core.learning.federated.models import ClientTrainingInput, FederatedTrainingCoordinate
-from datp_core.populations.models import (
-    OUTCOME_LABEL_COLUMN,
-    STABLE_ROW_ID_COLUMN,
-    ClientIdentity,
-    PopulationOutcomeLabel,
-)
 from datp_core.preprocessing.models import (
     FederatedFittedPreprocessingState,
     PreprocessingProtocol,

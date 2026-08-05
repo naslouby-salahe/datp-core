@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from statistics import fmean
 
+from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.enums import (
     AvailabilityStatus,
     ContractSubject,
@@ -18,7 +19,6 @@ from datp_core.domain.values import (
     floats_exactly_equal,
 )
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.populations.models import ClientIdentity
 from datp_core.protocols.splits import FRACTION_TOTAL_ABSOLUTE_TOLERANCE
 
 

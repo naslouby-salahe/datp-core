@@ -2,22 +2,21 @@ from pathlib import Path
 
 import pytest
 
-from datp_core.domain.enums import SplitProtocolId
-from datp_core.domain.errors import CapabilityError
-from datp_core.domain.values import Seed
-from datp_core.populations.ciciot_file_clients import (
-    build_ciciot_file_clients,
-    ciciot_client_eligibility_evidence,
-    ciciot_excluded_row_evidence,
+from datp_core.datasets.ciciot2023.populations import (
+    construct_ciciot_file_clients,
     reject_family_interpretation,
     reject_physical_device_interpretation,
 )
+from datp_core.domain.enums import SplitProtocolId
+from datp_core.domain.errors import CapabilityError
+from datp_core.domain.values import Seed
 
 
 def test_ciciot_builds_exactly_sixty_three_file_clients(ciciot_canonical_root: Path) -> None:
-    manifest, membership = build_ciciot_file_clients(
+    construction = construct_ciciot_file_clients(
         ciciot_canonical_root, partition_seed=Seed(1), split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS
     )
+    manifest, membership = construction.manifest, construction.membership
     assert len(manifest.document.accepted_clients) == 63
     assert membership.get_column("client_id").n_unique() == 63
     # ineligible row from Merged01 local=8 is excluded
@@ -30,7 +29,7 @@ def test_ciciot_rejects_physical_family_and_temporal_interpretation(ciciot_canon
     with pytest.raises(CapabilityError):
         reject_family_interpretation()
     with pytest.raises(CapabilityError):
-        build_ciciot_file_clients(
+        construct_ciciot_file_clients(
             ciciot_canonical_root,
             partition_seed=Seed(0),
             split_protocol=SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE,
@@ -38,8 +37,12 @@ def test_ciciot_rejects_physical_family_and_temporal_interpretation(ciciot_canon
 
 
 def test_ciciot_excluded_rows_preserve_typed_canonical_reasons(ciciot_canonical_root: Path) -> None:
-    excluded_rows = ciciot_excluded_row_evidence(ciciot_canonical_root)
-    per_client = ciciot_client_eligibility_evidence(excluded_rows)
+    construction = construct_ciciot_file_clients(
+        ciciot_canonical_root, partition_seed=Seed(1), split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS
+    )
+    evidence = construction.evidence
+    assert evidence is not None
+    excluded_rows, per_client = evidence.excluded_rows, evidence.client_eligibility
 
     assert excluded_rows.height == 1
     assert excluded_rows.get_column("nonfinite_feature").to_list() == [True]

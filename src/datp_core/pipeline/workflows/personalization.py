@@ -8,6 +8,8 @@ from pathlib import Path
 
 import polars as pl
 
+from datp_core.datasets.partitioning.contracts import ClientIdentity, PopulationOutcomeLabel
+from datp_core.datasets.registry import population_capabilities
 from datp_core.domain.contracts import ClientCollection, ClientOwned
 from datp_core.domain.enums import (
     ContractSubject,
@@ -66,8 +68,6 @@ from datp_core.pipeline.training.personalized import (
     TrainDittoDetectorResult,
     train_ditto_detector,
 )
-from datp_core.populations.capabilities import population_capabilities
-from datp_core.populations.models import ClientIdentity, PopulationOutcomeLabel
 from datp_core.preprocessing.models import ClientPreprocessingResult
 from datp_core.protocols.calibration import CANONICAL_QUANTILE
 from datp_core.protocols.inference import FixedScoreInvariant

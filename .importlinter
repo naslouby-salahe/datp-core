@@ -87,23 +87,26 @@ forbidden_modules =
     datp_core.cli
 
 [importlinter:contract:dataset-direction]
-name = Dataset implementations must not depend on populations or application composition
+name = Dataset implementations must not depend on application composition
 type = forbidden
 source_modules =
     datp_core.datasets
 forbidden_modules =
-    datp_core.populations
     datp_core.pipeline.workflows
     datp_core.pipeline.dagster
     datp_core.reporting
     datp_core.cli
 
-[importlinter:contract:population-direction]
-name = Population implementations must not depend on application composition
+[importlinter:contract:partitioning-direction]
+name = Shared dataset partitioning must not depend on dataset-specific implementations or the registry
 type = forbidden
 source_modules =
-    datp_core.populations
+    datp_core.datasets.partitioning
 forbidden_modules =
+    datp_core.datasets.nbaiot
+    datp_core.datasets.ciciot2023
+    datp_core.datasets.edge_iiotset
+    datp_core.datasets.registry
     datp_core.pipeline.workflows
     datp_core.pipeline.dagster
     datp_core.reporting
@@ -145,7 +148,6 @@ forbidden_modules =
     datp_core.anchor
     datp_core.learning
     datp_core.preprocessing
-    datp_core.populations
     datp_core.datasets
     datp_core.pipeline
     datp_core.runtime
@@ -158,7 +160,6 @@ source_modules =
     datp_core.domain
     datp_core.protocols
     datp_core.datasets
-    datp_core.populations
     datp_core.preprocessing
     datp_core.learning
     datp_core.pipeline

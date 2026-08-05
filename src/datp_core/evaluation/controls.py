@@ -7,6 +7,8 @@ from hashlib import sha256
 
 import polars as pl
 
+from datp_core.datasets.partitioning.contracts import ClientIdentity, PopulationOutcomeLabel
+from datp_core.datasets.registry import population_capabilities
 from datp_core.domain.enums import (
     ContractSubject,
     EvaluationCohort,
@@ -41,8 +43,6 @@ from datp_core.evaluation.models import (
     metric_by_id,
 )
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.populations.capabilities import population_capabilities
-from datp_core.populations.models import ClientIdentity, PopulationOutcomeLabel
 from datp_core.protocols.inference import (
     FixedScoreInvariant,
     ScoreArtifactManifest,

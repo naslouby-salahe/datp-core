@@ -9,11 +9,11 @@ from datp_core.calibration.models import (
     EligibilityDecision,
     EligibilityStatus,
 )
+from datp_core.datasets.partitioning.contracts import ClientIdentity, PopulationOutcomeLabel
+from datp_core.datasets.partitioning.integrity import reject_non_benign_labels
 from datp_core.domain.enums import ContractSubject, PartitionRole, ScoreFrameColumn
 from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.values import Checksum, RowCount, ScoreValue, StableRowId
-from datp_core.populations.integrity import reject_non_benign_labels
-from datp_core.populations.models import ClientIdentity, PopulationOutcomeLabel
 from datp_core.protocols.inference import ScoreRecord
 from datp_core.protocols.models import CalibrationEligibilityProtocol
 

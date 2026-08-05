@@ -6,6 +6,7 @@ from typing import ClassVar
 
 import numpy as np
 
+from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.enums import ContractSubject, FederatedThresholdMethod
 from datp_core.domain.errors import ScientificContractError, require_contract
 from datp_core.domain.values import (
@@ -21,7 +22,6 @@ from datp_core.domain.values import (
     floats_exactly_equal,
 )
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.populations.models import ClientIdentity
 from datp_core.protocols.models import FederatedStatisticsProtocol
 from datp_core.thresholding.assignments import (
     ThresholdAssignment,

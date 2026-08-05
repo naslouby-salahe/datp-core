@@ -6,12 +6,44 @@ from pathlib import Path
 import polars as pl
 
 from datp_core.datasets.canonical_cache import require_canonical_publication_complete
-from datp_core.datasets.catalogue import dataset_binding
-from datp_core.datasets.core.contracts import canonical_root_under
 from datp_core.datasets.edge_iiotset.schema import (
     EDGE_NUMERIC_FEATURE_COLUMNS,
     EdgeAssetRole,
     EdgeCanonicalColumn,
+)
+from datp_core.datasets.partitioning.construction import (
+    build_preprocessing_handoff,
+    join_handoff_with_canonical_features,
+)
+from datp_core.datasets.partitioning.contracts import (
+    CLIENT_ID_COLUMN,
+    PARTITION_ROLE_COLUMN,
+    SOURCE_PATH_COLUMN,
+    STABLE_ROW_ID_COLUMN,
+    ChronologicalPartitionDiagnosticsDocument,
+    ControlledPartitionCondition,
+    PopulationConstructionRequest,
+    PopulationFeasibility,
+    PopulationManifest,
+    PopulationManifestDocument,
+    PreprocessingHandoff,
+    PreprocessingHandoffRequest,
+    SplitManifestDocument,
+    client_identities,
+)
+from datp_core.datasets.partitioning.integrity import (
+    membership_frame_checksum,
+    validate_no_future_history_leakage,
+    validate_population_manifest,
+    validate_split_manifest,
+)
+from datp_core.datasets.paths import canonical_root_under
+from datp_core.datasets.registry import (
+    construct_population,
+    dataset_binding,
+    population_capabilities,
+    population_declaration,
+    resolve_population,
 )
 from datp_core.domain.contracts import ClientCollection, ClientOwned
 from datp_core.domain.enums import (
@@ -38,34 +70,6 @@ from datp_core.domain.values import (
     NonNegativeIntegerValue,
     Seed,
     checksum_text,
-)
-from datp_core.populations.catalogue import (
-    PopulationConstructionRequest,
-    PreprocessingHandoff,
-    PreprocessingHandoffRequest,
-    build_preprocessing_handoff,
-    construct_population,
-    join_handoff_with_canonical_features,
-    resolve_population,
-)
-from datp_core.populations.integrity import (
-    membership_frame_checksum,
-    validate_no_future_history_leakage,
-    validate_population_manifest,
-    validate_split_manifest,
-)
-from datp_core.populations.models import (
-    CLIENT_ID_COLUMN,
-    PARTITION_ROLE_COLUMN,
-    SOURCE_PATH_COLUMN,
-    STABLE_ROW_ID_COLUMN,
-    ChronologicalPartitionDiagnosticsDocument,
-    ControlledPartitionCondition,
-    PopulationFeasibility,
-    PopulationManifest,
-    PopulationManifestDocument,
-    SplitManifestDocument,
-    client_identities,
 )
 from datp_core.preprocessing.federated import (
     fit_estimators_for_federated_clients,
@@ -808,7 +812,12 @@ def _validate_published_pair(
             "published split protocol is incompatible",
             subject=identity.population,
         )
-    validate_population_manifest(population_manifest, membership)
+    validate_population_manifest(
+        population_manifest,
+        membership,
+        population_declaration(identity.population),
+        population_capabilities(identity.population),
+    )
     validate_split_manifest(membership, assignments, split_manifest)
     if identity.population is PopulationId.EDGE_TEMPORAL_GROUPS and not use_static_reference:
         validate_no_future_history_leakage(

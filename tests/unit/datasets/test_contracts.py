@@ -9,8 +9,7 @@ from datp_core.datasets.ciciot2023.schema import (
     CICIOT2023_MODEL_INPUT_ELIGIBILITY_POLICY,
     CICIoT2023EligibilityReason,
 )
-from datp_core.datasets.materialization import canonical_schema_checksum
-from datp_core.datasets.models import (
+from datp_core.datasets.contracts import (
     CanonicalManifestDocument,
     ChronologyValidation,
     RawSourceFile,
@@ -18,6 +17,7 @@ from datp_core.datasets.models import (
     SourceStateEntryDocument,
     _ChronologyEntry,
 )
+from datp_core.datasets.materialization import canonical_schema_checksum
 from datp_core.datasets.nbaiot.schema import NBAIOT_ARROW_SCHEMA, NBAIOT_CANONICAL_COLUMNS, NBAIOT_SCHEMA
 from datp_core.domain.enums import AvailabilityStatus, DatasetId
 from datp_core.domain.values import (

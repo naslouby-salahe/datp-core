@@ -7,6 +7,12 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
+from datp_core.datasets.partitioning.contracts import (
+    OUTCOME_LABEL_COLUMN,
+    PARTITION_ROLE_COLUMN,
+    STABLE_ROW_ID_COLUMN,
+    PopulationOutcomeLabel,
+)
 from datp_core.domain.enums import (
     ContractSubject,
     PartitionOrdering,
@@ -23,12 +29,6 @@ from datp_core.domain.values import (
     FeatureNameSequence,
     RowCount,
     checksum_file,
-)
-from datp_core.populations.models import (
-    OUTCOME_LABEL_COLUMN,
-    PARTITION_ROLE_COLUMN,
-    STABLE_ROW_ID_COLUMN,
-    PopulationOutcomeLabel,
 )
 from datp_core.preprocessing.contracts import (
     ProcessedAssetName,

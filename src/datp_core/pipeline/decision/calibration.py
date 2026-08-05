@@ -4,9 +4,9 @@ from dataclasses import dataclass
 
 from datp_core.calibration.models import CalibrationReplicateManifest, EligibilityDecision
 from datp_core.calibration.service import CalibrationRequest, calibrate
+from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.values import CalibrationSize, SubsampleReplicateCount
 from datp_core.pipeline.scoring.models import FederatedScoreArtifactManifest
-from datp_core.populations.models import ClientIdentity
 from datp_core.protocols.models import CalibrationEligibilityProtocol
 
 

@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from enum import StrEnum
 
+from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.contracts import ClientCollection, ClientOwned
 from datp_core.domain.enums import PublicationStatus
 from datp_core.learning.federated.common import (
@@ -21,7 +22,6 @@ from datp_core.pipeline.publication.service import (
     RelatedPublicationMember,
     publish_related_artifacts,
 )
-from datp_core.populations.models import ClientIdentity
 
 
 class DittoPublicationMember(StrEnum):

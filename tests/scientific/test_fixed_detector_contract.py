@@ -8,6 +8,7 @@ from sklearn.metrics import roc_auc_score
 from tests.unit.learning.federated.helpers import AUTOENCODER, BATCH_SIZE, FEATURE_NAMES, benign_frame, client_identity
 from tests.unit.scoring.helpers import selected_checkpoint
 
+from datp_core.datasets.partitioning.contracts import PopulationOutcomeLabel
 from datp_core.domain.enums import FederatedThresholdMethod, ScoreFrameColumn
 from datp_core.domain.values import RowCount, Seed
 from datp_core.learning.federated.models import (
@@ -17,7 +18,6 @@ from datp_core.learning.federated.models import (
 )
 from datp_core.pipeline.scoring.federated import generate_federated_scores
 from datp_core.pipeline.scoring.models import ClientScoringInput, ScoreGenerationRequest
-from datp_core.populations.models import PopulationOutcomeLabel
 from datp_core.protocols.inference import FixedScoreInvariant, ScoreRecord
 from datp_core.runtime.compute import resolve_cuda_device
 

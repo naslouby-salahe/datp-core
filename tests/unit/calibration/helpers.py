@@ -5,9 +5,9 @@ from pathlib import Path
 import polars as pl
 from tests.unit.learning.federated.helpers import client_identity, fedavg_coordinate
 
+from datp_core.datasets.partitioning.contracts import ClientIdentity, PopulationOutcomeLabel
 from datp_core.domain.enums import PartitionRole, ScoreFrameColumn, SerializationFormat
 from datp_core.domain.values import Checksum, FeatureCount, RoundNumber, RowCount, Seed, checksum_file
-from datp_core.populations.models import ClientIdentity, PopulationOutcomeLabel
 from datp_core.protocols.inference import ScoreRecord
 
 

@@ -4,8 +4,17 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from datp_core.datasets.canonical_cache import require_canonical_publication_complete
-from datp_core.datasets.catalogue import dataset_binding
-from datp_core.datasets.core.contracts import canonical_root_under
+from datp_core.datasets.partitioning.construction import (
+    build_preprocessing_handoff,
+    join_handoff_with_canonical_features,
+)
+from datp_core.datasets.partitioning.contracts import (
+    ControlledPartitionCondition,
+    PopulationConstructionRequest,
+    PreprocessingHandoffRequest,
+)
+from datp_core.datasets.paths import canonical_root_under
+from datp_core.datasets.registry import construct_population, dataset_binding, resolve_population
 from datp_core.domain.enums import (
     ContractSubject,
     DatasetId,
@@ -20,15 +29,6 @@ from datp_core.domain.enums import (
 )
 from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.values import FeatureName, FeatureNameSequence, RowCount, Seed
-from datp_core.populations.catalogue import (
-    PopulationConstructionRequest,
-    PreprocessingHandoffRequest,
-    build_preprocessing_handoff,
-    construct_population,
-    join_handoff_with_canonical_features,
-    resolve_population,
-)
-from datp_core.populations.models import ControlledPartitionCondition
 from datp_core.preprocessing.contracts import (
     ProcessedAssetName,
     RelativeAssetPathSequence,

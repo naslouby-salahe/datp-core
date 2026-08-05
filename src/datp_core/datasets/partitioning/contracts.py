@@ -1,15 +1,15 @@
-"""Immutable population, partition, split, and feasibility records."""
+"""Immutable population, partition, split, feasibility, and construction contracts."""
 
 from dataclasses import dataclass
 from enum import StrEnum
 from functools import total_ordering
-from math import floor, fsum
 from pathlib import Path
 
 import polars as pl
 from pydantic import model_validator
 
-from datp_core.datasets.models import CanonicalProvenanceColumn
+from datp_core.datasets.capabilities import DatasetCapabilities
+from datp_core.datasets.contracts import CanonicalProvenanceColumn
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
     CapabilityStatus,
@@ -17,10 +17,12 @@ from datp_core.domain.enums import (
     DatasetId,
     EvidenceRole,
     FederatedThresholdMethod,
+    MetricId,
     PopulationId,
     PopulationIdentityKind,
     SplitProtocolId,
 )
+from datp_core.domain.errors import CapabilityError
 from datp_core.domain.values import (
     Checksum,
     ClientCount,
@@ -29,10 +31,9 @@ from datp_core.domain.values import (
     RowCount,
     Seed,
     checksum_text,
-    floats_absolutely_close,
 )
+from datp_core.protocols.models import PopulationDeclaration
 from datp_core.protocols.runtime import DATA_ROOT
-from datp_core.protocols.splits import FRACTION_TOTAL_ABSOLUTE_TOLERANCE, UNIT_FRACTION_TOTAL
 
 
 class PopulationOutcomeLabel(StrEnum):
@@ -64,7 +65,7 @@ class PopulationManifestField(StrEnum):
 
 
 class WorkingFrameColumn(StrEnum):
-    """Ephemeral Polars helper columns used only inside population algorithms."""
+    """Ephemeral Polars helper columns used only inside partitioning algorithms."""
 
     ORDER = "_order"
     PERM = "_perm"
@@ -371,7 +372,7 @@ class ControlledPartitionCondition:
 
 @dataclass(frozen=True, slots=True, eq=False)
 class SplitConstructionRequest:
-    """Typed request boundary for residual and chronological splits."""
+    """Typed request boundary for non-temporal, temporal, and static-reference splits."""
 
     membership: pl.DataFrame
     population: PopulationId
@@ -380,6 +381,62 @@ class SplitConstructionRequest:
     split_protocol: SplitProtocolId
     population_manifest_checksum: Checksum
     capture_timestamp_column: str | None = None
+
+
+@dataclass(frozen=True, slots=True, eq=False)
+class MatchedReferencePopulation:
+    """A secondary population constructed over the same accepted rows as a primary population."""
+
+    manifest: PopulationManifest
+    membership: pl.DataFrame
+
+
+@dataclass(frozen=True, slots=True, eq=False)
+class PopulationConstructionEvidence:
+    """Typed per-row and per-client evidence produced alongside a population construction."""
+
+    excluded_rows: pl.DataFrame
+    client_eligibility: pl.DataFrame
+
+
+@dataclass(slots=True, eq=False)
+class PopulationConstructionResult:
+    manifest: PopulationManifest
+    membership: pl.DataFrame
+    diagnostics: DirichletPartitionDiagnosticsDocument | ChronologicalPartitionDiagnosticsDocument | None
+    matched_reference: MatchedReferencePopulation | None = None
+    evidence: PopulationConstructionEvidence | None = None
+
+    @property
+    def population(self) -> PopulationId:
+        return self.manifest.document.population
+
+
+@dataclass(frozen=True, slots=True)
+class PopulationConstructionRequest:
+    population_id: PopulationId
+    canonical_root: Path
+    partition_seed: Seed
+    split_protocol: SplitProtocolId
+    dirichlet_condition: ControlledPartitionCondition | None
+
+
+@dataclass(frozen=True, slots=True)
+class PreprocessingHandoffRequest:
+    construction: PopulationConstructionResult
+    deployment_fallback_client_ids: frozenset[str]
+    capture_timestamp_column: str | None = None
+
+
+@dataclass(slots=True, eq=False)
+class PreprocessingHandoff:
+    """Typed boundary from dataset partitioning into preprocessing."""
+
+    population_manifest: PopulationManifest
+    membership: pl.DataFrame
+    assignments: pl.DataFrame
+    client_partition_counts: tuple[ClientPartitionCounts, ...]
+    deployment_fallback_client_ids: frozenset[ClientIdentity] = frozenset()
 
 
 def dirichlet_condition(
@@ -420,35 +477,6 @@ def build_population_manifest(
     )
 
 
-def hamilton_integer_counts(
-    total: int,
-    ratios: tuple[float, ...],
-) -> tuple[int, ...]:
-    """Largest-remainder (Hamilton) integer allocation.
-
-    For non-negative integer ``total`` and ratios that sum to one:
-
-    1. compute raw shares ``total * ratio_i``;
-    2. assign each role ``floor(raw_i)``;
-    3. distribute the residual ``total - sum(floors)`` by descending fractional part;
-    4. break fractional ties by ascending role index.
-
-    The result conserves every row exactly once and never depends on library defaults.
-    """
-    _require_hamilton_inputs(total, ratios)
-    raw = tuple(total * ratio for ratio in ratios)
-    floors = tuple(floor(value) for value in raw)
-    residual = total - sum(floors)
-    order = sorted(
-        range(len(ratios)),
-        key=lambda index: (-(raw[index] - floors[index]), index),
-    )
-    extras = [0] * len(ratios)
-    for index in order[:residual]:
-        extras[index] = 1
-    return tuple(floor_value + extra for floor_value, extra in zip(floors, extras, strict=True))
-
-
 def synthetic_client_ids(client_count: ClientCount) -> tuple[str, ...]:
     width = max(2, len(str(client_count.value - 1)))
     return tuple(f"synthetic_client_{index:0{width}d}" for index in range(client_count.value))
@@ -462,20 +490,133 @@ def membership_checksum(
     return checksum_text(payload)
 
 
-def _require_hamilton_inputs(
-    total: int,
-    ratios: tuple[float, ...],
-) -> None:
-    if total < 0:
-        raise ValueError("Hamilton allocation requires a non-negative total")
-    if not ratios or any(ratio < 0 for ratio in ratios):
-        raise ValueError("Hamilton allocation requires non-negative ratios that sum to one")
-    if not floats_absolutely_close(
-        fsum(ratios),
-        UNIT_FRACTION_TOTAL,
-        FRACTION_TOTAL_ABSOLUTE_TOLERANCE,
-    ):
-        raise ValueError("Hamilton allocation requires non-negative ratios that sum to one")
+def population_evidence_role(population_id: PopulationId) -> EvidenceRole:
+    match population_id:
+        case PopulationId.NBAIOT_NATURAL_DEVICES:
+            return EvidenceRole.CONFIRMATORY
+        case PopulationId.NBAIOT_DIRICHLET_CLIENTS:
+            return EvidenceRole.MECHANISM
+        case PopulationId.CICIOT_FILE_CLIENTS:
+            return EvidenceRole.APPLICABILITY_BOUNDARY
+        case PopulationId.EDGE_SENSOR_GROUPS:
+            return EvidenceRole.EXTERNAL_VALIDATION
+        case PopulationId.EDGE_TEMPORAL_GROUPS:
+            return EvidenceRole.TEMPORAL_BOUNDARY
+
+
+def build_population_capabilities(
+    declaration: PopulationDeclaration,
+    evidentiary_role: EvidenceRole,
+    dataset_capabilities: DatasetCapabilities,
+) -> PopulationCapabilities:
+    """Compose a population's capability profile from its declaration and owning dataset capabilities."""
+    _require_population_allowed(declaration, dataset_capabilities)
+    return PopulationCapabilities(
+        population=declaration.id,
+        dataset=declaration.dataset,
+        identity_kind=declaration.identity_kind,
+        declared_client_count=declaration.client_count,
+        physical_client_validity=_physical_validity(declaration, dataset_capabilities),
+        family_taxonomy=_family_status(declaration, dataset_capabilities),
+        chronology=_chronology_status(declaration, dataset_capabilities),
+        client_level_attack_assignment=_attack_status(declaration, dataset_capabilities),
+        fpr_evaluation=_fpr_status(dataset_capabilities),
+        attack_sensitive_evaluation=_attack_metric_status(declaration, dataset_capabilities),
+        temporal_support=_temporal_status(declaration, dataset_capabilities),
+        valid_threshold_methods=_threshold_methods(declaration, dataset_capabilities),
+        evidentiary_role=evidentiary_role,
+        confirmatory_eligible=declaration.is_confirmatory_population,
+    )
+
+
+def _require_population_allowed(declaration: PopulationDeclaration, capabilities: DatasetCapabilities) -> None:
+    if declaration.id not in capabilities.valid_populations:
+        raise CapabilityError(
+            "population is not valid for its dataset",
+            subject=declaration.id,
+            reason="dataset capability catalogue does not list the population",
+        )
+
+
+def _physical_validity(declaration: PopulationDeclaration, capabilities: DatasetCapabilities) -> CapabilityStatus:
+    match declaration.identity_kind:
+        case PopulationIdentityKind.PHYSICAL_DEVICES:
+            return capabilities.physical_clients.status
+        case PopulationIdentityKind.FILE_DEFINED_PSEUDO_CLIENTS:
+            return CapabilityStatus.NOT_APPLICABLE
+        case PopulationIdentityKind.SOURCE_DEFINED_SENSOR_GROUPS:
+            return capabilities.physical_clients.status
+        case PopulationIdentityKind.SYNTHETIC_DIRICHLET_CLIENTS:
+            return CapabilityStatus.NOT_APPLICABLE
+        case PopulationIdentityKind.VERIFIED_TEMPORAL_GROUPS:
+            return capabilities.physical_clients.status
+
+
+def _family_status(declaration: PopulationDeclaration, capabilities: DatasetCapabilities) -> CapabilityStatus:
+    if not declaration.requires_family_taxonomy:
+        return CapabilityStatus.UNAVAILABLE
+    return capabilities.family_taxonomy.status
+
+
+def _chronology_status(declaration: PopulationDeclaration, capabilities: DatasetCapabilities) -> CapabilityStatus:
+    if not declaration.requires_verified_chronology:
+        return CapabilityStatus.UNAVAILABLE
+    return capabilities.chronology.status
+
+
+def _attack_status(declaration: PopulationDeclaration, capabilities: DatasetCapabilities) -> CapabilityStatus:
+    if not declaration.requires_client_attack_assignment:
+        return CapabilityStatus.UNAVAILABLE
+    if not capabilities.attack_assignment.client_level_assignment_available:
+        return CapabilityStatus.UNAVAILABLE
+    return capabilities.attack_assignment.status
+
+
+def _fpr_status(capabilities: DatasetCapabilities) -> CapabilityStatus:
+    return capabilities.metrics.status_for(MetricId.FALSE_POSITIVE_RATE)
+
+
+def _attack_metric_status(declaration: PopulationDeclaration, capabilities: DatasetCapabilities) -> CapabilityStatus:
+    if not declaration.requires_client_attack_assignment:
+        return CapabilityStatus.UNAVAILABLE
+    if not capabilities.attack_assignment.client_level_assignment_available:
+        return CapabilityStatus.UNAVAILABLE
+    statuses = frozenset(
+        capabilities.metrics.status_for(metric)
+        for metric in (
+            MetricId.TRUE_POSITIVE_RATE,
+            MetricId.BALANCED_ACCURACY,
+            MetricId.BINARY_MACRO_F1,
+            MetricId.AUROC,
+        )
+    )
+    if statuses == {CapabilityStatus.SUPPORTED}:
+        return CapabilityStatus.SUPPORTED
+    if CapabilityStatus.CONDITIONAL in statuses:
+        return CapabilityStatus.CONDITIONAL
+    return CapabilityStatus.UNAVAILABLE
+
+
+def _temporal_status(declaration: PopulationDeclaration, capabilities: DatasetCapabilities) -> CapabilityStatus:
+    if not declaration.requires_verified_chronology:
+        return CapabilityStatus.UNAVAILABLE
+    return capabilities.temporal.status
+
+
+def _threshold_methods(
+    declaration: PopulationDeclaration, capabilities: DatasetCapabilities
+) -> tuple[FederatedThresholdMethod, ...]:
+    supported = tuple(
+        item.method
+        for item in capabilities.threshold_methods
+        if item.status in {CapabilityStatus.SUPPORTED, CapabilityStatus.CONDITIONAL}
+    )
+    if declaration.requires_family_taxonomy and FederatedThresholdMethod.FAMILY_THRESHOLD not in supported:
+        if capabilities.family_taxonomy.status is CapabilityStatus.SUPPORTED:
+            return supported + (FederatedThresholdMethod.FAMILY_THRESHOLD,)
+    if not declaration.requires_family_taxonomy:
+        return tuple(method for method in supported if method is not FederatedThresholdMethod.FAMILY_THRESHOLD)
+    return supported
 
 
 def _require_unique_ordered(

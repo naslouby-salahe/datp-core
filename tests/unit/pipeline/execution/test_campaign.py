@@ -1,5 +1,6 @@
 import pytest
 
+from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.enums import (
     FederatedThresholdMethod,
     PopulationId,
@@ -13,7 +14,6 @@ from datp_core.domain.values import DittoRegularization, Seed, checksum_text
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.pipeline.execution.engine import build_campaign
 from datp_core.pipeline.planning import expand_experiment_plan
-from datp_core.populations.models import ClientIdentity
 from datp_core.protocols.calibration import CANONICAL_QUANTILE
 from datp_core.protocols.models import QuantileProtocol
 from datp_core.protocols.training import DITTO_TRAINING_PROTOCOLS, resolve_ditto_protocol

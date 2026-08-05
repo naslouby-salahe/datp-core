@@ -12,6 +12,11 @@ from safetensors.torch import save
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
+from datp_core.datasets.partitioning.contracts import (
+    OUTCOME_LABEL_COLUMN,
+    ClientIdentity,
+    PopulationOutcomeLabel,
+)
 from datp_core.domain.enums import (
     CommunicationEstimationMethod,
     ContractSubject,
@@ -61,11 +66,6 @@ from datp_core.learning.federated.models import (
     GlobalModelStateReference,
     PreparedClientProvenance,
     RoundSnapshot,
-)
-from datp_core.populations.models import (
-    OUTCOME_LABEL_COLUMN,
-    ClientIdentity,
-    PopulationOutcomeLabel,
 )
 from datp_core.protocols.models import (
     AutoencoderProtocol,

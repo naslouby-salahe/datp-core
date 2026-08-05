@@ -3,6 +3,7 @@
 from dataclasses import dataclass, field
 from enum import StrEnum
 
+from datp_core.datasets.partitioning.contracts import ClientIdentity, PopulationOutcomeLabel
 from datp_core.domain.enums import (
     EvaluationCohort,
     EvidenceRole,
@@ -14,7 +15,6 @@ from datp_core.domain.enums import (
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import Checksum, MetricValue, RowCount, ScoreValue, StableRowId, ThresholdValue
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.populations.models import ClientIdentity, PopulationOutcomeLabel
 from datp_core.protocols.inference import ScoreRecord
 
 

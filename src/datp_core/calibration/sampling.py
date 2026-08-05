@@ -15,11 +15,11 @@ from datp_core.calibration.models import (
     CalibrationSubsample,
     CalibrationUnavailableReason,
 )
+from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.enums import ContractSubject
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import CalibrationSize, ReplicateIndex, RowCount, Seed, checksum_text
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.populations.models import ClientIdentity
 
 
 def replicate_seed(training_seed: Seed, client: ClientIdentity, replicate_index: ReplicateIndex) -> Seed:

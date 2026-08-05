@@ -8,6 +8,11 @@ import numpy as np
 import polars as pl
 from pydantic import model_validator
 
+from datp_core.datasets.partitioning.contracts import (
+    OUTCOME_LABEL_COLUMN,
+    PARTITION_ROLE_COLUMN,
+    STABLE_ROW_ID_COLUMN,
+)
 from datp_core.domain.contracts import ClientCollection, StrictModel
 from datp_core.domain.enums import (
     ContractSubject,
@@ -35,11 +40,6 @@ from datp_core.domain.values import (
     Seed,
     StableRowId,
     StableRowIdSequence,
-)
-from datp_core.populations.models import (
-    OUTCOME_LABEL_COLUMN,
-    PARTITION_ROLE_COLUMN,
-    STABLE_ROW_ID_COLUMN,
 )
 from datp_core.preprocessing.contracts import RelativeAssetPathSequence
 from datp_core.preprocessing.state import TrustedScaler

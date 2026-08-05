@@ -5,6 +5,7 @@ from pathlib import Path
 
 import polars as pl
 
+from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.enums import (
     CheckpointStatus,
     CommunicationEstimationMethod,
@@ -29,7 +30,6 @@ from datp_core.domain.values import (
     Seed,
 )
 from datp_core.learning.autoencoder import AutoencoderState
-from datp_core.populations.models import ClientIdentity
 from datp_core.preprocessing.models import FederatedFittedPreprocessingState
 from datp_core.protocols.models import AutoencoderProtocol, CheckpointProtocol
 

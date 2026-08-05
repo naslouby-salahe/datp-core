@@ -8,6 +8,7 @@ from pathlib import Path
 import torch
 from safetensors.torch import load_file, save_file
 
+from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.enums import CheckpointStatus, ContractSubject
 from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
 from datp_core.domain.values import Checksum, RoundNumber, SafeTensorFilename, checksum_file
@@ -17,7 +18,6 @@ from datp_core.learning.federated.models import (
     FederatedTrainingCoordinate,
     RoundSnapshot,
 )
-from datp_core.populations.models import ClientIdentity
 from datp_core.protocols.checkpoints import (
     validate_ordered_checkpoint_inventory,
     validate_persisted_checkpoint_file,

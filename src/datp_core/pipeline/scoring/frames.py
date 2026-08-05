@@ -8,6 +8,11 @@ import polars as pl
 import torch
 from safetensors.torch import load_file
 
+from datp_core.datasets.partitioning.contracts import (
+    OUTCOME_LABEL_COLUMN,
+    STABLE_ROW_ID_COLUMN,
+    PopulationOutcomeLabel,
+)
 from datp_core.domain.enums import ContractSubject, PartitionRole, ScoreFrameColumn
 from datp_core.domain.errors import (
     ArtifactIntegrityError,
@@ -25,11 +30,6 @@ from datp_core.domain.values import (
 from datp_core.learning.autoencoder import LEARNING_DTYPE, ReconstructionAutoencoder, reconstruction_errors
 from datp_core.learning.federated.models import CheckpointCandidate
 from datp_core.pipeline.scoring.models import PersistedScoreFrame
-from datp_core.populations.models import (
-    OUTCOME_LABEL_COLUMN,
-    STABLE_ROW_ID_COLUMN,
-    PopulationOutcomeLabel,
-)
 from datp_core.protocols.checkpoints import validate_persisted_checkpoint_file
 from datp_core.protocols.models import AutoencoderProtocol
 

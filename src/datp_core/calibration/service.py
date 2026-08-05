@@ -14,9 +14,9 @@ from datp_core.calibration.eligibility import (
 )
 from datp_core.calibration.models import CalibrationReplicateManifest, EligibilityDecision
 from datp_core.calibration.sampling import build_calibration_replicate
+from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.enums import ScoreFrameColumn
 from datp_core.domain.values import CalibrationSize, ReplicateIndex, SubsampleReplicateCount
-from datp_core.populations.models import ClientIdentity
 from datp_core.protocols.inference import FixedScoreInvariant, ScoreArtifactManifest, ScoreRecord
 from datp_core.protocols.models import CalibrationEligibilityProtocol
 

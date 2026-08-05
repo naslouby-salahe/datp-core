@@ -10,15 +10,7 @@ from datp_core.datasets.canonical_cache import (
     canonical_directory,
     reuse_published_canonical,
 )
-from datp_core.datasets.materialization import (
-    CanonicalPublication,
-    canonical_data_partition_assets,
-    publish_canonical,
-    raw_inventory,
-    raw_source_file,
-    stream_parquet,
-)
-from datp_core.datasets.models import (
+from datp_core.datasets.contracts import (
     CanonicalAssetRole,
     DatasetValidationCode,
     DatasetValidationIssue,
@@ -27,6 +19,14 @@ from datp_core.datasets.models import (
     RawDatasetInventory,
     SourceFileRole,
     ValidationSeverity,
+)
+from datp_core.datasets.materialization import (
+    CanonicalPublication,
+    canonical_data_partition_assets,
+    publish_canonical,
+    raw_inventory,
+    raw_source_file,
+    stream_parquet,
 )
 from datp_core.domain.enums import AvailabilityStatus, DatasetId
 from datp_core.domain.values import (
@@ -51,6 +51,10 @@ class CICIoT2023Materializer:
 
     def canonical_directory(self, canonical_root: Path) -> Path:
         return canonical_directory(canonical_root, CICIOT2023_SCHEMA)
+
+    def publish(self, raw_root: Path, canonical_root: Path) -> MaterializedDataset:
+        sources = tuple(sorted(raw_root.glob(f"**/{CICIoT2023ArtifactName.MERGED_CSV_DIRECTORY}/*.csv")))
+        return self.materialize(sources, canonical_root)
 
     def materialize(self, source_paths: tuple[Path, ...], canonical_root: Path) -> MaterializedDataset:
         ordered_paths = tuple(sorted(source_paths))

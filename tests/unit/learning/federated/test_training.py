@@ -7,6 +7,7 @@ from tests.unit.learning.federated.helpers import (
     require_cuda,
 )
 
+from datp_core.datasets.partitioning.contracts import PopulationOutcomeLabel
 from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.values import (
     BatchSize,
@@ -34,7 +35,6 @@ from datp_core.learning.federated.training import (
     run_local_epoch,
     serialize_and_checksum_state_dict,
 )
-from datp_core.populations.models import PopulationOutcomeLabel
 
 
 def test_derive_client_stream_seed_is_deterministic_and_client_specific() -> None:

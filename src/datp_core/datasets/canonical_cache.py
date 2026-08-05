@@ -9,7 +9,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from filelock import FileLock
 
-from datp_core.datasets.models import (
+from datp_core.datasets.contracts import (
     CanonicalAssetRole,
     CanonicalColumn,
     CanonicalManifestDocument,

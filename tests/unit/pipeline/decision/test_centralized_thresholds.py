@@ -13,6 +13,7 @@ from tests.unit.learning.centralized.helpers import (
     training_coordinate,
 )
 
+from datp_core.datasets.partitioning.contracts import PopulationOutcomeLabel
 from datp_core.domain.enums import CentralizedThresholdMethod, FederatedThresholdMethod, ScoreFrameColumn
 from datp_core.domain.errors import LeakageError
 from datp_core.domain.values import Quantile, RowCount, Seed, ThresholdValue
@@ -28,7 +29,6 @@ from datp_core.pipeline.decision.centralized import (
 )
 from datp_core.pipeline.scoring.centralized import load_score_frame, score_centralized_reference
 from datp_core.pipeline.scoring.models import CentralizedScoringRequest
-from datp_core.populations.models import PopulationOutcomeLabel
 
 
 def test_pooled_benign_quantile_matches_declared_linear_quantile(tmp_path: Path) -> None:

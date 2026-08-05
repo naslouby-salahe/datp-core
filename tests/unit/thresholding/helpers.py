@@ -2,9 +2,9 @@
 
 from tests.unit.learning.federated.helpers import client_identity, fedavg_coordinate
 
+from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.values import Checksum, Seed
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.populations.models import ClientIdentity
 from datp_core.thresholding.quantiles import ClientBenignCalibrationScores
 
 COORDINATE = fedavg_coordinate(Seed(0))

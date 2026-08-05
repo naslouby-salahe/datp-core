@@ -7,6 +7,8 @@ from pathlib import Path
 import polars as pl
 
 from datp_core.analysis.temporal import TemporalDeploymentProvenance
+from datp_core.datasets.partitioning.contracts import ClientIdentity, PopulationOutcomeLabel
+from datp_core.datasets.registry import population_capabilities
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
     EvaluationCohort,
@@ -68,8 +70,6 @@ from datp_core.evaluation.threshold_estimation import (
 )
 from datp_core.evaluation.traffic_rates import ValidatedTrafficRateEvidence
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.populations.capabilities import population_capabilities
-from datp_core.populations.models import ClientIdentity, PopulationOutcomeLabel
 from datp_core.protocols.experiments import (
     ExternalTemporalExecutionIdentity,
     require_execution_identity,

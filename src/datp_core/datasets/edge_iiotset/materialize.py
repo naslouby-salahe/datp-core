@@ -13,16 +13,7 @@ from datp_core.datasets.canonical_cache import (
     canonical_directory,
     reuse_published_canonical,
 )
-from datp_core.datasets.materialization import (
-    CanonicalPublication,
-    empty_asset,
-    named_assets,
-    publish_canonical,
-    raw_inventory,
-    raw_source_file,
-    stream_parquet,
-)
-from datp_core.datasets.models import (
+from datp_core.datasets.contracts import (
     CanonicalProvenanceColumn,
     ChronologyValidation,
     DatasetValidationCode,
@@ -32,6 +23,15 @@ from datp_core.datasets.models import (
     RawDatasetInventory,
     SourceFileRole,
     ValidationSeverity,
+)
+from datp_core.datasets.materialization import (
+    CanonicalPublication,
+    empty_asset,
+    named_assets,
+    publish_canonical,
+    raw_inventory,
+    raw_source_file,
+    stream_parquet,
 )
 from datp_core.domain.enums import AvailabilityStatus, DatasetId
 from datp_core.domain.values import (
@@ -44,6 +44,8 @@ from .reader import EdgeIIoTsetReader
 from .schema import (
     EDGE_ARROW_SCHEMA,
     EDGE_SCHEMA,
+    EdgeArtifactName,
+    EdgeArtifactSuffix,
     EdgeAssetRole,
     EdgeCanonicalColumn,
     benign_sensor_group,
@@ -84,6 +86,20 @@ class EdgeIIoTsetMaterializer:
 
     def canonical_directory(self, canonical_root: Path) -> Path:
         return canonical_directory(canonical_root, EDGE_SCHEMA)
+
+    def publish(self, raw_root: Path, canonical_root: Path) -> MaterializedDataset:
+        bundle_root = raw_root / EdgeArtifactName.DATASET_BUNDLE_DIRECTORY
+        benign_paths = tuple(
+            sorted((bundle_root / EdgeArtifactName.NORMAL_TRAFFIC_DIRECTORY).glob(f"*/*{EdgeArtifactSuffix.CSV}"))
+        )
+        attack_paths = tuple(
+            sorted(
+                (bundle_root / EdgeArtifactName.ATTACK_TRAFFIC_DIRECTORY).glob(
+                    f"*{EdgeArtifactName.ATTACK_FILE_SUFFIX}"
+                )
+            )
+        )
+        return self.materialize(benign_paths, attack_paths, canonical_root)
 
     def materialize(
         self, benign_paths: tuple[Path, ...], attack_paths: tuple[Path, ...], canonical_root: Path

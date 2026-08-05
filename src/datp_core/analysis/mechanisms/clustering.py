@@ -6,10 +6,10 @@ from pydantic import model_validator
 from sklearn.metrics import adjusted_rand_score
 
 from datp_core.analysis.inference.wilcoxon import CorrelationCoefficient
+from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.contracts import ClientOwned, StrictModel
 from datp_core.domain.enums import EvidenceRole
 from datp_core.domain.values import ClusterIndex, PairedObservationCount
-from datp_core.populations.models import ClientIdentity
 from datp_core.thresholding.methods.cluster import ClusterMembership
 
 MINIMUM_STABILITY_CLIENTS = PairedObservationCount(2)

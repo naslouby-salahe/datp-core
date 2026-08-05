@@ -5,6 +5,7 @@ import polars as pl
 import pytest
 from sklearn.preprocessing import StandardScaler
 
+from datp_core.datasets.partitioning.contracts import OUTCOME_LABEL_COLUMN, STABLE_ROW_ID_COLUMN, PopulationOutcomeLabel
 from datp_core.domain.contracts import ClientCollection, ClientOwned
 from datp_core.domain.enums import (
     PartitionRole,
@@ -26,7 +27,6 @@ from datp_core.domain.values import (
     StableRowId,
     StableRowIdSequence,
 )
-from datp_core.populations.models import OUTCOME_LABEL_COLUMN, STABLE_ROW_ID_COLUMN, PopulationOutcomeLabel
 from datp_core.preprocessing.federated import fit_estimators_for_federated_clients
 from datp_core.preprocessing.models import (
     CentralizedFittedPreprocessingState,

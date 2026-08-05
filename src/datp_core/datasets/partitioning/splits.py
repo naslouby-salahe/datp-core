@@ -1,6 +1,7 @@
-"""Deterministic non-temporal and chronological splits on stable row identities."""
+"""Deterministic non-temporal, temporal, and static-reference splits on stable row identities."""
 
 from hashlib import sha256
+from math import floor, fsum
 
 import numpy as np
 import polars as pl
@@ -16,8 +17,19 @@ from datp_core.domain.errors import (
     LeakageError,
     ScientificContractError,
 )
-from datp_core.domain.values import RowCount, Seed, checksum_text
-from datp_core.populations.models import (
+from datp_core.domain.values import RowCount, Seed, checksum_text, floats_absolutely_close
+from datp_core.protocols.splits import (
+    FRACTION_TOTAL_ABSOLUTE_TOLERANCE,
+    NON_TEMPORAL_SPLIT,
+    STATIC_REFERENCE_SPLIT,
+    TEMPORAL_SPLIT,
+    UNIT_FRACTION_TOTAL,
+    FractionalSplitProtocol,
+    StaticReferenceSplitProtocol,
+    TemporalSplitProtocol,
+)
+
+from .contracts import (
     CLIENT_ID_COLUMN,
     ORDER_COLUMN,
     OUTCOME_LABEL_COLUMN,
@@ -29,17 +41,9 @@ from datp_core.populations.models import (
     SplitConstructionRequest,
     SplitManifestDocument,
     assignment_column_names,
-    hamilton_integer_counts,
     membership_column_names,
 )
-from datp_core.protocols.splits import (
-    NON_TEMPORAL_SPLIT,
-    STATIC_REFERENCE_SPLIT,
-    TEMPORAL_SPLIT,
-    FractionalSplitProtocol,
-    StaticReferenceSplitProtocol,
-    TemporalSplitProtocol,
-)
+from .integrity import validate_no_future_history_leakage
 
 _BENIGN = PopulationOutcomeLabel.BENIGN
 _ATTACK = PopulationOutcomeLabel.ATTACK
@@ -55,6 +59,35 @@ def temporal_split_protocol() -> TemporalSplitProtocol:
 
 def static_reference_split_protocol() -> StaticReferenceSplitProtocol:
     return STATIC_REFERENCE_SPLIT
+
+
+def hamilton_integer_counts(
+    total: int,
+    ratios: tuple[float, ...],
+) -> tuple[int, ...]:
+    """Largest-remainder (Hamilton) integer allocation.
+
+    For non-negative integer ``total`` and ratios that sum to one:
+
+    1. compute raw shares ``total * ratio_i``;
+    2. assign each role ``floor(raw_i)``;
+    3. distribute the residual ``total - sum(floors)`` by descending fractional part;
+    4. break fractional ties by ascending role index.
+
+    The result conserves every row exactly once and never depends on library defaults.
+    """
+    _require_hamilton_inputs(total, ratios)
+    raw = tuple(total * ratio for ratio in ratios)
+    floors = tuple(floor(value) for value in raw)
+    residual = total - sum(floors)
+    order = sorted(
+        range(len(ratios)),
+        key=lambda index: (-(raw[index] - floors[index]), index),
+    )
+    extras = [0] * len(ratios)
+    for index in order[:residual]:
+        extras[index] = 1
+    return tuple(floor_value + extra for floor_value, extra in zip(floors, extras, strict=True))
 
 
 def split_membership(
@@ -174,7 +207,7 @@ def _temporal_assignments(
         raise LeakageError(
             "temporal populations cannot carry client-assigned attack rows",
             subject=SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE,
-            reason="Edge temporal evidence is benign-only",
+            reason="temporal evidence is benign-only",
         )
     pieces = [
         _sequential_role_frame(
@@ -191,7 +224,7 @@ def _temporal_assignments(
     if not pieces:
         return membership.clear().with_columns(pl.lit(None, dtype=pl.String).alias(PARTITION_ROLE_COLUMN))
     output_columns = assignment_column_names() + ((capture_timestamp_column,) if capture_timestamp_column else ())
-    return (
+    assignments = (
         pl.concat(pieces, how="vertical_relaxed")
         .select(output_columns)
         .sort(
@@ -202,13 +235,15 @@ def _temporal_assignments(
             ]
         )
     )
+    validate_no_future_history_leakage(assignments, capture_timestamp_column)
+    return assignments
 
 
 def _static_reference_assignments(
     membership: pl.DataFrame,
     partition_seed: Seed,
 ) -> pl.DataFrame:
-    """Randomize the same 55/15/10/20 inventory without temporal ordering."""
+    """Randomize the same temporal inventory without temporal ordering."""
     if membership.filter(pl.col(OUTCOME_LABEL_COLUMN) == _ATTACK).height > 0:
         raise LeakageError(
             "the matched static reference is benign-only",
@@ -416,3 +451,19 @@ def _require_membership_schema(membership: pl.DataFrame) -> None:
             subject=StageOperationId.SPLIT,
             reason="population builders must emit the locked membership schema",
         )
+
+
+def _require_hamilton_inputs(
+    total: int,
+    ratios: tuple[float, ...],
+) -> None:
+    if total < 0:
+        raise ValueError("Hamilton allocation requires a non-negative total")
+    if not ratios or any(ratio < 0 for ratio in ratios):
+        raise ValueError("Hamilton allocation requires non-negative ratios that sum to one")
+    if not floats_absolutely_close(
+        fsum(ratios),
+        UNIT_FRACTION_TOTAL,
+        FRACTION_TOTAL_ABSOLUTE_TOLERANCE,
+    ):
+        raise ValueError("Hamilton allocation requires non-negative ratios that sum to one")

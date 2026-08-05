@@ -1,29 +1,13 @@
 import pytest
 
-from datp_core.domain.enums import ControlledPartitionKind
-from datp_core.domain.values import ClientCount, DirichletConcentration
-from datp_core.populations.models import (
+from datp_core.datasets.partitioning.contracts import (
     ControlledPartitionCondition,
     dirichlet_condition,
-    hamilton_integer_counts,
     iid_condition,
     synthetic_client_ids,
 )
-
-
-def test_hamilton_allocation_conserves_rows_and_is_deterministic() -> None:
-    assert hamilton_integer_counts(10, (1 / 3, 1 / 3, 1 / 3)) == (4, 3, 3)
-    assert hamilton_integer_counts(11, (1 / 3, 1 / 3, 1 / 3)) == (4, 4, 3)
-    temporal = hamilton_integer_counts(100, (0.55, 0.15, 0.10, 0.20))
-    assert sum(temporal) == 100
-    assert temporal == (55, 15, 10, 20)
-
-
-def test_hamilton_rejects_invalid_ratios() -> None:
-    with pytest.raises(ValueError):
-        hamilton_integer_counts(10, (0.5, 0.5, 0.5))
-    with pytest.raises(ValueError):
-        hamilton_integer_counts(-1, (1.0,))
+from datp_core.domain.enums import ControlledPartitionKind
+from datp_core.domain.values import ClientCount, DirichletConcentration
 
 
 def test_controlled_partition_conditions_separate_iid_from_dirichlet() -> None:

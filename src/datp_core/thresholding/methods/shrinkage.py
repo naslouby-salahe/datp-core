@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from typing import ClassVar
 
+from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.enums import (
     ContractSubject,
     FederatedThresholdMethod,
@@ -15,7 +16,6 @@ from datp_core.domain.values import (
     floats_exactly_equal,
 )
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.populations.models import ClientIdentity
 from datp_core.protocols.models import FixedShrinkageProtocol, QuantileProtocol
 from datp_core.thresholding.identities import (
     ThresholdInfeasibilityReason,

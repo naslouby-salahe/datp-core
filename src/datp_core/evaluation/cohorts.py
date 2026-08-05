@@ -5,6 +5,13 @@ from enum import StrEnum
 import polars as pl
 from pydantic import model_validator
 
+from datp_core.datasets.partitioning.contracts import (
+    ClientIdentity,
+    ClientPartitionCounts,
+    PopulationCapabilities,
+    PopulationOutcomeLabel,
+)
+from datp_core.datasets.registry import population_capabilities
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
     CapabilityStatus,
@@ -17,13 +24,6 @@ from datp_core.domain.enums import (
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import CalibrationSize, RowCount, Seed
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.populations.capabilities import population_capabilities
-from datp_core.populations.models import (
-    ClientIdentity,
-    ClientPartitionCounts,
-    PopulationCapabilities,
-    PopulationOutcomeLabel,
-)
 from datp_core.protocols.calibration import MINIMUM_BENIGN_SUPPORT
 from datp_core.protocols.inference import ScoreArtifactManifest, ScoreRecord
 

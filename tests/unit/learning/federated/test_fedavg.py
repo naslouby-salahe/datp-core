@@ -13,11 +13,11 @@ from tests.unit.learning.federated.helpers import (
     fedavg_coordinate,
 )
 
+from datp_core.datasets.partitioning.contracts import PopulationOutcomeLabel
 from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.values import Checksum, RowCount, Seed
 from datp_core.learning.federated.fedavg import train_fedavg
 from datp_core.learning.federated.training import FederatedTrainingRequest
-from datp_core.populations.models import PopulationOutcomeLabel
 
 
 def _request(tmp_path: Path, seed: Seed | None = None) -> FederatedTrainingRequest:

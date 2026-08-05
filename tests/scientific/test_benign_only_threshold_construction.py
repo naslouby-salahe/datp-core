@@ -20,6 +20,7 @@ from datp_core.calibration.eligibility import (
     reject_score_coordinate_mismatch,
     require_common_eligible_cohort,
 )
+from datp_core.datasets.partitioning.contracts import PopulationCapabilities
 from datp_core.domain.enums import (
     CapabilityStatus,
     CentralizedThresholdMethod,
@@ -45,7 +46,6 @@ from datp_core.pipeline.decision.federated import (
     ConstructFederatedThresholdsRequest,
     construct_federated_thresholds,
 )
-from datp_core.populations.models import PopulationCapabilities
 from datp_core.protocols.calibration import CLUSTER_THRESHOLD_PROTOCOL, FEDERATED_STATISTICS_PROTOCOL
 from datp_core.protocols.models import CalibrationEligibilityProtocol, ClusterThresholdProtocol
 from datp_core.thresholding.common import FederatedThresholdAssetName

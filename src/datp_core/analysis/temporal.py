@@ -5,6 +5,7 @@ from enum import StrEnum
 from pydantic import model_validator
 
 from datp_core.analysis.decisions import ScientificDecisionResult
+from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
     AvailabilityStatus,
@@ -18,7 +19,6 @@ from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.provenance import canonical_checksum
 from datp_core.domain.values import Checksum, MetricValue, Seed
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.populations.models import ClientIdentity
 from datp_core.protocols.inference import ScoreArtifactManifest
 from datp_core.protocols.metrics import TEMPORAL_CV_MATERIALITY_CUTOFF
 

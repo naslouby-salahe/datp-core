@@ -3,6 +3,7 @@
 from collections.abc import Sequence
 from dataclasses import replace
 
+from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.enums import (
     CheckpointSelectionRule,
     CheckpointStatus,
@@ -16,7 +17,6 @@ from datp_core.learning.federated.models import (
     CheckpointDecision,
     FederatedTrainingCoordinate,
 )
-from datp_core.populations.models import ClientIdentity
 from datp_core.protocols.checkpoints import (
     select_terminal_checkpoint,
     validate_ordered_checkpoint_inventory,

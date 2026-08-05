@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+from datp_core.datasets.partitioning.contracts import ControlledPartitionCondition
 from datp_core.domain.enums import (
     DatasetId,
     PopulationId,
@@ -11,7 +12,6 @@ from datp_core.domain.enums import (
     SplitProtocolId,
 )
 from datp_core.domain.values import ClientPublicationCount, Seed
-from datp_core.populations.models import ControlledPartitionCondition
 from datp_core.preprocessing.centralized import (
     CentralizedPopulationPreprocessingRequest,
     CentralizedPreprocessingOutcome,

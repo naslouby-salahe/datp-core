@@ -3,18 +3,19 @@ from pathlib import Path
 import polars as pl
 import pytest
 
+from datp_core.datasets.nbaiot.populations import construct_nbaiot_natural_devices
+from datp_core.datasets.partitioning.contracts import SplitConstructionRequest
+from datp_core.datasets.partitioning.splits import split_membership
 from datp_core.domain.enums import DatasetId, PopulationId, SplitProtocolId
 from datp_core.domain.values import Seed
-from datp_core.populations.models import SplitConstructionRequest
-from datp_core.populations.nbaiot_natural_devices import build_nbaiot_natural_devices
-from datp_core.populations.splits import split_membership
 
 
 @pytest.mark.parametrize("seed", [Seed(0), Seed(1), Seed(2), Seed(3), Seed(4), Seed(5), Seed(6), Seed(7)])
 def test_non_temporal_splits_are_disjoint_for_any_seed(seed: Seed, nbaiot_canonical_root: Path) -> None:
-    manifest, membership = build_nbaiot_natural_devices(
+    construction = construct_nbaiot_natural_devices(
         nbaiot_canonical_root, partition_seed=seed, split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS
     )
+    manifest, membership = construction.manifest, construction.membership
     assignments, _ = split_membership(
         SplitConstructionRequest(
             membership=membership,

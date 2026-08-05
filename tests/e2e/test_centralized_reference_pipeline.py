@@ -15,6 +15,7 @@ from tests.unit.learning.centralized.helpers import (
     training_coordinate,
 )
 
+from datp_core.datasets.partitioning.contracts import PopulationOutcomeLabel
 from datp_core.domain.values import Checksum, RowCount, Seed
 from datp_core.learning.centralized.training import CentralizedTrainingRequest, train_centralized_autoencoder
 from datp_core.pipeline.checkpoints.service import retain_centralized_checkpoint_candidates
@@ -25,7 +26,6 @@ from datp_core.pipeline.decision.centralized import (
 )
 from datp_core.pipeline.scoring.centralized import score_centralized_reference
 from datp_core.pipeline.scoring.models import CentralizedScoringRequest
-from datp_core.populations.models import PopulationOutcomeLabel
 
 
 def test_centralized_reference_uses_its_own_model_scores_and_threshold(tmp_path: Path) -> None:

@@ -120,7 +120,7 @@ def test_score_reload_equality_detects_a_corrupted_file(tmp_path: Path) -> None:
 
 
 def test_scoring_rejects_attack_labelled_calibration_rows(tmp_path: Path) -> None:
-    from datp_core.populations.models import PopulationOutcomeLabel
+    from datp_core.datasets.partitioning.contracts import PopulationOutcomeLabel
 
     checkpoint = selected_checkpoint(tmp_path / "checkpoint")
     attack_frame = benign_frame(RowCount(6), seed=Seed(1), label=PopulationOutcomeLabel.ATTACK.value)

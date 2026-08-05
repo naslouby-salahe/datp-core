@@ -12,6 +12,7 @@ from datp_core.analysis.temporal import (
     temporal_recovery,
     validate_frozen_recalibrated_pair,
 )
+from datp_core.datasets.registry import population_capabilities
 from datp_core.domain.enums import (
     ExperimentId,
     FederatedThresholdMethod,
@@ -48,7 +49,6 @@ from datp_core.pipeline.execution.workspace import (
 )
 from datp_core.pipeline.planning import ExperimentCoordinate, expand_experiment_plan
 from datp_core.pipeline.scoring.models import FederatedScoreArtifactManifest
-from datp_core.populations.capabilities import population_capabilities
 from datp_core.protocols.calibration import CANONICAL_QUANTILE
 from datp_core.protocols.experiments import EXPERIMENTS, ExternalTemporalExecutionIdentity
 from datp_core.protocols.models import ExperimentDeclaration, SeedCohort

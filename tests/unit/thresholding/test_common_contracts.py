@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 import pytest
 
+from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.enums import (
     FederatedThresholdMethod,
     PopulationId,
@@ -13,7 +14,6 @@ from datp_core.domain.enums import (
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import Checksum, Quantile, Seed, ThresholdValue
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.populations.models import ClientIdentity
 from datp_core.thresholding.assignments import ThresholdAssignment
 from datp_core.thresholding.common import (
     FederatedThresholdResult,

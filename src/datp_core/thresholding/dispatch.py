@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from typing import assert_never
 
+from datp_core.datasets.partitioning.contracts import ClientIdentity, PopulationCapabilities
 from datp_core.domain.enums import (
     CentralizedThresholdMethod,
     ContractSubject,
@@ -15,7 +16,6 @@ from datp_core.domain.errors import (
 )
 from datp_core.domain.values import FamilyIdentity, Quantile
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.populations.models import ClientIdentity, PopulationCapabilities
 from datp_core.protocols.calibration import (
     CLUSTER_THRESHOLD_PROTOCOL,
     FEDERATED_STATISTICS_PROTOCOL,

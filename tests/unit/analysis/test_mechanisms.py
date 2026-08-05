@@ -24,6 +24,7 @@ from datp_core.analysis.mechanisms.movement import (
     ThresholdOperatingPoint,
     threshold_movement,
 )
+from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.enums import (
     AvailabilityStatus,
     EvidenceRole,
@@ -38,7 +39,6 @@ from datp_core.domain.values import (
     Ratio,
     ThresholdValue,
 )
-from datp_core.populations.models import ClientIdentity
 
 
 def test_association_reports_all_observations_with_typed_statistics() -> None:

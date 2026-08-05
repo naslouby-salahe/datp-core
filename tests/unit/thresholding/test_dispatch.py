@@ -3,6 +3,7 @@ from typing import cast
 import pytest
 from tests.unit.thresholding.helpers import COORDINATE, client_scores
 
+from datp_core.datasets.partitioning.contracts import ClientIdentity, PopulationCapabilities
 from datp_core.domain.enums import (
     CapabilityStatus,
     CentralizedThresholdMethod,
@@ -14,7 +15,6 @@ from datp_core.domain.enums import (
 )
 from datp_core.domain.errors import CapabilityError, LeakageError, ScientificContractError
 from datp_core.domain.values import ClientCount, FamilyIdentity, Quantile
-from datp_core.populations.models import ClientIdentity, PopulationCapabilities
 from datp_core.thresholding.dispatch import (
     ThresholdConstructionRequest,
     dispatch_federated_threshold,

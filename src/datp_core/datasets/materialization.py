@@ -27,8 +27,7 @@ from datp_core.datasets.canonical_cache import (
     serialized_manifest_json,
     write_source_state,
 )
-from datp_core.datasets.core.materialize import publish_canonical_atomically
-from datp_core.datasets.models import (
+from datp_core.datasets.contracts import (
     CanonicalAssetRole,
     CanonicalColumn,
     CanonicalColumnRole,
@@ -44,6 +43,7 @@ from datp_core.datasets.models import (
     RawSourceFile,
     SourceFileRole,
 )
+from datp_core.datasets.publication import publish_canonical_atomically
 from datp_core.domain.enums import DatasetId, PublicationStatus
 from datp_core.domain.values import (
     ByteCount,

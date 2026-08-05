@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from datp_core.datasets.core.contracts import raw_dataset_directory, raw_dataset_root
+from datp_core.datasets.paths import raw_dataset_directory, raw_dataset_root
 from datp_core.domain.enums import DatasetId, RawDatasetDirectory
 
 

@@ -8,6 +8,12 @@ from datp_core.datasets.canonical_cache import (
     canonical_directory,
     reuse_published_canonical,
 )
+from datp_core.datasets.contracts import (
+    CanonicalAssetRole,
+    DatasetValidationReport,
+    MaterializedDataset,
+    SourceFileRole,
+)
 from datp_core.datasets.materialization import (
     CanonicalPublication,
     canonical_data_partition_assets,
@@ -16,7 +22,6 @@ from datp_core.datasets.materialization import (
     raw_source_file,
     stream_parquet,
 )
-from datp_core.datasets.models import CanonicalAssetRole, DatasetValidationReport, MaterializedDataset, SourceFileRole
 from datp_core.domain.enums import AvailabilityStatus, DatasetId
 from datp_core.domain.values import (
     RowCount,
@@ -24,7 +29,14 @@ from datp_core.domain.values import (
 )
 
 from .reader import NBaIoTReader
-from .schema import NBAIOT_ARROW_SCHEMA, NBAIOT_SCHEMA, NBaIoTSourceLabel, parse_source_identity, source_relative_path
+from .schema import (
+    NBAIOT_ARROW_SCHEMA,
+    NBAIOT_SCHEMA,
+    NBaIoTArtifactName,
+    NBaIoTSourceLabel,
+    parse_source_identity,
+    source_relative_path,
+)
 
 _NBAIOT_CANONICALIZATION_CONTRACT = "normalized_physical_client_identity"
 
@@ -34,6 +46,14 @@ class NBaIoTMaterializer:
 
     def canonical_directory(self, canonical_root: Path) -> Path:
         return canonical_directory(canonical_root, NBAIOT_SCHEMA)
+
+    def publish(self, raw_root: Path, canonical_root: Path) -> MaterializedDataset:
+        sources = tuple(
+            path
+            for path in sorted(raw_root.glob(f"**/*{NBaIoTArtifactName.CSV_SUFFIX}"))
+            if path.name != NBaIoTArtifactName.STRUCTURE_DEMONSTRATION_FILE
+        )
+        return self.materialize(sources, canonical_root)
 
     def materialize(self, source_paths: tuple[Path, ...], canonical_root: Path) -> MaterializedDataset:
         if not source_paths:

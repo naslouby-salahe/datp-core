@@ -1,4 +1,10 @@
-"""Population construction, splitting, and deterministic publication."""
+"""Generic population construction, splitting, and deterministic publication.
+
+This module publishes population and split artifacts without interpreting
+dataset columns or branching on dataset-specific implementation details: it
+only reacts to the generic, typed presence of optional construction results
+(diagnostics, a matched reference population, typed evidence).
+"""
 
 from __future__ import annotations
 
@@ -8,44 +14,30 @@ from pathlib import Path
 
 import polars as pl
 
+from datp_core.datasets.partitioning.contracts import (
+    ChronologicalPartitionDiagnosticsDocument,
+    ControlledPartitionCondition,
+    PopulationConstructionRequest,
+    PopulationConstructionResult,
+    PopulationManifest,
+    PopulationManifestDocument,
+    SplitConstructionRequest,
+    SplitManifestDocument,
+)
+from datp_core.datasets.partitioning.integrity import membership_frame_checksum, validate_split_manifest
+from datp_core.datasets.partitioning.splits import split_membership
+from datp_core.datasets.registry import construct_population
 from datp_core.domain.enums import DatasetId, PopulationId, PublicationStatus, SplitProtocolId
-from datp_core.domain.values import Checksum, Seed
+from datp_core.domain.errors import ScientificContractError
+from datp_core.domain.provenance import canonical_json_text
+from datp_core.domain.values import Checksum, Seed, checksum_text
 from datp_core.pipeline.publication.service import (
     ArtifactPublication,
     FunctionalArtifactCodec,
     publish_artifact,
     serialize_json_model,
 )
-from datp_core.populations.catalogue import (
-    PopulationConstructionRequest as CapabilityPopulationConstructionRequest,
-)
-from datp_core.populations.catalogue import (
-    PopulationConstructionResult as CapabilityPopulationConstructionResult,
-)
-from datp_core.populations.catalogue import construct_population as construct_population_capability
-from datp_core.populations.integrity import membership_frame_checksum, validate_split_manifest
-from datp_core.populations.membership import (
-    PopulationMembershipArtifacts,
-    PopulationMembershipPublication,
-    PopulationMembershipRequest,
-    prepare_population_membership,
-)
-from datp_core.populations.models import (
-    ChronologicalPartitionDiagnosticsDocument,
-    ControlledPartitionCondition,
-    PopulationManifest,
-    PopulationManifestDocument,
-    SplitConstructionRequest,
-    SplitManifestDocument,
-)
-from datp_core.populations.splits import split_membership
-from datp_core.populations.splitting import (
-    PopulationSplitArtifacts,
-    PopulationSplitPublication,
-    PopulationSplitRequest,
-    prepare_population_split,
-)
-from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
+from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity, require_execution_identity
 
 
 class PopulationPublicationAsset(StrEnum):
@@ -81,7 +73,7 @@ class ConstructDeclaredPopulationRequest:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ConstructDeclaredPopulationResult:
-    construction: CapabilityPopulationConstructionResult
+    construction: PopulationConstructionResult
     split_assignments: pl.DataFrame
     split_manifest: SplitManifestDocument
 
@@ -89,8 +81,8 @@ class ConstructDeclaredPopulationResult:
 def construct_declared_population(
     request: ConstructDeclaredPopulationRequest,
 ) -> ConstructDeclaredPopulationResult:
-    construction = construct_population_capability(
-        CapabilityPopulationConstructionRequest(
+    construction = construct_population(
+        PopulationConstructionRequest(
             request.population,
             request.canonical_root,
             request.partition_seed,
@@ -112,6 +104,36 @@ def construct_declared_population(
         construction=construction,
         split_assignments=assignments,
         split_manifest=manifest,
+    )
+
+
+@dataclass(slots=True, eq=False)
+class PopulationMembershipArtifacts:
+    population_manifest: PopulationManifest
+    membership: pl.DataFrame
+    chronology: ChronologicalPartitionDiagnosticsDocument | None
+    matched_static_reference_manifest: PopulationManifest | None
+    matched_static_reference_membership: pl.DataFrame | None
+    ciciot_excluded_rows: pl.DataFrame | None = None
+    ciciot_client_eligibility: pl.DataFrame | None = None
+
+
+def _population_membership_artifacts(construction: PopulationConstructionResult) -> PopulationMembershipArtifacts:
+    chronology = (
+        construction.diagnostics
+        if isinstance(construction.diagnostics, ChronologicalPartitionDiagnosticsDocument)
+        else None
+    )
+    matched_reference = construction.matched_reference
+    evidence = construction.evidence
+    return PopulationMembershipArtifacts(
+        population_manifest=construction.manifest,
+        membership=construction.membership,
+        chronology=chronology,
+        matched_static_reference_manifest=matched_reference.manifest if matched_reference is not None else None,
+        matched_static_reference_membership=matched_reference.membership if matched_reference is not None else None,
+        ciciot_excluded_rows=evidence.excluded_rows if evidence is not None else None,
+        ciciot_client_eligibility=evidence.client_eligibility if evidence is not None else None,
     )
 
 
@@ -139,17 +161,31 @@ class ConstructPublishedPopulationResult:
     ciciot_client_eligibility: pl.DataFrame | None = None
 
 
+@dataclass(slots=True, eq=False)
+class _PopulationMembershipPublication:
+    execution_identity: ExternalTemporalExecutionIdentity
+    artifacts: PopulationMembershipArtifacts
+    digest: Checksum
+
+
 def construct_published_population(
     request: ConstructPublishedPopulationRequest,
 ) -> ConstructPublishedPopulationResult:
-    prepared = prepare_population_membership(
-        PopulationMembershipRequest(
-            canonical_root=request.canonical_root,
-            population=request.population,
-            execution_identity=request.execution_identity,
-            partition_seed=request.partition_seed,
-            split_protocol=request.split_protocol,
+    require_execution_identity(request.execution_identity, request.population)
+    construction = construct_population(
+        PopulationConstructionRequest(
+            request.population,
+            request.canonical_root,
+            request.partition_seed,
+            request.split_protocol,
+            None,
         )
+    )
+    artifacts = _population_membership_artifacts(construction)
+    prepared = _PopulationMembershipPublication(
+        execution_identity=request.execution_identity,
+        artifacts=artifacts,
+        digest=_population_membership_digest(artifacts, request.execution_identity),
     )
     publication = publish_artifact(
         ArtifactPublication(
@@ -165,18 +201,33 @@ def construct_published_population(
             complete_marker=PopulationPublicationAsset.COMPLETE,
         )
     )
-    artifacts = publication.value
+    published = publication.value
     return ConstructPublishedPopulationResult(
         publication_status=publication.status,
-        population_manifest=artifacts.population_manifest,
-        membership=artifacts.membership,
-        chronology=artifacts.chronology,
-        matched_static_reference_manifest=artifacts.matched_static_reference_manifest,
-        matched_static_reference_membership=artifacts.matched_static_reference_membership,
+        population_manifest=published.population_manifest,
+        membership=published.membership,
+        chronology=published.chronology,
+        matched_static_reference_manifest=published.matched_static_reference_manifest,
+        matched_static_reference_membership=published.matched_static_reference_membership,
         complete_digest=publication.complete_digest,
-        ciciot_excluded_rows=artifacts.ciciot_excluded_rows,
-        ciciot_client_eligibility=artifacts.ciciot_client_eligibility,
+        ciciot_excluded_rows=published.ciciot_excluded_rows,
+        ciciot_client_eligibility=published.ciciot_client_eligibility,
     )
+
+
+def _population_membership_digest(
+    artifacts: PopulationMembershipArtifacts,
+    identity: ExternalTemporalExecutionIdentity,
+) -> Checksum:
+    sections = [
+        canonical_json_text(identity),
+        canonical_json_text(artifacts.population_manifest.document),
+    ]
+    if artifacts.chronology is not None:
+        sections.append(canonical_json_text(artifacts.chronology))
+    if artifacts.matched_static_reference_manifest is not None:
+        sections.append(canonical_json_text(artifacts.matched_static_reference_manifest.document))
+    return checksum_text("\n".join(sections))
 
 
 @dataclass(slots=True, eq=False, kw_only=True)
@@ -202,17 +253,74 @@ class ConstructPublishedSplitResult:
     complete_digest: Checksum
 
 
+@dataclass(slots=True, eq=False)
+class _PopulationSplitArtifacts:
+    assignments: pl.DataFrame
+    manifest: SplitManifestDocument
+    matched_static_reference_assignments: pl.DataFrame | None
+    matched_static_reference_manifest: SplitManifestDocument | None
+
+
+@dataclass(slots=True, eq=False)
+class _PopulationSplitPublication:
+    request: ConstructPublishedSplitRequest
+    artifacts: _PopulationSplitArtifacts
+    digest: Checksum
+
+
 def construct_published_split(request: ConstructPublishedSplitRequest) -> ConstructPublishedSplitResult:
-    prepared = prepare_population_split(
-        PopulationSplitRequest(
-            population=request.population,
-            execution_identity=request.execution_identity,
-            population_manifest=request.population_manifest,
-            membership=request.membership,
-            partition_seed=request.partition_seed,
-            matched_static_reference_manifest=request.matched_static_reference_manifest,
-            matched_static_reference_membership=request.matched_static_reference_membership,
+    document = request.population_manifest.document
+    if document.population is not request.population:
+        raise ScientificContractError(
+            "split request population must match its manifest",
+            subject=request.population,
         )
+    has_matched_reference = request.matched_static_reference_manifest is not None
+    if has_matched_reference and request.matched_static_reference_membership is None:
+        raise ScientificContractError(
+            "a matched reference manifest requires its matched reference membership",
+            subject=request.population,
+        )
+    assignments, manifest = split_membership(
+        SplitConstructionRequest(
+            membership=request.membership,
+            population=request.population,
+            dataset=document.dataset,
+            partition_seed=request.partition_seed,
+            split_protocol=document.split_protocol,
+            population_manifest_checksum=document.membership_checksum,
+        )
+    )
+    validate_split_manifest(request.membership, assignments, manifest)
+    static_assignments: pl.DataFrame | None = None
+    static_manifest: SplitManifestDocument | None = None
+    if has_matched_reference:
+        assert request.matched_static_reference_manifest is not None
+        assert request.matched_static_reference_membership is not None
+        _require_matching_reference_rows(request.membership, request.matched_static_reference_membership)
+        static_assignments, static_manifest = split_membership(
+            SplitConstructionRequest(
+                membership=request.matched_static_reference_membership,
+                population=request.population,
+                dataset=document.dataset,
+                partition_seed=request.partition_seed,
+                split_protocol=SplitProtocolId.RANDOM_FRACTIONAL_STATIC_REFERENCE,
+                population_manifest_checksum=request.matched_static_reference_manifest.document.membership_checksum,
+            )
+        )
+        validate_split_manifest(
+            request.matched_static_reference_membership,
+            static_assignments,
+            static_manifest,
+        )
+    artifacts = _PopulationSplitArtifacts(assignments, manifest, static_assignments, static_manifest)
+    sections = [canonical_json_text(request.execution_identity), canonical_json_text(artifacts.manifest)]
+    if artifacts.matched_static_reference_manifest is not None:
+        sections.append(canonical_json_text(artifacts.matched_static_reference_manifest))
+    prepared = _PopulationSplitPublication(
+        request=request,
+        artifacts=artifacts,
+        digest=checksum_text("\n".join(sections)),
     )
     publication = publish_artifact(
         ArtifactPublication(
@@ -228,24 +336,35 @@ def construct_published_split(request: ConstructPublishedSplitRequest) -> Constr
             complete_marker=SplitPublicationAsset.COMPLETE,
         )
     )
-    artifacts = publication.value
+    published = publication.value
     return ConstructPublishedSplitResult(
         publication_status=publication.status,
-        assignments=artifacts.assignments,
-        manifest=artifacts.manifest,
-        matched_static_reference_assignments=artifacts.matched_static_reference_assignments,
-        matched_static_reference_manifest=artifacts.matched_static_reference_manifest,
+        assignments=published.assignments,
+        manifest=published.manifest,
+        matched_static_reference_assignments=published.matched_static_reference_assignments,
+        matched_static_reference_manifest=published.matched_static_reference_manifest,
         complete_digest=publication.complete_digest,
     )
 
 
+def _require_matching_reference_rows(temporal: pl.DataFrame, static: pl.DataFrame) -> None:
+    row_columns = ("client_id", "stable_row_id")
+    temporal_rows = temporal.select(row_columns).sort(row_columns)
+    static_rows = static.select(row_columns).sort(row_columns)
+    if not temporal_rows.equals(static_rows):
+        raise ScientificContractError(
+            "matched static reference must use the same client rows",
+            subject=PopulationId.EDGE_TEMPORAL_GROUPS,
+        )
+
+
 def _write_population_membership(
-    publication: PopulationMembershipPublication,
+    publication: _PopulationMembershipPublication,
     directory: Path,
 ) -> PopulationMembershipArtifacts:
     artifacts = publication.artifacts
     serialize_json_model(
-        publication.request.execution_identity,
+        publication.execution_identity,
         directory / PopulationPublicationAsset.EXECUTION_IDENTITY,
     )
     serialize_json_model(
@@ -276,7 +395,7 @@ def _write_population_membership(
 
 
 def _population_membership_is_reusable(
-    publication: PopulationMembershipPublication,
+    publication: _PopulationMembershipPublication,
     directory: Path,
 ) -> bool:
     complete = directory / PopulationPublicationAsset.COMPLETE
@@ -291,7 +410,7 @@ def _population_membership_is_reusable(
         persisted_identity = ExternalTemporalExecutionIdentity.model_validate_json(
             identity_path.read_text(encoding="utf-8")
         )
-        if persisted_identity != publication.request.execution_identity:
+        if persisted_identity != publication.execution_identity:
             return False
         persisted = PopulationManifestDocument.model_validate_json(manifest_path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -300,7 +419,7 @@ def _population_membership_is_reusable(
 
 
 def _load_reused_population_membership(
-    publication: PopulationMembershipPublication,
+    publication: _PopulationMembershipPublication,
     directory: Path,
 ) -> PopulationMembershipArtifacts:
     del directory
@@ -377,9 +496,9 @@ def _matches_static_reference(directory: Path, expected: PopulationManifest) -> 
 
 
 def _write_population_split(
-    publication: PopulationSplitPublication,
+    publication: _PopulationSplitPublication,
     directory: Path,
-) -> PopulationSplitArtifacts:
+) -> _PopulationSplitArtifacts:
     artifacts = publication.artifacts
     serialize_json_model(
         publication.request.execution_identity,
@@ -403,7 +522,7 @@ def _write_population_split(
 
 
 def _population_split_is_reusable(
-    publication: PopulationSplitPublication,
+    publication: _PopulationSplitPublication,
     directory: Path,
 ) -> bool:
     complete = directory / SplitPublicationAsset.COMPLETE
@@ -437,23 +556,23 @@ def _population_split_is_reusable(
 
 
 def _load_reused_population_split(
-    publication: PopulationSplitPublication,
+    publication: _PopulationSplitPublication,
     directory: Path,
-) -> PopulationSplitArtifacts:
+) -> _PopulationSplitArtifacts:
     del directory
     return publication.artifacts
 
 
 def _rebase_population_split(
-    artifacts: PopulationSplitArtifacts,
+    artifacts: _PopulationSplitArtifacts,
     directory: Path,
-) -> PopulationSplitArtifacts:
+) -> _PopulationSplitArtifacts:
     del directory
     return artifacts
 
 
 def _matches_split_static_reference(
-    request: PopulationSplitRequest,
+    request: ConstructPublishedSplitRequest,
     directory: Path,
     expected: SplitManifestDocument,
 ) -> bool:

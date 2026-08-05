@@ -1,41 +1,38 @@
-"""Centralized population, split, and cohort integrity checks."""
+"""Hard population, split, and cohort invariants.
+
+Validators receive their declaration and capability context as explicit typed
+inputs rather than resolving them from global registry state, so this module
+stays independent of any specific dataset implementation or the registry.
+"""
 
 from collections.abc import Iterable
-from dataclasses import dataclass
 
 import polars as pl
 
 from datp_core.domain.enums import (
     ContractSubject,
-    DatasetId,
     PartitionRole,
     PopulationId,
-    PopulationIdentityKind,
-    SplitProtocolId,
     StageOperationId,
 )
 from datp_core.domain.errors import DataIntegrityError, LeakageError, ScientificContractError
-from datp_core.domain.values import Checksum, ClientCount, NonNegativeIntegerValue, RowCount, Seed
-from datp_core.populations.capabilities import population_capabilities, population_declaration
-from datp_core.populations.models import (
+from datp_core.domain.values import Checksum, ClientCount, RowCount
+from datp_core.protocols.models import PopulationDeclaration
+
+from .contracts import (
     CLIENT_ID_COLUMN,
     OUTCOME_LABEL_COLUMN,
     PARTITION_ROLE_COLUMN,
     STABLE_ROW_ID_COLUMN,
-    PopulationFeasibility,
-    PopulationFeasibilityReason,
-    PopulationFeasibilityStatus,
+    PopulationCapabilities,
     PopulationFrameColumn,
     PopulationManifest,
-    PopulationManifestDocument,
     PopulationOutcomeLabel,
     SplitManifestDocument,
     WorkingFrameColumn,
     assignment_column_names,
-    build_population_manifest,
     membership_checksum,
     membership_column_names,
-    select_membership_frame,
 )
 
 _BENIGN = PopulationOutcomeLabel.BENIGN
@@ -70,10 +67,10 @@ def outcome_row_counts(membership: pl.DataFrame) -> tuple[RowCount, RowCount]:
 def validate_population_manifest(
     manifest: PopulationManifest,
     membership: pl.DataFrame,
+    declaration: PopulationDeclaration,
+    capabilities: PopulationCapabilities,
 ) -> None:
     document = manifest.document
-    declaration = population_declaration(document.population)
-    capabilities = population_capabilities(document.population)
     _require_columns(membership, membership_column_names(), StageOperationId.CONSTRUCT_POPULATION)
     _require_membership_row_contract(membership, document.total_membership_rows, document.population)
     _require_membership_client_subset(membership, document.accepted_clients, document.population)
@@ -148,149 +145,6 @@ def validate_dirichlet_conservation(
             subject=population,
             reason="controlled partitions lock the client count at twenty",
         )
-
-
-@dataclass(frozen=True, slots=True)
-class FeasibilityAssessmentRequest:
-    expected_count: ClientCount
-    candidate_ids: tuple[str, ...]
-    accepted_ids: tuple[str, ...]
-    expected_identities: tuple[str, ...] | None
-    chronology_required: bool
-
-
-@dataclass(frozen=True, slots=True, eq=False)
-class PopulationFinalizationRequest:
-    population: PopulationId
-    dataset: DatasetId
-    identity_kind: PopulationIdentityKind
-    partition_seed: Seed
-    split_protocol: SplitProtocolId
-    candidate_ids: tuple[str, ...]
-    accepted_ids: tuple[str, ...]
-    excluded_ids: tuple[str, ...]
-    expected_identities: tuple[str, ...] | None
-    chronology_required: bool
-    membership: pl.DataFrame
-    canonical_schema_checksum: Checksum
-    family_by_client: tuple[tuple[str, str], ...] = ()
-
-
-def assess_declared_feasibility(
-    *,
-    expected_count: ClientCount,
-    candidate_ids: tuple[str, ...],
-    accepted_ids: tuple[str, ...],
-    expected_identities: tuple[str, ...] | None,
-    chronology_required: bool,
-) -> PopulationFeasibility:
-    """Shared feasibility gate used by every population builder."""
-    return feasibility_from_candidates(
-        FeasibilityAssessmentRequest(
-            expected_count=expected_count,
-            candidate_ids=candidate_ids,
-            accepted_ids=accepted_ids,
-            expected_identities=expected_identities,
-            chronology_required=chronology_required,
-        )
-    )
-
-
-def finalize_population(request: PopulationFinalizationRequest) -> PopulationManifest:
-    """Build and validate a complete immutable population result from one typed request."""
-    declaration = population_declaration(request.population)
-    if declaration.dataset is not request.dataset or declaration.identity_kind is not request.identity_kind:
-        raise ScientificContractError(
-            "population finalization disagrees with its declaration",
-            subject=request.population,
-            reason="dataset and identity kind must come from the authoritative population binding",
-        )
-    membership = select_membership_frame(request.membership)
-    benign, attack = outcome_row_counts(membership)
-    feasibility = assess_declared_feasibility(
-        expected_count=declaration.client_count,
-        candidate_ids=request.candidate_ids,
-        accepted_ids=request.accepted_ids,
-        expected_identities=request.expected_identities,
-        chronology_required=request.chronology_required,
-    )
-    manifest = build_population_manifest(
-        PopulationManifestDocument(
-            population=request.population,
-            dataset=request.dataset,
-            identity_kind=request.identity_kind,
-            partition_seed=request.partition_seed,
-            split_protocol=request.split_protocol,
-            candidate_clients=request.candidate_ids,
-            accepted_clients=request.accepted_ids,
-            excluded_client_ids=request.excluded_ids,
-            total_membership_rows=RowCount(membership.height),
-            benign_row_count=benign,
-            attack_row_count=attack,
-            membership_checksum=membership_frame_checksum(membership),
-            canonical_schema_checksum=request.canonical_schema_checksum,
-            feasibility_status=feasibility.status,
-            feasibility_reason=feasibility.reason,
-        ),
-        feasibility=feasibility,
-        family_by_client=request.family_by_client,
-    )
-    validate_population_manifest(manifest, membership)
-    return manifest
-
-
-def feasibility_from_candidates(request: FeasibilityAssessmentRequest) -> PopulationFeasibility:
-    expected = request.expected_count
-    accepted_n = len(request.accepted_ids)
-    identity_mismatch = request.expected_identities is not None and tuple(sorted(request.candidate_ids)) != tuple(
-        sorted(request.expected_identities)
-    )
-    if identity_mismatch:
-        return _infeasible(
-            PopulationFeasibilityReason.IDENTITY_SET_MISMATCH,
-            expected,
-            accepted_n,
-            "observed candidate identities disagree with the audited identity set",
-        )
-    if not request.chronology_required and len(request.candidate_ids) != request.expected_count:
-        return _infeasible(
-            PopulationFeasibilityReason.CANDIDATE_COUNT_MISMATCH,
-            expected,
-            accepted_n,
-            "candidate client count disagrees with the population declaration",
-        )
-    if request.chronology_required and not request.accepted_ids:
-        return _infeasible(
-            PopulationFeasibilityReason.CHRONOLOGY_EVIDENCE_INSUFFICIENT,
-            expected,
-            0,
-            "no groups remain after chronology eligibility validation",
-        )
-    if not request.accepted_ids:
-        return _infeasible(
-            PopulationFeasibilityReason.EMPTY_ACCEPTED_CLIENTS,
-            expected,
-            0,
-            "population construction accepted no clients",
-        )
-    return PopulationFeasibility(
-        PopulationFeasibilityStatus.FEASIBLE,
-        PopulationFeasibilityReason.CANDIDATE_SET_MATCHES_DECLARATION,
-        expected,
-        NonNegativeIntegerValue(accepted_n),
-        "candidate and accepted client sets match the locked construction contract",
-    )
-
-
-def _infeasible(
-    reason: PopulationFeasibilityReason,
-    expected: ClientCount,
-    observed: int,
-    evidence: str,
-) -> PopulationFeasibility:
-    return PopulationFeasibility(
-        PopulationFeasibilityStatus.INFEASIBLE, reason, expected, NonNegativeIntegerValue(observed), evidence
-    )
 
 
 def _require_membership_row_contract(

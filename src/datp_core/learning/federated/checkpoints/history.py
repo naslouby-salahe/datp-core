@@ -7,6 +7,7 @@ from pathlib import Path
 import polars as pl
 from polars.exceptions import PolarsError
 
+from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.enums import (
     CommunicationEstimationMethod,
     ContractSubject,
@@ -32,7 +33,6 @@ from datp_core.learning.federated.models import (
     GlobalModelStateReference,
     PersonalizedModelStateReference,
 )
-from datp_core.populations.models import ClientIdentity
 from datp_core.protocols.models import CheckpointProtocol
 
 
