@@ -147,21 +147,9 @@ def expand_experiment_plan(
     entries = tuple(
         sorted(
             (
-                _planned_entry(
-                    declaration,
-                    seed,
-                    threshold_method,
-                    metric,
-                    temporal_state,
-                    model_coefficient,
-                    validated_evidence,
-                )
+                _planned_entry(declaration, cell, validated_evidence)
                 for declaration in declarations
-                for seed in seed_cohort.values
-                for threshold_method in declaration.federated_thresholds
-                for metric in declaration.metrics
-                for temporal_state in _temporal_states(declaration.id)
-                for model_coefficient in _declared_model_coefficients(declaration.training_model)
+                for cell in _swept_cells(declaration, seed_cohort)
             ),
             key=lambda entry: entry.coordinate.stable_key,
         )
@@ -169,13 +157,35 @@ def expand_experiment_plan(
     return ExperimentPlan(entries=entries, digest=_digest_entries(entries))
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class _SweptCell:
+    seed: Seed
+    threshold_method: FederatedThresholdMethod
+    metric: MetricId
+    temporal_state: TemporalState | None
+    model_coefficient: ModelCoefficientValue | None
+
+
+def _swept_cells(declaration: ExperimentDeclaration, seed_cohort: SeedCohort) -> tuple[_SweptCell, ...]:
+    return tuple(
+        _SweptCell(
+            seed=seed,
+            threshold_method=threshold_method,
+            metric=metric,
+            temporal_state=temporal_state,
+            model_coefficient=model_coefficient,
+        )
+        for seed in seed_cohort.values
+        for threshold_method in declaration.federated_thresholds
+        for metric in declaration.metrics
+        for temporal_state in _temporal_states(declaration.id)
+        for model_coefficient in _declared_model_coefficients(declaration.training_model)
+    )
+
+
 def _planned_entry(
     declaration: ExperimentDeclaration,
-    seed: Seed,
-    threshold_method: FederatedThresholdMethod,
-    metric: MetricId,
-    temporal_state: TemporalState | None,
-    model_coefficient: ModelCoefficientValue | None,
+    cell: _SweptCell,
     evidence: tuple[PlanningEvidence, ...],
 ) -> PlannedExperiment:
     disposition, reason = _resolve_disposition(declaration, evidence)
@@ -187,13 +197,13 @@ def _planned_entry(
             dataset=population.dataset,
             population=declaration.population,
             training_model=declaration.training_model,
-            training_seed=seed,
+            training_seed=cell.seed,
             split_protocol=split_protocol_for_population(declaration.population),
             preprocessing_protocol=SCIENTIFIC_FEDERATED_PREPROCESSING_METHOD.identity,
-            model_coefficient=model_coefficient,
-            threshold_method=threshold_method,
-            metric=metric,
-            temporal_state=temporal_state,
+            model_coefficient=cell.model_coefficient,
+            threshold_method=cell.threshold_method,
+            metric=cell.metric,
+            temporal_state=cell.temporal_state,
         ),
         disposition=disposition,
         reason=reason,
