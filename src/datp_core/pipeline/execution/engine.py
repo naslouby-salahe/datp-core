@@ -14,6 +14,7 @@ from pathlib import Path
 from shutil import rmtree
 
 from datp_core.anchor.models import VerifyAnchorStageRequest
+from datp_core.datasets.service import DatasetMaterializationRequest, materialize_datasets
 from datp_core.domain.enums import ExperimentId, PublicationStatus
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.provenance import canonical_checksum
@@ -45,7 +46,6 @@ from datp_core.pipeline.planning import (
     PlanDisposition,
     execution_route_for,
 )
-from datp_core.pipeline.preparation.datasets import MaterializeDatasetRequest, materialize_dataset
 from datp_core.pipeline.publication.layout import experiment_output_directory
 from datp_core.pipeline.publication.models import ArtifactKind, ArtifactRecord, ArtifactState, CompletionState
 from datp_core.pipeline.publication.service import (
@@ -287,7 +287,9 @@ class PipelineStageRunner:
                 )
 
     def _materialize_dataset(self, stage: PipelineStage, coordinate: ExperimentCoordinate) -> StageExecution:
-        result = materialize_dataset(MaterializeDatasetRequest(data_root=DATA_ROOT, datasets=(coordinate.dataset,)))
+        result = materialize_datasets(
+            DatasetMaterializationRequest(data_root=DATA_ROOT, datasets=(coordinate.dataset,))
+        )
         publication = result.publications[0]
         return StageExecution(
             stage=stage,
