@@ -48,7 +48,6 @@ from datp_core.pipeline.decision.federated import (
 )
 from datp_core.protocols.calibration import CLUSTER_THRESHOLD_PROTOCOL, FEDERATED_STATISTICS_PROTOCOL
 from datp_core.protocols.models import CalibrationEligibilityProtocol, ClusterThresholdProtocol
-from datp_core.thresholding.common import FederatedThresholdAssetName
 from datp_core.thresholding.dispatch import (
     ThresholdConstructionRequest,
     dispatch_federated_threshold,
@@ -63,6 +62,7 @@ from datp_core.thresholding.methods.federated_statistics import (
     construct_federated_benign_statistics,
 )
 from datp_core.thresholding.methods.shrinkage import construct_size_aware_shrinkage
+from datp_core.thresholding.publication import FederatedThresholdAssetName
 
 PROTOCOL = CalibrationEligibilityProtocol(minimum_support=CalibrationSize(100))
 QUANTILE = Quantile(0.95)
