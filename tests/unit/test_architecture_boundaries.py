@@ -1,13 +1,16 @@
-from ast import Import, ImportFrom, parse
+from ast import ClassDef, FunctionDef, Import, ImportFrom, parse
 from pathlib import Path
 
 _SOURCE_ROOT = Path(__file__).resolve().parents[2] / "src" / "datp_core"
 
 
+def _syntax_tree(path: Path):
+    return parse(path.read_text(encoding="utf-8"), filename=str(path))
+
+
 def _imported_modules(path: Path) -> tuple[str, ...]:
-    tree = parse(path.read_text(encoding="utf-8"), filename=str(path))
     modules: list[str] = []
-    for node in tree.body:
+    for node in _syntax_tree(path).body:
         if isinstance(node, ImportFrom) and node.module is not None:
             modules.append(node.module)
         elif isinstance(node, Import):
@@ -45,3 +48,29 @@ def test_global_federated_algorithms_use_one_public_training_module() -> None:
     assert not (federated / "fedavg.py").exists()
     assert not (federated / "fedprox.py").exists()
     assert (federated / "global_training.py").is_file()
+
+
+def test_thresholding_separates_models_dispatch_and_publication_without_analysis_dependency() -> None:
+    thresholding = _SOURCE_ROOT / "thresholding"
+    assert not (thresholding / "common.py").exists()
+    assert (thresholding / "models.py").is_file()
+    assert (thresholding / "publication.py").is_file()
+    for path in thresholding.rglob("*.py"):
+        assert all(not module.startswith("datp_core.analysis") for module in _imported_modules(path)), path
+
+
+def test_temporal_deployment_provenance_is_protocol_owned() -> None:
+    assert ( _SOURCE_ROOT / "protocols" / "temporal.py").is_file()
+    assert _source_importers("datp_core.analysis.temporal.TemporalDeploymentProvenance") == ()
+
+
+def test_workspace_contains_only_the_cached_coordinate_coordinator() -> None:
+    workspace = _SOURCE_ROOT / "pipeline" / "execution" / "workspace.py"
+    top_level_definitions = tuple(
+        node.name for node in _syntax_tree(workspace).body if isinstance(node, (ClassDef, FunctionDef))
+    )
+    assert top_level_definitions == ("ExperimentWorkspace",)
+    execution = workspace.parent
+    assert (execution / "context.py").is_file()
+    assert (execution / "layout.py").is_file()
+    assert (execution / "scoring.py").is_file()
