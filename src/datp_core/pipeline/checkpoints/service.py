@@ -3,7 +3,6 @@
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from datp_core.artifacts.serialization import canonical_checksum
 from datp_core.domain.enums import (
     CheckpointSelectionRule,
     CheckpointStatus,
@@ -11,6 +10,7 @@ from datp_core.domain.enums import (
     TrainingModelId,
 )
 from datp_core.domain.errors import LeakageError, ScientificContractError
+from datp_core.domain.provenance import canonical_checksum
 from datp_core.domain.values import Checksum, MetricValue, RoundNumber, Seed
 from datp_core.learning.centralized.training import (
     CentralizedTrainingCoordinate,
