@@ -32,9 +32,9 @@ from datp_core.pipeline.workflows.external import run_ciciot_boundary_seed, run_
 from datp_core.pipeline.workflows.personalization import run_ditto_stress_test_seed
 from datp_core.pipeline.workflows.temporal import run_temporal_campaign, run_temporal_seed
 from datp_core.protocols.populations import DIRICHLET_CONCENTRATIONS
-from datp_core.protocols.runtime import DATA_ROOT
 from datp_core.protocols.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_SEED_COHORT
 from datp_core.protocols.training import DITTO_TRAINING_PROTOCOLS
+from datp_core.runtime.configuration import DATA_ROOT
 
 app = typer.Typer(no_args_is_help=True)
 _DECLARED_DIRICHLET_VALUES = frozenset(item.value for item in DIRICHLET_CONCENTRATIONS)
