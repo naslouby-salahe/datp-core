@@ -27,6 +27,7 @@ jobs:
 
       - name: Extract and execute reviewed migration
         run: |
+          cp src/datp_core/artifacts/store.py /tmp/preprocessing_publication.py
           git show 5008cea7c49a93315fc00ab04e0463b960164cbc:.github/workflows/remove-artifacts-package.yml \
             | awk '/^          python <<'"'"'PY'"'"'$/{capture=1; next} /^          PY$/{capture=0} capture{sub(/^          /, ""); print}' \
             > /tmp/remove_artifacts_package.py
@@ -51,18 +52,24 @@ jobs:
           python - <<'PY'
           from pathlib import Path
 
-          path = Path('src/datp_core/preprocessing/publication.py')
-          lines = path.read_text(encoding='utf-8').splitlines()
-          target = 'if not publication.overwrite and _is_reusable(target, publication):'
-          matches = tuple(index for index, line in enumerate(lines) if line.strip() == target)
-          if len(matches) != 1:
-              raise SystemExit(f'expected one generated reuse branch, found {len(matches)}')
-          index = matches[0]
-          if index + 1 >= len(lines) or lines[index + 1].strip() != 'return ProcessedPublicationResult(':
-              raise SystemExit('generated reuse branch does not contain the expected return')
-          indentation = len(lines[index]) - len(lines[index].lstrip())
-          lines[index + 1] = ' ' * (indentation + 4) + lines[index + 1].strip()
-          path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          source = Path('/tmp/preprocessing_publication.py')
+          destination = Path('src/datp_core/preprocessing/publication.py')
+          text = source.read_text(encoding='utf-8')
+          old = (
+              'from datp_core.artifacts.completion import complete_digest\n'
+              'from datp_core.artifacts.layout import ProcessedAssetName\n'
+              'from datp_core.artifacts.serialization import canonical_json_text\n'
+          )
+          new = (
+              'from datp_core.domain.provenance import canonical_json_text\n'
+              'from datp_core.domain.values import Checksum, checksum_text\n'
+              'from datp_core.preprocessing.contracts import ProcessedAssetName\n\n\n'
+              'def complete_digest(manifest_payload: str, schema_payload: str) -> Checksum:\n'
+              '    return checksum_text(f"{manifest_payload}\\n{schema_payload}")\n'
+          )
+          if text.count(old) != 1:
+              raise SystemExit('tested store import block did not match exactly once')
+          destination.write_text(text.replace(old, new), encoding='utf-8')
           PY
 
       - run: uv sync --all-groups --all-extras --frozen
