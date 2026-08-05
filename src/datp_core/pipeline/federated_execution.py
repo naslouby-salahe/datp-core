@@ -10,14 +10,7 @@ from pydantic import ValidationError
 
 from datp_core.datasets.catalogue import dataset_binding
 from datp_core.datasets.edge_iiotset.schema import EDGE_NUMERIC_FEATURE_COLUMNS
-from datp_core.domain.enums import (
-    DatasetId,
-    MetricId,
-    PartitionRole,
-    PopulationId,
-    ScoreFrameColumn,
-    TrainingModelId,
-)
+from datp_core.domain.enums import DatasetId, MetricId, PartitionRole, ScoreFrameColumn, TrainingModelId
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import (
     Checksum,
@@ -28,6 +21,7 @@ from datp_core.domain.values import (
     FeatureNameSequence,
     MetricValue,
     ProximalCoefficient,
+    Seed,
     checksum_file,
 )
 from datp_core.evaluation.models import MetricStatus, metric_by_id
@@ -196,6 +190,7 @@ def resolve_execution_context(coordinate: ExperimentCoordinate) -> FederatedExec
         clients = population_result.construction.manifest.clients
         family_by_client = population_result.construction.manifest.family_by_client
         split_manifest_checksum = population_result.split_manifest.assignment_checksum
+        training_directory = federated_training_directory(training_coordinate)
     else:
         root = published_seed_directory(execution_identity, coordinate.training_seed)
         population_result = construct_published_population(
@@ -234,6 +229,7 @@ def resolve_execution_context(coordinate: ExperimentCoordinate) -> FederatedExec
         clients = population_result.population_manifest.clients
         family_by_client = population_result.population_manifest.family_by_client
         split_manifest_checksum = split_result.manifest.assignment_checksum
+        training_directory = root / "training"
     state_set_checksum = preprocessing_state_set_checksum(
         tuple(
             PreparedClientProvenance(
@@ -251,7 +247,7 @@ def resolve_execution_context(coordinate: ExperimentCoordinate) -> FederatedExec
         preprocessing=preprocessing,
         preprocessing_state_set_checksum=state_set_checksum,
         split_manifest_checksum=split_manifest_checksum,
-        training_directory=federated_training_directory(training_coordinate),
+        training_directory=training_directory,
     )
 
 
@@ -347,9 +343,14 @@ def client_scoring_inputs(
 ) -> tuple[ClientScoringInput, ...]:
     return tuple(
         ClientScoringInput(
-            client_with_id(clients, publication.client_identity.value),
-            pl.read_parquet(publication.paths.calibration),
-            pl.read_parquet(publication.paths.evaluation),
+            client=client_with_id(clients, publication.client_identity.value),
+            calibration_features=pl.read_parquet(publication.paths.calibration),
+            evaluation_features=pl.read_parquet(publication.paths.evaluation),
+            future_recalibration_features=(
+                pl.read_parquet(publication.paths.future_recalibration)
+                if publication.paths.future_recalibration is not None
+                else None
+            ),
         )
         for publication in publications
     )
@@ -435,7 +436,7 @@ def federated_training_directory(coordinate: FederatedTrainingCoordinate) -> Pat
 
 def published_seed_directory(
     execution_identity: ExternalTemporalExecutionIdentity,
-    partition_seed,
+    partition_seed: Seed,
 ) -> Path:
     temporal = execution_identity.temporal_state.value if execution_identity.temporal_state is not None else "static"
     return OUTPUTS_ROOT / "phase11" / execution_identity.population.value / str(partition_seed.value) / temporal
