@@ -80,13 +80,6 @@ from datp_core.pipeline.preparation.populations import (
     construct_published_population,
     construct_published_split,
 )
-from datp_core.pipeline.preparation.preprocessing import (
-    FitFederatedPreprocessingRequest,
-    FitFederatedPreprocessingResult,
-    FitPublishedFederatedPreprocessingRequest,
-    fit_federated_preprocessing,
-    fit_published_federated_preprocessing,
-)
 from datp_core.pipeline.publication.layout import evaluation_run_directory
 from datp_core.pipeline.scoring.federated import materialize_federated_scores, publish_federated_scores
 from datp_core.pipeline.scoring.models import (
@@ -106,6 +99,11 @@ from datp_core.preprocessing.service import (
     MATCHED_STATIC_SPLIT_ASSIGNMENTS_ASSET,
     MATCHED_STATIC_SPLIT_MANIFEST_ASSET,
     PARQUET_PATTERN,
+    FederatedPreprocessingOutcome,
+    FederatedPreprocessingRequest,
+    PublishedFederatedPreprocessingRequest,
+    preprocess_federated,
+    preprocess_published_federated,
 )
 from datp_core.preprocessing.state import TrustedScaler, load_estimator
 from datp_core.preprocessing.validation import transform_feature_matrix
@@ -157,7 +155,7 @@ class FederatedExecutionContext:
     execution_identity: ExternalTemporalExecutionIdentity | None
     clients: tuple[ClientIdentity, ...]
     family_by_client: tuple[tuple[ClientIdentity, FamilyIdentity], ...]
-    preprocessing: FitFederatedPreprocessingResult
+    preprocessing: FederatedPreprocessingOutcome
     preprocessing_state_set_checksum: Checksum
     split_manifest_checksum: Checksum
     training_directory: Path
@@ -236,8 +234,8 @@ def resolve_execution_context(coordinate: ExperimentCoordinate, output_root: Pat
                 controlled_condition=None,
             )
         )
-        preprocessing = fit_federated_preprocessing(
-            FitFederatedPreprocessingRequest(
+        preprocessing = preprocess_federated(
+            FederatedPreprocessingRequest(
                 population=coordinate.population,
                 partition_seed=coordinate.training_seed,
                 split_protocol=coordinate.split_protocol,
@@ -279,8 +277,8 @@ def resolve_execution_context(coordinate: ExperimentCoordinate, output_root: Pat
                 matched_static_reference_membership=population_result.matched_static_reference_membership,
             )
         )
-        preprocessing = fit_published_federated_preprocessing(
-            FitPublishedFederatedPreprocessingRequest(
+        preprocessing = preprocess_published_federated(
+            PublishedFederatedPreprocessingRequest(
                 execution_identity=execution_identity,
                 population_directory=population_directory,
                 split_directory=split_directory,
