@@ -54,7 +54,6 @@ from datp_core.domain.values import (
     checksum_file,
     checksum_text,
 )
-from datp_core.protocols.runtime import DATA_ROOT
 
 _COMPLETE_NAME, _MANIFEST_NAME, _SCHEMA_NAME, _SOURCE_STATE_NAME = publication_artifact_names()
 
@@ -269,7 +268,7 @@ def partition_assets[AssetRoleT: StrEnum](
     if partition_count < 1:
         raise ValueError("canonical partition publication requires at least one partition")
     return tuple(
-        CanonicalAssetLayout(DATA_ROOT / branch / f"part-{index:05d}.parquet", role) for index in range(partition_count)
+        CanonicalAssetLayout(branch / f"part-{index:05d}.parquet", role) for index in range(partition_count)
     )
 
 
@@ -283,13 +282,13 @@ def named_assets[AssetRoleT: StrEnum](
     if not source_identities or len(source_identities) != len(frozenset(source_identities)):
         raise ValueError("named canonical assets require unique source identities")
     return tuple(
-        CanonicalAssetLayout(DATA_ROOT / branch / f"{source_identity}.parquet", role, source_identity)
+        CanonicalAssetLayout(branch / f"{source_identity}.parquet", role, source_identity)
         for source_identity in source_identities
     )
 
 
 def empty_asset[AssetRoleT: StrEnum](branch: Path, role: AssetRoleT) -> CanonicalAssetLayout[AssetRoleT]:
-    return CanonicalAssetLayout(DATA_ROOT / branch / "empty.parquet", role)
+    return CanonicalAssetLayout(branch / "empty.parquet", role)
 
 
 def stream_parquet[AssetRoleT: StrEnum](
