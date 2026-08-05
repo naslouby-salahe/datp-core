@@ -27,6 +27,7 @@ from datp_core.datasets.canonical_cache import (
     serialized_manifest_json,
     write_source_state,
 )
+from datp_core.datasets.core.materialize import publish_canonical_atomically
 from datp_core.datasets.models import (
     CanonicalAssetRole,
     CanonicalColumn,
@@ -53,7 +54,6 @@ from datp_core.domain.values import (
     checksum_file,
     checksum_text,
 )
-from datp_core.pipeline.publication.atomic import publish_atomically
 from datp_core.protocols.runtime import DATA_ROOT
 
 _COMPLETE_NAME, _MANIFEST_NAME, _SCHEMA_NAME, _SOURCE_STATE_NAME = publication_artifact_names()
@@ -324,9 +324,8 @@ def publish_canonical[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
         _write_canonical(temporary, publication)
         return target
 
-    outcome = publish_atomically(
+    outcome = publish_canonical_atomically(
         target=target,
-        overwrite=False,
         is_reusable=lambda directory: completed_publication_is_reusable(directory, publication.match_request()),
         write=write,
         reusable_value=lambda directory: directory,
@@ -433,7 +432,9 @@ def _materialized_dataset[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
     )
 
 
-def _asset_row_count[AssetRoleT: StrEnum](target: Path, layout: CanonicalAssetLayout[AssetRoleT]) -> RowCount:
+def _asset_row_count[AssetRoleT: StrEnum](
+    target: Path, layout: CanonicalAssetLayout[AssetRoleT]
+) -> RowCount:
     return RowCount(pq.ParquetFile(canonical_asset_path(target, layout.relative_path)).metadata.num_rows)
 
 
@@ -441,14 +442,13 @@ def _logical_row_count[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
     publication: CanonicalPublication[AssetRoleT, EligibilityReasonT],
     assets: tuple[MaterializedCanonicalAsset[AssetRoleT], ...],
 ) -> RowCount:
-    if publication.inventory.accepted_row_count is not None:
-        return publication.inventory.accepted_row_count
-    return RowCount(sum(asset.row_count.value for asset in assets if asset.role is CanonicalAssetRole.CANONICAL_DATA))
+    accepted = publication.inventory.accepted_row_count
+    return accepted if accepted is not None else RowCount(sum(asset.row_count.value for asset in assets))
 
 
 def _remove_target(target: Path, canonical_root: Path) -> None:
+    root = canonical_root.resolve()
     resolved_target = target.resolve()
-    resolved_root = canonical_root.resolve()
-    if not resolved_target.is_relative_to(resolved_root):
-        raise ValueError("canonical publication target escapes the canonical root")
+    if root not in resolved_target.parents or resolved_target == root:
+        raise ValueError("refusing to remove a target outside the canonical root")
     rmtree(resolved_target)
