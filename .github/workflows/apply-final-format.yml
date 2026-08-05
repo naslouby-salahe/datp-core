@@ -1,0 +1,68 @@
+name: Apply final formatting repair
+
+on:
+  push:
+    branches:
+      - agent/phase-12-16-target-architecture
+    paths:
+      - .github/workflows/apply-final-format.yml
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          ref: agent/phase-12-16-target-architecture
+          fetch-depth: 0
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.12'
+
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
+
+      - run: uv sync --all-groups --all-extras --frozen
+
+      - name: Format only reported files
+        run: |
+          uv run ruff format \
+            src/datp_core/cli/anchor.py \
+            src/datp_core/cli/plan.py \
+            src/datp_core/cli/run.py \
+            src/datp_core/datasets/materialization.py \
+            src/datp_core/evaluation/operational.py \
+            src/datp_core/orchestration/assets/detectors.py \
+            src/datp_core/pipeline/campaign.py \
+            src/datp_core/pipeline/evaluate_detector.py \
+            src/datp_core/pipeline/execution.py \
+            src/datp_core/pipeline/materialize_dataset.py \
+            src/datp_core/pipeline/planning.py \
+            src/datp_core/pipeline/preflight.py \
+            tests/architecture/test_architecture_ratchets.py \
+            tests/e2e/test_temporal_recalibration_pipeline.py \
+            tests/scientific/test_benign_only_threshold_construction.py \
+            tests/unit/domain/test_enums.py \
+            tests/unit/pipeline/test_centralized_evaluation.py \
+            tests/unit/pipeline/test_centralized_scoring.py
+          uv run ruff format --check src tests noxfile.py
+
+      - name: Commit without force-updating concurrent work
+        run: |
+          set -euo pipefail
+          branch='agent/phase-12-16-target-architecture'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/apply-final-format.yml
+          git add src tests
+          git commit -m 'Apply final Ruff formatting'
+          for attempt in 1 2 3 4 5 6 7 8; do
+            if git push origin "HEAD:$branch"; then
+              exit 0
+            fi
+            git pull --rebase origin "$branch"
+          done
+          exit 1
