@@ -20,11 +20,8 @@ def _mean_reconstruction_error(path: Path) -> float:
     return float(mean_value)
 
 
-def test_one_score_artifact_is_reusable_across_every_simulated_threshold_method(tmp_path: Path) -> None:
-    """A frozen score artifact must yield identical values no matter how many
-    distinct threshold methods read it — generation happens exactly once."""
+def _scores(tmp_path: Path):
     checkpoint = selected_checkpoint(tmp_path / "checkpoint")
-    device = resolve_cuda_device()
     clients = (
         ClientScoringInput(
             client=client_identity("client_a"),
@@ -32,19 +29,25 @@ def test_one_score_artifact_is_reusable_across_every_simulated_threshold_method(
             evaluation_features=benign_frame(RowCount(8), seed=Seed(2)),
         ),
     )
-    request = ScoreGenerationRequest(
-        checkpoint=checkpoint,
-        autoencoder=AUTOENCODER,
-        feature_names=FEATURE_NAMES,
-        clients=clients,
-        batch_size=BATCH_SIZE,
-        output_directory=tmp_path / "scores",
-        preprocessing_state_set_checksum=checkpoint.preprocessing_state_set_checksum,
-        split_manifest_checksum=checkpoint.split_manifest_checksum,
+    return generate_federated_scores(
+        ScoreGenerationRequest(
+            checkpoint=checkpoint,
+            scored_split_protocol=checkpoint.coordinate.split_protocol,
+            autoencoder=AUTOENCODER,
+            feature_names=FEATURE_NAMES,
+            clients=clients,
+            batch_size=BATCH_SIZE,
+            output_directory=tmp_path / "scores",
+            preprocessing_state_set_checksum=checkpoint.preprocessing_state_set_checksum,
+            split_manifest_checksum=checkpoint.split_manifest_checksum,
+        ),
+        resolve_cuda_device(),
     )
-    result = generate_federated_scores(request, device)
-    calibration_path = result.manifest.calibration_records[0].path
 
+
+def test_one_score_artifact_is_reusable_across_every_simulated_threshold_method(tmp_path: Path) -> None:
+    """A frozen score artifact yields identical values for every threshold method."""
+    calibration_path = _scores(tmp_path).manifest.calibration_records[0].path
     simulated_threshold_methods = (
         "shared_threshold",
         "local_threshold",
@@ -56,29 +59,8 @@ def test_one_score_artifact_is_reusable_across_every_simulated_threshold_method(
 
 
 def test_auroc_style_separability_over_the_same_score_artifact_is_invariant_across_reads(tmp_path: Path) -> None:
-    """A quality control statistic computed over one frozen score artifact must not
-    change depending on which threshold-method context reads it."""
-    checkpoint = selected_checkpoint(tmp_path / "checkpoint")
-    device = resolve_cuda_device()
-    clients = (
-        ClientScoringInput(
-            client=client_identity("client_a"),
-            calibration_features=benign_frame(RowCount(8), seed=Seed(1)),
-            evaluation_features=benign_frame(RowCount(8), seed=Seed(2)),
-        ),
-    )
-    request = ScoreGenerationRequest(
-        checkpoint=checkpoint,
-        autoencoder=AUTOENCODER,
-        feature_names=FEATURE_NAMES,
-        clients=clients,
-        batch_size=BATCH_SIZE,
-        output_directory=tmp_path / "scores",
-        preprocessing_state_set_checksum=checkpoint.preprocessing_state_set_checksum,
-        split_manifest_checksum=checkpoint.split_manifest_checksum,
-    )
-    result = generate_federated_scores(request, device)
-    evaluation_path = result.manifest.evaluation_records[0].path
+    """A quality control statistic over one score artifact is read-invariant."""
+    evaluation_path = _scores(tmp_path).manifest.evaluation_records[0].path
 
     def quality_control_statistic() -> float:
         return _mean_reconstruction_error(evaluation_path)

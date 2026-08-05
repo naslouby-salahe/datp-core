@@ -54,7 +54,7 @@ def test_plan_expansion_is_deterministic_and_records_complete_coordinates() -> N
     assert all(entry.coordinate.temporal_state is None for entry in first.entries)
 
 
-def test_temporal_plan_expands_every_declared_state() -> None:
+def test_temporal_plan_uses_state_specific_split_protocols() -> None:
     declaration = ExperimentDeclaration(
         id=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
         role=EvidenceRole.TEMPORAL_BOUNDARY,
@@ -70,7 +70,8 @@ def test_temporal_plan_expands_every_declared_state() -> None:
         seed_cohort=SeedCohort(values=(Seed(0),)),
     )
 
-    assert tuple(entry.coordinate.temporal_state for entry in plan.entries) == tuple(
+    by_state = {entry.coordinate.temporal_state: entry.coordinate for entry in plan.entries}
+    assert tuple(by_state) == tuple(
         sorted(
             (
                 TemporalState.STATIC_REFERENCE,
@@ -80,5 +81,43 @@ def test_temporal_plan_expands_every_declared_state() -> None:
             key=lambda state: state.value,
         )
     )
-    assert all(entry.coordinate.dataset is DatasetId.EDGE_IIOTSET for entry in plan.entries)
-    assert all(entry.coordinate.split_protocol is SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE for entry in plan.entries)
+    assert all(coordinate.dataset is DatasetId.EDGE_IIOTSET for coordinate in by_state.values())
+    assert (
+        by_state[TemporalState.STATIC_REFERENCE].split_protocol
+        is SplitProtocolId.RANDOM_FRACTIONAL_STATIC_REFERENCE
+    )
+    assert (
+        by_state[TemporalState.FROZEN_FUTURE].split_protocol
+        is SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE
+    )
+    assert (
+        by_state[TemporalState.RECALIBRATED_FUTURE].split_protocol
+        is SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE
+    )
+
+
+def test_planning_cannot_override_population_threshold_capabilities() -> None:
+    declaration = ExperimentDeclaration(
+        id=ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY,
+        role=EvidenceRole.APPLICABILITY_BOUNDARY,
+        population=PopulationId.CICIOT_FILE_CLIENTS,
+        training_model=TrainingModelId.FEDAVG_AUTOENCODER,
+        federated_thresholds=(FederatedThresholdMethod.FAMILY_THRESHOLD,),
+        metrics=(MetricId.FPR_COEFFICIENT_OF_VARIATION,),
+        readiness=ExperimentReadiness.DECLARED,
+    )
+    plan = expand_experiment_plan(
+        declarations=(declaration,),
+        seed_cohort=SeedCohort(values=(Seed(0),)),
+        evidence=(
+            PlanningEvidence(
+                experiment=declaration.id,
+                disposition=PlanDisposition.EXECUTABLE,
+                reason="caller claims the campaign is executable",
+            ),
+        ),
+    )
+
+    assert len(plan.entries) == 1
+    assert plan.entries[0].disposition is PlanDisposition.INFEASIBLE
+    assert "threshold_method_unsupported" in plan.entries[0].reason

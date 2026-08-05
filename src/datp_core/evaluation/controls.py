@@ -53,6 +53,7 @@ type FederatedScoreArtifactManifest = ScoreArtifactManifest[FederatedTrainingCoo
 type FederatedScoreRecord = ScoreRecord[FederatedTrainingCoordinate, ClientIdentity]
 
 _LENGTH_PREFIX_BYTES = 8
+_CALIBRATION_ROLES = frozenset((PartitionRole.CALIBRATION, PartitionRole.FUTURE_RECALIBRATION))
 
 
 class ClientChecksumField(StrEnum):
@@ -76,6 +77,7 @@ class FixedScoreEvidence:
 
     coordinate: FederatedTrainingCoordinate
     threshold_method: FederatedThresholdMethod
+    calibration_role: PartitionRole
     model_checksum: Checksum
     preprocessing_checksum: Checksum
     selected_checkpoint_checksum: Checksum
@@ -89,6 +91,8 @@ class FixedScoreEvidence:
     aurocs: tuple[ClientAurocEvidence, ...]
 
     def __post_init__(self) -> None:
+        if self.calibration_role not in _CALIBRATION_ROLES:
+            raise ValueError("fixed-score evidence requires a calibration partition role")
         clients = tuple(item.client for item in self.aurocs)
         if len(clients) != len(frozenset(clients)):
             raise ValueError("AUROC evidence must be unique by client")
@@ -115,7 +119,20 @@ class ClientEvidenceChecksum:
 def build_federated_evaluation_inputs(
     score_manifest: FederatedScoreArtifactManifest,
     threshold_method: FederatedThresholdMethod,
+    *,
+    calibration_role: PartitionRole = PartitionRole.CALIBRATION,
 ) -> FederatedEvaluationInputs:
+    if calibration_role not in _CALIBRATION_ROLES:
+        raise ScientificContractError(
+            "evaluation inputs require a calibration partition role",
+            subject=calibration_role,
+        )
+    calibration_records = score_manifest.records_for(calibration_role)
+    if not calibration_records:
+        raise ScientificContractError(
+            "evaluation inputs require the declared calibration score set",
+            subject=calibration_role,
+        )
     cohort = build_evaluation_cohort_manifest(
         population=score_manifest.coordinate.population,
         partition_seed=score_manifest.coordinate.training_seed,
@@ -127,10 +144,11 @@ def build_federated_evaluation_inputs(
         fixed_score_evidence=FixedScoreEvidence(
             coordinate=score_manifest.coordinate,
             threshold_method=threshold_method,
+            calibration_role=calibration_role,
             model_checksum=score_manifest.checkpoint_checksum,
-            preprocessing_checksum=(score_manifest.preprocessing_state_set_checksum),
+            preprocessing_checksum=score_manifest.preprocessing_state_set_checksum,
             selected_checkpoint_checksum=score_manifest.checkpoint_checksum,
-            calibration_score_checksum=(invariant.calibration_score_set_checksum),
+            calibration_score_checksum=score_manifest.score_set_checksum(calibration_role),
             evaluation_score_checksum=invariant.evaluation_score_set_checksum,
             evaluation_label_checksum=_evaluation_label_checksum(score_manifest),
             client_population_checksum=_client_population_checksum(score_manifest),
@@ -183,6 +201,12 @@ def validate_fixed_score_controls(
             second.coordinate,
             ContractSubject.COORDINATE,
             "training coordinate",
+        ),
+        (
+            first.calibration_role,
+            second.calibration_role,
+            ContractSubject.SPLIT,
+            "calibration partition role",
         ),
         (
             first.model_checksum,
@@ -404,6 +428,11 @@ def _validate_evidence_manifest_binding(
 ) -> None:
     if evidence.coordinate != manifest.coordinate:
         raise ScientificContractError("fixed-score evidence must match the score coordinate")
+    calibration_records = manifest.records_for(evidence.calibration_role)
+    if not calibration_records:
+        raise ScientificContractError(
+            "fixed-score evidence calibration partition is unavailable in the score manifest"
+        )
     bindings = (
         ("model", evidence.model_checksum, invariant.model_checksum),
         (
@@ -419,7 +448,7 @@ def _validate_evidence_manifest_binding(
         (
             "calibration score",
             evidence.calibration_score_checksum,
-            invariant.calibration_score_set_checksum,
+            manifest.score_set_checksum(evidence.calibration_role),
         ),
         (
             "evaluation score",

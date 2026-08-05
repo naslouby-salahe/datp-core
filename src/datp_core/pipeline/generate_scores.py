@@ -401,6 +401,7 @@ def score_artifact_set_checksum(
 def _federated_request(request: GenerateFederatedScoresRequest, directory: Path) -> ScoreGenerationRequest:
     return ScoreGenerationRequest(
         checkpoint=request.checkpoint,
+        scored_split_protocol=request.checkpoint.coordinate.split_protocol,
         autoencoder=request.autoencoder,
         feature_names=request.feature_names,
         clients=request.clients,

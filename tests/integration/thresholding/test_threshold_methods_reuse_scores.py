@@ -66,6 +66,7 @@ def _manifest(tmp_path: Path) -> ScoreArtifactManifest:
     )
     return ScoreArtifactManifest(
         coordinate=calibration_records[0].coordinate,
+        scored_split_protocol=calibration_records[0].coordinate.split_protocol,
         checkpoint_round=calibration_records[0].checkpoint_round,
         checkpoint_checksum=calibration_records[0].checkpoint_checksum,
         preprocessing_state_set_checksum=calibration_records[0].checksum,

@@ -193,9 +193,14 @@ class TemporalAnalysisDocument(StrictModel):
     records: tuple[TemporalAnalysisRecord, ...]
 
     @model_validator(mode="after")
-    def validate_role(self) -> TemporalAnalysisDocument:
+    def validate_role_and_records(self) -> TemporalAnalysisDocument:
         if self.evidence_role is not EvidenceRole.TEMPORAL_BOUNDARY:
             raise ValueError("temporal analysis must remain temporal-boundary evidence")
+        if not self.records:
+            raise ValueError("temporal analysis requires at least one recovery record")
+        seeds = tuple(record.recovery.seed for record in self.records)
+        if len(seeds) != len(frozenset(seeds)):
+            raise ValueError("temporal recovery records must be unique by seed")
         return self
 
 
@@ -331,11 +336,30 @@ def _validate_temporal_provenance(request: TemporalAnalysisRequest) -> None:
     from datp_core.analysis.temporal import validate_frozen_recalibrated_pair
 
     static = request.static_reference_provenance
+    frozen = request.frozen_provenance
     if static.state is not TemporalState.STATIC_REFERENCE:
         raise ValueError("temporal analysis requires static-reference provenance")
-    validate_frozen_recalibrated_pair(request.frozen_provenance, request.recalibrated_provenance)
-    if static.checkpoint_checksum != request.frozen_provenance.checkpoint_checksum:
-        raise ValueError("all temporal states must share one fitted detector")
+    validate_frozen_recalibrated_pair(frozen, request.recalibrated_provenance)
+    bindings = (
+        (
+            static.checkpoint_checksum,
+            frozen.checkpoint_checksum,
+            "all temporal states must share one fitted detector",
+        ),
+        (
+            static.preprocessing_state_set_checksum,
+            frozen.preprocessing_state_set_checksum,
+            "all temporal states must share one fitted preprocessing state",
+        ),
+        (
+            static.coordinate_checksum,
+            frozen.coordinate_checksum,
+            "all temporal states must share one training coordinate",
+        ),
+    )
+    for observed, expected, message in bindings:
+        if observed != expected:
+            raise ValueError(message)
 
 
 def _validate_temporal_identities(request: TemporalAnalysisRequest) -> None:

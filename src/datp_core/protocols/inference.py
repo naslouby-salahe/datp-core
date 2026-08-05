@@ -95,6 +95,7 @@ class ScoreArtifactManifest[
     ClientT: ClientIdentityContract,
 ]:
     coordinate: CoordinateT
+    scored_split_protocol: SplitProtocolId
     checkpoint_round: RoundNumber
     checkpoint_checksum: Checksum
     preprocessing_state_set_checksum: Checksum
@@ -111,10 +112,10 @@ class ScoreArtifactManifest[
             )
         _require_consistent_partition_records(self, self.calibration_records, PartitionRole.CALIBRATION)
         _require_consistent_partition_records(self, self.evaluation_records, PartitionRole.EVALUATION)
-        expected_future = self.coordinate.split_protocol is SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE
+        expected_future = self.scored_split_protocol is SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE
         if expected_future != bool(self.future_recalibration_records):
             raise ScientificContractError(
-                "score manifest future-recalibration inventory must match its split protocol",
+                "score manifest future-recalibration inventory must match its scored split protocol",
                 subject=ContractSubject.SCORES,
             )
         if expected_future:

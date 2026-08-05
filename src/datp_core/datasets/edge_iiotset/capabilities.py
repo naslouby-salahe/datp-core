@@ -74,14 +74,44 @@ EDGE_IIOTSET_CAPABILITIES = DatasetCapabilities(
         ThresholdMethodCapability(
             FederatedThresholdMethod.SHARED_THRESHOLD,
             CapabilityStatus.SUPPORTED,
-            "Static benign sensor-group identity is available.",
+            "Eligible benign sensor groups provide local calibration quantiles.",
+            "The method is limited to benign external and temporal outcomes.",
+        ),
+        ThresholdMethodCapability(
+            FederatedThresholdMethod.POOLED_SHARED_QUANTILE,
+            CapabilityStatus.SUPPORTED,
+            "Eligible benign calibration scores can be pooled without using attack-labelled rows.",
+            "The result remains a shared-threshold external comparator, not a centralized detector.",
+        ),
+        ThresholdMethodCapability(
+            FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD,
+            CapabilityStatus.SUPPORTED,
+            "Eligible local benign thresholds and support counts are available.",
             "The method is limited to benign external-validation outcomes.",
         ),
         ThresholdMethodCapability(
             FederatedThresholdMethod.LOCAL_THRESHOLD,
             CapabilityStatus.SUPPORTED,
-            "Static benign sensor-group identity is available.",
-            "The method is limited to benign external-validation outcomes.",
+            "Eligible benign sensor groups retain client-local calibration scores.",
+            "The method is limited to benign external and temporal outcomes.",
+        ),
+        ThresholdMethodCapability(
+            FederatedThresholdMethod.CLUSTER_THRESHOLD,
+            CapabilityStatus.CONDITIONAL,
+            "Eligible clients can be grouped from benign reconstruction-error fingerprints.",
+            "Execution requires the locked group count to be smaller than the eligible population.",
+        ),
+        ThresholdMethodCapability(
+            FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE,
+            CapabilityStatus.SUPPORTED,
+            "Shared and local benign thresholds are available under one frozen detector.",
+            "Only the predeclared fixed shrinkage curve is supported.",
+        ),
+        ThresholdMethodCapability(
+            FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS,
+            CapabilityStatus.SUPPORTED,
+            "Eligible clients can publish benign-only summary statistics under the declared comparator protocol.",
+            "The method does not imply formal privacy or attack-sensitive validation.",
         ),
     ),
 )
