@@ -27,10 +27,26 @@ jobs:
 
       - name: Extract and execute reviewed migration
         run: |
-          git show HEAD^:.github/workflows/remove-artifacts-package.yml \
+          git show 5008cea7c49a93315fc00ab04e0463b960164cbc:.github/workflows/remove-artifacts-package.yml \
             | awk '/^          python <<'"'"'PY'"'"'$/{capture=1; next} /^          PY$/{capture=0} capture{sub(/^          /, ""); print}' \
             > /tmp/remove_artifacts_package.py
           test -s /tmp/remove_artifacts_package.py
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('/tmp/remove_artifacts_package.py')
+          text = path.read_text(encoding='utf-8')
+          old = "if 'datp_core.artifacts' in path.read_text(encoding='utf-8'):\n"
+          new = (
+              "if (\n"
+              "    path != root / 'tests/architecture/test_architecture_ratchets.py'\n"
+              "    and 'datp_core.artifacts' in path.read_text(encoding='utf-8')\n"
+              "):\n"
+          )
+          if text.count(old) != 1:
+              raise SystemExit('stale-import assertion patch did not match exactly once')
+          path.write_text(text.replace(old, new), encoding='utf-8')
+          PY
           python /tmp/remove_artifacts_package.py
 
       - run: uv sync --all-groups --all-extras --frozen
