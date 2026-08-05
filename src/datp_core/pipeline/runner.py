@@ -29,7 +29,6 @@ from datp_core.pipeline.federated_execution import (
     FederatedExecutionContext,
     client_training_inputs,
     eligible_calibration_scores,
-    family_identities,
     load_evaluation_document,
     resolve_execution_context,
     score_execution_context,
@@ -74,7 +73,7 @@ from datp_core.protocols.graph import (
     observe_graph_boundary,
 )
 from datp_core.protocols.inference import FixedScoreInvariant
-from datp_core.protocols.runtime import DATA_ROOT, OUTPUTS_ROOT
+from datp_core.protocols.runtime import DATA_ROOT
 from datp_core.protocols.training import BATCH_SIZE, CHECKPOINT_PROTOCOL, LEARNING_RATE
 from datp_core.thresholding.common import ThresholdConstructionResult
 from datp_core.thresholding.dispatch import ThresholdConstructionRequest
@@ -129,9 +128,10 @@ class StageRunner:
         stage: PipelineStage,
         coordinate: ExperimentCoordinate,
         provenance: ExecutionProvenance,
+        output_root: Path,
     ) -> StageExecution:
         try:
-            return self._run(stage, coordinate, provenance)
+            return self._run(stage, coordinate, provenance, output_root)
         except ScientificContractError as error:
             return StageExecution(stage=stage, outcome=StageOutcome.BLOCKED, evidence=str(error))
 
@@ -140,6 +140,7 @@ class StageRunner:
         stage: PipelineStage,
         coordinate: ExperimentCoordinate,
         provenance: ExecutionProvenance,
+        output_root: Path,
     ) -> StageExecution:
         if coordinate.temporal_state is not None:
             raise ScientificContractError(
@@ -156,38 +157,38 @@ class StageRunner:
             case PipelineStage.MATERIALIZE_DATASET:
                 return self._materialize_dataset(stage, coordinate)
             case PipelineStage.CONSTRUCT_POPULATION:
-                return self._construct_population(stage, coordinate)
+                return self._construct_population(stage, coordinate, output_root)
             case PipelineStage.FIT_PREPROCESSING:
-                return self._fit_preprocessing(stage, coordinate)
+                return self._fit_preprocessing(stage, coordinate, output_root)
             case PipelineStage.TRAIN_DETECTOR:
-                return self._train_detector(stage, coordinate)
+                return self._train_detector(stage, coordinate, output_root)
             case PipelineStage.SELECT_CHECKPOINT:
-                return self._select_checkpoint(stage, coordinate)
+                return self._select_checkpoint(stage, coordinate, output_root)
             case PipelineStage.GENERATE_SCORES:
-                return self._generate_scores(stage, coordinate)
+                return self._generate_scores(stage, coordinate, output_root)
             case PipelineStage.BUILD_CALIBRATION:
-                return self._build_calibration(stage, coordinate)
+                return self._build_calibration(stage, coordinate, output_root)
             case PipelineStage.CONSTRUCT_THRESHOLDS:
-                return self._construct_thresholds(stage, coordinate)
+                return self._construct_thresholds(stage, coordinate, output_root)
             case PipelineStage.EVALUATE_DETECTOR:
-                return self._evaluate_detector(stage, coordinate)
+                return self._evaluate_detector(stage, coordinate, output_root)
             case PipelineStage.ANALYZE_EVIDENCE:
-                return self._analyze_evidence(stage, coordinate)
+                return self._analyze_evidence(stage, coordinate, output_root)
             case PipelineStage.VERIFY_ANCHOR:
-                return self._verify_anchor(stage, coordinate)
+                return self._verify_anchor(stage, coordinate, output_root)
             case PipelineStage.FINALIZE_PUBLICATION:
-                return self._finalize_publication(stage, coordinate, provenance)
+                return self._finalize_publication(stage, coordinate, provenance, output_root)
             case PipelineStage.PUBLISH_REPORT:
                 raise ScientificContractError(
                     "report publication is a campaign-level responsibility",
                     subject=coordinate.experiment,
                 )
 
-    def _context(self, coordinate: ExperimentCoordinate) -> FederatedExecutionContext:
-        return resolve_execution_context(coordinate)
+    def _context(self, coordinate: ExperimentCoordinate, output_root: Path) -> FederatedExecutionContext:
+        return resolve_execution_context(coordinate, output_root)
 
-    def _run_directory(self, coordinate: ExperimentCoordinate) -> Path:
-        return evaluation_run_directory(OUTPUTS_ROOT, coordinate)
+    def _run_directory(self, coordinate: ExperimentCoordinate, output_root: Path) -> Path:
+        return evaluation_run_directory(output_root, coordinate)
 
     def _materialize_dataset(self, stage: PipelineStage, coordinate: ExperimentCoordinate) -> StageExecution:
         result = materialize_dataset(MaterializeDatasetRequest(data_root=DATA_ROOT, datasets=(coordinate.dataset,)))
@@ -198,16 +199,26 @@ class StageRunner:
             evidence=f"{publication.dataset.value} status={publication.publication_status.value}",
         )
 
-    def _construct_population(self, stage: PipelineStage, coordinate: ExperimentCoordinate) -> StageExecution:
-        context = self._context(coordinate)
+    def _construct_population(
+        self,
+        stage: PipelineStage,
+        coordinate: ExperimentCoordinate,
+        output_root: Path,
+    ) -> StageExecution:
+        context = self._context(coordinate, output_root)
         return StageExecution(
             stage=stage,
             outcome=StageOutcome.COMPLETED,
             evidence=f"clients={len(context.clients)} split_checksum={context.split_manifest_checksum.value}",
         )
 
-    def _fit_preprocessing(self, stage: PipelineStage, coordinate: ExperimentCoordinate) -> StageExecution:
-        context = self._context(coordinate)
+    def _fit_preprocessing(
+        self,
+        stage: PipelineStage,
+        coordinate: ExperimentCoordinate,
+        output_root: Path,
+    ) -> StageExecution:
+        context = self._context(coordinate, output_root)
         return StageExecution(
             stage=stage,
             outcome=StageOutcome.COMPLETED,
@@ -217,8 +228,9 @@ class StageRunner:
     def _training(
         self,
         coordinate: ExperimentCoordinate,
+        output_root: Path,
     ) -> tuple[FederatedExecutionContext, TrainFederatedDetectorResult]:
-        context = self._context(coordinate)
+        context = self._context(coordinate, output_root)
         result = train_federated_detector(
             TrainFederatedDetectorRequest(
                 request=FederatedTrainingRequest(
@@ -246,8 +258,9 @@ class StageRunner:
     def _selection(
         self,
         coordinate: ExperimentCoordinate,
+        output_root: Path,
     ) -> tuple[FederatedExecutionContext, SelectFederatedCheckpointResult]:
-        context, training = self._training(coordinate)
+        context, training = self._training(coordinate, output_root)
         selection = select_federated_primary_checkpoint(
             SelectFederatedCheckpointRequest(
                 coordinate=context.coordinate,
@@ -262,8 +275,13 @@ class StageRunner:
         )
         return context, selection
 
-    def _train_detector(self, stage: PipelineStage, coordinate: ExperimentCoordinate) -> StageExecution:
-        _, result = self._training(coordinate)
+    def _train_detector(
+        self,
+        stage: PipelineStage,
+        coordinate: ExperimentCoordinate,
+        output_root: Path,
+    ) -> StageExecution:
+        _, result = self._training(coordinate, output_root)
         outcome = (
             StageOutcome.COMPLETED
             if result.publication_status is PublicationStatus.PUBLISHED
@@ -275,8 +293,13 @@ class StageRunner:
             evidence=f"rounds={len(result.candidates)} status={result.publication_status.value}",
         )
 
-    def _select_checkpoint(self, stage: PipelineStage, coordinate: ExperimentCoordinate) -> StageExecution:
-        _, selection = self._selection(coordinate)
+    def _select_checkpoint(
+        self,
+        stage: PipelineStage,
+        coordinate: ExperimentCoordinate,
+        output_root: Path,
+    ) -> StageExecution:
+        _, selection = self._selection(coordinate, output_root)
         return StageExecution(
             stage=stage,
             outcome=StageOutcome.COMPLETED,
@@ -286,8 +309,9 @@ class StageRunner:
     def _scores(
         self,
         coordinate: ExperimentCoordinate,
+        output_root: Path,
     ) -> tuple[FederatedExecutionContext, FederatedScoreArtifactManifest]:
-        context = self._context(coordinate)
+        context = self._context(coordinate, output_root)
         scores = score_execution_context(
             context,
             autoencoder=training_autoencoder(coordinate.dataset),
@@ -306,8 +330,13 @@ class StageRunner:
             self.observation_hook,
         )
 
-    def _generate_scores(self, stage: PipelineStage, coordinate: ExperimentCoordinate) -> StageExecution:
-        _, scores = self._scores(coordinate)
+    def _generate_scores(
+        self,
+        stage: PipelineStage,
+        coordinate: ExperimentCoordinate,
+        output_root: Path,
+    ) -> StageExecution:
+        _, scores = self._scores(coordinate, output_root)
         checksum = canonical_checksum(FixedScoreInvariant.from_manifest(scores))
         self._observe(ObservationBoundary.AFTER_SCORE_GENERATION_BEFORE_CALIBRATION, coordinate, checksum)
         return StageExecution(
@@ -316,8 +345,13 @@ class StageRunner:
             evidence=f"score_invariant={checksum.value}",
         )
 
-    def _build_calibration(self, stage: PipelineStage, coordinate: ExperimentCoordinate) -> StageExecution:
-        _, scores = self._scores(coordinate)
+    def _build_calibration(
+        self,
+        stage: PipelineStage,
+        coordinate: ExperimentCoordinate,
+        output_root: Path,
+    ) -> StageExecution:
+        _, scores = self._scores(coordinate, output_root)
         eligible = eligible_calibration_scores(scores)
         checksum = canonical_checksum(eligible)
         self._observe(ObservationBoundary.AFTER_CALIBRATION_BEFORE_THRESHOLD_CONSTRUCTION, coordinate, checksum)
@@ -330,8 +364,9 @@ class StageRunner:
     def _threshold(
         self,
         coordinate: ExperimentCoordinate,
+        output_root: Path,
     ) -> tuple[FederatedExecutionContext, FederatedScoreArtifactManifest, ThresholdConstructionResult]:
-        context, scores = self._scores(coordinate)
+        context, scores = self._scores(coordinate, output_root)
         threshold = construct_federated_thresholds(
             ConstructFederatedThresholdsRequest(
                 request=ThresholdConstructionRequest(
@@ -340,9 +375,11 @@ class StageRunner:
                     CANONICAL_QUANTILE,
                     population_capabilities(coordinate.population),
                     eligible_calibration_scores(scores),
-                    family_identities(context.clients, context.family_by_client),
+                    context.family_by_client,
                 ),
-                output_directory=self._run_directory(coordinate) / EvaluationRunAssetDirectory.THRESHOLD.value,
+                output_directory=(
+                    self._run_directory(coordinate, output_root) / EvaluationRunAssetDirectory.THRESHOLD.value
+                ),
                 overwrite=False,
             )
         ).result
@@ -353,8 +390,13 @@ class StageRunner:
             )
         return context, scores, threshold
 
-    def _construct_thresholds(self, stage: PipelineStage, coordinate: ExperimentCoordinate) -> StageExecution:
-        _, _, threshold = self._threshold(coordinate)
+    def _construct_thresholds(
+        self,
+        stage: PipelineStage,
+        coordinate: ExperimentCoordinate,
+        output_root: Path,
+    ) -> StageExecution:
+        _, _, threshold = self._threshold(coordinate, output_root)
         checksum = canonical_checksum(threshold)
         self._observe(ObservationBoundary.AFTER_THRESHOLD_CONSTRUCTION_BEFORE_EVALUATION, coordinate, checksum)
         return StageExecution(
@@ -363,8 +405,13 @@ class StageRunner:
             evidence=f"threshold_checksum={checksum.value}",
         )
 
-    def _evaluate_detector(self, stage: PipelineStage, coordinate: ExperimentCoordinate) -> StageExecution:
-        context, scores, threshold = self._threshold(coordinate)
+    def _evaluate_detector(
+        self,
+        stage: PipelineStage,
+        coordinate: ExperimentCoordinate,
+        output_root: Path,
+    ) -> StageExecution:
+        context, scores, threshold = self._threshold(coordinate, output_root)
         evaluation_inputs = build_federated_evaluation_inputs(scores, coordinate.threshold_method)
         evaluation = evaluate_federated_detector(
             EvaluateFederatedDetectorRequest(
@@ -379,7 +426,9 @@ class StageRunner:
                 communication_messages=(),
                 traffic_rate_evidence=None,
                 execution_identity=context.execution_identity,
-                output_directory=self._run_directory(coordinate) / EvaluationRunAssetDirectory.EVALUATION.value,
+                output_directory=(
+                    self._run_directory(coordinate, output_root) / EvaluationRunAssetDirectory.EVALUATION.value
+                ),
                 overwrite=False,
             )
         )
@@ -394,23 +443,33 @@ class StageRunner:
             evidence=f"complete_digest={evaluation.complete_digest.value}",
         )
 
-    def _evaluation(self, coordinate: ExperimentCoordinate) -> FederatedEvaluationDocument:
+    def _evaluation(self, coordinate: ExperimentCoordinate, output_root: Path) -> FederatedEvaluationDocument:
         path = (
-            self._run_directory(coordinate)
+            self._run_directory(coordinate, output_root)
             / EvaluationRunAssetDirectory.EVALUATION.value
             / FederatedEvaluationAssetName.DOCUMENT
         )
         return load_evaluation_document(path)
 
-    def _analyze_evidence(self, stage: PipelineStage, coordinate: ExperimentCoordinate) -> StageExecution:
-        result = metric_by_id(self._evaluation(coordinate).population.metrics, coordinate.metric)
+    def _analyze_evidence(
+        self,
+        stage: PipelineStage,
+        coordinate: ExperimentCoordinate,
+        output_root: Path,
+    ) -> StageExecution:
+        result = metric_by_id(self._evaluation(coordinate, output_root).population.metrics, coordinate.metric)
         return StageExecution(
             stage=stage,
             outcome=StageOutcome.COMPLETED,
             evidence=f"metric={coordinate.metric.value} status={result.status.value}",
         )
 
-    def _verify_anchor(self, stage: PipelineStage, coordinate: ExperimentCoordinate) -> StageExecution:
+    def _verify_anchor(
+        self,
+        stage: PipelineStage,
+        coordinate: ExperimentCoordinate,
+        output_root: Path,
+    ) -> StageExecution:
         if coordinate.experiment is not ExperimentId.HISTORICAL_DATP_REPRODUCTION:
             raise ScientificContractError(
                 "the anchor gate applies only to the historical reproduction experiment",
@@ -419,7 +478,9 @@ class StageRunner:
         result = verify_anchor(
             VerifyAnchorStageRequest(
                 protocol=ANCHOR_DECISION_PROTOCOL,
-                diagnostics_directory=self._run_directory(coordinate) / EvaluationRunAssetDirectory.ANCHOR.value,
+                diagnostics_directory=(
+                    self._run_directory(coordinate, output_root) / EvaluationRunAssetDirectory.ANCHOR.value
+                ),
                 observations=None,
                 historical_sources=None,
                 request_independent_reproduction=False,
@@ -436,11 +497,12 @@ class StageRunner:
         stage: PipelineStage,
         coordinate: ExperimentCoordinate,
         provenance: ExecutionProvenance,
+        output_root: Path,
     ) -> StageExecution:
-        _, selection = self._selection(coordinate)
+        _, selection = self._selection(coordinate, output_root)
         selected = selection.decision.selected
         evaluation_document_path = (
-            self._run_directory(coordinate)
+            self._run_directory(coordinate, output_root)
             / EvaluationRunAssetDirectory.EVALUATION.value
             / FederatedEvaluationAssetName.DOCUMENT
         )
@@ -452,20 +514,20 @@ class StageRunner:
         artifacts = (
             ArtifactRecord(
                 kind=ArtifactKind.MODEL_TENSORS,
-                relative_path=selected.tensor_path.relative_to(OUTPUTS_ROOT),
+                relative_path=selected.tensor_path.relative_to(output_root),
                 checksum=selected.tensor_checksum,
                 byte_count=ByteCount(selected.tensor_path.stat().st_size),
                 state=ArtifactState.PUBLISHED,
             ),
             ArtifactRecord(
                 kind=ArtifactKind.MANIFEST,
-                relative_path=evaluation_document_path.relative_to(OUTPUTS_ROOT),
+                relative_path=evaluation_document_path.relative_to(output_root),
                 checksum=checksum_file(evaluation_document_path),
                 byte_count=ByteCount(evaluation_document_path.stat().st_size),
                 state=ArtifactState.PUBLISHED,
             ),
         )
-        directory = experiment_output_directory(OUTPUTS_ROOT, coordinate)
+        directory = experiment_output_directory(output_root, coordinate)
         record = build_completion_record(
             plan_digest=provenance.plan_digest,
             campaign_digest=provenance.campaign_digest,
