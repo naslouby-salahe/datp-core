@@ -1,8 +1,7 @@
-"""Shared federated training adapters for publication, reuse, and validation."""
+"""Shared federated training artifact publication, reuse, and validation."""
 
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import cast
 
 from datp_core.datasets.registry import resolve_population
 from datp_core.domain.enums import ContractSubject
@@ -17,8 +16,7 @@ from datp_core.learning.federated.checkpoints.reuse import (
     load_reused_federated_training,
 )
 from datp_core.learning.federated.ditto import DittoTrainingRequest, train_ditto
-from datp_core.learning.federated.fedavg import train_fedavg
-from datp_core.learning.federated.fedprox import train_fedprox
+from datp_core.learning.federated.global_training import GlobalFederatedProtocol, train_global_federated
 from datp_core.learning.federated.models import (
     CheckpointCandidate,
     ClientTrainingInput,
@@ -27,9 +25,6 @@ from datp_core.learning.federated.models import (
     PreparedClientProvenance,
 )
 from datp_core.learning.federated.training import FederatedTrainingRequest, preprocessing_state_set_checksum
-from datp_core.protocols.models import FedAvgProtocol, FedProxProtocol
-
-type GlobalFederatedProtocol = FedAvgProtocol | FedProxProtocol
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,16 +62,12 @@ def validate_federated_training_inputs(
         )
 
 
-def write_federated_training(
+def materialize_global_federated_training(
     request: FederatedTrainingRequest[GlobalFederatedProtocol],
     directory: Path,
 ) -> FederatedTrainingArtifacts:
-    temporary_request = replace(request, output_directory=directory)
-    match temporary_request.training_protocol:
-        case FedAvgProtocol():
-            outcome = train_fedavg(cast(FederatedTrainingRequest[FedAvgProtocol], temporary_request))
-        case FedProxProtocol():
-            outcome = train_fedprox(cast(FederatedTrainingRequest[FedProxProtocol], temporary_request))
+    """Execute and persist global federated training inside an artifact staging directory."""
+    outcome = train_global_federated(replace(request, output_directory=directory))
     return FederatedTrainingArtifacts(outcome.training_result, outcome.candidates)
 
 
