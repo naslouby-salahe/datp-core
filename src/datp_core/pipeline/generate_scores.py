@@ -9,7 +9,6 @@ import numpy as np
 import polars as pl
 import torch
 
-from datp_core.artifacts.serialization import canonical_checksum
 from datp_core.domain.enums import (
     ContractSubject,
     PartitionRole,
@@ -18,6 +17,7 @@ from datp_core.domain.enums import (
     SerializationFormat,
 )
 from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
+from datp_core.domain.provenance import canonical_checksum
 from datp_core.domain.values import (
     BatchSize,
     Checksum,
@@ -252,11 +252,7 @@ def generate_centralized_scores(request: GenerateCentralizedScoresRequest) -> Ge
 def score_centralized_reference(request: CentralizedScoringRequest) -> CentralizedScoringResult:
     _validate_scoring_request(request)
     device = resolve_cuda_device()
-    model = load_centralized_model_tensors(
-        request.checkpoint.tensor_path,
-        request.autoencoder,
-        device,
-    )
+    model = load_centralized_model_tensors(request.checkpoint.tensor_path, request.autoencoder, device)
     request.output_directory.mkdir(parents=True, exist_ok=True)
     calibration = _score_partition(
         frame=request.calibration_features,
