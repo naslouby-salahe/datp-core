@@ -51,11 +51,6 @@ from datp_core.pipeline.execution.workspace import (
     training_feature_names,
 )
 from datp_core.pipeline.preparation.populations import ConstructDeclaredPopulationRequest, construct_declared_population
-from datp_core.pipeline.preparation.preprocessing import (
-    FitFederatedPreprocessingRequest,
-    FitFederatedPreprocessingResult,
-    fit_federated_preprocessing,
-)
 from datp_core.pipeline.scoring.federated import publish_federated_scores
 from datp_core.pipeline.scoring.models import (
     ClientScoringInput,
@@ -69,6 +64,11 @@ from datp_core.pipeline.training.personalized import (
     train_ditto_detector,
 )
 from datp_core.preprocessing.models import ClientPreprocessingResult
+from datp_core.preprocessing.service import (
+    FederatedPreprocessingOutcome,
+    FederatedPreprocessingRequest,
+    preprocess_federated,
+)
 from datp_core.protocols.calibration import CANONICAL_QUANTILE
 from datp_core.protocols.inference import FixedScoreInvariant
 from datp_core.protocols.training import (
@@ -105,7 +105,7 @@ class DittoStressTestResult:
 class DittoPopulationContext:
     clients: tuple[ClientIdentity, ...]
     family_by_client: tuple[tuple[ClientIdentity, FamilyIdentity], ...]
-    preprocessing: FitFederatedPreprocessingResult
+    preprocessing: FederatedPreprocessingOutcome
     split_manifest_checksum: Checksum
     preprocessing_state_set_checksum: Checksum
 
@@ -269,8 +269,8 @@ def _population_context(
             controlled_condition=None,
         )
     )
-    preprocessing = fit_federated_preprocessing(
-        FitFederatedPreprocessingRequest(
+    preprocessing = preprocess_federated(
+        FederatedPreprocessingRequest(
             population=population,
             partition_seed=training_seed,
             split_protocol=split_protocol,
