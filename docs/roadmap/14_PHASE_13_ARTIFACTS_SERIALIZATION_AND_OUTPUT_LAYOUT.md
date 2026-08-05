@@ -1,222 +1,78 @@
 # Phase 13 — Artifacts, Safe Serialization, and Output Layout
 
-## Scientific authority and interpretation rules
+## Authority and ownership
 
-- Before planning, editing, testing, or auditing this phase, read **`/home/naslouby/Projects/datp-core/docs/Journal_Extension_Master_Roadmap.md`** in full. It is the authoritative source for the scientific question, permitted evidence, dataset boundaries, numerical grids, metrics, inference, and claim restrictions.
-- Use descriptive implementation identities only. Never introduce opaque lettered populations, numbered threshold policies, numbered baselines, compatibility aliases, redirects, deprecated names, or duplicated identifiers.
-- The centralized reference is an independent pooled-data pipeline. It is never a federated threshold method and never consumes scores produced by a federated model.
-- The confirmatory comparison reuses one selected FedAvg detector, one preprocessing state, one client population, one calibration set, and one held-out score set per seed. Only threshold-calibration scope changes.
-- Calibration is benign-only. Attack labels and held-out outcomes cannot select models, checkpoints, quantiles, shrinkage values, statistical coefficients, clients, or group assignments.
-- The implementation source tree is locked to the files already created under `datp_core/`. Do not create, rename, move, delete, or replace source files. Test files may be created only when explicitly named in this roadmap.
-- Scientific values absent from the source of truth must remain unresolved. Do not infer them from memory, historical repositories, convenient defaults, or common practice. Record the blocker in `01_PHASE_MASTER_LOG.md`.
-- Python protocol declarations replace YAML. Protocol objects are immutable, fully typed, explicitly constructed, validated as one graph at startup, and serialized into every resolved experiment manifest.
-- Do not add backward compatibility, migration adapters, aliases, generic registries, service locators, untyped dictionaries, `Any`, silent fallbacks, or catch-all modules.
-- Do not add comments that restate code. Express intent through names, enums, types, validated records, and small functions.
-- Reusable canonical and preprocessed data belong under `data/`. Experiment-specific trained states, scores, thresholds, evaluations, analyses, and reports belong under `outputs/`.
+`docs/Journal_Extension_Master_Roadmap.md` is the scientific authority.
 
-## Objective
+Final experiment-output ownership is consolidated under:
 
-Implement deterministic experiment-output coordinates, typed manifests, safe serialization, checksum/schema validation, atomic completion, reload verification, and stale-output cleanup. Keep reusable data under `data/` and experiment-specific artifacts under `outputs/`.
+- `src/datp_core/pipeline/publication/` for records, deterministic layout, manifests, canonical serialization, atomic publication, checksums, completion, reuse, and reload validation;
+- `src/datp_core/pipeline/checkpoints/` for checkpoint records, service, and safe persistence;
+- `src/datp_core/pipeline/scoring/` for score records, frame contracts, and score persistence.
 
-Phase 4 established the artifact package as generic infrastructure: atomic publication, integrity, checksums, locking, and safe estimator persistence without importing preprocessing-specific scientific models. Preprocessing constructs and validates its own models and passes validated Pydantic objects into generic artifact APIs. Phase 13 extends this pattern to experiment outputs under `outputs/`.
+Capability packages construct typed scientific results. Pipeline publication services persist them. CLI and Dagster do not implement persistence.
 
-## Entry criteria
+## Deterministic identity
 
-- Phases 02–12 are complete.
-- All artifact-bearing result models exist.
-- Scientific coordinate ordering is resolved.
+Output paths derive only from active typed scientific coordinates. They contain no timestamp, run ID, job ID, resume ID, random suffix, or generic parameter bag. Inactive coordinates are omitted. Two distinct complete scientific coordinates must never collide.
 
-## Source files permitted to change
+Reusable canonical and processed data remain under `data/`. Experiment-specific training, checkpoints, scores, calibration, thresholds, evaluation, analysis, anchor evidence, and reports remain under `outputs/`. Outputs refer to reusable assets by typed identity, path, schema, and checksum; they do not copy them.
 
-- `datp_core/artifacts/coordinates.py`
-- `datp_core/artifacts/layout.py`
-- `datp_core/artifacts/manifest.py`
-- `datp_core/artifacts/serialization.py`
-- `datp_core/artifacts/reload_validation.py`
-- `datp_core/artifacts/store.py`
-- `datp_core/artifacts/completion.py`
+## Canonical publication lifecycle
 
-## Output root contract
+Every publication follows one lifecycle:
 
-```text
-outputs/
-└── <EXPERIMENT_ID>/
-    └── <POPULATION_ID>/
-        └── seed_<SEED>/
-            └── <MODEL_ID>/
-                └── [model_parameter_<VALUE>/]
-                    └── checkpoint_<ROUND>/
-                        └── <THRESHOLD_METHOD>/
-                            └── quantile_<VALUE>/
-                                └── [coverage_<VALUE>/]
-                                    └── calibration_size_<VALUE>/
-                                        └── [shrinkage_<VALUE>/]
-                                            └── [summary_coefficient_<VALUE>/]
-                                                └── [group_count_<VALUE>/]
-                                                    └── replicate_<VALUE>/
-                                                        └── [temporal_state_<VALUE>/]
-```
+1. derive the deterministic target coordinate;
+2. acquire the coordinate lock;
+3. remove stale sibling staging directories;
+4. validate any existing publication before reuse;
+5. write all artifacts into a temporary sibling directory;
+6. reload and semantically validate every expected artifact;
+7. calculate actual byte counts and BLAKE2 checksums from persisted bytes;
+8. create the typed inventory and manifest;
+9. write the completion record last;
+10. atomically replace the target directory.
 
-Dirichlet condition belongs between population and seed when active. Coordinates absent from a cell are omitted. No generic `parameter=value` bag is permitted; every coordinate has a typed field and canonical label.
+An output without a valid completion record is incomplete. A complete marker with missing, corrupt, schema-invalid, or coordinate-mismatched artifacts is invalid. Neither state is reusable.
 
-## Artifact grouping
+## Approved formats
 
-Within the leaf or nearest reusable parent, store:
+- SafeTensors for model and checkpoint tensor state;
+- skops only for validated preprocessing estimators with explicit trusted types;
+- Parquet/PyArrow for tabular artifacts;
+- canonical Pydantic JSON for protocols, manifests, summaries, decisions, warnings, inventories, unavailable outcomes, and completion records;
+- explicit JSON or Arrow schemas for feature and table contracts.
 
-- resolved experiment manifest;
-- model/training histories and safe tensor states;
-- checkpoint candidates and decision;
-- immutable scores;
-- eligibility/cohort/subsample manifests;
-- thresholds and diagnostics;
-- metrics and unavailable outcomes;
-- analysis and decisions;
-- reporting outputs;
-- artifact inventory;
-- `COMPLETE` marker.
+Pickle, joblib pickle, cloudpickle, dill, arbitrary object serialization, executable codecs, and serialized optimizer objects are prohibited.
 
-Do not copy canonical or preprocessed data into outputs. Refer to their manifests by checksum and path.
+## Manifest and reload requirements
 
-## Required dataclasses/models
+Typed manifests bind:
 
-- `ArtifactCoordinate`
-- `ExperimentCoordinate`
-- `ModelCoordinate`
-- `ThresholdCoordinate`
-- `AnalysisCoordinate`
-- `ArtifactManifest`
-- `ExperimentManifest`
-- `ArtifactInventoryEntry`
-- `ArtifactInventory`
-- `ReloadValidationResult`
-- `CompletionState`
-
-## Safe serialization
-
-- SafeTensors: model and checkpoint tensor states.
-- skops: fitted preprocessing estimators, with trusted types explicitly validated.
-- Parquet/PyArrow: tabular data, histories, scores, thresholds, metrics, analyses.
-- Pydantic JSON: protocols, manifests, summaries, decisions, warnings.
-- JSON schema or Arrow schema: feature and table schemas.
-- Unsafe pickle, joblib pickle, arbitrary object serialization, and executable codecs are prohibited.
-
-Optimizer objects are never serialized. Store optimizer identity, configured values, and aggregate summaries only.
-
-## Manifest requirements
-
-Every manifest records:
-
-- descriptive IDs;
 - all active scientific coordinates;
-- resolved protocol checksum;
-- source/canonical/processed data references;
-- model/checkpoint/score checksums;
-- expected artifacts;
-- capability and anchor-gate status;
+- protocol and declaration digests;
+- canonical and processed data references;
+- preprocessing, model, checkpoint, score, calibration, threshold, evaluation, analysis, and report identities;
 - schema identifiers;
-- completion state.
+- expected artifacts;
+- availability, suppression, anchor, publication, and completion states.
 
-No timestamp is part of identity or required manifest semantics.
+Reload validation checks actual file checksums and sizes, artifact membership and ordering, coordinate identity, schema identity, tensor names/shapes/dtypes/model architecture, checkpoint round, estimator type and feature order, table schemas and semantic columns, typed unavailable outcomes, and inventory completeness.
 
-## Reload validation
+A file that can be parsed but fails semantic reload is invalid.
 
-Reload and validate:
+## Reuse and cleanup
 
-- model tensor names, shapes, dtypes, architecture identity, and checksum;
-- checkpoint round and model coordinate;
-- preprocessing estimator type, feature order, and transform equivalence;
-- optimizer summary schema;
-- Arrow schemas and table semantic identifiers;
-- protocol and experiment manifests;
-- unavailable/suppression results;
-- artifact inventory completeness.
+Path existence is insufficient for reuse. Complete scientific identity, manifest, checksum, schema, and reload validation must all match. Reuse across centralized/federated identity, dataset, population, seeds, split, preprocessing, training, coefficient, checkpoint, score, calibration, threshold, evidence role, or temporal state mismatch is prohibited.
 
-A successfully written file that fails semantic reload is invalid.
+Incomplete experiment outputs are deleted before restart. Explicit overwrite deletes the full experiment coordinate. Completed valid outputs are reused unless overwrite is requested.
 
-## Completion
+## Verification
 
-- Write into a temporary sibling directory.
-- Validate expected artifacts and reload them.
-- Create artifact inventory.
-- Atomically publish.
-- Write `COMPLETE` last.
-- An output without `COMPLETE` is incomplete and must be deleted before rerun.
+Tests cover deterministic path construction and collision rejection, absence of run/timestamp identity, atomic replacement, stale staging cleanup, actual checksum corruption, missing completed artifacts, wrong-coordinate reload, model/checkpoint round trips, preprocessing round trips, Parquet schema round trips, completion-last integrity, unsafe serializer prohibition, and data/output separation.
 
-## Test files to implement
+## Completion record
 
-- `tests/unit/artifacts/test_coordinates.py`
-- `tests/unit/artifacts/test_layout.py`
-- `tests/unit/artifacts/test_manifest.py`
-- `tests/unit/artifacts/test_serialization.py`
-- `tests/unit/artifacts/test_reload_validation.py`
-- `tests/unit/artifacts/test_store.py`
-- `tests/unit/artifacts/test_completion.py`
-- `tests/unit/orchestration/stages/test_finalize.py`
-- `tests/integration/artifacts/test_model_round_trip.py`
-- `tests/integration/artifacts/test_preprocessing_round_trip.py`
-- `tests/integration/artifacts/test_parquet_schema_round_trip.py`
-- `tests/integration/artifacts/test_atomic_experiment_publication.py`
-- `tests/integration/artifacts/test_deterministic_output_paths.py`
-- `tests/integration/artifacts/test_incomplete_output_cleanup.py`
-- `tests/architecture/test_no_unsafe_serialization.py`
-- `tests/architecture/test_outputs_do_not_duplicate_processed_data.py`
+Phase 13 is complete only when every persisted experiment artifact uses the canonical lifecycle, every reusable artifact passes strict semantic reload, completion evidence is trustworthy, unsafe serialization and bypass paths are absent, and relevant unit, integration, architecture, and scientific tests pass.
 
-## Required negative tests
-
-- Path collision between two scientific coordinates.
-- Timestamp/run ID/job ID included in path.
-- Pickle or joblib serialization.
-- Wrong model state loaded into a coordinate.
-- Manifest checksum mismatch.
-- Missing expected artifact with `COMPLETE` attempted.
-- Processed data copied under output.
-
-## Exit criteria
-
-- Every output path is deterministic and collision-tested.
-- Every persisted artifact uses an approved format and passes semantic reload.
-- `COMPLETE` is trustworthy.
-- Data/output separation is enforced.
-- All Phase 13 tests and audits pass.
-
-## External code-health gate
-
-Before phase closure, run the credentials-safe SonarQube CLI and CodeScene procedure in [the roadmap index](00_ROADMAP_INDEX.md#mandatory-external-code-health-gates). Resolve actionable `src/` findings or record the gate as blocked.
-
-## Mandatory closing audit
-
-Before marking this phase complete, the implementing agent must perform and record all applicable checks:
-
-### Scientific audit
-- [ ] Every scientific statement and numeric value is traceable to the source of truth or marked unresolved.
-- [ ] No attack-labelled record influences training of the benign autoencoder, calibration, threshold construction, checkpoint selection, eligibility, or parameter selection.
-- [ ] The fixed-detector contract is preserved wherever threshold methods are compared.
-- [ ] Unsupported dataset capabilities produce typed unavailability or infeasibility, never imputation.
-- [ ] Confirmatory, supportive, mechanism, external, stress-test, boundary, exploratory, and operational evidence remain separated.
-
-### Architecture audit
-- [ ] Only source files explicitly assigned to this phase were modified.
-- [ ] No source file was added, renamed, moved, or deleted.
-- [ ] No circular dependency was introduced.
-- [ ] Domain and protocol modules do not import orchestration, reporting, or concrete storage implementations.
-- [ ] No compatibility alias, redirect, deprecated identifier, generic registry, or string-key dispatch was added.
-
-### Typing and validation audit
-- [ ] Ruff formatting and linting pass.
-- [ ] Pyright strict mode passes for all changed files.
-- [ ] Pylint passes at the project threshold without suppressing newly introduced defects.
-- [ ] Pydantic models reject extra fields and are frozen.
-- [ ] Dataclasses are frozen and slotted unless mutability is scientifically necessary and documented.
-- [ ] No `Any`, unchecked cast, mutable module-level collection, or raw configuration dictionary remains.
-
-### Test audit
-- [ ] Every test file listed by this phase exists and contains meaningful assertions.
-- [ ] Tests verify scientific invariants, invalid inputs, unavailable outcomes, and deterministic behavior—not only happy paths.
-- [ ] Tests do not duplicate implementation logic or merely assert that functions return a value.
-- [ ] Focused tests pass first; then the complete test suite passes with pytest-xdist.
-- [ ] Hypothesis tests use bounded strategies consistent with scientific domains.
-
-### Repository audit
-- [ ] `git diff --stat` contains only intended files.
-- [ ] No generated output, cache, temporary file, notebook, profiling file, or local path leaked into the repository.
-- [ ] No commit or push was performed by the implementing agent.
+Formatting, Ruff, Pyright, Pylint, SonarQube, CodeScene, GitHub Actions, hosted CI, and external quality gates are outside this pull request's completion procedure.

@@ -6,7 +6,7 @@ from tests.unit.learning.federated.helpers import client_identity, fedavg_coordi
 from datp_core.domain.enums import PartitionRole, SerializationFormat
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import Checksum, FeatureCount, RoundNumber, RowCount, Seed
-from datp_core.scoring.models import FixedScoreInvariant, ScoreArtifactManifest, ScoreGenerationResult, ScoreRecord
+from datp_core.protocols.inference import FixedScoreInvariant, ScoreArtifactManifest, ScoreGenerationResult, ScoreRecord
 
 
 def _record(role: PartitionRole, client_id: str, path: Path) -> ScoreRecord:

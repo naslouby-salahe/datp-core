@@ -9,8 +9,6 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from filelock import FileLock
 
-from datp_core.artifacts.completion import complete_digest
-from datp_core.artifacts.serialization import canonical_json_text, canonical_mapping, canonical_value
 from datp_core.datasets.models import (
     CanonicalAssetRole,
     CanonicalColumn,
@@ -42,6 +40,7 @@ from datp_core.datasets.models import (
 )
 from datp_core.domain.enums import AvailabilityStatus, ContractSubject, DatasetId, PublicationStatus
 from datp_core.domain.errors import ScientificContractError
+from datp_core.domain.provenance import canonical_json_text, canonical_mapping, canonical_value
 from datp_core.domain.values import (
     ByteCount,
     Checksum,
@@ -58,6 +57,10 @@ _SCHEMA_NAME = CanonicalPublicationArtifact.SCHEMA
 _SOURCE_STATE_NAME = CanonicalPublicationArtifact.SOURCE_STATE
 
 SourcePathResolver = Callable[[Path], Path]
+
+
+def complete_digest(manifest_payload: str, schema_payload: str) -> Checksum:
+    return checksum_text(f"{manifest_payload}\n{schema_payload}")
 
 
 @dataclass(frozen=True, slots=True)

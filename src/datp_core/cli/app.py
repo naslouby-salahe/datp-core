@@ -1,0 +1,22 @@
+"""Root Typer application composed from thin pipeline adapters."""
+
+import typer
+
+from datp_core.cli.anchor import app as anchor_app
+from datp_core.cli.inspect import app as inspect_app
+from datp_core.cli.plan import app as plan_app
+from datp_core.cli.run import app as run_app
+
+app = typer.Typer(no_args_is_help=True, help="Reproducible DATP-Core operations.")
+app.add_typer(plan_app, name="plan")
+app.add_typer(run_app, name="run")
+app.add_typer(inspect_app, name="inspect")
+app.add_typer(anchor_app, name="anchor")
+
+
+def main() -> None:
+    app()
+
+
+if __name__ == "__main__":
+    main()

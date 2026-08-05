@@ -5,12 +5,12 @@ from tests.unit.learning.federated.helpers import AUTOENCODER, BATCH_SIZE, FEATU
 from tests.unit.scoring.helpers import selected_checkpoint
 
 from datp_core.domain.values import RowCount, Seed
-from datp_core.runtime.compute import resolve_cuda_device
-from datp_core.scoring.generation import (
+from datp_core.pipeline.scoring.service import (
     ClientScoringInput,
     ScoreGenerationRequest,
     generate_federated_scores,
 )
+from datp_core.runtime.compute import resolve_cuda_device
 
 
 def _mean_reconstruction_error(path: Path) -> float:

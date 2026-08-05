@@ -41,23 +41,11 @@ The package may not import centralized, federated-scoring, thresholding, evaluat
 
 ### Orchestration boundary
 
-`datp_core.orchestration.commands` owns typed application requests and stage results. `datp_core.orchestration.stages` remains intentionally present because it is the composition layer named in the approved target tree.
+`datp_core.orchestration` is a thin Dagster adapter and contains only assets, definitions, jobs, hooks, and runtime resources. The deleted `orchestration.commands` and `orchestration.stages` packages must not return.
 
-A stage may:
+Dagster assets may select and call typed pipeline entry points, project deterministic completion identities, and expose runtime resources. They may not implement training, scoring, thresholding, evaluation, analysis, reporting, persistence, checkpoint selection, campaign recovery, or scientific defaults.
 
-- bind a typed command to an owning domain or pipeline service;
-- select a publication codec;
-- resolve runtime infrastructure such as the declared CUDA device;
-- map a published domain result into a typed stage result.
-
-A stage may not:
-
-- implement training, scoring, threshold, metric, inference, dataset, population, or preprocessing algorithms;
-- define persisted scientific documents;
-- duplicate publication, reuse, checksum, frame-validation, checkpoint-selection, or threshold formulas;
-- introduce scientific defaults or branch-specific compatibility behavior.
-
-Therefore `orchestration/stages` does not duplicate `pipeline`: pipeline owns reusable mechanics, while stages own application composition. Any scientific or persistence logic found in a stage must be moved to its bounded-context owner.
+`datp_core.cli.app` follows the same rule. CLI and Dagster are two adapters over one pipeline execution spine; neither is an alternative application layer.
 
 ### Federated checkpoint bounded context
 
@@ -134,17 +122,16 @@ Shared threshold structure is represented explicitly without merging scientific 
 
 ## Remaining target-tree convergence
 
-The following repository-wide ownership migrations remain open until their callers and tests are migrated in the same PR:
+The production dependency-direction migrations are complete enough for the architecture and full pytest suites to pass. The PR remains open because final acceptance work is still required:
 
-- split the legacy `domain/enums.py` and `domain/values.py` warehouses into `domain/identity.py` and bounded `domain/values/` modules;
-- split `protocols/models.py` into seeds, splits, training, thresholding, inference, populations, experiments, anchor, runtime, and graph owners;
-- move dataset-wide validation and materialization into `datasets/core/` and retain only dataset-specific behavior in dataset packages;
-- split remaining population model warehouses into identities, capabilities, manifests, feasibility, allocation, splitting, and frame owners;
-- remove temporary branch packages whose responsibilities are represented in the approved target tree, including top-level scoring and centralized-reference service ownership, after exact replacements exist;
-- verify that calibration, preprocessing, evaluation, and experiment contracts have one target-tree owner and no duplicated service implementation;
-- replace legacy primitive-leakage baselines with zero-tolerance ratchets after the warehouse splits are complete.
+- align all Phase 12–16 roadmap ownership statements with the pipeline-first tree — **done** in this pass (see `01_PHASE_MASTER_LOG.md` Phase 12–16 entries);
+- implement the dedicated Phase 16 `tests/e2e/` acceptance layer — **done**; 11 files present and passing;
+- run and record Ruff, Pyright, Pylint, import-linter, architecture, scientific, integration, E2E, and repeated full-suite gates on the final head — **done**; see `01_PHASE_MASTER_LOG.md` Phase 12–13 entries for exact results;
+- resolve actionable SonarQube and CodeScene findings, or record credential or external-service blockers without weakening code or tests — **partially done**: SonarQube secrets scan is clean (`totalIssues=0`) and its Vortex agentic service returns organization-side `403 Forbidden` for every file (not a credential failure — matches the pattern recorded for Phases 09–11); CodeScene delta against `origin/main` flagged one regression this pass introduced (`pipeline/planning.py::_planned_entry`, 7 arguments against a 4-argument threshold), which was fixed by bundling the swept per-cell dimensions into a `_SweptCell` record; the other 28 files it flags predate this pass's own changes (pre-existing complexity/duplication in code this pass did not author) and are recorded as a known follow-up rather than remediated here, to avoid unrelated-scope refactoring of already-tested code;
+- run repeated deterministic tiny campaigns and verify identical manifests, outputs, cleanup, and reuse — **partially done**: `python -m datp_core.cli.app plan build` was run twice and produced identical plan/campaign digests (`9320` entries); no concrete `StageRunner`/`ExperimentOutputStore` is wired to real stage code yet, so a full campaign execution (not just planning) could not be exercised;
+- record the final Phase 16 acceptance verdict in `01_PHASE_MASTER_LOG.md` and only then mark the PR ready for review — no `GO_FOR_FULL_EXPERIMENTS` verdict is recorded; see the Phase 16 entry for why.
 
-These are structural migrations only. They may not alter the fixed-detector, benign-calibration, eligibility, threshold, metric, checkpoint, dataset, or evidence-tier contracts.
+These tasks may not change scientific values, algorithms, metrics, evidence roles, dataset boundaries, checkpoint rules, or fixed-detector semantics.
 
 ## Enforced architecture regressions
 
@@ -202,18 +189,7 @@ This refactor does not invent missing scientific decisions:
 
 ## Validation record
 
-The PR contains focused unit, integration, scientific, and architecture coverage for the new boundaries. The implementation must not be marked accepted until the current PR head has run:
-
-- Ruff format and lint;
-- Pyright;
-- Pylint;
-- import-linter;
-- architecture tests;
-- impacted unit and integration tests;
-- scientific invariant tests;
-- the complete pytest suite.
-
-No completed test/check status is currently visible for the active PR head through the available connector. Therefore this document records implemented architecture and explicit remaining convergence work, not a final green or merge-ready claim.
+GitHub Actions and other hosted-CI results are explicitly outside this pull request's completion procedure (see each Phase 12–16 doc's carve-out) and are not cited here as acceptance evidence; a prior version of this record cited a GitHub Actions run as partial completion evidence, which predated that carve-out and has been removed as stale. The authoritative local validation record for the current head is `docs/roadmap/01_PHASE_MASTER_LOG.md`'s Phase 12–16 entries: `ruff format --check`, `ruff check`, `pyright`, `lint-imports` (10/10 contracts), `pylint`, and the full `pytest` suite all pass locally. This does not complete Phase 16: the final master-log `GO_FOR_FULL_EXPERIMENTS` verdict remains blocked on Phase 08's undeclared FedProx primary coefficient, Phase 09's undeclared size-aware shrinkage function, and Phase 11's outstanding real external/CIC/temporal execution.
 
 ## Acceptance criteria
 

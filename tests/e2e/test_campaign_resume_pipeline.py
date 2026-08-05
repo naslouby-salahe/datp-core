@@ -1,0 +1,129 @@
+from pathlib import Path
+
+from datp_core.domain.enums import ExperimentId
+from datp_core.domain.values import Seed
+from datp_core.pipeline.campaign import CampaignPlan, build_campaign, execute_campaign
+from datp_core.pipeline.execution import (
+    PIPELINE_SEQUENCE,
+    ExistingExperimentState,
+    PipelineStage,
+    StageExecution,
+    StageOutcome,
+)
+from datp_core.pipeline.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
+from datp_core.protocols.experiments import EXPERIMENTS
+from datp_core.protocols.models import SeedCohort
+
+
+class _IncompleteStore:
+    def __init__(self) -> None:
+        self.deleted: list[str] = []
+
+    def state(self, coordinate, output_root: Path) -> ExistingExperimentState:
+        del output_root
+        return ExistingExperimentState.INCOMPLETE
+
+    def delete(self, coordinate, output_root: Path) -> None:
+        del output_root
+        self.deleted.append(coordinate.stable_key)
+
+
+class _CompleteStore:
+    def __init__(self) -> None:
+        self.deleted: list[str] = []
+
+    def state(self, coordinate, output_root: Path) -> ExistingExperimentState:
+        del coordinate, output_root
+        return ExistingExperimentState.COMPLETE_VALID
+
+    def delete(self, coordinate, output_root: Path) -> None:
+        del output_root
+        self.deleted.append(coordinate.stable_key)
+
+
+class _SuccessfulRunner:
+    def __init__(self) -> None:
+        self.stages: list[PipelineStage] = []
+
+    def run(self, stage: PipelineStage, coordinate) -> StageExecution:
+        del coordinate
+        self.stages.append(stage)
+        return StageExecution(stage=stage, outcome=StageOutcome.COMPLETED, evidence="tiny deterministic fixture")
+
+
+def _tiny_campaign() -> CampaignPlan:
+    declaration = next(item for item in EXPERIMENTS if item.id is ExperimentId.DITTO_ABSORPTION_STRESS_TEST)
+    plan = expand_experiment_plan(
+        declarations=(declaration,),
+        seed_cohort=SeedCohort(values=(Seed(0),)),
+        evidence=(
+            PlanningEvidence(
+                experiment=declaration.id,
+                disposition=PlanDisposition.EXECUTABLE,
+                reason="tiny campaign fixture is available",
+            ),
+        ),
+    )
+    return build_campaign(plan)
+
+
+def test_campaign_resume_deletes_incomplete_cells_and_restarts_in_canonical_order(tmp_path: Path) -> None:
+    campaign = _tiny_campaign()
+    store = _IncompleteStore()
+    runner = _SuccessfulRunner()
+
+    result = execute_campaign(
+        campaign=campaign,
+        stage_runner=runner,
+        output_store=store,
+        output_root=tmp_path,
+    )
+
+    assert result.campaign_digest == campaign.digest
+    assert all(execution.successful for execution in result.experiments)
+    assert len(store.deleted) == len(campaign.entries)
+    assert tuple(runner.stages) == PIPELINE_SEQUENCE * len(campaign.entries)
+
+
+def test_repeated_tiny_campaigns_have_identical_plan_execution_and_cleanup(tmp_path: Path) -> None:
+    campaign = _tiny_campaign()
+    first_store = _IncompleteStore()
+    second_store = _IncompleteStore()
+    first_runner = _SuccessfulRunner()
+    second_runner = _SuccessfulRunner()
+
+    first = execute_campaign(
+        campaign=campaign,
+        stage_runner=first_runner,
+        output_store=first_store,
+        output_root=tmp_path / "first",
+    )
+    second = execute_campaign(
+        campaign=campaign,
+        stage_runner=second_runner,
+        output_store=second_store,
+        output_root=tmp_path / "second",
+    )
+
+    assert campaign == _tiny_campaign()
+    assert first == second
+    assert first_store.deleted == second_store.deleted
+    assert first_runner.stages == second_runner.stages
+
+
+def test_complete_campaign_cells_are_reused_without_stage_execution(tmp_path: Path) -> None:
+    campaign = _tiny_campaign()
+    store = _CompleteStore()
+    runner = _SuccessfulRunner()
+
+    result = execute_campaign(
+        campaign=campaign,
+        stage_runner=runner,
+        output_store=store,
+        output_root=tmp_path,
+    )
+
+    assert all(execution.successful for execution in result.experiments)
+    assert all(execution.reused_complete_experiment for execution in result.experiments)
+    assert not runner.stages
+    assert not store.deleted

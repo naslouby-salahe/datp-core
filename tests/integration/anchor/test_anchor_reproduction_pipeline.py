@@ -3,7 +3,11 @@ from pathlib import Path
 
 import pytest
 
-from datp_core.anchor.models import AnchorGateStatus, HistoricalThresholdScopeToken
+from datp_core.anchor.models import (
+    AnchorGateStatus,
+    HistoricalThresholdScopeToken,
+    VerifyAnchorStageRequest,
+)
 from datp_core.anchor.reproduction import (
     historical_sources_for_seed_directories,
     load_historical_observations,
@@ -13,7 +17,7 @@ from datp_core.anchor.reproduction import (
 from datp_core.domain.enums import ExperimentReadiness, FederatedThresholdMethod
 from datp_core.domain.errors import AnchorReproductionError
 from datp_core.domain.values import Seed
-from datp_core.orchestration.stages.verify_anchor import VerifyAnchorStageRequest, verify_anchor_stage
+from datp_core.pipeline.verify_anchor import verify_anchor
 from datp_core.protocols.anchor import (
     ANCHOR_DECISION_PROTOCOL,
     HISTORICAL_LOCAL_THRESHOLD_CV_FPR,
@@ -89,9 +93,11 @@ def test_pipeline_loads_historical_artifacts_and_passes_gate(tmp_path: Path) -> 
     for shared, local in zip(observations[0::2], observations[1::2], strict=True):
         assert shared.model_checkpoint_identity == local.model_checkpoint_identity
 
-    result = verify_anchor_stage(
+    result = verify_anchor(
         VerifyAnchorStageRequest(
-            protocol=ANCHOR_DECISION_PROTOCOL, historical_sources=sources, diagnostics_directory=tmp_path / "diag"
+            protocol=ANCHOR_DECISION_PROTOCOL,
+            historical_sources=sources,
+            diagnostics_directory=tmp_path / "diag",
         )
     )
     assert result.status.gate_status is AnchorGateStatus.PASS
@@ -110,9 +116,11 @@ def test_pipeline_blocks_stale_mismatched_value(tmp_path: Path) -> None:
     )
     stale.write_text(payload, encoding="utf-8")
     sources = historical_sources_for_seed_directories(shared_root, local_root)
-    result = verify_anchor_stage(
+    result = verify_anchor(
         VerifyAnchorStageRequest(
-            protocol=ANCHOR_DECISION_PROTOCOL, historical_sources=sources, diagnostics_directory=tmp_path / "diag"
+            protocol=ANCHOR_DECISION_PROTOCOL,
+            historical_sources=sources,
+            diagnostics_directory=tmp_path / "diag",
         )
     )
     assert result.status.gate_status is AnchorGateStatus.BLOCKED

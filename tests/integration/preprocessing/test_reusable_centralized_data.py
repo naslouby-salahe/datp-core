@@ -2,8 +2,6 @@ from pathlib import Path
 
 import polars as pl
 
-from datp_core.artifacts.serialization import construct_trusted_estimator
-from datp_core.centralized_reference.preprocessing import PooledPublishRequest, publish_pooled_preprocessing
 from datp_core.domain.enums import (
     DatasetId,
     PartitionRole,
@@ -22,6 +20,7 @@ from datp_core.domain.values import (
     FeatureNameSequence,
     Seed,
 )
+from datp_core.preprocessing.centralized import PooledPublishRequest, publish_pooled_preprocessing
 from datp_core.preprocessing.models import (
     CentralizedFittedPreprocessingState,
     PreprocessingPartition,
@@ -29,6 +28,7 @@ from datp_core.preprocessing.models import (
     PreprocessingProtocol,
     PreprocessingPublishContext,
 )
+from datp_core.preprocessing.state import construct_trusted_estimator
 
 
 def test_centralized_publication_is_independent_and_reusable(tmp_path: Path) -> None:

@@ -17,8 +17,8 @@ from datp_core.domain.enums import (
 from datp_core.domain.errors import CapabilityError, ScientificContractError
 from datp_core.domain.values import FeatureNameSequence, RowCount, Seed
 from datp_core.populations.capabilities import (
-    POPULATION_EVIDENCE_ROLES,
     population_capabilities,
+    population_evidence_role,
 )
 from datp_core.populations.ciciot_file_clients import build_ciciot_file_clients
 from datp_core.populations.edge_sensor_groups import build_edge_sensor_groups
@@ -214,7 +214,7 @@ _POPULATION_BINDINGS = (
     PopulationBinding(
         PopulationId.NBAIOT_NATURAL_DEVICES,
         NBAIOT_NATURAL_DEVICES,
-        POPULATION_EVIDENCE_ROLES[PopulationId.NBAIOT_NATURAL_DEVICES],
+        population_evidence_role(PopulationId.NBAIOT_NATURAL_DEVICES),
         population_capabilities(PopulationId.NBAIOT_NATURAL_DEVICES),
         frozenset(),
         _construct_nbaiot_natural,
@@ -222,7 +222,7 @@ _POPULATION_BINDINGS = (
     PopulationBinding(
         PopulationId.NBAIOT_DIRICHLET_CLIENTS,
         NBAIOT_DIRICHLET_CLIENTS,
-        POPULATION_EVIDENCE_ROLES[PopulationId.NBAIOT_DIRICHLET_CLIENTS],
+        population_evidence_role(PopulationId.NBAIOT_DIRICHLET_CLIENTS),
         population_capabilities(PopulationId.NBAIOT_DIRICHLET_CLIENTS),
         frozenset(ControlledPartitionKind),
         _construct_nbaiot_dirichlet,
@@ -230,7 +230,7 @@ _POPULATION_BINDINGS = (
     PopulationBinding(
         PopulationId.CICIOT_FILE_CLIENTS,
         CICIOT_FILE_CLIENTS,
-        POPULATION_EVIDENCE_ROLES[PopulationId.CICIOT_FILE_CLIENTS],
+        population_evidence_role(PopulationId.CICIOT_FILE_CLIENTS),
         population_capabilities(PopulationId.CICIOT_FILE_CLIENTS),
         frozenset(),
         _construct_ciciot_file_clients,
@@ -238,7 +238,7 @@ _POPULATION_BINDINGS = (
     PopulationBinding(
         PopulationId.EDGE_SENSOR_GROUPS,
         EDGE_SENSOR_GROUPS,
-        POPULATION_EVIDENCE_ROLES[PopulationId.EDGE_SENSOR_GROUPS],
+        population_evidence_role(PopulationId.EDGE_SENSOR_GROUPS),
         population_capabilities(PopulationId.EDGE_SENSOR_GROUPS),
         frozenset(),
         _construct_edge_sensor_groups,
@@ -246,7 +246,7 @@ _POPULATION_BINDINGS = (
     PopulationBinding(
         PopulationId.EDGE_TEMPORAL_GROUPS,
         EDGE_TEMPORAL_GROUPS,
-        POPULATION_EVIDENCE_ROLES[PopulationId.EDGE_TEMPORAL_GROUPS],
+        population_evidence_role(PopulationId.EDGE_TEMPORAL_GROUPS),
         population_capabilities(PopulationId.EDGE_TEMPORAL_GROUPS),
         frozenset(),
         _construct_edge_temporal_groups,

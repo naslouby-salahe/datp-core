@@ -7,11 +7,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from scipy.stats import skew
-from tests.unit.calibration.helpers import (
-    attack_score_record,
-    benign_score_record,
-    some_client,
-)
+from tests.unit.calibration.helpers import attack_score_record, benign_score_record, some_client
 from tests.unit.thresholding.helpers import client_scores, identity
 
 from datp_core.calibration.eligibility import (
@@ -45,21 +41,13 @@ from datp_core.domain.values import (
     Quantile,
     Seed,
 )
-from datp_core.orchestration.commands.thresholding import (
+from datp_core.pipeline.construct_thresholds import (
     ConstructFederatedThresholdsRequest,
-)
-from datp_core.orchestration.stages.construct_federated_thresholds import (
-    construct_federated_thresholds_stage,
+    construct_federated_thresholds,
 )
 from datp_core.populations.models import PopulationCapabilities
-from datp_core.protocols.calibration import (
-    CLUSTER_THRESHOLD_PROTOCOL,
-    FEDERATED_STATISTICS_PROTOCOL,
-)
-from datp_core.protocols.models import (
-    CalibrationEligibilityProtocol,
-    ClusterThresholdProtocol,
-)
+from datp_core.protocols.calibration import CLUSTER_THRESHOLD_PROTOCOL, FEDERATED_STATISTICS_PROTOCOL
+from datp_core.protocols.models import CalibrationEligibilityProtocol, ClusterThresholdProtocol
 from datp_core.thresholding.common import FederatedThresholdAssetName
 from datp_core.thresholding.dispatch import (
     ThresholdConstructionRequest,
@@ -68,17 +56,13 @@ from datp_core.thresholding.dispatch import (
 )
 from datp_core.thresholding.identities import ThresholdUnavailableResult
 from datp_core.thresholding.methods.cluster import construct_grouped_threshold
-from datp_core.thresholding.methods.conformal import (
-    construct_local_conformal_threshold,
-)
+from datp_core.thresholding.methods.conformal import construct_local_conformal_threshold
 from datp_core.thresholding.methods.family import construct_family_threshold
 from datp_core.thresholding.methods.federated_statistics import (
     PooledVarianceDecomposition,
     construct_federated_benign_statistics,
 )
-from datp_core.thresholding.methods.shrinkage import (
-    construct_size_aware_shrinkage,
-)
+from datp_core.thresholding.methods.shrinkage import construct_size_aware_shrinkage
 
 PROTOCOL = CalibrationEligibilityProtocol(minimum_support=CalibrationSize(100))
 QUANTILE = Quantile(0.95)
@@ -96,7 +80,7 @@ FORBIDDEN_RETRAINING_IMPORTS = (
     "datp_core.learning.federated.fedavg",
     "datp_core.learning.federated.fedprox",
     "datp_core.learning.federated.ditto",
-    "datp_core.scoring.generation",
+    "datp_core.pipeline.scoring.service",
 )
 
 
@@ -143,31 +127,17 @@ def test_evaluation_partition_cannot_enter_calibration_eligibility() -> None:
 
 def test_calibration_evaluation_row_overlap_is_rejected() -> None:
     with pytest.raises(LeakageError, match="must not share source rows"):
-        reject_calibration_evaluation_overlap(
-            frozenset({"row-1", "row-2"}),
-            frozenset({"row-2"}),
-        )
+        reject_calibration_evaluation_overlap(frozenset({"row-1", "row-2"}), frozenset({"row-2"}))
 
 
 def test_methods_compared_within_one_cell_must_share_the_eligible_cohort() -> None:
     with pytest.raises(ScientificContractError, match="same eligible cohort"):
-        require_common_eligible_cohort(
-            (
-                (some_client("client_a"), some_client("client_b")),
-                (some_client("client_a"),),
-            )
-        )
+        require_common_eligible_cohort(((some_client("client_a"), some_client("client_b")), (some_client("client_a"),)))
 
 
-def test_eligibility_covers_every_candidate_client_never_silently_drops_one(
-    tmp_path: Path,
-) -> None:
+def test_eligibility_covers_every_candidate_client_never_silently_drops_one(tmp_path: Path) -> None:
     records = (
-        benign_score_record(
-            tmp_path,
-            "client_a",
-            tuple(float(index) for index in range(150)),
-        ),
+        benign_score_record(tmp_path, "client_a", tuple(float(index) for index in range(150))),
         benign_score_record(tmp_path, "client_b", (0.1, 0.2)),
     )
     decisions = tuple(
@@ -245,15 +215,15 @@ def test_cluster_threshold_protocol_locks_reject_non_canonical_hyperparameters()
         ClusterThresholdProtocol(
             method=CLUSTER_THRESHOLD_PROTOCOL.method,
             quantile=CLUSTER_THRESHOLD_PROTOCOL.quantile,
-            fingerprint_features=(CLUSTER_THRESHOLD_PROTOCOL.fingerprint_features),
-            feature_standardization=(CLUSTER_THRESHOLD_PROTOCOL.feature_standardization),
+            fingerprint_features=CLUSTER_THRESHOLD_PROTOCOL.fingerprint_features,
+            feature_standardization=CLUSTER_THRESHOLD_PROTOCOL.feature_standardization,
             assignment_algorithm=CLUSTER_THRESHOLD_PROTOCOL.assignment_algorithm,
             initialization=CLUSTER_THRESHOLD_PROTOCOL.initialization,
             initialization_count=CLUSTER_THRESHOLD_PROTOCOL.initialization_count,
             maximum_iterations=CLUSTER_THRESHOLD_PROTOCOL.maximum_iterations,
             random_state=CLUSTER_THRESHOLD_PROTOCOL.random_state,
             group_count=GroupCount(9),
-            threshold_aggregation=(CLUSTER_THRESHOLD_PROTOCOL.threshold_aggregation),
+            threshold_aggregation=CLUSTER_THRESHOLD_PROTOCOL.threshold_aggregation,
         )
 
 
@@ -280,15 +250,9 @@ def test_size_aware_shrinkage_never_fabricates_a_lambda_function() -> None:
 
 
 def test_conformal_threshold_never_silently_falls_back_for_insufficient_support() -> None:
-    sufficient = client_scores(
-        "client_a",
-        tuple(float(index) for index in range(1, 101)),
-    )
+    sufficient = client_scores("client_a", tuple(float(index) for index in range(1, 101)))
     insufficient = client_scores("client_b", (1.0, 2.0))
-    result = construct_local_conformal_threshold(
-        (sufficient, insufficient),
-        QUANTILE,
-    )
+    result = construct_local_conformal_threshold((sufficient, insufficient), QUANTILE)
     assert result.unavailable_clients == (insufficient.client,)
     assert insufficient.client not in frozenset(assignment.client for assignment in result.assignments)
 
@@ -306,20 +270,10 @@ def test_pooled_variance_decomposition_requires_between_client_term() -> None:
 def test_fixed_coefficients_remain_a_separate_supplementary_curve() -> None:
     generator = np.random.default_rng(2)
     clients = (
-        client_scores(
-            "client_a",
-            tuple(float(value) for value in generator.normal(size=100)),
-        ),
-        client_scores(
-            "client_b",
-            tuple(float(value) for value in generator.normal(loc=50.0, size=100)),
-        ),
+        client_scores("client_a", tuple(float(value) for value in generator.normal(size=100))),
+        client_scores("client_b", tuple(float(value) for value in generator.normal(loc=50.0, size=100))),
     )
-    result = construct_federated_benign_statistics(
-        clients,
-        FEDERATED_STATISTICS_PROTOCOL,
-        QUANTILE,
-    )
+    result = construct_federated_benign_statistics(clients, FEDERATED_STATISTICS_PROTOCOL, QUANTILE)
     assert result.matched_threshold.value not in frozenset(
         item.threshold.value for item in result.fixed_coefficient_curve
     )
@@ -348,34 +302,20 @@ def test_thresholding_package_never_imports_training_or_scoring_generation_code(
             )
 
 
-def test_score_coordinate_mismatch_across_calibration_records_is_rejected(
-    tmp_path: Path,
-) -> None:
+def test_score_coordinate_mismatch_across_calibration_records_is_rejected(tmp_path: Path) -> None:
     with pytest.raises(ScientificContractError, match="share one coordinate"):
         reject_score_coordinate_mismatch(
             (
                 benign_score_record(tmp_path, "client_a", (0.1, 0.2)),
-                benign_score_record(
-                    tmp_path,
-                    "client_b",
-                    (0.3, 0.4),
-                    seed=Seed(9),
-                ),
+                benign_score_record(tmp_path, "client_b", (0.3, 0.4), seed=Seed(9)),
             )
         )
 
 
-def test_construct_federated_thresholds_stage_rejects_partial_artifact(
-    tmp_path: Path,
-) -> None:
-    eligible = (
-        client_scores(
-            "client_a",
-            tuple(float(index) for index in range(150)),
-        ),
-    )
+def test_construct_federated_thresholds_rejects_partial_artifact(tmp_path: Path) -> None:
+    eligible = (client_scores("client_a", tuple(float(index) for index in range(150))),)
     output_directory = tmp_path / "threshold_output"
-    stage_request = ConstructFederatedThresholdsRequest(
+    request = ConstructFederatedThresholdsRequest(
         request=ThresholdConstructionRequest(
             method=FederatedThresholdMethod.SHARED_THRESHOLD,
             coordinate=eligible[0].coordinate,
@@ -387,9 +327,9 @@ def test_construct_federated_thresholds_stage_rejects_partial_artifact(
         output_directory=output_directory,
         overwrite=False,
     )
-    construct_federated_thresholds_stage(stage_request)
+    construct_federated_thresholds(request)
     (output_directory / FederatedThresholdAssetName.RESULT).unlink()
-    result = construct_federated_thresholds_stage(stage_request)
+    result = construct_federated_thresholds(request)
     assert result.publication_status is PublicationStatus.PUBLISHED
 
 
@@ -404,9 +344,9 @@ def test_dispatch_rejects_method_unsupported_by_population_capabilities() -> Non
         physical_client_validity=capabilities.physical_client_validity,
         family_taxonomy=capabilities.family_taxonomy,
         chronology=capabilities.chronology,
-        client_level_attack_assignment=(capabilities.client_level_attack_assignment),
+        client_level_attack_assignment=capabilities.client_level_attack_assignment,
         fpr_evaluation=capabilities.fpr_evaluation,
-        attack_sensitive_evaluation=(capabilities.attack_sensitive_evaluation),
+        attack_sensitive_evaluation=capabilities.attack_sensitive_evaluation,
         temporal_support=capabilities.temporal_support,
         valid_threshold_methods=(FederatedThresholdMethod.SHARED_THRESHOLD,),
         evidentiary_role=capabilities.evidentiary_role,

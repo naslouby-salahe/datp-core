@@ -15,33 +15,34 @@ from datp_core.populations.models import PopulationCapabilities
 from datp_core.protocols.models import PopulationDeclaration
 from datp_core.protocols.populations import POPULATIONS
 
-# Evidence roles are locked with population identity (catalogue reuses this map).
-POPULATION_EVIDENCE_ROLES: dict[PopulationId, EvidenceRole] = {
-    PopulationId.NBAIOT_NATURAL_DEVICES: EvidenceRole.CONFIRMATORY,
-    PopulationId.NBAIOT_DIRICHLET_CLIENTS: EvidenceRole.MECHANISM,
-    PopulationId.CICIOT_FILE_CLIENTS: EvidenceRole.APPLICABILITY_BOUNDARY,
-    PopulationId.EDGE_SENSOR_GROUPS: EvidenceRole.EXTERNAL_VALIDATION,
-    PopulationId.EDGE_TEMPORAL_GROUPS: EvidenceRole.TEMPORAL_BOUNDARY,
-}
 
-_POPULATION_DECLARATIONS: dict[PopulationId, PopulationDeclaration] = {
-    declaration.id: declaration for declaration in POPULATIONS
-}
+def population_evidence_role(population_id: PopulationId) -> EvidenceRole:
+    match population_id:
+        case PopulationId.NBAIOT_NATURAL_DEVICES:
+            return EvidenceRole.CONFIRMATORY
+        case PopulationId.NBAIOT_DIRICHLET_CLIENTS:
+            return EvidenceRole.MECHANISM
+        case PopulationId.CICIOT_FILE_CLIENTS:
+            return EvidenceRole.APPLICABILITY_BOUNDARY
+        case PopulationId.EDGE_SENSOR_GROUPS:
+            return EvidenceRole.EXTERNAL_VALIDATION
+        case PopulationId.EDGE_TEMPORAL_GROUPS:
+            return EvidenceRole.TEMPORAL_BOUNDARY
 
 
 def population_declaration(population_id: PopulationId) -> PopulationDeclaration:
-    try:
-        return _POPULATION_DECLARATIONS[population_id]
-    except KeyError as error:
+    matches = tuple(declaration for declaration in POPULATIONS if declaration.id is population_id)
+    if len(matches) != 1:
         raise CapabilityError(
             f"unknown population identity {population_id.value}",
             subject=population_id,
-        ) from error
+        )
+    return matches[0]
 
 
 def population_capabilities(population_id: PopulationId) -> PopulationCapabilities:
     declaration = population_declaration(population_id)
-    return build_population_capabilities(declaration, POPULATION_EVIDENCE_ROLES[population_id])
+    return build_population_capabilities(declaration, population_evidence_role(population_id))
 
 
 def build_population_capabilities(

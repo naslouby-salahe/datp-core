@@ -8,7 +8,7 @@ from tests.unit.learning.federated.helpers import client_identity, fedavg_coordi
 from datp_core.domain.enums import PartitionRole, ScoreFrameColumn, SerializationFormat
 from datp_core.domain.values import Checksum, FeatureCount, RoundNumber, RowCount, Seed, checksum_file
 from datp_core.populations.models import ClientIdentity, PopulationOutcomeLabel
-from datp_core.scoring.models import ScoreRecord
+from datp_core.protocols.inference import ScoreRecord
 
 
 def write_score_parquet(

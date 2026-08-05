@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from pydantic import model_validator
@@ -37,7 +36,6 @@ from datp_core.analysis.inference.wilcoxon import (
     matched_pairs_rank_biserial,
     paired_wilcoxon,
 )
-from datp_core.artifacts.serialization import canonical_json_text
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
     AvailabilityStatus,
@@ -47,13 +45,8 @@ from datp_core.domain.enums import (
     TemporalState,
 )
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import (
-    Checksum,
-    MetricValue,
-    PairedObservationCount,
-    Seed,
-    checksum_text,
-)
+from datp_core.domain.provenance import canonical_checksum
+from datp_core.domain.values import Checksum, MetricValue, PairedObservationCount, Seed
 from datp_core.protocols.experiments import (
     ExternalTemporalExecutionIdentity,
     require_execution_identity,
@@ -252,10 +245,7 @@ def prepare_confirmatory_analysis(
 def prepare_external_analysis(
     request: ExternalAnalysisRequest,
 ) -> AnalysisPublication[ExternalAnalysisDocument]:
-    identity = require_execution_identity(
-        request.execution_identity,
-        request.plan.population,
-    )
+    identity = require_execution_identity(request.execution_identity, request.plan.population)
     if identity is None:
         raise RuntimeError("external analysis requires an execution identity")
     identity.require_evidence_role(request.plan.evidence_role)
@@ -278,10 +268,7 @@ def prepare_external_analysis(
             ),
             sign_consistency=count_paired_differences(deltas),
             wilcoxon=paired_wilcoxon(request.contrasts, protocol),
-            rank_biserial=matched_pairs_rank_biserial(
-                request.contrasts,
-                protocol,
-            ),
+            rank_biserial=matched_pairs_rank_biserial(request.contrasts, protocol),
         ),
     )
 
@@ -315,53 +302,6 @@ def prepare_temporal_analysis(
     )
 
 
-def write_analysis_publication[DocumentT](
-    publication: AnalysisPublication[DocumentT],
-    directory: Path,
-) -> DocumentT:
-    (directory / publication.asset_name).write_text(
-        canonical_json_text(publication.document),
-        encoding="utf-8",
-    )
-    (directory / AnalysisAssetName.COMPLETE).write_text(
-        publication.digest.value,
-        encoding="utf-8",
-    )
-    return publication.document
-
-
-def analysis_publication_is_reusable[DocumentT](
-    publication: AnalysisPublication[DocumentT],
-    directory: Path,
-) -> bool:
-    complete = directory / AnalysisAssetName.COMPLETE
-    document = directory / publication.asset_name
-    try:
-        return (
-            complete.is_file()
-            and document.is_file()
-            and complete.read_text(encoding="utf-8").strip() == publication.digest.value
-        )
-    except OSError:
-        return False
-
-
-def load_reused_analysis_publication[DocumentT](
-    publication: AnalysisPublication[DocumentT],
-    directory: Path,
-) -> DocumentT:
-    del directory
-    return publication.document
-
-
-def rebase_analysis_publication[DocumentT](
-    document: DocumentT,
-    directory: Path,
-) -> DocumentT:
-    del directory
-    return document
-
-
 def _publication[DocumentT](
     asset_name: AnalysisAssetName,
     document: DocumentT,
@@ -369,7 +309,7 @@ def _publication[DocumentT](
     return AnalysisPublication(
         asset_name=asset_name,
         document=document,
-        digest=checksum_text(canonical_json_text(document)),
+        digest=canonical_checksum(document),
     )
 
 
@@ -393,10 +333,7 @@ def _validate_temporal_provenance(request: TemporalAnalysisRequest) -> None:
     static = request.static_reference_provenance
     if static.state is not TemporalState.STATIC_REFERENCE:
         raise ValueError("temporal analysis requires static-reference provenance")
-    validate_frozen_recalibrated_pair(
-        request.frozen_provenance,
-        request.recalibrated_provenance,
-    )
+    validate_frozen_recalibrated_pair(request.frozen_provenance, request.recalibrated_provenance)
     if static.checkpoint_checksum != request.frozen_provenance.checkpoint_checksum:
         raise ValueError("all temporal states must share one fitted detector")
 
@@ -408,9 +345,6 @@ def _validate_temporal_identities(request: TemporalAnalysisRequest) -> None:
         (request.recalibrated_identity, TemporalState.RECALIBRATED_FUTURE),
     )
     for identity, expected_state in bindings:
-        bound = require_execution_identity(
-            identity,
-            PopulationId.EDGE_TEMPORAL_GROUPS,
-        )
+        bound = require_execution_identity(identity, PopulationId.EDGE_TEMPORAL_GROUPS)
         if bound is None or bound.temporal_state is not expected_state:
             raise ScientificContractError("temporal analysis identity must match its deployment state")

@@ -6,9 +6,9 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from datp_core.artifacts.serialization import canonical_checksum, serialize_json_model
 from datp_core.domain.enums import ContractSubject, TrainingModelId
 from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
+from datp_core.domain.provenance import canonical_checksum, serialize_json_model
 from datp_core.domain.values import (
     BatchSize,
     Checksum,

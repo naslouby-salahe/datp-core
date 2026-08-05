@@ -12,13 +12,13 @@ def _tests(module: str, *names: str) -> frozenset[str]:
 
 _CUDA_ONLY_MODULES = frozenset(
     {
-        "tests/integration/centralized_reference/test_centralized_reference_pipeline.py",
+        "tests/e2e/test_centralized_reference_pipeline.py",
+        "tests/integration/pipeline/test_centralized_reference.py",
         "tests/integration/learning/test_ditto_training.py",
         "tests/integration/learning/test_fedavg_training.py",
         "tests/integration/learning/test_fedprox_training.py",
         "tests/integration/scoring/test_score_reuse_across_thresholds.py",
-        "tests/unit/centralized_reference/test_evaluation.py",
-        "tests/unit/orchestration/stages/test_federated_training_stages.py",
+        "tests/unit/pipeline/test_centralized_evaluation.py",
         "tests/unit/scoring/test_generation.py",
     }
 )
@@ -26,26 +26,27 @@ _CUDA_ONLY_MODULES = frozenset(
 _CUDA_ONLY_TESTS = frozenset().union(
     _tests(
         "tests/scientific/test_fixed_detector_contract.py",
-        "test_every_simulated_threshold_method_reads_one_model_and_score_checksum",
-        "test_auroc_style_quality_control_is_invariant_across_repeated_reads",
+        "test_every_threshold_method_receives_identical_detector_provenance",
+        "test_auroc_is_identical_for_every_threshold_method",
+        "test_score_artifact_bytes_are_stable_across_repeated_reads",
     ),
     _tests(
-        "tests/unit/centralized_reference/test_checkpointing.py",
+        "tests/unit/pipeline/test_centralized_checkpoints.py",
         "test_retains_declared_checkpoint_candidates",
         "test_selection_uses_fixed_terminal_maximum_round",
         "test_selection_rejects_held_out_metrics",
     ),
     _tests(
-        "tests/unit/centralized_reference/test_scoring.py",
+        "tests/unit/pipeline/test_centralized_scoring.py",
         "test_deterministic_scoring_and_reload",
         "test_score_polarity_higher_is_more_anomalous",
     ),
     _tests(
-        "tests/unit/centralized_reference/test_thresholding.py",
-        "test_pooled_benign_quantile_matches_numpy_linear",
+        "tests/unit/pipeline/test_centralized_thresholds.py",
+        "test_pooled_benign_quantile_matches_declared_linear_quantile",
     ),
     _tests(
-        "tests/unit/centralized_reference/test_training.py",
+        "tests/unit/learning/centralized/test_training.py",
         "test_deterministic_cuda_training_and_safetensors_reload",
         "test_training_rejects_undersized_batch",
         "test_autoencoder_round_trip_shape",
@@ -86,10 +87,6 @@ _CUDA_ONLY_TESTS = frozenset().union(
         "test_run_local_epoch_with_larger_proximal_coefficient_stays_closer_to_reference",
         "test_proximal_penalty_is_zero_when_parameters_match",
         "test_proximal_penalty_scales_with_coefficient",
-    ),
-    _tests(
-        "tests/unit/orchestration/stages/test_centralized_reference_stages.py",
-        "test_train_score_threshold_evaluate_stage_chain",
     ),
     _tests(
         "tests/unit/runtime/test_compute_and_determinism.py",

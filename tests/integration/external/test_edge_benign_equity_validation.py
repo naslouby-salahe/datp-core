@@ -1,5 +1,5 @@
 from datp_core.domain.enums import FederatedThresholdMethod, MetricId
-from datp_core.experiments.feasibility import EdgeExternalFeasibilityRequest, assess_external_temporal_feasibility
+from datp_core.pipeline.planning import EdgeExternalFeasibilityRequest, assess_external_temporal_feasibility
 
 
 def test_edge_validation_keeps_attack_assignment_unavailable() -> None:

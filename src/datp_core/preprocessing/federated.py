@@ -2,18 +2,6 @@
 
 import numpy as np
 
-from datp_core.artifacts.coordinates import ReusableDataCoordinate
-from datp_core.artifacts.layout import (
-    ProcessedAssetName,
-    RelativeAssetPathSequence,
-    asset_for_partition,
-    canonical_relative_asset_path,
-    client_asset_path,
-    federated_client_directory,
-    partition_roles,
-    processed_asset_names,
-)
-from datp_core.artifacts.serialization import TrustedScaler
 from datp_core.domain.contracts import ClientCollection, ClientOwned
 from datp_core.domain.enums import ContractSubject, PartitionRole, PreprocessingFitScope, ProcessedDataBranch
 from datp_core.domain.errors import ScientificContractError
@@ -23,6 +11,17 @@ from datp_core.domain.values import (
     OutcomeLabelSequence,
     RowCount,
     StableRowIdSequence,
+)
+from datp_core.preprocessing.contracts import (
+    ProcessedAssetName,
+    RelativeAssetPathSequence,
+    ReusableDataCoordinate,
+    asset_for_partition,
+    canonical_relative_asset_path,
+    client_asset_path,
+    federated_client_directory,
+    partition_roles,
+    processed_asset_names,
 )
 from datp_core.preprocessing.models import (
     ClientPreprocessingResult,
@@ -35,6 +34,7 @@ from datp_core.preprocessing.models import (
     PreprocessingPartitions,
     PreprocessingProtocol,
 )
+from datp_core.preprocessing.state import TrustedScaler
 from datp_core.preprocessing.validation import (
     federated_fitted_state_after_publish,
     fit_trusted_batch,

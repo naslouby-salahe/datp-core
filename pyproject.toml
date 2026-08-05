@@ -50,7 +50,7 @@ dev = [
 ]
 
 [project.scripts]
-datp-core = "datp_core.cli:main"
+datp-core = "datp_core.cli.app:main"
 
 [build-system]
 requires = ["setuptools>=75"]
@@ -74,9 +74,6 @@ select = ["E", "F", "I", "N", "UP", "B", "ICN"]
 
 [tool.ruff.lint.per-file-ignores]
 "typings/**/*.pyi" = ["N818"]
-# typer.Option/typer.Argument function-call defaults are the required idiom for declaring CLI
-# parameters; bugbear's B008 only recognizes a single such default per signature as exempt.
-"src/datp_core/cli.py" = ["B008"]
 # __init__.py barrel re-exports are intentional public API
 "__init__.py" = ["F401"]
 

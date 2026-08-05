@@ -24,7 +24,7 @@ from datp_core.populations.models import (
     PopulationOutcomeLabel,
 )
 from datp_core.protocols.calibration import MINIMUM_BENIGN_SUPPORT
-from datp_core.scoring.models import ScoreArtifactManifest, ScoreRecord
+from datp_core.protocols.inference import ScoreArtifactManifest, ScoreRecord
 
 
 class ClientExclusionReason(StrEnum):
