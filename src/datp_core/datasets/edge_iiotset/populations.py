@@ -21,7 +21,6 @@ from datp_core.datasets.partitioning.construction import PopulationFinalizationR
 from datp_core.datasets.partitioning.contracts import (
     CLIENT_ID_COLUMN,
     OUTCOME_LABEL_COLUMN,
-    PARQUET_GLOB,
     SOURCE_PATH_COLUMN,
     SOURCE_ROW_INDEX_COLUMN,
     STABLE_ROW_ID_COLUMN,
@@ -32,10 +31,10 @@ from datp_core.datasets.partitioning.contracts import (
     PopulationManifest,
     PopulationOutcomeLabel,
     build_population_capabilities,
-    canonical_branch_directory,
     population_evidence_role,
     select_membership_frame,
 )
+from datp_core.datasets.partitioning.paths import PartitioningFilePattern, canonical_branch_directory
 from datp_core.domain.enums import DatasetId, PopulationId, PopulationIdentityKind, SplitProtocolId
 from datp_core.domain.errors import CapabilityError, DataIntegrityError, ScientificContractError
 from datp_core.domain.values import NonNegativeIntegerValue, RowCount, Seed
@@ -242,7 +241,9 @@ def _chronology_for_group(group_id: str, chronology):
 
 
 def _load_static_membership(canonical_root: Path) -> pl.DataFrame:
-    paths = sorted(canonical_branch_directory(canonical_root, EdgeAssetRole.STATIC_BENIGN).glob(PARQUET_GLOB))
+    paths = sorted(
+        canonical_branch_directory(canonical_root, EdgeAssetRole.STATIC_BENIGN).glob(PartitioningFilePattern.PARQUET)
+    )
     if not paths:
         raise DataIntegrityError(
             "Edge static benign assets are missing",
