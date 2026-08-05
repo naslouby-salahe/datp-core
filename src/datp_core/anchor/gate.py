@@ -11,9 +11,9 @@ from datp_core.anchor.models import (
     AnchorGateStatus,
     AnchorReproductionResult,
 )
-from datp_core.artifacts.serialization import canonical_json_text
 from datp_core.domain.enums import ExperimentReadiness
 from datp_core.domain.errors import AnchorReproductionError
+from datp_core.domain.provenance import canonical_json_text
 from datp_core.domain.values import Checksum, checksum_text
 
 
