@@ -124,12 +124,12 @@ Shared threshold structure is represented explicitly without merging scientific 
 
 The production dependency-direction migrations are complete enough for the architecture and full pytest suites to pass. The PR remains open because final acceptance work is still required:
 
-- align all Phase 12–16 roadmap ownership statements with the pipeline-first tree;
-- implement the dedicated Phase 16 `tests/e2e/` acceptance layer;
-- run and record Ruff, Pyright, Pylint, import-linter, architecture, scientific, integration, E2E, and repeated full-suite gates on the final head;
-- resolve actionable SonarQube and CodeScene findings, or record credential or external-service blockers without weakening code or tests;
-- run repeated deterministic tiny campaigns and verify identical manifests, outputs, cleanup, and reuse;
-- record the final Phase 16 acceptance verdict in `01_PHASE_MASTER_LOG.md` and only then mark the PR ready for review.
+- align all Phase 12–16 roadmap ownership statements with the pipeline-first tree — **done** in this pass (see `01_PHASE_MASTER_LOG.md` Phase 12–16 entries);
+- implement the dedicated Phase 16 `tests/e2e/` acceptance layer — **done**; 11 files present and passing;
+- run and record Ruff, Pyright, Pylint, import-linter, architecture, scientific, integration, E2E, and repeated full-suite gates on the final head — **done**; see `01_PHASE_MASTER_LOG.md` Phase 12–13 entries for exact results;
+- resolve actionable SonarQube and CodeScene findings, or record credential or external-service blockers without weakening code or tests — **partially done**: SonarQube secrets scan is clean (`totalIssues=0`) and its Vortex agentic service returns organization-side `403 Forbidden` for every file (not a credential failure — matches the pattern recorded for Phases 09–11); CodeScene delta against `origin/main` flagged one regression this pass introduced (`pipeline/planning.py::_planned_entry`, 7 arguments against a 4-argument threshold), which was fixed by bundling the swept per-cell dimensions into a `_SweptCell` record; the other 28 files it flags predate this pass's own changes (pre-existing complexity/duplication in code this pass did not author) and are recorded as a known follow-up rather than remediated here, to avoid unrelated-scope refactoring of already-tested code;
+- run repeated deterministic tiny campaigns and verify identical manifests, outputs, cleanup, and reuse — **partially done**: `python -m datp_core.cli.app plan build` was run twice and produced identical plan/campaign digests (`9320` entries); no concrete `StageRunner`/`ExperimentOutputStore` is wired to real stage code yet, so a full campaign execution (not just planning) could not be exercised;
+- record the final Phase 16 acceptance verdict in `01_PHASE_MASTER_LOG.md` and only then mark the PR ready for review — no `GO_FOR_FULL_EXPERIMENTS` verdict is recorded; see the Phase 16 entry for why.
 
 These tasks may not change scientific values, algorithms, metrics, evidence roles, dataset boundaries, checkpoint rules, or fixed-detector semantics.
 
