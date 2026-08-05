@@ -26,6 +26,7 @@ from datp_core.pipeline.execution import (
 )
 from datp_core.pipeline.federated_execution import (
     FederatedExecutionContext,
+    client_training_inputs,
     eligible_calibration_scores,
     family_identities,
     load_evaluation_document,
@@ -50,8 +51,16 @@ from datp_core.pipeline.publication.records import (
     CompletionState,
 )
 from datp_core.pipeline.publication.reload_validation import validate_reload
-from datp_core.pipeline.select_checkpoint import SelectFederatedCheckpointRequest, select_federated_primary_checkpoint
-from datp_core.pipeline.train_detector import TrainFederatedDetectorRequest, train_federated_detector
+from datp_core.pipeline.select_checkpoint import (
+    SelectFederatedCheckpointRequest,
+    SelectFederatedCheckpointResult,
+    select_federated_primary_checkpoint,
+)
+from datp_core.pipeline.train_detector import (
+    TrainFederatedDetectorRequest,
+    TrainFederatedDetectorResult,
+    train_federated_detector,
+)
 from datp_core.pipeline.verify_anchor import verify_anchor
 from datp_core.populations.capabilities import population_capabilities
 from datp_core.protocols.anchor import ANCHOR_DECISION_PROTOCOL
@@ -193,19 +202,19 @@ class StageRunner:
             evidence=f"state_set={context.preprocessing_state_set_checksum.value}",
         )
 
-    def _training(self, coordinate: ExperimentCoordinate):
+    def _training(
+        self,
+        coordinate: ExperimentCoordinate,
+    ) -> tuple[FederatedExecutionContext, TrainFederatedDetectorResult]:
         context = self._context(coordinate)
         result = train_federated_detector(
             TrainFederatedDetectorRequest(
                 request=FederatedTrainingRequest(
                     coordinate=context.coordinate,
-                    clients=tuple(
-                        __import__("datp_core.pipeline.federated_execution", fromlist=["client_training_inputs"])
-                        .client_training_inputs(
-                            context.preprocessing.client_publications,
-                            context.clients,
-                            training_feature_names(coordinate.dataset),
-                        )
+                    clients=client_training_inputs(
+                        context.preprocessing.client_publications,
+                        context.clients,
+                        training_feature_names(coordinate.dataset),
                     ),
                     population_client_count=ClientCount(len(context.clients)),
                     autoencoder=training_autoencoder(coordinate.dataset),
@@ -222,7 +231,10 @@ class StageRunner:
         )
         return context, result
 
-    def _selection(self, coordinate: ExperimentCoordinate):
+    def _selection(
+        self,
+        coordinate: ExperimentCoordinate,
+    ) -> tuple[FederatedExecutionContext, SelectFederatedCheckpointResult]:
         context, training = self._training(coordinate)
         selection = select_federated_primary_checkpoint(
             SelectFederatedCheckpointRequest(
