@@ -52,7 +52,6 @@ from datp_core.pipeline.planning import ExperimentCoordinate
 from datp_core.pipeline.scoring.service import ClientScoringInput, FederatedScoreArtifactManifest
 from datp_core.pipeline.select_checkpoint import SelectFederatedCheckpointRequest, select_federated_primary_checkpoint
 from datp_core.pipeline.train_detector import TrainFederatedDetectorRequest, train_federated_detector
-from datp_core.populations.catalogue import resolve_population
 from datp_core.populations.models import ClientIdentity
 from datp_core.preprocessing.models import ClientPreprocessingResult
 from datp_core.protocols.experiments import BOUNDED_EVIDENCE_POPULATIONS, ExternalTemporalExecutionIdentity
