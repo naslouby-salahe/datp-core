@@ -79,11 +79,12 @@ forbidden_modules =
     datp_core.cli
 
 [importlinter:contract:protocol-direction]
-name = Protocol declarations must not depend on orchestration, reporting, or CLI
+name = Protocol declarations must not depend on execution or adapter packages
 type = forbidden
 source_modules =
     datp_core.protocols
 forbidden_modules =
+    datp_core.pipeline
     datp_core.orchestration
     datp_core.reporting
     datp_core.cli
