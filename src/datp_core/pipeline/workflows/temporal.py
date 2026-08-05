@@ -26,18 +26,19 @@ from datp_core.pipeline.decision.federated import (
     construct_federated_thresholds,
     evaluate_federated_detector,
 )
-from datp_core.pipeline.execution.workspace import (
-    ExecutionArtifactDirectory,
+from datp_core.pipeline.execution.context import (
     FederatedExecutionContext,
-    bounded_evidence_seed_directory,
     client_scoring_inputs,
-    eligible_calibration_scores,
-    matched_static_reference_inputs,
     resolve_execution_context,
-    score_selected_checkpoint,
-    select_execution_checkpoint,
     training_autoencoder,
     training_feature_names,
+)
+from datp_core.pipeline.execution.layout import ExecutionArtifactDirectory, bounded_evidence_seed_directory
+from datp_core.pipeline.execution.scoring import (
+    eligible_calibration_scores,
+    matched_static_reference_inputs,
+    score_selected_checkpoint,
+    select_execution_checkpoint,
 )
 from datp_core.pipeline.planning import ExperimentCoordinate, expand_experiment_plan
 from datp_core.pipeline.scoring.models import FederatedScoreArtifactManifest
@@ -166,7 +167,7 @@ def _execute_temporal_states(
         autoencoder=autoencoder,
         feature_names=feature_names,
         clients=client_scoring_inputs(context.preprocessing.client_publications, context.clients),
-        output_directory=context.training_directory / ExecutionArtifactDirectory.SCORES.value,
+        output_directory=context.training_directory / ExecutionArtifactDirectory.SCORES,
         preprocessing_state_set_checksum=context.preprocessing_state_set_checksum,
         split_manifest_checksum=context.split_manifest_checksum,
     )
@@ -180,7 +181,7 @@ def _execute_temporal_states(
         autoencoder=autoencoder,
         feature_names=feature_names,
         clients=static_inputs.clients,
-        output_directory=static_root / TemporalArtifactDirectory.SCORES.value,
+        output_directory=static_root / TemporalArtifactDirectory.SCORES,
         preprocessing_state_set_checksum=context.preprocessing_state_set_checksum,
         split_manifest_checksum=static_inputs.split_manifest_checksum,
     )
@@ -246,7 +247,7 @@ def _evaluate_state(
                     eligible,
                     context.family_by_client,
                 ),
-                output_directory=output_root / TemporalArtifactDirectory.THRESHOLDS.value / method.value,
+                output_directory=output_root / TemporalArtifactDirectory.THRESHOLDS / method.value,
                 overwrite=False,
                 temporal_provenance=provenance,
                 temporal_score_manifest=scores,
@@ -270,7 +271,7 @@ def _evaluate_state(
                 execution_identity=identity,
                 temporal_provenance=provenance,
                 temporal_threshold_provenance=provenance,
-                output_directory=output_root / TemporalArtifactDirectory.EVALUATIONS.value / method.value,
+                output_directory=output_root / TemporalArtifactDirectory.EVALUATIONS / method.value,
                 overwrite=False,
             )
         )
@@ -412,7 +413,7 @@ def _temporal_analysis_directory(partition_seed: Seed, method: FederatedThreshol
         / declaration.population.value
         / declaration.role.value
         / str(partition_seed.value)
-        / TemporalArtifactDirectory.ANALYSIS.value
+        / TemporalArtifactDirectory.ANALYSIS
         / method.value
     )
 
