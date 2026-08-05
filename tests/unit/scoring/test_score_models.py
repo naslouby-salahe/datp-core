@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from tests.unit.learning.federated.helpers import client_identity, fedavg_coordinate
 
-from datp_core.domain.enums import PartitionRole, SerializationFormat
+from datp_core.domain.enums import PartitionRole, SerializationFormat, SplitProtocolId
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import Checksum, FeatureCount, RoundNumber, RowCount, Seed
 from datp_core.protocols.inference import FixedScoreInvariant, ScoreArtifactManifest, ScoreGenerationResult, ScoreRecord
@@ -27,13 +27,17 @@ def _record(role: PartitionRole, client_id: str, path: Path, *, seed: Seed = See
 def _manifest(
     tmp_path: Path,
     *,
+    scored_split_protocol: SplitProtocolId | None = None,
     calibration_records: tuple[ScoreRecord, ...] | None = None,
     evaluation_records: tuple[ScoreRecord, ...] | None = None,
+    future_recalibration_records: tuple[ScoreRecord, ...] = (),
 ) -> ScoreArtifactManifest:
     coordinate = fedavg_coordinate(Seed(0))
     return ScoreArtifactManifest(
         coordinate=coordinate,
-        scored_split_protocol=coordinate.split_protocol,
+        scored_split_protocol=(
+            coordinate.split_protocol if scored_split_protocol is None else scored_split_protocol
+        ),
         checkpoint_round=RoundNumber(2),
         checkpoint_checksum=Checksum("a" * 64),
         preprocessing_state_set_checksum=Checksum("c" * 64),
@@ -48,6 +52,7 @@ def _manifest(
         )
         if evaluation_records is None
         else evaluation_records,
+        future_recalibration_records=future_recalibration_records,
     )
 
 
@@ -124,6 +129,28 @@ def test_manifest_rejects_missing_client_in_evaluation(tmp_path: Path) -> None:
             evaluation_records=(
                 _record(PartitionRole.EVALUATION, "client_b", tmp_path / "eval.parquet"),
             ),
+        )
+
+
+def test_non_temporal_manifest_rejects_future_recalibration_records(tmp_path: Path) -> None:
+    with pytest.raises(ScientificContractError, match="future-recalibration inventory"):
+        _manifest(
+            tmp_path,
+            future_recalibration_records=(
+                _record(
+                    PartitionRole.FUTURE_RECALIBRATION,
+                    "client_a",
+                    tmp_path / "future.parquet",
+                ),
+            ),
+        )
+
+
+def test_temporal_manifest_requires_future_recalibration_records(tmp_path: Path) -> None:
+    with pytest.raises(ScientificContractError, match="future-recalibration inventory"):
+        _manifest(
+            tmp_path,
+            scored_split_protocol=SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE,
         )
 
 
