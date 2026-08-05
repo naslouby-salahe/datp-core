@@ -33,5 +33,6 @@ def inspect_population(population: PopulationId = typer.Argument(...)) -> None:
     declaration = next(item for item in POPULATIONS if item.id is population)
     typer.echo(
         f"population={declaration.id.value} dataset={declaration.dataset.value} "
-        f"clients={declaration.declared_client_count.value} temporal={declaration.supports_temporal_evidence}"
+        f"clients={declaration.client_count.value} identity={declaration.identity_kind.value} "
+        f"verified_chronology={declaration.requires_verified_chronology}"
     )
