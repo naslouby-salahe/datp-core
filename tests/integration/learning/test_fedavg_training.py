@@ -16,7 +16,7 @@ from tests.unit.learning.federated.helpers import (
 from datp_core.domain.enums import PublicationStatus
 from datp_core.domain.values import Checksum, RowCount, Seed
 from datp_core.learning.federated.checkpoints.selection import select_checkpoint
-from datp_core.learning.federated.fedavg import train_fedavg
+from datp_core.learning.federated.global_training import train_global_federated
 from datp_core.learning.federated.training import FederatedTrainingRequest
 from datp_core.pipeline.scoring.federated import generate_federated_scores
 from datp_core.pipeline.scoring.models import ClientScoringInput, ScoreGenerationRequest
@@ -43,7 +43,7 @@ def _training_request(tmp_path: Path) -> FederatedTrainingRequest:
 
 def test_fedavg_end_to_end_train_select_and_score(tmp_path: Path) -> None:
     request = _training_request(tmp_path)
-    outcome = train_fedavg(request)
+    outcome = train_global_federated(request)
     assert outcome.training_result.history.rounds[-1].round_number == CHECKPOINT.maximum_round
 
     decision = select_checkpoint(
