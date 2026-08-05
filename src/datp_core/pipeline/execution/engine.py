@@ -64,7 +64,7 @@ from datp_core.protocols.graph import (
     observe_graph_boundary,
 )
 from datp_core.protocols.inference import FixedScoreInvariant
-from datp_core.protocols.runtime import DATA_ROOT
+from datp_core.runtime.configuration import DATA_ROOT
 
 
 def resolve_execution_recipe(coordinate: ExperimentCoordinate) -> ExecutionRecipe:
