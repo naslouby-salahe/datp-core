@@ -44,7 +44,7 @@ from datp_core.learning.federated.models import FederatedTrainingCoordinate, Pre
 from datp_core.learning.federated.training import preprocessing_state_set_checksum
 from datp_core.pipeline.checkpoints.service import SelectFederatedCheckpointRequest, select_federated_primary_checkpoint
 from datp_core.pipeline.decision.federated import ConstructFederatedThresholdsRequest, construct_federated_thresholds
-from datp_core.pipeline.execution.workspace import (
+from datp_core.pipeline.execution.context import (
     client_training_inputs,
     client_with_id,
     family_identities,
@@ -58,17 +58,9 @@ from datp_core.pipeline.scoring.models import (
     FederatedScoreRecord,
     GenerateFederatedScoresRequest,
 )
-from datp_core.pipeline.training.personalized import (
-    TrainDittoDetectorRequest,
-    TrainDittoDetectorResult,
-    train_ditto_detector,
-)
+from datp_core.pipeline.training.personalized import TrainDittoDetectorRequest, TrainDittoDetectorResult, train_ditto_detector
 from datp_core.preprocessing.models import ClientPreprocessingResult
-from datp_core.preprocessing.service import (
-    FederatedPreprocessingOutcome,
-    FederatedPreprocessingRequest,
-    preprocess_federated,
-)
+from datp_core.preprocessing.service import FederatedPreprocessingOutcome, FederatedPreprocessingRequest, preprocess_federated
 from datp_core.protocols.calibration import CANONICAL_QUANTILE
 from datp_core.protocols.inference import FixedScoreInvariant
 from datp_core.protocols.training import (
@@ -116,11 +108,7 @@ class PersonalizedScoreCollection:
     manifests: ClientCollection[ClientIdentity, FederatedScoreArtifactManifest]
 
 
-def run_ditto_stress_test_seed(
-    *,
-    training_seed: Seed,
-    regularization: DittoRegularization,
-) -> DittoStressTestResult:
+def run_ditto_stress_test_seed(*, training_seed: Seed, regularization: DittoRegularization) -> DittoStressTestResult:
     population = PopulationId.NBAIOT_NATURAL_DEVICES
     split_protocol = SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS
     preprocessing_identity = PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD
@@ -152,9 +140,7 @@ def run_ditto_stress_test_seed(
             request=DittoTrainingRequest(
                 global_coordinate=global_coordinate,
                 personalized_coordinate=personalized_coordinate,
-                clients=client_training_inputs(
-                    context.preprocessing.client_publications, context.clients, feature_names
-                ),
+                clients=client_training_inputs(context.preprocessing.client_publications, context.clients, feature_names),
                 population_client_count=ClientCount(len(context.clients)),
                 autoencoder=NBAIOT_AUTOENCODER,
                 training_protocol=resolve_ditto_protocol(regularization),
@@ -163,11 +149,7 @@ def run_ditto_stress_test_seed(
                 batch_size=BATCH_SIZE,
                 learning_rate=LEARNING_RATE,
                 split_manifest_checksum=context.split_manifest_checksum,
-                global_output_directory=ditto_directory(
-                    training_seed,
-                    regularization,
-                    DittoArtifactBranch.GLOBAL_MODEL,
-                ),
+                global_output_directory=ditto_directory(training_seed, regularization, DittoArtifactBranch.GLOBAL_MODEL),
                 personalized_output_directory=ditto_directory(
                     training_seed,
                     regularization,
@@ -310,11 +292,7 @@ def _personalized_scores(
 ) -> PersonalizedScoreCollection:
     eligible: list[ClientBenignCalibrationScores] = []
     manifests: list[ClientOwned[ClientIdentity, FederatedScoreArtifactManifest]] = []
-    personalized_directory = ditto_directory(
-        training_seed,
-        regularization,
-        DittoArtifactBranch.PERSONALIZED_MODELS,
-    )
+    personalized_directory = ditto_directory(training_seed, regularization, DittoArtifactBranch.PERSONALIZED_MODELS)
     for owned in sorted(training.personalized_candidates.items, key=lambda item: item.client):
         client = owned.client
         selection = select_federated_primary_checkpoint(
@@ -388,9 +366,7 @@ def _client_metric(
     record = _score_record_for_client(manifest.evaluation_records, assignment.client, PartitionRole.EVALUATION)
     frame = pl.read_parquet(record.path)
     scores = tuple(ScoreValue(float(value)) for value in frame[ScoreFrameColumn.RECONSTRUCTION_ERROR.value].to_list())
-    labels = tuple(
-        PopulationOutcomeLabel(str(value)) for value in frame[ScoreFrameColumn.OUTCOME_LABEL.value].to_list()
-    )
+    labels = tuple(PopulationOutcomeLabel(str(value)) for value in frame[ScoreFrameColumn.OUTCOME_LABEL.value].to_list())
     rows = tuple(str(value) for value in frame[ScoreFrameColumn.STABLE_ROW_ID.value].to_list())
     cohort_manifest = build_evaluation_cohort_manifest(
         population=population,
