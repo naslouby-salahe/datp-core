@@ -1,5 +1,5 @@
 from datp_core.domain.enums import FederatedThresholdMethod, MetricId, TemporalState
-from datp_core.experiments.feasibility import (
+from datp_core.pipeline.planning import (
     EdgeTemporalFeasibilityRequest,
     FeasibilityReason,
     TemporalExecutionMode,
