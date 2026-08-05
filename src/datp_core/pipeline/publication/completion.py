@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
-from datp_core.domain.values import Checksum
+from datp_core.domain.values import Checksum, checksum_text
 from datp_core.pipeline.publication.records import (
     ArtifactRecord,
     ArtifactState,
     CompletionRecord,
     CompletionState,
 )
+
+
+def complete_digest(manifest_payload: str, schema_payload: str) -> Checksum:
+    """Bind a manifest and schema payload into one deterministic completion digest."""
+    return checksum_text(f"{manifest_payload}\n{schema_payload}")
 
 
 def build_completion_record(
