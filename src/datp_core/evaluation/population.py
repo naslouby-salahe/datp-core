@@ -74,7 +74,7 @@ from datp_core.protocols.experiments import (
     ExternalTemporalExecutionIdentity,
     require_execution_identity,
 )
-from datp_core.scoring.models import ScoreArtifactManifest, ScoreRecord
+from datp_core.protocols.inference import ScoreArtifactManifest, ScoreRecord
 from datp_core.thresholding.assignments import ThresholdAssignment
 from datp_core.thresholding.common import ThresholdConstructionResult
 from datp_core.thresholding.identities import ThresholdUnavailableResult

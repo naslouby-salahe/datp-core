@@ -6,7 +6,7 @@ from tests.unit.scoring.helpers import selected_checkpoint
 
 from datp_core.domain.values import RowCount, Seed
 from datp_core.runtime.compute import resolve_cuda_device
-from datp_core.scoring.generation import (
+from datp_core.pipeline.scoring.service import (
     ClientScoringInput,
     ScoreGenerationRequest,
     generate_federated_scores,

@@ -24,7 +24,7 @@ from datp_core.pipeline.execution import PipelineStage
 from datp_core.pipeline.publication.codec import ArtifactPublication, FunctionalArtifactCodec, publish_artifact
 from datp_core.protocols.models import AutoencoderProtocol
 from datp_core.runtime.compute import resolve_cuda_device
-from datp_core.scoring.generation import (
+from datp_core.pipeline.scoring.service import (
     ClientScoringInput,
     FederatedScoreAssetName,
     ScoreGenerationRequest,
@@ -33,7 +33,7 @@ from datp_core.scoring.generation import (
     rebase_federated_scores,
     write_federated_scores,
 )
-from datp_core.scoring.models import ScoreGenerationResult
+from datp_core.protocols.inference import ScoreGenerationResult
 
 
 @dataclass(slots=True, eq=False, kw_only=True)

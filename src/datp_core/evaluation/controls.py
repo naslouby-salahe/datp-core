@@ -43,7 +43,7 @@ from datp_core.evaluation.models import (
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.populations.capabilities import population_capabilities
 from datp_core.populations.models import ClientIdentity, PopulationOutcomeLabel
-from datp_core.scoring.models import (
+from datp_core.protocols.inference import (
     FixedScoreInvariant,
     ScoreArtifactManifest,
     ScoreRecord,

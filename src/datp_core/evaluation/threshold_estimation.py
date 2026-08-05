@@ -30,7 +30,7 @@ from datp_core.evaluation.models import (
 )
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.populations.models import ClientIdentity, PopulationOutcomeLabel
-from datp_core.scoring.models import ScoreRecord
+from datp_core.protocols.inference import ScoreRecord
 
 _THRESHOLD_ESTIMATION_METRICS = frozenset(
     {

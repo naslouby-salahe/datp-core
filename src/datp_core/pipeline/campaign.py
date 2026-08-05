@@ -89,8 +89,8 @@ from datp_core.protocols.training import (
     LEARNING_RATE,
     NBAIOT_AUTOENCODER,
 )
-from datp_core.scoring.generation import ClientScoringInput
-from datp_core.scoring.models import FixedScoreInvariant, ScoreArtifactManifest
+from datp_core.pipeline.scoring.service import ClientScoringInput
+from datp_core.protocols.inference import FixedScoreInvariant, ScoreArtifactManifest
 from datp_core.thresholding.dispatch import ThresholdConstructionRequest
 from datp_core.thresholding.identities import ThresholdUnavailableResult
 from datp_core.thresholding.quantiles import ClientBenignCalibrationScores

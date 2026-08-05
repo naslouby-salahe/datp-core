@@ -20,7 +20,7 @@ from datp_core.domain.values import Checksum
 from datp_core.pipeline.execution import PipelineStage
 from datp_core.pipeline.publication.codec import ArtifactPublication, FunctionalArtifactCodec, publish_artifact
 from datp_core.protocols.models import CentralizedQuantileProtocol
-from datp_core.scoring.models import ScoreArtifactManifest
+from datp_core.protocols.inference import ScoreArtifactManifest
 from datp_core.thresholding.common import (
     FederatedThresholdAssetName,
     FederatedThresholdPublicationRequest,

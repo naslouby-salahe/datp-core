@@ -31,7 +31,7 @@ from datp_core.evaluation.models import (
 )
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.populations.models import ClientIdentity, PopulationOutcomeLabel
-from datp_core.scoring.models import ScoreRecord
+from datp_core.protocols.inference import ScoreRecord
 from datp_core.thresholding.methods.conformal import ConformalAssignment
 
 _COVERAGE_METRICS = frozenset(

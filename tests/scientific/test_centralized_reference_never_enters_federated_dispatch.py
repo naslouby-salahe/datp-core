@@ -18,7 +18,7 @@ THRESHOLDING_ROOT = ROOT / "src" / "datp_core" / "thresholding"
 FORBIDDEN_CENTRALIZED_IMPORTS = (
     "datp_core.thresholding",
     "datp_core.learning.federated",
-    "datp_core.scoring",
+    "datp_core.pipeline.scoring",
 )
 FORBIDDEN_THRESHOLDING_IMPORT = "datp_core.centralized_reference"
 

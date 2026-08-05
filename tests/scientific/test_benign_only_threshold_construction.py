@@ -80,7 +80,7 @@ FORBIDDEN_RETRAINING_IMPORTS = (
     "datp_core.learning.federated.fedavg",
     "datp_core.learning.federated.fedprox",
     "datp_core.learning.federated.ditto",
-    "datp_core.scoring.generation",
+    "datp_core.pipeline.scoring.service",
 )
 
 
