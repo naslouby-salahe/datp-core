@@ -17,8 +17,18 @@ CAPABILITY_PACKAGES = (
 )
 FORBIDDEN_LEGACY_PATHS = (
     SOURCE_ROOT / "cli.py",
+    SOURCE_ROOT / "centralized_reference",
+    SOURCE_ROOT / "experiments",
+    SOURCE_ROOT / "scoring",
     SOURCE_ROOT / "orchestration" / "commands",
     SOURCE_ROOT / "orchestration" / "stages",
+)
+FORBIDDEN_LEGACY_IMPORTS = (
+    "datp_core.centralized_reference",
+    "datp_core.experiments",
+    "datp_core.scoring",
+    "datp_core.orchestration.commands",
+    "datp_core.orchestration.stages",
 )
 PIPELINE_IMPORT_EXEMPT_ADAPTERS = frozenset(
     {
@@ -43,19 +53,16 @@ def _imports(path: Path) -> tuple[str, ...]:
     return tuple(imports)
 
 
-def test_legacy_execution_spines_cannot_return() -> None:
+def test_legacy_execution_and_ownership_packages_cannot_return() -> None:
     assert all(not path.exists() for path in FORBIDDEN_LEGACY_PATHS)
     violations = tuple(
-        str(path.relative_to(REPOSITORY_ROOT))
+        f"{path.relative_to(REPOSITORY_ROOT)} imports {imported}"
         for root in (SOURCE_ROOT, TEST_ROOT)
         for path in _python_files(root)
-        if any(
-            imported.startswith("datp_core.orchestration.commands")
-            or imported.startswith("datp_core.orchestration.stages")
-            for imported in _imports(path)
-        )
+        for imported in _imports(path)
+        if imported.startswith(FORBIDDEN_LEGACY_IMPORTS)
     )
-    assert not violations
+    assert not violations, "\n".join(violations)
 
 
 def test_domain_imports_no_higher_layer() -> None:
