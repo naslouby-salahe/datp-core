@@ -1,0 +1,62 @@
+name: Finalize checkpoint dependency
+
+on:
+  push:
+    branches:
+      - agent/phase-12-16-target-architecture
+    paths:
+      - .github/workflows/finalize-checkpoint-dependency.yml
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/phase-12-16-target-architecture
+          fetch-depth: 0
+
+      - name: Replace exact checkpoint imports
+        shell: python
+        run: |
+          from pathlib import Path
+
+          root = Path.cwd()
+          replacements = {
+              "src/datp_core/learning/federated/checkpoints/candidates.py": (
+                  '''from datp_core.pipeline.checkpoints.persistence import (\n    validate_persisted_checkpoint_file,\n)\nfrom datp_core.pipeline.checkpoints.service import (\n    validate_ordered_checkpoint_inventory,\n)''',
+                  '''from datp_core.protocols.checkpoints import (\n    validate_ordered_checkpoint_inventory,\n    validate_persisted_checkpoint_file,\n)''',
+              ),
+              "src/datp_core/learning/federated/checkpoints/selection.py": (
+                  '''from datp_core.pipeline.checkpoints.persistence import (\n    validate_persisted_checkpoint_file,\n)\nfrom datp_core.pipeline.checkpoints.service import (\n    select_terminal_checkpoint,\n    validate_ordered_checkpoint_inventory,\n)''',
+                  '''from datp_core.protocols.checkpoints import (\n    select_terminal_checkpoint,\n    validate_ordered_checkpoint_inventory,\n    validate_persisted_checkpoint_file,\n)''',
+              ),
+              "src/datp_core/learning/federated/checkpoints/reuse.py": (
+                  '''from datp_core.pipeline.checkpoints.persistence import (\n    validate_persisted_checkpoint_file,\n)''',
+                  '''from datp_core.protocols.checkpoints import validate_persisted_checkpoint_file''',
+              ),
+          }
+          for relative, (old, new) in replacements.items():
+              path = root / relative
+              text = path.read_text(encoding="utf-8")
+              if text.count(old) != 1:
+                  raise SystemExit(f"expected exactly one checkpoint import block in {relative}")
+              path.write_text(text.replace(old, new), encoding="utf-8")
+
+          for path in (root / "src/datp_core/learning").rglob("*.py"):
+              text = path.read_text(encoding="utf-8")
+              if "datp_core.pipeline" in text:
+                  raise SystemExit(f"learning still imports pipeline: {path.relative_to(root)}")
+
+          (root / ".github/workflows/finalize-checkpoint-dependency.yml").unlink()
+
+      - name: Commit dependency migration
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Remove learning dependency on pipeline checkpoints"
+          git push origin HEAD:agent/phase-12-16-target-architecture
