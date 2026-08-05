@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from hashlib import blake2b
 from pathlib import Path
 
+from datp_core.domain.values import checksum_file
 from datp_core.pipeline.publication.records import ArtifactRecord, ArtifactState, CompletionRecord
 
 
@@ -40,11 +40,10 @@ def validate_reload(
         if not artifact_path.is_file():
             evidence.append(f"completed artifact is absent: {artifact.relative_path.as_posix()}")
             continue
-        payload = artifact_path.read_bytes()
-        actual_checksum = blake2b(payload, digest_size=32).hexdigest()
+        actual_checksum = checksum_file(artifact_path)
         if actual_checksum != artifact.checksum:
             evidence.append(f"artifact checksum mismatch: {artifact.relative_path.as_posix()}")
-        if len(payload) != artifact.byte_count:
+        if artifact_path.stat().st_size != artifact.byte_count.value:
             evidence.append(f"artifact byte-count mismatch: {artifact.relative_path.as_posix()}")
 
     return ReloadValidation(valid=not evidence, evidence=tuple(evidence))
