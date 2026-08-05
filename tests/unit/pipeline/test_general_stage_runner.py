@@ -14,12 +14,12 @@ from datp_core.domain.enums import (
     TrainingModelId,
 )
 from datp_core.domain.values import ByteCount, Checksum, ModelCoefficientValue, Seed, checksum_bytes
-from datp_core.pipeline.campaign import GeneralExperimentOutputStore, GeneralStageRunner
 from datp_core.pipeline.execution import ExecutionProvenance, ExistingExperimentState, PipelineStage, StageOutcome
 from datp_core.pipeline.planning import ExperimentCoordinate
 from datp_core.pipeline.publication.completion import build_completion_record, write_completion_record
 from datp_core.pipeline.publication.layout import experiment_output_directory
 from datp_core.pipeline.publication.records import ArtifactKind, ArtifactRecord, ArtifactState
+from datp_core.pipeline.runner import ExperimentOutputStore, StageRunner
 from datp_core.protocols.training import DITTO_TRAINING_PROTOCOLS
 
 
@@ -49,22 +49,22 @@ def provenance() -> ExecutionProvenance:
 
 
 def test_preflight_completes_without_touching_disk() -> None:
-    runner = GeneralStageRunner()
+    runner = StageRunner()
     result = runner.run(PipelineStage.PREFLIGHT, coordinate(), provenance())
     assert result.outcome is StageOutcome.COMPLETED
     assert coordinate().stable_key in result.evidence
 
 
 def test_temporal_coordinates_are_blocked_from_single_coordinate_stages() -> None:
-    runner = GeneralStageRunner()
+    runner = StageRunner()
     temporal_coordinate = replace(coordinate(), temporal_state=TemporalState.FROZEN_FUTURE)
     result = runner.run(PipelineStage.CONSTRUCT_POPULATION, temporal_coordinate, provenance())
     assert result.outcome is StageOutcome.BLOCKED
-    assert "run_temporal_future_pair" in result.evidence
+    assert "paired temporal execution route" in result.evidence
 
 
 def test_ditto_training_model_is_blocked_rather_than_approximated() -> None:
-    runner = GeneralStageRunner()
+    runner = StageRunner()
     ditto_coordinate = replace(
         coordinate(),
         training_model=TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER,
@@ -72,11 +72,11 @@ def test_ditto_training_model_is_blocked_rather_than_approximated() -> None:
     )
     result = runner.run(PipelineStage.TRAIN_DETECTOR, ditto_coordinate, provenance())
     assert result.outcome is StageOutcome.BLOCKED
-    assert "not single-coordinate" in result.evidence
+    assert "global and personalized execution route" in result.evidence
 
 
 def test_ciciot2023_dataset_is_blocked_for_undeclared_autoencoder() -> None:
-    runner = GeneralStageRunner()
+    runner = StageRunner()
     cic_coordinate = replace(coordinate(), dataset=DatasetId.CICIOT2023)
     result = runner.run(PipelineStage.TRAIN_DETECTOR, cic_coordinate, provenance())
     assert result.outcome is StageOutcome.BLOCKED
@@ -84,33 +84,33 @@ def test_ciciot2023_dataset_is_blocked_for_undeclared_autoencoder() -> None:
 
 
 def test_publish_report_is_rejected_as_a_per_coordinate_stage() -> None:
-    runner = GeneralStageRunner()
+    runner = StageRunner()
     result = runner.run(PipelineStage.PUBLISH_REPORT, coordinate(), provenance())
     assert result.outcome is StageOutcome.BLOCKED
     assert "campaign-level" in result.evidence
 
 
 def test_verify_anchor_rejects_experiments_other_than_the_historical_reproduction() -> None:
-    runner = GeneralStageRunner()
+    runner = StageRunner()
     result = runner.run(PipelineStage.VERIFY_ANCHOR, coordinate(), provenance())
     assert result.outcome is StageOutcome.BLOCKED
     assert "historical reproduction" in result.evidence
 
 
 def test_output_store_reports_absent_for_missing_directory(tmp_path: Path) -> None:
-    store = GeneralExperimentOutputStore()
+    store = ExperimentOutputStore()
     assert store.state(coordinate(), tmp_path) is ExistingExperimentState.ABSENT
 
 
 def test_output_store_reports_incomplete_for_directory_without_completion_record(tmp_path: Path) -> None:
-    store = GeneralExperimentOutputStore()
+    store = ExperimentOutputStore()
     directory = experiment_output_directory(tmp_path, coordinate())
     directory.mkdir(parents=True)
     assert store.state(coordinate(), tmp_path) is ExistingExperimentState.INCOMPLETE
 
 
 def test_output_store_round_trips_a_valid_completion_record(tmp_path: Path) -> None:
-    store = GeneralExperimentOutputStore()
+    store = ExperimentOutputStore()
     directory = experiment_output_directory(tmp_path, coordinate())
     relative = directory.relative_to(tmp_path) / "result.json"
     (tmp_path / relative).parent.mkdir(parents=True, exist_ok=True)
