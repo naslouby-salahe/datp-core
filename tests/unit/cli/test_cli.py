@@ -43,6 +43,12 @@ def test_inspection_rejects_undeclared_scientific_identity() -> None:
     assert result.exit_code != 0
 
 
+def test_confirmatory_seed_rejects_arbitrary_scientific_override() -> None:
+    result = runner.invoke(app, ["run", "confirmatory-seed", "--training-seed", "999"])
+    assert result.exit_code != 0
+    assert "declared confirmatory seeds" in _plain(result.output)
+
+
 def test_federated_preprocessing_rejects_centralized_identity() -> None:
     result = runner.invoke(
         app,
