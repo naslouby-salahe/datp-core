@@ -283,7 +283,11 @@ def _evaluate_state(
         ).result
         if isinstance(threshold, ThresholdUnavailableResult):
             continue
-        evaluation_inputs = build_federated_evaluation_inputs(scores, method)
+        evaluation_inputs = build_federated_evaluation_inputs(
+            scores,
+            method,
+            calibration_role=calibration_role,
+        )
         evaluation = evaluate_federated_detector(
             EvaluateFederatedDetectorRequest(
                 score_manifest=scores,
