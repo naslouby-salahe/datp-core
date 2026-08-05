@@ -4,11 +4,11 @@ from datp_core.domain.enums import ExperimentId
 from datp_core.domain.values import Seed
 from datp_core.pipeline.campaign import CampaignPlan, build_campaign, execute_campaign
 from datp_core.pipeline.execution import (
-    PIPELINE_SEQUENCE,
     ExistingExperimentState,
     PipelineStage,
     StageExecution,
     StageOutcome,
+    resolve_execution_recipe,
 )
 from datp_core.pipeline.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
 from datp_core.protocols.experiments import EXPERIMENTS
@@ -20,7 +20,7 @@ class _IncompleteStore:
         self.deleted: list[str] = []
 
     def state(self, coordinate, output_root: Path) -> ExistingExperimentState:
-        del output_root
+        del coordinate, output_root
         return ExistingExperimentState.INCOMPLETE
 
     def delete(self, coordinate, output_root: Path) -> None:
@@ -52,7 +52,7 @@ class _SuccessfulRunner:
 
 
 def _tiny_campaign() -> CampaignPlan:
-    declaration = next(item for item in EXPERIMENTS if item.id is ExperimentId.DITTO_ABSORPTION_STRESS_TEST)
+    declaration = next(item for item in EXPERIMENTS if item.id is ExperimentId.SHARED_VS_LOCAL_CONFIRMATION)
     plan = expand_experiment_plan(
         declarations=(declaration,),
         seed_cohort=SeedCohort(values=(Seed(0),)),
@@ -82,7 +82,8 @@ def test_campaign_resume_deletes_incomplete_cells_and_restarts_in_canonical_orde
     assert result.campaign_digest == campaign.digest
     assert all(execution.successful for execution in result.experiments)
     assert len(store.deleted) == len(campaign.entries)
-    assert tuple(runner.stages) == PIPELINE_SEQUENCE * len(campaign.entries)
+    recipe_stages = resolve_execution_recipe(campaign.entries[0].coordinate).stages
+    assert tuple(runner.stages) == recipe_stages * len(campaign.entries)
 
 
 def test_repeated_tiny_campaigns_have_identical_plan_execution_and_cleanup(tmp_path: Path) -> None:

@@ -2,20 +2,25 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from hashlib import blake2b
 from pathlib import Path
 from shutil import rmtree
+from typing import ClassVar
 
 import polars as pl
 from pydantic import ValidationError
 
 from datp_core.analysis.contrasts import PairedContrast
 from datp_core.analysis.temporal import TemporalDeploymentProvenance
+from datp_core.anchor.models import VerifyAnchorStageRequest
 from datp_core.datasets.catalogue import dataset_binding
 from datp_core.datasets.edge_iiotset.schema import EDGE_NUMERIC_FEATURE_COLUMNS
 from datp_core.domain.enums import (
+    CentralizedModelId,
     DatasetId,
+    EvaluationCohort,
     EvidenceRole,
     ExperimentId,
     FederatedThresholdMethod,
@@ -40,12 +45,23 @@ from datp_core.domain.values import (
     FeatureNameSequence,
     MetricValue,
     ProximalCoefficient,
+    ScoreValue,
     Seed,
     checksum_file,
 )
-from datp_core.evaluation.controls import FixedScoreEvidence, build_federated_evaluation_inputs
-from datp_core.evaluation.models import MetricStatus, metric_by_id
+from datp_core.evaluation.client_metrics import calculate_client_metrics
+from datp_core.evaluation.cohorts import build_evaluation_cohort_manifest, client_partition_counts_from_scores
+from datp_core.evaluation.confusion import calculate_confusion_counts
+from datp_core.evaluation.controls import (
+    FixedScoreEvidence,
+    build_federated_evaluation_inputs,
+    evaluation_label_checksum,
+    source_row_checksum,
+)
+from datp_core.evaluation.models import ClientMetricResult, MetricStatus, metric_by_id
 from datp_core.evaluation.population import FederatedEvaluationAssetName, FederatedEvaluationDocument
+from datp_core.learning.centralized.training import CentralizedTrainingCoordinate
+from datp_core.learning.federated.ditto import DittoTrainingRequest
 from datp_core.learning.federated.models import (
     ClientTrainingInput,
     FederatedTrainingCoordinate,
@@ -63,11 +79,17 @@ from datp_core.pipeline.construct_population import (
     construct_published_split,
 )
 from datp_core.pipeline.construct_thresholds import (
+    CENTRALIZED_POOLED_QUANTILE_PROTOCOL,
+    ConstructCentralizedThresholdRequest,
     ConstructFederatedThresholdsRequest,
+    construct_centralized_threshold,
     construct_federated_thresholds,
 )
 from datp_core.pipeline.evaluate_detector import (
+    EvaluateCentralizedDetectorRequest,
+    EvaluateCentralizedDetectorResult,
     EvaluateFederatedDetectorRequest,
+    evaluate_centralized_detector,
     evaluate_federated_detector,
 )
 from datp_core.pipeline.execution import (
@@ -82,15 +104,28 @@ from datp_core.pipeline.execution import (
     execute_experiment,
 )
 from datp_core.pipeline.fit_preprocessing import (
+    FitCentralizedPopulationPreprocessingRequest,
     FitFederatedPreprocessingRequest,
     FitFederatedPreprocessingResult,
     FitPublishedFederatedPreprocessingRequest,
+    fit_centralized_population_preprocessing,
     fit_federated_preprocessing,
     fit_published_federated_preprocessing,
 )
-from datp_core.pipeline.generate_scores import GenerateFederatedScoresRequest, generate_federated_scores
+from datp_core.pipeline.generate_scores import (
+    GenerateCentralizedScoresRequest,
+    GenerateFederatedScoresRequest,
+    generate_centralized_scores,
+    generate_federated_scores,
+)
 from datp_core.pipeline.materialize_dataset import MaterializeDatasetRequest, materialize_dataset
-from datp_core.pipeline.planning import ExperimentCoordinate, ExperimentPlan, PlanDisposition
+from datp_core.pipeline.planning import (
+    ExecutionRoute,
+    ExperimentCoordinate,
+    ExperimentPlan,
+    PlanDisposition,
+    execution_route_for,
+)
 from datp_core.pipeline.publication.completion import (
     build_completion_record,
     read_completion_record,
@@ -106,14 +141,26 @@ from datp_core.pipeline.publication.records import (
 from datp_core.pipeline.publication.reload_validation import validate_reload
 from datp_core.pipeline.scoring.service import ClientScoringInput, FederatedScoreArtifactManifest
 from datp_core.pipeline.select_checkpoint import (
+    SelectCentralizedCheckpointRequest,
     SelectFederatedCheckpointRequest,
+    select_centralized_primary_checkpoint,
     select_federated_primary_checkpoint,
 )
-from datp_core.pipeline.train_detector import TrainFederatedDetectorRequest, train_federated_detector
+from datp_core.pipeline.train_detector import (
+    TrainCentralizedDetectorRequest,
+    TrainDittoDetectorRequest,
+    TrainDittoDetectorResult,
+    TrainFederatedDetectorRequest,
+    train_centralized_detector,
+    train_ditto_detector,
+    train_federated_detector,
+)
+from datp_core.pipeline.verify_anchor import verify_anchor
 from datp_core.populations.capabilities import population_capabilities
 from datp_core.populations.catalogue import resolve_population
-from datp_core.populations.models import ClientIdentity
+from datp_core.populations.models import ClientIdentity, PopulationOutcomeLabel
 from datp_core.preprocessing.models import ClientPreprocessingResult
+from datp_core.protocols.anchor import ANCHOR_DECISION_PROTOCOL
 from datp_core.protocols.calibration import CANONICAL_QUANTILE
 from datp_core.protocols.experiments import (
     BOUNDED_EVIDENCE_POPULATIONS,
@@ -121,7 +168,7 @@ from datp_core.protocols.experiments import (
     ExternalTemporalExecutionIdentity,
 )
 from datp_core.protocols.inference import FixedScoreInvariant
-from datp_core.protocols.models import AutoencoderProtocol, FedAvgProtocol, FedProxProtocol
+from datp_core.protocols.models import AutoencoderProtocol, DittoProtocol, FedAvgProtocol, FedProxProtocol
 from datp_core.protocols.populations import split_protocol_for_population
 from datp_core.protocols.runtime import DATA_ROOT, OUTPUTS_ROOT
 from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT
@@ -129,14 +176,18 @@ from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL
 from datp_core.protocols.training import (
     BATCH_SIZE,
     CHECKPOINT_PROTOCOL,
+    DITTO_TRAINING_PROTOCOLS,
     EDGE_IIOTSET_NUMERIC_AUTOENCODER,
     FEDAVG_TRAINING_PROTOCOL,
     FEDPROX_TRAINING_PROTOCOLS,
     LEARNING_RATE,
     NBAIOT_AUTOENCODER,
 )
+from datp_core.thresholding.assignments import ThresholdAssignment
 from datp_core.thresholding.dispatch import ThresholdConstructionRequest
 from datp_core.thresholding.identities import ThresholdUnavailableResult
+from datp_core.thresholding.methods.local import LocalThresholdResult
+from datp_core.thresholding.methods.shared import SharedThresholdResult
 from datp_core.thresholding.quantiles import ClientBenignCalibrationScores
 
 
@@ -198,8 +249,38 @@ class PublishedSeedContext:
     training_directory: Path
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class DittoStressTestResult:
+    """Ditto's declared personalized-model threshold-scope comparison (roadmap 7.2/11.2).
+
+    SHARED_THRESHOLD and LOCAL_THRESHOLD are both constructed from the PERSONALIZED
+    per-client scores only (never the global model, which would confound model identity,
+    score geometry, and threshold-calibration scope in one comparison). Personalized
+    clients are expected to carry distinct model/score checksums from each other; the
+    controlled comparison instead holds each client's own model, preprocessing state,
+    calibration rows, and evaluation rows fixed across the two threshold policies."""
+
+    personalized_coordinate: FederatedTrainingCoordinate
+    shared_threshold: SharedThresholdResult
+    local_threshold: LocalThresholdResult
+    shared_threshold_metrics: tuple[ClientMetricResult, ...]
+    local_threshold_metrics: tuple[ClientMetricResult, ...]
+
+
 def build_campaign(plan: ExperimentPlan) -> CampaignPlan:
-    coordinates = tuple(entry.coordinate for entry in plan.entries if entry.disposition is PlanDisposition.EXECUTABLE)
+    """Build the generic single-coordinate campaign from executable plan entries.
+
+    Only ExecutionRoute.SINGLE_COORDINATE coordinates are included: Ditto and
+    temporal-paired coordinates require their dedicated joint workflow (see
+    pipeline.planning.execution_route_for) and are never executed through
+    execute_experiment/GeneralStageRunner, so they are not campaign cells here.
+    """
+    coordinates = tuple(
+        entry.coordinate
+        for entry in plan.entries
+        if entry.disposition is PlanDisposition.EXECUTABLE
+        and execution_route_for(entry.coordinate) is ExecutionRoute.SINGLE_COORDINATE
+    )
     entries = tuple(CampaignEntry(ordinal=index, coordinate=coordinate) for index, coordinate in enumerate(coordinates))
     return CampaignPlan(entries=entries, digest=_campaign_digest(entries), plan_digest=Checksum(plan.digest))
 
@@ -275,6 +356,451 @@ def analyze_confirmatory_campaign() -> Path:
         )
     )
     return output
+
+
+def run_centralized_reference_seed(training_seed: Seed) -> EvaluateCentralizedDetectorResult:
+    """Train, checkpoint-select, score, threshold, and evaluate the centralized reference
+    for one seed on the confirmatory N-BaIoT population.
+
+    The centralized reference is the roadmap's privacy-incompatible upper-bound comparator
+    (roadmap section 4.1) and is structurally outside the federated threshold-scope ladder:
+    its own pooled model, its own pooled preprocessing, and its own POOLED_BENIGN_QUANTILE
+    threshold policy, never a federated checkpoint or a federated threshold method."""
+    population = PopulationId.NBAIOT_NATURAL_DEVICES
+    split_protocol = SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS
+    population_result = construct_declared_population(
+        ConstructDeclaredPopulationRequest(
+            population=population,
+            dataset=DatasetId.NBAIOT,
+            canonical_root=DATA_ROOT / "canonical" / DatasetId.NBAIOT.value,
+            partition_seed=training_seed,
+            split_protocol=split_protocol,
+            controlled_condition=None,
+        )
+    )
+    preprocessing = fit_centralized_population_preprocessing(
+        FitCentralizedPopulationPreprocessingRequest(
+            population=population,
+            partition_seed=training_seed,
+            split_protocol=split_protocol,
+            data_root=DATA_ROOT,
+            dirichlet_condition=None,
+            capture_timestamp_column=None,
+        )
+    )
+    coordinate = CentralizedTrainingCoordinate(
+        population=population,
+        training_seed=training_seed,
+        split_protocol=split_protocol,
+        preprocessing_identity=PreprocessingProtocolId.CENTRALIZED_POOLED_MIN_MAX,
+        model=CentralizedModelId.CENTRALIZED_AUTOENCODER,
+    )
+    directory = _centralized_reference_directory(training_seed)
+    feature_names = _training_feature_names(DatasetId.NBAIOT)
+    split_checksum = population_result.split_manifest.assignment_checksum
+    preprocessing_checksum = preprocessing.result.fitted_state.estimator_checksum
+    training = train_centralized_detector(
+        TrainCentralizedDetectorRequest(
+            coordinate=coordinate,
+            training_features=pl.read_parquet(preprocessing.result.paths.train),
+            feature_names=feature_names,
+            preprocessing_state=preprocessing.result.fitted_state,
+            split_manifest_checksum=split_checksum,
+            output_directory=directory / "training",
+            training_seed=training_seed,
+            autoencoder=NBAIOT_AUTOENCODER,
+            checkpoint_protocol=CHECKPOINT_PROTOCOL,
+            overwrite=False,
+        )
+    )
+    selection = select_centralized_primary_checkpoint(
+        SelectCentralizedCheckpointRequest(
+            coordinate=coordinate,
+            candidates=training.candidates,
+            checkpoint_protocol=CHECKPOINT_PROTOCOL,
+            preprocessing_checksum=preprocessing_checksum,
+            split_checksum=split_checksum,
+            training_seed=training_seed,
+            held_out_metrics=None,
+            attack_labels_present=False,
+        )
+    )
+    scores = generate_centralized_scores(
+        GenerateCentralizedScoresRequest(
+            coordinate=coordinate,
+            checkpoint=selection.decision.selected,
+            autoencoder=NBAIOT_AUTOENCODER,
+            feature_names=feature_names,
+            calibration_features=pl.read_parquet(preprocessing.result.paths.calibration),
+            evaluation_features=pl.read_parquet(preprocessing.result.paths.evaluation),
+            batch_size=BATCH_SIZE,
+            output_directory=directory / "scores",
+            preprocessing_state_checksum=preprocessing_checksum,
+            overwrite=False,
+        )
+    )
+    threshold = construct_centralized_threshold(
+        ConstructCentralizedThresholdRequest(
+            coordinate=coordinate,
+            calibration_scores=scores.scoring.calibration_scores,
+            output_directory=directory / "threshold",
+            protocol=CENTRALIZED_POOLED_QUANTILE_PROTOCOL,
+            overwrite=False,
+        )
+    )
+    return evaluate_centralized_detector(
+        EvaluateCentralizedDetectorRequest(
+            coordinate=coordinate,
+            evaluation_scores=scores.scoring.evaluation_scores,
+            threshold=threshold.threshold,
+            output_directory=directory / "evaluation",
+            overwrite=False,
+        )
+    )
+
+
+def _centralized_reference_directory(training_seed: Seed) -> Path:
+    return OUTPUTS_ROOT / "centralized_reference" / PopulationId.NBAIOT_NATURAL_DEVICES.value / str(training_seed.value)
+
+
+def _ditto_training_protocol_for(regularization: DittoRegularization) -> DittoProtocol:
+    matches = tuple(
+        protocol for protocol in DITTO_TRAINING_PROTOCOLS if protocol.regularization.value == regularization.value
+    )
+    if len(matches) != 1:
+        raise ScientificContractError(
+            "a Ditto regularization value must resolve to exactly one declared training protocol",
+            subject=TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER,
+        )
+    return matches[0]
+
+
+def _ditto_directory(training_seed: Seed, regularization: DittoRegularization, branch: str) -> Path:
+    return (
+        OUTPUTS_ROOT
+        / "ditto_stress_test"
+        / PopulationId.NBAIOT_NATURAL_DEVICES.value
+        / str(training_seed.value)
+        / str(regularization.value)
+        / branch
+    )
+
+
+def _client_scoring_input(
+    publications: tuple[ClientPreprocessingResult, ...], client: ClientIdentity
+) -> ClientScoringInput:
+    publication = next(item for item in publications if item.client_identity.value == client.client_id)
+    return ClientScoringInput(
+        client,
+        pl.read_parquet(publication.paths.calibration),
+        pl.read_parquet(publication.paths.evaluation),
+    )
+
+
+def _ditto_client_metric(
+    coordinate: FederatedTrainingCoordinate,
+    threshold_method: FederatedThresholdMethod,
+    population: PopulationId,
+    manifest: FederatedScoreArtifactManifest,
+    assignment: ThresholdAssignment,
+) -> ClientMetricResult:
+    record = next(item for item in manifest.evaluation_records if item.scored_client == assignment.client)
+    frame = pl.read_parquet(record.path)
+    scores = tuple(ScoreValue(float(value)) for value in frame[ScoreFrameColumn.RECONSTRUCTION_ERROR.value].to_list())
+    labels = tuple(
+        PopulationOutcomeLabel(str(value)) for value in frame[ScoreFrameColumn.OUTCOME_LABEL.value].to_list()
+    )
+    rows = tuple(str(value) for value in frame[ScoreFrameColumn.STABLE_ROW_ID.value].to_list())
+    cohort_manifest = build_evaluation_cohort_manifest(
+        population=population,
+        partition_seed=coordinate.training_seed,
+        client_counts=client_partition_counts_from_scores(manifest),
+    )
+    eligibility = next(item for item in cohort_manifest.records if item.client == assignment.client)
+    confusion = calculate_confusion_counts(
+        scores=scores,
+        labels=labels,
+        source_row_ids=rows,
+        threshold=assignment.threshold,
+        partition_role=PartitionRole.EVALUATION,
+        attack_assignment_valid=eligibility.attack_evaluable,
+    )
+    if eligibility.fpr_evaluable:
+        cohort = EvaluationCohort.FPR_EVALUABLE
+    elif eligibility.deployment_fallback:
+        cohort = EvaluationCohort.DEPLOYMENT_FALLBACK
+    else:
+        cohort = EvaluationCohort.UNAVAILABLE
+    return ClientMetricResult(
+        coordinate=coordinate,
+        threshold_method=threshold_method,
+        cohort=cohort,
+        client=assignment.client,
+        threshold=assignment.threshold,
+        confusion=confusion,
+        metrics=calculate_client_metrics(confusion=confusion, scores=scores, labels=labels),
+        warnings=(),
+        evidence_role=population_capabilities(population).evidentiary_role,
+        evaluation_score_checksum=record.checksum,
+        evaluation_label_checksum=evaluation_label_checksum(labels),
+        source_row_checksum=source_row_checksum(rows),
+    )
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class _DittoPopulationContext:
+    clients: tuple[ClientIdentity, ...]
+    family_by_client: tuple[tuple[ClientIdentity, FamilyIdentity], ...]
+    preprocessing: FitFederatedPreprocessingResult
+    split_manifest_checksum: Checksum
+    state_set_checksum: Checksum
+
+
+def _ditto_population_context(
+    *,
+    training_seed: Seed,
+    population: PopulationId,
+    split_protocol: SplitProtocolId,
+    preprocessing_identity: PreprocessingProtocolId,
+) -> _DittoPopulationContext:
+    population_result = construct_declared_population(
+        ConstructDeclaredPopulationRequest(
+            population=population,
+            dataset=DatasetId.NBAIOT,
+            canonical_root=DATA_ROOT / "canonical" / DatasetId.NBAIOT.value,
+            partition_seed=training_seed,
+            split_protocol=split_protocol,
+            controlled_condition=None,
+        )
+    )
+    preprocessing = fit_federated_preprocessing(
+        FitFederatedPreprocessingRequest(
+            population=population,
+            partition_seed=training_seed,
+            split_protocol=split_protocol,
+            preprocessing_identity=preprocessing_identity,
+            data_root=DATA_ROOT,
+            dirichlet_condition=None,
+            capture_timestamp_column=None,
+        )
+    )
+    clients = population_result.construction.manifest.clients
+    state_set_checksum = preprocessing_state_set_checksum(
+        tuple(
+            PreparedClientProvenance(
+                client=_client_with_id(clients, item.client_identity.value),
+                preprocessing_checksum=item.fitted_state.estimator_checksum,
+            )
+            for item in preprocessing.client_publications
+        )
+    )
+    return _DittoPopulationContext(
+        clients=clients,
+        family_by_client=_family_identities(clients, population_result.construction.manifest.family_by_client),
+        preprocessing=preprocessing,
+        split_manifest_checksum=population_result.split_manifest.assignment_checksum,
+        state_set_checksum=state_set_checksum,
+    )
+
+
+def _ditto_personalized_client_scores(
+    *,
+    training: TrainDittoDetectorResult,
+    personalized_coordinate: FederatedTrainingCoordinate,
+    context: _DittoPopulationContext,
+    feature_names: FeatureNameSequence,
+    training_seed: Seed,
+    regularization: DittoRegularization,
+    overwrite: bool,
+) -> tuple[tuple[ClientBenignCalibrationScores, ...], dict[ClientIdentity, FederatedScoreArtifactManifest]]:
+    eligible: list[ClientBenignCalibrationScores] = []
+    manifests_by_client: dict[ClientIdentity, FederatedScoreArtifactManifest] = {}
+    for owned in sorted(training.personalized_candidates.items, key=lambda item: item.client):
+        client = owned.client
+        selection = select_federated_primary_checkpoint(
+            SelectFederatedCheckpointRequest(
+                coordinate=personalized_coordinate,
+                client=client,
+                candidates=owned.value,
+                checkpoint_protocol=CHECKPOINT_PROTOCOL,
+                preprocessing_state_set_checksum=context.state_set_checksum,
+                split_manifest_checksum=context.split_manifest_checksum,
+                held_out_metrics=None,
+                attack_labels_present=False,
+            )
+        )
+        scores = generate_federated_scores(
+            GenerateFederatedScoresRequest(
+                checkpoint=selection.decision.selected,
+                autoencoder=NBAIOT_AUTOENCODER,
+                feature_names=feature_names,
+                clients=(_client_scoring_input(context.preprocessing.client_publications, client),),
+                batch_size=BATCH_SIZE,
+                output_directory=(
+                    _ditto_directory(training_seed, regularization, "personalized") / client.client_id / "scores"
+                ),
+                preprocessing_state_set_checksum=context.state_set_checksum,
+                split_manifest_checksum=context.split_manifest_checksum,
+                overwrite=overwrite,
+            )
+        ).result.manifest
+        manifests_by_client[client] = scores
+        invariant = FixedScoreInvariant.from_manifest(scores)
+        record = next(item for item in scores.calibration_records if item.scored_client == client)
+        eligible.append(
+            ClientBenignCalibrationScores(
+                client,
+                personalized_coordinate,
+                tuple(
+                    float(value)
+                    for value in pl.read_parquet(record.path)[ScoreFrameColumn.RECONSTRUCTION_ERROR.value].to_list()
+                ),
+                checksum_file(record.path),
+                invariant.calibration_score_set_checksum,
+            )
+        )
+    return tuple(eligible), manifests_by_client
+
+
+def run_ditto_stress_test_seed(
+    *,
+    training_seed: Seed,
+    regularization: DittoRegularization,
+    overwrite: bool = False,
+) -> DittoStressTestResult:
+    """Train Ditto's joint global/personalized publication (roadmap 7.2), then construct and
+    evaluate SHARED_THRESHOLD and LOCAL_THRESHOLD from the PERSONALIZED per-client scores only.
+
+    SHARED_THRESHOLD means every eligible client deploys the identical value
+    unweighted_mean(local_quantile_i for all i); LOCAL_THRESHOLD means each client deploys its
+    own local_quantile_i. Both constructions already tolerate distinct per-client score-set
+    checksums (thresholding.methods.shared.construct_shared_threshold and
+    methods.local.construct_local_threshold require no cross-client checksum equality, unlike
+    the pooled-scores POOLED_SHARED_QUANTILE method) so no relaxation of any existing scientific
+    invariant was needed. Both policies reuse the SAME per-client personalized checkpoint,
+    preprocessing state, calibration rows, and evaluation rows -- only the threshold-calibration
+    scope differs, which is the controlled comparison the roadmap requires."""
+    population = PopulationId.NBAIOT_NATURAL_DEVICES
+    split_protocol = SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS
+    context = _ditto_population_context(
+        training_seed=training_seed,
+        population=population,
+        split_protocol=split_protocol,
+        preprocessing_identity=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
+    )
+    global_coordinate = FederatedTrainingCoordinate(
+        population=population,
+        training_seed=training_seed,
+        split_protocol=split_protocol,
+        preprocessing_identity=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
+        model=TrainingModelId.DITTO_GLOBAL_AUTOENCODER,
+        model_coefficient=None,
+    )
+    personalized_coordinate = FederatedTrainingCoordinate(
+        population=population,
+        training_seed=training_seed,
+        split_protocol=split_protocol,
+        preprocessing_identity=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
+        model=TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER,
+        model_coefficient=regularization,
+    )
+    feature_names = _training_feature_names(DatasetId.NBAIOT)
+    training = train_ditto_detector(
+        TrainDittoDetectorRequest(
+            request=DittoTrainingRequest(
+                global_coordinate=global_coordinate,
+                personalized_coordinate=personalized_coordinate,
+                clients=_client_training_inputs(
+                    context.preprocessing.client_publications, context.clients, feature_names
+                ),
+                population_client_count=ClientCount(len(context.clients)),
+                autoencoder=NBAIOT_AUTOENCODER,
+                training_protocol=_ditto_training_protocol_for(regularization),
+                checkpoint_protocol=CHECKPOINT_PROTOCOL,
+                training_seed=training_seed,
+                batch_size=BATCH_SIZE,
+                learning_rate=LEARNING_RATE,
+                split_manifest_checksum=context.split_manifest_checksum,
+                global_output_directory=_ditto_directory(training_seed, regularization, "global"),
+                personalized_output_directory=_ditto_directory(training_seed, regularization, "personalized"),
+            ),
+            overwrite=overwrite,
+        )
+    )
+    eligible, manifests_by_client = _ditto_personalized_client_scores(
+        training=training,
+        personalized_coordinate=personalized_coordinate,
+        context=context,
+        feature_names=feature_names,
+        training_seed=training_seed,
+        regularization=regularization,
+        overwrite=overwrite,
+    )
+    capabilities = population_capabilities(population)
+    threshold_directory = _ditto_directory(training_seed, regularization, "threshold")
+    shared = construct_federated_thresholds(
+        ConstructFederatedThresholdsRequest(
+            request=ThresholdConstructionRequest(
+                FederatedThresholdMethod.SHARED_THRESHOLD,
+                personalized_coordinate,
+                CANONICAL_QUANTILE,
+                capabilities,
+                eligible,
+                context.family_by_client,
+            ),
+            output_directory=threshold_directory / "shared",
+            overwrite=overwrite,
+        )
+    ).result
+    local = construct_federated_thresholds(
+        ConstructFederatedThresholdsRequest(
+            request=ThresholdConstructionRequest(
+                FederatedThresholdMethod.LOCAL_THRESHOLD,
+                personalized_coordinate,
+                CANONICAL_QUANTILE,
+                capabilities,
+                eligible,
+                context.family_by_client,
+            ),
+            output_directory=threshold_directory / "local",
+            overwrite=overwrite,
+        )
+    ).result
+    if not isinstance(shared, SharedThresholdResult):
+        raise ScientificContractError(
+            "Ditto SHARED_THRESHOLD construction must produce a shared threshold result",
+            subject=personalized_coordinate.model,
+        )
+    if not isinstance(local, LocalThresholdResult):
+        raise ScientificContractError(
+            "Ditto LOCAL_THRESHOLD construction must produce a local threshold result",
+            subject=personalized_coordinate.model,
+        )
+    return DittoStressTestResult(
+        personalized_coordinate=personalized_coordinate,
+        shared_threshold=shared,
+        local_threshold=local,
+        shared_threshold_metrics=tuple(
+            _ditto_client_metric(
+                personalized_coordinate,
+                FederatedThresholdMethod.SHARED_THRESHOLD,
+                population,
+                manifests_by_client[assignment.client],
+                assignment,
+            )
+            for assignment in shared.assignments
+        ),
+        local_threshold_metrics=tuple(
+            _ditto_client_metric(
+                personalized_coordinate,
+                FederatedThresholdMethod.LOCAL_THRESHOLD,
+                population,
+                manifests_by_client[assignment.client],
+                assignment,
+            )
+            for assignment in local.assignments
+        ),
+    )
 
 
 def run_published_seed(
@@ -1215,46 +1741,42 @@ class GeneralStageRunner:
                     "run via pipeline.campaign.run_temporal_future_pair, not single-coordinate stages"
                 ),
             )
-        match stage:
-            case PipelineStage.PREFLIGHT:
-                return StageExecution(
-                    stage=stage,
-                    outcome=StageOutcome.COMPLETED,
-                    evidence=f"coordinate validated: {coordinate.stable_key}",
-                )
-            case PipelineStage.MATERIALIZE_DATASET:
-                return self._materialize_dataset(stage, coordinate)
-            case PipelineStage.CONSTRUCT_POPULATION | PipelineStage.FIT_PREPROCESSING:
-                context = _resolve_seed_context(coordinate)
-                return StageExecution(
-                    stage=stage,
-                    outcome=StageOutcome.COMPLETED,
-                    evidence=f"clients={len(context.clients)} state_set={context.state_set_checksum.value}",
-                )
-            case PipelineStage.TRAIN_DETECTOR:
-                return self._train_detector(stage, coordinate)
-            case PipelineStage.SELECT_CHECKPOINT:
-                return self._select_checkpoint(stage, coordinate)
-            case PipelineStage.GENERATE_SCORES:
-                return self._generate_scores(stage, coordinate)
-            case PipelineStage.BUILD_CALIBRATION:
-                return self._build_calibration(stage, coordinate)
-            case PipelineStage.CONSTRUCT_THRESHOLDS:
-                return self._construct_thresholds(stage, coordinate)
-            case PipelineStage.EVALUATE_DETECTOR:
-                return self._evaluate_detector(stage, coordinate)
-            case PipelineStage.ANALYZE_EVIDENCE:
-                return self._analyze_evidence(stage, coordinate)
-            case PipelineStage.VERIFY_ANCHOR:
-                return self._verify_anchor(stage, coordinate)
-            case PipelineStage.PUBLISH_REPORT:
-                return StageExecution(
-                    stage=stage,
-                    outcome=StageOutcome.COMPLETED,
-                    evidence="per-coordinate report emission is a campaign-level aggregation; no-op here",
-                )
-            case PipelineStage.FINALIZE_PUBLICATION:
-                return self._finalize_publication(stage, coordinate, provenance)
+        if stage is PipelineStage.PREFLIGHT:
+            return StageExecution(
+                stage=stage,
+                outcome=StageOutcome.COMPLETED,
+                evidence=f"coordinate validated: {coordinate.stable_key}",
+            )
+        if stage is PipelineStage.PUBLISH_REPORT:
+            raise ScientificContractError(
+                "PUBLISH_REPORT is a campaign-level report aggregation, not a per-coordinate stage; "
+                "no execution recipe includes it",
+                subject=coordinate.experiment,
+            )
+        if stage is PipelineStage.FINALIZE_PUBLICATION:
+            return self._finalize_publication(stage, coordinate, provenance)
+        handler = self._COORDINATE_STAGE_HANDLERS.get(stage)
+        if handler is None:
+            raise ScientificContractError(
+                f"no coordinate-stage handler is declared for {stage.value}", subject=coordinate.experiment
+            )
+        return handler(self, stage, coordinate)
+
+    def _construct_population(self, stage: PipelineStage, coordinate: ExperimentCoordinate) -> StageExecution:
+        context = _resolve_seed_context(coordinate)
+        return StageExecution(
+            stage=stage,
+            outcome=StageOutcome.COMPLETED,
+            evidence=f"clients={len(context.clients)} split_checksum={context.split_manifest_checksum.value}",
+        )
+
+    def _fit_preprocessing(self, stage: PipelineStage, coordinate: ExperimentCoordinate) -> StageExecution:
+        context = _resolve_seed_context(coordinate)
+        return StageExecution(
+            stage=stage,
+            outcome=StageOutcome.COMPLETED,
+            evidence=f"state_set={context.state_set_checksum.value}",
+        )
 
     def _materialize_dataset(self, stage: PipelineStage, coordinate: ExperimentCoordinate) -> StageExecution:
         result = materialize_dataset(MaterializeDatasetRequest(data_root=DATA_ROOT, datasets=(coordinate.dataset,)))
@@ -1508,15 +2030,23 @@ class GeneralStageRunner:
 
     def _verify_anchor(self, stage: PipelineStage, coordinate: ExperimentCoordinate) -> StageExecution:
         if coordinate.experiment is not ExperimentId.HISTORICAL_DATP_REPRODUCTION:
-            return StageExecution(
-                stage=stage,
-                outcome=StageOutcome.COMPLETED,
-                evidence="the anchor gate applies only to the historical reproduction experiment; no-op here",
+            raise ScientificContractError(
+                "the anchor gate applies only to the historical reproduction experiment",
+                subject=coordinate.experiment,
             )
+        result = verify_anchor(
+            VerifyAnchorStageRequest(
+                protocol=ANCHOR_DECISION_PROTOCOL,
+                diagnostics_directory=experiment_output_directory(OUTPUTS_ROOT, coordinate) / "anchor",
+                observations=None,
+                historical_sources=None,
+                request_independent_reproduction=False,
+            )
+        )
         return StageExecution(
             stage=stage,
             outcome=StageOutcome.COMPLETED,
-            evidence="anchor verification is a dedicated campaign-level gate (pipeline.verify_anchor)",
+            evidence=f"gate={result.status.gate_status.value} readiness={result.status.dependent_readiness.value}",
         )
 
     def _finalize_publication(
@@ -1599,3 +2129,19 @@ class GeneralStageRunner:
             outcome=StageOutcome.COMPLETED,
             evidence=f"completion_state={record.state.value} artifacts={len(record.artifacts)}",
         )
+
+    _COORDINATE_STAGE_HANDLERS: ClassVar[
+        dict[PipelineStage, Callable[[GeneralStageRunner, PipelineStage, ExperimentCoordinate], StageExecution]]
+    ] = {
+        PipelineStage.MATERIALIZE_DATASET: _materialize_dataset,
+        PipelineStage.CONSTRUCT_POPULATION: _construct_population,
+        PipelineStage.FIT_PREPROCESSING: _fit_preprocessing,
+        PipelineStage.TRAIN_DETECTOR: _train_detector,
+        PipelineStage.SELECT_CHECKPOINT: _select_checkpoint,
+        PipelineStage.GENERATE_SCORES: _generate_scores,
+        PipelineStage.BUILD_CALIBRATION: _build_calibration,
+        PipelineStage.CONSTRUCT_THRESHOLDS: _construct_thresholds,
+        PipelineStage.EVALUATE_DETECTOR: _evaluate_detector,
+        PipelineStage.ANALYZE_EVIDENCE: _analyze_evidence,
+        PipelineStage.VERIFY_ANCHOR: _verify_anchor,
+    }

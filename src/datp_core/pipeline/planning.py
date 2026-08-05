@@ -52,6 +52,36 @@ class PlanDisposition(StrEnum):
     BLOCKED = "blocked"
 
 
+class ExecutionRoute(StrEnum):
+    """Which execution mechanism a coordinate's scientific shape requires.
+
+    Only SINGLE_COORDINATE resolves to an ExecutionRecipe runnable by
+    execute_experiment/GeneralStageRunner. The other routes require their
+    dedicated joint workflow (pipeline.campaign.run_temporal_future_pair for
+    TEMPORAL_PAIRED_EXECUTION; Ditto's joint global/personalized publication,
+    not yet campaign-wired, for DITTO_JOINT_PUBLICATION) because they couple
+    multiple coordinates or a shared detector in ways a per-coordinate recipe
+    cannot represent.
+    """
+
+    SINGLE_COORDINATE = "single_coordinate"
+    DITTO_JOINT_PUBLICATION = "ditto_joint_publication"
+    TEMPORAL_PAIRED_EXECUTION = "temporal_paired_execution"
+
+
+_DITTO_TRAINING_MODELS = frozenset(
+    (TrainingModelId.DITTO_GLOBAL_AUTOENCODER, TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER)
+)
+
+
+def execution_route_for(coordinate: ExperimentCoordinate) -> ExecutionRoute:
+    if coordinate.temporal_state is not None:
+        return ExecutionRoute.TEMPORAL_PAIRED_EXECUTION
+    if coordinate.training_model in _DITTO_TRAINING_MODELS:
+        return ExecutionRoute.DITTO_JOINT_PUBLICATION
+    return ExecutionRoute.SINGLE_COORDINATE
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PlanningEvidence:
     experiment: ExperimentId
@@ -406,7 +436,7 @@ def _ciciot_decision(request: CiciotBoundaryFeasibilityRequest) -> FeasibilityDe
     return _threshold_and_artifact_decision(request)
 
 
-def _temporal_decision(request: EdgeTemporalFeasibilityRequest) -> FeasibilityDecision:
+def _temporal_chronology_decision(request: EdgeTemporalFeasibilityRequest) -> FeasibilityDecision | None:
     if request.temporal_execution_mode is not TemporalExecutionMode.ONE_SHOT:
         return _infeasible(
             FeasibilityReason.UNSUPPORTED_TEMPORAL_EXECUTION_MODE,
@@ -422,6 +452,10 @@ def _temporal_decision(request: EdgeTemporalFeasibilityRequest) -> FeasibilityDe
             FeasibilityReason.MODBUS_TEMPORAL_UNAVAILABLE,
             "Modbus frame.time values are address literals, not chronology",
         )
+    return None
+
+
+def _temporal_attack_exposure_decision(request: EdgeTemporalFeasibilityRequest) -> FeasibilityDecision | None:
     if request.attack_assignment_claimed_available:
         return _infeasible(
             FeasibilityReason.ATTACK_ASSIGNMENT_MISREPRESENTED,
@@ -432,6 +466,10 @@ def _temporal_decision(request: EdgeTemporalFeasibilityRequest) -> FeasibilityDe
             FeasibilityReason.ATTACK_SENSITIVE_EDGE_METRIC,
             "Edge temporal evidence supports benign operating-point outcomes only",
         )
+    return None
+
+
+def _temporal_eligibility_decision(request: EdgeTemporalFeasibilityRequest) -> FeasibilityDecision | None:
     if request.recovery_ratio_requested and not request.materiality_protocol_available:
         return _blocked(
             FeasibilityReason.MATERIALITY_PROTOCOL_UNAVAILABLE,
@@ -447,6 +485,17 @@ def _temporal_decision(request: EdgeTemporalFeasibilityRequest) -> FeasibilityDe
             FeasibilityReason.FUTURE_LEAKAGE,
             "future rows cannot affect historical fitting or frozen thresholds",
         )
+    return None
+
+
+def _temporal_decision(request: EdgeTemporalFeasibilityRequest) -> FeasibilityDecision:
+    decision = (
+        _temporal_chronology_decision(request)
+        or _temporal_attack_exposure_decision(request)
+        or _temporal_eligibility_decision(request)
+    )
+    if decision is not None:
+        return decision
     return _threshold_and_artifact_decision(request)
 
 

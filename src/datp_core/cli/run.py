@@ -17,11 +17,13 @@ from datp_core.domain.enums import (
     SplitProtocolId,
     TemporalState,
 )
-from datp_core.domain.values import DirichletConcentration, FeatureName, FeatureNameSequence, Seed
+from datp_core.domain.values import DirichletConcentration, DittoRegularization, FeatureName, FeatureNameSequence, Seed
 from datp_core.pipeline.campaign import (
     analyze_confirmatory_campaign,
+    run_centralized_reference_seed,
     run_confirmatory_campaign,
     run_confirmatory_seed,
+    run_ditto_stress_test_seed,
     run_published_seed,
     run_temporal_future_pair,
 )
@@ -37,7 +39,7 @@ from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
 from datp_core.protocols.populations import DIRICHLET_CONCENTRATIONS
 from datp_core.protocols.runtime import DATA_ROOT
 from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT
-from datp_core.protocols.training import EDGE_IIOTSET_NUMERIC_AUTOENCODER
+from datp_core.protocols.training import DITTO_TRAINING_PROTOCOLS, EDGE_IIOTSET_NUMERIC_AUTOENCODER
 
 app = typer.Typer(no_args_is_help=True)
 _DECLARED_DIRICHLET_VALUES = frozenset(item.value for item in DIRICHLET_CONCENTRATIONS)
@@ -132,6 +134,41 @@ def confirmatory_campaign() -> None:
 @app.command("analyze-confirmatory")
 def analyze_confirmatory() -> None:
     typer.echo(str(analyze_confirmatory_campaign()))
+
+
+@app.command("centralized-reference-seed")
+def centralized_reference_seed(training_seed: Annotated[int, typer.Option(min=0)]) -> None:
+    if training_seed not in _DECLARED_CONFIRMATORY_SEEDS:
+        allowed = ", ".join(str(value) for value in sorted(_DECLARED_CONFIRMATORY_SEEDS))
+        raise typer.BadParameter(f"training-seed must be one of the declared confirmatory seeds: {allowed}")
+    evaluation = run_centralized_reference_seed(Seed(training_seed))
+    typer.echo(
+        f"seed={training_seed} status={evaluation.publication_status.value} "
+        f"threshold={evaluation.evaluation.threshold.value}"
+    )
+
+
+@app.command("ditto-stress-test-seed")
+def ditto_stress_test_seed(
+    training_seed: Annotated[int, typer.Option(min=0)],
+    regularization: Annotated[float, typer.Option()],
+) -> None:
+    if training_seed not in _DECLARED_CONFIRMATORY_SEEDS:
+        allowed = ", ".join(str(value) for value in sorted(_DECLARED_CONFIRMATORY_SEEDS))
+        raise typer.BadParameter(f"training-seed must be one of the declared confirmatory seeds: {allowed}")
+    declared = frozenset(protocol.regularization.value for protocol in DITTO_TRAINING_PROTOCOLS)
+    if regularization not in declared:
+        allowed = ", ".join(str(value) for value in sorted(declared))
+        raise typer.BadParameter(f"regularization must be one of the declared Ditto values: {allowed}")
+    result = run_ditto_stress_test_seed(
+        training_seed=Seed(training_seed),
+        regularization=DittoRegularization(regularization),
+    )
+    typer.echo(
+        f"seed={training_seed} regularization={regularization} "
+        f"shared_threshold={result.shared_threshold.shared_threshold.value} "
+        f"clients={len(result.shared_threshold_metrics)}"
+    )
 
 
 @app.command("external-validation-seed")
