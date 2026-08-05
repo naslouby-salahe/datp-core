@@ -4,7 +4,13 @@ import pytest
 
 from datp_core.domain.values import checksum_bytes
 from datp_core.pipeline.publication.completion import build_completion_record, require_complete
-from datp_core.pipeline.publication.records import ArtifactKind, ArtifactRecord, ArtifactState, CompletionRecord
+from datp_core.pipeline.publication.records import (
+    ArtifactKind,
+    ArtifactRecord,
+    ArtifactState,
+    CompletionRecord,
+    CompletionState,
+)
 from datp_core.pipeline.publication.reload_validation import validate_reload
 
 
@@ -28,6 +34,7 @@ def test_completion_and_reload_require_exact_published_artifacts(tmp_path: Path)
         campaign_digest="campaign",
         artifacts=(artifact,),
     )
+    assert completion.state is CompletionState.COMPLETE
     require_complete(completion)
     validation = validate_reload(root=tmp_path, completion=completion, observed=(artifact,))
     assert validation.valid
@@ -74,5 +81,5 @@ def test_complete_record_requires_an_artifact_inventory() -> None:
             plan_digest="plan",
             campaign_digest="campaign",
             artifacts=(),
-            complete=True,
+            state=CompletionState.COMPLETE,
         )
