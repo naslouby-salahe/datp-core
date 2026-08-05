@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 
 import polars as pl
@@ -10,12 +11,11 @@ from pydantic import ValidationError
 
 from datp_core.datasets.catalogue import dataset_binding
 from datp_core.datasets.edge_iiotset.schema import EDGE_NUMERIC_FEATURE_COLUMNS
-from datp_core.domain.enums import DatasetId, MetricId, PartitionRole, ScoreFrameColumn, TrainingModelId
+from datp_core.domain.enums import DatasetId, MetricId, PartitionRole, ScoreFrameColumn
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import (
     Checksum,
     ClientCount,
-    DittoRegularization,
     FamilyIdentity,
     FeatureName,
     FeatureNameSequence,
@@ -63,14 +63,28 @@ from datp_core.protocols.training import (
     BATCH_SIZE,
     CHECKPOINT_PROTOCOL,
     EDGE_IIOTSET_NUMERIC_AUTOENCODER,
-    FEDAVG_TRAINING_PROTOCOL,
     LEARNING_RATE,
     NBAIOT_AUTOENCODER,
-    resolve_fedprox_protocol,
+    resolve_single_model_federated_training_protocol,
 )
 from datp_core.thresholding.quantiles import ClientBenignCalibrationScores
 
 EDGE_FEATURE_NAMES = FeatureNameSequence(tuple(FeatureName(name) for name in EDGE_NUMERIC_FEATURE_COLUMNS))
+
+
+class ExecutionArtifactDirectory(StrEnum):
+    CANONICAL_DATA = "canonical"
+    POPULATION = "population"
+    SPLIT = "split"
+    TRAINING = "training"
+    SCORES = "scores"
+
+
+class ExecutionPathIdentity(StrEnum):
+    FEDERATED = "federated"
+    BOUNDED_EVIDENCE = "bounded_evidence"
+    NO_MODEL_COEFFICIENT = "no_model_coefficient"
+    NON_TEMPORAL = "non_temporal"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -78,7 +92,7 @@ class FederatedExecutionContext:
     coordinate: FederatedTrainingCoordinate
     execution_identity: ExternalTemporalExecutionIdentity | None
     clients: tuple[ClientIdentity, ...]
-    family_by_client: tuple[tuple[str, str], ...]
+    family_by_client: tuple[tuple[ClientIdentity, FamilyIdentity], ...]
     preprocessing: FitFederatedPreprocessingResult
     preprocessing_state_set_checksum: Checksum
     split_manifest_checksum: Checksum
@@ -105,42 +119,15 @@ def training_feature_names(dataset: DatasetId) -> FeatureNameSequence:
 
 
 def training_protocol_for(coordinate: ExperimentCoordinate) -> FedAvgProtocol | FedProxProtocol:
-    match coordinate.training_model:
-        case TrainingModelId.FEDAVG_AUTOENCODER:
-            return FEDAVG_TRAINING_PROTOCOL
-        case TrainingModelId.FEDPROX_AUTOENCODER:
-            if coordinate.model_coefficient is None:
-                raise ScientificContractError(
-                    "a FedProx coordinate requires a declared model coefficient",
-                    subject=coordinate.training_model,
-                )
-            return resolve_fedprox_protocol(coordinate.model_coefficient)
-        case TrainingModelId.DITTO_GLOBAL_AUTOENCODER | TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER:
-            raise ScientificContractError(
-                "Ditto requires its related global and personalized execution route",
-                subject=coordinate.training_model,
-            )
+    return resolve_single_model_federated_training_protocol(
+        model=coordinate.training_model,
+        coefficient=coordinate.model_coefficient,
+    )
 
 
-def federated_model_coefficient(
-    coordinate: ExperimentCoordinate,
-) -> ProximalCoefficient | DittoRegularization | None:
-    match coordinate.training_model:
-        case TrainingModelId.FEDAVG_AUTOENCODER:
-            return None
-        case TrainingModelId.FEDPROX_AUTOENCODER:
-            protocol = training_protocol_for(coordinate)
-            if not isinstance(protocol, FedProxProtocol):
-                raise ScientificContractError(
-                    "a FedProx coordinate must resolve to a FedProx protocol",
-                    subject=coordinate.training_model,
-                )
-            return protocol.coefficient
-        case TrainingModelId.DITTO_GLOBAL_AUTOENCODER | TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER:
-            raise ScientificContractError(
-                "Ditto requires its related global and personalized execution route",
-                subject=coordinate.training_model,
-            )
+def federated_model_coefficient(coordinate: ExperimentCoordinate) -> ProximalCoefficient | None:
+    protocol = training_protocol_for(coordinate)
+    return protocol.coefficient if isinstance(protocol, FedProxProtocol) else None
 
 
 def execution_identity_for(coordinate: ExperimentCoordinate) -> ExternalTemporalExecutionIdentity | None:
@@ -170,7 +157,9 @@ def resolve_execution_context(coordinate: ExperimentCoordinate) -> FederatedExec
             ConstructDeclaredPopulationRequest(
                 population=coordinate.population,
                 dataset=coordinate.dataset,
-                canonical_root=DATA_ROOT / "canonical" / coordinate.dataset.value,
+                canonical_root=(
+                    DATA_ROOT / ExecutionArtifactDirectory.CANONICAL_DATA.value / coordinate.dataset.value
+                ),
                 partition_seed=coordinate.training_seed,
                 split_protocol=coordinate.split_protocol,
                 controlled_condition=None,
@@ -188,19 +177,23 @@ def resolve_execution_context(coordinate: ExperimentCoordinate) -> FederatedExec
             )
         )
         clients = population_result.construction.manifest.clients
-        family_by_client = population_result.construction.manifest.family_by_client
+        raw_family_by_client = population_result.construction.manifest.family_by_client
         split_manifest_checksum = population_result.split_manifest.assignment_checksum
         training_directory = federated_training_directory(training_coordinate)
     else:
-        root = published_seed_directory(execution_identity, coordinate.training_seed)
+        root = bounded_evidence_seed_directory(execution_identity, coordinate.training_seed)
+        population_directory = root / ExecutionArtifactDirectory.POPULATION.value
+        split_directory = root / ExecutionArtifactDirectory.SPLIT.value
         population_result = construct_published_population(
             ConstructPublishedPopulationRequest(
-                canonical_root=DATA_ROOT / "canonical" / coordinate.dataset.value,
+                canonical_root=(
+                    DATA_ROOT / ExecutionArtifactDirectory.CANONICAL_DATA.value / coordinate.dataset.value
+                ),
                 population=coordinate.population,
                 execution_identity=execution_identity,
                 partition_seed=coordinate.training_seed,
                 split_protocol=coordinate.split_protocol,
-                output_directory=root / "population",
+                output_directory=population_directory,
                 overwrite=False,
             )
         )
@@ -211,7 +204,7 @@ def resolve_execution_context(coordinate: ExperimentCoordinate) -> FederatedExec
                 population_manifest=population_result.population_manifest,
                 membership=population_result.membership,
                 partition_seed=coordinate.training_seed,
-                output_directory=root / "split",
+                output_directory=split_directory,
                 overwrite=False,
                 matched_static_reference_manifest=population_result.matched_static_reference_manifest,
                 matched_static_reference_membership=population_result.matched_static_reference_membership,
@@ -220,20 +213,20 @@ def resolve_execution_context(coordinate: ExperimentCoordinate) -> FederatedExec
         preprocessing = fit_published_federated_preprocessing(
             FitPublishedFederatedPreprocessingRequest(
                 execution_identity=execution_identity,
-                population_directory=root / "population",
-                split_directory=root / "split",
+                population_directory=population_directory,
+                split_directory=split_directory,
                 preprocessing_identity=coordinate.preprocessing_protocol,
                 data_root=DATA_ROOT,
             )
         )
         clients = population_result.population_manifest.clients
-        family_by_client = population_result.population_manifest.family_by_client
+        raw_family_by_client = population_result.population_manifest.family_by_client
         split_manifest_checksum = split_result.manifest.assignment_checksum
-        training_directory = root / "training"
+        training_directory = root / ExecutionArtifactDirectory.TRAINING.value
     state_set_checksum = preprocessing_state_set_checksum(
         tuple(
             PreparedClientProvenance(
-                client=ClientIdentity(coordinate.population, item.client_identity.value, identity_kind),
+                client=client_with_id(clients, item.client_identity.value),
                 preprocessing_checksum=item.fitted_state.estimator_checksum,
             )
             for item in preprocessing.client_publications
@@ -243,7 +236,7 @@ def resolve_execution_context(coordinate: ExperimentCoordinate) -> FederatedExec
         coordinate=training_coordinate,
         execution_identity=execution_identity,
         clients=clients,
-        family_by_client=family_by_client,
+        family_by_client=family_identities(clients, raw_family_by_client),
         preprocessing=preprocessing,
         preprocessing_state_set_checksum=state_set_checksum,
         split_manifest_checksum=split_manifest_checksum,
@@ -257,7 +250,10 @@ def score_execution_context(
     autoencoder: AutoencoderProtocol,
     feature_names: FeatureNameSequence,
 ) -> FederatedScoreArtifactManifest:
-    training_protocol = _protocol_for_training_coordinate(context.coordinate)
+    training_protocol = resolve_single_model_federated_training_protocol(
+        model=context.coordinate.model,
+        coefficient=context.coordinate.model_coefficient,
+    )
     training = train_federated_detector(
         TrainFederatedDetectorRequest(
             request=FederatedTrainingRequest(
@@ -295,30 +291,12 @@ def score_execution_context(
             feature_names=feature_names,
             clients=client_scoring_inputs(context.preprocessing.client_publications, context.clients),
             batch_size=BATCH_SIZE,
-            output_directory=context.training_directory / "scores",
+            output_directory=context.training_directory / ExecutionArtifactDirectory.SCORES.value,
             preprocessing_state_set_checksum=context.preprocessing_state_set_checksum,
             split_manifest_checksum=context.split_manifest_checksum,
             overwrite=False,
         )
     ).result.manifest
-
-
-def _protocol_for_training_coordinate(coordinate: FederatedTrainingCoordinate) -> FedAvgProtocol | FedProxProtocol:
-    match coordinate.model:
-        case TrainingModelId.FEDAVG_AUTOENCODER:
-            return FEDAVG_TRAINING_PROTOCOL
-        case TrainingModelId.FEDPROX_AUTOENCODER:
-            if coordinate.model_coefficient is None:
-                raise ScientificContractError(
-                    "a FedProx training coordinate requires a coefficient",
-                    subject=coordinate.model,
-                )
-            return resolve_fedprox_protocol(coordinate.model_coefficient)
-        case TrainingModelId.DITTO_GLOBAL_AUTOENCODER | TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER:
-            raise ScientificContractError(
-                "Ditto is not a single-model federated execution context",
-                subject=coordinate.model,
-            )
 
 
 def client_training_inputs(
@@ -421,10 +399,14 @@ def population_metric(document: FederatedEvaluationDocument, metric: MetricId) -
 
 
 def federated_training_directory(coordinate: FederatedTrainingCoordinate) -> Path:
-    coefficient = str(coordinate.model_coefficient.value) if coordinate.model_coefficient is not None else "unweighted"
+    coefficient = (
+        str(coordinate.model_coefficient.value)
+        if coordinate.model_coefficient is not None
+        else ExecutionPathIdentity.NO_MODEL_COEFFICIENT.value
+    )
     return (
         OUTPUTS_ROOT
-        / "federated"
+        / ExecutionPathIdentity.FEDERATED.value
         / coordinate.population.value
         / str(coordinate.training_seed.value)
         / coordinate.split_protocol.value
@@ -434,9 +416,21 @@ def federated_training_directory(coordinate: FederatedTrainingCoordinate) -> Pat
     )
 
 
-def published_seed_directory(
+def bounded_evidence_seed_directory(
     execution_identity: ExternalTemporalExecutionIdentity,
     partition_seed: Seed,
 ) -> Path:
-    temporal = execution_identity.temporal_state.value if execution_identity.temporal_state is not None else "static"
-    return OUTPUTS_ROOT / "phase11" / execution_identity.population.value / str(partition_seed.value) / temporal
+    temporal = (
+        execution_identity.temporal_state.value
+        if execution_identity.temporal_state is not None
+        else ExecutionPathIdentity.NON_TEMPORAL.value
+    )
+    return (
+        OUTPUTS_ROOT
+        / ExecutionPathIdentity.BOUNDED_EVIDENCE.value
+        / execution_identity.experiment.value
+        / execution_identity.population.value
+        / execution_identity.evidence_role.value
+        / str(partition_seed.value)
+        / temporal
+    )
