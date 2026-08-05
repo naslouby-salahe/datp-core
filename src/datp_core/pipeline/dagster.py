@@ -5,7 +5,7 @@ from dagster import AssetSelection, ConfigurableResource, Definitions, asset, de
 from datp_core.pipeline.execution.engine import build_campaign
 from datp_core.pipeline.planning import expand_experiment_plan
 from datp_core.pipeline.workflows.confirmatory import analyze_confirmatory_campaign, run_confirmatory_campaign
-from datp_core.protocols.runtime import DATA_ROOT, OUTPUTS_ROOT
+from datp_core.runtime.configuration import DATA_ROOT, OUTPUTS_ROOT
 
 
 class PipelinePaths(ConfigurableResource["PipelinePaths"]):

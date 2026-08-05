@@ -48,7 +48,6 @@ from datp_core.domain.values import (
     checksum_file,
     checksum_text,
 )
-from datp_core.protocols.runtime import DATA_ROOT
 
 _CANONICAL_PUBLICATION_CONTRACT = "canonical_publication_contract"
 _COMPLETE_NAME = CanonicalPublicationArtifact.COMPLETE
@@ -71,7 +70,7 @@ class CanonicalAssetLayout[AssetRoleT: StrEnum]:
 
     def __post_init__(self) -> None:
         if not _is_canonical_relative_path(self.relative_path):
-            raise ValueError("canonical asset layouts must use data-root-relative paths")
+            raise ValueError("canonical asset layouts must use publication-root-relative paths")
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,14 +84,14 @@ class CanonicalAsset[AssetRoleT: StrEnum]:
 
     def __post_init__(self) -> None:
         if not _is_canonical_relative_path(self.relative_path):
-            raise ValueError("canonical assets require a relative path and columns")
+            raise ValueError("canonical assets require a publication-root-relative path")
         if not self.columns:
-            raise ValueError("canonical assets require a relative path and columns")
+            raise ValueError("canonical assets require columns")
 
 
 def canonical_asset_path(root: Path, relative_path: Path) -> Path:
     if not _is_canonical_relative_path(relative_path):
-        raise ValueError("canonical assets must remain below the data branch")
+        raise ValueError("canonical assets must remain below their publication root")
     candidate = root / relative_path
     if not candidate.resolve().is_relative_to(root.resolve()):
         raise ValueError("canonical asset path escapes its publication root")
@@ -100,7 +99,7 @@ def canonical_asset_path(root: Path, relative_path: Path) -> Path:
 
 
 def _is_canonical_relative_path(path: Path) -> bool:
-    return not path.is_absolute() and path.parts[:1] == (DATA_ROOT.name,) and ".." not in path.parts
+    return bool(path.parts) and not path.is_absolute() and ".." not in path.parts
 
 
 def canonical_directory(canonical_root: Path, schema: CanonicalSchema) -> Path:

@@ -3,16 +3,17 @@
 from pathlib import Path
 
 from datp_core.domain.enums import DatasetId, RawDatasetDirectory, ReusableDataCoordinateKind
-from datp_core.protocols.runtime import DATA_ROOT
 
 
 def raw_dataset_directory(dataset: DatasetId) -> RawDatasetDirectory:
     return RawDatasetDirectory[dataset.name]
 
 
-def raw_dataset_root(dataset: DatasetId) -> Path:
-    return DATA_ROOT / ReusableDataCoordinateKind.RAW / raw_dataset_directory(dataset).value
+def raw_dataset_root(data_root: Path, dataset: DatasetId) -> Path:
+    """Resolve one dataset's raw root beneath the caller-owned data root."""
+    return data_root / ReusableDataCoordinateKind.RAW / raw_dataset_directory(dataset).value
 
 
 def canonical_root_under(data_root: Path, dataset: DatasetId) -> Path:
+    """Resolve one dataset's canonical root beneath the caller-owned data root."""
     return data_root / ReusableDataCoordinateKind.CANONICAL / dataset.value

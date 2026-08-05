@@ -1,6 +1,5 @@
 """Frozen, typed scientific declarations."""
 
-from pathlib import Path
 from typing import Annotated, Literal
 
 from pydantic import Field, model_validator
@@ -49,7 +48,6 @@ from datp_core.domain.values import (
     SummaryCoefficient,
     TrafficRatePerDay,
     WeightDecay,
-    WorkerCount,
 )
 
 from .splits import (
@@ -391,23 +389,6 @@ class AnchorDecisionProtocol(Declaration):
         return self
 
 
-class RuntimeProtocol(Declaration):
-    data_root: Path
-    outputs_root: Path
-    results_root: Path
-    require_cuda: bool
-    worker_count: WorkerCount
-    overwrite_outputs: bool
-
-    @model_validator(mode="after")
-    def validate_paths(self) -> "RuntimeProtocol":
-        if self.data_root.is_absolute() or self.outputs_root.is_absolute() or self.results_root.is_absolute():
-            raise ValueError("runtime paths must be project-relative")
-        if not self.data_root.parts or not self.outputs_root.parts:
-            raise ValueError("runtime data and outputs paths must be non-empty")
-        return self
-
-
 class ResolvedProtocolGraph(Declaration):
     populations: tuple[PopulationDeclaration, ...]
     experiments: tuple[ExperimentDeclaration, ...]
@@ -420,7 +401,6 @@ class ResolvedProtocolGraph(Declaration):
     confirmatory_endpoint: ConfirmatoryEndpoint
     confirmatory_inference: StatisticalInferenceProtocol
     anchor: AnchorDecisionProtocol
-    runtime: RuntimeProtocol
     traffic_rate_evidence: tuple[TrafficRateEvidence, ...]
     cluster_threshold: ClusterThresholdProtocol
     fedavg_training: FedAvgProtocol

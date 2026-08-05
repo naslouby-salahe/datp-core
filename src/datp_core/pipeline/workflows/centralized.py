@@ -32,8 +32,8 @@ from datp_core.pipeline.preparation.preprocessing import (
 from datp_core.pipeline.scoring.centralized import generate_centralized_scores
 from datp_core.pipeline.scoring.models import GenerateCentralizedScoresRequest
 from datp_core.pipeline.training.centralized import TrainCentralizedDetectorRequest, train_centralized_detector
-from datp_core.protocols.runtime import DATA_ROOT, OUTPUTS_ROOT
 from datp_core.protocols.training import BATCH_SIZE, CHECKPOINT_PROTOCOL, NBAIOT_AUTOENCODER
+from datp_core.runtime.configuration import DATA_ROOT, OUTPUTS_ROOT
 
 
 class CentralizedReferenceArtifactDirectory(StrEnum):

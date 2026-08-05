@@ -113,7 +113,6 @@ from datp_core.protocols.calibration import CANONICAL_QUANTILE
 from datp_core.protocols.experiments import BOUNDED_EVIDENCE_POPULATIONS, ExternalTemporalExecutionIdentity
 from datp_core.protocols.inference import FixedScoreInvariant
 from datp_core.protocols.models import AutoencoderProtocol, FedAvgProtocol, FedProxProtocol
-from datp_core.protocols.runtime import DATA_ROOT
 from datp_core.protocols.training import (
     BATCH_SIZE,
     CHECKPOINT_PROTOCOL,
@@ -124,6 +123,7 @@ from datp_core.protocols.training import (
     resolve_single_model_federated_training_protocol,
 )
 from datp_core.runtime.compute import resolve_cuda_device
+from datp_core.runtime.configuration import DATA_ROOT
 from datp_core.thresholding.common import ThresholdConstructionResult
 from datp_core.thresholding.dispatch import ThresholdConstructionRequest
 from datp_core.thresholding.identities import ThresholdUnavailableResult

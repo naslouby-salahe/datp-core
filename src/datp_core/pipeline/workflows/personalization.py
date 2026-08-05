@@ -71,7 +71,6 @@ from datp_core.pipeline.training.personalized import (
 from datp_core.preprocessing.models import ClientPreprocessingResult
 from datp_core.protocols.calibration import CANONICAL_QUANTILE
 from datp_core.protocols.inference import FixedScoreInvariant
-from datp_core.protocols.runtime import DATA_ROOT, OUTPUTS_ROOT
 from datp_core.protocols.training import (
     BATCH_SIZE,
     CHECKPOINT_PROTOCOL,
@@ -79,6 +78,7 @@ from datp_core.protocols.training import (
     NBAIOT_AUTOENCODER,
     resolve_ditto_protocol,
 )
+from datp_core.runtime.configuration import DATA_ROOT, OUTPUTS_ROOT
 from datp_core.thresholding.assignments import ThresholdAssignment
 from datp_core.thresholding.dispatch import ThresholdConstructionRequest
 from datp_core.thresholding.methods.local import LocalThresholdResult

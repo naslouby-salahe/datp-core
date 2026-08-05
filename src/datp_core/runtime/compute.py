@@ -7,7 +7,8 @@ import torch
 from datp_core.domain.enums import ContractSubject
 from datp_core.domain.errors import ExecutionStateError
 from datp_core.domain.values import CudaDeviceCount, CudaDeviceName, WorkerCount
-from datp_core.protocols.runtime import CANONICAL_RUNTIME
+
+from .configuration import CANONICAL_RUNTIME
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,11 +33,6 @@ class CudaProvenance:
 
 
 def require_cuda_available() -> None:
-    if not CANONICAL_RUNTIME.require_cuda:
-        raise ExecutionStateError(
-            "canonical runtime requires CUDA but require_cuda is false",
-            subject=ContractSubject.RUNTIME,
-        )
     if not torch.cuda.is_available():
         raise ExecutionStateError(
             "CUDA is mandatory for GPU-appropriate operations and is unavailable",
@@ -45,13 +41,11 @@ def require_cuda_available() -> None:
 
 
 def resolve_cuda_device() -> torch.device:
-    """Return the canonical CUDA device. Never falls back to CPU."""
     require_cuda_available()
     return torch.device(f"cuda:{torch.cuda.current_device()}")
 
 
 def canonical_worker_count() -> WorkerCount:
-    """Maximum concurrency for suitable CPU-side independent work."""
     return CANONICAL_RUNTIME.worker_count
 
 

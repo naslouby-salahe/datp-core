@@ -3,9 +3,9 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from datp_core.datasets.paths import raw_dataset_root
+from datp_core.datasets.paths import canonical_root_under, raw_dataset_root
 from datp_core.datasets.registry import DatasetPublication, dataset_binding
-from datp_core.domain.enums import DatasetId, ReusableDataCoordinateKind
+from datp_core.domain.enums import DatasetId
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -24,8 +24,11 @@ class MaterializeDatasetResult:
 
 
 def materialize_dataset(request: MaterializeDatasetRequest) -> MaterializeDatasetResult:
-    canonical_root = request.data_root / ReusableDataCoordinateKind.CANONICAL
     publications = tuple(
-        dataset_binding(dataset).publish(raw_dataset_root(dataset), canonical_root) for dataset in request.datasets
+        dataset_binding(dataset).publish(
+            raw_dataset_root(request.data_root, dataset),
+            canonical_root_under(request.data_root, dataset).parent,
+        )
+        for dataset in request.datasets
     )
     return MaterializeDatasetResult(publications=publications)

@@ -32,9 +32,9 @@ from datp_core.pipeline.planning import (
 from datp_core.pipeline.publication.layout import evaluation_run_directory
 from datp_core.protocols.experiments import EXPERIMENTS
 from datp_core.protocols.models import ExperimentDeclaration, SeedCohort
-from datp_core.protocols.runtime import OUTPUTS_ROOT
 from datp_core.protocols.seeds import CONFIRMATORY_ANALYSIS_SEED, CONFIRMATORY_SEED_COHORT
 from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL
+from datp_core.runtime.configuration import OUTPUTS_ROOT
 
 
 class ConfirmatoryAssetDirectory(StrEnum):

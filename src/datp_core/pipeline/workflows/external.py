@@ -15,7 +15,7 @@ from datp_core.pipeline.execution.engine import (
 from datp_core.pipeline.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
 from datp_core.protocols.experiments import EXPERIMENTS
 from datp_core.protocols.models import ExperimentDeclaration, SeedCohort
-from datp_core.protocols.runtime import OUTPUTS_ROOT
+from datp_core.runtime.configuration import OUTPUTS_ROOT
 
 
 class BoundedExternalPlanningReason(StrEnum):

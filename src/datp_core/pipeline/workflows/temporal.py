@@ -52,8 +52,8 @@ from datp_core.pipeline.scoring.models import FederatedScoreArtifactManifest
 from datp_core.protocols.calibration import CANONICAL_QUANTILE
 from datp_core.protocols.experiments import EXPERIMENTS, ExternalTemporalExecutionIdentity
 from datp_core.protocols.models import ExperimentDeclaration, SeedCohort
-from datp_core.protocols.runtime import OUTPUTS_ROOT
 from datp_core.protocols.seeds import BOUNDED_EVIDENCE_SEED_COHORT
+from datp_core.runtime.configuration import OUTPUTS_ROOT
 from datp_core.thresholding.dispatch import ThresholdConstructionRequest
 from datp_core.thresholding.identities import ThresholdUnavailableResult
 
