@@ -1,7 +1,15 @@
 from pathlib import Path
 
-from datp_core.domain.enums import AvailabilityStatus, ClaimStatus, EvidenceRole, MetricId
-from datp_core.reporting.export import PublicationBundle, export_markdown
+from datp_core.domain.enums import (
+    AvailabilityStatus,
+    ClaimStatus,
+    EvidenceRole,
+    ExperimentId,
+    MetricId,
+    PopulationId,
+)
+from datp_core.domain.values import checksum_text
+from datp_core.reporting.export import PublicationBundle, ReportProvenance, export_markdown
 from datp_core.reporting.tables import PublicationTable, TableCell
 from datp_core.reporting.validation import (
     ClaimKind,
@@ -11,7 +19,9 @@ from datp_core.reporting.validation import (
 )
 
 
-def test_reporting_export_is_deterministic_and_preserves_unavailable_outcomes(tmp_path: Path) -> None:
+def test_reporting_export_is_deterministic_and_preserves_provenance_and_unavailable_outcomes(
+    tmp_path: Path,
+) -> None:
     permitted = validate_claim(
         ClaimRequest(
             kind=ClaimKind.CONFIRMATORY,
@@ -53,7 +63,18 @@ def test_reporting_export_is_deterministic_and_preserves_unavailable_outcomes(tm
             ),
         ),
     )
-    bundle = PublicationBundle(claims=(permitted, blocked), tables=(table,), figures=())
+    provenance = ReportProvenance(
+        experiment=ExperimentId.SHARED_VS_LOCAL_CONFIRMATION,
+        population=PopulationId.NBAIOT_NATURAL_DEVICES,
+        evidence_role=EvidenceRole.CONFIRMATORY,
+        analysis_checksum=checksum_text("validated-analysis"),
+    )
+    bundle = PublicationBundle(
+        provenance=provenance,
+        claims=(permitted, blocked),
+        tables=(table,),
+        figures=(),
+    )
     destination = tmp_path / "report.md"
 
     first = export_markdown(bundle, destination).read_text(encoding="utf-8")
@@ -62,6 +83,9 @@ def test_reporting_export_is_deterministic_and_preserves_unavailable_outcomes(tm
     assert permitted.status is ClaimStatus.PERMITTED
     assert blocked.status is ClaimStatus.BLOCKED
     assert first == second
+    assert provenance.analysis_checksum.value in first
+    assert provenance.experiment.value in first
+    assert provenance.evidence_role.value in first
     assert permitted.wording in first
     assert blocked.reason in first
     assert "| true_positive_rate | unavailable |" in first
