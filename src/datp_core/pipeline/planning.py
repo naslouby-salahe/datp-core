@@ -9,19 +9,22 @@ from typing import ClassVar
 
 from datp_core.domain.enums import (
     AvailabilityStatus,
+    DatasetId,
     EvidenceRole,
     ExperimentId,
     ExperimentReadiness,
     FederatedThresholdMethod,
     MetricId,
     PopulationId,
+    SplitProtocolId,
     TemporalState,
     TrainingModelId,
 )
 from datp_core.domain.values import Seed
-from datp_core.populations.capabilities import population_capabilities
-from datp_core.protocols.experiments import EXPERIMENTS
+from datp_core.populations.capabilities import population_capabilities, population_declaration
+from datp_core.protocols.experiments import EXECUTION_IDENTITY_DECLARATIONS, EXPERIMENTS
 from datp_core.protocols.models import ExperimentDeclaration, SeedCohort
+from datp_core.protocols.populations import split_protocol_for_population
 from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT
 
 
@@ -46,9 +49,12 @@ class PlanningEvidence:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ExperimentCoordinate:
     experiment: ExperimentId
+    evidence_role: EvidenceRole
+    dataset: DatasetId
     population: PopulationId
     training_model: TrainingModelId
     training_seed: Seed
+    split_protocol: SplitProtocolId
     threshold_method: FederatedThresholdMethod
     metric: MetricId
     temporal_state: TemporalState | None
@@ -59,9 +65,12 @@ class ExperimentCoordinate:
         return "/".join(
             (
                 self.experiment.value,
+                self.evidence_role.value,
+                self.dataset.value,
                 self.population.value,
                 self.training_model.value,
                 str(self.training_seed.value),
+                self.split_protocol.value,
                 self.threshold_method.value,
                 self.metric.value,
                 temporal,
@@ -109,11 +118,19 @@ def expand_experiment_plan(
     entries = tuple(
         sorted(
             (
-                _planned_entry(declaration, seed, threshold_method, metric, validated_evidence)
+                _planned_entry(
+                    declaration,
+                    seed,
+                    threshold_method,
+                    metric,
+                    temporal_state,
+                    validated_evidence,
+                )
                 for declaration in declarations
                 for seed in seed_cohort.values
                 for threshold_method in declaration.federated_thresholds
                 for metric in declaration.metrics
+                for temporal_state in _temporal_states(declaration.id)
             ),
             key=lambda entry: entry.coordinate.stable_key,
         )
@@ -126,22 +143,40 @@ def _planned_entry(
     seed: Seed,
     threshold_method: FederatedThresholdMethod,
     metric: MetricId,
+    temporal_state: TemporalState | None,
     evidence: tuple[PlanningEvidence, ...],
 ) -> PlannedExperiment:
     disposition, reason = _resolve_disposition(declaration, evidence)
+    population = population_declaration(declaration.population)
     return PlannedExperiment(
         coordinate=ExperimentCoordinate(
             experiment=declaration.id,
+            evidence_role=declaration.role,
+            dataset=population.dataset,
             population=declaration.population,
             training_model=declaration.training_model,
             training_seed=seed,
+            split_protocol=split_protocol_for_population(declaration.population),
             threshold_method=threshold_method,
             metric=metric,
-            temporal_state=None,
+            temporal_state=temporal_state,
         ),
         disposition=disposition,
         reason=reason,
     )
+
+
+def _temporal_states(experiment: ExperimentId) -> tuple[TemporalState | None, ...]:
+    matches = tuple(
+        declaration.temporal_states
+        for declaration in EXECUTION_IDENTITY_DECLARATIONS
+        if declaration.experiment is experiment
+    )
+    if not matches:
+        return (None,)
+    if len(matches) != 1:
+        raise ValueError("experiment temporal-state declaration must resolve exactly once")
+    return matches[0]
 
 
 def _resolve_disposition(
