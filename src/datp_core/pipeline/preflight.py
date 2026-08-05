@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-from datp_core.pipeline.campaign import CampaignPlan
+from datp_core.pipeline.campaign_execution import CampaignPlan
 from datp_core.pipeline.planning import ExperimentPlan
 
 
@@ -53,7 +53,7 @@ def validate_preflight(
         AcceptanceCheck(
             name="campaign_digest",
             status=AcceptanceStatus.PASSED,
-            evidence=f"validated deterministic campaign {campaign.digest}",
+            evidence=f"validated deterministic campaign {campaign.digest.value}",
         ),
         AcceptanceCheck(
             name="output_root",
