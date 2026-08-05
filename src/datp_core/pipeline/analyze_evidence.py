@@ -13,18 +13,15 @@ from datp_core.analysis.decisions import (
     ExternalAnalysisRequest,
     TemporalAnalysisDocument,
     TemporalAnalysisRequest,
-    analysis_publication_is_reusable,
-    load_reused_analysis_publication,
     prepare_confirmatory_analysis,
     prepare_external_analysis,
     prepare_temporal_analysis,
-    rebase_analysis_publication,
-    write_analysis_publication,
 )
 from datp_core.analysis.inference.multiplicity import MultiplicityPlan
 from datp_core.analysis.mechanisms import MechanismEvidence
 from datp_core.analysis.temporal import TemporalDeploymentProvenance, TemporalRecoveryResult
 from datp_core.domain.enums import PublicationStatus
+from datp_core.domain.provenance import canonical_json_text
 from datp_core.domain.values import Checksum, Seed
 from datp_core.pipeline.execution import PipelineStage
 from datp_core.pipeline.publication.codec import (
@@ -169,12 +166,53 @@ def _publish[DocumentT](
             target=output_directory,
             request=prepared,
             codec=FunctionalArtifactCodec(
-                writer=write_analysis_publication,
-                validator=analysis_publication_is_reusable,
-                loader=load_reused_analysis_publication,
-                rebaser=rebase_analysis_publication,
+                writer=_write_analysis_publication,
+                validator=_analysis_publication_is_reusable,
+                loader=_load_reused_analysis_publication,
+                rebaser=_rebase_analysis_publication,
             ),
             overwrite=overwrite,
             complete_marker=AnalysisAssetName.COMPLETE,
         )
     )
+
+
+def _write_analysis_publication[DocumentT](
+    publication: AnalysisPublication[DocumentT],
+    directory: Path,
+) -> DocumentT:
+    (directory / publication.asset_name).write_text(
+        canonical_json_text(publication.document),
+        encoding="utf-8",
+    )
+    (directory / AnalysisAssetName.COMPLETE).write_text(publication.digest.value, encoding="utf-8")
+    return publication.document
+
+
+def _analysis_publication_is_reusable[DocumentT](
+    publication: AnalysisPublication[DocumentT],
+    directory: Path,
+) -> bool:
+    complete = directory / AnalysisAssetName.COMPLETE
+    document = directory / publication.asset_name
+    try:
+        return (
+            complete.is_file()
+            and document.is_file()
+            and complete.read_text(encoding="utf-8").strip() == publication.digest.value
+        )
+    except OSError:
+        return False
+
+
+def _load_reused_analysis_publication[DocumentT](
+    publication: AnalysisPublication[DocumentT],
+    directory: Path,
+) -> DocumentT:
+    del directory
+    return publication.document
+
+
+def _rebase_analysis_publication[DocumentT](document: DocumentT, directory: Path) -> DocumentT:
+    del directory
+    return document
