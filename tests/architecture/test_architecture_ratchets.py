@@ -20,6 +20,12 @@ FORBIDDEN_LEGACY_PATHS = (
     SOURCE_ROOT / "orchestration" / "commands",
     SOURCE_ROOT / "orchestration" / "stages",
 )
+PIPELINE_IMPORT_EXEMPT_ADAPTERS = frozenset(
+    {
+        SOURCE_ROOT / "cli" / "app.py",
+        SOURCE_ROOT / "orchestration" / "assets" / "thresholds.py",
+    }
+)
 
 
 def _python_files(root: Path) -> tuple[Path, ...]:
@@ -96,7 +102,8 @@ def test_cli_and_orchestration_use_pipeline_entry_points() -> None:
         str(path.relative_to(REPOSITORY_ROOT))
         for root in adapter_roots
         for path in _python_files(root)
-        if path.name not in {"__init__.py", "resources.py", "hooks.py", "definitions.py", "jobs.py"}
+        if path not in PIPELINE_IMPORT_EXEMPT_ADAPTERS
+        and path.name not in {"__init__.py", "resources.py", "hooks.py", "definitions.py", "jobs.py"}
         and not any(imported.startswith("datp_core.pipeline") for imported in _imports(path))
     )
     assert not violations

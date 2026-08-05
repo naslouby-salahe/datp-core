@@ -18,7 +18,6 @@ _CUDA_ONLY_MODULES = frozenset(
         "tests/integration/learning/test_fedprox_training.py",
         "tests/integration/scoring/test_score_reuse_across_thresholds.py",
         "tests/unit/centralized_reference/test_evaluation.py",
-        "tests/unit/orchestration/stages/test_federated_training_stages.py",
         "tests/unit/scoring/test_generation.py",
     }
 )
@@ -26,8 +25,9 @@ _CUDA_ONLY_MODULES = frozenset(
 _CUDA_ONLY_TESTS = frozenset().union(
     _tests(
         "tests/scientific/test_fixed_detector_contract.py",
-        "test_every_simulated_threshold_method_reads_one_model_and_score_checksum",
-        "test_auroc_style_quality_control_is_invariant_across_repeated_reads",
+        "test_every_threshold_method_receives_identical_detector_provenance",
+        "test_auroc_is_identical_for_every_threshold_method",
+        "test_score_artifact_bytes_are_stable_across_repeated_reads",
     ),
     _tests(
         "tests/unit/centralized_reference/test_checkpointing.py",
@@ -42,7 +42,7 @@ _CUDA_ONLY_TESTS = frozenset().union(
     ),
     _tests(
         "tests/unit/centralized_reference/test_thresholding.py",
-        "test_pooled_benign_quantile_matches_numpy_linear",
+        "test_pooled_benign_quantile_matches_declared_linear_quantile",
     ),
     _tests(
         "tests/unit/centralized_reference/test_training.py",
@@ -86,10 +86,6 @@ _CUDA_ONLY_TESTS = frozenset().union(
         "test_run_local_epoch_with_larger_proximal_coefficient_stays_closer_to_reference",
         "test_proximal_penalty_is_zero_when_parameters_match",
         "test_proximal_penalty_scales_with_coefficient",
-    ),
-    _tests(
-        "tests/unit/orchestration/stages/test_centralized_reference_stages.py",
-        "test_train_score_threshold_evaluate_stage_chain",
     ),
     _tests(
         "tests/unit/runtime/test_compute_and_determinism.py",

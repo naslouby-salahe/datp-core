@@ -103,9 +103,21 @@ class ExtensionDecision:
 
 def assess_extension(request: ExtensionRequest) -> ExtensionDecision:
     if request.kind in {ExtensionKind.ATTACK, ExtensionKind.DEFENSE}:
-        return ExtensionDecision(False, "attacks and defenses are outside DATP-Core")
+        return ExtensionDecision(
+            permitted=False,
+            reason="attacks and defenses are outside DATP-Core",
+        )
     if request.kind is ExtensionKind.DYNAMIC_ADAPTATION:
-        return ExtensionDecision(False, "DATP-Core permits one-shot recalibration only")
+        return ExtensionDecision(
+            permitted=False,
+            reason="DATP-Core permits one-shot recalibration only",
+        )
     if request.kind is ExtensionKind.DATASET:
-        return ExtensionDecision(False, "DATP-Core adds no dataset beyond Edge-IIoTset")
-    return ExtensionDecision(False, "future extensions require a separately approved scientific protocol")
+        return ExtensionDecision(
+            permitted=False,
+            reason="DATP-Core adds no dataset beyond Edge-IIoTset",
+        )
+    return ExtensionDecision(
+        permitted=False,
+        reason="future extensions require a separately approved scientific protocol",
+    )
