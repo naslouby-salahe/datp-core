@@ -49,3 +49,22 @@ def test_threshold_methods_keep_distinct_evaluation_runs() -> None:
     local = replace(shared, threshold_method=FederatedThresholdMethod.LOCAL_THRESHOLD)
 
     assert evaluation_run_directory(root, shared) != evaluation_run_directory(root, local)
+
+
+def test_every_non_metric_coordinate_dimension_changes_the_run_identity() -> None:
+    root = Path("outputs")
+    primary = coordinate()
+    alternatives = (
+        replace(primary, experiment=ExperimentId.HISTORICAL_DATP_REPRODUCTION),
+        replace(primary, evidence_role=EvidenceRole.ANCHOR_REPRODUCTION),
+        replace(primary, dataset=DatasetId.EDGE_IIOTSET),
+        replace(primary, population=PopulationId.EDGE_SENSOR_GROUPS),
+        replace(primary, training_model=TrainingModelId.FEDPROX_AUTOENCODER, model_coefficient=0.1),
+        replace(primary, training_seed=Seed(1)),
+        replace(primary, split_protocol=SplitProtocolId.TEMPORAL_55_15_10_20),
+        replace(primary, preprocessing_protocol=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_MIN_MAX),
+        replace(primary, threshold_method=FederatedThresholdMethod.LOCAL_THRESHOLD),
+    )
+
+    primary_path = evaluation_run_directory(root, primary)
+    assert all(evaluation_run_directory(root, alternative) != primary_path for alternative in alternatives)
