@@ -1,0 +1,166 @@
+name: Sync Phase 12-16 roadmap
+
+on:
+  push:
+    branches:
+      - agent/phase-12-16-target-architecture
+    paths:
+      - .github/workflows/sync-phase-12-16-roadmap.yml
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/phase-12-16-target-architecture
+          fetch-depth: 0
+
+      - name: Align roadmap with pipeline-first architecture
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          root = Path.cwd()
+          branch_note = {
+              "13_PHASE_12_EXPERIMENT_PLANNING_AND_CAMPAIGN_EXECUTION.md": """## Pipeline-first architecture amendment
+
+This amendment supersedes every legacy source-path, ownership, stage-module, and test-path statement below that refers to `datp_core.experiments`, the deleted monolithic `datp_core.cli.py`, `datp_core.orchestration.commands`, or `datp_core.orchestration.stages`.
+
+Phase 12 is implemented through these final owners:
+
+- `datp_core.pipeline.planning` — deterministic experiment expansion and typed feasibility;
+- `datp_core.pipeline.campaign` — deterministic campaign construction and confirmatory workflow composition;
+- `datp_core.pipeline.execution` — interruption cleanup and stage execution semantics;
+- `datp_core.pipeline.preflight` — acceptance and extension-boundary decisions;
+- `datp_core.cli.app` — the only CLI adapter;
+- `datp_core.orchestration.assets`, `definitions`, `jobs`, and `resources` — thin Dagster adapters over pipeline entry points.
+
+There is one execution spine. CLI and Dagster must call pipeline services; they may not own scientific calculations, persistence lifecycles, score contracts, checkpoint rules, or campaign recovery. The deleted `experiments`, `orchestration/commands`, and `orchestration/stages` paths are forbidden and have no compatibility surface.
+""",
+              "14_PHASE_13_ARTIFACTS_SERIALIZATION_AND_OUTPUT_LAYOUT.md": """## Pipeline-first architecture amendment
+
+This amendment supersedes legacy ownership lists below where they conflict with the converged repository.
+
+Phase 13 now uses two explicit layers:
+
+- `datp_core.artifacts` owns canonical serialization, schemas, completion evidence, reusable-data layout, provenance, and artifact-specific records;
+- `datp_core.pipeline.publication`, `pipeline.checkpoints`, and `pipeline.scoring` own branch-neutral atomic publication, reload validation, checkpoint persistence, score persistence, reuse, and rebasing for experiment outputs.
+
+Bounded scientific packages construct typed results; pipeline publication services persist them. No bounded scientific package may import orchestration or CLI, and no orchestration adapter may reimplement checksum, staging, completion, reload, or reuse mechanics.
+""",
+              "15_PHASE_14_REPORTING_CLAIMS_AND_PUBLICATION_EXPORTS.md": """## Pipeline-first architecture amendment
+
+This amendment supersedes legacy execution ownership below while preserving every reporting and claim restriction.
+
+`datp_core.reporting` owns table, figure, export, and claim-validation semantics. `datp_core.pipeline.report_evidence` and `datp_core.pipeline.publication` compose and publish report bundles. CLI and Dagster are adapters only. Reporting may consume typed analysis/evaluation artifacts but cannot recalculate scientific decisions, coerce unavailable outcomes to zero, or bypass evidence-role and anchor gates.
+""",
+              "16_PHASE_15_EXTENSION_READINESS.md": """## Pipeline-first architecture amendment
+
+This amendment supersedes references below to the deleted `datp_core.experiments` ownership model.
+
+Extension readiness is enforced by immutable hook contexts in `datp_core.orchestration.hooks`, typed runtime resources in `datp_core.orchestration.resources`, and explicit extension decisions in `datp_core.pipeline.preflight`. Hooks remain no-op observers and cannot alter clean coordinates, checksums, score artifacts, thresholds, evaluations, or completion state. No plugin discovery, attack implementation, defense implementation, online loop, new dataset, privacy mechanism, or hidden conditional extension is permitted.
+""",
+              "17_PHASE_16_FINAL_SCIENTIFIC_AND_ENGINEERING_AUDIT.md": """## Pipeline-first architecture amendment
+
+The final audit targets the converged pipeline-first tree, not the superseded phase-local layout. It must prove that:
+
+- `datp_core.pipeline` is the single application execution spine;
+- `datp_core.cli` and `datp_core.orchestration` are thin adapters;
+- deleted `datp_core.experiments`, `orchestration.commands`, `orchestration.stages`, top-level scoring, and monolithic CLI paths cannot return;
+- capability packages do not import pipeline or adapters;
+- centralized and federated branches remain scientifically separate while sharing neutral publication mechanics;
+- the exact final E2E, architecture, and scientific acceptance tests listed below exist and pass.
+
+A green unit/integration suite is necessary but not sufficient. Phase 16 remains incomplete until the dedicated `tests/e2e/` acceptance layer, static-analysis gates, repeated deterministic campaign checks, source-tree audit, and final verdict in `01_PHASE_MASTER_LOG.md` are complete.
+""",
+          }
+
+          roadmap = root / "docs/roadmap"
+          for name, note in branch_note.items():
+              path = roadmap / name
+              text = path.read_text(encoding="utf-8")
+              if "## Pipeline-first architecture amendment" in text:
+                  raise SystemExit(f"architecture amendment already exists in {name}")
+              first_break = text.index("\n", text.index("# ")) + 1
+              path.write_text(text[:first_break] + "\n" + note + "\n" + text[first_break:], encoding="utf-8")
+
+          architecture = roadmap / "18_REPOSITORY_ARCHITECTURE_AND_SCIENTIFIC_INVARIANTS.md"
+          text = architecture.read_text(encoding="utf-8")
+          orchestration = """### Orchestration boundary
+
+`datp_core.orchestration` is a thin Dagster adapter and contains only assets, definitions, jobs, hooks, and runtime resources. The deleted `orchestration.commands` and `orchestration.stages` packages must not return.
+
+Dagster assets may select and call typed pipeline entry points, project deterministic completion identities, and expose runtime resources. They may not implement training, scoring, thresholding, evaluation, analysis, reporting, persistence, checkpoint selection, campaign recovery, or scientific defaults.
+
+`datp_core.cli.app` follows the same rule. CLI and Dagster are two adapters over one pipeline execution spine; neither is an alternative application layer.
+
+"""
+          text, count = re.subn(
+              r"### Orchestration boundary\n.*?(?=### Federated checkpoint bounded context)",
+              orchestration,
+              text,
+              flags=re.S,
+          )
+          if count != 1:
+              raise SystemExit("failed to replace orchestration boundary exactly once")
+
+          remaining = """## Remaining target-tree convergence
+
+The production dependency-direction migrations are complete enough for the architecture and full pytest suites to pass. The PR remains open because final acceptance work is still required:
+
+- align all Phase 12–16 roadmap ownership statements with the pipeline-first tree;
+- implement the dedicated Phase 16 `tests/e2e/` acceptance layer;
+- run and record Ruff, Pyright, Pylint, import-linter, architecture, scientific, integration, E2E, and repeated full-suite gates on the final head;
+- resolve actionable SonarQube and CodeScene findings, or record credential/external-service blockers without weakening code or tests;
+- run repeated deterministic tiny campaigns and verify identical manifests, outputs, cleanup, and reuse;
+- record the final Phase 16 acceptance verdict in `01_PHASE_MASTER_LOG.md` and only then mark the PR ready for review.
+
+These tasks may not change scientific values, algorithms, metrics, evidence roles, dataset boundaries, checkpoint rules, or fixed-detector semantics.
+
+"""
+          text, count = re.subn(
+              r"## Remaining target-tree convergence\n.*?(?=## Enforced architecture regressions)",
+              remaining,
+              text,
+              flags=re.S,
+          )
+          if count != 1:
+              raise SystemExit("failed to replace remaining convergence section exactly once")
+
+          validation = """## Validation record
+
+At commit `78ba26adf6d46bc8c68f54843ad2e0f9933a1e9f`, the GitHub Actions `Tests` workflow completed successfully and the PR was mergeable. That proves the current unit, integration, property, architecture, and scientific suite is green on that revision. It does not complete Phase 16: the dedicated E2E layer, final static-analysis sequence, repeated determinism checks, external code-health gates, and final master-log verdict remain mandatory on the eventual final head.
+
+"""
+          text, count = re.subn(
+              r"## Validation record\n.*?(?=## Acceptance criteria)",
+              validation,
+              text,
+              flags=re.S,
+          )
+          if count != 1:
+              raise SystemExit("failed to replace validation record exactly once")
+          architecture.write_text(text, encoding="utf-8")
+
+          master = roadmap / "01_PHASE_MASTER_LOG.md"
+          text = master.read_text(encoding="utf-8")
+          entry = """\n## Architecture-convergence audit — Phase 12–16\n\n- Production execution has converged on one pipeline spine with thin CLI and Dagster adapters.\n- The full GitHub Actions test workflow passed at `78ba26adf6d46bc8c68f54843ad2e0f9933a1e9f`.\n- Phase 16 remains `IN_PROGRESS`: dedicated E2E acceptance tests, final static-analysis gates, repeated deterministic campaign checks, external code-health evidence, and the final acceptance verdict are still required.\n- No `GO_FOR_FULL_EXPERIMENTS` verdict is recorded yet.\n\n"""
+          if "## Architecture-convergence audit — Phase 12–16" in text:
+              raise SystemExit("master-log architecture entry already exists")
+          master.write_text(text + entry, encoding="utf-8")
+
+          workflow = root / ".github/workflows/sync-phase-12-16-roadmap.yml"
+          workflow.unlink()
+
+      - name: Commit roadmap convergence
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Align Phase 12-16 roadmap with pipeline architecture"
+          git push origin HEAD:agent/phase-12-16-target-architecture
