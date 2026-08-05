@@ -4,12 +4,7 @@ from pathlib import Path
 
 import polars as pl
 
-from datp_core.datasets.canonical_cache import (
-    CanonicalAsset,
-    CanonicalReuseRequest,
-    canonical_directory,
-    reuse_published_canonical,
-)
+from datp_core.datasets.canonical_cache import CanonicalAsset, canonical_directory
 from datp_core.datasets.contracts import (
     CanonicalAssetRole,
     DatasetValidationCode,
@@ -23,16 +18,13 @@ from datp_core.datasets.contracts import (
 from datp_core.datasets.materialization import (
     CanonicalPublication,
     canonical_data_partition_assets,
-    publish_canonical,
     raw_inventory,
     raw_source_file,
     stream_parquet,
 )
+from datp_core.datasets.materialization_lifecycle import CanonicalMaterializationRequest, materialize_canonical
 from datp_core.domain.enums import AvailabilityStatus, DatasetId
-from datp_core.domain.values import (
-    RowCount,
-    ValidationIssueCount,
-)
+from datp_core.domain.values import RowCount, ValidationIssueCount
 
 from .reader import CICIoT2023AuditSummary, CICIoT2023Reader
 from .schema import (
@@ -58,8 +50,8 @@ class CICIoT2023Materializer:
 
     def materialize(self, source_paths: tuple[Path, ...], canonical_root: Path) -> MaterializedDataset:
         ordered_paths = tuple(sorted(source_paths))
-        reusable = reuse_published_canonical(
-            CanonicalReuseRequest(
+        return materialize_canonical(
+            CanonicalMaterializationRequest(
                 canonical_root=canonical_root,
                 schema=CICIOT2023_SCHEMA,
                 canonicalization_contract=_CICIOT2023_CANONICALIZATION_CONTRACT,
@@ -67,11 +59,13 @@ class CICIoT2023Materializer:
                 source_path_resolver=source_relative_path,
                 asset_role_type=CanonicalAssetRole,
                 eligibility_policy=CICIOT2023_MODEL_INPUT_ELIGIBILITY_POLICY,
+                prepare_publication=lambda: self._prepare_publication(ordered_paths, canonical_root),
             )
         )
-        if reusable is not None:
-            return reusable
-        frames, inventory, report = self.audit(source_paths)
+
+    @staticmethod
+    def _prepare_publication(source_paths: tuple[Path, ...], canonical_root: Path) -> CanonicalPublication:
+        frames, inventory, report = CICIoT2023Materializer.audit(source_paths)
         expected_assets = canonical_data_partition_assets(len(frames))
 
         def write_assets(data_root: Path) -> tuple[CanonicalAsset, ...]:
@@ -80,27 +74,23 @@ class CICIoT2023Materializer:
                 for frame, asset in zip(frames, expected_assets, strict=True)
             )
 
-        return publish_canonical(
-            CanonicalPublication(
-                canonical_root,
-                _CICIOT2023_CANONICALIZATION_CONTRACT,
-                CICIOT2023_SCHEMA,
-                inventory,
-                report,
-                expected_assets,
-                write_assets,
-                source_paths=ordered_paths,
-                source_path_resolver=source_relative_path,
-                eligibility_policy=CICIOT2023_MODEL_INPUT_ELIGIBILITY_POLICY,
-            )
+        return CanonicalPublication(
+            canonical_root=canonical_root,
+            canonicalization_contract=_CICIOT2023_CANONICALIZATION_CONTRACT,
+            schema=CICIOT2023_SCHEMA,
+            inventory=inventory,
+            validation_report=report,
+            expected_assets=expected_assets,
+            writer=write_assets,
+            source_paths=source_paths,
+            source_path_resolver=source_relative_path,
+            eligibility_policy=CICIOT2023_MODEL_INPUT_ELIGIBILITY_POLICY,
         )
 
     @staticmethod
     def audit(
         source_paths: tuple[Path, ...],
     ) -> tuple[tuple[pl.LazyFrame, ...], RawDatasetInventory, DatasetValidationReport]:
-        if not source_paths:
-            raise ValueError("CICIoT2023 materialization requires accepted merged sources")
         ordered_paths, frames, summaries = _audited_sources(source_paths)
         return frames, _source_inventory(ordered_paths, summaries), _validation_report(summaries)
 
@@ -143,7 +133,10 @@ def _validation_report(summaries: tuple[CICIoT2023AuditSummary, ...]) -> Dataset
 
 
 def _validation_issues(
-    invalid_labels: RowCount, nonfinite_features: RowCount, infinite_rates: RowCount, empty_rates: RowCount
+    invalid_labels: RowCount,
+    nonfinite_features: RowCount,
+    infinite_rates: RowCount,
+    empty_rates: RowCount,
 ) -> tuple[DatasetValidationIssue, ...]:
     issues: tuple[DatasetValidationIssue, ...] = ()
     for issue in (
@@ -190,7 +183,9 @@ def _empty_rate_issue(affected_count: RowCount) -> DatasetValidationIssue | None
 
 
 def _validation_issue(
-    affected_count: RowCount, code: DatasetValidationCode, reason: str
+    affected_count: RowCount,
+    code: DatasetValidationCode,
+    reason: str,
 ) -> DatasetValidationIssue | None:
     if affected_count.value == 0:
         return None
