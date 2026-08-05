@@ -3,6 +3,7 @@
 from dataclasses import dataclass, replace
 from enum import StrEnum
 from pathlib import Path
+from shutil import rmtree
 
 import numpy as np
 import polars as pl
@@ -249,8 +250,10 @@ def materialize_federated_scores(
     request: ScoreGenerationRequest,
     device: torch.device,
 ) -> FederatedScoreGenerationResult:
-    if federated_scoring_is_reusable(request, request.output_directory):
-        return load_reused_federated_scores(request, request.output_directory)
+    directory = request.output_directory
+    if federated_scoring_is_reusable(request, directory):
+        return load_reused_federated_scores(request, directory)
+    _remove_incomplete_output(directory)
     return generate_federated_scores(request, device)
 
 
@@ -372,6 +375,13 @@ def _rebased_record(record: FederatedScoreRecord, output_directory: Path) -> Fed
         feature_count=record.feature_count,
         serialization_format=record.serialization_format,
     )
+
+
+def _remove_incomplete_output(directory: Path) -> None:
+    if directory.is_dir():
+        rmtree(directory)
+    elif directory.exists():
+        directory.unlink()
 
 
 def _require_empty_output_directory(directory: Path) -> None:
