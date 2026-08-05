@@ -31,14 +31,7 @@ class PipelineStage(StrEnum):
 
 
 class ExecutionRecipeId(StrEnum):
-    """Which typed stage sequence a single-coordinate experiment executes.
-
-    Every declared experiment resolves to exactly one of these. Both recipes
-    share the same population/training/threshold-evaluation fragments (rule:
-    reuse a fragment only when stage order and invariants are identical);
-    ANCHOR_REPRODUCTION differs solely by inserting the real anchor gate
-    before finalization.
-    """
+    """Typed stage sequence selected for one single-coordinate experiment."""
 
     STANDARD_FEDERATED = "standard_federated"
     ANCHOR_REPRODUCTION = "anchor_reproduction"
@@ -119,12 +112,6 @@ class ExistingExperimentState(StrEnum):
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ExecutionProvenance:
-    """The deterministic plan/campaign/protocol identity a coordinate was executed under.
-
-    Carried explicitly alongside the coordinate (never inferred or defaulted) so
-    FINALIZE_PUBLICATION can bind each experiment's completion record to the exact
-    declared plan and protocol graph that produced it, with no hidden run/job token."""
-
     plan_digest: Checksum
     campaign_digest: Checksum
     protocol_digest: Checksum
@@ -173,6 +160,7 @@ class StageRunner(Protocol):
         stage: PipelineStage,
         coordinate: ExperimentCoordinate,
         provenance: ExecutionProvenance,
+        output_root: Path,
     ) -> StageExecution: ...
 
 
@@ -210,7 +198,7 @@ def execute_experiment(
 
     executions: list[StageExecution] = []
     for stage in recipe.stages:
-        result = stage_runner.run(stage, coordinate, provenance)
+        result = stage_runner.run(stage, coordinate, provenance, output_root)
         if result.stage is not stage:
             raise ValueError("stage runner returned a result for the wrong stage")
         executions.append(result)

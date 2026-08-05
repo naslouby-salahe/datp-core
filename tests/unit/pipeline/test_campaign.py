@@ -11,12 +11,12 @@ from datp_core.domain.enums import (
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import DittoRegularization, Seed, checksum_text
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.pipeline.campaign import _ditto_training_protocol_for, build_campaign
+from datp_core.pipeline.campaign_execution import build_campaign
 from datp_core.pipeline.planning import expand_experiment_plan
 from datp_core.populations.models import ClientIdentity
 from datp_core.protocols.calibration import CANONICAL_QUANTILE
 from datp_core.protocols.models import QuantileProtocol
-from datp_core.protocols.training import DITTO_TRAINING_PROTOCOLS
+from datp_core.protocols.training import DITTO_TRAINING_PROTOCOLS, resolve_ditto_protocol
 from datp_core.thresholding.methods.local import construct_local_threshold
 from datp_core.thresholding.methods.shared import construct_shared_threshold
 from datp_core.thresholding.quantiles import ClientBenignCalibrationScores, unweighted_mean
@@ -26,17 +26,17 @@ def test_campaign_contains_only_executable_plan_entries() -> None:
     plan = expand_experiment_plan()
     campaign = build_campaign(plan)
     assert all(entry.ordinal == index for index, entry in enumerate(campaign.entries))
-    assert campaign.digest
+    assert campaign.digest.value
 
 
 def test_ditto_training_protocol_resolves_every_declared_regularization() -> None:
     for protocol in DITTO_TRAINING_PROTOCOLS:
-        assert _ditto_training_protocol_for(protocol.regularization) is protocol
+        assert resolve_ditto_protocol(protocol.regularization) is protocol
 
 
 def test_ditto_training_protocol_rejects_an_undeclared_regularization() -> None:
     with pytest.raises(ScientificContractError, match="regularization"):
-        _ditto_training_protocol_for(DittoRegularization(999.0))
+        resolve_ditto_protocol(DittoRegularization(999.0))
 
 
 def _ditto_personalized_coordinate() -> FederatedTrainingCoordinate:
@@ -54,12 +54,7 @@ def _ditto_client(client_id: str) -> ClientIdentity:
     return ClientIdentity(PopulationId.NBAIOT_NATURAL_DEVICES, client_id, PopulationIdentityKind.PHYSICAL_DEVICES)
 
 
-def test_ditto_shared_threshold_tolerates_distinct_personalized_model_checksums() -> None:
-    """Every personalized client has its own model, hence its own score-set checksum.
-    Neither construct_shared_threshold nor construct_local_threshold requires cross-client
-    checksum equality (unlike construct_pooled_shared_quantile's _require_common_score_set_checksum),
-    so this must not raise -- confirming the Ditto stress test needs no relaxation of any
-    existing scientific invariant."""
+def test_ditto_shared_threshold_accepts_distinct_personalized_model_checksums() -> None:
     coordinate = _ditto_personalized_coordinate()
     eligible = tuple(
         ClientBenignCalibrationScores(
@@ -79,10 +74,12 @@ def test_ditto_shared_threshold_tolerates_distinct_personalized_model_checksums(
     )
 
     local = construct_local_threshold(
-        eligible, QuantileProtocol(method=FederatedThresholdMethod.LOCAL_THRESHOLD, quantile=CANONICAL_QUANTILE)
+        eligible,
+        QuantileProtocol(method=FederatedThresholdMethod.LOCAL_THRESHOLD, quantile=CANONICAL_QUANTILE),
     )
     shared = construct_shared_threshold(
-        eligible, QuantileProtocol(method=FederatedThresholdMethod.SHARED_THRESHOLD, quantile=CANONICAL_QUANTILE)
+        eligible,
+        QuantileProtocol(method=FederatedThresholdMethod.SHARED_THRESHOLD, quantile=CANONICAL_QUANTILE),
     )
 
     assert len(local.assignments) == len(eligible)

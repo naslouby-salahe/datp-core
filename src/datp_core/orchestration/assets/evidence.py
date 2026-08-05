@@ -2,7 +2,7 @@
 
 from dagster import asset
 
-from datp_core.pipeline.campaign import analyze_confirmatory_campaign
+from datp_core.pipeline.confirmatory import analyze_confirmatory_campaign
 
 
 @asset

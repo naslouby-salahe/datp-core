@@ -14,14 +14,14 @@ from datp_core.domain.enums import (
     TrainingModelId,
 )
 from datp_core.domain.values import Checksum, Seed
-from datp_core.orchestration.hooks import (
-    NoOpObservationHook,
+from datp_core.pipeline.planning import ExperimentCoordinate
+from datp_core.protocols.graph import (
+    IdentityObservationHook,
     ObservationBoundary,
     ObservationContext,
     ObservationResult,
-    apply_observation_hook,
+    observe_graph_boundary,
 )
-from datp_core.pipeline.planning import ExperimentCoordinate
 
 
 def coordinate() -> ExperimentCoordinate:
@@ -43,20 +43,20 @@ def coordinate() -> ExperimentCoordinate:
 
 def context() -> ObservationContext:
     return ObservationContext(
-        boundary=ObservationBoundary.BEFORE_CALIBRATION,
+        boundary=ObservationBoundary.AFTER_SCORE_GENERATION_BEFORE_CALIBRATION,
         coordinate=coordinate(),
         input_checksum=Checksum("a" * 64),
     )
 
 
-def test_noop_hook_preserves_coordinate_and_checksum() -> None:
-    result = apply_observation_hook(context(), NoOpObservationHook())
+def test_identity_hook_preserves_coordinate_and_checksum() -> None:
+    result = observe_graph_boundary(context(), IdentityObservationHook())
     assert result.input_checksum == result.output_checksum
     assert result.coordinate == coordinate()
 
 
-def test_absent_hook_has_identical_noop_behavior() -> None:
-    assert apply_observation_hook(context(), None) == apply_observation_hook(context(), NoOpObservationHook())
+def test_absent_hook_has_identical_identity_behavior() -> None:
+    assert observe_graph_boundary(context(), None) == observe_graph_boundary(context(), IdentityObservationHook())
 
 
 def test_hook_context_is_immutable() -> None:
@@ -68,7 +68,7 @@ def test_hook_context_is_immutable() -> None:
 def test_observation_result_rejects_changed_checksum() -> None:
     with pytest.raises(ValueError, match="cannot alter"):
         ObservationResult(
-            boundary=ObservationBoundary.BEFORE_CALIBRATION,
+            boundary=ObservationBoundary.AFTER_SCORE_GENERATION_BEFORE_CALIBRATION,
             coordinate=coordinate(),
             input_checksum=Checksum("a" * 64),
             output_checksum=Checksum("b" * 64),

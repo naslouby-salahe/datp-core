@@ -31,19 +31,24 @@ from datp_core.pipeline.execution import (
 from datp_core.pipeline.planning import ExperimentCoordinate
 from datp_core.protocols.training import DITTO_TRAINING_PROTOCOLS
 
+OUTPUT_ROOT = Path("outputs")
+
 
 class Runner:
     def __init__(self) -> None:
         self.stages: list[PipelineStage] = []
+        self.output_roots: list[Path] = []
 
     def run(
         self,
         stage: PipelineStage,
         coordinate: ExperimentCoordinate,
         provenance: ExecutionProvenance,
+        output_root: Path,
     ) -> StageExecution:
         assert provenance.plan_digest.value
         self.stages.append(stage)
+        self.output_roots.append(output_root)
         return StageExecution(stage=stage, outcome=StageOutcome.COMPLETED, evidence=coordinate.stable_key)
 
 
@@ -96,10 +101,11 @@ def test_absent_experiment_runs_every_stage_without_deletion() -> None:
         provenance=provenance(),
         stage_runner=runner,
         output_store=output_store,
-        output_root=Path("outputs"),
+        output_root=OUTPUT_ROOT,
     )
     assert not output_store.deleted
     assert tuple(runner.stages) == resolve_execution_recipe(coordinate()).stages
+    assert set(runner.output_roots) == {OUTPUT_ROOT}
     assert result.successful
 
 
@@ -111,11 +117,12 @@ def test_complete_valid_experiment_is_reused_without_execution() -> None:
         provenance=provenance(),
         stage_runner=runner,
         output_store=output_store,
-        output_root=Path("outputs"),
+        output_root=OUTPUT_ROOT,
     )
     assert result.reused_complete_experiment
     assert result.successful
     assert not runner.stages
+    assert not runner.output_roots
     assert not output_store.deleted
 
 
@@ -127,10 +134,11 @@ def test_incomplete_experiment_is_deleted_and_restarted() -> None:
         provenance=provenance(),
         stage_runner=runner,
         output_store=output_store,
-        output_root=Path("outputs"),
+        output_root=OUTPUT_ROOT,
     )
     assert output_store.deleted
     assert tuple(runner.stages) == resolve_execution_recipe(coordinate()).stages
+    assert set(runner.output_roots) == {OUTPUT_ROOT}
     assert result.successful
 
 
@@ -142,11 +150,12 @@ def test_overwrite_deletes_complete_coordinate_before_execution() -> None:
         provenance=provenance(),
         stage_runner=runner,
         output_store=output_store,
-        output_root=Path("outputs"),
+        output_root=OUTPUT_ROOT,
         overwrite=True,
     )
     assert output_store.deleted
     assert tuple(runner.stages) == resolve_execution_recipe(coordinate()).stages
+    assert set(runner.output_roots) == {OUTPUT_ROOT}
     assert result.successful
 
 
@@ -159,10 +168,11 @@ def test_invalid_completed_experiment_is_not_reused_or_deleted_silently() -> Non
             provenance=provenance(),
             stage_runner=runner,
             output_store=output_store,
-            output_root=Path("outputs"),
+            output_root=OUTPUT_ROOT,
         )
     assert not output_store.deleted
     assert not runner.stages
+    assert not runner.output_roots
 
 
 def test_confirmatory_experiment_resolves_the_standard_federated_recipe() -> None:
@@ -192,10 +202,11 @@ def test_completed_execution_contains_every_stage_in_its_selected_recipe() -> No
         provenance=provenance(),
         stage_runner=runner,
         output_store=output_store,
-        output_root=Path("outputs"),
+        output_root=OUTPUT_ROOT,
     )
     assert result.recipe == STANDARD_FEDERATED_RECIPE
     assert tuple(item.stage for item in result.stages) == STANDARD_FEDERATED_RECIPE.stages
+    assert set(runner.output_roots) == {OUTPUT_ROOT}
 
 
 def test_partial_execution_is_a_valid_recipe_prefix() -> None:
@@ -205,8 +216,10 @@ def test_partial_execution_is_a_valid_recipe_prefix() -> None:
             stage: PipelineStage,
             coordinate: ExperimentCoordinate,
             provenance: ExecutionProvenance,
+            output_root: Path,
         ) -> StageExecution:
             del coordinate, provenance
+            assert output_root == OUTPUT_ROOT
             if stage is PipelineStage.SELECT_CHECKPOINT:
                 return StageExecution(stage=stage, outcome=StageOutcome.BLOCKED, evidence="fixture halts here")
             return StageExecution(stage=stage, outcome=StageOutcome.COMPLETED, evidence="fixture")
@@ -216,7 +229,7 @@ def test_partial_execution_is_a_valid_recipe_prefix() -> None:
         provenance=provenance(),
         stage_runner=_BlocksAfterTraining(),
         output_store=OutputStore(ExistingExperimentState.ABSENT),
-        output_root=Path("outputs"),
+        output_root=OUTPUT_ROOT,
     )
     completed_stage_ids = tuple(item.stage for item in result.stages)
     assert completed_stage_ids == STANDARD_FEDERATED_RECIPE.stages[: len(completed_stage_ids)]
@@ -255,6 +268,7 @@ def test_execute_experiment_fails_fast_for_a_ditto_coordinate_instead_of_running
             provenance=provenance(),
             stage_runner=runner,
             output_store=output_store,
-            output_root=Path("outputs"),
+            output_root=OUTPUT_ROOT,
         )
     assert not runner.stages
+    assert not runner.output_roots

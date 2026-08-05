@@ -1,4 +1,4 @@
-"""Training declarations."""
+"""Training declarations and authoritative protocol resolution."""
 
 from collections.abc import Sequence
 
@@ -18,6 +18,7 @@ from datp_core.domain.values import (
     LearningRate,
     LocalEpochCount,
     MetricValue,
+    ModelCoefficientValue,
     ProximalCoefficient,
     Ratio,
     RoundNumber,
@@ -35,7 +36,8 @@ from .models import (
 )
 
 CHECKPOINT_PROTOCOL = CheckpointProtocol(
-    candidates=tuple(RoundNumber(value) for value in (25, 50, 75, 100, 125, 150, 200)), maximum_round=RoundNumber(200)
+    candidates=tuple(RoundNumber(value) for value in (25, 50, 75, 100, 125, 150, 200)),
+    maximum_round=RoundNumber(200),
 )
 CHECKPOINT_SELECTION_RULE = CheckpointSelectionRule.FIXED_TERMINAL_MAXIMUM_ROUND
 
@@ -86,7 +88,6 @@ WEIGHT_DECAY = WeightDecay(0.0)
 OPTIMIZER = OptimizerProtocol(identity=OptimizerId.ADAM, weight_decay=WEIGHT_DECAY)
 LEARNING_RATE = LearningRate(0.001)
 BATCH_SIZE = BatchSize(256)
-# CUDA-resident TensorDataset loaders cannot fork worker processes.
 CENTRALIZED_DATALOADER_WORKER_COUNT = DataLoaderWorkerCount(0)
 FEDERATED_DATALOADER_WORKER_COUNT = DataLoaderWorkerCount(0)
 DITTO_REGULARIZATION_GRID = tuple(DittoRegularization(value) for value in (0.05, 0.1, 0.2))
@@ -118,3 +119,55 @@ DITTO_TRAINING_PROTOCOLS = tuple(
     )
     for regularization in DITTO_REGULARIZATION_GRID
 )
+
+
+def resolve_fedprox_protocol(coefficient: ModelCoefficientValue | ProximalCoefficient) -> FedProxProtocol:
+    matches = tuple(
+        protocol for protocol in FEDPROX_TRAINING_PROTOCOLS if protocol.coefficient.value == coefficient.value
+    )
+    if len(matches) != 1:
+        raise ScientificContractError(
+            "a FedProx coefficient must resolve to exactly one declared training protocol",
+            subject=TrainingModelId.FEDPROX_AUTOENCODER,
+        )
+    return matches[0]
+
+
+def resolve_ditto_protocol(regularization: DittoRegularization) -> DittoProtocol:
+    matches = tuple(
+        protocol for protocol in DITTO_TRAINING_PROTOCOLS if protocol.regularization.value == regularization.value
+    )
+    if len(matches) != 1:
+        raise ScientificContractError(
+            "a Ditto regularization value must resolve to exactly one declared training protocol",
+            subject=TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER,
+        )
+    return matches[0]
+
+
+def resolve_single_model_federated_training_protocol(
+    *,
+    model: TrainingModelId,
+    coefficient: ModelCoefficientValue | ProximalCoefficient | DittoRegularization | None,
+) -> FedAvgProtocol | FedProxProtocol:
+    """Resolve the only supported single-model federated training protocol for a typed identity."""
+    match model:
+        case TrainingModelId.FEDAVG_AUTOENCODER:
+            if coefficient is not None:
+                raise ScientificContractError(
+                    "FedAvg must not declare a model coefficient",
+                    subject=model,
+                )
+            return FEDAVG_TRAINING_PROTOCOL
+        case TrainingModelId.FEDPROX_AUTOENCODER:
+            if coefficient is None or isinstance(coefficient, DittoRegularization):
+                raise ScientificContractError(
+                    "FedProx requires a declared proximal coefficient",
+                    subject=model,
+                )
+            return resolve_fedprox_protocol(coefficient)
+        case TrainingModelId.DITTO_GLOBAL_AUTOENCODER | TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER:
+            raise ScientificContractError(
+                "Ditto requires its related global and personalized execution route",
+                subject=model,
+            )

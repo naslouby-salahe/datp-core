@@ -53,20 +53,25 @@ class PlanDisposition(StrEnum):
 
 
 class ExecutionRoute(StrEnum):
-    """Which execution mechanism a coordinate's scientific shape requires.
+    """Execution mechanism required by one coordinate's scientific shape.
 
-    Only SINGLE_COORDINATE resolves to an ExecutionRecipe runnable by
-    execute_experiment/GeneralStageRunner. The other routes require their
-    dedicated joint workflow (pipeline.campaign.run_temporal_future_pair for
-    TEMPORAL_PAIRED_EXECUTION; Ditto's joint global/personalized publication,
-    not yet campaign-wired, for DITTO_JOINT_PUBLICATION) because they couple
-    multiple coordinates or a shared detector in ways a per-coordinate recipe
-    cannot represent.
+    `SINGLE_COORDINATE` is executed by `execution.execute_experiment` and
+    `runner.StageRunner`. `TEMPORAL_PAIRED_EXECUTION` is executed by
+    `temporal_evidence.run_temporal_future_pair`, while
+    `DITTO_JOINT_PUBLICATION` is executed by
+    `ditto_stress.run_ditto_stress_test_seed`. The joint routes preserve shared
+    detector or related-model identities that cannot be represented safely by
+    independent single-coordinate recipes.
     """
 
     SINGLE_COORDINATE = "single_coordinate"
     DITTO_JOINT_PUBLICATION = "ditto_joint_publication"
     TEMPORAL_PAIRED_EXECUTION = "temporal_paired_execution"
+
+
+class CoordinateIdentitySegment(StrEnum):
+    NO_MODEL_COEFFICIENT = "no_model_coefficient"
+    NON_TEMPORAL = "non_temporal"
 
 
 _DITTO_TRAINING_MODELS = frozenset(
@@ -117,8 +122,16 @@ class ExperimentCoordinate:
 
     @property
     def stable_key(self) -> str:
-        temporal = self.temporal_state.value if self.temporal_state is not None else "static"
-        coefficient = f"{self.model_coefficient.value}" if self.model_coefficient is not None else "unweighted"
+        temporal = (
+            self.temporal_state.value
+            if self.temporal_state is not None
+            else CoordinateIdentitySegment.NON_TEMPORAL.value
+        )
+        coefficient = (
+            f"{self.model_coefficient.value}"
+            if self.model_coefficient is not None
+            else CoordinateIdentitySegment.NO_MODEL_COEFFICIENT.value
+        )
         return "/".join(
             (
                 self.experiment.value,
