@@ -24,11 +24,6 @@ from datp_core.domain.values import (
     RowCount,
     checksum_file,
 )
-from datp_core.pipeline.publication.processed import (
-    ProcessedPublication,
-    ProcessedPublicationResult,
-    publish_processed,
-)
 from datp_core.populations.models import (
     OUTCOME_LABEL_COLUMN,
     PARTITION_ROLE_COLUMN,
@@ -56,6 +51,11 @@ from datp_core.preprocessing.models import (
     PreprocessingPublishContext,
     PreprocessingValidationReport,
     TransformedSchema,
+)
+from datp_core.preprocessing.publication import (
+    ProcessedPublication,
+    ProcessedPublicationResult,
+    publish_processed,
 )
 from datp_core.preprocessing.state import (
     TransformReloadCheck,
