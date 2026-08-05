@@ -15,6 +15,7 @@ from datp_core.domain.enums import (
     PublicationStatus,
     ScoreFrameColumn,
     SerializationFormat,
+    SplitProtocolId,
 )
 from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
 from datp_core.domain.provenance import canonical_checksum
@@ -149,6 +150,7 @@ class CentralizedScoringPublicationBinding:
 @dataclass(slots=True, eq=False, kw_only=True)
 class GenerateFederatedScoresRequest:
     checkpoint: CheckpointCandidate
+    scored_split_protocol: SplitProtocolId
     autoencoder: AutoencoderProtocol
     feature_names: FeatureNameSequence
     clients: tuple[ClientScoringInput, ...]
@@ -401,6 +403,7 @@ def score_artifact_set_checksum(
 def _federated_request(request: GenerateFederatedScoresRequest, directory: Path) -> ScoreGenerationRequest:
     return ScoreGenerationRequest(
         checkpoint=request.checkpoint,
+        scored_split_protocol=request.scored_split_protocol,
         autoencoder=request.autoencoder,
         feature_names=request.feature_names,
         clients=request.clients,
