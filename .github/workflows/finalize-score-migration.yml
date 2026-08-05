@@ -28,6 +28,8 @@ jobs:
           replacements = {
               "from datp_core.scoring.models import": "from datp_core.protocols.inference import",
               "from datp_core.scoring.generation import": "from datp_core.pipeline.scoring.service import",
+              '"datp_core.scoring.generation",': '"datp_core.pipeline.scoring.service",',
+              '"datp_core.scoring",': '"datp_core.pipeline.scoring",',
           }
           for path in sorted((*root.joinpath("src").rglob("*.py"), *root.joinpath("tests").rglob("*.py"))):
               text = path.read_text(encoding="utf-8")
