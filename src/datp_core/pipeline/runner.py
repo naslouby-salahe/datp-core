@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from pathlib import Path
 from shutil import rmtree
@@ -11,8 +11,18 @@ from datp_core.anchor.models import VerifyAnchorStageRequest
 from datp_core.domain.enums import ExperimentId, PublicationStatus
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.provenance import canonical_checksum
-from datp_core.domain.values import ByteCount, Checksum, ClientCount, checksum_file
-from datp_core.evaluation.controls import build_federated_evaluation_inputs
+from datp_core.domain.values import (
+    NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
+    ByteCount,
+    Checksum,
+    ClientCount,
+    checksum_file,
+)
+from datp_core.evaluation.controls import (
+    FixedScoreEvidence,
+    build_federated_evaluation_inputs,
+    validate_fixed_score_controls,
+)
 from datp_core.evaluation.models import metric_by_id
 from datp_core.evaluation.population import FederatedEvaluationAssetName, FederatedEvaluationDocument
 from datp_core.learning.federated.training import FederatedTrainingRequest
@@ -405,6 +415,34 @@ class StageRunner:
             evidence=f"threshold_checksum={checksum.value}",
         )
 
+    def _comparison_fixed_score_evidence(
+        self,
+        coordinate: ExperimentCoordinate,
+        output_root: Path,
+    ) -> FixedScoreEvidence | None:
+        reference: FixedScoreEvidence | None = None
+        for method in population_capabilities(coordinate.population).valid_threshold_methods:
+            if method is coordinate.threshold_method:
+                continue
+            comparison_coordinate = replace(coordinate, threshold_method=method)
+            path = (
+                self._run_directory(comparison_coordinate, output_root)
+                / EvaluationRunAssetDirectory.EVALUATION.value
+                / FederatedEvaluationAssetName.DOCUMENT
+            )
+            if not path.is_file():
+                continue
+            evidence = load_evaluation_document(path).fixed_score_evidence
+            if reference is None:
+                reference = evidence
+                continue
+            validate_fixed_score_controls(
+                reference,
+                evidence,
+                auroc_absolute_tolerance=NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
+            )
+        return reference
+
     def _evaluate_detector(
         self,
         stage: PipelineStage,
@@ -419,7 +457,7 @@ class StageRunner:
                 threshold_result=threshold,
                 cohort=evaluation_inputs.cohort,
                 fixed_score_evidence=evaluation_inputs.fixed_score_evidence,
-                comparison_fixed_score_evidence=None,
+                comparison_fixed_score_evidence=self._comparison_fixed_score_evidence(coordinate, output_root),
                 evidence_role=coordinate.evidence_role,
                 conformal_coverage_inputs=(),
                 threshold_estimation_inputs=(),
