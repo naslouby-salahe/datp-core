@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Annotated
+
 import typer
 
 from datp_core.domain.enums import (
@@ -52,12 +54,12 @@ def materialize_datasets() -> None:
 
 @app.command("preprocess-federated")
 def preprocess_federated(
-    population: PopulationId = typer.Option(...),
-    partition_seed: int = typer.Option(..., min=0),
-    split_protocol: SplitProtocolId = typer.Option(...),
-    preprocessing_identity: PreprocessingProtocolId = typer.Option(...),
-    partition_kind: ControlledPartitionKind | None = typer.Option(None),
-    concentration: float | None = typer.Option(None),
+    population: Annotated[PopulationId, typer.Option()],
+    partition_seed: Annotated[int, typer.Option(min=0)],
+    split_protocol: Annotated[SplitProtocolId, typer.Option()],
+    preprocessing_identity: Annotated[PreprocessingProtocolId, typer.Option()],
+    partition_kind: Annotated[ControlledPartitionKind | None, typer.Option()] = None,
+    concentration: Annotated[float | None, typer.Option()] = None,
 ) -> None:
     if preprocessing_identity not in _FEDERATED_PREPROCESSING_IDENTITIES:
         allowed = ", ".join(sorted(item.value for item in _FEDERATED_PREPROCESSING_IDENTITIES))
@@ -81,11 +83,11 @@ def preprocess_federated(
 
 @app.command("preprocess-centralized")
 def preprocess_centralized(
-    population: PopulationId = typer.Option(...),
-    partition_seed: int = typer.Option(..., min=0),
-    split_protocol: SplitProtocolId = typer.Option(...),
-    partition_kind: ControlledPartitionKind | None = typer.Option(None),
-    concentration: float | None = typer.Option(None),
+    population: Annotated[PopulationId, typer.Option()],
+    partition_seed: Annotated[int, typer.Option(min=0)],
+    split_protocol: Annotated[SplitProtocolId, typer.Option()],
+    partition_kind: Annotated[ControlledPartitionKind | None, typer.Option()] = None,
+    concentration: Annotated[float | None, typer.Option()] = None,
 ) -> None:
     result = fit_centralized_population_preprocessing(
         FitCentralizedPopulationPreprocessingRequest(
@@ -103,7 +105,7 @@ def preprocess_centralized(
 
 
 @app.command("confirmatory-seed")
-def confirmatory_seed(training_seed: int = typer.Option(..., min=0)) -> None:
+def confirmatory_seed(training_seed: Annotated[int, typer.Option(min=0)]) -> None:
     if training_seed not in _DECLARED_CONFIRMATORY_SEEDS:
         allowed = ", ".join(str(value) for value in sorted(_DECLARED_CONFIRMATORY_SEEDS))
         raise typer.BadParameter(f"training-seed must be one of the declared confirmatory seeds: {allowed}")

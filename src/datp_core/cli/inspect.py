@@ -1,5 +1,7 @@
 """Read-only inspection CLI adapter."""
 
+from typing import Annotated
+
 import typer
 
 from datp_core.domain.enums import ExperimentId, PopulationId
@@ -19,7 +21,7 @@ def inspect_plan() -> None:
 
 
 @app.command("experiment")
-def inspect_experiment(experiment: ExperimentId = typer.Argument(...)) -> None:
+def inspect_experiment(experiment: Annotated[ExperimentId, typer.Argument()]) -> None:
     declaration = next(item for item in EXPERIMENTS if item.id is experiment)
     typer.echo(
         f"experiment={declaration.id.value} population={declaration.population.value} "
@@ -29,7 +31,7 @@ def inspect_experiment(experiment: ExperimentId = typer.Argument(...)) -> None:
 
 
 @app.command("population")
-def inspect_population(population: PopulationId = typer.Argument(...)) -> None:
+def inspect_population(population: Annotated[PopulationId, typer.Argument()]) -> None:
     declaration = next(item for item in POPULATIONS if item.id is population)
     typer.echo(
         f"population={declaration.id.value} dataset={declaration.dataset.value} "
