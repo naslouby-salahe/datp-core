@@ -14,6 +14,7 @@ from datp_core.domain.enums import (
     CheckpointStatus,
     ContractSubject,
     PartitionRole,
+    PopulationId,
     SerializationFormat,
     SplitProtocolId,
 )
@@ -265,7 +266,7 @@ def federated_scoring_is_reusable(request: ScoreGenerationRequest, directory: Pa
         loaded = load_reused_federated_scores(request, directory)
         expected = canonical_checksum(_invariant_from_manifest(loaded.manifest))
         return complete.read_text(encoding="utf-8").strip() == expected.value
-    except (ArtifactIntegrityError, OSError, ValueError):
+    except (ArtifactIntegrityError, OSError, ScientificContractError, ValueError):
         return False
 
 
@@ -436,7 +437,7 @@ def _validate_request(request: ScoreGenerationRequest) -> None:
         )
     if not _split_binding_is_valid(request):
         raise ScientificContractError(
-            "scored split must match checkpoint training split except for the matched temporal static reference",
+            "scored split must match checkpoint training split except for the matched Edge temporal static reference",
             subject=ContractSubject.SPLIT,
         )
     if not request.clients:
@@ -457,11 +458,12 @@ def _validate_request(request: ScoreGenerationRequest) -> None:
 
 
 def _split_binding_is_valid(request: ScoreGenerationRequest) -> bool:
-    training_split = request.checkpoint.coordinate.split_protocol
-    if request.scored_split_protocol is training_split:
+    coordinate = request.checkpoint.coordinate
+    if request.scored_split_protocol is coordinate.split_protocol:
         return request.checkpoint.split_manifest_checksum == request.split_manifest_checksum
     return (
-        training_split is SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE
+        coordinate.population is PopulationId.EDGE_TEMPORAL_GROUPS
+        and coordinate.split_protocol is SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE
         and request.scored_split_protocol is SplitProtocolId.RANDOM_FRACTIONAL_STATIC_REFERENCE
         and request.checkpoint.split_manifest_checksum != request.split_manifest_checksum
     )
