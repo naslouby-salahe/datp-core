@@ -588,9 +588,9 @@ def _auroc(labels: np.ndarray, scores: np.ndarray) -> CentralizedMetricRecord:
         return CentralizedMetricRecord(metric=MetricId.AUROC, status=AvailabilityStatus.UNAVAILABLE, value=None)
     ranks = _average_ranks(sorted_scores)
     positive_rank_sum = float(ranks[sorted_labels == 1].sum())
-    auc = (
-        positive_rank_sum - positive_count * (positive_count + ONE_BASED_RANK_OFFSET) / MANN_WHITNEY_PAIR_FACTOR
-    ) / (positive_count * negative_count)
+    auc = (positive_rank_sum - positive_count * (positive_count + ONE_BASED_RANK_OFFSET) / MANN_WHITNEY_PAIR_FACTOR) / (
+        positive_count * negative_count
+    )
     if not isfinite(auc):
         return CentralizedMetricRecord(metric=MetricId.AUROC, status=AvailabilityStatus.UNDEFINED, value=None)
     return CentralizedMetricRecord(

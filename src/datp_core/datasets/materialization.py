@@ -432,9 +432,7 @@ def _materialized_dataset[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
     )
 
 
-def _asset_row_count[AssetRoleT: StrEnum](
-    target: Path, layout: CanonicalAssetLayout[AssetRoleT]
-) -> RowCount:
+def _asset_row_count[AssetRoleT: StrEnum](target: Path, layout: CanonicalAssetLayout[AssetRoleT]) -> RowCount:
     return RowCount(pq.ParquetFile(canonical_asset_path(target, layout.relative_path)).metadata.num_rows)
 
 

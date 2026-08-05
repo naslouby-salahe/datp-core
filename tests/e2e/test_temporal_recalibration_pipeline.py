@@ -27,12 +27,8 @@ def _request(*, future_leakage: bool, mode: TemporalExecutionMode) -> EdgeTempor
 
 
 def test_temporal_pipeline_is_one_shot_and_rejects_future_leakage() -> None:
-    valid = assess_external_temporal_feasibility(
-        _request(future_leakage=False, mode=TemporalExecutionMode.ONE_SHOT)
-    )
-    leaking = assess_external_temporal_feasibility(
-        _request(future_leakage=True, mode=TemporalExecutionMode.ONE_SHOT)
-    )
+    valid = assess_external_temporal_feasibility(_request(future_leakage=False, mode=TemporalExecutionMode.ONE_SHOT))
+    leaking = assess_external_temporal_feasibility(_request(future_leakage=True, mode=TemporalExecutionMode.ONE_SHOT))
     streaming = assess_external_temporal_feasibility(
         _request(future_leakage=False, mode=TemporalExecutionMode.STREAMING)
     )

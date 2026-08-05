@@ -96,8 +96,7 @@ def preprocess_centralized(
         )
     )
     typer.echo(
-        f"population={result.population.value} dataset={result.dataset.value} "
-        f"status={result.publication_status.value}"
+        f"population={result.population.value} dataset={result.dataset.value} status={result.publication_status.value}"
     )
 
 

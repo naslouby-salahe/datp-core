@@ -79,10 +79,14 @@ def _evaluation(tmp_path: Path, calibration_seed: int, evaluation_seed: int):
         calibration_scores=scoring.calibration_scores,
         protocol=CENTRALIZED_POOLED_QUANTILE_PROTOCOL,
     )
-    return scoring, threshold, evaluate_centralized_reference(
-        coordinate=training_coordinate(),
-        evaluation_scores=scoring.evaluation_scores,
-        threshold_result=threshold,
+    return (
+        scoring,
+        threshold,
+        evaluate_centralized_reference(
+            coordinate=training_coordinate(),
+            evaluation_scores=scoring.evaluation_scores,
+            threshold_result=threshold,
+        ),
     )
 
 

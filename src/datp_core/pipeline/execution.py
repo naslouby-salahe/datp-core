@@ -71,8 +71,10 @@ class ExperimentExecution:
     def successful(self) -> bool:
         if self.reused_complete_experiment:
             return True
-        return bool(self.stages) and len(self.stages) == len(PIPELINE_SEQUENCE) and all(
-            item.outcome in {StageOutcome.COMPLETED, StageOutcome.REUSED} for item in self.stages
+        return (
+            bool(self.stages)
+            and len(self.stages) == len(PIPELINE_SEQUENCE)
+            and all(item.outcome in {StageOutcome.COMPLETED, StageOutcome.REUSED} for item in self.stages)
         )
 
 

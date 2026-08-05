@@ -142,9 +142,7 @@ class ConfirmatoryThresholdInputs:
 
 
 def build_campaign(plan: ExperimentPlan) -> CampaignPlan:
-    coordinates = tuple(
-        entry.coordinate for entry in plan.entries if entry.disposition is PlanDisposition.EXECUTABLE
-    )
+    coordinates = tuple(entry.coordinate for entry in plan.entries if entry.disposition is PlanDisposition.EXECUTABLE)
     entries = tuple(CampaignEntry(ordinal=index, coordinate=coordinate) for index, coordinate in enumerate(coordinates))
     return CampaignPlan(entries=entries, digest=_campaign_digest(entries))
 
@@ -428,8 +426,7 @@ def _family_identities(
     family_by_client: tuple[tuple[str, str], ...],
 ) -> tuple[tuple[ClientIdentity, FamilyIdentity], ...]:
     return tuple(
-        (_client_with_id(clients, client_id), FamilyIdentity(family))
-        for client_id, family in family_by_client
+        (_client_with_id(clients, client_id), FamilyIdentity(family)) for client_id, family in family_by_client
     )
 
 
@@ -441,12 +438,8 @@ def _client_with_id(clients: tuple[ClientIdentity, ...], client_id: str) -> Clie
 
 
 def _confirmatory_contrast(training_seed: Seed) -> PairedContrast:
-    shared = _load_evaluation_document(
-        _evaluation_path(training_seed, FederatedThresholdMethod.SHARED_THRESHOLD)
-    )
-    local = _load_evaluation_document(
-        _evaluation_path(training_seed, FederatedThresholdMethod.LOCAL_THRESHOLD)
-    )
+    shared = _load_evaluation_document(_evaluation_path(training_seed, FederatedThresholdMethod.SHARED_THRESHOLD))
+    local = _load_evaluation_document(_evaluation_path(training_seed, FederatedThresholdMethod.LOCAL_THRESHOLD))
     if shared.score_coordinate != local.score_coordinate:
         raise ScientificContractError("paired evaluation documents use different training coordinates")
     return PairedContrast(

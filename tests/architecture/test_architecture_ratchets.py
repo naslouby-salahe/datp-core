@@ -80,8 +80,7 @@ def test_protocols_depend_only_on_domain() -> None:
         f"{path.relative_to(REPOSITORY_ROOT)} imports {imported}"
         for path in _python_files(SOURCE_ROOT / "protocols")
         for imported in _imports(path)
-        if imported.startswith("datp_core.")
-        and not imported.startswith(("datp_core.domain", "datp_core.protocols"))
+        if imported.startswith("datp_core.") and not imported.startswith(("datp_core.domain", "datp_core.protocols"))
     )
     assert not violations, "\n".join(violations)
 

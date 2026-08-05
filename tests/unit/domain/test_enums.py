@@ -417,6 +417,5 @@ def test_centralized_and_federated_threshold_methods_are_structurally_separate()
     assert not isinstance(CentralizedThresholdMethod.POOLED_BENIGN_QUANTILE, FederatedThresholdMethod)
 
 
-
 def test_stage_id_has_eleven_high_level_stages() -> None:
     assert len(StageId) == 11

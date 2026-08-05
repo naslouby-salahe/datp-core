@@ -15,7 +15,13 @@ from tests.unit.learning.centralized.helpers import (
     training_coordinate,
 )
 
-from datp_core.domain.enums import CheckpointStatus, PartitionRole, ScoreFrameColumn, SerializationFormat, TrainingModelId
+from datp_core.domain.enums import (
+    CheckpointStatus,
+    PartitionRole,
+    ScoreFrameColumn,
+    SerializationFormat,
+    TrainingModelId,
+)
 from datp_core.domain.errors import LeakageError
 from datp_core.domain.values import Checksum, FeatureCount, MetricValue, RoundNumber, RowCount, Seed, checksum_file
 from datp_core.pipeline.checkpoints.records import CentralizedCheckpointCandidate

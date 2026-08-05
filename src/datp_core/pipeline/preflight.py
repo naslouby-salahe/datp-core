@@ -62,11 +62,7 @@ def validate_preflight(
         ),
         AcceptanceCheck(
             name="cuda",
-            status=(
-                AcceptanceStatus.PASSED
-                if cuda_available or not require_cuda
-                else AcceptanceStatus.BLOCKED
-            ),
+            status=(AcceptanceStatus.PASSED if cuda_available or not require_cuda else AcceptanceStatus.BLOCKED),
             evidence=(
                 "CUDA requirement satisfied"
                 if cuda_available

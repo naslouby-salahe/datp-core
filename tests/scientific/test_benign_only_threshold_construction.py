@@ -132,9 +132,7 @@ def test_calibration_evaluation_row_overlap_is_rejected() -> None:
 
 def test_methods_compared_within_one_cell_must_share_the_eligible_cohort() -> None:
     with pytest.raises(ScientificContractError, match="same eligible cohort"):
-        require_common_eligible_cohort(
-            ((some_client("client_a"), some_client("client_b")), (some_client("client_a"),))
-        )
+        require_common_eligible_cohort(((some_client("client_a"), some_client("client_b")), (some_client("client_a"),)))
 
 
 def test_eligibility_covers_every_candidate_client_never_silently_drops_one(tmp_path: Path) -> None:

@@ -24,6 +24,5 @@ def build() -> None:
     plan = expand_experiment_plan()
     campaign = build_campaign(plan)
     typer.echo(
-        f"plan={plan.digest} entries={len(plan.entries)} executable={len(plan.executable)} "
-        f"campaign={campaign.digest}"
+        f"plan={plan.digest} entries={len(plan.entries)} executable={len(plan.executable)} campaign={campaign.digest}"
     )

@@ -30,7 +30,10 @@ class AlertBurdenDiagnostic:
     warning: WarningCode | None
 
     def __post_init__(self) -> None:
-        if self.coordinate.population is not self.client.population or self.coordinate.training_seed != self.training_seed:
+        if (
+            self.coordinate.population is not self.client.population
+            or self.coordinate.training_seed != self.training_seed
+        ):
             raise ScientificContractError("alert-burden coordinate must match client and training seed")
         if self.metric.metric is not MetricId.ALERTS_PER_DAY:
             raise ScientificContractError("alert-burden diagnostics require the alerts-per-day metric")

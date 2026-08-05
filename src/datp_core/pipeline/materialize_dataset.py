@@ -28,8 +28,7 @@ class MaterializeDatasetResult:
 def materialize_dataset(request: MaterializeDatasetRequest) -> MaterializeDatasetResult:
     canonical_root = request.data_root / ReusableDataCoordinateKind.CANONICAL
     publications = tuple(
-        dataset_binding(dataset).publish(raw_dataset_root(dataset), canonical_root)
-        for dataset in request.datasets
+        dataset_binding(dataset).publish(raw_dataset_root(dataset), canonical_root) for dataset in request.datasets
     )
     return MaterializeDatasetResult(
         stage=PipelineStage.MATERIALIZE_DATASET,

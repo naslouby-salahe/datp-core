@@ -22,6 +22,4 @@ def verify(diagnostics_directory: Path = typer.Option(Path("outputs/anchor/diagn
             request_independent_reproduction=False,
         )
     )
-    typer.echo(
-        f"gate={result.status.gate_status.value} readiness={result.status.dependent_readiness.value}"
-    )
+    typer.echo(f"gate={result.status.gate_status.value} readiness={result.status.dependent_readiness.value}")
