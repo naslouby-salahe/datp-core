@@ -1,70 +1,84 @@
 # Phase 15 — Extension Readiness
 
-## Authority
+**Status:** COMPLETE  
+**Implementation date:** 2026-08-04  
+**Governing source:** `docs/Journal_Extension_Master_Roadmap.md`
 
-`docs/Journal_Extension_Master_Roadmap.md` remains the scientific authority. This phase strengthens future extension boundaries without adding current scientific behavior.
+## 1. Scope
 
-## Final ownership
+Phase 15 establishes observation-only graph boundaries for later calibration-channel attacks and defenses without implementing either extension.
 
-Extension readiness is owned by:
+The delivered boundaries must not alter:
 
-- `src/datp_core/pipeline/preflight.py` for explicit rejection of undeclared future capabilities;
-- `src/datp_core/protocols/graph.py` for immutable observation-only scientific graph contracts;
-- `src/datp_core/pipeline/execution.py` for invoking declared observation boundaries in the canonical execution path;
-- `src/datp_core/orchestration/resources.py` for typed Dagster resources only;
-- `tests/unit/pipeline/test_extension_boundaries.py` and `tests/unit/protocols/test_graph.py` for behavior and immutability checks.
+- client training rows or labels;
+- model weights, gradients, aggregation, or checkpoint selection;
+- score generation or stored score artifacts;
+- evaluation rows, labels, or score values;
+- client eligibility or cohort membership;
+- threshold methods or current journal claim scope.
 
-Dagster adapters do not own scientific graph contracts. The deleted `datp_core.experiments` package, orchestration commands, orchestration stages, and orchestration-owned observation models are not valid owners and must not return.
+## 2. Final ownership
 
-## Required boundaries
+- `src/datp_core/protocols/graph.py`: immutable observation boundary identities, contexts, hook protocol, default no-op behavior, and identity-preservation validation.
+- `src/datp_core/pipeline/runner.py`: the canonical invocation owner for every boundary using checksums from real stage artifacts.
+- `src/datp_core/pipeline/preflight.py`: rejection of undeclared attack or defense implementations.
+- `src/datp_core/cli/run.py`: contains no extension flags or configuration overrides.
+- `src/datp_core/orchestration/`: delegates to pipeline entry points and owns no extension logic.
 
-Typed observation points exist:
+Graph boundaries are protocol contracts because they define where scientific observation may occur. Dagster is only an execution adapter and must not own the boundaries.
 
-1. after reusable score generation and before calibration;
-2. after calibration and before threshold construction;
+## 3. Observation-only boundaries
+
+The canonical execution path invokes four immutable boundaries:
+
+1. after score generation and before calibration construction;
+2. after calibration construction and before threshold construction;
 3. after threshold construction and before evaluation;
-4. after evaluation and before analysis.
+4. after evaluation and before statistical analysis.
 
-Hook contexts and results are frozen. A hook may observe a scientific coordinate and artifact checksum only. It must preserve both exactly. The identity hook and an omitted hook have identical behavior.
+Each observation context carries:
 
-The observation contracts must be invoked by the canonical pipeline execution path before this phase can be declared complete. A disconnected contract exercised only by isolated unit tests is not implementation evidence.
+- the closed boundary identity;
+- the full immutable experiment coordinate;
+- the checksum of the stage artifact entering the boundary.
 
-## Prohibited behavior
+A hook may observe that context only. The returned context must preserve the boundary, coordinate, and checksum exactly. Any attempted mutation raises a scientific contract error and prevents downstream completion.
 
-DATP-Core does not implement:
+The score-generation boundary is built from the fixed-score invariant, the calibration boundary from the eligible benign calibration score collection, the threshold boundary from the typed threshold result, and the evaluation boundary from the completed evaluation digest. These are real execution artifacts, not test-only placeholders.
 
-- calibration poisoning or attack objectives;
-- defenses or defense estimators;
-- drift detectors, continuous adaptation, or online loops;
-- privacy mechanisms;
-- additional datasets;
-- reflection-based registration, generic plugin discovery, service locators, or string-key dispatch;
-- hooks that mutate clean scores, calibration data, thresholds, evaluations, analyses, coordinates, checksums, or completion state.
+## 4. Extension preflight
 
-A future research implementation requires a separately approved scientific protocol and a distinct scientific coordinate. It may not alter current clean artifacts in place.
+Attack and defense identities are not part of the current closed experiment enumeration. Preflight therefore rejects both extension kinds as undeclared. No extension output directory is created, and no current claim becomes attack- or defense-aware.
 
-## Invariants
+Current operational commands expose no attack, defense, poisoning, mutation, or extension mode flag.
 
-- Current benign-only calibration remains unchanged.
-- Fixed-detector threshold comparisons remain unchanged.
-- Anchor, evidence-role, capability, serialization, and publication gates remain mandatory.
-- Hook failure prevents downstream completion and leaves existing clean artifacts intact.
-- Enabling the identity hook produces the same identities and checksums as omitting it.
-- Scientific observation contracts remain independent of Dagster and other runtime adapters.
+## 5. Scientific safeguards
 
-## Verification
+The extension seam is observation-only:
 
-Required tests verify:
+- fixed-detector identity remains unchanged;
+- preprocessing, checkpoint, calibration rows, evaluation rows, labels, and score checksums remain unchanged;
+- threshold policies remain the only current experimental intervention;
+- attacks and defenses remain separate future experiments;
+- current anchor, confirmatory, supportive, mechanism, external, temporal, and exploratory claim boundaries remain unchanged.
 
-- identity hooks are no-ops;
-- frozen contexts cannot be mutated;
-- coordinate or checksum changes are rejected;
-- every declared boundary is reached by the canonical execution path;
-- undeclared attacks, defenses, datasets, adaptive behavior, and threshold methods are rejected;
-- no future research implementation is present in the current source tree.
+The boundary implementation contains no mutable dictionary contract, arbitrary callback payload, string-key dispatch, hidden global hook registry, compatibility wrapper, or alternate execution path.
 
-## Completion record
+## 6. Verification
 
-Phase 15 is complete only when the typed boundaries above are owned by the protocol graph, invoked by the canonical pipeline path, current behavior is unchanged, relevant behavioral and architecture tests pass, and no future research behavior has entered DATP-Core.
+Meaningful tests cover:
 
-Formatting, Ruff, Pyright, Pylint, SonarQube, CodeScene, GitHub Actions, and CI are outside this pull request's completion procedure and are not phase gates.
+- stable no-hook behavior;
+- rejection of coordinate mutation;
+- rejection of checksum mutation;
+- rejection of boundary mutation;
+- canonical-runner wiring of every declared boundary;
+- preflight rejection of undeclared attacks;
+- preflight rejection of undeclared defenses;
+- absence of extension flags in CLI and orchestration surfaces.
+
+## 7. Completion record
+
+Phase 15 is complete only when all four boundaries are immutable protocol-owned contracts, every boundary is invoked by the authoritative execution path with a real artifact checksum, undeclared attacks and defenses fail closed, adapters expose no extension override, and relevant behavioral, architecture, and scientific tests pass.
+
+Formatting, Ruff, Pylance, Pyright, Pylint, Black, isort, Sonar, CodeScene, GitHub Actions, hosted CI, and external quality gates are outside this pull request's completion procedure.
