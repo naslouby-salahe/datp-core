@@ -46,6 +46,16 @@ jobs:
           if removed != 1:
               raise SystemExit(f'generated publication block removal count was {removed}')
 
+          text, scoring_removed = re.subn(
+              r"\nreplace\(\n    'src/datp_core/pipeline/scoring/service\.py',\n.*?\n\)\n",
+              "\n",
+              text,
+              count=1,
+              flags=re.S,
+          )
+          if scoring_removed != 1:
+              raise SystemExit(f'scoring rewrite removal count was {scoring_removed}')
+
           validation_call = '''
           replace(
               'src/datp_core/preprocessing/validation.py',
