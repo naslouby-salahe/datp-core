@@ -131,6 +131,7 @@ jobs:
           validation.write_text(text.replace(old, new), encoding='utf-8')
           PY
           uv run ruff format src tests noxfile.py
+          uv run ruff check --fix src tests noxfile.py
           uv run ruff check src tests noxfile.py
 
       - run: uv run pyright
