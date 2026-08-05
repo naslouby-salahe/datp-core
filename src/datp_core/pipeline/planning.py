@@ -232,6 +232,13 @@ def _planned_entry(
     evidence: tuple[PlanningEvidence, ...],
 ) -> PlannedExperiment:
     disposition, reason = _resolve_disposition(declaration, evidence)
+    capabilities = population_capabilities(declaration.population)
+    if cell.threshold_method not in capabilities.valid_threshold_methods:
+        disposition = PlanDisposition.INFEASIBLE
+        reason = (
+            f"{FeasibilityReason.THRESHOLD_METHOD_UNSUPPORTED.value}: "
+            "population capability contract does not authorize this threshold method"
+        )
     population = population_declaration(declaration.population)
     return PlannedExperiment(
         coordinate=ExperimentCoordinate(
@@ -241,7 +248,7 @@ def _planned_entry(
             population=declaration.population,
             training_model=declaration.training_model,
             training_seed=cell.seed,
-            split_protocol=split_protocol_for_population(declaration.population),
+            split_protocol=_coordinate_split_protocol(declaration.population, cell.temporal_state),
             preprocessing_protocol=SCIENTIFIC_FEDERATED_PREPROCESSING_METHOD.identity,
             model_coefficient=cell.model_coefficient,
             threshold_method=cell.threshold_method,
@@ -251,6 +258,19 @@ def _planned_entry(
         disposition=disposition,
         reason=reason,
     )
+
+
+def _coordinate_split_protocol(
+    population: PopulationId,
+    temporal_state: TemporalState | None,
+) -> SplitProtocolId:
+    match temporal_state:
+        case TemporalState.STATIC_REFERENCE:
+            return SplitProtocolId.RANDOM_FRACTIONAL_STATIC_REFERENCE
+        case TemporalState.FROZEN_FUTURE | TemporalState.RECALIBRATED_FUTURE:
+            return SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE
+        case None:
+            return split_protocol_for_population(population)
 
 
 def _temporal_states(experiment: ExperimentId) -> tuple[TemporalState | None, ...]:
