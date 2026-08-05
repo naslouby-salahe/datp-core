@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing import TypeVar
 
 from pydantic import BaseModel
@@ -20,7 +21,21 @@ def canonical_model_json_text(model: BaseModel) -> str:
 def serialize_json_model(model: BaseModel, destination: Path) -> Checksum:
     destination.parent.mkdir(parents=True, exist_ok=True)
     payload = canonical_json_text(model)
-    destination.write_text(payload, encoding="utf-8")
+    with NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        dir=destination.parent,
+        prefix=f".{destination.name}.",
+        suffix=".tmp",
+        delete=False,
+    ) as temporary_file:
+        temporary_file.write(payload)
+        temporary_path = Path(temporary_file.name)
+    try:
+        temporary_path.replace(destination)
+    except Exception:
+        temporary_path.unlink(missing_ok=True)
+        raise
     return checksum_text(payload)
 
 
