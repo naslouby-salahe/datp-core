@@ -1,4 +1,8 @@
-from datp_core.domain.enums import OptimizerId
+import pytest
+
+from datp_core.domain.enums import OptimizerId, TrainingModelId
+from datp_core.domain.errors import ScientificContractError
+from datp_core.domain.values import DittoRegularization, ModelCoefficientValue
 from datp_core.protocols.training import (
     BATCH_SIZE,
     CENTRALIZED_TRAINING_PROTOCOL,
@@ -17,6 +21,7 @@ from datp_core.protocols.training import (
     LEARNING_RATE,
     NBAIOT_AUTOENCODER,
     OPTIMIZER,
+    resolve_single_model_federated_training_protocol,
 )
 
 
@@ -38,3 +43,39 @@ def test_training_grids_are_locked() -> None:
     assert FEDAVG_TRAINING_PROTOCOL.local_epochs == FEDAVG_LOCAL_EPOCHS
     assert tuple(item.coefficient for item in FEDPROX_TRAINING_PROTOCOLS) == FEDPROX_COEFFICIENTS
     assert tuple(item.regularization for item in DITTO_TRAINING_PROTOCOLS) == DITTO_REGULARIZATION_GRID
+
+
+def test_single_model_federated_protocol_resolution_is_authoritative() -> None:
+    assert (
+        resolve_single_model_federated_training_protocol(
+            model=TrainingModelId.FEDAVG_AUTOENCODER,
+            coefficient=None,
+        )
+        is FEDAVG_TRAINING_PROTOCOL
+    )
+    for protocol in FEDPROX_TRAINING_PROTOCOLS:
+        assert (
+            resolve_single_model_federated_training_protocol(
+                model=TrainingModelId.FEDPROX_AUTOENCODER,
+                coefficient=ModelCoefficientValue(protocol.coefficient.value),
+            )
+            is protocol
+        )
+
+
+def test_single_model_federated_protocol_resolution_rejects_invalid_shapes() -> None:
+    with pytest.raises(ScientificContractError, match="must not declare"):
+        resolve_single_model_federated_training_protocol(
+            model=TrainingModelId.FEDAVG_AUTOENCODER,
+            coefficient=ModelCoefficientValue(0.1),
+        )
+    with pytest.raises(ScientificContractError, match="proximal coefficient"):
+        resolve_single_model_federated_training_protocol(
+            model=TrainingModelId.FEDPROX_AUTOENCODER,
+            coefficient=DittoRegularization(0.1),
+        )
+    with pytest.raises(ScientificContractError, match="global and personalized"):
+        resolve_single_model_federated_training_protocol(
+            model=TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER,
+            coefficient=DittoRegularization(0.1),
+        )
