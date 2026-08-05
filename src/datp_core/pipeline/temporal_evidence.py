@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 from datp_core.analysis.temporal import (
     TemporalDeploymentProvenance,
@@ -30,6 +30,7 @@ from datp_core.pipeline.federated_execution import (
     training_feature_names,
 )
 from datp_core.pipeline.planning import ExperimentCoordinate, expand_experiment_plan
+from datp_core.pipeline.scoring.service import FederatedScoreArtifactManifest
 from datp_core.populations.capabilities import population_capabilities
 from datp_core.protocols.calibration import CANONICAL_QUANTILE
 from datp_core.protocols.experiments import EXPERIMENTS, ExternalTemporalExecutionIdentity
@@ -50,19 +51,10 @@ class TemporalFuturePairResult:
     recalibrated_future: TemporalStateResult
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
-class _ThresholdInputs:
-    previous_evidence: FixedScoreEvidence | None
-
-
 def run_temporal_static_reference_seed(partition_seed: Seed) -> TemporalStateResult:
     coordinate = _coordinate(partition_seed, TemporalState.STATIC_REFERENCE)
-    context = _isolated_temporal_context(coordinate)
-    scores = score_execution_context(
-        context,
-        autoencoder=training_autoencoder(coordinate.dataset),
-        feature_names=training_feature_names(coordinate.dataset),
-    )
+    context = resolve_execution_context(coordinate)
+    scores = _score_context(context, coordinate)
     completed = _evaluate_state(
         context=context,
         identity=_execution_identity(coordinate),
@@ -78,12 +70,8 @@ def run_temporal_static_reference_seed(partition_seed: Seed) -> TemporalStateRes
 
 def run_temporal_future_pair(partition_seed: Seed) -> TemporalFuturePairResult:
     frozen_coordinate = _coordinate(partition_seed, TemporalState.FROZEN_FUTURE)
-    context = _isolated_temporal_context(frozen_coordinate)
-    scores = score_execution_context(
-        context,
-        autoencoder=training_autoencoder(frozen_coordinate.dataset),
-        feature_names=training_feature_names(frozen_coordinate.dataset),
-    )
+    context = resolve_execution_context(frozen_coordinate)
+    scores = _score_context(context, frozen_coordinate)
     frozen_provenance = TemporalDeploymentProvenance.from_score_manifest(TemporalState.FROZEN_FUTURE, scores)
     recalibrated_provenance = TemporalDeploymentProvenance.from_score_manifest(
         TemporalState.RECALIBRATED_FUTURE,
@@ -117,26 +105,38 @@ def run_temporal_future_pair(partition_seed: Seed) -> TemporalFuturePairResult:
     )
 
 
+def _score_context(
+    context: FederatedExecutionContext,
+    coordinate: ExperimentCoordinate,
+) -> FederatedScoreArtifactManifest:
+    return score_execution_context(
+        context,
+        autoencoder=training_autoencoder(coordinate.dataset),
+        feature_names=training_feature_names(coordinate.dataset),
+    )
+
+
 def _evaluate_state(
     *,
     context: FederatedExecutionContext,
     identity: ExternalTemporalExecutionIdentity,
-    scores,
+    scores: FederatedScoreArtifactManifest,
     calibration_role: PartitionRole,
     provenance: TemporalDeploymentProvenance | None,
 ) -> tuple[FederatedThresholdMethod, ...]:
     eligible = eligible_calibration_scores(scores, calibration_role)
     families = family_identities(context.clients, context.family_by_client)
-    inputs = _ThresholdInputs(previous_evidence=None)
+    capabilities = population_capabilities(context.coordinate.population)
+    previous_evidence: FixedScoreEvidence | None = None
     completed: list[FederatedThresholdMethod] = []
-    for method in population_capabilities(context.coordinate.population).valid_threshold_methods:
+    for method in capabilities.valid_threshold_methods:
         threshold = construct_federated_thresholds(
             ConstructFederatedThresholdsRequest(
                 request=ThresholdConstructionRequest(
                     method,
                     context.coordinate,
                     CANONICAL_QUANTILE,
-                    population_capabilities(context.coordinate.population),
+                    capabilities,
                     eligible,
                     families,
                 ),
@@ -157,7 +157,7 @@ def _evaluate_state(
                 threshold_result=threshold,
                 cohort=evaluation_inputs.cohort,
                 fixed_score_evidence=evaluation_inputs.fixed_score_evidence,
-                comparison_fixed_score_evidence=inputs.previous_evidence,
+                comparison_fixed_score_evidence=previous_evidence,
                 evidence_role=identity.evidence_role,
                 conformal_coverage_inputs=(),
                 threshold_estimation_inputs=(),
@@ -174,18 +174,9 @@ def _evaluate_state(
         )
         if not evaluation.complete_digest.value:
             raise ScientificContractError("temporal evaluation produced an empty completion digest")
-        inputs = _ThresholdInputs(previous_evidence=evaluation_inputs.fixed_score_evidence)
+        previous_evidence = evaluation_inputs.fixed_score_evidence
         completed.append(method)
     return tuple(completed)
-
-
-def _isolated_temporal_context(coordinate: ExperimentCoordinate) -> FederatedExecutionContext:
-    context = resolve_execution_context(coordinate)
-    identity = _execution_identity(coordinate)
-    return replace(
-        context,
-        training_directory=published_seed_directory(identity, coordinate.training_seed) / "training",
-    )
 
 
 def _execution_identity(coordinate: ExperimentCoordinate) -> ExternalTemporalExecutionIdentity:
