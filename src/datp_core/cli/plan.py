@@ -2,7 +2,7 @@
 
 import typer
 
-from datp_core.pipeline.campaign import build_campaign
+from datp_core.pipeline.campaign_execution import build_campaign
 from datp_core.pipeline.planning import expand_experiment_plan
 from datp_core.protocols.validation import CANONICAL_PROTOCOL_GRAPH, validate_protocol_graph
 
@@ -20,9 +20,9 @@ def validate_protocols() -> None:
 
 @app.command("build")
 def build() -> None:
-    """Resolve the deterministic plan without inventing feasibility evidence."""
     plan = expand_experiment_plan()
     campaign = build_campaign(plan)
     typer.echo(
-        f"plan={plan.digest} entries={len(plan.entries)} executable={len(plan.executable)} campaign={campaign.digest}"
+        f"plan={plan.digest} entries={len(plan.entries)} executable={len(plan.executable)} "
+        f"campaign={campaign.digest.value}"
     )
