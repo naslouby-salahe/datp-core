@@ -1,4 +1,4 @@
-"""Safe trusted preprocessing-estimator construction and persistence."""
+"""Safe trusted preprocessing-estimator construction, persistence, and reload validation."""
 
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -11,9 +11,10 @@ import skops.io as skops_io
 from sklearn.base import BaseEstimator, clone
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
-from datp_core.domain.enums import TrustedEstimatorClassName
-from datp_core.domain.errors import SerializationSafetyError
+from datp_core.domain.enums import ContractSubject, TrustedEstimatorClassName
+from datp_core.domain.errors import ArtifactIntegrityError, SerializationSafetyError
 from datp_core.domain.values import AbsoluteTolerance, Checksum, checksum_file
+from datp_core.preprocessing.contracts import ProcessedAssetName
 
 TrustedScaler = StandardScaler | MinMaxScaler
 STANDARD_SCALER_WITH_MEAN = True
@@ -33,6 +34,15 @@ class TrustedEstimatorDefinition:
     identity: TrustedEstimatorClassName
     estimator_type: type[TrustedScaler]
     constructor: Callable[[], TrustedScaler]
+
+
+@dataclass(frozen=True, slots=True, eq=False)
+class TransformReloadCheck:
+    state_path: Path
+    class_name: TrustedEstimatorClassName
+    absolute_tolerance: AbsoluteTolerance
+    source_matrix: np.ndarray
+    expected_transformed: np.ndarray
 
 
 _TRUSTED_ESTIMATORS: tuple[TrustedEstimatorDefinition, ...] = (
@@ -129,3 +139,31 @@ def transforms_are_equivalent(
             equal_nan=False,
         )
     )
+
+
+def reload_and_compare_transform(check: TransformReloadCheck) -> TrustedScaler:
+    if check.state_path.name != ProcessedAssetName.STATE.value:
+        raise ArtifactIntegrityError(
+            "fitted state path must use the skops state asset name",
+            subject=ContractSubject.ARTIFACT_PATH,
+        )
+    estimator = load_estimator(check.state_path, check.class_name)
+    reloaded = np.asarray(estimator.transform(check.source_matrix), dtype=float)
+    if not transforms_are_equivalent(
+        check.expected_transformed,
+        reloaded,
+        check.absolute_tolerance,
+    ):
+        raise ArtifactIntegrityError(
+            "transform-after-reload is not numerically equivalent to transform-before-save",
+            subject=ContractSubject.ARTIFACT_PATH,
+        )
+    return estimator
+
+
+def reject_untrusted_state(state_path: Path, class_name: TrustedEstimatorClassName) -> None:
+    try:
+        load_estimator(state_path, class_name)
+    except SerializationSafetyError:
+        return
+    raise SerializationSafetyError("expected untrusted estimator rejection", subject=ContractSubject.ARTIFACT_PATH)
