@@ -19,7 +19,7 @@ from datp_core.analysis.decisions import (
 )
 from datp_core.analysis.inference.multiplicity import MultiplicityPlan
 from datp_core.analysis.mechanisms import MechanismEvidence
-from datp_core.analysis.temporal import TemporalDeploymentProvenance, TemporalRecoveryResult
+from datp_core.analysis.temporal import TemporalRecoveryResult
 from datp_core.domain.enums import PublicationStatus
 from datp_core.domain.provenance import canonical_json_text
 from datp_core.domain.values import Checksum, Seed
@@ -31,6 +31,7 @@ from datp_core.pipeline.publication.service import (
 )
 from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
 from datp_core.protocols.statistics import PairedInferenceProtocol
+from datp_core.protocols.temporal import TemporalDeploymentProvenance
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
