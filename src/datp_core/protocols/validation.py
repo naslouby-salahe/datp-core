@@ -31,12 +31,10 @@ from .models import (
     FedAvgProtocol,
     PopulationDeclaration,
     ResolvedProtocolGraph,
-    RuntimeProtocol,
     StatisticalInferenceProtocol,
     TrafficRateEvidence,
 )
 from .populations import POPULATIONS
-from .runtime import CANONICAL_RUNTIME
 from .seeds import CONFIRMATORY_SEED_COHORT
 from .splits import (
     NON_TEMPORAL_SPLIT,
@@ -77,7 +75,6 @@ class ProtocolGraphInputs:
     confirmatory_endpoint: ConfirmatoryEndpoint
     confirmatory_inference: StatisticalInferenceProtocol
     anchor: AnchorDecisionProtocol
-    runtime: RuntimeProtocol
     cluster_threshold: ClusterThresholdProtocol
     fedavg_training: FedAvgProtocol
 
@@ -94,7 +91,6 @@ CANONICAL_PROTOCOL_GRAPH = ProtocolGraphInputs(
     confirmatory_endpoint=CONFIRMATORY_ENDPOINT,
     confirmatory_inference=CONFIRMATORY_INFERENCE_PROTOCOL,
     anchor=ANCHOR_DECISION_PROTOCOL,
-    runtime=CANONICAL_RUNTIME,
     cluster_threshold=CLUSTER_THRESHOLD_PROTOCOL,
     fedavg_training=FEDAVG_TRAINING_PROTOCOL,
 )
@@ -102,8 +98,6 @@ CANONICAL_PROTOCOL_GRAPH = ProtocolGraphInputs(
 
 def validate_protocol_graph(inputs: ProtocolGraphInputs) -> ResolvedProtocolGraph:
     _require_unique_declaration_ids(inputs.populations, inputs.experiments)
-    if inputs.runtime != CANONICAL_RUNTIME:
-        raise ProtocolValidationError("runtime values must match the canonical runtime declaration")
     suppressed_experiment_ids: list[ExperimentId] = []
     _validate_confirmatory_endpoint(
         inputs.confirmatory_endpoint,
@@ -135,7 +129,6 @@ def validate_protocol_graph(inputs: ProtocolGraphInputs) -> ResolvedProtocolGrap
         confirmatory_endpoint=inputs.confirmatory_endpoint,
         confirmatory_inference=inputs.confirmatory_inference,
         anchor=inputs.anchor,
-        runtime=inputs.runtime,
         traffic_rate_evidence=inputs.traffic_rate_evidence,
         cluster_threshold=inputs.cluster_threshold,
         fedavg_training=inputs.fedavg_training,
