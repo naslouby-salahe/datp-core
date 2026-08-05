@@ -29,7 +29,6 @@ from datp_core.pipeline.decision.federated import (
 )
 from datp_core.protocols.inference import FixedScoreInvariant, ScoreArtifactManifest
 from datp_core.protocols.models import CalibrationEligibilityProtocol
-from datp_core.thresholding.common import ThresholdConstructionResult
 from datp_core.thresholding.dispatch import ThresholdConstructionRequest, dispatch_federated_threshold
 from datp_core.thresholding.methods.conformal import ConformalThresholdResult
 from datp_core.thresholding.methods.local import LocalThresholdResult
@@ -38,6 +37,7 @@ from datp_core.thresholding.methods.shared import (
     SampleWeightedSharedThresholdResult,
     SharedThresholdResult,
 )
+from datp_core.thresholding.models import ThresholdConstructionResult
 from datp_core.thresholding.quantiles import calibration_scores_from_references
 
 PROTOCOL = CalibrationEligibilityProtocol(minimum_support=CalibrationSize(100))
