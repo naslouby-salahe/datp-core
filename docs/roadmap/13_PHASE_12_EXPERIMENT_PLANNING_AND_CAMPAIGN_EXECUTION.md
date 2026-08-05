@@ -1,5 +1,21 @@
 # Phase 12 — Experiment Planning and Campaign Execution
 
+## Pipeline-first architecture amendment
+
+This amendment supersedes legacy source-path, ownership, stage-module, and test-path statements below that refer to `datp_core.experiments`, the deleted monolithic `datp_core.cli.py`, `datp_core.orchestration.commands`, or `datp_core.orchestration.stages`.
+
+Phase 12 is implemented through these final owners:
+
+- `datp_core.pipeline.planning` — deterministic experiment expansion and typed feasibility;
+- `datp_core.pipeline.campaign` — deterministic campaign construction and confirmatory workflow composition;
+- `datp_core.pipeline.execution` — interruption cleanup and stage execution semantics;
+- `datp_core.pipeline.preflight` — acceptance and extension-boundary decisions;
+- `datp_core.cli.app` — the only CLI adapter;
+- `datp_core.orchestration.assets`, `definitions`, `jobs`, and `resources` — thin Dagster adapters over pipeline entry points.
+
+There is one execution spine. CLI and Dagster call pipeline services; they do not own scientific calculations, persistence lifecycles, score contracts, checkpoint rules, or campaign recovery. The deleted `experiments`, `orchestration/commands`, and `orchestration/stages` paths are forbidden and have no compatibility surface.
+
+
 ## Scientific authority and interpretation rules
 
 - Before planning, editing, testing, or auditing this phase, read **`/home/naslouby/Projects/datp-core/docs/Journal_Extension_Master_Roadmap.md`** in full. It is the authoritative source for the scientific question, permitted evidence, dataset boundaries, numerical grids, metrics, inference, and claim restrictions.

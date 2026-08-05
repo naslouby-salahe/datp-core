@@ -1,5 +1,12 @@
 # Phase 15 — Extension Readiness
 
+## Pipeline-first architecture amendment
+
+This amendment supersedes references below to the deleted `datp_core.experiments` ownership model.
+
+Extension readiness is enforced by immutable hook contexts in `datp_core.orchestration.hooks`, typed runtime resources in `datp_core.orchestration.resources`, and explicit extension decisions in `datp_core.pipeline.preflight`. Hooks remain no-op observers and cannot alter clean coordinates, checksums, score artifacts, thresholds, evaluations, or completion state. No plugin discovery, attack implementation, defense implementation, online loop, new dataset, privacy mechanism, or hidden conditional extension is permitted.
+
+
 ## Scientific authority and interpretation rules
 
 - Before planning, editing, testing, or auditing this phase, read **`/home/naslouby/Projects/datp-core/docs/Journal_Extension_Master_Roadmap.md`** in full. It is the authoritative source for the scientific question, permitted evidence, dataset boundaries, numerical grids, metrics, inference, and claim restrictions.

@@ -388,3 +388,11 @@ Size-aware shrinkage `lambda(n_k)` remains genuinely unresolved: the roadmap req
 - Scientific representation repair: the full Edge static canonical corpus was audited for strict finite numeric parseability. The resulting fixed 33-column numeric schema is now bound into preprocessing checksums, and its exact 33-input symmetric autoencoder preserves the locked N-BaIoT depth and relative compression without padding, truncation, categorical coercion, fitted vocabularies, or fabricated values. Execution identity is now enforced by construction, split, preprocessing, evaluation, and analysis. The full real-data external/CIC/temporal campaign remains required; SonarQube and CodeScene remain explicitly skipped by user direction.
 - Verification update: the Edge static population/split and all ten 33-feature federated preprocessing publications completed against real canonical data. CIC population/split completed against 45,018,243 canonical rows, followed by all 63 39-feature client-local preprocessing publications using a source-file-client-at-a-time join. This replaces the unsafe federation-wide in-memory join; training/scoring remains pending. Native-environment verification passes `639` tests, Ruff, Pyright, and diff checking.
 
+
+
+## Architecture-convergence audit — Phase 12–16
+
+- Production execution has converged on one pipeline spine with thin CLI and Dagster adapters.
+- The full GitHub Actions test workflow passed at `78ba26adf6d46bc8c68f54843ad2e0f9933a1e9f`.
+- Phase 16 remains `IN_PROGRESS`: dedicated E2E acceptance tests, final static-analysis gates, repeated deterministic campaign checks, external code-health evidence, and the final acceptance verdict are still required.
+- No `GO_FOR_FULL_EXPERIMENTS` verdict is recorded yet.

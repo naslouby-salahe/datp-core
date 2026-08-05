@@ -1,5 +1,12 @@
 # Phase 14 — Reporting, Claims, and Publication Exports
 
+## Pipeline-first architecture amendment
+
+This amendment supersedes legacy execution ownership below while preserving every reporting and claim restriction.
+
+`datp_core.reporting` owns table, figure, export, and claim-validation semantics. `datp_core.pipeline.report_evidence` and `datp_core.pipeline.publication` compose and publish report bundles. CLI and Dagster are adapters only. Reporting consumes typed analysis and evaluation artifacts but cannot recalculate scientific decisions, coerce unavailable outcomes to zero, or bypass evidence-role and anchor gates.
+
+
 ## Scientific authority and interpretation rules
 
 - Before planning, editing, testing, or auditing this phase, read **`/home/naslouby/Projects/datp-core/docs/Journal_Extension_Master_Roadmap.md`** in full. It is the authoritative source for the scientific question, permitted evidence, dataset boundaries, numerical grids, metrics, inference, and claim restrictions.

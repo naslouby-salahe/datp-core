@@ -1,5 +1,19 @@
 # Phase 16 — Final Scientific and Engineering Audit
 
+## Pipeline-first architecture amendment
+
+The final audit targets the converged pipeline-first tree, not the superseded phase-local layout. It must prove that:
+
+- `datp_core.pipeline` is the single application execution spine;
+- `datp_core.cli` and `datp_core.orchestration` are thin adapters;
+- deleted `datp_core.experiments`, `orchestration.commands`, `orchestration.stages`, top-level scoring, and monolithic CLI paths cannot return;
+- capability packages do not import pipeline or adapters;
+- centralized and federated branches remain scientifically separate while sharing neutral publication mechanics;
+- the exact final E2E, architecture, and scientific acceptance tests listed below exist and pass.
+
+A green unit and integration suite is necessary but not sufficient. Phase 16 remains incomplete until the dedicated `tests/e2e/` acceptance layer, static-analysis gates, repeated deterministic campaign checks, source-tree audit, and final verdict in `01_PHASE_MASTER_LOG.md` are complete.
+
+
 ## Scientific authority and interpretation rules
 
 - Before planning, editing, testing, or auditing this phase, read **`/home/naslouby/Projects/datp-core/docs/Journal_Extension_Master_Roadmap.md`** in full. It is the authoritative source for the scientific question, permitted evidence, dataset boundaries, numerical grids, metrics, inference, and claim restrictions.

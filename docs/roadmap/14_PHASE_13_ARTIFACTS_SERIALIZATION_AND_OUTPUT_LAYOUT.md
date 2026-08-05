@@ -1,5 +1,17 @@
 # Phase 13 — Artifacts, Safe Serialization, and Output Layout
 
+## Pipeline-first architecture amendment
+
+This amendment supersedes legacy ownership lists below where they conflict with the converged repository.
+
+Phase 13 uses two explicit layers:
+
+- `datp_core.artifacts` owns canonical serialization, schemas, completion evidence, reusable-data layout, provenance, and artifact-specific records;
+- `datp_core.pipeline.publication`, `pipeline.checkpoints`, and `pipeline.scoring` own branch-neutral atomic publication, reload validation, checkpoint persistence, score persistence, reuse, and rebasing for experiment outputs.
+
+Bounded scientific packages construct typed results; pipeline publication services persist them. No bounded scientific package imports orchestration or CLI, and no orchestration adapter reimplements checksum, staging, completion, reload, or reuse mechanics.
+
+
 ## Scientific authority and interpretation rules
 
 - Before planning, editing, testing, or auditing this phase, read **`/home/naslouby/Projects/datp-core/docs/Journal_Extension_Master_Roadmap.md`** in full. It is the authoritative source for the scientific question, permitted evidence, dataset boundaries, numerical grids, metrics, inference, and claim restrictions.
