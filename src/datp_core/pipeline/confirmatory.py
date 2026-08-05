@@ -14,7 +14,12 @@ from datp_core.evaluation.population import FederatedEvaluationAssetName, Federa
 from datp_core.pipeline.analyze_evidence import AnalyzeConfirmatoryEvidenceRequest, analyze_confirmatory_evidence
 from datp_core.pipeline.campaign_execution import build_campaign, execute_campaign
 from datp_core.pipeline.federated_execution import load_evaluation_document, population_metric
-from datp_core.pipeline.planning import ExperimentCoordinate, expand_experiment_plan
+from datp_core.pipeline.planning import (
+    ExperimentCoordinate,
+    PlanDisposition,
+    PlanningEvidence,
+    expand_experiment_plan,
+)
 from datp_core.pipeline.publication.layout import evaluation_run_directory
 from datp_core.pipeline.runner import EvaluationRunAssetDirectory, ExperimentOutputStore, StageRunner
 from datp_core.protocols.experiments import EXPERIMENTS
@@ -46,6 +51,13 @@ def run_confirmatory_seed(training_seed: Seed) -> ConfirmatorySeedResult:
     plan = expand_experiment_plan(
         declarations=(declaration,),
         seed_cohort=SeedCohort(values=(training_seed,)),
+        evidence=(
+            PlanningEvidence(
+                experiment=declaration.id,
+                disposition=PlanDisposition.EXECUTABLE,
+                reason="the confirmatory entry point supplies the locked natural-device execution prerequisites",
+            ),
+        ),
     )
     campaign = build_campaign(plan)
     if not campaign.entries:
@@ -105,8 +117,9 @@ def _confirmatory_coordinate(
     training_seed: Seed,
     method: FederatedThresholdMethod,
 ) -> ExperimentCoordinate:
+    declaration = _confirmatory_declaration()
     plan = expand_experiment_plan(
-        declarations=(_confirmatory_declaration(),),
+        declarations=(declaration,),
         seed_cohort=SeedCohort(values=(training_seed,)),
     )
     matches = tuple(
