@@ -407,13 +407,10 @@ class OutcomeLabel(_NonEmptyString):
 
 
 class StableRowId(_NonEmptyString):
-    validation_name: ClassVar[str] = "stable row ID"
+    """An opaque `relative_source_path:row_index` identity token; the embedded
+    source path may legitimately contain path separators for nested source files."""
 
-    def __new__(cls, value: str) -> "StableRowId":
-        instance = super().__new__(cls, value)
-        if "/" in instance or "\\" in instance:
-            raise ValueError("stable row ID must not contain path separators")
-        return instance
+    validation_name: ClassVar[str] = "stable row ID"
 
 
 def _validate_non_empty_tuple(values: tuple, field_name: str) -> None:

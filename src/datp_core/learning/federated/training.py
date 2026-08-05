@@ -288,7 +288,7 @@ def _train_one_batch(
     batch: torch.Tensor,
     reference_parameters: tuple[torch.Tensor, ...] | None,
     proximal_term: ProximalTerm | None,
-) -> float:
+) -> torch.Tensor:
     optimizer.zero_grad(set_to_none=True)
     reconstruction = model(batch)
     reconstruction_loss = nn.functional.mse_loss(reconstruction, batch)
@@ -302,7 +302,7 @@ def _train_one_batch(
         )
     objective.backward()
     optimizer.step()
-    return float(reconstruction_loss.detach().cpu().item())
+    return reconstruction_loss.detach()
 
 
 def run_local_epoch(
@@ -315,7 +315,7 @@ def run_local_epoch(
 ) -> tuple[AutoencoderState, MetricValue, RowCount]:
     reference_parameters = _reference_parameters(model, proximal_term, device)
     model.train()
-    weighted_reconstruction_loss = 0.0
+    weighted_reconstruction_loss = torch.zeros((), device=device, dtype=TORCH_LEARNING_DTYPE)
     total_samples = 0
 
     for (batch_cpu,) in loader:
@@ -332,7 +332,7 @@ def run_local_epoch(
             reference_parameters,
             proximal_term,
         )
-        weighted_reconstruction_loss += batch_loss * batch_size
+        weighted_reconstruction_loss = weighted_reconstruction_loss + batch_loss * batch_size
         total_samples += batch_size
 
     if total_samples < 1:
@@ -342,7 +342,7 @@ def run_local_epoch(
         )
     return (
         clone_state(model.state_dict()),
-        MetricValue(weighted_reconstruction_loss / total_samples),
+        MetricValue(float(weighted_reconstruction_loss.item()) / total_samples),
         RowCount(total_samples),
     )
 

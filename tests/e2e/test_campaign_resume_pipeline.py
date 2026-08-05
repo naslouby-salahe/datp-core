@@ -45,8 +45,8 @@ class _SuccessfulRunner:
     def __init__(self) -> None:
         self.stages: list[PipelineStage] = []
 
-    def run(self, stage: PipelineStage, coordinate) -> StageExecution:
-        del coordinate
+    def run(self, stage: PipelineStage, coordinate, provenance) -> StageExecution:
+        del coordinate, provenance
         self.stages.append(stage)
         return StageExecution(stage=stage, outcome=StageOutcome.COMPLETED, evidence="tiny deterministic fixture")
 

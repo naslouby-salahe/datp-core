@@ -512,7 +512,7 @@ def _run_training_epochs(
     candidate_rounds = frozenset(candidate.value for candidate in checkpoint_protocol.candidates)
     model.train()
     for epoch_index in range(1, checkpoint_protocol.maximum_round.value + 1):
-        batch_losses: list[float] = []
+        batch_losses: list[torch.Tensor] = []
         for (batch,) in loader:
             batch = batch.to(device, non_blocking=False)
             optimizer.zero_grad(set_to_none=True)
@@ -520,13 +520,13 @@ def _run_training_epochs(
             loss = nn.functional.mse_loss(reconstruction, batch)
             loss.backward()
             optimizer.step()
-            batch_losses.append(float(loss.detach().cpu().item()))
+            batch_losses.append(loss.detach())
         if not batch_losses:
             raise ScientificContractError(
                 "centralized training produced no batches; declared batch size cannot be relaxed",
                 subject=ContractSubject.BATCH_SIZE,
             )
-        mean_loss = MetricValue(float(np.mean(np.asarray(batch_losses, dtype=float))))
+        mean_loss = MetricValue(float(torch.stack(batch_losses).mean().item()))
         epoch = RoundNumber(epoch_index)
         losses.append(CentralizedEpochLoss(epoch=epoch, mean_training_loss=mean_loss))
         if epoch_index in candidate_rounds:

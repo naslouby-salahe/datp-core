@@ -3,7 +3,12 @@ from pathlib import Path
 import pytest
 
 from datp_core.domain.values import ByteCount, Checksum, checksum_bytes
-from datp_core.pipeline.publication.completion import build_completion_record, require_complete
+from datp_core.pipeline.publication.completion import (
+    build_completion_record,
+    read_completion_record,
+    require_complete,
+    write_completion_record,
+)
 from datp_core.pipeline.publication.records import (
     ArtifactKind,
     ArtifactRecord,
@@ -83,3 +88,25 @@ def test_complete_record_requires_an_artifact_inventory() -> None:
             artifacts=(),
             state=CompletionState.COMPLETE,
         )
+
+
+def test_completion_record_round_trips_through_disk(tmp_path: Path) -> None:
+    relative = Path("result.json")
+    payload = b"{}"
+    artifact = artifact_for(relative, payload)
+    record = build_completion_record(
+        plan_digest="plan",
+        campaign_digest="campaign",
+        artifacts=(artifact,),
+    )
+
+    write_completion_record(tmp_path, record)
+    reloaded = read_completion_record(tmp_path)
+
+    assert reloaded == record
+
+
+def test_read_completion_record_returns_none_when_absent_or_corrupt(tmp_path: Path) -> None:
+    assert read_completion_record(tmp_path) is None
+    (tmp_path / "completion.json").write_text("not json", encoding="utf-8")
+    assert read_completion_record(tmp_path) is None

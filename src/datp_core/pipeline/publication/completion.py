@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
-from datp_core.domain.values import Checksum, checksum_text
+import json
+from pathlib import Path
+
+from datp_core.domain.values import ByteCount, Checksum, checksum_text
 from datp_core.pipeline.publication.records import (
+    ArtifactKind,
     ArtifactRecord,
     ArtifactState,
     CompletionRecord,
     CompletionState,
 )
+
+COMPLETION_RECORD_ASSET = "completion.json"
 
 
 def complete_digest(manifest_payload: str, schema_payload: str) -> Checksum:
@@ -41,3 +47,54 @@ def require_complete(record: CompletionRecord) -> None:
     invalid = tuple(item for item in record.artifacts if item.state is not ArtifactState.PUBLISHED)
     if invalid:
         raise ValueError("experiment publication contains non-published artifacts")
+
+
+def write_completion_record(directory: Path, record: CompletionRecord) -> Path:
+    """Persist one completion record as canonical JSON. Artifact paths are recorded
+    exactly as given (typically relative to a shared output root, not this directory,
+    so reusable assets are referenced rather than copied)."""
+    payload = {
+        "plan_digest": record.plan_digest.value,
+        "campaign_digest": record.campaign_digest.value,
+        "state": record.state.value,
+        "artifacts": [
+            {
+                "kind": item.kind.value,
+                "relative_path": item.relative_path.as_posix(),
+                "checksum": item.checksum.value,
+                "byte_count": item.byte_count.value,
+                "state": item.state.value,
+            }
+            for item in record.artifacts
+        ],
+    }
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / COMPLETION_RECORD_ASSET
+    path.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")), encoding="utf-8")
+    return path
+
+
+def read_completion_record(directory: Path) -> CompletionRecord | None:
+    """Reload one completion record, or None if absent, unreadable, or structurally invalid."""
+    path = directory / COMPLETION_RECORD_ASSET
+    if not path.is_file():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        return CompletionRecord(
+            plan_digest=Checksum(payload["plan_digest"]),
+            campaign_digest=Checksum(payload["campaign_digest"]),
+            state=CompletionState(payload["state"]),
+            artifacts=tuple(
+                ArtifactRecord(
+                    kind=ArtifactKind(item["kind"]),
+                    relative_path=Path(item["relative_path"]),
+                    checksum=Checksum(item["checksum"]),
+                    byte_count=ByteCount(item["byte_count"]),
+                    state=ArtifactState(item["state"]),
+                )
+                for item in payload["artifacts"]
+            ),
+        )
+    except (OSError, ValueError, KeyError, TypeError):
+        return None

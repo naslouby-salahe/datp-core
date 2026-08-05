@@ -88,6 +88,7 @@ from datp_core.protocols.experiments import (
     ExternalTemporalExecutionIdentity,
     require_execution_identity,
 )
+from datp_core.protocols.populations import split_protocol_for_population
 
 EXECUTION_IDENTITY_ASSET = "execution_identity.json"
 POPULATION_MANIFEST_ASSET = "population_manifest.json"
@@ -826,7 +827,7 @@ def _expected_split_protocol(
             if use_static_reference
             else SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE
         )
-    return SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS
+    return split_protocol_for_population(identity.population)
 
 
 def _capture_timestamp_column(

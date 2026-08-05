@@ -13,9 +13,10 @@ from datp_core.domain.enums import (
     SplitProtocolId,
     TrainingModelId,
 )
-from datp_core.domain.values import Seed
+from datp_core.domain.values import Checksum, Seed
 from datp_core.pipeline.execution import (
     PIPELINE_SEQUENCE,
+    ExecutionProvenance,
     ExistingExperimentState,
     PipelineStage,
     StageExecution,
@@ -29,7 +30,13 @@ class Runner:
     def __init__(self) -> None:
         self.stages: list[PipelineStage] = []
 
-    def run(self, stage: PipelineStage, coordinate: ExperimentCoordinate) -> StageExecution:
+    def run(
+        self,
+        stage: PipelineStage,
+        coordinate: ExperimentCoordinate,
+        provenance: ExecutionProvenance,
+    ) -> StageExecution:
+        assert provenance.plan_digest.value
         self.stages.append(stage)
         return StageExecution(stage=stage, outcome=StageOutcome.COMPLETED, evidence=coordinate.stable_key)
 
@@ -67,11 +74,20 @@ def coordinate() -> ExperimentCoordinate:
     )
 
 
+def provenance() -> ExecutionProvenance:
+    return ExecutionProvenance(
+        plan_digest=Checksum("plan"),
+        campaign_digest=Checksum("campaign"),
+        protocol_digest=Checksum("protocol"),
+    )
+
+
 def test_absent_experiment_runs_every_stage_without_deletion() -> None:
     runner = Runner()
     output_store = OutputStore(ExistingExperimentState.ABSENT)
     result = execute_experiment(
         coordinate=coordinate(),
+        provenance=provenance(),
         stage_runner=runner,
         output_store=output_store,
         output_root=Path("outputs"),
@@ -86,6 +102,7 @@ def test_complete_valid_experiment_is_reused_without_execution() -> None:
     output_store = OutputStore(ExistingExperimentState.COMPLETE_VALID)
     result = execute_experiment(
         coordinate=coordinate(),
+        provenance=provenance(),
         stage_runner=runner,
         output_store=output_store,
         output_root=Path("outputs"),
@@ -101,6 +118,7 @@ def test_incomplete_experiment_is_deleted_and_restarted() -> None:
     output_store = OutputStore(ExistingExperimentState.INCOMPLETE)
     result = execute_experiment(
         coordinate=coordinate(),
+        provenance=provenance(),
         stage_runner=runner,
         output_store=output_store,
         output_root=Path("outputs"),
@@ -115,6 +133,7 @@ def test_overwrite_deletes_complete_coordinate_before_execution() -> None:
     output_store = OutputStore(ExistingExperimentState.COMPLETE_VALID)
     result = execute_experiment(
         coordinate=coordinate(),
+        provenance=provenance(),
         stage_runner=runner,
         output_store=output_store,
         output_root=Path("outputs"),
@@ -131,6 +150,7 @@ def test_invalid_completed_experiment_is_not_reused_or_deleted_silently() -> Non
     with pytest.raises(ValueError, match="failed publication validation"):
         execute_experiment(
             coordinate=coordinate(),
+            provenance=provenance(),
             stage_runner=runner,
             output_store=output_store,
             output_root=Path("outputs"),

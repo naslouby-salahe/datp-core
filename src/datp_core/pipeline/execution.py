@@ -7,6 +7,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Protocol
 
+from datp_core.domain.values import Checksum
 from datp_core.pipeline.planning import ExperimentCoordinate
 
 
@@ -42,6 +43,19 @@ class ExistingExperimentState(StrEnum):
     COMPLETE_VALID = "complete_valid"
     COMPLETE_INVALID = "complete_invalid"
     INCOMPLETE = "incomplete"
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ExecutionProvenance:
+    """The deterministic plan/campaign/protocol identity a coordinate was executed under.
+
+    Carried explicitly alongside the coordinate (never inferred or defaulted) so
+    FINALIZE_PUBLICATION can bind each experiment's completion record to the exact
+    declared plan and protocol graph that produced it, with no hidden run/job token."""
+
+    plan_digest: Checksum
+    campaign_digest: Checksum
+    protocol_digest: Checksum
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -81,7 +95,12 @@ class ExperimentExecution:
 
 
 class StageRunner(Protocol):
-    def run(self, stage: PipelineStage, coordinate: ExperimentCoordinate) -> StageExecution: ...
+    def run(
+        self,
+        stage: PipelineStage,
+        coordinate: ExperimentCoordinate,
+        provenance: ExecutionProvenance,
+    ) -> StageExecution: ...
 
 
 class ExperimentOutputStore(Protocol):
@@ -93,6 +112,7 @@ class ExperimentOutputStore(Protocol):
 def execute_experiment(
     *,
     coordinate: ExperimentCoordinate,
+    provenance: ExecutionProvenance,
     stage_runner: StageRunner,
     output_store: ExperimentOutputStore,
     output_root: Path,
@@ -115,7 +135,7 @@ def execute_experiment(
 
     executions: list[StageExecution] = []
     for stage in PIPELINE_SEQUENCE:
-        result = stage_runner.run(stage, coordinate)
+        result = stage_runner.run(stage, coordinate, provenance)
         if result.stage is not stage:
             raise ValueError("stage runner returned a result for the wrong stage")
         executions.append(result)

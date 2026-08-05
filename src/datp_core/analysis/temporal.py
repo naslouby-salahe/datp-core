@@ -17,8 +17,12 @@ from datp_core.domain.enums import (
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.provenance import canonical_checksum
 from datp_core.domain.values import Checksum, MetricValue, Seed
+from datp_core.learning.federated.models import FederatedTrainingCoordinate
+from datp_core.populations.models import ClientIdentity
 from datp_core.protocols.inference import ScoreArtifactManifest
 from datp_core.protocols.metrics import TEMPORAL_CV_MATERIALITY_CUTOFF
+
+type FederatedScoreArtifactManifest = ScoreArtifactManifest[FederatedTrainingCoordinate, ClientIdentity]
 
 
 class TemporalInterpretation(StrEnum):
@@ -143,7 +147,7 @@ class TemporalDeploymentProvenance(StrictModel):
     def from_score_manifest(
         cls,
         state: TemporalState,
-        manifest: ScoreArtifactManifest,
+        manifest: FederatedScoreArtifactManifest,
     ) -> "TemporalDeploymentProvenance":
         calibration_role, evaluation_role = _partition_roles(state)
         if not manifest.records_for(calibration_role) or not manifest.records_for(evaluation_role):
@@ -164,7 +168,7 @@ class TemporalDeploymentProvenance(StrictModel):
             evaluation_score_set_checksum=manifest.score_set_checksum(evaluation_role),
         )
 
-    def validate_score_manifest(self, manifest: ScoreArtifactManifest) -> None:
+    def validate_score_manifest(self, manifest: FederatedScoreArtifactManifest) -> None:
         if TemporalDeploymentProvenance.from_score_manifest(self.state, manifest) != self:
             raise ScientificContractError(
                 "temporal deployment provenance does not match immutable score artifacts",
