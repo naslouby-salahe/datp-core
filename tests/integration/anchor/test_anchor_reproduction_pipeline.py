@@ -17,7 +17,7 @@ from datp_core.anchor.reproduction import (
 from datp_core.domain.enums import ExperimentReadiness, FederatedThresholdMethod
 from datp_core.domain.errors import AnchorReproductionError
 from datp_core.domain.values import Seed
-from datp_core.pipeline.verify_anchor import verify_anchor
+from datp_core.pipeline.workflows.anchor import verify_anchor
 from datp_core.protocols.anchor import (
     ANCHOR_DECISION_PROTOCOL,
     HISTORICAL_LOCAL_THRESHOLD_CV_FPR,

@@ -6,24 +6,30 @@ from typing import Annotated
 
 import typer
 
-from datp_core.domain.enums import ControlledPartitionKind, DatasetId, PopulationId, PreprocessingProtocolId, SplitProtocolId
-from datp_core.domain.values import DirichletConcentration, DittoRegularization, Seed
-from datp_core.pipeline.centralized_reference import run_centralized_reference_seed
-from datp_core.pipeline.confirmatory import (
-    analyze_confirmatory_campaign,
-    run_confirmatory_campaign,
-    run_confirmatory_seed,
+from datp_core.domain.enums import (
+    ControlledPartitionKind,
+    DatasetId,
+    PopulationId,
+    PreprocessingProtocolId,
+    SplitProtocolId,
 )
-from datp_core.pipeline.ditto_stress import run_ditto_stress_test_seed
-from datp_core.pipeline.external_evidence import run_ciciot_boundary_seed, run_external_validation_seed
-from datp_core.pipeline.fit_preprocessing import (
+from datp_core.domain.values import DirichletConcentration, DittoRegularization, Seed
+from datp_core.pipeline.preparation.datasets import MaterializeDatasetRequest, materialize_dataset
+from datp_core.pipeline.preparation.preprocessing import (
     FitCentralizedPopulationPreprocessingRequest,
     FitFederatedPreprocessingRequest,
     fit_centralized_population_preprocessing,
     fit_federated_preprocessing,
 )
-from datp_core.pipeline.materialize_dataset import MaterializeDatasetRequest, materialize_dataset
-from datp_core.pipeline.temporal_evidence import run_temporal_campaign, run_temporal_seed
+from datp_core.pipeline.workflows.centralized import run_centralized_reference_seed
+from datp_core.pipeline.workflows.confirmatory import (
+    analyze_confirmatory_campaign,
+    run_confirmatory_campaign,
+    run_confirmatory_seed,
+)
+from datp_core.pipeline.workflows.external import run_ciciot_boundary_seed, run_external_validation_seed
+from datp_core.pipeline.workflows.personalization import run_ditto_stress_test_seed
+from datp_core.pipeline.workflows.temporal import run_temporal_campaign, run_temporal_seed
 from datp_core.populations.models import ControlledPartitionCondition, dirichlet_condition, iid_condition
 from datp_core.protocols.populations import DIRICHLET_CONCENTRATIONS
 from datp_core.protocols.runtime import DATA_ROOT
@@ -33,9 +39,7 @@ from datp_core.protocols.training import DITTO_TRAINING_PROTOCOLS
 app = typer.Typer(no_args_is_help=True)
 _DECLARED_DIRICHLET_VALUES = frozenset(item.value for item in DIRICHLET_CONCENTRATIONS)
 _DECLARED_CONFIRMATORY_SEEDS = frozenset(item.value for item in CONFIRMATORY_SEED_COHORT.values)
-_DECLARED_BOUNDED_EVIDENCE_PARTITION_SEEDS = frozenset(
-    item.value for item in BOUNDED_EVIDENCE_SEED_COHORT.values
-)
+_DECLARED_BOUNDED_EVIDENCE_PARTITION_SEEDS = frozenset(item.value for item in BOUNDED_EVIDENCE_SEED_COHORT.values)
 _FEDERATED_PREPROCESSING_IDENTITIES = frozenset(
     (
         PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
@@ -110,9 +114,7 @@ def preprocess_centralized(
 def confirmatory_seed(training_seed: Annotated[int, typer.Option(min=0)]) -> None:
     _require_confirmatory_seed(training_seed)
     result = run_confirmatory_seed(Seed(training_seed))
-    typer.echo(
-        f"seed={training_seed} thresholds={','.join(item.value for item in result.completed_threshold_methods)}"
-    )
+    typer.echo(f"seed={training_seed} thresholds={','.join(item.value for item in result.completed_threshold_methods)}")
 
 
 @app.command("confirmatory-campaign")
@@ -196,9 +198,7 @@ def temporal_evidence_seed(partition_seed: Annotated[int, typer.Option(min=0)]) 
 def temporal_evidence_campaign() -> None:
     result = run_temporal_campaign()
     methods = tuple(item.method for item in result.seeds[0].analyses) if result.seeds else ()
-    typer.echo(
-        f"seeds={len(result.seeds)} methods={','.join(method.value for method in methods)}"
-    )
+    typer.echo(f"seeds={len(result.seeds)} methods={','.join(method.value for method in methods)}")
 
 
 def _require_confirmatory_seed(training_seed: int) -> None:

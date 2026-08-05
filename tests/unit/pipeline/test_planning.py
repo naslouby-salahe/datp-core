@@ -71,29 +71,17 @@ def test_temporal_plan_uses_state_specific_split_protocols() -> None:
     )
 
     by_state = {entry.coordinate.temporal_state: entry.coordinate for entry in plan.entries}
-    assert tuple(by_state) == tuple(
-        sorted(
-            (
-                TemporalState.STATIC_REFERENCE,
-                TemporalState.FROZEN_FUTURE,
-                TemporalState.RECALIBRATED_FUTURE,
-            ),
-            key=lambda state: state.value,
+    assert frozenset(by_state) == frozenset(
+        (
+            TemporalState.STATIC_REFERENCE,
+            TemporalState.FROZEN_FUTURE,
+            TemporalState.RECALIBRATED_FUTURE,
         )
     )
     assert all(coordinate.dataset is DatasetId.EDGE_IIOTSET for coordinate in by_state.values())
-    assert (
-        by_state[TemporalState.STATIC_REFERENCE].split_protocol
-        is SplitProtocolId.RANDOM_FRACTIONAL_STATIC_REFERENCE
-    )
-    assert (
-        by_state[TemporalState.FROZEN_FUTURE].split_protocol
-        is SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE
-    )
-    assert (
-        by_state[TemporalState.RECALIBRATED_FUTURE].split_protocol
-        is SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE
-    )
+    assert by_state[TemporalState.STATIC_REFERENCE].split_protocol is SplitProtocolId.RANDOM_FRACTIONAL_STATIC_REFERENCE
+    assert by_state[TemporalState.FROZEN_FUTURE].split_protocol is SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE
+    assert by_state[TemporalState.RECALIBRATED_FUTURE].split_protocol is SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE
 
 
 def test_planning_cannot_override_population_threshold_capabilities() -> None:

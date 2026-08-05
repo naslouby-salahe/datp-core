@@ -23,16 +23,35 @@ from datp_core.domain.values import Checksum, Seed
 class GraphCoordinate(Protocol):
     """Scientific identity exposed to observation-only graph extensions."""
 
-    experiment: ExperimentId
-    evidence_role: EvidenceRole
-    dataset: DatasetId
-    population: PopulationId
-    training_model: TrainingModelId
-    training_seed: Seed
-    split_protocol: SplitProtocolId
-    threshold_method: FederatedThresholdMethod
-    metric: MetricId
-    temporal_state: TemporalState | None
+    @property
+    def experiment(self) -> ExperimentId: ...
+
+    @property
+    def evidence_role(self) -> EvidenceRole: ...
+
+    @property
+    def dataset(self) -> DatasetId: ...
+
+    @property
+    def population(self) -> PopulationId: ...
+
+    @property
+    def training_model(self) -> TrainingModelId: ...
+
+    @property
+    def training_seed(self) -> Seed: ...
+
+    @property
+    def split_protocol(self) -> SplitProtocolId: ...
+
+    @property
+    def threshold_method(self) -> FederatedThresholdMethod: ...
+
+    @property
+    def metric(self) -> MetricId: ...
+
+    @property
+    def temporal_state(self) -> TemporalState | None: ...
 
 
 class ObservationBoundary(StrEnum):

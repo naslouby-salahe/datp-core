@@ -16,6 +16,7 @@ from datp_core.domain.enums import (
 )
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import CalibrationSize, RowCount, Seed
+from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.populations.capabilities import population_capabilities
 from datp_core.populations.models import (
     ClientIdentity,
@@ -25,6 +26,9 @@ from datp_core.populations.models import (
 )
 from datp_core.protocols.calibration import MINIMUM_BENIGN_SUPPORT
 from datp_core.protocols.inference import ScoreArtifactManifest, ScoreRecord
+
+type FederatedScoreArtifactManifest = ScoreArtifactManifest[FederatedTrainingCoordinate, ClientIdentity]
+type FederatedScoreRecord = ScoreRecord[FederatedTrainingCoordinate, ClientIdentity]
 
 
 class ClientExclusionReason(StrEnum):
@@ -153,7 +157,7 @@ def build_evaluation_cohort_manifest(
 
 
 def client_partition_counts_from_scores(
-    manifest: ScoreArtifactManifest,
+    manifest: FederatedScoreArtifactManifest,
 ) -> tuple[ClientPartitionCounts, ...]:
     calibration = tuple(
         sorted(
@@ -276,7 +280,7 @@ def _classify_client(
 
 
 def _label_count(
-    record: ScoreRecord,
+    record: FederatedScoreRecord,
     label: PopulationOutcomeLabel,
 ) -> RowCount:
     frame = pl.read_parquet(record.path)

@@ -5,11 +5,8 @@ from tests.unit.learning.federated.helpers import AUTOENCODER, BATCH_SIZE, FEATU
 from tests.unit.scoring.helpers import selected_checkpoint
 
 from datp_core.domain.values import RowCount, Seed
-from datp_core.pipeline.scoring.service import (
-    ClientScoringInput,
-    ScoreGenerationRequest,
-    generate_federated_scores,
-)
+from datp_core.pipeline.scoring.federated import generate_federated_scores
+from datp_core.pipeline.scoring.models import ClientScoringInput, ScoreGenerationRequest
 from datp_core.runtime.compute import resolve_cuda_device
 
 

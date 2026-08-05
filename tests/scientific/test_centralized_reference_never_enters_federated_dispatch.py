@@ -5,10 +5,10 @@ import pytest
 
 from datp_core.domain.enums import CentralizedThresholdMethod, FederatedThresholdMethod
 from datp_core.domain.errors import LeakageError
-from datp_core.pipeline.construct_thresholds import reject_centralized_threshold_in_federated_dispatch
-from datp_core.pipeline.evaluate_detector import (
+from datp_core.pipeline.decision.centralized import (
     reject_centralized_as_federated_threshold_policy,
     reject_centralized_in_federated_threshold_comparison,
+    reject_centralized_threshold_in_federated_dispatch,
     reject_cross_client_cv_fpr_from_pooled_centralized,
 )
 

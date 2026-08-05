@@ -21,7 +21,7 @@ from datp_core.domain.values import (
 )
 from datp_core.learning.centralized.training import reject_federated_preprocessing_for_training
 from datp_core.pipeline.checkpoints.service import reject_federated_checkpoint
-from datp_core.pipeline.construct_thresholds import (
+from datp_core.pipeline.decision.centralized import (
     reject_federated_scores_for_centralized_threshold,
     reject_local_quantile_mean_as_centralized,
 )

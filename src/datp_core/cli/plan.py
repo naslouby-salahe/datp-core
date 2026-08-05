@@ -2,7 +2,7 @@
 
 import typer
 
-from datp_core.pipeline.campaign_execution import build_campaign
+from datp_core.pipeline.execution.engine import build_campaign
 from datp_core.pipeline.planning import expand_experiment_plan
 from datp_core.protocols.validation import CANONICAL_PROTOCOL_GRAPH, validate_protocol_graph
 

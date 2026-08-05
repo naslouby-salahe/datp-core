@@ -7,7 +7,7 @@ from datp_core.domain.enums import (
     TrainingModelId,
 )
 from datp_core.domain.values import Seed
-from datp_core.pipeline.campaign_execution import build_campaign
+from datp_core.pipeline.execution.engine import build_campaign
 from datp_core.pipeline.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
 from datp_core.protocols.experiments import EXPERIMENTS
 from datp_core.protocols.models import SeedCohort

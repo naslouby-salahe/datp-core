@@ -1,6 +1,7 @@
-"""Checkpoint retention, inventory validation, and non-test selection."""
+"""Centralized and federated checkpoint retention, validation, and selection."""
 
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 
 from datp_core.domain.enums import (
@@ -20,23 +21,57 @@ from datp_core.learning.centralized.training import (
     model_from_in_memory_snapshot,
     persist_state_dict_tensors,
 )
-from datp_core.pipeline.checkpoints.persistence import validate_persisted_checkpoint_file
-from datp_core.pipeline.checkpoints.records import (
+from datp_core.learning.federated.checkpoints.selection import select_checkpoint
+from datp_core.learning.federated.checkpoints.selection import (
+    validate_candidate_coordinates as validate_federated_candidates,
+)
+from datp_core.learning.federated.models import (
+    CheckpointCandidate,
+    CheckpointDecision,
+    FederatedTrainingCoordinate,
+)
+from datp_core.pipeline.checkpoints.models import (
     CentralizedCheckpointAssetName,
     CentralizedCheckpointCandidate,
     CentralizedCheckpointDecision,
     CentralizedCheckpointSetEntry,
     PersistedCheckpoint,
 )
+from datp_core.populations.models import ClientIdentity
 from datp_core.protocols.checkpoints import (
     select_terminal_checkpoint as apply_terminal_selection,
 )
 from datp_core.protocols.checkpoints import (
     validate_ordered_checkpoint_inventory as validate_inventory,
 )
+from datp_core.protocols.checkpoints import validate_persisted_checkpoint_file
 from datp_core.protocols.models import AutoencoderProtocol, CheckpointProtocol
-from datp_core.protocols.training import require_non_test_checkpoint_selection_inputs
+from datp_core.protocols.training import CHECKPOINT_SELECTION_RULE, require_non_test_checkpoint_selection_inputs
 from datp_core.runtime.compute import resolve_cuda_device
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SelectFederatedCheckpointRequest:
+    coordinate: FederatedTrainingCoordinate
+    client: ClientIdentity | None
+    candidates: tuple[CheckpointCandidate, ...]
+    checkpoint_protocol: CheckpointProtocol
+    preprocessing_state_set_checksum: Checksum
+    split_manifest_checksum: Checksum
+    held_out_metrics: tuple[MetricValue, ...] | None
+    attack_labels_present: bool
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SelectCentralizedCheckpointRequest:
+    coordinate: CentralizedTrainingCoordinate
+    candidates: tuple[CentralizedCheckpointCandidate, ...]
+    checkpoint_protocol: CheckpointProtocol
+    preprocessing_checksum: Checksum
+    split_checksum: Checksum
+    training_seed: Seed
+    held_out_metrics: tuple[MetricValue, ...] | None
+    attack_labels_present: bool
 
 
 def validate_ordered_checkpoint_inventory[CandidateT: PersistedCheckpoint](
@@ -186,6 +221,46 @@ def centralized_candidate_set_checksum(
             )
             for item in candidates
         )
+    )
+
+
+def select_federated_primary_checkpoint(request: SelectFederatedCheckpointRequest) -> CheckpointDecision:
+    validate_federated_candidates(
+        request.candidates,
+        request.coordinate,
+        client=request.client,
+        preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
+        split_manifest_checksum=request.split_manifest_checksum,
+    )
+    return select_checkpoint(
+        request.candidates,
+        request.checkpoint_protocol,
+        coordinate=request.coordinate,
+        client=request.client,
+        selection_rule=CHECKPOINT_SELECTION_RULE,
+        held_out_metrics=request.held_out_metrics,
+        attack_labels_present=request.attack_labels_present,
+        preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
+        split_manifest_checksum=request.split_manifest_checksum,
+    )
+
+
+def select_centralized_primary_checkpoint(
+    request: SelectCentralizedCheckpointRequest,
+) -> CentralizedCheckpointDecision:
+    validate_centralized_candidate_coordinates(
+        request.candidates,
+        request.coordinate,
+        preprocessing_checksum=request.preprocessing_checksum,
+        split_checksum=request.split_checksum,
+        training_seed=request.training_seed,
+    )
+    return select_centralized_checkpoint(
+        request.candidates,
+        request.checkpoint_protocol,
+        selection_rule=CHECKPOINT_SELECTION_RULE,
+        held_out_metrics=request.held_out_metrics,
+        attack_labels_present=request.attack_labels_present,
     )
 
 

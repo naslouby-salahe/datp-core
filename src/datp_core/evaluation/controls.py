@@ -430,9 +430,7 @@ def _validate_evidence_manifest_binding(
         raise ScientificContractError("fixed-score evidence must match the score coordinate")
     calibration_records = manifest.records_for(evidence.calibration_role)
     if not calibration_records:
-        raise ScientificContractError(
-            "fixed-score evidence calibration partition is unavailable in the score manifest"
-        )
+        raise ScientificContractError("fixed-score evidence calibration partition is unavailable in the score manifest")
     bindings = (
         ("model", evidence.model_checksum, invariant.model_checksum),
         (

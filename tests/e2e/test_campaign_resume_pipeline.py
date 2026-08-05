@@ -2,13 +2,13 @@ from pathlib import Path
 
 from datp_core.domain.enums import ExperimentId
 from datp_core.domain.values import Seed
-from datp_core.pipeline.campaign_execution import CampaignPlan, build_campaign, execute_campaign
-from datp_core.pipeline.execution import (
+from datp_core.pipeline.execution.engine import build_campaign, execute_campaign, resolve_execution_recipe
+from datp_core.pipeline.execution.models import (
+    CampaignPlan,
     ExistingExperimentState,
     PipelineStage,
     StageExecution,
     StageOutcome,
-    resolve_execution_recipe,
 )
 from datp_core.pipeline.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
 from datp_core.protocols.experiments import EXPERIMENTS

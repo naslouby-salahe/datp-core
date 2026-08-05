@@ -41,7 +41,7 @@ from datp_core.domain.values import (
     Quantile,
     Seed,
 )
-from datp_core.pipeline.construct_thresholds import (
+from datp_core.pipeline.decision.federated import (
     ConstructFederatedThresholdsRequest,
     construct_federated_thresholds,
 )
@@ -80,7 +80,9 @@ FORBIDDEN_RETRAINING_IMPORTS = (
     "datp_core.learning.federated.fedavg",
     "datp_core.learning.federated.fedprox",
     "datp_core.learning.federated.ditto",
-    "datp_core.pipeline.scoring.service",
+    "datp_core.pipeline.scoring.frames",
+    "datp_core.pipeline.scoring.federated",
+    "datp_core.pipeline.scoring.centralized",
 )
 
 

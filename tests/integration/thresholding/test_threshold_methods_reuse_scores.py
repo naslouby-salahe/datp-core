@@ -22,7 +22,7 @@ from datp_core.domain.enums import (
     PublicationStatus,
 )
 from datp_core.domain.values import CalibrationSize, ClientCount, Quantile, checksum_file
-from datp_core.pipeline.construct_thresholds import (
+from datp_core.pipeline.decision.federated import (
     ConstructFederatedThresholdsRequest,
     construct_federated_thresholds,
 )

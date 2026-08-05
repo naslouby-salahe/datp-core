@@ -18,12 +18,13 @@ from tests.unit.learning.centralized.helpers import (
 from datp_core.domain.values import Checksum, RowCount, Seed
 from datp_core.learning.centralized.training import CentralizedTrainingRequest, train_centralized_autoencoder
 from datp_core.pipeline.checkpoints.service import retain_centralized_checkpoint_candidates
-from datp_core.pipeline.construct_thresholds import (
+from datp_core.pipeline.decision.centralized import (
     CENTRALIZED_POOLED_QUANTILE_PROTOCOL,
     construct_pooled_benign_quantile,
+    evaluate_centralized_reference,
 )
-from datp_core.pipeline.evaluate_detector import evaluate_centralized_reference
-from datp_core.pipeline.generate_scores import CentralizedScoringRequest, score_centralized_reference
+from datp_core.pipeline.scoring.centralized import score_centralized_reference
+from datp_core.pipeline.scoring.models import CentralizedScoringRequest
 from datp_core.populations.models import PopulationOutcomeLabel
 
 

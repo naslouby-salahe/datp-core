@@ -8,11 +8,8 @@ from datp_core.domain.enums import CheckpointStatus
 from datp_core.domain.errors import ArtifactIntegrityError, LeakageError, ScientificContractError
 from datp_core.domain.values import Checksum, RowCount, Seed
 from datp_core.learning.federated.models import CheckpointCandidate
-from datp_core.pipeline.scoring.service import (
-    ClientScoringInput,
-    ScoreGenerationRequest,
-    generate_federated_scores,
-)
+from datp_core.pipeline.scoring.federated import generate_federated_scores
+from datp_core.pipeline.scoring.models import ClientScoringInput, ScoreGenerationRequest
 from datp_core.runtime.compute import resolve_cuda_device
 
 
@@ -116,7 +113,7 @@ def test_score_reload_equality_detects_a_corrupted_file(tmp_path: Path) -> None:
         }
     )
     replacement.write_parquet(victim.path)
-    from datp_core.pipeline.scoring.frame_contract import validate_persisted_score_frame
+    from datp_core.pipeline.scoring.frames import validate_persisted_score_frame
 
     with pytest.raises(ArtifactIntegrityError, match="checksum changed"):
         validate_persisted_score_frame(victim.path, victim.checksum, victim.row_count)

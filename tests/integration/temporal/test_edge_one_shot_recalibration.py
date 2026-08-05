@@ -19,7 +19,7 @@ from datp_core.domain.enums import (
 )
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import Checksum, MetricValue, Seed
-from datp_core.pipeline.analyze_evidence import AnalyzeTemporalEvidenceRequest, analyze_temporal_evidence
+from datp_core.pipeline.decision.evidence import AnalyzeTemporalEvidenceRequest, analyze_temporal_evidence
 from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
 
 

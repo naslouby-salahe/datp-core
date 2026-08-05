@@ -11,12 +11,25 @@ source_modules =
 forbidden_modules =
     datp_core.learning.federated
 
-[importlinter:contract:pipeline-neutral-submodule-isolation]
-name = Neutral pipeline infrastructure must not import branch or application packages
+[importlinter:contract:centralized-pipeline-isolation]
+name = Centralized pipeline services must not import federated execution or workflows
 type = forbidden
 source_modules =
-    datp_core.pipeline.checkpoints
+    datp_core.pipeline.training.centralized
+    datp_core.pipeline.scoring.centralized
+    datp_core.pipeline.decision.centralized
+forbidden_modules =
+    datp_core.pipeline.execution
+    datp_core.pipeline.training.federated
+    datp_core.pipeline.scoring.federated
+    datp_core.pipeline.workflows
+
+[importlinter:contract:pipeline-neutral-submodule-isolation]
+name = Neutral pipeline infrastructure must not import branch, workflow, or application packages
+type = forbidden
+source_modules =
     datp_core.pipeline.coordinates
+    datp_core.pipeline.checkpoints
     datp_core.pipeline.scoring
     datp_core.pipeline.publication
 forbidden_modules =
@@ -25,7 +38,33 @@ forbidden_modules =
     datp_core.analysis
     datp_core.calibration
     datp_core.reporting
-    datp_core.orchestration
+    datp_core.pipeline.workflows
+    datp_core.pipeline.dagster
+    datp_core.cli
+
+[importlinter:contract:pipeline-services-do-not-import-workflows]
+name = Pipeline services must not import workflows
+type = forbidden
+source_modules =
+    datp_core.pipeline.execution
+    datp_core.pipeline.preparation
+    datp_core.pipeline.training
+    datp_core.pipeline.checkpoints
+    datp_core.pipeline.scoring
+    datp_core.pipeline.decision
+    datp_core.pipeline.publication
+forbidden_modules =
+    datp_core.pipeline.workflows
+ignore_imports =
+    datp_core.pipeline.execution.engine -> datp_core.pipeline.workflows.anchor
+
+[importlinter:contract:workflows-do-not-import-adapters]
+name = Workflows must not import Dagster or CLI
+type = forbidden
+source_modules =
+    datp_core.pipeline.workflows
+forbidden_modules =
+    datp_core.pipeline.dagster
     datp_core.cli
 
 [importlinter:contract:pipeline-application-boundary]
@@ -34,7 +73,6 @@ type = forbidden
 source_modules =
     datp_core.pipeline
 forbidden_modules =
-    datp_core.orchestration
     datp_core.cli
 
 [importlinter:contract:learning-isolation]
@@ -43,7 +81,8 @@ type = forbidden
 source_modules =
     datp_core.learning
 forbidden_modules =
-    datp_core.orchestration
+    datp_core.pipeline.workflows
+    datp_core.pipeline.dagster
     datp_core.reporting
     datp_core.cli
 
@@ -54,7 +93,8 @@ source_modules =
     datp_core.datasets
 forbidden_modules =
     datp_core.populations
-    datp_core.orchestration
+    datp_core.pipeline.workflows
+    datp_core.pipeline.dagster
     datp_core.reporting
     datp_core.cli
 
@@ -64,7 +104,8 @@ type = forbidden
 source_modules =
     datp_core.populations
 forbidden_modules =
-    datp_core.orchestration
+    datp_core.pipeline.workflows
+    datp_core.pipeline.dagster
     datp_core.reporting
     datp_core.cli
 
@@ -74,7 +115,8 @@ type = forbidden
 source_modules =
     datp_core.preprocessing
 forbidden_modules =
-    datp_core.orchestration
+    datp_core.pipeline.workflows
+    datp_core.pipeline.dagster
     datp_core.reporting
     datp_core.cli
 
@@ -85,7 +127,6 @@ source_modules =
     datp_core.protocols
 forbidden_modules =
     datp_core.pipeline
-    datp_core.orchestration
     datp_core.reporting
     datp_core.cli
 
@@ -96,7 +137,6 @@ source_modules =
     datp_core.domain
 forbidden_modules =
     datp_core.cli
-    datp_core.orchestration
     datp_core.reporting
     datp_core.analysis
     datp_core.evaluation
@@ -129,6 +169,5 @@ source_modules =
     datp_core.reporting
     datp_core.runtime
     datp_core.anchor
-    datp_core.orchestration
 forbidden_modules =
     datp_core.cli
