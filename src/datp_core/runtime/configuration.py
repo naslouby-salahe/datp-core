@@ -26,11 +26,15 @@ class RuntimeConfiguration:
     worker_count: WorkerCount
 
 
+DATA_ROOT = Path("data")
+OUTPUTS_ROOT = Path("outputs")
+RESULTS_ROOT = Path("results")
+
 CANONICAL_RUNTIME = RuntimeConfiguration(
     layout=RepositoryLayout(
-        data_root=Path("data"),
-        outputs_root=Path("outputs"),
-        results_root=Path("results"),
+        data_root=DATA_ROOT,
+        outputs_root=OUTPUTS_ROOT,
+        results_root=RESULTS_ROOT,
     ),
     worker_count=WorkerCount(6),
 )
