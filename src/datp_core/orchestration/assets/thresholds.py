@@ -4,11 +4,5 @@ from dagster import asset
 
 
 @asset
-def completed_thresholds(
-    confirmatory_campaign: tuple[tuple[int, tuple[str, ...]], ...],
-) -> tuple[str, ...]:
-    return tuple(
-        f"{seed}:{method}"
-        for seed, methods in confirmatory_campaign
-        for method in methods
-    )
+def completed_thresholds(confirmatory_campaign: list[str]) -> list[str]:
+    return list(confirmatory_campaign)
