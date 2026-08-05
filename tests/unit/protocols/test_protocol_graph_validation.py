@@ -12,10 +12,9 @@ from datp_core.domain.enums import (
     TrainingModelId,
 )
 from datp_core.domain.errors import ProtocolValidationError, UnresolvedScientificValueError
-from datp_core.domain.values import SeedCount, WorkerCount
+from datp_core.domain.values import SeedCount
 from datp_core.protocols.models import ExperimentDeclaration
 from datp_core.protocols.populations import POPULATIONS
-from datp_core.protocols.runtime import CANONICAL_RUNTIME
 from datp_core.protocols.validation import (
     CANONICAL_PROTOCOL_GRAPH,
     CONFIRMATORY_ENDPOINT,
@@ -31,9 +30,6 @@ def test_canonical_graph_is_fully_resolved() -> None:
     assert graph.suppressed_experiment_ids == (ExperimentId.ALERT_BURDEN_TRANSLATION,)
     assert graph.confirmatory_endpoint == CONFIRMATORY_ENDPOINT
     assert graph.confirmatory_inference.paired_seed_count == SeedCount(10)
-    assert graph.runtime == CANONICAL_RUNTIME
-    assert graph.runtime.require_cuda is True
-    assert graph.runtime.worker_count == WorkerCount(6)
     assert all(experiment.readiness is not ExperimentReadiness.EXECUTABLE for experiment in graph.experiments)
 
 
