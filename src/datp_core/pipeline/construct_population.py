@@ -20,7 +20,7 @@ from datp_core.populations.catalogue import (
     PopulationConstructionResult as CapabilityPopulationConstructionResult,
 )
 from datp_core.populations.catalogue import construct_population as construct_population_capability
-from datp_core.populations.integrity import membership_frame_checksum
+from datp_core.populations.integrity import membership_frame_checksum, validate_split_manifest
 from datp_core.populations.membership import (
     PopulationMembershipArtifacts,
     PopulationMembershipPublication,
@@ -35,6 +35,12 @@ from datp_core.populations.models import (
     SplitConstructionRequest,
     SplitManifestDocument,
 )
+from datp_core.populations.splitting import (
+    PopulationSplitArtifacts,
+    PopulationSplitPublication,
+    PopulationSplitRequest,
+    prepare_population_split,
+)
 from datp_core.populations.splits import split_membership
 from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
 
@@ -48,6 +54,15 @@ class PopulationPublicationAsset(StrEnum):
     MATCHED_STATIC_MEMBERSHIP = "matched_static_reference_membership.parquet"
     CICIOT_EXCLUDED_ROWS = "ciciot_excluded_rows.parquet"
     CICIOT_CLIENT_ELIGIBILITY = "ciciot_client_eligibility.parquet"
+    COMPLETE = "COMPLETE"
+
+
+class SplitPublicationAsset(StrEnum):
+    EXECUTION_IDENTITY = "execution_identity.json"
+    ASSIGNMENTS = "split_assignments.parquet"
+    MANIFEST = "split_manifest.json"
+    MATCHED_STATIC_ASSIGNMENTS = "matched_static_reference_assignments.parquet"
+    MATCHED_STATIC_MANIFEST = "matched_static_reference_split_manifest.json"
     COMPLETE = "COMPLETE"
 
 
@@ -162,6 +177,68 @@ def construct_published_population(
         complete_digest=publication.complete_digest,
         ciciot_excluded_rows=artifacts.ciciot_excluded_rows,
         ciciot_client_eligibility=artifacts.ciciot_client_eligibility,
+    )
+
+
+@dataclass(slots=True, eq=False, kw_only=True)
+class ConstructPublishedSplitRequest:
+    population: PopulationId
+    execution_identity: ExternalTemporalExecutionIdentity
+    population_manifest: PopulationManifest
+    membership: pl.DataFrame
+    partition_seed: Seed
+    output_directory: Path
+    overwrite: bool
+    matched_static_reference_manifest: PopulationManifest | None = None
+    matched_static_reference_membership: pl.DataFrame | None = None
+
+
+@dataclass(slots=True, eq=False, kw_only=True)
+class ConstructPublishedSplitResult:
+    stage: PipelineStage
+    publication_status: PublicationStatus
+    assignments: pl.DataFrame
+    manifest: SplitManifestDocument
+    matched_static_reference_assignments: pl.DataFrame | None
+    matched_static_reference_manifest: SplitManifestDocument | None
+    complete_digest: Checksum
+
+
+def construct_published_split(request: ConstructPublishedSplitRequest) -> ConstructPublishedSplitResult:
+    prepared = prepare_population_split(
+        PopulationSplitRequest(
+            population=request.population,
+            execution_identity=request.execution_identity,
+            population_manifest=request.population_manifest,
+            membership=request.membership,
+            partition_seed=request.partition_seed,
+            matched_static_reference_manifest=request.matched_static_reference_manifest,
+            matched_static_reference_membership=request.matched_static_reference_membership,
+        )
+    )
+    publication = publish_artifact(
+        ArtifactPublication(
+            target=request.output_directory,
+            request=prepared,
+            codec=FunctionalArtifactCodec(
+                writer=_write_population_split,
+                validator=_population_split_is_reusable,
+                loader=_load_reused_population_split,
+                rebaser=_rebase_population_split,
+            ),
+            overwrite=request.overwrite,
+            complete_marker=SplitPublicationAsset.COMPLETE,
+        )
+    )
+    artifacts = publication.value
+    return ConstructPublishedSplitResult(
+        stage=PipelineStage.CONSTRUCT_POPULATION,
+        publication_status=publication.status,
+        assignments=artifacts.assignments,
+        manifest=artifacts.manifest,
+        matched_static_reference_assignments=artifacts.matched_static_reference_assignments,
+        matched_static_reference_manifest=artifacts.matched_static_reference_manifest,
+        complete_digest=publication.complete_digest,
     )
 
 
@@ -300,3 +377,101 @@ def _matches_static_reference(directory: Path, expected: PopulationManifest) -> 
         )
     except (OSError, ValueError, pl.exceptions.PolarsError):
         return False
+
+
+def _write_population_split(
+    publication: PopulationSplitPublication,
+    directory: Path,
+) -> PopulationSplitArtifacts:
+    artifacts = publication.artifacts
+    serialize_json_model(
+        publication.request.execution_identity,
+        directory / SplitPublicationAsset.EXECUTION_IDENTITY,
+    )
+    artifacts.assignments.write_parquet(directory / SplitPublicationAsset.ASSIGNMENTS)
+    serialize_json_model(artifacts.manifest, directory / SplitPublicationAsset.MANIFEST)
+    if (
+        artifacts.matched_static_reference_assignments is not None
+        and artifacts.matched_static_reference_manifest is not None
+    ):
+        artifacts.matched_static_reference_assignments.write_parquet(
+            directory / SplitPublicationAsset.MATCHED_STATIC_ASSIGNMENTS
+        )
+        serialize_json_model(
+            artifacts.matched_static_reference_manifest,
+            directory / SplitPublicationAsset.MATCHED_STATIC_MANIFEST,
+        )
+    (directory / SplitPublicationAsset.COMPLETE).write_text(publication.digest.value, encoding="utf-8")
+    return artifacts
+
+
+def _population_split_is_reusable(
+    publication: PopulationSplitPublication,
+    directory: Path,
+) -> bool:
+    complete = directory / SplitPublicationAsset.COMPLETE
+    identity_path = directory / SplitPublicationAsset.EXECUTION_IDENTITY
+    manifest_path = directory / SplitPublicationAsset.MANIFEST
+    assignments_path = directory / SplitPublicationAsset.ASSIGNMENTS
+    if not (complete.is_file() and identity_path.is_file() and manifest_path.is_file() and assignments_path.is_file()):
+        return False
+    try:
+        if complete.read_text(encoding="utf-8").strip() != publication.digest.value:
+            return False
+        persisted_identity = ExternalTemporalExecutionIdentity.model_validate_json(
+            identity_path.read_text(encoding="utf-8")
+        )
+        if persisted_identity != publication.request.execution_identity:
+            return False
+        persisted = SplitManifestDocument.model_validate_json(manifest_path.read_text(encoding="utf-8"))
+        if persisted != publication.artifacts.manifest:
+            return False
+        validate_split_manifest(publication.request.membership, pl.read_parquet(assignments_path), persisted)
+        expected_static = publication.artifacts.matched_static_reference_manifest
+        if expected_static is not None and not _matches_split_static_reference(
+            publication.request,
+            directory,
+            expected_static,
+        ):
+            return False
+    except (OSError, ValueError, pl.exceptions.PolarsError):
+        return False
+    return True
+
+
+def _load_reused_population_split(
+    publication: PopulationSplitPublication,
+    directory: Path,
+) -> PopulationSplitArtifacts:
+    del directory
+    return publication.artifacts
+
+
+def _rebase_population_split(
+    artifacts: PopulationSplitArtifacts,
+    directory: Path,
+) -> PopulationSplitArtifacts:
+    del directory
+    return artifacts
+
+
+def _matches_split_static_reference(
+    request: PopulationSplitRequest,
+    directory: Path,
+    expected: SplitManifestDocument,
+) -> bool:
+    manifest_path = directory / SplitPublicationAsset.MATCHED_STATIC_MANIFEST
+    assignments_path = directory / SplitPublicationAsset.MATCHED_STATIC_ASSIGNMENTS
+    if not manifest_path.is_file() or not assignments_path.is_file():
+        return False
+    if request.matched_static_reference_membership is None:
+        return False
+    static_manifest = SplitManifestDocument.model_validate_json(manifest_path.read_text(encoding="utf-8"))
+    if static_manifest != expected:
+        return False
+    validate_split_manifest(
+        request.matched_static_reference_membership,
+        pl.read_parquet(assignments_path),
+        static_manifest,
+    )
+    return True
