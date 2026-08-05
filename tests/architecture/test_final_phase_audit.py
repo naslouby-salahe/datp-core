@@ -1,5 +1,6 @@
 import ast
 import re
+import subprocess
 from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).parents[2]
@@ -13,16 +14,24 @@ def _source_files() -> tuple[Path, ...]:
     return tuple(sorted(path for path in SOURCE_ROOT.rglob("*.py") if "__pycache__" not in path.parts))
 
 
+def _tracked_source_paths() -> tuple[Path, ...]:
+    completed = subprocess.run(
+        ("git", "ls-files", "src/datp_core"),
+        cwd=REPOSITORY_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return tuple(REPOSITORY_ROOT / relative for relative in completed.stdout.splitlines() if relative)
+
+
 def test_source_tree_contains_no_generated_or_runtime_artifacts() -> None:
     violations = tuple(
         str(path.relative_to(REPOSITORY_ROOT))
-        for path in SOURCE_ROOT.rglob("*")
-        if path.is_file()
-        and (
-            path.suffix in GENERATED_SUFFIXES
-            or path.name in {"COMPLETE", ".coverage"}
-            or path.name.endswith(("~", ".tmp", ".bak"))
-        )
+        for path in _tracked_source_paths()
+        if path.suffix in GENERATED_SUFFIXES
+        or path.name in {"COMPLETE", ".coverage"}
+        or path.name.endswith(("~", ".tmp", ".bak"))
     )
     assert not violations, "\n".join(violations)
 
