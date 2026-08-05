@@ -2,14 +2,8 @@
 
 from dataclasses import dataclass
 
-from datp_core.centralized_reference.checkpointing import (
-    CentralizedCheckpointCandidate,
-    CentralizedCheckpointDecision,
-    select_centralized_checkpoint,
-    validate_candidate_coordinates as validate_centralized_candidates,
-)
-from datp_core.centralized_reference.training import CentralizedTrainingCoordinate
 from datp_core.domain.values import Checksum, MetricValue, Seed
+from datp_core.learning.centralized.training import CentralizedTrainingCoordinate
 from datp_core.learning.federated.checkpoints.selection import (
     select_checkpoint,
     validate_candidate_coordinates as validate_federated_candidates,
@@ -18,6 +12,14 @@ from datp_core.learning.federated.models import (
     CheckpointCandidate,
     CheckpointDecision,
     FederatedTrainingCoordinate,
+)
+from datp_core.pipeline.checkpoints.records import (
+    CentralizedCheckpointCandidate,
+    CentralizedCheckpointDecision,
+)
+from datp_core.pipeline.checkpoints.service import (
+    select_centralized_checkpoint,
+    validate_centralized_candidate_coordinates,
 )
 from datp_core.pipeline.execution import PipelineStage
 from datp_core.populations.models import ClientIdentity
@@ -88,7 +90,7 @@ def select_federated_primary_checkpoint(
 def select_centralized_primary_checkpoint(
     request: SelectCentralizedCheckpointRequest,
 ) -> SelectCentralizedCheckpointResult:
-    validate_centralized_candidates(
+    validate_centralized_candidate_coordinates(
         request.candidates,
         request.coordinate,
         preprocessing_checksum=request.preprocessing_checksum,
