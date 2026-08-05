@@ -39,10 +39,10 @@ jobs:
 
           enum_test = root / "tests/unit/domain/test_enums.py"
           text = enum_test.read_text(encoding="utf-8")
-          text = text.replace("    StageOperationId,\n", "")
           block_start = text.index("    (\n        StageOperationId,")
           block_end = text.index("    (\n        SplitId,", block_start)
           text = text[:block_start] + text[block_end:]
+          text = text.replace("    StageOperationId,\n", "")
           obsolete_test = '''\ndef test_stage_operation_id_exhaustively_covers_existing_stage_files() -> None:\n    stages_root = Path(__file__).parents[3] / "src" / "datp_core" / "orchestration" / "stages"\n    stage_files = frozenset(path.stem for path in stages_root.glob("*.py") if path.stem != "__init__")\n    assert {stage.value for stage in StageOperationId} == stage_files\n\n'''
           if obsolete_test not in text:
               raise SystemExit("obsolete stage-operation test did not match exactly")
