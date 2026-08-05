@@ -55,7 +55,7 @@ jobs:
           '''
           text, validation_rewrites = re.subn(
               r"\nreplace\(\n    'src/datp_core/preprocessing/validation\.py',\n.*?\n\)\n",
-              "\n" + validation_call.strip() + "\n",
+              lambda _: "\n" + validation_call.strip() + "\n",
               text,
               count=1,
               flags=re.S,
