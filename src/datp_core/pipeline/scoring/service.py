@@ -14,6 +14,7 @@ from datp_core.domain.enums import (
     ContractSubject,
     PartitionRole,
     SerializationFormat,
+    SplitProtocolId,
 )
 from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
 from datp_core.domain.provenance import canonical_checksum
@@ -87,6 +88,7 @@ class ClientScoringInput:
 @dataclass(frozen=True, slots=True)
 class ScoreGenerationRequest:
     checkpoint: CheckpointCandidate
+    scored_split_protocol: SplitProtocolId
     autoencoder: AutoencoderProtocol
     feature_names: FeatureNameSequence
     clients: tuple[ClientScoringInput, ...]
@@ -201,7 +203,7 @@ def generate_federated_scores(request: ScoreGenerationRequest, device: torch.dev
     _validate_request(request)
     _require_empty_output_directory(request.output_directory)
     model = load_checkpoint_model(request.checkpoint, request.autoencoder, device)
-    scored_roles = scored_partition_roles(request.checkpoint.coordinate.split_protocol)
+    scored_roles = scored_partition_roles(request.scored_split_protocol)
     records = _ScoreRecordInventory.empty()
     for client_input in sorted(request.clients, key=lambda item: item.client):
         client_directory = request.output_directory / client_input.client.client_id
@@ -260,7 +262,7 @@ def load_reused_federated_scores(
     directory: Path,
 ) -> FederatedScoreGenerationResult:
     records = _ScoreRecordInventory.empty()
-    for role in scored_partition_roles(request.checkpoint.coordinate.split_protocol):
+    for role in scored_partition_roles(request.scored_split_protocol):
         records.extend(role, _build_records(directory, request, role))
     return _result_from_inventory(request, records)
 
@@ -270,6 +272,7 @@ def rebase_federated_scores(result: FederatedScoreGenerationResult, directory: P
     return ScoreGenerationResult(
         manifest=ScoreArtifactManifest(
             coordinate=manifest.coordinate,
+            scored_split_protocol=manifest.scored_split_protocol,
             checkpoint_round=manifest.checkpoint_round,
             checkpoint_checksum=manifest.checkpoint_checksum,
             preprocessing_state_set_checksum=manifest.preprocessing_state_set_checksum,
@@ -290,6 +293,7 @@ def _result_from_inventory(
     return ScoreGenerationResult(
         manifest=ScoreArtifactManifest(
             coordinate=request.checkpoint.coordinate,
+            scored_split_protocol=request.scored_split_protocol,
             checkpoint_round=request.checkpoint.round_number,
             checkpoint_checksum=request.checkpoint.tensor_checksum,
             preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
@@ -305,7 +309,7 @@ def _client_paths(output_directory: Path, request: ScoreGenerationRequest) -> tu
     return tuple(
         output_directory / client_input.client.client_id / _asset_name_for_partition(role).value
         for client_input in sorted(request.clients, key=lambda item: item.client)
-        for role in scored_partition_roles(request.checkpoint.coordinate.split_protocol)
+        for role in scored_partition_roles(request.scored_split_protocol)
     )
 
 
@@ -411,9 +415,9 @@ def _validate_request(request: ScoreGenerationRequest) -> None:
             "checkpoint preprocessing checksum mismatch during scoring",
             subject=ContractSubject.PREPROCESSING,
         )
-    if request.checkpoint.split_manifest_checksum != request.split_manifest_checksum:
+    if not _split_binding_is_valid(request):
         raise ScientificContractError(
-            "checkpoint split manifest checksum mismatch during scoring",
+            "scored split must match checkpoint training split except for the matched temporal static reference",
             subject=ContractSubject.SPLIT,
         )
     if not request.clients:
@@ -427,10 +431,21 @@ def _validate_request(request: ScoreGenerationRequest) -> None:
             "score generation cannot receive duplicate client identities",
             subject=ContractSubject.CLIENT_IDENTITY,
         )
-    expected_roles = scored_partition_roles(request.checkpoint.coordinate.split_protocol)
+    expected_roles = scored_partition_roles(request.scored_split_protocol)
     for client in request.clients:
         for role in expected_roles:
             client.features_for(role)
+
+
+def _split_binding_is_valid(request: ScoreGenerationRequest) -> bool:
+    training_split = request.checkpoint.coordinate.split_protocol
+    if request.scored_split_protocol is training_split:
+        return request.checkpoint.split_manifest_checksum == request.split_manifest_checksum
+    return (
+        training_split is SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE
+        and request.scored_split_protocol is SplitProtocolId.RANDOM_FRACTIONAL_STATIC_REFERENCE
+        and request.checkpoint.split_manifest_checksum != request.split_manifest_checksum
+    )
 
 
 def _asset_name_for_partition(role: PartitionRole) -> FederatedScoreAssetName:
