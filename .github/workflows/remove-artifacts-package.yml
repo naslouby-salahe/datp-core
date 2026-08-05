@@ -27,16 +27,24 @@ jobs:
 
       - name: Extract and execute reviewed migration
         run: |
-          cp src/datp_core/artifacts/store.py /tmp/preprocessing_publication.py
           git show 5008cea7c49a93315fc00ab04e0463b960164cbc:.github/workflows/remove-artifacts-package.yml \
             | awk '/^          python <<'"'"'PY'"'"'$/{capture=1; next} /^          PY$/{capture=0} capture{sub(/^          /, ""); print}' \
             > /tmp/remove_artifacts_package.py
           test -s /tmp/remove_artifacts_package.py
           python - <<'PY'
           from pathlib import Path
+          import re
 
           path = Path('/tmp/remove_artifacts_package.py')
           text = path.read_text(encoding='utf-8')
+          text, removed = re.subn(
+              r"\npublication = root / 'src/datp_core/preprocessing/publication.py'\n.*?\ndef replace\(path_text:",
+              "\ndef replace(path_text:",
+              text,
+              flags=re.S,
+          )
+          if removed != 1:
+              raise SystemExit(f'generated publication block removal count was {removed}')
           old = "if 'datp_core.artifacts' in path.read_text(encoding='utf-8'):\n"
           new = (
               "if (\n"
@@ -49,28 +57,6 @@ jobs:
           path.write_text(text.replace(old, new), encoding='utf-8')
           PY
           python /tmp/remove_artifacts_package.py
-          python - <<'PY'
-          from pathlib import Path
-
-          source = Path('/tmp/preprocessing_publication.py')
-          destination = Path('src/datp_core/preprocessing/publication.py')
-          text = source.read_text(encoding='utf-8')
-          old = (
-              'from datp_core.artifacts.completion import complete_digest\n'
-              'from datp_core.artifacts.layout import ProcessedAssetName\n'
-              'from datp_core.artifacts.serialization import canonical_json_text\n'
-          )
-          new = (
-              'from datp_core.domain.provenance import canonical_json_text\n'
-              'from datp_core.domain.values import Checksum, checksum_text\n'
-              'from datp_core.preprocessing.contracts import ProcessedAssetName\n\n\n'
-              'def complete_digest(manifest_payload: str, schema_payload: str) -> Checksum:\n'
-              '    return checksum_text(f"{manifest_payload}\\n{schema_payload}")\n'
-          )
-          if text.count(old) != 1:
-              raise SystemExit('tested store import block did not match exactly once')
-          destination.write_text(text.replace(old, new), encoding='utf-8')
-          PY
 
       - run: uv sync --all-groups --all-extras --frozen
       - run: uv run ruff format src tests noxfile.py
