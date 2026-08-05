@@ -22,6 +22,8 @@ from datp_core.pipeline.publication.records import ArtifactKind, ArtifactRecord,
 from datp_core.pipeline.runner import ExperimentOutputStore, StageRunner
 from datp_core.protocols.training import DITTO_TRAINING_PROTOCOLS
 
+OUTPUT_ROOT = Path("outputs")
+
 
 def coordinate() -> ExperimentCoordinate:
     return ExperimentCoordinate(
@@ -50,7 +52,7 @@ def provenance() -> ExecutionProvenance:
 
 def test_preflight_completes_without_touching_disk() -> None:
     runner = StageRunner()
-    result = runner.run(PipelineStage.PREFLIGHT, coordinate(), provenance())
+    result = runner.run(PipelineStage.PREFLIGHT, coordinate(), provenance(), OUTPUT_ROOT)
     assert result.outcome is StageOutcome.COMPLETED
     assert coordinate().stable_key in result.evidence
 
@@ -58,7 +60,7 @@ def test_preflight_completes_without_touching_disk() -> None:
 def test_temporal_coordinates_are_blocked_from_single_coordinate_stages() -> None:
     runner = StageRunner()
     temporal_coordinate = replace(coordinate(), temporal_state=TemporalState.FROZEN_FUTURE)
-    result = runner.run(PipelineStage.CONSTRUCT_POPULATION, temporal_coordinate, provenance())
+    result = runner.run(PipelineStage.CONSTRUCT_POPULATION, temporal_coordinate, provenance(), OUTPUT_ROOT)
     assert result.outcome is StageOutcome.BLOCKED
     assert "paired temporal execution route" in result.evidence
 
@@ -70,7 +72,7 @@ def test_ditto_training_model_is_blocked_rather_than_approximated() -> None:
         training_model=TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER,
         model_coefficient=ModelCoefficientValue(DITTO_TRAINING_PROTOCOLS[0].regularization.value),
     )
-    result = runner.run(PipelineStage.TRAIN_DETECTOR, ditto_coordinate, provenance())
+    result = runner.run(PipelineStage.TRAIN_DETECTOR, ditto_coordinate, provenance(), OUTPUT_ROOT)
     assert result.outcome is StageOutcome.BLOCKED
     assert "global and personalized execution route" in result.evidence
 
@@ -78,21 +80,21 @@ def test_ditto_training_model_is_blocked_rather_than_approximated() -> None:
 def test_ciciot2023_dataset_is_blocked_for_undeclared_autoencoder() -> None:
     runner = StageRunner()
     cic_coordinate = replace(coordinate(), dataset=DatasetId.CICIOT2023)
-    result = runner.run(PipelineStage.TRAIN_DETECTOR, cic_coordinate, provenance())
+    result = runner.run(PipelineStage.TRAIN_DETECTOR, cic_coordinate, provenance(), OUTPUT_ROOT)
     assert result.outcome is StageOutcome.BLOCKED
     assert "CICIOT2023" in result.evidence
 
 
 def test_publish_report_is_rejected_as_a_per_coordinate_stage() -> None:
     runner = StageRunner()
-    result = runner.run(PipelineStage.PUBLISH_REPORT, coordinate(), provenance())
+    result = runner.run(PipelineStage.PUBLISH_REPORT, coordinate(), provenance(), OUTPUT_ROOT)
     assert result.outcome is StageOutcome.BLOCKED
     assert "campaign-level" in result.evidence
 
 
 def test_verify_anchor_rejects_experiments_other_than_the_historical_reproduction() -> None:
     runner = StageRunner()
-    result = runner.run(PipelineStage.VERIFY_ANCHOR, coordinate(), provenance())
+    result = runner.run(PipelineStage.VERIFY_ANCHOR, coordinate(), provenance(), OUTPUT_ROOT)
     assert result.outcome is StageOutcome.BLOCKED
     assert "historical reproduction" in result.evidence
 
