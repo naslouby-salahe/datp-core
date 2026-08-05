@@ -24,13 +24,19 @@ from datp_core.domain.values import (
 
 
 class TrainingCoordinateContract(Protocol):
-    population: PopulationId
-    split_protocol: SplitProtocolId
+    @property
+    def population(self) -> PopulationId: ...
+
+    @property
+    def split_protocol(self) -> SplitProtocolId: ...
 
 
 class ClientIdentityContract(Protocol):
-    client_id: str
-    population: PopulationId
+    @property
+    def client_id(self) -> str: ...
+
+    @property
+    def population(self) -> PopulationId: ...
 
 
 POST_TRAINING_SCORE_PARTITIONS = frozenset(
