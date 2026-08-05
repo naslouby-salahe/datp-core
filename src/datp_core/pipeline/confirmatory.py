@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 
 from datp_core.analysis.contrasts import PairedContrast
@@ -14,13 +15,18 @@ from datp_core.pipeline.analyze_evidence import AnalyzeConfirmatoryEvidenceReque
 from datp_core.pipeline.campaign_execution import build_campaign, execute_campaign
 from datp_core.pipeline.federated_execution import load_evaluation_document, population_metric
 from datp_core.pipeline.planning import ExperimentCoordinate, expand_experiment_plan
-from datp_core.pipeline.publication.layout import experiment_output_directory
-from datp_core.pipeline.runner import ExperimentOutputStore, StageRunner
+from datp_core.pipeline.publication.layout import evaluation_run_directory
+from datp_core.pipeline.runner import EvaluationRunAssetDirectory, ExperimentOutputStore, StageRunner
 from datp_core.protocols.experiments import EXPERIMENTS
 from datp_core.protocols.models import ExperimentDeclaration, SeedCohort
 from datp_core.protocols.runtime import OUTPUTS_ROOT
 from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT
 from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL
+
+
+class ConfirmatoryAssetDirectory(StrEnum):
+    ROOT = "confirmatory"
+    ANALYSIS = "analysis"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -42,6 +48,8 @@ def run_confirmatory_seed(training_seed: Seed) -> ConfirmatorySeedResult:
         seed_cohort=SeedCohort(values=(training_seed,)),
     )
     campaign = build_campaign(plan)
+    if not campaign.entries:
+        raise ScientificContractError("confirmatory planning produced no executable coordinates")
     execution = execute_campaign(
         campaign=campaign,
         stage_runner=StageRunner(),
@@ -68,7 +76,12 @@ def run_confirmatory_campaign() -> ConfirmatoryCampaignResult:
 
 
 def analyze_confirmatory_campaign() -> Path:
-    output = OUTPUTS_ROOT / "confirmatory" / PopulationId.NBAIOT_NATURAL_DEVICES.value / "analysis"
+    output = (
+        OUTPUTS_ROOT
+        / ConfirmatoryAssetDirectory.ROOT.value
+        / PopulationId.NBAIOT_NATURAL_DEVICES.value
+        / ConfirmatoryAssetDirectory.ANALYSIS.value
+    )
     analyze_confirmatory_evidence(
         AnalyzeConfirmatoryEvidenceRequest(
             contrasts=tuple(_confirmatory_contrast(seed) for seed in CONFIRMATORY_SEED_COHORT.values),
@@ -135,8 +148,8 @@ def _required_metric(document: FederatedEvaluationDocument, metric: MetricId) ->
 def _evaluation_path(training_seed: Seed, method: FederatedThresholdMethod) -> Path:
     coordinate = _confirmatory_coordinate(training_seed, method)
     path = (
-        experiment_output_directory(OUTPUTS_ROOT, coordinate)
-        / "evaluation"
+        evaluation_run_directory(OUTPUTS_ROOT, coordinate)
+        / EvaluationRunAssetDirectory.EVALUATION.value
         / FederatedEvaluationAssetName.DOCUMENT
     )
     if not path.is_file():
