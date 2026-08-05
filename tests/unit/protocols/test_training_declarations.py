@@ -7,6 +7,7 @@ from datp_core.protocols.training import (
     BATCH_SIZE,
     CENTRALIZED_TRAINING_PROTOCOL,
     CHECKPOINT_PROTOCOL,
+    CICIOT2023_AUTOENCODER,
     DITTO_ALTERNATIVE_ROUTE_DIFFERENCE,
     DITTO_PARTIAL_EFFECT_MINIMUM,
     DITTO_PRIMARY_REGULARIZATION,
@@ -34,6 +35,7 @@ def test_training_grids_are_locked() -> None:
     assert DITTO_ALTERNATIVE_ROUTE_DIFFERENCE.value == 0.05
     assert NBAIOT_AUTOENCODER.widths == (115, 86, 58, 38, 29, 38, 58, 86, 115)
     assert EDGE_IIOTSET_NUMERIC_AUTOENCODER.widths == (33, 25, 17, 11, 8, 11, 17, 25, 33)
+    assert CICIOT2023_AUTOENCODER.widths == (39, 29, 20, 13, 10, 13, 20, 29, 39)
     assert OPTIMIZER.identity is OptimizerId.ADAM
     assert LEARNING_RATE.value == 0.001
     assert BATCH_SIZE.value == 256
