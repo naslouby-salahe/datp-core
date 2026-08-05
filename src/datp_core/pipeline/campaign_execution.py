@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 from datp_core.domain.provenance import canonical_checksum
 from datp_core.domain.values import Checksum, checksum_text
@@ -76,7 +77,7 @@ def execute_campaign(
     campaign: CampaignPlan,
     stage_runner: StageRunner,
     output_store: ExperimentOutputStore,
-    output_root,
+    output_root: Path,
 ) -> CampaignExecution:
     provenance = ExecutionProvenance(
         plan_digest=campaign.plan_digest,
