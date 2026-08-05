@@ -27,6 +27,8 @@ def run_external_validation_seed(partition_seed: Seed) -> ExternalValidationSeed
         seed_cohort=SeedCohort(values=(partition_seed,)),
     )
     campaign = build_campaign(plan)
+    if not campaign.entries:
+        raise ScientificContractError("external-validation planning produced no executable coordinates")
     execution = execute_campaign(
         campaign=campaign,
         stage_runner=StageRunner(),
