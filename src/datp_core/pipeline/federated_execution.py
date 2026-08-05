@@ -58,7 +58,7 @@ from datp_core.preprocessing.models import ClientPreprocessingResult
 from datp_core.protocols.experiments import BOUNDED_EVIDENCE_POPULATIONS, ExternalTemporalExecutionIdentity
 from datp_core.protocols.inference import FixedScoreInvariant
 from datp_core.protocols.models import AutoencoderProtocol, FedAvgProtocol, FedProxProtocol
-from datp_core.protocols.runtime import DATA_ROOT, OUTPUTS_ROOT
+from datp_core.protocols.runtime import DATA_ROOT
 from datp_core.protocols.training import (
     BATCH_SIZE,
     CHECKPOINT_PROTOCOL,
@@ -141,7 +141,7 @@ def execution_identity_for(coordinate: ExperimentCoordinate) -> ExternalTemporal
     )
 
 
-def resolve_execution_context(coordinate: ExperimentCoordinate) -> FederatedExecutionContext:
+def resolve_execution_context(coordinate: ExperimentCoordinate, output_root: Path) -> FederatedExecutionContext:
     training_coordinate = FederatedTrainingCoordinate(
         population=coordinate.population,
         training_seed=coordinate.training_seed,
@@ -151,7 +151,6 @@ def resolve_execution_context(coordinate: ExperimentCoordinate) -> FederatedExec
         model_coefficient=federated_model_coefficient(coordinate),
     )
     execution_identity = execution_identity_for(coordinate)
-    identity_kind = resolve_population(coordinate.population).declaration.identity_kind
     if execution_identity is None:
         population_result = construct_declared_population(
             ConstructDeclaredPopulationRequest(
@@ -179,9 +178,9 @@ def resolve_execution_context(coordinate: ExperimentCoordinate) -> FederatedExec
         clients = population_result.construction.manifest.clients
         raw_family_by_client = population_result.construction.manifest.family_by_client
         split_manifest_checksum = population_result.split_manifest.assignment_checksum
-        training_directory = federated_training_directory(training_coordinate)
+        training_directory = federated_training_directory(training_coordinate, output_root)
     else:
-        root = bounded_evidence_seed_directory(execution_identity, coordinate.training_seed)
+        root = bounded_evidence_seed_directory(execution_identity, coordinate.training_seed, output_root)
         population_directory = root / ExecutionArtifactDirectory.POPULATION.value
         split_directory = root / ExecutionArtifactDirectory.SPLIT.value
         population_result = construct_published_population(
@@ -398,14 +397,14 @@ def population_metric(document: FederatedEvaluationDocument, metric: MetricId) -
     return result.value
 
 
-def federated_training_directory(coordinate: FederatedTrainingCoordinate) -> Path:
+def federated_training_directory(coordinate: FederatedTrainingCoordinate, output_root: Path) -> Path:
     coefficient = (
         str(coordinate.model_coefficient.value)
         if coordinate.model_coefficient is not None
         else ExecutionPathIdentity.NO_MODEL_COEFFICIENT.value
     )
     return (
-        OUTPUTS_ROOT
+        output_root
         / ExecutionPathIdentity.FEDERATED.value
         / coordinate.population.value
         / str(coordinate.training_seed.value)
@@ -419,6 +418,7 @@ def federated_training_directory(coordinate: FederatedTrainingCoordinate) -> Pat
 def bounded_evidence_seed_directory(
     execution_identity: ExternalTemporalExecutionIdentity,
     partition_seed: Seed,
+    output_root: Path,
 ) -> Path:
     temporal = (
         execution_identity.temporal_state.value
@@ -426,7 +426,7 @@ def bounded_evidence_seed_directory(
         else ExecutionPathIdentity.NON_TEMPORAL.value
     )
     return (
-        OUTPUTS_ROOT
+        output_root
         / ExecutionPathIdentity.BOUNDED_EVIDENCE.value
         / execution_identity.experiment.value
         / execution_identity.population.value
