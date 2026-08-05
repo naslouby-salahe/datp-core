@@ -1,6 +1,7 @@
 name: Final Phase 16 quality gates
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - agent/phase-12-16-target-architecture
@@ -31,23 +32,66 @@ jobs:
 
       - run: uv sync --all-groups --all-extras --frozen
 
-      - name: Ruff format check
+      - id: format
+        name: Ruff format check
+        continue-on-error: true
         run: uv run ruff format --check src tests noxfile.py
 
-      - name: Ruff lint
+      - id: ruff
+        name: Ruff lint
+        continue-on-error: true
         run: uv run ruff check src tests noxfile.py
 
-      - name: Pyright
+      - id: pyright
+        name: Pyright
+        continue-on-error: true
         run: uv run pyright
 
-      - name: Pylint source
+      - id: pylint_source
+        name: Pylint source
+        continue-on-error: true
         run: uv run pylint src
 
-      - name: Pylint tests
+      - id: pylint_tests
+        name: Pylint tests
+        continue-on-error: true
         run: uv run pylint --disable=missing-module-docstring,too-few-public-methods,use-implicit-booleaness-not-comparison tests
 
-      - name: Import architecture
+      - id: imports
+        name: Import architecture
+        continue-on-error: true
         run: uv run lint-imports
 
-      - name: End-to-end acceptance
+      - id: e2e
+        name: End-to-end acceptance
+        continue-on-error: true
         run: uv run pytest tests/e2e -q
+
+      - name: Enforce aggregate quality verdict
+        if: always()
+        env:
+          FORMAT: ${{ steps.format.outcome }}
+          RUFF: ${{ steps.ruff.outcome }}
+          PYRIGHT: ${{ steps.pyright.outcome }}
+          PYLINT_SOURCE: ${{ steps.pylint_source.outcome }}
+          PYLINT_TESTS: ${{ steps.pylint_tests.outcome }}
+          IMPORTS: ${{ steps.imports.outcome }}
+          E2E: ${{ steps.e2e.outcome }}
+        run: |
+          python - <<'PY'
+          import os
+          import sys
+
+          outcomes = {
+              "format": os.environ["FORMAT"],
+              "ruff": os.environ["RUFF"],
+              "pyright": os.environ["PYRIGHT"],
+              "pylint_source": os.environ["PYLINT_SOURCE"],
+              "pylint_tests": os.environ["PYLINT_TESTS"],
+              "imports": os.environ["IMPORTS"],
+              "e2e": os.environ["E2E"],
+          }
+          failures = tuple(name for name, outcome in outcomes.items() if outcome != "success")
+          print(outcomes)
+          sys.exit(1 if failures else 0)
+          PY
