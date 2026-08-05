@@ -3,8 +3,8 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from datp_core.artifacts.coordinates import raw_dataset_root
 from datp_core.datasets.catalogue import DatasetPublication, dataset_binding
+from datp_core.datasets.core.contracts import raw_dataset_root
 from datp_core.domain.enums import DatasetId, ReusableDataCoordinateKind
 from datp_core.pipeline.execution import PipelineStage
 
