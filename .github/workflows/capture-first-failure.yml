@@ -1,0 +1,38 @@
+name: Capture first failure
+
+on:
+  push:
+    branches:
+      - agent/phase-12-16-target-architecture
+    paths:
+      - .github/workflows/capture-first-failure.yml
+
+permissions:
+  contents: write
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/phase-12-16-target-architecture
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --locked --dev
+      - name: Capture first failing traceback
+        run: |
+          set +e
+          uv run pytest -vv -x > score-traceback.txt 2>&1
+          set -e
+      - name: Commit traceback and remove workflow
+        run: |
+          rm .github/workflows/capture-first-failure.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Capture current first test failure"
+          git push origin HEAD:agent/phase-12-16-target-architecture
