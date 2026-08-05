@@ -31,3 +31,22 @@ class FigureSpec:
     def __post_init__(self) -> None:
         if not self.title.strip() or not self.series:
             raise ValueError("figure specifications require a title and series")
+
+
+def render_markdown_figure(figure: FigureSpec) -> str:
+    """Render every validated figure series as explicit publication evidence."""
+    rows = [
+        f"### {figure.title}",
+        "",
+        "| Series | Metric | Availability | Values |",
+        "| --- | --- | --- | --- |",
+    ]
+    rows.extend(_render_series(series) for series in figure.series)
+    return "\n".join(rows)
+
+
+def _render_series(series: FigureSeries) -> str:
+    values = ", ".join(format(value, ".17g") for value in series.values) if series.values else "—"
+    return (
+        f"| {series.label} | `{series.metric.value}` | `{series.availability.value}` | {values} |"
+    )
