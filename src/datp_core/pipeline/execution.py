@@ -35,6 +35,13 @@ class StageOutcome(StrEnum):
     FAILED = "failed"
 
 
+class ExistingExperimentState(StrEnum):
+    ABSENT = "absent"
+    COMPLETE_VALID = "complete_valid"
+    COMPLETE_INVALID = "complete_invalid"
+    INCOMPLETE = "incomplete"
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class StageExecution:
     stage: PipelineStage
@@ -50,15 +57,20 @@ class StageExecution:
 class ExperimentExecution:
     coordinate: ExperimentCoordinate
     stages: tuple[StageExecution, ...]
+    reused_complete_experiment: bool = False
 
     def __post_init__(self) -> None:
         completed_stage_ids = tuple(item.stage for item in self.stages)
         expected_prefix = PIPELINE_SEQUENCE[: len(completed_stage_ids)]
         if completed_stage_ids != expected_prefix:
             raise ValueError("pipeline stages must execute in canonical order")
+        if self.reused_complete_experiment and self.stages:
+            raise ValueError("a reused complete experiment must not execute stages")
 
     @property
     def successful(self) -> bool:
+        if self.reused_complete_experiment:
+            return True
         return bool(self.stages) and len(self.stages) == len(PIPELINE_SEQUENCE) and all(
             item.outcome in {StageOutcome.COMPLETED, StageOutcome.REUSED} for item in self.stages
         )
@@ -68,18 +80,35 @@ class StageRunner(Protocol):
     def run(self, stage: PipelineStage, coordinate: ExperimentCoordinate) -> StageExecution: ...
 
 
-class IncompleteExperimentCleaner(Protocol):
-    def remove(self, coordinate: ExperimentCoordinate, output_root: Path) -> None: ...
+class ExperimentOutputStore(Protocol):
+    def state(self, coordinate: ExperimentCoordinate, output_root: Path) -> ExistingExperimentState: ...
+
+    def delete(self, coordinate: ExperimentCoordinate, output_root: Path) -> None: ...
 
 
 def execute_experiment(
     *,
     coordinate: ExperimentCoordinate,
     stage_runner: StageRunner,
-    cleaner: IncompleteExperimentCleaner,
+    output_store: ExperimentOutputStore,
     output_root: Path,
+    overwrite: bool = False,
 ) -> ExperimentExecution:
-    cleaner.remove(coordinate, output_root)
+    existing_state = output_store.state(coordinate, output_root)
+    if overwrite:
+        if existing_state is not ExistingExperimentState.ABSENT:
+            output_store.delete(coordinate, output_root)
+    elif existing_state is ExistingExperimentState.COMPLETE_VALID:
+        return ExperimentExecution(
+            coordinate=coordinate,
+            stages=(),
+            reused_complete_experiment=True,
+        )
+    elif existing_state is ExistingExperimentState.COMPLETE_INVALID:
+        raise ValueError("completed experiment failed publication validation")
+    elif existing_state is ExistingExperimentState.INCOMPLETE:
+        output_store.delete(coordinate, output_root)
+
     executions: list[StageExecution] = []
     for stage in PIPELINE_SEQUENCE:
         result = stage_runner.run(stage, coordinate)
