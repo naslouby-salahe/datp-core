@@ -1,0 +1,80 @@
+from pathlib import Path
+
+from tests.unit.learning.centralized.helpers import (
+    AUTOENCODER,
+    BATCH_SIZE,
+    CHECKPOINT,
+    FEATURE_NAMES,
+    LEARNING_RATE,
+    SEED,
+    TRAINING_PROTOCOL,
+    benign_frame,
+    fitted_state,
+    mixed_evaluation_frame,
+    require_cuda,
+    training_coordinate,
+)
+
+from datp_core.domain.values import Checksum, RowCount, Seed
+from datp_core.learning.centralized.training import CentralizedTrainingRequest, train_centralized_autoencoder
+from datp_core.pipeline.checkpoints.service import retain_centralized_checkpoint_candidates
+from datp_core.pipeline.construct_thresholds import (
+    CENTRALIZED_POOLED_QUANTILE_PROTOCOL,
+    construct_pooled_benign_quantile,
+)
+from datp_core.pipeline.evaluate_detector import evaluate_centralized_reference
+from datp_core.pipeline.generate_scores import CentralizedScoringRequest, score_centralized_reference
+from datp_core.populations.models import PopulationOutcomeLabel
+
+
+def test_centralized_reference_uses_its_own_model_scores_and_threshold(tmp_path: Path) -> None:
+    require_cuda()
+    coordinate = training_coordinate()
+    state = fitted_state(tmp_path / "state.skops")
+    execution = train_centralized_autoencoder(
+        CentralizedTrainingRequest(
+            coordinate=coordinate,
+            training_features=benign_frame(RowCount(64), seed=Seed(0)),
+            feature_names=FEATURE_NAMES,
+            preprocessing_state=state,
+            split_manifest_checksum=Checksum("f" * 64),
+            output_directory=tmp_path / "model",
+            training_seed=SEED,
+            autoencoder=AUTOENCODER,
+            training_protocol=TRAINING_PROTOCOL,
+            checkpoint_protocol=CHECKPOINT,
+            learning_rate=LEARNING_RATE,
+            batch_size=BATCH_SIZE,
+            benign_label=PopulationOutcomeLabel.BENIGN,
+        )
+    )
+    checkpoint = retain_centralized_checkpoint_candidates(execution, AUTOENCODER)[0]
+    scoring = score_centralized_reference(
+        CentralizedScoringRequest(
+            coordinate=coordinate,
+            checkpoint=checkpoint,
+            autoencoder=AUTOENCODER,
+            feature_names=FEATURE_NAMES,
+            calibration_features=benign_frame(RowCount(48), seed=Seed(30)),
+            evaluation_features=mixed_evaluation_frame(RowCount(40), seed=Seed(31)),
+            batch_size=BATCH_SIZE,
+            output_directory=tmp_path / "scores",
+            preprocessing_state_checksum=state.estimator_checksum,
+        )
+    )
+    threshold = construct_pooled_benign_quantile(
+        coordinate=coordinate,
+        calibration_scores=scoring.calibration_scores,
+        protocol=CENTRALIZED_POOLED_QUANTILE_PROTOCOL,
+    )
+    evaluation = evaluate_centralized_reference(
+        coordinate=coordinate,
+        evaluation_scores=scoring.evaluation_scores,
+        threshold_result=threshold,
+    )
+
+    assert checkpoint.tensor_path.is_file()
+    assert scoring.calibration_scores.checkpoint_checksum == checkpoint.tensor_checksum
+    assert scoring.evaluation_scores.checkpoint_checksum == checkpoint.tensor_checksum
+    assert threshold.coordinate == coordinate
+    assert evaluation.evaluation_row_count == 40
