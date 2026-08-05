@@ -1,0 +1,14 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.13, pytest-9.1.1, pluggy-1.6.0 -- /home/runner/work/datp-core/datp-core/.venv/bin/python
+cachedir: .pytest_cache
+benchmark: 5.2.3 (defaults: timer=time.perf_counter disable_gc=False min_rounds=5 min_time=0.000005 max_time=1.0 calibration_precision=10 warmup=False warmup_iterations=100000)
+hypothesis profile 'ci' -> database=None, deadline=None, print_blob=True, derandomize=True, suppress_health_check=(HealthCheck.too_slow,)
+rootdir: /home/runner/work/datp-core/datp-core
+configfile: pyproject.toml
+plugins: cov-7.1.0, benchmark-5.2.3, xdist-3.8.0, hypothesis-6.157.1, typeguard-4.5.2
+collecting ... ERROR: not found: /home/runner/work/datp-core/datp-core/tests/unit/evaluation/test_controls.py::test_build_federated_evaluation_inputs_from_manifest
+(no match in any of [<Module test_controls.py>])
+
+collected 0 items
+
+============================ no tests ran in 0.95s =============================
