@@ -8,8 +8,6 @@ import numpy as np
 import polars as pl
 from pydantic import model_validator
 
-from datp_core.artifacts.layout import RelativeAssetPathSequence
-from datp_core.artifacts.serialization import TrustedScaler
 from datp_core.domain.contracts import ClientCollection, StrictModel
 from datp_core.domain.enums import (
     ContractSubject,
@@ -43,6 +41,8 @@ from datp_core.populations.models import (
     PARTITION_ROLE_COLUMN,
     STABLE_ROW_ID_COLUMN,
 )
+from datp_core.preprocessing.contracts import RelativeAssetPathSequence
+from datp_core.preprocessing.state import TrustedScaler
 from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
 
 
@@ -60,15 +60,8 @@ class PreprocessingProtocol(StrictModel):
 
     @model_validator(mode="after")
     def validate_protocol(self) -> "PreprocessingProtocol":
-        _require_skops(
-            self.serialization_format,
-            "fitted preprocessing state",
-        )
-        forbidden = {
-            STABLE_ROW_ID_COLUMN,
-            OUTCOME_LABEL_COLUMN,
-            PARTITION_ROLE_COLUMN,
-        }
+        _require_skops(self.serialization_format, "fitted preprocessing state")
+        forbidden = {STABLE_ROW_ID_COLUMN, OUTCOME_LABEL_COLUMN, PARTITION_ROLE_COLUMN}
         if any(name in forbidden for name in self.input_feature_names.names):
             raise ValueError("input_feature_names cannot contain structural columns")
         return self
@@ -84,10 +77,7 @@ class PreprocessingPartition:
             raise ValueError(f"preprocessing partition {self.role.value} cannot be empty")
         for column in (STABLE_ROW_ID_COLUMN, OUTCOME_LABEL_COLUMN):
             if column not in self.frame.columns:
-                raise ScientificContractError(
-                    f"missing structural column {column}",
-                    subject=ContractSubject.SCHEMA,
-                )
+                raise ScientificContractError(f"missing structural column {column}", subject=ContractSubject.SCHEMA)
             if self.frame.get_column(column).null_count() > 0:
                 raise ValueError(f"{column} cannot contain null values")
         _ = self.row_ids
@@ -120,10 +110,7 @@ class PreprocessingPartitions:
     def require(self, role: PartitionRole) -> PreprocessingPartition:
         matches = tuple(partition for partition in self.partitions if partition.role is role)
         if len(matches) != 1:
-            raise ScientificContractError(
-                f"missing preprocessing partition {role.value}",
-                subject=role,
-            )
+            raise ScientificContractError(f"missing preprocessing partition {role.value}", subject=role)
         return matches[0]
 
     def roles(self) -> tuple[PartitionRole, ...]:
@@ -240,18 +227,12 @@ class PreprocessingValidationReport(StrictModel):
         return self
 
 
-def _require_train_partition(
-    partition: PartitionRole,
-    subject: str,
-) -> None:
+def _require_train_partition(partition: PartitionRole, subject: str) -> None:
     if partition is not PartitionRole.TRAIN:
         raise ValueError(f"{subject} may fit only on the train partition")
 
 
-def _require_skops(
-    serialization_format: SerializationFormat,
-    subject: str,
-) -> None:
+def _require_skops(serialization_format: SerializationFormat, subject: str) -> None:
     if serialization_format is not SerializationFormat.SKOPS:
         raise ValueError(f"{subject} fitted state must use skops")
 
@@ -297,8 +278,6 @@ class FittedStatePublishSpec[OwnerT]:
 
 @dataclass(frozen=True, slots=True)
 class ScientificPreprocessingMethod:
-    """Dataset-agnostic method lock bound later to a feature schema."""
-
     identity: PreprocessingProtocolId
     fit_scope: PreprocessingFitScope
     estimator_class_name: TrustedEstimatorClassName
@@ -307,14 +286,8 @@ class ScientificPreprocessingMethod:
     numerical_equivalence_absolute_tolerance: AbsoluteTolerance
 
     def __post_init__(self) -> None:
-        _require_train_partition(
-            self.fit_partition,
-            "scientific preprocessing",
-        )
-        _require_skops(
-            self.serialization_format,
-            "scientific preprocessing",
-        )
+        _require_train_partition(self.fit_partition, "scientific preprocessing")
+        _require_skops(self.serialization_format, "scientific preprocessing")
 
 
 SCIENTIFIC_FEDERATED_PREPROCESSING_METHOD = ScientificPreprocessingMethod(
@@ -323,25 +296,23 @@ SCIENTIFIC_FEDERATED_PREPROCESSING_METHOD = ScientificPreprocessingMethod(
     estimator_class_name=TrustedEstimatorClassName.STANDARD_SCALER,
     serialization_format=SerializationFormat.SKOPS,
     fit_partition=PartitionRole.TRAIN,
-    numerical_equivalence_absolute_tolerance=(NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE),
+    numerical_equivalence_absolute_tolerance=NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
 )
-
 SCIENTIFIC_FEDERATED_POOLED_MIN_MAX_METHOD = ScientificPreprocessingMethod(
     identity=PreprocessingProtocolId.FEDERATED_POOLED_MIN_MAX,
     fit_scope=PreprocessingFitScope.POOLED_TRAINING,
     estimator_class_name=TrustedEstimatorClassName.MIN_MAX_SCALER,
     serialization_format=SerializationFormat.SKOPS,
     fit_partition=PartitionRole.TRAIN,
-    numerical_equivalence_absolute_tolerance=(NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE),
+    numerical_equivalence_absolute_tolerance=NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
 )
-
 SCIENTIFIC_CENTRALIZED_PREPROCESSING_METHOD = ScientificPreprocessingMethod(
     identity=PreprocessingProtocolId.CENTRALIZED_POOLED_MIN_MAX,
     fit_scope=PreprocessingFitScope.POOLED_TRAINING,
     estimator_class_name=TrustedEstimatorClassName.MIN_MAX_SCALER,
     serialization_format=SerializationFormat.SKOPS,
     fit_partition=PartitionRole.TRAIN,
-    numerical_equivalence_absolute_tolerance=(NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE),
+    numerical_equivalence_absolute_tolerance=NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
 )
 
 
@@ -349,12 +320,11 @@ def build_preprocessing_protocol(
     method: ScientificPreprocessingMethod,
     feature_names: FeatureNameSequence,
 ) -> PreprocessingProtocol:
-    """Bind a locked scientific method to ordered model-input features."""
     return PreprocessingProtocol(
         identity=method.identity,
         fit_scope=method.fit_scope,
         input_feature_names=feature_names,
         serialization_format=method.serialization_format,
         estimator_class_name=method.estimator_class_name,
-        numerical_equivalence_absolute_tolerance=(method.numerical_equivalence_absolute_tolerance),
+        numerical_equivalence_absolute_tolerance=method.numerical_equivalence_absolute_tolerance,
     )
