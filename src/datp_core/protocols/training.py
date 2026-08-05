@@ -1,4 +1,4 @@
-"""Training declarations."""
+"""Training declarations and authoritative protocol resolution."""
 
 from collections.abc import Sequence
 
@@ -18,6 +18,7 @@ from datp_core.domain.values import (
     LearningRate,
     LocalEpochCount,
     MetricValue,
+    ModelCoefficientValue,
     ProximalCoefficient,
     Ratio,
     RoundNumber,
@@ -35,7 +36,8 @@ from .models import (
 )
 
 CHECKPOINT_PROTOCOL = CheckpointProtocol(
-    candidates=tuple(RoundNumber(value) for value in (25, 50, 75, 100, 125, 150, 200)), maximum_round=RoundNumber(200)
+    candidates=tuple(RoundNumber(value) for value in (25, 50, 75, 100, 125, 150, 200)),
+    maximum_round=RoundNumber(200),
 )
 CHECKPOINT_SELECTION_RULE = CheckpointSelectionRule.FIXED_TERMINAL_MAXIMUM_ROUND
 
@@ -86,7 +88,6 @@ WEIGHT_DECAY = WeightDecay(0.0)
 OPTIMIZER = OptimizerProtocol(identity=OptimizerId.ADAM, weight_decay=WEIGHT_DECAY)
 LEARNING_RATE = LearningRate(0.001)
 BATCH_SIZE = BatchSize(256)
-# CUDA-resident TensorDataset loaders cannot fork worker processes.
 CENTRALIZED_DATALOADER_WORKER_COUNT = DataLoaderWorkerCount(0)
 FEDERATED_DATALOADER_WORKER_COUNT = DataLoaderWorkerCount(0)
 DITTO_REGULARIZATION_GRID = tuple(DittoRegularization(value) for value in (0.05, 0.1, 0.2))
@@ -118,3 +119,27 @@ DITTO_TRAINING_PROTOCOLS = tuple(
     )
     for regularization in DITTO_REGULARIZATION_GRID
 )
+
+
+def resolve_fedprox_protocol(coefficient: ModelCoefficientValue | ProximalCoefficient) -> FedProxProtocol:
+    matches = tuple(
+        protocol for protocol in FEDPROX_TRAINING_PROTOCOLS if protocol.coefficient.value == coefficient.value
+    )
+    if len(matches) != 1:
+        raise ScientificContractError(
+            "a FedProx coefficient must resolve to exactly one declared training protocol",
+            subject=TrainingModelId.FEDPROX_AUTOENCODER,
+        )
+    return matches[0]
+
+
+def resolve_ditto_protocol(regularization: DittoRegularization) -> DittoProtocol:
+    matches = tuple(
+        protocol for protocol in DITTO_TRAINING_PROTOCOLS if protocol.regularization.value == regularization.value
+    )
+    if len(matches) != 1:
+        raise ScientificContractError(
+            "a Ditto regularization value must resolve to exactly one declared training protocol",
+            subject=TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER,
+        )
+    return matches[0]
