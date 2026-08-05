@@ -12,13 +12,13 @@ from safetensors.torch import save
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
-from datp_core.artifacts.serialization import canonical_json_text
 from datp_core.domain.enums import (
     CommunicationEstimationMethod,
     ContractSubject,
     OptimizerId,
 )
 from datp_core.domain.errors import LeakageError, ScientificContractError
+from datp_core.domain.provenance import canonical_json_text
 from datp_core.domain.values import (
     BatchSize,
     ByteCount,

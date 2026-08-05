@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from datp_core.domain.values import checksum_bytes
+from datp_core.domain.values import ByteCount, Checksum, checksum_bytes
 from datp_core.pipeline.publication.completion import build_completion_record, require_complete
 from datp_core.pipeline.publication.records import (
     ArtifactKind,
@@ -19,7 +19,7 @@ def artifact_for(relative: Path, payload: bytes) -> ArtifactRecord:
         kind=ArtifactKind.SUMMARY,
         relative_path=relative,
         checksum=checksum_bytes(payload),
-        byte_count=len(payload),
+        byte_count=ByteCount(len(payload)),
         state=ArtifactState.PUBLISHED,
     )
 
@@ -78,8 +78,8 @@ def test_artifact_paths_cannot_escape_publication_root() -> None:
 def test_complete_record_requires_an_artifact_inventory() -> None:
     with pytest.raises(ValueError, match="at least one"):
         CompletionRecord(
-            plan_digest="plan",
-            campaign_digest="campaign",
+            plan_digest=Checksum("plan"),
+            campaign_digest=Checksum("campaign"),
             artifacts=(),
             state=CompletionState.COMPLETE,
         )

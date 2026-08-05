@@ -4,9 +4,7 @@ from pathlib import Path
 REPOSITORY_ROOT = Path(__file__).parents[2]
 SOURCE_ROOT = REPOSITORY_ROOT / "src" / "datp_core"
 TEST_ROOT = REPOSITORY_ROOT / "tests"
-PROHIBITED_WORKFLOW_PATHS = (
-    REPOSITORY_ROOT / ".github" / "workflows" / "remove-artifacts-package.yml",
-)
+PROHIBITED_WORKFLOW_PATHS = (REPOSITORY_ROOT / ".github" / "workflows" / "remove-artifacts-package.yml",)
 CAPABILITY_PACKAGES = (
     "datasets",
     "populations",

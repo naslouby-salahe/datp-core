@@ -44,10 +44,6 @@ class ArtifactRecord:
             raise ValueError("artifact paths must be non-empty and relative")
         if ".." in self.relative_path.parts:
             raise ValueError("artifact paths must remain inside the publication root")
-        if not isinstance(self.checksum, Checksum):
-            object.__setattr__(self, "checksum", Checksum(self.checksum))
-        if not isinstance(self.byte_count, ByteCount):
-            object.__setattr__(self, "byte_count", ByteCount(self.byte_count))
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -58,10 +54,6 @@ class CompletionRecord:
     state: CompletionState
 
     def __post_init__(self) -> None:
-        if not isinstance(self.plan_digest, Checksum):
-            object.__setattr__(self, "plan_digest", Checksum(self.plan_digest))
-        if not isinstance(self.campaign_digest, Checksum):
-            object.__setattr__(self, "campaign_digest", Checksum(self.campaign_digest))
         paths = tuple(item.relative_path for item in self.artifacts)
         if len(paths) != len(frozenset(paths)):
             raise ValueError("completion-record artifact paths must be unique")

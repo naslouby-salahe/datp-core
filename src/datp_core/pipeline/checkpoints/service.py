@@ -30,6 +30,8 @@ from datp_core.pipeline.checkpoints.records import (
 )
 from datp_core.protocols.checkpoints import (
     select_terminal_checkpoint as apply_terminal_selection,
+)
+from datp_core.protocols.checkpoints import (
     validate_ordered_checkpoint_inventory as validate_inventory,
 )
 from datp_core.protocols.models import AutoencoderProtocol, CheckpointProtocol

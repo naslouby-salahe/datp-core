@@ -28,8 +28,8 @@ def build_completion_record(
         else CompletionState.INCOMPLETE
     )
     return CompletionRecord(
-        plan_digest=plan_digest,
-        campaign_digest=campaign_digest,
+        plan_digest=plan_digest if isinstance(plan_digest, Checksum) else Checksum(plan_digest),
+        campaign_digest=campaign_digest if isinstance(campaign_digest, Checksum) else Checksum(campaign_digest),
         artifacts=artifacts,
         state=state,
     )

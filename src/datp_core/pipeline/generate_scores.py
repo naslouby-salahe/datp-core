@@ -43,6 +43,7 @@ from datp_core.pipeline.scoring.frame_contract import (
 from datp_core.pipeline.scoring.service import (
     ClientScoringInput,
     FederatedScoreAssetName,
+    FederatedScoreGenerationResult,
     ScoreGenerationRequest,
     federated_scoring_is_reusable,
     load_reused_federated_scores,
@@ -50,7 +51,7 @@ from datp_core.pipeline.scoring.service import (
     score_and_persist_autoencoder_frame,
     write_federated_scores,
 )
-from datp_core.protocols.inference import ScoreArtifact, ScoreGenerationResult
+from datp_core.protocols.inference import ScoreArtifact
 from datp_core.protocols.models import AutoencoderProtocol
 from datp_core.runtime.compute import resolve_cuda_device
 
@@ -162,7 +163,7 @@ class GenerateFederatedScoresRequest:
 class GenerateFederatedScoresResult:
     stage: PipelineStage
     publication_status: PublicationStatus
-    result: ScoreGenerationResult
+    result: FederatedScoreGenerationResult
 
 
 @dataclass(slots=True, eq=False, kw_only=True)

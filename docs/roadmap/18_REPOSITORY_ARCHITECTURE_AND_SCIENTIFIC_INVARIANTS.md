@@ -189,7 +189,7 @@ This refactor does not invent missing scientific decisions:
 
 ## Validation record
 
-At commit `78ba26adf6d46bc8c68f54843ad2e0f9933a1e9f`, the GitHub Actions `Tests` workflow completed successfully and the PR was mergeable. That proves the current unit, integration, property, architecture, and scientific suite is green on that revision. It does not complete Phase 16: the dedicated E2E layer, final static-analysis sequence, repeated determinism checks, external code-health gates, and final master-log verdict remain mandatory on the eventual final head.
+GitHub Actions and other hosted-CI results are explicitly outside this pull request's completion procedure (see each Phase 12–16 doc's carve-out) and are not cited here as acceptance evidence; a prior version of this record cited a GitHub Actions run as partial completion evidence, which predated that carve-out and has been removed as stale. The authoritative local validation record for the current head is `docs/roadmap/01_PHASE_MASTER_LOG.md`'s Phase 12–16 entries: `ruff format --check`, `ruff check`, `pyright`, `lint-imports` (10/10 contracts), `pylint`, and the full `pytest` suite all pass locally. This does not complete Phase 16: the final master-log `GO_FOR_FULL_EXPERIMENTS` verdict remains blocked on Phase 08's undeclared FedProx primary coefficient, Phase 09's undeclared size-aware shrinkage function, and Phase 11's outstanding real external/CIC/temporal execution.
 
 ## Acceptance criteria
 

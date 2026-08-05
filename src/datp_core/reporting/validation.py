@@ -98,7 +98,9 @@ def validate_claim(request: ClaimRequest) -> ClaimDecision:
             return ClaimDecision(
                 status=ClaimStatus.NARROWED,
                 wording=request.wording,
-                reason=f"confirmatory evidence is {request.evidence_decision.value} and cannot support a positive claim",
+                reason=(
+                    f"confirmatory evidence is {request.evidence_decision.value} and cannot support a positive claim"
+                ),
             )
     return ClaimDecision(status=ClaimStatus.PERMITTED, wording=request.wording, reason="claim matches evidence scope")
 

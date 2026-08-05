@@ -47,9 +47,9 @@ from datp_core.pipeline.execution import PipelineStage
 from datp_core.pipeline.generate_scores import PooledScoreArtifact, load_score_frame, reject_non_finite_scores
 from datp_core.pipeline.publication.codec import ArtifactPublication, FunctionalArtifactCodec, publish_artifact
 from datp_core.pipeline.publication.serialization import serialize_json_model
+from datp_core.pipeline.scoring.service import FederatedScoreArtifactManifest
 from datp_core.populations.models import PopulationOutcomeLabel
 from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
-from datp_core.protocols.inference import ScoreArtifactManifest
 from datp_core.thresholding.common import ThresholdConstructionResult
 
 BENIGN_OUTCOME_LABEL = PopulationOutcomeLabel.BENIGN
@@ -206,7 +206,7 @@ class EvaluateCentralizedDetectorResult:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class EvaluateFederatedDetectorRequest:
-    score_manifest: ScoreArtifactManifest
+    score_manifest: FederatedScoreArtifactManifest
     threshold_result: ThresholdConstructionResult
     cohort: EvaluationCohortManifest
     fixed_score_evidence: FixedScoreEvidence

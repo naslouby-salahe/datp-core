@@ -6,14 +6,14 @@ from datp_core.calibration.models import CalibrationReplicateManifest, Eligibili
 from datp_core.calibration.service import CalibrationRequest, calibrate
 from datp_core.domain.values import CalibrationSize, SubsampleReplicateCount
 from datp_core.pipeline.execution import PipelineStage
+from datp_core.pipeline.scoring.service import FederatedScoreArtifactManifest
 from datp_core.populations.models import ClientIdentity
 from datp_core.protocols.models import CalibrationEligibilityProtocol
-from datp_core.protocols.inference import ScoreArtifactManifest
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class BuildCalibrationRequest:
-    score_manifest: ScoreArtifactManifest
+    score_manifest: FederatedScoreArtifactManifest
     protocol: CalibrationEligibilityProtocol
     calibration_sizes: tuple[CalibrationSize, ...]
     replicate_count: SubsampleReplicateCount

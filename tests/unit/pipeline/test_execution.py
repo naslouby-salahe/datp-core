@@ -9,6 +9,7 @@ from datp_core.domain.enums import (
     FederatedThresholdMethod,
     MetricId,
     PopulationId,
+    PreprocessingProtocolId,
     SplitProtocolId,
     TrainingModelId,
 )
@@ -58,6 +59,8 @@ def coordinate() -> ExperimentCoordinate:
         training_model=TrainingModelId.FEDAVG_AUTOENCODER,
         training_seed=Seed(0),
         split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
+        preprocessing_protocol=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
+        model_coefficient=None,
         threshold_method=FederatedThresholdMethod.SHARED_THRESHOLD,
         metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
         temporal_state=None,

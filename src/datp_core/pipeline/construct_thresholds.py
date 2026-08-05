@@ -33,10 +33,10 @@ from datp_core.learning.centralized.training import CentralizedTrainingCoordinat
 from datp_core.pipeline.execution import PipelineStage
 from datp_core.pipeline.generate_scores import PooledScoreArtifact, load_score_frame, reject_non_finite_scores
 from datp_core.pipeline.publication.codec import ArtifactPublication, FunctionalArtifactCodec, publish_artifact
+from datp_core.pipeline.scoring.service import FederatedScoreArtifactManifest
 from datp_core.populations.integrity import reject_non_benign_labels
 from datp_core.populations.models import PopulationOutcomeLabel
 from datp_core.protocols.calibration import CANONICAL_QUANTILE
-from datp_core.protocols.inference import ScoreArtifactManifest
 from datp_core.protocols.models import CentralizedQuantileProtocol
 from datp_core.thresholding.common import (
     FederatedThresholdAssetName,
@@ -147,7 +147,7 @@ class ConstructFederatedThresholdsRequest:
     output_directory: Path
     overwrite: bool
     temporal_provenance: TemporalDeploymentProvenance | None = None
-    temporal_score_manifest: ScoreArtifactManifest | None = None
+    temporal_score_manifest: FederatedScoreArtifactManifest | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -338,7 +338,8 @@ def reject_federated_scores_for_centralized_threshold(
     method: FederatedThresholdMethod,
 ) -> None:
     raise LeakageError(
-        f"federated score artifact '{identity}' (method={method.value}) cannot enter centralized threshold construction",
+        f"federated score artifact '{identity}' (method={method.value}) "
+        "cannot enter centralized threshold construction",
         subject=ContractSubject.ARTIFACT_PATH,
     )
 

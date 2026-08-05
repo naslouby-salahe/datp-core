@@ -2,8 +2,6 @@ from pathlib import Path
 
 import polars as pl
 
-from datp_core.artifacts.layout import ProcessedAssetName
-from datp_core.artifacts.serialization import construct_trusted_estimator
 from datp_core.domain.enums import (
     DatasetId,
     PartitionRole,
@@ -22,6 +20,7 @@ from datp_core.domain.values import (
     FeatureNameSequence,
     Seed,
 )
+from datp_core.preprocessing.contracts import ProcessedAssetName
 from datp_core.preprocessing.federated import publish_client_preprocessing
 from datp_core.preprocessing.models import (
     ClientPublishRequest,
@@ -30,6 +29,7 @@ from datp_core.preprocessing.models import (
     PreprocessingProtocol,
     PreprocessingPublishContext,
 )
+from datp_core.preprocessing.state import construct_trusted_estimator
 
 
 def test_partial_asset_is_rebuilt_after_cleanup(tmp_path: Path) -> None:

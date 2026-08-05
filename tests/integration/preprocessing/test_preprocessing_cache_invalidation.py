@@ -2,7 +2,6 @@ from pathlib import Path
 
 import polars as pl
 
-from datp_core.artifacts.serialization import construct_trusted_estimator
 from datp_core.domain.enums import (
     DatasetId,
     PartitionRole,
@@ -29,6 +28,7 @@ from datp_core.preprocessing.models import (
     PreprocessingProtocol,
     PreprocessingPublishContext,
 )
+from datp_core.preprocessing.state import construct_trusted_estimator
 
 
 def _partitions() -> PreprocessingPartitions:

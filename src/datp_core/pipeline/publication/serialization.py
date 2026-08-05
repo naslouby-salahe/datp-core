@@ -4,14 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import TypeVar
 
 from pydantic import BaseModel
 
 from datp_core.domain.provenance import canonical_json_text
 from datp_core.domain.values import Checksum, checksum_text
-
-TModel = TypeVar("TModel", bound=BaseModel)
 
 
 def canonical_model_json_text(model: BaseModel) -> str:
@@ -39,9 +36,9 @@ def serialize_json_model(model: BaseModel, destination: Path) -> Checksum:
     return checksum_text(payload)
 
 
-def load_model_json(model_type: type[TModel], text: str) -> TModel:
+def load_model_json[ModelT: BaseModel](model_type: type[ModelT], text: str) -> ModelT:
     return model_type.model_validate_json(text)
 
 
-def load_model_file(model_type: type[TModel], path: Path) -> TModel:
+def load_model_file[ModelT: BaseModel](model_type: type[ModelT], path: Path) -> ModelT:
     return load_model_json(model_type, path.read_text(encoding="utf-8"))

@@ -18,12 +18,6 @@ class ExperimentManifest:
     artifacts: tuple[ArtifactRecord, ...]
 
     def __post_init__(self) -> None:
-        if not isinstance(self.plan_digest, Checksum):
-            object.__setattr__(self, "plan_digest", Checksum(self.plan_digest))
-        if not isinstance(self.campaign_digest, Checksum):
-            object.__setattr__(self, "campaign_digest", Checksum(self.campaign_digest))
-        if not isinstance(self.protocol_digest, Checksum):
-            object.__setattr__(self, "protocol_digest", Checksum(self.protocol_digest))
         if not self.artifacts:
             raise ValueError("experiment manifests require an artifact inventory")
         paths = tuple(item.relative_path for item in self.artifacts)

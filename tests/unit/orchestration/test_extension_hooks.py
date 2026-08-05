@@ -3,10 +3,14 @@ from dataclasses import FrozenInstanceError
 import pytest
 
 from datp_core.domain.enums import (
+    DatasetId,
+    EvidenceRole,
     ExperimentId,
     FederatedThresholdMethod,
     MetricId,
     PopulationId,
+    PreprocessingProtocolId,
+    SplitProtocolId,
     TrainingModelId,
 )
 from datp_core.domain.values import Checksum, Seed
@@ -23,9 +27,14 @@ from datp_core.pipeline.planning import ExperimentCoordinate
 def coordinate() -> ExperimentCoordinate:
     return ExperimentCoordinate(
         experiment=ExperimentId.SHARED_VS_LOCAL_CONFIRMATION,
+        evidence_role=EvidenceRole.CONFIRMATORY,
+        dataset=DatasetId.NBAIOT,
         population=PopulationId.NBAIOT_NATURAL_DEVICES,
         training_model=TrainingModelId.FEDAVG_AUTOENCODER,
         training_seed=Seed(0),
+        split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
+        preprocessing_protocol=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
+        model_coefficient=None,
         threshold_method=FederatedThresholdMethod.SHARED_THRESHOLD,
         metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
         temporal_state=None,

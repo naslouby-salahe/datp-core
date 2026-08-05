@@ -26,7 +26,7 @@ from datp_core.domain.values import (
     checksum_file,
 )
 from datp_core.learning.autoencoder import ReconstructionAutoencoder, reconstruction_errors
-from datp_core.learning.federated.models import CheckpointCandidate
+from datp_core.learning.federated.models import CheckpointCandidate, FederatedTrainingCoordinate
 from datp_core.pipeline.checkpoints.persistence import validate_persisted_checkpoint_file
 from datp_core.pipeline.scoring.frame_contract import (
     extract_score_arrays,
@@ -45,6 +45,10 @@ from datp_core.protocols.inference import (
     record_set_checksum,
 )
 from datp_core.protocols.models import AutoencoderProtocol
+
+type FederatedScoreRecord = ScoreRecord[FederatedTrainingCoordinate, ClientIdentity]
+type FederatedScoreArtifactManifest = ScoreArtifactManifest[FederatedTrainingCoordinate, ClientIdentity]
+type FederatedScoreGenerationResult = ScoreGenerationResult[FederatedTrainingCoordinate, ClientIdentity]
 
 
 class FederatedScoreAssetName(StrEnum):
@@ -94,15 +98,15 @@ class ScoreGenerationRequest:
 
 @dataclass(slots=True)
 class _ScoreRecordInventory:
-    calibration: list[ScoreRecord]
-    evaluation: list[ScoreRecord]
-    future_recalibration: list[ScoreRecord]
+    calibration: list[FederatedScoreRecord]
+    evaluation: list[FederatedScoreRecord]
+    future_recalibration: list[FederatedScoreRecord]
 
     @classmethod
     def empty(cls) -> "_ScoreRecordInventory":
         return cls(calibration=[], evaluation=[], future_recalibration=[])
 
-    def records_for(self, role: PartitionRole) -> list[ScoreRecord]:
+    def records_for(self, role: PartitionRole) -> list[FederatedScoreRecord]:
         match role:
             case PartitionRole.CALIBRATION:
                 return self.calibration
@@ -115,13 +119,13 @@ class _ScoreRecordInventory:
             case PartitionRole.STATIC_REFERENCE_RESERVE:
                 raise ScientificContractError("static-reference reserve rows are never score artifacts", subject=role)
 
-    def append(self, role: PartitionRole, record: ScoreRecord) -> None:
+    def append(self, role: PartitionRole, record: FederatedScoreRecord) -> None:
         self.records_for(role).append(record)
 
-    def extend(self, role: PartitionRole, records: tuple[ScoreRecord, ...]) -> None:
+    def extend(self, role: PartitionRole, records: tuple[FederatedScoreRecord, ...]) -> None:
         self.records_for(role).extend(records)
 
-    def immutable_records_for(self, role: PartitionRole) -> tuple[ScoreRecord, ...]:
+    def immutable_records_for(self, role: PartitionRole) -> tuple[FederatedScoreRecord, ...]:
         return tuple(self.records_for(role))
 
 
@@ -193,7 +197,7 @@ def load_checkpoint_model(
     return model
 
 
-def generate_federated_scores(request: ScoreGenerationRequest, device: torch.device) -> ScoreGenerationResult:
+def generate_federated_scores(request: ScoreGenerationRequest, device: torch.device) -> FederatedScoreGenerationResult:
     _validate_request(request)
     _require_empty_output_directory(request.output_directory)
     model = load_checkpoint_model(request.checkpoint, request.autoencoder, device)
@@ -235,7 +239,7 @@ def write_federated_scores(
     request: ScoreGenerationRequest,
     directory: Path,
     device: torch.device,
-) -> ScoreGenerationResult:
+) -> FederatedScoreGenerationResult:
     return generate_federated_scores(replace(request, output_directory=directory), device)
 
 
@@ -254,14 +258,14 @@ def federated_scoring_is_reusable(request: ScoreGenerationRequest, directory: Pa
 def load_reused_federated_scores(
     request: ScoreGenerationRequest,
     directory: Path,
-) -> ScoreGenerationResult:
+) -> FederatedScoreGenerationResult:
     records = _ScoreRecordInventory.empty()
     for role in scored_partition_roles(request.checkpoint.coordinate.split_protocol):
         records.extend(role, _build_records(directory, request, role))
     return _result_from_inventory(request, records)
 
 
-def rebase_federated_scores(result: ScoreGenerationResult, directory: Path) -> ScoreGenerationResult:
+def rebase_federated_scores(result: FederatedScoreGenerationResult, directory: Path) -> FederatedScoreGenerationResult:
     manifest = result.manifest
     return ScoreGenerationResult(
         manifest=ScoreArtifactManifest(
@@ -282,7 +286,7 @@ def rebase_federated_scores(result: ScoreGenerationResult, directory: Path) -> S
 def _result_from_inventory(
     request: ScoreGenerationRequest,
     records: _ScoreRecordInventory,
-) -> ScoreGenerationResult:
+) -> FederatedScoreGenerationResult:
     return ScoreGenerationResult(
         manifest=ScoreArtifactManifest(
             coordinate=request.checkpoint.coordinate,
@@ -309,8 +313,8 @@ def _build_records(
     output_directory: Path,
     request: ScoreGenerationRequest,
     partition_role: PartitionRole,
-) -> tuple[ScoreRecord, ...]:
-    records: list[ScoreRecord] = []
+) -> tuple[FederatedScoreRecord, ...]:
+    records: list[FederatedScoreRecord] = []
     for client_input in sorted(request.clients, key=lambda item: item.client):
         path = output_directory / client_input.client.client_id / _asset_name_for_partition(partition_role).value
         if not path.is_file():
@@ -336,7 +340,7 @@ def _build_records(
     return tuple(records)
 
 
-def _rebased_record(record: ScoreRecord, output_directory: Path) -> ScoreRecord:
+def _rebased_record(record: FederatedScoreRecord, output_directory: Path) -> FederatedScoreRecord:
     path = output_directory / record.scored_client.client_id / _asset_name_for_partition(record.partition_role).value
     if not path.is_file():
         raise ArtifactIntegrityError(
@@ -381,7 +385,7 @@ def _fixed_score_invariant(
     )
 
 
-def _invariant_from_manifest(manifest: ScoreArtifactManifest) -> FixedScoreInvariant:
+def _invariant_from_manifest(manifest: FederatedScoreArtifactManifest) -> FixedScoreInvariant:
     return FixedScoreInvariant(
         model_checksum=manifest.checkpoint_checksum,
         calibration_score_set_checksum=record_set_checksum(manifest.calibration_records),

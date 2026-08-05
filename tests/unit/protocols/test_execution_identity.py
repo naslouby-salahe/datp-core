@@ -1,6 +1,5 @@
 import pytest
 
-from datp_core.artifacts.serialization import canonical_json_text
 from datp_core.domain.enums import (
     EvidenceRole,
     ExperimentId,
@@ -8,6 +7,7 @@ from datp_core.domain.enums import (
     TemporalState,
 )
 from datp_core.domain.errors import ScientificContractError
+from datp_core.domain.provenance import canonical_json_text
 from datp_core.protocols.experiments import (
     EXECUTION_IDENTITY_DECLARATIONS,
     ExternalTemporalExecutionIdentity,

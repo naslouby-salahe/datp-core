@@ -7,7 +7,6 @@ from pathlib import Path
 import polars as pl
 
 from datp_core.analysis.temporal import TemporalDeploymentProvenance
-from datp_core.artifacts.serialization import canonical_checksum, canonical_json_text
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
     EvaluationCohort,
@@ -19,6 +18,7 @@ from datp_core.domain.enums import (
     StageOperationId,
 )
 from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
+from datp_core.domain.provenance import canonical_checksum, canonical_json_text
 from datp_core.domain.values import (
     NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
     Checksum,

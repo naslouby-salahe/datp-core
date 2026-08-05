@@ -6,6 +6,8 @@ from datp_core.domain.values import Checksum, MetricValue, Seed
 from datp_core.learning.centralized.training import CentralizedTrainingCoordinate
 from datp_core.learning.federated.checkpoints.selection import (
     select_checkpoint,
+)
+from datp_core.learning.federated.checkpoints.selection import (
     validate_candidate_coordinates as validate_federated_candidates,
 )
 from datp_core.learning.federated.models import (

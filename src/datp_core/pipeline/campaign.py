@@ -69,6 +69,7 @@ from datp_core.pipeline.fit_preprocessing import (
 )
 from datp_core.pipeline.generate_scores import GenerateFederatedScoresRequest, generate_federated_scores
 from datp_core.pipeline.planning import ExperimentCoordinate, ExperimentPlan, PlanDisposition
+from datp_core.pipeline.scoring.service import ClientScoringInput, FederatedScoreArtifactManifest
 from datp_core.pipeline.select_checkpoint import (
     SelectFederatedCheckpointRequest,
     select_federated_primary_checkpoint,
@@ -79,6 +80,7 @@ from datp_core.populations.catalogue import resolve_population
 from datp_core.populations.models import ClientIdentity
 from datp_core.preprocessing.models import ClientPreprocessingResult
 from datp_core.protocols.calibration import CANONICAL_QUANTILE
+from datp_core.protocols.inference import FixedScoreInvariant
 from datp_core.protocols.runtime import DATA_ROOT, OUTPUTS_ROOT
 from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT
 from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL
@@ -89,8 +91,6 @@ from datp_core.protocols.training import (
     LEARNING_RATE,
     NBAIOT_AUTOENCODER,
 )
-from datp_core.pipeline.scoring.service import ClientScoringInput
-from datp_core.protocols.inference import FixedScoreInvariant, ScoreArtifactManifest
 from datp_core.thresholding.dispatch import ThresholdConstructionRequest
 from datp_core.thresholding.identities import ThresholdUnavailableResult
 from datp_core.thresholding.quantiles import ClientBenignCalibrationScores
@@ -135,7 +135,7 @@ class ConfirmatorySeedContext:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ConfirmatoryThresholdInputs:
-    scores: ScoreArtifactManifest
+    scores: FederatedScoreArtifactManifest
     eligible: tuple[ClientBenignCalibrationScores, ...]
     family_by_client: tuple[tuple[ClientIdentity, FamilyIdentity], ...]
     previous_evidence: FixedScoreEvidence | None
@@ -261,7 +261,7 @@ def _prepare_confirmatory_seed(training_seed: Seed) -> ConfirmatorySeedContext:
     )
 
 
-def _score_confirmatory_seed(context: ConfirmatorySeedContext) -> ScoreArtifactManifest:
+def _score_confirmatory_seed(context: ConfirmatorySeedContext) -> FederatedScoreArtifactManifest:
     feature_names = FeatureNameSequence(
         tuple(FeatureName(name) for name in dataset_binding(DatasetId.NBAIOT).schema.feature_columns)
     )
@@ -373,7 +373,7 @@ def _evaluate_confirmatory_threshold_method(
 
 
 def _eligible_calibration_scores(
-    score_manifest: ScoreArtifactManifest,
+    score_manifest: FederatedScoreArtifactManifest,
 ) -> tuple[ClientBenignCalibrationScores, ...]:
     invariant = FixedScoreInvariant.from_manifest(score_manifest)
     return tuple(

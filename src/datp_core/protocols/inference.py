@@ -159,7 +159,7 @@ class FixedScoreInvariant:
         ClientT: ClientIdentityContract,
     ](
         manifest: ScoreArtifactManifest[CoordinateT, ClientT],
-    ) -> "FixedScoreInvariant":
+    ) -> FixedScoreInvariant:
         return FixedScoreInvariant(
             model_checksum=manifest.checkpoint_checksum,
             calibration_score_set_checksum=manifest.score_set_checksum(PartitionRole.CALIBRATION),
@@ -216,7 +216,8 @@ def _require_consistent_partition_records[
     for record in records:
         if record.partition_role is not role:
             raise ScientificContractError(
-                f"score record partition role {record.partition_role.value} does not match expected collection role {role.value}",
+                f"score record partition role {record.partition_role.value} "
+                f"does not match expected collection role {role.value}",
                 subject=ContractSubject.SCORES,
             )
         _require_record_matches_manifest(manifest, record)

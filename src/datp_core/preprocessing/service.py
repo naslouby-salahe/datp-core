@@ -5,10 +5,9 @@ from pathlib import Path
 
 import polars as pl
 
-from datp_core.artifacts.coordinates import canonical_root_under
-from datp_core.artifacts.serialization import TrustedScaler, canonical_json_text
 from datp_core.datasets.canonical_cache import require_canonical_publication_complete
 from datp_core.datasets.catalogue import dataset_binding
+from datp_core.datasets.core.contracts import canonical_root_under
 from datp_core.datasets.edge_iiotset.schema import (
     EDGE_NUMERIC_FEATURE_COLUMNS,
     EdgeAssetRole,
@@ -28,6 +27,7 @@ from datp_core.domain.enums import (
     TemporalState,
 )
 from datp_core.domain.errors import ScientificContractError
+from datp_core.domain.provenance import canonical_json_text
 from datp_core.domain.values import (
     Checksum,
     ClientCount,
@@ -82,6 +82,7 @@ from datp_core.preprocessing.models import (
     PreprocessingPublishContext,
     build_preprocessing_protocol,
 )
+from datp_core.preprocessing.state import TrustedScaler
 from datp_core.preprocessing.validation import extract_partitions
 from datp_core.protocols.experiments import (
     ExternalTemporalExecutionIdentity,

@@ -1,13 +1,8 @@
+from dataclasses import replace
 from pathlib import Path
 
-from datp_core.artifacts.coordinates import ReusableDataCoordinate
-from datp_core.artifacts.layout import (
-    ProcessedAssetName,
-    centralized_branch_directory,
-    core_processed_asset_names,
-    federated_branch_directory,
-    federated_client_directory,
-)
+import pytest
+
 from datp_core.domain.enums import (
     DatasetId,
     PopulationId,
@@ -16,9 +11,22 @@ from datp_core.domain.enums import (
     SplitProtocolId,
 )
 from datp_core.domain.values import ClientPathToken, Seed
+from datp_core.preprocessing.contracts import (
+    ProcessedAssetName,
+    ReusableDataCoordinate,
+    centralized_branch_directory,
+    core_processed_asset_names,
+    federated_branch_directory,
+    federated_client_coordinate,
+    federated_client_directory,
+    processed_branch_coordinate,
+)
 
 
-def _coordinate(branch: ProcessedDataBranch, client: ClientPathToken | None = None) -> ReusableDataCoordinate:
+def _coordinate(
+    branch: ProcessedDataBranch = ProcessedDataBranch.FEDERATED,
+    client: ClientPathToken | None = None,
+) -> ReusableDataCoordinate:
     return ReusableDataCoordinate(
         dataset=DatasetId.NBAIOT,
         population=PopulationId.NBAIOT_NATURAL_DEVICES,
@@ -28,6 +36,22 @@ def _coordinate(branch: ProcessedDataBranch, client: ClientPathToken | None = No
         branch=branch,
         client_identity=client,
     )
+
+
+def test_processed_coordinates_match_approved_layout() -> None:
+    data_root = Path("data")
+    path = processed_branch_coordinate(data_root, _coordinate())
+    assert path == Path(
+        "data/processed/nbaiot/nbaiot_natural_devices/1/"
+        f"{SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS.value}/"
+        f"{PreprocessingProtocolId.TEST_COLUMN_ORDER_PROJECTION.value}/federated"
+    )
+    coordinate = replace(_coordinate(), client_identity=ClientPathToken("danmini_doorbell"))
+    client = federated_client_coordinate(data_root, coordinate)
+    assert client.parts[-1] == "danmini_doorbell"
+    assert "client" not in client.parts
+    with pytest.raises(ValueError):
+        ClientPathToken("client=bad")
 
 
 def test_layout_separates_federated_and_centralized_branches() -> None:

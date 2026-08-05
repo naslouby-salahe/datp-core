@@ -35,13 +35,13 @@ from datp_core.populations.models import (
     SplitConstructionRequest,
     SplitManifestDocument,
 )
+from datp_core.populations.splits import split_membership
 from datp_core.populations.splitting import (
     PopulationSplitArtifacts,
     PopulationSplitPublication,
     PopulationSplitRequest,
     prepare_population_split,
 )
-from datp_core.populations.splits import split_membership
 from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
 
 

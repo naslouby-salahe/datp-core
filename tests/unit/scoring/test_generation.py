@@ -7,12 +7,12 @@ from tests.unit.scoring.helpers import selected_checkpoint
 from datp_core.domain.enums import CheckpointStatus
 from datp_core.domain.errors import ArtifactIntegrityError, LeakageError, ScientificContractError
 from datp_core.domain.values import Checksum, RowCount, Seed
-from datp_core.runtime.compute import resolve_cuda_device
 from datp_core.pipeline.scoring.service import (
     ClientScoringInput,
     ScoreGenerationRequest,
     generate_federated_scores,
 )
+from datp_core.runtime.compute import resolve_cuda_device
 
 
 def _clients() -> tuple[ClientScoringInput, ...]:

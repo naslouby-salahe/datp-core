@@ -7,12 +7,15 @@ from datp_core.pipeline.planning import ExperimentCoordinate
 
 def experiment_output_directory(root: Path, coordinate: ExperimentCoordinate) -> Path:
     temporal = coordinate.temporal_state.value if coordinate.temporal_state is not None else "static"
+    coefficient = f"{coordinate.model_coefficient.value}" if coordinate.model_coefficient is not None else "unweighted"
     return (
         root
         / coordinate.experiment.value
         / coordinate.population.value
         / coordinate.training_model.value
         / str(coordinate.training_seed.value)
+        / coordinate.preprocessing_protocol.value
+        / coefficient
         / coordinate.threshold_method.value
         / coordinate.metric.value
         / temporal

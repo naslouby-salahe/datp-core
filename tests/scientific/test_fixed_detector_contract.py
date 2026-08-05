@@ -14,10 +14,10 @@ from datp_core.learning.federated.models import (
     CheckpointDecision,
     FederatedTrainingCoordinate,
 )
-from datp_core.populations.models import PopulationOutcomeLabel
-from datp_core.runtime.compute import resolve_cuda_device
 from datp_core.pipeline.scoring.service import ClientScoringInput, ScoreGenerationRequest, generate_federated_scores
+from datp_core.populations.models import PopulationOutcomeLabel
 from datp_core.protocols.inference import FixedScoreInvariant, ScoreRecord
+from datp_core.runtime.compute import resolve_cuda_device
 
 THRESHOLD_METHODS = (
     FederatedThresholdMethod.SHARED_THRESHOLD,

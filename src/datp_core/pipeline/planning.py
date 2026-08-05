@@ -16,16 +16,33 @@ from datp_core.domain.enums import (
     FederatedThresholdMethod,
     MetricId,
     PopulationId,
+    PreprocessingProtocolId,
     SplitProtocolId,
     TemporalState,
     TrainingModelId,
 )
-from datp_core.domain.values import Seed
+from datp_core.domain.values import ModelCoefficientValue, Seed
 from datp_core.populations.capabilities import population_capabilities, population_declaration
+from datp_core.preprocessing.models import SCIENTIFIC_FEDERATED_PREPROCESSING_METHOD
 from datp_core.protocols.experiments import EXECUTION_IDENTITY_DECLARATIONS, EXPERIMENTS
 from datp_core.protocols.models import ExperimentDeclaration, SeedCohort
 from datp_core.protocols.populations import split_protocol_for_population
 from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT
+from datp_core.protocols.training import DITTO_TRAINING_PROTOCOLS, FEDPROX_TRAINING_PROTOCOLS
+
+_MODEL_COEFFICIENT_TRAINING_MODELS = frozenset(
+    (TrainingModelId.FEDPROX_AUTOENCODER, TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER)
+)
+
+
+def _declared_model_coefficients(training_model: TrainingModelId) -> tuple[ModelCoefficientValue | None, ...]:
+    match training_model:
+        case TrainingModelId.FEDPROX_AUTOENCODER:
+            return tuple(ModelCoefficientValue(protocol.coefficient.value) for protocol in FEDPROX_TRAINING_PROTOCOLS)
+        case TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER:
+            return tuple(ModelCoefficientValue(protocol.regularization.value) for protocol in DITTO_TRAINING_PROTOCOLS)
+        case _:
+            return (None,)
 
 
 class PlanDisposition(StrEnum):
@@ -55,13 +72,23 @@ class ExperimentCoordinate:
     training_model: TrainingModelId
     training_seed: Seed
     split_protocol: SplitProtocolId
+    preprocessing_protocol: PreprocessingProtocolId
+    model_coefficient: ModelCoefficientValue | None
     threshold_method: FederatedThresholdMethod
     metric: MetricId
     temporal_state: TemporalState | None
 
+    def __post_init__(self) -> None:
+        requires_coefficient = self.training_model in _MODEL_COEFFICIENT_TRAINING_MODELS
+        if requires_coefficient and self.model_coefficient is None:
+            raise ValueError("training models with a declared coefficient grid require a model coefficient")
+        if not requires_coefficient and self.model_coefficient is not None:
+            raise ValueError("a model coefficient is only active for training models with a declared coefficient grid")
+
     @property
     def stable_key(self) -> str:
         temporal = self.temporal_state.value if self.temporal_state is not None else "static"
+        coefficient = f"{self.model_coefficient.value}" if self.model_coefficient is not None else "unweighted"
         return "/".join(
             (
                 self.experiment.value,
@@ -71,6 +98,8 @@ class ExperimentCoordinate:
                 self.training_model.value,
                 str(self.training_seed.value),
                 self.split_protocol.value,
+                self.preprocessing_protocol.value,
+                coefficient,
                 self.threshold_method.value,
                 self.metric.value,
                 temporal,
@@ -124,6 +153,7 @@ def expand_experiment_plan(
                     threshold_method,
                     metric,
                     temporal_state,
+                    model_coefficient,
                     validated_evidence,
                 )
                 for declaration in declarations
@@ -131,6 +161,7 @@ def expand_experiment_plan(
                 for threshold_method in declaration.federated_thresholds
                 for metric in declaration.metrics
                 for temporal_state in _temporal_states(declaration.id)
+                for model_coefficient in _declared_model_coefficients(declaration.training_model)
             ),
             key=lambda entry: entry.coordinate.stable_key,
         )
@@ -144,6 +175,7 @@ def _planned_entry(
     threshold_method: FederatedThresholdMethod,
     metric: MetricId,
     temporal_state: TemporalState | None,
+    model_coefficient: ModelCoefficientValue | None,
     evidence: tuple[PlanningEvidence, ...],
 ) -> PlannedExperiment:
     disposition, reason = _resolve_disposition(declaration, evidence)
@@ -157,6 +189,8 @@ def _planned_entry(
             training_model=declaration.training_model,
             training_seed=seed,
             split_protocol=split_protocol_for_population(declaration.population),
+            preprocessing_protocol=SCIENTIFIC_FEDERATED_PREPROCESSING_METHOD.identity,
+            model_coefficient=model_coefficient,
             threshold_method=threshold_method,
             metric=metric,
             temporal_state=temporal_state,

@@ -7,7 +7,6 @@ from hashlib import sha256
 
 import polars as pl
 
-from datp_core.artifacts.serialization import canonical_checksum
 from datp_core.domain.enums import (
     ContractSubject,
     EvaluationCohort,
@@ -18,6 +17,7 @@ from datp_core.domain.enums import (
     ScoreFrameColumn,
 )
 from datp_core.domain.errors import ScientificContractError
+from datp_core.domain.provenance import canonical_checksum
 from datp_core.domain.values import (
     NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
     AbsoluteTolerance,
@@ -48,6 +48,9 @@ from datp_core.protocols.inference import (
     ScoreArtifactManifest,
     ScoreRecord,
 )
+
+type FederatedScoreArtifactManifest = ScoreArtifactManifest[FederatedTrainingCoordinate, ClientIdentity]
+type FederatedScoreRecord = ScoreRecord[FederatedTrainingCoordinate, ClientIdentity]
 
 _LENGTH_PREFIX_BYTES = 8
 
@@ -110,7 +113,7 @@ class ClientEvidenceChecksum:
 
 
 def build_federated_evaluation_inputs(
-    score_manifest: ScoreArtifactManifest,
+    score_manifest: FederatedScoreArtifactManifest,
     threshold_method: FederatedThresholdMethod,
 ) -> FederatedEvaluationInputs:
     cohort = build_evaluation_cohort_manifest(
@@ -151,7 +154,7 @@ def source_row_checksum(rows: Sequence[str]) -> Checksum:
 
 def validate_evaluation_evidence(
     evidence: FixedScoreEvidence,
-    manifest: ScoreArtifactManifest,
+    manifest: FederatedScoreArtifactManifest,
     cohort: EvaluationCohortManifest,
     clients: tuple[ClientMetricResult, ...],
 ) -> None:
@@ -252,13 +255,13 @@ def validate_fixed_score_controls(
 
 
 def _client_population_checksum(
-    manifest: ScoreArtifactManifest,
+    manifest: FederatedScoreArtifactManifest,
 ) -> Checksum:
     return canonical_checksum(tuple(sorted(record.scored_client for record in manifest.evaluation_records)))
 
 
 def _evaluation_label_checksum(
-    manifest: ScoreArtifactManifest,
+    manifest: FederatedScoreArtifactManifest,
 ) -> Checksum:
     return _aggregate_score_record_checksum(
         manifest.evaluation_records,
@@ -267,7 +270,7 @@ def _evaluation_label_checksum(
 
 
 def _evaluation_row_checksum(
-    manifest: ScoreArtifactManifest,
+    manifest: FederatedScoreArtifactManifest,
 ) -> Checksum:
     return _aggregate_score_record_checksum(
         manifest.evaluation_records,
@@ -276,7 +279,7 @@ def _evaluation_row_checksum(
 
 
 def _aggregate_score_record_checksum(
-    records: tuple[ScoreRecord, ...],
+    records: tuple[FederatedScoreRecord, ...],
     column: ScoreFrameColumn,
 ) -> Checksum:
     return canonical_checksum(
@@ -294,7 +297,7 @@ def _aggregate_score_record_checksum(
 
 
 def _score_column_checksum(
-    record: ScoreRecord,
+    record: FederatedScoreRecord,
     column: ScoreFrameColumn,
 ) -> Checksum:
     values = pl.read_parquet(record.path)[column.value].to_list()
@@ -302,7 +305,7 @@ def _score_column_checksum(
 
 
 def _score_order_checksum(
-    manifest: ScoreArtifactManifest,
+    manifest: FederatedScoreArtifactManifest,
 ) -> Checksum:
     return canonical_checksum(
         tuple(
@@ -322,7 +325,7 @@ def _score_order_checksum(
 
 
 def _client_aurocs(
-    manifest: ScoreArtifactManifest,
+    manifest: FederatedScoreArtifactManifest,
     cohort: EvaluationCohortManifest,
 ) -> tuple[ClientAurocEvidence, ...]:
     eligibility = tuple(sorted(cohort.records, key=lambda record: record.client))
@@ -352,7 +355,7 @@ def _client_aurocs(
 
 def _client_auroc_evidence(
     coordinate: FederatedTrainingCoordinate,
-    record: ScoreRecord,
+    record: FederatedScoreRecord,
     eligibility: ClientEligibilityRecord,
     evidence_role: EvidenceRole,
 ) -> ClientAurocEvidence:
@@ -396,7 +399,7 @@ def _client_auroc_evidence(
 
 def _validate_evidence_manifest_binding(
     evidence: FixedScoreEvidence,
-    manifest: ScoreArtifactManifest,
+    manifest: FederatedScoreArtifactManifest,
     invariant: FixedScoreInvariant,
 ) -> None:
     if evidence.coordinate != manifest.coordinate:
@@ -443,7 +446,7 @@ def _validate_evidence_cohort_binding(
 
 def _validate_evidence_held_out_rows(
     evidence: FixedScoreEvidence,
-    manifest: ScoreArtifactManifest,
+    manifest: FederatedScoreArtifactManifest,
     clients: tuple[ClientMetricResult, ...],
 ) -> None:
     if evidence.score_order_checksum != _score_order_checksum(manifest):

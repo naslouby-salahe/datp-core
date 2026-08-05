@@ -16,12 +16,12 @@ from datp_core.learning.federated.models import (
     CheckpointDecision,
     FederatedTrainingCoordinate,
 )
+from datp_core.populations.models import ClientIdentity
 from datp_core.protocols.checkpoints import (
     select_terminal_checkpoint,
     validate_ordered_checkpoint_inventory,
     validate_persisted_checkpoint_file,
 )
-from datp_core.populations.models import ClientIdentity
 from datp_core.protocols.models import CheckpointProtocol
 from datp_core.protocols.training import require_non_test_checkpoint_selection_inputs
 
