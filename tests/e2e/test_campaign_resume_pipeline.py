@@ -2,7 +2,7 @@ from pathlib import Path
 
 from datp_core.domain.enums import ExperimentId
 from datp_core.domain.values import Seed
-from datp_core.pipeline.campaign import CampaignPlan, build_campaign, execute_campaign
+from datp_core.pipeline.campaign_execution import CampaignPlan, build_campaign, execute_campaign
 from datp_core.pipeline.execution import (
     ExistingExperimentState,
     PipelineStage,
