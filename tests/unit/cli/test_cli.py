@@ -20,6 +20,29 @@ def test_root_exposes_thin_command_groups() -> None:
     assert "anchor" in output
 
 
+def test_protocol_validation_is_exposed_without_scientific_overrides() -> None:
+    result = runner.invoke(app, ["plan", "validate-protocols"])
+    assert result.exit_code == 0
+    output = _plain(result.stdout)
+    assert "populations=" in output
+    assert "experiments=" in output
+    assert "suppressed=" in output
+
+
+def test_declared_experiment_and_population_are_inspectable_by_enum_identity() -> None:
+    experiment = runner.invoke(app, ["inspect", "experiment", "shared_vs_local_confirmation"])
+    population = runner.invoke(app, ["inspect", "population", "nbaiot_natural_devices"])
+    assert experiment.exit_code == 0
+    assert "role=confirmatory" in _plain(experiment.stdout)
+    assert population.exit_code == 0
+    assert "identity=physical_devices" in _plain(population.stdout)
+
+
+def test_inspection_rejects_undeclared_scientific_identity() -> None:
+    result = runner.invoke(app, ["inspect", "experiment", "invented_experiment"])
+    assert result.exit_code != 0
+
+
 def test_federated_preprocessing_rejects_centralized_identity() -> None:
     result = runner.invoke(
         app,
