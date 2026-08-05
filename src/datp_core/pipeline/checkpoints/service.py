@@ -1,37 +1,21 @@
-"""Shared checkpoint inventory and terminal-selection services."""
+"""Pipeline checkpoint inventory and terminal-selection composition."""
 
 from collections.abc import Callable, Sequence
 
-from datp_core.domain.enums import CheckpointStatus, ContractSubject
-from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
+from datp_core.domain.enums import CheckpointStatus
 from datp_core.domain.values import RoundNumber
 from datp_core.pipeline.checkpoints.models import PersistedCheckpoint
+from datp_core.protocols.checkpoints import (
+    select_terminal_checkpoint as apply_terminal_selection,
+    validate_ordered_checkpoint_inventory as validate_inventory,
+)
 
 
 def validate_ordered_checkpoint_inventory[CandidateT: PersistedCheckpoint](
     candidates: Sequence[CandidateT],
     expected_rounds: tuple[RoundNumber, ...],
 ) -> tuple[CandidateT, ...]:
-    """Require an exact ordered candidate inventory with unique rounds and paths."""
-    ordered = tuple(candidates)
-    observed = tuple(candidate.round_number for candidate in ordered)
-    if observed != expected_rounds:
-        raise ArtifactIntegrityError(
-            "checkpoint candidate rounds must equal the declared ordered protocol",
-            subject=ContractSubject.CHECKPOINT_CANDIDATES,
-        )
-    if len(frozenset(observed)) != len(observed):
-        raise ArtifactIntegrityError(
-            "duplicate checkpoint candidates are forbidden",
-            subject=ContractSubject.CHECKPOINT_CANDIDATES,
-        )
-    paths = tuple(candidate.tensor_path for candidate in ordered)
-    if len(frozenset(paths)) != len(paths):
-        raise ArtifactIntegrityError(
-            "checkpoint candidate paths must be unique",
-            subject=ContractSubject.CHECKPOINT_CANDIDATES,
-        )
-    return ordered
+    return validate_inventory(candidates, expected_rounds)
 
 
 def select_terminal_checkpoint[CandidateT: PersistedCheckpoint](
@@ -40,27 +24,4 @@ def select_terminal_checkpoint[CandidateT: PersistedCheckpoint](
     *,
     rebuild: Callable[[CandidateT, CheckpointStatus], CandidateT],
 ) -> tuple[tuple[CandidateT, ...], CandidateT]:
-    """Apply the fixed-terminal non-test rule to an already validated inventory."""
-    statused: list[CandidateT] = []
-    selected: CandidateT | None = None
-    for candidate in candidates:
-        status = (
-            CheckpointStatus.SELECTED_BY_NON_TEST_RULE
-            if candidate.round_number == maximum_round
-            else CheckpointStatus.STABILITY_EVIDENCE
-        )
-        rebuilt = rebuild(candidate, status)
-        statused.append(rebuilt)
-        if status is CheckpointStatus.SELECTED_BY_NON_TEST_RULE:
-            if selected is not None:
-                raise ScientificContractError(
-                    "fixed-terminal selection produced multiple selected candidates",
-                    subject=ContractSubject.CHECKPOINT_SELECTION_RULE,
-                )
-            selected = rebuilt
-    if selected is None:
-        raise ArtifactIntegrityError(
-            "declared maximum-round checkpoint candidate is missing",
-            subject=ContractSubject.CHECKPOINT_CANDIDATES,
-        )
-    return tuple(statused), selected
+    return apply_terminal_selection(candidates, maximum_round, rebuild=rebuild)
