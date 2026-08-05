@@ -48,7 +48,7 @@ from datp_core.pipeline.fit_preprocessing import (
     fit_published_federated_preprocessing,
 )
 from datp_core.pipeline.generate_scores import GenerateFederatedScoresRequest, generate_federated_scores
-from datp_core.pipeline.planning import ExperimentCoordinate
+from datp_core.pipeline.planning import CoordinateIdentitySegment, ExperimentCoordinate
 from datp_core.pipeline.scoring.service import ClientScoringInput, FederatedScoreArtifactManifest
 from datp_core.pipeline.select_checkpoint import SelectFederatedCheckpointRequest, select_federated_primary_checkpoint
 from datp_core.pipeline.train_detector import TrainFederatedDetectorRequest, train_federated_detector
@@ -79,11 +79,9 @@ class ExecutionArtifactDirectory(StrEnum):
     SCORES = "scores"
 
 
-class ExecutionPathIdentity(StrEnum):
+class ExecutionRootDirectory(StrEnum):
     FEDERATED = "federated"
     BOUNDED_EVIDENCE = "bounded_evidence"
-    NO_MODEL_COEFFICIENT = "no_model_coefficient"
-    NON_TEMPORAL = "non_temporal"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -400,11 +398,11 @@ def federated_training_directory(coordinate: FederatedTrainingCoordinate, output
     coefficient = (
         str(coordinate.model_coefficient.value)
         if coordinate.model_coefficient is not None
-        else ExecutionPathIdentity.NO_MODEL_COEFFICIENT.value
+        else CoordinateIdentitySegment.NO_MODEL_COEFFICIENT.value
     )
     return (
         output_root
-        / ExecutionPathIdentity.FEDERATED.value
+        / ExecutionRootDirectory.FEDERATED.value
         / coordinate.population.value
         / str(coordinate.training_seed.value)
         / coordinate.split_protocol.value
@@ -422,11 +420,11 @@ def bounded_evidence_seed_directory(
     temporal = (
         execution_identity.temporal_state.value
         if execution_identity.temporal_state is not None
-        else ExecutionPathIdentity.NON_TEMPORAL.value
+        else CoordinateIdentitySegment.NON_TEMPORAL.value
     )
     return (
         output_root
-        / ExecutionPathIdentity.BOUNDED_EVIDENCE.value
+        / ExecutionRootDirectory.BOUNDED_EVIDENCE.value
         / execution_identity.experiment.value
         / execution_identity.population.value
         / execution_identity.evidence_role.value
