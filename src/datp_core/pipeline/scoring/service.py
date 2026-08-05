@@ -245,6 +245,15 @@ def write_federated_scores(
     return generate_federated_scores(replace(request, output_directory=directory), device)
 
 
+def materialize_federated_scores(
+    request: ScoreGenerationRequest,
+    device: torch.device,
+) -> FederatedScoreGenerationResult:
+    if federated_scoring_is_reusable(request, request.output_directory):
+        return load_reused_federated_scores(request, request.output_directory)
+    return generate_federated_scores(request, device)
+
+
 def federated_scoring_is_reusable(request: ScoreGenerationRequest, directory: Path) -> bool:
     complete = directory / FederatedScoreAssetName.COMPLETE.value
     if not complete.is_file() or not all(path.is_file() for path in _client_paths(directory, request)):
