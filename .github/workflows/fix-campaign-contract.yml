@@ -1,0 +1,51 @@
+name: Fix campaign execution contract
+
+on:
+  push:
+    branches:
+      - agent/phase-12-16-target-architecture
+    paths:
+      - .github/workflows/fix-campaign-contract.yml
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/phase-12-16-target-architecture
+          fetch-depth: 0
+
+      - name: Repair campaign output-store contract
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          root = Path.cwd()
+          path = root / "src/datp_core/pipeline/campaign.py"
+          text = path.read_text(encoding="utf-8")
+          replacements = {
+              "    IncompleteExperimentCleaner,\n": "    ExperimentOutputStore,\n",
+              "    cleaner: IncompleteExperimentCleaner,\n": "    output_store: ExperimentOutputStore,\n",
+              "            cleaner=cleaner,\n": "            output_store=output_store,\n",
+          }
+          for old, new in replacements.items():
+              if text.count(old) != 1:
+                  raise SystemExit(f"expected exactly one campaign contract fragment: {old!r}")
+              text = text.replace(old, new)
+          if "IncompleteExperimentCleaner" in text or "cleaner=cleaner" in text:
+              raise SystemExit("legacy campaign cleaner contract remains")
+          path.write_text(text, encoding="utf-8")
+          (root / ".github/workflows/fix-campaign-contract.yml").unlink()
+          PY
+
+      - name: Commit campaign repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Repair campaign execution output-store contract"
+          git push origin HEAD:agent/phase-12-16-target-architecture
