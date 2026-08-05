@@ -58,7 +58,7 @@ from datp_core.pipeline.evaluate_detector import (
 )
 from datp_core.pipeline.execution import (
     ExperimentExecution,
-    IncompleteExperimentCleaner,
+    ExperimentOutputStore,
     StageRunner,
     execute_experiment,
 )
@@ -153,14 +153,14 @@ def execute_campaign(
     *,
     campaign: CampaignPlan,
     stage_runner: StageRunner,
-    cleaner: IncompleteExperimentCleaner,
+    output_store: ExperimentOutputStore,
     output_root: Path,
 ) -> CampaignExecution:
     experiments = tuple(
         execute_experiment(
             coordinate=entry.coordinate,
             stage_runner=stage_runner,
-            cleaner=cleaner,
+            output_store=output_store,
             output_root=output_root,
         )
         for entry in campaign.entries
