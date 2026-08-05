@@ -1,10 +1,13 @@
 from datp_core.domain.enums import (
+    DatasetId,
     EvidenceRole,
     ExperimentId,
     ExperimentReadiness,
     FederatedThresholdMethod,
     MetricId,
     PopulationId,
+    SplitProtocolId,
+    TemporalState,
     TrainingModelId,
 )
 from datp_core.domain.values import Seed
@@ -12,7 +15,7 @@ from datp_core.pipeline.planning import PlanDisposition, PlanningEvidence, expan
 from datp_core.protocols.models import ExperimentDeclaration, SeedCohort
 
 
-def test_plan_expansion_is_deterministic_and_records_blockers() -> None:
+def test_plan_expansion_is_deterministic_and_records_complete_coordinates() -> None:
     declaration = ExperimentDeclaration(
         id=ExperimentId.SHARED_VS_LOCAL_CONFIRMATION,
         role=EvidenceRole.CONFIRMATORY,
@@ -45,3 +48,43 @@ def test_plan_expansion_is_deterministic_and_records_blockers() -> None:
     assert first == second
     assert len(first.entries) == 4
     assert all(entry.disposition is PlanDisposition.EXECUTABLE for entry in first.entries)
+    assert all(entry.coordinate.evidence_role is EvidenceRole.CONFIRMATORY for entry in first.entries)
+    assert all(entry.coordinate.dataset is DatasetId.NBAIOT for entry in first.entries)
+    assert all(
+        entry.coordinate.split_protocol is SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS
+        for entry in first.entries
+    )
+    assert all(entry.coordinate.temporal_state is None for entry in first.entries)
+
+
+def test_temporal_plan_expands_every_declared_state() -> None:
+    declaration = ExperimentDeclaration(
+        id=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
+        role=EvidenceRole.TEMPORAL_BOUNDARY,
+        population=PopulationId.EDGE_TEMPORAL_GROUPS,
+        training_model=TrainingModelId.FEDAVG_AUTOENCODER,
+        federated_thresholds=(FederatedThresholdMethod.SHARED_THRESHOLD,),
+        metrics=(MetricId.FPR_COEFFICIENT_OF_VARIATION,),
+        readiness=ExperimentReadiness.DECLARED,
+    )
+
+    plan = expand_experiment_plan(
+        declarations=(declaration,),
+        seed_cohort=SeedCohort(values=(Seed(0),)),
+    )
+
+    assert tuple(entry.coordinate.temporal_state for entry in plan.entries) == tuple(
+        sorted(
+            (
+                TemporalState.STATIC_REFERENCE,
+                TemporalState.FROZEN_FUTURE,
+                TemporalState.RECALIBRATED_FUTURE,
+            ),
+            key=lambda state: state.value,
+        )
+    )
+    assert all(entry.coordinate.dataset is DatasetId.EDGE_IIOTSET for entry in plan.entries)
+    assert all(
+        entry.coordinate.split_protocol is SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE
+        for entry in plan.entries
+    )
