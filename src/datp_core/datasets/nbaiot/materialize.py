@@ -2,31 +2,18 @@
 
 from pathlib import Path
 
-from datp_core.datasets.canonical_cache import (
-    CanonicalAsset,
-    CanonicalReuseRequest,
-    canonical_directory,
-    reuse_published_canonical,
-)
-from datp_core.datasets.contracts import (
-    CanonicalAssetRole,
-    DatasetValidationReport,
-    MaterializedDataset,
-    SourceFileRole,
-)
+from datp_core.datasets.canonical_cache import CanonicalAsset, canonical_directory
+from datp_core.datasets.contracts import CanonicalAssetRole, DatasetValidationReport, MaterializedDataset, SourceFileRole
 from datp_core.datasets.materialization import (
     CanonicalPublication,
     canonical_data_partition_assets,
-    publish_canonical,
     raw_inventory,
     raw_source_file,
     stream_parquet,
 )
+from datp_core.datasets.materialization_lifecycle import CanonicalMaterializationRequest, materialize_canonical
 from datp_core.domain.enums import AvailabilityStatus, DatasetId
-from datp_core.domain.values import (
-    RowCount,
-    ValidationIssueCount,
-)
+from datp_core.domain.values import RowCount, ValidationIssueCount
 
 from .reader import NBaIoTReader
 from .schema import (
@@ -56,23 +43,23 @@ class NBaIoTMaterializer:
         return self.materialize(sources, canonical_root)
 
     def materialize(self, source_paths: tuple[Path, ...], canonical_root: Path) -> MaterializedDataset:
-        if not source_paths:
-            raise ValueError("N-BaIoT materialization requires accepted sources")
         ordered_paths = tuple(sorted(source_paths))
-        reusable = reuse_published_canonical(
-            CanonicalReuseRequest(
+        return materialize_canonical(
+            CanonicalMaterializationRequest(
                 canonical_root=canonical_root,
                 schema=NBAIOT_SCHEMA,
                 canonicalization_contract=_NBAIOT_CANONICALIZATION_CONTRACT,
                 source_paths=ordered_paths,
                 source_path_resolver=source_relative_path,
                 asset_role_type=CanonicalAssetRole,
+                prepare_publication=lambda: self._prepare_publication(ordered_paths, canonical_root),
             )
         )
-        if reusable is not None:
-            return reusable
+
+    @staticmethod
+    def _prepare_publication(source_paths: tuple[Path, ...], canonical_root: Path) -> CanonicalPublication:
         reader = NBaIoTReader()
-        frames = tuple(reader.read(path) for path in ordered_paths)
+        frames = tuple(reader.read(path) for path in source_paths)
         row_counts = tuple(reader.validate_finite_values(frame) for frame in frames)
         inventory = raw_inventory(
             DatasetId.NBAIOT,
@@ -86,7 +73,7 @@ class NBaIoTMaterializer:
                     RowCount(row_count),
                     source_relative_path,
                 )
-                for path, row_count in zip(ordered_paths, row_counts, strict=True)
+                for path, row_count in zip(source_paths, row_counts, strict=True)
             ),
         )
         report = DatasetValidationReport(
@@ -107,16 +94,14 @@ class NBaIoTMaterializer:
                 for frame, asset in zip(frames, expected_assets, strict=True)
             )
 
-        return publish_canonical(
-            CanonicalPublication(
-                canonical_root=canonical_root,
-                canonicalization_contract=_NBAIOT_CANONICALIZATION_CONTRACT,
-                schema=NBAIOT_SCHEMA,
-                inventory=inventory,
-                validation_report=report,
-                expected_assets=expected_assets,
-                writer=write_assets,
-                source_paths=ordered_paths,
-                source_path_resolver=source_relative_path,
-            )
+        return CanonicalPublication(
+            canonical_root=canonical_root,
+            canonicalization_contract=_NBAIOT_CANONICALIZATION_CONTRACT,
+            schema=NBAIOT_SCHEMA,
+            inventory=inventory,
+            validation_report=report,
+            expected_assets=expected_assets,
+            writer=write_assets,
+            source_paths=source_paths,
+            source_path_resolver=source_relative_path,
         )
