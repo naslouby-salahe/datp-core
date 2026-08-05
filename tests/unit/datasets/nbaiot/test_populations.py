@@ -11,6 +11,7 @@ from datp_core.datasets.partitioning.contracts import (
 )
 from datp_core.domain.enums import ControlledPartitionKind, PopulationId, SplitProtocolId
 from datp_core.domain.values import DirichletConcentration, Seed
+from datp_core.protocols.calibration import MINIMUM_BENIGN_SUPPORT
 
 
 def test_natural_devices_are_exactly_the_audited_nine(nbaiot_canonical_root: Path) -> None:
@@ -22,7 +23,7 @@ def test_natural_devices_are_exactly_the_audited_nine(nbaiot_canonical_root: Pat
     assert manifest.document.accepted_clients == tuple(sorted(NBAIOT_DEVICE_IDENTITIES))
     assert len(manifest.document.accepted_clients) == 9
     assert membership.get_column("client_id").n_unique() == 9
-    assert set(manifest.family_by_client)  # families present
+    assert set(manifest.family_by_client)
     assert manifest.document.benign_row_count == 9 * 30
     assert manifest.document.attack_row_count == 9 * 12
     assert membership.height == manifest.document.total_membership_rows
@@ -46,6 +47,7 @@ def test_dirichlet_constructs_twenty_clients_and_conserves_rows(nbaiot_canonical
         partition_seed=Seed(2),
         condition=dirichlet_condition(DirichletConcentration(0.5)),
         split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
+        minimum_benign_support=MINIMUM_BENIGN_SUPPORT,
     )
     manifest, membership, diagnostics = construction.manifest, construction.membership, construction.diagnostics
     assert isinstance(diagnostics, DirichletPartitionDiagnosticsDocument)
@@ -62,12 +64,14 @@ def test_iid_is_separate_typed_condition_and_is_deterministic(nbaiot_canonical_r
         partition_seed=Seed(4),
         condition=iid_condition(),
         split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
+        minimum_benign_support=MINIMUM_BENIGN_SUPPORT,
     )
     second = construct_nbaiot_dirichlet_clients(
         nbaiot_canonical_root,
         partition_seed=Seed(4),
         condition=iid_condition(),
         split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
+        minimum_benign_support=MINIMUM_BENIGN_SUPPORT,
     )
     assert isinstance(first.diagnostics, DirichletPartitionDiagnosticsDocument)
     assert isinstance(second.diagnostics, DirichletPartitionDiagnosticsDocument)
@@ -84,6 +88,7 @@ def test_dirichlet_does_not_drop_or_duplicate_rows(nbaiot_canonical_root: Path) 
         partition_seed=Seed(7),
         condition=dirichlet_condition(DirichletConcentration(0.1)),
         split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
+        minimum_benign_support=MINIMUM_BENIGN_SUPPORT,
     )
     counts = construction.membership.group_by("stable_row_id").len()
     assert counts.filter(pl.col("len") != 1).height == 0
