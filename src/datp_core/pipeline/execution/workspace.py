@@ -7,7 +7,11 @@ from pathlib import Path
 from datp_core.datasets.registry import population_capabilities
 from datp_core.domain.enums import PartitionRole
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE
+from datp_core.domain.values import (
+    NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
+    ClientCount,
+    FeatureNameSequence,
+)
 from datp_core.evaluation.controls import FixedScoreEvidence, build_federated_evaluation_inputs, validate_fixed_score_controls
 from datp_core.evaluation.population import FederatedEvaluationAssetName, FederatedEvaluationDocument
 from datp_core.learning.federated.checkpoints.selection import CheckpointDecision
@@ -69,7 +73,7 @@ class ExperimentWorkspace:
         return training_autoencoder(self.coordinate.dataset)
 
     @cached_property
-    def feature_names(self):
+    def feature_names(self) -> FeatureNameSequence:
         return training_feature_names(self.coordinate.dataset)
 
     @cached_property
@@ -87,11 +91,7 @@ class ExperimentWorkspace:
                         self.context.clients,
                         self.feature_names,
                     ),
-                    population_client_count=self.context.coordinate.population_client_count
-                    if hasattr(self.context.coordinate, "population_client_count")
-                    else __import__("datp_core.domain.values", fromlist=["ClientCount"]).ClientCount(
-                        len(self.context.clients)
-                    ),
+                    population_client_count=ClientCount(len(self.context.clients)),
                     autoencoder=self.autoencoder,
                     training_protocol=protocol,
                     checkpoint_protocol=CHECKPOINT_PROTOCOL,
