@@ -14,7 +14,7 @@ from tests.unit.learning.federated.helpers import (
 
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import Checksum, ProximalCoefficient, Seed
-from datp_core.learning.federated.fedprox import train_fedprox
+from datp_core.learning.federated.global_training import train_global_federated
 from datp_core.learning.federated.training import FederatedTrainingRequest
 from datp_core.protocols.training import FEDPROX_COEFFICIENTS
 
@@ -49,8 +49,8 @@ def test_train_fedprox_produces_independent_model_per_coefficient(tmp_path: Path
     second_directory = tmp_path / "coefficient_b"
     first_directory.mkdir()
     second_directory.mkdir()
-    first = train_fedprox(_request(first_directory, FEDPROX_COEFFICIENTS[0]))
-    second = train_fedprox(_request(second_directory, FEDPROX_COEFFICIENTS[-1]))
+    first = train_global_federated(_request(first_directory, FEDPROX_COEFFICIENTS[0]))
+    second = train_global_federated(_request(second_directory, FEDPROX_COEFFICIENTS[-1]))
     first_checksums = {candidate.tensor_checksum for candidate in first.candidates}
     second_checksums = {candidate.tensor_checksum for candidate in second.candidates}
     assert first_checksums.isdisjoint(second_checksums)
@@ -73,7 +73,7 @@ def test_train_fedprox_rejects_partial_participation(tmp_path: Path) -> None:
         output_directory=tmp_path / "output",
     )
     with pytest.raises(ScientificContractError, match="does not match the declared population count"):
-        train_fedprox(request)
+        train_global_federated(request)
 
 
 def test_train_fedprox_rejects_mismatched_coordinate_and_protocol_coefficient(tmp_path: Path) -> None:
@@ -92,12 +92,14 @@ def test_train_fedprox_rejects_mismatched_coordinate_and_protocol_coefficient(tm
         output_directory=request.output_directory,
     )
     with pytest.raises(ScientificContractError, match="coefficient must match"):
-        train_fedprox(mismatched)
+        train_global_federated(mismatched)
 
 
-def test_fedprox_does_not_import_private_fedavg_symbols() -> None:
-    import datp_core.learning.federated.fedprox as fedprox_module
+def test_global_training_module_owns_fedavg_and_fedprox_dispatch() -> None:
+    import datp_core.learning.federated.global_training as global_training
 
-    module_dict = vars(fedprox_module)
-    assert not any(name.startswith("_run_") for name in module_dict)
-    assert "fedavg" not in fedprox_module.__file__
+    source = Path(global_training.__file__).read_text(encoding="utf-8")
+    assert "FedAvgProtocol" in source
+    assert "FedProxProtocol" in source
+    assert "learning.federated.fedavg" not in source
+    assert "learning.federated.fedprox" not in source
