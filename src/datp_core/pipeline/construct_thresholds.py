@@ -8,7 +8,6 @@ from pathlib import Path
 import numpy as np
 
 from datp_core.analysis.temporal import TemporalDeploymentProvenance
-from datp_core.artifacts.serialization import canonical_checksum, canonical_json_text
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
     CentralizedThresholdMethod,
@@ -20,6 +19,7 @@ from datp_core.domain.enums import (
     ScoreFrameColumn,
 )
 from datp_core.domain.errors import LeakageError, ScientificContractError
+from datp_core.domain.provenance import canonical_checksum, canonical_json_text
 from datp_core.domain.values import (
     Checksum,
     OutcomeLabel,
