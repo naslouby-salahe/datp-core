@@ -1,6 +1,7 @@
 """Scientific contract: one frozen detector and score inventory serves every threshold method."""
 
 import dataclasses
+from pathlib import Path
 
 import polars as pl
 from sklearn.metrics import roc_auc_score
@@ -65,9 +66,8 @@ def _evaluation_frame() -> pl.DataFrame:
     return pl.concat((benign, attack), how="vertical")
 
 
-def _scored_result(tmp_path):
+def _scored_result(tmp_path: Path):
     checkpoint = selected_checkpoint(tmp_path / "checkpoint")
-    device = resolve_cuda_device()
     clients = (
         ClientScoringInput(
             client=client_identity("client_a"),
@@ -78,6 +78,7 @@ def _scored_result(tmp_path):
     result = generate_federated_scores(
         ScoreGenerationRequest(
             checkpoint=checkpoint,
+            scored_split_protocol=checkpoint.coordinate.split_protocol,
             autoencoder=AUTOENCODER,
             feature_names=FEATURE_NAMES,
             clients=clients,
@@ -86,12 +87,12 @@ def _scored_result(tmp_path):
             preprocessing_state_set_checksum=checkpoint.preprocessing_state_set_checksum,
             split_manifest_checksum=checkpoint.split_manifest_checksum,
         ),
-        device,
+        resolve_cuda_device(),
     )
     return checkpoint, result
 
 
-def test_every_threshold_method_receives_identical_detector_provenance(tmp_path) -> None:
+def test_every_threshold_method_receives_identical_detector_provenance(tmp_path: Path) -> None:
     checkpoint, result = _scored_result(tmp_path)
     invariant = FixedScoreInvariant.from_manifest(result.manifest)
     observed = tuple(invariant for _method in THRESHOLD_METHODS)
@@ -104,7 +105,7 @@ def test_every_threshold_method_receives_identical_detector_provenance(tmp_path)
     assert invariant.evaluation_score_set_checksum == result.invariant.evaluation_score_set_checksum
 
 
-def test_auroc_is_identical_for_every_threshold_method(tmp_path) -> None:
+def test_auroc_is_identical_for_every_threshold_method(tmp_path: Path) -> None:
     _checkpoint, result = _scored_result(tmp_path)
     frame = pl.read_parquet(result.manifest.evaluation_records[0].path)
     label_column = ScoreFrameColumn.OUTCOME_LABEL.value
@@ -118,7 +119,7 @@ def test_auroc_is_identical_for_every_threshold_method(tmp_path) -> None:
     assert len(frozenset(observed)) == 1
 
 
-def test_score_artifact_bytes_are_stable_across_repeated_reads(tmp_path) -> None:
+def test_score_artifact_bytes_are_stable_across_repeated_reads(tmp_path: Path) -> None:
     _checkpoint, result = _scored_result(tmp_path)
     path = result.manifest.evaluation_records[0].path
     readings = tuple(path.read_bytes() for _ in THRESHOLD_METHODS)
