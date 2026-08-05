@@ -47,11 +47,9 @@ from datp_core.domain.enums import (
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.provenance import canonical_checksum
 from datp_core.domain.values import Checksum, MetricValue, PairedObservationCount, Seed
-from datp_core.protocols.experiments import (
-    ExternalTemporalExecutionIdentity,
-    require_execution_identity,
-)
+from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity, require_execution_identity
 from datp_core.protocols.statistics import PairedInferenceProtocol
+from datp_core.protocols.temporal import TemporalDeploymentProvenance, validate_frozen_recalibrated_pair
 
 
 class ScientificDecisionResult(StrictModel):
@@ -62,7 +60,7 @@ class ScientificDecisionResult(StrictModel):
     rationale: str
 
     @model_validator(mode="after")
-    def validate_decision(self) -> ScientificDecisionResult:
+    def validate_decision(self) -> "ScientificDecisionResult":
         if not self.rationale.strip():
             raise ValueError("scientific decisions require a rationale")
         if self.interval is not None and self.point_estimate != self.interval.point_estimate:
@@ -115,11 +113,7 @@ def decide_confirmatory(interval: BootstrapInterval) -> ScientificDecisionResult
 
 if TYPE_CHECKING:
     from datp_core.analysis.mechanisms import MechanismEvidence
-    from datp_core.analysis.temporal import (
-        TemporalAnalysisRecord,
-        TemporalDeploymentProvenance,
-        TemporalRecoveryResult,
-    )
+    from datp_core.analysis.temporal import TemporalAnalysisRecord, TemporalRecoveryResult
 
 
 class AnalysisAssetName(StrEnum):
@@ -151,7 +145,7 @@ class AnalysisDocument(StrictModel):
     mechanisms: tuple[MechanismEvidence, ...]
 
     @model_validator(mode="after")
-    def validate_multiplicity(self) -> AnalysisDocument:
+    def validate_multiplicity(self) -> "AnalysisDocument":
         if (self.multiplicity_plan is None) != (self.multiplicity_result is None):
             raise ValueError("multiplicity plan and result must occur together")
         return self
@@ -193,7 +187,7 @@ class TemporalAnalysisDocument(StrictModel):
     records: tuple[TemporalAnalysisRecord, ...]
 
     @model_validator(mode="after")
-    def validate_role_and_records(self) -> TemporalAnalysisDocument:
+    def validate_role_and_records(self) -> "TemporalAnalysisDocument":
         if self.evidence_role is not EvidenceRole.TEMPORAL_BOUNDARY:
             raise ValueError("temporal analysis must remain temporal-boundary evidence")
         if not self.records:
@@ -281,11 +275,7 @@ def prepare_external_analysis(
 def prepare_temporal_analysis(
     request: TemporalAnalysisRequest,
 ) -> AnalysisPublication[TemporalAnalysisDocument]:
-    from datp_core.analysis.temporal import (
-        TemporalAnalysisRecord,
-        TemporalDeploymentProvenance,
-        temporal_analysis_record,
-    )
+    from datp_core.analysis.temporal import TemporalAnalysisRecord, temporal_analysis_record
 
     TemporalAnalysisDocument.model_rebuild(
         _types_namespace={
@@ -333,8 +323,6 @@ def _zero_counts() -> ObservationCounts:
 
 
 def _validate_temporal_provenance(request: TemporalAnalysisRequest) -> None:
-    from datp_core.analysis.temporal import validate_frozen_recalibrated_pair
-
     static = request.static_reference_provenance
     frozen = request.frozen_provenance
     if static.state is not TemporalState.STATIC_REFERENCE:
