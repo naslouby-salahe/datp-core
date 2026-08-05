@@ -9,8 +9,9 @@ from pydantic import BaseModel
 
 from datp_core.domain.enums import ContractSubject, PublicationStatus
 from datp_core.domain.errors import ArtifactIntegrityError
-from datp_core.domain.values import Checksum, checksum_text
+from datp_core.domain.values import Checksum
 from datp_core.pipeline.publication.codec import ArtifactCodec, ArtifactPublication, publish_artifact
+from datp_core.pipeline.publication.completion import complete_digest
 from datp_core.pipeline.publication.serialization import load_model_file, serialize_json_model
 from datp_core.preprocessing.contracts import ProcessedAssetName
 
@@ -84,10 +85,6 @@ def publish_processed[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseMod
         publication_status=outcome.status,
         manifest=outcome.value,
     )
-
-
-def complete_digest(manifest_payload: str, schema_payload: str) -> Checksum:
-    return checksum_text(f"{manifest_payload}\n{schema_payload}")
 
 
 def _write_processed[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseModel](
