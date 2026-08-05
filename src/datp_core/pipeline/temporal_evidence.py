@@ -35,6 +35,7 @@ from datp_core.populations.capabilities import population_capabilities
 from datp_core.protocols.calibration import CANONICAL_QUANTILE
 from datp_core.protocols.experiments import EXPERIMENTS, ExternalTemporalExecutionIdentity
 from datp_core.protocols.models import ExperimentDeclaration, SeedCohort
+from datp_core.protocols.runtime import OUTPUTS_ROOT
 from datp_core.thresholding.dispatch import ThresholdConstructionRequest
 from datp_core.thresholding.identities import ThresholdUnavailableResult
 
@@ -64,7 +65,7 @@ class TemporalStateExecution:
 
 def run_temporal_static_reference_seed(partition_seed: Seed) -> TemporalStateResult:
     coordinate = _coordinate(partition_seed, TemporalState.STATIC_REFERENCE)
-    context = resolve_execution_context(coordinate)
+    context = resolve_execution_context(coordinate, OUTPUTS_ROOT)
     scores = _score_context(context, coordinate)
     execution = _evaluate_state(
         context=context,
@@ -82,7 +83,7 @@ def run_temporal_static_reference_seed(partition_seed: Seed) -> TemporalStateRes
 
 def run_temporal_future_pair(partition_seed: Seed) -> TemporalFuturePairResult:
     frozen_coordinate = _coordinate(partition_seed, TemporalState.FROZEN_FUTURE)
-    context = resolve_execution_context(frozen_coordinate)
+    context = resolve_execution_context(frozen_coordinate, OUTPUTS_ROOT)
     scores = _score_context(context, frozen_coordinate)
     frozen_provenance = TemporalDeploymentProvenance.from_score_manifest(TemporalState.FROZEN_FUTURE, scores)
     recalibrated_provenance = TemporalDeploymentProvenance.from_score_manifest(
@@ -144,7 +145,11 @@ def _evaluate_state(
     reference_evidence = comparison_fixed_score_evidence
     observed_evidence: FixedScoreEvidence | None = None
     completed: list[FederatedThresholdMethod] = []
-    output_root = bounded_evidence_seed_directory(identity, context.coordinate.training_seed)
+    output_root = bounded_evidence_seed_directory(
+        identity,
+        context.coordinate.training_seed,
+        OUTPUTS_ROOT,
+    )
     for method in capabilities.valid_threshold_methods:
         threshold = construct_federated_thresholds(
             ConstructFederatedThresholdsRequest(
