@@ -17,11 +17,9 @@ from datp_core.learning.federated.models import (
     FederatedTrainingCoordinate,
     RoundSnapshot,
 )
-from datp_core.pipeline.checkpoints.persistence import (
-    validate_persisted_checkpoint_file,
-)
-from datp_core.pipeline.checkpoints.service import (
+from datp_core.protocols.checkpoints import (
     validate_ordered_checkpoint_inventory,
+    validate_persisted_checkpoint_file,
 )
 from datp_core.populations.models import ClientIdentity
 from datp_core.protocols.models import AutoencoderProtocol, CheckpointProtocol

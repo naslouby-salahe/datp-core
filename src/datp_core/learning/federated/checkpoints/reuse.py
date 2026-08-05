@@ -50,9 +50,7 @@ from datp_core.learning.federated.models import (
     FederatedTrainingResult,
     PersonalizedCandidateSet,
 )
-from datp_core.pipeline.checkpoints.persistence import (
-    validate_persisted_checkpoint_file,
-)
+from datp_core.protocols.checkpoints import validate_persisted_checkpoint_file
 from datp_core.populations.models import ClientIdentity
 from datp_core.protocols.models import AutoencoderProtocol, CheckpointProtocol
 
