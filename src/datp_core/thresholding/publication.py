@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from pydantic import TypeAdapter
 
@@ -13,6 +14,9 @@ from datp_core.domain.values import Checksum, checksum_text
 from datp_core.protocols.inference import ScoreArtifactManifest
 from datp_core.protocols.temporal import TemporalDeploymentProvenance
 from datp_core.thresholding.models import ThresholdConstructionResult
+
+if TYPE_CHECKING:
+    from datp_core.thresholding.dispatch import ThresholdConstructionRequest
 
 
 class FederatedThresholdAssetName(StrEnum):
@@ -23,7 +27,7 @@ class FederatedThresholdAssetName(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class FederatedThresholdPublicationRequest:
-    request: "ThresholdConstructionRequest"
+    request: ThresholdConstructionRequest
     temporal_provenance: TemporalDeploymentProvenance | None = None
     temporal_score_manifest: ScoreArtifactManifest | None = None
 
@@ -141,10 +145,7 @@ def _load_temporal_provenance(
     return TemporalDeploymentProvenance.model_validate_json(path.read_text(encoding="utf-8"))
 
 
-def _dispatch(request: "ThresholdConstructionRequest") -> ThresholdConstructionResult:
+def _dispatch(request: ThresholdConstructionRequest) -> ThresholdConstructionResult:
     from datp_core.thresholding.dispatch import dispatch_federated_threshold
 
     return dispatch_federated_threshold(request)
-
-
-from datp_core.thresholding.dispatch import ThresholdConstructionRequest  # noqa: E402
