@@ -157,7 +157,7 @@ class TemporalDeploymentProvenance(StrictModel):
             )
         return cls(
             state=state,
-            split_protocol=manifest.coordinate.split_protocol,
+            split_protocol=manifest.scored_split_protocol,
             calibration_role=calibration_role,
             evaluation_role=evaluation_role,
             coordinate_checksum=canonical_checksum(manifest.coordinate),
