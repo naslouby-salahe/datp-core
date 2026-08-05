@@ -3,20 +3,9 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from datp_core.artifacts.coordinates import ReusableDataCoordinate, canonical_root_under
-from datp_core.artifacts.layout import (
-    ProcessedAssetName,
-    RelativeAssetPathSequence,
-    asset_for_partition,
-    branch_asset_path,
-    canonical_relative_asset_path,
-    centralized_branch_directory,
-    partition_roles,
-    processed_asset_names,
-)
-from datp_core.artifacts.serialization import TrustedScaler
 from datp_core.datasets.canonical_cache import require_canonical_publication_complete
 from datp_core.datasets.catalogue import dataset_binding
+from datp_core.datasets.core.contracts import canonical_root_under
 from datp_core.domain.enums import (
     ContractSubject,
     DatasetId,
@@ -40,6 +29,17 @@ from datp_core.populations.catalogue import (
     resolve_population,
 )
 from datp_core.populations.models import ControlledPartitionCondition
+from datp_core.preprocessing.contracts import (
+    ProcessedAssetName,
+    RelativeAssetPathSequence,
+    ReusableDataCoordinate,
+    asset_for_partition,
+    branch_asset_path,
+    canonical_relative_asset_path,
+    centralized_branch_directory,
+    partition_roles,
+    processed_asset_names,
+)
 from datp_core.preprocessing.models import (
     SCIENTIFIC_CENTRALIZED_PREPROCESSING_METHOD,
     FederatedFittedPreprocessingState,
@@ -54,6 +54,7 @@ from datp_core.preprocessing.models import (
     PreprocessingPublishContext,
     build_preprocessing_protocol,
 )
+from datp_core.preprocessing.state import TrustedScaler
 from datp_core.preprocessing.validation import (
     centralized_fitted_state_after_publish,
     extract_partitions,
