@@ -26,6 +26,11 @@ class ArtifactState(StrEnum):
     INCOMPLETE = "incomplete"
 
 
+class CompletionState(StrEnum):
+    COMPLETE = "complete"
+    INCOMPLETE = "incomplete"
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ArtifactRecord:
     kind: ArtifactKind
@@ -50,7 +55,7 @@ class CompletionRecord:
     plan_digest: Checksum
     campaign_digest: Checksum
     artifacts: tuple[ArtifactRecord, ...]
-    complete: bool
+    state: CompletionState
 
     def __post_init__(self) -> None:
         if not isinstance(self.plan_digest, Checksum):
@@ -60,7 +65,13 @@ class CompletionRecord:
         paths = tuple(item.relative_path for item in self.artifacts)
         if len(paths) != len(frozenset(paths)):
             raise ValueError("completion-record artifact paths must be unique")
-        if self.complete and not self.artifacts:
+        if self.state is CompletionState.COMPLETE and not self.artifacts:
             raise ValueError("complete records require at least one published artifact")
-        if self.complete and any(item.state is not ArtifactState.PUBLISHED for item in self.artifacts):
+        if self.state is CompletionState.COMPLETE and any(
+            item.state is not ArtifactState.PUBLISHED for item in self.artifacts
+        ):
             raise ValueError("complete records may contain only published artifacts")
+
+    @property
+    def complete(self) -> bool:
+        return self.state is CompletionState.COMPLETE
