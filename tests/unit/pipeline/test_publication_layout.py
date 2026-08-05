@@ -10,11 +10,14 @@ from datp_core.domain.enums import (
     PopulationId,
     PreprocessingProtocolId,
     SplitProtocolId,
+    TemporalState,
     TrainingModelId,
 )
 from datp_core.domain.values import ModelCoefficientValue, Seed
+from datp_core.pipeline.federated_execution import bounded_evidence_seed_directory
 from datp_core.pipeline.planning import ExperimentCoordinate
 from datp_core.pipeline.publication.layout import evaluation_run_directory, experiment_output_directory
+from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
 
 
 def coordinate() -> ExperimentCoordinate:
@@ -72,3 +75,33 @@ def test_every_non_metric_coordinate_dimension_changes_the_run_identity() -> Non
 
     primary_path = evaluation_run_directory(root, primary)
     assert all(evaluation_run_directory(root, alternative) != primary_path for alternative in alternatives)
+
+
+def test_bounded_evidence_paths_separate_external_and_temporal_claims() -> None:
+    root = Path("outputs")
+    seed = Seed(0)
+    external = ExternalTemporalExecutionIdentity(
+        experiment=ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION,
+        population=PopulationId.EDGE_SENSOR_GROUPS,
+        evidence_role=EvidenceRole.EXTERNAL_VALIDATION,
+        temporal_state=None,
+    )
+    frozen = ExternalTemporalExecutionIdentity(
+        experiment=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
+        population=PopulationId.EDGE_TEMPORAL_GROUPS,
+        evidence_role=EvidenceRole.TEMPORAL_BOUNDARY,
+        temporal_state=TemporalState.FROZEN_FUTURE,
+    )
+    recalibrated = ExternalTemporalExecutionIdentity(
+        experiment=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
+        population=PopulationId.EDGE_TEMPORAL_GROUPS,
+        evidence_role=EvidenceRole.TEMPORAL_BOUNDARY,
+        temporal_state=TemporalState.RECALIBRATED_FUTURE,
+    )
+
+    paths = {
+        bounded_evidence_seed_directory(identity, seed, root)
+        for identity in (external, frozen, recalibrated)
+    }
+    assert len(paths) == 3
+    assert all(path.is_relative_to(root) for path in paths)
