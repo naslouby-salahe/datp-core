@@ -8,7 +8,6 @@ from pathlib import Path
 import numpy as np
 
 from datp_core.analysis.temporal import TemporalDeploymentProvenance
-from datp_core.artifacts.serialization import canonical_checksum, serialize_json_model
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
     AvailabilityStatus,
@@ -22,6 +21,7 @@ from datp_core.domain.enums import (
     ScoreFrameColumn,
 )
 from datp_core.domain.errors import LeakageError, ScientificContractError
+from datp_core.domain.provenance import canonical_checksum
 from datp_core.domain.values import Checksum, MetricValue, RowCount, ThresholdValue
 from datp_core.evaluation.cohorts import EvaluationCohortManifest
 from datp_core.evaluation.communication import CommunicationMessageDiagnostic
@@ -46,6 +46,7 @@ from datp_core.pipeline.construct_thresholds import PooledThresholdResult, thres
 from datp_core.pipeline.execution import PipelineStage
 from datp_core.pipeline.generate_scores import PooledScoreArtifact, load_score_frame, reject_non_finite_scores
 from datp_core.pipeline.publication.codec import ArtifactPublication, FunctionalArtifactCodec, publish_artifact
+from datp_core.pipeline.publication.serialization import serialize_json_model
 from datp_core.populations.models import PopulationOutcomeLabel
 from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
 from datp_core.protocols.inference import ScoreArtifactManifest
@@ -173,11 +174,7 @@ class CentralizedEvaluationDocument(StrictModel):
             score_artifact_checksum=result.score_artifact_checksum,
             threshold_checksum=result.threshold_checksum,
             metrics=tuple(
-                CentralizedMetricDocument(
-                    metric=record.metric,
-                    status=record.status,
-                    value=record.value,
-                )
+                CentralizedMetricDocument(metric=record.metric, status=record.status, value=record.value)
                 for record in result.metrics
             ),
         )
@@ -236,9 +233,7 @@ class EvaluateFederatedDetectorResult:
     complete_digest: Checksum
 
 
-def evaluate_federated_detector(
-    request: EvaluateFederatedDetectorRequest,
-) -> EvaluateFederatedDetectorResult:
+def evaluate_federated_detector(request: EvaluateFederatedDetectorRequest) -> EvaluateFederatedDetectorResult:
     prepared = prepare_federated_evaluation(
         FederatedEvaluationRequest(
             score_manifest=request.score_manifest,
@@ -281,9 +276,7 @@ def evaluate_federated_detector(
     )
 
 
-def evaluate_centralized_detector(
-    request: EvaluateCentralizedDetectorRequest,
-) -> EvaluateCentralizedDetectorResult:
+def evaluate_centralized_detector(request: EvaluateCentralizedDetectorRequest) -> EvaluateCentralizedDetectorResult:
     publication_request = CentralizedEvaluationPublicationRequest(
         coordinate=request.coordinate,
         evaluation_scores=request.evaluation_scores,
@@ -401,9 +394,7 @@ def evaluation_result_checksum(result: CentralizedEvaluationResult) -> Checksum:
     return canonical_checksum(result)
 
 
-def reject_centralized_result_in_confirmatory_threshold_comparison(
-    result: CentralizedEvaluationResult,
-) -> None:
+def reject_centralized_result_in_confirmatory_threshold_comparison(result: CentralizedEvaluationResult) -> None:
     raise LeakageError(
         "centralized reference evaluation cannot enter the confirmatory shared-versus-local threshold comparison",
         subject=result.threshold_method,
@@ -458,17 +449,10 @@ def _validate_evaluation_inputs(
 def _evaluation_arrays(evaluation_scores: PooledScoreArtifact) -> tuple[np.ndarray, np.ndarray]:
     frame = load_score_frame(evaluation_scores)
     labels = np.asarray(frame.get_column(ScoreFrameColumn.OUTCOME_LABEL.value).to_list(), dtype=object)
-    scores = np.asarray(
-        frame.get_column(ScoreFrameColumn.RECONSTRUCTION_ERROR.value).to_list(),
-        dtype=np.float64,
-    )
+    scores = np.asarray(frame.get_column(ScoreFrameColumn.RECONSTRUCTION_ERROR.value).to_list(), dtype=np.float64)
     if scores.shape[0] != labels.shape[0]:
         raise ScientificContractError("evaluation scores and labels must align", subject=ContractSubject.ROWS)
-    reject_non_finite_scores(
-        scores,
-        message="evaluation scores must be finite",
-        subject=ContractSubject.SCORES,
-    )
+    reject_non_finite_scores(scores, message="evaluation scores must be finite", subject=ContractSubject.SCORES)
     return labels, scores
 
 
@@ -604,9 +588,9 @@ def _auroc(labels: np.ndarray, scores: np.ndarray) -> CentralizedMetricRecord:
         return CentralizedMetricRecord(metric=MetricId.AUROC, status=AvailabilityStatus.UNAVAILABLE, value=None)
     ranks = _average_ranks(sorted_scores)
     positive_rank_sum = float(ranks[sorted_labels == 1].sum())
-    auc = (positive_rank_sum - positive_count * (positive_count + ONE_BASED_RANK_OFFSET) / MANN_WHITNEY_PAIR_FACTOR) / (
-        positive_count * negative_count
-    )
+    auc = (
+        positive_rank_sum - positive_count * (positive_count + ONE_BASED_RANK_OFFSET) / MANN_WHITNEY_PAIR_FACTOR
+    ) / (positive_count * negative_count)
     if not isfinite(auc):
         return CentralizedMetricRecord(metric=MetricId.AUROC, status=AvailabilityStatus.UNDEFINED, value=None)
     return CentralizedMetricRecord(
