@@ -14,14 +14,12 @@ from datp_core.domain.enums import (
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import Checksum, MetricValue, RowCount, ScoreValue, StableRowId, ThresholdValue
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
+from datp_core.pipeline.scoring.records import ScoreRecord
 from datp_core.populations.models import ClientIdentity, PopulationOutcomeLabel
-from datp_core.scoring.models import ScoreRecord
 
 
 @dataclass(frozen=True, slots=True)
 class HeldOutBenignScore:
-    """One verified benign evaluation score with immutable score-artifact provenance."""
-
     client: ClientIdentity
     stable_row_id: StableRowId
     score: ScoreValue
@@ -95,8 +93,6 @@ POPULATION_METRIC_IDS: frozenset[MetricId] = frozenset(
 
 @dataclass(frozen=True, slots=True)
 class AvailableMetric:
-    """A metric with exactly one finite value and optional denominator evidence."""
-
     metric: MetricId
     value: MetricValue
     denominator: RowCount | None = None
@@ -109,8 +105,6 @@ class AvailableMetric:
 
 @dataclass(frozen=True, slots=True)
 class UnavailableMetric:
-    """A metric with exactly one closed non-available state and reason."""
-
     metric: MetricId
     status: MetricStatus
     reason: MetricReason

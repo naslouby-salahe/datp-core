@@ -13,15 +13,13 @@ from datp_core.domain.enums import ContractSubject, FederatedThresholdMethod
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import Checksum, Quantile, ThresholdValue, checksum_text
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
+from datp_core.pipeline.scoring.records import ScoreArtifactManifest
 from datp_core.populations.models import ClientIdentity
-from datp_core.scoring.models import ScoreArtifactManifest
 from datp_core.thresholding.identities import ThresholdUnavailableResult
 from datp_core.thresholding.methods.cluster import GroupedThresholdResult
 from datp_core.thresholding.methods.conformal import ConformalThresholdResult
 from datp_core.thresholding.methods.family import FamilyThresholdResult
-from datp_core.thresholding.methods.federated_statistics import (
-    FederatedStatisticsThresholdResult,
-)
+from datp_core.thresholding.methods.federated_statistics import FederatedStatisticsThresholdResult
 from datp_core.thresholding.methods.local import LocalThresholdResult
 from datp_core.thresholding.methods.shared import (
     PooledSharedQuantileResult,
@@ -136,10 +134,7 @@ def write_federated_threshold(
             encoding="utf-8",
         )
     (directory / FederatedThresholdAssetName.COMPLETE).write_text(
-        federated_threshold_publication_checksum(
-            result,
-            request.temporal_provenance,
-        ).value,
+        federated_threshold_publication_checksum(result, request.temporal_provenance).value,
         encoding="utf-8",
     )
     return result
@@ -202,9 +197,7 @@ def federated_threshold_publication_checksum(
     )
 
 
-def _dispatch(
-    request: ThresholdConstructionRequest,
-) -> ThresholdConstructionResult:
+def _dispatch(request: ThresholdConstructionRequest) -> ThresholdConstructionResult:
     from datp_core.thresholding.dispatch import dispatch_federated_threshold
 
     return dispatch_federated_threshold(request)

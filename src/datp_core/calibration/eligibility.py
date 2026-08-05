@@ -12,10 +12,10 @@ from datp_core.calibration.models import (
 from datp_core.domain.enums import ContractSubject, PartitionRole, ScoreFrameColumn
 from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.values import Checksum, RowCount, ScoreValue, StableRowId
+from datp_core.pipeline.scoring.records import ScoreRecord
 from datp_core.populations.integrity import reject_non_benign_labels
 from datp_core.populations.models import ClientIdentity, PopulationOutcomeLabel
 from datp_core.protocols.models import CalibrationEligibilityProtocol
-from datp_core.scoring.models import ScoreRecord
 
 
 def reject_evaluation_partition_in_eligibility(partition_role: PartitionRole) -> None:
@@ -50,7 +50,6 @@ def load_benign_calibration_references(
     *,
     benign_label: PopulationOutcomeLabel = PopulationOutcomeLabel.BENIGN,
 ) -> tuple[CalibrationSampleReference, ...]:
-    """Load one client's calibration score rows as benign-only sample references."""
     reject_evaluation_partition_in_eligibility(record.partition_role)
     frame = pl.read_parquet(record.path)
     labels = tuple(str(value) for value in frame.get_column(ScoreFrameColumn.OUTCOME_LABEL.value).to_list())
@@ -110,7 +109,6 @@ def eligible_clients(decisions: tuple[EligibilityDecision, ...]) -> tuple[Client
 def require_common_eligible_cohort(
     cohorts: tuple[tuple[ClientIdentity, ...], ...],
 ) -> tuple[ClientIdentity, ...]:
-    """Every threshold method compared within one score coordinate must share one eligible cohort."""
     if not cohorts:
         raise ScientificContractError(
             "at least one eligible cohort is required for comparison",
