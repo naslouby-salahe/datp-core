@@ -56,7 +56,6 @@ def test_fedavg_end_to_end_train_select_and_score(tmp_path: Path) -> None:
     )
     assert decision.selected.round_number == CHECKPOINT.maximum_round
 
-    device = resolve_cuda_device()
     scoring_clients = tuple(
         ClientScoringInput(
             client=client_dataset.client,
@@ -68,6 +67,7 @@ def test_fedavg_end_to_end_train_select_and_score(tmp_path: Path) -> None:
     result = generate_federated_scores(
         ScoreGenerationRequest(
             checkpoint=decision.selected,
+            scored_split_protocol=decision.selected.coordinate.split_protocol,
             autoencoder=AUTOENCODER,
             feature_names=FEATURE_NAMES,
             clients=scoring_clients,
@@ -76,7 +76,7 @@ def test_fedavg_end_to_end_train_select_and_score(tmp_path: Path) -> None:
             preprocessing_state_set_checksum=decision.selected.preprocessing_state_set_checksum,
             split_manifest_checksum=decision.selected.split_manifest_checksum,
         ),
-        device,
+        resolve_cuda_device(),
     )
     assert len(result.manifest.calibration_records) == len(request.clients)
     assert len(result.manifest.evaluation_records) == len(request.clients)
