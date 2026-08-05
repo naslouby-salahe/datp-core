@@ -4,17 +4,18 @@ import numpy as np
 import pytest
 from sklearn.decomposition import PCA
 
-from datp_core.artifacts.reload_validation import TransformReloadCheck, reload_and_compare_transform
-from datp_core.artifacts.serialization import (
-    canonical_value,
+from datp_core.domain.enums import TrustedEstimatorClassName
+from datp_core.domain.errors import SerializationSafetyError
+from datp_core.domain.provenance import canonical_value
+from datp_core.domain.values import AbsoluteTolerance, RowCount
+from datp_core.preprocessing.state import (
+    TransformReloadCheck,
     construct_trusted_estimator,
     load_estimator,
+    reload_and_compare_transform,
     serialize_estimator,
     trusted_estimator_type_names,
 )
-from datp_core.domain.enums import TrustedEstimatorClassName
-from datp_core.domain.errors import SerializationSafetyError
-from datp_core.domain.values import AbsoluteTolerance, RowCount
 
 
 def test_skops_round_trip_and_untrusted_rejection(tmp_path: Path) -> None:
