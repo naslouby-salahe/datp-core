@@ -15,7 +15,7 @@ from datp_core.pipeline.confirmatory import (
     run_confirmatory_seed,
 )
 from datp_core.pipeline.ditto_stress import run_ditto_stress_test_seed
-from datp_core.pipeline.external_evidence import run_external_validation_seed
+from datp_core.pipeline.external_evidence import run_ciciot_boundary_seed, run_external_validation_seed
 from datp_core.pipeline.fit_preprocessing import (
     FitCentralizedPopulationPreprocessingRequest,
     FitFederatedPreprocessingRequest,
@@ -160,12 +160,22 @@ def ditto_stress_test_seed(
     )
 
 
-@app.command("external-validation-seed")
-def external_validation_seed(partition_seed: Annotated[int, typer.Option(min=0)]) -> None:
+@app.command("edge-benign-equity-seed")
+def edge_benign_equity_seed(partition_seed: Annotated[int, typer.Option(min=0)]) -> None:
     _require_declared_bounded_evidence_seed(partition_seed)
     result = run_external_validation_seed(Seed(partition_seed))
     typer.echo(
-        f"seed={partition_seed} thresholds="
+        f"seed={partition_seed} population={result.population.value} thresholds="
+        f"{','.join(item.value for item in result.completed_threshold_methods)}"
+    )
+
+
+@app.command("ciciot-file-client-boundary-seed")
+def ciciot_file_client_boundary_seed(partition_seed: Annotated[int, typer.Option(min=0)]) -> None:
+    _require_declared_bounded_evidence_seed(partition_seed)
+    result = run_ciciot_boundary_seed(Seed(partition_seed))
+    typer.echo(
+        f"seed={partition_seed} population={result.population.value} thresholds="
         f"{','.join(item.value for item in result.completed_threshold_methods)}"
     )
 
