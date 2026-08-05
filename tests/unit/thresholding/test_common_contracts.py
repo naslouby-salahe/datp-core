@@ -15,7 +15,7 @@ from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import Checksum, Quantile, Seed, ThresholdValue
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.thresholding.assignments import ThresholdAssignment
-from datp_core.thresholding.common import (
+from datp_core.thresholding.models import (
     FederatedThresholdResult,
     ThresholdAssignmentSet,
     ThresholdConstructionContext,
