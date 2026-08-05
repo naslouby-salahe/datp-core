@@ -61,6 +61,7 @@ from datp_core.protocols.runtime import DATA_ROOT
 from datp_core.protocols.training import (
     BATCH_SIZE,
     CHECKPOINT_PROTOCOL,
+    CICIOT2023_AUTOENCODER,
     EDGE_IIOTSET_NUMERIC_AUTOENCODER,
     LEARNING_RATE,
     NBAIOT_AUTOENCODER,
@@ -103,10 +104,7 @@ def training_autoencoder(dataset: DatasetId) -> AutoencoderProtocol:
         case DatasetId.EDGE_IIOTSET:
             return EDGE_IIOTSET_NUMERIC_AUTOENCODER
         case DatasetId.CICIOT2023:
-            raise ScientificContractError(
-                "no autoencoder architecture is declared for CICIOT2023",
-                subject=dataset,
-            )
+            return CICIOT2023_AUTOENCODER
 
 
 def training_feature_names(dataset: DatasetId) -> FeatureNameSequence:
