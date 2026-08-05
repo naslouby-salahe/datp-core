@@ -110,7 +110,7 @@ def test_alert_burden_requires_traffic_rate_evidence() -> None:
     decision = validate_claim(
         claim_request(
             kind=ClaimKind.OPERATIONAL,
-            evidence_role=EvidenceRole.OPERATIONAL,
+            evidence_role=EvidenceRole.OPERATIONAL_TRANSLATION,
             metric=MetricId.ALERTS_PER_DAY,
             wording="The policy produces fewer alerts per day",
         )
