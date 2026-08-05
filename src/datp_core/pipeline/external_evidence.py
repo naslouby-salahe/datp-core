@@ -6,7 +6,7 @@ from datp_core.domain.enums import ExperimentId, FederatedThresholdMethod
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import Checksum, Seed
 from datp_core.pipeline.campaign_execution import build_campaign, execute_campaign
-from datp_core.pipeline.planning import expand_experiment_plan
+from datp_core.pipeline.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
 from datp_core.pipeline.runner import ExperimentOutputStore, StageRunner
 from datp_core.protocols.experiments import EXPERIMENTS
 from datp_core.protocols.models import ExperimentDeclaration, SeedCohort
@@ -25,6 +25,13 @@ def run_external_validation_seed(partition_seed: Seed) -> ExternalValidationSeed
     plan = expand_experiment_plan(
         declarations=(declaration,),
         seed_cohort=SeedCohort(values=(partition_seed,)),
+        evidence=(
+            PlanningEvidence(
+                experiment=declaration.id,
+                disposition=PlanDisposition.EXECUTABLE,
+                reason="the external-validation entry point supplies the audited Edge benign-equity prerequisites",
+            ),
+        ),
     )
     campaign = build_campaign(plan)
     if not campaign.entries:
