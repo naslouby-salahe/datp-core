@@ -33,7 +33,6 @@ from datp_core.domain.values import (
     checksum_text,
 )
 from datp_core.protocols.models import PopulationDeclaration
-from datp_core.protocols.runtime import DATA_ROOT
 
 
 class PopulationOutcomeLabel(StrEnum):
@@ -99,7 +98,6 @@ MEMBERSHIP_COLUMNS: tuple[PopulationFrameColumn, ...] = (
     PopulationFrameColumn.SOURCE_ROW_INDEX,
 )
 ASSIGNMENT_COLUMNS: tuple[PopulationFrameColumn, ...] = MEMBERSHIP_COLUMNS + (PopulationFrameColumn.PARTITION_ROLE,)
-PARQUET_GLOB = "*.parquet"
 
 
 def membership_column_names() -> tuple[str, ...]:
@@ -113,14 +111,6 @@ def assignment_column_names() -> tuple[str, ...]:
 def select_membership_frame(frame: pl.DataFrame) -> pl.DataFrame:
     """Select the locked membership schema from a Polars DataFrame."""
     return frame.select(membership_column_names())
-
-
-def canonical_data_glob(canonical_root: Path) -> str:
-    return str(Path(canonical_root) / DATA_ROOT / PARQUET_GLOB)
-
-
-def canonical_branch_directory(canonical_root: Path, branch: StrEnum) -> Path:
-    return Path(canonical_root) / DATA_ROOT / branch.value
 
 
 class PopulationFeasibilityStatus(StrEnum):
