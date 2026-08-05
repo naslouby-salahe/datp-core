@@ -1,24 +1,33 @@
-"""Typed experiment manifests binding plans, coordinates, and artifacts."""
+"""Typed experiment manifests binding plans, coordinates, protocols, and artifacts."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
+from datp_core.domain.values import Checksum
 from datp_core.pipeline.planning import ExperimentCoordinate
-from datp_core.pipeline.publication.records import ArtifactRecord
+from datp_core.pipeline.publication.records import ArtifactRecord, ArtifactState
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ExperimentManifest:
     coordinate: ExperimentCoordinate
-    plan_digest: str
-    campaign_digest: str
-    protocol_digest: str
+    plan_digest: Checksum
+    campaign_digest: Checksum
+    protocol_digest: Checksum
     artifacts: tuple[ArtifactRecord, ...]
 
     def __post_init__(self) -> None:
-        if not self.plan_digest or not self.campaign_digest or not self.protocol_digest:
-            raise ValueError("experiment manifests require plan, campaign, and protocol digests")
+        if not isinstance(self.plan_digest, Checksum):
+            object.__setattr__(self, "plan_digest", Checksum(self.plan_digest))
+        if not isinstance(self.campaign_digest, Checksum):
+            object.__setattr__(self, "campaign_digest", Checksum(self.campaign_digest))
+        if not isinstance(self.protocol_digest, Checksum):
+            object.__setattr__(self, "protocol_digest", Checksum(self.protocol_digest))
+        if not self.artifacts:
+            raise ValueError("experiment manifests require an artifact inventory")
         paths = tuple(item.relative_path for item in self.artifacts)
         if len(paths) != len(frozenset(paths)):
             raise ValueError("experiment manifest artifact paths must be unique")
+        if any(item.state not in {ArtifactState.PUBLISHED, ArtifactState.REUSED} for item in self.artifacts):
+            raise ValueError("experiment manifests cannot reference invalid or incomplete artifacts")
