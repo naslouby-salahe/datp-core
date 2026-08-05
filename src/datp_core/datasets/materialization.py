@@ -11,7 +11,6 @@ import polars as pl
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from datp_core.artifacts.completion import complete_digest
 from datp_core.datasets.canonical_cache import (
     CanonicalAsset,
     CanonicalAssetLayout,
@@ -20,6 +19,7 @@ from datp_core.datasets.canonical_cache import (
     SourcePathResolver,
     canonical_asset_path,
     canonical_directory,
+    complete_digest,
     completed_publication_is_reusable,
     publication_artifact_names,
     schema_checksum_document_json,
