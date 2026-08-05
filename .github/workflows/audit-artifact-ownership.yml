@@ -1,0 +1,45 @@
+name: Audit artifact ownership
+
+on:
+  push:
+    branches:
+      - agent/phase-12-16-target-architecture
+    paths:
+      - .github/workflows/audit-artifact-ownership.yml
+
+permissions:
+  contents: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          ref: agent/phase-12-16-target-architecture
+          fetch-depth: 0
+
+      - name: Print exact live references
+        run: |
+          echo '=== SOURCE IMPORTS ==='
+          grep -RIn --include='*.py' 'datp_core\.artifacts' src tests || true
+          echo '=== ARTIFACT PACKAGE FILES ==='
+          find src/datp_core/artifacts -maxdepth 1 -type f -print | sort
+          echo '=== DUPLICATE OWNER SYMBOLS ==='
+          grep -RIn --include='*.py' -E 'canonical_json|complete_digest|scored_partition_roles|ArtifactManifest|ExperimentArtifactStore|validate_.*reload' src/datp_core/artifacts src/datp_core/pipeline/publication src/datp_core/datasets src/datp_core/domain || true
+
+      - name: Remove audit workflow
+        run: |
+          set -euo pipefail
+          branch='agent/phase-12-16-target-architecture'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/audit-artifact-ownership.yml
+          git commit -m 'Remove one-shot artifact ownership audit'
+          for attempt in 1 2 3 4 5 6; do
+            if git push origin "HEAD:$branch"; then
+              exit 0
+            fi
+            git pull --rebase origin "$branch"
+          done
+          exit 1
