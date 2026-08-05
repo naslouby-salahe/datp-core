@@ -143,3 +143,31 @@ def resolve_ditto_protocol(regularization: DittoRegularization) -> DittoProtocol
             subject=TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER,
         )
     return matches[0]
+
+
+def resolve_single_model_federated_training_protocol(
+    *,
+    model: TrainingModelId,
+    coefficient: ModelCoefficientValue | ProximalCoefficient | DittoRegularization | None,
+) -> FedAvgProtocol | FedProxProtocol:
+    """Resolve the only supported single-model federated training protocol for a typed identity."""
+    match model:
+        case TrainingModelId.FEDAVG_AUTOENCODER:
+            if coefficient is not None:
+                raise ScientificContractError(
+                    "FedAvg must not declare a model coefficient",
+                    subject=model,
+                )
+            return FEDAVG_TRAINING_PROTOCOL
+        case TrainingModelId.FEDPROX_AUTOENCODER:
+            if coefficient is None or isinstance(coefficient, DittoRegularization):
+                raise ScientificContractError(
+                    "FedProx requires a declared proximal coefficient",
+                    subject=model,
+                )
+            return resolve_fedprox_protocol(coefficient)
+        case TrainingModelId.DITTO_GLOBAL_AUTOENCODER | TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER:
+            raise ScientificContractError(
+                "Ditto requires its related global and personalized execution route",
+                subject=model,
+            )
