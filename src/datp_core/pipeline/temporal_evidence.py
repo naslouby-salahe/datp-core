@@ -49,6 +49,7 @@ from datp_core.protocols.calibration import CANONICAL_QUANTILE
 from datp_core.protocols.experiments import EXPERIMENTS, ExternalTemporalExecutionIdentity
 from datp_core.protocols.models import ExperimentDeclaration, SeedCohort
 from datp_core.protocols.runtime import OUTPUTS_ROOT
+from datp_core.protocols.seeds import BOUNDED_EVIDENCE_SEED_COHORT
 from datp_core.thresholding.dispatch import ThresholdConstructionRequest
 from datp_core.thresholding.identities import ThresholdUnavailableResult
 
@@ -84,12 +85,6 @@ class TemporalStateResult:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class TemporalFuturePairResult:
-    frozen_future: TemporalStateResult
-    recalibrated_future: TemporalStateResult
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
 class TemporalMethodAnalysisResult:
     method: FederatedThresholdMethod
     recovery: TemporalRecoveryResult
@@ -98,15 +93,48 @@ class TemporalMethodAnalysisResult:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class TemporalSeedResult:
+    partition_seed: Seed
     static_reference: TemporalStateResult
     frozen_future: TemporalStateResult
     recalibrated_future: TemporalStateResult
     analyses: tuple[TemporalMethodAnalysisResult, ...]
 
+    def __post_init__(self) -> None:
+        methods = _common_completed_methods(
+            self.static_reference,
+            self.frozen_future,
+            self.recalibrated_future,
+        )
+        if tuple(item.method for item in self.analyses) != methods:
+            raise ValueError("temporal analyses must follow the completed threshold-method order")
+        if any(item.recovery.seed != self.partition_seed for item in self.analyses):
+            raise ValueError("temporal analysis records must match their partition seed")
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class TemporalCampaignResult:
+    seeds: tuple[TemporalSeedResult, ...]
+
+    def __post_init__(self) -> None:
+        expected = BOUNDED_EVIDENCE_SEED_COHORT.values
+        observed = tuple(result.partition_seed for result in self.seeds)
+        if observed != expected:
+            raise ValueError("temporal campaign must contain the complete declared bounded-evidence seed cohort")
+        if self.seeds:
+            methods = tuple(item.method for item in self.seeds[0].analyses)
+            if any(tuple(item.method for item in result.analyses) != methods for result in self.seeds[1:]):
+                raise ValueError("temporal campaign seeds must complete the same threshold methods")
+
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class TemporalStateExecution:
     result: TemporalStateResult
+
+
+def run_temporal_campaign() -> TemporalCampaignResult:
+    return TemporalCampaignResult(
+        seeds=tuple(run_temporal_seed(seed) for seed in BOUNDED_EVIDENCE_SEED_COHORT.values)
+    )
 
 
 def run_temporal_seed(partition_seed: Seed) -> TemporalSeedResult:
@@ -124,22 +152,11 @@ def run_temporal_seed(partition_seed: Seed) -> TemporalSeedResult:
         for method in methods
     )
     return TemporalSeedResult(
+        partition_seed=partition_seed,
         static_reference=static,
         frozen_future=frozen,
         recalibrated_future=recalibrated,
         analyses=analyses,
-    )
-
-
-def run_temporal_static_reference_seed(partition_seed: Seed) -> TemporalStateResult:
-    return run_temporal_seed(partition_seed).static_reference
-
-
-def run_temporal_future_pair(partition_seed: Seed) -> TemporalFuturePairResult:
-    result = run_temporal_seed(partition_seed)
-    return TemporalFuturePairResult(
-        frozen_future=result.frozen_future,
-        recalibrated_future=result.recalibrated_future,
     )
 
 
