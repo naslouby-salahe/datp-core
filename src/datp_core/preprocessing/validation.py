@@ -7,8 +7,6 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
-from datp_core.artifacts.serialization import canonical_checksum
-from datp_core.artifacts.store import ProcessedPublication, ProcessedPublicationResult, publish_processed
 from datp_core.domain.enums import (
     ContractSubject,
     PartitionOrdering,
@@ -18,12 +16,18 @@ from datp_core.domain.enums import (
     SplitProtocolId,
 )
 from datp_core.domain.errors import LeakageError, ScientificContractError
+from datp_core.domain.provenance import canonical_checksum
 from datp_core.domain.values import (
     Checksum,
     ClientPathToken,
     FeatureNameSequence,
     RowCount,
     checksum_file,
+)
+from datp_core.pipeline.publication.processed import (
+    ProcessedPublication,
+    ProcessedPublicationResult,
+    publish_processed,
 )
 from datp_core.populations.models import (
     OUTCOME_LABEL_COLUMN,
