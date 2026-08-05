@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from tests.unit.centralized_reference.helpers import (
+from tests.unit.learning.centralized.helpers import (
     AUTOENCODER,
     BATCH_SIZE,
     CHECKPOINT,
@@ -15,15 +15,15 @@ from tests.unit.centralized_reference.helpers import (
     training_coordinate,
 )
 
-from datp_core.centralized_reference.checkpointing import retain_centralized_checkpoint_candidates
-from datp_core.centralized_reference.evaluation import evaluate_centralized_reference
-from datp_core.centralized_reference.scoring import CentralizedScoringRequest, score_centralized_reference
-from datp_core.centralized_reference.thresholding import (
+from datp_core.domain.values import Checksum, RowCount, Seed
+from datp_core.learning.centralized.training import CentralizedTrainingRequest, train_centralized_autoencoder
+from datp_core.pipeline.checkpoints.service import retain_centralized_checkpoint_candidates
+from datp_core.pipeline.construct_thresholds import (
     CENTRALIZED_POOLED_QUANTILE_PROTOCOL,
     construct_pooled_benign_quantile,
 )
-from datp_core.centralized_reference.training import CentralizedTrainingRequest, train_centralized_autoencoder
-from datp_core.domain.values import Checksum, RowCount, Seed
+from datp_core.pipeline.evaluate_detector import evaluate_centralized_reference
+from datp_core.pipeline.generate_scores import CentralizedScoringRequest, score_centralized_reference
 from datp_core.populations.models import PopulationOutcomeLabel
 
 
@@ -49,11 +49,11 @@ def test_end_to_end_centralized_pipeline_without_federated_artifacts(tmp_path: P
         )
     )
     training = execution.result
-    candidates = retain_centralized_checkpoint_candidates(execution, AUTOENCODER)
+    checkpoint = retain_centralized_checkpoint_candidates(execution, AUTOENCODER)[0]
     scoring = score_centralized_reference(
         CentralizedScoringRequest(
             coordinate=coordinate,
-            checkpoint=candidates[0],
+            checkpoint=checkpoint,
             autoencoder=AUTOENCODER,
             feature_names=FEATURE_NAMES,
             calibration_features=benign_frame(RowCount(48), seed=Seed(30)),
@@ -74,7 +74,7 @@ def test_end_to_end_centralized_pipeline_without_federated_artifacts(tmp_path: P
         threshold_result=threshold,
     )
     assert training.model_tensor_path.is_file()
-    assert candidates[0].tensor_path.is_file()
+    assert checkpoint.tensor_path.is_file()
     assert scoring.calibration_scores.path.is_file()
     assert scoring.evaluation_scores.path.is_file()
     assert evaluation.evaluation_row_count == 40

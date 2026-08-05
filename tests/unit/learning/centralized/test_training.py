@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 import torch
-from tests.unit.centralized_reference.helpers import (
+from tests.unit.learning.centralized.helpers import (
     AUTOENCODER,
     BATCH_SIZE,
     CHECKPOINT,
@@ -18,7 +18,9 @@ from tests.unit.centralized_reference.helpers import (
     training_coordinate,
 )
 
-from datp_core.centralized_reference.training import (
+from datp_core.domain.errors import LeakageError, ScientificContractError
+from datp_core.domain.values import Checksum, ClientPathToken, OutcomeLabel, OutcomeLabelSequence, RowCount, Seed
+from datp_core.learning.centralized.training import (
     CentralizedTrainingRequest,
     build_centralized_autoencoder,
     load_centralized_model_tensors,
@@ -26,16 +28,13 @@ from datp_core.centralized_reference.training import (
     reject_federated_preprocessing_for_training,
     train_centralized_autoencoder,
 )
-from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.values import Checksum, ClientPathToken, OutcomeLabel, OutcomeLabelSequence, RowCount, Seed
 from datp_core.populations.models import PopulationOutcomeLabel
 from datp_core.preprocessing.models import FederatedFittedPreprocessingState
 
 
 def test_rejects_federated_preprocessing_state(tmp_path: Path) -> None:
-    protocol = feature_protocol()
     state = FederatedFittedPreprocessingState(
-        protocol=protocol,
+        protocol=feature_protocol(),
         client_identity=ClientPathToken("device_a"),
         estimator_path=tmp_path / "state.skops",
         estimator_checksum=Checksum("c" * 64),
@@ -103,5 +102,4 @@ def test_autoencoder_round_trip_shape() -> None:
     require_cuda()
     model = build_centralized_autoencoder(AUTOENCODER).to("cuda")
     features = torch.randn(5, 4, device="cuda")
-    reconstructed = model(features)
-    assert reconstructed.shape == features.shape
+    assert model(features).shape == features.shape

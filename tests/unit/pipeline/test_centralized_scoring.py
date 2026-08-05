@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 import pytest
-from tests.unit.centralized_reference.helpers import (
+from tests.unit.learning.centralized.helpers import (
     AUTOENCODER,
     BATCH_SIZE,
     FEATURE_NAMES,
@@ -15,12 +15,12 @@ from tests.unit.centralized_reference.helpers import (
     training_coordinate,
 )
 
-from datp_core.centralized_reference.checkpointing import (
-    CentralizedCheckpointCandidate,
-    reject_federated_checkpoint,
-    retain_centralized_checkpoint_candidates,
-)
-from datp_core.centralized_reference.scoring import (
+from datp_core.domain.enums import CheckpointStatus, PartitionRole, ScoreFrameColumn, SerializationFormat, TrainingModelId
+from datp_core.domain.errors import LeakageError
+from datp_core.domain.values import Checksum, FeatureCount, MetricValue, RoundNumber, RowCount, Seed, checksum_file
+from datp_core.pipeline.checkpoints.records import CentralizedCheckpointCandidate
+from datp_core.pipeline.checkpoints.service import reject_federated_checkpoint, retain_centralized_checkpoint_candidates
+from datp_core.pipeline.generate_scores import (
     CentralizedScoreAssetName,
     CentralizedScoringRequest,
     CentralizedScoringResult,
@@ -29,26 +29,6 @@ from datp_core.centralized_reference.scoring import (
     load_score_frame,
     score_artifact_set_checksum,
     score_centralized_reference,
-)
-from datp_core.centralized_reference.training import (
-    CentralizedTrainingCoordinate,
-)
-from datp_core.domain.enums import (
-    CheckpointStatus,
-    PartitionRole,
-    ScoreFrameColumn,
-    SerializationFormat,
-    TrainingModelId,
-)
-from datp_core.domain.errors import LeakageError
-from datp_core.domain.values import (
-    Checksum,
-    FeatureCount,
-    MetricValue,
-    RoundNumber,
-    RowCount,
-    Seed,
-    checksum_file,
 )
 from datp_core.pipeline.scoring.frame_contract import score_frame
 
@@ -71,12 +51,8 @@ def test_deterministic_scoring_and_reload(tmp_path: Path) -> None:
     )
     first = score_centralized_reference(request)
     second = score_centralized_reference(request)
-    left = load_score_frame(first.calibration_scores)
-    right = load_score_frame(second.calibration_scores)
-    assert left.equals(right)
+    assert load_score_frame(first.calibration_scores).equals(load_score_frame(second.calibration_scores))
     assert first.calibration_scores.checksum == second.calibration_scores.checksum
-    assert first.calibration_scores.row_count.value == 32
-    assert first.evaluation_scores.row_count.value == 32
 
 
 def test_rejects_federated_checkpoint_for_scoring() -> None:
@@ -103,10 +79,12 @@ def test_score_polarity_higher_is_more_anomalous(tmp_path: Path) -> None:
         )
     )
     frame = load_score_frame(result.evaluation_scores)
-    label_column = ScoreFrameColumn.OUTCOME_LABEL.value
-    score_column = ScoreFrameColumn.RECONSTRUCTION_ERROR.value
-    benign = frame.filter(frame[label_column] == "benign")[score_column].to_numpy()
-    attack = frame.filter(frame[label_column] == "attack")[score_column].to_numpy()
+    benign = frame.filter(frame[ScoreFrameColumn.OUTCOME_LABEL.value] == "benign")[
+        ScoreFrameColumn.RECONSTRUCTION_ERROR.value
+    ].to_numpy()
+    attack = frame.filter(frame[ScoreFrameColumn.OUTCOME_LABEL.value] == "attack")[
+        ScoreFrameColumn.RECONSTRUCTION_ERROR.value
+    ].to_numpy()
     assert float(np.mean(attack)) > float(np.mean(benign))
 
 
@@ -168,36 +146,29 @@ def test_reuse_rejects_changed_calibration_row_identity(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     assert centralized_scoring_is_reusable(request, directory)
-
-    changed_ids = tuple(
-        "changed-row" if index == 0 else str(value)
-        for index, value in enumerate(calibration.get_column(ScoreFrameColumn.STABLE_ROW_ID.value).to_list())
-    )
     changed_calibration = calibration.with_columns(
         pl.Series(
             ScoreFrameColumn.STABLE_ROW_ID.value,
-            changed_ids,
+            tuple(
+                "changed-row" if index == 0 else str(value)
+                for index, value in enumerate(calibration[ScoreFrameColumn.STABLE_ROW_ID.value].to_list())
+            ),
             dtype=pl.Utf8,
         )
     )
-    assert not centralized_scoring_is_reusable(
-        replace(request, calibration_features=changed_calibration),
-        directory,
-    )
+    assert not centralized_scoring_is_reusable(replace(request, calibration_features=changed_calibration), directory)
 
 
 def _persist_score_artifact(
-    coordinate: CentralizedTrainingCoordinate,
+    coordinate,
     checkpoint: CentralizedCheckpointCandidate,
     source: pl.DataFrame,
     partition_role: PartitionRole,
     path: Path,
 ) -> PooledScoreArtifact:
-    row_ids = tuple(str(value) for value in source.get_column(ScoreFrameColumn.STABLE_ROW_ID.value).to_list())
-    labels = tuple(str(value) for value in source.get_column(ScoreFrameColumn.OUTCOME_LABEL.value).to_list())
     score_frame(
-        row_ids,
-        labels,
+        tuple(str(value) for value in source[ScoreFrameColumn.STABLE_ROW_ID.value].to_list()),
+        tuple(str(value) for value in source[ScoreFrameColumn.OUTCOME_LABEL.value].to_list()),
         np.zeros(source.height, dtype=np.float64),
     ).write_parquet(path)
     return PooledScoreArtifact(

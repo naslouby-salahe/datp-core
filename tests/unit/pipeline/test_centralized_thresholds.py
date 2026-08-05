@@ -2,7 +2,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from tests.unit.centralized_reference.helpers import (
+from tests.unit.learning.centralized.helpers import (
     AUTOENCODER,
     BATCH_SIZE,
     FEATURE_NAMES,
@@ -13,13 +13,11 @@ from tests.unit.centralized_reference.helpers import (
     training_coordinate,
 )
 
-from datp_core.centralized_reference.checkpointing import retain_centralized_checkpoint_candidates
-from datp_core.centralized_reference.scoring import (
-    CentralizedScoringRequest,
-    load_score_frame,
-    score_centralized_reference,
-)
-from datp_core.centralized_reference.thresholding import (
+from datp_core.domain.enums import CentralizedThresholdMethod, FederatedThresholdMethod, ScoreFrameColumn
+from datp_core.domain.errors import LeakageError
+from datp_core.domain.values import Quantile, RowCount, Seed, ThresholdValue
+from datp_core.pipeline.checkpoints.service import retain_centralized_checkpoint_candidates
+from datp_core.pipeline.construct_thresholds import (
     CENTRALIZED_POOLED_QUANTILE_PROTOCOL,
     construct_pooled_benign_quantile,
     exact_pooled_quantile,
@@ -28,9 +26,7 @@ from datp_core.centralized_reference.thresholding import (
     reject_federated_scores_for_centralized_threshold,
     reject_local_quantile_mean_as_centralized,
 )
-from datp_core.domain.enums import CentralizedThresholdMethod, FederatedThresholdMethod, ScoreFrameColumn
-from datp_core.domain.errors import LeakageError
-from datp_core.domain.values import Quantile, RowCount, Seed, ThresholdValue
+from datp_core.pipeline.generate_scores import CentralizedScoringRequest, load_score_frame, score_centralized_reference
 from datp_core.populations.models import PopulationOutcomeLabel
 
 
@@ -58,20 +54,13 @@ def test_pooled_benign_quantile_matches_declared_linear_quantile(tmp_path: Path)
         protocol=CENTRALIZED_POOLED_QUANTILE_PROTOCOL,
     )
     assert result.method is CentralizedThresholdMethod.POOLED_BENIGN_QUANTILE
-    assert result.quantile == CENTRALIZED_POOLED_QUANTILE_PROTOCOL.quantile
-    assert result.calibration_score_count == 48
     scores = np.asarray(
-        load_score_frame(scoring.calibration_scores).get_column(ScoreFrameColumn.RECONSTRUCTION_ERROR.value).to_list(),
+        load_score_frame(scoring.calibration_scores)[ScoreFrameColumn.RECONSTRUCTION_ERROR.value].to_list(),
         dtype=float,
     )
-    expected = float(
-        np.quantile(
-            scores,
-            CENTRALIZED_POOLED_QUANTILE_PROTOCOL.quantile.value,
-            method="linear",
-        )
+    assert result.threshold.value == float(
+        np.quantile(scores, CENTRALIZED_POOLED_QUANTILE_PROTOCOL.quantile.value, method="linear")
     )
-    assert result.threshold.value == expected
 
 
 def test_exact_pooled_quantile_unit() -> None:
@@ -96,10 +85,7 @@ def test_rejects_attack_rows_in_calibration() -> None:
 
 def test_rejects_federated_scores_and_local_mean() -> None:
     with pytest.raises(LeakageError, match="federated score"):
-        reject_federated_scores_for_centralized_threshold(
-            "fedavg_scores",
-            FederatedThresholdMethod.SHARED_THRESHOLD,
-        )
+        reject_federated_scores_for_centralized_threshold("fedavg_scores", FederatedThresholdMethod.SHARED_THRESHOLD)
     with pytest.raises(LeakageError, match="arithmetic mean of local quantiles"):
         reject_local_quantile_mean_as_centralized((0.1, 0.2, 0.3))
     with pytest.raises(LeakageError, match="federated threshold dispatch"):

@@ -1,4 +1,4 @@
-"""Shared miniature fixtures for centralized-reference unit tests."""
+"""Shared miniature fixtures for centralized-learning and pipeline tests."""
 
 from pathlib import Path
 
@@ -6,12 +6,6 @@ import numpy as np
 import polars as pl
 import torch
 
-from datp_core.centralized_reference.training import (
-    CentralizedTrainingCoordinate,
-    CentralizedTrainingExecution,
-    CentralizedTrainingRequest,
-    train_centralized_autoencoder,
-)
 from datp_core.domain.enums import (
     CentralizedModelId,
     OptimizerId,
@@ -36,11 +30,14 @@ from datp_core.domain.values import (
     Seed,
     WeightDecay,
 )
-from datp_core.populations.models import OUTCOME_LABEL_COLUMN, STABLE_ROW_ID_COLUMN, PopulationOutcomeLabel
-from datp_core.preprocessing.models import (
-    CentralizedFittedPreprocessingState,
-    PreprocessingProtocol,
+from datp_core.learning.centralized.training import (
+    CentralizedTrainingCoordinate,
+    CentralizedTrainingExecution,
+    CentralizedTrainingRequest,
+    train_centralized_autoencoder,
 )
+from datp_core.populations.models import OUTCOME_LABEL_COLUMN, STABLE_ROW_ID_COLUMN, PopulationOutcomeLabel
+from datp_core.preprocessing.models import CentralizedFittedPreprocessingState, PreprocessingProtocol
 from datp_core.protocols.models import (
     AutoencoderProtocol,
     CentralizedTrainingProtocol,

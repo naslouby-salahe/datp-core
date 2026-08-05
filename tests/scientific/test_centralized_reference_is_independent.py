@@ -2,12 +2,6 @@ from pathlib import Path
 
 import pytest
 
-from datp_core.centralized_reference.checkpointing import reject_federated_checkpoint
-from datp_core.centralized_reference.thresholding import (
-    reject_federated_scores_for_centralized_threshold,
-    reject_local_quantile_mean_as_centralized,
-)
-from datp_core.centralized_reference.training import reject_federated_preprocessing_for_training
 from datp_core.domain.enums import (
     FederatedThresholdMethod,
     PreprocessingFitScope,
@@ -25,11 +19,14 @@ from datp_core.domain.values import (
     FeatureNameSequence,
     RowCount,
 )
-from datp_core.preprocessing.centralized import reject_federated_state_for_pooled
-from datp_core.preprocessing.models import (
-    FederatedFittedPreprocessingState,
-    PreprocessingProtocol,
+from datp_core.learning.centralized.training import reject_federated_preprocessing_for_training
+from datp_core.pipeline.checkpoints.service import reject_federated_checkpoint
+from datp_core.pipeline.construct_thresholds import (
+    reject_federated_scores_for_centralized_threshold,
+    reject_local_quantile_mean_as_centralized,
 )
+from datp_core.preprocessing.centralized import reject_federated_state_for_pooled
+from datp_core.preprocessing.models import FederatedFittedPreprocessingState, PreprocessingProtocol
 
 
 def _federated_state(path: Path) -> FederatedFittedPreprocessingState:
@@ -60,9 +57,6 @@ def test_centralized_pipeline_rejects_all_federated_artifacts(tmp_path: Path) ->
     with pytest.raises(LeakageError):
         reject_federated_checkpoint(TrainingModelId.FEDAVG_AUTOENCODER)
     with pytest.raises(LeakageError):
-        reject_federated_scores_for_centralized_threshold(
-            "scores",
-            FederatedThresholdMethod.LOCAL_THRESHOLD,
-        )
+        reject_federated_scores_for_centralized_threshold("scores", FederatedThresholdMethod.LOCAL_THRESHOLD)
     with pytest.raises(LeakageError):
         reject_local_quantile_mean_as_centralized((1.0, 2.0))
