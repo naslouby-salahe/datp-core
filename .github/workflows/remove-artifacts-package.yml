@@ -48,6 +48,23 @@ jobs:
           path.write_text(text.replace(old, new), encoding='utf-8')
           PY
           python /tmp/remove_artifacts_package.py
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/datp_core/preprocessing/publication.py')
+          text = path.read_text(encoding='utf-8')
+          old = (
+              '        if not publication.overwrite and _is_reusable(target, publication):\n'
+              '        return ProcessedPublicationResult(\n'
+          )
+          new = (
+              '        if not publication.overwrite and _is_reusable(target, publication):\n'
+              '            return ProcessedPublicationResult(\n'
+          )
+          if text.count(old) != 1:
+              raise SystemExit('generated reuse-return indentation did not match exactly once')
+          path.write_text(text.replace(old, new), encoding='utf-8')
+          PY
 
       - run: uv sync --all-groups --all-extras --frozen
       - run: uv run ruff format src tests noxfile.py
