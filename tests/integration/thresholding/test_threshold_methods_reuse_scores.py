@@ -22,18 +22,15 @@ from datp_core.domain.enums import (
     PublicationStatus,
 )
 from datp_core.domain.values import CalibrationSize, ClientCount, Quantile, checksum_file
-from datp_core.orchestration.commands.thresholding import ConstructFederatedThresholdsRequest
-from datp_core.orchestration.stages.construct_federated_thresholds import (
-    construct_federated_thresholds_stage,
+from datp_core.pipeline.construct_thresholds import (
+    ConstructFederatedThresholdsRequest,
+    construct_federated_thresholds,
 )
 from datp_core.populations.models import PopulationCapabilities
 from datp_core.protocols.models import CalibrationEligibilityProtocol
 from datp_core.scoring.models import FixedScoreInvariant, ScoreArtifactManifest
 from datp_core.thresholding.common import ThresholdConstructionResult
-from datp_core.thresholding.dispatch import (
-    ThresholdConstructionRequest,
-    dispatch_federated_threshold,
-)
+from datp_core.thresholding.dispatch import ThresholdConstructionRequest, dispatch_federated_threshold
 from datp_core.thresholding.methods.conformal import ConformalThresholdResult
 from datp_core.thresholding.methods.local import LocalThresholdResult
 from datp_core.thresholding.methods.shared import (
@@ -97,9 +94,7 @@ def _capabilities() -> PopulationCapabilities:
     )
 
 
-def test_every_threshold_method_reads_the_same_frozen_score_artifact_unchanged(
-    tmp_path: Path,
-) -> None:
+def test_every_threshold_method_reads_the_same_frozen_score_artifact_unchanged(tmp_path: Path) -> None:
     manifest = _manifest(tmp_path)
     invariant = FixedScoreInvariant.from_manifest(manifest)
     checksums_before = tuple(
@@ -132,48 +127,30 @@ def test_every_threshold_method_reads_the_same_frozen_score_artifact_unchanged(
         (record.scored_client.client_id, checksum_file(record.path)) for record in manifest.calibration_records
     )
     assert checksums_before == checksums_after
-
     shared = _result(results, FederatedThresholdMethod.SHARED_THRESHOLD)
     assert isinstance(shared, SharedThresholdResult)
     assert all(
         item.diagnostic.score_set_checksum == invariant.calibration_score_set_checksum
         for item in shared.contributing_local_quantiles
     )
-    assert isinstance(
-        _result(results, FederatedThresholdMethod.LOCAL_THRESHOLD),
-        LocalThresholdResult,
-    )
-    pooled = _result(
-        results,
-        FederatedThresholdMethod.POOLED_SHARED_QUANTILE,
-    )
+    assert isinstance(_result(results, FederatedThresholdMethod.LOCAL_THRESHOLD), LocalThresholdResult)
+    pooled = _result(results, FederatedThresholdMethod.POOLED_SHARED_QUANTILE)
     assert isinstance(pooled, PooledSharedQuantileResult)
     assert pooled.diagnostic.score_set_checksum == invariant.calibration_score_set_checksum
     assert isinstance(
-        _result(
-            results,
-            FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD,
-        ),
+        _result(results, FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD),
         SampleWeightedSharedThresholdResult,
     )
-    assert isinstance(
-        _result(
-            results,
-            FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD,
-        ),
-        ConformalThresholdResult,
-    )
+    assert isinstance(_result(results, FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD), ConformalThresholdResult)
     assert shared.shared_threshold.value != pooled.shared_threshold.value
 
 
-def test_construct_federated_thresholds_stage_reuses_a_completed_artifact_on_second_execution(
-    tmp_path: Path,
-) -> None:
+def test_construct_federated_thresholds_reuses_completed_artifact(tmp_path: Path) -> None:
     manifest = _manifest(tmp_path)
     invariant = FixedScoreInvariant.from_manifest(manifest)
     record = manifest.calibration_records[0]
     client_scores = _eligible_client_scores(record, manifest, invariant)
-    stage_request = ConstructFederatedThresholdsRequest(
+    request = ConstructFederatedThresholdsRequest(
         request=ThresholdConstructionRequest(
             method=FederatedThresholdMethod.SHARED_THRESHOLD,
             coordinate=manifest.coordinate,
@@ -185,8 +162,8 @@ def test_construct_federated_thresholds_stage_reuses_a_completed_artifact_on_sec
         output_directory=tmp_path / "threshold_output",
         overwrite=False,
     )
-    first = construct_federated_thresholds_stage(stage_request)
-    second = construct_federated_thresholds_stage(stage_request)
+    first = construct_federated_thresholds(request)
+    second = construct_federated_thresholds(request)
     assert first.publication_status is PublicationStatus.PUBLISHED
     assert second.publication_status is PublicationStatus.REUSED
     assert first.complete_digest == second.complete_digest
@@ -194,11 +171,7 @@ def test_construct_federated_thresholds_stage_reuses_a_completed_artifact_on_sec
 
 def _eligible_client_scores(record, manifest, invariant):
     references = load_benign_calibration_references(record)
-    support = calibration_support(
-        record,
-        references,
-        invariant.calibration_score_set_checksum,
-    )
+    support = calibration_support(record, references, invariant.calibration_score_set_checksum)
     assert decide_eligibility(support, PROTOCOL).status is EligibilityStatus.ELIGIBLE
     return calibration_scores_from_references(
         record.scored_client,

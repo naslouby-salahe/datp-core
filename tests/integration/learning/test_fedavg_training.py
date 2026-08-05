@@ -18,8 +18,7 @@ from datp_core.domain.values import Checksum, RowCount, Seed
 from datp_core.learning.federated.checkpoints.selection import select_checkpoint
 from datp_core.learning.federated.fedavg import train_fedavg
 from datp_core.learning.federated.training import FederatedTrainingRequest
-from datp_core.orchestration.commands.training import TrainFederatedRequest
-from datp_core.orchestration.stages.train_federated import train_federated_stage
+from datp_core.pipeline.train_detector import TrainFederatedDetectorRequest, train_federated_detector
 from datp_core.protocols.training import CHECKPOINT_SELECTION_RULE
 from datp_core.runtime.compute import resolve_cuda_device
 from datp_core.scoring.generation import ClientScoringInput, ScoreGenerationRequest, generate_federated_scores
@@ -85,10 +84,10 @@ def test_fedavg_end_to_end_train_select_and_score(tmp_path: Path) -> None:
 
 
 def test_fedavg_reruns_identical_coordinate_and_reuses_published_training(tmp_path: Path) -> None:
-    request = TrainFederatedRequest(request=_training_request(tmp_path), overwrite=False)
+    request = TrainFederatedDetectorRequest(request=_training_request(tmp_path), overwrite=False)
 
-    first = train_federated_stage(request)
-    second = train_federated_stage(request)
+    first = train_federated_detector(request)
+    second = train_federated_detector(request)
 
     assert first.publication_status is PublicationStatus.PUBLISHED
     assert second.publication_status is PublicationStatus.REUSED
