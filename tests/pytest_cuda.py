@@ -12,6 +12,7 @@ def _tests(module: str, *names: str) -> frozenset[str]:
 
 _CUDA_ONLY_MODULES = frozenset(
     {
+        "tests/e2e/test_centralized_reference_pipeline.py",
         "tests/integration/pipeline/test_centralized_reference.py",
         "tests/integration/learning/test_ditto_training.py",
         "tests/integration/learning/test_fedavg_training.py",
