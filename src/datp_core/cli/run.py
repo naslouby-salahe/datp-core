@@ -23,10 +23,7 @@ from datp_core.pipeline.fit_preprocessing import (
     fit_federated_preprocessing,
 )
 from datp_core.pipeline.materialize_dataset import MaterializeDatasetRequest, materialize_dataset
-from datp_core.pipeline.temporal_evidence import (
-    run_temporal_future_pair,
-    run_temporal_static_reference_seed,
-)
+from datp_core.pipeline.temporal_evidence import run_temporal_campaign, run_temporal_seed
 from datp_core.populations.models import ControlledPartitionCondition, dirichlet_condition, iid_condition
 from datp_core.protocols.populations import DIRICHLET_CONCENTRATIONS
 from datp_core.protocols.runtime import DATA_ROOT
@@ -180,23 +177,28 @@ def ciciot_file_client_boundary_seed(partition_seed: Annotated[int, typer.Option
     )
 
 
-@app.command("temporal-static-reference-seed")
-def temporal_static_reference_seed(partition_seed: Annotated[int, typer.Option(min=0)]) -> None:
+@app.command("temporal-evidence-seed")
+def temporal_evidence_seed(partition_seed: Annotated[int, typer.Option(min=0)]) -> None:
     _require_declared_bounded_evidence_seed(partition_seed)
-    result = run_temporal_static_reference_seed(Seed(partition_seed))
+    result = run_temporal_seed(Seed(partition_seed))
+    for analysis in result.analyses:
+        recovery_ratio = analysis.recovery.recovery_ratio
+        ratio = "undefined" if recovery_ratio is None else str(recovery_ratio.value)
+        typer.echo(
+            f"seed={partition_seed} method={analysis.method.value} "
+            f"drift_excess={analysis.recovery.drift_excess.value} "
+            f"recovered_amount={analysis.recovery.recovered_amount.value} "
+            f"recovery_ratio={ratio}"
+        )
+
+
+@app.command("temporal-evidence-campaign")
+def temporal_evidence_campaign() -> None:
+    result = run_temporal_campaign()
+    methods = tuple(item.method for item in result.seeds[0].analyses) if result.seeds else ()
     typer.echo(
-        f"seed={partition_seed} temporal_state={result.state.value} "
-        f"thresholds={','.join(item.value for item in result.completed_threshold_methods)}"
+        f"seeds={len(result.seeds)} methods={','.join(method.value for method in methods)}"
     )
-
-
-@app.command("temporal-future-pair-seed")
-def temporal_future_pair_seed(partition_seed: Annotated[int, typer.Option(min=0)]) -> None:
-    _require_declared_bounded_evidence_seed(partition_seed)
-    result = run_temporal_future_pair(Seed(partition_seed))
-    for state_result in (result.frozen_future, result.recalibrated_future):
-        thresholds = ",".join(item.value for item in state_result.completed_threshold_methods)
-        typer.echo(f"seed={partition_seed} temporal_state={state_result.state.value} thresholds={thresholds}")
 
 
 def _require_confirmatory_seed(training_seed: int) -> None:
