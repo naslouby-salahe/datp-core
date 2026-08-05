@@ -1,6 +1,6 @@
 """Population declarations owned by the scientific protocol layer."""
 
-from datp_core.domain.enums import DatasetId, PopulationId, PopulationIdentityKind
+from datp_core.domain.enums import DatasetId, PopulationId, PopulationIdentityKind, SplitProtocolId
 from datp_core.domain.values import ClientCount, DirichletConcentration
 
 from .models import PopulationDeclaration
@@ -51,3 +51,18 @@ POPULATIONS = (
     EDGE_SENSOR_GROUPS,
     EDGE_TEMPORAL_GROUPS,
 )
+
+
+def split_protocol_for_population(population: PopulationId) -> SplitProtocolId:
+    """Resolve the single declared split protocol for one population identity."""
+    match population:
+        case PopulationId.EDGE_TEMPORAL_GROUPS:
+            return SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE
+        case PopulationId.EDGE_SENSOR_GROUPS:
+            return SplitProtocolId.RANDOM_FRACTIONAL_STATIC_REFERENCE
+        case (
+            PopulationId.NBAIOT_NATURAL_DEVICES
+            | PopulationId.NBAIOT_DIRICHLET_CLIENTS
+            | PopulationId.CICIOT_FILE_CLIENTS
+        ):
+            return SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS
