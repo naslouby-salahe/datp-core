@@ -30,13 +30,15 @@ from datp_core.pipeline.temporal_evidence import (
 from datp_core.populations.models import ControlledPartitionCondition, dirichlet_condition, iid_condition
 from datp_core.protocols.populations import DIRICHLET_CONCENTRATIONS
 from datp_core.protocols.runtime import DATA_ROOT
-from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT
+from datp_core.protocols.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_SEED_COHORT
 from datp_core.protocols.training import DITTO_TRAINING_PROTOCOLS
 
 app = typer.Typer(no_args_is_help=True)
 _DECLARED_DIRICHLET_VALUES = frozenset(item.value for item in DIRICHLET_CONCENTRATIONS)
 _DECLARED_CONFIRMATORY_SEEDS = frozenset(item.value for item in CONFIRMATORY_SEED_COHORT.values)
-_DECLARED_BOUNDED_EVIDENCE_PARTITION_SEEDS = frozenset({0})
+_DECLARED_BOUNDED_EVIDENCE_PARTITION_SEEDS = frozenset(
+    item.value for item in BOUNDED_EVIDENCE_SEED_COHORT.values
+)
 _FEDERATED_PREPROCESSING_IDENTITIES = frozenset(
     (
         PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
