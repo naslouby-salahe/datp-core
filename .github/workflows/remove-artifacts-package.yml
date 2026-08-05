@@ -45,6 +45,24 @@ jobs:
           )
           if removed != 1:
               raise SystemExit(f'generated publication block removal count was {removed}')
+
+          validation_call = '''
+          replace(
+              'src/datp_core/preprocessing/validation.py',
+              'from datp_core.pipeline.publication.processed import (\\n    ProcessedPublication,\\n    ProcessedPublicationResult,\\n    publish_processed,\\n)\\n',
+              'from datp_core.preprocessing.publication import (\\n    ProcessedPublication,\\n    ProcessedPublicationResult,\\n    publish_processed,\\n)\\n',
+          )
+          '''
+          text, validation_rewrites = re.subn(
+              r"\nreplace\(\n    'src/datp_core/preprocessing/validation\.py',\n.*?\n\)\n",
+              "\n" + validation_call.strip() + "\n",
+              text,
+              count=1,
+              flags=re.S,
+          )
+          if validation_rewrites != 1:
+              raise SystemExit(f'validation import rewrite count was {validation_rewrites}')
+
           old = "if 'datp_core.artifacts' in path.read_text(encoding='utf-8'):\n"
           new = (
               "if (\n"
