@@ -1,11 +1,12 @@
-"""Deterministic output layout derived only from scientific coordinates."""
+"""Deterministic output layouts derived only from scientific coordinates."""
 
 from pathlib import Path
 
 from datp_core.pipeline.planning import ExperimentCoordinate
 
 
-def experiment_output_directory(root: Path, coordinate: ExperimentCoordinate) -> Path:
+def evaluation_run_directory(root: Path, coordinate: ExperimentCoordinate) -> Path:
+    """Metric-independent detector, threshold, and evaluation publication root."""
     temporal = coordinate.temporal_state.value if coordinate.temporal_state is not None else "static"
     coefficient = f"{coordinate.model_coefficient.value}" if coordinate.model_coefficient is not None else "unweighted"
     return (
@@ -17,9 +18,13 @@ def experiment_output_directory(root: Path, coordinate: ExperimentCoordinate) ->
         / coordinate.preprocessing_protocol.value
         / coefficient
         / coordinate.threshold_method.value
-        / coordinate.metric.value
         / temporal
     )
+
+
+def experiment_output_directory(root: Path, coordinate: ExperimentCoordinate) -> Path:
+    """Metric-specific analysis and completion root."""
+    return evaluation_run_directory(root, coordinate) / "metrics" / coordinate.metric.value
 
 
 def artifact_path(root: Path, coordinate: ExperimentCoordinate, filename: str) -> Path:
