@@ -25,7 +25,7 @@ from datp_core.pipeline.runner import EvaluationRunAssetDirectory, ExperimentOut
 from datp_core.protocols.experiments import EXPERIMENTS
 from datp_core.protocols.models import ExperimentDeclaration, SeedCohort
 from datp_core.protocols.runtime import OUTPUTS_ROOT
-from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT
+from datp_core.protocols.seeds import CONFIRMATORY_ANALYSIS_SEED, CONFIRMATORY_SEED_COHORT
 from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL
 
 
@@ -98,7 +98,7 @@ def analyze_confirmatory_campaign() -> Path:
         AnalyzeConfirmatoryEvidenceRequest(
             contrasts=tuple(_confirmatory_contrast(seed) for seed in CONFIRMATORY_SEED_COHORT.values),
             inference_protocol=CONFIRMATORY_INFERENCE_PROTOCOL,
-            analysis_seed=Seed(31),
+            analysis_seed=CONFIRMATORY_ANALYSIS_SEED,
             output_directory=output,
             overwrite=False,
         )
