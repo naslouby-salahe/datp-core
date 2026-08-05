@@ -27,9 +27,11 @@ from datp_core.pipeline.materialize_dataset import MaterializeDatasetRequest, ma
 from datp_core.populations.models import ControlledPartitionCondition, dirichlet_condition, iid_condition
 from datp_core.protocols.populations import DIRICHLET_CONCENTRATIONS
 from datp_core.protocols.runtime import DATA_ROOT
+from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT
 
 app = typer.Typer(no_args_is_help=True)
 _DECLARED_DIRICHLET_VALUES = frozenset(item.value for item in DIRICHLET_CONCENTRATIONS)
+_DECLARED_CONFIRMATORY_SEEDS = frozenset(item.value for item in CONFIRMATORY_SEED_COHORT.values)
 _FEDERATED_PREPROCESSING_IDENTITIES = frozenset(
     (
         PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
@@ -102,6 +104,9 @@ def preprocess_centralized(
 
 @app.command("confirmatory-seed")
 def confirmatory_seed(training_seed: int = typer.Option(..., min=0)) -> None:
+    if training_seed not in _DECLARED_CONFIRMATORY_SEEDS:
+        allowed = ", ".join(str(value) for value in sorted(_DECLARED_CONFIRMATORY_SEEDS))
+        raise typer.BadParameter(f"training-seed must be one of the declared confirmatory seeds: {allowed}")
     completed = run_confirmatory_seed(Seed(training_seed))
     typer.echo(f"seed={training_seed} thresholds={','.join(item.value for item in completed)}")
 
