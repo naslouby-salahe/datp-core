@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 
 import polars as pl
@@ -52,7 +53,11 @@ from datp_core.pipeline.fit_preprocessing import (
     fit_federated_preprocessing,
 )
 from datp_core.pipeline.generate_scores import GenerateFederatedScoresRequest, generate_federated_scores
-from datp_core.pipeline.scoring.service import ClientScoringInput, FederatedScoreArtifactManifest
+from datp_core.pipeline.scoring.service import (
+    ClientScoringInput,
+    FederatedScoreArtifactManifest,
+    FederatedScoreRecord,
+)
 from datp_core.pipeline.select_checkpoint import SelectFederatedCheckpointRequest, select_federated_primary_checkpoint
 from datp_core.pipeline.train_detector import TrainDittoDetectorRequest, TrainDittoDetectorResult, train_ditto_detector
 from datp_core.populations.capabilities import population_capabilities
@@ -73,6 +78,12 @@ from datp_core.thresholding.dispatch import ThresholdConstructionRequest
 from datp_core.thresholding.methods.local import LocalThresholdResult
 from datp_core.thresholding.methods.shared import SharedThresholdResult
 from datp_core.thresholding.quantiles import ClientBenignCalibrationScores
+
+
+class DittoArtifactBranch(StrEnum):
+    GLOBAL_MODEL = "global_model"
+    PERSONALIZED_MODELS = "personalized_models"
+    THRESHOLDS = "thresholds"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -106,17 +117,18 @@ def run_ditto_stress_test_seed(
 ) -> DittoStressTestResult:
     population = PopulationId.NBAIOT_NATURAL_DEVICES
     split_protocol = SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS
+    preprocessing_identity = PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD
     context = _population_context(
         training_seed=training_seed,
         population=population,
         split_protocol=split_protocol,
-        preprocessing_identity=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
+        preprocessing_identity=preprocessing_identity,
     )
     global_coordinate = FederatedTrainingCoordinate(
         population=population,
         training_seed=training_seed,
         split_protocol=split_protocol,
-        preprocessing_identity=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
+        preprocessing_identity=preprocessing_identity,
         model=TrainingModelId.DITTO_GLOBAL_AUTOENCODER,
         model_coefficient=None,
     )
@@ -124,7 +136,7 @@ def run_ditto_stress_test_seed(
         population=population,
         training_seed=training_seed,
         split_protocol=split_protocol,
-        preprocessing_identity=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
+        preprocessing_identity=preprocessing_identity,
         model=TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER,
         model_coefficient=regularization,
     )
@@ -143,8 +155,16 @@ def run_ditto_stress_test_seed(
                 batch_size=BATCH_SIZE,
                 learning_rate=LEARNING_RATE,
                 split_manifest_checksum=context.split_manifest_checksum,
-                global_output_directory=ditto_directory(training_seed, regularization, "global"),
-                personalized_output_directory=ditto_directory(training_seed, regularization, "personalized"),
+                global_output_directory=ditto_directory(
+                    training_seed,
+                    regularization,
+                    DittoArtifactBranch.GLOBAL_MODEL,
+                ),
+                personalized_output_directory=ditto_directory(
+                    training_seed,
+                    regularization,
+                    DittoArtifactBranch.PERSONALIZED_MODELS,
+                ),
             ),
             overwrite=False,
         )
@@ -158,7 +178,7 @@ def run_ditto_stress_test_seed(
         regularization=regularization,
     )
     capabilities = population_capabilities(population)
-    threshold_directory = ditto_directory(training_seed, regularization, "threshold")
+    threshold_directory = ditto_directory(training_seed, regularization, DittoArtifactBranch.THRESHOLDS)
     shared = construct_federated_thresholds(
         ConstructFederatedThresholdsRequest(
             request=ThresholdConstructionRequest(
@@ -282,6 +302,11 @@ def _personalized_scores(
 ) -> PersonalizedScoreCollection:
     eligible: list[ClientBenignCalibrationScores] = []
     manifests: list[ClientOwned[ClientIdentity, FederatedScoreArtifactManifest]] = []
+    personalized_directory = ditto_directory(
+        training_seed,
+        regularization,
+        DittoArtifactBranch.PERSONALIZED_MODELS,
+    )
     for owned in sorted(training.personalized_candidates.items, key=lambda item: item.client):
         client = owned.client
         selection = select_federated_primary_checkpoint(
@@ -303,9 +328,7 @@ def _personalized_scores(
                 feature_names=feature_names,
                 clients=(_client_scoring_input(context.preprocessing.client_publications, client),),
                 batch_size=BATCH_SIZE,
-                output_directory=ditto_directory(training_seed, regularization, "personalized")
-                / client.client_id
-                / "scores",
+                output_directory=personalized_directory / client.client_id / "scores",
                 preprocessing_state_set_checksum=context.preprocessing_state_set_checksum,
                 split_manifest_checksum=context.split_manifest_checksum,
                 overwrite=False,
@@ -313,7 +336,7 @@ def _personalized_scores(
         ).result.manifest
         manifests.append(ClientOwned(client=client, value=manifest))
         invariant = FixedScoreInvariant.from_manifest(manifest)
-        record = next(item for item in manifest.calibration_records if item.scored_client == client)
+        record = _score_record_for_client(manifest.calibration_records, client, PartitionRole.CALIBRATION)
         eligible.append(
             ClientBenignCalibrationScores(
                 client,
@@ -341,9 +364,9 @@ def _client_scoring_input(
         raise ScientificContractError(f"expected one preprocessing publication for {client.client_id}")
     publication = matches[0]
     return ClientScoringInput(
-        client,
-        pl.read_parquet(publication.paths.calibration),
-        pl.read_parquet(publication.paths.evaluation),
+        client=client,
+        calibration_features=pl.read_parquet(publication.paths.calibration),
+        evaluation_features=pl.read_parquet(publication.paths.evaluation),
     )
 
 
@@ -354,7 +377,7 @@ def _client_metric(
     manifest: FederatedScoreArtifactManifest,
     assignment: ThresholdAssignment,
 ) -> ClientMetricResult:
-    record = next(item for item in manifest.evaluation_records if item.scored_client == assignment.client)
+    record = _score_record_for_client(manifest.evaluation_records, assignment.client, PartitionRole.EVALUATION)
     frame = pl.read_parquet(record.path)
     scores = tuple(ScoreValue(float(value)) for value in frame[ScoreFrameColumn.RECONSTRUCTION_ERROR.value].to_list())
     labels = tuple(
@@ -366,7 +389,13 @@ def _client_metric(
         partition_seed=coordinate.training_seed,
         client_counts=client_partition_counts_from_scores(manifest),
     )
-    eligibility = next(item for item in cohort_manifest.records if item.client == assignment.client)
+    eligibility_matches = tuple(item for item in cohort_manifest.records if item.client == assignment.client)
+    if len(eligibility_matches) != 1:
+        raise ScientificContractError(
+            f"expected one evaluation-cohort record for {assignment.client.client_id}",
+            subject=assignment.client,
+        )
+    eligibility = eligibility_matches[0]
     confusion = calculate_confusion_counts(
         scores=scores,
         labels=labels,
@@ -397,10 +426,24 @@ def _client_metric(
     )
 
 
+def _score_record_for_client(
+    records: tuple[FederatedScoreRecord, ...],
+    client: ClientIdentity,
+    role: PartitionRole,
+) -> FederatedScoreRecord:
+    matches = tuple(item for item in records if item.scored_client == client)
+    if len(matches) != 1:
+        raise ScientificContractError(
+            f"expected one {role.value} score record for {client.client_id}",
+            subject=client,
+        )
+    return matches[0]
+
+
 def ditto_directory(
     training_seed: Seed,
     regularization: DittoRegularization,
-    branch: str,
+    branch: DittoArtifactBranch,
 ) -> Path:
     return (
         OUTPUTS_ROOT
@@ -408,5 +451,5 @@ def ditto_directory(
         / PopulationId.NBAIOT_NATURAL_DEVICES.value
         / str(training_seed.value)
         / str(regularization.value)
-        / branch
+        / branch.value
     )
