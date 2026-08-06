@@ -85,3 +85,15 @@ def test_fixed_score_controls_have_bounded_owners_without_a_facade() -> None:
     assert (fixed_score / "construction.py").is_file()
     assert (fixed_score / "validation.py").is_file()
     assert _source_importers("datp_core.evaluation.controls") == ()
+
+
+def test_threshold_estimation_math_does_not_read_artifacts() -> None:
+    evaluation = _SOURCE_ROOT / "evaluation"
+    diagnostics = evaluation / "threshold_estimation.py"
+    evidence = evaluation / "threshold_evidence.py"
+    assert evidence.is_file()
+    imported = _imported_modules(diagnostics)
+    assert "polars" not in imported
+    assert "datp_core.protocols.inference" not in imported
+    assert all(not module.startswith("datp_core.runtime") for module in imported)
+    assert "checksum_file" not in diagnostics.read_text(encoding="utf-8")
