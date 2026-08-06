@@ -3,15 +3,20 @@ from pathlib import Path
 
 import pytest
 
-from datp_core.anchor.gate import AnchorGateStatus
+from datp_core.anchor.gate import (
+    AnchorGateStatus,
+    load_anchor_confirmatory_handoff,
+    load_verified_anchor_gate_artifact,
+)
 from datp_core.anchor.reproduction import (
+    AnchorArtifactFileName,
     HistoricalThresholdScopeToken,
     historical_sources_for_seed_directories,
     load_historical_observations,
     references_from_protocol,
     reproduce_anchor,
 )
-from datp_core.domain.enums import ExperimentReadiness, FederatedThresholdMethod
+from datp_core.domain.enums import ExperimentId, ExperimentReadiness, FederatedThresholdMethod
 from datp_core.domain.errors import AnchorReproductionError
 from datp_core.domain.values.counts import Seed
 from datp_core.pipeline.workflows.anchor import VerifyAnchorStageRequest, verify_anchor
@@ -90,17 +95,23 @@ def test_pipeline_loads_historical_artifacts_and_passes_gate(tmp_path: Path) -> 
     for shared, local in zip(observations[0::2], observations[1::2], strict=True):
         assert shared.model_checkpoint_identity == local.model_checkpoint_identity
 
+    diagnostics = tmp_path / "diag"
     result = verify_anchor(
         VerifyAnchorStageRequest(
             protocol=ANCHOR_DECISION_PROTOCOL,
             historical_sources=sources,
-            diagnostics_directory=tmp_path / "diag",
+            diagnostics_directory=diagnostics,
         )
     )
     assert result.status.gate_status is AnchorGateStatus.PASS
     assert result.status.dependent_readiness is ExperimentReadiness.DECLARED
     assert result.gate.reproduction.seed_cohort.member_count.value == 5
     assert len(result.gate.reproduction.references) == len(ANCHOR_DECISION_PROTOCOL.references)
+    assert (diagnostics / AnchorArtifactFileName.CONFIRMATORY_HANDOFF.value).is_file()
+    verified = load_verified_anchor_gate_artifact(diagnostics)
+    handoff = load_anchor_confirmatory_handoff(diagnostics, verified_gate=verified)
+    assert handoff.dependent_confirmatory_experiment is ExperimentId.SHARED_VS_LOCAL_CONFIRMATION
+    assert handoff.verified_gate_artifact_checksum == verified.artifact_checksum
 
 
 def test_pipeline_blocks_stale_mismatched_value(tmp_path: Path) -> None:

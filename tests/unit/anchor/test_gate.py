@@ -10,12 +10,18 @@ from datp_core.anchor.gate import (
     assert_gate_not_bypassable,
     decide_anchor_gate,
     dependent_readiness_from_gate,
+    load_anchor_confirmatory_handoff,
     load_verified_anchor_gate_artifact,
     persist_anchor_gate_diagnostics,
+    validate_handoff_against_confirmatory_programme,
 )
+from datp_core.anchor.reproduction import (
+    AnchorArtifactFileName,
+    independent_reproduction_dependency_blocker,
+    reproduce_anchor,
+)
+from datp_core.domain.enums import EvidenceRole, ExperimentId, ExperimentReadiness, PopulationId
 from datp_core.domain.errors import AnchorReproductionError
-from datp_core.anchor.reproduction import independent_reproduction_dependency_blocker, reproduce_anchor
-from datp_core.domain.enums import EvidenceRole, ExperimentReadiness
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.ratios import MetricValue
 
@@ -137,3 +143,35 @@ def test_blocked_gate_artifact_cannot_verify_as_passed(tmp_path: Path) -> None:
     persist_anchor_gate_diagnostics(decision, tmp_path)
     with pytest.raises(AnchorReproductionError):
         load_verified_anchor_gate_artifact(tmp_path)
+    assert not (tmp_path / AnchorArtifactFileName.CONFIRMATORY_HANDOFF.value).exists()
+
+
+def test_pass_persists_and_loads_confirmatory_handoff(tmp_path: Path) -> None:
+    decision = decide_anchor_gate(reproduce_anchor(observations=matching_anchor_observations()))
+    persist_anchor_gate_diagnostics(decision, tmp_path)
+    verified = load_verified_anchor_gate_artifact(tmp_path)
+    handoff = load_anchor_confirmatory_handoff(tmp_path, verified_gate=verified)
+    assert handoff.dependent_confirmatory_experiment is ExperimentId.SHARED_VS_LOCAL_CONFIRMATION
+    assert handoff.dependent_population is PopulationId.NBAIOT_NATURAL_DEVICES
+    assert handoff.verified_gate_artifact_checksum == verified.artifact_checksum
+    assert handoff.anchor_gate_decision_checksum == verified.artifact_checksum
+    assert validate_handoff_against_confirmatory_programme(handoff) is handoff
+
+
+def test_handoff_missing_fails_closed(tmp_path: Path) -> None:
+    decision = decide_anchor_gate(reproduce_anchor(observations=matching_anchor_observations()))
+    persist_anchor_gate_diagnostics(decision, tmp_path)
+    verified = load_verified_anchor_gate_artifact(tmp_path)
+    (tmp_path / AnchorArtifactFileName.CONFIRMATORY_HANDOFF.value).unlink()
+    with pytest.raises(AnchorReproductionError, match="handoff artifact is missing"):
+        load_anchor_confirmatory_handoff(tmp_path, verified_gate=verified)
+
+
+def test_stale_handoff_programme_binding_is_rejected(tmp_path: Path) -> None:
+    decision = decide_anchor_gate(reproduce_anchor(observations=matching_anchor_observations()))
+    persist_anchor_gate_diagnostics(decision, tmp_path)
+    verified = load_verified_anchor_gate_artifact(tmp_path)
+    handoff = load_anchor_confirmatory_handoff(tmp_path, verified_gate=verified)
+    stale = handoff.model_copy(update={"dependent_population": PopulationId.NBAIOT_DIRICHLET_CLIENTS})
+    with pytest.raises(AnchorReproductionError, match="stale relative to the locked confirmatory programme"):
+        validate_handoff_against_confirmatory_programme(stale)

@@ -294,6 +294,15 @@ def prepare_temporal_analysis(request: TemporalAnalysisRequest) -> TemporalAnaly
             raise ScientificContractError("temporal recovery experiment must match the analysis request")
         if record.threshold_method is not request.threshold_method:
             raise ScientificContractError("temporal recovery threshold method must match the analysis request")
+        provenance = record.provenance
+        if provenance.seed != record.seed:
+            raise ScientificContractError("temporal recovery provenance seed must match the recovery seed")
+        if provenance.experiment is not record.experiment:
+            raise ScientificContractError("temporal recovery provenance experiment must match the recovery")
+        if provenance.threshold_method is not record.threshold_method:
+            raise ScientificContractError("temporal recovery provenance threshold method must match the recovery")
+        if not provenance.population.strip():
+            raise ScientificContractError("temporal recovery provenance requires a population identity")
     observed = frozenset(item.seed for item in ordered)
     declared = frozenset(BOUNDED_EVIDENCE_SEED_COHORT.values)
     if observed != declared:

@@ -106,6 +106,15 @@ def test_verify_anchor_rejects_experiments_other_than_the_historical_reproductio
     assert "historical reproduction" in result.evidence
 
 
+def test_verify_anchor_maps_blocked_gate_to_stage_blocked(tmp_path: Path) -> None:
+    runner = PipelineStageRunner()
+    anchor_coordinate = replace(coordinate(), experiment=ExperimentId.HISTORICAL_DATP_REPRODUCTION)
+    result = runner.run(PipelineStage.VERIFY_ANCHOR, anchor_coordinate, provenance(), tmp_path)
+    assert result.outcome is StageOutcome.BLOCKED
+    assert "gate=blocked" in result.evidence
+    assert "diagnostics=" in result.evidence
+
+
 def test_output_store_reports_absent_for_missing_directory(tmp_path: Path) -> None:
     store = CompletionRecordOutputStore()
     assert store.state(coordinate(), tmp_path) is ExistingExperimentState.ABSENT

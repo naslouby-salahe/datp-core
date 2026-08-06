@@ -93,6 +93,7 @@ class AnchorArtifactFileName(StrEnum):
     GATE_DECISION = "anchor_gate_decision.json"
     DISCREPANCIES = "anchor_discrepancies.json"
     GATE_COMPLETION = "anchor_gate_complete.json"
+    CONFIRMATORY_HANDOFF = "anchor_confirmatory_handoff.json"
 
 
 class AnchorSeedDirectoryPrefix(StrEnum):

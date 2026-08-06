@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from datp_core.analysis.scientific_decision import ScientificDecision
-from datp_core.analysis.temporal import temporal_recovery
+from datp_core.analysis.temporal import TemporalSeedProvenance, temporal_recovery
 from datp_core.domain.enums import (
     EvidenceRole,
     ExperimentId,
@@ -56,8 +56,9 @@ def test_temporal_analysis_publishes_campaign_decision_over_seed_cohort(tmp_path
             experiment=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
             threshold_method=FederatedThresholdMethod.LOCAL_THRESHOLD,
             static_reference_cv=MetricValue(0.1),
-            frozen_future_cv=MetricValue(0.3),
-            recalibrated_future_cv=MetricValue(0.2),
+            frozen_future_cv=MetricValue(0.5),
+            recalibrated_future_cv=MetricValue(0.3),
+            provenance=_seed_provenance(seed, static=static, frozen=frozen, recalibrated=recalibrated),
         )
         for seed in BOUNDED_EVIDENCE_SEED_COHORT.values
     )
@@ -106,6 +107,7 @@ def test_incomplete_temporal_cohort_cannot_publish_supported(tmp_path: Path) -> 
             static_reference_cv=MetricValue(0.1),
             frozen_future_cv=MetricValue(0.3),
             recalibrated_future_cv=MetricValue(0.2),
+            provenance=_seed_provenance(Seed(0), static=static, frozen=frozen, recalibrated=recalibrated),
         ),
     )
     request = AnalyzeTemporalEvidenceRequest(
@@ -152,4 +154,40 @@ def _future_provenance(
         split_manifest_checksum=Checksum("6" * 64),
         calibration_score_set_checksum=Checksum(calibration_checksum),
         evaluation_score_set_checksum=Checksum(evaluation_checksum),
+    )
+
+
+def _seed_provenance(
+    seed: Seed,
+    *,
+    static: TemporalDeploymentProvenance,
+    frozen: TemporalDeploymentProvenance,
+    recalibrated: TemporalDeploymentProvenance,
+) -> TemporalSeedProvenance:
+    index = seed.value + 1
+
+    def checksum(tag: str) -> Checksum:
+        body = f"{tag}{index:02x}"
+        return Checksum((body + "0" * 64)[:64])
+
+    return TemporalSeedProvenance(
+        seed=seed,
+        experiment=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
+        population=PopulationId.EDGE_TEMPORAL_GROUPS.value,
+        threshold_method=FederatedThresholdMethod.LOCAL_THRESHOLD,
+        static_reference=static,
+        frozen_future=frozen,
+        recalibrated_future=recalibrated,
+        static_threshold_checksum=checksum("6"),
+        frozen_threshold_checksum=checksum("7"),
+        recalibrated_threshold_checksum=checksum("8"),
+        static_evaluation_checksum=checksum("9"),
+        frozen_evaluation_checksum=checksum("0"),
+        recalibrated_evaluation_checksum=checksum("f"),
+        client_inventory_checksum=checksum("a1"),
+        eligibility_checksum=checksum("a2"),
+        source_row_checksum=checksum("a3"),
+        row_order_checksum=checksum("a4"),
+        exclusions=(),
+        unavailable_reasons=(),
     )

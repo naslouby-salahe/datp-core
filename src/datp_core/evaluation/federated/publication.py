@@ -3,9 +3,10 @@
 from enum import StrEnum
 from pathlib import Path
 
-from datp_core.domain.provenance import canonical_json_text
+from datp_core.domain.provenance import canonical_checksum, canonical_json_text
 from datp_core.evaluation.federated.contracts import (
     FederatedEvaluationArtifacts,
+    FederatedEvaluationDocument,
     FederatedEvaluationPublication,
 )
 
@@ -35,14 +36,15 @@ def federated_evaluation_is_reusable(
     directory: Path,
 ) -> bool:
     complete = directory / FederatedEvaluationAssetName.COMPLETE
-    document = directory / FederatedEvaluationAssetName.DOCUMENT
+    document_path = directory / FederatedEvaluationAssetName.DOCUMENT
     try:
-        return (
-            complete.is_file()
-            and document.is_file()
-            and complete.read_text(encoding="utf-8").strip() == publication.digest.value
-        )
-    except OSError:
+        if not complete.is_file() or not document_path.is_file():
+            return False
+        if complete.read_text(encoding="utf-8").strip() != publication.digest.value:
+            return False
+        loaded = FederatedEvaluationDocument.model_validate_json(document_path.read_text(encoding="utf-8"))
+        return canonical_checksum(loaded) == publication.digest and loaded == publication.document
+    except (OSError, ValueError, TypeError):
         return False
 
 
@@ -50,7 +52,10 @@ def load_reused_federated_evaluation(
     publication: FederatedEvaluationPublication,
     directory: Path,
 ) -> FederatedEvaluationArtifacts:
-    del directory
+    document_path = directory / FederatedEvaluationAssetName.DOCUMENT
+    loaded = FederatedEvaluationDocument.model_validate_json(document_path.read_text(encoding="utf-8"))
+    if canonical_checksum(loaded) != publication.digest or loaded != publication.document:
+        raise ValueError("reused federated evaluation document does not match the publication digest")
     return publication.artifacts
 
 

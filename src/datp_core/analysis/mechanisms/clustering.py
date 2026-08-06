@@ -35,27 +35,22 @@ class ClusterPartitionSummary(StrictModel):
         When empty clusters are supplied, their declared IDs are retained. Missing
         cluster ID ``1`` is never silently renumbered as missing cluster ID ``2``.
         """
-        if observed_empty_cluster_indexes:
+        size_by_index = {item.cluster_index.value: len(item.members) for item in memberships}
+        for empty_index in observed_empty_cluster_indexes:
+            size_by_index.setdefault(empty_index.value, 0)
+        if memberships or observed_empty_cluster_indexes or declared_group_count is not None:
             max_index = max(
                 (
                     *(item.cluster_index.value for item in memberships),
                     *tuple(i.value for i in observed_empty_cluster_indexes),
+                    -1 if declared_group_count is None else declared_group_count - 1,
                 ),
                 default=-1,
             )
-            size_by_index = {item.cluster_index.value: len(item.members) for item in memberships}
-            for empty_index in observed_empty_cluster_indexes:
-                size_by_index.setdefault(empty_index.value, 0)
-            if declared_group_count is not None:
-                max_index = max(max_index, declared_group_count - 1)
-            sizes = tuple(PairedObservationCount(size_by_index.get(index, 0)) for index in range(max_index + 1))
-            empty = tuple(ClusterIndex(index) for index, size in enumerate(sizes) if size.value == 0)
-            return cls(group_sizes=sizes, empty_cluster_indexes=empty)
-        sizes = tuple(PairedObservationCount(len(item.members)) for item in memberships)
-        empty: tuple[ClusterIndex, ...] = ()
-        if declared_group_count is not None and declared_group_count > len(sizes):
-            empty = tuple(ClusterIndex(index) for index in range(len(sizes), declared_group_count))
-            sizes = sizes + tuple(PairedObservationCount(0) for _ in empty)
+        else:
+            max_index = -1
+        sizes = tuple(PairedObservationCount(size_by_index.get(index, 0)) for index in range(max_index + 1))
+        empty = tuple(ClusterIndex(index) for index, size in enumerate(sizes) if size.value == 0)
         return cls(group_sizes=sizes, empty_cluster_indexes=empty)
 
     @property
@@ -344,8 +339,8 @@ def _cluster_assignments(
     memberships: tuple[ClusterMembership, ...],
 ) -> tuple[ClientOwned[ClientIdentity, ClusterIndex], ...]:
     assignments = tuple(
-        ClientOwned(client=client, value=ClusterIndex(cluster_index))
-        for cluster_index, membership in enumerate(memberships)
+        ClientOwned(client=client, value=membership.cluster_index)
+        for membership in memberships
         for client in membership.members
     )
     if not assignments:

@@ -1,8 +1,17 @@
+from pathlib import Path
+
 import pytest
 from tests.unit.anchor.helpers import matching_anchor_observations
 
 from datp_core.anchor.comparison import AnchorObservedMetric
-from datp_core.anchor.gate import AnchorGateStatus, decide_anchor_gate, dependent_readiness_from_gate
+from datp_core.anchor.gate import (
+    AnchorGateStatus,
+    decide_anchor_gate,
+    dependent_readiness_from_gate,
+    load_anchor_confirmatory_handoff,
+    load_verified_anchor_gate_artifact,
+    persist_anchor_gate_diagnostics,
+)
 from datp_core.anchor.reproduction import (
     independent_reproduction_dependency_blocker,
     reproduce_anchor,
@@ -60,3 +69,14 @@ def test_pass_does_not_mark_dependent_executable() -> None:
     assert decision.status is AnchorGateStatus.PASS
     assert decision.dependent_readiness is ExperimentReadiness.DECLARED
     assert decision.dependent_readiness is not ExperimentReadiness.EXECUTABLE
+
+
+def test_confirmatory_claims_require_gate_and_handoff_binding(tmp_path: Path) -> None:
+    with pytest.raises(AnchorReproductionError, match="missing"):
+        load_verified_anchor_gate_artifact(tmp_path)
+    decision = decide_anchor_gate(reproduce_anchor(observations=matching_anchor_observations()))
+    persist_anchor_gate_diagnostics(decision, tmp_path)
+    verified = load_verified_anchor_gate_artifact(tmp_path)
+    handoff = load_anchor_confirmatory_handoff(tmp_path, verified_gate=verified)
+    assert handoff.dependent_confirmatory_experiment is ExperimentId.SHARED_VS_LOCAL_CONFIRMATION
+    assert verified.permits_confirmatory_claims

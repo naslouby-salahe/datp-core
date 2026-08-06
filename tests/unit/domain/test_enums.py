@@ -210,6 +210,8 @@ EXPECTED_MEMBERS = (
                 "ABSOLUTE_COVERAGE_ERROR",
                 "ALERTS_PER_DAY",
                 "COMMUNICATION_BYTES",
+                "RECONSTRUCTION_ERROR",
+                "EMPIRICAL_CUMULATIVE_PROBABILITY",
             )
         ),
     ),

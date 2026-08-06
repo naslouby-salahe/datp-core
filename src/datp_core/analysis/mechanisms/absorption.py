@@ -2,16 +2,122 @@
 
 from pydantic import model_validator
 
-from datp_core.analysis.inference.bootstrap.contracts import BootstrapInterval
+from datp_core.analysis.inference.bootstrap.contracts import BcaOutcome, BootstrapInterval
 from datp_core.analysis.inference.bootstrap.estimation import seed_level_bca_interval
 from datp_core.analysis.scientific_decision import ScientificDecision, ScientificDecisionResult
 from datp_core.domain.contracts import StrictModel
-from datp_core.domain.enums import EvidenceRole, ExperimentId, TrainingModelId
+from datp_core.domain.enums import EvidenceRole, ExperimentId, FederatedThresholdMethod, TrainingModelId
+from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import Seed
-from datp_core.domain.values.ratios import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE, MetricValue
+from datp_core.domain.values.ratios import (
+    NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
+    MetricValue,
+    ModelCoefficientValue,
+    ProximalCoefficient,
+)
+from datp_core.protocols.metrics import ABSORPTION_REFERENCE_EFFECT_MATERIALITY_CUTOFF
 from datp_core.protocols.seeds import CONFIRMATORY_ANALYSIS_SEED, CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL, PairedInferenceProtocol
 from datp_core.protocols.training import ModelAbsorptionDecisionProtocol
+
+
+class AbsorptionCornerEvidence(StrictModel):
+    """One artifact-bound corner of the four-corner absorption estimand."""
+
+    seed: Seed
+    experiment: ExperimentId
+    population: str
+    model: TrainingModelId
+    threshold_method: FederatedThresholdMethod
+    coefficient: ModelCoefficientValue | None
+    checkpoint_checksum: Checksum
+    preprocessing_checksum: Checksum
+    split_checksum: Checksum
+    calibration_score_checksum: Checksum
+    evaluation_score_checksum: Checksum
+    evaluation_checksum: Checksum
+    client_inventory_checksum: Checksum
+    eligibility_checksum: Checksum
+    population_cv_fpr: MetricValue
+
+    @model_validator(mode="after")
+    def validate_corner(self) -> "AbsorptionCornerEvidence":
+        if not self.population.strip():
+            raise ValueError("absorption corner requires a population identity")
+        if self.threshold_method not in {
+            FederatedThresholdMethod.SHARED_THRESHOLD,
+            FederatedThresholdMethod.LOCAL_THRESHOLD,
+        }:
+            raise ValueError("absorption corners must use SHARED_THRESHOLD or LOCAL_THRESHOLD")
+        return self
+
+
+class AbsorptionFourCornerEvidence(StrictModel):
+    """Typed four-corner evidence for one seed under reference vs personalized training."""
+
+    seed: Seed
+    experiment: ExperimentId
+    reference_model: TrainingModelId
+    personalized_model: TrainingModelId
+    reference_shared: AbsorptionCornerEvidence
+    reference_local: AbsorptionCornerEvidence
+    personalized_shared: AbsorptionCornerEvidence
+    personalized_local: AbsorptionCornerEvidence
+
+    @model_validator(mode="after")
+    def validate_corners(self) -> "AbsorptionFourCornerEvidence":
+        corners = (
+            self.reference_shared,
+            self.reference_local,
+            self.personalized_shared,
+            self.personalized_local,
+        )
+        if any(item.seed != self.seed for item in corners):
+            raise ValueError("absorption corners must share the observation seed")
+        if any(item.experiment is not self.experiment for item in corners):
+            raise ValueError("absorption corners must share the observation experiment")
+        if (
+            self.reference_shared.model is not self.reference_model
+            or self.reference_local.model is not self.reference_model
+        ):
+            raise ValueError("reference corners must use the reference model")
+        if (
+            self.personalized_shared.model is not self.personalized_model
+            or self.personalized_local.model is not self.personalized_model
+        ):
+            raise ValueError("personalized corners must use the personalized model")
+        if self.reference_shared.threshold_method is not FederatedThresholdMethod.SHARED_THRESHOLD:
+            raise ValueError("reference shared corner must use SHARED_THRESHOLD")
+        if self.reference_local.threshold_method is not FederatedThresholdMethod.LOCAL_THRESHOLD:
+            raise ValueError("reference local corner must use LOCAL_THRESHOLD")
+        if self.personalized_shared.threshold_method is not FederatedThresholdMethod.SHARED_THRESHOLD:
+            raise ValueError("personalized shared corner must use SHARED_THRESHOLD")
+        if self.personalized_local.threshold_method is not FederatedThresholdMethod.LOCAL_THRESHOLD:
+            raise ValueError("personalized local corner must use LOCAL_THRESHOLD")
+        identities = tuple(
+            (
+                item.checkpoint_checksum,
+                item.preprocessing_checksum,
+                item.split_checksum,
+                item.calibration_score_checksum,
+                item.evaluation_score_checksum,
+                item.evaluation_checksum,
+            )
+            for item in corners
+        )
+        if len(frozenset(identities)) != 4:
+            raise ValueError("absorption corners must not clone identical artifact identities")
+        return self
+
+    @property
+    def reference_effect(self) -> MetricValue:
+        return MetricValue(self.reference_shared.population_cv_fpr.value - self.reference_local.population_cv_fpr.value)
+
+    @property
+    def personalized_effect(self) -> MetricValue:
+        return MetricValue(
+            self.personalized_shared.population_cv_fpr.value - self.personalized_local.population_cv_fpr.value
+        )
 
 
 class AbsorptionSeedObservation(StrictModel):
@@ -32,6 +138,9 @@ class AbsorptionSeedObservation(StrictModel):
     reference_local_cv: MetricValue
     personalized_shared_cv: MetricValue
     personalized_local_cv: MetricValue
+    corners: AbsorptionFourCornerEvidence | None = None
+    model_coefficient: ProximalCoefficient | ModelCoefficientValue | None = None
+    ratio_unavailable_reason: str | None = None
 
     @model_validator(mode="after")
     def validate_observation(self) -> "AbsorptionSeedObservation":
@@ -44,11 +153,51 @@ class AbsorptionSeedObservation(StrictModel):
             raise ValueError("reference_effect must equal reference shared CV(FPR) − local CV(FPR)")
         if abs(pers_delta - self.personalized_effect.value) > tol:
             raise ValueError("personalized_effect must equal personalized shared CV(FPR) − local CV(FPR)")
+        if self.corners is not None:
+            if self.corners.seed != self.seed or self.corners.experiment is not self.experiment:
+                raise ValueError("absorption corner evidence must match the observation identity")
+            if abs(self.corners.reference_effect.value - self.reference_effect.value) > tol:
+                raise ValueError("absorption corners must produce the declared reference effect")
+            if abs(self.corners.personalized_effect.value - self.personalized_effect.value) > tol:
+                raise ValueError("absorption corners must produce the declared personalized effect")
         return self
+
+    @classmethod
+    def from_corners(cls, corners: AbsorptionFourCornerEvidence) -> "AbsorptionSeedObservation":
+        reference_effect = corners.reference_effect
+        personalized_effect = corners.personalized_effect
+        ratio_reason = None
+        if reference_effect.value <= 0.0:
+            ratio_reason = "reference CV(FPR) effect is non-positive"
+        elif reference_effect.value < ABSORPTION_REFERENCE_EFFECT_MATERIALITY_CUTOFF.value:
+            ratio_reason = (
+                "reference CV(FPR) effect is below the declared absorption denominator materiality cutoff "
+                f"({ABSORPTION_REFERENCE_EFFECT_MATERIALITY_CUTOFF.value})"
+            )
+        coefficient = corners.personalized_shared.coefficient
+        return cls(
+            seed=corners.seed,
+            experiment=corners.experiment,
+            reference_model=corners.reference_model,
+            personalized_model=corners.personalized_model,
+            reference_effect=reference_effect,
+            personalized_effect=personalized_effect,
+            reference_shared_cv=corners.reference_shared.population_cv_fpr,
+            reference_local_cv=corners.reference_local.population_cv_fpr,
+            personalized_shared_cv=corners.personalized_shared.population_cv_fpr,
+            personalized_local_cv=corners.personalized_local.population_cv_fpr,
+            corners=corners,
+            model_coefficient=coefficient,
+            ratio_unavailable_reason=ratio_reason,
+        )
 
     @property
     def retention_ratio(self) -> MetricValue | None:
+        if self.ratio_unavailable_reason is not None:
+            return None
         if self.reference_effect.value <= 0.0:
+            return None
+        if self.reference_effect.value < ABSORPTION_REFERENCE_EFFECT_MATERIALITY_CUTOFF.value:
             return None
         return MetricValue(self.personalized_effect.value / self.reference_effect.value)
 
@@ -140,12 +289,24 @@ def decide_absorption_cohort(
         )
     ratios = tuple(item.retention_ratio for item in observations)
     if any(ratio is None for ratio in ratios):
+        reasons = sorted(
+            {
+                item.ratio_unavailable_reason
+                or "reference CV(FPR) effect is non-positive or below the materiality cutoff"
+                for item in observations
+                if item.retention_ratio is None
+            }
+        )
         decision = ScientificDecisionResult(
             evidence_role=EvidenceRole.TRAINING_STRESS_TEST,
             decision=ScientificDecision.INFEASIBLE,
             point_estimate=None,
             interval=None,
-            rationale="absorption cohort contains a non-positive reference CV(FPR) effect",
+            rationale=(
+                "absorption cohort ratio interpretation is unavailable: "
+                + "; ".join(reasons)
+                + "; paired difference estimands remain available"
+            ),
         )
         return AbsorptionCohortResult(
             observations=observations,
@@ -248,6 +409,23 @@ def _blocked_cohort(
             interval=None,
             rationale="absorption cohort records must share one model pair",
         )
+    coefficients = tuple(item.model_coefficient for item in observations if item.model_coefficient is not None)
+    if coefficients and len(coefficients) != len(observations):
+        return ScientificDecisionResult(
+            evidence_role=EvidenceRole.TRAINING_STRESS_TEST,
+            decision=ScientificDecision.BLOCKED,
+            point_estimate=None,
+            interval=None,
+            rationale="absorption cohort coefficients must be present for every seed when any seed declares one",
+        )
+    if coefficients and len({item.value for item in coefficients}) != 1:
+        return ScientificDecisionResult(
+            evidence_role=EvidenceRole.TRAINING_STRESS_TEST,
+            decision=ScientificDecision.BLOCKED,
+            point_estimate=None,
+            interval=None,
+            rationale="absorption cohort records must share one model coefficient",
+        )
     return None
 
 
@@ -261,9 +439,18 @@ def _classify_cohort(
 ) -> ScientificDecisionResult:
     total = len(observations)
     interval = retention_interval
+    bounds_available = (
+        interval is not None
+        and interval.outcome is BcaOutcome.AVAILABLE
+        and interval.lower_bound is not None
+        and interval.upper_bound is not None
+    )
     interval_text = (
         f"BCa=[{interval.lower_bound.value:.4g}, {interval.upper_bound.value:.4g}]"
-        if interval is not None and interval.lower_bound is not None and interval.upper_bound is not None
+        if bounds_available
+        and interval is not None
+        and interval.lower_bound is not None
+        and interval.upper_bound is not None
         else "BCa=unavailable"
     )
     range_text = f"(mean={mean_retention.value:.4g}, {interval_text}, opposite_seeds={opposite_count}/{total})"
@@ -286,11 +473,20 @@ def _classify_cohort(
                 f"as retained or absorbed {range_text}"
             ),
         )
-    if mean_retention.value >= protocol.full_retention_minimum.value and (
-        interval is None
-        or interval.lower_bound is None
-        or interval.lower_bound.value >= protocol.partial_retention_minimum.value
-    ):
+    if not bounds_available or interval is None or interval.lower_bound is None or interval.upper_bound is None:
+        return ScientificDecisionResult(
+            evidence_role=EvidenceRole.TRAINING_STRESS_TEST,
+            decision=ScientificDecision.DIRECTIONAL_INCONCLUSIVE,
+            point_estimate=mean_retention,
+            interval=interval,
+            rationale=(
+                "absorption retention classification requires an available BCa interval with finite bounds "
+                f"{range_text}"
+            ),
+        )
+    lower = interval.lower_bound.value
+    upper = interval.upper_bound.value
+    if mean_retention.value >= protocol.full_retention_minimum.value and lower >= protocol.full_retention_minimum.value:
         return ScientificDecisionResult(
             evidence_role=EvidenceRole.TRAINING_STRESS_TEST,
             decision=ScientificDecision.SUPPORTED,
@@ -300,10 +496,9 @@ def _classify_cohort(
                 f"paired seed-level CV(FPR) retention remains at or above the full-retention threshold {range_text}"
             ),
         )
-    if mean_retention.value < protocol.partial_retention_minimum.value and (
-        interval is None
-        or interval.upper_bound is None
-        or interval.upper_bound.value < protocol.partial_retention_minimum.value
+    if (
+        mean_retention.value < protocol.partial_retention_minimum.value
+        and upper < protocol.partial_retention_minimum.value
     ):
         return ScientificDecisionResult(
             evidence_role=EvidenceRole.TRAINING_STRESS_TEST,
@@ -312,7 +507,11 @@ def _classify_cohort(
             interval=interval,
             rationale=(f"paired seed-level CV(FPR) retention lies below the partial-retention threshold {range_text}"),
         )
-    if mean_retention.value >= protocol.partial_retention_minimum.value:
+    if (
+        mean_retention.value >= protocol.partial_retention_minimum.value
+        and lower >= protocol.partial_retention_minimum.value
+        and upper < protocol.full_retention_minimum.value
+    ):
         return ScientificDecisionResult(
             evidence_role=EvidenceRole.TRAINING_STRESS_TEST,
             decision=ScientificDecision.PARTIAL_ABSORPTION,
@@ -322,10 +521,11 @@ def _classify_cohort(
         )
     return ScientificDecisionResult(
         evidence_role=EvidenceRole.TRAINING_STRESS_TEST,
-        decision=ScientificDecision.FULL_ABSORPTION,
+        decision=ScientificDecision.DIRECTIONAL_INCONCLUSIVE,
         point_estimate=mean_retention,
         interval=interval,
         rationale=(
-            f"paired seed-level mean CV(FPR) retention falls below the partial-retention threshold {range_text}"
+            "absorption retention interval straddles declared retention boundaries and cannot support "
+            f"a unique classification {range_text}"
         ),
     )

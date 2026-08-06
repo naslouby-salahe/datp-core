@@ -1,14 +1,20 @@
 import pytest
+from tests.unit.learning.federated.helpers import client_identity
 
 from datp_core.analysis.contrasts import MetricSeries
 from datp_core.analysis.descriptive import (
     ObservationCounts,
     QuantileRange,
+    ScoreRole,
+    client_score_geometry,
     count_paired_differences,
+    empirical_cdf_points,
+    score_geometry_from_client_vectors,
     summarize_values,
 )
 from datp_core.domain.enums import AvailabilityStatus, EvidenceRole
-from datp_core.domain.values.counts import PairedObservationCount
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import PairedObservationCount, Seed
 from datp_core.domain.values.ratios import MetricValue, Ratio
 
 _DEFAULT_QUANTILES = QuantileRange(lower=Ratio(0.25), upper=Ratio(0.75))
@@ -72,3 +78,48 @@ def test_sign_counts_preserve_zeroes_with_semantic_counts() -> None:
         PairedObservationCount(1),
     )
     assert result.positive_proportion == Ratio(0.5)
+
+
+def test_empirical_cdf_points_expose_score_x_and_cumulative_probability_y() -> None:
+    points = empirical_cdf_points((MetricValue(0.3), MetricValue(0.1), MetricValue(0.2)))
+    assert tuple(point.score.value for point in points) == (0.1, 0.2, 0.3)
+    assert [point.cumulative_probability.value for point in points] == pytest.approx([1 / 3, 2 / 3, 1.0])
+
+
+def test_client_score_geometry_marks_empty_scores_unavailable() -> None:
+    client = client_identity("device_a")
+    geometry = client_score_geometry(
+        client=client,
+        score_role=ScoreRole.BENIGN_EVALUATION,
+        scores=(),
+    )
+    assert geometry.unavailable_reason is not None
+    assert geometry.empirical_cdf == ()
+
+
+def test_score_geometry_retains_every_declared_client_without_silent_omission() -> None:
+    clients = (client_identity("device_a"), client_identity("device_b"), client_identity("device_c"))
+    geometry = score_geometry_from_client_vectors(
+        seed=Seed(0),
+        source_score_checksum=Checksum("e" * 64),
+        benign_evaluation=(
+            (clients[0], (MetricValue(0.1), MetricValue(0.2))),
+            (clients[1], ()),
+            (clients[2], (MetricValue(0.4),)),
+        ),
+        attack_evaluation=(
+            (clients[0], ()),
+            (clients[1], (MetricValue(0.9),)),
+            (clients[2], ()),
+        ),
+        threshold_overlays=(),
+        attack_geometry_available=True,
+    )
+    benign = tuple(item for item in geometry.clients if item.score_role is ScoreRole.BENIGN_EVALUATION)
+    attack = tuple(item for item in geometry.clients if item.score_role is ScoreRole.ATTACK_EVALUATION)
+    assert tuple(item.client for item in benign) == clients
+    assert tuple(item.client for item in attack) == clients
+    assert benign[1].unavailable_reason is not None
+    assert attack[0].unavailable_reason is not None
+    assert attack[1].empirical_cdf[0].score == MetricValue(0.9)
+    assert attack[1].empirical_cdf[0].cumulative_probability == Ratio(1.0)

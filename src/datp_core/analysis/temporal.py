@@ -19,13 +19,13 @@ from datp_core.domain.enums import (
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import Seed
 from datp_core.domain.values.ratios import MetricValue, Ratio
-from datp_core.protocols.metrics import (
-    TEMPORAL_CV_MATERIALITY_CUTOFF,
-    TEMPORAL_MATERIAL_RECOVERY_RATIO_MINIMUM,
-)
 from datp_core.protocols.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_ANALYSIS_SEED, SeedCohort
 from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL, PairedInferenceProtocol
-from datp_core.protocols.temporal import TemporalDeploymentProvenance
+from datp_core.protocols.temporal import (
+    TEMPORAL_DECISION_PROTOCOL,
+    TemporalDecisionProtocol,
+    TemporalDeploymentProvenance,
+)
 
 
 class TemporalInterpretation(StrEnum):
@@ -42,19 +42,23 @@ class TemporalSeedProvenance(StrictModel):
 
     seed: Seed
     experiment: ExperimentId
+    population: str
     threshold_method: FederatedThresholdMethod
     static_reference: TemporalDeploymentProvenance
     frozen_future: TemporalDeploymentProvenance
     recalibrated_future: TemporalDeploymentProvenance
-    static_threshold_checksum: Checksum | None = None
-    frozen_threshold_checksum: Checksum | None = None
-    recalibrated_threshold_checksum: Checksum | None = None
-    static_evaluation_checksum: Checksum | None = None
-    frozen_evaluation_checksum: Checksum | None = None
-    recalibrated_evaluation_checksum: Checksum | None = None
-    client_inventory_checksum: Checksum | None = None
-    eligibility_checksum: Checksum | None = None
-    exclusion_reason: str | None = None
+    static_threshold_checksum: Checksum
+    frozen_threshold_checksum: Checksum
+    recalibrated_threshold_checksum: Checksum
+    static_evaluation_checksum: Checksum
+    frozen_evaluation_checksum: Checksum
+    recalibrated_evaluation_checksum: Checksum
+    client_inventory_checksum: Checksum
+    eligibility_checksum: Checksum
+    source_row_checksum: Checksum
+    row_order_checksum: Checksum
+    exclusions: tuple[str, ...] = ()
+    unavailable_reasons: tuple[str, ...] = ()
 
     @model_validator(mode="after")
     def validate_bindings(self) -> "TemporalSeedProvenance":
@@ -64,6 +68,8 @@ class TemporalSeedProvenance(StrictModel):
             raise ValueError("frozen_future provenance must use the frozen_future state")
         if self.recalibrated_future.state is not TemporalState.RECALIBRATED_FUTURE:
             raise ValueError("recalibrated_future provenance must use the recalibrated_future state")
+        if not self.population.strip():
+            raise ValueError("temporal provenance requires a population identity")
         if (
             self.static_reference.checkpoint_checksum != self.frozen_future.checkpoint_checksum
             or self.static_reference.preprocessing_state_set_checksum
@@ -131,12 +137,31 @@ class TemporalRecoveryResult(StrictModel):
     static_reference_cv: MetricValue
     frozen_future_cv: MetricValue
     recalibrated_future_cv: MetricValue
+    decision_protocol: TemporalDecisionProtocol
+    provenance: TemporalSeedProvenance
     mean_fpr_static: MetricValue | None = None
     mean_fpr_frozen: MetricValue | None = None
     mean_fpr_recalibrated: MetricValue | None = None
-    provenance: TemporalSeedProvenance | None = None
     client_trajectories: tuple[TemporalClientTrajectory, ...] = ()
     unavailable_reason: str | None = None
+
+    @model_validator(mode="after")
+    def validate_recovery(self) -> "TemporalRecoveryResult":
+        if self.provenance.seed != self.seed:
+            raise ValueError("temporal provenance seed must match the recovery seed")
+        if (
+            self.provenance.experiment is not self.experiment
+            or self.provenance.threshold_method is not self.threshold_method
+        ):
+            raise ValueError("temporal provenance must match experiment and threshold method")
+        trajectory_clients = tuple(item.client_id for item in self.client_trajectories)
+        if len(trajectory_clients) != len(frozenset(trajectory_clients)):
+            raise ValueError("temporal client trajectories must be unique by client")
+        if any(item.seed != self.seed for item in self.client_trajectories):
+            raise ValueError("temporal client trajectories must match the recovery seed")
+        if any(item.threshold_method is not self.threshold_method for item in self.client_trajectories):
+            raise ValueError("temporal client trajectories must match the recovery threshold method")
+        return self
 
     @property
     def evidence_role(self) -> EvidenceRole:
@@ -152,11 +177,11 @@ class TemporalRecoveryResult(StrictModel):
 
     @property
     def materiality_cutoff(self) -> MetricValue:
-        return TEMPORAL_CV_MATERIALITY_CUTOFF
+        return self.decision_protocol.cv_materiality_cutoff
 
     @property
     def material_recovery_ratio_minimum(self) -> Ratio:
-        return TEMPORAL_MATERIAL_RECOVERY_RATIO_MINIMUM
+        return self.decision_protocol.material_recovery_ratio_minimum
 
     @property
     def recovery_ratio(self) -> MetricValue | None:
@@ -222,19 +247,14 @@ def temporal_recovery(
     static_reference_cv: MetricValue,
     frozen_future_cv: MetricValue,
     recalibrated_future_cv: MetricValue,
+    provenance: TemporalSeedProvenance,
+    decision_protocol: TemporalDecisionProtocol = TEMPORAL_DECISION_PROTOCOL,
     mean_fpr_static: MetricValue | None = None,
     mean_fpr_frozen: MetricValue | None = None,
     mean_fpr_recalibrated: MetricValue | None = None,
-    provenance: TemporalSeedProvenance | None = None,
     client_trajectories: tuple[TemporalClientTrajectory, ...] = (),
     unavailable_reason: str | None = None,
 ) -> TemporalRecoveryResult:
-    if provenance is not None and provenance.seed != seed:
-        raise ValueError("temporal provenance seed must match the recovery seed")
-    if provenance is not None and (
-        provenance.experiment is not experiment or provenance.threshold_method is not threshold_method
-    ):
-        raise ValueError("temporal provenance must match experiment and threshold method")
     return TemporalRecoveryResult(
         seed=seed,
         experiment=experiment,
@@ -242,6 +262,7 @@ def temporal_recovery(
         static_reference_cv=static_reference_cv,
         frozen_future_cv=frozen_future_cv,
         recalibrated_future_cv=recalibrated_future_cv,
+        decision_protocol=decision_protocol,
         mean_fpr_static=mean_fpr_static,
         mean_fpr_frozen=mean_fpr_frozen,
         mean_fpr_recalibrated=mean_fpr_recalibrated,
@@ -434,41 +455,50 @@ def _blocked_temporal_campaign(
             interval=None,
             rationale="publication-level temporal decisions require a multi-seed declared cohort",
         )
-    provenances = tuple(record.provenance for record in records if record.provenance is not None)
-    if provenances and len(provenances) != len(records):
+    provenances = tuple(record.provenance for record in records)
+    if any(item.seed != record.seed for item, record in zip(provenances, records, strict=True)):
         return ScientificDecisionResult(
             evidence_role=EvidenceRole.TEMPORAL_BOUNDARY,
             decision=ScientificDecision.BLOCKED,
             point_estimate=None,
             interval=None,
-            rationale="temporal campaign requires either full per-seed provenance or none",
+            rationale="temporal provenance seeds must match recovery records one-to-one",
         )
-    if provenances:
-        if any(item.seed != record.seed for item, record in zip(provenances, records, strict=True)):
-            return ScientificDecisionResult(
-                evidence_role=EvidenceRole.TEMPORAL_BOUNDARY,
-                decision=ScientificDecision.BLOCKED,
-                point_estimate=None,
-                interval=None,
-                rationale="temporal provenance seeds must match recovery records one-to-one",
-            )
-        checksum_keys = tuple(
-            (
-                item.static_reference.checkpoint_checksum,
-                item.static_reference.split_manifest_checksum,
-                item.frozen_future.evaluation_score_set_checksum,
-                item.recalibrated_future.calibration_score_set_checksum,
-            )
-            for item in provenances
+    if len({item.population for item in provenances}) != 1:
+        return ScientificDecisionResult(
+            evidence_role=EvidenceRole.TEMPORAL_BOUNDARY,
+            decision=ScientificDecision.BLOCKED,
+            point_estimate=None,
+            interval=None,
+            rationale="temporal provenance records must share one population identity",
         )
-        if len(frozenset(checksum_keys)) != len(checksum_keys):
-            return ScientificDecisionResult(
-                evidence_role=EvidenceRole.TEMPORAL_BOUNDARY,
-                decision=ScientificDecision.BLOCKED,
-                point_estimate=None,
-                interval=None,
-                rationale="temporal provenance must not be cloned across seeds",
-            )
+    checksum_keys = tuple(
+        (
+            item.static_reference.checkpoint_checksum,
+            item.static_reference.split_manifest_checksum,
+            item.frozen_future.evaluation_score_set_checksum,
+            item.recalibrated_future.calibration_score_set_checksum,
+            item.static_threshold_checksum,
+            item.frozen_threshold_checksum,
+            item.recalibrated_threshold_checksum,
+            item.static_evaluation_checksum,
+            item.frozen_evaluation_checksum,
+            item.recalibrated_evaluation_checksum,
+            item.client_inventory_checksum,
+            item.eligibility_checksum,
+            item.source_row_checksum,
+            item.row_order_checksum,
+        )
+        for item in provenances
+    )
+    if len(frozenset(checksum_keys)) != len(checksum_keys):
+        return ScientificDecisionResult(
+            evidence_role=EvidenceRole.TEMPORAL_BOUNDARY,
+            decision=ScientificDecision.BLOCKED,
+            point_estimate=None,
+            interval=None,
+            rationale="temporal provenance must not be cloned across seeds",
+        )
     return None
 
 

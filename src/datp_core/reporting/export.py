@@ -236,13 +236,21 @@ def export_temporal_publication(document: TemporalAnalysisDocument, output_direc
         recovery = record.recovery
         provenance = recovery.provenance
         if provenance is None:
-            lines.append(f"- seed `{recovery.seed.value}`: provenance unavailable")
-            continue
+            raise ValueError(
+                f"temporal publication requires provenance for seed {recovery.seed.value}; "
+                "missing provenance cannot be exported"
+            )
         lines.append(
             f"- seed `{recovery.seed.value}`: checkpoint=`{provenance.frozen_future.checkpoint_checksum.value}` "
             f"preprocess=`{provenance.frozen_future.preprocessing_state_set_checksum.value}` "
             f"split=`{provenance.frozen_future.split_manifest_checksum.value}` "
-            f"eval_scores=`{provenance.frozen_future.evaluation_score_set_checksum.value}`"
+            f"eval_scores=`{provenance.frozen_future.evaluation_score_set_checksum.value}` "
+            f"static_threshold=`{provenance.static_threshold_checksum.value}` "
+            f"frozen_threshold=`{provenance.frozen_threshold_checksum.value}` "
+            f"recalibrated_threshold=`{provenance.recalibrated_threshold_checksum.value}` "
+            f"static_evaluation=`{provenance.static_evaluation_checksum.value}` "
+            f"frozen_evaluation=`{provenance.frozen_evaluation_checksum.value}` "
+            f"recalibrated_evaluation=`{provenance.recalibrated_evaluation_checksum.value}`"
         )
         for trajectory in recovery.client_trajectories:
             lines.append(

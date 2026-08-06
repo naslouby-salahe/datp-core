@@ -1,4 +1,4 @@
-"""Immutable temporal score and deployment provenance contracts."""
+"""Immutable temporal score, deployment provenance, and decision contracts."""
 
 from pydantic import model_validator
 
@@ -7,7 +7,13 @@ from datp_core.domain.enums import EvidenceRole, PartitionRole, SplitProtocolId,
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.provenance import canonical_checksum
 from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.ratios import MetricValue, Ratio
 from datp_core.protocols.inference import ClientIdentityContract, ScoreArtifactManifest, TrainingCoordinateContract
+from datp_core.protocols.metrics import (
+    TEMPORAL_CV_MATERIALITY_CUTOFF,
+    TEMPORAL_MATERIAL_RECOVERY_RATIO_MINIMUM,
+)
+from datp_core.protocols.seeds import BOUNDED_EVIDENCE_SEED_COHORT, SeedCohort
 
 
 class TemporalFutureIdentity(StrictModel):
@@ -127,3 +133,48 @@ def temporal_split_protocol(state: TemporalState) -> SplitProtocolId:
         case TemporalState.FROZEN_FUTURE | TemporalState.RECALIBRATED_FUTURE:
             return SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE
     raise ValueError(f"unsupported temporal state: {state}")
+
+
+class TemporalDecisionProtocol(StrictModel):
+    """Pre-specified temporal interpretation thresholds (roadmap §12.1 / §14).
+
+    Source of material recovery-ratio minimum:
+    locked temporal interpretation decision requiring recovery of at least half
+    of material drift excess (0.50). Distinct from model-absorption residual
+    bands (0.25 / 0.75).
+    """
+
+    cv_materiality_cutoff: MetricValue
+    material_recovery_ratio_minimum: Ratio
+    seed_cohort: SeedCohort
+    undefined_recovery_when_drift_not_material: bool
+    mixed_seed_publication_support: bool
+    require_full_seed_provenance: bool
+    require_uncertainty_for_supported: bool
+
+    @model_validator(mode="after")
+    def validate_protocol(self) -> "TemporalDecisionProtocol":
+        if self.cv_materiality_cutoff.value < 0.0:
+            raise ValueError("temporal CV materiality cutoff must be non-negative")
+        if self.material_recovery_ratio_minimum.value <= 0.0:
+            raise ValueError("temporal material recovery-ratio minimum must be positive")
+        if self.seed_cohort.member_count.value < 2:
+            raise ValueError("temporal publication decisions require a multi-seed cohort")
+        if not self.undefined_recovery_when_drift_not_material:
+            raise ValueError("temporal protocol must leave recovery undefined when drift is non-material")
+        if self.mixed_seed_publication_support:
+            raise ValueError("mixed-seed temporal evidence cannot support a publication claim")
+        if not self.require_full_seed_provenance:
+            raise ValueError("temporal publication requires full per-seed provenance")
+        return self
+
+
+TEMPORAL_DECISION_PROTOCOL = TemporalDecisionProtocol(
+    cv_materiality_cutoff=TEMPORAL_CV_MATERIALITY_CUTOFF,
+    material_recovery_ratio_minimum=TEMPORAL_MATERIAL_RECOVERY_RATIO_MINIMUM,
+    seed_cohort=BOUNDED_EVIDENCE_SEED_COHORT,
+    undefined_recovery_when_drift_not_material=True,
+    mixed_seed_publication_support=False,
+    require_full_seed_provenance=True,
+    require_uncertainty_for_supported=True,
+)

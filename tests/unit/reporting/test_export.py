@@ -10,8 +10,16 @@ from datp_core.domain.enums import (
     PopulationId,
 )
 from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import Seed
+from datp_core.domain.values.ratios import MetricValue
 from datp_core.reporting.export import PublicationBundle, ReportProvenance, export_markdown
-from datp_core.reporting.figures import FigureSeries, FigureSpec
+from datp_core.reporting.figures import (
+    EmpiricalCdfFigureSeries,
+    FigureSeries,
+    FigureSpec,
+    empirical_cdf_series_from_points,
+    render_markdown_figure,
+)
 from datp_core.reporting.validation import ClaimDecision, ClaimStatus
 
 
@@ -85,4 +93,71 @@ def test_report_provenance_rejects_primitive_checksum() -> None:
             population=PopulationId.NBAIOT_NATURAL_DEVICES,
             evidence_role=EvidenceRole.CONFIRMATORY,
             analysis_checksum="a" * 64,  # type: ignore[arg-type]
+        )
+
+
+def test_empirical_cdf_figure_series_uses_reconstruction_and_cumulative_metrics() -> None:
+    series = empirical_cdf_series_from_points(
+        label="seed0:device_a:benign_evaluation",
+        points=(
+            (MetricValue(0.1), MetricValue(0.5)),
+            (MetricValue(0.3), MetricValue(1.0)),
+        ),
+        client_id="device_a",
+        seed=Seed(0),
+        score_role="benign_evaluation",
+        threshold_overlays=(
+            ("shared_threshold", 0.2),
+            ("local_threshold", 0.25),
+            ("cluster_threshold", 0.22),
+        ),
+        source_checksum=Checksum("f" * 64),
+    )
+    assert isinstance(series, EmpiricalCdfFigureSeries)
+    assert series.x_metric is MetricId.RECONSTRUCTION_ERROR
+    assert series.y_metric is MetricId.EMPIRICAL_CUMULATIVE_PROBABILITY
+    assert series.x_values == (0.1, 0.3)
+    assert series.y_values == (0.5, 1.0)
+    assert series.threshold_overlays[0] == ("shared_threshold", 0.2)
+
+    unavailable = empirical_cdf_series_from_points(
+        label="seed0:device_b:attack_evaluation",
+        points=(),
+        client_id="device_b",
+        seed=Seed(0),
+        score_role="attack_evaluation",
+        source_checksum=Checksum("f" * 64),
+        unavailable_reason="no scores available for the declared role",
+    )
+    assert unavailable.availability is AvailabilityStatus.UNAVAILABLE
+    assert unavailable.x_values == ()
+    assert unavailable.y_values == ()
+
+    rendered = render_markdown_figure(
+        FigureSpec(
+            title="Per-client empirical score CDF",
+            empirical_cdf_series=(series, unavailable),
+        )
+    )
+    assert "reconstruction_error" in rendered
+    assert "empirical_cumulative_probability" in rendered
+    assert "shared_threshold=0.2" in rendered
+    assert "device_b" in rendered
+    assert "no scores available for the declared role" in rendered
+
+
+def test_empirical_cdf_rejects_fpr_as_score_metric() -> None:
+    with pytest.raises(ValueError, match="reconstruction-error x metric"):
+        EmpiricalCdfFigureSeries(
+            label="bad",
+            x_metric=MetricId.FALSE_POSITIVE_RATE,
+            y_metric=MetricId.EMPIRICAL_CUMULATIVE_PROBABILITY,
+            availability=AvailabilityStatus.AVAILABLE,
+            x_values=(0.1,),
+            y_values=(1.0,),
+            client_id="device_a",
+            seed=Seed(0),
+            score_role="benign_evaluation",
+            threshold_overlays=(),
+            source_checksum=None,
         )

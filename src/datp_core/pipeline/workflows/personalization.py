@@ -1,4 +1,4 @@
-"""Ditto personalized-model threshold-scope stress execution."""
+"""Ditto and FedProx personalized-model threshold-scope stress execution."""
 
 from __future__ import annotations
 
@@ -10,6 +10,8 @@ import polars as pl
 
 from datp_core.analysis.mechanisms import (
     AbsorptionCohortResult,
+    AbsorptionCornerEvidence,
+    AbsorptionFourCornerEvidence,
     AbsorptionSeedObservation,
     decide_absorption_cohort,
 )
@@ -34,11 +36,19 @@ from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.checksums import Checksum, checksum_file
 from datp_core.domain.values.counts import ClientCount, Seed
 from datp_core.domain.values.identifiers import FeatureNameSequence
-from datp_core.domain.values.ratios import DittoRegularization, MetricValue, ScoreValue
+from datp_core.domain.values.ratios import (
+    NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
+    DittoRegularization,
+    MetricValue,
+    ModelCoefficientValue,
+    ProximalCoefficient,
+    ScoreValue,
+)
 from datp_core.evaluation.client_metrics import calculate_client_metrics
 from datp_core.evaluation.cohort.construction import build_evaluation_cohort_manifest
 from datp_core.evaluation.cohort.evidence import client_partition_counts_from_scores
 from datp_core.evaluation.confusion import calculate_confusion_counts
+from datp_core.evaluation.federated.publication import FederatedEvaluationAssetName
 from datp_core.evaluation.fixed_score.checksums import evaluation_label_checksum, source_row_checksum
 from datp_core.evaluation.models import ClientMetricResult, MetricStatus, PopulationMetricResult, metric_by_id
 from datp_core.evaluation.population_metrics import calculate_population_metrics
@@ -57,8 +67,21 @@ from datp_core.pipeline.execution.context import (
     family_identities,
     training_feature_names,
 )
-from datp_core.pipeline.execution.layout import ExecutionArtifactDirectory, ExecutionRootDirectory
+from datp_core.pipeline.execution.engine import (
+    CompletionRecordOutputStore,
+    PipelineStageRunner,
+    execute_campaign,
+)
+from datp_core.pipeline.execution.evidence import load_evaluation_document
+from datp_core.pipeline.execution.layout import (
+    EvaluationRunAssetDirectory,
+    ExecutionArtifactDirectory,
+    ExecutionRootDirectory,
+)
+from datp_core.pipeline.execution.models import CampaignEntry, CampaignPlan, campaign_digest
+from datp_core.pipeline.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
 from datp_core.pipeline.preparation.populations import ConstructDeclaredPopulationRequest, construct_declared_population
+from datp_core.pipeline.publication.layout import evaluation_run_directory
 from datp_core.pipeline.scoring.federated import publish_federated_scores
 from datp_core.pipeline.scoring.models import (
     ClientScoringInput,
@@ -71,6 +94,11 @@ from datp_core.pipeline.training.personalized import (
     TrainDittoDetectorResult,
     train_ditto_detector,
 )
+from datp_core.pipeline.workflows.confirmatory import (
+    FedAvgCvFprEffectEvidence,
+    absorption_corner_from_evaluation_document,
+    load_fedavg_cv_fpr_effect,
+)
 from datp_core.preprocessing.models import (
     ClientPreprocessingResult,
     FederatedPreprocessingOutcome,
@@ -78,12 +106,14 @@ from datp_core.preprocessing.models import (
 )
 from datp_core.preprocessing.service import preprocess_federated
 from datp_core.protocols.calibration import CANONICAL_QUANTILE
+from datp_core.protocols.experiments import EXPERIMENTS
 from datp_core.protocols.inference import FixedScoreInvariant
-from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT
+from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.protocols.training import (
     BATCH_SIZE,
     CHECKPOINT_PROTOCOL,
     DITTO_ALTERNATIVE_ROUTE_DIFFERENCE,
+    FEDPROX_COEFFICIENTS,
     LEARNING_RATE,
     MODEL_ABSORPTION_DECISION_PROTOCOL,
     NBAIOT_AUTOENCODER,
@@ -126,6 +156,52 @@ class DittoPopulationContext:
 class PersonalizedScoreCollection:
     eligible_calibration: tuple[ClientBenignCalibrationScores, ...]
     manifests: ClientCollection[ClientIdentity, FederatedScoreArtifactManifest]
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class FedProxStressTestResult:
+    training_seed: Seed
+    coefficient: ProximalCoefficient
+    campaign_digest: Checksum
+    completed_threshold_methods: tuple[FederatedThresholdMethod, ...]
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class FedProxCvFprCornerEvidence:
+    """Artifact-bound FedProx SHARED/LOCAL CV(FPR) corners for one seed and coefficient."""
+
+    seed: Seed
+    coefficient: ProximalCoefficient
+    shared: AbsorptionCornerEvidence
+    local: AbsorptionCornerEvidence
+
+    def __post_init__(self) -> None:
+        if self.shared.seed != self.seed or self.local.seed != self.seed:
+            raise ValueError("FedProx CV(FPR) corners must match the observation seed")
+        if self.shared.threshold_method is not FederatedThresholdMethod.SHARED_THRESHOLD:
+            raise ValueError("FedProx shared corner must use SHARED_THRESHOLD")
+        if self.local.threshold_method is not FederatedThresholdMethod.LOCAL_THRESHOLD:
+            raise ValueError("FedProx local corner must use LOCAL_THRESHOLD")
+        if self.shared.model is not TrainingModelId.FEDPROX_AUTOENCODER:
+            raise ValueError("FedProx shared corner must use FEDPROX_AUTOENCODER")
+        if self.local.model is not TrainingModelId.FEDPROX_AUTOENCODER:
+            raise ValueError("FedProx local corner must use FEDPROX_AUTOENCODER")
+        tol = NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE.value
+        for corner in (self.shared, self.local):
+            if corner.coefficient is None or abs(corner.coefficient.value - self.coefficient.value) > tol:
+                raise ValueError("FedProx corner coefficient must match the declared proximal coefficient")
+
+    @property
+    def shared_cv(self) -> MetricValue:
+        return self.shared.population_cv_fpr
+
+    @property
+    def local_cv(self) -> MetricValue:
+        return self.local.population_cv_fpr
+
+    @property
+    def effect(self) -> MetricValue:
+        return MetricValue(self.shared_cv.value - self.local_cv.value)
 
 
 def run_ditto_stress_test_seed(*, training_seed: Seed, regularization: DittoRegularization) -> DittoStressTestResult:
@@ -252,9 +328,8 @@ def run_ditto_stress_test_seed(*, training_seed: Seed, regularization: DittoRegu
 def analyze_ditto_absorption(
     results: tuple[DittoStressTestResult, ...],
     *,
-    reference_effects: tuple[MetricValue, ...],
+    reference_evidence: tuple[FedAvgCvFprEffectEvidence, ...],
     output_directory: Path,
-    reference_shared_local_cvs: tuple[tuple[MetricValue, MetricValue], ...] | None = None,
 ) -> AbsorptionCohortResult:
     """Cohort-level absorption analysis for completed Ditto stress-test seeds.
 
@@ -262,40 +337,37 @@ def analyze_ditto_absorption(
     Δ = CV(FPR)_SHARED − CV(FPR)_LOCAL
     under FedAvg (reference) and under Ditto (personalized).
     """
-    if len(results) != len(reference_effects):
-        raise ScientificContractError("absorption analysis requires one reference effect per Ditto seed result")
-    if reference_shared_local_cvs is None or len(reference_shared_local_cvs) != len(results):
+    if len(results) != len(reference_evidence):
         raise ScientificContractError(
-            "absorption analysis requires per-seed four-corner FedAvg shared/local CV(FPR) evidence",
+            "absorption analysis requires one FedAvg corner-evidence record per Ditto seed result",
             subject=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
         )
-    from datp_core.domain.values.ratios import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE
-
     observations: list[AbsorptionSeedObservation] = []
     alternative_route = 0
-    tol = NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE.value
-    for index, (result, reference) in enumerate(zip(results, reference_effects, strict=True)):
-        shared_cv, local_cv, effect = _population_cv_fpr_effect(result)
-        ref_shared, ref_local = reference_shared_local_cvs[index]
-        if abs(ref_shared.value - ref_local.value - reference.value) > tol:
+    for result, reference in zip(results, reference_evidence, strict=True):
+        seed = result.personalized_coordinate.training_seed
+        if reference.seed != seed:
             raise ScientificContractError(
-                "reference CV(FPR) effect must equal shared CV(FPR) − local CV(FPR)",
+                "Ditto absorption reference evidence must align seed-for-seed with stress results",
                 subject=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
             )
-        if abs(shared_cv.value - ref_local.value) <= DITTO_ALTERNATIVE_ROUTE_DIFFERENCE.value:
+        shared_cv, local_cv, effect = _population_cv_fpr_effect(result)
+        if abs(shared_cv.value - reference.local_cv.value) <= DITTO_ALTERNATIVE_ROUTE_DIFFERENCE.value:
             alternative_route += 1
+        coefficient = result.personalized_coordinate.model_coefficient
         observations.append(
             AbsorptionSeedObservation(
-                seed=result.personalized_coordinate.training_seed,
+                seed=seed,
                 experiment=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
                 reference_model=TrainingModelId.FEDAVG_AUTOENCODER,
                 personalized_model=TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER,
-                reference_effect=reference,
+                reference_effect=reference.effect,
                 personalized_effect=effect,
-                reference_shared_cv=ref_shared,
-                reference_local_cv=ref_local,
+                reference_shared_cv=reference.shared_cv,
+                reference_local_cv=reference.local_cv,
                 personalized_shared_cv=shared_cv,
                 personalized_local_cv=local_cv,
+                model_coefficient=(ModelCoefficientValue(coefficient.value) if coefficient is not None else None),
             )
         )
     cohort = decide_absorption_cohort(
@@ -315,8 +387,6 @@ def analyze_ditto_absorption(
 def run_ditto_absorption_campaign(
     *,
     regularization: DittoRegularization,
-    reference_effects_by_seed: dict[Seed, MetricValue],
-    reference_shared_local_by_seed: dict[Seed, tuple[MetricValue, MetricValue]],
     output_directory: Path | None = None,
 ) -> AbsorptionCohortResult:
     """Run Ditto stress seeds over the confirmatory cohort and analyze absorption."""
@@ -324,11 +394,12 @@ def run_ditto_absorption_campaign(
         run_ditto_stress_test_seed(training_seed=seed, regularization=regularization)
         for seed in CONFIRMATORY_SEED_COHORT.values
     )
-    reference_effects = tuple(
-        reference_effects_by_seed[result.personalized_coordinate.training_seed] for result in results
-    )
-    reference_corners = tuple(
-        reference_shared_local_by_seed[result.personalized_coordinate.training_seed] for result in results
+    reference_evidence = tuple(
+        load_fedavg_cv_fpr_effect(
+            result.personalized_coordinate.training_seed,
+            experiment=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
+        )
+        for result in results
     )
     target = output_directory or (
         OUTPUTS_ROOT
@@ -339,10 +410,151 @@ def run_ditto_absorption_campaign(
     )
     return analyze_ditto_absorption(
         results,
-        reference_effects=reference_effects,
+        reference_evidence=reference_evidence,
         output_directory=target,
-        reference_shared_local_cvs=reference_corners,
     )
+
+
+def run_fedprox_stress_test_seed(
+    *,
+    training_seed: Seed,
+    coefficient: ProximalCoefficient,
+) -> FedProxStressTestResult:
+    """Train FedProx, score, threshold, and evaluate for one confirmatory seed and coefficient."""
+    declaration = next(item for item in EXPERIMENTS if item.id is ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST)
+    plan = expand_experiment_plan(
+        declarations=(declaration,),
+        seed_cohort=SeedCohort(values=(training_seed,)),
+        evidence=(
+            PlanningEvidence(
+                experiment=declaration.id,
+                disposition=PlanDisposition.EXECUTABLE,
+                reason=(
+                    "the FedProx stress-test entry point supplies the locked natural-device execution prerequisites"
+                ),
+            ),
+        ),
+    )
+    tol = NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE.value
+    coordinates = tuple(
+        entry.coordinate
+        for entry in plan.entries
+        if entry.disposition is PlanDisposition.EXECUTABLE
+        and entry.coordinate.model_coefficient is not None
+        and abs(entry.coordinate.model_coefficient.value - coefficient.value) <= tol
+    )
+    if not coordinates:
+        raise ScientificContractError(
+            f"FedProx planning produced no executable coordinates for coefficient={coefficient.value}",
+            subject=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST,
+        )
+    campaign_entries = tuple(
+        CampaignEntry(ordinal=index, coordinate=coordinate) for index, coordinate in enumerate(coordinates)
+    )
+    campaign = CampaignPlan(
+        entries=campaign_entries,
+        digest=campaign_digest(campaign_entries),
+        plan_digest=plan.digest,
+    )
+    execution = execute_campaign(
+        campaign=campaign,
+        stage_runner=PipelineStageRunner(),
+        output_store=CompletionRecordOutputStore(),
+        output_root=OUTPUTS_ROOT,
+    )
+    failed = tuple(result for result in execution.experiments if not result.successful)
+    if failed:
+        blocked = ", ".join(result.coordinate.stable_key for result in failed)
+        raise ScientificContractError(
+            f"FedProx execution did not complete: {blocked}",
+            subject=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST,
+        )
+    available_methods = frozenset(entry.coordinate.threshold_method for entry in campaign.entries)
+    methods = tuple(method for method in declaration.federated_thresholds if method in available_methods)
+    return FedProxStressTestResult(
+        training_seed=training_seed,
+        coefficient=coefficient,
+        campaign_digest=campaign.digest,
+        completed_threshold_methods=methods,
+    )
+
+
+def run_fedprox_coefficient_campaign(*, coefficient: ProximalCoefficient) -> tuple[FedProxStressTestResult, ...]:
+    """Run FedProx stress tests for one coefficient across the confirmatory seed cohort."""
+    return tuple(
+        run_fedprox_stress_test_seed(training_seed=seed, coefficient=coefficient)
+        for seed in CONFIRMATORY_SEED_COHORT.values
+    )
+
+
+def run_fedprox_grid_campaign() -> tuple[FedProxStressTestResult, ...]:
+    """Run FedProx stress tests for every declared proximal coefficient and confirmatory seed."""
+    return tuple(
+        result
+        for coefficient in FEDPROX_COEFFICIENTS
+        for result in run_fedprox_coefficient_campaign(coefficient=coefficient)
+    )
+
+
+def load_fedprox_cv_fpr_corners(
+    training_seed: Seed,
+    coefficient: ProximalCoefficient,
+) -> FedProxCvFprCornerEvidence:
+    """Load FedProx SHARED/LOCAL CV(FPR) corners with evaluation provenance."""
+    experiment = ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST
+    shared = absorption_corner_from_evaluation_document(
+        load_evaluation_document(
+            _fedprox_evaluation_path(
+                training_seed,
+                coefficient,
+                FederatedThresholdMethod.SHARED_THRESHOLD,
+            )
+        ),
+        experiment=experiment,
+    )
+    local = absorption_corner_from_evaluation_document(
+        load_evaluation_document(
+            _fedprox_evaluation_path(
+                training_seed,
+                coefficient,
+                FederatedThresholdMethod.LOCAL_THRESHOLD,
+            )
+        ),
+        experiment=experiment,
+    )
+    return FedProxCvFprCornerEvidence(
+        seed=training_seed,
+        coefficient=coefficient,
+        shared=shared,
+        local=local,
+    )
+
+
+def build_fedprox_absorption_observation(
+    *,
+    training_seed: Seed,
+    coefficient: ProximalCoefficient,
+    reference: FedAvgCvFprEffectEvidence,
+) -> AbsorptionSeedObservation:
+    """Build one four-corner FedProx absorption observation from evaluation artifacts."""
+    experiment = ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST
+    if reference.seed != training_seed:
+        raise ScientificContractError(
+            "FedProx absorption reference evidence must match the observation seed",
+            subject=experiment,
+        )
+    personalized = load_fedprox_cv_fpr_corners(training_seed, coefficient)
+    corners = AbsorptionFourCornerEvidence(
+        seed=training_seed,
+        experiment=experiment,
+        reference_model=TrainingModelId.FEDAVG_AUTOENCODER,
+        personalized_model=TrainingModelId.FEDPROX_AUTOENCODER,
+        reference_shared=reference.shared,
+        reference_local=reference.local,
+        personalized_shared=personalized.shared,
+        personalized_local=personalized.local,
+    )
+    return AbsorptionSeedObservation.from_corners(corners)
 
 
 def analyze_fedprox_absorption(
@@ -350,7 +562,7 @@ def analyze_fedprox_absorption(
     *,
     output_directory: Path,
 ) -> AbsorptionCohortResult:
-    """Cohort-level FedProx absorption from paired CV(FPR) seed observations."""
+    """Cohort-level FedProx absorption from four-corner CV(FPR) seed observations."""
     if observations and any(
         item.experiment is not ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST for item in observations
     ):
@@ -359,6 +571,11 @@ def analyze_fedprox_absorption(
         item.personalized_model is not TrainingModelId.FEDPROX_AUTOENCODER for item in observations
     ):
         raise ScientificContractError("FedProx absorption requires FEDPROX personalized model identity")
+    if observations and any(item.corners is None for item in observations):
+        raise ScientificContractError(
+            "FedProx absorption requires four-corner provenance on every seed observation",
+            subject=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST,
+        )
     cohort = decide_absorption_cohort(observations, MODEL_ABSORPTION_DECISION_PROTOCOL)
     export_mechanism_publication(
         (cohort,),
@@ -367,6 +584,41 @@ def analyze_fedprox_absorption(
         output_directory=output_directory,
     )
     return cohort
+
+
+def _fedprox_evaluation_path(
+    training_seed: Seed,
+    coefficient: ProximalCoefficient,
+    method: FederatedThresholdMethod,
+) -> Path:
+    declaration = next(item for item in EXPERIMENTS if item.id is ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST)
+    plan = expand_experiment_plan(
+        declarations=(declaration,),
+        seed_cohort=SeedCohort(values=(training_seed,)),
+    )
+    tol = NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE.value
+    matches = tuple(
+        entry.coordinate
+        for entry in plan.entries
+        if entry.coordinate.threshold_method is method
+        and entry.coordinate.metric is MetricId.FPR_COEFFICIENT_OF_VARIATION
+        and entry.coordinate.model_coefficient is not None
+        and abs(entry.coordinate.model_coefficient.value - coefficient.value) <= tol
+    )
+    if len(matches) != 1:
+        raise ScientificContractError(
+            f"FedProx evaluation coordinate unresolved for seed={training_seed.value} "
+            f"coefficient={coefficient.value} method={method.value}",
+            subject=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST,
+        )
+    path = (
+        evaluation_run_directory(OUTPUTS_ROOT, matches[0])
+        / EvaluationRunAssetDirectory.EVALUATION
+        / FederatedEvaluationAssetName.DOCUMENT
+    )
+    if not path.is_file():
+        raise ScientificContractError(f"missing FedProx evaluation document: {path}")
+    return path
 
 
 def _population_cv_fpr_effect(

@@ -58,9 +58,15 @@ class OutputStore:
         self.existing_state = state
         self.deleted = False
 
-    def state(self, coordinate: ExperimentCoordinate, output_root: Path) -> ExistingExperimentState:
+    def state(
+        self,
+        coordinate: ExperimentCoordinate,
+        output_root: Path,
+        provenance=None,
+    ) -> ExistingExperimentState:
         assert coordinate.stable_key
         assert output_root.parts
+        del provenance
         return self.existing_state
 
     def delete(self, coordinate: ExperimentCoordinate, output_root: Path) -> None:

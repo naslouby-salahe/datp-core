@@ -2,6 +2,8 @@
 
 from datp_core.analysis.mechanisms.absorption import (
     AbsorptionCohortResult,
+    AbsorptionCornerEvidence,
+    AbsorptionFourCornerEvidence,
     AbsorptionSeedObservation,
     decide_absorption_cohort,
     decide_model_absorption,
@@ -45,7 +47,6 @@ from datp_core.analysis.mechanisms.movement import (
 from datp_core.analysis.scientific_decision import ScientificDecisionResult
 from datp_core.domain.enums import ExperimentId, MetricId
 from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import ClusterIndex
 from datp_core.domain.values.ratios import MetricValue, Ratio
 from datp_core.evaluation.federated.contracts import FederatedEvaluationDocument
 from datp_core.evaluation.models import MetricStatus, metric_by_id
@@ -66,6 +67,8 @@ type MechanismEvidence = (
 
 __all__ = (
     "AbsorptionCohortResult",
+    "AbsorptionCornerEvidence",
+    "AbsorptionFourCornerEvidence",
     "AbsorptionSeedObservation",
     "AssociationObservation",
     "AssociationResult",
@@ -198,12 +201,14 @@ def cluster_mechanism_bundle(
     else:
         observations = tuple(
             GroupDispersionObservation(
-                group_index=ClusterIndex(index),
+                group_index=membership.cluster_index,
                 thresholds=tuple(item.value for item in membership.contributing_local_quantiles),
-                false_positive_rates=group_false_positive_rates[index],
+                false_positive_rates=group_false_positive_rates[membership.cluster_index.value],
             )
-            for index, membership in enumerate(left.clusters)
-            if membership.contributing_local_quantiles and group_false_positive_rates[index]
+            for membership in left.clusters
+            if membership.contributing_local_quantiles
+            and membership.cluster_index.value < len(group_false_positive_rates)
+            and group_false_positive_rates[membership.cluster_index.value]
         )
         dispersion = grouped_dispersion(observations)
     return evidence, stability, dispersion

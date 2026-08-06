@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from shutil import rmtree
 
+from datp_core.anchor.gate import AnchorGateStatus
 from datp_core.datasets.service import DatasetMaterializationRequest, materialize_datasets
 from datp_core.domain.enums import ExperimentId, PublicationStatus
 from datp_core.domain.errors import ScientificContractError
@@ -102,7 +103,7 @@ def execute_experiment(
     overwrite: bool = False,
 ) -> ExperimentExecution:
     recipe = resolve_execution_recipe(coordinate)
-    existing_state = output_store.state(coordinate, output_root)
+    existing_state = output_store.state(coordinate, output_root, provenance)
     if overwrite:
         if existing_state is not ExistingExperimentState.ABSENT:
             output_store.delete(coordinate, output_root)
@@ -156,13 +157,22 @@ def execute_campaign(
 
 @dataclass(frozen=True, slots=True)
 class CompletionRecordOutputStore:
-    def state(self, coordinate: ExperimentCoordinate, output_root: Path) -> ExistingExperimentState:
+    def state(
+        self,
+        coordinate: ExperimentCoordinate,
+        output_root: Path,
+        provenance: ExecutionProvenance | None = None,
+    ) -> ExistingExperimentState:
         directory = experiment_output_directory(output_root, coordinate)
         if not directory.is_dir():
             return ExistingExperimentState.ABSENT
         record = read_completion_record(directory)
         if record is None or record.state is not CompletionState.COMPLETE:
             return ExistingExperimentState.INCOMPLETE
+        if provenance is not None and (
+            record.plan_digest != provenance.plan_digest or record.campaign_digest != provenance.campaign_digest
+        ):
+            return ExistingExperimentState.COMPLETE_INVALID
         observed = _observed_artifacts(output_root, record.artifacts)
         validation = validate_reload(root=output_root, completion=record, observed=observed)
         return ExistingExperimentState.COMPLETE_VALID if validation.valid else ExistingExperimentState.COMPLETE_INVALID
@@ -381,19 +391,27 @@ class PipelineStageRunner:
                 "the anchor gate applies only to the historical reproduction experiment",
                 subject=coordinate.experiment,
             )
+        diagnostics_directory = workspace.run_directory() / EvaluationRunAssetDirectory.ANCHOR
         result = verify_anchor(
             VerifyAnchorStageRequest(
                 protocol=ANCHOR_DECISION_PROTOCOL,
-                diagnostics_directory=workspace.run_directory() / EvaluationRunAssetDirectory.ANCHOR,
+                diagnostics_directory=diagnostics_directory,
                 observations=None,
                 historical_sources=None,
                 request_independent_reproduction=False,
             )
         )
+        outcome = (
+            StageOutcome.BLOCKED if result.status.gate_status is AnchorGateStatus.BLOCKED else StageOutcome.COMPLETED
+        )
         return StageExecution(
             stage=stage,
-            outcome=StageOutcome.COMPLETED,
-            evidence=f"gate={result.status.gate_status.value} readiness={result.status.dependent_readiness.value}",
+            outcome=outcome,
+            evidence=(
+                f"gate={result.status.gate_status.value} "
+                f"readiness={result.status.dependent_readiness.value} "
+                f"diagnostics={diagnostics_directory}"
+            ),
         )
 
     def _finalize_publication(

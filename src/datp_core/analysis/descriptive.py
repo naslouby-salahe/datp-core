@@ -285,10 +285,7 @@ def score_geometry_from_client_vectors(
     available = tuple(
         item
         for item in clients
-        if item.unavailable_reason is None
-        and item.scores
-        and item.minimum is not None
-        and item.maximum is not None
+        if item.unavailable_reason is None and item.scores and item.minimum is not None and item.maximum is not None
     )
     if available:
         lower = MetricValue(min(item.minimum.value for item in available if item.minimum is not None))

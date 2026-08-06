@@ -19,8 +19,8 @@ class _IncompleteStore:
     def __init__(self) -> None:
         self.deleted: list[str] = []
 
-    def state(self, coordinate, output_root: Path) -> ExistingExperimentState:
-        del coordinate, output_root
+    def state(self, coordinate, output_root: Path, provenance=None) -> ExistingExperimentState:
+        del coordinate, output_root, provenance
         return ExistingExperimentState.INCOMPLETE
 
     def delete(self, coordinate, output_root: Path) -> None:
@@ -32,8 +32,8 @@ class _CompleteStore:
     def __init__(self) -> None:
         self.deleted: list[str] = []
 
-    def state(self, coordinate, output_root: Path) -> ExistingExperimentState:
-        del coordinate, output_root
+    def state(self, coordinate, output_root: Path, provenance=None) -> ExistingExperimentState:
+        del coordinate, output_root, provenance
         return ExistingExperimentState.COMPLETE_VALID
 
     def delete(self, coordinate, output_root: Path) -> None:

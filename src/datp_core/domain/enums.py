@@ -157,6 +157,8 @@ class MetricId(StrEnum):
     ABSOLUTE_COVERAGE_ERROR = "absolute_coverage_error"
     ALERTS_PER_DAY = "alerts_per_day"
     COMMUNICATION_BYTES = "communication_bytes"
+    RECONSTRUCTION_ERROR = "reconstruction_error"
+    EMPIRICAL_CUMULATIVE_PROBABILITY = "empirical_cumulative_probability"
 
 
 class AvailabilityStatus(StrEnum):

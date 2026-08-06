@@ -150,7 +150,12 @@ class StageRunner(Protocol):
 
 
 class ExperimentOutputStore(Protocol):
-    def state(self, coordinate: ExperimentCoordinate, output_root: Path) -> ExistingExperimentState: ...
+    def state(
+        self,
+        coordinate: ExperimentCoordinate,
+        output_root: Path,
+        provenance: ExecutionProvenance | None = None,
+    ) -> ExistingExperimentState: ...
 
     def delete(self, coordinate: ExperimentCoordinate, output_root: Path) -> None: ...
 

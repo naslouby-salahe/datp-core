@@ -5,6 +5,7 @@ from datp_core.protocols.metrics import (
     CV_ZERO_MEAN_POLICY,
     NEAR_ZERO_MEAN_FPR_WARNING_CUTOFF,
     TEMPORAL_CV_MATERIALITY_CUTOFF,
+    TEMPORAL_MATERIAL_RECOVERY_RATIO_MINIMUM,
 )
 
 
@@ -16,3 +17,4 @@ def test_metric_semantics_are_explicit() -> None:
     assert MetricId.P10_BINARY_MACRO_F1 in ATTACK_QUALITY_CONTROL_METRICS
     assert NEAR_ZERO_MEAN_FPR_WARNING_CUTOFF.value == 0.01
     assert TEMPORAL_CV_MATERIALITY_CUTOFF.value == 0.10
+    assert TEMPORAL_MATERIAL_RECOVERY_RATIO_MINIMUM.value == 0.50
