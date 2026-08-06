@@ -2,8 +2,9 @@ import pytest
 from tests.unit.learning.federated.helpers import client_identity, fedavg_coordinate
 
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import CalibrationSize, Quantile, ReplicateIndex, Seed, ThresholdValue
-from datp_core.evaluation.threshold_estimation import ThresholdEstimationProvenance, evaluate_threshold_estimate
+from datp_core.domain.values import CalibrationSize, Quantile, ReplicateIndex, Seed
+from datp_core.evaluation.threshold_estimation import ThresholdEstimationProvenance
+from datp_core.evaluation.threshold_evidence import verify_held_out_benign_scores
 
 
 def test_threshold_estimation_rejects_an_empty_held_out_benign_score_set() -> None:
@@ -17,9 +18,8 @@ def test_threshold_estimation_rejects_an_empty_held_out_benign_score_set() -> No
     )
 
     with pytest.raises(ScientificContractError, match="non-empty"):
-        evaluate_threshold_estimate(
-            provenance=provenance,
-            estimated_threshold=ThresholdValue(0.5),
-            exact_pooled_benign_quantile_reference=ThresholdValue(0.5),
-            held_out_benign_scores=(),
+        verify_held_out_benign_scores(
+            client=provenance.client,
+            coordinate=provenance.coordinate,
+            scores=(),
         )
