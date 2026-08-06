@@ -16,14 +16,23 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Determine execution mode
+        id: mode
+        run: |
+          if [[ -f tools/refactor.ready ]]; then
+            echo 'apply=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'apply=false' >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Export exact branch workspace
-        if: ${{ !hashFiles('tools/refactor.ready') }}
+        if: ${{ steps.mode.outputs.apply == 'false' }}
         run: |
           tar --exclude=.git -czf /tmp/datp-core-workspace.tar.gz .
           cp /tmp/datp-core-workspace.tar.gz datp-core-workspace.tar.gz
 
       - name: Upload workspace
-        if: ${{ !hashFiles('tools/refactor.ready') }}
+        if: ${{ steps.mode.outputs.apply == 'false' }}
         uses: actions/upload-artifact@v4
         with:
           name: datp-core-workspace
@@ -31,7 +40,7 @@ jobs:
           retention-days: 1
 
       - name: Apply reviewed refactor patch
-        if: ${{ hashFiles('tools/refactor.ready') != '' }}
+        if: ${{ steps.mode.outputs.apply == 'true' }}
         run: |
           cat tools/refactor.patch.xz.b64.* | base64 --decode > /tmp/refactor.patch.xz
           echo '34cdaa836aa5b99d4207939a6a923b489eefc8dd943f1dbea7c09ca4a2eeb4f1  /tmp/refactor.patch.xz' | sha256sum --check --strict
@@ -40,17 +49,17 @@ jobs:
           git rm tools/refactor.ready tools/refactor.patch.xz.b64.* .github/workflows/refactor-workspace.yml
 
       - name: Set up uv
-        if: ${{ hashFiles('tools/refactor.ready') != '' }}
+        if: ${{ steps.mode.outputs.apply == 'true' }}
         uses: astral-sh/setup-uv@v6
 
       - name: Install Python and dependencies
-        if: ${{ hashFiles('tools/refactor.ready') != '' }}
+        if: ${{ steps.mode.outputs.apply == 'true' }}
         run: |
           uv python install 3.12
           uv sync --frozen --group dev
 
       - name: Format and validate completed migrations
-        if: ${{ hashFiles('tools/refactor.ready') != '' }}
+        if: ${{ steps.mode.outputs.apply == 'true' }}
         run: |
           uv run ruff check --fix src tests
           uv run ruff format src tests
@@ -62,7 +71,7 @@ jobs:
           uv run pytest -q
 
       - name: Push completed refactor
-        if: ${{ hashFiles('tools/refactor.ready') != '' }}
+        if: ${{ steps.mode.outputs.apply == 'true' }}
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
