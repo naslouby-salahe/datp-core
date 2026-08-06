@@ -10,7 +10,8 @@ from datp_core.analysis.contrasts import PairedContrast
 from datp_core.domain.enums import EvidenceRole, ExperimentId, FederatedThresholdMethod, MetricId, PopulationId
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import Checksum, MetricValue, Seed
-from datp_core.evaluation.population import FederatedEvaluationAssetName, FederatedEvaluationDocument
+from datp_core.evaluation.federated.contracts import FederatedEvaluationDocument
+from datp_core.evaluation.federated.publication import FederatedEvaluationAssetName
 from datp_core.pipeline.decision.evidence import AnalyzeConfirmatoryEvidenceRequest, analyze_confirmatory_evidence
 from datp_core.pipeline.execution.engine import CompletionRecordOutputStore, PipelineStageRunner, build_campaign, execute_campaign
 from datp_core.pipeline.execution.layout import EvaluationRunAssetDirectory
