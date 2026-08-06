@@ -137,6 +137,7 @@ def execute_campaign(
     stage_runner: StageRunner,
     output_store: ExperimentOutputStore,
     output_root: Path,
+    overwrite: bool = False,
 ) -> CampaignExecution:
     provenance = ExecutionProvenance(
         plan_digest=campaign.plan_digest,
@@ -150,6 +151,7 @@ def execute_campaign(
             stage_runner=stage_runner,
             output_store=output_store,
             output_root=output_root,
+            overwrite=overwrite,
         )
         for entry in campaign.entries
     )
@@ -389,30 +391,74 @@ class PipelineStageRunner:
         coordinate: ExperimentCoordinate,
         workspace: ExperimentWorkspace,
     ) -> StageExecution:
+        """Register this coordinate's independent observation when eligible; gate is cohort-level.
+
+        Seed-level VERIFY_ANCHOR stages complete after publishing the local observation so
+        training/evaluation can finish for every historical seed. The programme-level
+        ``anchor reproduce`` / ``anchor verify`` commands resolve the full five-seed gate.
+        """
         if coordinate.experiment is not ExperimentId.HISTORICAL_DATP_REPRODUCTION:
             raise ScientificContractError(
                 "the anchor gate applies only to the historical reproduction experiment",
                 subject=coordinate.experiment,
             )
-        diagnostics_directory = workspace.run_directory() / EvaluationRunAssetDirectory.ANCHOR
+        from datp_core.domain.enums import FederatedThresholdMethod, MetricId
+        from datp_core.pipeline.workflows.anchor import (
+            collect_independent_observations_from_evaluations,
+            default_anchor_diagnostics_directory,
+            independent_package_directory,
+            observation_from_evaluation_document,
+            publish_independent_observations,
+        )
+
+        diagnostics_directory = default_anchor_diagnostics_directory(workspace.output_root)
+        package_directory = independent_package_directory(workspace.output_root)
+        eligible = coordinate.metric is MetricId.FPR_COEFFICIENT_OF_VARIATION and coordinate.threshold_method in {
+            FederatedThresholdMethod.SHARED_THRESHOLD,
+            FederatedThresholdMethod.LOCAL_THRESHOLD,
+        }
+        if eligible:
+            document_path = (
+                workspace.run_directory()
+                / EvaluationRunAssetDirectory.EVALUATION
+                / FederatedEvaluationAssetName.DOCUMENT
+            )
+            if document_path.is_file():
+                try:
+                    document = workspace.evaluation_document()
+                    observation_from_evaluation_document(document, document_path=document_path)
+                except ScientificContractError:
+                    document = None
+                else:
+                    observations = collect_independent_observations_from_evaluations(output_root=workspace.output_root)
+                    if observations:
+                        publish_independent_observations(package_directory, observations)
         result = verify_anchor(
             VerifyAnchorStageRequest(
                 protocol=ANCHOR_DECISION_PROTOCOL,
                 diagnostics_directory=diagnostics_directory,
-                observations=None,
-                historical_sources=None,
-                request_independent_reproduction=False,
+                independent_package_directory=package_directory,
+                request_independent_reproduction=True,
             )
         )
+        # Incomplete independent packages leave the gate blocked without stopping remaining seeds.
+        # A complete package that fails equivalence surfaces as a blocked stage outcome.
+        expected_observations = len(ANCHOR_DECISION_PROTOCOL.references)
+        complete_cohort = result.status.observation_count.value >= expected_observations
         outcome = (
-            StageOutcome.BLOCKED if result.status.gate_status is AnchorGateStatus.BLOCKED else StageOutcome.COMPLETED
+            StageOutcome.BLOCKED
+            if result.status.gate_status is AnchorGateStatus.BLOCKED and complete_cohort
+            else StageOutcome.COMPLETED
         )
+        if result.status.gate_status is AnchorGateStatus.BLOCKED and not complete_cohort:
+            outcome = StageOutcome.COMPLETED
         return StageExecution(
             stage=stage,
             outcome=outcome,
             evidence=(
                 f"gate={result.status.gate_status.value} "
                 f"readiness={result.status.dependent_readiness.value} "
+                f"observations={result.status.observation_count.value} "
                 f"diagnostics={diagnostics_directory}"
             ),
         )

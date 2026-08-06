@@ -90,6 +90,8 @@ def _run_bounded_external_seed(
     experiment: ExperimentId,
     partition_seed: Seed,
     reason: BoundedExternalPlanningReason,
+    output_root: Path | None = None,
+    overwrite: bool = False,
 ) -> BoundedExternalSeedResult:
     declaration = _bounded_external_declaration(experiment)
     plan = expand_experiment_plan(
@@ -113,7 +115,8 @@ def _run_bounded_external_seed(
         campaign=campaign,
         stage_runner=PipelineStageRunner(),
         output_store=CompletionRecordOutputStore(),
-        output_root=OUTPUTS_ROOT,
+        output_root=OUTPUTS_ROOT if output_root is None else output_root,
+        overwrite=overwrite,
     )
     failed = tuple(result for result in execution.experiments if not result.successful)
     if failed:

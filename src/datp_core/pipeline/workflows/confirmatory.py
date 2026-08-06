@@ -121,7 +121,12 @@ class FedAvgCvFprEffectEvidence:
         return MetricValue(self.shared_cv.value - self.local_cv.value)
 
 
-def run_confirmatory_seed(training_seed: Seed) -> ConfirmatorySeedResult:
+def run_confirmatory_seed(
+    training_seed: Seed,
+    *,
+    output_root: Path | None = None,
+    overwrite: bool = False,
+) -> ConfirmatorySeedResult:
     declaration = _confirmatory_declaration()
     plan = expand_experiment_plan(
         declarations=(declaration,),
@@ -141,7 +146,8 @@ def run_confirmatory_seed(training_seed: Seed) -> ConfirmatorySeedResult:
         campaign=campaign,
         stage_runner=PipelineStageRunner(),
         output_store=CompletionRecordOutputStore(),
-        output_root=OUTPUTS_ROOT,
+        output_root=OUTPUTS_ROOT if output_root is None else output_root,
+        overwrite=overwrite,
     )
     failed = tuple(result for result in execution.experiments if not result.successful)
     if failed:
@@ -161,7 +167,12 @@ def run_confirmatory_campaign() -> ConfirmatoryCampaignResult:
     return ConfirmatoryCampaignResult(seeds=seeds)
 
 
-def run_family_grouped_mechanism_seed(training_seed: Seed) -> ConfirmatorySeedResult:
+def run_family_grouped_mechanism_seed(
+    training_seed: Seed,
+    *,
+    output_root: Path | None = None,
+    overwrite: bool = False,
+) -> ConfirmatorySeedResult:
     """Execute the family/grouped mechanism ladder for one seed under fixed FedAvg detector.
 
     Publishes FAMILY_THRESHOLD and CLUSTER_THRESHOLD (with the rest of the locked
@@ -193,7 +204,8 @@ def run_family_grouped_mechanism_seed(training_seed: Seed) -> ConfirmatorySeedRe
         campaign=campaign,
         stage_runner=PipelineStageRunner(),
         output_store=CompletionRecordOutputStore(),
-        output_root=OUTPUTS_ROOT,
+        output_root=OUTPUTS_ROOT if output_root is None else output_root,
+        overwrite=overwrite,
     )
     failed = tuple(result for result in execution.experiments if not result.successful)
     if failed:

@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from pathlib import Path
+from shutil import rmtree
 
 from datp_core.datasets.paths import canonical_root_under, raw_dataset_root
 from datp_core.datasets.registry import DatasetPublication, dataset_binding
@@ -12,6 +13,7 @@ from datp_core.domain.enums import DatasetId
 class DatasetMaterializationRequest:
     data_root: Path
     datasets: tuple[DatasetId, ...]
+    overwrite: bool = False
 
     def __post_init__(self) -> None:
         if not self.datasets or len(self.datasets) != len(frozenset(self.datasets)):
@@ -25,11 +27,15 @@ class DatasetMaterializationResult:
 
 def materialize_datasets(request: DatasetMaterializationRequest) -> DatasetMaterializationResult:
     """Publish every requested dataset through its authoritative binding."""
-    publications = tuple(
-        dataset_binding(dataset).publish(
-            raw_dataset_root(request.data_root, dataset),
-            canonical_root_under(request.data_root, dataset).parent,
+    publications: list[DatasetPublication] = []
+    for dataset in request.datasets:
+        canonical_root = canonical_root_under(request.data_root, dataset)
+        if request.overwrite and canonical_root.exists():
+            rmtree(canonical_root)
+        publications.append(
+            dataset_binding(dataset).publish(
+                raw_dataset_root(request.data_root, dataset),
+                canonical_root.parent,
+            )
         )
-        for dataset in request.datasets
-    )
-    return DatasetMaterializationResult(publications=publications)
+    return DatasetMaterializationResult(publications=tuple(publications))

@@ -1,16 +1,49 @@
-"""Composition root for execution command families."""
+"""Generic experiment and campaign execution commands."""
+
+from __future__ import annotations
+
+from typing import Annotated
 
 import typer
 
-from datp_core.cli.confirmatory import app as confirmatory_app
-from datp_core.cli.datasets import app as datasets_app
-from datp_core.cli.external import app as external_app
-from datp_core.cli.personalization import app as personalization_app
-from datp_core.cli.temporal import app as temporal_app
+from datp_core.cli.validation import echo_error, map_exception_to_exit
+from datp_core.domain.enums import ExperimentId
+from datp_core.pipeline.workflows import run_campaign, run_experiment
 
-app = typer.Typer(no_args_is_help=True)
-app.add_typer(datasets_app)
-app.add_typer(confirmatory_app)
-app.add_typer(personalization_app)
-app.add_typer(external_app)
-app.add_typer(temporal_app)
+app = typer.Typer(no_args_is_help=True, help="Run one experiment or the complete campaign.")
+
+
+@app.command("experiment")
+def experiment_command(
+    experiment_id: Annotated[ExperimentId, typer.Argument(case_sensitive=False)],
+    overwrite: Annotated[
+        bool,
+        typer.Option("--overwrite", help="Rebuild this experiment's owned artifacts"),
+    ] = False,
+) -> None:
+    """Run one experiment's complete declared workflow and full seed cohort."""
+    try:
+        result = run_experiment(experiment_id, overwrite=overwrite, smoke=False)
+    except Exception as error:
+        echo_error(error)
+        raise typer.Exit(code=map_exception_to_exit(error)) from error
+    typer.echo(
+        f"experiment={result.experiment.value} seeds={len(result.seeds)} "
+        f"output_root={result.output_root} detail={result.detail}"
+    )
+
+
+@app.command("campaign")
+def campaign_command(
+    overwrite: Annotated[
+        bool,
+        typer.Option("--overwrite", help="Rebuild campaign-owned execution and analysis artifacts"),
+    ] = False,
+) -> None:
+    """Run the complete scientific programme in deterministic dependency order."""
+    try:
+        result = run_campaign(overwrite=overwrite)
+    except Exception as error:
+        echo_error(error)
+        raise typer.Exit(code=map_exception_to_exit(error)) from error
+    typer.echo(f"campaign experiments={len(result.experiments)} detail={result.detail}")

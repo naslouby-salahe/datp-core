@@ -71,3 +71,35 @@ class ArtifactIntegrityError(DatpCoreError):
 
 class ExecutionStateError(DatpCoreError):
     pass
+
+
+class UnknownIdentifierError(DatpCoreError):
+    pass
+
+
+class MissingPrerequisiteError(DatpCoreError):
+    pass
+
+
+class ReportEvidenceError(DatpCoreError):
+    pass
+
+
+class CliExitCode(Enum):
+    """Stable CLI exit codes for typed domain failures."""
+
+    SUCCESS = 0
+    USAGE = 2
+    INVALID_DECLARATION = 10
+    UNKNOWN_IDENTIFIER = 11
+    MISSING_RAW_DATASET = 12
+    INVALID_CANONICAL_DATASET = 13
+    PROVENANCE_FAILURE = 14
+    INCOMPLETE_PREREQUISITE = 15
+    ANCHOR_GATE_FAILURE = 16
+    EXPERIMENT_FAILURE = 17
+    INVALID_ARTIFACT = 18
+    MISSING_REPORT_EVIDENCE = 19
+    REPORT_FAILURE = 20
+    SCIENTIFIC_CONTRACT = 30
+    INTERNAL = 1

@@ -1,4 +1,4 @@
-.PHONY: format format-check lint pylint typecheck test test-parallel nox materialize-canonical preprocess-federated preprocess-centralized-reference sonar-analyze codescene-delta code-health
+.PHONY: format format-check lint pylint typecheck test test-parallel nox preprocess validate plan status sonar-analyze codescene-delta code-health
 
 UV ?= uv
 SONAR ?= $(HOME)/.local/share/sonarqube-cli/bin/sonar
@@ -37,33 +37,17 @@ test-parallel:
 nox:
 	$(UV) run nox
 
-materialize-canonical:
-	$(UV) run datp-core run materialize-datasets
+preprocess:
+	$(UV) run datp-core preprocess $(if $(DATASET_ID),$(DATASET_ID),) $(if $(OVERWRITE),--overwrite,)
 
-# Explicit scientific coordinates are required; no Makefile defaults for seed or population.
-preprocess-federated:
-	@test -n "$(POPULATION)" || (echo "POPULATION is required" >&2; exit 1)
-	@test -n "$(PARTITION_SEED)" || (echo "PARTITION_SEED is required" >&2; exit 1)
-	@test -n "$(SPLIT_PROTOCOL)" || (echo "SPLIT_PROTOCOL is required" >&2; exit 1)
-	@test -n "$(PREPROCESSING_IDENTITY)" || (echo "PREPROCESSING_IDENTITY is required" >&2; exit 1)
-	$(UV) run datp-core run preprocess-federated \
-		--population "$(POPULATION)" \
-		--partition-seed "$(PARTITION_SEED)" \
-		--split-protocol "$(SPLIT_PROTOCOL)" \
-		--preprocessing-identity "$(PREPROCESSING_IDENTITY)" \
-		$(if $(PARTITION_KIND),--partition-kind "$(PARTITION_KIND)",) \
-		$(if $(CONCENTRATION),--concentration "$(CONCENTRATION)",)
+validate:
+	$(UV) run datp-core validate $(if $(EXPERIMENT_ID),$(EXPERIMENT_ID),)
 
-preprocess-centralized-reference:
-	@test -n "$(POPULATION)" || (echo "POPULATION is required" >&2; exit 1)
-	@test -n "$(PARTITION_SEED)" || (echo "PARTITION_SEED is required" >&2; exit 1)
-	@test -n "$(SPLIT_PROTOCOL)" || (echo "SPLIT_PROTOCOL is required" >&2; exit 1)
-	$(UV) run datp-core run preprocess-centralized \
-		--population "$(POPULATION)" \
-		--partition-seed "$(PARTITION_SEED)" \
-		--split-protocol "$(SPLIT_PROTOCOL)" \
-		$(if $(PARTITION_KIND),--partition-kind "$(PARTITION_KIND)",) \
-		$(if $(CONCENTRATION),--concentration "$(CONCENTRATION)",)
+plan:
+	$(UV) run datp-core plan $(if $(EXPERIMENT_ID),$(EXPERIMENT_ID),)
+
+status:
+	$(UV) run datp-core status $(if $(EXPERIMENT_ID),$(EXPERIMENT_ID),)
 
 # Loads untracked .env into the recipe environment without printing secrets.
 define load-local-env

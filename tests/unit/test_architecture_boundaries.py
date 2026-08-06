@@ -176,7 +176,23 @@ def test_absorption_and_mechanism_helpers_have_production_callers() -> None:
     assert any(path.parts[0] == "pipeline" for path in mechanisms_importers)
     personalization = (_SOURCE_ROOT / "pipeline" / "workflows" / "personalization.py").read_text(encoding="utf-8")
     assert "decide_absorption_cohort" in personalization
-    personalization_cli = (_SOURCE_ROOT / "cli" / "personalization.py").read_text(encoding="utf-8")
-    assert "analyze-ditto-absorption" in personalization_cli
-    assert "analyze-fedprox-absorption" in personalization_cli
-    assert "load_fedavg_cv_fpr_effect" in personalization_cli
+    programme = (_SOURCE_ROOT / "pipeline" / "workflows" / "__init__.py").read_text(encoding="utf-8")
+    assert "analyze_fedprox_absorption" in programme
+    assert "generate_report" in programme
+    assert "run_experiment" in programme
+
+
+def test_cli_surface_is_research_facing_only() -> None:
+    cli = _SOURCE_ROOT / "cli"
+    present = {path.name for path in cli.glob("*.py")}
+    assert present == {"__init__.py", "app.py", "anchor.py", "execution.py", "validation.py"}
+    app_text = (cli / "app.py").read_text(encoding="utf-8")
+    for obsolete in (
+        "confirmatory-seed",
+        "materialize-datasets",
+        "preprocess-federated",
+        "validate-protocols",
+        "training-seed",
+        "partition-seed",
+    ):
+        assert obsolete not in app_text

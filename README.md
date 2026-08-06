@@ -39,7 +39,7 @@ Key boundaries:
 - `preprocessing`, `learning`, `thresholding`, and `evaluation` own their scientific computations and contracts.
 - `analysis` consumes validated evaluation evidence.
 - `pipeline` composes application workflows without redefining lower-level contracts. Deterministic planning, stage sequencing, reuse, provenance, completion validation, and publication live under `pipeline/`.
-- `cli` is the only user-facing execution interface (Typer). Experiments run through CLI commands that call `pipeline/workflows/`.
+- `cli` is a thin research-facing adapter. It accepts only experiment IDs, dataset IDs, and `--overwrite`, and calls programme services in `pipeline/workflows/`.
 
 No external orchestration framework is required. Artifact reuse, idempotency, provenance, checksums, and completion validation are repository-owned.
 
@@ -63,33 +63,46 @@ python -m pip install -e '.[dev]'
 
 ## Execution
 
-Experiments are executed only through the Typer CLI and the underlying pipeline workflows. There is no separate orchestration entrypoint.
+The public CLI exposes only research intentions. Scientific parameters (seeds, coefficients, populations, split protocols, threshold policies, paths, and training hyperparameters) are resolved from typed protocol declarations.
+
+```text
+datp-core
+├── validate [EXPERIMENT_ID]
+├── plan [EXPERIMENT_ID]
+├── preprocess [DATASET_ID] [--overwrite]
+├── smoke [EXPERIMENT_ID] [--overwrite]
+├── anchor
+│   ├── reproduce [--overwrite]
+│   ├── verify
+│   └── status
+├── run
+│   ├── experiment <EXPERIMENT_ID> [--overwrite]
+│   └── campaign [--overwrite]
+├── report [EXPERIMENT_ID] [--overwrite]
+└── status [EXPERIMENT_ID]
+```
+
+Examples:
+
+```bash
+datp-core validate
+datp-core plan shared_vs_local_confirmation
+datp-core preprocess
+datp-core preprocess nbaiot --overwrite
+datp-core smoke shared_vs_local_confirmation
+datp-core anchor reproduce
+datp-core anchor verify
+datp-core anchor status
+datp-core run experiment shared_vs_local_confirmation
+datp-core run campaign
+datp-core report
+datp-core status
+```
+
+Module invocation uses the same application:
 
 ```bash
 python -m datp_core.cli.app --help
-python -m datp_core.cli.app plan validate-protocols
-python -m datp_core.cli.app plan build
-python -m datp_core.cli.app run materialize-datasets
-python -m datp_core.cli.app run confirmatory-campaign
-python -m datp_core.cli.app run family-grouped-mechanism-campaign
-python -m datp_core.cli.app run analyze-confirmatory
-python -m datp_core.cli.app run ditto-stress-test-campaign
-python -m datp_core.cli.app run analyze-ditto-absorption
-python -m datp_core.cli.app run fedprox-coefficient-campaign --coefficient 0.01
-python -m datp_core.cli.app run analyze-fedprox-absorption --coefficient 0.01
-python -m datp_core.cli.app run temporal-evidence-campaign
-python -m datp_core.cli.app run edge-benign-equity-seed --partition-seed 0
-python -m datp_core.cli.app run analyze-edge-benign-equity
-python -m datp_core.cli.app run ciciot-file-client-boundary-seed --partition-seed 0
-python -m datp_core.cli.app run analyze-ciciot-file-client-boundary
-python -m datp_core.cli.app run centralized-reference-seed --training-seed 0
-```
-
-Inspect command-specific options before execution:
-
-```bash
-python -m datp_core.cli.app run --help
-python -m datp_core.cli.app plan --help
 ```
 
 ## Validation
@@ -108,6 +121,8 @@ Training and end-to-end execution additionally require the audited raw datasets 
 ## Artifact lifecycle
 
 Artifact reuse, idempotency, provenance, checksums, and completion validation are owned by this repository (not by an external orchestrator). Published artifacts are immutable, checksummed, and coordinate-bound. A complete artifact may be reused only when its request identity and persisted evidence validate under the current contract. Incomplete outputs are not resumed; they are replaced and rebuilt. Changes to artifact layout or scientific contracts intentionally invalidate incompatible prior outputs.
+
+Smoke artifacts live under `outputs/smoke/` and must not be treated as confirmatory evidence.
 
 ## Development rules
 

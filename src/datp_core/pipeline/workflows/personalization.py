@@ -429,6 +429,8 @@ def run_fedprox_stress_test_seed(
     *,
     training_seed: Seed,
     coefficient: ProximalCoefficient,
+    output_root: Path | None = None,
+    overwrite: bool = False,
 ) -> FedProxStressTestResult:
     """Train FedProx, score, threshold, and evaluate for one confirmatory seed and coefficient."""
     declaration = next(item for item in EXPERIMENTS if item.id is ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST)
@@ -470,7 +472,8 @@ def run_fedprox_stress_test_seed(
         campaign=campaign,
         stage_runner=PipelineStageRunner(),
         output_store=CompletionRecordOutputStore(),
-        output_root=OUTPUTS_ROOT,
+        output_root=OUTPUTS_ROOT if output_root is None else output_root,
+        overwrite=overwrite,
     )
     failed = tuple(result for result in execution.experiments if not result.successful)
     if failed:
