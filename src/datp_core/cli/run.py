@@ -7,6 +7,7 @@ from typing import Annotated
 import typer
 
 from datp_core.datasets.partitioning.contracts import ControlledPartitionCondition, dirichlet_condition, iid_condition
+from datp_core.datasets.service import DatasetMaterializationRequest, materialize_datasets as publish_datasets
 from datp_core.domain.enums import (
     ControlledPartitionKind,
     DatasetId,
@@ -15,13 +16,6 @@ from datp_core.domain.enums import (
     SplitProtocolId,
 )
 from datp_core.domain.values import DirichletConcentration, DittoRegularization, Seed
-from datp_core.pipeline.preparation.datasets import MaterializeDatasetRequest, materialize_dataset
-from datp_core.pipeline.preparation.preprocessing import (
-    FitCentralizedPopulationPreprocessingRequest,
-    FitFederatedPreprocessingRequest,
-    fit_centralized_population_preprocessing,
-    fit_federated_preprocessing,
-)
 from datp_core.pipeline.workflows.centralized import run_centralized_reference_seed
 from datp_core.pipeline.workflows.confirmatory import (
     analyze_confirmatory_campaign,
@@ -31,6 +25,11 @@ from datp_core.pipeline.workflows.confirmatory import (
 from datp_core.pipeline.workflows.external import run_ciciot_boundary_seed, run_external_validation_seed
 from datp_core.pipeline.workflows.personalization import run_ditto_stress_test_seed
 from datp_core.pipeline.workflows.temporal import run_temporal_campaign, run_temporal_seed
+from datp_core.preprocessing.centralized import (
+    CentralizedPopulationPreprocessingRequest,
+    preprocess_centralized_population,
+)
+from datp_core.preprocessing.service import FederatedPreprocessingRequest, preprocess_federated
 from datp_core.protocols.populations import DIRICHLET_CONCENTRATIONS
 from datp_core.protocols.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_SEED_COHORT
 from datp_core.protocols.training import DITTO_TRAINING_PROTOCOLS
@@ -50,7 +49,7 @@ _FEDERATED_PREPROCESSING_IDENTITIES = frozenset(
 
 @app.command("materialize-datasets")
 def materialize_datasets() -> None:
-    result = materialize_dataset(MaterializeDatasetRequest(data_root=DATA_ROOT, datasets=tuple(DatasetId)))
+    result = publish_datasets(DatasetMaterializationRequest(data_root=DATA_ROOT, datasets=tuple(DatasetId)))
     for publication in result.publications:
         typer.echo(
             f"{publication.dataset.value} {publication.publication_status.value} "
@@ -59,7 +58,7 @@ def materialize_datasets() -> None:
 
 
 @app.command("preprocess-federated")
-def preprocess_federated(
+def preprocess_federated_command(
     population: Annotated[PopulationId, typer.Option()],
     partition_seed: Annotated[int, typer.Option(min=0)],
     split_protocol: Annotated[SplitProtocolId, typer.Option()],
@@ -70,8 +69,8 @@ def preprocess_federated(
     if preprocessing_identity not in _FEDERATED_PREPROCESSING_IDENTITIES:
         allowed = ", ".join(sorted(item.value for item in _FEDERATED_PREPROCESSING_IDENTITIES))
         raise typer.BadParameter(f"preprocessing-identity must be one of: {allowed}")
-    result = fit_federated_preprocessing(
-        FitFederatedPreprocessingRequest(
+    result = preprocess_federated(
+        FederatedPreprocessingRequest(
             population=population,
             partition_seed=Seed(partition_seed),
             split_protocol=split_protocol,
@@ -88,15 +87,15 @@ def preprocess_federated(
 
 
 @app.command("preprocess-centralized")
-def preprocess_centralized(
+def preprocess_centralized_command(
     population: Annotated[PopulationId, typer.Option()],
     partition_seed: Annotated[int, typer.Option(min=0)],
     split_protocol: Annotated[SplitProtocolId, typer.Option()],
     partition_kind: Annotated[ControlledPartitionKind | None, typer.Option()] = None,
     concentration: Annotated[float | None, typer.Option()] = None,
 ) -> None:
-    result = fit_centralized_population_preprocessing(
-        FitCentralizedPopulationPreprocessingRequest(
+    result = preprocess_centralized_population(
+        CentralizedPopulationPreprocessingRequest(
             population=population,
             partition_seed=Seed(partition_seed),
             split_protocol=split_protocol,

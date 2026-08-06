@@ -14,12 +14,14 @@ from pathlib import Path
 from shutil import rmtree
 
 from datp_core.anchor.models import VerifyAnchorStageRequest
+from datp_core.datasets.service import DatasetMaterializationRequest, materialize_datasets
 from datp_core.domain.enums import ExperimentId, PublicationStatus
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.provenance import canonical_checksum
 from datp_core.domain.values import ByteCount, Checksum, checksum_file
+from datp_core.evaluation.federated.publication import FederatedEvaluationAssetName
 from datp_core.evaluation.models import metric_by_id
-from datp_core.evaluation.population import FederatedEvaluationAssetName
+from datp_core.pipeline.execution.layout import EvaluationRunAssetDirectory
 from datp_core.pipeline.execution.models import (
     ANCHOR_REPRODUCTION_RECIPE,
     STANDARD_FEDERATED_RECIPE,
@@ -37,7 +39,7 @@ from datp_core.pipeline.execution.models import (
     StageRunner,
     campaign_digest,
 )
-from datp_core.pipeline.execution.workspace import EvaluationRunAssetDirectory, ExperimentWorkspace
+from datp_core.pipeline.execution.workspace import ExperimentWorkspace
 from datp_core.pipeline.planning import (
     ExecutionRoute,
     ExperimentCoordinate,
@@ -45,7 +47,6 @@ from datp_core.pipeline.planning import (
     PlanDisposition,
     execution_route_for,
 )
-from datp_core.pipeline.preparation.datasets import MaterializeDatasetRequest, materialize_dataset
 from datp_core.pipeline.publication.layout import experiment_output_directory
 from datp_core.pipeline.publication.models import ArtifactKind, ArtifactRecord, ArtifactState, CompletionState
 from datp_core.pipeline.publication.service import (
@@ -57,12 +58,7 @@ from datp_core.pipeline.publication.service import (
 from datp_core.pipeline.workflows.anchor import verify_anchor
 from datp_core.protocols.anchor import ANCHOR_DECISION_PROTOCOL
 from datp_core.protocols.experiments import EXPERIMENTS
-from datp_core.protocols.graph import (
-    ObservationBoundary,
-    ObservationContext,
-    ObservationHook,
-    observe_graph_boundary,
-)
+from datp_core.protocols.graph import ObservationBoundary, ObservationContext, ObservationHook, observe_graph_boundary
 from datp_core.protocols.inference import FixedScoreInvariant
 from datp_core.runtime.configuration import DATA_ROOT
 
@@ -87,11 +83,7 @@ def build_campaign(plan: ExperimentPlan) -> CampaignPlan:
         and execution_route_for(entry.coordinate) is ExecutionRoute.SINGLE_COORDINATE
     )
     entries = tuple(CampaignEntry(ordinal=index, coordinate=coordinate) for index, coordinate in enumerate(coordinates))
-    return CampaignPlan(
-        entries=entries,
-        digest=campaign_digest(entries),
-        plan_digest=Checksum(plan.digest),
-    )
+    return CampaignPlan(entries=entries, digest=campaign_digest(entries), plan_digest=Checksum(plan.digest))
 
 
 def protocol_digest() -> Checksum:
@@ -213,11 +205,7 @@ class PipelineStageRunner:
             return StageExecution(stage=stage, outcome=StageOutcome.BLOCKED, evidence=str(error))
 
     def _workspace_for(self, coordinate: ExperimentCoordinate, output_root: Path) -> ExperimentWorkspace:
-        if (
-            self._workspace is None
-            or self._workspace.coordinate != coordinate
-            or self._workspace.output_root != output_root
-        ):
+        if self._workspace is None or self._workspace.coordinate != coordinate or self._workspace.output_root != output_root:
             self._workspace = ExperimentWorkspace(coordinate=coordinate, output_root=output_root)
         return self._workspace
 
@@ -287,7 +275,7 @@ class PipelineStageRunner:
                 )
 
     def _materialize_dataset(self, stage: PipelineStage, coordinate: ExperimentCoordinate) -> StageExecution:
-        result = materialize_dataset(MaterializeDatasetRequest(data_root=DATA_ROOT, datasets=(coordinate.dataset,)))
+        result = materialize_datasets(DatasetMaterializationRequest(data_root=DATA_ROOT, datasets=(coordinate.dataset,)))
         publication = result.publications[0]
         return StageExecution(
             stage=stage,
@@ -297,9 +285,7 @@ class PipelineStageRunner:
 
     def _train_detector(self, stage: PipelineStage, workspace: ExperimentWorkspace) -> StageExecution:
         result = workspace.training
-        outcome = (
-            StageOutcome.COMPLETED if result.publication_status is PublicationStatus.PUBLISHED else StageOutcome.REUSED
-        )
+        outcome = StageOutcome.COMPLETED if result.publication_status is PublicationStatus.PUBLISHED else StageOutcome.REUSED
         return StageExecution(
             stage=stage,
             outcome=outcome,
@@ -320,11 +306,7 @@ class PipelineStageRunner:
     ) -> StageExecution:
         checksum = canonical_checksum(FixedScoreInvariant.from_manifest(workspace.scores))
         self._observe(ObservationBoundary.AFTER_SCORE_GENERATION_BEFORE_CALIBRATION, coordinate, checksum)
-        return StageExecution(
-            stage=stage,
-            outcome=StageOutcome.COMPLETED,
-            evidence=f"score_invariant={checksum.value}",
-        )
+        return StageExecution(stage=stage, outcome=StageOutcome.COMPLETED, evidence=f"score_invariant={checksum.value}")
 
     def _build_calibration(
         self,
@@ -362,11 +344,7 @@ class PipelineStageRunner:
         workspace: ExperimentWorkspace,
     ) -> StageExecution:
         evaluation = workspace.evaluation
-        self._observe(
-            ObservationBoundary.AFTER_EVALUATION_BEFORE_ANALYSIS,
-            coordinate,
-            evaluation.complete_digest,
-        )
+        self._observe(ObservationBoundary.AFTER_EVALUATION_BEFORE_ANALYSIS, coordinate, evaluation.complete_digest)
         return StageExecution(
             stage=stage,
             outcome=StageOutcome.COMPLETED,
@@ -400,7 +378,7 @@ class PipelineStageRunner:
         result = verify_anchor(
             VerifyAnchorStageRequest(
                 protocol=ANCHOR_DECISION_PROTOCOL,
-                diagnostics_directory=(workspace.run_directory() / EvaluationRunAssetDirectory.ANCHOR.value),
+                diagnostics_directory=workspace.run_directory() / EvaluationRunAssetDirectory.ANCHOR,
                 observations=None,
                 historical_sources=None,
                 request_independent_reproduction=False,
@@ -423,7 +401,7 @@ class PipelineStageRunner:
         selected = workspace.selection.selected
         evaluation_document_path = (
             workspace.run_directory()
-            / EvaluationRunAssetDirectory.EVALUATION.value
+            / EvaluationRunAssetDirectory.EVALUATION
             / FederatedEvaluationAssetName.DOCUMENT
         )
         if not evaluation_document_path.is_file():

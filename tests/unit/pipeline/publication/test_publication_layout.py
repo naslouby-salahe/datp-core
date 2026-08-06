@@ -14,7 +14,7 @@ from datp_core.domain.enums import (
     TrainingModelId,
 )
 from datp_core.domain.values import ModelCoefficientValue, Seed
-from datp_core.pipeline.execution.workspace import bounded_evidence_seed_directory
+from datp_core.pipeline.execution.layout import bounded_evidence_seed_directory
 from datp_core.pipeline.planning import ExperimentCoordinate
 from datp_core.pipeline.publication.layout import evaluation_run_directory, experiment_output_directory
 from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity

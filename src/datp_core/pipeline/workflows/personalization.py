@@ -35,27 +35,23 @@ from datp_core.domain.values import (
     checksum_file,
 )
 from datp_core.evaluation.client_metrics import calculate_client_metrics
-from datp_core.evaluation.cohorts import build_evaluation_cohort_manifest, client_partition_counts_from_scores
+from datp_core.evaluation.cohort.construction import build_evaluation_cohort_manifest
+from datp_core.evaluation.cohort.evidence import client_partition_counts_from_scores
 from datp_core.evaluation.confusion import calculate_confusion_counts
-from datp_core.evaluation.controls import evaluation_label_checksum, source_row_checksum
+from datp_core.evaluation.fixed_score.checksums import evaluation_label_checksum, source_row_checksum
 from datp_core.evaluation.models import ClientMetricResult
 from datp_core.learning.federated.ditto import DittoTrainingRequest
 from datp_core.learning.federated.models import FederatedTrainingCoordinate, PreparedClientProvenance
 from datp_core.learning.federated.training import preprocessing_state_set_checksum
 from datp_core.pipeline.checkpoints.service import SelectFederatedCheckpointRequest, select_federated_primary_checkpoint
 from datp_core.pipeline.decision.federated import ConstructFederatedThresholdsRequest, construct_federated_thresholds
-from datp_core.pipeline.execution.workspace import (
+from datp_core.pipeline.execution.context import (
     client_training_inputs,
     client_with_id,
     family_identities,
     training_feature_names,
 )
 from datp_core.pipeline.preparation.populations import ConstructDeclaredPopulationRequest, construct_declared_population
-from datp_core.pipeline.preparation.preprocessing import (
-    FitFederatedPreprocessingRequest,
-    FitFederatedPreprocessingResult,
-    fit_federated_preprocessing,
-)
 from datp_core.pipeline.scoring.federated import publish_federated_scores
 from datp_core.pipeline.scoring.models import (
     ClientScoringInput,
@@ -63,12 +59,9 @@ from datp_core.pipeline.scoring.models import (
     FederatedScoreRecord,
     GenerateFederatedScoresRequest,
 )
-from datp_core.pipeline.training.personalized import (
-    TrainDittoDetectorRequest,
-    TrainDittoDetectorResult,
-    train_ditto_detector,
-)
+from datp_core.pipeline.training.personalized import TrainDittoDetectorRequest, TrainDittoDetectorResult, train_ditto_detector
 from datp_core.preprocessing.models import ClientPreprocessingResult
+from datp_core.preprocessing.service import FederatedPreprocessingOutcome, FederatedPreprocessingRequest, preprocess_federated
 from datp_core.protocols.calibration import CANONICAL_QUANTILE
 from datp_core.protocols.inference import FixedScoreInvariant
 from datp_core.protocols.training import (
@@ -105,7 +98,7 @@ class DittoStressTestResult:
 class DittoPopulationContext:
     clients: tuple[ClientIdentity, ...]
     family_by_client: tuple[tuple[ClientIdentity, FamilyIdentity], ...]
-    preprocessing: FitFederatedPreprocessingResult
+    preprocessing: FederatedPreprocessingOutcome
     split_manifest_checksum: Checksum
     preprocessing_state_set_checksum: Checksum
 
@@ -116,11 +109,7 @@ class PersonalizedScoreCollection:
     manifests: ClientCollection[ClientIdentity, FederatedScoreArtifactManifest]
 
 
-def run_ditto_stress_test_seed(
-    *,
-    training_seed: Seed,
-    regularization: DittoRegularization,
-) -> DittoStressTestResult:
+def run_ditto_stress_test_seed(*, training_seed: Seed, regularization: DittoRegularization) -> DittoStressTestResult:
     population = PopulationId.NBAIOT_NATURAL_DEVICES
     split_protocol = SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS
     preprocessing_identity = PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD
@@ -152,9 +141,7 @@ def run_ditto_stress_test_seed(
             request=DittoTrainingRequest(
                 global_coordinate=global_coordinate,
                 personalized_coordinate=personalized_coordinate,
-                clients=client_training_inputs(
-                    context.preprocessing.client_publications, context.clients, feature_names
-                ),
+                clients=client_training_inputs(context.preprocessing.client_publications, context.clients, feature_names),
                 population_client_count=ClientCount(len(context.clients)),
                 autoencoder=NBAIOT_AUTOENCODER,
                 training_protocol=resolve_ditto_protocol(regularization),
@@ -163,11 +150,7 @@ def run_ditto_stress_test_seed(
                 batch_size=BATCH_SIZE,
                 learning_rate=LEARNING_RATE,
                 split_manifest_checksum=context.split_manifest_checksum,
-                global_output_directory=ditto_directory(
-                    training_seed,
-                    regularization,
-                    DittoArtifactBranch.GLOBAL_MODEL,
-                ),
+                global_output_directory=ditto_directory(training_seed, regularization, DittoArtifactBranch.GLOBAL_MODEL),
                 personalized_output_directory=ditto_directory(
                     training_seed,
                     regularization,
@@ -269,8 +252,8 @@ def _population_context(
             controlled_condition=None,
         )
     )
-    preprocessing = fit_federated_preprocessing(
-        FitFederatedPreprocessingRequest(
+    preprocessing = preprocess_federated(
+        FederatedPreprocessingRequest(
             population=population,
             partition_seed=training_seed,
             split_protocol=split_protocol,
@@ -310,11 +293,7 @@ def _personalized_scores(
 ) -> PersonalizedScoreCollection:
     eligible: list[ClientBenignCalibrationScores] = []
     manifests: list[ClientOwned[ClientIdentity, FederatedScoreArtifactManifest]] = []
-    personalized_directory = ditto_directory(
-        training_seed,
-        regularization,
-        DittoArtifactBranch.PERSONALIZED_MODELS,
-    )
+    personalized_directory = ditto_directory(training_seed, regularization, DittoArtifactBranch.PERSONALIZED_MODELS)
     for owned in sorted(training.personalized_candidates.items, key=lambda item: item.client):
         client = owned.client
         selection = select_federated_primary_checkpoint(
@@ -388,9 +367,7 @@ def _client_metric(
     record = _score_record_for_client(manifest.evaluation_records, assignment.client, PartitionRole.EVALUATION)
     frame = pl.read_parquet(record.path)
     scores = tuple(ScoreValue(float(value)) for value in frame[ScoreFrameColumn.RECONSTRUCTION_ERROR.value].to_list())
-    labels = tuple(
-        PopulationOutcomeLabel(str(value)) for value in frame[ScoreFrameColumn.OUTCOME_LABEL.value].to_list()
-    )
+    labels = tuple(PopulationOutcomeLabel(str(value)) for value in frame[ScoreFrameColumn.OUTCOME_LABEL.value].to_list())
     rows = tuple(str(value) for value in frame[ScoreFrameColumn.STABLE_ROW_ID.value].to_list())
     cohort_manifest = build_evaluation_cohort_manifest(
         population=population,

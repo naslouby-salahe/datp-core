@@ -28,6 +28,7 @@ from datp_core.datasets.partitioning.contracts import (
 )
 from datp_core.domain.enums import ControlledPartitionKind, DatasetId, EvidenceRole, PopulationId
 from datp_core.domain.errors import CapabilityError, ScientificContractError
+from datp_core.protocols.calibration import MINIMUM_BENIGN_SUPPORT
 from datp_core.protocols.models import PopulationDeclaration
 from datp_core.protocols.populations import (
     CICIOT_FILE_CLIENTS,
@@ -139,6 +140,7 @@ def _construct_nbaiot_dirichlet(
         partition_seed=request.partition_seed,
         condition=condition,
         split_protocol=request.split_protocol,
+        minimum_benign_support=MINIMUM_BENIGN_SUPPORT,
     )
 
 

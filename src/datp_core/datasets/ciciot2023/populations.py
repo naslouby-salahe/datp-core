@@ -24,10 +24,10 @@ from datp_core.datasets.partitioning.contracts import (
     PopulationConstructionResult,
     PopulationOutcomeLabel,
     build_population_capabilities,
-    canonical_data_glob,
     population_evidence_role,
     select_membership_frame,
 )
+from datp_core.datasets.partitioning.paths import canonical_data_glob
 from datp_core.domain.enums import DatasetId, PopulationId, PopulationIdentityKind, SplitProtocolId
 from datp_core.domain.errors import CapabilityError, ScientificContractError
 from datp_core.domain.values import Seed

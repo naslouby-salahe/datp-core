@@ -15,7 +15,7 @@ from tests.unit.learning.federated.helpers import (
 
 from datp_core.domain.values import Checksum, RowCount, Seed
 from datp_core.learning.federated.checkpoints.selection import select_checkpoint
-from datp_core.learning.federated.fedprox import train_fedprox
+from datp_core.learning.federated.global_training import train_global_federated
 from datp_core.learning.federated.training import FederatedTrainingRequest
 from datp_core.pipeline.scoring.federated import generate_federated_scores
 from datp_core.pipeline.scoring.models import ClientScoringInput, ScoreGenerationRequest
@@ -27,7 +27,7 @@ def test_fedprox_end_to_end_train_select_and_score_for_one_declared_coefficient(
     coefficient = FEDPROX_COEFFICIENTS[0]
     coordinate = fedprox_coordinate(Seed(0), coefficient)
     clients = build_all_client_inputs(tmp_path)
-    outcome = train_fedprox(
+    outcome = train_global_federated(
         FederatedTrainingRequest(
             coordinate=coordinate,
             clients=clients,
@@ -84,7 +84,7 @@ def test_fedprox_grid_produces_independent_checksums_per_coefficient(tmp_path: P
         directory = tmp_path / f"coefficient_{index}"
         directory.mkdir()
         clients = build_all_client_inputs(directory)
-        outcome = train_fedprox(
+        outcome = train_global_federated(
             FederatedTrainingRequest(
                 coordinate=fedprox_coordinate(Seed(0), coefficient),
                 clients=clients,
@@ -99,6 +99,6 @@ def test_fedprox_grid_produces_independent_checksums_per_coefficient(tmp_path: P
                 output_directory=directory / "training",
             )
         )
-        terminal = next(c for c in outcome.candidates if c.round_number == CHECKPOINT.maximum_round)
+        terminal = next(candidate for candidate in outcome.candidates if candidate.round_number == CHECKPOINT.maximum_round)
         checksums.append(terminal.tensor_checksum)
     assert len(set(checksums)) == len(FEDPROX_COEFFICIENTS)

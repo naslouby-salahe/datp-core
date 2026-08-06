@@ -43,10 +43,10 @@ from .contracts import (
     PreprocessingHandoffRequest,
     SplitConstructionRequest,
     build_population_manifest,
-    canonical_data_glob,
     select_membership_frame,
 )
 from .integrity import membership_frame_checksum, outcome_row_counts, validate_population_manifest
+from .paths import canonical_data_glob
 from .splits import split_membership
 
 

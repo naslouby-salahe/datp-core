@@ -1,15 +1,14 @@
-from datp_core.analysis.contrasts import (
-    PairedContrast,
-    SupplementaryPairedAnalysisPlan,
-)
-from datp_core.analysis.decisions import decide_confirmatory
-from datp_core.analysis.inference.bootstrap import (
+from datp_core.analysis.contrasts import PairedContrast, SupplementaryPairedAnalysisPlan
+from datp_core.analysis.inference.bootstrap.contracts import (
     BcaAdjustment,
     BcaOutcome,
     BootstrapInterval,
+)
+from datp_core.analysis.inference.bootstrap.estimation import (
     paired_bca_interval,
     supplementary_paired_bca_interval,
 )
+from datp_core.analysis.scientific_decision import decide_confirmatory
 from datp_core.domain.enums import (
     AvailabilityStatus,
     EvidenceRole,
@@ -24,10 +23,7 @@ from datp_core.domain.enums import (
 from datp_core.domain.values import MetricValue, Seed
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.protocols.models import SeedCohort
-from datp_core.protocols.statistics import (
-    CONFIRMATORY_INFERENCE_PROTOCOL,
-    PairedInferenceProtocol,
-)
+from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL, PairedInferenceProtocol
 
 
 def test_paired_bca_is_deterministic_and_uses_protocol_metadata() -> None:
@@ -130,7 +126,7 @@ def _contrast(
             population=population,
             training_seed=Seed(seed),
             split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
-            preprocessing_identity=(PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD),
+            preprocessing_identity=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
             model=TrainingModelId.FEDAVG_AUTOENCODER,
             model_coefficient=None,
         ),

@@ -8,10 +8,7 @@ import polars as pl
 from datp_core.domain.enums import CentralizedModelId, DatasetId, PopulationId, PreprocessingProtocolId, SplitProtocolId
 from datp_core.domain.values import Seed
 from datp_core.learning.centralized.training import CentralizedTrainingCoordinate
-from datp_core.pipeline.checkpoints.service import (
-    SelectCentralizedCheckpointRequest,
-    select_centralized_primary_checkpoint,
-)
+from datp_core.pipeline.checkpoints.service import SelectCentralizedCheckpointRequest, select_centralized_primary_checkpoint
 from datp_core.pipeline.decision.centralized import (
     CENTRALIZED_POOLED_QUANTILE_PROTOCOL,
     ConstructCentralizedThresholdRequest,
@@ -20,18 +17,16 @@ from datp_core.pipeline.decision.centralized import (
     construct_centralized_threshold,
     evaluate_centralized_detector,
 )
-from datp_core.pipeline.execution.workspace import ExecutionArtifactDirectory, training_feature_names
-from datp_core.pipeline.preparation.populations import (
-    ConstructDeclaredPopulationRequest,
-    construct_declared_population,
-)
-from datp_core.pipeline.preparation.preprocessing import (
-    FitCentralizedPopulationPreprocessingRequest,
-    fit_centralized_population_preprocessing,
-)
+from datp_core.pipeline.execution.context import training_feature_names
+from datp_core.pipeline.execution.layout import ExecutionArtifactDirectory
+from datp_core.pipeline.preparation.populations import ConstructDeclaredPopulationRequest, construct_declared_population
 from datp_core.pipeline.scoring.centralized import generate_centralized_scores
 from datp_core.pipeline.scoring.models import GenerateCentralizedScoresRequest
 from datp_core.pipeline.training.centralized import TrainCentralizedDetectorRequest, train_centralized_detector
+from datp_core.preprocessing.centralized import (
+    CentralizedPopulationPreprocessingRequest,
+    preprocess_centralized_population,
+)
 from datp_core.protocols.training import BATCH_SIZE, CHECKPOINT_PROTOCOL, NBAIOT_AUTOENCODER
 from datp_core.runtime.configuration import DATA_ROOT, OUTPUTS_ROOT
 
@@ -51,14 +46,14 @@ def run_centralized_reference_seed(training_seed: Seed) -> EvaluateCentralizedDe
         ConstructDeclaredPopulationRequest(
             population=population,
             dataset=DatasetId.NBAIOT,
-            canonical_root=(DATA_ROOT / ExecutionArtifactDirectory.CANONICAL_DATA.value / DatasetId.NBAIOT.value),
+            canonical_root=DATA_ROOT / ExecutionArtifactDirectory.CANONICAL_DATA / DatasetId.NBAIOT.value,
             partition_seed=training_seed,
             split_protocol=split_protocol,
             controlled_condition=None,
         )
     )
-    preprocessing = fit_centralized_population_preprocessing(
-        FitCentralizedPopulationPreprocessingRequest(
+    preprocessing = preprocess_centralized_population(
+        CentralizedPopulationPreprocessingRequest(
             population=population,
             partition_seed=training_seed,
             split_protocol=split_protocol,
@@ -85,7 +80,7 @@ def run_centralized_reference_seed(training_seed: Seed) -> EvaluateCentralizedDe
             feature_names=feature_names,
             preprocessing_state=preprocessing.result.fitted_state,
             split_manifest_checksum=split_checksum,
-            output_directory=directory / CentralizedReferenceArtifactDirectory.TRAINING.value,
+            output_directory=directory / CentralizedReferenceArtifactDirectory.TRAINING,
             training_seed=training_seed,
             autoencoder=NBAIOT_AUTOENCODER,
             checkpoint_protocol=CHECKPOINT_PROTOCOL,
@@ -113,7 +108,7 @@ def run_centralized_reference_seed(training_seed: Seed) -> EvaluateCentralizedDe
             calibration_features=pl.read_parquet(preprocessing.result.paths.calibration),
             evaluation_features=pl.read_parquet(preprocessing.result.paths.evaluation),
             batch_size=BATCH_SIZE,
-            output_directory=directory / CentralizedReferenceArtifactDirectory.SCORES.value,
+            output_directory=directory / CentralizedReferenceArtifactDirectory.SCORES,
             preprocessing_state_checksum=preprocessing_checksum,
             overwrite=False,
         )
@@ -122,7 +117,7 @@ def run_centralized_reference_seed(training_seed: Seed) -> EvaluateCentralizedDe
         ConstructCentralizedThresholdRequest(
             coordinate=coordinate,
             calibration_scores=scores.scoring.calibration_scores,
-            output_directory=directory / CentralizedReferenceArtifactDirectory.THRESHOLD.value,
+            output_directory=directory / CentralizedReferenceArtifactDirectory.THRESHOLD,
             protocol=CENTRALIZED_POOLED_QUANTILE_PROTOCOL,
             overwrite=False,
         )
@@ -132,7 +127,7 @@ def run_centralized_reference_seed(training_seed: Seed) -> EvaluateCentralizedDe
             coordinate=coordinate,
             evaluation_scores=scores.scoring.evaluation_scores,
             threshold=threshold.threshold,
-            output_directory=directory / CentralizedReferenceArtifactDirectory.EVALUATION.value,
+            output_directory=directory / CentralizedReferenceArtifactDirectory.EVALUATION,
             overwrite=False,
         )
     )
@@ -141,7 +136,7 @@ def run_centralized_reference_seed(training_seed: Seed) -> EvaluateCentralizedDe
 def centralized_reference_directory(training_seed: Seed) -> Path:
     return (
         OUTPUTS_ROOT
-        / CentralizedReferenceArtifactDirectory.ROOT.value
+        / CentralizedReferenceArtifactDirectory.ROOT
         / PopulationId.NBAIOT_NATURAL_DEVICES.value
         / str(training_seed.value)
     )

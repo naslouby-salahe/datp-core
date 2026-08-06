@@ -9,11 +9,11 @@ from datp_core.domain.enums import (
 )
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import RowCount, Seed
-from datp_core.evaluation.cohorts import (
-    ClientExclusionReason,
+from datp_core.evaluation.cohort.construction import (
     assert_cohort_invariant_to_threshold_methods,
     build_evaluation_cohort_manifest,
 )
+from datp_core.evaluation.cohort.contracts import ClientExclusionReason
 
 
 def test_fpr_eligibility_requires_support_and_benign_evaluation() -> None:
@@ -37,15 +37,7 @@ def test_fpr_eligibility_requires_support_and_benign_evaluation() -> None:
 
 
 def test_fallback_cannot_enter_fpr_cohort() -> None:
-    counts = (
-        _counts(
-            "fallback_client",
-            1000,
-            100,
-            0,
-            deployment_fallback=True,
-        ),
-    )
+    counts = (_counts("fallback_client", 1000, 100, 0, deployment_fallback=True),)
     manifest = build_evaluation_cohort_manifest(
         population=PopulationId.NBAIOT_NATURAL_DEVICES,
         partition_seed=Seed(0),
@@ -79,10 +71,7 @@ def test_edge_clients_are_not_attack_evaluable() -> None:
 
 
 def test_cohort_membership_is_invariant_to_threshold_method() -> None:
-    counts = (
-        _counts("device_a", 150, 20, 8),
-        _counts("device_b", 80, 20, 8),
-    )
+    counts = (_counts("device_a", 150, 20, 8), _counts("device_b", 80, 20, 8))
     methods = (
         FederatedThresholdMethod.SHARED_THRESHOLD,
         FederatedThresholdMethod.LOCAL_THRESHOLD,

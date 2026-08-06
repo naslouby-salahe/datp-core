@@ -2,7 +2,6 @@
 
 from pathlib import Path
 
-import numpy as np
 import polars as pl
 
 from datp_core.datasets.contracts import CanonicalProvenanceColumn
@@ -23,32 +22,26 @@ from datp_core.datasets.partitioning.contracts import (
     SOURCE_PATH_COLUMN,
     SOURCE_ROW_INDEX_COLUMN,
     STABLE_ROW_ID_COLUMN,
-    Checksum,
-    ClientCount,
     ControlledPartitionCondition,
     DirichletPartitionDiagnosticsDocument,
     PopulationConstructionResult,
     PopulationFrameColumn,
     PopulationOutcomeLabel,
     build_population_capabilities,
-    canonical_data_glob,
-    checksum_text,
     membership_column_names,
     population_evidence_role,
     select_membership_frame,
     synthetic_client_ids,
 )
-from datp_core.datasets.partitioning.integrity import validate_dirichlet_conservation
-from datp_core.datasets.partitioning.splits import hamilton_integer_counts
-from datp_core.domain.enums import (
-    ControlledPartitionKind,
-    DatasetId,
-    PopulationId,
-    PopulationIdentityKind,
-    SplitProtocolId,
+from datp_core.datasets.partitioning.controlled import (
+    ControlledPartitionAllocator,
+    controlled_allocation_checksum,
 )
-from datp_core.domain.errors import DataIntegrityError, ScientificContractError
-from datp_core.domain.values import RowCount, Seed
+from datp_core.datasets.partitioning.integrity import validate_dirichlet_conservation
+from datp_core.datasets.partitioning.paths import canonical_data_glob
+from datp_core.domain.enums import DatasetId, PopulationId, PopulationIdentityKind, SplitProtocolId
+from datp_core.domain.errors import DataIntegrityError
+from datp_core.domain.values import CalibrationSize, ClientCount, RowCount, Seed
 from datp_core.protocols.populations import NBAIOT_DIRICHLET_CLIENTS, NBAIOT_NATURAL_DEVICES
 
 _SOURCE_CLIENT = NBaIoTCanonicalColumn.PHYSICAL_CLIENT_ID
@@ -115,15 +108,20 @@ def construct_nbaiot_dirichlet_clients(
     partition_seed: Seed,
     condition: ControlledPartitionCondition,
     split_protocol: SplitProtocolId,
+    minimum_benign_support: CalibrationSize,
 ) -> PopulationConstructionResult:
     source = _load_source_rows(canonical_root)
     client_ids = synthetic_client_ids(NBAIOT_DIRICHLET_CLIENTS.client_count)
+    allocator = ControlledPartitionAllocator(
+        population=_DIRICHLET_POPULATION,
+        client_count=NBAIOT_DIRICHLET_CLIENTS.client_count,
+        condition=condition,
+        seed=partition_seed,
+    )
     membership, benign_counts, attack_counts = _partition_source(
         source,
         client_ids=client_ids,
-        client_count=NBAIOT_DIRICHLET_CLIENTS.client_count,
-        condition=condition,
-        partition_seed=partition_seed,
+        allocator=allocator,
     )
     validate_dirichlet_conservation(membership, RowCount(source.height), NBAIOT_DIRICHLET_CLIENTS.client_count)
     diagnostics = _build_diagnostics(
@@ -134,6 +132,7 @@ def construct_nbaiot_dirichlet_clients(
         attack_counts=attack_counts,
         condition=condition,
         partition_seed=partition_seed,
+        minimum_benign_support=minimum_benign_support,
     )
     manifest = finalize_population(
         PopulationFinalizationRequest(
@@ -194,26 +193,29 @@ def _partition_source(
     source: pl.DataFrame,
     *,
     client_ids: tuple[str, ...],
-    client_count: ClientCount,
-    condition: ControlledPartitionCondition,
-    partition_seed: Seed,
+    allocator: ControlledPartitionAllocator,
 ) -> tuple[pl.DataFrame, tuple[RowCount, ...], tuple[RowCount, ...]]:
-    generator = np.random.Generator(np.random.PCG64(partition_seed.value))
     membership_parts: list[pl.DataFrame] = []
-    benign_counts: list[RowCount] = [RowCount(0)] * client_count.value
-    attack_counts: list[RowCount] = [RowCount(0)] * client_count.value
+    benign_counts: list[RowCount] = [RowCount(0)] * allocator.client_count.value
+    attack_counts: list[RowCount] = [RowCount(0)] * allocator.client_count.value
     for label, outcome in (
         (NBaIoTSourceLabel.BENIGN, PopulationOutcomeLabel.BENIGN),
         (NBaIoTSourceLabel.ATTACK, PopulationOutcomeLabel.ATTACK),
     ):
         stratum = source.filter(pl.col(_SOURCE_LABEL) == label).sort(STABLE_ROW_ID_COLUMN)
-        stratum = _permute_stratum(stratum, generator)
-        counts_int = _allocate_stratum(RowCount(stratum.height), client_count, condition, generator)
-        counts = tuple(RowCount(c) for c in counts_int)
-        membership_parts.append(_assign_stratum(stratum, client_ids, counts_int, outcome))
+        stratum = _permute_stratum(stratum, allocator)
+        counts = allocator.allocate(RowCount(stratum.height))
+        membership_parts.append(
+            _assign_stratum(
+                stratum,
+                client_ids,
+                tuple(count.value for count in counts),
+                outcome,
+            )
+        )
         target = benign_counts if outcome is PopulationOutcomeLabel.BENIGN else attack_counts
         for index, row_count in enumerate(counts):
-            target[index] = RowCount(target[index].value + row_count.value)
+            target[index] = target[index] + row_count
     membership = pl.concat(membership_parts, how="vertical_relaxed").sort([CLIENT_ID_COLUMN, STABLE_ROW_ID_COLUMN])
     return membership, tuple(benign_counts), tuple(attack_counts)
 
@@ -227,15 +229,18 @@ def _build_diagnostics(
     attack_counts: tuple[RowCount, ...],
     condition: ControlledPartitionCondition,
     partition_seed: Seed,
+    minimum_benign_support: CalibrationSize,
 ) -> DirichletPartitionDiagnosticsDocument:
-    from datp_core.protocols.calibration import MINIMUM_BENIGN_SUPPORT
-
     client_row_counts = tuple(benign + attack for benign, attack in zip(benign_counts, attack_counts, strict=True))
-    empty_ids = tuple(client_id for client_id, count in zip(client_ids, client_row_counts, strict=True) if count == 0)
+    empty_ids = tuple(
+        client_id
+        for client_id, count in zip(client_ids, client_row_counts, strict=True)
+        if count.value == 0
+    )
     insufficient = tuple(
         client_id
         for client_id, benign in zip(client_ids, benign_counts, strict=True)
-        if benign < MINIMUM_BENIGN_SUPPORT.value
+        if benign < minimum_benign_support
     )
     return DirichletPartitionDiagnosticsDocument(
         population=_DIRICHLET_POPULATION,
@@ -250,53 +255,22 @@ def _build_diagnostics(
         attack_row_counts=attack_counts,
         empty_client_ids=empty_ids,
         insufficient_benign_client_ids=insufficient,
-        allocation_checksum=_allocation_checksum(client_ids, client_row_counts, condition, partition_seed),
+        allocation_checksum=controlled_allocation_checksum(
+            client_ids,
+            client_row_counts,
+            condition,
+            partition_seed,
+        ),
     )
 
 
-def _allocate_stratum(
-    row_count: RowCount,
-    client_count: ClientCount,
-    condition: ControlledPartitionCondition,
-    generator: np.random.Generator,
-) -> tuple[int, ...]:
-    if row_count == 0:
-        return tuple(0 for _ in range(client_count.value))
-    match condition.kind:
-        case ControlledPartitionKind.IID:
-            proportions = tuple(1.0 / client_count.value for _ in range(client_count.value))
-        case ControlledPartitionKind.DIRICHLET:
-            if condition.concentration is None:
-                raise ScientificContractError(
-                    "Dirichlet construction requires a concentration",
-                    subject=_DIRICHLET_POPULATION,
-                    reason="concentration cannot be invented",
-                )
-            alpha = np.full(client_count.value, condition.concentration.value, dtype=np.float64)
-            proportions = tuple(float(value) for value in generator.dirichlet(alpha))
-        case _:
-            raise ScientificContractError(
-                "unsupported controlled partition kind",
-                subject=condition.kind,
-                reason="only Dirichlet and IID constructions are authorized",
-            )
-    counts = hamilton_integer_counts(row_count.value, proportions)
-    if sum(counts) != row_count:
-        raise DataIntegrityError(
-            "controlled partition allocation failed to conserve stratum rows",
-            subject=_DIRICHLET_POPULATION,
-            reason="Hamilton residual allocation must preserve every row",
-        )
-    return counts
-
-
-def _permute_stratum(stratum: pl.DataFrame, generator: np.random.Generator) -> pl.DataFrame:
-    if stratum.height <= 1:
+def _permute_stratum(stratum: pl.DataFrame, allocator: ControlledPartitionAllocator) -> pl.DataFrame:
+    row_count = RowCount(stratum.height)
+    if row_count.value <= 1:
         return stratum
-    order = generator.permutation(stratum.height)
     return (
         stratum.with_row_index(ORDER_COLUMN)
-        .with_columns(pl.Series(PERM_COLUMN, order))
+        .with_columns(pl.Series(PERM_COLUMN, allocator.permutation(row_count)))
         .sort(PERM_COLUMN)
         .drop([ORDER_COLUMN, PERM_COLUMN])
     )
@@ -339,22 +313,3 @@ def _load_source_rows(canonical_root: Path) -> pl.DataFrame:
         )
         .collect(engine="streaming")
     )
-
-
-def _allocation_checksum(
-    client_ids: tuple[str, ...],
-    counts: tuple[int, ...],
-    condition: ControlledPartitionCondition,
-    partition_seed: Seed,
-) -> Checksum:
-    concentration = condition.kind.value if condition.concentration is None else str(condition.concentration.value)
-    payload = "\n".join(
-        (
-            condition.kind.value,
-            concentration,
-            str(partition_seed.value),
-            *client_ids,
-            *(str(count) for count in counts),
-        )
-    )
-    return checksum_text(payload)

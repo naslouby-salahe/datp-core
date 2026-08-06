@@ -1,4 +1,4 @@
-"""Canonical dataset materialization."""
+"""Application service for canonical dataset publication."""
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -9,7 +9,7 @@ from datp_core.domain.enums import DatasetId
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class MaterializeDatasetRequest:
+class DatasetMaterializationRequest:
     data_root: Path
     datasets: tuple[DatasetId, ...]
 
@@ -19,11 +19,12 @@ class MaterializeDatasetRequest:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class MaterializeDatasetResult:
+class DatasetMaterializationResult:
     publications: tuple[DatasetPublication, ...]
 
 
-def materialize_dataset(request: MaterializeDatasetRequest) -> MaterializeDatasetResult:
+def materialize_datasets(request: DatasetMaterializationRequest) -> DatasetMaterializationResult:
+    """Publish every requested dataset through its authoritative binding."""
     publications = tuple(
         dataset_binding(dataset).publish(
             raw_dataset_root(request.data_root, dataset),
@@ -31,4 +32,4 @@ def materialize_dataset(request: MaterializeDatasetRequest) -> MaterializeDatase
         )
         for dataset in request.datasets
     )
-    return MaterializeDatasetResult(publications=publications)
+    return DatasetMaterializationResult(publications=publications)

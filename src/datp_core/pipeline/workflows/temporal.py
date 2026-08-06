@@ -6,12 +6,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-from datp_core.analysis.temporal import (
-    TemporalDeploymentProvenance,
-    TemporalRecoveryResult,
-    temporal_recovery,
-    validate_frozen_recalibrated_pair,
-)
+from datp_core.analysis.temporal import TemporalRecoveryResult, temporal_recovery
 from datp_core.datasets.registry import population_capabilities
 from datp_core.domain.enums import (
     ExperimentId,
@@ -22,37 +17,34 @@ from datp_core.domain.enums import (
 )
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import Checksum, MetricValue, Seed
-from datp_core.evaluation.controls import build_federated_evaluation_inputs
+from datp_core.evaluation.fixed_score.construction import build_federated_evaluation_inputs
 from datp_core.evaluation.models import MetricStatus, metric_by_id
-from datp_core.pipeline.decision.evidence import (
-    AnalyzeTemporalEvidenceRequest,
-    analyze_temporal_evidence,
-)
+from datp_core.pipeline.decision.evidence import AnalyzeTemporalEvidenceRequest, analyze_temporal_evidence
 from datp_core.pipeline.decision.federated import (
     ConstructFederatedThresholdsRequest,
     EvaluateFederatedDetectorRequest,
     construct_federated_thresholds,
     evaluate_federated_detector,
 )
-from datp_core.pipeline.execution.workspace import (
-    ExecutionArtifactDirectory,
+from datp_core.pipeline.execution.checkpoints import select_execution_checkpoint
+from datp_core.pipeline.execution.context import (
     FederatedExecutionContext,
-    bounded_evidence_seed_directory,
     client_scoring_inputs,
-    eligible_calibration_scores,
-    matched_static_reference_inputs,
     resolve_execution_context,
-    score_selected_checkpoint,
-    select_execution_checkpoint,
     training_autoencoder,
     training_feature_names,
 )
+from datp_core.pipeline.execution.evidence import eligible_calibration_scores
+from datp_core.pipeline.execution.layout import ExecutionArtifactDirectory, bounded_evidence_seed_directory
+from datp_core.pipeline.execution.matched_reference import matched_static_reference_inputs
+from datp_core.pipeline.execution.score_generation import score_selected_checkpoint
 from datp_core.pipeline.planning import ExperimentCoordinate, expand_experiment_plan
 from datp_core.pipeline.scoring.models import FederatedScoreArtifactManifest
 from datp_core.protocols.calibration import CANONICAL_QUANTILE
 from datp_core.protocols.experiments import EXPERIMENTS, ExternalTemporalExecutionIdentity
 from datp_core.protocols.models import ExperimentDeclaration, SeedCohort
 from datp_core.protocols.seeds import BOUNDED_EVIDENCE_SEED_COHORT
+from datp_core.protocols.temporal import TemporalDeploymentProvenance, validate_frozen_recalibrated_pair
 from datp_core.runtime.configuration import OUTPUTS_ROOT
 from datp_core.thresholding.dispatch import ThresholdConstructionRequest
 from datp_core.thresholding.identities import ThresholdUnavailableResult
@@ -104,11 +96,7 @@ class TemporalSeedResult:
     analyses: tuple[TemporalMethodAnalysisResult, ...]
 
     def __post_init__(self) -> None:
-        methods = _common_completed_methods(
-            self.static_reference,
-            self.frozen_future,
-            self.recalibrated_future,
-        )
+        methods = _common_completed_methods(self.static_reference, self.frozen_future, self.recalibrated_future)
         if tuple(item.method for item in self.analyses) != methods:
             raise ValueError("temporal analyses must follow the completed threshold-method order")
         if any(item.recovery.seed != self.partition_seed for item in self.analyses):
@@ -170,18 +158,14 @@ def _execute_temporal_states(
     context = resolve_execution_context(frozen_coordinate, OUTPUTS_ROOT)
     autoencoder = training_autoencoder(frozen_coordinate.dataset)
     feature_names = training_feature_names(frozen_coordinate.dataset)
-    checkpoint = select_execution_checkpoint(
-        context,
-        autoencoder=autoencoder,
-        feature_names=feature_names,
-    )
+    checkpoint = select_execution_checkpoint(context, autoencoder=autoencoder, feature_names=feature_names)
     future_scores = score_selected_checkpoint(
         checkpoint=checkpoint,
         scored_split_protocol=frozen_coordinate.split_protocol,
         autoencoder=autoencoder,
         feature_names=feature_names,
         clients=client_scoring_inputs(context.preprocessing.client_publications, context.clients),
-        output_directory=context.training_directory / ExecutionArtifactDirectory.SCORES.value,
+        output_directory=context.training_directory / ExecutionArtifactDirectory.SCORES,
         preprocessing_state_set_checksum=context.preprocessing_state_set_checksum,
         split_manifest_checksum=context.split_manifest_checksum,
     )
@@ -195,18 +179,12 @@ def _execute_temporal_states(
         autoencoder=autoencoder,
         feature_names=feature_names,
         clients=static_inputs.clients,
-        output_directory=static_root / TemporalArtifactDirectory.SCORES.value,
+        output_directory=static_root / TemporalArtifactDirectory.SCORES,
         preprocessing_state_set_checksum=context.preprocessing_state_set_checksum,
         split_manifest_checksum=static_inputs.split_manifest_checksum,
     )
-    static_provenance = TemporalDeploymentProvenance.from_score_manifest(
-        TemporalState.STATIC_REFERENCE,
-        static_scores,
-    )
-    frozen_provenance = TemporalDeploymentProvenance.from_score_manifest(
-        TemporalState.FROZEN_FUTURE,
-        future_scores,
-    )
+    static_provenance = TemporalDeploymentProvenance.from_score_manifest(TemporalState.STATIC_REFERENCE, static_scores)
+    frozen_provenance = TemporalDeploymentProvenance.from_score_manifest(TemporalState.FROZEN_FUTURE, future_scores)
     recalibrated_provenance = TemporalDeploymentProvenance.from_score_manifest(
         TemporalState.RECALIBRATED_FUTURE,
         future_scores,
@@ -229,11 +207,7 @@ def _execute_temporal_states(
         threshold_methods=declaration.federated_thresholds,
         provenance=frozen_provenance,
     ).result
-    recalibrated_coordinate = _coordinate(
-        partition_seed,
-        TemporalState.RECALIBRATED_FUTURE,
-        declaration,
-    )
+    recalibrated_coordinate = _coordinate(partition_seed, TemporalState.RECALIBRATED_FUTURE, declaration)
     recalibrated = _evaluate_state(
         context=context,
         identity=_execution_identity(recalibrated_coordinate),
@@ -259,11 +233,7 @@ def _evaluate_state(
     reference_evidence = None
     completed: list[FederatedThresholdMethod] = []
     outcomes: list[TemporalMethodOutcome] = []
-    output_root = bounded_evidence_seed_directory(
-        identity,
-        context.coordinate.training_seed,
-        OUTPUTS_ROOT,
-    )
+    output_root = bounded_evidence_seed_directory(identity, context.coordinate.training_seed, OUTPUTS_ROOT)
     for method in threshold_methods:
         threshold = construct_federated_thresholds(
             ConstructFederatedThresholdsRequest(
@@ -275,7 +245,7 @@ def _evaluate_state(
                     eligible,
                     context.family_by_client,
                 ),
-                output_directory=(output_root / TemporalArtifactDirectory.THRESHOLDS.value / method.value),
+                output_directory=output_root / TemporalArtifactDirectory.THRESHOLDS / method.value,
                 overwrite=False,
                 temporal_provenance=provenance,
                 temporal_score_manifest=scores,
@@ -283,11 +253,7 @@ def _evaluate_state(
         ).result
         if isinstance(threshold, ThresholdUnavailableResult):
             continue
-        evaluation_inputs = build_federated_evaluation_inputs(
-            scores,
-            method,
-            calibration_role=calibration_role,
-        )
+        evaluation_inputs = build_federated_evaluation_inputs(scores, method, calibration_role=calibration_role)
         evaluation = evaluate_federated_detector(
             EvaluateFederatedDetectorRequest(
                 score_manifest=scores,
@@ -303,14 +269,11 @@ def _evaluate_state(
                 execution_identity=identity,
                 temporal_provenance=provenance,
                 temporal_threshold_provenance=provenance,
-                output_directory=(output_root / TemporalArtifactDirectory.EVALUATIONS.value / method.value),
+                output_directory=output_root / TemporalArtifactDirectory.EVALUATIONS / method.value,
                 overwrite=False,
             )
         )
-        result = metric_by_id(
-            evaluation.population.metrics,
-            MetricId.FPR_COEFFICIENT_OF_VARIATION,
-        )
+        result = metric_by_id(evaluation.population.metrics, MetricId.FPR_COEFFICIENT_OF_VARIATION)
         if result.status is not MetricStatus.AVAILABLE or result.value is None:
             raise ScientificContractError(
                 "temporal evaluation requires available population CV(FPR)",
@@ -319,12 +282,7 @@ def _evaluate_state(
         if reference_evidence is None:
             reference_evidence = evaluation_inputs.fixed_score_evidence
         completed.append(method)
-        outcomes.append(
-            TemporalMethodOutcome(
-                method=method,
-                fpr_coefficient_of_variation=result.value,
-            )
-        )
+        outcomes.append(TemporalMethodOutcome(method=method, fpr_coefficient_of_variation=result.value))
     if not completed:
         raise ScientificContractError(
             "temporal execution produced no evaluable threshold method",
@@ -369,11 +327,7 @@ def _analyze_temporal_method(
             overwrite=False,
         )
     )
-    return TemporalMethodAnalysisResult(
-        method=method,
-        recovery=recovery,
-        complete_digest=analysis.complete_digest,
-    )
+    return TemporalMethodAnalysisResult(method=method, recovery=recovery, complete_digest=analysis.complete_digest)
 
 
 def _validate_shared_temporal_detector(
@@ -448,10 +402,7 @@ def _coordinate(
     return first
 
 
-def _temporal_analysis_directory(
-    partition_seed: Seed,
-    method: FederatedThresholdMethod,
-) -> Path:
+def _temporal_analysis_directory(partition_seed: Seed, method: FederatedThresholdMethod) -> Path:
     declaration = _temporal_declaration()
     return (
         OUTPUTS_ROOT
@@ -460,7 +411,7 @@ def _temporal_analysis_directory(
         / declaration.population.value
         / declaration.role.value
         / str(partition_seed.value)
-        / TemporalArtifactDirectory.ANALYSIS.value
+        / TemporalArtifactDirectory.ANALYSIS
         / method.value
     )
 

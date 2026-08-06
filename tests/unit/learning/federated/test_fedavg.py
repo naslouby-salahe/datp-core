@@ -16,7 +16,7 @@ from tests.unit.learning.federated.helpers import (
 from datp_core.datasets.partitioning.contracts import PopulationOutcomeLabel
 from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.values import Checksum, RowCount, Seed
-from datp_core.learning.federated.fedavg import train_fedavg
+from datp_core.learning.federated.global_training import train_global_federated
 from datp_core.learning.federated.training import FederatedTrainingRequest
 
 
@@ -38,14 +38,14 @@ def _request(tmp_path: Path, seed: Seed | None = None) -> FederatedTrainingReque
 
 
 def test_train_fedavg_produces_history_with_full_participation_every_round(tmp_path: Path) -> None:
-    outcome = train_fedavg(_request(tmp_path))
+    outcome = train_global_federated(_request(tmp_path))
     for round_result in outcome.training_result.history.rounds:
         assert len(round_result.client_results) == POPULATION_CLIENT_COUNT.value
     assert len(outcome.training_result.history.rounds) == CHECKPOINT.maximum_round.value
 
 
 def test_train_fedavg_produces_one_checkpoint_candidate_per_declared_round(tmp_path: Path) -> None:
-    outcome = train_fedavg(_request(tmp_path))
+    outcome = train_global_federated(_request(tmp_path))
     observed_rounds = tuple(candidate.round_number for candidate in outcome.candidates)
     expected_rounds = tuple(CHECKPOINT.candidates)
     assert observed_rounds == expected_rounds
@@ -59,8 +59,8 @@ def test_train_fedavg_is_deterministic_given_the_same_seed(tmp_path: Path) -> No
     second_directory = tmp_path / "second"
     first_directory.mkdir()
     second_directory.mkdir()
-    first = train_fedavg(_request(first_directory))
-    second = train_fedavg(_request(second_directory))
+    first = train_global_federated(_request(first_directory))
+    second = train_global_federated(_request(second_directory))
     first_checksums = tuple(candidate.tensor_checksum for candidate in first.candidates)
     second_checksums = tuple(candidate.tensor_checksum for candidate in second.candidates)
     assert first_checksums == second_checksums
@@ -82,7 +82,7 @@ def test_train_fedavg_rejects_partial_client_participation(tmp_path: Path) -> No
         output_directory=tmp_path / "output",
     )
     with pytest.raises(ScientificContractError, match="does not match the declared population count"):
-        train_fedavg(request)
+        train_global_federated(request)
 
 
 def test_train_fedavg_rejects_a_fedprox_coordinate(tmp_path: Path) -> None:
@@ -92,8 +92,8 @@ def test_train_fedavg_rejects_a_fedprox_coordinate(tmp_path: Path) -> None:
 
     request = _request(tmp_path)
     wrong_coordinate = fedprox_coordinate(Seed(0), ProximalCoefficient(0.1))
-    with pytest.raises(ScientificContractError, match="FEDAVG_AUTOENCODER coordinate"):
-        train_fedavg(
+    with pytest.raises(ScientificContractError, match="coordinate model must match"):
+        train_global_federated(
             FederatedTrainingRequest(
                 coordinate=wrong_coordinate,
                 clients=request.clients,
@@ -139,4 +139,4 @@ def test_train_fedavg_never_trains_on_attack_labelled_rows(tmp_path: Path) -> No
     )
 
     with pytest.raises(LeakageError, match="attack-labelled rows"):
-        train_fedavg(request)
+        train_global_federated(request)

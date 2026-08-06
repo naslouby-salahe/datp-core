@@ -22,29 +22,22 @@ from datp_core.protocols.calibration import (
     FIXED_SHRINKAGE_PROTOCOL,
 )
 from datp_core.protocols.models import QuantileProtocol
-from datp_core.thresholding.common import ThresholdConstructionResult
 from datp_core.thresholding.identities import (
     ThresholdInfeasibilityReason,
     ThresholdUnavailableResult,
 )
 from datp_core.thresholding.methods.cluster import construct_grouped_threshold
-from datp_core.thresholding.methods.conformal import (
-    construct_local_conformal_threshold,
-)
+from datp_core.thresholding.methods.conformal import construct_local_conformal_threshold
 from datp_core.thresholding.methods.family import construct_family_threshold
-from datp_core.thresholding.methods.federated_statistics import (
-    construct_federated_benign_statistics,
-)
+from datp_core.thresholding.methods.federated_statistics import construct_federated_benign_statistics
 from datp_core.thresholding.methods.local import construct_local_threshold
 from datp_core.thresholding.methods.shared import (
     construct_pooled_shared_quantile,
     construct_sample_weighted_shared_threshold,
     construct_shared_threshold,
 )
-from datp_core.thresholding.methods.shrinkage import (
-    construct_fixed_shrinkage,
-    construct_size_aware_shrinkage,
-)
+from datp_core.thresholding.methods.shrinkage import construct_fixed_shrinkage, construct_size_aware_shrinkage
+from datp_core.thresholding.models import ThresholdConstructionResult
 from datp_core.thresholding.quantiles import ClientBenignCalibrationScores
 
 
@@ -113,32 +106,23 @@ def dispatch_federated_threshold(
         case FederatedThresholdMethod.SHARED_THRESHOLD:
             return construct_shared_threshold(
                 request.eligible,
-                QuantileProtocol(
-                    method=FederatedThresholdMethod.SHARED_THRESHOLD,
-                    quantile=request.quantile,
-                ),
+                QuantileProtocol(method=FederatedThresholdMethod.SHARED_THRESHOLD, quantile=request.quantile),
             )
         case FederatedThresholdMethod.LOCAL_THRESHOLD:
             return construct_local_threshold(
                 request.eligible,
-                QuantileProtocol(
-                    method=FederatedThresholdMethod.LOCAL_THRESHOLD,
-                    quantile=request.quantile,
-                ),
+                QuantileProtocol(method=FederatedThresholdMethod.LOCAL_THRESHOLD, quantile=request.quantile),
             )
         case FederatedThresholdMethod.POOLED_SHARED_QUANTILE:
             return construct_pooled_shared_quantile(
                 request.eligible,
-                QuantileProtocol(
-                    method=FederatedThresholdMethod.POOLED_SHARED_QUANTILE,
-                    quantile=request.quantile,
-                ),
+                QuantileProtocol(method=FederatedThresholdMethod.POOLED_SHARED_QUANTILE, quantile=request.quantile),
             )
         case FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD:
             return construct_sample_weighted_shared_threshold(
                 request.eligible,
                 QuantileProtocol(
-                    method=(FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD),
+                    method=FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD,
                     quantile=request.quantile,
                 ),
             )
@@ -147,18 +131,11 @@ def dispatch_federated_threshold(
         case FederatedThresholdMethod.CLUSTER_THRESHOLD:
             return _cluster_threshold_or_unavailable(request)
         case FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE:
-            return construct_fixed_shrinkage(
-                request.eligible,
-                FIXED_SHRINKAGE_PROTOCOL,
-                request.quantile,
-            )
+            return construct_fixed_shrinkage(request.eligible, FIXED_SHRINKAGE_PROTOCOL, request.quantile)
         case FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE:
             return construct_size_aware_shrinkage(request.coordinate)
         case FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD:
-            return construct_local_conformal_threshold(
-                request.eligible,
-                request.quantile,
-            )
+            return construct_local_conformal_threshold(request.eligible, request.quantile)
         case FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS:
             return construct_federated_benign_statistics(
                 request.eligible,
@@ -169,9 +146,7 @@ def dispatch_federated_threshold(
             assert_never(request.method)
 
 
-def _family_threshold_or_unavailable(
-    request: ThresholdConstructionRequest,
-) -> ThresholdConstructionResult:
+def _family_threshold_or_unavailable(request: ThresholdConstructionRequest) -> ThresholdConstructionResult:
     if not request.family_by_client:
         return ThresholdUnavailableResult(
             method=FederatedThresholdMethod.FAMILY_THRESHOLD,
@@ -179,22 +154,16 @@ def _family_threshold_or_unavailable(
             reason=ThresholdInfeasibilityReason.FAMILY_TAXONOMY_UNAVAILABLE,
             detail="No family taxonomy was supplied for this population.",
         )
-    return construct_family_threshold(
-        request.eligible,
-        request.quantile,
-        request.family_by_client,
-    )
+    return construct_family_threshold(request.eligible, request.quantile, request.family_by_client)
 
 
-def _cluster_threshold_or_unavailable(
-    request: ThresholdConstructionRequest,
-) -> ThresholdConstructionResult:
+def _cluster_threshold_or_unavailable(request: ThresholdConstructionRequest) -> ThresholdConstructionResult:
     if len(request.eligible) <= CLUSTER_THRESHOLD_PROTOCOL.group_count.value:
         return ThresholdUnavailableResult(
             method=FederatedThresholdMethod.CLUSTER_THRESHOLD,
             coordinate=request.coordinate,
-            reason=(ThresholdInfeasibilityReason.GROUP_COUNT_EXCEEDS_ELIGIBLE_POPULATION),
-            detail=("The eligible population does not exceed the locked cluster group count."),
+            reason=ThresholdInfeasibilityReason.GROUP_COUNT_EXCEEDS_ELIGIBLE_POPULATION,
+            detail="The eligible population does not exceed the locked cluster group count.",
         )
     protocol = CLUSTER_THRESHOLD_PROTOCOL.model_copy(update={"quantile": request.quantile})
     return construct_grouped_threshold(request.eligible, protocol)

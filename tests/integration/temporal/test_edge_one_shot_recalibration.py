@@ -3,11 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from datp_core.analysis.temporal import (
-    TemporalDeploymentProvenance,
-    temporal_recovery,
-    validate_frozen_recalibrated_pair,
-)
+from datp_core.analysis.temporal import temporal_recovery
 from datp_core.domain.enums import (
     EvidenceRole,
     ExperimentId,
@@ -21,6 +17,7 @@ from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import Checksum, MetricValue, Seed
 from datp_core.pipeline.decision.evidence import AnalyzeTemporalEvidenceRequest, analyze_temporal_evidence
 from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
+from datp_core.protocols.temporal import TemporalDeploymentProvenance, validate_frozen_recalibrated_pair
 
 
 def test_recalibrated_future_can_change_only_calibration_window() -> None:

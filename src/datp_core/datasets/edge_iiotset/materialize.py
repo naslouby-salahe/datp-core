@@ -6,13 +6,7 @@ from shutil import rmtree
 
 import polars as pl
 
-from datp_core.datasets.canonical_cache import (
-    CanonicalAsset,
-    CanonicalAssetLayout,
-    CanonicalReuseRequest,
-    canonical_directory,
-    reuse_published_canonical,
-)
+from datp_core.datasets.canonical_cache import CanonicalAsset, CanonicalAssetLayout, canonical_directory
 from datp_core.datasets.contracts import (
     CanonicalProvenanceColumn,
     ChronologyValidation,
@@ -28,16 +22,13 @@ from datp_core.datasets.materialization import (
     CanonicalPublication,
     empty_asset,
     named_assets,
-    publish_canonical,
     raw_inventory,
     raw_source_file,
     stream_parquet,
 )
+from datp_core.datasets.materialization_lifecycle import CanonicalMaterializationRequest, materialize_canonical
 from datp_core.domain.enums import AvailabilityStatus, DatasetId
-from datp_core.domain.values import (
-    RowCount,
-    ValidationIssueCount,
-)
+from datp_core.domain.values import RowCount, ValidationIssueCount
 
 from .chronology import PcapChronology, paired_capture_path, validate_chronology, write_capture_timeline
 from .reader import EdgeIIoTsetReader
@@ -102,63 +93,76 @@ class EdgeIIoTsetMaterializer:
         return self.materialize(benign_paths, attack_paths, canonical_root)
 
     def materialize(
-        self, benign_paths: tuple[Path, ...], attack_paths: tuple[Path, ...], canonical_root: Path
+        self,
+        benign_paths: tuple[Path, ...],
+        attack_paths: tuple[Path, ...],
+        canonical_root: Path,
     ) -> MaterializedDataset:
-        if not benign_paths or not attack_paths:
+        ordered_benign = tuple(sorted(benign_paths))
+        ordered_attack = tuple(sorted(attack_paths))
+        if not ordered_benign or not ordered_attack:
             raise ValueError("Edge materialization requires benign and attack sources")
-        source_paths = _source_paths(benign_paths, attack_paths)
-        reusable = reuse_published_canonical(
-            CanonicalReuseRequest(
+        source_paths = _source_paths(ordered_benign, ordered_attack)
+        return materialize_canonical(
+            CanonicalMaterializationRequest(
                 canonical_root=canonical_root,
                 schema=EDGE_SCHEMA,
                 canonicalization_contract=_EDGE_CANONICALIZATION_CONTRACT,
                 source_paths=source_paths,
                 source_path_resolver=source_relative_path,
                 asset_role_type=EdgeAssetRole,
+                prepare_publication=lambda: self._prepare_canonical_publication(
+                    ordered_benign,
+                    ordered_attack,
+                    canonical_root,
+                    source_paths,
+                ),
             )
         )
-        if reusable is not None:
-            return reusable
+
+    def _prepare_canonical_publication(
+        self,
+        benign_paths: tuple[Path, ...],
+        attack_paths: tuple[Path, ...],
+        canonical_root: Path,
+        source_paths: tuple[Path, ...],
+    ) -> CanonicalPublication:
         publication = self._prepare_publication(benign_paths, attack_paths)
 
-        def write_assets(canonical_root: Path) -> tuple[CanonicalAsset, ...]:
-            return self._write_assets(canonical_root, publication.inputs)
+        def write_assets(output_root: Path) -> tuple[CanonicalAsset, ...]:
+            return self._write_assets(output_root, publication.inputs)
 
-        return publish_canonical(
-            CanonicalPublication(
-                canonical_root=canonical_root,
-                canonicalization_contract=_EDGE_CANONICALIZATION_CONTRACT,
-                schema=EDGE_SCHEMA,
-                inventory=publication.inventory,
-                validation_report=publication.report,
-                expected_assets=publication.inputs.expected_assets,
-                writer=write_assets,
-                source_paths=source_paths,
-                source_path_resolver=source_relative_path,
-                chronology=publication.validations,
-            )
+        return CanonicalPublication(
+            canonical_root=canonical_root,
+            canonicalization_contract=_EDGE_CANONICALIZATION_CONTRACT,
+            schema=EDGE_SCHEMA,
+            inventory=publication.inventory,
+            validation_report=publication.report,
+            expected_assets=publication.inputs.expected_assets,
+            writer=write_assets,
+            source_paths=source_paths,
+            source_path_resolver=source_relative_path,
+            chronology=publication.validations,
         )
 
     def _prepare_publication(self, benign_paths: tuple[Path, ...], attack_paths: tuple[Path, ...]) -> _EdgePublication:
         reader = EdgeIIoTsetReader()
-        ordered_benign = tuple(sorted(benign_paths))
-        ordered_attack = tuple(sorted(attack_paths))
-        benign_frames = tuple(reader.read_benign(path) for path in ordered_benign)
-        attack_frames = tuple(reader.read_attack(path) for path in ordered_attack)
+        benign_frames = tuple(reader.read_benign(path) for path in benign_paths)
+        attack_frames = tuple(reader.read_attack(path) for path in attack_paths)
         chronology = tuple(
             validate_chronology(
                 benign_sensor_group(path).value,
                 path,
                 paired_capture_path(path),
             )
-            for path in ordered_benign
+            for path in benign_paths
         )
         validations = tuple(evidence.validation for evidence in chronology)
         attack_counts = tuple(self._row_count(frame) for frame in attack_frames)
-        inventory = self._inventory(ordered_benign, chronology, ordered_attack, attack_counts)
-        report = self._validation_report(ordered_benign, validations, attack_counts)
-        expected_assets = _expected_assets(ordered_benign, ordered_attack, validations)
-        inputs = _EdgePublicationInputs(ordered_benign, benign_frames, attack_frames, chronology, expected_assets)
+        inventory = self._inventory(benign_paths, chronology, attack_paths, attack_counts)
+        report = self._validation_report(benign_paths, validations, attack_counts)
+        expected_assets = _expected_assets(benign_paths, attack_paths, validations)
+        inputs = _EdgePublicationInputs(benign_paths, benign_frames, attack_frames, chronology, expected_assets)
         return _EdgePublication(inputs, inventory, report, validations)
 
     @staticmethod
@@ -191,17 +195,18 @@ class EdgeIIoTsetMaterializer:
         )
         attack_sources = tuple(
             raw_source_file(
-                DatasetId.EDGE_IIOTSET, path, SourceFileRole.ATTACK, RowCount(row_count), source_relative_path
+                DatasetId.EDGE_IIOTSET,
+                path,
+                SourceFileRole.ATTACK,
+                RowCount(row_count),
+                source_relative_path,
             )
             for path, row_count in zip(attack_paths, attack_counts, strict=True)
         )
         return raw_inventory(DatasetId.EDGE_IIOTSET, benign_sources + evidence_sources + attack_sources)
 
     @staticmethod
-    def _write_assets(
-        canonical_root: Path,
-        inputs: _EdgePublicationInputs,
-    ) -> tuple[CanonicalAsset, ...]:
+    def _write_assets(canonical_root: Path, inputs: _EdgePublicationInputs) -> tuple[CanonicalAsset, ...]:
         timeline_root = canonical_root / ".chronology"
         try:
             static_assets = _write_static_assets(canonical_root, timeline_root, inputs)
@@ -217,14 +222,15 @@ class EdgeIIoTsetMaterializer:
 
     @staticmethod
     def _validation_report(
-        benign_paths: tuple[Path, ...], validations: tuple[ChronologyValidation, ...], attack_counts: tuple[int, ...]
+        benign_paths: tuple[Path, ...],
+        validations: tuple[ChronologyValidation, ...],
+        attack_counts: tuple[int, ...],
     ) -> DatasetValidationReport:
         invalid = tuple(
             (path, validation)
             for path, validation in zip(benign_paths, validations, strict=True)
             if not validation.temporal_eligible
         )
-
         issues = tuple(
             DatasetValidationIssue(
                 ValidationSeverity.WARNING,
@@ -249,7 +255,9 @@ class EdgeIIoTsetMaterializer:
 
 
 def _expected_assets(
-    benign_paths: tuple[Path, ...], attack_paths: tuple[Path, ...], validations: tuple[ChronologyValidation, ...]
+    benign_paths: tuple[Path, ...],
+    attack_paths: tuple[Path, ...],
+    validations: tuple[ChronologyValidation, ...],
 ) -> tuple[CanonicalAssetLayout, ...]:
     benign_identities = tuple(benign_sensor_group(path).value for path in benign_paths)
     static_assets = named_assets(_STATIC_BENIGN_BRANCH, EdgeAssetRole.STATIC_BENIGN, benign_identities)
@@ -272,7 +280,10 @@ def _expected_assets(
 
 
 def _with_capture_timeline(
-    csv_path: Path, frame: pl.LazyFrame, timeline_path: Path, evidence: PcapChronology
+    csv_path: Path,
+    frame: pl.LazyFrame,
+    timeline_path: Path,
+    evidence: PcapChronology,
 ) -> pl.LazyFrame:
     if not evidence.validation.temporal_eligible:
         return frame
@@ -288,7 +299,9 @@ def _with_capture_timeline(
 
 
 def _write_static_assets(
-    canonical_root: Path, timeline_root: Path, inputs: _EdgePublicationInputs
+    canonical_root: Path,
+    timeline_root: Path,
+    inputs: _EdgePublicationInputs,
 ) -> tuple[CanonicalAsset, ...]:
     enriched_benign = tuple(
         _with_capture_timeline(path, frame, timeline_root / f"{index:05d}.parquet", evidence)
@@ -303,7 +316,9 @@ def _write_static_assets(
 
 
 def _write_temporal_assets(
-    canonical_root: Path, static_assets: tuple[CanonicalAsset, ...], inputs: _EdgePublicationInputs
+    canonical_root: Path,
+    static_assets: tuple[CanonicalAsset, ...],
+    inputs: _EdgePublicationInputs,
 ) -> tuple[CanonicalAsset, ...]:
     temporal_count = sum(evidence.validation.temporal_eligible for evidence in inputs.chronology) or 1
     temporal_paths = inputs.expected_assets[len(static_assets) : len(static_assets) + temporal_count]

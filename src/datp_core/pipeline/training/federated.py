@@ -1,17 +1,17 @@
-"""Federated detector training publication."""
+"""Global federated training artifact publication and reuse."""
 
 from dataclasses import dataclass
 
 from datp_core.domain.enums import PublicationStatus
 from datp_core.learning.federated.common import (
     FederatedTrainingArtifacts,
-    GlobalFederatedProtocol,
     federated_training_is_reusable,
     load_reused_federated_artifacts,
+    materialize_global_federated_training,
     rebase_federated_training,
     validate_federated_training_inputs,
-    write_federated_training,
 )
+from datp_core.learning.federated.global_training import GlobalFederatedProtocol
 from datp_core.learning.federated.models import CheckpointCandidate, FederatedTrainingResult
 from datp_core.learning.federated.training import FederatedTrainingRequest
 from datp_core.pipeline.publication.service import ArtifactPublication, FunctionalArtifactCodec, publish_artifact
@@ -38,7 +38,7 @@ def train_federated_detector(request: TrainFederatedDetectorRequest) -> TrainFed
             target=training_request.output_directory,
             request=training_request,
             codec=FunctionalArtifactCodec(
-                writer=write_federated_training,
+                writer=materialize_global_federated_training,
                 validator=federated_training_is_reusable,
                 loader=load_reused_federated_artifacts,
                 rebaser=rebase_federated_training,

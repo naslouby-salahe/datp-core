@@ -4,7 +4,15 @@ from tests.unit.learning.federated.helpers import client_identity, fedavg_coordi
 from datp_core.domain.enums import FederatedThresholdMethod, MetricId, PartitionRole
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import AbsoluteTolerance, Checksum, MetricValue, Seed
-from datp_core.evaluation.controls import ClientAurocEvidence, FixedScoreEvidence, validate_fixed_score_controls
+from datp_core.evaluation.fixed_score.contracts import (
+    CalibrationEvidence,
+    ClientAurocEvidence,
+    DetectorEvidence,
+    FixedScoreEvidence,
+    HeldOutEvaluationEvidence,
+    PopulationEvidence,
+)
+from datp_core.evaluation.fixed_score.validation import validate_fixed_score_controls
 from datp_core.evaluation.metric_semantics import available, unavailable
 from datp_core.evaluation.models import MetricAvailability, MetricReason, MetricStatus
 
@@ -47,6 +55,23 @@ def test_fixed_score_controls_reject_changed_calibration_partition() -> None:
         )
 
 
+def test_calibration_evidence_rejects_non_calibration_role() -> None:
+    with pytest.raises(ValueError, match="calibration partition role"):
+        CalibrationEvidence(role=PartitionRole.EVALUATION, score_checksum=Checksum("a" * 64))
+
+
+def test_held_out_evidence_rejects_duplicate_auroc_clients() -> None:
+    item = ClientAurocEvidence(client_identity("client_a"), available(MetricId.AUROC, 0.8))
+    with pytest.raises(ValueError, match="unique by client"):
+        HeldOutEvaluationEvidence(
+            score_checksum=Checksum("a" * 64),
+            label_checksum=Checksum("b" * 64),
+            source_row_checksum=Checksum("c" * 64),
+            score_order_checksum=Checksum("d" * 64),
+            aurocs=(item, item),
+        )
+
+
 def _evidence(
     method: FederatedThresholdMethod,
     auroc: MetricValue | MetricAvailability,
@@ -55,23 +80,28 @@ def _evidence(
 ) -> FixedScoreEvidence:
     checksum = Checksum("d" * 64)
     return FixedScoreEvidence(
-        coordinate=fedavg_coordinate(Seed(8)),
         threshold_method=method,
-        calibration_role=calibration_role,
-        model_checksum=checksum,
-        preprocessing_checksum=checksum,
-        selected_checkpoint_checksum=checksum,
-        calibration_score_checksum=checksum,
-        evaluation_score_checksum=checksum,
-        evaluation_label_checksum=checksum,
-        client_population_checksum=checksum,
-        eligibility_cohort_checksum=checksum,
-        source_row_checksum=checksum,
-        score_order_checksum=checksum,
-        aurocs=(
-            ClientAurocEvidence(
-                client_identity("client_a"),
-                available(MetricId.AUROC, auroc.value) if isinstance(auroc, MetricValue) else auroc,
+        detector=DetectorEvidence(
+            coordinate=fedavg_coordinate(Seed(8)),
+            model_checksum=checksum,
+            preprocessing_checksum=checksum,
+            selected_checkpoint_checksum=checksum,
+        ),
+        calibration=CalibrationEvidence(role=calibration_role, score_checksum=checksum),
+        evaluation=HeldOutEvaluationEvidence(
+            score_checksum=checksum,
+            label_checksum=checksum,
+            source_row_checksum=checksum,
+            score_order_checksum=checksum,
+            aurocs=(
+                ClientAurocEvidence(
+                    client_identity("client_a"),
+                    available(MetricId.AUROC, auroc.value) if isinstance(auroc, MetricValue) else auroc,
+                ),
             ),
+        ),
+        population=PopulationEvidence(
+            client_inventory_checksum=checksum,
+            eligibility_cohort_checksum=checksum,
         ),
     )

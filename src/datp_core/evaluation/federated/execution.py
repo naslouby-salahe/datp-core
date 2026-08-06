@@ -1,92 +1,48 @@
-"""Held-out federated evaluation over immutable scores and thresholds."""
-
-from dataclasses import dataclass
-from enum import StrEnum
-from pathlib import Path
+"""Held-out federated evaluation over immutable score and threshold evidence."""
 
 import polars as pl
 
-from datp_core.analysis.temporal import TemporalDeploymentProvenance
 from datp_core.datasets.partitioning.contracts import ClientIdentity, PopulationOutcomeLabel
 from datp_core.datasets.registry import population_capabilities
-from datp_core.domain.contracts import StrictModel
-from datp_core.domain.enums import (
-    EvaluationCohort,
-    EvidenceRole,
-    FederatedThresholdMethod,
-    MetricId,
-    PartitionRole,
-    ScoreFrameColumn,
-    StageOperationId,
-)
+from datp_core.domain.enums import EvaluationCohort, EvidenceRole, MetricId, PartitionRole, ScoreFrameColumn, StageOperationId
 from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
-from datp_core.domain.provenance import canonical_checksum, canonical_json_text
+from datp_core.domain.provenance import canonical_checksum
 from datp_core.domain.values import (
     NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
-    Checksum,
-    CoverageTarget,
     ScoreValue,
     ThresholdValue,
     checksum_file,
 )
 from datp_core.evaluation.client_metrics import calculate_client_metrics
-from datp_core.evaluation.cohorts import (
-    ClientEligibilityRecord,
-    EvaluationCohortManifest,
-    cohort_record_for_client,
-)
-from datp_core.evaluation.communication import (
-    CommunicationDiagnostic,
-    CommunicationMessageDiagnostic,
-    summarize_communication,
-)
-from datp_core.evaluation.conformal_coverage import (
-    ConformalCoverageDiagnostic,
-    evaluate_held_out_conformal_coverage,
-)
+from datp_core.evaluation.cohort.construction import cohort_record_for_client
+from datp_core.evaluation.cohort.contracts import ClientEligibilityRecord
+from datp_core.evaluation.communication import summarize_communication
+from datp_core.evaluation.conformal_coverage import evaluate_held_out_conformal_coverage
 from datp_core.evaluation.confusion import calculate_confusion_counts
-from datp_core.evaluation.controls import (
-    FixedScoreEvidence,
-    evaluation_label_checksum,
-    source_row_checksum,
-    validate_evaluation_evidence,
-    validate_fixed_score_controls,
+from datp_core.evaluation.federated.contracts import (
+    EvaluationDiagnostics,
+    FederatedEvaluationArtifacts,
+    FederatedEvaluationDocument,
+    FederatedEvaluationPublication,
+    FederatedEvaluationRequest,
+    ThresholdEstimationStageInput,
 )
-from datp_core.evaluation.models import (
-    ClientMetricResult,
-    HeldOutBenignScore,
-    PopulationMetricResult,
-    metric_by_id,
-)
-from datp_core.evaluation.operational import (
-    AlertBurdenDiagnostic,
-    calculate_alert_burden,
-)
+from datp_core.evaluation.fixed_score.checksums import evaluation_label_checksum, source_row_checksum
+from datp_core.evaluation.fixed_score.validation import validate_evaluation_evidence, validate_fixed_score_controls
+from datp_core.evaluation.models import ClientMetricResult, PopulationMetricResult, metric_by_id
+from datp_core.evaluation.operational import AlertBurdenDiagnostic, calculate_alert_burden
 from datp_core.evaluation.population_metrics import calculate_population_metrics
-from datp_core.evaluation.threshold_estimation import (
-    ThresholdEstimationDiagnostic,
-    ThresholdEstimationProvenance,
-    evaluate_threshold_estimate,
-)
+from datp_core.evaluation.threshold_estimation import ThresholdEstimationDiagnostic, evaluate_threshold_estimate
 from datp_core.evaluation.traffic_rates import ValidatedTrafficRateEvidence
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.protocols.experiments import (
-    ExternalTemporalExecutionIdentity,
-    require_execution_identity,
-)
-from datp_core.protocols.inference import ScoreArtifactManifest, ScoreRecord
+from datp_core.protocols.experiments import require_execution_identity
+from datp_core.protocols.inference import ScoreRecord
 from datp_core.thresholding.assignments import ThresholdAssignment
-from datp_core.thresholding.common import ThresholdConstructionResult
 from datp_core.thresholding.identities import ThresholdUnavailableResult
 from datp_core.thresholding.methods.cluster import GroupedThresholdResult
-from datp_core.thresholding.methods.conformal import (
-    ConformalAssignment,
-    ConformalThresholdResult,
-)
+from datp_core.thresholding.methods.conformal import ConformalThresholdResult
 from datp_core.thresholding.methods.family import FamilyThresholdResult
-from datp_core.thresholding.methods.federated_statistics import (
-    FederatedStatisticsThresholdResult,
-)
+from datp_core.thresholding.methods.federated_statistics import FederatedStatisticsThresholdResult
 from datp_core.thresholding.methods.local import LocalThresholdResult
 from datp_core.thresholding.methods.shared import (
     PooledSharedQuantileResult,
@@ -94,86 +50,10 @@ from datp_core.thresholding.methods.shared import (
     SharedThresholdResult,
 )
 from datp_core.thresholding.methods.shrinkage import ShrinkageThresholdResult
+from datp_core.thresholding.models import ThresholdConstructionResult
 
 
-class FederatedEvaluationAssetName(StrEnum):
-    DOCUMENT = "federated_evaluation.json"
-    COMPLETE = "COMPLETE"
-
-
-@dataclass(frozen=True, slots=True)
-class ConformalCoverageStageInput:
-    assignment: ConformalAssignment
-    target_coverage: CoverageTarget
-    held_out_benign_scores: tuple[HeldOutBenignScore, ...]
-
-
-@dataclass(frozen=True, slots=True)
-class ThresholdEstimationStageInput:
-    provenance: ThresholdEstimationProvenance
-    estimated_threshold: ThresholdValue
-    exact_pooled_benign_quantile_reference: ThresholdValue
-    held_out_benign_scores: tuple[HeldOutBenignScore, ...]
-
-
-@dataclass(frozen=True, slots=True)
-class EvaluationDiagnostics:
-    conformal_coverage: tuple[ConformalCoverageDiagnostic, ...]
-    threshold_estimation: tuple[ThresholdEstimationDiagnostic, ...]
-    communication: CommunicationDiagnostic | None
-    alert_burden: tuple[AlertBurdenDiagnostic, ...]
-
-
-@dataclass(frozen=True, slots=True)
-class FederatedEvaluationRequest:
-    score_manifest: ScoreArtifactManifest
-    threshold_result: ThresholdConstructionResult
-    cohort: EvaluationCohortManifest
-    fixed_score_evidence: FixedScoreEvidence
-    comparison_fixed_score_evidence: FixedScoreEvidence | None
-    evidence_role: EvidenceRole
-    conformal_coverage_inputs: tuple[ConformalCoverageStageInput, ...]
-    threshold_estimation_inputs: tuple[ThresholdEstimationStageInput, ...]
-    communication_messages: tuple[CommunicationMessageDiagnostic, ...]
-    traffic_rate_evidence: ValidatedTrafficRateEvidence | None
-    temporal_provenance: TemporalDeploymentProvenance | None
-    temporal_threshold_provenance: TemporalDeploymentProvenance | None
-    execution_identity: ExternalTemporalExecutionIdentity | None
-
-
-class FederatedEvaluationDocument(StrictModel):
-    stage: StageOperationId
-    score_coordinate: FederatedTrainingCoordinate
-    score_checkpoint_checksum: Checksum
-    preprocessing_state_set_checksum: Checksum
-    split_manifest_checksum: Checksum
-    threshold_method: FederatedThresholdMethod
-    evidence_role: EvidenceRole
-    fixed_score_evidence: FixedScoreEvidence
-    cohort: EvaluationCohortManifest
-    clients: tuple[ClientMetricResult, ...]
-    population: PopulationMetricResult
-    diagnostics: EvaluationDiagnostics
-    temporal_provenance: TemporalDeploymentProvenance | None
-
-
-@dataclass(frozen=True, slots=True)
-class FederatedEvaluationArtifacts:
-    clients: tuple[ClientMetricResult, ...]
-    population: PopulationMetricResult
-    diagnostics: EvaluationDiagnostics
-
-
-@dataclass(frozen=True, slots=True)
-class FederatedEvaluationPublication:
-    artifacts: FederatedEvaluationArtifacts
-    document: FederatedEvaluationDocument
-    digest: Checksum
-
-
-def prepare_federated_evaluation(
-    request: FederatedEvaluationRequest,
-) -> FederatedEvaluationPublication:
+def prepare_federated_evaluation(request: FederatedEvaluationRequest) -> FederatedEvaluationPublication:
     _validate_temporal_provenance(request)
     clients, population = _evaluate(request)
     diagnostics = _evaluate_diagnostics(request, clients)
@@ -187,18 +67,14 @@ def prepare_federated_evaluation(
         validate_fixed_score_controls(
             request.fixed_score_evidence,
             request.comparison_fixed_score_evidence,
-            auroc_absolute_tolerance=(NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE),
+            auroc_absolute_tolerance=NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
         )
-    artifacts = FederatedEvaluationArtifacts(
-        clients=clients,
-        population=population,
-        diagnostics=diagnostics,
-    )
+    artifacts = FederatedEvaluationArtifacts(clients=clients, population=population, diagnostics=diagnostics)
     document = FederatedEvaluationDocument(
         stage=StageOperationId.EVALUATE_FEDERATED,
         score_coordinate=request.score_manifest.coordinate,
         score_checkpoint_checksum=request.score_manifest.checkpoint_checksum,
-        preprocessing_state_set_checksum=(request.score_manifest.preprocessing_state_set_checksum),
+        preprocessing_state_set_checksum=request.score_manifest.preprocessing_state_set_checksum,
         split_manifest_checksum=request.score_manifest.split_manifest_checksum,
         threshold_method=request.threshold_result.method,
         evidence_role=request.evidence_role,
@@ -216,56 +92,7 @@ def prepare_federated_evaluation(
     )
 
 
-def write_federated_evaluation(
-    publication: FederatedEvaluationPublication,
-    directory: Path,
-) -> FederatedEvaluationArtifacts:
-    (directory / FederatedEvaluationAssetName.DOCUMENT).write_text(
-        canonical_json_text(publication.document),
-        encoding="utf-8",
-    )
-    (directory / FederatedEvaluationAssetName.COMPLETE).write_text(
-        publication.digest.value,
-        encoding="utf-8",
-    )
-    return publication.artifacts
-
-
-def federated_evaluation_is_reusable(
-    publication: FederatedEvaluationPublication,
-    directory: Path,
-) -> bool:
-    complete = directory / FederatedEvaluationAssetName.COMPLETE
-    document = directory / FederatedEvaluationAssetName.DOCUMENT
-    try:
-        return (
-            complete.is_file()
-            and document.is_file()
-            and complete.read_text(encoding="utf-8").strip() == publication.digest.value
-        )
-    except OSError:
-        return False
-
-
-def load_reused_federated_evaluation(
-    publication: FederatedEvaluationPublication,
-    directory: Path,
-) -> FederatedEvaluationArtifacts:
-    del directory
-    return publication.artifacts
-
-
-def rebase_federated_evaluation(
-    result: FederatedEvaluationArtifacts,
-    directory: Path,
-) -> FederatedEvaluationArtifacts:
-    del directory
-    return result
-
-
-def _validate_temporal_provenance(
-    request: FederatedEvaluationRequest,
-) -> None:
+def _validate_temporal_provenance(request: FederatedEvaluationRequest) -> None:
     provenance = request.temporal_provenance
     temporal = request.evidence_role is EvidenceRole.TEMPORAL_BOUNDARY
     if not temporal and (provenance is not None or request.temporal_threshold_provenance is not None):
@@ -286,10 +113,7 @@ def _validate_temporal_provenance(
             subject=request.evidence_role,
         )
     provenance.validate_score_manifest(request.score_manifest)
-    identity = require_execution_identity(
-        request.execution_identity,
-        request.score_manifest.coordinate.population,
-    )
+    identity = require_execution_identity(request.execution_identity, request.score_manifest.coordinate.population)
     if identity is None or identity.temporal_state is not provenance.state:
         raise ScientificContractError(
             "temporal evaluation provenance must match the execution identity state",
@@ -304,17 +128,12 @@ def _evaluate(
     assignments = _assignments(request.threshold_result)
     clients = tuple(
         _evaluate_score_record(request, assignments, record)
-        for record in sorted(
-            request.score_manifest.evaluation_records,
-            key=lambda item: item.scored_client,
-        )
+        for record in sorted(request.score_manifest.evaluation_records, key=lambda item: item.scored_client)
     )
     return clients, calculate_population_metrics(clients)
 
 
-def _validate_evaluation_request(
-    request: FederatedEvaluationRequest,
-) -> None:
+def _validate_evaluation_request(request: FederatedEvaluationRequest) -> None:
     if isinstance(request.threshold_result, ThresholdUnavailableResult):
         raise ScientificContractError("unavailable threshold cannot be evaluated")
     if request.threshold_result.coordinate != request.score_manifest.coordinate:
@@ -327,10 +146,7 @@ def _validate_evaluation_request(
             "evaluation evidence role must match the population capability contract",
             subject=request.evidence_role,
         )
-    identity = require_execution_identity(
-        request.execution_identity,
-        request.score_manifest.coordinate.population,
-    )
+    identity = require_execution_identity(request.execution_identity, request.score_manifest.coordinate.population)
     if identity is not None:
         identity.require_evidence_role(request.evidence_role)
 
@@ -341,10 +157,7 @@ def _evaluate_score_record(
     record: ScoreRecord,
 ) -> ClientMetricResult:
     threshold = _threshold_for_client(assignments, record.scored_client)
-    eligibility = cohort_record_for_client(
-        request.cohort,
-        record.scored_client,
-    )
+    eligibility = cohort_record_for_client(request.cohort, record.scored_client)
     if threshold is None or eligibility is None:
         raise ScientificContractError("threshold and cohort must cover every evaluated client")
     if not record.path.is_file() or checksum_file(record.path) != record.checksum:
@@ -365,11 +178,7 @@ def _evaluate_score_record(
         cohort=_evaluation_cohort(eligibility),
         threshold=threshold,
         confusion=confusion,
-        metrics=calculate_client_metrics(
-            confusion=confusion,
-            scores=scores,
-            labels=labels,
-        ),
+        metrics=calculate_client_metrics(confusion=confusion, scores=scores, labels=labels),
         warnings=(),
         evidence_role=request.evidence_role,
         evaluation_score_checksum=record.checksum,
@@ -378,9 +187,7 @@ def _evaluate_score_record(
     )
 
 
-def _evaluation_cohort(
-    record: ClientEligibilityRecord,
-) -> EvaluationCohort:
+def _evaluation_cohort(record: ClientEligibilityRecord) -> EvaluationCohort:
     if record.fpr_evaluable:
         return EvaluationCohort.FPR_EVALUABLE
     if record.deployment_fallback:
@@ -410,21 +217,13 @@ def _evaluate_diagnostics(
     communication = (
         None
         if not request.communication_messages
-        else summarize_communication(
-            coordinate.training_seed,
-            coordinate,
-            request.communication_messages,
-        )
+        else summarize_communication(coordinate.training_seed, coordinate, request.communication_messages)
     )
     return EvaluationDiagnostics(
         conformal_coverage=conformal_coverage,
         threshold_estimation=threshold_estimation,
         communication=communication,
-        alert_burden=_evaluate_alert_burden(
-            request.traffic_rate_evidence,
-            clients,
-            coordinate,
-        ),
+        alert_burden=_evaluate_alert_burden(request.traffic_rate_evidence, clients, coordinate),
     )
 
 
@@ -437,8 +236,8 @@ def _evaluate_threshold_estimation_input(
     return evaluate_threshold_estimate(
         provenance=diagnostic.provenance,
         estimated_threshold=diagnostic.estimated_threshold,
-        exact_pooled_benign_quantile_reference=(diagnostic.exact_pooled_benign_quantile_reference),
-        held_out_benign_scores=diagnostic.held_out_benign_scores,
+        exact_pooled_benign_quantile_reference=diagnostic.exact_pooled_benign_quantile_reference,
+        verified_benign_scores=diagnostic.verified_benign_scores,
     )
 
 
@@ -451,10 +250,7 @@ def _evaluate_alert_burden(
         return ()
     diagnostics: list[AlertBurdenDiagnostic] = []
     for client in clients:
-        false_positive_rate = metric_by_id(
-            client.metrics,
-            MetricId.FALSE_POSITIVE_RATE,
-        ).value
+        false_positive_rate = metric_by_id(client.metrics, MetricId.FALSE_POSITIVE_RATE).value
         if false_positive_rate is not None:
             diagnostics.append(
                 calculate_alert_burden(
@@ -468,9 +264,7 @@ def _evaluate_alert_burden(
     return tuple(diagnostics)
 
 
-def _assignments(
-    result: ThresholdConstructionResult,
-) -> tuple[ThresholdAssignment, ...]:
+def _assignments(result: ThresholdConstructionResult) -> tuple[ThresholdAssignment, ...]:
     match result:
         case ThresholdUnavailableResult():
             return ()
@@ -502,11 +296,7 @@ def _threshold_for_client(
 
 def _score_arrays(
     frame: pl.DataFrame,
-) -> tuple[
-    tuple[ScoreValue, ...],
-    tuple[PopulationOutcomeLabel, ...],
-    tuple[str, ...],
-]:
+) -> tuple[tuple[ScoreValue, ...], tuple[PopulationOutcomeLabel, ...], tuple[str, ...]]:
     required = (
         ScoreFrameColumn.STABLE_ROW_ID.value,
         ScoreFrameColumn.OUTCOME_LABEL.value,
