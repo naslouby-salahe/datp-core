@@ -35,7 +35,8 @@ from datp_core.domain.values import (
     checksum_file,
 )
 from datp_core.evaluation.client_metrics import calculate_client_metrics
-from datp_core.evaluation.cohorts import build_evaluation_cohort_manifest, client_partition_counts_from_scores
+from datp_core.evaluation.cohort.construction import build_evaluation_cohort_manifest
+from datp_core.evaluation.cohort.evidence import client_partition_counts_from_scores
 from datp_core.evaluation.confusion import calculate_confusion_counts
 from datp_core.evaluation.fixed_score.checksums import evaluation_label_checksum, source_row_checksum
 from datp_core.evaluation.models import ClientMetricResult
