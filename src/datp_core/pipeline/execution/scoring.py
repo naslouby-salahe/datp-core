@@ -18,8 +18,8 @@ from datp_core.datasets.partitioning.contracts import (
 from datp_core.domain.enums import ContractSubject, DatasetId, MetricId, PartitionRole, ScoreFrameColumn, SplitProtocolId, TemporalState
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import Checksum, ClientCount, FeatureNameSequence, MetricValue, checksum_file
+from datp_core.evaluation.federated.contracts import FederatedEvaluationDocument
 from datp_core.evaluation.models import MetricStatus, metric_by_id
-from datp_core.evaluation.population import FederatedEvaluationDocument
 from datp_core.learning.federated.checkpoints.selection import CheckpointDecision
 from datp_core.learning.federated.models import CheckpointCandidate
 from datp_core.learning.federated.training import FederatedTrainingRequest
