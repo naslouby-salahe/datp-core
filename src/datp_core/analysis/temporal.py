@@ -4,7 +4,7 @@ from enum import StrEnum
 
 from pydantic import model_validator
 
-from datp_core.analysis.decisions import ScientificDecisionResult
+from datp_core.analysis.scientific_decision import ScientificDecisionResult
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import AvailabilityStatus, EvidenceRole, ScientificDecision
 from datp_core.domain.values import MetricValue, Seed
