@@ -3,6 +3,9 @@
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+from typing import TypeVar
+
+from pydantic import ValidationError
 
 from datp_core.analysis.contrasts import PairedContrast, SupplementaryPairedAnalysisPlan
 from datp_core.analysis.inference.multiplicity import MultiplicityPlan
@@ -19,7 +22,9 @@ from datp_core.analysis.preparation import (
     prepare_temporal_analysis,
 )
 from datp_core.analysis.temporal import TemporalRecoveryResult
-from datp_core.domain.enums import PublicationStatus
+from datp_core.domain.contracts import StrictModel
+from datp_core.domain.enums import ExperimentId, FederatedThresholdMethod, PublicationStatus
+from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.provenance import canonical_checksum, canonical_json_text
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import Seed
@@ -33,6 +38,8 @@ from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
 from datp_core.protocols.statistics import PairedInferenceProtocol
 from datp_core.protocols.temporal import TemporalDeploymentProvenance
 
+AnalysisDocumentT = TypeVar("AnalysisDocumentT", bound=StrictModel)
+
 
 class AnalysisAssetName(StrEnum):
     DOCUMENT = "analysis.json"
@@ -42,10 +49,11 @@ class AnalysisAssetName(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
-class AnalysisPublication[DocumentT]:
+class AnalysisPublication[AnalysisDocumentT: StrictModel]:
     asset_name: AnalysisAssetName
-    document: DocumentT
+    document: AnalysisDocumentT
     digest: Checksum
+    document_type: type[AnalysisDocumentT]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -67,10 +75,13 @@ class AnalyzeExternalEvidenceRequest:
     analysis_seed: Seed
     output_directory: Path
     overwrite: bool
+    mechanisms: tuple[MechanismEvidence, ...] = ()
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class AnalyzeTemporalEvidenceRequest:
+    experiment: ExperimentId
+    threshold_method: FederatedThresholdMethod
     static_reference_identity: ExternalTemporalExecutionIdentity
     frozen_identity: ExternalTemporalExecutionIdentity
     recalibrated_identity: ExternalTemporalExecutionIdentity
@@ -118,7 +129,7 @@ def analyze_confirmatory_evidence(
     publication = _publish(
         request.output_directory,
         request.overwrite,
-        _publication(AnalysisAssetName.DOCUMENT, document),
+        _publication(AnalysisAssetName.DOCUMENT, document, AnalysisDocument),
     )
     return AnalyzeConfirmatoryEvidenceResult(
         publication_status=publication.status,
@@ -136,12 +147,13 @@ def analyze_external_evidence(
             contrasts=request.contrasts,
             plan=request.plan,
             analysis_seed=request.analysis_seed,
+            mechanisms=request.mechanisms,
         )
     )
     publication = _publish(
         request.output_directory,
         request.overwrite,
-        _publication(AnalysisAssetName.EXTERNAL_DOCUMENT, document),
+        _publication(AnalysisAssetName.EXTERNAL_DOCUMENT, document, ExternalAnalysisDocument),
     )
     return AnalyzeExternalEvidenceResult(
         publication_status=publication.status,
@@ -155,6 +167,8 @@ def analyze_temporal_evidence(
 ) -> AnalyzeTemporalEvidenceResult:
     document = prepare_temporal_analysis(
         TemporalAnalysisRequest(
+            experiment=request.experiment,
+            threshold_method=request.threshold_method,
             static_reference_identity=request.static_reference_identity,
             frozen_identity=request.frozen_identity,
             recalibrated_identity=request.recalibrated_identity,
@@ -167,7 +181,7 @@ def analyze_temporal_evidence(
     publication = _publish(
         request.output_directory,
         request.overwrite,
-        _publication(AnalysisAssetName.TEMPORAL_DOCUMENT, document),
+        _publication(AnalysisAssetName.TEMPORAL_DOCUMENT, document, TemporalAnalysisDocument),
     )
     return AnalyzeTemporalEvidenceResult(
         publication_status=publication.status,
@@ -176,15 +190,24 @@ def analyze_temporal_evidence(
     )
 
 
-def _publication[DocumentT](asset_name: AnalysisAssetName, document: DocumentT) -> AnalysisPublication[DocumentT]:
-    return AnalysisPublication(asset_name=asset_name, document=document, digest=canonical_checksum(document))
+def _publication[AnalysisDocumentT: StrictModel](
+    asset_name: AnalysisAssetName,
+    document: AnalysisDocumentT,
+    document_type: type[AnalysisDocumentT],
+) -> AnalysisPublication[AnalysisDocumentT]:
+    return AnalysisPublication(
+        asset_name=asset_name,
+        document=document,
+        digest=canonical_checksum(document),
+        document_type=document_type,
+    )
 
 
-def _publish[DocumentT](
+def _publish[AnalysisDocumentT: StrictModel](
     output_directory: Path,
     overwrite: bool,
-    prepared: AnalysisPublication[DocumentT],
-) -> ArtifactPublicationResult[DocumentT]:
+    prepared: AnalysisPublication[AnalysisDocumentT],
+) -> ArtifactPublicationResult[AnalysisDocumentT]:
     return publish_artifact(
         ArtifactPublication(
             target=output_directory,
@@ -201,10 +224,10 @@ def _publish[DocumentT](
     )
 
 
-def _write_analysis_publication[DocumentT](
-    publication: AnalysisPublication[DocumentT],
+def _write_analysis_publication[AnalysisDocumentT: StrictModel](
+    publication: AnalysisPublication[AnalysisDocumentT],
     directory: Path,
-) -> DocumentT:
+) -> AnalysisDocumentT:
     (directory / publication.asset_name).write_text(
         canonical_json_text(publication.document),
         encoding="utf-8",
@@ -213,30 +236,76 @@ def _write_analysis_publication[DocumentT](
     return publication.document
 
 
-def _analysis_publication_is_reusable[DocumentT](
-    publication: AnalysisPublication[DocumentT],
+def _analysis_publication_is_reusable[AnalysisDocumentT: StrictModel](
+    publication: AnalysisPublication[AnalysisDocumentT],
     directory: Path,
 ) -> bool:
     complete = directory / AnalysisAssetName.COMPLETE
-    document = directory / publication.asset_name
+    document_path = directory / publication.asset_name
     try:
-        return (
-            complete.is_file()
-            and document.is_file()
-            and complete.read_text(encoding="utf-8").strip() == publication.digest.value
-        )
-    except OSError:
+        if not complete.is_file() or not document_path.is_file():
+            return False
+        marker = complete.read_text(encoding="utf-8").strip()
+        loaded = publication.document_type.model_validate_json(document_path.read_text(encoding="utf-8"))
+        recalculated = canonical_checksum(loaded)
+        if marker != recalculated.value:
+            return False
+        if recalculated != publication.digest:
+            return False
+        if not _analysis_identity_matches(publication.document, loaded):
+            return False
+        return True
+    except (OSError, UnicodeError, ValidationError, ValueError, TypeError):
         return False
 
 
-def _load_reused_analysis_publication[DocumentT](
-    publication: AnalysisPublication[DocumentT],
+def _load_reused_analysis_publication[AnalysisDocumentT: StrictModel](
+    publication: AnalysisPublication[AnalysisDocumentT],
     directory: Path,
-) -> DocumentT:
-    del directory
-    return publication.document
+) -> AnalysisDocumentT:
+    document_path = directory / publication.asset_name
+    try:
+        loaded = publication.document_type.model_validate_json(document_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValidationError, ValueError) as error:
+        raise ScientificContractError(
+            f"completed analysis document is unreadable or invalid: {document_path}"
+        ) from error
+    recalculated = canonical_checksum(loaded)
+    marker = (directory / AnalysisAssetName.COMPLETE).read_text(encoding="utf-8").strip()
+    if recalculated.value != marker:
+        raise ScientificContractError(f"analysis document checksum does not match completion marker: {document_path}")
+    if recalculated != publication.digest:
+        raise ScientificContractError(
+            f"analysis document identity does not match the requested analysis: {document_path}"
+        )
+    if not _analysis_identity_matches(publication.document, loaded):
+        raise ScientificContractError(f"persisted analysis identity does not match the requested run: {document_path}")
+    return loaded
 
 
-def _rebase_analysis_publication[DocumentT](document: DocumentT, directory: Path) -> DocumentT:
+def _rebase_analysis_publication[AnalysisDocumentT: StrictModel](
+    document: AnalysisDocumentT,
+    directory: Path,
+) -> AnalysisDocumentT:
     del directory
     return document
+
+
+def _analysis_identity_matches(requested: object, loaded: object) -> bool:
+    if type(requested) is not type(loaded):
+        return False
+    if isinstance(requested, AnalysisDocument) and isinstance(loaded, AnalysisDocument):
+        return requested.inference_protocol == loaded.inference_protocol and tuple(
+            item.seed for item in requested.contrasts
+        ) == tuple(item.seed for item in loaded.contrasts)
+    if isinstance(requested, ExternalAnalysisDocument) and isinstance(loaded, ExternalAnalysisDocument):
+        return requested.plan == loaded.plan and tuple(item.seed for item in requested.contrasts) == tuple(
+            item.seed for item in loaded.contrasts
+        )
+    if isinstance(requested, TemporalAnalysisDocument) and isinstance(loaded, TemporalAnalysisDocument):
+        return (
+            requested.experiment is loaded.experiment
+            and requested.threshold_method is loaded.threshold_method
+            and requested.paired_seed_identities == loaded.paired_seed_identities
+        )
+    return requested == loaded

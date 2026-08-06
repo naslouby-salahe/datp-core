@@ -6,7 +6,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-from datp_core.analysis.contrasts import PairedContrast
+from datp_core.analysis.contrasts import PairedContrast, build_paired_contrast
+from datp_core.analysis.mechanisms import MechanismEvidence, threshold_movements_from_evaluations
 from datp_core.domain.enums import EvidenceRole, ExperimentId, FederatedThresholdMethod, MetricId, PopulationId
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.checksums import Checksum
@@ -29,7 +30,11 @@ from datp_core.pipeline.publication.layout import evaluation_run_directory
 from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration
 from datp_core.protocols.seeds import CONFIRMATORY_ANALYSIS_SEED, CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL
-from datp_core.reporting.export import export_analysis_report
+from datp_core.reporting.export import (
+    export_analysis_report,
+    export_confirmatory_publication,
+    export_mechanism_publication,
+)
 from datp_core.runtime.configuration import OUTPUTS_ROOT
 
 
@@ -97,6 +102,7 @@ def analyze_confirmatory_campaign() -> Path:
         / PopulationId.NBAIOT_NATURAL_DEVICES.value
         / ConfirmatoryAssetDirectory.ANALYSIS
     )
+    mechanisms = _confirmatory_mechanisms()
     result = analyze_confirmatory_evidence(
         AnalyzeConfirmatoryEvidenceRequest(
             contrasts=tuple(_confirmatory_contrast(seed) for seed in CONFIRMATORY_SEED_COHORT.values),
@@ -104,10 +110,33 @@ def analyze_confirmatory_campaign() -> Path:
             analysis_seed=CONFIRMATORY_ANALYSIS_SEED,
             output_directory=output,
             overwrite=False,
+            mechanisms=mechanisms,
         )
     )
     export_analysis_report(result.document, output / "analysis_report.md")
+    export_confirmatory_publication(result.document, output)
+    if mechanisms:
+        export_mechanism_publication(
+            mechanisms,
+            experiment=ExperimentId.SHARED_VS_LOCAL_CONFIRMATION,
+            population=PopulationId.NBAIOT_NATURAL_DEVICES,
+            output_directory=output / "mechanisms",
+        )
     return output
+
+
+def _confirmatory_mechanisms() -> tuple[MechanismEvidence, ...]:
+    movements: list[MechanismEvidence] = []
+    for seed in CONFIRMATORY_SEED_COHORT.values:
+        shared = load_evaluation_document(_evaluation_path(seed, FederatedThresholdMethod.SHARED_THRESHOLD))
+        local = load_evaluation_document(_evaluation_path(seed, FederatedThresholdMethod.LOCAL_THRESHOLD))
+        cohort = threshold_movements_from_evaluations(
+            shared=shared,
+            local=local,
+            experiment=ExperimentId.SHARED_VS_LOCAL_CONFIRMATION,
+        )
+        movements.append(cohort)
+    return tuple(movements)
 
 
 def _confirmatory_declaration() -> ExperimentDeclaration:
@@ -134,17 +163,14 @@ def _confirmatory_coordinate(training_seed: Seed, method: FederatedThresholdMeth
 def _confirmatory_contrast(training_seed: Seed) -> PairedContrast:
     shared = load_evaluation_document(_evaluation_path(training_seed, FederatedThresholdMethod.SHARED_THRESHOLD))
     local = load_evaluation_document(_evaluation_path(training_seed, FederatedThresholdMethod.LOCAL_THRESHOLD))
-    if shared.score_coordinate != local.score_coordinate:
-        raise ScientificContractError("paired evaluation documents use different training coordinates")
     metric = MetricId.FPR_COEFFICIENT_OF_VARIATION
-    return PairedContrast(
-        coordinate=shared.score_coordinate,
-        evidence_role=EvidenceRole.CONFIRMATORY,
+    return build_paired_contrast(
+        left=shared,
+        right=local,
         metric=metric,
-        left_method=FederatedThresholdMethod.SHARED_THRESHOLD,
-        right_method=FederatedThresholdMethod.LOCAL_THRESHOLD,
         left_value=_required_metric(shared, metric),
         right_value=_required_metric(local, metric),
+        evidence_role=EvidenceRole.CONFIRMATORY,
     )
 
 

@@ -15,15 +15,18 @@ from datp_core.analysis.adapters.scipy import (
 )
 from datp_core.analysis.inference.wilcoxon import CorrelationCoefficient, PValue
 from datp_core.domain.contracts import StrictModel
-from datp_core.domain.enums import AvailabilityStatus, EvidenceRole
-from datp_core.domain.values.counts import PairedObservationCount
+from datp_core.domain.enums import AvailabilityStatus, EvidenceRole, ExperimentId, PopulationId
+from datp_core.domain.values.counts import PairedObservationCount, Seed
 from datp_core.domain.values.ratios import MetricValue, Ratio
 
 MINIMUM_ASSOCIATION_OBSERVATIONS = PairedObservationCount(3)
+MINIMUM_PUBLICATION_OBSERVATIONS = PairedObservationCount(5)
+DEFAULT_ASSOCIATION_CONFIDENCE_LEVEL = Ratio(0.95)
 
 
 class AssociationIssue(StrEnum):
     INSUFFICIENT_OBSERVATIONS = "association requires at least three observations"
+    INSUFFICIENT_EVIDENCE = "association is mathematically computable but scientifically underpowered for publication"
     NON_FINITE_OBSERVATION = "association observations must be finite"
     ZERO_HETEROGENEITY_VARIATION = "heterogeneity has zero variation"
     ZERO_BENEFIT_VARIATION = "benefit has zero variation"
@@ -36,12 +39,24 @@ class AssociationIssue(StrEnum):
             AssociationIssue.ZERO_BENEFIT_VARIATION,
         }:
             return AvailabilityStatus.UNDEFINED
+        if self is AssociationIssue.INSUFFICIENT_EVIDENCE:
+            return AvailabilityStatus.AVAILABLE
         return AvailabilityStatus.UNAVAILABLE
 
 
 class AssociationObservation(StrictModel):
+    seed: Seed
+    experiment: ExperimentId
+    population: PopulationId
+    regime_label: str
     heterogeneity: MetricValue
     benefit: MetricValue
+
+    @model_validator(mode="after")
+    def validate_observation(self) -> "AssociationObservation":
+        if not self.regime_label.strip():
+            raise ValueError("association observation requires a non-empty regime label")
+        return self
 
 
 class AssociationStatistics(StrictModel):
@@ -50,8 +65,20 @@ class AssociationStatistics(StrictModel):
     regression_intercept: MetricValue
     regression_slope: MetricValue
     regression_slope_standard_error: MetricValue
+    regression_slope_confidence_interval: tuple[MetricValue, MetricValue]
     r_squared: Ratio
     leverage: tuple[Ratio, ...]
+    leave_one_out_slopes: tuple[MetricValue, ...]
+    leave_one_out_r_squared: tuple[Ratio, ...]
+    influence: tuple[MetricValue, ...]
+    evidentiary_sufficient: bool
+
+    @model_validator(mode="after")
+    def validate_statistics(self) -> "AssociationStatistics":
+        lower, upper = self.regression_slope_confidence_interval
+        if lower.value > upper.value:
+            raise ValueError("regression slope confidence interval bounds are inverted")
+        return self
 
 
 class AssociationResult(StrictModel):
@@ -64,14 +91,28 @@ class AssociationResult(StrictModel):
     @model_validator(mode="after")
     def validate_result(self) -> "AssociationResult":
         if (self.statistics is None) == (self.issue is None):
-            raise ValueError("association result requires either statistics or one issue")
-        if self.statistics is not None and len(self.statistics.leverage) != len(self.observations):
-            raise ValueError("association leverage must cover every observation")
+            # Allow computed statistics with INSUFFICIENT_EVIDENCE issue
+            if not (self.statistics is not None and self.issue is AssociationIssue.INSUFFICIENT_EVIDENCE):
+                raise ValueError("association result requires either statistics or one issue")
+        if self.statistics is not None:
+            count = len(self.observations)
+            if len(self.statistics.leverage) != count:
+                raise ValueError("association leverage must cover every observation")
+            if len(self.statistics.leave_one_out_slopes) != count:
+                raise ValueError("association leave-one-out slopes must cover every observation")
+            if len(self.statistics.leave_one_out_r_squared) != count:
+                raise ValueError("association leave-one-out R² must cover every observation")
+            if len(self.statistics.influence) != count:
+                raise ValueError("association influence must cover every observation")
         return self
 
     @property
     def availability(self) -> AvailabilityStatus:
-        return AvailabilityStatus.AVAILABLE if self.issue is None else self.issue.availability
+        if self.issue is None:
+            return AvailabilityStatus.AVAILABLE
+        if self.statistics is not None and self.issue is AssociationIssue.INSUFFICIENT_EVIDENCE:
+            return AvailabilityStatus.AVAILABLE
+        return self.issue.availability
 
     @property
     def reason(self) -> str | None:
@@ -84,6 +125,8 @@ class AssociationResult(StrictModel):
 
 def heterogeneity_benefit_association(
     observations: tuple[AssociationObservation, ...],
+    *,
+    confidence_level: Ratio = DEFAULT_ASSOCIATION_CONFIDENCE_LEVEL,
 ) -> AssociationResult:
     if len(observations) < MINIMUM_ASSOCIATION_OBSERVATIONS.value:
         return _unavailable_association(
@@ -133,19 +176,69 @@ def heterogeneity_benefit_association(
     values = spearman + regression
     design = np.column_stack((np.ones(x_values.size), x_values))
     leverage = np.einsum("ij,ji->i", design, np.linalg.pinv(design))
+    slope = values[3]
+    slope_se = values[4]
+    alpha = 1.0 - confidence_level.value
+    t_critical = float(stats.t.ppf(1.0 - alpha / 2.0, df=max(x_values.size - 2, 1)))
+    loo_slopes, loo_r2, influence = _leave_one_out(x_values, y_values, slope)
+    sufficient = len(observations) >= MINIMUM_PUBLICATION_OBSERVATIONS.value
+    statistics = AssociationStatistics(
+        spearman_rho=CorrelationCoefficient(values[0]),
+        spearman_p_value=PValue(values[1]),
+        regression_intercept=MetricValue(values[2]),
+        regression_slope=MetricValue(slope),
+        regression_slope_standard_error=MetricValue(slope_se),
+        regression_slope_confidence_interval=(
+            MetricValue(slope - t_critical * slope_se),
+            MetricValue(slope + t_critical * slope_se),
+        ),
+        r_squared=Ratio(values[5] ** 2),
+        leverage=tuple(Ratio(float(value)) for value in leverage),
+        leave_one_out_slopes=loo_slopes,
+        leave_one_out_r_squared=loo_r2,
+        influence=influence,
+        evidentiary_sufficient=sufficient,
+    )
     return AssociationResult(
         observations=observations,
-        statistics=AssociationStatistics(
-            spearman_rho=CorrelationCoefficient(values[0]),
-            spearman_p_value=PValue(values[1]),
-            regression_intercept=MetricValue(values[2]),
-            regression_slope=MetricValue(values[3]),
-            regression_slope_standard_error=MetricValue(values[4]),
-            r_squared=Ratio(values[5] ** 2),
-            leverage=tuple(Ratio(float(value)) for value in leverage),
-        ),
-        issue=None,
+        statistics=statistics,
+        issue=None if sufficient else AssociationIssue.INSUFFICIENT_EVIDENCE,
     )
+
+
+def _leave_one_out(
+    x_values: np.ndarray,
+    y_values: np.ndarray,
+    full_slope: float,
+) -> tuple[tuple[MetricValue, ...], tuple[Ratio, ...], tuple[MetricValue, ...]]:
+    slopes: list[MetricValue] = []
+    r_squared_values: list[Ratio] = []
+    influences: list[MetricValue] = []
+    for index in range(x_values.size):
+        mask = np.ones(x_values.size, dtype=bool)
+        mask[index] = False
+        x_loo = x_values[mask]
+        y_loo = y_values[mask]
+        if np.ptp(x_loo) == 0.0 or np.ptp(y_loo) == 0.0:
+            slopes.append(MetricValue(full_slope))
+            r_squared_values.append(Ratio(0.0))
+            influences.append(MetricValue(0.0))
+            continue
+        fit = cast(
+            LinearRegressionResult,
+            stats.linregress(x_loo, y_loo, alternative="two-sided"),
+        )
+        extracted = linear_regression_values(fit)
+        if extracted is None:
+            slopes.append(MetricValue(full_slope))
+            r_squared_values.append(Ratio(0.0))
+            influences.append(MetricValue(0.0))
+            continue
+        loo_slope = extracted[1]
+        slopes.append(MetricValue(loo_slope))
+        r_squared_values.append(Ratio(extracted[3] ** 2))
+        influences.append(MetricValue(full_slope - loo_slope))
+    return tuple(slopes), tuple(r_squared_values), tuple(influences)
 
 
 def _unavailable_association(

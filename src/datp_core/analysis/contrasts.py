@@ -12,8 +12,19 @@ from datp_core.domain.enums import (
     SplitProtocolId,
     TrainingModelId,
 )
+from datp_core.domain.errors import ScientificContractError
+from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import PairedObservationCount, Seed
-from datp_core.domain.values.ratios import DittoRegularization, MetricValue, ProximalCoefficient, Ratio
+from datp_core.domain.values.ratios import (
+    NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
+    AbsoluteTolerance,
+    DittoRegularization,
+    MetricValue,
+    ProximalCoefficient,
+    Ratio,
+)
+from datp_core.evaluation.federated.contracts import FederatedEvaluationDocument
+from datp_core.evaluation.fixed_score.validation import validate_fixed_score_controls
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.protocols.seeds import SeedCohort
 from datp_core.protocols.statistics import PairedInferenceProtocol
@@ -58,6 +69,22 @@ class FederatedDesignIdentity(StrictModel):
         )
 
 
+class FixedScorePairProvenance(StrictModel):
+    """Fixed-score invariants proven identical across paired threshold policies."""
+
+    model_checksum: Checksum
+    preprocessing_checksum: Checksum
+    selected_checkpoint_checksum: Checksum
+    split_manifest_checksum: Checksum
+    calibration_score_checksum: Checksum
+    evaluation_score_checksum: Checksum
+    evaluation_label_checksum: Checksum
+    source_row_checksum: Checksum
+    score_order_checksum: Checksum
+    client_inventory_checksum: Checksum
+    eligibility_cohort_checksum: Checksum
+
+
 class PairedContrast(StrictModel):
     coordinate: FederatedTrainingCoordinate
     evidence_role: EvidenceRole
@@ -66,6 +93,7 @@ class PairedContrast(StrictModel):
     right_method: FederatedThresholdMethod
     left_value: MetricValue
     right_value: MetricValue
+    fixed_score: FixedScorePairProvenance
 
     @model_validator(mode="after")
     def validate_distinct_methods(self) -> "PairedContrast":
@@ -111,3 +139,57 @@ class SupplementaryPairedAnalysisPlan(StrictModel):
         if self.seed_cohort != self.inference_protocol.seed_cohort:
             raise ValueError("supplementary plan and inference protocol must share one seed cohort")
         return self
+
+
+def build_paired_contrast(
+    *,
+    left: FederatedEvaluationDocument,
+    right: FederatedEvaluationDocument,
+    metric: MetricId,
+    left_value: MetricValue,
+    right_value: MetricValue,
+    evidence_role: EvidenceRole,
+    auroc_absolute_tolerance: AbsoluteTolerance = NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
+) -> PairedContrast:
+    """Build a typed paired contrast only after full fixed-score control validation."""
+    if left.score_coordinate != right.score_coordinate:
+        raise ScientificContractError("paired evaluation documents use different training coordinates")
+    if left.threshold_method is right.threshold_method:
+        raise ScientificContractError("paired evaluation documents require distinct threshold methods")
+    if left.evidence_role is not evidence_role or right.evidence_role is not evidence_role:
+        raise ScientificContractError("paired evaluation documents must share the requested evidence role")
+    if left.split_manifest_checksum != right.split_manifest_checksum:
+        raise ScientificContractError("paired evaluation documents use different split-manifest checksums")
+    if (
+        left.score_checkpoint_checksum != right.score_checkpoint_checksum
+        or left.preprocessing_state_set_checksum != right.preprocessing_state_set_checksum
+    ):
+        raise ScientificContractError("paired evaluation documents use different detector or preprocessing state")
+    validate_fixed_score_controls(
+        left.fixed_score_evidence,
+        right.fixed_score_evidence,
+        auroc_absolute_tolerance=auroc_absolute_tolerance,
+    )
+    left_evidence = left.fixed_score_evidence
+    return PairedContrast(
+        coordinate=left.score_coordinate,
+        evidence_role=evidence_role,
+        metric=metric,
+        left_method=left.threshold_method,
+        right_method=right.threshold_method,
+        left_value=left_value,
+        right_value=right_value,
+        fixed_score=FixedScorePairProvenance(
+            model_checksum=left_evidence.detector.model_checksum,
+            preprocessing_checksum=left_evidence.detector.preprocessing_checksum,
+            selected_checkpoint_checksum=left_evidence.detector.selected_checkpoint_checksum,
+            split_manifest_checksum=left.split_manifest_checksum,
+            calibration_score_checksum=left_evidence.calibration.score_checksum,
+            evaluation_score_checksum=left_evidence.evaluation.score_checksum,
+            evaluation_label_checksum=left_evidence.evaluation.label_checksum,
+            source_row_checksum=left_evidence.evaluation.source_row_checksum,
+            score_order_checksum=left_evidence.evaluation.score_order_checksum,
+            client_inventory_checksum=left_evidence.population.client_inventory_checksum,
+            eligibility_cohort_checksum=left_evidence.population.eligibility_cohort_checksum,
+        ),
+    )

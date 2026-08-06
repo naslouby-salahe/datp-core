@@ -17,6 +17,7 @@ from datp_core.evaluation.metric_semantics import (
     unavailable,
 )
 from datp_core.evaluation.models import (
+    FederatedScoreRecord,
     HeldOutBenignScore,
     MetricAvailability,
     MetricReason,
@@ -25,7 +26,6 @@ from datp_core.evaluation.models import (
     validate_metric_set,
 )
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.protocols.inference import ScoreRecord
 from datp_core.thresholding.methods.conformal import ConformalAssignment
 
 _COVERAGE_METRICS = frozenset(
@@ -192,7 +192,7 @@ def _validate_scores(
 def _verify_score_rows(
     scores: tuple[HeldOutBenignScore, ...],
 ) -> None:
-    records: list[ScoreRecord] = []
+    records: list[FederatedScoreRecord] = []
     for item in scores:
         if item.score_record not in records:
             records.append(item.score_record)
@@ -202,7 +202,7 @@ def _verify_score_rows(
 
 
 def _verify_record_rows(
-    record: ScoreRecord,
+    record: FederatedScoreRecord,
     supplied_rows: tuple[HeldOutBenignScore, ...],
 ) -> None:
     required = (

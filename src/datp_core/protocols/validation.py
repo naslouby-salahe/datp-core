@@ -191,8 +191,6 @@ def _require_endpoint_matches_experiment(
         raise ProtocolValidationError("Confirmatory experiment requires LOCAL_THRESHOLD")
     if endpoint.metric not in experiment.metrics:
         raise ProtocolValidationError("Confirmatory experiment requires FPR_COEFFICIENT_OF_VARIATION")
-    if MetricId.AUROC is endpoint.metric:
-        raise ProtocolValidationError("AUROC cannot be the confirmatory endpoint")
 
 
 def _validate_experiment_population_pair(

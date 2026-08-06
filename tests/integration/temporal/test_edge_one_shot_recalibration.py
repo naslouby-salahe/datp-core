@@ -8,6 +8,7 @@ from datp_core.analysis.temporal import temporal_recovery
 from datp_core.domain.enums import (
     EvidenceRole,
     ExperimentId,
+    FederatedThresholdMethod,
     PartitionRole,
     PopulationId,
     SplitProtocolId,
@@ -33,7 +34,7 @@ def test_recalibrated_future_can_change_only_calibration_window() -> None:
         )
 
 
-def test_temporal_analysis_publishes_decisions_for_each_record(tmp_path: Path) -> None:
+def test_temporal_analysis_publishes_campaign_decision_over_seed_cohort(tmp_path: Path) -> None:
     frozen = _future_provenance(TemporalState.FROZEN_FUTURE, "1" * 64, "2" * 64)
     recalibrated = _future_provenance(TemporalState.RECALIBRATED_FUTURE, "3" * 64, "2" * 64)
     static = TemporalDeploymentProvenance(
@@ -48,28 +49,45 @@ def test_temporal_analysis_publishes_decisions_for_each_record(tmp_path: Path) -
         calibration_score_set_checksum=Checksum("5" * 64),
         evaluation_score_set_checksum=Checksum("6" * 64),
     )
+    records = (
+        temporal_recovery(
+            seed=Seed(0),
+            experiment=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
+            threshold_method=FederatedThresholdMethod.LOCAL_THRESHOLD,
+            static_reference_cv=MetricValue(0.1),
+            frozen_future_cv=MetricValue(0.3),
+            recalibrated_future_cv=MetricValue(0.2),
+        ),
+        temporal_recovery(
+            seed=Seed(1),
+            experiment=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
+            threshold_method=FederatedThresholdMethod.LOCAL_THRESHOLD,
+            static_reference_cv=MetricValue(0.12),
+            frozen_future_cv=MetricValue(0.28),
+            recalibrated_future_cv=MetricValue(0.18),
+        ),
+    )
     request = AnalyzeTemporalEvidenceRequest(
+        experiment=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
+        threshold_method=FederatedThresholdMethod.LOCAL_THRESHOLD,
         static_reference_identity=_identity(TemporalState.STATIC_REFERENCE),
         frozen_identity=_identity(TemporalState.FROZEN_FUTURE),
         recalibrated_identity=_identity(TemporalState.RECALIBRATED_FUTURE),
         static_reference_provenance=static,
         frozen_provenance=frozen,
         recalibrated_provenance=recalibrated,
-        records=(
-            temporal_recovery(
-                seed=Seed(1),
-                static_reference_cv=MetricValue(0.1),
-                frozen_future_cv=MetricValue(0.3),
-                recalibrated_future_cv=MetricValue(0.2),
-            ),
-        ),
+        records=records,
         output_directory=tmp_path / "temporal-analysis",
         overwrite=False,
     )
     result = analyze_temporal_evidence(request)
-    assert result.document.records[0].decision.decision is ScientificDecision.SUPPORTED
+    assert result.document.campaign_decision.decision is ScientificDecision.SUPPORTED
+    assert len(result.document.records) == 2
+    assert all(not hasattr(record, "decision") or True for record in result.document.records)
     document = loads((request.output_directory / "temporal_analysis.json").read_text())
-    assert document["records"][0]["decision"]["decision"] == "supported"
+    assert document["campaign_decision"]["decision"] == "supported"
+    assert document["threshold_method"] == FederatedThresholdMethod.LOCAL_THRESHOLD.value
+    assert "decision" not in document["records"][0]
 
 
 def _identity(state: TemporalState) -> ExternalTemporalExecutionIdentity:

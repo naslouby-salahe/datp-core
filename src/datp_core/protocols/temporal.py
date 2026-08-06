@@ -79,7 +79,13 @@ class TemporalDeploymentProvenance(StrictModel):
             evaluation_score_set_checksum=manifest.score_set_checksum(evaluation_role),
         )
 
-    def validate_score_manifest(self, manifest: ScoreArtifactManifest) -> None:
+    def validate_score_manifest[
+        CoordinateT: TrainingCoordinateContract,
+        ClientT: ClientIdentityContract,
+    ](
+        self,
+        manifest: ScoreArtifactManifest[CoordinateT, ClientT],
+    ) -> None:
         if TemporalDeploymentProvenance.from_score_manifest(self.state, manifest) != self:
             raise ScientificContractError(
                 "temporal deployment provenance does not match immutable score artifacts",

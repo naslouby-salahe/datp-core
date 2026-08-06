@@ -33,7 +33,7 @@ class SerializedPayloadEvidence:
     logical_element_count: LogicalElementCount
 
     def __post_init__(self) -> None:
-        if not isinstance(self.logical_element_count, LogicalElementCount):
+        if type(self.logical_element_count) is not LogicalElementCount:
             raise ScientificContractError("communication payloads require a typed logical element count")
 
 

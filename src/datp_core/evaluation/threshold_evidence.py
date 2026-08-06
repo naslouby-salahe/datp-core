@@ -8,9 +8,8 @@ from datp_core.datasets.partitioning.contracts import ClientIdentity, Population
 from datp_core.domain.enums import ScoreFrameColumn
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.checksums import checksum_file
-from datp_core.evaluation.models import HeldOutBenignScore
+from datp_core.evaluation.models import FederatedScoreRecord, HeldOutBenignScore
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.protocols.inference import ScoreRecord
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,7 +45,7 @@ def verify_held_out_benign_scores(
 
 def _verify_score_rows(scores: tuple[HeldOutBenignScore, ...]) -> None:
     """Reject rows not demonstrably present in an unchanged held-out score artifact."""
-    by_record: dict[ScoreRecord, list[HeldOutBenignScore]] = {}
+    by_record: dict[FederatedScoreRecord, list[HeldOutBenignScore]] = {}
     for item in scores:
         by_record.setdefault(item.score_record, []).append(item)
     required = (

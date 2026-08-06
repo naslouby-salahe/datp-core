@@ -1,6 +1,6 @@
 """Scientific design validation for paired bootstrap inference."""
 
-from datp_core.analysis.contrasts import PairedContrasts, SupplementaryPairedAnalysisPlan
+from datp_core.analysis.contrasts import FixedScorePairProvenance, PairedContrasts, SupplementaryPairedAnalysisPlan
 from datp_core.analysis.inference.bootstrap.contracts import BcaReason
 from datp_core.domain.enums import EvidenceRole, FederatedThresholdMethod
 from datp_core.protocols.statistics import PairedInferenceProtocol
@@ -39,6 +39,7 @@ def validate_confirmatory_contrasts(
         ):
             raise PairedAnalysisContractError(BcaReason.CONFIRMATORY_ENDPOINT_MISMATCH)
     _require_fixed_design(contrasts)
+    _require_fixed_score_identity(contrasts)
     return tuple(sorted(contrasts, key=lambda contrast: contrast.seed.value))
 
 
@@ -61,6 +62,7 @@ def validate_supplementary_contrasts(
         ):
             raise PairedAnalysisContractError(BcaReason.SUPPLEMENTARY_ANALYSIS_PLAN_MISMATCH)
     _require_fixed_design(contrasts)
+    _require_fixed_score_identity(contrasts)
     return tuple(sorted(contrasts, key=lambda contrast: contrast.seed.value))
 
 
@@ -69,4 +71,33 @@ def _require_fixed_design(contrasts: PairedContrasts) -> None:
         raise PairedAnalysisContractError(BcaReason.SEED_COHORT_MISMATCH)
     design = contrasts[0].design
     if any(contrast.design != design for contrast in contrasts[1:]):
+        raise PairedAnalysisContractError(BcaReason.FIXED_COORDINATE_MISMATCH)
+
+
+def _require_fixed_score_identity(contrasts: PairedContrasts) -> None:
+    """Reject pairs that only share a training coordinate without fixed-score provenance."""
+    if not contrasts:
+        raise PairedAnalysisContractError(BcaReason.SEED_COHORT_MISMATCH)
+    for contrast in contrasts:
+        _require_complete_provenance(contrast.fixed_score)
+    methods = (contrasts[0].left_method, contrasts[0].right_method)
+    if any((contrast.left_method, contrast.right_method) != methods for contrast in contrasts[1:]):
+        raise PairedAnalysisContractError(BcaReason.FIXED_COORDINATE_MISMATCH)
+
+
+def _require_complete_provenance(provenance: FixedScorePairProvenance) -> None:
+    fields = (
+        provenance.model_checksum,
+        provenance.preprocessing_checksum,
+        provenance.selected_checkpoint_checksum,
+        provenance.split_manifest_checksum,
+        provenance.calibration_score_checksum,
+        provenance.evaluation_score_checksum,
+        provenance.evaluation_label_checksum,
+        provenance.source_row_checksum,
+        provenance.score_order_checksum,
+        provenance.client_inventory_checksum,
+        provenance.eligibility_cohort_checksum,
+    )
+    if any(not field.value for field in fields):
         raise PairedAnalysisContractError(BcaReason.FIXED_COORDINATE_MISMATCH)

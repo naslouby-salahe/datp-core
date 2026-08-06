@@ -67,8 +67,6 @@ class ConfirmatoryEndpoint(StrictModel):
     def validate_endpoint(self) -> "ConfirmatoryEndpoint":
         if self.seed_cohort.member_count != CONFIRMATORY_PAIRED_SEED_COUNT:
             raise ValueError("confirmatory endpoint requires the paired ten-seed journal cohort")
-        if MetricId.AUROC is self.metric:
-            raise ValueError("AUROC is a model-quality control, not the confirmatory endpoint")
         return self
 
 

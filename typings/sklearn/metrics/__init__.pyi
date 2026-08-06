@@ -1,0 +1,3 @@
+from collections.abc import Sequence
+
+def adjusted_rand_score(labels_true: Sequence[int], labels_pred: Sequence[int]) -> float: ...

@@ -9,11 +9,15 @@ from typing import TYPE_CHECKING
 
 from pydantic import TypeAdapter
 
+from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.provenance import canonical_json_text
 from datp_core.domain.values.checksums import Checksum, checksum_text
+from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.protocols.inference import ScoreArtifactManifest
 from datp_core.protocols.temporal import TemporalDeploymentProvenance
 from datp_core.thresholding.models import ThresholdConstructionResult
+
+type FederatedScoreArtifactManifest = ScoreArtifactManifest[FederatedTrainingCoordinate, ClientIdentity]
 
 if TYPE_CHECKING:
     from datp_core.thresholding.dispatch import ThresholdConstructionRequest
@@ -29,7 +33,7 @@ class FederatedThresholdAssetName(StrEnum):
 class FederatedThresholdPublicationRequest:
     request: ThresholdConstructionRequest
     temporal_provenance: TemporalDeploymentProvenance | None = None
-    temporal_score_manifest: ScoreArtifactManifest | None = None
+    temporal_score_manifest: FederatedScoreArtifactManifest | None = None
 
     def __post_init__(self) -> None:
         if (self.temporal_provenance is None) != (self.temporal_score_manifest is None):
@@ -44,9 +48,6 @@ class FederatedThresholdPublicationRequest:
 class _ThresholdPublicationProjection:
     result: ThresholdConstructionResult
     temporal_provenance: TemporalDeploymentProvenance | None
-
-
-_RESULT_ADAPTER = TypeAdapter(ThresholdConstructionResult)
 
 
 def write_federated_threshold(
@@ -127,7 +128,8 @@ def federated_threshold_publication_checksum(
 
 def _load_result(directory: Path) -> ThresholdConstructionResult:
     path = directory / FederatedThresholdAssetName.RESULT
-    return _RESULT_ADAPTER.validate_json(path.read_text(encoding="utf-8"))
+    adapter: TypeAdapter[ThresholdConstructionResult] = TypeAdapter(ThresholdConstructionResult)
+    return adapter.validate_json(path.read_text(encoding="utf-8"))
 
 
 def _load_temporal_provenance(

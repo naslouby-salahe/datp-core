@@ -1,13 +1,15 @@
+from pathlib import Path
+
 from datp_core.analysis.contrasts import FixedScorePairProvenance, PairedContrast
-from datp_core.analysis.inference.bootstrap.contracts import BcaOutcome
-from datp_core.analysis.inference.bootstrap.estimation import paired_bca_interval
+from datp_core.analysis.mechanisms.divergence import ClientScoreVector, jensen_shannon_divergence
 from datp_core.analysis.preparation import ConfirmatoryAnalysisRequest, prepare_confirmatory_analysis
+from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.enums import (
-    AvailabilityStatus,
     EvidenceRole,
     FederatedThresholdMethod,
     MetricId,
     PopulationId,
+    PopulationIdentityKind,
     PreprocessingProtocolId,
     SplitProtocolId,
     TrainingModelId,
@@ -17,58 +19,39 @@ from datp_core.domain.values.counts import Seed
 from datp_core.domain.values.ratios import MetricValue
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL
+from datp_core.reporting.export import export_analysis_report
 
 
-def test_confirmatory_bca_blocks_nine_pairs() -> None:
-    result = paired_bca_interval(
-        tuple(_contrast(seed) for seed in range(9)),
-        protocol=CONFIRMATORY_INFERENCE_PROTOCOL,
-        analysis_seed=Seed(17),
+def test_analysis_report_contains_actual_mechanism_values(tmp_path: Path) -> None:
+    clients = (
+        ClientIdentity(PopulationId.NBAIOT_NATURAL_DEVICES, "a", PopulationIdentityKind.PHYSICAL_DEVICES),
+        ClientIdentity(PopulationId.NBAIOT_NATURAL_DEVICES, "b", PopulationIdentityKind.PHYSICAL_DEVICES),
     )
-    assert result.outcome is BcaOutcome.BLOCKED
-    assert result.point_estimate is not None
-
-
-def test_pairing_rejects_a_seed_independent_design_change() -> None:
-    values = [_contrast(seed) for seed in range(10)]
-    changed = values[-1]
-    values[-1] = changed.model_copy(
-        update={
-            "coordinate": FederatedTrainingCoordinate(
-                population=changed.coordinate.population,
-                training_seed=changed.coordinate.training_seed,
-                split_protocol=changed.coordinate.split_protocol,
-                preprocessing_identity=PreprocessingProtocolId.FEDERATED_POOLED_MIN_MAX,
-                model=changed.coordinate.model,
-                model_coefficient=None,
-            )
-        }
+    divergence = jensen_shannon_divergence(
+        (
+            ClientScoreVector(client=clients[0], scores=(MetricValue(0.1), MetricValue(0.2))),
+            ClientScoreVector(client=clients[1], scores=(MetricValue(0.8), MetricValue(0.9))),
+        ),
+        source_score_checksum=Checksum("e" * 64),
     )
-    result = paired_bca_interval(
-        tuple(values),
-        protocol=CONFIRMATORY_INFERENCE_PROTOCOL,
-        analysis_seed=Seed(17),
-    )
-    assert result.outcome is BcaOutcome.BLOCKED
-
-
-def test_invalid_contrasts_block_all_dependent_statistics() -> None:
     document = prepare_confirmatory_analysis(
         ConfirmatoryAnalysisRequest(
-            contrasts=tuple(_contrast(seed) for seed in range(9)),
+            contrasts=tuple(_contrast(seed) for seed in range(10)),
             inference_protocol=CONFIRMATORY_INFERENCE_PROTOCOL,
-            analysis_seed=Seed(17),
+            analysis_seed=Seed(31),
+            mechanisms=(divergence,),
         )
     )
-    assert document.decision.decision.value == "blocked"
-    assert document.wilcoxon.availability is AvailabilityStatus.UNAVAILABLE
-    assert document.rank_biserial.availability is AvailabilityStatus.UNAVAILABLE
-    assert document.multiplicity_result is None
-    assert document.unavailable_reason is not None
+    path = export_analysis_report(document, tmp_path / "report.md")
+    text = path.read_text(encoding="utf-8")
+    assert "DivergenceResult" in text
+    assert "Aggregate JS" in text
+    assert "Paired Seed Values" in text
+    assert str(document.interval.point_estimate.value if document.interval.point_estimate else "")[:4] in text
 
 
 def _fixed_score() -> FixedScorePairProvenance:
-    checksum = Checksum("b" * 64)
+    checksum = Checksum("f" * 64)
     return FixedScorePairProvenance(
         model_checksum=checksum,
         preprocessing_checksum=checksum,
@@ -98,7 +81,7 @@ def _contrast(seed: int) -> PairedContrast:
         metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
         left_method=FederatedThresholdMethod.SHARED_THRESHOLD,
         right_method=FederatedThresholdMethod.LOCAL_THRESHOLD,
-        left_value=MetricValue(0.03 + seed / 10_000),
+        left_value=MetricValue(0.05 + seed / 10_000),
         right_value=MetricValue(0.02),
         fixed_score=_fixed_score(),
     )

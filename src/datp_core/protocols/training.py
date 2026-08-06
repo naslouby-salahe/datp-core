@@ -41,7 +41,7 @@ class AutoencoderArchitecture(Sequence[int]):
         validate_non_empty_tuple(self.widths, "autoencoder architecture")
         if len(self.widths) < 2:
             raise ValueError("autoencoder architecture requires at least input and output layers")
-        if any(isinstance(width, bool) or not isinstance(width, int) or width < 1 for width in self.widths):
+        if any(type(width) is not int or width < 1 for width in self.widths):
             raise ValueError("autoencoder widths must be positive integers")
         if self.widths[0] != self.widths[-1]:
             raise ValueError("autoencoder input and output widths must match")
@@ -60,7 +60,9 @@ class AutoencoderArchitecture(Sequence[int]):
     def input_width(self) -> int:
         return self.widths[0]
 
-    __get_pydantic_core_schema__ = classmethod(sequence_pydantic_schema)
+    @classmethod
+    def __get_pydantic_core_schema__(cls, source_type: object, handler: object) -> object:
+        return sequence_pydantic_schema(cls, source_type, handler)
 
 
 class AutoencoderProtocol(StrictModel):

@@ -5,7 +5,12 @@ from typing import Annotated
 import typer
 
 from datp_core.cli.validation import declared_bounded_evidence_seed
-from datp_core.pipeline.workflows.external import run_ciciot_boundary_seed, run_external_validation_seed
+from datp_core.pipeline.workflows.external import (
+    analyze_ciciot_boundary_campaign,
+    analyze_external_validation_campaign,
+    run_ciciot_boundary_seed,
+    run_external_validation_seed,
+)
 
 app = typer.Typer()
 
@@ -28,3 +33,15 @@ def ciciot_file_client_boundary_seed(partition_seed: Annotated[int, typer.Option
         f"seed={seed.value} population={result.population.value} thresholds="
         f"{','.join(item.value for item in result.completed_threshold_methods)}"
     )
+
+
+@app.command("analyze-edge-benign-equity")
+def analyze_edge_benign_equity() -> None:
+    result = analyze_external_validation_campaign()
+    typer.echo(str(result.output_directory))
+
+
+@app.command("analyze-ciciot-file-client-boundary")
+def analyze_ciciot_file_client_boundary() -> None:
+    result = analyze_ciciot_boundary_campaign()
+    typer.echo(str(result.output_directory))

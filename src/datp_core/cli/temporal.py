@@ -5,7 +5,13 @@ from typing import Annotated
 import typer
 
 from datp_core.cli.validation import declared_bounded_evidence_seed
-from datp_core.pipeline.workflows.temporal import run_temporal_campaign, run_temporal_seed
+from datp_core.pipeline.workflows.temporal import (
+    TemporalCampaignResult,
+    analyze_temporal_campaign,
+    run_temporal_campaign,
+    run_temporal_seed,
+)
+from datp_core.protocols.seeds import BOUNDED_EVIDENCE_SEED_COHORT
 
 app = typer.Typer()
 
@@ -14,13 +20,13 @@ app = typer.Typer()
 def temporal_evidence_seed(partition_seed: Annotated[int, typer.Option(min=0)]) -> None:
     seed = declared_bounded_evidence_seed(partition_seed)
     result = run_temporal_seed(seed)
-    for analysis in result.analyses:
-        recovery_ratio = analysis.recovery.recovery_ratio
+    for recovery in result.recoveries:
+        recovery_ratio = recovery.recovery.recovery_ratio
         ratio = "undefined" if recovery_ratio is None else str(recovery_ratio.value)
         typer.echo(
-            f"seed={seed.value} method={analysis.method.value} "
-            f"drift_excess={analysis.recovery.drift_excess.value} "
-            f"recovered_amount={analysis.recovery.recovered_amount.value} "
+            f"seed={seed.value} method={recovery.method.value} "
+            f"drift_excess={recovery.recovery.drift_excess.value} "
+            f"recovered_amount={recovery.recovery.recovered_amount.value} "
             f"recovery_ratio={ratio}"
         )
 
@@ -28,5 +34,16 @@ def temporal_evidence_seed(partition_seed: Annotated[int, typer.Option(min=0)]) 
 @app.command("temporal-evidence-campaign")
 def temporal_evidence_campaign() -> None:
     result = run_temporal_campaign()
-    methods = tuple(item.method for item in result.seeds[0].analyses) if result.seeds else ()
-    typer.echo(f"seeds={len(result.seeds)} methods={','.join(method.value for method in methods)}")
+    methods = tuple(item.method for item in result.seeds[0].recoveries) if result.seeds else ()
+    typer.echo(
+        f"seeds={len(result.seeds)} methods={','.join(method.value for method in methods)} "
+        f"analyses={len(result.analyses)}"
+    )
+
+
+@app.command("analyze-temporal-campaign")
+def analyze_temporal_campaign_command() -> None:
+    seeds = tuple(run_temporal_seed(seed) for seed in BOUNDED_EVIDENCE_SEED_COHORT.values)
+    analyses = analyze_temporal_campaign(TemporalCampaignResult(seeds=seeds))
+    for analysis in analyses:
+        typer.echo(f"method={analysis.method.value} path={analysis.output_directory}")

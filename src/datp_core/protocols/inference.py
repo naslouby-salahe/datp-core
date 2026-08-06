@@ -76,7 +76,16 @@ class ScoreRecord[
     scored_client: ClientT
 
     def __post_init__(self) -> None:
-        ScoreArtifact.__post_init__(self)
+        if self.partition_role not in POST_TRAINING_SCORE_PARTITIONS:
+            raise ScientificContractError(
+                "score artifacts are only defined for post-training partitions",
+                subject=self.partition_role,
+            )
+        if self.serialization_format is not SerializationFormat.PARQUET:
+            raise ScientificContractError(
+                "score artifacts must use Parquet serialization",
+                subject=ContractSubject.SCHEMA,
+            )
         if self.scored_client.population is not self.coordinate.population:
             raise ScientificContractError(
                 "scored client population must match the training coordinate",

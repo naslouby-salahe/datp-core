@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 
+from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import EvidenceRole, FederatedThresholdMethod, StageOperationId
 from datp_core.domain.errors import ScientificContractError
@@ -22,6 +23,8 @@ from datp_core.protocols.inference import ScoreArtifactManifest
 from datp_core.protocols.temporal import TemporalDeploymentProvenance
 from datp_core.thresholding.methods.conformal import ConformalAssignment
 from datp_core.thresholding.models import ThresholdConstructionResult
+
+type FederatedScoreArtifactManifest = ScoreArtifactManifest[FederatedTrainingCoordinate, ClientIdentity]
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,7 +58,7 @@ class EvaluationDiagnostics:
 
 @dataclass(frozen=True, slots=True)
 class FederatedEvaluationRequest:
-    score_manifest: ScoreArtifactManifest
+    score_manifest: FederatedScoreArtifactManifest
     threshold_result: ThresholdConstructionResult
     cohort: EvaluationCohortManifest
     fixed_score_evidence: FixedScoreEvidence

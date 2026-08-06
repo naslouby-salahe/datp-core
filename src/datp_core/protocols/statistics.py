@@ -35,7 +35,16 @@ class WilcoxonZeroMethod(StrEnum):
 
 
 class WilcoxonComputationMethod(StrEnum):
-    SCIPY_ASYMPTOTIC = "asymptotic"
+    """Persisted computation method actually used for a Wilcoxon result."""
+
+    EXACT = "exact"
+    ASYMPTOTIC = "asymptotic"
+
+
+class WilcoxonComputationPreference(StrEnum):
+    """Declared protocol preference: exact when feasible, asymptotic otherwise."""
+
+    EXACT_PREFERRED = "exact_preferred"
 
 
 class PairedInferenceProtocol(StatisticalInferenceProtocol):
@@ -46,7 +55,7 @@ class PairedInferenceProtocol(StatisticalInferenceProtocol):
     statistical_test: StatisticalTestId
     wilcoxon_alternative: WilcoxonAlternative
     wilcoxon_zero_method: WilcoxonZeroMethod
-    wilcoxon_computation_method: WilcoxonComputationMethod
+    wilcoxon_computation_preference: WilcoxonComputationPreference
     effect_size: EffectSizeId
     multiplicity_correction: MultiplicityCorrectionId
     descriptive_lower_quantile: Ratio
@@ -58,8 +67,8 @@ class PairedInferenceProtocol(StatisticalInferenceProtocol):
             raise ValueError("paired Wilcoxon alternative must remain two-sided")
         if self.wilcoxon_zero_method is not WilcoxonZeroMethod.PRATT:
             raise ValueError("paired Wilcoxon zero handling must remain Pratt")
-        if self.wilcoxon_computation_method is not WilcoxonComputationMethod.SCIPY_ASYMPTOTIC:
-            raise ValueError("paired Wilcoxon computation must remain asymptotic")
+        if self.wilcoxon_computation_preference is not WilcoxonComputationPreference.EXACT_PREFERRED:
+            raise ValueError("paired Wilcoxon must prefer exact computation when feasible")
         if self.descriptive_lower_quantile > self.descriptive_upper_quantile:
             raise ValueError("descriptive lower quantile cannot exceed the upper quantile")
         return self
@@ -73,7 +82,7 @@ CONFIRMATORY_INFERENCE_PROTOCOL = PairedInferenceProtocol(
     statistical_test=StatisticalTestId.WILCOXON_SIGNED_RANK,
     wilcoxon_alternative=WilcoxonAlternative.TWO_SIDED,
     wilcoxon_zero_method=WilcoxonZeroMethod.PRATT,
-    wilcoxon_computation_method=WilcoxonComputationMethod.SCIPY_ASYMPTOTIC,
+    wilcoxon_computation_preference=WilcoxonComputationPreference.EXACT_PREFERRED,
     effect_size=EffectSizeId.MATCHED_PAIRS_RANK_BISERIAL,
     multiplicity_correction=MultiplicityCorrectionId.HOLM,
     descriptive_lower_quantile=Ratio(0.25),

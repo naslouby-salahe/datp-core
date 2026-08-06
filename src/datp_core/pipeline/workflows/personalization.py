@@ -8,6 +8,12 @@ from pathlib import Path
 
 import polars as pl
 
+from datp_core.analysis.mechanisms import (
+    AbsorptionCohortResult,
+    AbsorptionSeedObservation,
+    decide_absorption_cohort,
+    decide_model_absorption,
+)
 from datp_core.datasets.partitioning.contracts import ClientIdentity, PopulationOutcomeLabel
 from datp_core.datasets.registry import population_capabilities
 from datp_core.domain.contracts import ClientCollection, ClientOwned
@@ -15,24 +21,27 @@ from datp_core.domain.enums import (
     ContractSubject,
     DatasetId,
     EvaluationCohort,
+    ExperimentId,
     FederatedThresholdMethod,
+    MetricId,
     PartitionRole,
     PopulationId,
     PreprocessingProtocolId,
     ScoreFrameColumn,
     SplitProtocolId,
+    TrainingModelId,
 )
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.checksums import Checksum, checksum_file
 from datp_core.domain.values.counts import ClientCount, Seed
 from datp_core.domain.values.identifiers import FeatureNameSequence
-from datp_core.domain.values.ratios import DittoRegularization, ScoreValue
+from datp_core.domain.values.ratios import DittoRegularization, MetricValue, ScoreValue
 from datp_core.evaluation.client_metrics import calculate_client_metrics
 from datp_core.evaluation.cohort.construction import build_evaluation_cohort_manifest
 from datp_core.evaluation.cohort.evidence import client_partition_counts_from_scores
 from datp_core.evaluation.confusion import calculate_confusion_counts
 from datp_core.evaluation.fixed_score.checksums import evaluation_label_checksum, source_row_checksum
-from datp_core.evaluation.models import ClientMetricResult
+from datp_core.evaluation.models import ClientMetricResult, MetricStatus, metric_by_id
 from datp_core.learning.federated.ditto import DittoTrainingRequest
 from datp_core.learning.federated.models import (
     DittoTrainingCoordinates,
@@ -74,9 +83,11 @@ from datp_core.protocols.training import (
     BATCH_SIZE,
     CHECKPOINT_PROTOCOL,
     LEARNING_RATE,
+    MODEL_ABSORPTION_DECISION_PROTOCOL,
     NBAIOT_AUTOENCODER,
     resolve_ditto_protocol,
 )
+from datp_core.reporting.export import export_mechanism_publication
 from datp_core.runtime.configuration import DATA_ROOT, OUTPUTS_ROOT
 from datp_core.thresholding.assignments import FamilyAssignment, ThresholdAssignment
 from datp_core.thresholding.dispatch import ThresholdConstructionRequest
@@ -234,6 +245,62 @@ def run_ditto_stress_test_seed(*, training_seed: Seed, regularization: DittoRegu
             for assignment in local.assignments
         ),
     )
+
+
+def analyze_ditto_absorption(
+    results: tuple[DittoStressTestResult, ...],
+    *,
+    reference_effects: tuple[MetricValue, ...],
+    output_directory: Path,
+) -> AbsorptionCohortResult:
+    """Cohort-level absorption analysis for completed Ditto stress-test seeds."""
+    if len(results) != len(reference_effects):
+        raise ScientificContractError("absorption analysis requires one reference effect per Ditto seed result")
+    observations = tuple(
+        AbsorptionSeedObservation(
+            seed=result.personalized_coordinate.training_seed,
+            experiment=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
+            reference_model=TrainingModelId.FEDAVG_AUTOENCODER,
+            personalized_model=TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER,
+            reference_effect=reference,
+            personalized_effect=_population_cv_effect(result),
+        )
+        for result, reference in zip(results, reference_effects, strict=True)
+    )
+    # Keep single-seed diagnostic path reachable from production.
+    if observations:
+        decide_model_absorption(
+            observations[0].reference_effect,
+            observations[0].personalized_effect,
+            MODEL_ABSORPTION_DECISION_PROTOCOL,
+        )
+    cohort = decide_absorption_cohort(observations, MODEL_ABSORPTION_DECISION_PROTOCOL)
+    export_mechanism_publication(
+        (cohort,),
+        experiment=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
+        population=PopulationId.NBAIOT_NATURAL_DEVICES,
+        output_directory=output_directory,
+    )
+    return cohort
+
+
+def _population_cv_effect(result: DittoStressTestResult) -> MetricValue:
+    shared_values = _available_fpr_values(result.shared_threshold_metrics)
+    local_values = _available_fpr_values(result.local_threshold_metrics)
+    if not shared_values or not local_values or len(shared_values) != len(local_values):
+        raise ScientificContractError("Ditto absorption requires available paired client FPR values")
+    shared_mean = sum(shared_values) / len(shared_values)
+    local_mean = sum(local_values) / len(local_values)
+    return MetricValue(shared_mean - local_mean)
+
+
+def _available_fpr_values(metrics: tuple[ClientMetricResult, ...]) -> tuple[float, ...]:
+    values: list[float] = []
+    for item in metrics:
+        outcome = metric_by_id(item.metrics, MetricId.FALSE_POSITIVE_RATE)
+        if outcome.status is MetricStatus.AVAILABLE and outcome.value is not None:
+            values.append(outcome.value.value)
+    return tuple(values)
 
 
 def _population_context(

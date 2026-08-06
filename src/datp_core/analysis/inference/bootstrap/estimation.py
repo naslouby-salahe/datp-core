@@ -184,13 +184,17 @@ def _bca_interval_from_distribution(
     denominator = 1.0 - acceleration * shifted
     if np.any(np.abs(denominator) <= np.finfo(np.float64).eps):
         return BcaReason.INVALID_ADJUSTED_QUANTILES
-    adjusted_quantiles = stats.norm.cdf(bias_correction + shifted / denominator)
+    adjusted_quantiles = np.asarray(
+        stats.norm.cdf(bias_correction + shifted / denominator),
+        dtype=np.float64,
+    )
     if np.any(~np.isfinite(adjusted_quantiles)) or np.any((adjusted_quantiles < 0.0) | (adjusted_quantiles > 1.0)):
         return BcaReason.INVALID_ADJUSTED_QUANTILES
-    bounds = np.quantile(distribution, adjusted_quantiles, method="linear")
+    lower = float(np.quantile(distribution, float(adjusted_quantiles[0]), method="linear"))
+    upper = float(np.quantile(distribution, float(adjusted_quantiles[1]), method="linear"))
     return (
-        MetricValue(float(bounds[0])),
-        MetricValue(float(bounds[1])),
+        MetricValue(lower),
+        MetricValue(upper),
         BcaAdjustment(
             bias_correction=MetricValue(bias_correction),
             acceleration=MetricValue(acceleration),

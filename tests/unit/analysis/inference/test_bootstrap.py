@@ -1,4 +1,4 @@
-from datp_core.analysis.contrasts import PairedContrast, SupplementaryPairedAnalysisPlan
+from datp_core.analysis.contrasts import FixedScorePairProvenance, PairedContrast, SupplementaryPairedAnalysisPlan
 from datp_core.analysis.inference.bootstrap.contracts import (
     BcaAdjustment,
     BcaOutcome,
@@ -19,6 +19,7 @@ from datp_core.domain.enums import (
     SplitProtocolId,
     TrainingModelId,
 )
+from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import Seed
 from datp_core.domain.values.ratios import MetricValue
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
@@ -103,6 +104,25 @@ def test_confirmatory_decision_uses_the_interval_only() -> None:
     assert result.availability is AvailabilityStatus.AVAILABLE
 
 
+def test_bca_handles_ties_with_identical_deltas_as_degenerate() -> None:
+    values = tuple(
+        _contrast(
+            seed,
+            PopulationId.NBAIOT_NATURAL_DEVICES,
+            EvidenceRole.CONFIRMATORY,
+            shared=MetricValue(0.05),
+            local=MetricValue(0.02),
+        )
+        for seed in range(10)
+    )
+    result = paired_bca_interval(
+        values,
+        protocol=CONFIRMATORY_INFERENCE_PROTOCOL,
+        analysis_seed=Seed(11),
+    )
+    assert result.outcome is BcaOutcome.DEGENERATE
+
+
 def contrasts() -> tuple[PairedContrast, ...]:
     return tuple(
         _contrast(
@@ -114,13 +134,33 @@ def contrasts() -> tuple[PairedContrast, ...]:
     )
 
 
+def _fixed_score() -> FixedScorePairProvenance:
+    checksum = Checksum("a" * 64)
+    return FixedScorePairProvenance(
+        model_checksum=checksum,
+        preprocessing_checksum=checksum,
+        selected_checkpoint_checksum=checksum,
+        split_manifest_checksum=checksum,
+        calibration_score_checksum=checksum,
+        evaluation_score_checksum=checksum,
+        evaluation_label_checksum=checksum,
+        source_row_checksum=checksum,
+        score_order_checksum=checksum,
+        client_inventory_checksum=checksum,
+        eligibility_cohort_checksum=checksum,
+    )
+
+
 def _contrast(
     seed: int,
     population: PopulationId,
     role: EvidenceRole,
+    *,
+    shared: MetricValue | None = None,
+    local: MetricValue | None = None,
 ) -> PairedContrast:
-    local = MetricValue(0.02 + seed / 10_000)
-    shared = MetricValue(local.value + 0.01 + seed / 100_000)
+    local_value = local if local is not None else MetricValue(0.02 + seed / 10_000)
+    shared_value = shared if shared is not None else MetricValue(local_value.value + 0.01 + seed / 100_000)
     return PairedContrast(
         coordinate=FederatedTrainingCoordinate(
             population=population,
@@ -134,6 +174,7 @@ def _contrast(
         metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
         left_method=FederatedThresholdMethod.SHARED_THRESHOLD,
         right_method=FederatedThresholdMethod.LOCAL_THRESHOLD,
-        left_value=shared,
-        right_value=local,
+        left_value=shared_value,
+        right_value=local_value,
+        fixed_score=_fixed_score(),
     )

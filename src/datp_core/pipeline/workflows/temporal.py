@@ -51,6 +51,7 @@ from datp_core.protocols.calibration import CANONICAL_QUANTILE
 from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration, ExternalTemporalExecutionIdentity
 from datp_core.protocols.seeds import BOUNDED_EVIDENCE_SEED_COHORT, SeedCohort
 from datp_core.protocols.temporal import TemporalDeploymentProvenance, validate_frozen_recalibrated_pair
+from datp_core.reporting.export import export_temporal_publication
 from datp_core.runtime.configuration import OUTPUTS_ROOT
 from datp_core.thresholding.dispatch import ThresholdConstructionRequest
 from datp_core.thresholding.identities import ThresholdUnavailableResult
@@ -87,10 +88,16 @@ class TemporalStateResult:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class TemporalMethodAnalysisResult:
+class TemporalMethodRecovery:
     method: FederatedThresholdMethod
     recovery: TemporalRecoveryResult
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class TemporalMethodCampaignAnalysis:
+    method: FederatedThresholdMethod
     complete_digest: Checksum
+    output_directory: Path
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -99,19 +106,26 @@ class TemporalSeedResult:
     static_reference: TemporalStateResult
     frozen_future: TemporalStateResult
     recalibrated_future: TemporalStateResult
-    analyses: tuple[TemporalMethodAnalysisResult, ...]
+    recoveries: tuple[TemporalMethodRecovery, ...]
 
     def __post_init__(self) -> None:
         methods = _common_completed_methods(self.static_reference, self.frozen_future, self.recalibrated_future)
-        if tuple(item.method for item in self.analyses) != methods:
-            raise ValueError("temporal analyses must follow the completed threshold-method order")
-        if any(item.recovery.seed != self.partition_seed for item in self.analyses):
-            raise ValueError("temporal analysis records must match their partition seed")
+        if tuple(item.method for item in self.recoveries) != methods:
+            raise ValueError("temporal recoveries must follow the completed threshold-method order")
+        if any(item.recovery.seed != self.partition_seed for item in self.recoveries):
+            raise ValueError("temporal recovery records must match their partition seed")
+
+    def recovery_for(self, method: FederatedThresholdMethod) -> TemporalRecoveryResult:
+        matches = tuple(item.recovery for item in self.recoveries if item.method is method)
+        if len(matches) != 1:
+            raise ScientificContractError("temporal seed must contain exactly one recovery per method", subject=method)
+        return matches[0]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class TemporalCampaignResult:
     seeds: tuple[TemporalSeedResult, ...]
+    analyses: tuple[TemporalMethodCampaignAnalysis, ...] = ()
 
     def __post_init__(self) -> None:
         expected = BOUNDED_EVIDENCE_SEED_COHORT.values
@@ -119,8 +133,8 @@ class TemporalCampaignResult:
         if observed != expected:
             raise ValueError("temporal campaign must contain the complete declared bounded-evidence seed cohort")
         if self.seeds:
-            methods = tuple(item.method for item in self.seeds[0].analyses)
-            if any(tuple(item.method for item in result.analyses) != methods for result in self.seeds[1:]):
+            methods = tuple(item.method for item in self.seeds[0].recoveries)
+            if any(tuple(item.method for item in result.recoveries) != methods for result in self.seeds[1:]):
                 raise ValueError("temporal campaign seeds must complete the same threshold methods")
 
 
@@ -141,7 +155,10 @@ class TemporalCoordinateSet:
 
 
 def run_temporal_campaign() -> TemporalCampaignResult:
-    return TemporalCampaignResult(seeds=tuple(run_temporal_seed(seed) for seed in BOUNDED_EVIDENCE_SEED_COHORT.values))
+    seeds = tuple(run_temporal_seed(seed) for seed in BOUNDED_EVIDENCE_SEED_COHORT.values)
+    campaign = TemporalCampaignResult(seeds=seeds)
+    analyses = analyze_temporal_campaign(campaign)
+    return TemporalCampaignResult(seeds=seeds, analyses=analyses)
 
 
 def run_temporal_seed(partition_seed: Seed) -> TemporalSeedResult:
@@ -149,14 +166,17 @@ def run_temporal_seed(partition_seed: Seed) -> TemporalSeedResult:
     coordinates = _temporal_coordinates(partition_seed, declaration)
     static, frozen, recalibrated = _execute_temporal_states(declaration, coordinates)
     methods = _common_completed_methods(static, frozen, recalibrated)
-    analyses = tuple(
-        _analyze_temporal_method(
-            partition_seed=partition_seed,
+    recoveries = tuple(
+        TemporalMethodRecovery(
             method=method,
-            static=static,
-            frozen=frozen,
-            recalibrated=recalibrated,
-            coordinates=coordinates,
+            recovery=temporal_recovery(
+                seed=partition_seed,
+                experiment=declaration.id,
+                threshold_method=method,
+                static_reference_cv=static.outcome_for(method).fpr_coefficient_of_variation,
+                frozen_future_cv=frozen.outcome_for(method).fpr_coefficient_of_variation,
+                recalibrated_future_cv=recalibrated.outcome_for(method).fpr_coefficient_of_variation,
+            ),
         )
         for method in methods
     )
@@ -165,7 +185,27 @@ def run_temporal_seed(partition_seed: Seed) -> TemporalSeedResult:
         static_reference=static,
         frozen_future=frozen,
         recalibrated_future=recalibrated,
-        analyses=analyses,
+        recoveries=recoveries,
+    )
+
+
+def analyze_temporal_campaign(campaign: TemporalCampaignResult) -> tuple[TemporalMethodCampaignAnalysis, ...]:
+    if not campaign.seeds:
+        raise ScientificContractError("temporal campaign analysis requires completed seed results")
+    methods = tuple(item.method for item in campaign.seeds[0].recoveries)
+    declaration = _temporal_declaration()
+    first = campaign.seeds[0]
+    coordinates = _temporal_coordinates(first.partition_seed, declaration)
+    return tuple(
+        _publish_temporal_method_campaign(
+            method=method,
+            campaign=campaign,
+            coordinates=coordinates,
+            static_provenance=first.static_reference.provenance,
+            frozen_provenance=first.frozen_future.provenance,
+            recalibrated_provenance=first.recalibrated_future.provenance,
+        )
+        for method in methods
     )
 
 
@@ -316,35 +356,39 @@ def _evaluate_state(
     )
 
 
-def _analyze_temporal_method(
+def _publish_temporal_method_campaign(
     *,
-    partition_seed: Seed,
     method: FederatedThresholdMethod,
-    static: TemporalStateResult,
-    frozen: TemporalStateResult,
-    recalibrated: TemporalStateResult,
+    campaign: TemporalCampaignResult,
     coordinates: TemporalCoordinateSet,
-) -> TemporalMethodAnalysisResult:
-    recovery = temporal_recovery(
-        seed=partition_seed,
-        static_reference_cv=static.outcome_for(method).fpr_coefficient_of_variation,
-        frozen_future_cv=frozen.outcome_for(method).fpr_coefficient_of_variation,
-        recalibrated_future_cv=recalibrated.outcome_for(method).fpr_coefficient_of_variation,
-    )
+    static_provenance: TemporalDeploymentProvenance,
+    frozen_provenance: TemporalDeploymentProvenance,
+    recalibrated_provenance: TemporalDeploymentProvenance,
+) -> TemporalMethodCampaignAnalysis:
+    declaration = _temporal_declaration()
+    records = tuple(seed.recovery_for(method) for seed in campaign.seeds)
+    output_directory = _temporal_campaign_analysis_directory(method)
     analysis = analyze_temporal_evidence(
         AnalyzeTemporalEvidenceRequest(
+            experiment=declaration.id,
+            threshold_method=method,
             static_reference_identity=_execution_identity(coordinates.static_reference),
             frozen_identity=_execution_identity(coordinates.frozen_future),
             recalibrated_identity=_execution_identity(coordinates.recalibrated_future),
-            static_reference_provenance=static.provenance,
-            frozen_provenance=frozen.provenance,
-            recalibrated_provenance=recalibrated.provenance,
-            records=(recovery,),
-            output_directory=_temporal_analysis_directory(partition_seed, method),
+            static_reference_provenance=static_provenance,
+            frozen_provenance=frozen_provenance,
+            recalibrated_provenance=recalibrated_provenance,
+            records=records,
+            output_directory=output_directory,
             overwrite=False,
         )
     )
-    return TemporalMethodAnalysisResult(method=method, recovery=recovery, complete_digest=analysis.complete_digest)
+    export_temporal_publication(analysis.document, output_directory)
+    return TemporalMethodCampaignAnalysis(
+        method=method,
+        complete_digest=analysis.complete_digest,
+        output_directory=output_directory,
+    )
 
 
 def _validate_shared_temporal_detector(
@@ -419,7 +463,7 @@ def _coordinate_for_state(plan: ExperimentPlan, state: TemporalState) -> Experim
     return first
 
 
-def _temporal_analysis_directory(partition_seed: Seed, method: FederatedThresholdMethod) -> Path:
+def _temporal_campaign_analysis_directory(method: FederatedThresholdMethod) -> Path:
     declaration = _temporal_declaration()
     return (
         OUTPUTS_ROOT
@@ -427,7 +471,6 @@ def _temporal_analysis_directory(partition_seed: Seed, method: FederatedThreshol
         / declaration.id.value
         / declaration.population.value
         / declaration.role.value
-        / str(partition_seed.value)
         / TemporalArtifactDirectory.ANALYSIS
         / method.value
     )

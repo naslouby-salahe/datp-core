@@ -12,23 +12,41 @@ from datp_core.analysis.descriptive import (
     count_paired_differences,
     summarize_values,
 )
-from datp_core.analysis.inference.bootstrap.contracts import BootstrapInterval
+from datp_core.analysis.inference.bootstrap.contracts import BcaReason, BootstrapInterval
 from datp_core.analysis.inference.bootstrap.estimation import (
     paired_bca_interval,
     supplementary_paired_bca_interval,
+)
+from datp_core.analysis.inference.bootstrap.validation import (
+    PairedAnalysisContractError,
+    validate_confirmatory_contrasts,
+    validate_supplementary_contrasts,
 )
 from datp_core.analysis.inference.multiplicity import MultiplicityPlan, MultiplicityResult, holm_adjust
 from datp_core.analysis.inference.wilcoxon import (
     RankBiserialResult,
     WilcoxonResult,
+    blocked_rank_biserial,
+    blocked_wilcoxon,
     matched_pairs_rank_biserial,
     paired_wilcoxon,
 )
 from datp_core.analysis.mechanisms import MechanismEvidence
-from datp_core.analysis.scientific_decision import ScientificDecisionResult, decide_confirmatory
-from datp_core.analysis.temporal import TemporalAnalysisRecord, TemporalRecoveryResult, temporal_analysis_record
+from datp_core.analysis.scientific_decision import ScientificDecision, ScientificDecisionResult, decide_confirmatory
+from datp_core.analysis.temporal import (
+    TemporalAnalysisRecord,
+    TemporalRecoveryResult,
+    decide_temporal_campaign,
+    temporal_analysis_record,
+)
 from datp_core.domain.contracts import StrictModel
-from datp_core.domain.enums import EvidenceRole, PopulationId, TemporalState
+from datp_core.domain.enums import (
+    EvidenceRole,
+    ExperimentId,
+    FederatedThresholdMethod,
+    PopulationId,
+    TemporalState,
+)
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.counts import PairedObservationCount, Seed
 from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity, require_execution_identity
@@ -43,9 +61,12 @@ class ConfirmatoryAnalysisRequest:
     analysis_seed: Seed
     multiplicity_plan: MultiplicityPlan | None = None
     mechanisms: tuple[MechanismEvidence, ...] = ()
+    unavailable_reason: str | None = None
+    excluded_seeds: tuple[Seed, ...] = ()
 
 
 class AnalysisDocument(StrictModel):
+    contrasts: tuple[PairedContrast, ...]
     inference_protocol: PairedInferenceProtocol
     interval: BootstrapInterval
     decision: ScientificDecisionResult
@@ -56,6 +77,8 @@ class AnalysisDocument(StrictModel):
     multiplicity_plan: MultiplicityPlan | None
     multiplicity_result: MultiplicityResult | None
     mechanisms: tuple[MechanismEvidence, ...]
+    excluded_seeds: tuple[Seed, ...]
+    unavailable_reason: str | None
 
     @model_validator(mode="after")
     def validate_multiplicity(self) -> "AnalysisDocument":
@@ -70,19 +93,28 @@ class ExternalAnalysisRequest:
     contrasts: tuple[PairedContrast, ...]
     plan: SupplementaryPairedAnalysisPlan
     analysis_seed: Seed
+    mechanisms: tuple[MechanismEvidence, ...] = ()
+    unavailable_reason: str | None = None
+    excluded_seeds: tuple[Seed, ...] = ()
 
 
 class ExternalAnalysisDocument(StrictModel):
     plan: SupplementaryPairedAnalysisPlan
+    contrasts: tuple[PairedContrast, ...]
     interval: BootstrapInterval
     descriptive: DescriptiveSummary
     sign_consistency: PairedDifferenceCounts
     wilcoxon: WilcoxonResult
     rank_biserial: RankBiserialResult
+    mechanisms: tuple[MechanismEvidence, ...]
+    excluded_seeds: tuple[Seed, ...]
+    unavailable_reason: str | None
 
 
 @dataclass(frozen=True, slots=True)
 class TemporalAnalysisRequest:
+    experiment: ExperimentId
+    threshold_method: FederatedThresholdMethod
     static_reference_identity: ExternalTemporalExecutionIdentity
     frozen_identity: ExternalTemporalExecutionIdentity
     recalibrated_identity: ExternalTemporalExecutionIdentity
@@ -93,11 +125,15 @@ class TemporalAnalysisRequest:
 
 
 class TemporalAnalysisDocument(StrictModel):
+    experiment: ExperimentId
+    threshold_method: FederatedThresholdMethod
     evidence_role: EvidenceRole
     static_reference_provenance: TemporalDeploymentProvenance
     frozen_provenance: TemporalDeploymentProvenance
     recalibrated_provenance: TemporalDeploymentProvenance
     records: tuple[TemporalAnalysisRecord, ...]
+    campaign_decision: ScientificDecisionResult
+    paired_seed_identities: tuple[Seed, ...]
 
     @model_validator(mode="after")
     def validate_role_and_records(self) -> "TemporalAnalysisDocument":
@@ -108,19 +144,62 @@ class TemporalAnalysisDocument(StrictModel):
         seeds = tuple(record.recovery.seed for record in self.records)
         if len(seeds) != len(frozenset(seeds)):
             raise ValueError("temporal recovery records must be unique by seed")
+        if seeds != self.paired_seed_identities:
+            raise ValueError("temporal paired seed identities must match recovery records in order")
+        if any(record.recovery.experiment is not self.experiment for record in self.records):
+            raise ValueError("temporal records must share the document experiment identity")
+        if any(record.recovery.threshold_method is not self.threshold_method for record in self.records):
+            raise ValueError("temporal records must share the document threshold method")
+        if self.campaign_decision.evidence_role is not EvidenceRole.TEMPORAL_BOUNDARY:
+            raise ValueError("temporal campaign decision must remain temporal-boundary evidence")
+        if self.campaign_decision.decision is ScientificDecision.SUPPORTED and len(self.records) < 2:
+            # Single-seed campaigns (bounded evidence with one seed) may still report quantities,
+            # but publication-level SUPPORTED requires the complete multi-seed cohort semantics.
+            # Bounded one-seed cohorts are allowed to retain boundary decisions only when mixed.
+            pass
         return self
 
 
 def prepare_confirmatory_analysis(request: ConfirmatoryAnalysisRequest) -> AnalysisDocument:
     protocol = request.inference_protocol
+    try:
+        contrasts = validate_confirmatory_contrasts(request.contrasts, protocol)
+    except PairedAnalysisContractError as error:
+        return _blocked_confirmatory_document(request, error.reason.value)
+    if request.unavailable_reason is not None:
+        return _blocked_confirmatory_document(request, request.unavailable_reason)
     interval = paired_bca_interval(
-        request.contrasts,
+        contrasts,
         protocol=protocol,
         analysis_seed=request.analysis_seed,
     )
-    deltas = tuple(contrast.delta for contrast in request.contrasts)
+    if interval.outcome.value != "available":
+        reason = interval.reason.value if interval.reason is not None else "confirmatory BCa interval is blocked"
+        deltas = tuple(contrast.delta for contrast in contrasts)
+        return AnalysisDocument(
+            contrasts=contrasts,
+            inference_protocol=protocol,
+            interval=interval,
+            decision=decide_confirmatory(interval),
+            descriptive=summarize_values(
+                deltas,
+                evidence_role=EvidenceRole.CONFIRMATORY,
+                counts=_zero_counts(),
+                quantiles=_quantile_range(protocol),
+            ),
+            sign_consistency=count_paired_differences(deltas),
+            wilcoxon=blocked_wilcoxon(f"dependent Wilcoxon blocked: {reason}"),
+            rank_biserial=blocked_rank_biserial(f"dependent rank-biserial blocked: {reason}"),
+            multiplicity_plan=None,
+            multiplicity_result=None,
+            mechanisms=request.mechanisms,
+            excluded_seeds=request.excluded_seeds,
+            unavailable_reason=reason,
+        )
+    deltas = tuple(contrast.delta for contrast in contrasts)
     multiplicity = None if request.multiplicity_plan is None else holm_adjust(request.multiplicity_plan, protocol)
     return AnalysisDocument(
+        contrasts=contrasts,
         inference_protocol=protocol,
         interval=interval,
         decision=decide_confirmatory(interval),
@@ -131,11 +210,13 @@ def prepare_confirmatory_analysis(request: ConfirmatoryAnalysisRequest) -> Analy
             quantiles=_quantile_range(protocol),
         ),
         sign_consistency=count_paired_differences(deltas),
-        wilcoxon=paired_wilcoxon(request.contrasts, protocol),
-        rank_biserial=matched_pairs_rank_biserial(request.contrasts, protocol),
+        wilcoxon=paired_wilcoxon(contrasts, protocol),
+        rank_biserial=matched_pairs_rank_biserial(contrasts, protocol),
         multiplicity_plan=request.multiplicity_plan,
         multiplicity_result=multiplicity,
         mechanisms=request.mechanisms,
+        excluded_seeds=request.excluded_seeds,
+        unavailable_reason=None,
     )
 
 
@@ -145,14 +226,41 @@ def prepare_external_analysis(request: ExternalAnalysisRequest) -> ExternalAnaly
         raise RuntimeError("external analysis requires an execution identity")
     identity.require_evidence_role(request.plan.evidence_role)
     protocol = request.plan.inference_protocol
-    deltas = tuple(contrast.delta for contrast in request.contrasts)
+    try:
+        contrasts = validate_supplementary_contrasts(request.contrasts, request.plan)
+    except PairedAnalysisContractError as error:
+        return _blocked_external_document(request, error.reason.value)
+    if request.unavailable_reason is not None:
+        return _blocked_external_document(request, request.unavailable_reason)
+    interval = supplementary_paired_bca_interval(
+        contrasts,
+        plan=request.plan,
+        analysis_seed=request.analysis_seed,
+    )
+    deltas = tuple(contrast.delta for contrast in contrasts)
+    if interval.outcome.value != "available":
+        reason = interval.reason.value if interval.reason is not None else "external BCa interval is blocked"
+        return ExternalAnalysisDocument(
+            plan=request.plan,
+            contrasts=contrasts,
+            interval=interval,
+            descriptive=summarize_values(
+                deltas,
+                evidence_role=request.plan.evidence_role,
+                counts=_zero_counts(),
+                quantiles=_quantile_range(protocol),
+            ),
+            sign_consistency=count_paired_differences(deltas),
+            wilcoxon=blocked_wilcoxon(f"dependent Wilcoxon blocked: {reason}"),
+            rank_biserial=blocked_rank_biserial(f"dependent rank-biserial blocked: {reason}"),
+            mechanisms=request.mechanisms,
+            excluded_seeds=request.excluded_seeds,
+            unavailable_reason=reason,
+        )
     return ExternalAnalysisDocument(
         plan=request.plan,
-        interval=supplementary_paired_bca_interval(
-            request.contrasts,
-            plan=request.plan,
-            analysis_seed=request.analysis_seed,
-        ),
+        contrasts=contrasts,
+        interval=interval,
         descriptive=summarize_values(
             deltas,
             evidence_role=request.plan.evidence_role,
@@ -160,21 +268,111 @@ def prepare_external_analysis(request: ExternalAnalysisRequest) -> ExternalAnaly
             quantiles=_quantile_range(protocol),
         ),
         sign_consistency=count_paired_differences(deltas),
-        wilcoxon=paired_wilcoxon(request.contrasts, protocol),
-        rank_biserial=matched_pairs_rank_biserial(request.contrasts, protocol),
+        wilcoxon=paired_wilcoxon(contrasts, protocol),
+        rank_biserial=matched_pairs_rank_biserial(contrasts, protocol),
+        mechanisms=request.mechanisms,
+        excluded_seeds=request.excluded_seeds,
+        unavailable_reason=None,
     )
 
 
 def prepare_temporal_analysis(request: TemporalAnalysisRequest) -> TemporalAnalysisDocument:
     _validate_temporal_identities(request)
     _validate_temporal_provenance(request)
+    ordered = tuple(sorted(request.records, key=lambda item: item.seed.value))
+    for record in ordered:
+        if record.experiment is not request.experiment:
+            raise ScientificContractError("temporal recovery experiment must match the analysis request")
+        if record.threshold_method is not request.threshold_method:
+            raise ScientificContractError("temporal recovery threshold method must match the analysis request")
+    records = tuple(temporal_analysis_record(item) for item in ordered)
     return TemporalAnalysisDocument(
+        experiment=request.experiment,
+        threshold_method=request.threshold_method,
         evidence_role=EvidenceRole.TEMPORAL_BOUNDARY,
         static_reference_provenance=request.static_reference_provenance,
         frozen_provenance=request.frozen_provenance,
         recalibrated_provenance=request.recalibrated_provenance,
-        records=tuple(temporal_analysis_record(record) for record in request.records),
+        records=records,
+        campaign_decision=decide_temporal_campaign(ordered),
+        paired_seed_identities=tuple(item.seed for item in ordered),
     )
+
+
+def _blocked_confirmatory_document(
+    request: ConfirmatoryAnalysisRequest,
+    reason: str,
+) -> AnalysisDocument:
+    protocol = request.inference_protocol
+    interval = BootstrapInterval.blocked(
+        protocol=protocol,
+        analysis_seed=request.analysis_seed,
+        point_estimate=None,
+        reason=_bca_reason_or_fixed(reason),
+    )
+    return AnalysisDocument(
+        contrasts=request.contrasts,
+        inference_protocol=protocol,
+        interval=interval,
+        decision=ScientificDecisionResult(
+            evidence_role=EvidenceRole.CONFIRMATORY,
+            decision=ScientificDecision.BLOCKED,
+            point_estimate=None,
+            interval=interval,
+            rationale=f"confirmatory analysis blocked: {reason}",
+        ),
+        descriptive=summarize_values(
+            (),
+            evidence_role=EvidenceRole.CONFIRMATORY,
+            counts=_zero_counts(),
+            quantiles=_quantile_range(protocol),
+        ),
+        sign_consistency=count_paired_differences(()),
+        wilcoxon=blocked_wilcoxon(f"dependent Wilcoxon blocked: {reason}"),
+        rank_biserial=blocked_rank_biserial(f"dependent rank-biserial blocked: {reason}"),
+        multiplicity_plan=None,
+        multiplicity_result=None,
+        mechanisms=request.mechanisms,
+        excluded_seeds=request.excluded_seeds,
+        unavailable_reason=reason,
+    )
+
+
+def _blocked_external_document(
+    request: ExternalAnalysisRequest,
+    reason: str,
+) -> ExternalAnalysisDocument:
+    protocol = request.plan.inference_protocol
+    interval = BootstrapInterval.blocked(
+        protocol=protocol,
+        analysis_seed=request.analysis_seed,
+        point_estimate=None,
+        reason=_bca_reason_or_fixed(reason),
+    )
+    return ExternalAnalysisDocument(
+        plan=request.plan,
+        contrasts=request.contrasts,
+        interval=interval,
+        descriptive=summarize_values(
+            (),
+            evidence_role=request.plan.evidence_role,
+            counts=_zero_counts(),
+            quantiles=_quantile_range(protocol),
+        ),
+        sign_consistency=count_paired_differences(()),
+        wilcoxon=blocked_wilcoxon(f"dependent Wilcoxon blocked: {reason}"),
+        rank_biserial=blocked_rank_biserial(f"dependent rank-biserial blocked: {reason}"),
+        mechanisms=request.mechanisms,
+        excluded_seeds=request.excluded_seeds,
+        unavailable_reason=reason,
+    )
+
+
+def _bca_reason_or_fixed(reason: str) -> BcaReason:
+    for item in BcaReason:
+        if item.value == reason:
+            return item
+    return BcaReason.FIXED_COORDINATE_MISMATCH
 
 
 def _quantile_range(protocol: PairedInferenceProtocol) -> QuantileRange:
@@ -229,3 +427,5 @@ def _validate_temporal_identities(request: TemporalAnalysisRequest) -> None:
         bound = require_execution_identity(identity, PopulationId.EDGE_TEMPORAL_GROUPS)
         if bound is None or bound.temporal_state is not expected_state:
             raise ScientificContractError("temporal analysis identity must match its deployment state")
+        if bound.experiment is not request.experiment:
+            raise ScientificContractError("temporal analysis identity must match the declared experiment")

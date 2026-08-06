@@ -32,14 +32,13 @@ from datp_core.evaluation.federated.contracts import (
 )
 from datp_core.evaluation.fixed_score.checksums import evaluation_label_checksum, source_row_checksum
 from datp_core.evaluation.fixed_score.validation import validate_evaluation_evidence, validate_fixed_score_controls
-from datp_core.evaluation.models import ClientMetricResult, PopulationMetricResult, metric_by_id
+from datp_core.evaluation.models import ClientMetricResult, FederatedScoreRecord, PopulationMetricResult, metric_by_id
 from datp_core.evaluation.operational import AlertBurdenDiagnostic, calculate_alert_burden
 from datp_core.evaluation.population_metrics import calculate_population_metrics
 from datp_core.evaluation.threshold_estimation import ThresholdEstimationDiagnostic, evaluate_threshold_estimate
 from datp_core.evaluation.traffic_rates import ValidatedTrafficRateEvidence
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.protocols.experiments import require_execution_identity
-from datp_core.protocols.inference import ScoreRecord
 from datp_core.thresholding.assignments import ThresholdAssignment
 from datp_core.thresholding.identities import ThresholdUnavailableResult
 from datp_core.thresholding.methods.cluster import GroupedThresholdResult
@@ -157,7 +156,7 @@ def _validate_evaluation_request(request: FederatedEvaluationRequest) -> None:
 def _evaluate_score_record(
     request: FederatedEvaluationRequest,
     assignments: tuple[ThresholdAssignment, ...],
-    record: ScoreRecord,
+    record: FederatedScoreRecord,
 ) -> ClientMetricResult:
     threshold = _threshold_for_client(assignments, record.scored_client)
     eligibility = cohort_record_for_client(request.cohort, record.scored_client)

@@ -96,7 +96,7 @@ def str_enum_schema(cls, _source_type, _handler):
     return _cs.no_info_plain_validator_function(_validate)
 
 
-def str_subclass_schema(cls, _source_type, _handler):
+def str_subclass_schema(cls: type, _source_type: object, _handler: object) -> object:
     from pydantic_core import core_schema as _cs
 
     return _cs.no_info_plain_validator_function(
@@ -209,7 +209,7 @@ class ClosedUnitIntervalValue(FiniteFloatValue):
             raise ValueError(f"{self.validation_name} must be in [0, 1]")
 
 
-class _NonEmptyString(str):
+class NonEmptyString(str):
     validation_name: ClassVar[str] = "value"
 
     def __new__(cls, value: str):
@@ -220,20 +220,23 @@ class _NonEmptyString(str):
     __get_pydantic_core_schema__ = classmethod(str_subclass_schema)
 
 
-def validate_non_empty_tuple(values: tuple, field_name: str) -> None:
+_NonEmptyString = NonEmptyString
+
+
+def validate_non_empty_tuple(values: tuple[object, ...], field_name: str) -> None:
     if not isinstance(values, tuple) or not values:
         raise ValueError(f"{field_name} requires a non-empty tuple")
 
 
-def _validate_unique(values: tuple, field_name: str) -> None:
+def _validate_unique(values: tuple[object, ...], field_name: str) -> None:
     if len(frozenset(values)) != len(values):
         raise ValueError(f"{field_name} must be unique")
 
 
-def sequence_pydantic_schema(cls, _source_type, _handler):
+def sequence_pydantic_schema(cls: type, _source_type: object, _handler: object) -> object:
     from pydantic_core import core_schema as _cs
 
-    def _validate(value):
+    def _validate(value: object) -> object:
         if isinstance(value, cls):
             return value
         if isinstance(value, (list, tuple)):

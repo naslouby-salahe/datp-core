@@ -13,6 +13,8 @@ from datp_core.domain.values.ratios import MetricValue, ScoreValue, ThresholdVal
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.protocols.inference import ScoreRecord
 
+type FederatedScoreRecord = ScoreRecord[FederatedTrainingCoordinate, ClientIdentity]
+
 
 class WarningCode(StrEnum):
     NEAR_ZERO_MEAN_FPR = "near_zero_mean_fpr"
@@ -30,7 +32,7 @@ class HeldOutBenignScore:
     score: ScoreValue
     partition_role: PartitionRole
     outcome_label: PopulationOutcomeLabel
-    score_record: ScoreRecord
+    score_record: FederatedScoreRecord
 
     def __post_init__(self) -> None:
         if self.partition_role is not PartitionRole.EVALUATION:
@@ -158,7 +160,7 @@ class ConfusionCounts:
     attack_assignment_valid: bool
 
     def __post_init__(self) -> None:
-        if not isinstance(self.attack_assignment_valid, bool):
+        if type(self.attack_assignment_valid) is not bool:
             raise ValueError("attack assignment validity must be boolean")
         if not self.attack_assignment_valid and (self.true_positive.value or self.false_negative.value):
             raise ValueError("invalid attack assignments cannot contribute attack counts")
