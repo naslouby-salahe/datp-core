@@ -2,8 +2,8 @@
 
 from datp_core.domain.enums import FederatedThresholdMethod, MetricId
 from datp_core.domain.values import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE, MetricValue, Seed
-
-from .models import AnchorDecisionProtocol, AnchorReference, SeedCohort
+from datp_core.protocols.anchor_contracts import AnchorDecisionProtocol, AnchorReference
+from datp_core.protocols.models import SeedCohort
 
 HISTORICAL_SHARED_THRESHOLD_CV_FPR = (
     MetricValue(1.0448312675151203),
