@@ -12,7 +12,7 @@ from datp_core.pipeline.workflows.external import (
     run_external_validation_seed,
 )
 
-app = typer.Typer()
+app = typer.Typer(no_args_is_help=True)
 
 
 @app.command("edge-benign-equity-seed")

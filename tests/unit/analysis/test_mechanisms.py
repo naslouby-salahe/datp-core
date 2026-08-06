@@ -3,8 +3,13 @@ from math import isclose
 import pytest
 
 from datp_core.analysis.inference.wilcoxon import CorrelationCoefficient
-from datp_core.analysis.mechanisms.absorption import decide_model_absorption
+from datp_core.analysis.mechanisms.absorption import (
+    AbsorptionSeedObservation,
+    decide_absorption_cohort,
+    decide_model_absorption,
+)
 from datp_core.analysis.mechanisms.association import (
+    AssociationIssue,
     AssociationObservation,
     heterogeneity_benefit_association,
 )
@@ -74,6 +79,7 @@ def test_association_reports_all_observations_with_typed_statistics() -> None:
     )
     result = heterogeneity_benefit_association(observations)
     assert result.availability is AvailabilityStatus.AVAILABLE
+    assert result.issue is AssociationIssue.INSUFFICIENT_EVIDENCE
     assert result.observation_count == PairedObservationCount(3)
     assert result.statistics is not None
     assert isinstance(result.statistics.spearman_rho, CorrelationCoefficient)
@@ -192,9 +198,40 @@ def test_model_absorption_follows_the_declared_retention_protocol() -> None:
     retained = decide_model_absorption(MetricValue(1.0), MetricValue(0.8), MODEL_ABSORPTION_DECISION_PROTOCOL)
     partial = decide_model_absorption(MetricValue(1.0), MetricValue(0.5), MODEL_ABSORPTION_DECISION_PROTOCOL)
     absorbed = decide_model_absorption(MetricValue(1.0), MetricValue(0.1), MODEL_ABSORPTION_DECISION_PROTOCOL)
+    opposite = decide_model_absorption(MetricValue(1.0), MetricValue(-0.2), MODEL_ABSORPTION_DECISION_PROTOCOL)
     assert retained.decision is ScientificDecision.SUPPORTED
     assert partial.decision is ScientificDecision.PARTIAL_ABSORPTION
     assert absorbed.decision is ScientificDecision.FULL_ABSORPTION
+    assert opposite.decision is ScientificDecision.OPPOSITE_DIRECTION
+
+
+def test_absorption_cohort_requires_complete_seed_set_and_preserves_opposite_direction() -> None:
+    incomplete = (
+        AbsorptionSeedObservation(
+            seed=Seed(0),
+            experiment=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
+            reference_model=TrainingModelId.FEDAVG_AUTOENCODER,
+            personalized_model=TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER,
+            reference_effect=MetricValue(0.2),
+            personalized_effect=MetricValue(0.18),
+        ),
+    )
+    assert decide_absorption_cohort(incomplete, MODEL_ABSORPTION_DECISION_PROTOCOL).decision.decision is (
+        ScientificDecision.BLOCKED
+    )
+    opposite = tuple(
+        AbsorptionSeedObservation(
+            seed=Seed(seed),
+            experiment=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
+            reference_model=TrainingModelId.FEDAVG_AUTOENCODER,
+            personalized_model=TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER,
+            reference_effect=MetricValue(0.2),
+            personalized_effect=MetricValue(-0.05 if seed % 2 == 0 else 0.18),
+        )
+        for seed in range(10)
+    )
+    result = decide_absorption_cohort(opposite, MODEL_ABSORPTION_DECISION_PROTOCOL)
+    assert result.decision.decision is ScientificDecision.OPPOSITE_DIRECTION
 
 
 def _client(

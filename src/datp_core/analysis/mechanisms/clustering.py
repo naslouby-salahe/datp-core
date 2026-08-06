@@ -1,5 +1,6 @@
 """Persisted cluster-partition stability and recovery mechanism evidence."""
 
+from enum import StrEnum
 from typing import ClassVar
 
 from pydantic import model_validator
@@ -45,6 +46,13 @@ class ClusterPartitionSummary(StrictModel):
         return self.empty_cluster_indexes if self.empty_cluster_indexes else derived
 
 
+class ClusterEvidenceAvailability(StrEnum):
+    AVAILABLE = "available"
+    AVAILABLE_WITH_EMPTY_GROUP_EVIDENCE = "available_with_empty_group_evidence"
+    BLOCKED = "blocked"
+    FAILED = "failed"
+
+
 class ClusterEvidenceRecord(StrictModel):
     """Full cluster evidence derived from a persisted grouped-threshold result."""
 
@@ -56,8 +64,11 @@ class ClusterEvidenceRecord(StrictModel):
     partition: ClusterPartitionSummary
     contributing_quantile_dispersion: MetricValue
     effective_threshold_dispersion: MetricValue
-    recovery_fraction: MetricValue | None
-    recovery_fraction_reason: str | None
+    threshold_dispersion_recovery_fraction: MetricValue | None
+    threshold_dispersion_recovery_reason: str | None
+    cv_fpr_equity_recovery_fraction: MetricValue | None
+    cv_fpr_equity_recovery_reason: str | None
+    evidence_availability: ClusterEvidenceAvailability = ClusterEvidenceAvailability.AVAILABLE
 
     evidence_role: ClassVar[EvidenceRole] = EvidenceRole.MECHANISM
 
@@ -65,13 +76,29 @@ class ClusterEvidenceRecord(StrictModel):
     def validate_record(self) -> "ClusterEvidenceRecord":
         if self.method is not FederatedThresholdMethod.CLUSTER_THRESHOLD:
             raise ValueError("cluster evidence requires the cluster threshold method")
-        if (self.recovery_fraction is None) == (self.recovery_fraction_reason is None):
-            raise ValueError("cluster recovery fraction requires either a value or an explicit reason")
+        if (self.threshold_dispersion_recovery_fraction is None) == (self.threshold_dispersion_recovery_reason is None):
+            raise ValueError("threshold-dispersion recovery requires either a value or an explicit reason")
+        if (self.cv_fpr_equity_recovery_fraction is None) == (self.cv_fpr_equity_recovery_reason is None):
+            raise ValueError("CV(FPR) equity recovery requires either a value or an explicit reason")
         return self
 
     @property
     def availability(self) -> AvailabilityStatus:
-        return AvailabilityStatus.AVAILABLE
+        if self.evidence_availability in {
+            ClusterEvidenceAvailability.AVAILABLE,
+            ClusterEvidenceAvailability.AVAILABLE_WITH_EMPTY_GROUP_EVIDENCE,
+        }:
+            return AvailabilityStatus.AVAILABLE
+        return AvailabilityStatus.UNAVAILABLE
+
+    @property
+    def recovery_fraction(self) -> MetricValue | None:
+        """Primary recovery claim uses the CV(FPR) equity estimand when available."""
+        return self.cv_fpr_equity_recovery_fraction
+
+    @property
+    def recovery_fraction_reason(self) -> str | None:
+        return self.cv_fpr_equity_recovery_reason
 
 
 class ClusterStabilityResult(StrictModel):
@@ -114,6 +141,9 @@ def cluster_evidence_from_grouped_result(
     *,
     source_threshold_checksum: Checksum,
     local_dispersion: MetricValue | None,
+    shared_cv_fpr: MetricValue | None = None,
+    local_cv_fpr: MetricValue | None = None,
+    cluster_cv_fpr: MetricValue | None = None,
 ) -> ClusterEvidenceRecord:
     partition = ClusterPartitionSummary.from_memberships(
         result.clusters,
@@ -126,11 +156,22 @@ def cluster_evidence_from_grouped_result(
     contributing_dispersion = MetricValue(max(contributing) - min(contributing)) if contributing else MetricValue(0.0)
     effective_dispersion = MetricValue(max(effective) - min(effective)) if effective else MetricValue(0.0)
     if local_dispersion is None or local_dispersion.value <= 0.0:
-        recovery = None
-        recovery_reason = "local-threshold dispersion is unavailable or non-positive"
+        threshold_recovery = None
+        threshold_reason = "local-threshold dispersion is unavailable or non-positive"
     else:
-        recovery = MetricValue(1.0 - (effective_dispersion.value / local_dispersion.value))
-        recovery_reason = None
+        threshold_recovery = MetricValue(1.0 - (effective_dispersion.value / local_dispersion.value))
+        threshold_reason = None
+    equity_recovery, equity_reason = _cv_fpr_equity_recovery(
+        shared_cv_fpr=shared_cv_fpr,
+        local_cv_fpr=local_cv_fpr,
+        cluster_cv_fpr=cluster_cv_fpr,
+    )
+    empty = partition.empty_groups
+    evidence_availability = (
+        ClusterEvidenceAvailability.AVAILABLE_WITH_EMPTY_GROUP_EVIDENCE
+        if empty
+        else ClusterEvidenceAvailability.AVAILABLE
+    )
     return ClusterEvidenceRecord(
         seed=result.coordinate.training_seed,
         method=FederatedThresholdMethod.CLUSTER_THRESHOLD,
@@ -140,9 +181,58 @@ def cluster_evidence_from_grouped_result(
         partition=partition,
         contributing_quantile_dispersion=contributing_dispersion,
         effective_threshold_dispersion=effective_dispersion,
-        recovery_fraction=recovery,
-        recovery_fraction_reason=recovery_reason,
+        threshold_dispersion_recovery_fraction=threshold_recovery,
+        threshold_dispersion_recovery_reason=threshold_reason,
+        cv_fpr_equity_recovery_fraction=equity_recovery,
+        cv_fpr_equity_recovery_reason=equity_reason,
+        evidence_availability=evidence_availability,
     )
+
+
+def empty_cluster_evidence_record(
+    *,
+    seed: Seed,
+    source_threshold_checksum: Checksum,
+    declared_group_count: int,
+    filled_memberships: tuple[ClusterMembership, ...],
+    fingerprints: tuple[ClusterFingerprint, ...] = (),
+    reason: str,
+) -> ClusterEvidenceRecord:
+    """Preserve empty-cluster negative evidence without fabricating memberships."""
+    partition = ClusterPartitionSummary.from_memberships(
+        filled_memberships,
+        declared_group_count=declared_group_count,
+    )
+    return ClusterEvidenceRecord(
+        seed=seed,
+        method=FederatedThresholdMethod.CLUSTER_THRESHOLD,
+        source_threshold_checksum=source_threshold_checksum,
+        fingerprints=fingerprints,
+        memberships=filled_memberships,
+        partition=partition,
+        contributing_quantile_dispersion=MetricValue(0.0),
+        effective_threshold_dispersion=MetricValue(0.0),
+        threshold_dispersion_recovery_fraction=None,
+        threshold_dispersion_recovery_reason=reason,
+        cv_fpr_equity_recovery_fraction=None,
+        cv_fpr_equity_recovery_reason=reason,
+        evidence_availability=ClusterEvidenceAvailability.AVAILABLE_WITH_EMPTY_GROUP_EVIDENCE,
+    )
+
+
+def _cv_fpr_equity_recovery(
+    *,
+    shared_cv_fpr: MetricValue | None,
+    local_cv_fpr: MetricValue | None,
+    cluster_cv_fpr: MetricValue | None,
+) -> tuple[MetricValue | None, str | None]:
+    if shared_cv_fpr is None or local_cv_fpr is None or cluster_cv_fpr is None:
+        return None, "CV(FPR) equity recovery requires shared, local, and cluster population CV(FPR)"
+    gap = shared_cv_fpr.value - local_cv_fpr.value
+    if gap <= 0.0:
+        return None, "CV(FPR) equity recovery is undefined when the B1–B2 gap is non-positive"
+    recovered = shared_cv_fpr.value - cluster_cv_fpr.value
+    return MetricValue(recovered / gap), None
 
 
 def cluster_stability(

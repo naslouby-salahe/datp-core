@@ -49,6 +49,22 @@ def test_confirmatory_seed_rejects_arbitrary_scientific_override() -> None:
     assert "declared confirmatory seeds" in _plain(result.output)
 
 
+def test_registered_run_commands_include_absorption_and_temporal_analysis() -> None:
+    result = runner.invoke(app, ["run", "--help"])
+    assert result.exit_code == 0
+    output = _plain(result.stdout)
+    for command in (
+        "analyze-confirmatory",
+        "analyze-ditto-absorption",
+        "analyze-fedprox-absorption",
+        "ditto-stress-test-campaign",
+        "analyze-temporal-campaign",
+        "analyze-edge-benign-equity",
+        "analyze-ciciot-file-client-boundary",
+    ):
+        assert command in output
+
+
 def test_federated_preprocessing_rejects_centralized_identity() -> None:
     result = runner.invoke(
         app,

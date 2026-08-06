@@ -12,7 +12,7 @@ from datp_core.pipeline.workflows.confirmatory import (
     run_confirmatory_seed,
 )
 
-app = typer.Typer()
+app = typer.Typer(no_args_is_help=True)
 
 
 @app.command("confirmatory-seed")

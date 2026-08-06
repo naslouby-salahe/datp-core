@@ -11,5 +11,5 @@ def test_seed_values_are_pre_registered() -> None:
     assert tuple(seed.value for seed in CONFIRMATORY_SEED_COHORT.values) == tuple(
         range(CONFIRMATORY_INFERENCE_PROTOCOL.paired_seed_count.value)
     )
-    assert tuple(seed.value for seed in BOUNDED_EVIDENCE_SEED_COHORT.values) == (0,)
+    assert tuple(seed.value for seed in BOUNDED_EVIDENCE_SEED_COHORT.values) == tuple(range(10))
     assert CONFIRMATORY_ANALYSIS_SEED.value == 31

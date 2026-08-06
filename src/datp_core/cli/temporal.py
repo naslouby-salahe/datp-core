@@ -5,15 +5,9 @@ from typing import Annotated
 import typer
 
 from datp_core.cli.validation import declared_bounded_evidence_seed
-from datp_core.pipeline.workflows.temporal import (
-    TemporalCampaignResult,
-    analyze_temporal_campaign,
-    run_temporal_campaign,
-    run_temporal_seed,
-)
-from datp_core.protocols.seeds import BOUNDED_EVIDENCE_SEED_COHORT
+from datp_core.pipeline.workflows.temporal import run_temporal_campaign, run_temporal_seed
 
-app = typer.Typer()
+app = typer.Typer(no_args_is_help=True)
 
 
 @app.command("temporal-evidence-seed")
@@ -43,7 +37,10 @@ def temporal_evidence_campaign() -> None:
 
 @app.command("analyze-temporal-campaign")
 def analyze_temporal_campaign_command() -> None:
-    seeds = tuple(run_temporal_seed(seed) for seed in BOUNDED_EVIDENCE_SEED_COHORT.values)
-    analyses = analyze_temporal_campaign(TemporalCampaignResult(seeds=seeds))
-    for analysis in analyses:
+    """Analyze completed temporal seeds without re-running seed execution when campaign reuses outputs.
+
+    Seed execution remains deterministic and reuse-aware; analysis enforces the complete declared cohort.
+    """
+    campaign = run_temporal_campaign()
+    for analysis in campaign.analyses:
         typer.echo(f"method={analysis.method.value} path={analysis.output_directory}")

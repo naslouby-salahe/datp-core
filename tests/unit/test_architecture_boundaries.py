@@ -154,3 +154,24 @@ def test_preprocessing_service_delegates_client_and_artifact_responsibilities() 
     assert "_load_published_population_split" not in service_text
     assert "_preprocess_ciciot_client_local" not in service_text
     assert "_ciciot_source_files" not in service_text
+
+
+def test_stale_monolithic_cli_run_module_is_removed() -> None:
+    assert not (_SOURCE_ROOT / "cli" / "run.py").exists()
+    assert _source_importers("datp_core.cli.run") == ()
+
+
+def test_analysis_documents_module_remains_deleted() -> None:
+    assert not (_SOURCE_ROOT / "analysis" / "documents.py").exists()
+    assert _source_importers("datp_core.analysis.documents") == ()
+
+
+def test_absorption_and_mechanism_helpers_have_production_callers() -> None:
+    mechanisms_importers = _source_importers("datp_core.analysis.mechanisms")
+    assert any(path.parts[0] == "pipeline" for path in mechanisms_importers)
+    personalization = (_SOURCE_ROOT / "pipeline" / "workflows" / "personalization.py").read_text(encoding="utf-8")
+    assert "decide_absorption_cohort" in personalization
+    personalization_cli = (_SOURCE_ROOT / "cli" / "personalization.py").read_text(encoding="utf-8")
+    assert "analyze-ditto-absorption" in personalization_cli
+    assert "analyze-fedprox-absorption" in personalization_cli
+    assert "load_fedavg_cv_fpr_effect" in personalization_cli

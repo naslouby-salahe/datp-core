@@ -16,7 +16,11 @@ from datp_core.analysis.mechanisms.association import AssociationResult
 from datp_core.analysis.mechanisms.clustering import ClusterEvidenceRecord, ClusterStabilityResult
 from datp_core.analysis.mechanisms.dispersion import GroupedDispersionResult
 from datp_core.analysis.mechanisms.divergence import DivergenceResult
-from datp_core.analysis.mechanisms.movement import ThresholdMovement, ThresholdMovementCohort
+from datp_core.analysis.mechanisms.movement import (
+    ThresholdMovement,
+    ThresholdMovementCohort,
+    ThresholdMovementMultiSeedUncertainty,
+)
 from datp_core.analysis.preparation import AnalysisDocument, ExternalAnalysisDocument, TemporalAnalysisDocument
 from datp_core.analysis.scientific_decision import ScientificDecision, ScientificDecisionResult
 from datp_core.domain.enums import AvailabilityStatus, EvidenceRole, ExperimentId, MetricId, PopulationId
@@ -97,7 +101,12 @@ def export_analysis_report(document: AnalysisDocument, destination: Path) -> Pat
     return write_text_atomically(destination, payload)
 
 
-def export_confirmatory_publication(document: AnalysisDocument, output_directory: Path) -> Path:
+def export_confirmatory_publication(
+    document: AnalysisDocument,
+    output_directory: Path,
+    *,
+    anchor_gate_passed: bool,
+) -> Path:
     claim = validate_claim(
         ClaimRequest(
             kind=ClaimKind.CONFIRMATORY,
@@ -105,7 +114,7 @@ def export_confirmatory_publication(document: AnalysisDocument, output_directory
             metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
             availability=document.interval.availability,
             evidence_decision=_map_decision(document.decision.decision),
-            anchor_gate_passed=True,
+            anchor_gate_passed=anchor_gate_passed,
             traffic_rate_available=False,
             wording=document.decision.rationale,
         )
@@ -138,7 +147,7 @@ def export_external_publication(document: ExternalAnalysisDocument, output_direc
             metric=document.plan.metric,
             availability=document.interval.availability,
             evidence_decision=EvidenceDecision.BOUNDARY,
-            anchor_gate_passed=True,
+            anchor_gate_passed=False,
             traffic_rate_available=False,
             wording="External paired threshold contrast remains supplementary and claim-bounded.",
         )
@@ -181,9 +190,9 @@ def export_temporal_publication(document: TemporalAnalysisDocument, output_direc
             kind=ClaimKind.TEMPORAL,
             evidence_role=EvidenceRole.TEMPORAL_BOUNDARY,
             metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
-            availability=AvailabilityStatus.AVAILABLE,
+            availability=document.campaign_decision.availability,
             evidence_decision=_map_decision(document.campaign_decision.decision),
-            anchor_gate_passed=True,
+            anchor_gate_passed=False,
             traffic_rate_available=False,
             wording=document.campaign_decision.rationale,
         )
@@ -255,15 +264,20 @@ def export_mechanism_publication(
     experiment: ExperimentId,
     population: PopulationId,
     output_directory: Path,
+    evidence_role: EvidenceRole = EvidenceRole.MECHANISM,
 ) -> Path:
     payload = "\n".join(_render_mechanisms(mechanisms))
     write_text_atomically(output_directory / "mechanism_report.md", payload)
+    tables = _mechanism_tables(mechanisms)
+    role = evidence_role
+    if any(isinstance(item, AbsorptionCohortResult) for item in mechanisms):
+        role = EvidenceRole.TRAINING_STRESS_TEST
     return export_markdown(
         PublicationBundle(
             provenance=ReportProvenance(
                 experiment=experiment,
                 population=population,
-                evidence_role=EvidenceRole.MECHANISM,
+                evidence_role=role,
                 analysis_checksum=canonical_checksum(mechanisms),
             ),
             claims=(
@@ -273,15 +287,17 @@ def export_mechanism_publication(
                     reason="mechanism claim tier",
                 ),
             ),
-            tables=(
+            tables=tables
+            if tables
+            else (
                 PublicationTable(
-                    title="Mechanism inventory",
+                    title="Mechanism evidence",
                     cells=(
                         TableCell(
                             metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
-                            availability=AvailabilityStatus.AVAILABLE,
-                            rendered_value=str(len(mechanisms)),
-                            evidence="count of typed mechanism records",
+                            availability=AvailabilityStatus.UNAVAILABLE,
+                            rendered_value="",
+                            evidence="no mechanism evidence values were available for tabular export",
                         ),
                     ),
                 ),
@@ -379,13 +395,18 @@ def _render_wilcoxon(wilcoxon: WilcoxonResult) -> list[str]:
         "",
         f"Availability: `{wilcoxon.availability.value}`",
         f"Nonzero pairs: {wilcoxon.nonzero_pair_count.value}",
+        f"Effective sample size: {wilcoxon.effective_sample_size.value}",
     ]
+    if wilcoxon.requested_method is not None:
+        lines.append(f"Requested method: `{wilcoxon.requested_method.value}`")
+    if wilcoxon.zero_method is not None:
+        lines.append(f"Zero handling: `{wilcoxon.zero_method.value}`")
     if wilcoxon.statistic:
         lines.append(f"Statistic: {wilcoxon.statistic.value:.6g}")
     if wilcoxon.p_value:
         lines.append(f"P-value: {wilcoxon.p_value.value:.6g}")
     if wilcoxon.computation_method:
-        lines.append(f"Method: `{wilcoxon.computation_method.value}`")
+        lines.append(f"Executed method: `{wilcoxon.computation_method.value}`")
     if wilcoxon.fallback_reason:
         lines.append(f"Fallback reason: {wilcoxon.fallback_reason}")
     if wilcoxon.reason:
@@ -465,10 +486,112 @@ def _render_multiplicity(result: MultiplicityResult) -> list[str]:
 def _render_mechanisms(mechanisms: tuple[MechanismEvidence, ...]) -> list[str]:
     lines = ["## Mechanism Evidence", ""]
     for index, mechanism in enumerate(mechanisms, start=1):
-        lines.append(f"### Mechanism {index}: `{type(mechanism).__name__}`")
+        lines.append(f"### Mechanism record {index}: {_mechanism_title(mechanism)}")
         lines.extend(_render_one_mechanism(mechanism))
         lines.append("")
     return lines
+
+
+def _mechanism_title(mechanism: MechanismEvidence) -> str:
+    match mechanism:
+        case AssociationResult():
+            return "heterogeneity_benefit_association"
+        case DivergenceResult():
+            return "jensen_shannon_score_divergence"
+        case ClusterStabilityResult():
+            return "cluster_stability"
+        case ClusterEvidenceRecord():
+            return "cluster_evidence"
+        case GroupedDispersionResult():
+            return "grouped_dispersion"
+        case ThresholdMovement():
+            return "threshold_movement"
+        case ThresholdMovementCohort():
+            return "threshold_movement_cohort"
+        case ThresholdMovementMultiSeedUncertainty():
+            return "threshold_movement_across_seed_uncertainty"
+        case AbsorptionCohortResult():
+            return "model_personalization_absorption"
+        case ScientificDecisionResult():
+            return "scientific_decision"
+        case _:
+            return "mechanism_evidence"
+
+
+def _mechanism_tables(mechanisms: tuple[MechanismEvidence, ...]) -> tuple[PublicationTable, ...]:
+    cells: list[TableCell] = []
+    for mechanism in mechanisms:
+        match mechanism:
+            case AssociationResult() if mechanism.statistics is not None:
+                stats = mechanism.statistics
+                cells.append(
+                    TableCell(
+                        metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
+                        availability=mechanism.availability,
+                        rendered_value=f"{stats.spearman_rho.value:.6g}",
+                        evidence=(
+                            f"Spearman association n={mechanism.observation_count.value}; "
+                            f"slope={stats.regression_slope.value:.6g}; R²={stats.r_squared.value:.6g}; "
+                            f"sufficient={stats.evidentiary_sufficient}"
+                        ),
+                    )
+                )
+            case DivergenceResult() if mechanism.aggregate is not None:
+                cells.append(
+                    TableCell(
+                        metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
+                        availability=mechanism.availability,
+                        rendered_value=f"{mechanism.aggregate.value:.6g}",
+                        evidence=(
+                            f"mean pairwise JS distance (base-2), clients={len(mechanism.clients)}, "
+                            f"bins={mechanism.protocol.bin_count.value}"
+                        ),
+                    )
+                )
+            case ThresholdMovementCohort() if mechanism.mean_delta_fpr is not None:
+                dispersion = (
+                    f"{mechanism.client_dispersion_delta_fpr.value:.6g}"
+                    if mechanism.client_dispersion_delta_fpr is not None
+                    else "unavailable"
+                )
+                cells.append(
+                    TableCell(
+                        metric=MetricId.MEAN_FPR,
+                        availability=mechanism.availability,
+                        rendered_value=f"{mechanism.mean_delta_fpr.value:.6g}",
+                        evidence=f"mean ΔFPR; client_dispersion={dispersion}; n={len(mechanism.movements)}",
+                    )
+                )
+            case AbsorptionCohortResult() if mechanism.mean_retention is not None:
+                cells.append(
+                    TableCell(
+                        metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
+                        availability=AvailabilityStatus.AVAILABLE,
+                        rendered_value=f"{mechanism.mean_retention.value:.6g}",
+                        evidence=(
+                            f"mean CV(FPR) retention; decision={mechanism.decision.decision.value}; "
+                            f"seeds={len(mechanism.observations)}; "
+                            f"alternative_route_seeds={mechanism.alternative_route_seed_count}"
+                        ),
+                    )
+                )
+            case ClusterEvidenceRecord() if mechanism.cv_fpr_equity_recovery_fraction is not None:
+                cells.append(
+                    TableCell(
+                        metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
+                        availability=mechanism.availability,
+                        rendered_value=f"{mechanism.cv_fpr_equity_recovery_fraction.value:.6g}",
+                        evidence=(
+                            f"CV(FPR) equity recovery; empty_clusters={len(mechanism.partition.empty_groups)}; "
+                            f"seed={mechanism.seed.value}"
+                        ),
+                    )
+                )
+            case _:
+                continue
+    if not cells:
+        return ()
+    return (PublicationTable(title="Mechanism scientific values", cells=tuple(cells)),)
 
 
 def _render_one_mechanism(mechanism: MechanismEvidence) -> list[str]:
@@ -480,13 +603,18 @@ def _render_one_mechanism(mechanism: MechanismEvidence) -> list[str]:
             ]
             if mechanism.statistics is not None:
                 stats = mechanism.statistics
+                lower, upper = stats.regression_slope_confidence_interval
                 lines.extend(
                     [
                         f"Spearman rho: {stats.spearman_rho.value:.6g}",
                         f"Spearman p: {stats.spearman_p_value.value:.6g}",
+                        f"Intercept: {stats.regression_intercept.value:.6g}",
                         f"Slope: {stats.regression_slope.value:.6g} "
                         f"(SE {stats.regression_slope_standard_error.value:.6g})",
+                        f"Slope CI: [{lower.value:.6g}, {upper.value:.6g}]",
                         f"R²: {stats.r_squared.value:.6g}",
+                        f"Leverage: {', '.join(f'{value.value:.6g}' for value in stats.leverage)}",
+                        f"Influence: {', '.join(f'{value.value:.6g}' for value in stats.influence)}",
                         f"Evidentiary sufficient: {stats.evidentiary_sufficient}",
                     ]
                 )
@@ -497,10 +625,17 @@ def _render_one_mechanism(mechanism: MechanismEvidence) -> list[str]:
             lines = [
                 f"Clients: {len(mechanism.clients)}",
                 f"Availability: `{mechanism.availability.value}`",
-                f"Protocol bin count: {mechanism.protocol.bin_count.value}",
+                f"Score source: `{mechanism.protocol.score_source.value}`",
+                f"Shared support: `{mechanism.protocol.shared_support.value}`",
+                f"Binning: `{mechanism.protocol.binning.value}` bins={mechanism.protocol.bin_count.value}",
+                f"Smoothing: {mechanism.protocol.smoothing_constant.value:.6g}",
+                f"Log base: `{mechanism.protocol.logarithm_base.value}`",
+                f"Aggregation: `{mechanism.protocol.aggregation.value}`",
             ]
+            if mechanism.source_score_checksum is not None:
+                lines.append(f"Source score checksum: `{mechanism.source_score_checksum.value}`")
             if mechanism.aggregate is not None:
-                lines.append(f"Aggregate JS: {mechanism.aggregate.value:.6g}")
+                lines.append(f"Aggregate JS distance: {mechanism.aggregate.value:.6g}")
                 lines.append(
                     f"Pairwise values: {', '.join(f'{value.value:.6g}' for value in mechanism.pairwise_values)}"
                 )
@@ -515,18 +650,25 @@ def _render_one_mechanism(mechanism: MechanismEvidence) -> list[str]:
                 f"Right empty groups: {len(mechanism.right_partition.empty_groups)}",
             ]
         case ClusterEvidenceRecord():
-            recovery = (
-                f"{mechanism.recovery_fraction.value:.6g}"
-                if mechanism.recovery_fraction is not None
-                else mechanism.recovery_fraction_reason
+            equity = (
+                f"{mechanism.cv_fpr_equity_recovery_fraction.value:.6g}"
+                if mechanism.cv_fpr_equity_recovery_fraction is not None
+                else mechanism.cv_fpr_equity_recovery_reason
+            )
+            threshold_recovery = (
+                f"{mechanism.threshold_dispersion_recovery_fraction.value:.6g}"
+                if mechanism.threshold_dispersion_recovery_fraction is not None
+                else mechanism.threshold_dispersion_recovery_reason
             )
             return [
                 f"Seed: {mechanism.seed.value}",
                 f"Memberships: {len(mechanism.memberships)}",
                 f"Contributing quantile dispersion: {mechanism.contributing_quantile_dispersion.value:.6g}",
                 f"Effective threshold dispersion: {mechanism.effective_threshold_dispersion.value:.6g}",
-                f"Recovery fraction: {recovery}",
+                f"CV(FPR) equity recovery: {equity}",
+                f"Threshold-dispersion recovery: {threshold_recovery}",
                 f"Empty clusters: {len(mechanism.partition.empty_groups)}",
+                f"Evidence availability: `{mechanism.evidence_availability.value}`",
             ]
         case GroupedDispersionResult():
             return [
@@ -550,6 +692,11 @@ def _render_one_mechanism(mechanism: MechanismEvidence) -> list[str]:
                 f"Δ TPR: {delta_tpr}",
             ]
         case ThresholdMovementCohort():
+            dispersion = (
+                f"{mechanism.client_dispersion_delta_fpr.value:.6g}"
+                if mechanism.client_dispersion_delta_fpr is not None
+                else "unavailable"
+            )
             return [
                 f"Movements: {len(mechanism.movements)}",
                 f"Availability: `{mechanism.availability.value}`",
@@ -558,8 +705,31 @@ def _render_one_mechanism(mechanism: MechanismEvidence) -> list[str]:
                     if mechanism.mean_delta_fpr is not None
                     else f"Reason: {mechanism.reason}"
                 ),
+                f"Client dispersion of Δ FPR: {dispersion}",
+            ]
+        case ThresholdMovementMultiSeedUncertainty():
+            across = (
+                f"{mechanism.across_seed_dispersion_delta_fpr.value:.6g}"
+                if mechanism.across_seed_dispersion_delta_fpr is not None
+                else "unavailable"
+            )
+            mean = (
+                f"{mechanism.mean_of_seed_mean_delta_fpr.value:.6g}"
+                if mechanism.mean_of_seed_mean_delta_fpr is not None
+                else "unavailable"
+            )
+            return [
+                f"Seed summaries: {len(mechanism.seed_summaries)}",
+                f"Availability: `{mechanism.availability.value}`",
+                f"Mean of seed-mean Δ FPR: {mean}",
+                f"Across-seed dispersion of mean Δ FPR: {across}",
             ]
         case AbsorptionCohortResult():
+            retention_range = (
+                f"[{mechanism.retention_range_lower.value:.6g}, {mechanism.retention_range_upper.value:.6g}]"
+                if mechanism.retention_range_lower is not None and mechanism.retention_range_upper is not None
+                else "unavailable"
+            )
             return [
                 f"Seeds: {len(mechanism.observations)}",
                 f"Decision: `{mechanism.decision.decision.value}`",
@@ -569,6 +739,8 @@ def _render_one_mechanism(mechanism: MechanismEvidence) -> list[str]:
                     if mechanism.mean_retention is not None
                     else "Mean retention: unavailable"
                 ),
+                f"Retention range across seeds: {retention_range}",
+                f"Alternative-route seeds: {mechanism.alternative_route_seed_count}",
             ]
         case ScientificDecisionResult():
             return [
@@ -577,7 +749,7 @@ def _render_one_mechanism(mechanism: MechanismEvidence) -> list[str]:
                 f"Rationale: {mechanism.rationale}",
             ]
         case _:
-            return [f"Unhandled mechanism type: {type(mechanism).__name__}"]
+            return ["Unhandled mechanism evidence kind"]
 
 
 def _interval_table(interval: BootstrapInterval) -> PublicationTable:

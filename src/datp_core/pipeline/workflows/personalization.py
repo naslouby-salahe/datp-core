@@ -12,7 +12,6 @@ from datp_core.analysis.mechanisms import (
     AbsorptionCohortResult,
     AbsorptionSeedObservation,
     decide_absorption_cohort,
-    decide_model_absorption,
 )
 from datp_core.datasets.partitioning.contracts import ClientIdentity, PopulationOutcomeLabel
 from datp_core.datasets.registry import population_capabilities
@@ -41,7 +40,8 @@ from datp_core.evaluation.cohort.construction import build_evaluation_cohort_man
 from datp_core.evaluation.cohort.evidence import client_partition_counts_from_scores
 from datp_core.evaluation.confusion import calculate_confusion_counts
 from datp_core.evaluation.fixed_score.checksums import evaluation_label_checksum, source_row_checksum
-from datp_core.evaluation.models import ClientMetricResult, MetricStatus, metric_by_id
+from datp_core.evaluation.models import ClientMetricResult, MetricStatus, PopulationMetricResult, metric_by_id
+from datp_core.evaluation.population_metrics import calculate_population_metrics
 from datp_core.learning.federated.ditto import DittoTrainingRequest
 from datp_core.learning.federated.models import (
     DittoTrainingCoordinates,
@@ -79,9 +79,11 @@ from datp_core.preprocessing.models import (
 from datp_core.preprocessing.service import preprocess_federated
 from datp_core.protocols.calibration import CANONICAL_QUANTILE
 from datp_core.protocols.inference import FixedScoreInvariant
+from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT
 from datp_core.protocols.training import (
     BATCH_SIZE,
     CHECKPOINT_PROTOCOL,
+    DITTO_ALTERNATIVE_ROUTE_DIFFERENCE,
     LEARNING_RATE,
     MODEL_ABSORPTION_DECISION_PROTOCOL,
     NBAIOT_AUTOENCODER,
@@ -252,29 +254,49 @@ def analyze_ditto_absorption(
     *,
     reference_effects: tuple[MetricValue, ...],
     output_directory: Path,
+    reference_shared_local_cvs: tuple[tuple[MetricValue, MetricValue], ...] | None = None,
 ) -> AbsorptionCohortResult:
-    """Cohort-level absorption analysis for completed Ditto stress-test seeds."""
+    """Cohort-level absorption analysis for completed Ditto stress-test seeds.
+
+    Estimand per seed:
+    Δ = CV(FPR)_SHARED − CV(FPR)_LOCAL
+    under FedAvg (reference) and under Ditto (personalized).
+    """
     if len(results) != len(reference_effects):
         raise ScientificContractError("absorption analysis requires one reference effect per Ditto seed result")
-    observations = tuple(
-        AbsorptionSeedObservation(
-            seed=result.personalized_coordinate.training_seed,
-            experiment=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
-            reference_model=TrainingModelId.FEDAVG_AUTOENCODER,
-            personalized_model=TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER,
-            reference_effect=reference,
-            personalized_effect=_population_cv_effect(result),
+    observations: list[AbsorptionSeedObservation] = []
+    alternative_route = 0
+    for index, (result, reference) in enumerate(zip(results, reference_effects, strict=True)):
+        shared_cv, local_cv, effect = _population_cv_fpr_effect(result)
+        ref_shared = ref_local = None
+        if reference_shared_local_cvs is not None:
+            ref_shared, ref_local = reference_shared_local_cvs[index]
+            if abs(ref_shared.value - ref_local.value - reference.value) > 1e-12:
+                raise ScientificContractError(
+                    "reference CV(FPR) effect must equal shared CV(FPR) − local CV(FPR)",
+                    subject=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
+                )
+            if abs(shared_cv.value - ref_local.value) <= DITTO_ALTERNATIVE_ROUTE_DIFFERENCE.value:
+                alternative_route += 1
+        observations.append(
+            AbsorptionSeedObservation(
+                seed=result.personalized_coordinate.training_seed,
+                experiment=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
+                reference_model=TrainingModelId.FEDAVG_AUTOENCODER,
+                personalized_model=TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER,
+                reference_effect=reference,
+                personalized_effect=effect,
+                reference_shared_cv=ref_shared,
+                reference_local_cv=ref_local,
+                personalized_shared_cv=shared_cv,
+                personalized_local_cv=local_cv,
+            )
         )
-        for result, reference in zip(results, reference_effects, strict=True)
+    cohort = decide_absorption_cohort(
+        tuple(observations),
+        MODEL_ABSORPTION_DECISION_PROTOCOL,
+        alternative_route_seed_count=alternative_route,
     )
-    # Keep single-seed diagnostic path reachable from production.
-    if observations:
-        decide_model_absorption(
-            observations[0].reference_effect,
-            observations[0].personalized_effect,
-            MODEL_ABSORPTION_DECISION_PROTOCOL,
-        )
-    cohort = decide_absorption_cohort(observations, MODEL_ABSORPTION_DECISION_PROTOCOL)
     export_mechanism_publication(
         (cohort,),
         experiment=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
@@ -284,23 +306,70 @@ def analyze_ditto_absorption(
     return cohort
 
 
-def _population_cv_effect(result: DittoStressTestResult) -> MetricValue:
-    shared_values = _available_fpr_values(result.shared_threshold_metrics)
-    local_values = _available_fpr_values(result.local_threshold_metrics)
-    if not shared_values or not local_values or len(shared_values) != len(local_values):
-        raise ScientificContractError("Ditto absorption requires available paired client FPR values")
-    shared_mean = sum(shared_values) / len(shared_values)
-    local_mean = sum(local_values) / len(local_values)
-    return MetricValue(shared_mean - local_mean)
+def run_ditto_absorption_campaign(
+    *,
+    regularization: DittoRegularization,
+    reference_effects_by_seed: dict[Seed, MetricValue],
+    output_directory: Path | None = None,
+) -> AbsorptionCohortResult:
+    """Run Ditto stress seeds over the confirmatory cohort and analyze absorption."""
+    results = tuple(
+        run_ditto_stress_test_seed(training_seed=seed, regularization=regularization)
+        for seed in CONFIRMATORY_SEED_COHORT.values
+    )
+    reference_effects = tuple(
+        reference_effects_by_seed[result.personalized_coordinate.training_seed] for result in results
+    )
+    target = output_directory or (
+        OUTPUTS_ROOT
+        / ExecutionRootDirectory.DITTO_STRESS_TEST
+        / PopulationId.NBAIOT_NATURAL_DEVICES.value
+        / "analysis"
+        / str(regularization.value)
+    )
+    return analyze_ditto_absorption(results, reference_effects=reference_effects, output_directory=target)
 
 
-def _available_fpr_values(metrics: tuple[ClientMetricResult, ...]) -> tuple[float, ...]:
-    values: list[float] = []
-    for item in metrics:
-        outcome = metric_by_id(item.metrics, MetricId.FALSE_POSITIVE_RATE)
-        if outcome.status is MetricStatus.AVAILABLE and outcome.value is not None:
-            values.append(outcome.value.value)
-    return tuple(values)
+def analyze_fedprox_absorption(
+    observations: tuple[AbsorptionSeedObservation, ...],
+    *,
+    output_directory: Path,
+) -> AbsorptionCohortResult:
+    """Cohort-level FedProx absorption from paired CV(FPR) seed observations."""
+    if observations and any(
+        item.experiment is not ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST for item in observations
+    ):
+        raise ScientificContractError("FedProx absorption requires FEDPROX_ABSORPTION_STRESS_TEST observations")
+    if observations and any(
+        item.personalized_model is not TrainingModelId.FEDPROX_AUTOENCODER for item in observations
+    ):
+        raise ScientificContractError("FedProx absorption requires FEDPROX personalized model identity")
+    cohort = decide_absorption_cohort(observations, MODEL_ABSORPTION_DECISION_PROTOCOL)
+    export_mechanism_publication(
+        (cohort,),
+        experiment=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST,
+        population=PopulationId.NBAIOT_NATURAL_DEVICES,
+        output_directory=output_directory,
+    )
+    return cohort
+
+
+def _population_cv_fpr_effect(
+    result: DittoStressTestResult,
+) -> tuple[MetricValue, MetricValue, MetricValue]:
+    """Return shared CV(FPR), local CV(FPR), and Δ = shared − local."""
+    shared_population = calculate_population_metrics(result.shared_threshold_metrics)
+    local_population = calculate_population_metrics(result.local_threshold_metrics)
+    shared_cv = _required_population_cv(shared_population)
+    local_cv = _required_population_cv(local_population)
+    return shared_cv, local_cv, MetricValue(shared_cv.value - local_cv.value)
+
+
+def _required_population_cv(population: PopulationMetricResult) -> MetricValue:
+    outcome = metric_by_id(population.metrics, MetricId.FPR_COEFFICIENT_OF_VARIATION)
+    if outcome.status is not MetricStatus.AVAILABLE or outcome.value is None:
+        raise ScientificContractError("absorption requires available population CV(FPR) under both threshold methods")
+    return outcome.value
 
 
 def _population_context(

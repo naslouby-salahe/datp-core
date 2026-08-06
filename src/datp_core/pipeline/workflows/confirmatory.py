@@ -6,9 +6,27 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
+import polars as pl
+
 from datp_core.analysis.contrasts import PairedContrast, build_paired_contrast
-from datp_core.analysis.mechanisms import MechanismEvidence, threshold_movements_from_evaluations
-from datp_core.domain.enums import EvidenceRole, ExperimentId, FederatedThresholdMethod, MetricId, PopulationId
+from datp_core.analysis.mechanisms import (
+    AssociationObservation,
+    ClientScoreVector,
+    MechanismEvidence,
+    ThresholdMovementCohort,
+    heterogeneity_benefit_association,
+    jensen_shannon_from_client_scores,
+    summarize_threshold_movements_across_seeds,
+    threshold_movements_from_evaluations,
+)
+from datp_core.domain.enums import (
+    EvidenceRole,
+    ExperimentId,
+    FederatedThresholdMethod,
+    MetricId,
+    PopulationId,
+    ScoreFrameColumn,
+)
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import Seed
@@ -24,14 +42,18 @@ from datp_core.pipeline.execution.engine import (
     execute_campaign,
 )
 from datp_core.pipeline.execution.evidence import load_evaluation_document, population_metric
-from datp_core.pipeline.execution.layout import EvaluationRunAssetDirectory
+from datp_core.pipeline.execution.layout import (
+    EvaluationRunAssetDirectory,
+    ExecutionArtifactDirectory,
+    federated_training_directory,
+)
 from datp_core.pipeline.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
 from datp_core.pipeline.publication.layout import evaluation_run_directory
+from datp_core.pipeline.scoring.models import FederatedScoreAssetName
 from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration
 from datp_core.protocols.seeds import CONFIRMATORY_ANALYSIS_SEED, CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL
 from datp_core.reporting.export import (
-    export_analysis_report,
     export_confirmatory_publication,
     export_mechanism_publication,
 )
@@ -95,7 +117,7 @@ def run_confirmatory_campaign() -> ConfirmatoryCampaignResult:
     return ConfirmatoryCampaignResult(seeds=seeds)
 
 
-def analyze_confirmatory_campaign() -> Path:
+def analyze_confirmatory_campaign(*, anchor_gate_passed: bool = False) -> Path:
     output = (
         OUTPUTS_ROOT
         / ConfirmatoryAssetDirectory.ROOT
@@ -113,8 +135,7 @@ def analyze_confirmatory_campaign() -> Path:
             mechanisms=mechanisms,
         )
     )
-    export_analysis_report(result.document, output / "analysis_report.md")
-    export_confirmatory_publication(result.document, output)
+    export_confirmatory_publication(result.document, output, anchor_gate_passed=anchor_gate_passed)
     if mechanisms:
         export_mechanism_publication(
             mechanisms,
@@ -126,17 +147,74 @@ def analyze_confirmatory_campaign() -> Path:
 
 
 def _confirmatory_mechanisms() -> tuple[MechanismEvidence, ...]:
-    movements: list[MechanismEvidence] = []
+    movement_cohorts: list[ThresholdMovementCohort] = []
+    association_observations: list[AssociationObservation] = []
+    mechanisms: list[MechanismEvidence] = []
     for seed in CONFIRMATORY_SEED_COHORT.values:
         shared = load_evaluation_document(_evaluation_path(seed, FederatedThresholdMethod.SHARED_THRESHOLD))
         local = load_evaluation_document(_evaluation_path(seed, FederatedThresholdMethod.LOCAL_THRESHOLD))
-        cohort = threshold_movements_from_evaluations(
+        movement = threshold_movements_from_evaluations(
             shared=shared,
             local=local,
             experiment=ExperimentId.SHARED_VS_LOCAL_CONFIRMATION,
         )
-        movements.append(cohort)
-    return tuple(movements)
+        movement_cohorts.append(movement)
+        mechanisms.append(movement)
+        shared_cv = population_metric(shared, MetricId.FPR_COEFFICIENT_OF_VARIATION)
+        local_cv = population_metric(local, MetricId.FPR_COEFFICIENT_OF_VARIATION)
+        benefit = MetricValue(shared_cv.value - local_cv.value)
+        vectors, score_checksum = _client_score_vectors(shared)
+        divergence = jensen_shannon_from_client_scores(vectors, source_score_checksum=score_checksum)
+        mechanisms.append(divergence)
+        if divergence.aggregate is not None:
+            association_observations.append(
+                AssociationObservation(
+                    seed=seed,
+                    experiment=ExperimentId.SHARED_VS_LOCAL_CONFIRMATION,
+                    population=PopulationId.NBAIOT_NATURAL_DEVICES,
+                    regime_label=f"seed_{seed.value}",
+                    heterogeneity=divergence.aggregate,
+                    benefit=benefit,
+                )
+            )
+    mechanisms.append(
+        summarize_threshold_movements_across_seeds(
+            tuple(movement_cohorts),
+            required_seed_count=CONFIRMATORY_SEED_COHORT.member_count.value,
+        )
+    )
+    if association_observations:
+        mechanisms.append(heterogeneity_benefit_association(tuple(association_observations)))
+    return tuple(mechanisms)
+
+
+def _client_score_vectors(
+    document: FederatedEvaluationDocument,
+) -> tuple[tuple[ClientScoreVector, ...], Checksum]:
+    score_root = (
+        federated_training_directory(document.score_coordinate, OUTPUTS_ROOT) / ExecutionArtifactDirectory.SCORES
+    )
+    vectors: list[ClientScoreVector] = []
+    for client_result in sorted(document.clients, key=lambda item: item.client):
+        path = score_root / client_result.client.client_id / FederatedScoreAssetName.CALIBRATION.value
+        if not path.is_file():
+            raise ScientificContractError(
+                f"missing persisted benign calibration scores for JS divergence: {path}",
+                subject=ExperimentId.HETEROGENEITY_BENEFIT_ASSOCIATION,
+            )
+        scores = tuple(
+            MetricValue(float(value))
+            for value in pl.read_parquet(path)[ScoreFrameColumn.RECONSTRUCTION_ERROR.value].to_list()
+        )
+        if not scores:
+            raise ScientificContractError(
+                f"empty calibration score vector for client {client_result.client.client_id}",
+                subject=ExperimentId.HETEROGENEITY_BENEFIT_ASSOCIATION,
+            )
+        vectors.append(ClientScoreVector(client=client_result.client, scores=scores))
+    if len(vectors) < 2:
+        raise ScientificContractError("Jensen-Shannon construction requires at least two client score vectors")
+    return tuple(vectors), document.fixed_score_evidence.calibration.score_checksum
 
 
 def _confirmatory_declaration() -> ExperimentDeclaration:
@@ -172,6 +250,15 @@ def _confirmatory_contrast(training_seed: Seed) -> PairedContrast:
         right_value=_required_metric(local, metric),
         evidence_role=EvidenceRole.CONFIRMATORY,
     )
+
+
+def load_fedavg_cv_fpr_effect(training_seed: Seed) -> tuple[MetricValue, MetricValue, MetricValue]:
+    """Load FedAvg SHARED/LOCAL population CV(FPR) and Δ from confirmatory evaluation documents."""
+    shared = load_evaluation_document(_evaluation_path(training_seed, FederatedThresholdMethod.SHARED_THRESHOLD))
+    local = load_evaluation_document(_evaluation_path(training_seed, FederatedThresholdMethod.LOCAL_THRESHOLD))
+    shared_cv = population_metric(shared, MetricId.FPR_COEFFICIENT_OF_VARIATION)
+    local_cv = population_metric(local, MetricId.FPR_COEFFICIENT_OF_VARIATION)
+    return shared_cv, local_cv, MetricValue(shared_cv.value - local_cv.value)
 
 
 def _required_metric(document: FederatedEvaluationDocument, metric: MetricId) -> MetricValue:

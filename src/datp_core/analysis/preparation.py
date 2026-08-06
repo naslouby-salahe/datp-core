@@ -38,6 +38,7 @@ from datp_core.analysis.temporal import (
     TemporalRecoveryResult,
     decide_temporal_campaign,
     temporal_analysis_record,
+    temporal_seed_series_intervals,
 )
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
@@ -50,6 +51,7 @@ from datp_core.domain.enums import (
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.counts import PairedObservationCount, Seed
 from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity, require_execution_identity
+from datp_core.protocols.seeds import BOUNDED_EVIDENCE_SEED_COHORT
 from datp_core.protocols.statistics import PairedInferenceProtocol
 from datp_core.protocols.temporal import TemporalDeploymentProvenance, validate_frozen_recalibrated_pair
 
@@ -134,6 +136,11 @@ class TemporalAnalysisDocument(StrictModel):
     records: tuple[TemporalAnalysisRecord, ...]
     campaign_decision: ScientificDecisionResult
     paired_seed_identities: tuple[Seed, ...]
+    excluded_seeds: tuple[Seed, ...] = ()
+    unavailable_reason: str | None = None
+    drift_excess_interval: BootstrapInterval | None = None
+    recovered_amount_interval: BootstrapInterval | None = None
+    recovery_ratio_interval: BootstrapInterval | None = None
 
     @model_validator(mode="after")
     def validate_role_and_records(self) -> "TemporalAnalysisDocument":
@@ -152,11 +159,13 @@ class TemporalAnalysisDocument(StrictModel):
             raise ValueError("temporal records must share the document threshold method")
         if self.campaign_decision.evidence_role is not EvidenceRole.TEMPORAL_BOUNDARY:
             raise ValueError("temporal campaign decision must remain temporal-boundary evidence")
-        if self.campaign_decision.decision is ScientificDecision.SUPPORTED and len(self.records) < 2:
-            # Single-seed campaigns (bounded evidence with one seed) may still report quantities,
-            # but publication-level SUPPORTED requires the complete multi-seed cohort semantics.
-            # Bounded one-seed cohorts are allowed to retain boundary decisions only when mixed.
-            pass
+        if (
+            self.campaign_decision.decision is ScientificDecision.SUPPORTED
+            and len(self.records) < BOUNDED_EVIDENCE_SEED_COHORT.member_count.value
+        ):
+            raise ValueError(
+                "publication-level temporal SUPPORTED is forbidden without the complete declared multi-seed cohort"
+            )
         return self
 
 
@@ -285,7 +294,17 @@ def prepare_temporal_analysis(request: TemporalAnalysisRequest) -> TemporalAnaly
             raise ScientificContractError("temporal recovery experiment must match the analysis request")
         if record.threshold_method is not request.threshold_method:
             raise ScientificContractError("temporal recovery threshold method must match the analysis request")
+    observed = frozenset(item.seed for item in ordered)
+    declared = frozenset(BOUNDED_EVIDENCE_SEED_COHORT.values)
+    if observed != declared:
+        missing = tuple(sorted((seed for seed in declared - observed), key=lambda item: item.value))
+        extra = tuple(sorted((seed for seed in observed - declared), key=lambda item: item.value))
+        raise ScientificContractError(
+            "temporal analysis requires exact declared seed-cohort equality "
+            f"(missing={tuple(seed.value for seed in missing)}, extra={tuple(seed.value for seed in extra)})"
+        )
     records = tuple(temporal_analysis_record(item) for item in ordered)
+    drift_interval, recovered_interval, ratio_interval = temporal_seed_series_intervals(ordered)
     return TemporalAnalysisDocument(
         experiment=request.experiment,
         threshold_method=request.threshold_method,
@@ -296,6 +315,11 @@ def prepare_temporal_analysis(request: TemporalAnalysisRequest) -> TemporalAnaly
         records=records,
         campaign_decision=decide_temporal_campaign(ordered),
         paired_seed_identities=tuple(item.seed for item in ordered),
+        excluded_seeds=(),
+        unavailable_reason=None,
+        drift_excess_interval=drift_interval,
+        recovered_amount_interval=recovered_interval,
+        recovery_ratio_interval=ratio_interval,
     )
 
 

@@ -217,3 +217,75 @@ def _jackknife_acceleration(deltas: NDArray[np.float64]) -> float | None:
 def _point_estimate_or_none(contrasts: PairedContrasts) -> MetricValue | None:
     deltas = paired_deltas(contrasts)
     return MetricValue(float(np.mean(deltas))) if deltas.size else None
+
+
+def seed_level_bca_interval(
+    values: tuple[MetricValue, ...],
+    *,
+    protocol: PairedInferenceProtocol,
+    analysis_seed: Seed,
+    require_full_cohort: bool = True,
+) -> BootstrapInterval:
+    """BCa bootstrap over seed-level scalar records (temporal/supportive series)."""
+    if not values:
+        return BootstrapInterval.blocked(
+            protocol=protocol,
+            analysis_seed=analysis_seed,
+            point_estimate=None,
+            reason=BcaReason.SEED_COHORT_MISMATCH,
+        )
+    if require_full_cohort and len(values) != protocol.seed_cohort.member_count.value:
+        return BootstrapInterval.blocked(
+            protocol=protocol,
+            analysis_seed=analysis_seed,
+            point_estimate=MetricValue(float(np.mean([item.value for item in values]))),
+            reason=BcaReason.SEED_COHORT_MISMATCH,
+        )
+    array = np.fromiter((item.value for item in values), dtype=np.float64, count=len(values))
+    if np.any(~np.isfinite(array)):
+        return BootstrapInterval.blocked(
+            protocol=protocol,
+            analysis_seed=analysis_seed,
+            point_estimate=None,
+            reason=BcaReason.FIXED_COORDINATE_MISMATCH,
+        )
+    estimate = MetricValue(float(np.mean(array)))
+    if array.size < 2 or np.ptp(array) <= 0.0:
+        return BootstrapInterval.degenerate(
+            protocol=protocol,
+            analysis_seed=analysis_seed,
+            point_estimate=estimate,
+            reason=BcaReason.IDENTICAL_PAIRED_DELTAS if array.size >= 2 else BcaReason.SEED_COHORT_MISMATCH,
+        )
+    rng = np.random.default_rng(analysis_seed.value)
+    indexes = rng.integers(0, array.size, size=(protocol.bootstrap_replicates.value, array.size))
+    distribution = np.mean(array[indexes], axis=1)
+    if np.ptp(distribution) <= 0.0:
+        return BootstrapInterval.degenerate(
+            protocol=protocol,
+            analysis_seed=analysis_seed,
+            point_estimate=estimate,
+            reason=BcaReason.DEGENERATE_BOOTSTRAP_DISTRIBUTION,
+        )
+    interval = _bca_interval_from_distribution(
+        estimate=estimate,
+        deltas=array,
+        distribution=distribution,
+        confidence_level=protocol.confidence_level,
+    )
+    if isinstance(interval, BcaReason):
+        return BootstrapInterval.degenerate(
+            protocol=protocol,
+            analysis_seed=analysis_seed,
+            point_estimate=estimate,
+            reason=interval,
+        )
+    lower_bound, upper_bound, adjustment = interval
+    return BootstrapInterval.available(
+        protocol=protocol,
+        analysis_seed=analysis_seed,
+        point_estimate=estimate,
+        lower_bound=lower_bound,
+        upper_bound=upper_bound,
+        adjustment=adjustment,
+    )

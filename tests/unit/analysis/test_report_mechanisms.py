@@ -44,8 +44,8 @@ def test_analysis_report_contains_actual_mechanism_values(tmp_path: Path) -> Non
     )
     path = export_analysis_report(document, tmp_path / "report.md")
     text = path.read_text(encoding="utf-8")
-    assert "DivergenceResult" in text
-    assert "Aggregate JS" in text
+    assert "jensen_shannon_score_divergence" in text
+    assert "Aggregate JS distance" in text
     assert "Paired Seed Values" in text
     assert str(document.interval.point_estimate.value if document.interval.point_estimate else "")[:4] in text
 

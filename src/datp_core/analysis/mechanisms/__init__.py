@@ -12,10 +12,12 @@ from datp_core.analysis.mechanisms.association import (
     heterogeneity_benefit_association,
 )
 from datp_core.analysis.mechanisms.clustering import (
+    ClusterEvidenceAvailability,
     ClusterEvidenceRecord,
     ClusterStabilityResult,
     cluster_evidence_from_grouped_result,
     cluster_stability,
+    empty_cluster_evidence_record,
     local_threshold_dispersion,
 )
 from datp_core.analysis.mechanisms.dispersion import (
@@ -33,8 +35,11 @@ from datp_core.analysis.mechanisms.divergence import (
 from datp_core.analysis.mechanisms.movement import (
     ThresholdMovement,
     ThresholdMovementCohort,
+    ThresholdMovementMultiSeedUncertainty,
+    ThresholdMovementSeedSummary,
     ThresholdOperatingPoint,
     summarize_threshold_movements,
+    summarize_threshold_movements_across_seeds,
     threshold_movement,
 )
 from datp_core.analysis.scientific_decision import ScientificDecisionResult
@@ -56,6 +61,7 @@ type MechanismEvidence = (
     | ScientificDecisionResult
     | ThresholdMovement
     | ThresholdMovementCohort
+    | ThresholdMovementMultiSeedUncertainty
 )
 
 __all__ = (
@@ -64,6 +70,7 @@ __all__ = (
     "AssociationObservation",
     "AssociationResult",
     "ClientScoreVector",
+    "ClusterEvidenceAvailability",
     "ClusterEvidenceRecord",
     "ClusterStabilityResult",
     "DivergenceBlocker",
@@ -73,6 +80,8 @@ __all__ = (
     "MechanismEvidence",
     "ThresholdMovement",
     "ThresholdMovementCohort",
+    "ThresholdMovementMultiSeedUncertainty",
+    "ThresholdMovementSeedSummary",
     "ThresholdOperatingPoint",
     "blocked_jensen_shannon_divergence",
     "cluster_evidence_from_grouped_result",
@@ -80,6 +89,7 @@ __all__ = (
     "cluster_stability",
     "decide_absorption_cohort",
     "decide_model_absorption",
+    "empty_cluster_evidence_record",
     "grouped_dispersion",
     "heterogeneity_association_from_observations",
     "heterogeneity_benefit_association",
@@ -87,6 +97,7 @@ __all__ = (
     "jensen_shannon_from_client_scores",
     "local_threshold_dispersion",
     "summarize_threshold_movements",
+    "summarize_threshold_movements_across_seeds",
     "threshold_movement",
     "threshold_movements_from_evaluations",
 )
@@ -99,12 +110,14 @@ def threshold_movements_from_evaluations(
     experiment: ExperimentId,
 ) -> ThresholdMovementCohort:
     """Build per-client threshold/operating-point movement evidence from paired evaluation documents."""
+    shared_clients = {item.client for item in shared.clients}
+    local_clients = {item.client for item in local.clients}
+    if shared_clients != local_clients:
+        raise ValueError("threshold movement requires identical client inventories on paired evaluations")
     local_by_client = {item.client: item for item in local.clients}
     movements: list[ThresholdMovement] = []
-    for shared_client in shared.clients:
-        local_client = local_by_client.get(shared_client.client)
-        if local_client is None:
-            continue
+    for shared_client in sorted(shared.clients, key=lambda item: item.client):
+        local_client = local_by_client[shared_client.client]
         shared_fpr = metric_by_id(shared_client.metrics, MetricId.FALSE_POSITIVE_RATE)
         local_fpr = metric_by_id(local_client.metrics, MetricId.FALSE_POSITIVE_RATE)
         if (
@@ -113,7 +126,7 @@ def threshold_movements_from_evaluations(
             or shared_fpr.value is None
             or local_fpr.value is None
         ):
-            continue
+            raise ValueError(f"threshold movement requires available FPR for client {shared_client.client.client_id}")
         shared_tpr = metric_by_id(shared_client.metrics, MetricId.TRUE_POSITIVE_RATE)
         local_tpr = metric_by_id(local_client.metrics, MetricId.TRUE_POSITIVE_RATE)
         tpr_shared = (
@@ -159,12 +172,18 @@ def cluster_mechanism_bundle(
     right_checksum: Checksum,
     local_dispersion: MetricValue | None,
     group_false_positive_rates: tuple[tuple[Ratio, ...], ...] | None = None,
+    shared_cv_fpr: MetricValue | None = None,
+    local_cv_fpr: MetricValue | None = None,
+    cluster_cv_fpr: MetricValue | None = None,
 ) -> tuple[ClusterEvidenceRecord, ClusterStabilityResult, GroupedDispersionResult]:
     """Assemble cluster evidence, stability, and optional grouped dispersion from persisted results."""
     evidence = cluster_evidence_from_grouped_result(
         left,
         source_threshold_checksum=left_checksum,
         local_dispersion=local_dispersion,
+        shared_cv_fpr=shared_cv_fpr,
+        local_cv_fpr=local_cv_fpr,
+        cluster_cv_fpr=cluster_cv_fpr,
     )
     stability = cluster_stability(
         left.clusters,
