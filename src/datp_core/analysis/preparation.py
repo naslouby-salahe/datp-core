@@ -11,7 +11,10 @@ from datp_core.analysis.documents import (
     TemporalAnalysisDocument,
     TemporalAnalysisRequest,
 )
-from datp_core.analysis.inference.bootstrap import paired_bca_interval, supplementary_paired_bca_interval
+from datp_core.analysis.inference.bootstrap.estimation import (
+    paired_bca_interval,
+    supplementary_paired_bca_interval,
+)
 from datp_core.analysis.inference.multiplicity import holm_adjust
 from datp_core.analysis.inference.wilcoxon import matched_pairs_rank_biserial, paired_wilcoxon
 from datp_core.analysis.scientific_decision import decide_confirmatory
