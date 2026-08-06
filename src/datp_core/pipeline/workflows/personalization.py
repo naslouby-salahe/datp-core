@@ -22,6 +22,7 @@ from datp_core.domain.enums import (
     ContractSubject,
     DatasetId,
     EvaluationCohort,
+    EvidenceRole,
     ExperimentId,
     FederatedThresholdMethod,
     MetricId,
@@ -34,7 +35,7 @@ from datp_core.domain.enums import (
 )
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.checksums import Checksum, checksum_file
-from datp_core.domain.values.counts import ClientCount, Seed
+from datp_core.domain.values.counts import ClientCount, RowCount, Seed
 from datp_core.domain.values.identifiers import FeatureNameSequence
 from datp_core.domain.values.ratios import (
     NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
@@ -46,6 +47,7 @@ from datp_core.domain.values.ratios import (
 )
 from datp_core.evaluation.client_metrics import calculate_client_metrics
 from datp_core.evaluation.cohort.construction import build_evaluation_cohort_manifest
+from datp_core.evaluation.cohort.contracts import EvaluationCohortManifest
 from datp_core.evaluation.cohort.evidence import client_partition_counts_from_scores
 from datp_core.evaluation.confusion import calculate_confusion_counts
 from datp_core.evaluation.federated.publication import FederatedEvaluationAssetName
@@ -105,7 +107,7 @@ from datp_core.preprocessing.models import (
     FederatedPreprocessingRequest,
 )
 from datp_core.preprocessing.service import preprocess_federated
-from datp_core.protocols.calibration import CANONICAL_QUANTILE
+from datp_core.protocols.calibration import CANONICAL_QUANTILE, MINIMUM_BENIGN_SUPPORT
 from datp_core.protocols.experiments import EXPERIMENTS
 from datp_core.protocols.inference import FixedScoreInvariant
 from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
@@ -141,6 +143,7 @@ class DittoStressTestResult:
     local_threshold: LocalThresholdResult
     shared_threshold_metrics: tuple[ClientMetricResult, ...]
     local_threshold_metrics: tuple[ClientMetricResult, ...]
+    evaluation_cohort: EvaluationCohortManifest
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -298,6 +301,12 @@ def run_ditto_stress_test_seed(*, training_seed: Seed, regularization: DittoRegu
             "Ditto local-threshold construction must produce a local result",
             subject=personalized_coordinate.model,
         )
+    reference_manifest = scores.manifests.require(shared.assignments[0].client)
+    evaluation_cohort = build_evaluation_cohort_manifest(
+        population=population,
+        partition_seed=personalized_coordinate.training_seed,
+        client_counts=client_partition_counts_from_scores(reference_manifest),
+    )
     return DittoStressTestResult(
         personalized_coordinate=personalized_coordinate,
         shared_threshold=shared,
@@ -322,6 +331,7 @@ def run_ditto_stress_test_seed(*, training_seed: Seed, regularization: DittoRegu
             )
             for assignment in local.assignments
         ),
+        evaluation_cohort=evaluation_cohort,
     )
 
 
@@ -625,8 +635,14 @@ def _population_cv_fpr_effect(
     result: DittoStressTestResult,
 ) -> tuple[MetricValue, MetricValue, MetricValue]:
     """Return shared CV(FPR), local CV(FPR), and Δ = shared − local."""
-    shared_population = calculate_population_metrics(result.shared_threshold_metrics)
-    local_population = calculate_population_metrics(result.local_threshold_metrics)
+    shared_population = calculate_population_metrics(
+        result.shared_threshold_metrics,
+        cohort=result.evaluation_cohort,
+    )
+    local_population = calculate_population_metrics(
+        result.local_threshold_metrics,
+        cohort=result.evaluation_cohort,
+    )
     shared_cv = _required_population_cv(shared_population)
     local_cv = _required_population_cv(local_population)
     return shared_cv, local_cv, MetricValue(shared_cv.value - local_cv.value)
@@ -728,17 +744,25 @@ def _personalized_scores(
         manifests.append(ClientOwned(client=client, value=manifest))
         invariant = FixedScoreInvariant.from_manifest(manifest)
         record = _score_record_for_client(manifest.calibration_records, client, PartitionRole.CALIBRATION)
+        scores = tuple(
+            ScoreValue(float(value))
+            for value in pl.read_parquet(record.path)[ScoreFrameColumn.RECONSTRUCTION_ERROR.value].to_list()
+        )
+        if not MINIMUM_BENIGN_SUPPORT.fits_within(RowCount(len(scores))):
+            continue
         eligible.append(
             ClientBenignCalibrationScores(
                 client,
                 personalized_coordinate,
-                tuple(
-                    ScoreValue(float(value))
-                    for value in pl.read_parquet(record.path)[ScoreFrameColumn.RECONSTRUCTION_ERROR.value].to_list()
-                ),
+                scores,
                 checksum_file(record.path),
                 invariant.calibration_score_set_checksum,
             )
+        )
+    if not eligible:
+        raise ScientificContractError(
+            "no client meets the minimum benign calibration support for threshold construction",
+            subject=ContractSubject.CALIBRATION,
         )
     return PersonalizedScoreCollection(
         eligible_calibration=tuple(eligible),
@@ -810,7 +834,7 @@ def _client_metric(
         confusion=confusion,
         metrics=calculate_client_metrics(confusion=confusion, scores=scores, labels=labels),
         warnings=(),
-        evidence_role=population_capabilities(population).evidentiary_role,
+        evidence_role=EvidenceRole.TRAINING_STRESS_TEST,
         evaluation_score_checksum=record.checksum,
         evaluation_label_checksum=evaluation_label_checksum(labels),
         source_row_checksum=source_row_checksum(rows),

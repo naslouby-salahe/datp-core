@@ -485,6 +485,7 @@ def membership_checksum(
 
 
 def population_evidence_role(population_id: PopulationId) -> EvidenceRole:
+    """Primary scientific role of the population (not the only permitted claim tier)."""
     match population_id:
         case PopulationId.NBAIOT_NATURAL_DEVICES:
             return EvidenceRole.CONFIRMATORY
@@ -496,6 +497,37 @@ def population_evidence_role(population_id: PopulationId) -> EvidenceRole:
             return EvidenceRole.EXTERNAL_VALIDATION
         case PopulationId.EDGE_TEMPORAL_GROUPS:
             return EvidenceRole.TEMPORAL_BOUNDARY
+
+
+def population_allowed_evidence_roles(population_id: PopulationId) -> frozenset[EvidenceRole]:
+    """Claim tiers authorized on a population without forcing every artifact to the primary role.
+
+    N-BaIoT natural devices host confirmatory, supportive, mechanism, threshold-variant,
+    stress-test, operational, exploratory, and anchor studies. The primary role remains
+    confirmatory; evaluation must accept any authorized experiment role.
+    """
+    match population_id:
+        case PopulationId.NBAIOT_NATURAL_DEVICES:
+            return frozenset(
+                {
+                    EvidenceRole.ANCHOR_REPRODUCTION,
+                    EvidenceRole.CONFIRMATORY,
+                    EvidenceRole.SUPPORTIVE,
+                    EvidenceRole.MECHANISM,
+                    EvidenceRole.THRESHOLD_VARIANT,
+                    EvidenceRole.TRAINING_STRESS_TEST,
+                    EvidenceRole.OPERATIONAL_TRANSLATION,
+                    EvidenceRole.EXPLORATORY,
+                }
+            )
+        case PopulationId.NBAIOT_DIRICHLET_CLIENTS:
+            return frozenset({EvidenceRole.MECHANISM, EvidenceRole.SUPPORTIVE, EvidenceRole.EXPLORATORY})
+        case PopulationId.CICIOT_FILE_CLIENTS:
+            return frozenset({EvidenceRole.APPLICABILITY_BOUNDARY})
+        case PopulationId.EDGE_SENSOR_GROUPS:
+            return frozenset({EvidenceRole.EXTERNAL_VALIDATION, EvidenceRole.SUPPORTIVE})
+        case PopulationId.EDGE_TEMPORAL_GROUPS:
+            return frozenset({EvidenceRole.TEMPORAL_BOUNDARY})
 
 
 def build_population_capabilities(

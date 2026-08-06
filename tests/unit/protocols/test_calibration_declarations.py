@@ -3,7 +3,9 @@ import pytest
 from datp_core.domain.enums import FederatedThresholdMethod
 from datp_core.domain.values.ratios import CoverageTarget
 from datp_core.protocols.calibration import (
+    CALIBRATION_SIZE_PROTOCOL,
     CALIBRATION_SIZES,
+    CALIBRATION_SUBSAMPLE_REPLICATE_COUNT,
     CANONICAL_QUANTILE,
     CLUSTER_THRESHOLD_PROTOCOL,
     CONFORMAL_PROTOCOL,
@@ -25,6 +27,9 @@ def test_calibration_grids_are_locked() -> None:
     assert CANONICAL_QUANTILE.value == 0.95
     assert tuple(item.value for item in QUANTILE_GRID) == (0.9, 0.95, 0.975, 0.99)
     assert tuple(item.value for item in CALIBRATION_SIZES) == (50, 100, 250, 500, 1000, 5000)
+    assert CALIBRATION_SUBSAMPLE_REPLICATE_COUNT.value == 10
+    assert CALIBRATION_SIZE_PROTOCOL.sizes == CALIBRATION_SIZES
+    assert CALIBRATION_SIZE_PROTOCOL.replicate_count == CALIBRATION_SUBSAMPLE_REPLICATE_COUNT
     assert SHARED_THRESHOLD_PROTOCOL.quantile == CANONICAL_QUANTILE
     assert LOCAL_THRESHOLD_PROTOCOL.quantile == CANONICAL_QUANTILE
     assert FIXED_SHRINKAGE_PROTOCOL.weights[0].value == 0

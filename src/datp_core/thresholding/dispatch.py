@@ -14,12 +14,14 @@ from datp_core.domain.errors import (
     LeakageError,
     ScientificContractError,
 )
+from datp_core.domain.values.counts import RowCount
 from datp_core.domain.values.ratios import Quantile
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.protocols.calibration import (
     CLUSTER_THRESHOLD_PROTOCOL,
     FEDERATED_STATISTICS_PROTOCOL,
     FIXED_SHRINKAGE_PROTOCOL,
+    MINIMUM_BENIGN_SUPPORT,
     QuantileProtocol,
 )
 from datp_core.thresholding.assignments import FamilyAssignment
@@ -71,6 +73,7 @@ class ThresholdConstructionRequest:
     capabilities: PopulationCapabilities
     eligible: tuple[ClientBenignCalibrationScores, ...]
     family_by_client: tuple[FamilyAssignment, ...]
+    enforce_minimum_support: bool = True
 
     def __post_init__(self) -> None:
         if not self.eligible:
@@ -103,6 +106,13 @@ def dispatch_federated_threshold(
 ) -> ThresholdConstructionResult:
     reject_centralized_threshold_method(request.method)
     validate_population_capability(request.capabilities, request.method)
+    if request.enforce_minimum_support:
+        for item in request.eligible:
+            if not MINIMUM_BENIGN_SUPPORT.fits_within(RowCount(len(item.scores))):
+                raise ScientificContractError(
+                    "threshold construction rejects clients below the minimum benign calibration support",
+                    subject=ContractSubject.CALIBRATION,
+                )
     match request.method:
         case FederatedThresholdMethod.SHARED_THRESHOLD:
             return construct_shared_threshold(

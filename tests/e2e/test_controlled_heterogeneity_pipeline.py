@@ -1,3 +1,4 @@
+from datp_core.datasets.partitioning.contracts import ControlledPartitionKind
 from datp_core.domain.enums import (
     EvidenceRole,
     ExperimentId,
@@ -8,6 +9,7 @@ from datp_core.domain.enums import (
 from datp_core.domain.values.counts import Seed
 from datp_core.pipeline.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
 from datp_core.protocols.experiments import EXPERIMENTS
+from datp_core.protocols.populations import DIRICHLET_CONCENTRATIONS
 from datp_core.protocols.seeds import SeedCohort
 
 
@@ -36,3 +38,13 @@ def test_controlled_heterogeneity_is_mechanism_evidence_not_a_second_confirmatio
         }
     )
     assert all(entry.coordinate.population is PopulationId.NBAIOT_DIRICHLET_CLIENTS for entry in plan.entries)
+    partition_kinds = frozenset(entry.coordinate.controlled_partition_kind for entry in plan.entries)
+    assert ControlledPartitionKind.DIRICHLET in partition_kinds
+    assert ControlledPartitionKind.IID in partition_kinds
+    concentrations = frozenset(
+        entry.coordinate.dirichlet_concentration.value
+        for entry in plan.entries
+        if entry.coordinate.dirichlet_concentration is not None
+    )
+    assert concentrations == frozenset(item.value for item in DIRICHLET_CONCENTRATIONS)
+    assert all(entry.coordinate.controlled_partition_kind is not None for entry in plan.entries)

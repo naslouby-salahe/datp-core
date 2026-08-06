@@ -332,11 +332,18 @@ class PipelineStageRunner:
     ) -> StageExecution:
         eligible = workspace.eligible_calibration_scores()
         checksum = canonical_checksum(eligible)
+        evidence = f"eligible_clients={len(eligible)} checksum={checksum.value}"
+        if workspace.calibration is not None:
+            lattice = workspace.calibration
+            evidence = (
+                f"{evidence} ablation_clients={len(lattice.eligible_clients)} "
+                f"replicates={len(lattice.replicate_manifests)}"
+            )
         self._observe(ObservationBoundary.AFTER_CALIBRATION_BEFORE_THRESHOLD_CONSTRUCTION, coordinate, checksum)
         return StageExecution(
             stage=stage,
             outcome=StageOutcome.COMPLETED,
-            evidence=f"eligible_clients={len(eligible)} checksum={checksum.value}",
+            evidence=evidence,
         )
 
     def _construct_thresholds(

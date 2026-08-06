@@ -6,6 +6,7 @@ from datp_core.domain.enums import EvaluationCohort, MetricId
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.counts import RowCount
 from datp_core.domain.values.ratios import Quantile
+from datp_core.evaluation.cohort.contracts import EvaluationCohortManifest
 from datp_core.evaluation.metric_semantics import available, unavailable
 from datp_core.evaluation.models import (
     FPR_POPULATION_METRIC_IDS,
@@ -20,7 +21,11 @@ from datp_core.evaluation.models import (
 from datp_core.protocols.metrics import NEAR_ZERO_MEAN_FPR_WARNING_CUTOFF
 
 
-def calculate_population_metrics(results: tuple[ClientMetricResult, ...]) -> PopulationMetricResult:
+def calculate_population_metrics(
+    results: tuple[ClientMetricResult, ...],
+    *,
+    cohort: EvaluationCohortManifest | None = None,
+) -> PopulationMetricResult:
     """Aggregate one threshold method's client results without pooling rows for FPR dispersion."""
     if not results:
         raise ScientificContractError("population evaluation requires client results")
@@ -42,6 +47,10 @@ def calculate_population_metrics(results: tuple[ClientMetricResult, ...]) -> Pop
     fpr_records = tuple(_metric(result, MetricId.FALSE_POSITIVE_RATE) for result in fpr_evaluable)
     fpr_values = tuple(item.value.value for item in fpr_records if item.value is not None)
     attack_evaluable = tuple(result for result in fpr_evaluable if result.attack_evaluable)
+    if cohort is None:
+        calibration_eligible_count = len(fpr_evaluable)
+    else:
+        calibration_eligible_count = sum(1 for record in cohort.records if record.calibration_eligible)
     metric_records, warnings = _population_metric_records(fpr_evaluable, fpr_values)
     return PopulationMetricResult(
         coordinate=first.coordinate,
@@ -49,7 +58,7 @@ def calculate_population_metrics(results: tuple[ClientMetricResult, ...]) -> Pop
         cohort=EvaluationCohort.FPR_EVALUABLE,
         metrics=metric_records,
         candidate_client_count=_count(len(results)),
-        calibration_eligible_client_count=_count(len(fpr_evaluable)),
+        calibration_eligible_client_count=_count(calibration_eligible_count),
         fpr_evaluable_client_count=_count(len(fpr_values)),
         attack_evaluable_client_count=_count(len(attack_evaluable)),
         deployment_fallback_count=_count(len(fallback)),

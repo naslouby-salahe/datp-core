@@ -5,13 +5,15 @@ from pathlib import Path
 import polars as pl
 from pydantic import ValidationError
 
-from datp_core.domain.enums import MetricId, PartitionRole, ScoreFrameColumn
+from datp_core.domain.enums import ContractSubject, MetricId, PartitionRole, ScoreFrameColumn
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.checksums import checksum_file
+from datp_core.domain.values.counts import RowCount
 from datp_core.domain.values.ratios import MetricValue, ScoreValue
 from datp_core.evaluation.federated.contracts import FederatedEvaluationDocument
 from datp_core.evaluation.models import MetricStatus, metric_by_id
 from datp_core.pipeline.scoring.models import FederatedScoreArtifactManifest
+from datp_core.protocols.calibration import MINIMUM_BENIGN_SUPPORT
 from datp_core.protocols.inference import FixedScoreInvariant
 from datp_core.thresholding.quantiles import ClientBenignCalibrationScores
 
@@ -20,6 +22,13 @@ def eligible_calibration_scores(
     score_manifest: FederatedScoreArtifactManifest,
     role: PartitionRole = PartitionRole.CALIBRATION,
 ) -> tuple[ClientBenignCalibrationScores, ...]:
+    """Load benign calibration scores for clients that meet the locked support floor.
+
+    Threshold construction must receive only the eligible cohort (``n_k >= 100``).
+    Clients below the floor remain present in score artifacts and evaluation
+    cohorts, but they must not contribute local quantiles to shared, local,
+    family, cluster, or comparator constructions.
+    """
     invariant = FixedScoreInvariant.from_manifest(score_manifest)
     if role is PartitionRole.CALIBRATION:
         score_set_checksum = invariant.calibration_score_set_checksum
@@ -32,7 +41,7 @@ def eligible_calibration_scores(
         )
     if score_set_checksum is None:
         raise ScientificContractError("the requested calibration score set is unavailable", subject=role)
-    return tuple(
+    candidates = tuple(
         ClientBenignCalibrationScores(
             record.scored_client,
             score_manifest.coordinate,
@@ -45,6 +54,13 @@ def eligible_calibration_scores(
         )
         for record in sorted(score_manifest.records_for(role), key=lambda item: item.scored_client)
     )
+    eligible = tuple(item for item in candidates if MINIMUM_BENIGN_SUPPORT.fits_within(RowCount(len(item.scores))))
+    if not eligible:
+        raise ScientificContractError(
+            "no client meets the minimum benign calibration support for threshold construction",
+            subject=ContractSubject.CALIBRATION,
+        )
+    return eligible
 
 
 def load_evaluation_document(path: Path) -> FederatedEvaluationDocument:

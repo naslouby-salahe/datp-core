@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
+from datp_core.datasets.partitioning.contracts import ControlledPartitionKind
 from datp_core.datasets.registry import population_capabilities, population_declaration
 from datp_core.domain.enums import (
     ExperimentId,
@@ -18,11 +19,12 @@ from datp_core.domain.enums import (
 )
 from datp_core.domain.values.checksums import Checksum, checksum_text
 from datp_core.domain.values.counts import Seed
-from datp_core.domain.values.ratios import ModelCoefficientValue
+from datp_core.domain.values.ratios import DirichletConcentration, ModelCoefficientValue, Quantile
 from datp_core.pipeline.coordinates import ExperimentCoordinate
 from datp_core.preprocessing.models import SCIENTIFIC_FEDERATED_PREPROCESSING_METHOD
+from datp_core.protocols.calibration import QUANTILE_GRID
 from datp_core.protocols.experiments import EXECUTION_IDENTITY_DECLARATIONS, EXPERIMENTS, ExperimentDeclaration
-from datp_core.protocols.populations import split_protocol_for_population
+from datp_core.protocols.populations import DIRICHLET_CONCENTRATIONS, split_protocol_for_population
 from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.protocols.training import DITTO_TRAINING_PROTOCOLS, FEDPROX_TRAINING_PROTOCOLS
 
@@ -112,6 +114,9 @@ class _SweptCell:
     metric: MetricId
     temporal_state: TemporalState | None
     model_coefficient: ModelCoefficientValue | None
+    threshold_quantile: Quantile | None
+    controlled_partition_kind: ControlledPartitionKind | None
+    dirichlet_concentration: DirichletConcentration | None
 
 
 def _swept_cells(declaration: ExperimentDeclaration, seed_cohort: SeedCohort) -> tuple[_SweptCell, ...]:
@@ -122,13 +127,41 @@ def _swept_cells(declaration: ExperimentDeclaration, seed_cohort: SeedCohort) ->
             metric=metric,
             temporal_state=temporal_state,
             model_coefficient=model_coefficient,
+            threshold_quantile=threshold_quantile,
+            controlled_partition_kind=partition_kind,
+            dirichlet_concentration=concentration,
         )
         for seed in seed_cohort.values
         for threshold_method in declaration.federated_thresholds
         for metric in declaration.metrics
         for temporal_state in _temporal_states(declaration.id)
         for model_coefficient in _declared_model_coefficients(declaration.training_model)
+        for threshold_quantile in _threshold_quantiles(declaration.id)
+        for partition_kind, concentration in _controlled_partition_cells(declaration)
     )
+
+
+def _threshold_quantiles(experiment: ExperimentId) -> tuple[Quantile | None, ...]:
+    if experiment is ExperimentId.QUANTILE_SENSITIVITY:
+        return QUANTILE_GRID
+    return (None,)
+
+
+def _controlled_partition_cells(
+    declaration: ExperimentDeclaration,
+) -> tuple[tuple[ControlledPartitionKind | None, DirichletConcentration | None], ...]:
+    if declaration.population is not PopulationId.NBAIOT_DIRICHLET_CLIENTS:
+        return ((None, None),)
+    if declaration.id is ExperimentId.CONTROLLED_HETEROGENEITY_SWEEP:
+        dirichlet_cells = tuple(
+            (ControlledPartitionKind.DIRICHLET, concentration) for concentration in DIRICHLET_CONCENTRATIONS
+        )
+        return (*dirichlet_cells, (ControlledPartitionKind.IID, None))
+    # Any other Dirichlet experiment still requires an explicit condition; use the full grid.
+    dirichlet_cells = tuple(
+        (ControlledPartitionKind.DIRICHLET, concentration) for concentration in DIRICHLET_CONCENTRATIONS
+    )
+    return (*dirichlet_cells, (ControlledPartitionKind.IID, None))
 
 
 def _planned_entry(
@@ -156,6 +189,9 @@ def _planned_entry(
             threshold_method=cell.threshold_method,
             metric=cell.metric,
             temporal_state=cell.temporal_state,
+            threshold_quantile=cell.threshold_quantile,
+            controlled_partition_kind=cell.controlled_partition_kind,
+            dirichlet_concentration=cell.dirichlet_concentration,
         ),
         disposition=disposition,
         reason=reason,

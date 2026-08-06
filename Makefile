@@ -38,7 +38,7 @@ nox:
 	$(UV) run nox
 
 materialize-canonical:
-	$(UV) run datp-core materialize-canonical-datasets
+	$(UV) run datp-core run materialize-datasets
 
 # Explicit scientific coordinates are required; no Makefile defaults for seed or population.
 preprocess-federated:
@@ -46,7 +46,7 @@ preprocess-federated:
 	@test -n "$(PARTITION_SEED)" || (echo "PARTITION_SEED is required" >&2; exit 1)
 	@test -n "$(SPLIT_PROTOCOL)" || (echo "SPLIT_PROTOCOL is required" >&2; exit 1)
 	@test -n "$(PREPROCESSING_IDENTITY)" || (echo "PREPROCESSING_IDENTITY is required" >&2; exit 1)
-	$(UV) run datp-core preprocess-federated \
+	$(UV) run datp-core run preprocess-federated \
 		--population "$(POPULATION)" \
 		--partition-seed "$(PARTITION_SEED)" \
 		--split-protocol "$(SPLIT_PROTOCOL)" \
@@ -58,7 +58,7 @@ preprocess-centralized-reference:
 	@test -n "$(POPULATION)" || (echo "POPULATION is required" >&2; exit 1)
 	@test -n "$(PARTITION_SEED)" || (echo "PARTITION_SEED is required" >&2; exit 1)
 	@test -n "$(SPLIT_PROTOCOL)" || (echo "SPLIT_PROTOCOL is required" >&2; exit 1)
-	$(UV) run datp-core preprocess-centralized-reference \
+	$(UV) run datp-core run preprocess-centralized \
 		--population "$(POPULATION)" \
 		--partition-seed "$(PARTITION_SEED)" \
 		--split-protocol "$(SPLIT_PROTOCOL)" \

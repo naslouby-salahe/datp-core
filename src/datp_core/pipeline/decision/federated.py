@@ -8,6 +8,7 @@ from datp_core.domain.values.checksums import Checksum
 from datp_core.evaluation.cohort.contracts import EvaluationCohortManifest
 from datp_core.evaluation.communication import CommunicationMessageDiagnostic
 from datp_core.evaluation.federated.contracts import (
+    CalibrationSizeAblationCell,
     ConformalCoverageStageInput,
     EvaluationDiagnostics,
     FederatedEvaluationArtifacts,
@@ -75,6 +76,7 @@ class EvaluateFederatedDetectorRequest:
     temporal_provenance: TemporalDeploymentProvenance | None = None
     temporal_threshold_provenance: TemporalDeploymentProvenance | None = None
     execution_identity: ExternalTemporalExecutionIdentity | None = None
+    calibration_size_ablation: tuple[CalibrationSizeAblationCell, ...] = ()
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -132,6 +134,7 @@ def evaluate_federated_detector(request: EvaluateFederatedDetectorRequest) -> Ev
             temporal_provenance=request.temporal_provenance,
             temporal_threshold_provenance=request.temporal_threshold_provenance,
             execution_identity=request.execution_identity,
+            calibration_size_ablation=request.calibration_size_ablation,
         )
     )
     publication = publish_artifact(

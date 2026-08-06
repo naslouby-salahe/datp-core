@@ -100,5 +100,44 @@ NBAIOT_CAPABILITIES = DatasetCapabilities(
             reason="Execution requires the declared outcome-blind cluster-feasibility criterion.",
             method=FederatedThresholdMethod.CLUSTER_THRESHOLD,
         ),
+        ThresholdMethodCapability(
+            status=CapabilityStatus.SUPPORTED,
+            evidence="Eligible clients supply benign calibration scores for pooled quantile construction.",
+            reason="Pooled shared quantile is a shared-construction control on Regime A.",
+            method=FederatedThresholdMethod.POOLED_SHARED_QUANTILE,
+        ),
+        ThresholdMethodCapability(
+            status=CapabilityStatus.SUPPORTED,
+            evidence="Eligible clients supply benign calibration counts for sample-weighted shared construction.",
+            reason="Sample-weighted shared threshold is a shared-construction control on Regime A.",
+            method=FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD,
+        ),
+        ThresholdMethodCapability(
+            status=CapabilityStatus.SUPPORTED,
+            evidence="Shared and local endpoints are available under one frozen detector.",
+            reason="The predeclared fixed-lambda shrinkage curve is supported on Regime A.",
+            method=FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE,
+        ),
+        ThresholdMethodCapability(
+            status=CapabilityStatus.SUPPORTED,
+            evidence="Eligible clients supply ordered benign calibration scores for finite-sample conformal ranks.",
+            reason="Local conformal threshold is a supportive coverage diagnostic on Regime A.",
+            method=FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD,
+        ),
+        ThresholdMethodCapability(
+            status=CapabilityStatus.SUPPORTED,
+            evidence="Eligible clients can publish benign-only summary statistics under the declared comparator.",
+            reason="Federated benign-statistics is a threshold-variant comparator on Regime A.",
+            method=FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS,
+        ),
+        ThresholdMethodCapability(
+            status=CapabilityStatus.UNSUPPORTED,
+            evidence="No pre-declared monotone lambda(n_k) function is frozen for this programme.",
+            reason=(
+                "Size-aware shrinkage remains intentionally unavailable until a bounded "
+                "lambda(n_k) is declared before evaluation; inventing a formula is forbidden."
+            ),
+            method=FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE,
+        ),
     ),
 )

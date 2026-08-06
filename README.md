@@ -45,7 +45,7 @@ No backwards-compatibility shims, redirect modules, implicit CPU fallback, or al
 
 ## Runtime requirements
 
-- Python 3.13 or newer;
+- Python 3.12 (see pyproject.toml requires-python);
 - CUDA-capable PyTorch runtime;
 - GPU execution for training and other GPU-appropriate operations;
 - raw datasets available beneath `data/raw` using the audited directory names documented in `RAW_DATA_STRUCTURE.md`.

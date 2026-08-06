@@ -5,12 +5,12 @@ from functools import cached_property
 from pathlib import Path
 
 from datp_core.datasets.registry import population_capabilities
-from datp_core.domain.enums import PartitionRole
+from datp_core.domain.enums import ExperimentId, PartitionRole
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.counts import ClientCount
 from datp_core.domain.values.identifiers import FeatureNameSequence
-from datp_core.domain.values.ratios import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE
-from datp_core.evaluation.federated.contracts import FederatedEvaluationDocument
+from datp_core.domain.values.ratios import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE, Quantile
+from datp_core.evaluation.federated.contracts import CalibrationSizeAblationCell, FederatedEvaluationDocument
 from datp_core.evaluation.federated.publication import FederatedEvaluationAssetName
 from datp_core.evaluation.fixed_score.construction import build_federated_evaluation_inputs
 from datp_core.evaluation.fixed_score.contracts import FixedScoreEvidence
@@ -20,6 +20,12 @@ from datp_core.learning.federated.models import CheckpointCandidate
 from datp_core.learning.federated.training import FederatedTrainingRequest
 from datp_core.pipeline.checkpoints.service import SelectFederatedCheckpointRequest, select_federated_primary_checkpoint
 from datp_core.pipeline.coordinates import ExperimentCoordinate
+from datp_core.pipeline.decision.calibration import (
+    BuildCalibrationResult,
+    ConstructCalibrationSizeAblationRequest,
+    build_declared_calibration,
+    construct_calibration_size_ablation,
+)
 from datp_core.pipeline.decision.federated import (
     ConstructFederatedThresholdsRequest,
     EvaluateFederatedDetectorRequest,
@@ -148,6 +154,18 @@ class ExperimentWorkspace:
     def run_directory(self) -> Path:
         return evaluation_run_directory(self.output_root, self.coordinate)
 
+    @property
+    def threshold_quantile(self) -> Quantile:
+        if self.coordinate.threshold_quantile is not None:
+            return self.coordinate.threshold_quantile
+        return CANONICAL_QUANTILE
+
+    @cached_property
+    def calibration(self) -> BuildCalibrationResult | None:
+        if self.coordinate.experiment is not ExperimentId.CALIBRATION_SIZE_ABLATION:
+            return None
+        return build_declared_calibration(self.scores)
+
     @cached_property
     def threshold(self) -> ThresholdConstructionResult:
         result = construct_federated_thresholds(
@@ -155,7 +173,7 @@ class ExperimentWorkspace:
                 request=ThresholdConstructionRequest(
                     method=self.coordinate.threshold_method,
                     coordinate=self.scores.coordinate,
-                    quantile=CANONICAL_QUANTILE,
+                    quantile=self.threshold_quantile,
                     capabilities=population_capabilities(self.coordinate.population),
                     eligible=self.eligible_calibration_scores(),
                     family_by_client=self.context.family_by_client,
@@ -196,6 +214,27 @@ class ExperimentWorkspace:
         return reference
 
     @cached_property
+    def calibration_size_ablation(self) -> tuple[CalibrationSizeAblationCell, ...]:
+        if self.coordinate.experiment is not ExperimentId.CALIBRATION_SIZE_ABLATION:
+            return ()
+        if self.calibration is None:
+            raise ScientificContractError("calibration-size ablation requires a calibration lattice")
+        inputs = build_federated_evaluation_inputs(self.scores, self.coordinate.threshold_method)
+        return construct_calibration_size_ablation(
+            ConstructCalibrationSizeAblationRequest(
+                score_manifest=self.scores,
+                method=self.coordinate.threshold_method,
+                quantile=self.threshold_quantile,
+                cohort=inputs.cohort,
+                fixed_score_evidence=inputs.fixed_score_evidence,
+                evidence_role=self.coordinate.evidence_role,
+                family_by_client=self.context.family_by_client,
+                calibration=self.calibration,
+                execution_identity=self.context.execution_identity,
+            )
+        )
+
+    @cached_property
     def evaluation(self) -> EvaluateFederatedDetectorResult:
         inputs = build_federated_evaluation_inputs(self.scores, self.coordinate.threshold_method)
         return evaluate_federated_detector(
@@ -213,6 +252,7 @@ class ExperimentWorkspace:
                 execution_identity=self.context.execution_identity,
                 output_directory=self.run_directory() / EvaluationRunAssetDirectory.EVALUATION,
                 overwrite=False,
+                calibration_size_ablation=self.calibration_size_ablation,
             )
         )
 

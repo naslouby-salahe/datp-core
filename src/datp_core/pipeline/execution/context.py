@@ -6,7 +6,7 @@ from pathlib import Path
 import polars as pl
 
 from datp_core.datasets.edge_iiotset.schema import EDGE_NUMERIC_FEATURE_COLUMNS
-from datp_core.datasets.partitioning.contracts import ClientIdentity
+from datp_core.datasets.partitioning.contracts import ClientIdentity, ControlledPartitionCondition
 from datp_core.datasets.registry import dataset_binding, population_capabilities
 from datp_core.domain.enums import ContractSubject, DatasetId
 from datp_core.domain.errors import ScientificContractError
@@ -127,6 +127,7 @@ def resolve_execution_context(coordinate: ExperimentCoordinate, output_root: Pat
     )
     execution_identity = execution_identity_for(coordinate)
     if execution_identity is None:
+        controlled_condition = _controlled_partition_condition(coordinate)
         population_result = construct_declared_population(
             ConstructDeclaredPopulationRequest(
                 population=coordinate.population,
@@ -134,7 +135,7 @@ def resolve_execution_context(coordinate: ExperimentCoordinate, output_root: Pat
                 canonical_root=DATA_ROOT / ExecutionArtifactDirectory.CANONICAL_DATA / coordinate.dataset.value,
                 partition_seed=coordinate.training_seed,
                 split_protocol=coordinate.split_protocol,
-                controlled_condition=None,
+                controlled_condition=controlled_condition,
             )
         )
         preprocessing = preprocess_federated(
@@ -144,7 +145,7 @@ def resolve_execution_context(coordinate: ExperimentCoordinate, output_root: Pat
                 split_protocol=coordinate.split_protocol,
                 preprocessing_identity=coordinate.preprocessing_protocol,
                 data_root=DATA_ROOT,
-                dirichlet_condition=None,
+                dirichlet_condition=controlled_condition,
                 capture_timestamp_column=None,
             )
         )
@@ -264,3 +265,12 @@ def client_with_id(clients: tuple[ClientIdentity, ...], client_id: str) -> Clien
     if len(matches) != 1:
         raise ScientificContractError(f"population manifest must contain exactly one client {client_id}")
     return matches[0]
+
+
+def _controlled_partition_condition(coordinate: ExperimentCoordinate) -> ControlledPartitionCondition | None:
+    if coordinate.controlled_partition_kind is None:
+        return None
+    return ControlledPartitionCondition(
+        kind=coordinate.controlled_partition_kind,
+        concentration=coordinate.dirichlet_concentration,
+    )

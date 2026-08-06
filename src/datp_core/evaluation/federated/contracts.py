@@ -1,20 +1,25 @@
 """Contracts for held-out federated evaluation and its diagnostics."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import EvidenceRole, FederatedThresholdMethod, StageOperationId
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.ratios import CoverageTarget, ThresholdValue
+from datp_core.domain.values.counts import CalibrationSize, ReplicateIndex
+from datp_core.domain.values.ratios import CoverageTarget, ShrinkageWeight, ThresholdValue
 from datp_core.evaluation.cohort.contracts import EvaluationCohortManifest
 from datp_core.evaluation.communication import CommunicationDiagnostic, CommunicationMessageDiagnostic
 from datp_core.evaluation.conformal_coverage import ConformalCoverageDiagnostic
 from datp_core.evaluation.fixed_score.contracts import FixedScoreEvidence
 from datp_core.evaluation.models import ClientMetricResult, HeldOutBenignScore, PopulationMetricResult
 from datp_core.evaluation.operational import AlertBurdenDiagnostic
-from datp_core.evaluation.threshold_estimation import ThresholdEstimationDiagnostic, ThresholdEstimationProvenance
+from datp_core.evaluation.threshold_estimation import (
+    SampleEfficiencyPoint,
+    ThresholdEstimationDiagnostic,
+    ThresholdEstimationProvenance,
+)
 from datp_core.evaluation.threshold_evidence import VerifiedHeldOutBenignScores
 from datp_core.evaluation.traffic_rates import ValidatedTrafficRateEvidence
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
@@ -25,6 +30,38 @@ from datp_core.thresholding.methods.conformal import ConformalAssignment
 from datp_core.thresholding.models import ThresholdConstructionResult
 
 type FederatedScoreArtifactManifest = ScoreArtifactManifest[FederatedTrainingCoordinate, ClientIdentity]
+
+
+@dataclass(frozen=True, slots=True)
+class ShrinkageLambdaEvaluation:
+    """Population operating point for one predeclared shrinkage weight."""
+
+    lambda_weight: ShrinkageWeight
+    clients: tuple[ClientMetricResult, ...]
+    population: PopulationMetricResult
+
+    def __post_init__(self) -> None:
+        if not self.clients:
+            raise ScientificContractError("shrinkage lambda evaluation requires client metrics")
+        if len({item.client for item in self.clients}) != len(self.clients):
+            raise ScientificContractError("shrinkage lambda evaluation cannot repeat clients")
+
+
+@dataclass(frozen=True, slots=True)
+class CalibrationSizeAblationCell:
+    """One nested calibration-size × subsample-replicate evaluation cell."""
+
+    calibration_size: CalibrationSize
+    replicate_index: ReplicateIndex
+    method: FederatedThresholdMethod
+    clients: tuple[ClientMetricResult, ...]
+    population: PopulationMetricResult
+
+    def __post_init__(self) -> None:
+        if not self.clients:
+            raise ScientificContractError("calibration-size ablation cell requires client metrics")
+        if len({item.client for item in self.clients}) != len(self.clients):
+            raise ScientificContractError("calibration-size ablation cannot repeat clients")
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,6 +91,9 @@ class EvaluationDiagnostics:
     threshold_estimation: tuple[ThresholdEstimationDiagnostic, ...]
     communication: CommunicationDiagnostic | None
     alert_burden: tuple[AlertBurdenDiagnostic, ...]
+    shrinkage_curve: tuple[ShrinkageLambdaEvaluation, ...] = field(default_factory=tuple)
+    calibration_size_ablation: tuple[CalibrationSizeAblationCell, ...] = field(default_factory=tuple)
+    sample_efficiency: tuple[SampleEfficiencyPoint, ...] = field(default_factory=tuple)
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,6 +111,7 @@ class FederatedEvaluationRequest:
     temporal_provenance: TemporalDeploymentProvenance | None
     temporal_threshold_provenance: TemporalDeploymentProvenance | None
     execution_identity: ExternalTemporalExecutionIdentity | None
+    calibration_size_ablation: tuple[CalibrationSizeAblationCell, ...] = ()
 
 
 class FederatedEvaluationDocument(StrictModel):

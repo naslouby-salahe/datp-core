@@ -1,6 +1,6 @@
 from tests.unit.thresholding.helpers import client_scores
 
-from datp_core.domain.values.ratios import Quantile
+from datp_core.domain.values.ratios import Quantile, ShrinkageWeight
 from datp_core.protocols.calibration import FIXED_SHRINKAGE_PROTOCOL
 from datp_core.thresholding.identities import ThresholdInfeasibilityReason
 from datp_core.thresholding.methods.shrinkage import (
@@ -51,3 +51,19 @@ def test_construct_size_aware_shrinkage_is_typed_unavailability() -> None:
     result = construct_size_aware_shrinkage(CLIENT_A.coordinate)
     assert result.reason is ThresholdInfeasibilityReason.SIZE_AWARE_SHRINKAGE_FUNCTION_UNRESOLVED
     assert result.detail
+
+
+def test_fixed_shrinkage_curve_preserves_unique_clients_per_lambda() -> None:
+    result = construct_fixed_shrinkage(
+        (CLIENT_A, CLIENT_B),
+        FIXED_SHRINKAGE_PROTOCOL,
+        QUANTILE,
+    )
+    for weight in result.weights:
+        clients = tuple(item.client for item in result.assignments if item.lambda_weight == weight)
+        assert len(clients) == len(set(clients))
+        assert len(clients) == 2
+    local_endpoint = ShrinkageWeight(1.0)
+    local_clients = tuple(item.client for item in result.assignments if item.lambda_weight == local_endpoint)
+    assert len(local_clients) == len(set(local_clients))
+    assert len(result.weights) == 5

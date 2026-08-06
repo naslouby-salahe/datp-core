@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from enum import StrEnum
 
+from datp_core.datasets.partitioning.contracts import ControlledPartitionKind
 from datp_core.domain.enums import (
     DatasetId,
     EvidenceRole,
@@ -16,7 +17,7 @@ from datp_core.domain.enums import (
     TrainingModelId,
 )
 from datp_core.domain.values.counts import Seed
-from datp_core.domain.values.ratios import ModelCoefficientValue
+from datp_core.domain.values.ratios import DirichletConcentration, ModelCoefficientValue, Quantile
 
 _MODEL_COEFFICIENT_TRAINING_MODELS = frozenset(
     (TrainingModelId.FEDPROX_AUTOENCODER, TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER)
@@ -30,6 +31,8 @@ _DITTO_TRAINING_MODELS = frozenset(
 class CoordinateIdentitySegment(StrEnum):
     NO_MODEL_COEFFICIENT = "no_model_coefficient"
     NON_TEMPORAL = "non_temporal"
+    CANONICAL_QUANTILE = "canonical_quantile"
+    NO_CONTROLLED_PARTITION = "no_controlled_partition"
 
 
 class ExecutionRoute(StrEnum):
@@ -63,6 +66,9 @@ class ExperimentCoordinate:
     threshold_method: FederatedThresholdMethod
     metric: MetricId
     temporal_state: TemporalState | None
+    threshold_quantile: Quantile | None = None
+    controlled_partition_kind: ControlledPartitionKind | None = None
+    dirichlet_concentration: DirichletConcentration | None = None
 
     def __post_init__(self) -> None:
         requires_coefficient = self.training_model in _MODEL_COEFFICIENT_TRAINING_MODELS
@@ -70,6 +76,14 @@ class ExperimentCoordinate:
             raise ValueError("training models with a declared coefficient grid require a model coefficient")
         if not requires_coefficient and self.model_coefficient is not None:
             raise ValueError("a model coefficient is only active for training models with a declared coefficient grid")
+        if self.controlled_partition_kind is ControlledPartitionKind.DIRICHLET and self.dirichlet_concentration is None:
+            raise ValueError("Dirichlet controlled partitions require a concentration")
+        if self.controlled_partition_kind is ControlledPartitionKind.IID and self.dirichlet_concentration is not None:
+            raise ValueError("IID controlled partitions must not carry a concentration")
+        if self.controlled_partition_kind is None and self.dirichlet_concentration is not None:
+            raise ValueError("a Dirichlet concentration requires a controlled partition kind")
+        if self.population is PopulationId.NBAIOT_DIRICHLET_CLIENTS and self.controlled_partition_kind is None:
+            raise ValueError("Dirichlet-client populations require an explicit controlled partition condition")
 
     @property
     def stable_key(self) -> str:
@@ -83,6 +97,20 @@ class ExperimentCoordinate:
             if self.model_coefficient is not None
             else CoordinateIdentitySegment.NO_MODEL_COEFFICIENT.value
         )
+        quantile = (
+            f"q{self.threshold_quantile.value}"
+            if self.threshold_quantile is not None
+            else CoordinateIdentitySegment.CANONICAL_QUANTILE.value
+        )
+        if self.controlled_partition_kind is None:
+            partition = CoordinateIdentitySegment.NO_CONTROLLED_PARTITION.value
+        elif self.controlled_partition_kind is ControlledPartitionKind.IID:
+            partition = ControlledPartitionKind.IID.value
+        else:
+            concentration = self.dirichlet_concentration
+            if concentration is None:
+                raise ValueError("Dirichlet stable keys require a concentration")
+            partition = f"{ControlledPartitionKind.DIRICHLET.value}:{concentration.value}"
         return "/".join(
             (
                 self.experiment.value,
@@ -97,6 +125,8 @@ class ExperimentCoordinate:
                 self.threshold_method.value,
                 self.metric.value,
                 temporal,
+                quantile,
+                partition,
             )
         )
 

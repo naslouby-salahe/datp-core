@@ -13,6 +13,7 @@ from datp_core.domain.values.counts import (
     KMeansInitializationCount,
     KMeansMaximumIterationCount,
     Seed,
+    SubsampleReplicateCount,
 )
 from datp_core.domain.values.ratios import CoverageTarget, Quantile, Ratio, ShrinkageWeight, SummaryCoefficient
 
@@ -73,6 +74,18 @@ class QuantileProtocol(StrictModel):
 
 class CalibrationSizeProtocol(StrictModel):
     sizes: tuple[CalibrationSize, ...]
+    replicate_count: SubsampleReplicateCount
+
+    @model_validator(mode="after")
+    def validate_sizes_and_replicates(self) -> "CalibrationSizeProtocol":
+        if not self.sizes:
+            raise ValueError("calibration-size protocol requires at least one size")
+        if len(self.sizes) != len(frozenset(self.sizes)):
+            raise ValueError("calibration-size protocol sizes must be unique")
+        ordered = tuple(sorted(self.sizes, key=lambda item: item.value))
+        if self.sizes != ordered:
+            raise ValueError("calibration-size protocol sizes must be ascending")
+        return self
 
 
 class FixedShrinkageProtocol(StrictModel):
@@ -160,11 +173,17 @@ CANONICAL_QUANTILE = Quantile(0.95)
 QUANTILE_GRID = tuple(Quantile(value) for value in (0.90, 0.95, 0.975, 0.99))
 MINIMUM_BENIGN_SUPPORT = CalibrationSize(100)
 CALIBRATION_SIZES = tuple(CalibrationSize(value) for value in (50, 100, 250, 500, 1000, 5000))
+# Nested calibration subsampling replicates within each training seed (roadmap §8.1).
+# Count locked to the same nested-repetition scale as cluster multi-start (10).
+CALIBRATION_SUBSAMPLE_REPLICATE_COUNT = SubsampleReplicateCount(10)
 FIXED_SHRINKAGE_WEIGHTS = tuple(ShrinkageWeight(value) for value in (0, 0.25, 0.5, 0.75, 1))
 CONFORMAL_COVERAGE = CoverageTarget(0.95)
 SUMMARY_COEFFICIENTS = tuple(SummaryCoefficient(value) for value in (2, 2.5, 3))
 CALIBRATION_ELIGIBILITY_PROTOCOL = CalibrationEligibilityProtocol(minimum_support=MINIMUM_BENIGN_SUPPORT)
-CALIBRATION_SIZE_PROTOCOL = CalibrationSizeProtocol(sizes=CALIBRATION_SIZES)
+CALIBRATION_SIZE_PROTOCOL = CalibrationSizeProtocol(
+    sizes=CALIBRATION_SIZES,
+    replicate_count=CALIBRATION_SUBSAMPLE_REPLICATE_COUNT,
+)
 SHARED_THRESHOLD_PROTOCOL = QuantileProtocol(
     method=FederatedThresholdMethod.SHARED_THRESHOLD,
     quantile=CANONICAL_QUANTILE,

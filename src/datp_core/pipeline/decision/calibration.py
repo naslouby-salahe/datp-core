@@ -1,13 +1,41 @@
-"""Benign-only calibration eligibility and subsampling stage."""
+"""Benign-only calibration eligibility, subsampling, and size-ablation construction."""
 
 from dataclasses import dataclass
 
-from datp_core.calibration.models import CalibrationReplicateManifest, EligibilityDecision
+from datp_core.calibration.models import (
+    CalibrationReplicateManifest,
+    CalibrationSubsample,
+    EligibilityDecision,
+)
 from datp_core.calibration.service import CalibrationRequest, calibrate
 from datp_core.datasets.partitioning.contracts import ClientIdentity
-from datp_core.domain.values.counts import CalibrationSize, SubsampleReplicateCount
+from datp_core.datasets.registry import population_capabilities
+from datp_core.domain.enums import EvidenceRole, FederatedThresholdMethod
+from datp_core.domain.errors import ScientificContractError
+from datp_core.domain.values.checksums import Checksum, checksum_text
+from datp_core.domain.values.counts import CalibrationSize, ReplicateIndex, SubsampleReplicateCount
+from datp_core.domain.values.ratios import Quantile
+from datp_core.evaluation.cohort.contracts import EvaluationCohortManifest
+from datp_core.evaluation.federated.contracts import (
+    CalibrationSizeAblationCell,
+    FederatedEvaluationRequest,
+)
+from datp_core.evaluation.federated.execution import prepare_federated_evaluation
+from datp_core.evaluation.fixed_score.contracts import FixedScoreEvidence
 from datp_core.pipeline.scoring.models import FederatedScoreArtifactManifest
-from datp_core.protocols.calibration import CalibrationEligibilityProtocol
+from datp_core.protocols.calibration import (
+    CALIBRATION_ELIGIBILITY_PROTOCOL,
+    CALIBRATION_SIZE_PROTOCOL,
+    CalibrationEligibilityProtocol,
+)
+from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
+from datp_core.thresholding.assignments import FamilyAssignment
+from datp_core.thresholding.dispatch import ThresholdConstructionRequest, dispatch_federated_threshold
+from datp_core.thresholding.identities import ThresholdUnavailableResult
+from datp_core.thresholding.quantiles import (
+    ClientBenignCalibrationScores,
+    calibration_scores_from_references,
+)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -25,6 +53,19 @@ class BuildCalibrationResult:
     replicate_manifests: tuple[CalibrationReplicateManifest, ...]
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ConstructCalibrationSizeAblationRequest:
+    score_manifest: FederatedScoreArtifactManifest
+    method: FederatedThresholdMethod
+    quantile: Quantile
+    cohort: EvaluationCohortManifest
+    fixed_score_evidence: FixedScoreEvidence
+    evidence_role: EvidenceRole
+    family_by_client: tuple[FamilyAssignment, ...]
+    calibration: BuildCalibrationResult
+    execution_identity: ExternalTemporalExecutionIdentity | None
+
+
 def build_calibration(request: BuildCalibrationRequest) -> BuildCalibrationResult:
     result = calibrate(
         CalibrationRequest(
@@ -39,3 +80,125 @@ def build_calibration(request: BuildCalibrationRequest) -> BuildCalibrationResul
         eligible_clients=result.eligible_clients,
         replicate_manifests=result.replicate_manifests,
     )
+
+
+def build_declared_calibration(score_manifest: FederatedScoreArtifactManifest) -> BuildCalibrationResult:
+    """Construct the locked calibration-size ablation subsample lattice."""
+    return build_calibration(
+        BuildCalibrationRequest(
+            score_manifest=score_manifest,
+            protocol=CALIBRATION_ELIGIBILITY_PROTOCOL,
+            calibration_sizes=CALIBRATION_SIZE_PROTOCOL.sizes,
+            replicate_count=CALIBRATION_SIZE_PROTOCOL.replicate_count,
+        )
+    )
+
+
+def construct_calibration_size_ablation(
+    request: ConstructCalibrationSizeAblationRequest,
+) -> tuple[CalibrationSizeAblationCell, ...]:
+    """Evaluate the locked size × replicate grid on the unchanged held-out test set."""
+    cells: list[CalibrationSizeAblationCell] = []
+    capabilities = population_capabilities(request.score_manifest.coordinate.population)
+    by_client_replicate = {
+        (manifest.client, manifest.replicate_index.value): manifest
+        for manifest in request.calibration.replicate_manifests
+    }
+    for size in CALIBRATION_SIZE_PROTOCOL.sizes:
+        for replicate_index in range(CALIBRATION_SIZE_PROTOCOL.replicate_count.value):
+            eligible = _eligible_scores_for_size(
+                request.calibration.eligible_clients,
+                by_client_replicate,
+                size,
+                ReplicateIndex(replicate_index),
+            )
+            if not eligible:
+                continue
+            threshold = dispatch_federated_threshold(
+                ThresholdConstructionRequest(
+                    method=request.method,
+                    coordinate=request.score_manifest.coordinate,
+                    quantile=request.quantile,
+                    capabilities=capabilities,
+                    eligible=eligible,
+                    family_by_client=request.family_by_client,
+                    # Nested size grid includes n_k=50 below confirmatory eligibility.
+                    enforce_minimum_support=False,
+                )
+            )
+            if isinstance(threshold, ThresholdUnavailableResult):
+                continue
+            publication = prepare_federated_evaluation(
+                FederatedEvaluationRequest(
+                    score_manifest=request.score_manifest,
+                    threshold_result=threshold,
+                    cohort=request.cohort,
+                    fixed_score_evidence=request.fixed_score_evidence,
+                    comparison_fixed_score_evidence=None,
+                    evidence_role=request.evidence_role,
+                    conformal_coverage_inputs=(),
+                    threshold_estimation_inputs=(),
+                    communication_messages=(),
+                    traffic_rate_evidence=None,
+                    temporal_provenance=None,
+                    temporal_threshold_provenance=None,
+                    execution_identity=request.execution_identity,
+                    calibration_size_ablation=(),
+                )
+            )
+            cells.append(
+                CalibrationSizeAblationCell(
+                    calibration_size=size,
+                    replicate_index=ReplicateIndex(replicate_index),
+                    method=request.method,
+                    clients=publication.artifacts.clients,
+                    population=publication.artifacts.population,
+                )
+            )
+    if not cells:
+        raise ScientificContractError(
+            "calibration-size ablation produced no evaluable size/replicate cells",
+            subject=request.method,
+        )
+    return tuple(cells)
+
+
+def _eligible_scores_for_size(
+    eligible_clients: tuple[ClientIdentity, ...],
+    by_client_replicate: dict[tuple[ClientIdentity, int], CalibrationReplicateManifest],
+    size: CalibrationSize,
+    replicate_index: ReplicateIndex,
+) -> tuple[ClientBenignCalibrationScores, ...]:
+    scores: list[ClientBenignCalibrationScores] = []
+    for client in eligible_clients:
+        manifest = by_client_replicate.get((client, replicate_index.value))
+        if manifest is None:
+            continue
+        matches = tuple(item for item in manifest.subsamples if item.size == size)
+        if len(matches) != 1:
+            continue
+        subsample = matches[0]
+        scores.append(
+            calibration_scores_from_references(
+                client=client,
+                coordinate=manifest.coordinate,
+                references=subsample.references,
+                score_set_checksum=_subsample_checksum(manifest, subsample),
+            )
+        )
+    return tuple(scores)
+
+
+def _subsample_checksum(
+    manifest: CalibrationReplicateManifest,
+    subsample: CalibrationSubsample,
+) -> Checksum:
+    payload = "|".join(
+        (
+            manifest.client.client_id,
+            str(manifest.replicate_index.value),
+            str(subsample.size.value),
+            *sorted(str(item.stable_row_id) for item in subsample.references),
+        )
+    )
+    return checksum_text(payload)

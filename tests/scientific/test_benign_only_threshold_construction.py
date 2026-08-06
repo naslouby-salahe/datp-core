@@ -162,7 +162,7 @@ def test_eligibility_covers_every_candidate_client_never_silently_drops_one(tmp_
 
 
 def test_family_threshold_without_taxonomy_reports_typed_unavailability_not_a_crash() -> None:
-    eligible = (client_scores("client_a", (1.0, 2.0, 3.0)),)
+    eligible = (client_scores("client_a", tuple(float(index) for index in range(100))),)
     result = dispatch_federated_threshold(
         ThresholdConstructionRequest(
             method=FederatedThresholdMethod.FAMILY_THRESHOLD,
@@ -339,7 +339,7 @@ def test_construct_federated_thresholds_rejects_partial_artifact(tmp_path: Path)
 
 
 def test_dispatch_rejects_method_unsupported_by_population_capabilities() -> None:
-    eligible = (client_scores("client_a", (1.0, 2.0, 3.0)),)
+    eligible = (client_scores("client_a", tuple(float(index) for index in range(100))),)
     capabilities = _capabilities()
     restricted = PopulationCapabilities(
         population=capabilities.population,
@@ -364,6 +364,21 @@ def test_dispatch_rejects_method_unsupported_by_population_capabilities() -> Non
                 coordinate=eligible[0].coordinate,
                 quantile=QUANTILE,
                 capabilities=restricted,
+                eligible=eligible,
+                family_by_client=(),
+            )
+        )
+
+
+def test_dispatch_rejects_clients_below_minimum_benign_support() -> None:
+    eligible = (client_scores("client_a", (1.0, 2.0, 3.0)),)
+    with pytest.raises(ScientificContractError, match="minimum benign calibration support"):
+        dispatch_federated_threshold(
+            ThresholdConstructionRequest(
+                method=FederatedThresholdMethod.SHARED_THRESHOLD,
+                coordinate=eligible[0].coordinate,
+                quantile=QUANTILE,
+                capabilities=_capabilities(),
                 eligible=eligible,
                 family_by_client=(),
             )
