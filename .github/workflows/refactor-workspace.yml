@@ -58,20 +58,49 @@ jobs:
           uv python install 3.12
           uv sync --frozen --group dev
 
-      - name: Format and validate completed migrations
+      - name: Normalize migrated source
         if: ${{ steps.mode.outputs.apply == 'true' }}
         run: |
-          uv run ruff check --fix src tests
+          uv run ruff check --fix src tests || true
           uv run ruff format src tests
-          uv run python -m compileall -q src tests
-          uv run ruff check src tests
-          uv run ruff format --check src tests
-          uv run pyright
-          uv run python -m importlinter
-          uv run pytest -q
+
+      - name: Package normalized workspace
+        if: ${{ steps.mode.outputs.apply == 'true' }}
+        run: |
+          items=(src tests pyproject.toml uv.lock)
+          for item in .importlinter pyrightconfig.json; do
+            [[ -e "$item" ]] && items+=("$item")
+          done
+          tar -czf normalized-workspace.tar.gz "${items[@]}"
+
+      - name: Upload normalized workspace
+        if: ${{ always() && steps.mode.outputs.apply == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: normalized-migration-workspace
+          path: normalized-workspace.tar.gz
+          retention-days: 1
+
+      - name: Validate completed migrations
+        if: ${{ steps.mode.outputs.apply == 'true' }}
+        run: |
+          set +e
+          status=0
+          run_gate() {
+            echo "::group::$*"
+            "$@" || status=1
+            echo "::endgroup::"
+          }
+          run_gate uv run python -m compileall -q src tests
+          run_gate uv run ruff check src tests
+          run_gate uv run ruff format --check src tests
+          run_gate uv run pyright
+          run_gate uv run python -m importlinter
+          run_gate uv run pytest -q
+          exit "$status"
 
       - name: Push completed refactor
-        if: ${{ steps.mode.outputs.apply == 'true' }}
+        if: ${{ steps.mode.outputs.apply == 'true' && success() }}
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
