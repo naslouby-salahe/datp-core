@@ -60,7 +60,7 @@ def test_thresholding_separates_models_dispatch_and_publication_without_analysis
 
 
 def test_temporal_deployment_provenance_is_protocol_owned() -> None:
-    assert ( _SOURCE_ROOT / "protocols" / "temporal.py").is_file()
+    assert (_SOURCE_ROOT / "protocols" / "temporal.py").is_file()
     assert _source_importers("datp_core.analysis.temporal.TemporalDeploymentProvenance") == ()
 
 
@@ -74,3 +74,14 @@ def test_workspace_contains_only_the_cached_coordinate_coordinator() -> None:
     assert (execution / "context.py").is_file()
     assert (execution / "layout.py").is_file()
     assert (execution / "scoring.py").is_file()
+
+
+def test_fixed_score_controls_have_bounded_owners_without_a_facade() -> None:
+    evaluation = _SOURCE_ROOT / "evaluation"
+    fixed_score = evaluation / "fixed_score"
+    assert not (evaluation / "controls.py").exists()
+    assert (fixed_score / "contracts.py").is_file()
+    assert (fixed_score / "checksums.py").is_file()
+    assert (fixed_score / "construction.py").is_file()
+    assert (fixed_score / "validation.py").is_file()
+    assert _source_importers("datp_core.evaluation.controls") == ()
