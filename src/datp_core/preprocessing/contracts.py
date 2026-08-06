@@ -17,7 +17,7 @@ from datp_core.domain.enums import (
 from datp_core.domain.values.base import sequence_pydantic_schema, str_subclass_schema, validate_non_empty_tuple
 from datp_core.domain.values.counts import Seed
 from datp_core.domain.values.paths import ClientPathToken
-from datpcom_core.domain.values.ratios import DirichletConcentration
+from datp_core.domain.values.ratios import DirichletConcentration
 
 _NO_CONTROLLED_PARTITION_SEGMENT = "no_controlled_partition"
 
