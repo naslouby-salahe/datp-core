@@ -14,8 +14,8 @@ from datp_core.evaluation.federated.contracts import FederatedEvaluationDocument
 from datp_core.evaluation.federated.publication import FederatedEvaluationAssetName
 from datp_core.pipeline.decision.evidence import AnalyzeConfirmatoryEvidenceRequest, analyze_confirmatory_evidence
 from datp_core.pipeline.execution.engine import CompletionRecordOutputStore, PipelineStageRunner, build_campaign, execute_campaign
+from datp_core.pipeline.execution.evidence import load_evaluation_document, population_metric
 from datp_core.pipeline.execution.layout import EvaluationRunAssetDirectory
-from datp_core.pipeline.execution.scoring import load_evaluation_document, population_metric
 from datp_core.pipeline.planning import ExperimentCoordinate, PlanDisposition, PlanningEvidence, expand_experiment_plan
 from datp_core.pipeline.publication.layout import evaluation_run_directory
 from datp_core.protocols.experiments import EXPERIMENTS
