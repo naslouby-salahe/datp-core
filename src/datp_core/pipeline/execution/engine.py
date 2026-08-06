@@ -19,8 +19,8 @@ from datp_core.domain.enums import ExperimentId, PublicationStatus
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.provenance import canonical_checksum
 from datp_core.domain.values import ByteCount, Checksum, checksum_file
+from datp_core.evaluation.federated.publication import FederatedEvaluationAssetName
 from datp_core.evaluation.models import metric_by_id
-from datp_core.evaluation.population import FederatedEvaluationAssetName
 from datp_core.pipeline.execution.layout import EvaluationRunAssetDirectory
 from datp_core.pipeline.execution.models import (
     ANCHOR_REPRODUCTION_RECIPE,
