@@ -12,10 +12,11 @@ from datp_core.domain.values import (
     ClientCount,
     FeatureNameSequence,
 )
+from datp_core.evaluation.federated.contracts import FederatedEvaluationDocument
+from datp_core.evaluation.federated.publication import FederatedEvaluationAssetName
 from datp_core.evaluation.fixed_score.construction import build_federated_evaluation_inputs
 from datp_core.evaluation.fixed_score.contracts import FixedScoreEvidence
 from datp_core.evaluation.fixed_score.validation import validate_fixed_score_controls
-from datp_core.evaluation.population import FederatedEvaluationAssetName, FederatedEvaluationDocument
 from datp_core.learning.federated.checkpoints.selection import CheckpointDecision
 from datp_core.learning.federated.models import CheckpointCandidate
 from datp_core.learning.federated.training import FederatedTrainingRequest
