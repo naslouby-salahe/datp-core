@@ -17,7 +17,7 @@ from datp_core.domain.enums import (
 )
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import Checksum, MetricValue, Seed
-from datp_core.evaluation.controls import build_federated_evaluation_inputs
+from datp_core.evaluation.fixed_score.construction import build_federated_evaluation_inputs
 from datp_core.evaluation.models import MetricStatus, metric_by_id
 from datp_core.pipeline.decision.evidence import AnalyzeTemporalEvidenceRequest, analyze_temporal_evidence
 from datp_core.pipeline.decision.federated import (
