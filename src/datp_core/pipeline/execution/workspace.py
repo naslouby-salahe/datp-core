@@ -36,8 +36,9 @@ from datp_core.pipeline.execution.context import (
     training_autoencoder,
     training_feature_names,
 )
+from datp_core.pipeline.execution.evidence import eligible_calibration_scores, load_evaluation_document
 from datp_core.pipeline.execution.layout import EvaluationRunAssetDirectory, ExecutionArtifactDirectory
-from datp_core.pipeline.execution.scoring import eligible_calibration_scores, load_evaluation_document, score_selected_checkpoint
+from datp_core.pipeline.execution.score_generation import score_selected_checkpoint
 from datp_core.pipeline.planning import ExperimentCoordinate
 from datp_core.pipeline.publication.layout import evaluation_run_directory
 from datp_core.pipeline.scoring.models import FederatedScoreArtifactManifest
