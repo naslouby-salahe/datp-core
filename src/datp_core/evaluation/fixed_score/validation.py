@@ -9,7 +9,7 @@ from datp_core.domain.values import (
     AbsoluteTolerance,
     floats_absolutely_close,
 )
-from datp_core.evaluation.cohorts import EvaluationCohortManifest
+from datp_core.evaluation.cohort.contracts import EvaluationCohortManifest
 from datp_core.evaluation.fixed_score.checksums import (
     ClientChecksumField,
     aggregate_client_checksum,
@@ -61,12 +61,7 @@ def validate_fixed_score_controls(
         "calibration partition role",
     )
     for left, right, subject, name in (
-        (
-            first.detector.model_checksum,
-            second.detector.model_checksum,
-            ContractSubject.SCORES,
-            "model checksum",
-        ),
+        (first.detector.model_checksum, second.detector.model_checksum, ContractSubject.SCORES, "model checksum"),
         (
             first.detector.preprocessing_checksum,
             second.detector.preprocessing_checksum,
@@ -180,10 +175,7 @@ def _validate_held_out_rows(
         raise ScientificContractError("fixed-score evidence label or source-row checksum does not match evaluation")
 
 
-def _validate_aurocs(
-    evidence: FixedScoreEvidence,
-    clients: tuple[ClientMetricResult, ...],
-) -> None:
+def _validate_aurocs(evidence: FixedScoreEvidence, clients: tuple[ClientMetricResult, ...]) -> None:
     observed = tuple((client.client, metric_by_id(client.metrics, MetricId.AUROC)) for client in clients)
     if tuple(item.client for item in evidence.evaluation.aurocs) != tuple(client for client, _ in observed):
         raise ScientificContractError("fixed-score AUROC evidence client order does not match evaluation")
@@ -191,17 +183,9 @@ def _validate_aurocs(
         _require_matching_auroc(expected_item.outcome, observed_outcome)
 
 
-def _require_equal(
-    left: object,
-    right: object,
-    subject: ContractSubject,
-    name: str,
-) -> None:
+def _require_equal(left: object, right: object, subject: ContractSubject, name: str) -> None:
     if left != right:
-        raise ScientificContractError(
-            f"fixed-score control failed: {name} differs",
-            subject=subject,
-        )
+        raise ScientificContractError(f"fixed-score control failed: {name} differs", subject=subject)
 
 
 def _require_auroc_invariance(
@@ -229,21 +213,14 @@ def _require_auroc_invariance(
             continue
         if left.outcome.value is None or right.outcome.value is None:
             raise RuntimeError("available AUROC evidence must contain values")
-        if not floats_absolutely_close(
-            left.outcome.value.value,
-            right.outcome.value.value,
-            tolerance.value,
-        ):
+        if not floats_absolutely_close(left.outcome.value.value, right.outcome.value.value, tolerance.value):
             raise ScientificContractError(
                 "fixed-score control failed: AUROC differs",
                 subject=ContractSubject.HELD_OUT_METRICS,
             )
 
 
-def _require_matching_auroc(
-    expected: MetricAvailability,
-    observed: MetricAvailability,
-) -> None:
+def _require_matching_auroc(expected: MetricAvailability, observed: MetricAvailability) -> None:
     if expected.status is not observed.status:
         raise ScientificContractError("fixed-score AUROC availability does not match held-out evaluation")
     if expected.status is MetricStatus.AVAILABLE:
