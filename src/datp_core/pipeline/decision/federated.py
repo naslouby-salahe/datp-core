@@ -7,21 +7,23 @@ from datp_core.domain.enums import EvidenceRole, PublicationStatus
 from datp_core.domain.values import Checksum
 from datp_core.evaluation.cohort.contracts import EvaluationCohortManifest
 from datp_core.evaluation.communication import CommunicationMessageDiagnostic
-from datp_core.evaluation.fixed_score.contracts import FixedScoreEvidence
-from datp_core.evaluation.models import ClientMetricResult, PopulationMetricResult
-from datp_core.evaluation.population import (
+from datp_core.evaluation.federated.contracts import (
     ConformalCoverageStageInput,
     EvaluationDiagnostics,
     FederatedEvaluationArtifacts,
-    FederatedEvaluationAssetName,
     FederatedEvaluationRequest,
     ThresholdEstimationStageInput,
+)
+from datp_core.evaluation.federated.execution import prepare_federated_evaluation
+from datp_core.evaluation.federated.publication import (
+    FederatedEvaluationAssetName,
     federated_evaluation_is_reusable,
     load_reused_federated_evaluation,
-    prepare_federated_evaluation,
     rebase_federated_evaluation,
     write_federated_evaluation,
 )
+from datp_core.evaluation.fixed_score.contracts import FixedScoreEvidence
+from datp_core.evaluation.models import ClientMetricResult, PopulationMetricResult
 from datp_core.evaluation.traffic_rates import ValidatedTrafficRateEvidence
 from datp_core.pipeline.publication.service import ArtifactPublication, FunctionalArtifactCodec, publish_artifact
 from datp_core.pipeline.scoring.models import FederatedScoreArtifactManifest
