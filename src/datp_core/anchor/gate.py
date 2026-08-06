@@ -152,6 +152,35 @@ def _partition_discrepancies(
     return blocking, declared
 
 
+class AnchorGateCompletionMarker(StrictModel):
+    artifact_checksum: Checksum
+    status: AnchorGateStatus
+
+
+class VerifiedAnchorGateArtifact(StrictModel):
+    """Checksum-verified anchor-gate artifact that claim export must consume."""
+
+    decision: AnchorGateDecision
+    artifact_checksum: Checksum
+    diagnostics_directory: str
+
+    @model_validator(mode="after")
+    def validate_passed_gate(self) -> "VerifiedAnchorGateArtifact":
+        if self.decision.status is AnchorGateStatus.BLOCKED:
+            raise ValueError("verified anchor-gate artifact cannot be blocked")
+        recomputed = checksum_text(canonical_json_text(self.decision))
+        if recomputed != self.artifact_checksum:
+            raise ValueError("anchor-gate artifact checksum does not match the decision payload")
+        return self
+
+    @property
+    def permits_confirmatory_claims(self) -> bool:
+        return self.decision.status in {
+            AnchorGateStatus.PASS,
+            AnchorGateStatus.PASS_WITH_DECLARED_DISCREPANCY,
+        }
+
+
 def persist_anchor_gate_diagnostics(decision: AnchorGateDecision, diagnostics_directory: Path | None) -> Checksum:
     """Write gate decision and discrepancy diagnostics, returning a deterministic checksum."""
     gate_json = canonical_json_text(decision)
@@ -165,4 +194,66 @@ def persist_anchor_gate_diagnostics(decision: AnchorGateDecision, diagnostics_di
         discrepancies_json,
         encoding="utf-8",
     )
+    marker = AnchorGateCompletionMarker(artifact_checksum=checksum, status=decision.status)
+    (diagnostics_directory / AnchorArtifactFileName.GATE_COMPLETION.value).write_text(
+        canonical_json_text(marker),
+        encoding="utf-8",
+    )
     return checksum
+
+
+def load_verified_anchor_gate_artifact(diagnostics_directory: Path) -> VerifiedAnchorGateArtifact:
+    """Load, re-validate, and checksum-verify a persisted anchor-gate decision.
+
+    Fail-closed on missing, corrupted, stale, or blocked gate artifacts.
+    Manual boolean success cannot be asserted through this path.
+    """
+    if not diagnostics_directory.is_dir():
+        raise AnchorReproductionError(
+            "anchor-gate diagnostics directory is missing",
+            reason=str(diagnostics_directory),
+        )
+    gate_path = diagnostics_directory / AnchorArtifactFileName.GATE_DECISION.value
+    if not gate_path.is_file():
+        raise AnchorReproductionError(
+            "anchor-gate decision artifact is missing",
+            reason=str(gate_path),
+        )
+    payload = gate_path.read_text(encoding="utf-8")
+    try:
+        decision = AnchorGateDecision.model_validate_json(payload)
+    except (ValueError, TypeError, OSError) as error:
+        raise AnchorReproductionError(
+            "anchor-gate decision artifact is corrupted or schema-invalid",
+            reason=str(gate_path),
+        ) from error
+    decision = assert_gate_not_bypassable(decision)
+    artifact_checksum = checksum_text(canonical_json_text(decision))
+    marker_path = diagnostics_directory / AnchorArtifactFileName.GATE_COMPLETION.value
+    if not marker_path.is_file():
+        raise AnchorReproductionError(
+            "anchor-gate completion marker is missing",
+            reason=str(marker_path),
+        )
+    try:
+        marker = AnchorGateCompletionMarker.model_validate_json(marker_path.read_text(encoding="utf-8"))
+    except (ValueError, TypeError, OSError) as error:
+        raise AnchorReproductionError(
+            "anchor-gate completion marker is corrupted or schema-invalid",
+            reason=str(marker_path),
+        ) from error
+    if marker.artifact_checksum != artifact_checksum or marker.status is not decision.status:
+        raise AnchorReproductionError(
+            "anchor-gate completion marker is stale or mismatched",
+            reason=str(marker_path),
+        )
+    if decision.status is AnchorGateStatus.BLOCKED:
+        raise AnchorReproductionError(
+            "anchor gate is blocked and cannot permit confirmatory claims",
+            subject=decision.status,
+        )
+    return VerifiedAnchorGateArtifact(
+        decision=decision,
+        artifact_checksum=artifact_checksum,
+        diagnostics_directory=str(diagnostics_directory.resolve()),
+    )

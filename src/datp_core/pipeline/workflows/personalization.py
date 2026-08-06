@@ -264,20 +264,26 @@ def analyze_ditto_absorption(
     """
     if len(results) != len(reference_effects):
         raise ScientificContractError("absorption analysis requires one reference effect per Ditto seed result")
+    if reference_shared_local_cvs is None or len(reference_shared_local_cvs) != len(results):
+        raise ScientificContractError(
+            "absorption analysis requires per-seed four-corner FedAvg shared/local CV(FPR) evidence",
+            subject=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
+        )
+    from datp_core.domain.values.ratios import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE
+
     observations: list[AbsorptionSeedObservation] = []
     alternative_route = 0
+    tol = NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE.value
     for index, (result, reference) in enumerate(zip(results, reference_effects, strict=True)):
         shared_cv, local_cv, effect = _population_cv_fpr_effect(result)
-        ref_shared = ref_local = None
-        if reference_shared_local_cvs is not None:
-            ref_shared, ref_local = reference_shared_local_cvs[index]
-            if abs(ref_shared.value - ref_local.value - reference.value) > 1e-12:
-                raise ScientificContractError(
-                    "reference CV(FPR) effect must equal shared CV(FPR) − local CV(FPR)",
-                    subject=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
-                )
-            if abs(shared_cv.value - ref_local.value) <= DITTO_ALTERNATIVE_ROUTE_DIFFERENCE.value:
-                alternative_route += 1
+        ref_shared, ref_local = reference_shared_local_cvs[index]
+        if abs(ref_shared.value - ref_local.value - reference.value) > tol:
+            raise ScientificContractError(
+                "reference CV(FPR) effect must equal shared CV(FPR) − local CV(FPR)",
+                subject=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
+            )
+        if abs(shared_cv.value - ref_local.value) <= DITTO_ALTERNATIVE_ROUTE_DIFFERENCE.value:
+            alternative_route += 1
         observations.append(
             AbsorptionSeedObservation(
                 seed=result.personalized_coordinate.training_seed,
@@ -310,6 +316,7 @@ def run_ditto_absorption_campaign(
     *,
     regularization: DittoRegularization,
     reference_effects_by_seed: dict[Seed, MetricValue],
+    reference_shared_local_by_seed: dict[Seed, tuple[MetricValue, MetricValue]],
     output_directory: Path | None = None,
 ) -> AbsorptionCohortResult:
     """Run Ditto stress seeds over the confirmatory cohort and analyze absorption."""
@@ -320,6 +327,9 @@ def run_ditto_absorption_campaign(
     reference_effects = tuple(
         reference_effects_by_seed[result.personalized_coordinate.training_seed] for result in results
     )
+    reference_corners = tuple(
+        reference_shared_local_by_seed[result.personalized_coordinate.training_seed] for result in results
+    )
     target = output_directory or (
         OUTPUTS_ROOT
         / ExecutionRootDirectory.DITTO_STRESS_TEST
@@ -327,7 +337,12 @@ def run_ditto_absorption_campaign(
         / "analysis"
         / str(regularization.value)
     )
-    return analyze_ditto_absorption(results, reference_effects=reference_effects, output_directory=target)
+    return analyze_ditto_absorption(
+        results,
+        reference_effects=reference_effects,
+        output_directory=target,
+        reference_shared_local_cvs=reference_corners,
+    )
 
 
 def analyze_fedprox_absorption(

@@ -14,19 +14,114 @@ from datp_core.domain.enums import (
     EvidenceRole,
     ExperimentId,
     FederatedThresholdMethod,
+    TemporalState,
 )
+from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import Seed
-from datp_core.domain.values.ratios import MetricValue
-from datp_core.protocols.metrics import TEMPORAL_CV_MATERIALITY_CUTOFF
+from datp_core.domain.values.ratios import MetricValue, Ratio
+from datp_core.protocols.metrics import (
+    TEMPORAL_CV_MATERIALITY_CUTOFF,
+    TEMPORAL_MATERIAL_RECOVERY_RATIO_MINIMUM,
+)
 from datp_core.protocols.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_ANALYSIS_SEED, SeedCohort
 from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL, PairedInferenceProtocol
+from datp_core.protocols.temporal import TemporalDeploymentProvenance
 
 
 class TemporalInterpretation(StrEnum):
-    TEMPORAL_DEGRADATION_WITH_RECOVERY = "temporal_degradation_with_recovery"
+    TEMPORAL_DEGRADATION_WITH_MATERIAL_RECOVERY = "temporal_degradation_with_material_recovery"
+    TEMPORAL_DEGRADATION_WITH_PARTIAL_OR_WEAK_RECOVERY = "temporal_degradation_with_partial_or_weak_recovery"
     TEMPORAL_DEGRADATION_WITHOUT_RECOVERY = "temporal_degradation_without_recovery"
     NO_DETECTABLE_TEMPORAL_DEGRADATION = "no_detectable_temporal_degradation"
     OPPOSITE_TEMPORAL_MOVEMENT = "opposite_temporal_movement"
+    BLOCKED_OR_UNAVAILABLE = "blocked_or_unavailable"
+
+
+class TemporalSeedProvenance(StrictModel):
+    """Exact one-seed temporal artifact provenance for campaign identity."""
+
+    seed: Seed
+    experiment: ExperimentId
+    threshold_method: FederatedThresholdMethod
+    static_reference: TemporalDeploymentProvenance
+    frozen_future: TemporalDeploymentProvenance
+    recalibrated_future: TemporalDeploymentProvenance
+    static_threshold_checksum: Checksum | None = None
+    frozen_threshold_checksum: Checksum | None = None
+    recalibrated_threshold_checksum: Checksum | None = None
+    static_evaluation_checksum: Checksum | None = None
+    frozen_evaluation_checksum: Checksum | None = None
+    recalibrated_evaluation_checksum: Checksum | None = None
+    client_inventory_checksum: Checksum | None = None
+    eligibility_checksum: Checksum | None = None
+    exclusion_reason: str | None = None
+
+    @model_validator(mode="after")
+    def validate_bindings(self) -> "TemporalSeedProvenance":
+        if self.static_reference.state is not TemporalState.STATIC_REFERENCE:
+            raise ValueError("static_reference provenance must use the static_reference state")
+        if self.frozen_future.state is not TemporalState.FROZEN_FUTURE:
+            raise ValueError("frozen_future provenance must use the frozen_future state")
+        if self.recalibrated_future.state is not TemporalState.RECALIBRATED_FUTURE:
+            raise ValueError("recalibrated_future provenance must use the recalibrated_future state")
+        if (
+            self.static_reference.checkpoint_checksum != self.frozen_future.checkpoint_checksum
+            or self.static_reference.preprocessing_state_set_checksum
+            != self.frozen_future.preprocessing_state_set_checksum
+        ):
+            raise ValueError("static and frozen temporal states must share detector and preprocessing identity")
+        if self.frozen_future.future_identity != self.recalibrated_future.future_identity:
+            raise ValueError("frozen and recalibrated future must share detector, split, and evaluation scores")
+        return self
+
+
+class TemporalClientTrajectory(StrictModel):
+    """Per-client temporal state trajectory for one seed and threshold method."""
+
+    seed: Seed
+    client_id: str
+    threshold_method: FederatedThresholdMethod
+    eligible: bool
+    exclusion_reason: str | None
+    threshold_static: MetricValue | None
+    threshold_frozen: MetricValue | None
+    threshold_recalibrated: MetricValue | None
+    fpr_static: MetricValue | None
+    fpr_frozen: MetricValue | None
+    fpr_recalibrated: MetricValue | None
+    tpr_static: MetricValue | None = None
+    tpr_frozen: MetricValue | None = None
+    tpr_recalibrated: MetricValue | None = None
+    balanced_accuracy_static: MetricValue | None = None
+    balanced_accuracy_frozen: MetricValue | None = None
+    balanced_accuracy_recalibrated: MetricValue | None = None
+    macro_f1_static: MetricValue | None = None
+    macro_f1_frozen: MetricValue | None = None
+    macro_f1_recalibrated: MetricValue | None = None
+
+    @property
+    def threshold_movement_frozen(self) -> MetricValue | None:
+        if self.threshold_static is None or self.threshold_frozen is None:
+            return None
+        return MetricValue(self.threshold_frozen.value - self.threshold_static.value)
+
+    @property
+    def threshold_movement_recalibrated(self) -> MetricValue | None:
+        if self.threshold_frozen is None or self.threshold_recalibrated is None:
+            return None
+        return MetricValue(self.threshold_recalibrated.value - self.threshold_frozen.value)
+
+    @property
+    def fpr_movement_frozen(self) -> MetricValue | None:
+        if self.fpr_static is None or self.fpr_frozen is None:
+            return None
+        return MetricValue(self.fpr_frozen.value - self.fpr_static.value)
+
+    @property
+    def fpr_movement_recalibrated(self) -> MetricValue | None:
+        if self.fpr_frozen is None or self.fpr_recalibrated is None:
+            return None
+        return MetricValue(self.fpr_recalibrated.value - self.fpr_frozen.value)
 
 
 class TemporalRecoveryResult(StrictModel):
@@ -39,6 +134,9 @@ class TemporalRecoveryResult(StrictModel):
     mean_fpr_static: MetricValue | None = None
     mean_fpr_frozen: MetricValue | None = None
     mean_fpr_recalibrated: MetricValue | None = None
+    provenance: TemporalSeedProvenance | None = None
+    client_trajectories: tuple[TemporalClientTrajectory, ...] = ()
+    unavailable_reason: str | None = None
 
     @property
     def evidence_role(self) -> EvidenceRole:
@@ -57,32 +155,50 @@ class TemporalRecoveryResult(StrictModel):
         return TEMPORAL_CV_MATERIALITY_CUTOFF
 
     @property
+    def material_recovery_ratio_minimum(self) -> Ratio:
+        return TEMPORAL_MATERIAL_RECOVERY_RATIO_MINIMUM
+
+    @property
     def recovery_ratio(self) -> MetricValue | None:
+        if self.unavailable_reason is not None:
+            return None
         if self.drift_excess.value <= self.materiality_cutoff.value:
             return None
         return MetricValue(self.recovered_amount.value / self.drift_excess.value)
 
     @property
     def availability(self) -> AvailabilityStatus:
+        if self.unavailable_reason is not None:
+            return AvailabilityStatus.UNAVAILABLE
         return AvailabilityStatus.UNDEFINED if self.recovery_ratio is None else AvailabilityStatus.AVAILABLE
 
     @property
     def interpretation(self) -> TemporalInterpretation:
+        if self.unavailable_reason is not None:
+            return TemporalInterpretation.BLOCKED_OR_UNAVAILABLE
         if self.recovery_ratio is None:
             if self.drift_excess.value < 0.0:
                 return TemporalInterpretation.OPPOSITE_TEMPORAL_MOVEMENT
             return TemporalInterpretation.NO_DETECTABLE_TEMPORAL_DEGRADATION
+        ratio = self.recovery_ratio.value
+        if ratio >= self.material_recovery_ratio_minimum.value:
+            return TemporalInterpretation.TEMPORAL_DEGRADATION_WITH_MATERIAL_RECOVERY
         if self.recovered_amount.value > 0.0:
-            return TemporalInterpretation.TEMPORAL_DEGRADATION_WITH_RECOVERY
+            return TemporalInterpretation.TEMPORAL_DEGRADATION_WITH_PARTIAL_OR_WEAK_RECOVERY
         return TemporalInterpretation.TEMPORAL_DEGRADATION_WITHOUT_RECOVERY
 
     @property
     def reason(self) -> str | None:
-        return (
-            None
-            if self.recovery_ratio is not None
-            else "drift excess does not satisfy the declared positive-materiality rule"
-        )
+        if self.unavailable_reason is not None:
+            return self.unavailable_reason
+        if self.recovery_ratio is None:
+            return "drift excess does not satisfy the declared positive-materiality rule"
+        if self.interpretation is TemporalInterpretation.TEMPORAL_DEGRADATION_WITH_PARTIAL_OR_WEAK_RECOVERY:
+            return (
+                "recovery_ratio is positive but below the declared material recovery-ratio minimum "
+                f"({self.material_recovery_ratio_minimum.value})"
+            )
+        return None
 
 
 class TemporalAnalysisRecord(StrictModel):
@@ -109,7 +225,16 @@ def temporal_recovery(
     mean_fpr_static: MetricValue | None = None,
     mean_fpr_frozen: MetricValue | None = None,
     mean_fpr_recalibrated: MetricValue | None = None,
+    provenance: TemporalSeedProvenance | None = None,
+    client_trajectories: tuple[TemporalClientTrajectory, ...] = (),
+    unavailable_reason: str | None = None,
 ) -> TemporalRecoveryResult:
+    if provenance is not None and provenance.seed != seed:
+        raise ValueError("temporal provenance seed must match the recovery seed")
+    if provenance is not None and (
+        provenance.experiment is not experiment or provenance.threshold_method is not threshold_method
+    ):
+        raise ValueError("temporal provenance must match experiment and threshold method")
     return TemporalRecoveryResult(
         seed=seed,
         experiment=experiment,
@@ -120,6 +245,9 @@ def temporal_recovery(
         mean_fpr_static=mean_fpr_static,
         mean_fpr_frozen=mean_fpr_frozen,
         mean_fpr_recalibrated=mean_fpr_recalibrated,
+        provenance=provenance,
+        client_trajectories=client_trajectories,
+        unavailable_reason=unavailable_reason,
     )
 
 
@@ -173,18 +301,25 @@ def decide_temporal_campaign(
 
 @dataclass(frozen=True, slots=True)
 class _TemporalInterpretationCounts:
-    with_recovery: int
+    material_recovery: int
+    partial_or_weak_recovery: int
     without_recovery: int
     opposite: int
     no_degradation: int
+    blocked: int
 
 
 def _temporal_interpretation_counts(
     records: tuple[TemporalRecoveryResult, ...],
 ) -> _TemporalInterpretationCounts:
     return _TemporalInterpretationCounts(
-        with_recovery=sum(
-            record.interpretation is TemporalInterpretation.TEMPORAL_DEGRADATION_WITH_RECOVERY for record in records
+        material_recovery=sum(
+            record.interpretation is TemporalInterpretation.TEMPORAL_DEGRADATION_WITH_MATERIAL_RECOVERY
+            for record in records
+        ),
+        partial_or_weak_recovery=sum(
+            record.interpretation is TemporalInterpretation.TEMPORAL_DEGRADATION_WITH_PARTIAL_OR_WEAK_RECOVERY
+            for record in records
         ),
         without_recovery=sum(
             record.interpretation is TemporalInterpretation.TEMPORAL_DEGRADATION_WITHOUT_RECOVERY for record in records
@@ -193,6 +328,7 @@ def _temporal_interpretation_counts(
         no_degradation=sum(
             record.interpretation is TemporalInterpretation.NO_DETECTABLE_TEMPORAL_DEGRADATION for record in records
         ),
+        blocked=sum(record.interpretation is TemporalInterpretation.BLOCKED_OR_UNAVAILABLE for record in records),
     )
 
 
@@ -208,10 +344,15 @@ def _campaign_decision_from_counts(
             ScientificDecision.BLOCKED,
             "publication-level temporal SUPPORTED requires the complete multi-seed declared cohort",
         )
-    if counts.with_recovery == total:
+    if counts.blocked > 0:
+        return (
+            ScientificDecision.BLOCKED,
+            "temporal campaign contains blocked or unavailable seed evidence",
+        )
+    if counts.material_recovery == total:
         return (
             ScientificDecision.SUPPORTED,
-            "campaign-level temporal evidence shows material degradation with positive "
+            "campaign-level temporal evidence shows material degradation with material "
             f"one-shot recalibration recovery on every seed of the declared cohort "
             f"(defined_recovery_ratio_count={defined_recovery_count})",
         )
@@ -228,13 +369,20 @@ def _campaign_decision_from_counts(
     if counts.without_recovery == total:
         return (
             ScientificDecision.BOUNDARY_RESULT,
-            "campaign-level temporal evidence shows degradation without positive recovery",
+            "campaign-level temporal evidence shows degradation without material recovery",
+        )
+    if counts.partial_or_weak_recovery == total:
+        return (
+            ScientificDecision.BOUNDARY_RESULT,
+            "campaign-level temporal evidence shows only partial or weak recovery below the material ratio minimum",
         )
     return (
         ScientificDecision.BOUNDARY_RESULT,
         (
             "campaign-level temporal evidence is mixed across seeds "
-            f"(recovery={counts.with_recovery}, without={counts.without_recovery}, "
+            f"(material_recovery={counts.material_recovery}, "
+            f"partial_or_weak={counts.partial_or_weak_recovery}, "
+            f"without={counts.without_recovery}, "
             f"no_degradation={counts.no_degradation}, opposite={counts.opposite}, "
             f"defined_recovery_ratio_count={defined_recovery_count})"
         ),
@@ -286,6 +434,41 @@ def _blocked_temporal_campaign(
             interval=None,
             rationale="publication-level temporal decisions require a multi-seed declared cohort",
         )
+    provenances = tuple(record.provenance for record in records if record.provenance is not None)
+    if provenances and len(provenances) != len(records):
+        return ScientificDecisionResult(
+            evidence_role=EvidenceRole.TEMPORAL_BOUNDARY,
+            decision=ScientificDecision.BLOCKED,
+            point_estimate=None,
+            interval=None,
+            rationale="temporal campaign requires either full per-seed provenance or none",
+        )
+    if provenances:
+        if any(item.seed != record.seed for item, record in zip(provenances, records, strict=True)):
+            return ScientificDecisionResult(
+                evidence_role=EvidenceRole.TEMPORAL_BOUNDARY,
+                decision=ScientificDecision.BLOCKED,
+                point_estimate=None,
+                interval=None,
+                rationale="temporal provenance seeds must match recovery records one-to-one",
+            )
+        checksum_keys = tuple(
+            (
+                item.static_reference.checkpoint_checksum,
+                item.static_reference.split_manifest_checksum,
+                item.frozen_future.evaluation_score_set_checksum,
+                item.recalibrated_future.calibration_score_set_checksum,
+            )
+            for item in provenances
+        )
+        if len(frozenset(checksum_keys)) != len(checksum_keys):
+            return ScientificDecisionResult(
+                evidence_role=EvidenceRole.TEMPORAL_BOUNDARY,
+                decision=ScientificDecision.BLOCKED,
+                point_estimate=None,
+                interval=None,
+                rationale="temporal provenance must not be cloned across seeds",
+            )
     return None
 
 

@@ -109,9 +109,9 @@ def analyze_fedprox_absorption_command(
         raise typer.BadParameter(f"coefficient must be one of the declared FedProx values: {allowed}")
     observations: list[AbsorptionSeedObservation] = []
     for seed in CONFIRMATORY_SEED_COHORT.values:
-        _, _, reference_effect = load_fedavg_cv_fpr_effect(seed)
+        ref_shared, ref_local, reference_effect = load_fedavg_cv_fpr_effect(seed)
         try:
-            personalized_effect = _load_fedprox_cv_fpr_effect(seed, coefficient)
+            pers_shared, pers_local, personalized_effect = _load_fedprox_cv_fpr_corners(seed, coefficient)
         except ScientificContractError as error:
             raise typer.BadParameter(str(error)) from error
         observations.append(
@@ -122,6 +122,10 @@ def analyze_fedprox_absorption_command(
                 personalized_model=TrainingModelId.FEDPROX_AUTOENCODER,
                 reference_effect=reference_effect,
                 personalized_effect=personalized_effect,
+                reference_shared_cv=ref_shared,
+                reference_local_cv=ref_local,
+                personalized_shared_cv=pers_shared,
+                personalized_local_cv=pers_local,
             )
         )
     output = OUTPUTS_ROOT / "fedprox_stress_test" / "nbaiot_natural_devices" / "analysis" / str(coefficient)
@@ -132,9 +136,13 @@ def analyze_fedprox_absorption_command(
     )
 
 
-def _load_fedprox_cv_fpr_effect(training_seed, coefficient: float) -> MetricValue:
-    """Load FedProx SHARED−LOCAL CV(FPR) when evaluation documents exist for the coefficient."""
+def _load_fedprox_cv_fpr_corners(
+    training_seed,
+    coefficient: float,
+) -> tuple[MetricValue, MetricValue, MetricValue]:
+    """Load FedProx SHARED/LOCAL CV(FPR) corners and Δ when evaluation documents exist."""
     from datp_core.domain.enums import FederatedThresholdMethod, MetricId
+    from datp_core.domain.values.ratios import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE
     from datp_core.evaluation.federated.publication import FederatedEvaluationAssetName
     from datp_core.pipeline.execution.evidence import load_evaluation_document, population_metric
     from datp_core.pipeline.execution.layout import EvaluationRunAssetDirectory
@@ -149,6 +157,7 @@ def _load_fedprox_cv_fpr_effect(training_seed, coefficient: float) -> MetricValu
         seed_cohort=SeedCohort(values=(training_seed,)),
     )
     effects: list[MetricValue] = []
+    tol = NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE.value
     for method in (FederatedThresholdMethod.SHARED_THRESHOLD, FederatedThresholdMethod.LOCAL_THRESHOLD):
         matches = tuple(
             entry.coordinate
@@ -156,7 +165,7 @@ def _load_fedprox_cv_fpr_effect(training_seed, coefficient: float) -> MetricValu
             if entry.coordinate.threshold_method is method
             and entry.coordinate.metric is MetricId.FPR_COEFFICIENT_OF_VARIATION
             and entry.coordinate.model_coefficient is not None
-            and abs(entry.coordinate.model_coefficient.value - coefficient) < 1e-15
+            and abs(entry.coordinate.model_coefficient.value - coefficient) <= tol
         )
         if len(matches) != 1:
             raise ScientificContractError(
@@ -171,4 +180,4 @@ def _load_fedprox_cv_fpr_effect(training_seed, coefficient: float) -> MetricValu
         if not path.is_file():
             raise ScientificContractError(f"missing FedProx evaluation document: {path}")
         effects.append(population_metric(load_evaluation_document(path), MetricId.FPR_COEFFICIENT_OF_VARIATION))
-    return MetricValue(effects[0].value - effects[1].value)
+    return effects[0], effects[1], MetricValue(effects[0].value - effects[1].value)

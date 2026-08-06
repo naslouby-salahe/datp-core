@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-from datp_core.analysis.temporal import TemporalRecoveryResult, temporal_recovery
+from datp_core.analysis.temporal import TemporalRecoveryResult, TemporalSeedProvenance, temporal_recovery
 from datp_core.datasets.registry import population_capabilities
 from datp_core.domain.enums import (
     ExperimentId,
@@ -68,6 +68,7 @@ class TemporalArtifactDirectory(StrEnum):
 class TemporalMethodOutcome:
     method: FederatedThresholdMethod
     fpr_coefficient_of_variation: MetricValue
+    mean_fpr: MetricValue | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -176,6 +177,17 @@ def run_temporal_seed(partition_seed: Seed) -> TemporalSeedResult:
                 static_reference_cv=static.outcome_for(method).fpr_coefficient_of_variation,
                 frozen_future_cv=frozen.outcome_for(method).fpr_coefficient_of_variation,
                 recalibrated_future_cv=recalibrated.outcome_for(method).fpr_coefficient_of_variation,
+                mean_fpr_static=static.outcome_for(method).mean_fpr,
+                mean_fpr_frozen=frozen.outcome_for(method).mean_fpr,
+                mean_fpr_recalibrated=recalibrated.outcome_for(method).mean_fpr,
+                provenance=TemporalSeedProvenance(
+                    seed=partition_seed,
+                    experiment=declaration.id,
+                    threshold_method=method,
+                    static_reference=static.provenance,
+                    frozen_future=frozen.provenance,
+                    recalibrated_future=recalibrated.provenance,
+                ),
             ),
         )
         for method in methods
@@ -194,8 +206,24 @@ def analyze_temporal_campaign(campaign: TemporalCampaignResult) -> tuple[Tempora
         raise ScientificContractError("temporal campaign analysis requires completed seed results")
     methods = tuple(item.method for item in campaign.seeds[0].recoveries)
     declaration = _temporal_declaration()
+    # Per-seed provenance is carried on each TemporalRecoveryResult; campaign publication
+    # still requires one coordinate identity template for experiment/method binding.
     first = campaign.seeds[0]
     coordinates = _temporal_coordinates(first.partition_seed, declaration)
+    for seed_result in campaign.seeds:
+        for recovery in seed_result.recoveries:
+            if recovery.recovery.provenance is None:
+                raise ScientificContractError(
+                    "temporal campaign analysis requires per-seed provenance on every recovery record",
+                    subject=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
+                    reason=f"seed={seed_result.partition_seed.value}",
+                )
+            if recovery.recovery.provenance.seed != seed_result.partition_seed:
+                raise ScientificContractError(
+                    "temporal provenance seed must match the recovery seed",
+                    subject=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
+                    reason=f"seed={seed_result.partition_seed.value}",
+                )
     return tuple(
         _publish_temporal_method_campaign(
             method=method,
@@ -337,10 +365,22 @@ def _evaluate_state(
                 "temporal evaluation requires available population CV(FPR)",
                 subject=method,
             )
+        mean_fpr_metric = metric_by_id(evaluation.population.metrics, MetricId.MEAN_FPR)
+        mean_fpr = (
+            mean_fpr_metric.value
+            if mean_fpr_metric.status is MetricStatus.AVAILABLE and mean_fpr_metric.value is not None
+            else None
+        )
         if reference_evidence is None:
             reference_evidence = evaluation_inputs.fixed_score_evidence
         completed.append(method)
-        outcomes.append(TemporalMethodOutcome(method=method, fpr_coefficient_of_variation=result.value))
+        outcomes.append(
+            TemporalMethodOutcome(
+                method=method,
+                fpr_coefficient_of_variation=result.value,
+                mean_fpr=mean_fpr,
+            )
+        )
     if not completed:
         raise ScientificContractError(
             "temporal execution produced no evaluable threshold method",

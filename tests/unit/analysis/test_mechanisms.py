@@ -205,33 +205,42 @@ def test_model_absorption_follows_the_declared_retention_protocol() -> None:
     assert opposite.decision is ScientificDecision.OPPOSITE_DIRECTION
 
 
-def test_absorption_cohort_requires_complete_seed_set_and_preserves_opposite_direction() -> None:
-    incomplete = (
-        AbsorptionSeedObservation(
-            seed=Seed(0),
-            experiment=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
-            reference_model=TrainingModelId.FEDAVG_AUTOENCODER,
-            personalized_model=TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER,
-            reference_effect=MetricValue(0.2),
-            personalized_effect=MetricValue(0.18),
-        ),
+def _absorption_observation(
+    seed: int,
+    *,
+    reference_effect: float,
+    personalized_effect: float,
+) -> AbsorptionSeedObservation:
+    return AbsorptionSeedObservation(
+        seed=Seed(seed),
+        experiment=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
+        reference_model=TrainingModelId.FEDAVG_AUTOENCODER,
+        personalized_model=TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER,
+        reference_effect=MetricValue(reference_effect),
+        personalized_effect=MetricValue(personalized_effect),
+        reference_shared_cv=MetricValue(0.5),
+        reference_local_cv=MetricValue(0.5 - reference_effect),
+        personalized_shared_cv=MetricValue(0.5),
+        personalized_local_cv=MetricValue(0.5 - personalized_effect),
     )
+
+
+def test_absorption_cohort_requires_complete_seed_set_and_preserves_opposite_direction() -> None:
+    incomplete = (_absorption_observation(0, reference_effect=0.2, personalized_effect=0.18),)
     assert decide_absorption_cohort(incomplete, MODEL_ABSORPTION_DECISION_PROTOCOL).decision.decision is (
         ScientificDecision.BLOCKED
     )
     opposite = tuple(
-        AbsorptionSeedObservation(
-            seed=Seed(seed),
-            experiment=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
-            reference_model=TrainingModelId.FEDAVG_AUTOENCODER,
-            personalized_model=TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER,
-            reference_effect=MetricValue(0.2),
-            personalized_effect=MetricValue(-0.05 if seed % 2 == 0 else 0.18),
+        _absorption_observation(
+            seed,
+            reference_effect=0.2,
+            personalized_effect=-0.05 if seed % 2 == 0 else 0.18,
         )
         for seed in range(10)
     )
     result = decide_absorption_cohort(opposite, MODEL_ABSORPTION_DECISION_PROTOCOL)
     assert result.decision.decision is ScientificDecision.OPPOSITE_DIRECTION
+    assert result.retention_interval is not None
 
 
 def _client(

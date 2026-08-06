@@ -10,7 +10,10 @@ from datp_core.anchor.gate import (
     assert_gate_not_bypassable,
     decide_anchor_gate,
     dependent_readiness_from_gate,
+    load_verified_anchor_gate_artifact,
+    persist_anchor_gate_diagnostics,
 )
+from datp_core.domain.errors import AnchorReproductionError
 from datp_core.anchor.reproduction import independent_reproduction_dependency_blocker, reproduce_anchor
 from datp_core.domain.enums import EvidenceRole, ExperimentReadiness
 from datp_core.domain.values.checksums import Checksum
@@ -101,3 +104,36 @@ def test_observation_source_kind_remains_explicit() -> None:
     assert first.evidence_role is EvidenceRole.ANCHOR_REPRODUCTION
     assert isinstance(first.artifact_path, Path)
     assert isinstance(first.artifact_checksum, Checksum)
+
+
+def test_verified_anchor_gate_artifact_round_trip(tmp_path: Path) -> None:
+    decision = decide_anchor_gate(reproduce_anchor(observations=matching_anchor_observations()))
+    checksum = persist_anchor_gate_diagnostics(decision, tmp_path)
+    verified = load_verified_anchor_gate_artifact(tmp_path)
+    assert verified.permits_confirmatory_claims
+    assert verified.artifact_checksum == checksum
+    assert verified.decision.status is AnchorGateStatus.PASS
+
+
+def test_manual_gate_success_cannot_be_asserted_without_artifact(tmp_path: Path) -> None:
+    with pytest.raises(AnchorReproductionError, match="missing"):
+        load_verified_anchor_gate_artifact(tmp_path)
+    decision = decide_anchor_gate(reproduce_anchor(observations=matching_anchor_observations()))
+    persist_anchor_gate_diagnostics(decision, tmp_path)
+    marker = tmp_path / "anchor_gate_complete.json"
+    marker.write_text('{"artifact_checksum":"' + ("0" * 64) + '","status":"pass"}', encoding="utf-8")
+    with pytest.raises(AnchorReproductionError, match="stale|mismatched"):
+        load_verified_anchor_gate_artifact(tmp_path)
+
+
+def test_blocked_gate_artifact_cannot_verify_as_passed(tmp_path: Path) -> None:
+    decision = decide_anchor_gate(
+        reproduce_anchor(
+            observations=(),
+            dependency_blocker=independent_reproduction_dependency_blocker(),
+        )
+    )
+    assert decision.status is AnchorGateStatus.BLOCKED
+    persist_anchor_gate_diagnostics(decision, tmp_path)
+    with pytest.raises(AnchorReproductionError):
+        load_verified_anchor_gate_artifact(tmp_path)

@@ -23,9 +23,11 @@ from datp_core.analysis.mechanisms.movement import (
 )
 from datp_core.analysis.preparation import AnalysisDocument, ExternalAnalysisDocument, TemporalAnalysisDocument
 from datp_core.analysis.scientific_decision import ScientificDecision, ScientificDecisionResult
+from datp_core.anchor.gate import VerifiedAnchorGateArtifact
 from datp_core.domain.enums import AvailabilityStatus, EvidenceRole, ExperimentId, MetricId, PopulationId
 from datp_core.domain.provenance import canonical_checksum
 from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.ratios import MetricValue
 from datp_core.reporting.figures import FigureSpec, render_markdown_figure
 from datp_core.reporting.tables import PublicationTable, TableCell, render_markdown_table
 from datp_core.reporting.validation import (
@@ -105,7 +107,8 @@ def export_confirmatory_publication(
     document: AnalysisDocument,
     output_directory: Path,
     *,
-    anchor_gate_passed: bool,
+    verified_anchor_gate: VerifiedAnchorGateArtifact | None,
+    figures: tuple[FigureSpec, ...] = (),
 ) -> Path:
     claim = validate_claim(
         ClaimRequest(
@@ -114,7 +117,7 @@ def export_confirmatory_publication(
             metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
             availability=document.interval.availability,
             evidence_decision=_map_decision(document.decision.decision),
-            anchor_gate_passed=anchor_gate_passed,
+            verified_anchor_gate=verified_anchor_gate,
             traffic_rate_available=False,
             wording=document.decision.rationale,
         )
@@ -123,6 +126,7 @@ def export_confirmatory_publication(
         _interval_table(document.interval),
         _wilcoxon_table(document.wilcoxon, document.rank_biserial),
         _paired_values_table(document),
+        *_mechanism_tables(document.mechanisms),
     )
     bundle = PublicationBundle(
         provenance=ReportProvenance(
@@ -133,7 +137,7 @@ def export_confirmatory_publication(
         ),
         claims=(claim,),
         tables=tables,
-        figures=(),
+        figures=figures,
     )
     export_analysis_report(document, output_directory / "analysis_report.md")
     return export_markdown(bundle, output_directory / "publication.md")
@@ -147,7 +151,7 @@ def export_external_publication(document: ExternalAnalysisDocument, output_direc
             metric=document.plan.metric,
             availability=document.interval.availability,
             evidence_decision=EvidenceDecision.BOUNDARY,
-            anchor_gate_passed=False,
+            verified_anchor_gate=None,
             traffic_rate_available=False,
             wording="External paired threshold contrast remains supplementary and claim-bounded.",
         )
@@ -192,7 +196,7 @@ def export_temporal_publication(document: TemporalAnalysisDocument, output_direc
             metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
             availability=document.campaign_decision.availability,
             evidence_decision=_map_decision(document.campaign_decision.decision),
-            anchor_gate_passed=False,
+            verified_anchor_gate=None,
             traffic_rate_available=False,
             wording=document.campaign_decision.rationale,
         )
@@ -208,27 +212,46 @@ def export_temporal_publication(document: TemporalAnalysisDocument, output_direc
         "",
         "## Seed recoveries",
         "",
-        "| Seed | Static CV | Frozen CV | Recalibrated CV | Drift excess | Recovered | Ratio | Interpretation |",
-        "|---|---:|---:|---:|---:|---:|---:|---|",
+        (
+            "| Seed | Static CV | Frozen CV | Recalibrated CV | Mean FPR static | "
+            "Mean FPR frozen | Mean FPR recal | Drift excess | Recovered | Ratio | Interpretation |"
+        ),
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|",
     ]
     for record in document.records:
         recovery = record.recovery
         ratio = "undefined" if recovery.recovery_ratio is None else f"{recovery.recovery_ratio.value:.6g}"
+        mean_static = "—" if recovery.mean_fpr_static is None else f"{recovery.mean_fpr_static.value:.6g}"
+        mean_frozen = "—" if recovery.mean_fpr_frozen is None else f"{recovery.mean_fpr_frozen.value:.6g}"
+        mean_recal = "—" if recovery.mean_fpr_recalibrated is None else f"{recovery.mean_fpr_recalibrated.value:.6g}"
         lines.append(
             f"| {recovery.seed.value} | {recovery.static_reference_cv.value:.6g} | "
             f"{recovery.frozen_future_cv.value:.6g} | {recovery.recalibrated_future_cv.value:.6g} | "
+            f"{mean_static} | {mean_frozen} | {mean_recal} | "
             f"{recovery.drift_excess.value:.6g} | {recovery.recovered_amount.value:.6g} | "
             f"{ratio} | `{record.interpretation.value}` |"
         )
-    lines.extend(
-        [
-            "",
-            f"Detector checksum: `{document.frozen_provenance.checkpoint_checksum.value}`",
-            f"Preprocessing checksum: `{document.frozen_provenance.preprocessing_state_set_checksum.value}`",
-            f"Coordinate checksum: `{document.frozen_provenance.coordinate_checksum.value}`",
-            "",
-        ]
-    )
+    lines.extend(["", "## Per-seed provenance", ""])
+    for record in document.records:
+        recovery = record.recovery
+        provenance = recovery.provenance
+        if provenance is None:
+            lines.append(f"- seed `{recovery.seed.value}`: provenance unavailable")
+            continue
+        lines.append(
+            f"- seed `{recovery.seed.value}`: checkpoint=`{provenance.frozen_future.checkpoint_checksum.value}` "
+            f"preprocess=`{provenance.frozen_future.preprocessing_state_set_checksum.value}` "
+            f"split=`{provenance.frozen_future.split_manifest_checksum.value}` "
+            f"eval_scores=`{provenance.frozen_future.evaluation_score_set_checksum.value}`"
+        )
+        for trajectory in recovery.client_trajectories:
+            lines.append(
+                f"  - client `{trajectory.client_id}` eligible={trajectory.eligible} "
+                f"fpr_static={_optional_metric(trajectory.fpr_static)} "
+                f"fpr_frozen={_optional_metric(trajectory.fpr_frozen)} "
+                f"fpr_recal={_optional_metric(trajectory.fpr_recalibrated)}"
+            )
+    lines.append("")
     write_text_atomically(output_directory / "temporal_analysis_report.md", "\n".join(lines))
     return export_markdown(
         PublicationBundle(
@@ -660,11 +683,21 @@ def _render_one_mechanism(mechanism: MechanismEvidence) -> list[str]:
                 if mechanism.threshold_dispersion_recovery_fraction is not None
                 else mechanism.threshold_dispersion_recovery_reason
             )
+            contributing = (
+                f"{mechanism.contributing_quantile_dispersion.value:.6g}"
+                if mechanism.contributing_quantile_dispersion is not None
+                else (mechanism.dispersion_unavailable_reason or "unavailable")
+            )
+            effective = (
+                f"{mechanism.effective_threshold_dispersion.value:.6g}"
+                if mechanism.effective_threshold_dispersion is not None
+                else (mechanism.dispersion_unavailable_reason or "unavailable")
+            )
             return [
                 f"Seed: {mechanism.seed.value}",
                 f"Memberships: {len(mechanism.memberships)}",
-                f"Contributing quantile dispersion: {mechanism.contributing_quantile_dispersion.value:.6g}",
-                f"Effective threshold dispersion: {mechanism.effective_threshold_dispersion.value:.6g}",
+                f"Contributing quantile dispersion: {contributing}",
+                f"Effective threshold dispersion: {effective}",
                 f"CV(FPR) equity recovery: {equity}",
                 f"Threshold-dispersion recovery: {threshold_recovery}",
                 f"Empty clusters: {len(mechanism.partition.empty_groups)}",
@@ -725,10 +758,13 @@ def _render_one_mechanism(mechanism: MechanismEvidence) -> list[str]:
                 f"Across-seed dispersion of mean Δ FPR: {across}",
             ]
         case AbsorptionCohortResult():
-            retention_range = (
-                f"[{mechanism.retention_range_lower.value:.6g}, {mechanism.retention_range_upper.value:.6g}]"
-                if mechanism.retention_range_lower is not None and mechanism.retention_range_upper is not None
-                else "unavailable"
+            retention_interval = mechanism.retention_interval
+            retention_bca = (
+                f"BCa[{retention_interval.lower_bound.value:.6g}, {retention_interval.upper_bound.value:.6g}]"
+                if retention_interval is not None
+                and retention_interval.lower_bound is not None
+                and retention_interval.upper_bound is not None
+                else "BCa unavailable"
             )
             return [
                 f"Seeds: {len(mechanism.observations)}",
@@ -739,7 +775,7 @@ def _render_one_mechanism(mechanism: MechanismEvidence) -> list[str]:
                     if mechanism.mean_retention is not None
                     else "Mean retention: unavailable"
                 ),
-                f"Retention range across seeds: {retention_range}",
+                f"Retention BCa interval across seeds: {retention_bca}",
                 f"Alternative-route seeds: {mechanism.alternative_route_seed_count}",
             ]
         case ScientificDecisionResult():
@@ -816,6 +852,10 @@ def _paired_values_table(document: AnalysisDocument) -> PublicationTable:
             ),
         ),
     )
+
+
+def _optional_metric(value: MetricValue | None) -> str:
+    return "—" if value is None else f"{value.value:.6g}"
 
 
 def _map_decision(decision: ScientificDecision) -> EvidenceDecision:

@@ -100,7 +100,7 @@ def clone_trusted_scaler(estimator: TrustedScaler, class_name: TrustedEstimatorC
     return cast(TrustedScaler, clone(estimator))
 
 
-def serialize_estimator(estimator: BaseEstimator, destination: Path) -> Checksum:
+def serialize_estimator(estimator: BaseEstimator | TrustedScaler, destination: Path) -> Checksum:
     estimator_type = type(estimator)
     trusted_types = tuple(definition.estimator_type for definition in _TRUSTED_ESTIMATORS)
     if estimator_type not in trusted_types:

@@ -69,14 +69,21 @@ class ClusterMembership:
     cluster_index: ClusterIndex
     members: tuple[ClientIdentity, ...]
     contributing_local_quantiles: tuple[LocalQuantile, ...]
-    cluster_threshold: ThresholdValue
+    cluster_threshold: ThresholdValue | None
 
     def __post_init__(self) -> None:
-        require_contract(
-            bool(self.members),
-            "a cluster membership requires at least one member",
-            ContractSubject.THRESHOLD,
-        )
+        if not self.members:
+            require_contract(
+                self.cluster_threshold is None and not self.contributing_local_quantiles,
+                "empty cluster memberships cannot carry thresholds or quantiles",
+                ContractSubject.THRESHOLD,
+            )
+            return
+        if self.cluster_threshold is None:
+            raise ScientificContractError(
+                "non-empty cluster membership requires a cluster threshold",
+                subject=ContractSubject.THRESHOLD,
+            )
         validate_group_membership(
             self.members,
             self.contributing_local_quantiles,
@@ -135,15 +142,22 @@ class GroupedThresholdResult:
             "cluster membership must cover exactly the fingerprinted client set",
             ContractSubject.CLIENT_IDENTITY,
         )
+        expected_assignments = tuple(
+            ThresholdAssignment(client, cluster.cluster_threshold)
+            for cluster in self.clusters
+            for client in cluster.members
+            if cluster.cluster_threshold is not None
+        )
         validate_assignments(
             self.assignments,
-            tuple(
-                ThresholdAssignment(client, cluster.cluster_threshold)
-                for cluster in self.clusters
-                for client in cluster.members
-            ),
+            expected_assignments,
             label="threshold assignments",
             mismatch_message=("a cluster threshold assignment must use its cluster's threshold"),
+        )
+        require_contract(
+            all((not cluster.members) == (cluster.cluster_threshold is None) for cluster in self.clusters),
+            "empty clusters must omit thresholds; non-empty clusters must declare them",
+            ContractSubject.THRESHOLD,
         )
 
 
@@ -241,6 +255,16 @@ def _build_clusters(
     for index in range(group_count.value):
         cluster_index = ClusterIndex(index)
         members = _cluster_members(ordered, labels, cluster_index)
+        if not members:
+            clusters.append(
+                ClusterMembership(
+                    cluster_index=cluster_index,
+                    members=(),
+                    contributing_local_quantiles=(),
+                    cluster_threshold=None,
+                )
+            )
+            continue
         contributing = tuple(_local_quantile(local_quantiles, client) for client in members)
         cluster_value = ThresholdValue(unweighted_mean(tuple(item.value.value for item in contributing)))
         clusters.append(
@@ -260,13 +284,12 @@ def _cluster_members(
     labels: np.ndarray,
     cluster_index: ClusterIndex,
 ) -> tuple[ClientIdentity, ...]:
-    members = tuple(item.client for item, label in zip(ordered, labels, strict=True) if label == cluster_index.value)
-    if not members:
-        raise ScientificContractError(
-            "k-means produced an empty cluster; grouped thresholding requires every cluster to be non-empty",
-            subject=ContractSubject.THRESHOLD,
-        )
-    return members
+    """Return members for a declared cluster index.
+
+    Empty memberships are preserved as explicit negative evidence rather than
+    aborting construction before the evidence layer can record the outcome.
+    """
+    return tuple(item.client for item, label in zip(ordered, labels, strict=True) if label == cluster_index.value)
 
 
 def _local_quantile(

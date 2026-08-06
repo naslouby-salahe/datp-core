@@ -2,17 +2,25 @@
 
 from pydantic import model_validator
 
+from datp_core.analysis.inference.bootstrap.contracts import BootstrapInterval
+from datp_core.analysis.inference.bootstrap.estimation import seed_level_bca_interval
 from datp_core.analysis.scientific_decision import ScientificDecision, ScientificDecisionResult
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import EvidenceRole, ExperimentId, TrainingModelId
 from datp_core.domain.values.counts import Seed
-from datp_core.domain.values.ratios import MetricValue
-from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
+from datp_core.domain.values.ratios import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE, MetricValue
+from datp_core.protocols.seeds import CONFIRMATORY_ANALYSIS_SEED, CONFIRMATORY_SEED_COHORT, SeedCohort
+from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL, PairedInferenceProtocol
 from datp_core.protocols.training import ModelAbsorptionDecisionProtocol
 
 
 class AbsorptionSeedObservation(StrictModel):
-    """One seed of paired threshold-scope effects under reference vs personalized training."""
+    """One seed of paired threshold-scope effects under reference vs personalized training.
+
+    Four-corner estimand:
+    Δ_ref = CV(FPR)_SHARED_ref − CV(FPR)_LOCAL_ref
+    Δ_pers = CV(FPR)_SHARED_pers − CV(FPR)_LOCAL_pers
+    """
 
     seed: Seed
     experiment: ExperimentId
@@ -20,15 +28,22 @@ class AbsorptionSeedObservation(StrictModel):
     personalized_model: TrainingModelId
     reference_effect: MetricValue
     personalized_effect: MetricValue
-    reference_shared_cv: MetricValue | None = None
-    reference_local_cv: MetricValue | None = None
-    personalized_shared_cv: MetricValue | None = None
-    personalized_local_cv: MetricValue | None = None
+    reference_shared_cv: MetricValue
+    reference_local_cv: MetricValue
+    personalized_shared_cv: MetricValue
+    personalized_local_cv: MetricValue
 
     @model_validator(mode="after")
     def validate_observation(self) -> "AbsorptionSeedObservation":
         if self.reference_model is self.personalized_model:
             raise ValueError("absorption observation requires distinct reference and personalized models")
+        ref_delta = self.reference_shared_cv.value - self.reference_local_cv.value
+        pers_delta = self.personalized_shared_cv.value - self.personalized_local_cv.value
+        tol = NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE.value
+        if abs(ref_delta - self.reference_effect.value) > tol:
+            raise ValueError("reference_effect must equal reference shared CV(FPR) − local CV(FPR)")
+        if abs(pers_delta - self.personalized_effect.value) > tol:
+            raise ValueError("personalized_effect must equal personalized shared CV(FPR) − local CV(FPR)")
         return self
 
     @property
@@ -46,8 +61,10 @@ class AbsorptionCohortResult(StrictModel):
     observations: tuple[AbsorptionSeedObservation, ...]
     decision: ScientificDecisionResult
     mean_retention: MetricValue | None
-    retention_range_lower: MetricValue | None
-    retention_range_upper: MetricValue | None
+    retention_interval: BootstrapInterval | None = None
+    reference_effect_interval: BootstrapInterval | None = None
+    personalized_effect_interval: BootstrapInterval | None = None
+    paired_absorption_change_interval: BootstrapInterval | None = None
     alternative_route_seed_count: int = 0
 
     @model_validator(mode="after")
@@ -106,17 +123,20 @@ def decide_absorption_cohort(
     *,
     required_seed_cohort: SeedCohort = CONFIRMATORY_SEED_COHORT,
     alternative_route_seed_count: int = 0,
+    inference_protocol: PairedInferenceProtocol | None = None,
+    analysis_seed: Seed = CONFIRMATORY_ANALYSIS_SEED,
 ) -> AbsorptionCohortResult:
     """Cohort-level absorption using paired seed-level CV(FPR) retention ratios."""
+    if alternative_route_seed_count < 0:
+        raise ValueError("alternative-route seed count cannot be negative")
+    route_count = alternative_route_seed_count
     blocked = _blocked_cohort(observations, required_seed_cohort)
     if blocked is not None:
         return AbsorptionCohortResult(
             observations=observations,
             decision=blocked,
             mean_retention=None,
-            retention_range_lower=None,
-            retention_range_upper=None,
-            alternative_route_seed_count=alternative_route_seed_count,
+            alternative_route_seed_count=route_count,
         )
     ratios = tuple(item.retention_ratio for item in observations)
     if any(ratio is None for ratio in ratios):
@@ -131,30 +151,55 @@ def decide_absorption_cohort(
             observations=observations,
             decision=decision,
             mean_retention=None,
-            retention_range_lower=None,
-            retention_range_upper=None,
-            alternative_route_seed_count=alternative_route_seed_count,
+            alternative_route_seed_count=route_count,
         )
-    values = tuple(ratio.value for ratio in ratios if ratio is not None)
-    mean_retention = MetricValue(sum(values) / len(values))
-    lower = MetricValue(min(values))
-    upper = MetricValue(max(values))
+    defined_ratios = tuple(ratio for ratio in ratios if ratio is not None)
+    mean_retention = MetricValue(sum(item.value for item in defined_ratios) / len(defined_ratios))
     opposite_count = sum(1 for item in observations if item.is_opposite_direction)
+    stats_protocol = inference_protocol or CONFIRMATORY_INFERENCE_PROTOCOL
+    retention_interval = seed_level_bca_interval(
+        defined_ratios,
+        protocol=stats_protocol,
+        analysis_seed=analysis_seed,
+        require_full_cohort=True,
+    )
+    reference_interval = seed_level_bca_interval(
+        tuple(item.reference_effect for item in observations),
+        protocol=stats_protocol,
+        analysis_seed=analysis_seed,
+        require_full_cohort=True,
+    )
+    personalized_interval = seed_level_bca_interval(
+        tuple(item.personalized_effect for item in observations),
+        protocol=stats_protocol,
+        analysis_seed=analysis_seed,
+        require_full_cohort=True,
+    )
+    absorption_change = tuple(
+        MetricValue(item.reference_effect.value - item.personalized_effect.value) for item in observations
+    )
+    change_interval = seed_level_bca_interval(
+        absorption_change,
+        protocol=stats_protocol,
+        analysis_seed=analysis_seed,
+        require_full_cohort=True,
+    )
     decision = _classify_cohort(
         observations=observations,
         protocol=protocol,
         mean_retention=mean_retention,
-        lower=lower,
-        upper=upper,
         opposite_count=opposite_count,
+        retention_interval=retention_interval,
     )
     return AbsorptionCohortResult(
         observations=observations,
         decision=decision,
         mean_retention=mean_retention,
-        retention_range_lower=lower,
-        retention_range_upper=upper,
-        alternative_route_seed_count=alternative_route_seed_count,
+        retention_interval=retention_interval,
+        reference_effect_interval=reference_interval,
+        personalized_effect_interval=personalized_interval,
+        paired_absorption_change_interval=change_interval,
+        alternative_route_seed_count=route_count,
     )
 
 
@@ -211,21 +256,23 @@ def _classify_cohort(
     observations: tuple[AbsorptionSeedObservation, ...],
     protocol: ModelAbsorptionDecisionProtocol,
     mean_retention: MetricValue,
-    lower: MetricValue,
-    upper: MetricValue,
     opposite_count: int,
+    retention_interval: BootstrapInterval | None,
 ) -> ScientificDecisionResult:
     total = len(observations)
-    range_text = (
-        f"(mean={mean_retention.value:.4g}, range=[{lower.value:.4g}, {upper.value:.4g}], "
-        f"opposite_seeds={opposite_count}/{total})"
+    interval = retention_interval
+    interval_text = (
+        f"BCa=[{interval.lower_bound.value:.4g}, {interval.upper_bound.value:.4g}]"
+        if interval is not None and interval.lower_bound is not None and interval.upper_bound is not None
+        else "BCa=unavailable"
     )
+    range_text = f"(mean={mean_retention.value:.4g}, {interval_text}, opposite_seeds={opposite_count}/{total})"
     if opposite_count == total:
         return ScientificDecisionResult(
             evidence_role=EvidenceRole.TRAINING_STRESS_TEST,
             decision=ScientificDecision.OPPOSITE_DIRECTION,
             point_estimate=mean_retention,
-            interval=None,
+            interval=interval,
             rationale="every seed reversed the reference CV(FPR) threshold-scope direction under personalization",
         )
     if opposite_count > 0:
@@ -233,45 +280,51 @@ def _classify_cohort(
             evidence_role=EvidenceRole.TRAINING_STRESS_TEST,
             decision=ScientificDecision.OPPOSITE_DIRECTION,
             point_estimate=mean_retention,
-            interval=None,
+            interval=interval,
             rationale=(
                 "absorption cohort contains opposite-direction CV(FPR) effects and cannot be classified "
                 f"as retained or absorbed {range_text}"
             ),
         )
-    if lower.value >= protocol.full_retention_minimum.value:
+    if mean_retention.value >= protocol.full_retention_minimum.value and (
+        interval is None
+        or interval.lower_bound is None
+        or interval.lower_bound.value >= protocol.partial_retention_minimum.value
+    ):
         return ScientificDecisionResult(
             evidence_role=EvidenceRole.TRAINING_STRESS_TEST,
             decision=ScientificDecision.SUPPORTED,
             point_estimate=mean_retention,
-            interval=None,
+            interval=interval,
             rationale=(
                 f"paired seed-level CV(FPR) retention remains at or above the full-retention threshold {range_text}"
             ),
         )
-    if upper.value < protocol.partial_retention_minimum.value:
+    if mean_retention.value < protocol.partial_retention_minimum.value and (
+        interval is None
+        or interval.upper_bound is None
+        or interval.upper_bound.value < protocol.partial_retention_minimum.value
+    ):
         return ScientificDecisionResult(
             evidence_role=EvidenceRole.TRAINING_STRESS_TEST,
             decision=ScientificDecision.FULL_ABSORPTION,
             point_estimate=mean_retention,
-            interval=None,
-            rationale=(
-                f"paired seed-level CV(FPR) retention lies entirely below the partial-retention threshold {range_text}"
-            ),
+            interval=interval,
+            rationale=(f"paired seed-level CV(FPR) retention lies below the partial-retention threshold {range_text}"),
         )
     if mean_retention.value >= protocol.partial_retention_minimum.value:
         return ScientificDecisionResult(
             evidence_role=EvidenceRole.TRAINING_STRESS_TEST,
             decision=ScientificDecision.PARTIAL_ABSORPTION,
             point_estimate=mean_retention,
-            interval=None,
+            interval=interval,
             rationale=(f"paired seed-level CV(FPR) retention is partially absorbed with residual effect {range_text}"),
         )
     return ScientificDecisionResult(
         evidence_role=EvidenceRole.TRAINING_STRESS_TEST,
         decision=ScientificDecision.FULL_ABSORPTION,
         point_estimate=mean_retention,
-        interval=None,
+        interval=interval,
         rationale=(
             f"paired seed-level mean CV(FPR) retention falls below the partial-retention threshold {range_text}"
         ),

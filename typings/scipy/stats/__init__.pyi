@@ -1,5 +1,5 @@
 from collections.abc import Sequence
-from typing import Any, Literal
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray

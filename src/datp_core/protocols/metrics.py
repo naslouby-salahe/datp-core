@@ -30,3 +30,6 @@ SUPPRESSED_OPERATIONAL_METRICS = (MetricId.ALERTS_PER_DAY,)
 CV_ZERO_MEAN_POLICY = AvailabilityStatus.UNDEFINED
 NEAR_ZERO_MEAN_FPR_WARNING_CUTOFF = Ratio(0.01)
 TEMPORAL_CV_MATERIALITY_CUTOFF = MetricValue(0.10)
+# Pre-specified floor for a "meaningful portion" of drift recovery (roadmap §12.1).
+# Aligns with the partial-effect residual band used for training-side absorption.
+TEMPORAL_MATERIAL_RECOVERY_RATIO_MINIMUM = Ratio(0.25)

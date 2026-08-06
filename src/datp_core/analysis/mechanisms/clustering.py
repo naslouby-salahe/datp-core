@@ -28,7 +28,29 @@ class ClusterPartitionSummary(StrictModel):
         memberships: tuple[ClusterMembership, ...],
         *,
         declared_group_count: int | None = None,
+        observed_empty_cluster_indexes: tuple[ClusterIndex, ...] = (),
     ) -> "ClusterPartitionSummary":
+        """Build partition sizes preserving actual observed cluster indexes.
+
+        When empty clusters are supplied, their declared IDs are retained. Missing
+        cluster ID ``1`` is never silently renumbered as missing cluster ID ``2``.
+        """
+        if observed_empty_cluster_indexes:
+            max_index = max(
+                (
+                    *(item.cluster_index.value for item in memberships),
+                    *tuple(i.value for i in observed_empty_cluster_indexes),
+                ),
+                default=-1,
+            )
+            size_by_index = {item.cluster_index.value: len(item.members) for item in memberships}
+            for empty_index in observed_empty_cluster_indexes:
+                size_by_index.setdefault(empty_index.value, 0)
+            if declared_group_count is not None:
+                max_index = max(max_index, declared_group_count - 1)
+            sizes = tuple(PairedObservationCount(size_by_index.get(index, 0)) for index in range(max_index + 1))
+            empty = tuple(ClusterIndex(index) for index, size in enumerate(sizes) if size.value == 0)
+            return cls(group_sizes=sizes, empty_cluster_indexes=empty)
         sizes = tuple(PairedObservationCount(len(item.members)) for item in memberships)
         empty: tuple[ClusterIndex, ...] = ()
         if declared_group_count is not None and declared_group_count > len(sizes):
@@ -62,13 +84,14 @@ class ClusterEvidenceRecord(StrictModel):
     fingerprints: tuple[ClusterFingerprint, ...]
     memberships: tuple[ClusterMembership, ...]
     partition: ClusterPartitionSummary
-    contributing_quantile_dispersion: MetricValue
-    effective_threshold_dispersion: MetricValue
+    contributing_quantile_dispersion: MetricValue | None
+    effective_threshold_dispersion: MetricValue | None
     threshold_dispersion_recovery_fraction: MetricValue | None
     threshold_dispersion_recovery_reason: str | None
     cv_fpr_equity_recovery_fraction: MetricValue | None
     cv_fpr_equity_recovery_reason: str | None
     evidence_availability: ClusterEvidenceAvailability = ClusterEvidenceAvailability.AVAILABLE
+    dispersion_unavailable_reason: str | None = None
 
     evidence_role: ClassVar[EvidenceRole] = EvidenceRole.MECHANISM
 
@@ -80,6 +103,10 @@ class ClusterEvidenceRecord(StrictModel):
             raise ValueError("threshold-dispersion recovery requires either a value or an explicit reason")
         if (self.cv_fpr_equity_recovery_fraction is None) == (self.cv_fpr_equity_recovery_reason is None):
             raise ValueError("CV(FPR) equity recovery requires either a value or an explicit reason")
+        if (
+            self.contributing_quantile_dispersion is None or self.effective_threshold_dispersion is None
+        ) and self.dispersion_unavailable_reason is None:
+            raise ValueError("unavailable dispersion requires an explicit dispersion_unavailable_reason")
         return self
 
     @property
@@ -152,10 +179,15 @@ def cluster_evidence_from_grouped_result(
     contributing = tuple(
         quantile.value.value for membership in result.clusters for quantile in membership.contributing_local_quantiles
     )
-    effective = tuple(membership.cluster_threshold.value for membership in result.clusters)
-    contributing_dispersion = MetricValue(max(contributing) - min(contributing)) if contributing else MetricValue(0.0)
-    effective_dispersion = MetricValue(max(effective) - min(effective)) if effective else MetricValue(0.0)
-    if local_dispersion is None or local_dispersion.value <= 0.0:
+    effective = tuple(
+        membership.cluster_threshold.value for membership in result.clusters if membership.cluster_threshold is not None
+    )
+    contributing_dispersion = MetricValue(max(contributing) - min(contributing)) if len(contributing) >= 2 else None
+    effective_dispersion = MetricValue(max(effective) - min(effective)) if len(effective) >= 2 else None
+    dispersion_reason = None
+    if contributing_dispersion is None or effective_dispersion is None:
+        dispersion_reason = "dispersion requires at least two computed cluster quantiles or thresholds"
+    if local_dispersion is None or local_dispersion.value <= 0.0 or effective_dispersion is None:
         threshold_recovery = None
         threshold_reason = "local-threshold dispersion is unavailable or non-positive"
     else:
@@ -186,6 +218,7 @@ def cluster_evidence_from_grouped_result(
         cv_fpr_equity_recovery_fraction=equity_recovery,
         cv_fpr_equity_recovery_reason=equity_reason,
         evidence_availability=evidence_availability,
+        dispersion_unavailable_reason=dispersion_reason,
     )
 
 
@@ -197,11 +230,34 @@ def empty_cluster_evidence_record(
     filled_memberships: tuple[ClusterMembership, ...],
     fingerprints: tuple[ClusterFingerprint, ...] = (),
     reason: str,
+    observed_empty_cluster_indexes: tuple[ClusterIndex, ...] = (),
 ) -> ClusterEvidenceRecord:
-    """Preserve empty-cluster negative evidence without fabricating memberships."""
+    """Preserve empty-cluster negative evidence without fabricating memberships or zero metrics.
+
+    Missing declared cluster IDs remain explicit. Dispersion values that cannot be computed
+    stay unavailable rather than MetricValue(0.0).
+    """
     partition = ClusterPartitionSummary.from_memberships(
         filled_memberships,
         declared_group_count=declared_group_count,
+        observed_empty_cluster_indexes=observed_empty_cluster_indexes,
+    )
+    contributing = tuple(
+        quantile.value.value
+        for membership in filled_memberships
+        for quantile in membership.contributing_local_quantiles
+    )
+    effective = tuple(
+        membership.cluster_threshold.value
+        for membership in filled_memberships
+        if membership.cluster_threshold is not None
+    )
+    contributing_dispersion = MetricValue(max(contributing) - min(contributing)) if len(contributing) >= 2 else None
+    effective_dispersion = MetricValue(max(effective) - min(effective)) if len(effective) >= 2 else None
+    dispersion_reason = (
+        None
+        if contributing_dispersion is not None and effective_dispersion is not None
+        else "dispersion is unavailable for empty or incomplete cluster partitions"
     )
     return ClusterEvidenceRecord(
         seed=seed,
@@ -210,13 +266,14 @@ def empty_cluster_evidence_record(
         fingerprints=fingerprints,
         memberships=filled_memberships,
         partition=partition,
-        contributing_quantile_dispersion=MetricValue(0.0),
-        effective_threshold_dispersion=MetricValue(0.0),
+        contributing_quantile_dispersion=contributing_dispersion,
+        effective_threshold_dispersion=effective_dispersion,
         threshold_dispersion_recovery_fraction=None,
         threshold_dispersion_recovery_reason=reason,
         cv_fpr_equity_recovery_fraction=None,
         cv_fpr_equity_recovery_reason=reason,
         evidence_availability=ClusterEvidenceAvailability.AVAILABLE_WITH_EMPTY_GROUP_EVIDENCE,
+        dispersion_unavailable_reason=dispersion_reason,
     )
 
 

@@ -19,6 +19,7 @@ from datp_core.analysis.mechanisms import (
     summarize_threshold_movements_across_seeds,
     threshold_movements_from_evaluations,
 )
+from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.enums import (
     EvidenceRole,
     ExperimentId,
@@ -117,14 +118,33 @@ def run_confirmatory_campaign() -> ConfirmatoryCampaignResult:
     return ConfirmatoryCampaignResult(seeds=seeds)
 
 
-def analyze_confirmatory_campaign(*, anchor_gate_passed: bool = False) -> Path:
+def analyze_confirmatory_campaign(
+    *,
+    anchor_gate_diagnostics_directory: Path | None = None,
+) -> Path:
+    """Analyze confirmatory campaign and export publication artifacts.
+
+    Confirmatory claims require a checksum-verified anchor-gate artifact. The free
+    boolean gate path is intentionally removed; callers cannot assert gate success.
+    """
+    from datp_core.anchor.gate import load_verified_anchor_gate_artifact
+    from datp_core.domain.errors import AnchorReproductionError
+
     output = (
         OUTPUTS_ROOT
         / ConfirmatoryAssetDirectory.ROOT
         / PopulationId.NBAIOT_NATURAL_DEVICES.value
         / ConfirmatoryAssetDirectory.ANALYSIS
     )
+    gate_directory = anchor_gate_diagnostics_directory or (OUTPUTS_ROOT / "anchor" / "diagnostics")
+    verified_gate = None
+    try:
+        verified_gate = load_verified_anchor_gate_artifact(gate_directory)
+    except (AnchorReproductionError, OSError, ValueError, TypeError):
+        verified_gate = None
     mechanisms = _confirmatory_mechanisms()
+    cluster_mechanisms = _confirmatory_cluster_mechanisms()
+    all_mechanisms = mechanisms + cluster_mechanisms
     result = analyze_confirmatory_evidence(
         AnalyzeConfirmatoryEvidenceRequest(
             contrasts=tuple(_confirmatory_contrast(seed) for seed in CONFIRMATORY_SEED_COHORT.values),
@@ -132,13 +152,19 @@ def analyze_confirmatory_campaign(*, anchor_gate_passed: bool = False) -> Path:
             analysis_seed=CONFIRMATORY_ANALYSIS_SEED,
             output_directory=output,
             overwrite=False,
-            mechanisms=mechanisms,
+            mechanisms=all_mechanisms,
         )
     )
-    export_confirmatory_publication(result.document, output, anchor_gate_passed=anchor_gate_passed)
-    if mechanisms:
+    figures = _confirmatory_score_geometry_figures()
+    export_confirmatory_publication(
+        result.document,
+        output,
+        verified_anchor_gate=verified_gate,
+        figures=figures,
+    )
+    if all_mechanisms:
         export_mechanism_publication(
-            mechanisms,
+            all_mechanisms,
             experiment=ExperimentId.SHARED_VS_LOCAL_CONFIRMATION,
             population=PopulationId.NBAIOT_NATURAL_DEVICES,
             output_directory=output / "mechanisms",
@@ -185,6 +211,156 @@ def _confirmatory_mechanisms() -> tuple[MechanismEvidence, ...]:
     )
     if association_observations:
         mechanisms.append(heterogeneity_benefit_association(tuple(association_observations)))
+    return tuple(mechanisms)
+
+
+def _confirmatory_score_geometry_figures():
+    """Build deterministic score-geometry figure specs from persisted evaluation scores."""
+    from datp_core.analysis.descriptive import score_geometry_from_client_vectors
+    from datp_core.domain.enums import AvailabilityStatus
+    from datp_core.reporting.figures import FigureSeries, FigureSpec
+
+    figures: list[FigureSpec] = []
+    for seed in CONFIRMATORY_SEED_COHORT.values:
+        shared = load_evaluation_document(_evaluation_path(seed, FederatedThresholdMethod.SHARED_THRESHOLD))
+        benign_eval = _client_evaluation_scores(shared, benign_only=True)
+        attack_eval = _client_evaluation_scores(shared, benign_only=False)
+        geometry = score_geometry_from_client_vectors(
+            seed=seed,
+            source_score_checksum=shared.fixed_score_evidence.evaluation.score_checksum,
+            benign_evaluation=benign_eval,
+            attack_evaluation=attack_eval,
+            threshold_overlays=(),
+            attack_geometry_available=bool(attack_eval),
+            attack_geometry_reason=None if attack_eval else "attack evaluation scores unavailable",
+        )
+        series: list[FigureSeries] = []
+        for client_geometry in geometry.clients:
+            if client_geometry.unavailable_reason is not None or not client_geometry.empirical_cdf:
+                continue
+            series.append(
+                FigureSeries(
+                    label=f"seed{seed.value}:{client_geometry.client.client_id}:{client_geometry.score_role.value}",
+                    metric=MetricId.FALSE_POSITIVE_RATE,
+                    availability=AvailabilityStatus.AVAILABLE,
+                    values=tuple(point.score.value for point in client_geometry.empirical_cdf),
+                )
+            )
+        if series:
+            figures.append(
+                FigureSpec(title=f"Per-client empirical score CDF (seed {seed.value})", series=tuple(series))
+            )
+    return tuple(figures)
+
+
+def _client_evaluation_scores(
+    document: FederatedEvaluationDocument,
+    *,
+    benign_only: bool,
+) -> tuple[tuple[ClientIdentity, tuple[MetricValue, ...]], ...]:
+    score_root = (
+        federated_training_directory(document.score_coordinate, OUTPUTS_ROOT) / ExecutionArtifactDirectory.SCORES
+    )
+    pairs: list[tuple[ClientIdentity, tuple[MetricValue, ...]]] = []
+    for client_result in sorted(document.clients, key=lambda item: item.client):
+        path = score_root / client_result.client.client_id / FederatedScoreAssetName.EVALUATION.value
+        if not path.is_file():
+            continue
+        frame = pl.read_parquet(path)
+        column = ScoreFrameColumn.RECONSTRUCTION_ERROR.value
+        if column not in frame.columns:
+            continue
+        label_column = ScoreFrameColumn.OUTCOME_LABEL.value
+        if label_column in frame.columns:
+            labels = frame[label_column].to_list()
+            scores_raw = frame[column].to_list()
+            if benign_only:
+                scores = tuple(
+                    MetricValue(float(score))
+                    for score, label in zip(scores_raw, labels, strict=True)
+                    if int(label) == 0
+                )
+            else:
+                scores = tuple(
+                    MetricValue(float(score))
+                    for score, label in zip(scores_raw, labels, strict=True)
+                    if int(label) != 0
+                )
+        else:
+            if not benign_only:
+                continue
+            scores = tuple(MetricValue(float(value)) for value in frame[column].to_list())
+        if scores:
+            pairs.append((client_result.client, scores))
+    return tuple(pairs)
+
+
+def _confirmatory_cluster_mechanisms() -> tuple[MechanismEvidence, ...]:
+    """Load persisted CLUSTER_THRESHOLD results and publish cluster mechanism evidence."""
+    from pydantic import TypeAdapter
+
+    from datp_core.analysis.mechanisms import (
+        cluster_evidence_from_grouped_result,
+        cluster_stability,
+        local_threshold_dispersion,
+    )
+    from datp_core.thresholding.methods.cluster import GroupedThresholdResult
+    from datp_core.thresholding.publication import FederatedThresholdAssetName, threshold_result_checksum
+
+    mechanisms: list[MechanismEvidence] = []
+    records: list[tuple[Seed, GroupedThresholdResult, Checksum]] = []
+    adapter: TypeAdapter[GroupedThresholdResult] = TypeAdapter(GroupedThresholdResult)
+    for seed in CONFIRMATORY_SEED_COHORT.values:
+        directory = (
+            OUTPUTS_ROOT
+            / ConfirmatoryAssetDirectory.ROOT
+            / PopulationId.NBAIOT_NATURAL_DEVICES.value
+            / str(seed.value)
+            / "thresholds"
+            / FederatedThresholdMethod.CLUSTER_THRESHOLD.value
+        )
+        result_path = directory / FederatedThresholdAssetName.RESULT.value
+        if not result_path.is_file():
+            continue
+        try:
+            result = adapter.validate_json(result_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError, TypeError):
+            continue
+        checksum = threshold_result_checksum(result)
+        records.append((seed, result, checksum))
+        shared_cv = population_metric(
+            load_evaluation_document(_evaluation_path(seed, FederatedThresholdMethod.SHARED_THRESHOLD)),
+            MetricId.FPR_COEFFICIENT_OF_VARIATION,
+        )
+        local_document = load_evaluation_document(_evaluation_path(seed, FederatedThresholdMethod.LOCAL_THRESHOLD))
+        local_cv = population_metric(local_document, MetricId.FPR_COEFFICIENT_OF_VARIATION)
+        cluster_cv = population_metric(
+            load_evaluation_document(_evaluation_path(seed, FederatedThresholdMethod.CLUSTER_THRESHOLD)),
+            MetricId.FPR_COEFFICIENT_OF_VARIATION,
+        )
+        local_thresholds = tuple(item.threshold for item in local_document.clients)
+        local_dispersion = local_threshold_dispersion(local_thresholds) if local_thresholds else None
+        mechanisms.append(
+            cluster_evidence_from_grouped_result(
+                result,
+                source_threshold_checksum=checksum,
+                local_dispersion=local_dispersion,
+                shared_cv_fpr=shared_cv,
+                local_cv_fpr=local_cv,
+                cluster_cv_fpr=cluster_cv,
+            )
+        )
+    for left, right in zip(records, records[1:], strict=False):
+        mechanisms.append(
+            cluster_stability(
+                left[1].clusters,
+                right[1].clusters,
+                left_source_checksum=left[2],
+                right_source_checksum=right[2],
+                left_declared_group_count=left[1].group_count.value,
+                right_declared_group_count=right[1].group_count.value,
+            )
+        )
     return tuple(mechanisms)
 
 

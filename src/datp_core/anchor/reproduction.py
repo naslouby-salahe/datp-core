@@ -92,6 +92,7 @@ class AnchorArtifactFileName(StrEnum):
     METRICS = "metrics.json"
     GATE_DECISION = "anchor_gate_decision.json"
     DISCREPANCIES = "anchor_discrepancies.json"
+    GATE_COMPLETION = "anchor_gate_complete.json"
 
 
 class AnchorSeedDirectoryPrefix(StrEnum):

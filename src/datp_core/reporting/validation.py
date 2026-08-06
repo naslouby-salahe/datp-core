@@ -5,7 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
+from datp_core.anchor.gate import VerifiedAnchorGateArtifact
 from datp_core.domain.enums import AvailabilityStatus, EvidenceRole, MetricId
+from datp_core.domain.values.checksums import Checksum
 
 
 class ClaimStatus(StrEnum):
@@ -43,13 +45,16 @@ class ClaimRequest:
     metric: MetricId
     availability: AvailabilityStatus
     evidence_decision: EvidenceDecision
-    anchor_gate_passed: bool
+    verified_anchor_gate: VerifiedAnchorGateArtifact | None
     traffic_rate_available: bool
     wording: str
 
     def __post_init__(self) -> None:
         if not self.wording.strip():
             raise ValueError("claim requests require proposed wording")
+        if self.kind is ClaimKind.CONFIRMATORY and self.verified_anchor_gate is not None:
+            if not self.verified_anchor_gate.permits_confirmatory_claims:
+                raise ValueError("confirmatory claims cannot attach a non-permitting anchor-gate artifact")
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -57,6 +62,7 @@ class ClaimDecision:
     status: ClaimStatus
     wording: str
     reason: str
+    anchor_gate_checksum: Checksum | None = None
 
 
 def validate_claim(request: ClaimRequest) -> ClaimDecision:
@@ -65,8 +71,11 @@ def validate_claim(request: ClaimRequest) -> ClaimDecision:
         return _blocked(f"claim evidence is {request.availability.value}")
     if request.evidence_decision is EvidenceDecision.SUPPRESSED:
         return _blocked("suppressed experiments cannot be exported as executed evidence")
-    if request.kind is ClaimKind.CONFIRMATORY and not request.anchor_gate_passed:
-        return _blocked("the anchor gate blocks dependent journal claims")
+    if request.kind is ClaimKind.CONFIRMATORY:
+        if request.verified_anchor_gate is None:
+            return _blocked("confirmatory claims require a checksum-verified anchor-gate artifact")
+        if not request.verified_anchor_gate.permits_confirmatory_claims:
+            return _blocked("the anchor gate blocks dependent journal claims")
     if request.kind in {ClaimKind.DEPLOYMENT, ClaimKind.PRIVACY}:
         return _suppressed("DATP-Core provides neither deployment validation nor formal privacy guarantees")
     if request.kind is ClaimKind.OPERATIONAL and request.metric is MetricId.ALERTS_PER_DAY:
@@ -82,11 +91,21 @@ def validate_claim(request: ClaimRequest) -> ClaimDecision:
             MetricId.AUROC,
         }:
             return _blocked("Edge external evidence has no valid client-level attack assignment")
-    if request.kind is ClaimKind.TEMPORAL and any(
-        phrase in normalized_wording
-        for phrase in ("continuous adaptation", "online adaptation", "concept drift solution", "drift handling")
-    ):
-        return _blocked("one-shot recalibration cannot be represented as general drift handling")
+    if request.kind is ClaimKind.TEMPORAL:
+        if any(
+            phrase in normalized_wording
+            for phrase in ("continuous adaptation", "online adaptation", "concept drift solution", "drift handling")
+        ):
+            return _blocked("one-shot recalibration cannot be represented as general drift handling")
+        if request.evidence_decision is not EvidenceDecision.SUPPORTED:
+            return ClaimDecision(
+                status=ClaimStatus.NARROWED,
+                wording=(
+                    f"[NARROWED:{request.evidence_decision.value}] Temporal boundary evidence is "
+                    f"{request.evidence_decision.value} and does not support a positive recovery claim."
+                ),
+                reason=f"temporal evidence is {request.evidence_decision.value}",
+            )
     if "formal privacy" in normalized_wording or "privacy guarantee" in normalized_wording:
         return _suppressed("data locality is not a formal privacy guarantee")
     if "deployment measurement" in normalized_wording or "measured deployment" in normalized_wording:
@@ -99,17 +118,37 @@ def validate_claim(request: ClaimRequest) -> ClaimDecision:
         if request.metric is not MetricId.FPR_COEFFICIENT_OF_VARIATION:
             return ClaimDecision(
                 status=ClaimStatus.NARROWED,
-                wording=request.wording,
+                wording=(
+                    f"[NARROWED:control] Metric `{request.metric.value}` is a control or trade-off measure, "
+                    "not the confirmatory FPR equity endpoint."
+                ),
                 reason="non-primary metrics are controls or trade-off evidence",
+                anchor_gate_checksum=(
+                    None if request.verified_anchor_gate is None else request.verified_anchor_gate.artifact_checksum
+                ),
             )
         if request.evidence_decision is not EvidenceDecision.SUPPORTED:
             return ClaimDecision(
                 status=ClaimStatus.NARROWED,
-                wording=request.wording,
+                wording=(
+                    f"[NARROWED:{request.evidence_decision.value}] Confirmatory evidence is "
+                    f"{request.evidence_decision.value} and cannot support a positive claim."
+                ),
                 reason=(
                     f"confirmatory evidence is {request.evidence_decision.value} and cannot support a positive claim"
                 ),
+                anchor_gate_checksum=(
+                    None if request.verified_anchor_gate is None else request.verified_anchor_gate.artifact_checksum
+                ),
             )
+        return ClaimDecision(
+            status=ClaimStatus.PERMITTED,
+            wording=request.wording,
+            reason="claim matches evidence scope",
+            anchor_gate_checksum=request.verified_anchor_gate.artifact_checksum
+            if request.verified_anchor_gate is not None
+            else None,
+        )
     return ClaimDecision(status=ClaimStatus.PERMITTED, wording=request.wording, reason="claim matches evidence scope")
 
 

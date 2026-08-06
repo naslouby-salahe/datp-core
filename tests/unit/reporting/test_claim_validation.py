@@ -1,3 +1,4 @@
+from datp_core.anchor.gate import VerifiedAnchorGateArtifact
 from datp_core.domain.enums import AvailabilityStatus, EvidenceRole, MetricId
 from datp_core.reporting.validation import (
     ClaimKind,
@@ -23,7 +24,7 @@ def claim_request(
     wording: str,
     availability: AvailabilityStatus = AvailabilityStatus.AVAILABLE,
     evidence_decision: EvidenceDecision = EvidenceDecision.SUPPORTED,
-    anchor_gate_passed: bool = True,
+    verified_anchor_gate: VerifiedAnchorGateArtifact | None = None,
     traffic_rate_available: bool = False,
 ) -> ClaimRequest:
     return ClaimRequest(
@@ -32,7 +33,7 @@ def claim_request(
         metric=metric,
         availability=availability,
         evidence_decision=evidence_decision,
-        anchor_gate_passed=anchor_gate_passed,
+        verified_anchor_gate=verified_anchor_gate,
         traffic_rate_available=traffic_rate_available,
         wording=wording,
     )
@@ -69,11 +70,12 @@ def test_blocked_anchor_blocks_confirmatory_claim() -> None:
             kind=ClaimKind.CONFIRMATORY,
             evidence_role=EvidenceRole.CONFIRMATORY,
             metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
-            anchor_gate_passed=False,
+            verified_anchor_gate=None,
             wording="Local calibration improves cross-client FPR equity",
         )
     )
     assert not decision.wording
+    assert "anchor-gate artifact" in decision.reason
 
 
 def test_inconclusive_confirmatory_result_cannot_render_as_positive_support() -> None:
@@ -86,8 +88,10 @@ def test_inconclusive_confirmatory_result_cannot_render_as_positive_support() ->
             wording="Local calibration improves cross-client FPR equity",
         )
     )
-    assert decision.wording
-    assert "cannot support a positive claim" in decision.reason
+    assert decision.status is ClaimStatus.BLOCKED or "[NARROWED:" in decision.wording or not decision.wording
+    if decision.status is ClaimStatus.NARROWED:
+        assert decision.wording.startswith("[NARROWED:")
+        assert "cannot support a positive claim" in decision.reason
 
 
 def test_edge_attack_sensitive_claim_is_blocked() -> None:

@@ -28,10 +28,24 @@ def test_scientific_decision_member_set_is_exact_and_unique() -> None:
 
 
 def test_material_drift_with_recovery_is_supported_only_at_campaign_level() -> None:
+    # drift=0.20, recovered=0.18, ratio=0.9 >= 0.25 material recovery floor
     records = tuple(_recovery(seed.value, 0.10, 0.30, 0.12) for seed in BOUNDED_EVIDENCE_SEED_COHORT.values)
-    assert all(record.interpretation is TemporalInterpretation.TEMPORAL_DEGRADATION_WITH_RECOVERY for record in records)
+    assert all(
+        record.interpretation is TemporalInterpretation.TEMPORAL_DEGRADATION_WITH_MATERIAL_RECOVERY
+        for record in records
+    )
     campaign = decide_temporal_campaign(records)
     assert campaign.decision is ScientificDecision.SUPPORTED
+
+
+def test_tiny_positive_recovery_is_not_material_support() -> None:
+    # drift=0.20, recovered=0.001, ratio=0.005 < 0.25 material recovery floor
+    records = tuple(_recovery(seed.value, 0.10, 0.30, 0.299) for seed in BOUNDED_EVIDENCE_SEED_COHORT.values)
+    assert all(
+        record.interpretation is TemporalInterpretation.TEMPORAL_DEGRADATION_WITH_PARTIAL_OR_WEAK_RECOVERY
+        for record in records
+    )
+    assert decide_temporal_campaign(records).decision is ScientificDecision.BOUNDARY_RESULT
 
 
 def test_single_seed_never_yields_publication_supported() -> None:
@@ -43,7 +57,7 @@ def test_single_seed_never_yields_publication_supported() -> None:
         frozen_future_cv=MetricValue(0.30),
         recalibrated_future_cv=MetricValue(0.12),
     )
-    assert result.interpretation is TemporalInterpretation.TEMPORAL_DEGRADATION_WITH_RECOVERY
+    assert result.interpretation is TemporalInterpretation.TEMPORAL_DEGRADATION_WITH_MATERIAL_RECOVERY
     assert decide_temporal_campaign((result,)).decision is ScientificDecision.BLOCKED
 
 

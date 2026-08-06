@@ -1,12 +1,17 @@
 """Deterministic descriptive summaries for seed- and client-level evidence."""
 
+from enum import StrEnum
+from typing import ClassVar
+
 import numpy as np
 from pydantic import model_validator
 
 from datp_core.analysis.contrasts import MetricSeries, PairedDifferenceCounts
+from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.contracts import StrictModel
-from datp_core.domain.enums import AvailabilityStatus, EvidenceRole
-from datp_core.domain.values.counts import PairedObservationCount
+from datp_core.domain.enums import AvailabilityStatus, EvidenceRole, FederatedThresholdMethod
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import PairedObservationCount, Seed
 from datp_core.domain.values.ratios import MetricValue, Ratio
 
 
@@ -145,3 +150,158 @@ def _metric_array(values: MetricSeries) -> np.ndarray:
     if np.any(~np.isfinite(array)):
         raise ValueError("metric values must be finite")
     return array
+
+
+class ScoreRole(StrEnum):
+    BENIGN_CALIBRATION = "benign_calibration"
+    BENIGN_EVALUATION = "benign_evaluation"
+    ATTACK_EVALUATION = "attack_evaluation"
+
+
+class EmpiricalCdfPoint(StrictModel):
+    score: MetricValue
+    cumulative_probability: Ratio
+
+
+class ClientScoreGeometry(StrictModel):
+    client: ClientIdentity
+    score_role: ScoreRole
+    scores: tuple[MetricValue, ...]
+    quantiles: tuple[MetricValue, ...]
+    empirical_cdf: tuple[EmpiricalCdfPoint, ...]
+    mean: MetricValue | None
+    standard_deviation: MetricValue | None
+    minimum: MetricValue | None
+    maximum: MetricValue | None
+    unavailable_reason: str | None = None
+
+    @model_validator(mode="after")
+    def validate_geometry(self) -> "ClientScoreGeometry":
+        if self.unavailable_reason is not None:
+            if self.scores or self.empirical_cdf or self.mean is not None:
+                raise ValueError("unavailable score geometry cannot carry scores, CDF points, or summaries")
+            return self
+        if not self.scores or not self.empirical_cdf:
+            raise ValueError("available score geometry requires scores and empirical CDF points")
+        if self.mean is None or self.standard_deviation is None or self.minimum is None or self.maximum is None:
+            raise ValueError("available score geometry requires distribution summaries")
+        return self
+
+
+class ScoreGeometryThresholdOverlay(StrictModel):
+    method: FederatedThresholdMethod
+    threshold: MetricValue
+    client: ClientIdentity | None = None
+
+
+class ScoreGeometryResult(StrictModel):
+    seed: Seed
+    source_score_checksum: Checksum
+    common_support_lower: MetricValue | None
+    common_support_upper: MetricValue | None
+    clients: tuple[ClientScoreGeometry, ...]
+    threshold_overlays: tuple[ScoreGeometryThresholdOverlay, ...]
+    attack_geometry_available: bool
+    attack_geometry_reason: str | None = None
+
+    evidence_role: ClassVar[EvidenceRole] = EvidenceRole.MECHANISM
+
+    @property
+    def availability(self) -> AvailabilityStatus:
+        return AvailabilityStatus.AVAILABLE if self.clients else AvailabilityStatus.UNAVAILABLE
+
+
+_DEFAULT_CDF_QUANTILES = (0.05, 0.25, 0.5, 0.75, 0.95)
+
+
+def empirical_cdf_points(scores: tuple[MetricValue, ...]) -> tuple[EmpiricalCdfPoint, ...]:
+    if not scores:
+        raise ValueError("empirical CDF requires at least one score")
+    ordered = tuple(sorted(score.value for score in scores))
+    count = len(ordered)
+    return tuple(
+        EmpiricalCdfPoint(
+            score=MetricValue(value),
+            cumulative_probability=Ratio((index + 1) / count),
+        )
+        for index, value in enumerate(ordered)
+    )
+
+
+def client_score_geometry(
+    *,
+    client: ClientIdentity,
+    score_role: ScoreRole,
+    scores: tuple[MetricValue, ...],
+    quantiles: tuple[float, ...] = _DEFAULT_CDF_QUANTILES,
+) -> ClientScoreGeometry:
+    if not scores:
+        return ClientScoreGeometry(
+            client=client,
+            score_role=score_role,
+            scores=(),
+            quantiles=(),
+            empirical_cdf=(),
+            mean=None,
+            standard_deviation=None,
+            minimum=None,
+            maximum=None,
+            unavailable_reason="no scores available for the declared role",
+        )
+    array = _metric_array(scores)
+    quantile_values = tuple(MetricValue(float(np.quantile(array, level, method="linear"))) for level in quantiles)
+    return ClientScoreGeometry(
+        client=client,
+        score_role=score_role,
+        scores=scores,
+        quantiles=quantile_values,
+        empirical_cdf=empirical_cdf_points(scores),
+        mean=MetricValue(float(np.mean(array))),
+        standard_deviation=MetricValue(float(np.std(array, ddof=0))),
+        minimum=MetricValue(float(np.min(array))),
+        maximum=MetricValue(float(np.max(array))),
+    )
+
+
+def score_geometry_from_client_vectors(
+    *,
+    seed: Seed,
+    source_score_checksum: Checksum,
+    benign_evaluation: tuple[tuple[ClientIdentity, tuple[MetricValue, ...]], ...],
+    attack_evaluation: tuple[tuple[ClientIdentity, tuple[MetricValue, ...]], ...] | None,
+    threshold_overlays: tuple[ScoreGeometryThresholdOverlay, ...],
+    attack_geometry_available: bool,
+    attack_geometry_reason: str | None = None,
+) -> ScoreGeometryResult:
+    clients = tuple(
+        client_score_geometry(client=client, score_role=ScoreRole.BENIGN_EVALUATION, scores=scores)
+        for client, scores in sorted(benign_evaluation, key=lambda item: item[0])
+    )
+    if attack_evaluation is not None and attack_geometry_available:
+        clients = clients + tuple(
+            client_score_geometry(client=client, score_role=ScoreRole.ATTACK_EVALUATION, scores=scores)
+            for client, scores in sorted(attack_evaluation, key=lambda item: item[0])
+        )
+    available = tuple(
+        item
+        for item in clients
+        if item.unavailable_reason is None
+        and item.scores
+        and item.minimum is not None
+        and item.maximum is not None
+    )
+    if available:
+        lower = MetricValue(min(item.minimum.value for item in available if item.minimum is not None))
+        upper = MetricValue(max(item.maximum.value for item in available if item.maximum is not None))
+    else:
+        lower = upper = None
+    return ScoreGeometryResult(
+        seed=seed,
+        source_score_checksum=source_score_checksum,
+        common_support_lower=lower,
+        common_support_upper=upper,
+        clients=clients,
+        threshold_overlays=threshold_overlays,
+        attack_geometry_available=attack_geometry_available,
+        attack_geometry_reason=attack_geometry_reason,
+    )

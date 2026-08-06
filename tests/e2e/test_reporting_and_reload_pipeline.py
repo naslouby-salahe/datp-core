@@ -16,16 +16,29 @@ from datp_core.reporting.validation import (
 def test_reporting_export_is_deterministic_and_preserves_provenance_and_unavailable_outcomes(
     tmp_path: Path,
 ) -> None:
-    permitted = validate_claim(
+    # Confirmatory claims fail closed without a checksum-verified anchor-gate artifact.
+    blocked_confirmatory = validate_claim(
         ClaimRequest(
             kind=ClaimKind.CONFIRMATORY,
             evidence_role=EvidenceRole.CONFIRMATORY,
             metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
             availability=AvailabilityStatus.AVAILABLE,
             evidence_decision=EvidenceDecision.SUPPORTED,
-            anchor_gate_passed=True,
+            verified_anchor_gate=None,
             traffic_rate_available=False,
             wording="Local calibration reduced cross-client FPR dispersion.",
+        )
+    )
+    permitted = validate_claim(
+        ClaimRequest(
+            kind=ClaimKind.SUPPORTIVE,
+            evidence_role=EvidenceRole.SUPPORTIVE,
+            metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
+            availability=AvailabilityStatus.AVAILABLE,
+            evidence_decision=EvidenceDecision.SUPPORTED,
+            verified_anchor_gate=None,
+            traffic_rate_available=False,
+            wording="Supportive threshold construction sensitivity remains claim-bounded.",
         )
     )
     blocked = validate_claim(
@@ -35,7 +48,7 @@ def test_reporting_export_is_deterministic_and_preserves_provenance_and_unavaila
             metric=MetricId.TRUE_POSITIVE_RATE,
             availability=AvailabilityStatus.AVAILABLE,
             evidence_decision=EvidenceDecision.BOUNDARY,
-            anchor_gate_passed=True,
+            verified_anchor_gate=None,
             traffic_rate_available=False,
             wording="Edge clients improved attack detection.",
         )
@@ -65,7 +78,7 @@ def test_reporting_export_is_deterministic_and_preserves_provenance_and_unavaila
     )
     bundle = PublicationBundle(
         provenance=provenance,
-        claims=(permitted, blocked),
+        claims=(permitted, blocked, blocked_confirmatory),
         tables=(table,),
         figures=(),
     )
@@ -76,11 +89,13 @@ def test_reporting_export_is_deterministic_and_preserves_provenance_and_unavaila
 
     assert permitted.status is ClaimStatus.PERMITTED
     assert blocked.status is ClaimStatus.BLOCKED
+    assert blocked_confirmatory.status is ClaimStatus.BLOCKED
     assert first == second
     assert provenance.analysis_checksum.value in first
     assert provenance.experiment.value in first
     assert provenance.evidence_role.value in first
     assert permitted.wording in first
     assert blocked.reason in first
+    assert "anchor-gate artifact" in blocked_confirmatory.reason
     assert "| true_positive_rate | unavailable |" in first
     assert "| true_positive_rate | 0" not in first
