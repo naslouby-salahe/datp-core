@@ -2,7 +2,6 @@ from datp_core.analysis.contrasts import (
     PairedContrast,
     SupplementaryPairedAnalysisPlan,
 )
-from datp_core.analysis.decisions import decide_confirmatory
 from datp_core.analysis.inference.bootstrap import (
     BcaAdjustment,
     BcaOutcome,
@@ -10,6 +9,7 @@ from datp_core.analysis.inference.bootstrap import (
     paired_bca_interval,
     supplementary_paired_bca_interval,
 )
+from datp_core.analysis.scientific_decision import decide_confirmatory
 from datp_core.domain.enums import (
     AvailabilityStatus,
     EvidenceRole,
