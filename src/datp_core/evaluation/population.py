@@ -29,11 +29,8 @@ from datp_core.domain.values import (
     checksum_file,
 )
 from datp_core.evaluation.client_metrics import calculate_client_metrics
-from datp_core.evaluation.cohorts import (
-    ClientEligibilityRecord,
-    EvaluationCohortManifest,
-    cohort_record_for_client,
-)
+from datp_core.evaluation.cohort.construction import cohort_record_for_client
+from datp_core.evaluation.cohort.contracts import ClientEligibilityRecord, EvaluationCohortManifest
 from datp_core.evaluation.communication import (
     CommunicationDiagnostic,
     CommunicationMessageDiagnostic,
