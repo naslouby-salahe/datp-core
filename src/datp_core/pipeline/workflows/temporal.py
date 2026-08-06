@@ -26,6 +26,7 @@ from datp_core.pipeline.decision.federated import (
     construct_federated_thresholds,
     evaluate_federated_detector,
 )
+from datp_core.pipeline.execution.checkpoints import select_execution_checkpoint
 from datp_core.pipeline.execution.context import (
     FederatedExecutionContext,
     client_scoring_inputs,
@@ -33,13 +34,10 @@ from datp_core.pipeline.execution.context import (
     training_autoencoder,
     training_feature_names,
 )
+from datp_core.pipeline.execution.evidence import eligible_calibration_scores
 from datp_core.pipeline.execution.layout import ExecutionArtifactDirectory, bounded_evidence_seed_directory
-from datp_core.pipeline.execution.scoring import (
-    eligible_calibration_scores,
-    matched_static_reference_inputs,
-    score_selected_checkpoint,
-    select_execution_checkpoint,
-)
+from datp_core.pipeline.execution.matched_reference import matched_static_reference_inputs
+from datp_core.pipeline.execution.score_generation import score_selected_checkpoint
 from datp_core.pipeline.planning import ExperimentCoordinate, expand_experiment_plan
 from datp_core.pipeline.scoring.models import FederatedScoreArtifactManifest
 from datp_core.protocols.calibration import CANONICAL_QUANTILE
