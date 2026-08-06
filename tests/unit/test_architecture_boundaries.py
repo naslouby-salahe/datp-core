@@ -97,3 +97,14 @@ def test_threshold_estimation_math_does_not_read_artifacts() -> None:
     assert "datp_core.protocols.inference" not in imported
     assert all(not module.startswith("datp_core.runtime") for module in imported)
     assert "checksum_file" not in diagnostics.read_text(encoding="utf-8")
+
+
+def test_evaluation_cohorts_have_separate_contract_classification_and_evidence_owners() -> None:
+    evaluation = _SOURCE_ROOT / "evaluation"
+    cohort = evaluation / "cohort"
+    assert not (evaluation / "cohorts.py").exists()
+    assert (cohort / "contracts.py").is_file()
+    assert (cohort / "construction.py").is_file()
+    assert (cohort / "evidence.py").is_file()
+    assert _source_importers("datp_core.evaluation.cohorts") == ()
+    assert "polars" not in _imported_modules(cohort / "construction.py")
