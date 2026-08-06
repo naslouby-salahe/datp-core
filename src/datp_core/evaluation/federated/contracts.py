@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import EvidenceRole, FederatedThresholdMethod, StageOperationId
+from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import Checksum, CoverageTarget, ThresholdValue
 from datp_core.evaluation.cohort.contracts import EvaluationCohortManifest
 from datp_core.evaluation.communication import CommunicationDiagnostic, CommunicationMessageDiagnostic
@@ -38,9 +39,9 @@ class ThresholdEstimationStageInput:
 
     def __post_init__(self) -> None:
         if self.verified_benign_scores.client != self.provenance.client:
-            raise ValueError("threshold-estimation evidence must match the evaluated client")
+            raise ScientificContractError("threshold-estimation evidence must match the evaluated client")
         if self.verified_benign_scores.coordinate != self.provenance.coordinate:
-            raise ValueError("threshold-estimation evidence must match the evaluated coordinate")
+            raise ScientificContractError("threshold-estimation evidence must match the evaluated coordinate")
 
 
 @dataclass(frozen=True, slots=True)
