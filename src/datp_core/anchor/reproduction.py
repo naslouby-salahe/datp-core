@@ -39,8 +39,7 @@ from datp_core.domain.enums import ContractSubject, FederatedThresholdMethod, Me
 from datp_core.domain.errors import AnchorReproductionError
 from datp_core.domain.values import MetricValue, Seed, checksum_file
 from datp_core.protocols.anchor import ANCHOR_DECISION_PROTOCOL, HISTORICAL_ANCHOR_SEED_COHORT
-from datp_core.protocols.anchor_contracts import AnchorDecisionProtocol
-from datp_core.protocols.models import SeedCohort
+from datp_core.protocols.models import AnchorDecisionProtocol, SeedCohort
 from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT
 
 
