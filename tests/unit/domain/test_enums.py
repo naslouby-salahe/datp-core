@@ -212,6 +212,8 @@ EXPECTED_MEMBERS = (
                 "COMMUNICATION_BYTES",
                 "RECONSTRUCTION_ERROR",
                 "EMPIRICAL_CUMULATIVE_PROBABILITY",
+                "JAIN_FAIRNESS_INDEX",
+                "GINI_COEFFICIENT",
             )
         ),
     ),

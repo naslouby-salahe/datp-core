@@ -128,3 +128,30 @@ def test_alert_burden_requires_traffic_rate_evidence() -> None:
         )
     )
     assert not decision.wording
+
+
+def test_supportive_claim_cannot_reuse_confirmatory_evidence_role() -> None:
+    decision = validate_claim(
+        claim_request(
+            kind=ClaimKind.SUPPORTIVE,
+            evidence_role=EvidenceRole.CONFIRMATORY,
+            metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
+            wording="Supportive evidence strengthens the confirmatory claim",
+        )
+    )
+    assert decision.status is ClaimStatus.BLOCKED
+    assert "confirmatory evidence role" in decision.reason
+
+
+def test_supportive_null_evidence_cannot_render_as_positive_support() -> None:
+    decision = validate_claim(
+        claim_request(
+            kind=ClaimKind.SUPPORTIVE,
+            evidence_role=EvidenceRole.SUPPORTIVE,
+            metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
+            evidence_decision=EvidenceDecision.NULL,
+            wording="Supportive threshold construction improved equity",
+        )
+    )
+    assert decision.status is ClaimStatus.NARROWED
+    assert decision.wording.startswith("[NARROWED:")

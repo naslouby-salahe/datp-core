@@ -161,6 +161,58 @@ def run_confirmatory_campaign() -> ConfirmatoryCampaignResult:
     return ConfirmatoryCampaignResult(seeds=seeds)
 
 
+def run_family_grouped_mechanism_seed(training_seed: Seed) -> ConfirmatorySeedResult:
+    """Execute the family/grouped mechanism ladder for one seed under fixed FedAvg detector.
+
+    Publishes FAMILY_THRESHOLD and CLUSTER_THRESHOLD (with the rest of the locked
+    ladder methods declared on FAMILY_AND_GROUPED_GRANULARITY) so confirmatory
+    analysis can attach B3/B4 mechanism evidence when present.
+    """
+    matches = tuple(item for item in EXPERIMENTS if item.id is ExperimentId.FAMILY_AND_GROUPED_GRANULARITY)
+    if len(matches) != 1:
+        raise ScientificContractError("family/grouped mechanism experiment must be declared exactly once")
+    declaration = matches[0]
+    plan = expand_experiment_plan(
+        declarations=(declaration,),
+        seed_cohort=SeedCohort(values=(training_seed,)),
+        evidence=(
+            PlanningEvidence(
+                experiment=declaration.id,
+                disposition=PlanDisposition.EXECUTABLE,
+                reason=(
+                    "the family/grouped mechanism entry point supplies the locked "
+                    "natural-device execution prerequisites for B3/B4 evidence"
+                ),
+            ),
+        ),
+    )
+    campaign = build_campaign(plan)
+    if not campaign.entries:
+        raise ScientificContractError("family/grouped planning produced no executable coordinates")
+    execution = execute_campaign(
+        campaign=campaign,
+        stage_runner=PipelineStageRunner(),
+        output_store=CompletionRecordOutputStore(),
+        output_root=OUTPUTS_ROOT,
+    )
+    failed = tuple(result for result in execution.experiments if not result.successful)
+    if failed:
+        blocked = ", ".join(result.coordinate.stable_key for result in failed)
+        raise ScientificContractError(f"family/grouped execution did not complete: {blocked}")
+    available_methods = frozenset(entry.coordinate.threshold_method for entry in campaign.entries)
+    methods = tuple(method for method in declaration.federated_thresholds if method in available_methods)
+    return ConfirmatorySeedResult(
+        training_seed=training_seed,
+        campaign_digest=campaign.digest,
+        completed_threshold_methods=methods,
+    )
+
+
+def run_family_grouped_mechanism_campaign() -> ConfirmatoryCampaignResult:
+    seeds = tuple(run_family_grouped_mechanism_seed(seed) for seed in CONFIRMATORY_SEED_COHORT.values)
+    return ConfirmatoryCampaignResult(seeds=seeds)
+
+
 def analyze_confirmatory_campaign(
     *,
     anchor_gate_diagnostics_directory: Path | None = None,
@@ -453,7 +505,12 @@ def _client_evaluation_scores(
 
 
 def _confirmatory_cluster_mechanisms() -> tuple[MechanismEvidence, ...]:
-    """Load persisted CLUSTER_THRESHOLD results for the full confirmatory seed cohort."""
+    """Load CLUSTER_THRESHOLD mechanism evidence when a complete cohort is present.
+
+    Confirmatory B1-versus-B2 analysis does not require B4. A completely absent
+    cluster cohort yields no mechanism records. A partial or corrupt cohort fails
+    closed so incomplete mechanism execution cannot look complete.
+    """
     from pydantic import TypeAdapter, ValidationError
 
     from datp_core.analysis.mechanisms import (
@@ -492,9 +549,18 @@ def _confirmatory_cluster_mechanisms() -> tuple[MechanismEvidence, ...]:
             continue
         available.append((seed, result, threshold_result_checksum(result)))
 
-    if unavailable or corrupt or len(available) != CONFIRMATORY_SEED_COHORT.member_count.value:
+    if corrupt:
         raise ScientificContractError(
-            "cluster threshold cohort must cover every confirmatory seed with a complete publication; "
+            "cluster threshold cohort has corrupt publications; "
+            f"available={[seed.value for seed, _, _ in available]} "
+            f"unavailable={[seed.value for seed in unavailable]} "
+            f"corrupt={[seed.value for seed in corrupt]}"
+        )
+    if not available:
+        return ()
+    if unavailable or len(available) != CONFIRMATORY_SEED_COHORT.member_count.value:
+        raise ScientificContractError(
+            "cluster threshold cohort is partial and must cover every confirmatory seed or none; "
             f"available={[seed.value for seed, _, _ in available]} "
             f"unavailable={[seed.value for seed in unavailable]} "
             f"corrupt={[seed.value for seed in corrupt]}"

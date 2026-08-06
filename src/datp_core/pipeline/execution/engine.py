@@ -23,6 +23,7 @@ from datp_core.domain.values.counts import ByteCount
 from datp_core.evaluation.federated.publication import FederatedEvaluationAssetName
 from datp_core.evaluation.models import metric_by_id
 from datp_core.pipeline.coordinates import ExecutionRoute, ExperimentCoordinate, execution_route_for
+from datp_core.pipeline.execution.evidence import load_evaluation_document
 from datp_core.pipeline.execution.layout import EvaluationRunAssetDirectory
 from datp_core.pipeline.execution.models import (
     ANCHOR_REPRODUCTION_RECIPE,
@@ -282,11 +283,6 @@ class PipelineStageRunner:
                 return self._verify_anchor(stage, coordinate, workspace)
             case PipelineStage.FINALIZE_PUBLICATION:
                 return self._finalize_publication(stage, coordinate, provenance, output_root, workspace)
-            case PipelineStage.PUBLISH_REPORT:
-                raise ScientificContractError(
-                    "report publication is a campaign-level responsibility",
-                    subject=coordinate.experiment,
-                )
 
     def _materialize_dataset(self, stage: PipelineStage, coordinate: ExperimentCoordinate) -> StageExecution:
         request = DatasetMaterializationRequest(data_root=DATA_ROOT, datasets=(coordinate.dataset,))
@@ -430,14 +426,11 @@ class PipelineStageRunner:
         workspace: ExperimentWorkspace,
     ) -> StageExecution:
         selected = workspace.selection.selected
-        evaluation_document_path = (
-            workspace.run_directory() / EvaluationRunAssetDirectory.EVALUATION / FederatedEvaluationAssetName.DOCUMENT
-        )
-        if not evaluation_document_path.is_file():
-            raise ScientificContractError(
-                "finalization requires a completed evaluation document",
-                subject=coordinate.experiment,
-            )
+        evaluation_directory = workspace.run_directory() / EvaluationRunAssetDirectory.EVALUATION
+        evaluation_document_path = evaluation_directory / FederatedEvaluationAssetName.DOCUMENT
+        evaluation_complete_path = evaluation_directory / FederatedEvaluationAssetName.COMPLETE
+        # Fail closed unless the document and COMPLETE marker agree on identity.
+        load_evaluation_document(evaluation_document_path)
         artifacts = (
             ArtifactRecord(
                 kind=ArtifactKind.MODEL_TENSORS,
@@ -451,6 +444,13 @@ class PipelineStageRunner:
                 relative_path=evaluation_document_path.relative_to(output_root),
                 checksum=checksum_file(evaluation_document_path),
                 byte_count=ByteCount(evaluation_document_path.stat().st_size),
+                state=ArtifactState.PUBLISHED,
+            ),
+            ArtifactRecord(
+                kind=ArtifactKind.MANIFEST,
+                relative_path=evaluation_complete_path.relative_to(output_root),
+                checksum=checksum_file(evaluation_complete_path),
+                byte_count=ByteCount(evaluation_complete_path.stat().st_size),
                 state=ArtifactState.PUBLISHED,
             ),
         )

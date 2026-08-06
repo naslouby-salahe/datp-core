@@ -64,10 +64,41 @@ def eligible_calibration_scores(
 
 
 def load_evaluation_document(path: Path) -> FederatedEvaluationDocument:
+    """Load a federated evaluation document only when its COMPLETE digest matches.
+
+    Analysis and peer fixed-score discovery must not accept incomplete, partial,
+    or hand-edited documents that lack a matching publication COMPLETE marker.
+    """
+    from datp_core.domain.provenance import canonical_checksum
+    from datp_core.evaluation.federated.publication import FederatedEvaluationAssetName
+
+    complete_path = path.with_name(FederatedEvaluationAssetName.COMPLETE)
     try:
-        return FederatedEvaluationDocument.model_validate_json(path.read_text(encoding="utf-8"))
+        if not path.is_file():
+            raise ScientificContractError(
+                f"completed evaluation document is missing: {path}",
+                subject=ContractSubject.ARTIFACT_PATH,
+            )
+        if not complete_path.is_file():
+            raise ScientificContractError(
+                f"evaluation COMPLETE marker is missing for document: {path}",
+                subject=ContractSubject.ARTIFACT_PATH,
+            )
+        document = FederatedEvaluationDocument.model_validate_json(path.read_text(encoding="utf-8"))
+        marker = complete_path.read_text(encoding="utf-8").strip()
+        if marker != canonical_checksum(document).value:
+            raise ScientificContractError(
+                f"evaluation COMPLETE digest does not match document identity: {path}",
+                subject=ContractSubject.ARTIFACT_PATH,
+            )
+        return document
+    except ScientificContractError:
+        raise
     except (OSError, UnicodeError, ValidationError, ValueError) as error:
-        raise ScientificContractError(f"completed evaluation document is unreadable or invalid: {path}") from error
+        raise ScientificContractError(
+            f"completed evaluation document is unreadable or invalid: {path}",
+            subject=ContractSubject.ARTIFACT_PATH,
+        ) from error
 
 
 def population_metric(document: FederatedEvaluationDocument, metric: MetricId) -> MetricValue:

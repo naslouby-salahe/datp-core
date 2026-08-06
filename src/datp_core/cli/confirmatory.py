@@ -10,6 +10,8 @@ from datp_core.pipeline.workflows.confirmatory import (
     analyze_confirmatory_campaign,
     run_confirmatory_campaign,
     run_confirmatory_seed,
+    run_family_grouped_mechanism_campaign,
+    run_family_grouped_mechanism_seed,
 )
 
 app = typer.Typer(no_args_is_help=True)
@@ -31,6 +33,19 @@ def confirmatory_campaign() -> None:
 @app.command("analyze-confirmatory")
 def analyze_confirmatory() -> None:
     typer.echo(str(analyze_confirmatory_campaign()))
+
+
+@app.command("family-grouped-mechanism-seed")
+def family_grouped_mechanism_seed(training_seed: Annotated[int, typer.Option(min=0)]) -> None:
+    seed = declared_confirmatory_seed(training_seed)
+    result = run_family_grouped_mechanism_seed(seed)
+    typer.echo(f"seed={seed.value} thresholds={','.join(item.value for item in result.completed_threshold_methods)}")
+
+
+@app.command("family-grouped-mechanism-campaign")
+def family_grouped_mechanism_campaign() -> None:
+    result = run_family_grouped_mechanism_campaign()
+    typer.echo(f"seeds={len(result.seeds)}")
 
 
 @app.command("centralized-reference-seed")

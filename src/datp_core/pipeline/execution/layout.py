@@ -35,6 +35,12 @@ def federated_training_directory(coordinate: FederatedTrainingCoordinate, output
         if coordinate.model_coefficient is not None
         else CoordinateIdentitySegment.NO_MODEL_COEFFICIENT.value
     )
+    if coordinate.controlled_partition_kind is None:
+        partition = CoordinateIdentitySegment.NO_CONTROLLED_PARTITION.value
+    elif coordinate.dirichlet_concentration is not None:
+        partition = f"{coordinate.controlled_partition_kind.value}:{coordinate.dirichlet_concentration.value}"
+    else:
+        partition = coordinate.controlled_partition_kind.value
     return (
         output_root
         / ExecutionRootDirectory.FEDERATED
@@ -44,6 +50,7 @@ def federated_training_directory(coordinate: FederatedTrainingCoordinate, output
         / coordinate.preprocessing_identity.value
         / coordinate.model.value
         / coefficient
+        / partition
     )
 
 

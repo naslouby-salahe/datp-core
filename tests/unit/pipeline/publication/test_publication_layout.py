@@ -56,6 +56,9 @@ def test_threshold_methods_keep_distinct_evaluation_runs() -> None:
 
 
 def test_every_non_metric_coordinate_dimension_changes_the_run_identity() -> None:
+    from datp_core.datasets.partitioning.contracts import ControlledPartitionKind
+    from datp_core.domain.values.ratios import DirichletConcentration, Quantile
+
     root = Path("outputs")
     primary = coordinate()
     alternatives = (
@@ -72,10 +75,42 @@ def test_every_non_metric_coordinate_dimension_changes_the_run_identity() -> Non
         replace(primary, split_protocol=SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE),
         replace(primary, preprocessing_protocol=PreprocessingProtocolId.FEDERATED_POOLED_MIN_MAX),
         replace(primary, threshold_method=FederatedThresholdMethod.LOCAL_THRESHOLD),
+        replace(primary, threshold_quantile=Quantile(0.90)),
+        replace(
+            primary,
+            population=PopulationId.NBAIOT_DIRICHLET_CLIENTS,
+            controlled_partition_kind=ControlledPartitionKind.DIRICHLET,
+            dirichlet_concentration=DirichletConcentration(0.1),
+        ),
     )
 
     primary_path = evaluation_run_directory(root, primary)
     assert all(evaluation_run_directory(root, alternative) != primary_path for alternative in alternatives)
+
+
+def test_quantile_and_controlled_partition_are_path_identity_dimensions() -> None:
+    from datp_core.datasets.partitioning.contracts import ControlledPartitionKind
+    from datp_core.domain.values.ratios import DirichletConcentration, Quantile
+
+    root = Path("outputs")
+    base = coordinate()
+    q90 = replace(base, threshold_quantile=Quantile(0.90))
+    q99 = replace(base, threshold_quantile=Quantile(0.99))
+    dirichlet = replace(
+        base,
+        population=PopulationId.NBAIOT_DIRICHLET_CLIENTS,
+        controlled_partition_kind=ControlledPartitionKind.DIRICHLET,
+        dirichlet_concentration=DirichletConcentration(0.5),
+    )
+    iid = replace(
+        base,
+        population=PopulationId.NBAIOT_DIRICHLET_CLIENTS,
+        controlled_partition_kind=ControlledPartitionKind.IID,
+        dirichlet_concentration=None,
+    )
+    assert evaluation_run_directory(root, q90) != evaluation_run_directory(root, q99)
+    assert evaluation_run_directory(root, dirichlet) != evaluation_run_directory(root, iid)
+    assert evaluation_run_directory(root, dirichlet) != evaluation_run_directory(root, base)
 
 
 def test_bounded_evidence_paths_separate_external_and_temporal_claims() -> None:

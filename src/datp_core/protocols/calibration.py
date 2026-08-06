@@ -39,6 +39,7 @@ class KMeansInitialization(StrEnum):
 
 class ClusterThresholdAggregation(StrEnum):
     ARITHMETIC_MEAN_OF_ELIGIBLE_LOCAL_THRESHOLDS = "arithmetic_mean_of_eligible_local_thresholds"
+    MEDIAN_OF_ELIGIBLE_LOCAL_THRESHOLDS = "median_of_eligible_local_thresholds"
 
 
 REQUIRED_CLUSTER_FINGERPRINT_FEATURES = (
@@ -159,8 +160,12 @@ class ClusterThresholdProtocol(StrictModel):
                 "cluster group count must match the locked group count",
             ),
             (
-                self.threshold_aggregation is ClusterThresholdAggregation.ARITHMETIC_MEAN_OF_ELIGIBLE_LOCAL_THRESHOLDS,
-                "cluster thresholds must average eligible local thresholds",
+                self.threshold_aggregation
+                in {
+                    ClusterThresholdAggregation.ARITHMETIC_MEAN_OF_ELIGIBLE_LOCAL_THRESHOLDS,
+                    ClusterThresholdAggregation.MEDIAN_OF_ELIGIBLE_LOCAL_THRESHOLDS,
+                },
+                "cluster thresholds must aggregate eligible local thresholds by locked mean or median",
             ),
         )
         for satisfied, message in requirements:
@@ -228,4 +233,17 @@ CLUSTER_THRESHOLD_PROTOCOL = ClusterThresholdProtocol(
     random_state=LOCKED_CLUSTER_RANDOM_STATE,
     group_count=LOCKED_CLUSTER_GROUP_COUNT,
     threshold_aggregation=ClusterThresholdAggregation.ARITHMETIC_MEAN_OF_ELIGIBLE_LOCAL_THRESHOLDS,
+)
+CLUSTER_MEDIAN_THRESHOLD_PROTOCOL = ClusterThresholdProtocol(
+    method=FederatedThresholdMethod.CLUSTER_THRESHOLD,
+    quantile=CANONICAL_QUANTILE,
+    fingerprint_features=REQUIRED_CLUSTER_FINGERPRINT_FEATURES,
+    feature_standardization=ClusterFeatureStandardization.STANDARD_SCALER,
+    assignment_algorithm=ClusterAssignmentAlgorithm.KMEANS,
+    initialization=KMeansInitialization.KMEANS_PLUS_PLUS,
+    initialization_count=LOCKED_CLUSTER_INITIALIZATION_COUNT,
+    maximum_iterations=LOCKED_CLUSTER_MAXIMUM_ITERATIONS,
+    random_state=LOCKED_CLUSTER_RANDOM_STATE,
+    group_count=LOCKED_CLUSTER_GROUP_COUNT,
+    threshold_aggregation=ClusterThresholdAggregation.MEDIAN_OF_ELIGIBLE_LOCAL_THRESHOLDS,
 )

@@ -85,9 +85,15 @@ FPR_POPULATION_METRIC_IDS: tuple[MetricId, ...] = (
     MetricId.WORST_CLIENT_FPR,
 )
 
+EQUITY_INDEX_METRIC_IDS: tuple[MetricId, ...] = (
+    MetricId.JAIN_FAIRNESS_INDEX,
+    MetricId.GINI_COEFFICIENT,
+)
+
 POPULATION_METRIC_IDS: frozenset[MetricId] = frozenset(
     (
         *FPR_POPULATION_METRIC_IDS,
+        *EQUITY_INDEX_METRIC_IDS,
         MetricId.TPR_COEFFICIENT_OF_VARIATION,
         MetricId.P10_BINARY_MACRO_F1,
         MetricId.WORST_CLIENT_BALANCED_ACCURACY,

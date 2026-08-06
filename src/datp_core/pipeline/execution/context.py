@@ -124,6 +124,8 @@ def resolve_execution_context(coordinate: ExperimentCoordinate, output_root: Pat
         preprocessing_identity=coordinate.preprocessing_protocol,
         model=coordinate.training_model,
         model_coefficient=federated_model_coefficient(coordinate),
+        controlled_partition_kind=coordinate.controlled_partition_kind,
+        dirichlet_concentration=coordinate.dirichlet_concentration,
     )
     execution_identity = execution_identity_for(coordinate)
     if execution_identity is None:

@@ -165,18 +165,24 @@ def raw_source_file(
     )
 
 
-def raw_inventory(dataset: DatasetId, sources: tuple[RawSourceFile, ...]) -> RawDatasetInventory:
+def raw_inventory(
+    dataset: DatasetId,
+    sources: tuple[RawSourceFile, ...],
+    *,
+    excluded_source_count: SourceFileCount | None = None,
+) -> RawDatasetInventory:
     if not sources:
         raise ValueError("raw inventories require at least one accepted source")
     ordered_sources = tuple(sorted(sources, key=lambda source: source.relative_path.as_posix()))
     if tuple(source.dataset for source in ordered_sources) != (dataset,) * len(ordered_sources):
         raise ValueError("raw inventory sources must belong to its dataset")
     total_rows = _inventory_row_count(ordered_sources)
+    excluded = SourceFileCount(0) if excluded_source_count is None else excluded_source_count
     return RawDatasetInventory(
         dataset=dataset,
         sources=ordered_sources,
         accepted_source_count=SourceFileCount(len(ordered_sources)),
-        excluded_source_count=SourceFileCount(0),
+        excluded_source_count=excluded,
         accepted_row_count=total_rows,
         checksum=_inventory_checksum(ordered_sources),
     )

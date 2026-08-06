@@ -1,5 +1,7 @@
 """Held-out federated evaluation over immutable score and threshold evidence."""
 
+from typing import assert_never
+
 import polars as pl
 
 from datp_core.datasets.partitioning.contracts import (
@@ -422,8 +424,8 @@ def _deployment_fallback_threshold(
             return ThresholdValue(unweighted_mean(tuple(item.threshold.value for item in assignments)))
         case ThresholdUnavailableResult():
             return None
-        case _:
-            return None
+        case _ as unreachable:
+            assert_never(unreachable)
 
 
 def _score_arrays(

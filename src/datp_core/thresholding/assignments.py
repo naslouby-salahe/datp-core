@@ -61,6 +61,17 @@ def mean_local_threshold(quantiles: tuple[LocalQuantile, ...]) -> ThresholdValue
     return ThresholdValue(fmean(item.value.value for item in quantiles))
 
 
+def median_local_threshold(quantiles: tuple[LocalQuantile, ...]) -> ThresholdValue:
+    ordered = tuple(sorted(item.value.value for item in quantiles))
+    count = len(ordered)
+    if count == 0:
+        raise ValueError("median local threshold requires at least one local quantile")
+    mid = count // 2
+    if count % 2 == 1:
+        return ThresholdValue(ordered[mid])
+    return ThresholdValue((ordered[mid - 1] + ordered[mid]) / 2.0)
+
+
 def require_unique_clients(
     clients: tuple[ClientIdentity, ...],
     label: str,
@@ -144,6 +155,7 @@ def validate_group_membership(
     members_label: str,
     match_message: str,
     threshold_message: str,
+    expected_group_threshold: ThresholdValue | None = None,
 ) -> None:
     require_unique_clients(members, members_label)
     quantile_clients = tuple(item.client for item in contributing_local_quantiles)
@@ -153,10 +165,15 @@ def validate_group_membership(
         match_message,
         ContractSubject.CLIENT_IDENTITY,
     )
+    expected = (
+        expected_group_threshold
+        if expected_group_threshold is not None
+        else mean_local_threshold(contributing_local_quantiles)
+    )
     require_contract(
         floats_exactly_equal(
             group_threshold.value,
-            mean_local_threshold(contributing_local_quantiles).value,
+            expected.value,
         ),
         threshold_message,
         ContractSubject.THRESHOLD,

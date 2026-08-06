@@ -18,7 +18,7 @@ from datp_core.datasets.materialization import (
 )
 from datp_core.datasets.materialization_lifecycle import CanonicalMaterializationRequest, materialize_canonical
 from datp_core.domain.enums import AvailabilityStatus, DatasetId
-from datp_core.domain.values.counts import RowCount, ValidationIssueCount
+from datp_core.domain.values.counts import RowCount, SourceFileCount, ValidationIssueCount
 
 from .reader import NBaIoTReader
 from .schema import (
@@ -40,14 +40,18 @@ class NBaIoTMaterializer:
         return canonical_directory(canonical_root, NBAIOT_SCHEMA)
 
     def publish(self, raw_root: Path, canonical_root: Path) -> MaterializedDataset:
-        sources = tuple(
-            path
-            for path in sorted(raw_root.glob(f"**/*{NBaIoTArtifactName.CSV_SUFFIX}"))
-            if path.name != NBaIoTArtifactName.STRUCTURE_DEMONSTRATION_FILE
-        )
-        return self.materialize(sources, canonical_root)
+        candidates = tuple(sorted(raw_root.glob(f"**/*{NBaIoTArtifactName.CSV_SUFFIX}")))
+        sources = tuple(path for path in candidates if path.name != NBaIoTArtifactName.STRUCTURE_DEMONSTRATION_FILE)
+        excluded = len(candidates) - len(sources)
+        return self.materialize(sources, canonical_root, excluded_source_count=excluded)
 
-    def materialize(self, source_paths: tuple[Path, ...], canonical_root: Path) -> MaterializedDataset:
+    def materialize(
+        self,
+        source_paths: tuple[Path, ...],
+        canonical_root: Path,
+        *,
+        excluded_source_count: int = 0,
+    ) -> MaterializedDataset:
         ordered_paths = tuple(sorted(source_paths))
         return materialize_canonical(
             CanonicalMaterializationRequest(
@@ -57,12 +61,21 @@ class NBaIoTMaterializer:
                 source_paths=ordered_paths,
                 source_path_resolver=source_relative_path,
                 asset_role_type=CanonicalAssetRole,
-                prepare_publication=lambda: self._prepare_publication(ordered_paths, canonical_root),
+                prepare_publication=lambda: self._prepare_publication(
+                    ordered_paths,
+                    canonical_root,
+                    excluded_source_count=excluded_source_count,
+                ),
             )
         )
 
     @staticmethod
-    def _prepare_publication(source_paths: tuple[Path, ...], canonical_root: Path) -> CanonicalPublication:
+    def _prepare_publication(
+        source_paths: tuple[Path, ...],
+        canonical_root: Path,
+        *,
+        excluded_source_count: int = 0,
+    ) -> CanonicalPublication:
         reader = NBaIoTReader()
         frames = tuple(reader.read(path) for path in source_paths)
         row_counts = tuple(reader.validate_finite_values(frame) for frame in frames)
@@ -80,6 +93,7 @@ class NBaIoTMaterializer:
                 )
                 for path, row_count in zip(source_paths, row_counts, strict=True)
             ),
+            excluded_source_count=SourceFileCount(excluded_source_count),
         )
         report = DatasetValidationReport(
             DatasetId.NBAIOT,

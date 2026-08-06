@@ -20,6 +20,7 @@ def test_dagster_assets_cover_workflow_surface() -> None:
     assert {
         "deterministic_plan",
         "confirmatory_campaign",
+        "family_grouped_mechanism_campaign",
         "confirmatory_evidence",
         "centralized_reference_seed",
         "ditto_stress_campaign",

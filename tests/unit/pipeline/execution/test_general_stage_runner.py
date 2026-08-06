@@ -92,13 +92,6 @@ def test_ciciot2023_dataset_is_blocked_for_undeclared_autoencoder() -> None:
     assert "CICIOT2023" in result.evidence
 
 
-def test_publish_report_is_rejected_as_a_per_coordinate_stage() -> None:
-    runner = PipelineStageRunner()
-    result = runner.run(PipelineStage.PUBLISH_REPORT, coordinate(), provenance(), OUTPUT_ROOT)
-    assert result.outcome is StageOutcome.BLOCKED
-    assert "campaign-level" in result.evidence
-
-
 def test_verify_anchor_rejects_experiments_other_than_the_historical_reproduction() -> None:
     runner = PipelineStageRunner()
     result = runner.run(PipelineStage.VERIFY_ANCHOR, coordinate(), provenance(), OUTPUT_ROOT)

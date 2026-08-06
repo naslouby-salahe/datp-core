@@ -95,6 +95,7 @@ def preprocess_federated(
         protocol=protocol,
         canonical_schema_checksum=schema.checksum,
         data_root=request.data_root,
+        dirichlet_condition=request.dirichlet_condition,
     )
     partitions = client_partitions(
         joined,

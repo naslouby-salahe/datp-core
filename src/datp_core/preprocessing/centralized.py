@@ -116,6 +116,12 @@ def publish_pooled_preprocessing(request: PooledPublishRequest) -> PooledPreproc
             preprocessing_identity=context.protocol.identity,
             branch=ProcessedDataBranch.CENTRALIZED_REFERENCE,
             client_identity=None,
+            controlled_partition_kind=(
+                None if context.dirichlet_condition is None else context.dirichlet_condition.kind
+            ),
+            dirichlet_concentration=(
+                None if context.dirichlet_condition is None else context.dirichlet_condition.concentration
+            ),
         ),
     )
     asset_names = processed_asset_names(context.split_protocol_identity)
@@ -258,6 +264,7 @@ def preprocess_centralized_population(
                 protocol=protocol,
                 canonical_schema_checksum=schema.checksum,
                 data_root=request.data_root,
+                dirichlet_condition=request.dirichlet_condition,
             ),
             partitions=partitions,
         )

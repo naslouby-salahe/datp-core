@@ -24,7 +24,7 @@ from datp_core.datasets.materialization import (
 )
 from datp_core.datasets.materialization_lifecycle import CanonicalMaterializationRequest, materialize_canonical
 from datp_core.domain.enums import AvailabilityStatus, DatasetId
-from datp_core.domain.values.counts import RowCount, ValidationIssueCount
+from datp_core.domain.values.counts import RowCount, SourceFileCount, ValidationIssueCount
 
 from .reader import CICIoT2023AuditSummary, CICIoT2023Reader
 from .schema import (
@@ -46,9 +46,17 @@ class CICIoT2023Materializer:
 
     def publish(self, raw_root: Path, canonical_root: Path) -> MaterializedDataset:
         sources = tuple(sorted(raw_root.glob(f"**/{CICIoT2023ArtifactName.MERGED_CSV_DIRECTORY}/*.csv")))
-        return self.materialize(sources, canonical_root)
+        all_csvs = tuple(sorted(raw_root.glob("**/*.csv")))
+        excluded = max(0, len(all_csvs) - len(sources))
+        return self.materialize(sources, canonical_root, excluded_source_count=excluded)
 
-    def materialize(self, source_paths: tuple[Path, ...], canonical_root: Path) -> MaterializedDataset:
+    def materialize(
+        self,
+        source_paths: tuple[Path, ...],
+        canonical_root: Path,
+        *,
+        excluded_source_count: int = 0,
+    ) -> MaterializedDataset:
         ordered_paths = tuple(sorted(source_paths))
         return materialize_canonical(
             CanonicalMaterializationRequest(
@@ -59,13 +67,25 @@ class CICIoT2023Materializer:
                 source_path_resolver=source_relative_path,
                 asset_role_type=CanonicalAssetRole,
                 eligibility_policy=CICIOT2023_MODEL_INPUT_ELIGIBILITY_POLICY,
-                prepare_publication=lambda: self._prepare_publication(ordered_paths, canonical_root),
+                prepare_publication=lambda: self._prepare_publication(
+                    ordered_paths,
+                    canonical_root,
+                    excluded_source_count=excluded_source_count,
+                ),
             )
         )
 
     @staticmethod
-    def _prepare_publication(source_paths: tuple[Path, ...], canonical_root: Path) -> CanonicalPublication:
-        frames, inventory, report = CICIoT2023Materializer.audit(source_paths)
+    def _prepare_publication(
+        source_paths: tuple[Path, ...],
+        canonical_root: Path,
+        *,
+        excluded_source_count: int = 0,
+    ) -> CanonicalPublication:
+        frames, inventory, report = CICIoT2023Materializer.audit(
+            source_paths,
+            excluded_source_count=excluded_source_count,
+        )
         expected_assets = canonical_data_partition_assets(len(frames))
 
         def write_assets(data_root: Path) -> tuple[CanonicalAsset, ...]:
@@ -90,9 +110,15 @@ class CICIoT2023Materializer:
     @staticmethod
     def audit(
         source_paths: tuple[Path, ...],
+        *,
+        excluded_source_count: int = 0,
     ) -> tuple[tuple[pl.LazyFrame, ...], RawDatasetInventory, DatasetValidationReport]:
         ordered_paths, frames, summaries = _audited_sources(source_paths)
-        return frames, _source_inventory(ordered_paths, summaries), _validation_report(summaries)
+        return (
+            frames,
+            _source_inventory(ordered_paths, summaries, excluded_source_count=excluded_source_count),
+            _validation_report(summaries),
+        )
 
 
 def _audited_sources(
@@ -105,12 +131,21 @@ def _audited_sources(
     return ordered_paths, frames, summaries
 
 
-def _source_inventory(paths: tuple[Path, ...], summaries: tuple[CICIoT2023AuditSummary, ...]) -> RawDatasetInventory:
+def _source_inventory(
+    paths: tuple[Path, ...],
+    summaries: tuple[CICIoT2023AuditSummary, ...],
+    *,
+    excluded_source_count: int = 0,
+) -> RawDatasetInventory:
     sources = tuple(
         raw_source_file(DatasetId.CICIOT2023, path, SourceFileRole.MERGED, summary.total_rows, source_relative_path)
         for path, summary in zip(paths, summaries, strict=True)
     )
-    return raw_inventory(DatasetId.CICIOT2023, sources)
+    return raw_inventory(
+        DatasetId.CICIOT2023,
+        sources,
+        excluded_source_count=SourceFileCount(excluded_source_count),
+    )
 
 
 def _validation_report(summaries: tuple[CICIoT2023AuditSummary, ...]) -> DatasetValidationReport:

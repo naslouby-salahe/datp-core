@@ -21,7 +21,7 @@ from datp_core.domain.enums import (
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.ratios import ConfidenceLevel
 
-from .metrics import CONFIRMATORY_METRICS, OPERATING_POINT_METRICS
+from .metrics import CONFIRMATORY_METRICS, OPERATING_POINT_METRICS, OPTIONAL_EQUITY_INDEX_METRICS
 from .seeds import CONFIRMATORY_PAIRED_SEED_COUNT, SeedCohort
 
 
@@ -423,6 +423,6 @@ EXPERIMENTS = (
         PopulationId.NBAIOT_NATURAL_DEVICES,
         TrainingModelId.FEDAVG_AUTOENCODER,
         _SHARED_LOCAL_AND_GROUPED_METHODS,
-        OPERATING_POINT_METRICS,
+        OPERATING_POINT_METRICS + OPTIONAL_EQUITY_INDEX_METRICS,
     ),
 )

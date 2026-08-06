@@ -134,6 +134,12 @@ def publish_client_preprocessing(request: ClientPublishRequest) -> ClientPreproc
             preprocessing_identity=context.protocol.identity,
             branch=ProcessedDataBranch.FEDERATED,
             client_identity=request.client_identity,
+            controlled_partition_kind=(
+                None if context.dirichlet_condition is None else context.dirichlet_condition.kind
+            ),
+            dirichlet_concentration=(
+                None if context.dirichlet_condition is None else context.dirichlet_condition.concentration
+            ),
         ),
     )
     asset_paths = RelativeAssetPathSequence(

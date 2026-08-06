@@ -9,6 +9,7 @@ from datp_core.domain.values.ratios import Quantile
 from datp_core.evaluation.cohort.contracts import EvaluationCohortManifest
 from datp_core.evaluation.metric_semantics import available, unavailable
 from datp_core.evaluation.models import (
+    EQUITY_INDEX_METRIC_IDS,
     FPR_POPULATION_METRIC_IDS,
     ClientMetricResult,
     MetricAvailability,
@@ -88,7 +89,7 @@ def _fpr_aggregates(values: tuple[float, ...]) -> tuple[tuple[MetricAvailability
     if not values:
         absent = tuple(
             unavailable(metric, MetricStatus.UNAVAILABLE, MetricReason.NO_EVALUABLE_CLIENTS)
-            for metric in FPR_POPULATION_METRIC_IDS
+            for metric in (*FPR_POPULATION_METRIC_IDS, *EQUITY_INDEX_METRIC_IDS)
         )
         return absent, ()
     array = np.asarray(values, dtype=np.float64)
@@ -115,7 +116,28 @@ def _fpr_aggregates(values: tuple[float, ...]) -> tuple[tuple[MetricAvailability
             available(MetricId.WORST_CLIENT_FPR, float(np.max(array)), denominator=len(values)),
         )
     )
+    metrics.extend(_equity_index_metrics(array))
     return tuple(metrics), warnings
+
+
+def _equity_index_metrics(values: np.ndarray) -> tuple[MetricAvailability, ...]:
+    """Optional FPR equity indices (roadmap §14.2): Jain fairness and Gini on client FPR."""
+    total = float(np.sum(values))
+    count = int(values.size)
+    if total == 0.0:
+        return (
+            unavailable(MetricId.JAIN_FAIRNESS_INDEX, MetricStatus.UNDEFINED, MetricReason.ZERO_MEAN),
+            unavailable(MetricId.GINI_COEFFICIENT, MetricStatus.UNDEFINED, MetricReason.ZERO_MEAN),
+        )
+    sum_squares = float(np.sum(values * values))
+    jain = (total * total) / (count * sum_squares)
+    ordered = np.sort(values)
+    ranks = np.arange(1, count + 1, dtype=np.float64)
+    gini = (2.0 * float(np.sum(ranks * ordered)) / (count * total)) - ((count + 1.0) / count)
+    return (
+        available(MetricId.JAIN_FAIRNESS_INDEX, jain, denominator=count),
+        available(MetricId.GINI_COEFFICIENT, gini, denominator=count),
+    )
 
 
 def _attack_aggregates(results: tuple[ClientMetricResult, ...]) -> tuple[MetricAvailability, ...]:

@@ -5,7 +5,7 @@ from functools import cached_property
 from pathlib import Path
 
 from datp_core.datasets.registry import population_capabilities
-from datp_core.domain.enums import ExperimentId, PartitionRole
+from datp_core.domain.enums import ExperimentId, FederatedThresholdMethod, PartitionRole
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.counts import ClientCount
 from datp_core.domain.values.identifiers import FeatureNameSequence
@@ -168,6 +168,14 @@ class ExperimentWorkspace:
 
     @cached_property
     def threshold(self) -> ThresholdConstructionResult:
+        from datp_core.protocols.calibration import ClusterThresholdAggregation
+
+        cluster_aggregation = (
+            ClusterThresholdAggregation.MEDIAN_OF_ELIGIBLE_LOCAL_THRESHOLDS
+            if self.coordinate.experiment is ExperimentId.GROUP_MEDIAN_SUPPLEMENT
+            and self.coordinate.threshold_method is FederatedThresholdMethod.CLUSTER_THRESHOLD
+            else None
+        )
         result = construct_federated_thresholds(
             ConstructFederatedThresholdsRequest(
                 request=ThresholdConstructionRequest(
@@ -177,6 +185,7 @@ class ExperimentWorkspace:
                     capabilities=population_capabilities(self.coordinate.population),
                     eligible=self.eligible_calibration_scores(),
                     family_by_client=self.context.family_by_client,
+                    cluster_threshold_aggregation=cluster_aggregation,
                 ),
                 output_directory=self.run_directory() / EvaluationRunAssetDirectory.THRESHOLD,
                 overwrite=False,

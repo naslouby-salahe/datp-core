@@ -61,7 +61,8 @@ def test_processed_coordinates_match_approved_layout() -> None:
     assert path == Path(
         "data/processed/nbaiot/nbaiot_natural_devices/1/"
         f"{SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS.value}/"
-        f"{PreprocessingProtocolId.TEST_COLUMN_ORDER_PROJECTION.value}/federated"
+        f"{PreprocessingProtocolId.TEST_COLUMN_ORDER_PROJECTION.value}/"
+        "no_controlled_partition/federated"
     )
     coordinate = replace(_coordinate(), client_identity=ClientPathToken("danmini_doorbell"))
     client = federated_client_coordinate(data_root, coordinate)

@@ -249,6 +249,7 @@ class PreprocessingPublishContext:
     canonical_schema_checksum: Checksum
     data_root: Path
     execution_identity: ExternalTemporalExecutionIdentity | None = None
+    dirichlet_condition: ControlledPartitionCondition | None = None
 
 
 @dataclass(slots=True, eq=False)

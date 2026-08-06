@@ -5,7 +5,7 @@ from pathlib import Path
 
 import polars as pl
 
-from datp_core.datasets.partitioning.contracts import ClientIdentity
+from datp_core.datasets.partitioning.contracts import ClientIdentity, ControlledPartitionKind
 from datp_core.domain.enums import (
     CheckpointStatus,
     CommunicationEstimationMethod,
@@ -19,7 +19,12 @@ from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import BatchSize, ByteCount, RoundNumber, RowCount, Seed
 from datp_core.domain.values.identifiers import CudaDeviceName, FeatureNameSequence
-from datp_core.domain.values.ratios import DittoRegularization, MetricValue, ProximalCoefficient
+from datp_core.domain.values.ratios import (
+    DirichletConcentration,
+    DittoRegularization,
+    MetricValue,
+    ProximalCoefficient,
+)
 from datp_core.learning.autoencoder import AutoencoderState
 from datp_core.preprocessing.models import FederatedFittedPreprocessingState
 from datp_core.protocols.checkpoints import CheckpointProtocol
@@ -104,9 +109,31 @@ class FederatedTrainingCoordinate:
     preprocessing_identity: PreprocessingProtocolId
     model: TrainingModelId
     model_coefficient: ProximalCoefficient | DittoRegularization | None
+    controlled_partition_kind: ControlledPartitionKind | None = None
+    dirichlet_concentration: DirichletConcentration | None = None
 
     def __post_init__(self) -> None:
         _require_model_coefficient(self.model, self.model_coefficient)
+        if self.controlled_partition_kind is ControlledPartitionKind.DIRICHLET and self.dirichlet_concentration is None:
+            raise ScientificContractError(
+                "Dirichlet controlled partitions require a concentration",
+                subject=ContractSubject.COORDINATE,
+            )
+        if self.controlled_partition_kind is ControlledPartitionKind.IID and self.dirichlet_concentration is not None:
+            raise ScientificContractError(
+                "IID controlled partitions must not carry a concentration",
+                subject=ContractSubject.COORDINATE,
+            )
+        if self.controlled_partition_kind is None and self.dirichlet_concentration is not None:
+            raise ScientificContractError(
+                "a Dirichlet concentration requires a controlled partition kind",
+                subject=ContractSubject.COORDINATE,
+            )
+        if self.population is PopulationId.NBAIOT_DIRICHLET_CLIENTS and self.controlled_partition_kind is None:
+            raise ScientificContractError(
+                "Dirichlet-client populations require an explicit controlled partition condition",
+                subject=ContractSubject.COORDINATE,
+            )
 
     def matches_ditto_peer(self, other: "FederatedTrainingCoordinate") -> bool:
         return (
@@ -115,6 +142,8 @@ class FederatedTrainingCoordinate:
             and self.split_protocol == other.split_protocol
             and self.preprocessing_identity == other.preprocessing_identity
             and self.model_coefficient == other.model_coefficient
+            and self.controlled_partition_kind == other.controlled_partition_kind
+            and self.dirichlet_concentration == other.dirichlet_concentration
             and {self.model, other.model}
             == {
                 TrainingModelId.DITTO_GLOBAL_AUTOENCODER,

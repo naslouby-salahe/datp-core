@@ -640,22 +640,17 @@ def test_client_evaluation_scores_include_every_expected_client(
     assert attack[1][1] == ()
 
 
-def test_cluster_mechanisms_require_complete_confirmatory_cohort_and_report_missing(
+def test_cluster_mechanisms_are_optional_when_entire_cohort_is_absent(
     tmp_path,
     monkeypatch,
 ) -> None:
     import datp_core.pipeline.workflows.confirmatory as confirmatory
-    from datp_core.domain.errors import ScientificContractError
     from datp_core.pipeline.workflows.confirmatory import _confirmatory_cluster_mechanisms
     from datp_core.protocols.seeds import SeedCohort
 
     monkeypatch.setattr(confirmatory, "OUTPUTS_ROOT", tmp_path)
     monkeypatch.setattr(confirmatory, "CONFIRMATORY_SEED_COHORT", SeedCohort(values=(Seed(0), Seed(1))))
-    with pytest.raises(ScientificContractError, match="unavailable=\\[0, 1\\]") as raised:
-        _confirmatory_cluster_mechanisms()
-    message = str(raised.value)
-    assert "available=[]" in message
-    assert "corrupt=[]" in message
+    assert _confirmatory_cluster_mechanisms() == ()
 
 
 def test_cluster_mechanisms_resolve_threshold_publication_layout(

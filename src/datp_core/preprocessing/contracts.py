@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
+from datp_core.datasets.partitioning.contracts import ControlledPartitionKind
 from datp_core.domain.enums import (
     DatasetId,
     PartitionRole,
@@ -16,6 +17,9 @@ from datp_core.domain.enums import (
 from datp_core.domain.values.base import sequence_pydantic_schema, str_subclass_schema, validate_non_empty_tuple
 from datp_core.domain.values.counts import Seed
 from datp_core.domain.values.paths import ClientPathToken
+from datpcom_core.domain.values.ratios import DirichletConcentration
+
+_NO_CONTROLLED_PARTITION_SEGMENT = "no_controlled_partition"
 
 
 class PreprocessingFitScope(StrEnum):
@@ -42,10 +46,20 @@ class ReusableDataCoordinate:
     preprocessing_identity: PreprocessingProtocolId
     branch: ProcessedDataBranch
     client_identity: ClientPathToken | None
+    controlled_partition_kind: ControlledPartitionKind | None = None
+    dirichlet_concentration: DirichletConcentration | None = None
 
     def __post_init__(self) -> None:
         if self.branch is ProcessedDataBranch.CENTRALIZED_REFERENCE and self.client_identity is not None:
             raise ValueError("centralized reusable coordinates cannot include client identity")
+        if self.controlled_partition_kind is ControlledPartitionKind.DIRICHLET and self.dirichlet_concentration is None:
+            raise ValueError("Dirichlet controlled partitions require a concentration")
+        if self.controlled_partition_kind is ControlledPartitionKind.IID and self.dirichlet_concentration is not None:
+            raise ValueError("IID controlled partitions must not carry a concentration")
+        if self.controlled_partition_kind is None and self.dirichlet_concentration is not None:
+            raise ValueError("a Dirichlet concentration requires a controlled partition kind")
+        if self.population is PopulationId.NBAIOT_DIRICHLET_CLIENTS and self.controlled_partition_kind is None:
+            raise ValueError("Dirichlet-client populations require an explicit controlled partition condition")
 
 
 class RelativeAssetPath(str):
@@ -96,6 +110,17 @@ class ProcessedAssetName(StrEnum):
     VALIDATION_REPORT = "validation_report.json"
 
 
+def controlled_partition_path_segment(
+    kind: ControlledPartitionKind | None,
+    concentration: DirichletConcentration | None,
+) -> str:
+    if kind is None:
+        return _NO_CONTROLLED_PARTITION_SEGMENT
+    if concentration is not None:
+        return f"{kind.value}:{concentration.value}"
+    return kind.value
+
+
 def processed_root_under(data_root: Path, coordinate: ReusableDataCoordinate) -> Path:
     return (
         data_root
@@ -105,6 +130,10 @@ def processed_root_under(data_root: Path, coordinate: ReusableDataCoordinate) ->
         / str(coordinate.partition_seed.value)
         / coordinate.split_protocol_identity.value
         / coordinate.preprocessing_identity.value
+        / controlled_partition_path_segment(
+            coordinate.controlled_partition_kind,
+            coordinate.dirichlet_concentration,
+        )
     )
 
 

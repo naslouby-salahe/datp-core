@@ -24,7 +24,6 @@ class PipelineStage(StrEnum):
     EVALUATE_DETECTOR = "evaluate_detector"
     ANALYZE_EVIDENCE = "analyze_evidence"
     VERIFY_ANCHOR = "verify_anchor"
-    PUBLISH_REPORT = "publish_report"
     FINALIZE_PUBLICATION = "finalize_publication"
 
 

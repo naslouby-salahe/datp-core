@@ -24,10 +24,17 @@ from datp_core.domain.values.counts import (
 )
 from datp_core.domain.values.ratios import ThresholdValue
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.protocols.calibration import CANONICAL_QUANTILE, ClusterThresholdProtocol, KMeansInitialization
+from datp_core.protocols.calibration import (
+    CANONICAL_QUANTILE,
+    ClusterThresholdAggregation,
+    ClusterThresholdProtocol,
+    KMeansInitialization,
+)
 from datp_core.thresholding.assignments import (
     LocalQuantile,
     ThresholdAssignment,
+    mean_local_threshold,
+    median_local_threshold,
     require_unique_clients,
     validate_assignments,
     validate_group_membership,
@@ -36,7 +43,6 @@ from datp_core.thresholding.quantiles import (
     ClientBenignCalibrationScores,
     exact_empirical_quantile,
     local_quantile,
-    unweighted_mean,
 )
 
 
@@ -70,6 +76,9 @@ class ClusterMembership:
     members: tuple[ClientIdentity, ...]
     contributing_local_quantiles: tuple[LocalQuantile, ...]
     cluster_threshold: ThresholdValue | None
+    threshold_aggregation: ClusterThresholdAggregation = (
+        ClusterThresholdAggregation.ARITHMETIC_MEAN_OF_ELIGIBLE_LOCAL_THRESHOLDS
+    )
 
     def __post_init__(self) -> None:
         if not self.members:
@@ -84,13 +93,18 @@ class ClusterMembership:
                 "non-empty cluster membership requires a cluster threshold",
                 subject=ContractSubject.THRESHOLD,
             )
+        expected = _aggregate_local_thresholds(
+            self.contributing_local_quantiles,
+            self.threshold_aggregation,
+        )
         validate_group_membership(
             self.members,
             self.contributing_local_quantiles,
             self.cluster_threshold,
             members_label="cluster members",
             match_message=("contributing local quantile clients must exactly equal cluster members"),
-            threshold_message=("cluster_threshold must equal the unweighted mean of contributing local quantiles"),
+            threshold_message=("cluster_threshold must equal the declared aggregation of contributing local quantiles"),
+            expected_group_threshold=expected,
         )
 
 
@@ -206,6 +220,7 @@ def construct_grouped_threshold(
         labels,
         protocol.group_count,
         local_quantiles,
+        protocol.threshold_aggregation,
     )
     return GroupedThresholdResult(
         coordinate=ordered[0].coordinate,
@@ -249,6 +264,7 @@ def _build_clusters(
     labels: np.ndarray,
     group_count: GroupCount,
     local_quantiles: tuple[LocalQuantile, ...],
+    aggregation: ClusterThresholdAggregation,
 ) -> tuple[tuple[ClusterMembership, ...], tuple[ThresholdAssignment, ...]]:
     clusters: list[ClusterMembership] = []
     assignments: list[ThresholdAssignment] = []
@@ -262,21 +278,39 @@ def _build_clusters(
                     members=(),
                     contributing_local_quantiles=(),
                     cluster_threshold=None,
+                    threshold_aggregation=aggregation,
                 )
             )
             continue
         contributing = tuple(_local_quantile(local_quantiles, client) for client in members)
-        cluster_value = ThresholdValue(unweighted_mean(tuple(item.value.value for item in contributing)))
+        cluster_value = _aggregate_local_thresholds(contributing, aggregation)
         clusters.append(
             ClusterMembership(
                 cluster_index=cluster_index,
                 members=members,
                 contributing_local_quantiles=contributing,
                 cluster_threshold=cluster_value,
+                threshold_aggregation=aggregation,
             )
         )
         assignments.extend(ThresholdAssignment(client, cluster_value) for client in members)
     return tuple(clusters), tuple(assignments)
+
+
+def _aggregate_local_thresholds(
+    contributing: tuple[LocalQuantile, ...],
+    aggregation: ClusterThresholdAggregation,
+) -> ThresholdValue:
+    match aggregation:
+        case ClusterThresholdAggregation.ARITHMETIC_MEAN_OF_ELIGIBLE_LOCAL_THRESHOLDS:
+            return mean_local_threshold(contributing)
+        case ClusterThresholdAggregation.MEDIAN_OF_ELIGIBLE_LOCAL_THRESHOLDS:
+            return median_local_threshold(contributing)
+        case _:
+            raise ScientificContractError(
+                f"unsupported cluster threshold aggregation {aggregation}",
+                subject=ContractSubject.THRESHOLD,
+            )
 
 
 def _cluster_members(

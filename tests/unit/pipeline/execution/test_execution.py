@@ -185,7 +185,8 @@ def test_invalid_completed_experiment_is_not_reused_or_deleted_silently() -> Non
 def test_confirmatory_experiment_resolves_the_standard_federated_recipe() -> None:
     assert resolve_execution_recipe(coordinate()) == STANDARD_FEDERATED_RECIPE
     assert PipelineStage.VERIFY_ANCHOR not in STANDARD_FEDERATED_RECIPE.stages
-    assert PipelineStage.PUBLISH_REPORT not in STANDARD_FEDERATED_RECIPE.stages
+    assert PipelineStage.FINALIZE_PUBLICATION in STANDARD_FEDERATED_RECIPE.stages
+    assert "publish_report" not in {stage.value for stage in PipelineStage}
 
 
 def test_anchor_reproduction_experiment_resolves_a_distinct_recipe_with_verify_anchor() -> None:

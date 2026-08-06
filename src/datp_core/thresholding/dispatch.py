@@ -18,10 +18,12 @@ from datp_core.domain.values.counts import RowCount
 from datp_core.domain.values.ratios import Quantile
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.protocols.calibration import (
+    CLUSTER_MEDIAN_THRESHOLD_PROTOCOL,
     CLUSTER_THRESHOLD_PROTOCOL,
     FEDERATED_STATISTICS_PROTOCOL,
     FIXED_SHRINKAGE_PROTOCOL,
     MINIMUM_BENIGN_SUPPORT,
+    ClusterThresholdAggregation,
     QuantileProtocol,
 )
 from datp_core.thresholding.assignments import FamilyAssignment
@@ -74,6 +76,7 @@ class ThresholdConstructionRequest:
     eligible: tuple[ClientBenignCalibrationScores, ...]
     family_by_client: tuple[FamilyAssignment, ...]
     enforce_minimum_support: bool = True
+    cluster_threshold_aggregation: ClusterThresholdAggregation | None = None
 
     def __post_init__(self) -> None:
         if not self.eligible:
@@ -176,5 +179,10 @@ def _cluster_threshold_or_unavailable(request: ThresholdConstructionRequest) -> 
             reason=ThresholdInfeasibilityReason.GROUP_COUNT_EXCEEDS_ELIGIBLE_POPULATION,
             detail="The eligible population does not exceed the locked cluster group count.",
         )
-    protocol = CLUSTER_THRESHOLD_PROTOCOL.model_copy(update={"quantile": request.quantile})
+    base_protocol = (
+        CLUSTER_MEDIAN_THRESHOLD_PROTOCOL
+        if request.cluster_threshold_aggregation is ClusterThresholdAggregation.MEDIAN_OF_ELIGIBLE_LOCAL_THRESHOLDS
+        else CLUSTER_THRESHOLD_PROTOCOL
+    )
+    protocol = base_protocol.model_copy(update={"quantile": request.quantile})
     return construct_grouped_threshold(request.eligible, protocol)

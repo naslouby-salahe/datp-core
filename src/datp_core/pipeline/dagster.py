@@ -11,6 +11,7 @@ from datp_core.pipeline.workflows.confirmatory import (
     analyze_confirmatory_campaign,
     load_fedavg_cv_fpr_effect,
     run_confirmatory_campaign,
+    run_family_grouped_mechanism_campaign,
 )
 from datp_core.pipeline.workflows.external import (
     analyze_ciciot_boundary_campaign,
@@ -67,11 +68,27 @@ def confirmatory_campaign(paths: PipelinePaths) -> list[str]:
     ]
 
 
+@asset(deps=["deterministic_plan"])
+def family_grouped_mechanism_campaign(paths: PipelinePaths) -> list[str]:
+    _ = paths.outputs_root_path
+    result = run_family_grouped_mechanism_campaign()
+    return [
+        f"{seed.training_seed.value}:{method.value}"
+        for seed in result.seeds
+        for method in seed.completed_threshold_methods
+    ]
+
+
 @asset
-def confirmatory_evidence(confirmatory_campaign: list[str], paths: PipelinePaths) -> str:
+def confirmatory_evidence(
+    confirmatory_campaign: list[str],
+    family_grouped_mechanism_campaign: list[str],
+    paths: PipelinePaths,
+) -> str:
     _ = paths.outputs_root_path
     if not confirmatory_campaign:
         raise ValueError("confirmatory evidence requires completed threshold evaluations")
+    _ = family_grouped_mechanism_campaign
     return str(analyze_confirmatory_campaign())
 
 
@@ -184,6 +201,7 @@ CONFIRMATORY_JOB = define_asset_job(
     selection=AssetSelection.assets(
         "deterministic_plan",
         "confirmatory_campaign",
+        "family_grouped_mechanism_campaign",
         "confirmatory_evidence",
     ),
 )
@@ -214,6 +232,7 @@ DEFINITIONS = Definitions(
     assets=(
         deterministic_plan,
         confirmatory_campaign,
+        family_grouped_mechanism_campaign,
         confirmatory_evidence,
         centralized_reference_seed,
         ditto_stress_campaign,

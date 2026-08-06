@@ -159,6 +159,8 @@ class MetricId(StrEnum):
     COMMUNICATION_BYTES = "communication_bytes"
     RECONSTRUCTION_ERROR = "reconstruction_error"
     EMPIRICAL_CUMULATIVE_PROBABILITY = "empirical_cumulative_probability"
+    JAIN_FAIRNESS_INDEX = "jain_fairness_index"
+    GINI_COEFFICIENT = "gini_coefficient"
 
 
 class AvailabilityStatus(StrEnum):
