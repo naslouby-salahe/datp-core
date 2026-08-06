@@ -85,19 +85,35 @@ jobs:
         if: ${{ steps.mode.outputs.apply == 'true' }}
         run: |
           set +e
+          mkdir -p diagnostics
           status=0
           run_gate() {
-            echo "::group::$*"
-            "$@" || status=1
+            name="$1"
+            shift
+            echo "::group::$name"
+            "$@" >"diagnostics/${name}.log" 2>&1
+            gate_status=$?
+            cat "diagnostics/${name}.log"
+            if [[ $gate_status -ne 0 ]]; then
+              status=1
+            fi
             echo "::endgroup::"
           }
-          run_gate uv run python -m compileall -q src tests
-          run_gate uv run ruff check src tests
-          run_gate uv run ruff format --check src tests
-          run_gate uv run pyright
-          run_gate uv run python -m importlinter
-          run_gate uv run pytest -q
+          run_gate compile uv run python -m compileall -q src tests
+          run_gate ruff-check uv run ruff check src tests
+          run_gate ruff-format uv run ruff format --check src tests
+          run_gate pyright uv run pyright
+          run_gate import-linter uv run lint-imports
+          run_gate pytest uv run pytest -q
           exit "$status"
+
+      - name: Upload validation diagnostics
+        if: ${{ always() && steps.mode.outputs.apply == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: migration-validation-diagnostics
+          path: diagnostics
+          retention-days: 1
 
       - name: Push completed refactor
         if: ${{ steps.mode.outputs.apply == 'true' && success() }}
