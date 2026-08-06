@@ -44,13 +44,9 @@ from datp_core.evaluation.conformal_coverage import (
     evaluate_held_out_conformal_coverage,
 )
 from datp_core.evaluation.confusion import calculate_confusion_counts
-from datp_core.evaluation.controls import (
-    FixedScoreEvidence,
-    evaluation_label_checksum,
-    source_row_checksum,
-    validate_evaluation_evidence,
-    validate_fixed_score_controls,
-)
+from datp_core.evaluation.fixed_score.checksums import evaluation_label_checksum, source_row_checksum
+from datp_core.evaluation.fixed_score.contracts import FixedScoreEvidence
+from datp_core.evaluation.fixed_score.validation import validate_evaluation_evidence, validate_fixed_score_controls
 from datp_core.evaluation.models import (
     ClientMetricResult,
     HeldOutBenignScore,
