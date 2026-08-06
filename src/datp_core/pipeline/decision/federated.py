@@ -7,7 +7,7 @@ from datp_core.domain.enums import EvidenceRole, PublicationStatus
 from datp_core.domain.values import Checksum
 from datp_core.evaluation.cohorts import EvaluationCohortManifest
 from datp_core.evaluation.communication import CommunicationMessageDiagnostic
-from datp_core.evaluation.controls import FixedScoreEvidence
+from datp_core.evaluation.fixed_score.contracts import FixedScoreEvidence
 from datp_core.evaluation.models import ClientMetricResult, PopulationMetricResult
 from datp_core.evaluation.population import (
     ConformalCoverageStageInput,
