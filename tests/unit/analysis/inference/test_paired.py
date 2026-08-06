@@ -1,6 +1,11 @@
 from tests.unit.analysis.inference.test_bootstrap import contrasts
 
-from datp_core.analysis.inference.multiplicity import MultiplicityPlan, holm_adjust
+from datp_core.analysis.inference.multiplicity import (
+    FamilyName,
+    FamilySize,
+    MultiplicityPlan,
+    holm_adjust,
+)
 from datp_core.analysis.inference.wilcoxon import (
     PValue,
     matched_pairs_rank_biserial,
@@ -28,12 +33,14 @@ def test_paired_inference_uses_the_declared_protocol() -> None:
 def test_multiplicity_uses_a_complete_typed_plan() -> None:
     result = holm_adjust(
         MultiplicityPlan(
-            family_name="predeclared_supportive_family",
+            family_name=FamilyName("predeclared_supportive_family"),
             raw_p_values=(PValue(0.01), PValue(0.04)),
             alpha=Ratio(0.05),
         ),
         CONFIRMATORY_INFERENCE_PROTOCOL,
     )
     assert result.correction is CONFIRMATORY_INFERENCE_PROTOCOL.multiplicity_correction
+    assert result.family_name == FamilyName("predeclared_supportive_family")
+    assert result.family_size == FamilySize(2)
     assert result.raw_p_values == (PValue(0.01), PValue(0.04))
     assert result.adjusted_p_values[0].value <= result.adjusted_p_values[1].value

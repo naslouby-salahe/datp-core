@@ -29,6 +29,7 @@ from datp_core.pipeline.publication.layout import evaluation_run_directory
 from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration
 from datp_core.protocols.seeds import CONFIRMATORY_ANALYSIS_SEED, CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL
+from datp_core.reporting.export import export_analysis_report
 from datp_core.runtime.configuration import OUTPUTS_ROOT
 
 
@@ -96,7 +97,7 @@ def analyze_confirmatory_campaign() -> Path:
         / PopulationId.NBAIOT_NATURAL_DEVICES.value
         / ConfirmatoryAssetDirectory.ANALYSIS
     )
-    analyze_confirmatory_evidence(
+    result = analyze_confirmatory_evidence(
         AnalyzeConfirmatoryEvidenceRequest(
             contrasts=tuple(_confirmatory_contrast(seed) for seed in CONFIRMATORY_SEED_COHORT.values),
             inference_protocol=CONFIRMATORY_INFERENCE_PROTOCOL,
@@ -105,6 +106,7 @@ def analyze_confirmatory_campaign() -> Path:
             overwrite=False,
         )
     )
+    export_analysis_report(result.document, output / "analysis_report.md")
     return output
 
 
