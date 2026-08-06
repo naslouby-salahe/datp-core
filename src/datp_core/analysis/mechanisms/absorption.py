@@ -1,6 +1,6 @@
 """Model-personalization absorption decisions."""
 
-from datp_core.analysis.decisions import ScientificDecisionResult
+from datp_core.analysis.scientific_decision import ScientificDecisionResult
 from datp_core.domain.enums import EvidenceRole, ScientificDecision
 from datp_core.domain.values import MetricValue, Ratio
 
