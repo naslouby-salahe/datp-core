@@ -16,12 +16,9 @@ from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.provenance import canonical_checksum
 from datp_core.domain.values import ScoreValue, ThresholdValue
 from datp_core.evaluation.client_metrics import calculate_client_metrics
-from datp_core.evaluation.cohorts import (
-    ClientEligibilityRecord,
-    EvaluationCohortManifest,
-    build_evaluation_cohort_manifest,
-    client_partition_counts_from_scores,
-)
+from datp_core.evaluation.cohort.construction import build_evaluation_cohort_manifest
+from datp_core.evaluation.cohort.contracts import ClientEligibilityRecord, EvaluationCohortManifest
+from datp_core.evaluation.cohort.evidence import client_partition_counts_from_scores
 from datp_core.evaluation.confusion import calculate_confusion_counts
 from datp_core.evaluation.fixed_score.checksums import (
     client_population_checksum,
