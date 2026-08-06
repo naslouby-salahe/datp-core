@@ -9,6 +9,7 @@ from datp_core.datasets.partitioning.integrity import validate_no_future_history
 from datp_core.datasets.partitioning.splits import split_membership
 from datp_core.domain.enums import DatasetId, PartitionRole, PopulationId, SplitProtocolId
 from datp_core.domain.values.counts import Seed
+from datp_core.domain.values.identifiers import CaptureTimestampColumn
 
 
 def test_temporal_split_preserves_history_before_future(edge_temporal_eligible_root: Path) -> None:
@@ -24,12 +25,12 @@ def test_temporal_split_preserves_history_before_future(edge_temporal_eligible_r
             partition_seed=Seed(0),
             split_protocol=SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE,
             population_manifest_checksum=manifest.document.membership_checksum,
-            capture_timestamp_column="capture_timestamp",
+            capture_timestamp_column=CaptureTimestampColumn("capture_timestamp"),
         )
     )
     assert split_manifest.split_protocol is SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE
     assert assignments.height == membership.height
-    validate_no_future_history_leakage(assignments, "capture_timestamp")
+    validate_no_future_history_leakage(assignments, CaptureTimestampColumn("capture_timestamp"))
     historical = assignments.filter(
         pl.col("partition_role").is_in([PartitionRole.TRAIN.value, PartitionRole.CALIBRATION.value])
     )

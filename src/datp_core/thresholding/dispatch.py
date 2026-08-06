@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import assert_never
 
-from datp_core.datasets.partitioning.contracts import ClientIdentity, PopulationCapabilities
+from datp_core.datasets.partitioning.contracts import PopulationCapabilities
 from datp_core.domain.enums import (
     CentralizedThresholdMethod,
     ContractSubject,
@@ -14,7 +14,6 @@ from datp_core.domain.errors import (
     LeakageError,
     ScientificContractError,
 )
-from datp_core.domain.values.paths import FamilyIdentity
 from datp_core.domain.values.ratios import Quantile
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.protocols.calibration import (
@@ -23,6 +22,7 @@ from datp_core.protocols.calibration import (
     FIXED_SHRINKAGE_PROTOCOL,
     QuantileProtocol,
 )
+from datp_core.thresholding.assignments import FamilyAssignment
 from datp_core.thresholding.identities import (
     ThresholdInfeasibilityReason,
     ThresholdUnavailableResult,
@@ -63,14 +63,14 @@ def validate_population_capability(
         )
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ThresholdConstructionRequest:
     method: FederatedThresholdMethod
     coordinate: FederatedTrainingCoordinate
     quantile: Quantile
     capabilities: PopulationCapabilities
     eligible: tuple[ClientBenignCalibrationScores, ...]
-    family_by_client: tuple[tuple[ClientIdentity, FamilyIdentity], ...]
+    family_by_client: tuple[FamilyAssignment, ...]
 
     def __post_init__(self) -> None:
         if not self.eligible:
@@ -90,7 +90,7 @@ class ThresholdConstructionRequest:
                     "every eligible entry must carry the request coordinate",
                     subject=ContractSubject.COORDINATE,
                 )
-        family_clients = tuple(item[0] for item in self.family_by_client)
+        family_clients = tuple(item.client for item in self.family_by_client)
         if len(set(family_clients)) != len(family_clients):
             raise ScientificContractError(
                 "family-by-client entries must have unique client identities",

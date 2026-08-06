@@ -77,7 +77,7 @@ class ConformalThresholdResult:
 
     @property
     def significance(self) -> Ratio:
-        return Ratio(1.0 - self.coverage.value)
+        return self.coverage.significance
 
 
 def construct_local_conformal_threshold(

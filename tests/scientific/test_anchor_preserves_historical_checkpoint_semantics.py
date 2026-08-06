@@ -1,10 +1,10 @@
 import pytest
 from tests.unit.anchor.helpers import make_observation, make_reference, matching_anchor_observations
 
-from datp_core.anchor.models import ANCHOR_CHECKPOINT_STATUS, ExactEqualityRule
-from datp_core.anchor.reproduction import references_from_protocol, reproduce_anchor
+from datp_core.anchor.comparison import ExactEqualityRule
+from datp_core.anchor.reproduction import ANCHOR_CHECKPOINT_STATUS, references_from_protocol, reproduce_anchor
 from datp_core.domain.enums import CheckpointStatus, FederatedThresholdMethod, MetricId, TrainingModelId
-from datp_core.domain.errors import AnchorReproductionError
+from datp_core.domain.errors import AnchorReproductionError, ScientificContractError
 from datp_core.protocols.anchor import HISTORICAL_ANCHOR_SEED_COHORT
 from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT
 
@@ -24,7 +24,7 @@ def test_historical_and_confirmatory_seed_cohorts_remain_structurally_distinct()
 
 
 def test_selected_checkpoint_status_cannot_replace_historical_endpoint() -> None:
-    with pytest.raises(ValueError, match="historical endpoint"):
+    with pytest.raises(ScientificContractError, match="historical endpoint"):
         make_reference(
             rule=ExactEqualityRule(),
             checkpoint_status=CheckpointStatus.SELECTED_BY_NON_TEST_RULE,

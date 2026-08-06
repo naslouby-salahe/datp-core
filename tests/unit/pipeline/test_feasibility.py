@@ -1,5 +1,5 @@
 from datp_core.domain.enums import AvailabilityStatus, FederatedThresholdMethod, MetricId, TemporalState
-from datp_core.pipeline.planning import (
+from datp_core.pipeline.feasibility import (
     CiciotBoundaryFeasibilityRequest,
     EdgeExternalFeasibilityRequest,
     EdgeTemporalFeasibilityRequest,

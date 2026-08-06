@@ -1,11 +1,6 @@
 from pathlib import Path
 
-from datp_core.anchor.models import (
-    ANCHOR_CHECKPOINT_STATUS,
-    ANCHOR_METRIC,
-    ANCHOR_POPULATION,
-    ANCHOR_TRAINING_MODEL,
-    AnchorArtifactFileName,
+from datp_core.anchor.comparison import (
     AnchorMetricReference,
     AnchorObservationSourceKind,
     AnchorObservedMetric,
@@ -13,7 +8,14 @@ from datp_core.anchor.models import (
     ExactEqualityRule,
     MetricInterval,
 )
-from datp_core.anchor.reproduction import references_from_protocol
+from datp_core.anchor.reproduction import (
+    ANCHOR_CHECKPOINT_STATUS,
+    ANCHOR_METRIC,
+    ANCHOR_POPULATION,
+    ANCHOR_TRAINING_MODEL,
+    AnchorArtifactFileName,
+    references_from_protocol,
+)
 from datp_core.domain.enums import (
     CheckpointStatus,
     EvidenceRole,

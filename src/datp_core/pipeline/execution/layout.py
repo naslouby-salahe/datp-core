@@ -5,7 +5,7 @@ from pathlib import Path
 
 from datp_core.domain.values.counts import Seed
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.pipeline.planning import CoordinateIdentitySegment
+from datp_core.pipeline.coordinates import CoordinateIdentitySegment
 from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
 
 
@@ -20,6 +20,7 @@ class ExecutionArtifactDirectory(StrEnum):
 class ExecutionRootDirectory(StrEnum):
     FEDERATED = "federated"
     BOUNDED_EVIDENCE = "bounded_evidence"
+    DITTO_STRESS_TEST = "ditto_stress_test"
 
 
 class EvaluationRunAssetDirectory(StrEnum):

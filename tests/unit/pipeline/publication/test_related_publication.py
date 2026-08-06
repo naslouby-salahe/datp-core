@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+import pytest
+
 from datp_core.domain.enums import PublicationStatus
 from datp_core.pipeline.publication.service import (
     RelatedArtifactPublication,
@@ -58,3 +60,73 @@ def test_related_publication_commits_and_reuses_all_members(tmp_path: Path) -> N
     assert first.status is PublicationStatus.PUBLISHED
     assert second.status is PublicationStatus.REUSED
     assert first.value == second.value
+
+
+def test_related_publication_interrupted_write_leaves_no_staging_or_target(tmp_path: Path) -> None:
+    class _FailingCodec:
+        def write(self, request: _Request, directories: tuple[Path, ...]) -> _Result:
+            del request, directories
+            raise RuntimeError("interrupted write")
+
+        def validate(self, request: _Request, directories: tuple[Path, ...]) -> bool:
+            del request, directories
+            return False
+
+        def load(self, request: _Request, directories: tuple[Path, ...]) -> _Result:
+            raise AssertionError("load must not run when the artifact is not reusable")
+
+        def rebase(self, result: _Result, directories: tuple[Path, ...]) -> _Result:
+            raise AssertionError("rebase must not run when the write failed")
+
+    members = (
+        RelatedPublicationMember(identity="global", target=tmp_path / "global"),
+        RelatedPublicationMember(identity="personalized", target=tmp_path / "personalized"),
+    )
+    publication = RelatedArtifactPublication(
+        request=_Request("global", "personalized"),
+        members=members,
+        codec=_FailingCodec(),
+        overwrite=False,
+    )
+    with pytest.raises(RuntimeError, match="interrupted write"):
+        publish_related_artifacts(publication)
+    assert not (tmp_path / "global").exists()
+    assert not (tmp_path / "personalized").exists()
+    assert tuple(path for path in tmp_path.iterdir() if path.is_dir()) == ()
+
+
+def test_related_publication_rolls_back_every_target_when_a_later_replace_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    members = (
+        RelatedPublicationMember(identity="global", target=tmp_path / "global"),
+        RelatedPublicationMember(identity="personalized", target=tmp_path / "personalized"),
+    )
+    original_request = _Request("original-global", "original-personalized")
+    publish_related_artifacts(
+        RelatedArtifactPublication(request=original_request, members=members, codec=_Codec(), overwrite=False)
+    )
+
+    real_replace = Path.replace
+    personalized_target = tmp_path / "personalized"
+    personalized_staging_prefix = f".{personalized_target.name}."
+    failure_injected = False
+
+    def _flaky_replace(self: Path, target: Path) -> Path:
+        nonlocal failure_injected
+        if not failure_injected and target == personalized_target and self.name.startswith(personalized_staging_prefix):
+            failure_injected = True
+            raise OSError("simulated failure replacing the second related target")
+        return real_replace(self, target)
+
+    monkeypatch.setattr(Path, "replace", _flaky_replace)
+    overwrite_request = _Request("new-global", "new-personalized")
+    with pytest.raises(OSError, match="simulated failure"):
+        publish_related_artifacts(
+            RelatedArtifactPublication(request=overwrite_request, members=members, codec=_Codec(), overwrite=True)
+        )
+    monkeypatch.undo()
+
+    assert (tmp_path / "global" / "global.txt").read_text(encoding="utf-8") == "original-global"
+    assert (tmp_path / "personalized" / "personalized.txt").read_text(encoding="utf-8") == "original-personalized"

@@ -79,7 +79,7 @@ def test_construct_sample_weighted_shared_threshold_weights_sum_to_one() -> None
             quantile=QUANTILE,
         ),
     )
-    assert abs(sum(result.normalized_weights) - 1.0) < 1e-12
+    assert abs(sum(weight.value for weight in result.normalized_weights) - 1.0) < 1e-12
 
 
 def test_construct_sample_weighted_shared_threshold_matches_manual_weighted_mean() -> None:

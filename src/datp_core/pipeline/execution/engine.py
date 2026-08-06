@@ -13,7 +13,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from shutil import rmtree
 
-from datp_core.anchor.models import VerifyAnchorStageRequest
 from datp_core.datasets.service import DatasetMaterializationRequest, materialize_datasets
 from datp_core.domain.enums import ExperimentId, PublicationStatus
 from datp_core.domain.errors import ScientificContractError
@@ -22,6 +21,7 @@ from datp_core.domain.values.checksums import Checksum, checksum_file
 from datp_core.domain.values.counts import ByteCount
 from datp_core.evaluation.federated.publication import FederatedEvaluationAssetName
 from datp_core.evaluation.models import metric_by_id
+from datp_core.pipeline.coordinates import ExecutionRoute, ExperimentCoordinate, execution_route_for
 from datp_core.pipeline.execution.layout import EvaluationRunAssetDirectory
 from datp_core.pipeline.execution.models import (
     ANCHOR_REPRODUCTION_RECIPE,
@@ -41,13 +41,7 @@ from datp_core.pipeline.execution.models import (
     campaign_digest,
 )
 from datp_core.pipeline.execution.workspace import ExperimentWorkspace
-from datp_core.pipeline.planning import (
-    ExecutionRoute,
-    ExperimentCoordinate,
-    ExperimentPlan,
-    PlanDisposition,
-    execution_route_for,
-)
+from datp_core.pipeline.planning import ExperimentPlan, PlanDisposition, expand_experiment_plan
 from datp_core.pipeline.publication.layout import experiment_output_directory
 from datp_core.pipeline.publication.models import ArtifactKind, ArtifactRecord, ArtifactState, CompletionState
 from datp_core.pipeline.publication.service import (
@@ -56,7 +50,7 @@ from datp_core.pipeline.publication.service import (
     validate_reload,
     write_completion_record,
 )
-from datp_core.pipeline.workflows.anchor import verify_anchor
+from datp_core.pipeline.workflows.anchor import VerifyAnchorStageRequest, verify_anchor
 from datp_core.protocols.anchor import ANCHOR_DECISION_PROTOCOL
 from datp_core.protocols.experiments import EXPERIMENTS
 from datp_core.protocols.graph import ObservationBoundary, ObservationContext, ObservationHook, observe_graph_boundary
@@ -84,7 +78,14 @@ def build_campaign(plan: ExperimentPlan) -> CampaignPlan:
         and execution_route_for(entry.coordinate) is ExecutionRoute.SINGLE_COORDINATE
     )
     entries = tuple(CampaignEntry(ordinal=index, coordinate=coordinate) for index, coordinate in enumerate(coordinates))
-    return CampaignPlan(entries=entries, digest=campaign_digest(entries), plan_digest=Checksum(plan.digest))
+    return CampaignPlan(entries=entries, digest=campaign_digest(entries), plan_digest=plan.digest)
+
+
+def plan_and_build_campaign() -> tuple[ExperimentPlan, CampaignPlan]:
+    """Expand the canonical experiment plan and build its executable campaign in one call."""
+
+    plan = expand_experiment_plan()
+    return plan, build_campaign(plan)
 
 
 def protocol_digest() -> Checksum:

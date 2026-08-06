@@ -54,10 +54,11 @@ def build_calibration_replicate(
     permutation = generator.permutation(len(ordered))
     permuted = tuple(ordered[index] for index in permutation)
 
+    full_calibration_count = RowCount(len(permuted))
     subsamples: list[CalibrationSubsample] = []
     unavailable_sizes: list[CalibrationSize] = []
     for size in sorted(sizes, key=lambda item: item.value):
-        if size > len(permuted):
+        if size.value > full_calibration_count.value:
             unavailable_sizes.append(size)
             continue
         subsamples.append(
@@ -72,7 +73,7 @@ def build_calibration_replicate(
         coordinate=coordinate,
         training_seed=training_seed,
         replicate_index=replicate_index,
-        full_calibration_count=RowCount(len(permuted)),
+        full_calibration_count=full_calibration_count,
         subsamples=tuple(subsamples),
         unavailable_sizes=tuple(unavailable_sizes),
         unavailable_reason=(

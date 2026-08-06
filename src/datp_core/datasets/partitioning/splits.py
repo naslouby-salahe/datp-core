@@ -20,6 +20,7 @@ from datp_core.domain.errors import (
 from datp_core.domain.values.base import floats_absolutely_close
 from datp_core.domain.values.checksums import checksum_text
 from datp_core.domain.values.counts import RowCount, Seed
+from datp_core.domain.values.identifiers import CaptureTimestampColumn
 from datp_core.protocols.splits import (
     FRACTION_TOTAL_ABSOLUTE_TOLERANCE,
     NON_TEMPORAL_SPLIT,
@@ -184,7 +185,7 @@ def _non_temporal_assignments(
 
 def _temporal_assignments(
     membership: pl.DataFrame,
-    capture_timestamp_column: str,
+    capture_timestamp_column: CaptureTimestampColumn,
 ) -> pl.DataFrame:
     if capture_timestamp_column not in membership.columns:
         raise ScientificContractError(
@@ -292,7 +293,7 @@ def _static_reference_assignments(
 def _require_sorted_client_rows(
     membership: pl.DataFrame,
     client_id: str,
-    capture_timestamp_column: str,
+    capture_timestamp_column: CaptureTimestampColumn,
 ) -> pl.DataFrame:
     client_rows = membership.filter(pl.col(CLIENT_ID_COLUMN) == client_id).sort(
         [

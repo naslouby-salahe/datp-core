@@ -1,4 +1,4 @@
-"""Canonical publication reuse, source-state comparison, and manifest serialization."""
+"""Canonical publication reuse probing, source-state comparison, and domain reconstruction."""
 
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -11,7 +11,6 @@ from filelock import FileLock
 
 from datp_core.datasets.contracts import (
     CanonicalAssetRole,
-    CanonicalColumn,
     CanonicalManifestDocument,
     CanonicalPublicationArtifact,
     CanonicalSchema,
@@ -21,40 +20,32 @@ from datp_core.datasets.contracts import (
     DatasetValidationIssue,
     DatasetValidationReport,
     ExclusionReason,
+    ManifestSerializationRequest,
     MaterializedCanonicalAsset,
     MaterializedDataset,
     ModelInputEligibilityPolicy,
     RawDatasetInventory,
     RawSourceFile,
-    SchemaChecksumDocument,
     SourceFileRole,
     SourceRowReference,
     SourceStateDocument,
     SourceStateEntryDocument,
     ValidationSeverity,
     _AssetEntry,
-    _ChronologyEntry,
-    _EligibilityPolicyEntry,
-    _InventoryEntry,
-    _ValidationReportEntry,
+    _chronology_entry,
+    _eligibility_entry,
+    _inventory_entry,
+    _validation_report_entry,
+    complete_digest,
+    schema_content,
 )
 from datp_core.domain.enums import AvailabilityStatus, ContractSubject, DatasetId, PublicationStatus
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.provenance import canonical_json_text, canonical_mapping, canonical_value
+from datp_core.domain.provenance import canonical_json_text, canonical_value
 from datp_core.domain.values.checksums import Checksum, checksum_file, checksum_text
 from datp_core.domain.values.counts import ByteCount, RowCount
 
-_CANONICAL_PUBLICATION_CONTRACT = "canonical_publication_contract"
-_COMPLETE_NAME = CanonicalPublicationArtifact.COMPLETE
-_MANIFEST_NAME = CanonicalPublicationArtifact.MANIFEST
-_SCHEMA_NAME = CanonicalPublicationArtifact.SCHEMA
-_SOURCE_STATE_NAME = CanonicalPublicationArtifact.SOURCE_STATE
-
 SourcePathResolver = Callable[[Path], Path]
-
-
-def complete_digest(manifest_payload: str, schema_payload: str) -> Checksum:
-    return checksum_text(f"{manifest_payload}\n{schema_payload}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -101,31 +92,6 @@ def canonical_directory(canonical_root: Path, schema: CanonicalSchema) -> Path:
     return canonical_root / schema.dataset.value
 
 
-def schema_content(schema: CanonicalSchema) -> str:
-    return canonical_json_text(schema)
-
-
-def schema_checksum_document_json(
-    dataset: DatasetId, columns: tuple[CanonicalColumn, ...], physical_schema: pa.Schema
-) -> str:
-    return canonical_json_text(
-        SchemaChecksumDocument(
-            canonicalization_contract=_CANONICAL_PUBLICATION_CONTRACT,
-            columns=columns,
-            dataset=dataset,
-            physical_schema=physical_schema.to_string(show_field_metadata=True, show_schema_metadata=True),
-        )
-    )
-
-
-def canonical_publication_contract() -> str:
-    return _CANONICAL_PUBLICATION_CONTRACT
-
-
-def publication_artifact_names() -> tuple[str, str, str, str]:
-    return _COMPLETE_NAME, _MANIFEST_NAME, _SCHEMA_NAME, _SOURCE_STATE_NAME
-
-
 @dataclass(frozen=True, slots=True)
 class CanonicalReuseRequest[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum]:
     canonical_root: Path
@@ -165,25 +131,14 @@ class PublicationFiles:
     complete_file: Path
 
 
-@dataclass(frozen=True, slots=True)
-class ManifestSerializationRequest[EligibilityReasonT: StrEnum]:
-    dataset: DatasetId
-    canonicalization_contract: str
-    schema_checksum: Checksum
-    inventory: RawDatasetInventory
-    validation_report: DatasetValidationReport
-    chronology: tuple[ChronologyValidation, ...] = ()
-    eligibility_policy: ModelInputEligibilityPolicy[EligibilityReasonT] | None = None
-
-
 def completed_publication_is_reusable[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
     target: Path, publication: PublicationMatchRequest[AssetRoleT, EligibilityReasonT]
 ) -> bool:
     files = PublicationFiles(
         target,
-        target / _SCHEMA_NAME,
-        target / _MANIFEST_NAME,
-        target / _COMPLETE_NAME,
+        target / CanonicalPublicationArtifact.SCHEMA,
+        target / CanonicalPublicationArtifact.MANIFEST,
+        target / CanonicalPublicationArtifact.COMPLETE,
     )
     manifest = _reusable_manifest(files, publication)
     if manifest is None:
@@ -213,9 +168,9 @@ def _fast_reusable_manifest[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
     target: Path, request: CanonicalReuseRequest[AssetRoleT, EligibilityReasonT]
 ) -> tuple[CanonicalManifestDocument, str] | None:
     schema = request.schema
-    schema_file = target / _SCHEMA_NAME
-    manifest_file = target / _MANIFEST_NAME
-    complete_file = target / _COMPLETE_NAME
+    schema_file = target / CanonicalPublicationArtifact.SCHEMA
+    manifest_file = target / CanonicalPublicationArtifact.MANIFEST
+    complete_file = target / CanonicalPublicationArtifact.COMPLETE
     published_manifest = _read_manifest(target, schema_file, manifest_file, complete_file)
     if published_manifest is None:
         return None
@@ -261,7 +216,7 @@ def _reused_materialized_dataset[AssetRoleT: StrEnum, EligibilityReasonT: StrEnu
         dataset=schema.dataset,
         canonical_root=target,
         assets=assets,
-        manifest_path=target / _MANIFEST_NAME,
+        manifest_path=target / CanonicalPublicationArtifact.MANIFEST,
         schema=schema,
         row_count=(
             inventory.accepted_row_count
@@ -382,7 +337,7 @@ def _chronology_from_serialized(document) -> ChronologyValidation:
 
 
 def _source_state_matches(probe: SourceStateProbe) -> bool:
-    source_state = probe.target / _SOURCE_STATE_NAME
+    source_state = probe.target / CanonicalPublicationArtifact.SOURCE_STATE
     try:
         state = SourceStateDocument.model_validate_json(source_state.read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -398,12 +353,12 @@ def write_source_state(
 ) -> None:
     if not source_paths:
         return
-    manifest_path = target / _MANIFEST_NAME
+    manifest_path = target / CanonicalPublicationArtifact.MANIFEST
     if not manifest_path.is_file():
         return
     manifest = manifest_path.read_text(encoding="utf-8")
-    state_path = target / _SOURCE_STATE_NAME
-    temporary = state_path.with_name(f".{_SOURCE_STATE_NAME}")
+    state_path = target / CanonicalPublicationArtifact.SOURCE_STATE
+    temporary = state_path.with_name(f".{CanonicalPublicationArtifact.SOURCE_STATE}")
     temporary.write_text(
         canonical_json_text(_source_state(dataset, source_paths, manifest, source_path_resolver)),
         encoding="utf-8",
@@ -476,24 +431,6 @@ def _documents_match_publication(
         schema_file.read_text(encoding="utf-8") == serialized_schema
         and complete_file.read_text(encoding="utf-8") == complete_digest(serialized_manifest, serialized_schema).value
     )
-
-
-def _chronology_entry(value: ChronologyValidation) -> _ChronologyEntry:
-    return _ChronologyEntry.model_validate(canonical_mapping(value))
-
-
-def _eligibility_entry[EligibilityReasonT: StrEnum](
-    value: ModelInputEligibilityPolicy[EligibilityReasonT] | None,
-) -> _EligibilityPolicyEntry | None:
-    return None if value is None else _EligibilityPolicyEntry.model_validate(canonical_mapping(value))
-
-
-def _inventory_entry(value: RawDatasetInventory) -> _InventoryEntry:
-    return _InventoryEntry.model_validate(canonical_mapping(value))
-
-
-def _validation_report_entry(value: DatasetValidationReport) -> _ValidationReportEntry:
-    return _ValidationReportEntry.model_validate(canonical_mapping(value))
 
 
 def _asset_entry[AssetRoleT: StrEnum](asset: CanonicalAsset[AssetRoleT]) -> _AssetEntry:

@@ -5,8 +5,7 @@ from typing import Annotated
 
 import typer
 
-from datp_core.anchor.models import VerifyAnchorStageRequest
-from datp_core.pipeline.workflows.anchor import verify_anchor
+from datp_core.pipeline.workflows.anchor import VerifyAnchorStageRequest, verify_anchor
 from datp_core.protocols.anchor import ANCHOR_DECISION_PROTOCOL
 
 app = typer.Typer(no_args_is_help=True)

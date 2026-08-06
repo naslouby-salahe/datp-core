@@ -78,17 +78,27 @@ def test_coordinate_requires_coefficient_for_fedprox() -> None:
 
 
 def test_ditto_global_and_personalized_coordinates_are_structurally_distinct() -> None:
-    global_coordinate, personalized_coordinate, _regularization = ditto_coordinates(SEED)
-    assert global_coordinate.model is TrainingModelId.DITTO_GLOBAL_AUTOENCODER
-    assert personalized_coordinate.model is TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER
-    assert global_coordinate != personalized_coordinate
+    coordinates, _regularization = ditto_coordinates(SEED)
+    assert coordinates.global_coordinate.model is TrainingModelId.DITTO_GLOBAL_AUTOENCODER
+    assert coordinates.personalized_coordinate.model is TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER
+    assert coordinates.global_coordinate != coordinates.personalized_coordinate
+
+
+def test_ditto_training_coordinates_create_shares_regularization() -> None:
+    coordinates, regularization = ditto_coordinates(SEED)
+    assert coordinates.global_coordinate.model_coefficient == regularization
+    assert coordinates.personalized_coordinate.model_coefficient == regularization
+    assert coordinates.global_coordinate.matches_ditto_peer(coordinates.personalized_coordinate)
 
 
 def test_global_state_reference_rejects_personalized_coordinate() -> None:
-    _global, personalized, _regularization = ditto_coordinates(SEED)
+    coordinates, _regularization = ditto_coordinates(SEED)
     with pytest.raises(ScientificContractError, match="global federated model coordinate"):
         GlobalModelStateReference(
-            coordinate=personalized, round_number=RoundNumber(1), state_checksum=Checksum("a" * 64), tensor_path=None
+            coordinate=coordinates.personalized_coordinate,
+            round_number=RoundNumber(1),
+            state_checksum=Checksum("a" * 64),
+            tensor_path=None,
         )
 
 

@@ -2,15 +2,14 @@
 
 from datp_core.analysis.scientific_decision import ScientificDecision, ScientificDecisionResult
 from datp_core.domain.enums import EvidenceRole
-from datp_core.domain.values.ratios import MetricValue, Ratio
-
-MODEL_EFFECT_PARTIAL_RETENTION_CUTOFF = Ratio(0.25)
-MODEL_EFFECT_FULL_RETENTION_CUTOFF = Ratio(0.75)
+from datp_core.domain.values.ratios import MetricValue
+from datp_core.protocols.training import ModelAbsorptionDecisionProtocol
 
 
 def decide_model_absorption(
     reference_effect: MetricValue | None,
     personalized_effect: MetricValue | None,
+    protocol: ModelAbsorptionDecisionProtocol,
 ) -> ScientificDecisionResult:
     if reference_effect is None or personalized_effect is None or reference_effect.value <= 0.0:
         return ScientificDecisionResult(
@@ -21,10 +20,10 @@ def decide_model_absorption(
             rationale="model absorption requires a valid positive reference effect",
         )
     retention = MetricValue(personalized_effect.value / reference_effect.value)
-    if retention.value >= MODEL_EFFECT_FULL_RETENTION_CUTOFF.value:
+    if retention.value >= protocol.full_retention_minimum.value:
         decision = ScientificDecision.SUPPORTED
         rationale = "the personalized-model effect is retained"
-    elif retention.value >= MODEL_EFFECT_PARTIAL_RETENTION_CUTOFF.value:
+    elif retention.value >= protocol.partial_retention_minimum.value:
         decision = ScientificDecision.PARTIAL_ABSORPTION
         rationale = "the personalized-model effect is partially absorbed"
     else:

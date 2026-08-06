@@ -15,7 +15,7 @@ from datp_core.domain.enums import (
 )
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import Seed
-from datp_core.pipeline.planning import ExperimentCoordinate
+from datp_core.pipeline.coordinates import ExperimentCoordinate
 from datp_core.protocols.graph import (
     IdentityObservationHook,
     ObservationBoundary,

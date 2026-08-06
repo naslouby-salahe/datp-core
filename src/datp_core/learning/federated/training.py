@@ -527,7 +527,7 @@ def _proximal_coefficient(
             )
 
 
-def run_federated_training[T: (FedAvgProtocol, FedProxProtocol)](
+def run_federated_training[T: FedAvgProtocol | FedProxProtocol](
     request: FederatedTrainingRequest[T],
 ) -> FederatedTrainingExecution:
     validate_common_request(

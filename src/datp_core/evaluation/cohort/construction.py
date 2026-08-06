@@ -138,9 +138,9 @@ def _support_exclusion_reasons(
     reasons: list[ClientExclusionReason] = []
     if not counts.accepted:
         reasons.append(ClientExclusionReason.CLIENT_NOT_ACCEPTED)
-    if counts.benign_calibration_count < support:
+    if not support.fits_within(counts.benign_calibration_count):
         reasons.append(ClientExclusionReason.INSUFFICIENT_BENIGN_CALIBRATION)
-    if counts.benign_evaluation_count < 1:
+    if counts.benign_evaluation_count.value < 1:
         reasons.append(ClientExclusionReason.EMPTY_BENIGN_EVALUATION)
     if fpr_status is CapabilityStatus.UNAVAILABLE:
         reasons.append(ClientExclusionReason.POPULATION_PROHIBITS_FPR)
@@ -148,7 +148,7 @@ def _support_exclusion_reasons(
 
 
 def _is_calibration_eligible(counts: ClientPartitionCounts, support: CalibrationSize) -> bool:
-    return counts.accepted and counts.benign_calibration_count >= support and not counts.deployment_fallback
+    return counts.accepted and support.fits_within(counts.benign_calibration_count) and not counts.deployment_fallback
 
 
 def _is_fpr_evaluable(
@@ -180,7 +180,7 @@ def _attack_exclusion_reasons(
         CapabilityStatus.NOT_APPLICABLE,
     }:
         reasons.append(ClientExclusionReason.POPULATION_PROHIBITS_ATTACK_METRICS)
-    if counts.attack_evaluation_count < 1:
+    if counts.attack_evaluation_count.value < 1:
         reasons.append(ClientExclusionReason.NO_HELD_OUT_ATTACK_ROWS)
     return reasons
 

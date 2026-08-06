@@ -30,6 +30,7 @@ from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import ClientPublicationCount, RowCount, Seed
 from datp_core.domain.values.identifiers import (
+    CaptureTimestampColumn,
     FeatureNameSequence,
     OutcomeLabel,
     OutcomeLabelSequence,
@@ -325,7 +326,7 @@ class FederatedPreprocessingRequest:
     preprocessing_identity: PreprocessingProtocolId
     data_root: Path
     dirichlet_condition: ControlledPartitionCondition | None
-    capture_timestamp_column: str | None
+    capture_timestamp_column: CaptureTimestampColumn | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -335,7 +336,7 @@ class PublishedFederatedPreprocessingRequest:
     split_directory: Path
     preprocessing_identity: PreprocessingProtocolId
     data_root: Path
-    capture_timestamp_column: str | None = None
+    capture_timestamp_column: CaptureTimestampColumn | None = None
 
 
 @dataclass(frozen=True, slots=True)

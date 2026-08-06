@@ -27,7 +27,12 @@ def test_prediction_boundary_is_benign_and_counts_conserve_rows() -> None:
     )
 
     assert predicted_attack(ScoreValue(2.0), threshold) is False
-    assert (result.true_negative, result.false_positive, result.true_positive, result.false_negative) == (2, 0, 2, 0)
+    assert (
+        result.true_negative.value,
+        result.false_positive.value,
+        result.true_positive.value,
+        result.false_negative.value,
+    ) == (2, 0, 2, 0)
     assert result.evaluation_row_count.value == 4
 
 

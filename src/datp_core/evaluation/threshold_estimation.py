@@ -147,7 +147,7 @@ def evaluate_threshold_estimate(
         )
     scores = verified_benign_scores.scores
     target_exceedance = 1.0 - provenance.quantile.value
-    achieved = sum(score.score > estimated_threshold for score in scores) / len(scores)
+    achieved = sum(score.score.exceeds(estimated_threshold) for score in scores) / len(scores)
     signed_attainment_error = achieved - target_exceedance
     absolute_error = abs(estimated_threshold.value - exact_pooled_benign_quantile_reference.value)
     reference = exact_pooled_benign_quantile_reference.value

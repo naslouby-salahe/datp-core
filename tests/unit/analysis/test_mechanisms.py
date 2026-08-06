@@ -34,6 +34,7 @@ from datp_core.domain.enums import (
 )
 from datp_core.domain.values.counts import ClusterIndex, PairedObservationCount
 from datp_core.domain.values.ratios import MetricValue, Ratio, ThresholdValue
+from datp_core.protocols.training import MODEL_ABSORPTION_DECISION_PROTOCOL
 
 
 def test_association_reports_all_observations_with_typed_statistics() -> None:
@@ -135,9 +136,18 @@ def test_unresolved_jsd_and_absorption_remain_typed() -> None:
         clients,
         DivergenceBlocker.BINNING_UNRESOLVED,
     )
-    absorption = decide_model_absorption(MetricValue(0.0), MetricValue(0.2))
+    absorption = decide_model_absorption(MetricValue(0.0), MetricValue(0.2), MODEL_ABSORPTION_DECISION_PROTOCOL)
     assert divergence.availability is AvailabilityStatus.UNAVAILABLE
     assert absorption.decision is ScientificDecision.BLOCKED
+
+
+def test_model_absorption_follows_the_declared_retention_protocol() -> None:
+    retained = decide_model_absorption(MetricValue(1.0), MetricValue(0.8), MODEL_ABSORPTION_DECISION_PROTOCOL)
+    partial = decide_model_absorption(MetricValue(1.0), MetricValue(0.5), MODEL_ABSORPTION_DECISION_PROTOCOL)
+    absorbed = decide_model_absorption(MetricValue(1.0), MetricValue(0.1), MODEL_ABSORPTION_DECISION_PROTOCOL)
+    assert retained.decision is ScientificDecision.SUPPORTED
+    assert partial.decision is ScientificDecision.PARTIAL_ABSORPTION
+    assert absorbed.decision is ScientificDecision.FULL_ABSORPTION
 
 
 def _client(

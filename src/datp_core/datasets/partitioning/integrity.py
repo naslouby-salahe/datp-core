@@ -18,6 +18,7 @@ from datp_core.domain.enums import (
 from datp_core.domain.errors import DataIntegrityError, LeakageError, ScientificContractError
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import ClientCount, RowCount
+from datp_core.domain.values.identifiers import CaptureTimestampColumn
 from datp_core.protocols.populations import PopulationDeclaration
 
 from .contracts import (
@@ -98,7 +99,9 @@ def validate_split_manifest(
     _require_benign_only_fit_roles(assignments, population)
 
 
-def validate_no_future_history_leakage(assignments: pl.DataFrame, capture_timestamp_column: str) -> None:
+def validate_no_future_history_leakage(
+    assignments: pl.DataFrame, capture_timestamp_column: CaptureTimestampColumn
+) -> None:
     if capture_timestamp_column not in assignments.columns:
         raise ScientificContractError(
             "chronological leakage check requires capture timestamps",
@@ -128,7 +131,7 @@ def validate_dirichlet_conservation(
     client_count: ClientCount,
 ) -> None:
     population = PopulationId.NBAIOT_DIRICHLET_CLIENTS
-    if membership.height != source_row_count:
+    if membership.height != source_row_count.value:
         raise DataIntegrityError(
             "Dirichlet partition does not conserve source rows",
             subject=population,
@@ -151,7 +154,7 @@ def validate_dirichlet_conservation(
 def _require_membership_row_contract(
     membership: pl.DataFrame, expected_rows: RowCount, population: PopulationId
 ) -> None:
-    if membership.height != expected_rows:
+    if membership.height != expected_rows.value:
         raise DataIntegrityError(
             "membership row count disagrees with the population manifest",
             subject=population,
@@ -188,7 +191,7 @@ def _require_membership_client_subset(
 
 
 def _require_candidate_count(candidates: tuple[str, ...], expected: ClientCount, population: PopulationId) -> None:
-    if len(candidates) != expected:
+    if len(candidates) != expected.value:
         raise DataIntegrityError(
             "candidate client count disagrees with the population declaration",
             subject=population,
@@ -202,7 +205,7 @@ def _require_assignment_row_contract(
     expected_rows: RowCount,
     population: PopulationId,
 ) -> None:
-    if assignments.height != expected_rows:
+    if assignments.height != expected_rows.value:
         raise DataIntegrityError(
             "assignment row count disagrees with the split manifest",
             subject=population,
@@ -231,7 +234,7 @@ def _require_role_counts(assignments: pl.DataFrame, document: SplitManifestDocum
         (PartitionRole.STATIC_REFERENCE_RESERVE, document.static_reference_reserve_row_count),
     ):
         observed = int(assignments.filter(pl.col(PARTITION_ROLE_COLUMN) == role).height)
-        if observed != expected:
+        if observed != expected.value:
             raise DataIntegrityError(
                 f"split role count mismatch for {role.value}",
                 subject=document.population,
@@ -254,7 +257,7 @@ def _require_benign_only_fit_roles(assignments: pl.DataFrame, population: Popula
 def _reject_client_future_history_leakage(
     historical: pl.DataFrame,
     future: pl.DataFrame,
-    capture_timestamp_column: str,
+    capture_timestamp_column: CaptureTimestampColumn,
     client_id: str,
 ) -> None:
     if historical.height == 0 or future.height == 0:

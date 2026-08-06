@@ -1,8 +1,8 @@
 import pytest
 from tests.unit.anchor.helpers import matching_anchor_observations
 
-from datp_core.anchor.gate import decide_anchor_gate, dependent_readiness_from_gate
-from datp_core.anchor.models import AnchorGateStatus, AnchorObservedMetric
+from datp_core.anchor.comparison import AnchorObservedMetric
+from datp_core.anchor.gate import AnchorGateStatus, decide_anchor_gate, dependent_readiness_from_gate
 from datp_core.anchor.reproduction import (
     independent_reproduction_dependency_blocker,
     reproduce_anchor,

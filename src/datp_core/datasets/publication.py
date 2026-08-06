@@ -4,12 +4,16 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from shutil import rmtree
-from tempfile import mkdtemp
 
 from filelock import FileLock
 
 from datp_core.domain.enums import PublicationStatus
 from datp_core.domain.values.checksums import Checksum, checksum_file
+from datp_core.runtime.filesystem import (
+    cleanup_staging_on_failure,
+    create_staging_directory,
+    remove_stale_staging_directories,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,7 +35,7 @@ def publish_canonical_atomically[ValueT](
     """Publish one canonical dataset directory without exposing partial state."""
     target.parent.mkdir(parents=True, exist_ok=True)
     with FileLock(f"{target}.lock"):
-        _remove_stale_directories(target)
+        remove_stale_staging_directories(target)
         if is_reusable(target):
             return DatasetPublicationOutcome(
                 status=PublicationStatus.REUSED,
@@ -40,23 +44,12 @@ def publish_canonical_atomically[ValueT](
             )
         if target.exists():
             remove_target(target)
-        staging = Path(mkdtemp(prefix=f".{target.name}.", dir=target.parent))
-        try:
+        staging = create_staging_directory(target)
+        with cleanup_staging_on_failure(staging):
             value = write(staging)
             staging.replace(target)
-        except Exception:
-            if staging.exists():
-                rmtree(staging, ignore_errors=True)
-            raise
     return DatasetPublicationOutcome(
         status=PublicationStatus.PUBLISHED,
         value=value,
         complete_digest=checksum_file(target / complete_marker),
     )
-
-
-def _remove_stale_directories(target: Path) -> None:
-    prefix = f".{target.name}."
-    for candidate in sorted(target.parent.iterdir()):
-        if candidate.is_dir() and candidate.name.startswith(prefix):
-            rmtree(candidate, ignore_errors=True)

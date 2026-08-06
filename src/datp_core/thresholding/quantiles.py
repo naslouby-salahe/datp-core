@@ -16,7 +16,14 @@ from datp_core.domain.enums import (
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.checksums import Checksum, checksum_text
 from datp_core.domain.values.counts import ConformalRankIndex, RowCount
-from datp_core.domain.values.ratios import CoverageTarget, Quantile, Ratio, SummaryCoefficient, ThresholdValue
+from datp_core.domain.values.ratios import (
+    CoverageTarget,
+    Quantile,
+    Ratio,
+    ScoreValue,
+    SummaryCoefficient,
+    ThresholdValue,
+)
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.thresholding.assignments import LocalQuantile, ThresholdDiagnostic
 
@@ -25,7 +32,7 @@ from datp_core.thresholding.assignments import LocalQuantile, ThresholdDiagnosti
 class ClientBenignCalibrationScores:
     client: ClientIdentity
     coordinate: FederatedTrainingCoordinate
-    scores: tuple[float, ...]
+    scores: tuple[ScoreValue, ...]
     calibration_manifest_checksum: Checksum
     score_set_checksum: Checksum
 
@@ -35,15 +42,10 @@ class ClientBenignCalibrationScores:
                 "eligible client calibration scores must be non-empty",
                 subject=ContractSubject.CALIBRATION,
             )
-        if not all(np.isfinite(score) for score in self.scores):
-            raise ScientificContractError(
-                "every calibration score must be finite",
-                subject=ContractSubject.CALIBRATION,
-            )
 
     @property
     def as_array(self) -> np.ndarray:
-        return np.asarray(self.scores, dtype=np.float64)
+        return np.asarray(tuple(score.value for score in self.scores), dtype=np.float64)
 
 
 def calibration_scores_from_references(
@@ -56,7 +58,7 @@ def calibration_scores_from_references(
     return ClientBenignCalibrationScores(
         client=client,
         coordinate=coordinate,
-        scores=tuple(reference.score.value for reference in references),
+        scores=tuple(reference.score for reference in references),
         calibration_manifest_checksum=manifest_checksum,
         score_set_checksum=score_set_checksum,
     )

@@ -27,7 +27,7 @@ from datp_core.domain.enums import (
 )
 from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.values.counts import RowCount, Seed
-from datp_core.domain.values.identifiers import FeatureName, FeatureNameSequence
+from datp_core.domain.values.identifiers import CaptureTimestampColumn, FeatureName, FeatureNameSequence
 from datp_core.preprocessing.contracts import (
     PartitionOrdering,
     PreprocessingFitScope,
@@ -84,7 +84,7 @@ class CentralizedPopulationPreprocessingRequest:
     split_protocol: SplitProtocolId
     data_root: Path
     dirichlet_condition: ControlledPartitionCondition | None
-    capture_timestamp_column: str | None
+    capture_timestamp_column: CaptureTimestampColumn | None
 
 
 @dataclass(frozen=True, slots=True)

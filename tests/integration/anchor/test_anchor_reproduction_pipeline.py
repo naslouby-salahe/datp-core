@@ -3,12 +3,9 @@ from pathlib import Path
 
 import pytest
 
-from datp_core.anchor.models import (
-    AnchorGateStatus,
-    HistoricalThresholdScopeToken,
-    VerifyAnchorStageRequest,
-)
+from datp_core.anchor.gate import AnchorGateStatus
 from datp_core.anchor.reproduction import (
+    HistoricalThresholdScopeToken,
     historical_sources_for_seed_directories,
     load_historical_observations,
     references_from_protocol,
@@ -17,7 +14,7 @@ from datp_core.anchor.reproduction import (
 from datp_core.domain.enums import ExperimentReadiness, FederatedThresholdMethod
 from datp_core.domain.errors import AnchorReproductionError
 from datp_core.domain.values.counts import Seed
-from datp_core.pipeline.workflows.anchor import verify_anchor
+from datp_core.pipeline.workflows.anchor import VerifyAnchorStageRequest, verify_anchor
 from datp_core.protocols.anchor import (
     ANCHOR_DECISION_PROTOCOL,
     HISTORICAL_LOCAL_THRESHOLD_CV_FPR,
@@ -161,7 +158,8 @@ def test_references_and_fixture_observations_are_full_precision_aligned(tmp_path
     for comparison in reproduction.metric_comparisons:
         assert comparison.observation is not None
         assert comparison.observation.value == comparison.reference.value
-        assert comparison.signed_difference == 0.0
+        assert comparison.signed_difference is not None
+        assert comparison.signed_difference.value == 0.0
     assert [
         item.value
         for item in references_from_protocol()

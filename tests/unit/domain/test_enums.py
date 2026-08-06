@@ -9,7 +9,6 @@ from datp_core.domain.enums import (
     CheckpointSelectionRule,
     CheckpointStatus,
     CommunicationEstimationMethod,
-    CompletionStatus,
     ContractSubject,
     DatasetId,
     EffectSizeId,
@@ -25,7 +24,6 @@ from datp_core.domain.enums import (
     PartitionRole,
     PopulationId,
     PopulationIdentityKind,
-    PreprocessExecutionStatus,
     PreprocessingProtocolId,
     ProcessedDataBranch,
     PublicationStatus,
@@ -33,15 +31,12 @@ from datp_core.domain.enums import (
     ReusableDataCoordinateKind,
     ScoreFrameColumn,
     SerializationFormat,
-    SplitId,
     SplitProtocolId,
-    StageId,
     StatisticalTestId,
     TemporalState,
     TrafficRateEvidenceType,
     TrainingHistoryColumn,
     TrainingModelId,
-    TrustedEstimatorModule,
 )
 
 EXPECTED_MEMBERS = (
@@ -95,11 +90,6 @@ EXPECTED_MEMBERS = (
                 "TEST_COLUMN_ORDER_PROJECTION",
             )
         ),
-    ),
-    (TrustedEstimatorModule, frozenset(("SKLEARN_PREPROCESSING",))),  # value: sklearn_preprocessing
-    (
-        PreprocessExecutionStatus,
-        frozenset(("BLOCKED_SCIENTIFIC_VALUE", "BLOCKED_POPULATION_CONSTRUCTION", "PUBLISHED", "REUSED")),
     ),
     (
         EvidenceRole,
@@ -224,37 +214,6 @@ EXPECTED_MEMBERS = (
         ),
     ),
     (AvailabilityStatus, frozenset(("AVAILABLE", "UNAVAILABLE", "UNDEFINED", "SUPPRESSED", "INFEASIBLE"))),
-    (
-        StageId,
-        frozenset(
-            (
-                "PREFLIGHT",
-                "DATASET_MATERIALIZATION",
-                "MODEL_TRAINING",
-                "CHECKPOINT_SELECTION",
-                "SCORE_GENERATION",
-                "CALIBRATION_SUBSAMPLING",
-                "THRESHOLD_CONSTRUCTION",
-                "EVALUATION",
-                "STATISTICAL_ANALYSIS",
-                "REPORTING",
-                "FINALIZATION",
-            )
-        ),
-    ),
-    (
-        SplitId,
-        frozenset(
-            (
-                "BENIGN_TRAINING",
-                "BENIGN_CALIBRATION",
-                "HELD_OUT_EVALUATION",
-                "HISTORICAL_BENIGN_CALIBRATION",
-                "FUTURE_BENIGN_RECALIBRATION",
-                "FUTURE_HELD_OUT_EVALUATION",
-            )
-        ),
-    ),
     (TemporalState, frozenset(("STATIC_REFERENCE", "FROZEN_FUTURE", "RECALIBRATED_FUTURE"))),
     (SerializationFormat, frozenset(("PYDANTIC_JSON", "PARQUET", "SAFETENSORS", "SKOPS"))),
     (
@@ -272,7 +231,6 @@ EXPECTED_MEMBERS = (
         frozenset(("HISTORICAL_ENDPOINT", "CANDIDATE", "SELECTED_BY_NON_TEST_RULE", "STABILITY_EVIDENCE")),
     ),
     (CheckpointSelectionRule, frozenset(("FIXED_TERMINAL_MAXIMUM_ROUND",))),
-    (CompletionStatus, frozenset(("NOT_STARTED", "IN_PROGRESS", "COMPLETE", "FAILED", "BLOCKED"))),
     (
         ContractSubject,
         frozenset(
@@ -348,7 +306,3 @@ def test_centralized_and_federated_threshold_methods_are_structurally_separate()
     assert CentralizedThresholdMethod is not FederatedThresholdMethod
     assert set(CentralizedThresholdMethod).isdisjoint(set(FederatedThresholdMethod))
     assert not isinstance(CentralizedThresholdMethod.POOLED_BENIGN_QUANTILE, FederatedThresholdMethod)
-
-
-def test_stage_id_has_eleven_high_level_stages() -> None:
-    assert len(StageId) == 11

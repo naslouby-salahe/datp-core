@@ -12,16 +12,18 @@ from datp_core.calibration.eligibility import (
     reject_calibration_evaluation_overlap,
     reject_score_coordinate_mismatch,
 )
-from datp_core.calibration.models import CalibrationReplicateManifest, EligibilityDecision
+from datp_core.calibration.models import CalibrationReplicateManifest, CalibrationSampleReference, EligibilityDecision
 from datp_core.calibration.sampling import build_calibration_replicate
 from datp_core.datasets.partitioning.contracts import ClientIdentity
+from datp_core.domain.contracts import ClientCollection, ClientOwned
 from datp_core.domain.enums import ScoreFrameColumn
 from datp_core.domain.values.counts import CalibrationSize, ReplicateIndex, SubsampleReplicateCount
+from datp_core.domain.values.identifiers import StableRowId
 from datp_core.protocols.calibration import CalibrationEligibilityProtocol
 from datp_core.protocols.inference import FixedScoreInvariant, ScoreArtifactManifest, ScoreRecord
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class CalibrationRequest:
     score_manifest: ScoreArtifactManifest
     protocol: CalibrationEligibilityProtocol
@@ -29,7 +31,7 @@ class CalibrationRequest:
     replicate_count: SubsampleReplicateCount
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class CalibrationResult:
     eligibility: tuple[EligibilityDecision, ...]
     eligible_clients: tuple[ClientIdentity, ...]
@@ -39,12 +41,14 @@ class CalibrationResult:
 def calibrate(request: CalibrationRequest) -> CalibrationResult:
     reject_score_coordinate_mismatch(request.score_manifest.calibration_records)
     invariant = FixedScoreInvariant.from_manifest(request.score_manifest)
-    evaluation_row_ids_by_client = {
-        record.scored_client.client_id: _evaluation_stable_row_ids(record)
-        for record in request.score_manifest.evaluation_records
-    }
+    evaluation_row_ids_by_client = ClientCollection(
+        items=tuple(
+            ClientOwned(client=record.scored_client, value=_evaluation_stable_row_ids(record))
+            for record in request.score_manifest.evaluation_records
+        )
+    )
     decisions: list[EligibilityDecision] = []
-    references_by_client = {}
+    references_by_client: list[ClientOwned[ClientIdentity, tuple[CalibrationSampleReference, ...]]] = []
     ordered_calibration_records = sorted(
         request.score_manifest.calibration_records,
         key=lambda record: record.scored_client,
@@ -53,11 +57,12 @@ def calibrate(request: CalibrationRequest) -> CalibrationResult:
         references = load_benign_calibration_references(record)
         reject_calibration_evaluation_overlap(
             frozenset(reference.stable_row_id for reference in references),
-            evaluation_row_ids_by_client.get(record.scored_client.client_id, frozenset()),
+            evaluation_row_ids_by_client.require(record.scored_client),
         )
-        references_by_client[record.scored_client] = references
+        references_by_client.append(ClientOwned(client=record.scored_client, value=references))
         support = calibration_support(record, references, invariant.calibration_score_set_checksum)
         decisions.append(decide_eligibility(support, request.protocol))
+    references_collection = ClientCollection(items=tuple(references_by_client))
     eligible = eligible_clients(tuple(decisions))
     replicate_manifests = tuple(
         build_calibration_replicate(
@@ -65,7 +70,7 @@ def calibrate(request: CalibrationRequest) -> CalibrationResult:
             coordinate=request.score_manifest.coordinate,
             training_seed=request.score_manifest.coordinate.training_seed,
             replicate_index=ReplicateIndex(replicate_index),
-            references=references_by_client[client],
+            references=references_collection.require(client),
             sizes=request.calibration_sizes,
         )
         for client in eligible
@@ -78,6 +83,7 @@ def calibrate(request: CalibrationRequest) -> CalibrationResult:
     )
 
 
-def _evaluation_stable_row_ids(record: ScoreRecord) -> frozenset[str]:
+def _evaluation_stable_row_ids(record: ScoreRecord) -> frozenset[StableRowId]:
     frame = pl.read_parquet(record.path)
-    return frozenset(str(value) for value in frame.get_column(ScoreFrameColumn.STABLE_ROW_ID.value).to_list())
+    values = frame.get_column(ScoreFrameColumn.STABLE_ROW_ID.value).to_list()
+    return frozenset(StableRowId(str(value)) for value in values)

@@ -36,15 +36,6 @@ class ClientEligibilityRecord(StrictModel):
 
     @model_validator(mode="after")
     def validate_record(self) -> "ClientEligibilityRecord":
-        if (
-            min(
-                self.benign_calibration_count,
-                self.benign_evaluation_count,
-                self.attack_evaluation_count,
-            )
-            < 0
-        ):
-            raise ValueError("cohort counts must be non-negative")
         if self.calibration_eligible and self.deployment_fallback:
             raise ValueError("deployment-fallback clients cannot be calibration eligible")
         if self.fpr_evaluable and not self.calibration_eligible:

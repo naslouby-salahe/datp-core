@@ -1,13 +1,16 @@
-"""Immutable records for audited dataset ingestion and publication."""
+"""Immutable records for audited dataset ingestion and publication, and their canonical serialization."""
 
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
+import pyarrow as pa
+
 import datp_core.domain.enums as domain_enums
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import AvailabilityStatus, DatasetId
-from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.provenance import canonical_json_text, canonical_mapping
+from datp_core.domain.values.checksums import Checksum, checksum_text
 from datp_core.domain.values.counts import (
     ByteCount,
     CanonicalColumnPosition,
@@ -538,6 +541,71 @@ class CanonicalManifestDocument(StrictModel):
     inventory: _InventoryEntry
     schema_checksum: str
     validation_report: _ValidationReportEntry
+
+
+_CANONICAL_PUBLICATION_CONTRACT = "canonical_publication_contract"
+_COMPLETE_NAME = CanonicalPublicationArtifact.COMPLETE
+_MANIFEST_NAME = CanonicalPublicationArtifact.MANIFEST
+_SCHEMA_NAME = CanonicalPublicationArtifact.SCHEMA
+_SOURCE_STATE_NAME = CanonicalPublicationArtifact.SOURCE_STATE
+
+
+def complete_digest(manifest_payload: str, schema_payload: str) -> Checksum:
+    return checksum_text(f"{manifest_payload}\n{schema_payload}")
+
+
+def schema_content(schema: CanonicalSchema) -> str:
+    return canonical_json_text(schema)
+
+
+def schema_checksum_document_json(
+    dataset: DatasetId, columns: tuple[CanonicalColumn, ...], physical_schema: pa.Schema
+) -> str:
+    return canonical_json_text(
+        SchemaChecksumDocument(
+            canonicalization_contract=_CANONICAL_PUBLICATION_CONTRACT,
+            columns=columns,
+            dataset=dataset,
+            physical_schema=physical_schema.to_string(show_field_metadata=True, show_schema_metadata=True),
+        )
+    )
+
+
+def canonical_publication_contract() -> str:
+    return _CANONICAL_PUBLICATION_CONTRACT
+
+
+def publication_artifact_names() -> tuple[str, str, str, str]:
+    return _COMPLETE_NAME, _MANIFEST_NAME, _SCHEMA_NAME, _SOURCE_STATE_NAME
+
+
+@dataclass(frozen=True, slots=True)
+class ManifestSerializationRequest[EligibilityReasonT: StrEnum]:
+    dataset: DatasetId
+    canonicalization_contract: str
+    schema_checksum: Checksum
+    inventory: RawDatasetInventory
+    validation_report: DatasetValidationReport
+    chronology: tuple[ChronologyValidation, ...] = ()
+    eligibility_policy: ModelInputEligibilityPolicy[EligibilityReasonT] | None = None
+
+
+def _chronology_entry(value: ChronologyValidation) -> _ChronologyEntry:
+    return _ChronologyEntry.model_validate(canonical_mapping(value))
+
+
+def _eligibility_entry[EligibilityReasonT: StrEnum](
+    value: ModelInputEligibilityPolicy[EligibilityReasonT] | None,
+) -> _EligibilityPolicyEntry | None:
+    return None if value is None else _EligibilityPolicyEntry.model_validate(canonical_mapping(value))
+
+
+def _inventory_entry(value: RawDatasetInventory) -> _InventoryEntry:
+    return _InventoryEntry.model_validate(canonical_mapping(value))
+
+
+def _validation_report_entry(value: DatasetValidationReport) -> _ValidationReportEntry:
+    return _ValidationReportEntry.model_validate(canonical_mapping(value))
 
 
 class SourceStateEntryDocument(StrictModel):

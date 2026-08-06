@@ -9,7 +9,7 @@ from torch import nn
 from datp_core.domain.enums import ContractSubject
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.counts import BatchSize, Seed
-from datp_core.protocols.training import AutoencoderProtocol
+from datp_core.protocols.training import AutoencoderArchitecture, AutoencoderProtocol
 from datp_core.runtime.compute import require_cuda_available
 
 type AutoencoderState = dict[str, torch.Tensor]
@@ -47,23 +47,10 @@ class ReconstructionAutoencoder(nn.Module):
 
 
 def _validated_widths(widths: Sequence[int]) -> tuple[int, ...]:
-    declared = tuple(widths)
-    if len(declared) < 2:
-        raise ScientificContractError(
-            "autoencoder widths require at least input and output layers",
-            subject=ContractSubject.WIDTHS,
-        )
-    if any(isinstance(width, bool) or not isinstance(width, int) or width < 1 for width in declared):
-        raise ScientificContractError(
-            "autoencoder widths must be positive integers",
-            subject=ContractSubject.WIDTHS,
-        )
-    if declared[0] != declared[-1]:
-        raise ScientificContractError(
-            "autoencoder input and output widths must match",
-            subject=ContractSubject.WIDTHS,
-        )
-    return declared
+    try:
+        return tuple(AutoencoderArchitecture(tuple(widths)))
+    except ValueError as error:
+        raise ScientificContractError(str(error), subject=ContractSubject.WIDTHS) from error
 
 
 def _construct_autoencoder(protocol: AutoencoderProtocol) -> ReconstructionAutoencoder:

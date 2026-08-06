@@ -2,8 +2,7 @@
 
 import typer
 
-from datp_core.pipeline.execution.engine import build_campaign
-from datp_core.pipeline.planning import expand_experiment_plan
+from datp_core.pipeline.execution.engine import plan_and_build_campaign
 from datp_core.protocols.validation import CANONICAL_PROTOCOL_GRAPH, validate_protocol_graph
 
 app = typer.Typer(no_args_is_help=True)
@@ -20,9 +19,8 @@ def validate_protocols() -> None:
 
 @app.command("build")
 def build() -> None:
-    plan = expand_experiment_plan()
-    campaign = build_campaign(plan)
+    plan, campaign = plan_and_build_campaign()
     typer.echo(
-        f"plan={plan.digest} entries={len(plan.entries)} executable={len(plan.executable)} "
+        f"plan={plan.digest.value} entries={len(plan.entries)} executable={len(plan.executable)} "
         f"campaign={campaign.digest.value}"
     )

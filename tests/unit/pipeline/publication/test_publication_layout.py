@@ -15,8 +15,8 @@ from datp_core.domain.enums import (
 )
 from datp_core.domain.values.counts import Seed
 from datp_core.domain.values.ratios import ModelCoefficientValue
+from datp_core.pipeline.coordinates import ExperimentCoordinate
 from datp_core.pipeline.execution.layout import bounded_evidence_seed_directory
-from datp_core.pipeline.planning import ExperimentCoordinate
 from datp_core.pipeline.publication.layout import evaluation_run_directory, experiment_output_directory
 from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
 

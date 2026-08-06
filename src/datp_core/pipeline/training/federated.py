@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 
 from datp_core.domain.enums import PublicationStatus
+from datp_core.learning.federated.checkpoints.identities import FederatedHistoryAssetName
 from datp_core.learning.federated.common import (
     FederatedTrainingArtifacts,
     federated_training_is_reusable,
@@ -44,6 +45,7 @@ def train_federated_detector(request: TrainFederatedDetectorRequest) -> TrainFed
                 rebaser=rebase_federated_training,
             ),
             overwrite=request.overwrite,
+            complete_marker=FederatedHistoryAssetName.COMPLETE,
         )
     )
     artifacts: FederatedTrainingArtifacts = publication.value

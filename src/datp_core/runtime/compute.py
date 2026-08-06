@@ -6,7 +6,7 @@ import torch
 
 from datp_core.domain.enums import ContractSubject
 from datp_core.domain.errors import ExecutionStateError
-from datp_core.domain.values.counts import CudaDeviceCount, WorkerCount
+from datp_core.domain.values.counts import CudaDeviceCount
 from datp_core.domain.values.identifiers import CudaDeviceName
 
 from .configuration import CANONICAL_RUNTIME, CudaDeviceIndex
@@ -62,10 +62,6 @@ def configured_cuda_device_index() -> CudaDeviceIndex:
 def resolve_cuda_device() -> torch.device:
     require_cuda_available()
     return torch.device(f"cuda:{configured_cuda_device_index().value}")
-
-
-def canonical_worker_count() -> WorkerCount:
-    return CANONICAL_RUNTIME.worker_count
 
 
 def cuda_provenance() -> CudaProvenance:

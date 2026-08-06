@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+import pytest
+
 from datp_core.domain.enums import PublicationStatus
 from datp_core.domain.values.checksums import checksum_file
 from datp_core.pipeline.publication.service import (
@@ -45,6 +47,37 @@ class _Codec:
         return _Result(path=directory / result.path.name, payload=result.payload)
 
 
+class _FailingCodec:
+    def write(self, request: _Request, directory: Path) -> _Result:
+        (directory / "payload.txt").write_text(request.payload, encoding="utf-8")
+        raise RuntimeError("interrupted write")
+
+    def validate(self, request: _Request, directory: Path) -> bool:
+        del request, directory
+        return False
+
+    def load(self, request: _Request, directory: Path) -> _Result:
+        raise AssertionError("load must not run when the artifact is not reusable")
+
+    def rebase(self, result: _Result, directory: Path) -> _Result:
+        raise AssertionError("rebase must not run when the write failed")
+
+
+def test_interrupted_write_leaves_no_target_and_no_staging_directory(tmp_path: Path) -> None:
+    target = tmp_path / "artifact"
+    publication = ArtifactPublication(
+        target=target,
+        request=_Request(payload="stable"),
+        codec=_FailingCodec(),
+        overwrite=False,
+        complete_marker="COMPLETE",
+    )
+    with pytest.raises(RuntimeError, match="interrupted write"):
+        publish_artifact(publication)
+    assert not target.exists()
+    assert tuple(path for path in tmp_path.iterdir() if path.is_dir()) == ()
+
+
 def test_artifact_codec_publishes_reuses_rebases_and_returns_completion_digest(
     tmp_path: Path,
 ) -> None:
@@ -54,6 +87,7 @@ def test_artifact_codec_publishes_reuses_rebases_and_returns_completion_digest(
         request=_Request(payload="stable"),
         codec=_Codec(),
         overwrite=False,
+        complete_marker="COMPLETE",
     )
     first = publish_artifact(publication)
     second = publish_artifact(publication)

@@ -18,6 +18,7 @@ from datp_core.domain.enums import PartitionRole
 from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import CalibrationSize, RowCount, Seed
+from datp_core.domain.values.identifiers import StableRowId
 from datp_core.protocols.calibration import CalibrationEligibilityProtocol
 
 PROTOCOL = CalibrationEligibilityProtocol(minimum_support=CalibrationSize(100))
@@ -46,14 +47,20 @@ def test_reject_evaluation_partition_in_eligibility_rejects_evaluation() -> None
 
 def test_reject_calibration_evaluation_overlap_detects_shared_rows() -> None:
     def call() -> None:
-        reject_calibration_evaluation_overlap(frozenset({"row-1", "row-2"}), frozenset({"row-2", "row-3"}))
+        reject_calibration_evaluation_overlap(
+            frozenset({StableRowId("row-1"), StableRowId("row-2")}),
+            frozenset({StableRowId("row-2"), StableRowId("row-3")}),
+        )
 
     with pytest.raises(LeakageError, match="must not share source rows"):
         call()
 
 
 def test_reject_calibration_evaluation_overlap_allows_disjoint_rows() -> None:
-    reject_calibration_evaluation_overlap(frozenset({"row-1", "row-2"}), frozenset({"row-3", "row-4"}))
+    reject_calibration_evaluation_overlap(
+        frozenset({StableRowId("row-1"), StableRowId("row-2")}),
+        frozenset({StableRowId("row-3"), StableRowId("row-4")}),
+    )
 
 
 def test_reject_score_coordinate_mismatch(tmp_path) -> None:

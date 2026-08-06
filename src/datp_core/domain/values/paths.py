@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from datp_core.domain.values.base import _pydantic_value_schema
+from datp_core.domain.values.base import pydantic_value_schema
 
 
 @dataclass(frozen=True, slots=True)
@@ -15,7 +15,7 @@ class ClientPathToken:
         if self.value in {".", ".."} or any(token in self.value for token in ("=", "/", "\\")):
             raise ValueError("client path token must be a single non-relative path segment without key=value syntax")
 
-    __get_pydantic_core_schema__ = classmethod(_pydantic_value_schema)
+    __get_pydantic_core_schema__ = classmethod(pydantic_value_schema)
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,4 +26,4 @@ class FamilyIdentity:
         if not isinstance(self.value, str) or not self.value:
             raise ValueError("family identity must be non-empty")
 
-    __get_pydantic_core_schema__ = classmethod(_pydantic_value_schema)
+    __get_pydantic_core_schema__ = classmethod(pydantic_value_schema)

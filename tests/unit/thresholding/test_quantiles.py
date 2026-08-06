@@ -61,8 +61,8 @@ def test_finite_sample_conformal_threshold_selects_the_expected_order_statistic(
     )
     assert rank_index == ConformalRankIndex(96)
     assert threshold.value == 96.0
-    assert effective_quantile == 96 / 100
-    assert tie_count == 0
+    assert effective_quantile.value == 96 / 100
+    assert tie_count.value == 0
 
 
 def test_finite_sample_conformal_threshold_is_infeasible_for_too_few_scores() -> None:
@@ -78,7 +78,7 @@ def test_finite_sample_conformal_threshold_is_infeasible_for_too_few_scores() ->
 def test_achieved_benign_exceedance_is_the_fraction_strictly_above_threshold() -> None:
     scores = np.array([1.0, 2.0, 3.0, 4.0])
     exceedance = achieved_benign_exceedance(scores, ThresholdValue(2.0))
-    assert exceedance == 0.5
+    assert exceedance.value == 0.5
 
 
 def test_gaussian_matched_exceedance_threshold_at_the_median_returns_the_mean() -> None:

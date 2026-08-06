@@ -1,11 +1,9 @@
 """Executable repository layout and runtime limits."""
 
 from dataclasses import dataclass
-from os import cpu_count
 from pathlib import Path
 
 from datp_core.domain.values.base import NonNegativeIntegerValue
-from datp_core.domain.values.counts import WorkerCount
 
 
 class CudaDeviceIndex(NonNegativeIntegerValue):
@@ -29,12 +27,7 @@ class RepositoryLayout:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class RuntimeConfiguration:
     layout: RepositoryLayout
-    worker_count: WorkerCount
     cuda_device_index: CudaDeviceIndex
-
-
-def _available_worker_count() -> WorkerCount:
-    return WorkerCount(cpu_count() or 1)
 
 
 CANONICAL_RUNTIME = RuntimeConfiguration(
@@ -43,7 +36,6 @@ CANONICAL_RUNTIME = RuntimeConfiguration(
         outputs_root=Path("outputs"),
         results_root=Path("results"),
     ),
-    worker_count=_available_worker_count(),
     cuda_device_index=CudaDeviceIndex(0),
 )
 

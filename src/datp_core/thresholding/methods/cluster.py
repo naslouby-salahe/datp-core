@@ -83,6 +83,7 @@ class ClusterMembership:
             self.cluster_threshold,
             members_label="cluster members",
             match_message=("contributing local quantile clients must exactly equal cluster members"),
+            threshold_message=("cluster_threshold must equal the unweighted mean of contributing local quantiles"),
         )
 
 
@@ -136,7 +137,11 @@ class GroupedThresholdResult:
         )
         validate_assignments(
             self.assignments,
-            tuple((client, cluster.cluster_threshold) for cluster in self.clusters for client in cluster.members),
+            tuple(
+                ThresholdAssignment(client, cluster.cluster_threshold)
+                for cluster in self.clusters
+                for client in cluster.members
+            ),
             label="threshold assignments",
             mismatch_message=("a cluster threshold assignment must use its cluster's threshold"),
         )

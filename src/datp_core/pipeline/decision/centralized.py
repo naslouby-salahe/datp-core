@@ -1,9 +1,8 @@
 """Pooled centralized threshold construction and held-out evaluation."""
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
-from math import isfinite
 from pathlib import Path
 
 import numpy as np
@@ -12,7 +11,6 @@ from datp_core.datasets.partitioning.contracts import PopulationOutcomeLabel
 from datp_core.datasets.partitioning.integrity import reject_non_benign_labels
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
-    AvailabilityStatus,
     CentralizedThresholdMethod,
     ContractSubject,
     EvidenceRole,
@@ -28,7 +26,10 @@ from datp_core.domain.provenance import canonical_checksum, canonical_json_text
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import RoundNumber, RowCount
 from datp_core.domain.values.identifiers import OutcomeLabel, OutcomeLabelSequence
-from datp_core.domain.values.ratios import MetricValue, Quantile, ThresholdValue
+from datp_core.domain.values.ratios import Quantile, ScoreValue, ThresholdValue
+from datp_core.evaluation.client_metrics import calculate_client_metrics
+from datp_core.evaluation.confusion import calculate_confusion_counts
+from datp_core.evaluation.models import ConfusionCounts, MetricAvailability
 from datp_core.learning.centralized.training import CentralizedTrainingCoordinate
 from datp_core.pipeline.publication.service import (
     ArtifactPublication,
@@ -39,14 +40,6 @@ from datp_core.pipeline.publication.service import (
 from datp_core.pipeline.scoring.centralized import load_score_frame, reject_non_finite_scores
 from datp_core.pipeline.scoring.models import PooledScoreArtifact
 from datp_core.protocols.calibration import CANONICAL_QUANTILE, CentralizedQuantileProtocol
-
-BENIGN_OUTCOME_LABEL = PopulationOutcomeLabel.BENIGN
-ATTACK_OUTCOME_LABEL = PopulationOutcomeLabel.ATTACK
-BINARY_CLASS_AVERAGE_WEIGHT = 0.5
-F1_HARMONIC_MEAN_FACTOR = 2.0
-RANK_MIDPOINT_WEIGHT = 0.5
-ONE_BASED_RANK_OFFSET = 1.0
-MANN_WHITNEY_PAIR_FACTOR = 2.0
 
 
 class CentralizedThresholdAssetName(StrEnum):
@@ -106,7 +99,7 @@ class PooledThresholdResult:
                 "centralized threshold method must be POOLED_BENIGN_QUANTILE",
                 subject=self.method,
             )
-        if self.calibration_score_count < 1:
+        if self.calibration_score_count.value < 1:
             raise ValueError("pooled threshold requires at least one benign calibration score")
 
 
@@ -158,45 +151,13 @@ class ConstructCentralizedThresholdResult:
 
 
 @dataclass(frozen=True, slots=True)
-class CentralizedConfusionCounts:
-    true_negative: RowCount
-    false_positive: RowCount
-    true_positive: RowCount
-    false_negative: RowCount
-
-    def __post_init__(self) -> None:
-        for name, value in (
-            ("true_negative", self.true_negative),
-            ("false_positive", self.false_positive),
-            ("true_positive", self.true_positive),
-            ("false_negative", self.false_negative),
-        ):
-            if not isinstance(value, RowCount):
-                raise TypeError(f"{name} must be a RowCount")
-
-
-@dataclass(frozen=True, slots=True)
-class CentralizedMetricRecord:
-    metric: MetricId
-    status: AvailabilityStatus
-    value: MetricValue | None
-
-    def __post_init__(self) -> None:
-        if self.status is AvailabilityStatus.AVAILABLE:
-            if self.value is None:
-                raise ValueError("available metrics require a numeric value")
-        elif self.value is not None:
-            raise ValueError("unavailable or undefined metrics must not carry a numeric value")
-
-
-@dataclass(frozen=True, slots=True)
 class CentralizedEvaluationResult:
     coordinate: CentralizedTrainingCoordinate
     threshold_method: CentralizedThresholdMethod
     decision_rule: CentralizedDecisionRule
     threshold: ThresholdValue
-    confusion: CentralizedConfusionCounts
-    metrics: tuple[CentralizedMetricRecord, ...]
+    confusion: ConfusionCounts
+    metrics: tuple[MetricAvailability, ...]
     evaluation_row_count: RowCount
     evidence_role: EvidenceRole
     score_artifact_checksum: Checksum
@@ -213,6 +174,11 @@ class CentralizedEvaluationResult:
                 "centralized evaluation cannot claim confirmatory evidence role",
                 subject=self.evidence_role,
             )
+        if not self.confusion.attack_assignment_valid:
+            raise ScientificContractError(
+                "centralized pooled evaluation always carries a valid attack assignment",
+                subject=ContractSubject.ATTACK_LABELS,
+            )
         if tuple(record.metric for record in self.metrics) != CENTRALIZED_POOLED_METRICS:
             raise ScientificContractError(
                 "centralized evaluation metrics must follow the declared pooled metric order",
@@ -220,23 +186,17 @@ class CentralizedEvaluationResult:
             )
 
 
-class CentralizedMetricDocument(StrictModel):
-    metric: MetricId
-    status: AvailabilityStatus
-    value: MetricValue | None
-
-
 class CentralizedEvaluationDocument(StrictModel):
     coordinate: CentralizedTrainingCoordinate
     threshold_method: CentralizedThresholdMethod
     decision_rule: CentralizedDecisionRule
     threshold: ThresholdValue
-    confusion: CentralizedConfusionCounts
+    confusion: ConfusionCounts
     evaluation_row_count: RowCount
     evidence_role: EvidenceRole
     score_artifact_checksum: Checksum
     threshold_checksum: Checksum
-    metrics: tuple[CentralizedMetricDocument, ...]
+    metrics: tuple[MetricAvailability, ...]
 
     @classmethod
     def from_result(cls, result: CentralizedEvaluationResult) -> "CentralizedEvaluationDocument":
@@ -250,10 +210,7 @@ class CentralizedEvaluationDocument(StrictModel):
             evidence_role=result.evidence_role,
             score_artifact_checksum=result.score_artifact_checksum,
             threshold_checksum=result.threshold_checksum,
-            metrics=tuple(
-                CentralizedMetricDocument(metric=record.metric, status=record.status, value=record.value)
-                for record in result.metrics
-            ),
+            metrics=result.metrics,
         )
 
 
@@ -500,10 +457,16 @@ def evaluate_centralized_reference(
     threshold_result: PooledThresholdResult,
 ) -> CentralizedEvaluationResult:
     _validate_evaluation_inputs(coordinate, evaluation_scores, threshold_result)
-    labels, scores = _evaluation_arrays(evaluation_scores)
-    predictions = scores > threshold_result.threshold.value
-    confusion = _confusion_counts(labels, predictions)
-    metrics = _pooled_metrics(labels, scores, confusion)
+    row_ids, labels, scores = _evaluation_arrays(evaluation_scores)
+    confusion = calculate_confusion_counts(
+        scores=scores,
+        labels=labels,
+        source_row_ids=row_ids,
+        threshold=threshold_result.threshold,
+        partition_role=PartitionRole.EVALUATION,
+        attack_assignment_valid=True,
+    )
+    metrics = _pooled_metrics(confusion=confusion, scores=scores, labels=labels)
     return CentralizedEvaluationResult(
         coordinate=coordinate,
         threshold_method=threshold_result.method,
@@ -511,7 +474,7 @@ def evaluate_centralized_reference(
         threshold=threshold_result.threshold,
         confusion=confusion,
         metrics=metrics,
-        evaluation_row_count=RowCount(int(scores.shape[0])),
+        evaluation_row_count=confusion.evaluation_row_count,
         evidence_role=EvidenceRole.SUPPORTIVE,
         score_artifact_checksum=evaluation_scores.checksum,
         threshold_checksum=threshold_result_checksum(threshold_result),
@@ -680,168 +643,30 @@ def _validate_evaluation_inputs(
         )
 
 
-def _evaluation_arrays(evaluation_scores: PooledScoreArtifact) -> tuple[np.ndarray, np.ndarray]:
+def _evaluation_arrays(
+    evaluation_scores: PooledScoreArtifact,
+) -> tuple[tuple[str, ...], tuple[PopulationOutcomeLabel, ...], tuple[ScoreValue, ...]]:
     frame = load_score_frame(evaluation_scores)
-    labels = np.asarray(frame.get_column(ScoreFrameColumn.OUTCOME_LABEL.value).to_list(), dtype=object)
-    scores = np.asarray(frame.get_column(ScoreFrameColumn.RECONSTRUCTION_ERROR.value).to_list(), dtype=np.float64)
-    if scores.shape[0] != labels.shape[0]:
-        raise ScientificContractError("evaluation scores and labels must align", subject=ContractSubject.ROWS)
-    reject_non_finite_scores(scores, message="evaluation scores must be finite", subject=ContractSubject.SCORES)
-    return labels, scores
-
-
-def _confusion_counts(labels: np.ndarray, predictions: np.ndarray) -> CentralizedConfusionCounts:
-    true_negative = false_positive = true_positive = false_negative = 0
-    for label, predicted_attack in zip(labels.tolist(), predictions.tolist(), strict=True):
-        label_text = str(label)
-        if label_text == BENIGN_OUTCOME_LABEL:
-            false_positive += int(predicted_attack)
-            true_negative += int(not predicted_attack)
-        elif label_text == ATTACK_OUTCOME_LABEL:
-            true_positive += int(predicted_attack)
-            false_negative += int(not predicted_attack)
-        else:
-            raise ScientificContractError(
-                f"unrecognized evaluation label {label_text!r}",
-                subject=ContractSubject.LABEL,
-            )
-    return CentralizedConfusionCounts(
-        true_negative=RowCount(true_negative),
-        false_positive=RowCount(false_positive),
-        true_positive=RowCount(true_positive),
-        false_negative=RowCount(false_negative),
+    row_ids = tuple(str(value) for value in frame.get_column(ScoreFrameColumn.STABLE_ROW_ID.value).to_list())
+    labels = tuple(
+        PopulationOutcomeLabel(str(value)) for value in frame.get_column(ScoreFrameColumn.OUTCOME_LABEL.value).to_list()
     )
+    scores = tuple(
+        ScoreValue(float(value)) for value in frame.get_column(ScoreFrameColumn.RECONSTRUCTION_ERROR.value).to_list()
+    )
+    if len(scores) != len(labels) or len(scores) != len(row_ids):
+        raise ScientificContractError("evaluation scores and labels must align", subject=ContractSubject.ROWS)
+    return row_ids, labels, scores
 
 
 def _pooled_metrics(
-    labels: np.ndarray,
-    scores: np.ndarray,
-    confusion: CentralizedConfusionCounts,
-) -> tuple[CentralizedMetricRecord, ...]:
-    false_positive_rate = _rate_metric(
-        MetricId.FALSE_POSITIVE_RATE,
-        confusion.false_positive,
-        confusion.false_positive + confusion.true_negative,
-    )
-    true_positive_rate = _rate_metric(
-        MetricId.TRUE_POSITIVE_RATE,
-        confusion.true_positive,
-        confusion.true_positive + confusion.false_negative,
-    )
-    return (
-        false_positive_rate,
-        true_positive_rate,
-        _balanced_accuracy(false_positive_rate, true_positive_rate),
-        _macro_f1_record(MetricId.BINARY_MACRO_F1, confusion),
-        _auroc(labels, scores),
-        _macro_f1_record(MetricId.POOLED_MACRO_F1, confusion),
-    )
-
-
-def _rate_metric(metric: MetricId, numerator: RowCount, denominator: RowCount) -> CentralizedMetricRecord:
-    if denominator == 0:
-        return CentralizedMetricRecord(metric=metric, status=AvailabilityStatus.UNAVAILABLE, value=None)
-    return CentralizedMetricRecord(
-        metric=metric,
-        status=AvailabilityStatus.AVAILABLE,
-        value=MetricValue(numerator.value / denominator.value),
-    )
-
-
-def _balanced_accuracy(
-    fpr: CentralizedMetricRecord,
-    tpr: CentralizedMetricRecord,
-) -> CentralizedMetricRecord:
-    if (
-        fpr.status is not AvailabilityStatus.AVAILABLE
-        or tpr.status is not AvailabilityStatus.AVAILABLE
-        or fpr.value is None
-        or tpr.value is None
-    ):
-        return CentralizedMetricRecord(
-            metric=MetricId.BALANCED_ACCURACY,
-            status=AvailabilityStatus.UNAVAILABLE,
-            value=None,
-        )
-    specificity = 1.0 - fpr.value.value
-    return CentralizedMetricRecord(
-        metric=MetricId.BALANCED_ACCURACY,
-        status=AvailabilityStatus.AVAILABLE,
-        value=MetricValue(BINARY_CLASS_AVERAGE_WEIGHT * (tpr.value.value + specificity)),
-    )
-
-
-def _macro_f1_record(metric: MetricId, confusion: CentralizedConfusionCounts) -> CentralizedMetricRecord:
-    denominators = (
-        confusion.true_positive + confusion.false_positive,
-        confusion.true_positive + confusion.false_negative,
-        confusion.true_negative + confusion.false_negative,
-        confusion.true_negative + confusion.false_positive,
-    )
-    if min(denominators) == 0:
-        return CentralizedMetricRecord(metric=metric, status=AvailabilityStatus.UNAVAILABLE, value=None)
-    attack_precision = confusion.true_positive.value / denominators[0].value
-    attack_recall = confusion.true_positive.value / denominators[1].value
-    benign_precision = confusion.true_negative.value / denominators[2].value
-    benign_recall = confusion.true_negative.value / denominators[3].value
-    attack_f1 = _f1(attack_precision, attack_recall)
-    benign_f1 = _f1(benign_precision, benign_recall)
-    if attack_f1 is None or benign_f1 is None:
-        return CentralizedMetricRecord(metric=metric, status=AvailabilityStatus.UNDEFINED, value=None)
-    return CentralizedMetricRecord(
-        metric=metric,
-        status=AvailabilityStatus.AVAILABLE,
-        value=MetricValue(BINARY_CLASS_AVERAGE_WEIGHT * (attack_f1 + benign_f1)),
-    )
-
-
-def _f1(precision: float, recall: float) -> float | None:
-    total = precision + recall
-    if total == 0:
-        return None
-    return F1_HARMONIC_MEAN_FACTOR * precision * recall / total
-
-
-def _auroc(labels: np.ndarray, scores: np.ndarray) -> CentralizedMetricRecord:
-    binary = np.asarray(
-        [
-            1 if str(label) == ATTACK_OUTCOME_LABEL else 0 if str(label) == BENIGN_OUTCOME_LABEL else -1
-            for label in labels
-        ]
-    )
-    if np.any(binary < 0):
-        raise ScientificContractError("AUROC encountered unrecognized labels", subject=ContractSubject.LABEL)
-    if binary.min() == binary.max():
-        return CentralizedMetricRecord(metric=MetricId.AUROC, status=AvailabilityStatus.UNAVAILABLE, value=None)
-    order = np.argsort(scores, kind="mergesort")
-    sorted_labels = binary[order]
-    sorted_scores = scores[order]
-    positive_count = float(binary.sum())
-    negative_count = float(binary.size - positive_count)
-    if positive_count == 0.0 or negative_count == 0.0:
-        return CentralizedMetricRecord(metric=MetricId.AUROC, status=AvailabilityStatus.UNAVAILABLE, value=None)
-    ranks = _average_ranks(sorted_scores)
-    positive_rank_sum = float(ranks[sorted_labels == 1].sum())
-    auc = (positive_rank_sum - positive_count * (positive_count + ONE_BASED_RANK_OFFSET) / MANN_WHITNEY_PAIR_FACTOR) / (
-        positive_count * negative_count
-    )
-    if not isfinite(auc):
-        return CentralizedMetricRecord(metric=MetricId.AUROC, status=AvailabilityStatus.UNDEFINED, value=None)
-    return CentralizedMetricRecord(
-        metric=MetricId.AUROC,
-        status=AvailabilityStatus.AVAILABLE,
-        value=MetricValue(auc),
-    )
-
-
-def _average_ranks(sorted_scores: np.ndarray) -> np.ndarray:
-    ranks = np.empty(sorted_scores.shape[0], dtype=np.float64)
-    start = 0
-    while start < sorted_scores.shape[0]:
-        end = start + 1
-        while end < sorted_scores.shape[0] and sorted_scores[end] == sorted_scores[start]:
-            end += 1
-        average = RANK_MIDPOINT_WEIGHT * (start + end - 1) + ONE_BASED_RANK_OFFSET
-        ranks[start:end] = average
-        start = end
-    return ranks
+    *,
+    confusion: ConfusionCounts,
+    scores: Sequence[ScoreValue],
+    labels: Sequence[PopulationOutcomeLabel],
+) -> tuple[MetricAvailability, ...]:
+    """Reuse the canonical per-client formulas; a pooled evaluation is one virtual client."""
+    client_style_metrics = calculate_client_metrics(confusion=confusion, scores=scores, labels=labels)
+    binary_macro_f1 = next(item for item in client_style_metrics if item.metric is MetricId.BINARY_MACRO_F1)
+    pooled_macro_f1 = replace(binary_macro_f1, metric=MetricId.POOLED_MACRO_F1)
+    return (*client_style_metrics, pooled_macro_f1)

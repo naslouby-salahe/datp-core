@@ -56,6 +56,7 @@ from datp_core.protocols.training import (
     LEARNING_RATE,
     NBAIOT_AUTOENCODER,
     WEIGHT_DECAY,
+    AutoencoderArchitecture,
     AutoencoderProtocol,
     CentralizedTrainingProtocol,
     OptimizerProtocol,
@@ -134,7 +135,7 @@ class CentralizedTrainingResult:
     def __post_init__(self) -> None:
         if not isinstance(self.device_name, CudaDeviceName):
             raise TypeError("centralized training results require a typed CUDA device name")
-        if self.train_row_count < 1:
+        if self.train_row_count.value < 1:
             raise ValueError("centralized training requires at least one benign training row")
         if self.batch_size_used != self.optimizer.batch_size:
             raise ScientificContractError(
@@ -325,7 +326,9 @@ def assert_safetensors_reload(
     path: Path,
     device: torch.device,
 ) -> None:
-    reloaded = build_centralized_autoencoder(AutoencoderProtocol(widths=model.widths)).to(device)
+    reloaded = build_centralized_autoencoder(AutoencoderProtocol(widths=AutoencoderArchitecture(model.widths))).to(
+        device
+    )
     state = load_file(str(path), device=str(device))
     reloaded.load_state_dict(state, strict=True)
     for left, right in zip(model.state_dict().values(), reloaded.state_dict().values(), strict=True):
@@ -398,11 +401,6 @@ def _require_centralized_model_identities(request: CentralizedTrainingRequest) -
         raise ScientificContractError(
             "training coordinate model identity is invalid",
             subject=request.coordinate.model,
-        )
-    if request.batch_size < 1:
-        raise ScientificContractError(
-            "batch size must remain the declared positive value",
-            subject=ContractSubject.BATCH_SIZE,
         )
     if request.preprocessing_state.protocol.identity is not request.coordinate.preprocessing_identity:
         raise ScientificContractError(

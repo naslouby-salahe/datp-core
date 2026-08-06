@@ -27,7 +27,7 @@ def test_edge_static_includes_ten_groups_with_modbus(edge_canonical_root: Path) 
     assert manifest.document.accepted_clients == tuple(sorted(EDGE_BENIGN_SENSOR_GROUPS))
     assert "Modbus" in manifest.document.accepted_clients
     assert membership.get_column("client_id").n_unique() == 10
-    assert manifest.document.attack_row_count == 0
+    assert manifest.document.attack_row_count.value == 0
 
 
 def test_edge_static_rejects_attack_and_family_requests() -> None:

@@ -13,7 +13,7 @@ from datp_core.domain.enums import (
     ReusableDataCoordinateKind,
     SplitProtocolId,
 )
-from datp_core.domain.values.base import _sequence_pydantic_schema, _str_subclass_schema, _validate_non_empty_tuple
+from datp_core.domain.values.base import sequence_pydantic_schema, str_subclass_schema, validate_non_empty_tuple
 from datp_core.domain.values.counts import Seed
 from datp_core.domain.values.paths import ClientPathToken
 
@@ -59,7 +59,7 @@ class RelativeAssetPath(str):
             raise ValueError("relative asset path must not be absolute")
         return super().__new__(cls, path_text)
 
-    __get_pydantic_core_schema__ = classmethod(_str_subclass_schema)
+    __get_pydantic_core_schema__ = classmethod(str_subclass_schema)
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,7 +71,7 @@ class RelativeAssetPathSequence:
             raise TypeError("relative asset paths must be an immutable tuple")
         wrapped = tuple(item if isinstance(item, RelativeAssetPath) else RelativeAssetPath(item) for item in self.paths)
         object.__setattr__(self, "paths", wrapped)
-        _validate_non_empty_tuple(self.paths, "relative asset path sequence")
+        validate_non_empty_tuple(self.paths, "relative asset path sequence")
 
     def __len__(self) -> int:
         return len(self.paths)
@@ -79,7 +79,7 @@ class RelativeAssetPathSequence:
     def __iter__(self):
         return iter(self.paths)
 
-    __get_pydantic_core_schema__ = classmethod(_sequence_pydantic_schema)
+    __get_pydantic_core_schema__ = classmethod(sequence_pydantic_schema)
 
 
 class ProcessedAssetName(StrEnum):

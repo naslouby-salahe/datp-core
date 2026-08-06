@@ -5,9 +5,9 @@ from typing import ClassVar
 
 from datp_core.domain.values.base import (
     _NonEmptyString,
-    _sequence_pydantic_schema,
-    _validate_non_empty_tuple,
     _validate_unique,
+    sequence_pydantic_schema,
+    validate_non_empty_tuple,
 )
 
 
@@ -24,6 +24,10 @@ class StableRowId(_NonEmptyString):
     source path may legitimately contain path separators for nested source files."""
 
     validation_name: ClassVar[str] = "stable row ID"
+
+
+class CaptureTimestampColumn(_NonEmptyString):
+    validation_name: ClassVar[str] = "capture timestamp column"
 
 
 class SafeTensorFilename(_NonEmptyString):
@@ -52,7 +56,7 @@ class FeatureNameSequence:
     def __post_init__(self) -> None:
         wrapped = tuple(item if isinstance(item, FeatureName) else FeatureName(item) for item in self.names)
         object.__setattr__(self, "names", wrapped)
-        _validate_non_empty_tuple(self.names, "feature name sequence")
+        validate_non_empty_tuple(self.names, "feature name sequence")
         _validate_unique(self.names, "feature names")
 
     def __len__(self) -> int:
@@ -64,7 +68,7 @@ class FeatureNameSequence:
     def as_list(self) -> list[str]:
         return list(self.names)
 
-    __get_pydantic_core_schema__ = classmethod(_sequence_pydantic_schema)
+    __get_pydantic_core_schema__ = classmethod(sequence_pydantic_schema)
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,7 +90,7 @@ class OutcomeLabelSequence:
     def __iter__(self):
         return iter(self.labels)
 
-    __get_pydantic_core_schema__ = classmethod(_sequence_pydantic_schema)
+    __get_pydantic_core_schema__ = classmethod(sequence_pydantic_schema)
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,7 +100,7 @@ class StableRowIdSequence:
     def __post_init__(self) -> None:
         wrapped = tuple(item if isinstance(item, StableRowId) else StableRowId(item) for item in self.row_ids)
         object.__setattr__(self, "row_ids", wrapped)
-        _validate_non_empty_tuple(self.row_ids, "stable row ID sequence")
+        validate_non_empty_tuple(self.row_ids, "stable row ID sequence")
         _validate_unique(self.row_ids, "stable row IDs")
 
     def __len__(self) -> int:
@@ -105,4 +109,4 @@ class StableRowIdSequence:
     def __iter__(self):
         return iter(self.row_ids)
 
-    __get_pydantic_core_schema__ = classmethod(_sequence_pydantic_schema)
+    __get_pydantic_core_schema__ = classmethod(sequence_pydantic_schema)

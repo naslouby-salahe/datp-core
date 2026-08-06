@@ -3,8 +3,6 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from shutil import rmtree
-from tempfile import mkdtemp
 
 from filelock import FileLock
 from pydantic import BaseModel, ValidationError
@@ -14,6 +12,12 @@ from datp_core.domain.errors import ArtifactIntegrityError
 from datp_core.domain.provenance import canonical_json_text
 from datp_core.domain.values.checksums import Checksum, checksum_text
 from datp_core.preprocessing.contracts import ProcessedAssetName
+from datp_core.runtime.filesystem import (
+    cleanup_staging_on_failure,
+    create_staging_directory,
+    remove_stale_staging_directories,
+    replace_directory,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,7 +46,7 @@ def publish_processed[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseMod
     target = publication.coordinate_directory
     target.parent.mkdir(parents=True, exist_ok=True)
     with FileLock(f"{target}.lock"):
-        _remove_stale_staging_directories(target)
+        remove_stale_staging_directories(target)
         if not publication.overwrite and _is_reusable(target, publication):
             return ProcessedPublicationResult(
                 coordinate_directory=target,
@@ -53,16 +57,10 @@ def publish_processed[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseMod
                     publication.manifest_type,
                 ),
             )
-        if target.exists():
-            rmtree(target)
-        staging = Path(mkdtemp(prefix=f".{target.name}.", dir=target.parent))
-        try:
+        staging = create_staging_directory(target)
+        with cleanup_staging_on_failure(staging):
             _write_processed(staging, publication)
-            staging.replace(target)
-        except Exception:
-            if staging.exists():
-                rmtree(staging, ignore_errors=True)
-            raise
+            replace_directory(staging, target)
     return ProcessedPublicationResult(
         coordinate_directory=target,
         publication_status=PublicationStatus.PUBLISHED,
@@ -158,12 +156,3 @@ def _assert_required_assets(directory: Path, required_assets: tuple[ProcessedAss
             f"processed publication missing assets: {', '.join(asset.value for asset in missing)}",
             subject=ContractSubject.ARTIFACT_PATH,
         )
-
-
-def _remove_stale_staging_directories(target: Path) -> None:
-    if not target.parent.is_dir():
-        return
-    prefix = f".{target.name}."
-    for candidate in sorted(target.parent.iterdir()):
-        if candidate.is_dir() and candidate.name.startswith(prefix):
-            rmtree(candidate, ignore_errors=True)

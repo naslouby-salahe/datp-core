@@ -165,15 +165,15 @@ class ConfusionCounts:
 
     @property
     def benign_denominator(self) -> RowCount:
-        return self.true_negative + self.false_positive
+        return self.true_negative.plus(self.false_positive)
 
     @property
     def attack_denominator(self) -> RowCount:
-        return self.true_positive + self.false_negative
+        return self.true_positive.plus(self.false_negative)
 
     @property
     def evaluation_row_count(self) -> RowCount:
-        return self.benign_denominator + self.attack_denominator
+        return self.benign_denominator.plus(self.attack_denominator)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -236,7 +236,7 @@ class PopulationMetricResult(MetricResultHeader):
             raise ValueError("attack-evaluable clients must belong to the calibration-eligible cohort")
         if self.calibration_eligible_client_count > self.candidate_client_count:
             raise ValueError("calibration-eligible client count cannot exceed the candidate count")
-        if self.deployment_fallback_count + self.unavailable_client_count > self.candidate_client_count:
+        if self.deployment_fallback_count.plus(self.unavailable_client_count) > self.candidate_client_count:
             raise ValueError("excluded client counts cannot exceed the candidate count")
         excluded = tuple(client.client_id for client in self.excluded_clients)
         if len(excluded) != len(frozenset(excluded)):

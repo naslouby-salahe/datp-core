@@ -11,12 +11,13 @@ class Seed(NonNegativeIntegerValue):
 
 class CalibrationSize(PositiveIntegerValue):
     validation_name: ClassVar[str] = "calibration size"
-    comparison_family: ClassVar[str | None] = "row_count"
+
+    def fits_within(self, count: "RowCount") -> bool:
+        return self.value <= count.value
 
 
 class ClientCount(PositiveIntegerValue):
     validation_name: ClassVar[str] = "client count"
-    comparison_family: ClassVar[str | None] = "population_cardinality"
 
 
 class SeedCount(PositiveIntegerValue):
@@ -45,7 +46,9 @@ class SubsampleReplicateCount(PositiveIntegerValue):
 
 class GroupCount(PositiveIntegerValue):
     validation_name: ClassVar[str] = "group count"
-    comparison_family: ClassVar[str | None] = "population_cardinality"
+
+    def fits_within(self, count: ClientCount) -> bool:
+        return self.value < count.value
 
 
 class ReplicateIndex(NonNegativeIntegerValue):
@@ -108,17 +111,12 @@ class DataLoaderWorkerCount(NonNegativeIntegerValue):
     validation_name: ClassVar[str] = "data loader worker count"
 
 
-class WorkerCount(PositiveIntegerValue):
-    validation_name: ClassVar[str] = "worker count"
-
-
 class FeatureCount(PositiveIntegerValue):
     validation_name: ClassVar[str] = "feature count"
 
 
 class RowCount(NonNegativeIntegerValue):
     validation_name: ClassVar[str] = "row count"
-    comparison_family: ClassVar[str | None] = "row_count"
 
 
 class ManifestSchemaVersion(PositiveIntegerValue):

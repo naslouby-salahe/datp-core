@@ -1,20 +1,67 @@
 """Gate decision for historical anchor reproduction and dependent-experiment readiness."""
 
+from enum import StrEnum
 from pathlib import Path
 
-from datp_core.anchor.models import (
+from pydantic import model_validator
+
+from datp_core.anchor.comparison import AnchorComparisonDecision, AnchorDiscrepancy
+from datp_core.anchor.reproduction import (
     DECLARED_NON_BLOCKING_DISCREPANCY_REASONS,
     AnchorArtifactFileName,
-    AnchorComparisonDecision,
-    AnchorDiscrepancy,
-    AnchorGateDecision,
-    AnchorGateStatus,
     AnchorReproductionResult,
 )
+from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import ExperimentReadiness
 from datp_core.domain.errors import AnchorReproductionError
 from datp_core.domain.provenance import canonical_json_text
 from datp_core.domain.values.checksums import Checksum, checksum_text
+
+
+class AnchorGateStatus(StrEnum):
+    PASS = "pass"
+    PASS_WITH_DECLARED_DISCREPANCY = "pass_with_declared_discrepancy"
+    BLOCKED = "blocked"
+
+
+class AnchorGateDecision(StrictModel):
+    status: AnchorGateStatus
+    dependent_readiness: ExperimentReadiness
+    reproduction: AnchorReproductionResult
+    blocking_discrepancies: tuple[AnchorDiscrepancy, ...]
+    declared_discrepancies: tuple[AnchorDiscrepancy, ...]
+
+    @model_validator(mode="after")
+    def validate_gate_integrity(self) -> "AnchorGateDecision":
+        match self.status:
+            case AnchorGateStatus.PASS:
+                _require_clean_pass(self)
+            case AnchorGateStatus.PASS_WITH_DECLARED_DISCREPANCY:
+                _require_declared_discrepancy_pass(self)
+            case AnchorGateStatus.BLOCKED:
+                _require_blocked_gate(self)
+        return self
+
+
+def _require_clean_pass(decision: AnchorGateDecision) -> None:
+    if decision.blocking_discrepancies or decision.declared_discrepancies:
+        raise ValueError("PASS forbids discrepancies")
+    if decision.dependent_readiness is not ExperimentReadiness.DECLARED:
+        raise ValueError("PASS permits only declared dependent readiness handoff")
+
+
+def _require_declared_discrepancy_pass(decision: AnchorGateDecision) -> None:
+    if decision.blocking_discrepancies or not decision.declared_discrepancies:
+        raise ValueError("PASS_WITH_DECLARED_DISCREPANCY requires only declared discrepancies")
+    if decision.dependent_readiness is not ExperimentReadiness.DECLARED:
+        raise ValueError("declared-discrepancy pass still only unlocks declared dependent readiness")
+
+
+def _require_blocked_gate(decision: AnchorGateDecision) -> None:
+    if not decision.blocking_discrepancies and decision.reproduction.dependency_blocker is None:
+        raise ValueError("BLOCKED requires blocking discrepancies or a dependency blocker")
+    if decision.dependent_readiness is not ExperimentReadiness.BLOCKED:
+        raise ValueError("blocked anchor gate must block dependent readiness")
 
 
 def decide_anchor_gate(reproduction: AnchorReproductionResult) -> AnchorGateDecision:

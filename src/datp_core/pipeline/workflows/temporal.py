@@ -21,6 +21,7 @@ from datp_core.domain.values.counts import Seed
 from datp_core.domain.values.ratios import MetricValue
 from datp_core.evaluation.fixed_score.construction import build_federated_evaluation_inputs
 from datp_core.evaluation.models import MetricStatus, metric_by_id
+from datp_core.pipeline.coordinates import ExperimentCoordinate
 from datp_core.pipeline.decision.evidence import AnalyzeTemporalEvidenceRequest, analyze_temporal_evidence
 from datp_core.pipeline.decision.federated import (
     ConstructFederatedThresholdsRequest,
@@ -37,10 +38,14 @@ from datp_core.pipeline.execution.context import (
     training_feature_names,
 )
 from datp_core.pipeline.execution.evidence import eligible_calibration_scores
-from datp_core.pipeline.execution.layout import ExecutionArtifactDirectory, bounded_evidence_seed_directory
+from datp_core.pipeline.execution.layout import (
+    ExecutionArtifactDirectory,
+    ExecutionRootDirectory,
+    bounded_evidence_seed_directory,
+)
 from datp_core.pipeline.execution.matched_reference import matched_static_reference_inputs
 from datp_core.pipeline.execution.score_generation import score_selected_checkpoint
-from datp_core.pipeline.planning import ExperimentCoordinate, expand_experiment_plan
+from datp_core.pipeline.planning import ExperimentPlan, expand_experiment_plan
 from datp_core.pipeline.scoring.models import FederatedScoreArtifactManifest
 from datp_core.protocols.calibration import CANONICAL_QUANTILE
 from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration, ExternalTemporalExecutionIdentity
@@ -120,8 +125,19 @@ class TemporalCampaignResult:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class TemporalStateExecution:
-    result: TemporalStateResult
+class TemporalCoordinateSet:
+    static_reference: ExperimentCoordinate
+    frozen_future: ExperimentCoordinate
+    recalibrated_future: ExperimentCoordinate
+
+    def for_state(self, state: TemporalState) -> ExperimentCoordinate:
+        match state:
+            case TemporalState.STATIC_REFERENCE:
+                return self.static_reference
+            case TemporalState.FROZEN_FUTURE:
+                return self.frozen_future
+            case TemporalState.RECALIBRATED_FUTURE:
+                return self.recalibrated_future
 
 
 def run_temporal_campaign() -> TemporalCampaignResult:
@@ -130,7 +146,8 @@ def run_temporal_campaign() -> TemporalCampaignResult:
 
 def run_temporal_seed(partition_seed: Seed) -> TemporalSeedResult:
     declaration = _temporal_declaration()
-    static, frozen, recalibrated = _execute_temporal_states(partition_seed, declaration)
+    coordinates = _temporal_coordinates(partition_seed, declaration)
+    static, frozen, recalibrated = _execute_temporal_states(declaration, coordinates)
     methods = _common_completed_methods(static, frozen, recalibrated)
     analyses = tuple(
         _analyze_temporal_method(
@@ -139,6 +156,7 @@ def run_temporal_seed(partition_seed: Seed) -> TemporalSeedResult:
             static=static,
             frozen=frozen,
             recalibrated=recalibrated,
+            coordinates=coordinates,
         )
         for method in methods
     )
@@ -152,10 +170,10 @@ def run_temporal_seed(partition_seed: Seed) -> TemporalSeedResult:
 
 
 def _execute_temporal_states(
-    partition_seed: Seed,
     declaration: ExperimentDeclaration,
+    coordinates: TemporalCoordinateSet,
 ) -> tuple[TemporalStateResult, TemporalStateResult, TemporalStateResult]:
-    frozen_coordinate = _coordinate(partition_seed, TemporalState.FROZEN_FUTURE, declaration)
+    frozen_coordinate = coordinates.frozen_future
     context = resolve_execution_context(frozen_coordinate, OUTPUTS_ROOT)
     autoencoder = training_autoencoder(frozen_coordinate.dataset)
     feature_names = training_feature_names(frozen_coordinate.dataset)
@@ -171,9 +189,9 @@ def _execute_temporal_states(
         split_manifest_checksum=context.split_manifest_checksum,
     )
     static_inputs = matched_static_reference_inputs(context, OUTPUTS_ROOT)
-    static_coordinate = _coordinate(partition_seed, TemporalState.STATIC_REFERENCE, declaration)
+    static_coordinate = coordinates.static_reference
     static_identity = _execution_identity(static_coordinate)
-    static_root = bounded_evidence_seed_directory(static_identity, partition_seed, OUTPUTS_ROOT)
+    static_root = bounded_evidence_seed_directory(static_identity, static_coordinate.training_seed, OUTPUTS_ROOT)
     static_scores = score_selected_checkpoint(
         checkpoint=checkpoint,
         scored_split_protocol=static_coordinate.split_protocol,
@@ -199,7 +217,7 @@ def _execute_temporal_states(
         calibration_role=PartitionRole.CALIBRATION,
         threshold_methods=declaration.federated_thresholds,
         provenance=static_provenance,
-    ).result
+    )
     frozen = _evaluate_state(
         context=context,
         identity=_execution_identity(frozen_coordinate),
@@ -207,16 +225,15 @@ def _execute_temporal_states(
         calibration_role=PartitionRole.CALIBRATION,
         threshold_methods=declaration.federated_thresholds,
         provenance=frozen_provenance,
-    ).result
-    recalibrated_coordinate = _coordinate(partition_seed, TemporalState.RECALIBRATED_FUTURE, declaration)
+    )
     recalibrated = _evaluate_state(
         context=context,
-        identity=_execution_identity(recalibrated_coordinate),
+        identity=_execution_identity(coordinates.recalibrated_future),
         scores=future_scores,
         calibration_role=PartitionRole.FUTURE_RECALIBRATION,
         threshold_methods=declaration.federated_thresholds,
         provenance=recalibrated_provenance,
-    ).result
+    )
     return static, frozen, recalibrated
 
 
@@ -228,7 +245,7 @@ def _evaluate_state(
     calibration_role: PartitionRole,
     threshold_methods: tuple[FederatedThresholdMethod, ...],
     provenance: TemporalDeploymentProvenance,
-) -> TemporalStateExecution:
+) -> TemporalStateResult:
     eligible = eligible_calibration_scores(scores, calibration_role)
     capabilities = population_capabilities(context.coordinate.population)
     reference_evidence = None
@@ -239,12 +256,12 @@ def _evaluate_state(
         threshold = construct_federated_thresholds(
             ConstructFederatedThresholdsRequest(
                 request=ThresholdConstructionRequest(
-                    method,
-                    context.coordinate,
-                    CANONICAL_QUANTILE,
-                    capabilities,
-                    eligible,
-                    context.family_by_client,
+                    method=method,
+                    coordinate=context.coordinate,
+                    quantile=CANONICAL_QUANTILE,
+                    capabilities=capabilities,
+                    eligible=eligible,
+                    family_by_client=context.family_by_client,
                 ),
                 output_directory=output_root / TemporalArtifactDirectory.THRESHOLDS / method.value,
                 overwrite=False,
@@ -291,13 +308,11 @@ def _evaluate_state(
         )
     if identity.temporal_state is None:
         raise ScientificContractError("temporal result requires an explicit state")
-    return TemporalStateExecution(
-        result=TemporalStateResult(
-            state=identity.temporal_state,
-            completed_threshold_methods=tuple(completed),
-            provenance=provenance,
-            outcomes=tuple(outcomes),
-        )
+    return TemporalStateResult(
+        state=identity.temporal_state,
+        completed_threshold_methods=tuple(completed),
+        provenance=provenance,
+        outcomes=tuple(outcomes),
     )
 
 
@@ -308,6 +323,7 @@ def _analyze_temporal_method(
     static: TemporalStateResult,
     frozen: TemporalStateResult,
     recalibrated: TemporalStateResult,
+    coordinates: TemporalCoordinateSet,
 ) -> TemporalMethodAnalysisResult:
     recovery = temporal_recovery(
         seed=partition_seed,
@@ -317,9 +333,9 @@ def _analyze_temporal_method(
     )
     analysis = analyze_temporal_evidence(
         AnalyzeTemporalEvidenceRequest(
-            static_reference_identity=_identity_for_state(partition_seed, TemporalState.STATIC_REFERENCE),
-            frozen_identity=_identity_for_state(partition_seed, TemporalState.FROZEN_FUTURE),
-            recalibrated_identity=_identity_for_state(partition_seed, TemporalState.RECALIBRATED_FUTURE),
+            static_reference_identity=_execution_identity(coordinates.static_reference),
+            frozen_identity=_execution_identity(coordinates.frozen_future),
+            recalibrated_identity=_execution_identity(coordinates.recalibrated_future),
             static_reference_provenance=static.provenance,
             frozen_provenance=frozen.provenance,
             recalibrated_provenance=recalibrated.provenance,
@@ -374,19 +390,19 @@ def _execution_identity(coordinate: ExperimentCoordinate) -> ExternalTemporalExe
     )
 
 
-def _identity_for_state(partition_seed: Seed, state: TemporalState) -> ExternalTemporalExecutionIdentity:
-    return _execution_identity(_coordinate(partition_seed, state, _temporal_declaration()))
-
-
-def _coordinate(
-    partition_seed: Seed,
-    state: TemporalState,
-    declaration: ExperimentDeclaration,
-) -> ExperimentCoordinate:
+def _temporal_coordinates(partition_seed: Seed, declaration: ExperimentDeclaration) -> TemporalCoordinateSet:
     plan = expand_experiment_plan(
         declarations=(declaration,),
         seed_cohort=SeedCohort(values=(partition_seed,)),
     )
+    return TemporalCoordinateSet(
+        static_reference=_coordinate_for_state(plan, TemporalState.STATIC_REFERENCE),
+        frozen_future=_coordinate_for_state(plan, TemporalState.FROZEN_FUTURE),
+        recalibrated_future=_coordinate_for_state(plan, TemporalState.RECALIBRATED_FUTURE),
+    )
+
+
+def _coordinate_for_state(plan: ExperimentPlan, state: TemporalState) -> ExperimentCoordinate:
     matches = tuple(entry.coordinate for entry in plan.entries if entry.coordinate.temporal_state is state)
     if not matches:
         raise ScientificContractError(f"no temporal coordinate is declared for {state.value}")
@@ -407,7 +423,7 @@ def _temporal_analysis_directory(partition_seed: Seed, method: FederatedThreshol
     declaration = _temporal_declaration()
     return (
         OUTPUTS_ROOT
-        / "bounded_evidence"
+        / ExecutionRootDirectory.BOUNDED_EVIDENCE
         / declaration.id.value
         / declaration.population.value
         / declaration.role.value

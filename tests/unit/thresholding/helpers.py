@@ -5,6 +5,7 @@ from tests.unit.learning.federated.helpers import client_identity, fedavg_coordi
 from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import Seed
+from datp_core.domain.values.ratios import ScoreValue
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.thresholding.quantiles import ClientBenignCalibrationScores
 
@@ -24,7 +25,7 @@ def client_scores(
     return ClientBenignCalibrationScores(
         client=client_identity(client_id),
         coordinate=coordinate,
-        scores=scores,
+        scores=tuple(ScoreValue(value) for value in scores),
         calibration_manifest_checksum=calibration_manifest_checksum,
         score_set_checksum=score_set_checksum,
     )

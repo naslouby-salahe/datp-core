@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from itertools import chain
 from pathlib import Path
 
 from datp_core.domain.enums import EvidenceRole, ExperimentId, PopulationId
 from datp_core.domain.values.checksums import Checksum
 from datp_core.reporting.figures import FigureSpec, render_markdown_figure
 from datp_core.reporting.tables import PublicationTable, render_markdown_table
-from datp_core.reporting.validation import ClaimDecision
+from datp_core.reporting.validation import ClaimDecision, ClaimStatus
 from datp_core.runtime.filesystem import write_text_atomically
 
 
@@ -37,11 +38,14 @@ class PublicationBundle:
             raise ValueError("publication bundles require at least one validated output")
 
 
+_PUBLISHABLE_CLAIM_STATUSES = frozenset({ClaimStatus.PERMITTED, ClaimStatus.NARROWED})
+
+
 def export_markdown(bundle: PublicationBundle, destination: Path) -> Path:
-    blocked = tuple(decision for decision in bundle.claims if decision.wording == "")
-    permitted = tuple(decision.wording for decision in bundle.claims if decision.wording)
+    blocked = tuple(decision for decision in bundle.claims if decision.status not in _PUBLISHABLE_CLAIM_STATUSES)
+    permitted = tuple(decision.wording for decision in bundle.claims if decision.status in _PUBLISHABLE_CLAIM_STATUSES)
     provenance = bundle.provenance
-    sections = [
+    header = (
         "# DATP-Core Results",
         "",
         f"Experiment: `{provenance.experiment.value}`  ",
@@ -49,16 +53,19 @@ def export_markdown(bundle: PublicationBundle, destination: Path) -> Path:
         f"Evidence role: `{provenance.evidence_role.value}`  ",
         f"Analysis checksum: `{provenance.analysis_checksum.value}`",
         "",
-    ]
-    sections.extend(permitted)
-    if blocked:
-        sections.extend(("", "## Suppressed or blocked claims", ""))
-        sections.extend(f"- {decision.reason}" for decision in blocked)
-    for table in bundle.tables:
-        sections.extend(("", render_markdown_table(table)))
-    if bundle.figures:
-        sections.extend(("", "## Figures"))
-        for figure in bundle.figures:
-            sections.extend(("", render_markdown_figure(figure)))
+    )
+    blocked_section = (
+        ("", "## Suppressed or blocked claims", "") + tuple(f"- {decision.reason}" for decision in blocked)
+        if blocked
+        else ()
+    )
+    table_section = tuple(chain.from_iterable(("", render_markdown_table(table)) for table in bundle.tables))
+    figure_section = (
+        ("", "## Figures")
+        + tuple(chain.from_iterable(("", render_markdown_figure(figure)) for figure in bundle.figures))
+        if bundle.figures
+        else ()
+    )
+    sections = header + permitted + blocked_section + table_section + figure_section
     payload = "\n".join(sections).rstrip() + "\n"
     return write_text_atomically(destination, payload)

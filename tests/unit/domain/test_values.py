@@ -49,24 +49,20 @@ def test_unrelated_integer_value_objects_cannot_be_ordered() -> None:
         _ = Seed(1) < RowCount(2)
 
 
-def test_unrelated_integer_value_objects_cannot_be_added() -> None:
-    with pytest.raises(TypeError):
-        _ = Seed(1) + RowCount(2)
+def test_same_integer_value_type_supports_explicit_addition() -> None:
+    assert RowCount(2).plus(RowCount(3)) == RowCount(5)
 
 
-def test_same_integer_value_type_supports_arithmetic() -> None:
-    assert RowCount(2) + RowCount(3) == RowCount(5)
-    assert sum((RowCount(2), RowCount(3)), start=0) == RowCount(5)
+def test_explicit_count_relationships_use_named_methods() -> None:
+    assert CalibrationSize(100).fits_within(RowCount(100))
+    assert not CalibrationSize(101).fits_within(RowCount(100))
+    assert GroupCount(3).fits_within(ClientCount(9))
+    assert not GroupCount(9).fits_within(ClientCount(9))
 
 
-def test_explicit_count_families_remain_comparable() -> None:
-    assert RowCount(100) >= CalibrationSize(100)
-    assert GroupCount(3) < ClientCount(9)
-
-
-def test_anomaly_scores_remain_comparable_to_thresholds() -> None:
-    assert ScoreValue(0.6) > ThresholdValue(0.5)
-    assert ScoreValue(0.5) == ThresholdValue(0.5)
+def test_anomaly_scores_use_explicit_exceeds_against_thresholds() -> None:
+    assert ScoreValue(0.6).exceeds(ThresholdValue(0.5))
+    assert not ScoreValue(0.5).exceeds(ThresholdValue(0.5))
 
 
 def test_unrelated_float_value_objects_are_not_equal() -> None:

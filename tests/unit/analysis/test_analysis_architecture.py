@@ -14,18 +14,19 @@ def _imported_modules(path: Path) -> tuple[str, ...]:
     return tuple(modules)
 
 
-def test_analysis_separates_decisions_documents_and_preparation() -> None:
+def test_analysis_separates_decisions_and_preparation() -> None:
     analysis = _SOURCE_ROOT / "analysis"
 
     assert not (analysis / "decisions.py").exists()
+    assert not (analysis / "documents.py").exists()
     assert (analysis / "scientific_decision.py").is_file()
-    assert (analysis / "documents.py").is_file()
     assert (analysis / "preparation.py").is_file()
 
     stale_importers = tuple(
         path.relative_to(_SOURCE_ROOT)
         for path in _SOURCE_ROOT.rglob("*.py")
         if "datp_core.analysis.decisions" in _imported_modules(path)
+        or "datp_core.analysis.documents" in _imported_modules(path)
     )
     assert stale_importers == ()
 

@@ -91,7 +91,7 @@ class ConformalProtocol(StrictModel):
 
     @property
     def significance(self) -> Ratio:
-        return Ratio(1.0 - self.coverage.value)
+        return self.coverage.significance
 
 
 class FederatedStatisticsProtocol(StrictModel):
@@ -130,11 +130,11 @@ class ClusterThresholdProtocol(StrictModel):
                 "cluster initialization must be k-means++",
             ),
             (
-                self.initialization_count.value == LOCKED_CLUSTER_INITIALIZATION_COUNT.value,
+                self.initialization_count == LOCKED_CLUSTER_INITIALIZATION_COUNT,
                 "cluster n_init must match the locked initialization count",
             ),
             (
-                self.maximum_iterations.value == LOCKED_CLUSTER_MAXIMUM_ITERATIONS.value,
+                self.maximum_iterations == LOCKED_CLUSTER_MAXIMUM_ITERATIONS,
                 "cluster max_iter must match the locked maximum iteration count",
             ),
             (
@@ -142,7 +142,7 @@ class ClusterThresholdProtocol(StrictModel):
                 "cluster random_state must match the locked seed",
             ),
             (
-                self.group_count.value == LOCKED_CLUSTER_GROUP_COUNT.value,
+                self.group_count == LOCKED_CLUSTER_GROUP_COUNT,
                 "cluster group count must match the locked group count",
             ),
             (

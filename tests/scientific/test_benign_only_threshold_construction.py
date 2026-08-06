@@ -35,6 +35,7 @@ from datp_core.domain.enums import (
 from datp_core.domain.errors import CapabilityError, LeakageError, ScientificContractError
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import CalibrationSize, ClientCount, GroupCount, Seed
+from datp_core.domain.values.identifiers import StableRowId
 from datp_core.domain.values.paths import FamilyIdentity
 from datp_core.domain.values.ratios import Quantile
 from datp_core.pipeline.decision.federated import (
@@ -47,6 +48,7 @@ from datp_core.protocols.calibration import (
     CalibrationEligibilityProtocol,
     ClusterThresholdProtocol,
 )
+from datp_core.thresholding.assignments import FamilyAssignment
 from datp_core.thresholding.dispatch import (
     ThresholdConstructionRequest,
     dispatch_federated_threshold,
@@ -128,7 +130,9 @@ def test_evaluation_partition_cannot_enter_calibration_eligibility() -> None:
 
 def test_calibration_evaluation_row_overlap_is_rejected() -> None:
     with pytest.raises(LeakageError, match="must not share source rows"):
-        reject_calibration_evaluation_overlap(frozenset({"row-1", "row-2"}), frozenset({"row-2"}))
+        reject_calibration_evaluation_overlap(
+            frozenset({StableRowId("row-1"), StableRowId("row-2")}), frozenset({StableRowId("row-2")})
+        )
 
 
 def test_methods_compared_within_one_cell_must_share_the_eligible_cohort() -> None:
@@ -153,7 +157,7 @@ def test_eligibility_covers_every_candidate_client_never_silently_drops_one(tmp_
         for record in records
     )
     assert len(decisions) == 2
-    assert frozenset(item.client.client_id for item in decisions) == frozenset({"client_a", "client_b"})
+    assert frozenset(item.support.client.client_id for item in decisions) == frozenset({"client_a", "client_b"})
     assert tuple(client.client_id for client in eligible_clients(decisions)) == ("client_a",)
 
 
@@ -182,7 +186,7 @@ def test_construct_family_threshold_signature_accepts_no_label_bearing_input() -
     result = construct_family_threshold(
         (client_scores("client_a", (1.0, 2.0, 3.0)),),
         QUANTILE,
-        ((identity("client_a"), FamilyIdentity("doorbell")),),
+        (FamilyAssignment(client=identity("client_a"), family=FamilyIdentity("doorbell")),),
     )
     assert result.families
 

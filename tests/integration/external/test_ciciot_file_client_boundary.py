@@ -1,7 +1,7 @@
 from dataclasses import fields
 
 from datp_core.domain.enums import FederatedThresholdMethod, MetricId
-from datp_core.pipeline.planning import CiciotBoundaryFeasibilityRequest, assess_external_temporal_feasibility
+from datp_core.pipeline.feasibility import CiciotBoundaryFeasibilityRequest, assess_external_temporal_feasibility
 
 
 def _request() -> CiciotBoundaryFeasibilityRequest:

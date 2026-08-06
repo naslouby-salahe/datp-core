@@ -15,6 +15,7 @@ from datp_core.domain.values.paths import FamilyIdentity
 from datp_core.domain.values.ratios import Quantile, ThresholdValue
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.thresholding.assignments import (
+    FamilyAssignment,
     LocalQuantile,
     ThresholdAssignment,
     mean_local_threshold,
@@ -63,7 +64,7 @@ class FamilyMembership:
             require_contract(
                 floats_exactly_equal(
                     self.family_threshold.value,
-                    mean_local_threshold(self.contributing_local_quantiles),
+                    mean_local_threshold(self.contributing_local_quantiles).value,
                 ),
                 "family_threshold must equal the unweighted mean of contributing local quantiles",
                 ContractSubject.THRESHOLD,
@@ -96,15 +97,15 @@ class FamilyThresholdResult:
                     "every nested quantile must carry the containing result coordinate",
                     ContractSubject.COORDINATE,
                 )
-        expected_pairs = tuple(
-            (client, family.family_threshold)
+        expected_assignments = tuple(
+            ThresholdAssignment(client, family.family_threshold)
             for family in self.families
             if family.status is AvailabilityStatus.AVAILABLE and family.family_threshold is not None
             for client in family.members
         )
         validate_assignments(
             self.assignments,
-            expected_pairs,
+            expected_assignments,
             label="threshold assignments",
             mismatch_message=("a family threshold assignment must use its family's constructed threshold"),
         )
@@ -113,7 +114,7 @@ class FamilyThresholdResult:
 def construct_family_threshold(
     eligible: tuple[ClientBenignCalibrationScores, ...],
     quantile: Quantile,
-    family_by_client: tuple[tuple[ClientIdentity, FamilyIdentity], ...],
+    family_by_client: tuple[FamilyAssignment, ...],
 ) -> FamilyThresholdResult:
     if not family_by_client:
         raise ScientificContractError(
@@ -131,7 +132,7 @@ def construct_family_threshold(
         "eligible clients in family threshold construction",
     )
     for client in eligible_clients:
-        matching = tuple(family for candidate, family in family_by_client if candidate == client)
+        matching = tuple(item.family for item in family_by_client if item.client == client)
         if not matching:
             raise ScientificContractError(
                 f"eligible client {client} is missing a family taxonomy entry",
@@ -144,14 +145,14 @@ def construct_family_threshold(
             )
     family_ids = tuple(
         sorted(
-            frozenset(family for _, family in family_by_client),
+            frozenset(item.family for item in family_by_client),
             key=lambda item: item.value,
         )
     )
     memberships: list[FamilyMembership] = []
     assignments: list[ThresholdAssignment] = []
     for family_id in family_ids:
-        declared_members = tuple(client for client, declared_family in family_by_client if declared_family == family_id)
+        declared_members = tuple(item.client for item in family_by_client if item.family == family_id)
         membership, family_assignments = _build_family_membership(
             family_id,
             declared_members,

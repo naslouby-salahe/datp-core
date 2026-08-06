@@ -21,6 +21,7 @@ from datp_core.protocols.training import (
     FEDPROX_COEFFICIENTS,
     FEDPROX_TRAINING_PROTOCOLS,
     LEARNING_RATE,
+    MODEL_ABSORPTION_DECISION_PROTOCOL,
     NBAIOT_AUTOENCODER,
     OPTIMIZER,
     resolve_single_model_federated_training_protocol,
@@ -34,9 +35,11 @@ def test_training_grids_are_locked() -> None:
     assert DITTO_RETAINED_EFFECT_MINIMUM.value == 0.75
     assert DITTO_PARTIAL_EFFECT_MINIMUM.value == 0.25
     assert DITTO_ALTERNATIVE_ROUTE_DIFFERENCE.value == 0.05
-    assert NBAIOT_AUTOENCODER.widths == (115, 86, 58, 38, 29, 38, 58, 86, 115)
-    assert EDGE_IIOTSET_NUMERIC_AUTOENCODER.widths == (33, 25, 17, 11, 8, 11, 17, 25, 33)
-    assert CICIOT2023_AUTOENCODER.widths == (39, 29, 20, 13, 10, 13, 20, 29, 39)
+    assert MODEL_ABSORPTION_DECISION_PROTOCOL.full_retention_minimum == DITTO_RETAINED_EFFECT_MINIMUM
+    assert MODEL_ABSORPTION_DECISION_PROTOCOL.partial_retention_minimum == DITTO_PARTIAL_EFFECT_MINIMUM
+    assert tuple(NBAIOT_AUTOENCODER.widths) == (115, 86, 58, 38, 29, 38, 58, 86, 115)
+    assert tuple(EDGE_IIOTSET_NUMERIC_AUTOENCODER.widths) == (33, 25, 17, 11, 8, 11, 17, 25, 33)
+    assert tuple(CICIOT2023_AUTOENCODER.widths) == (39, 29, 20, 13, 10, 13, 20, 29, 39)
     assert OPTIMIZER.identity is OptimizerId.ADAM
     assert LEARNING_RATE.value == 0.001
     assert BATCH_SIZE.value == 256

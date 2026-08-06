@@ -30,8 +30,8 @@ def reject_evaluation_partition_in_eligibility(partition_role: PartitionRole) ->
 
 
 def reject_calibration_evaluation_overlap(
-    calibration_stable_row_ids: frozenset[str],
-    evaluation_stable_row_ids: frozenset[str],
+    calibration_stable_row_ids: frozenset[StableRowId],
+    evaluation_stable_row_ids: frozenset[StableRowId],
 ) -> None:
     if calibration_stable_row_ids & evaluation_stable_row_ids:
         raise LeakageError(
@@ -96,7 +96,7 @@ def decide_eligibility(
     support: CalibrationSupport,
     protocol: CalibrationEligibilityProtocol,
 ) -> EligibilityDecision:
-    meets_minimum = support.benign_calibration_count >= protocol.minimum_support
+    meets_minimum = protocol.minimum_support.fits_within(support.benign_calibration_count)
     return EligibilityDecision(
         support=support,
         minimum_support=protocol.minimum_support,
@@ -106,7 +106,7 @@ def decide_eligibility(
 
 
 def eligible_clients(decisions: tuple[EligibilityDecision, ...]) -> tuple[ClientIdentity, ...]:
-    return tuple(sorted(decision.client for decision in decisions if decision.is_eligible))
+    return tuple(sorted(decision.support.client for decision in decisions if decision.is_eligible))
 
 
 def require_common_eligible_cohort(

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from hashlib import file_digest, sha256
 from pathlib import Path
 
-from datp_core.domain.values.base import _pydantic_value_schema
+from datp_core.domain.values.base import pydantic_value_schema
 
 
 @dataclass(frozen=True, slots=True)
@@ -16,7 +16,7 @@ class Checksum:
             raise ValueError("checksum must be non-empty")
         object.__setattr__(self, "value", self.value.strip().lower())
 
-    __get_pydantic_core_schema__ = classmethod(_pydantic_value_schema)
+    __get_pydantic_core_schema__ = classmethod(pydantic_value_schema)
 
 
 def checksum_text(payload: str) -> Checksum:

@@ -42,6 +42,7 @@ from datp_core.learning.federated.checkpoints.publication import (
 )
 from datp_core.learning.federated.models import (
     CheckpointCandidate,
+    DittoTrainingCoordinates,
     DittoTrainingOutcome,
     FederatedTrainingCoordinate,
     FederatedTrainingOutcome,
@@ -91,8 +92,7 @@ class ReusedFederatedTrainingRequest:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ReusedDittoTrainingRequest:
-    global_coordinate: FederatedTrainingCoordinate
-    personalized_coordinate: FederatedTrainingCoordinate
+    coordinates: DittoTrainingCoordinates
     global_directory: Path
     personalized_directory: Path
     clients: tuple[ClientIdentity, ...]
@@ -360,7 +360,7 @@ def load_reused_ditto_training(
     request: ReusedDittoTrainingRequest,
 ) -> DittoTrainingOutcome:
     global_request = ReusedGlobalCandidatesRequest(
-        coordinate=request.global_coordinate,
+        coordinate=request.coordinates.global_coordinate,
         directory=request.global_directory,
         checkpoint_protocol=request.checkpoint_protocol,
         preprocessing_state_set_checksum=(request.preprocessing_state_set_checksum),
@@ -369,7 +369,7 @@ def load_reused_ditto_training(
         batch_size=request.batch_size,
     )
     personalized_request = ReusedPersonalizedCandidatesRequest(
-        personalized_coordinate=request.personalized_coordinate,
+        personalized_coordinate=request.coordinates.personalized_coordinate,
         personalized_output_directory=request.personalized_directory,
         global_history_directory=request.global_directory,
         clients=request.clients,
@@ -394,15 +394,15 @@ def load_reused_ditto_training(
     global_candidates = load_reused_global_candidates(global_request)
     personalized_candidates = load_reused_personalized_candidates(personalized_request)
     history = load_federated_training_history(
-        request.global_coordinate,
+        request.coordinates.global_coordinate,
         request.global_directory,
         request.identity_kind,
         clients=request.clients,
         checkpoint_protocol=request.checkpoint_protocol,
-        personalized_coordinate=request.personalized_coordinate,
+        personalized_coordinate=request.coordinates.personalized_coordinate,
     )
     global_training = FederatedTrainingResult(
-        coordinate=request.global_coordinate,
+        coordinate=request.coordinates.global_coordinate,
         autoencoder=request.autoencoder,
         checkpoint_protocol=request.checkpoint_protocol,
         history=history,

@@ -14,7 +14,7 @@ from datp_core.domain.errors import ScientificContractError, require_contract
 from datp_core.domain.values.base import floats_exactly_equal
 from datp_core.domain.values.checksums import Checksum, checksum_text
 from datp_core.domain.values.counts import RowCount
-from datp_core.domain.values.ratios import Quantile, ThresholdValue
+from datp_core.domain.values.ratios import NormalizedWeight, Quantile, ThresholdValue
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.protocols.calibration import QuantileProtocol
 from datp_core.thresholding.assignments import (
@@ -54,14 +54,16 @@ class SharedThresholdResult:
         )
         validate_assignments(
             self.assignments,
-            tuple((item.client, self.shared_threshold) for item in self.contributing_local_quantiles),
+            tuple(
+                ThresholdAssignment(item.client, self.shared_threshold) for item in self.contributing_local_quantiles
+            ),
             label="threshold assignments",
             mismatch_message=("every assignment in a shared threshold result must carry the identical shared value"),
         )
         require_contract(
             floats_exactly_equal(
                 self.shared_threshold.value,
-                mean_local_threshold(self.contributing_local_quantiles),
+                mean_local_threshold(self.contributing_local_quantiles).value,
             ),
             "shared_threshold must equal the unweighted mean of contributing local quantiles",
             ContractSubject.THRESHOLD,
@@ -111,7 +113,7 @@ class SampleWeightedSharedThresholdResult:
     coordinate: FederatedTrainingCoordinate
     quantile: Quantile
     contributing_local_quantiles: tuple[LocalQuantile, ...]
-    normalized_weights: tuple[float, ...]
+    normalized_weights: tuple[NormalizedWeight, ...]
     shared_threshold: ThresholdValue
     assignments: tuple[ThresholdAssignment, ...]
     method: ClassVar[FederatedThresholdMethod] = FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD
@@ -119,7 +121,7 @@ class SampleWeightedSharedThresholdResult:
     def __post_init__(self) -> None:
         validate_normalized_weights(
             self.normalized_weights,
-            len(self.contributing_local_quantiles),
+            self.contributing_local_quantiles,
         )
         validate_local_quantiles(
             self.contributing_local_quantiles,
@@ -128,12 +130,14 @@ class SampleWeightedSharedThresholdResult:
         )
         validate_assignments(
             self.assignments,
-            tuple((item.client, self.shared_threshold) for item in self.contributing_local_quantiles),
+            tuple(
+                ThresholdAssignment(item.client, self.shared_threshold) for item in self.contributing_local_quantiles
+            ),
             label="threshold assignments",
             mismatch_message=("every assignment in a shared threshold result must carry the identical shared value"),
         )
         expected_shared = sum(
-            item.value.value * weight
+            item.value.value * weight.value
             for item, weight in zip(
                 self.contributing_local_quantiles,
                 self.normalized_weights,
@@ -181,7 +185,7 @@ def construct_pooled_shared_quantile(
     _require_eligible(eligible)
     pooled_scores = tuple(score for client_scores in eligible for score in client_scores.scores)
     shared_value = exact_empirical_quantile(
-        np.asarray(pooled_scores, dtype=np.float64),
+        np.asarray(tuple(score.value for score in pooled_scores), dtype=np.float64),
         protocol.quantile,
     )
     diagnostic = ThresholdDiagnostic(
@@ -215,7 +219,7 @@ def construct_sample_weighted_shared_threshold(
     local_quantiles = tuple(local_quantile(client_scores, protocol.quantile) for client_scores in eligible)
     counts = tuple(float(item.calibration_count.value) for item in local_quantiles)
     total = sum(counts)
-    normalized_weights = tuple(count / total for count in counts)
+    normalized_weights = tuple(NormalizedWeight(count / total) for count in counts)
     shared_value = ThresholdValue(
         sample_weighted_mean(
             tuple(item.value.value for item in local_quantiles),

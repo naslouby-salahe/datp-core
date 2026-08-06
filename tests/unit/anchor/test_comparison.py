@@ -2,11 +2,6 @@ import pytest
 from tests.unit.anchor.helpers import make_observation, make_reference
 
 from datp_core.anchor.comparison import (
-    compare_anchor_metric,
-    full_precision_failure_stands_despite_rounded_equality,
-    reject_global_floating_point_tolerance,
-)
-from datp_core.anchor.models import (
     AbsoluteToleranceRule,
     AnchorComparisonDecision,
     AnchorDiscrepancyReason,
@@ -14,6 +9,9 @@ from datp_core.anchor.models import (
     IntervalOverlapRule,
     MetricInterval,
     RelativeToleranceRule,
+    compare_anchor_metric,
+    full_precision_failure_stands_despite_rounded_equality,
+    reject_global_floating_point_tolerance,
 )
 from datp_core.domain.enums import (
     CheckpointStatus,
@@ -30,7 +28,8 @@ def test_exact_reproduction_passes() -> None:
         make_reference(value=1.0448312675151203), make_observation(value=1.0448312675151203)
     )
     assert comparison.decision is AnchorComparisonDecision.EQUIVALENT
-    assert comparison.signed_difference == 0.0
+    assert comparison.signed_difference is not None
+    assert comparison.signed_difference.value == 0.0
 
 
 def test_absolute_tolerance_passes_within_declared_bound() -> None:

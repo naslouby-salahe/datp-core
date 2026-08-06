@@ -19,6 +19,7 @@ from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import Seed
 from datp_core.domain.values.ratios import ModelCoefficientValue
+from datp_core.pipeline.coordinates import ExperimentCoordinate
 from datp_core.pipeline.execution.engine import execute_experiment, resolve_execution_recipe
 from datp_core.pipeline.execution.models import (
     ANCHOR_REPRODUCTION_RECIPE,
@@ -29,7 +30,6 @@ from datp_core.pipeline.execution.models import (
     StageExecution,
     StageOutcome,
 )
-from datp_core.pipeline.planning import ExperimentCoordinate
 from datp_core.protocols.training import DITTO_TRAINING_PROTOCOLS
 
 OUTPUT_ROOT = Path("outputs")

@@ -23,9 +23,9 @@ from datp_core.learning.federated.models import (
     ClientTrainingInput,
     ClientTrainingResult,
     ClientUpdate,
+    DittoTrainingCoordinates,
     DittoTrainingOutcome,
     FederatedRoundResult,
-    FederatedTrainingCoordinate,
     FederatedTrainingHistory,
     FederatedTrainingResult,
     GlobalModelStateReference,
@@ -56,8 +56,7 @@ from datp_core.runtime.determinism import configure_deterministic_execution
 
 @dataclass(frozen=True, slots=True)
 class DittoTrainingRequest:
-    global_coordinate: FederatedTrainingCoordinate
-    personalized_coordinate: FederatedTrainingCoordinate
+    coordinates: DittoTrainingCoordinates
     clients: tuple[ClientTrainingInput, ...]
     population_client_count: ClientCount
     autoencoder: AutoencoderProtocol
@@ -110,27 +109,12 @@ def _require_snapshot_buffer(
 
 
 def _validate_request(request: DittoTrainingRequest) -> None:
-    if request.global_coordinate.model is not TrainingModelId.DITTO_GLOBAL_AUTOENCODER:
-        raise ScientificContractError(
-            "Ditto requires the DITTO_GLOBAL_AUTOENCODER global coordinate",
-            subject=request.global_coordinate.model,
-        )
-    if request.personalized_coordinate.model is not TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER:
-        raise ScientificContractError(
-            "Ditto requires the DITTO_PERSONALIZED_AUTOENCODER personalized coordinate",
-            subject=request.personalized_coordinate.model,
-        )
     if request.training_protocol.kind is not TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER:
         raise ScientificContractError(
             "Ditto protocol kind must be DITTO_PERSONALIZED_AUTOENCODER",
             subject=request.training_protocol.kind,
         )
-    if not request.global_coordinate.matches_ditto_peer(request.personalized_coordinate):
-        raise ScientificContractError(
-            "Ditto global and personalized coordinates must share one experiment identity",
-            subject=ContractSubject.COORDINATE,
-        )
-    if request.global_coordinate.model_coefficient != request.training_protocol.regularization:
+    if request.coordinates.global_coordinate.model_coefficient != request.training_protocol.regularization:
         raise ScientificContractError(
             "Ditto coordinate regularization must match the protocol",
             subject=ContractSubject.COORDINATE,
@@ -141,7 +125,7 @@ def _validate_request(request: DittoTrainingRequest) -> None:
             subject=ContractSubject.TRAINING,
         )
     validate_common_request(
-        request.global_coordinate,
+        request.coordinates.global_coordinate,
         request.training_seed,
         request.clients,
         request.population_client_count,
@@ -230,7 +214,7 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
             personalized_checksum, _ = serialize_and_checksum_state_dict(personalized_update.state_dict)
             personalized_references.append(
                 PersonalizedModelStateReference(
-                    coordinate=request.personalized_coordinate,
+                    coordinate=request.coordinates.personalized_coordinate,
                     client=client_data.client,
                     round_number=round_number,
                     local_loss=personalized_update.local_loss,
@@ -262,7 +246,7 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
                     download_count=request.population_client_count,
                 ),
                 global_state_reference=GlobalModelStateReference(
-                    coordinate=request.global_coordinate,
+                    coordinate=request.coordinates.global_coordinate,
                     round_number=round_number,
                     state_checksum=global_checksum,
                     tensor_path=None,
@@ -275,11 +259,11 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
             global_snapshots.append(create_round_snapshot(round_number, global_state, aggregate_loss))
 
     global_result = FederatedTrainingResult(
-        coordinate=request.global_coordinate,
+        coordinate=request.coordinates.global_coordinate,
         autoencoder=request.autoencoder,
         checkpoint_protocol=request.checkpoint_protocol,
         history=FederatedTrainingHistory(
-            coordinate=request.global_coordinate,
+            coordinate=request.coordinates.global_coordinate,
             rounds=tuple(rounds),
         ),
         preprocessing_state_set_checksum=preprocessing_checksum,
@@ -290,7 +274,7 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
     return write_ditto_training(
         global_result=global_result,
         global_snapshots=tuple(global_snapshots),
-        personalized_coordinate=request.personalized_coordinate,
+        personalized_coordinate=request.coordinates.personalized_coordinate,
         personalized_snapshot_sets=tuple(
             PersonalizedSnapshotSet(client=buffer.client, snapshots=tuple(buffer.snapshots))
             for buffer in personalized_snapshots

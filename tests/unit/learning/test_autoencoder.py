@@ -9,7 +9,7 @@ from datp_core.learning.autoencoder import (
     clone_autoencoder_state,
     load_autoencoder_state,
 )
-from datp_core.protocols.training import AutoencoderProtocol
+from datp_core.protocols.training import AutoencoderArchitecture, AutoencoderProtocol
 
 
 def test_forward_output_shape_equals_input_shape() -> None:
@@ -37,7 +37,7 @@ def test_no_batchnorm_or_dropout_layers_are_introduced() -> None:
 
 
 def test_initialization_is_deterministic_from_the_seed() -> None:
-    protocol = AutoencoderProtocol(widths=(4, 3, 2, 3, 4))
+    protocol = AutoencoderProtocol(widths=AutoencoderArchitecture((4, 3, 2, 3, 4)))
     first = build_reconstruction_autoencoder(protocol, initialization_seed=Seed(7))
     second = build_reconstruction_autoencoder(protocol, initialization_seed=Seed(7))
     for left, right in zip(first.state_dict().values(), second.state_dict().values(), strict=True):
@@ -45,7 +45,7 @@ def test_initialization_is_deterministic_from_the_seed() -> None:
 
 
 def test_different_seeds_produce_different_initializations() -> None:
-    protocol = AutoencoderProtocol(widths=(4, 3, 2, 3, 4))
+    protocol = AutoencoderProtocol(widths=AutoencoderArchitecture((4, 3, 2, 3, 4)))
     first = build_reconstruction_autoencoder(protocol, initialization_seed=Seed(1))
     second = build_reconstruction_autoencoder(protocol, initialization_seed=Seed(2))
     mismatched = any(
@@ -56,7 +56,7 @@ def test_different_seeds_produce_different_initializations() -> None:
 
 
 def test_clone_and_load_state_round_trips_exactly() -> None:
-    protocol = AutoencoderProtocol(widths=(4, 3, 2, 3, 4))
+    protocol = AutoencoderProtocol(widths=AutoencoderArchitecture((4, 3, 2, 3, 4)))
     model = build_reconstruction_autoencoder(protocol, initialization_seed=Seed(3))
     cloned = clone_autoencoder_state(model)
     other = build_reconstruction_autoencoder(protocol, initialization_seed=Seed(4))

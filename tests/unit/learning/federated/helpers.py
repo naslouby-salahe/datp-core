@@ -31,7 +31,11 @@ from datp_core.domain.values.ratios import (
     LearningRate,
     ProximalCoefficient,
 )
-from datp_core.learning.federated.models import ClientTrainingInput, FederatedTrainingCoordinate
+from datp_core.learning.federated.models import (
+    ClientTrainingInput,
+    DittoTrainingCoordinates,
+    FederatedTrainingCoordinate,
+)
 from datp_core.preprocessing.contracts import PreprocessingFitScope, TrustedEstimatorClassName
 from datp_core.preprocessing.models import (
     FederatedFittedPreprocessingState,
@@ -41,6 +45,7 @@ from datp_core.protocols.checkpoints import CheckpointProtocol
 from datp_core.protocols.training import (
     DITTO_REGULARIZATION_GRID,
     WEIGHT_DECAY,
+    AutoencoderArchitecture,
     AutoencoderProtocol,
     DittoProtocol,
     FedAvgProtocol,
@@ -49,7 +54,7 @@ from datp_core.protocols.training import (
 )
 
 FEATURE_NAMES = FeatureNameSequence((FeatureName("f0"), FeatureName("f1"), FeatureName("f2"), FeatureName("f3")))
-AUTOENCODER = AutoencoderProtocol(widths=(4, 3, 2, 3, 4))
+AUTOENCODER = AutoencoderProtocol(widths=AutoencoderArchitecture((4, 3, 2, 3, 4)))
 CHECKPOINT = CheckpointProtocol(candidates=(RoundNumber(1), RoundNumber(2)), maximum_round=RoundNumber(2))
 LEARNING_RATE = LearningRate(0.01)
 BATCH_SIZE = BatchSize(4)
@@ -101,25 +106,16 @@ def fedprox_protocol(coefficient: ProximalCoefficient) -> FedProxProtocol:
 
 def ditto_coordinates(
     seed: Seed,
-) -> tuple[FederatedTrainingCoordinate, FederatedTrainingCoordinate, DittoRegularization]:
+) -> tuple[DittoTrainingCoordinates, DittoRegularization]:
     regularization = DITTO_REGULARIZATION_GRID[1]
-    global_coordinate = FederatedTrainingCoordinate(
+    coordinates = DittoTrainingCoordinates.create(
         population=POPULATION,
         training_seed=seed,
         split_protocol=SPLIT_PROTOCOL,
         preprocessing_identity=PREPROCESSING_IDENTITY,
-        model=TrainingModelId.DITTO_GLOBAL_AUTOENCODER,
-        model_coefficient=regularization,
+        regularization=regularization,
     )
-    personalized_coordinate = FederatedTrainingCoordinate(
-        population=POPULATION,
-        training_seed=seed,
-        split_protocol=SPLIT_PROTOCOL,
-        preprocessing_identity=PREPROCESSING_IDENTITY,
-        model=TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER,
-        model_coefficient=regularization,
-    )
-    return global_coordinate, personalized_coordinate, regularization
+    return coordinates, regularization
 
 
 def ditto_protocol(regularization: DittoRegularization) -> DittoProtocol:

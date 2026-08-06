@@ -215,7 +215,7 @@ def _partition_source(
         )
         target = benign_counts if outcome is PopulationOutcomeLabel.BENIGN else attack_counts
         for index, row_count in enumerate(counts):
-            target[index] = target[index] + row_count
+            target[index] = target[index].plus(row_count)
     membership = pl.concat(membership_parts, how="vertical_relaxed").sort([CLIENT_ID_COLUMN, STABLE_ROW_ID_COLUMN])
     return membership, tuple(benign_counts), tuple(attack_counts)
 
@@ -231,14 +231,14 @@ def _build_diagnostics(
     partition_seed: Seed,
     minimum_benign_support: CalibrationSize,
 ) -> DirichletPartitionDiagnosticsDocument:
-    client_row_counts = tuple(benign + attack for benign, attack in zip(benign_counts, attack_counts, strict=True))
+    client_row_counts = tuple(benign.plus(attack) for benign, attack in zip(benign_counts, attack_counts, strict=True))
     empty_ids = tuple(
         client_id for client_id, count in zip(client_ids, client_row_counts, strict=True) if count.value == 0
     )
     insufficient = tuple(
         client_id
         for client_id, benign in zip(client_ids, benign_counts, strict=True)
-        if benign < minimum_benign_support
+        if not minimum_benign_support.fits_within(benign)
     )
     return DirichletPartitionDiagnosticsDocument(
         population=_DIRICHLET_POPULATION,

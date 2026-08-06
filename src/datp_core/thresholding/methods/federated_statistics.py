@@ -170,7 +170,7 @@ class FederatedStatisticsThresholdResult:
         require_unique_clients(summary_clients, "client summaries")
         validate_assignments(
             self.assignments,
-            tuple((client, self.matched_threshold) for client in summary_clients),
+            tuple(ThresholdAssignment(client, self.matched_threshold) for client in summary_clients),
             label="threshold assignments",
             mismatch_message=("every assignment in a shared threshold result must carry the identical shared value"),
         )

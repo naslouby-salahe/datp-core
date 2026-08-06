@@ -2,8 +2,7 @@
 
 from dagster import AssetSelection, ConfigurableResource, Definitions, asset, define_asset_job
 
-from datp_core.pipeline.execution.engine import build_campaign
-from datp_core.pipeline.planning import expand_experiment_plan
+from datp_core.pipeline.execution.engine import plan_and_build_campaign
 from datp_core.pipeline.workflows.confirmatory import analyze_confirmatory_campaign, run_confirmatory_campaign
 from datp_core.runtime.configuration import DATA_ROOT, OUTPUTS_ROOT
 
@@ -18,9 +17,8 @@ PIPELINE_PATHS = PipelinePaths(data_root=str(DATA_ROOT), outputs_root=str(OUTPUT
 
 @asset
 def deterministic_plan() -> str:
-    plan = expand_experiment_plan()
-    campaign = build_campaign(plan)
-    return f"{plan.digest}:{campaign.digest.value}"
+    plan, campaign = plan_and_build_campaign()
+    return f"{plan.digest.value}:{campaign.digest.value}"
 
 
 @asset(deps=["deterministic_plan"])

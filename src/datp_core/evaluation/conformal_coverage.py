@@ -152,7 +152,7 @@ def _coverage_metrics(
             ),
         )
     denominator = len(scores)
-    achieved = sum(item.score <= assignment.threshold for item in scores) / denominator
+    achieved = sum(not item.score.exceeds(assignment.threshold) for item in scores) / denominator
     signed_error = achieved - target_coverage.value
     return (
         available(MetricId.TARGET_COVERAGE, target_coverage.value),

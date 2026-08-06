@@ -28,10 +28,15 @@ from datp_core.learning.centralized.training import (
 from datp_core.preprocessing.contracts import PreprocessingFitScope, TrustedEstimatorClassName
 from datp_core.preprocessing.models import CentralizedFittedPreprocessingState, PreprocessingProtocol
 from datp_core.protocols.checkpoints import CheckpointProtocol
-from datp_core.protocols.training import AutoencoderProtocol, CentralizedTrainingProtocol, OptimizerProtocol
+from datp_core.protocols.training import (
+    AutoencoderArchitecture,
+    AutoencoderProtocol,
+    CentralizedTrainingProtocol,
+    OptimizerProtocol,
+)
 
 FEATURE_NAMES = FeatureNameSequence((FeatureName("f0"), FeatureName("f1"), FeatureName("f2"), FeatureName("f3")))
-AUTOENCODER = AutoencoderProtocol(widths=(4, 3, 2, 3, 4))
+AUTOENCODER = AutoencoderProtocol(widths=AutoencoderArchitecture((4, 3, 2, 3, 4)))
 CHECKPOINT = CheckpointProtocol(candidates=(RoundNumber(2),), maximum_round=RoundNumber(2))
 TRAINING_PROTOCOL = CentralizedTrainingProtocol(
     kind=CentralizedModelId.CENTRALIZED_AUTOENCODER,

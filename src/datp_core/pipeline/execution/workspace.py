@@ -19,6 +19,7 @@ from datp_core.learning.federated.checkpoints.selection import CheckpointDecisio
 from datp_core.learning.federated.models import CheckpointCandidate
 from datp_core.learning.federated.training import FederatedTrainingRequest
 from datp_core.pipeline.checkpoints.service import SelectFederatedCheckpointRequest, select_federated_primary_checkpoint
+from datp_core.pipeline.coordinates import ExperimentCoordinate
 from datp_core.pipeline.decision.federated import (
     ConstructFederatedThresholdsRequest,
     EvaluateFederatedDetectorRequest,
@@ -37,7 +38,6 @@ from datp_core.pipeline.execution.context import (
 from datp_core.pipeline.execution.evidence import eligible_calibration_scores, load_evaluation_document
 from datp_core.pipeline.execution.layout import EvaluationRunAssetDirectory, ExecutionArtifactDirectory
 from datp_core.pipeline.execution.score_generation import score_selected_checkpoint
-from datp_core.pipeline.planning import ExperimentCoordinate
 from datp_core.pipeline.publication.layout import evaluation_run_directory
 from datp_core.pipeline.scoring.models import FederatedScoreArtifactManifest
 from datp_core.pipeline.training.federated import (
@@ -153,12 +153,12 @@ class ExperimentWorkspace:
         result = construct_federated_thresholds(
             ConstructFederatedThresholdsRequest(
                 request=ThresholdConstructionRequest(
-                    self.coordinate.threshold_method,
-                    self.scores.coordinate,
-                    CANONICAL_QUANTILE,
-                    population_capabilities(self.coordinate.population),
-                    self.eligible_calibration_scores(),
-                    self.context.family_by_client,
+                    method=self.coordinate.threshold_method,
+                    coordinate=self.scores.coordinate,
+                    quantile=CANONICAL_QUANTILE,
+                    capabilities=population_capabilities(self.coordinate.population),
+                    eligible=self.eligible_calibration_scores(),
+                    family_by_client=self.context.family_by_client,
                 ),
                 output_directory=self.run_directory() / EvaluationRunAssetDirectory.THRESHOLD,
                 overwrite=False,

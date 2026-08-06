@@ -1,3 +1,4 @@
+from functools import reduce
 from pathlib import Path
 
 import polars as pl
@@ -10,7 +11,7 @@ from datp_core.datasets.partitioning.contracts import (
     iid_condition,
 )
 from datp_core.domain.enums import SplitProtocolId
-from datp_core.domain.values.counts import Seed
+from datp_core.domain.values.counts import RowCount, Seed
 from datp_core.domain.values.ratios import DirichletConcentration
 from datp_core.protocols.calibration import MINIMUM_BENIGN_SUPPORT
 
@@ -30,7 +31,7 @@ def test_dirichlet_never_drops_or_duplicates_rows(seed: Seed, alpha: float, nbai
     membership, diagnostics = construction.membership, construction.diagnostics
     assert isinstance(diagnostics, DirichletPartitionDiagnosticsDocument)
     assert membership.get_column("stable_row_id").n_unique() == membership.height
-    assert sum(diagnostics.client_row_counts) == membership.height
+    assert reduce(RowCount.plus, diagnostics.client_row_counts, RowCount(0)).value == membership.height
     assert membership.group_by("stable_row_id").len().filter(pl.col("len") != 1).height == 0
 
 
@@ -44,4 +45,4 @@ def test_iid_conserves_rows(nbaiot_canonical_root: Path) -> None:
     )
     diagnostics = construction.diagnostics
     assert isinstance(diagnostics, DirichletPartitionDiagnosticsDocument)
-    assert sum(diagnostics.client_row_counts) == construction.membership.height
+    assert reduce(RowCount.plus, diagnostics.client_row_counts, RowCount(0)).value == construction.membership.height

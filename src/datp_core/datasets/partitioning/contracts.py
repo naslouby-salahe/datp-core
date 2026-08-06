@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from enum import StrEnum
-from functools import total_ordering
+from functools import reduce, total_ordering
 from pathlib import Path
 
 import polars as pl
@@ -24,6 +24,7 @@ from datp_core.domain.errors import CapabilityError
 from datp_core.domain.values.base import NonNegativeIntegerValue
 from datp_core.domain.values.checksums import Checksum, checksum_text
 from datp_core.domain.values.counts import ClientCount, RowCount, Seed
+from datp_core.domain.values.identifiers import CaptureTimestampColumn
 from datp_core.domain.values.ratios import DirichletConcentration
 from datp_core.protocols.populations import PopulationDeclaration
 
@@ -205,7 +206,7 @@ class SplitManifestDocument(StrictModel):
             self.future_recalibration_row_count,
             self.static_reference_reserve_row_count,
         )
-        if sum(counts) != self.assignment_row_count:
+        if reduce(RowCount.plus, counts) != self.assignment_row_count:
             raise ValueError("partition role counts must sum to assignment rows")
         return self
 
@@ -373,7 +374,7 @@ class SplitConstructionRequest:
     partition_seed: Seed
     split_protocol: SplitProtocolId
     population_manifest_checksum: Checksum
-    capture_timestamp_column: str | None = None
+    capture_timestamp_column: CaptureTimestampColumn | None = None
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -418,7 +419,7 @@ class PopulationConstructionRequest:
 class PreprocessingHandoffRequest:
     construction: PopulationConstructionResult
     deployment_fallback_client_ids: frozenset[str]
-    capture_timestamp_column: str | None = None
+    capture_timestamp_column: CaptureTimestampColumn | None = None
 
 
 @dataclass(slots=True, eq=False)
@@ -637,7 +638,7 @@ def _require_non_negative_row_counts(
     benign: RowCount,
     attack: RowCount,
 ) -> None:
-    if benign + attack != total:
+    if benign.plus(attack) != total:
         raise ValueError("benign and attack rows must sum to total membership rows")
 
 
@@ -659,9 +660,11 @@ def _require_client_series_shape(
 def _require_row_conservation(
     document: DirichletPartitionDiagnosticsDocument,
 ) -> None:
-    if sum(document.client_row_counts) != document.total_rows:
+    if reduce(RowCount.plus, document.client_row_counts, RowCount(0)) != document.total_rows:
         raise ValueError("client row counts must conserve total rows")
-    if sum(document.benign_row_counts) + sum(document.attack_row_counts) != document.total_rows:
+    benign_total = reduce(RowCount.plus, document.benign_row_counts, RowCount(0))
+    attack_total = reduce(RowCount.plus, document.attack_row_counts, RowCount(0))
+    if benign_total.plus(attack_total) != document.total_rows:
         raise ValueError("benign and attack counts must conserve total rows")
 
 
@@ -670,7 +673,7 @@ def _require_partition_kind_fields(
 ) -> None:
     match document.partition_kind:
         case ControlledPartitionKind.DIRICHLET:
-            if document.concentration is None or document.concentration <= 0:
+            if document.concentration is None:
                 raise ValueError("Dirichlet diagnostics require a positive concentration")
         case ControlledPartitionKind.IID:
             if document.concentration is not None:

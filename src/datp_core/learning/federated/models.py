@@ -123,6 +123,59 @@ class FederatedTrainingCoordinate:
         )
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class DittoTrainingCoordinates:
+    """The one global/personalized coordinate pair for a Ditto experiment identity."""
+
+    global_coordinate: FederatedTrainingCoordinate
+    personalized_coordinate: FederatedTrainingCoordinate
+
+    def __post_init__(self) -> None:
+        if self.global_coordinate.model is not TrainingModelId.DITTO_GLOBAL_AUTOENCODER:
+            raise ScientificContractError(
+                "Ditto training coordinates require the DITTO_GLOBAL_AUTOENCODER global coordinate",
+                subject=ContractSubject.COORDINATE,
+            )
+        if self.personalized_coordinate.model is not TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER:
+            raise ScientificContractError(
+                "Ditto training coordinates require the DITTO_PERSONALIZED_AUTOENCODER personalized coordinate",
+                subject=ContractSubject.COORDINATE,
+            )
+        if not self.global_coordinate.matches_ditto_peer(self.personalized_coordinate):
+            raise ScientificContractError(
+                "Ditto global and personalized coordinates must share one experiment identity",
+                subject=ContractSubject.COORDINATE,
+            )
+
+    @classmethod
+    def create(
+        cls,
+        population: PopulationId,
+        training_seed: Seed,
+        split_protocol: SplitProtocolId,
+        preprocessing_identity: PreprocessingProtocolId,
+        regularization: DittoRegularization,
+    ) -> "DittoTrainingCoordinates":
+        return cls(
+            global_coordinate=FederatedTrainingCoordinate(
+                population=population,
+                training_seed=training_seed,
+                split_protocol=split_protocol,
+                preprocessing_identity=preprocessing_identity,
+                model=TrainingModelId.DITTO_GLOBAL_AUTOENCODER,
+                model_coefficient=regularization,
+            ),
+            personalized_coordinate=FederatedTrainingCoordinate(
+                population=population,
+                training_seed=training_seed,
+                split_protocol=split_protocol,
+                preprocessing_identity=preprocessing_identity,
+                model=TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER,
+                model_coefficient=regularization,
+            ),
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class PreparedClientProvenance:
     client: ClientIdentity

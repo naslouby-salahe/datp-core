@@ -79,4 +79,4 @@ def test_centralized_reference_uses_its_own_model_scores_and_threshold(tmp_path:
     assert scoring.calibration_scores.checkpoint_checksum == checkpoint.tensor_checksum
     assert scoring.evaluation_scores.checkpoint_checksum == checkpoint.tensor_checksum
     assert threshold.coordinate == coordinate
-    assert evaluation.evaluation_row_count == 40
+    assert evaluation.evaluation_row_count.value == 40

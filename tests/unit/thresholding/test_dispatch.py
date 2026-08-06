@@ -4,7 +4,7 @@ import pytest
 from tests.unit.thresholding.helpers import COORDINATE, client_scores
 
 from datp_core.datasets.capabilities import CapabilityStatus
-from datp_core.datasets.partitioning.contracts import ClientIdentity, PopulationCapabilities
+from datp_core.datasets.partitioning.contracts import PopulationCapabilities
 from datp_core.domain.enums import (
     CentralizedThresholdMethod,
     DatasetId,
@@ -17,6 +17,7 @@ from datp_core.domain.errors import CapabilityError, LeakageError, ScientificCon
 from datp_core.domain.values.counts import ClientCount
 from datp_core.domain.values.paths import FamilyIdentity
 from datp_core.domain.values.ratios import Quantile
+from datp_core.thresholding.assignments import FamilyAssignment
 from datp_core.thresholding.dispatch import (
     ThresholdConstructionRequest,
     dispatch_federated_threshold,
@@ -48,7 +49,7 @@ ELIGIBLE = tuple(
     for index in range(6)
 )
 FAMILY_A = FamilyIdentity("family_a")
-FAMILY_BY_CLIENT = tuple((item.client, FAMILY_A) for item in ELIGIBLE)
+FAMILY_BY_CLIENT = tuple(FamilyAssignment(client=item.client, family=FAMILY_A) for item in ELIGIBLE)
 
 
 def _capabilities(
@@ -80,7 +81,7 @@ def _request(
     *,
     capabilities: PopulationCapabilities = ALL_METHODS_CAPABILITIES,
     eligible: tuple[ClientBenignCalibrationScores, ...] = ELIGIBLE,
-    family_by_client: tuple[tuple[ClientIdentity, FamilyIdentity], ...] = FAMILY_BY_CLIENT,
+    family_by_client: tuple[FamilyAssignment, ...] = FAMILY_BY_CLIENT,
 ) -> ThresholdConstructionRequest:
     return ThresholdConstructionRequest(
         method=method,
@@ -225,8 +226,8 @@ def test_threshold_construction_request_rejects_mixed_coordinates() -> None:
 
 def test_threshold_construction_request_rejects_duplicate_family_taxonomy_client() -> None:
     duplicated = (
-        (ELIGIBLE[0].client, FAMILY_A),
-        (ELIGIBLE[0].client, FAMILY_A),
+        FamilyAssignment(client=ELIGIBLE[0].client, family=FAMILY_A),
+        FamilyAssignment(client=ELIGIBLE[0].client, family=FAMILY_A),
     )
     with pytest.raises(
         ScientificContractError,

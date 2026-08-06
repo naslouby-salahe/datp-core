@@ -27,6 +27,7 @@ from datp_core.domain.provenance import canonical_json_text
 from datp_core.domain.values.base import NonNegativeIntegerValue
 from datp_core.domain.values.checksums import Checksum, checksum_text
 from datp_core.domain.values.counts import ClientCount
+from datp_core.domain.values.identifiers import CaptureTimestampColumn
 from datp_core.preprocessing.models import PublishedFederatedPreprocessingRequest
 from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
 from datp_core.protocols.populations import split_protocol_for_population
@@ -270,7 +271,7 @@ def _validate_published_pair(
     if identity.population is PopulationId.EDGE_TEMPORAL_GROUPS and not use_static_reference:
         validate_no_future_history_leakage(
             assignments,
-            EdgeCanonicalColumn.CAPTURE_TIMESTAMP.value,
+            CaptureTimestampColumn(EdgeCanonicalColumn.CAPTURE_TIMESTAMP.value),
         )
 
 

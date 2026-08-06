@@ -1,29 +1,26 @@
 """Confirmatory, external, and temporal evidence analysis publication."""
 
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 
 from datp_core.analysis.contrasts import PairedContrast, SupplementaryPairedAnalysisPlan
-from datp_core.analysis.documents import (
-    AnalysisAssetName,
+from datp_core.analysis.inference.multiplicity import MultiplicityPlan
+from datp_core.analysis.mechanisms import MechanismEvidence
+from datp_core.analysis.preparation import (
     AnalysisDocument,
-    AnalysisPublication,
     ConfirmatoryAnalysisRequest,
     ExternalAnalysisDocument,
     ExternalAnalysisRequest,
     TemporalAnalysisDocument,
     TemporalAnalysisRequest,
-)
-from datp_core.analysis.inference.multiplicity import MultiplicityPlan
-from datp_core.analysis.mechanisms import MechanismEvidence
-from datp_core.analysis.preparation import (
     prepare_confirmatory_analysis,
     prepare_external_analysis,
     prepare_temporal_analysis,
 )
 from datp_core.analysis.temporal import TemporalRecoveryResult
 from datp_core.domain.enums import PublicationStatus
-from datp_core.domain.provenance import canonical_json_text
+from datp_core.domain.provenance import canonical_checksum, canonical_json_text
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import Seed
 from datp_core.pipeline.publication.service import (
@@ -35,6 +32,20 @@ from datp_core.pipeline.publication.service import (
 from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
 from datp_core.protocols.statistics import PairedInferenceProtocol
 from datp_core.protocols.temporal import TemporalDeploymentProvenance
+
+
+class AnalysisAssetName(StrEnum):
+    DOCUMENT = "analysis.json"
+    COMPLETE = "COMPLETE"
+    EXTERNAL_DOCUMENT = "external_analysis.json"
+    TEMPORAL_DOCUMENT = "temporal_analysis.json"
+
+
+@dataclass(frozen=True, slots=True)
+class AnalysisPublication[DocumentT]:
+    asset_name: AnalysisAssetName
+    document: DocumentT
+    digest: Checksum
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -95,7 +106,7 @@ class AnalyzeTemporalEvidenceResult:
 def analyze_confirmatory_evidence(
     request: AnalyzeConfirmatoryEvidenceRequest,
 ) -> AnalyzeConfirmatoryEvidenceResult:
-    prepared = prepare_confirmatory_analysis(
+    document = prepare_confirmatory_analysis(
         ConfirmatoryAnalysisRequest(
             contrasts=request.contrasts,
             inference_protocol=request.inference_protocol,
@@ -104,7 +115,11 @@ def analyze_confirmatory_evidence(
             mechanisms=request.mechanisms,
         )
     )
-    publication = _publish(request.output_directory, request.overwrite, prepared)
+    publication = _publish(
+        request.output_directory,
+        request.overwrite,
+        _publication(AnalysisAssetName.DOCUMENT, document),
+    )
     return AnalyzeConfirmatoryEvidenceResult(
         publication_status=publication.status,
         document=publication.value,
@@ -115,7 +130,7 @@ def analyze_confirmatory_evidence(
 def analyze_external_evidence(
     request: AnalyzeExternalEvidenceRequest,
 ) -> AnalyzeExternalEvidenceResult:
-    prepared = prepare_external_analysis(
+    document = prepare_external_analysis(
         ExternalAnalysisRequest(
             execution_identity=request.execution_identity,
             contrasts=request.contrasts,
@@ -123,7 +138,11 @@ def analyze_external_evidence(
             analysis_seed=request.analysis_seed,
         )
     )
-    publication = _publish(request.output_directory, request.overwrite, prepared)
+    publication = _publish(
+        request.output_directory,
+        request.overwrite,
+        _publication(AnalysisAssetName.EXTERNAL_DOCUMENT, document),
+    )
     return AnalyzeExternalEvidenceResult(
         publication_status=publication.status,
         document=publication.value,
@@ -134,7 +153,7 @@ def analyze_external_evidence(
 def analyze_temporal_evidence(
     request: AnalyzeTemporalEvidenceRequest,
 ) -> AnalyzeTemporalEvidenceResult:
-    prepared = prepare_temporal_analysis(
+    document = prepare_temporal_analysis(
         TemporalAnalysisRequest(
             static_reference_identity=request.static_reference_identity,
             frozen_identity=request.frozen_identity,
@@ -145,12 +164,20 @@ def analyze_temporal_evidence(
             records=request.records,
         )
     )
-    publication = _publish(request.output_directory, request.overwrite, prepared)
+    publication = _publish(
+        request.output_directory,
+        request.overwrite,
+        _publication(AnalysisAssetName.TEMPORAL_DOCUMENT, document),
+    )
     return AnalyzeTemporalEvidenceResult(
         publication_status=publication.status,
         document=publication.value,
         complete_digest=publication.complete_digest,
     )
+
+
+def _publication[DocumentT](asset_name: AnalysisAssetName, document: DocumentT) -> AnalysisPublication[DocumentT]:
+    return AnalysisPublication(asset_name=asset_name, document=document, digest=canonical_checksum(document))
 
 
 def _publish[DocumentT](

@@ -1,7 +1,8 @@
 """Training declarations and authoritative protocol resolution."""
 
 from collections.abc import Sequence
-from typing import Annotated, Literal
+from dataclasses import dataclass
+from typing import Annotated, Literal, overload
 
 from pydantic import Field, model_validator
 
@@ -15,6 +16,7 @@ from datp_core.domain.enums import (
     TrainingModelId,
 )
 from datp_core.domain.errors import LeakageError, ScientificContractError
+from datp_core.domain.values.base import sequence_pydantic_schema, validate_non_empty_tuple
 from datp_core.domain.values.counts import BatchSize, DataLoaderWorkerCount, LocalEpochCount, RoundNumber
 from datp_core.domain.values.ratios import (
     DittoRegularization,
@@ -29,14 +31,40 @@ from datp_core.domain.values.ratios import (
 from .checkpoints import CheckpointProtocol
 
 
-class AutoencoderProtocol(StrictModel):
+@dataclass(frozen=True, slots=True)
+class AutoencoderArchitecture(Sequence[int]):
+    """The one authoritative declaration of a symmetric autoencoder layer-width ladder."""
+
     widths: tuple[int, ...]
 
-    @model_validator(mode="after")
-    def validate_widths(self) -> "AutoencoderProtocol":
-        if not self.widths or any(isinstance(width, bool) or width < 1 for width in self.widths):
+    def __post_init__(self) -> None:
+        validate_non_empty_tuple(self.widths, "autoencoder architecture")
+        if len(self.widths) < 2:
+            raise ValueError("autoencoder architecture requires at least input and output layers")
+        if any(isinstance(width, bool) or not isinstance(width, int) or width < 1 for width in self.widths):
             raise ValueError("autoencoder widths must be positive integers")
-        return self
+        if self.widths[0] != self.widths[-1]:
+            raise ValueError("autoencoder input and output widths must match")
+
+    def __len__(self) -> int:
+        return len(self.widths)
+
+    @overload
+    def __getitem__(self, index: int) -> int: ...
+    @overload
+    def __getitem__(self, index: slice) -> tuple[int, ...]: ...
+    def __getitem__(self, index: int | slice) -> int | tuple[int, ...]:
+        return self.widths[index]
+
+    @property
+    def input_width(self) -> int:
+        return self.widths[0]
+
+    __get_pydantic_core_schema__ = classmethod(sequence_pydantic_schema)
+
+
+class AutoencoderProtocol(StrictModel):
+    widths: AutoencoderArchitecture
 
 
 class OptimizerProtocol(StrictModel):
@@ -70,6 +98,19 @@ TrainingProtocol = Annotated[FedAvgProtocol | FedProxProtocol | DittoProtocol, F
 class CentralizedTrainingProtocol(StrictModel):
     kind: Literal[CentralizedModelId.CENTRALIZED_AUTOENCODER]
     optimizer: OptimizerProtocol
+
+
+class ModelAbsorptionDecisionProtocol(StrictModel):
+    """Locked retention boundaries for the model-personalization absorption verdict."""
+
+    full_retention_minimum: Ratio
+    partial_retention_minimum: Ratio
+
+    @model_validator(mode="after")
+    def validate_ordering(self) -> "ModelAbsorptionDecisionProtocol":
+        if self.partial_retention_minimum.value >= self.full_retention_minimum.value:
+            raise ValueError("partial retention minimum must be below the full retention minimum")
+        return self
 
 
 CHECKPOINT_PROTOCOL = CheckpointProtocol(
@@ -119,9 +160,15 @@ FEDPROX_COEFFICIENTS = tuple(ProximalCoefficient(value) for value in (0.001, 0.0
 DITTO_RETAINED_EFFECT_MINIMUM = Ratio(0.75)
 DITTO_PARTIAL_EFFECT_MINIMUM = Ratio(0.25)
 DITTO_ALTERNATIVE_ROUTE_DIFFERENCE = MetricValue(0.05)
-NBAIOT_AUTOENCODER = AutoencoderProtocol(widths=(115, 86, 58, 38, 29, 38, 58, 86, 115))
-EDGE_IIOTSET_NUMERIC_AUTOENCODER = AutoencoderProtocol(widths=(33, 25, 17, 11, 8, 11, 17, 25, 33))
-CICIOT2023_AUTOENCODER = AutoencoderProtocol(widths=(39, 29, 20, 13, 10, 13, 20, 29, 39))
+MODEL_ABSORPTION_DECISION_PROTOCOL = ModelAbsorptionDecisionProtocol(
+    full_retention_minimum=DITTO_RETAINED_EFFECT_MINIMUM,
+    partial_retention_minimum=DITTO_PARTIAL_EFFECT_MINIMUM,
+)
+NBAIOT_AUTOENCODER = AutoencoderProtocol(widths=AutoencoderArchitecture((115, 86, 58, 38, 29, 38, 58, 86, 115)))
+EDGE_IIOTSET_NUMERIC_AUTOENCODER = AutoencoderProtocol(
+    widths=AutoencoderArchitecture((33, 25, 17, 11, 8, 11, 17, 25, 33))
+)
+CICIOT2023_AUTOENCODER = AutoencoderProtocol(widths=AutoencoderArchitecture((39, 29, 20, 13, 10, 13, 20, 29, 39)))
 WEIGHT_DECAY = WeightDecay(0.0)
 OPTIMIZER = OptimizerProtocol(identity=OptimizerId.ADAM, weight_decay=WEIGHT_DECAY)
 LEARNING_RATE = LearningRate(0.001)

@@ -172,22 +172,6 @@ class PublicationStatus(StrEnum):
     REUSED = "reused"
 
 
-class StageId(StrEnum):
-    """Eleven high-level pipeline stages. Branch-specific operations use StageOperationId."""
-
-    PREFLIGHT = "preflight"
-    DATASET_MATERIALIZATION = "dataset_materialization"
-    MODEL_TRAINING = "model_training"
-    CHECKPOINT_SELECTION = "checkpoint_selection"
-    SCORE_GENERATION = "score_generation"
-    CALIBRATION_SUBSAMPLING = "calibration_subsampling"
-    THRESHOLD_CONSTRUCTION = "threshold_construction"
-    EVALUATION = "evaluation"
-    STATISTICAL_ANALYSIS = "statistical_analysis"
-    REPORTING = "reporting"
-    FINALIZATION = "finalization"
-
-
 class StageOperationId(StrEnum):
     """Fine-grained stage-file operations under centralized/federated branches."""
 
@@ -209,15 +193,6 @@ class StageOperationId(StrEnum):
     TRAIN_CENTRALIZED_REFERENCE = "train_centralized_reference"
     TRAIN_FEDERATED = "train_federated"
     VERIFY_ANCHOR = "verify_anchor"
-
-
-class SplitId(StrEnum):
-    BENIGN_TRAINING = "benign_training"
-    BENIGN_CALIBRATION = "benign_calibration"
-    HELD_OUT_EVALUATION = "held_out_evaluation"
-    HISTORICAL_BENIGN_CALIBRATION = "historical_benign_calibration"
-    FUTURE_BENIGN_RECALIBRATION = "future_benign_recalibration"
-    FUTURE_HELD_OUT_EVALUATION = "future_held_out_evaluation"
 
 
 class TemporalState(StrEnum):
@@ -256,14 +231,6 @@ class CheckpointSelectionRule(StrEnum):
     """Locked non-test checkpoint selection algorithms."""
 
     FIXED_TERMINAL_MAXIMUM_ROUND = "fixed_terminal_maximum_round"
-
-
-class CompletionStatus(StrEnum):
-    NOT_STARTED = "not_started"
-    IN_PROGRESS = "in_progress"
-    COMPLETE = "complete"
-    FAILED = "failed"
-    BLOCKED = "blocked"
 
 
 class ProcessedDataBranch(StrEnum):
@@ -306,17 +273,6 @@ class PreprocessingProtocolId(StrEnum):
     FEDERATED_CLIENT_LOCAL_STANDARD = "federated_client_local_standard"
     CENTRALIZED_POOLED_MIN_MAX = "centralized_pooled_min_max"
     TEST_COLUMN_ORDER_PROJECTION = "test_column_order_projection"
-
-
-class TrustedEstimatorModule(StrEnum):
-    SKLEARN_PREPROCESSING = "sklearn_preprocessing"
-
-
-class PreprocessExecutionStatus(StrEnum):
-    BLOCKED_SCIENTIFIC_VALUE = "blocked_scientific_value"
-    BLOCKED_POPULATION_CONSTRUCTION = "blocked_population_construction"
-    PUBLISHED = "published"
-    REUSED = "reused"
 
 
 class ContractSubject(StrEnum):

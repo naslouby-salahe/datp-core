@@ -16,7 +16,7 @@ from datp_core.datasets.registry import construct_population, dataset_binding, r
 from datp_core.domain.enums import ContractSubject, DatasetId, PopulationId, PreprocessingProtocolId, SplitProtocolId
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.counts import ClientPublicationCount
-from datp_core.domain.values.identifiers import FeatureNameSequence
+from datp_core.domain.values.identifiers import CaptureTimestampColumn, FeatureNameSequence
 from datp_core.preprocessing.ciciot_file_clients import preprocess_ciciot_client_local
 from datp_core.preprocessing.client_partitions import (
     client_partitions,
@@ -238,7 +238,7 @@ def _validate_artifact_request(
 
 def _capture_timestamp_column(
     request: FederatedPreprocessingRequest,
-) -> str | None:
+) -> CaptureTimestampColumn | None:
     return _capture_timestamp_column_for(
         request.population,
         request.split_protocol,
@@ -249,18 +249,16 @@ def _capture_timestamp_column(
 def _capture_timestamp_column_for(
     population: PopulationId,
     split_protocol: SplitProtocolId,
-    capture_timestamp_column: str | None,
-) -> str | None:
+    capture_timestamp_column: CaptureTimestampColumn | None,
+) -> CaptureTimestampColumn | None:
+    audited_column = CaptureTimestampColumn(EdgeCanonicalColumn.CAPTURE_TIMESTAMP.value)
     if split_protocol is SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE:
-        if capture_timestamp_column not in {
-            None,
-            EdgeCanonicalColumn.CAPTURE_TIMESTAMP.value,
-        }:
+        if capture_timestamp_column not in {None, audited_column}:
             raise ScientificContractError(
                 "temporal preprocessing must use the audited Edge capture timestamp column",
                 subject=population,
             )
-        return EdgeCanonicalColumn.CAPTURE_TIMESTAMP.value
+        return audited_column
     return capture_timestamp_column
 
 

@@ -14,6 +14,7 @@ from datp_core.domain.values.counts import Seed
 from datp_core.domain.values.ratios import MetricValue
 from datp_core.evaluation.federated.contracts import FederatedEvaluationDocument
 from datp_core.evaluation.federated.publication import FederatedEvaluationAssetName
+from datp_core.pipeline.coordinates import ExperimentCoordinate
 from datp_core.pipeline.decision.evidence import AnalyzeConfirmatoryEvidenceRequest, analyze_confirmatory_evidence
 from datp_core.pipeline.execution.engine import (
     CompletionRecordOutputStore,
@@ -23,7 +24,7 @@ from datp_core.pipeline.execution.engine import (
 )
 from datp_core.pipeline.execution.evidence import load_evaluation_document, population_metric
 from datp_core.pipeline.execution.layout import EvaluationRunAssetDirectory
-from datp_core.pipeline.planning import ExperimentCoordinate, PlanDisposition, PlanningEvidence, expand_experiment_plan
+from datp_core.pipeline.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
 from datp_core.pipeline.publication.layout import evaluation_run_directory
 from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration
 from datp_core.protocols.seeds import CONFIRMATORY_ANALYSIS_SEED, CONFIRMATORY_SEED_COHORT, SeedCohort

@@ -1,11 +1,10 @@
 """Shared value-object comparison, arithmetic, and Pydantic-integration machinery."""
 
-from collections.abc import Callable
 from dataclasses import dataclass
 from functools import total_ordering
 from math import isclose, isfinite
 from types import NotImplementedType
-from typing import ClassVar, cast
+from typing import ClassVar, Self
 
 NUMERIC_ZERO: float = 0.0
 NO_RELATIVE_TOLERANCE: float = 0.0
@@ -50,12 +49,7 @@ def _numeric_value(instance: object) -> NumericValue:
 
 
 def _compatible_value(self: object, other: object) -> NumericValue | NotImplementedType:
-    if isinstance(other, (int, float)) and not isinstance(other, bool):
-        return other
     if type(other) is type(self):
-        return _numeric_value(other)
-    family = getattr(self, "comparison_family", None)
-    if family is not None and getattr(other, "comparison_family", None) == family:
         return _numeric_value(other)
     return NotImplemented
 
@@ -74,32 +68,11 @@ def _typed_eq(self: object, other: object) -> bool | NotImplementedType:
     return _numeric_value(self) == other_value
 
 
-def _add_impl[T: (PositiveIntegerValue, NonNegativeIntegerValue)](self: T, other: object) -> T | NotImplementedType:
-    self_value = _numeric_value(self)
-    if not isinstance(self_value, int):
-        return NotImplemented
-    constructor = cast(Callable[[int], T], type(self))
-    if isinstance(other, int) and not isinstance(other, bool):
-        return constructor(self_value + other)
-    if type(other) is type(self):
-        other_value = _numeric_value(other)
-        return constructor(self_value + int(other_value))
-    return NotImplemented
-
-
-def _radd_impl[T: (PositiveIntegerValue, NonNegativeIntegerValue)](self: T, other: object) -> T | NotImplementedType:
-    self_value = _numeric_value(self)
-    if isinstance(self_value, int) and isinstance(other, int) and not isinstance(other, bool):
-        constructor = cast(Callable[[int], T], type(self))
-        return constructor(other + self_value)
-    return NotImplemented
-
-
 def _coerce_instance(cls, value):
     return value if isinstance(value, cls) else cls(value)
 
 
-def _pydantic_value_schema(cls, _source_type, _handler):
+def pydantic_value_schema(cls, _source_type, _handler):
     """Validate a raw scalar into a value object and serialize its scalar value."""
     from pydantic_core import core_schema as _cs
 
@@ -109,7 +82,7 @@ def _pydantic_value_schema(cls, _source_type, _handler):
     )
 
 
-def _str_enum_schema(cls, _source_type, _handler):
+def str_enum_schema(cls, _source_type, _handler):
     """Validate a raw string into a StrEnum member."""
     from pydantic_core import core_schema as _cs
 
@@ -123,7 +96,7 @@ def _str_enum_schema(cls, _source_type, _handler):
     return _cs.no_info_plain_validator_function(_validate)
 
 
-def _str_subclass_schema(cls, _source_type, _handler):
+def str_subclass_schema(cls, _source_type, _handler):
     from pydantic_core import core_schema as _cs
 
     return _cs.no_info_plain_validator_function(
@@ -137,7 +110,6 @@ def _str_subclass_schema(cls, _source_type, _handler):
 class PositiveIntegerValue:
     value: int
     validation_name: ClassVar[str] = "value"
-    comparison_family: ClassVar[str | None] = None
 
     def __post_init__(self) -> None:
         _integer(self.value, self.validation_name, 1)
@@ -151,9 +123,12 @@ class PositiveIntegerValue:
     def __hash__(self) -> int:
         return hash(self.value)
 
-    __add__ = _add_impl
-    __radd__ = _radd_impl
-    __get_pydantic_core_schema__ = classmethod(_pydantic_value_schema)
+    def plus(self, other: Self) -> Self:
+        if type(other) is not type(self):
+            raise TypeError(f"{type(self).__name__}.plus requires another {type(self).__name__}")
+        return type(self)(self.value + other.value)
+
+    __get_pydantic_core_schema__ = classmethod(pydantic_value_schema)
 
 
 @total_ordering
@@ -161,7 +136,6 @@ class PositiveIntegerValue:
 class NonNegativeIntegerValue:
     value: int
     validation_name: ClassVar[str] = "value"
-    comparison_family: ClassVar[str | None] = None
 
     def __post_init__(self) -> None:
         _integer(self.value, self.validation_name, 0)
@@ -175,9 +149,12 @@ class NonNegativeIntegerValue:
     def __hash__(self) -> int:
         return hash(self.value)
 
-    __add__ = _add_impl
-    __radd__ = _radd_impl
-    __get_pydantic_core_schema__ = classmethod(_pydantic_value_schema)
+    def plus(self, other: Self) -> Self:
+        if type(other) is not type(self):
+            raise TypeError(f"{type(self).__name__}.plus requires another {type(self).__name__}")
+        return type(self)(self.value + other.value)
+
+    __get_pydantic_core_schema__ = classmethod(pydantic_value_schema)
 
 
 @total_ordering
@@ -185,7 +162,6 @@ class NonNegativeIntegerValue:
 class FiniteFloatValue:
     value: float
     validation_name: ClassVar[str] = "value"
-    comparison_family: ClassVar[str | None] = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "value", _number(self.value, self.validation_name))
@@ -202,7 +178,7 @@ class FiniteFloatValue:
     def __float__(self) -> float:
         return self.value
 
-    __get_pydantic_core_schema__ = classmethod(_pydantic_value_schema)
+    __get_pydantic_core_schema__ = classmethod(pydantic_value_schema)
 
 
 class PositiveFiniteFloatValue(FiniteFloatValue):
@@ -237,14 +213,14 @@ class _NonEmptyString(str):
     validation_name: ClassVar[str] = "value"
 
     def __new__(cls, value: str):
-        if not isinstance(value, str) or not value:
+        if not isinstance(value, str) or not value.strip():
             raise ValueError(f"{cls.validation_name} must be a non-empty string")
         return super().__new__(cls, value)
 
-    __get_pydantic_core_schema__ = classmethod(_str_subclass_schema)
+    __get_pydantic_core_schema__ = classmethod(str_subclass_schema)
 
 
-def _validate_non_empty_tuple(values: tuple, field_name: str) -> None:
+def validate_non_empty_tuple(values: tuple, field_name: str) -> None:
     if not isinstance(values, tuple) or not values:
         raise ValueError(f"{field_name} requires a non-empty tuple")
 
@@ -254,7 +230,7 @@ def _validate_unique(values: tuple, field_name: str) -> None:
         raise ValueError(f"{field_name} must be unique")
 
 
-def _sequence_pydantic_schema(cls, _source_type, _handler):
+def sequence_pydantic_schema(cls, _source_type, _handler):
     from pydantic_core import core_schema as _cs
 
     def _validate(value):

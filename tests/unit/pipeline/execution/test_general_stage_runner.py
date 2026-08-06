@@ -16,6 +16,7 @@ from datp_core.domain.enums import (
 from datp_core.domain.values.checksums import Checksum, checksum_bytes
 from datp_core.domain.values.counts import ByteCount, Seed
 from datp_core.domain.values.ratios import ModelCoefficientValue
+from datp_core.pipeline.coordinates import ExperimentCoordinate
 from datp_core.pipeline.execution.engine import CompletionRecordOutputStore, PipelineStageRunner
 from datp_core.pipeline.execution.models import (
     ExecutionProvenance,
@@ -23,7 +24,6 @@ from datp_core.pipeline.execution.models import (
     PipelineStage,
     StageOutcome,
 )
-from datp_core.pipeline.planning import ExperimentCoordinate
 from datp_core.pipeline.publication.layout import experiment_output_directory
 from datp_core.pipeline.publication.models import ArtifactKind, ArtifactRecord, ArtifactState
 from datp_core.pipeline.publication.service import build_completion_record, write_completion_record
@@ -132,7 +132,9 @@ def test_output_store_round_trips_a_valid_completion_record(tmp_path: Path) -> N
         byte_count=ByteCount(len(payload)),
         state=ArtifactState.PUBLISHED,
     )
-    record = build_completion_record(plan_digest="plan", campaign_digest="campaign", artifacts=(artifact,))
+    record = build_completion_record(
+        plan_digest=Checksum("plan"), campaign_digest=Checksum("campaign"), artifacts=(artifact,)
+    )
     write_completion_record(directory, record)
 
     assert store.state(coordinate(), tmp_path) is ExistingExperimentState.COMPLETE_VALID

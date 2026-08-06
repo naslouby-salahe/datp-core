@@ -22,6 +22,10 @@ class Quantile(OpenUnitIntervalValue):
 class CoverageTarget(OpenUnitIntervalValue):
     validation_name: ClassVar[str] = "coverage target"
 
+    @property
+    def significance(self) -> Ratio:
+        return Ratio(1.0 - self.value)
+
 
 class RankSum(NonNegativeFiniteFloatValue):
     validation_name: ClassVar[str] = "rank sum"
@@ -76,6 +80,10 @@ class ShrinkageWeight(ClosedUnitIntervalValue):
     validation_name: ClassVar[str] = "shrinkage weight"
 
 
+class NormalizedWeight(ClosedUnitIntervalValue):
+    validation_name: ClassVar[str] = "normalized weight"
+
+
 class SummaryCoefficient(PositiveFiniteFloatValue):
     validation_name: ClassVar[str] = "summary coefficient"
 
@@ -86,16 +94,22 @@ class ConfidenceLevel(OpenUnitIntervalValue):
 
 class ThresholdValue(FiniteFloatValue):
     validation_name: ClassVar[str] = "threshold"
-    comparison_family: ClassVar[str | None] = "anomaly_score"
 
 
 class ScoreValue(FiniteFloatValue):
     validation_name: ClassVar[str] = "score"
-    comparison_family: ClassVar[str | None] = "anomaly_score"
+
+    def exceeds(self, threshold: ThresholdValue) -> bool:
+        """The sole global operating rule: reconstruction error strictly exceeds threshold."""
+        return self.value > threshold.value
 
 
 class MetricValue(FiniteFloatValue):
     validation_name: ClassVar[str] = "metric"
+
+
+class MetricDelta(FiniteFloatValue):
+    validation_name: ClassVar[str] = "metric delta"
 
 
 class TrafficRatePerDay(NonNegativeFiniteFloatValue):

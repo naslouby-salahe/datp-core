@@ -12,7 +12,7 @@ from datp_core.domain.enums import (
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.checksums import checksum_text
 from datp_core.domain.values.counts import Seed
-from datp_core.domain.values.ratios import DittoRegularization
+from datp_core.domain.values.ratios import DittoRegularization, ScoreValue
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.pipeline.execution.engine import build_campaign
 from datp_core.pipeline.planning import expand_experiment_plan
@@ -61,7 +61,7 @@ def test_ditto_shared_threshold_accepts_distinct_personalized_model_checksums() 
         ClientBenignCalibrationScores(
             _ditto_client(f"device-{index}"),
             coordinate,
-            scores,
+            tuple(ScoreValue(value) for value in scores),
             checksum_text(f"calibration-manifest-{index}"),
             checksum_text(f"distinct-personalized-model-{index}"),
         )

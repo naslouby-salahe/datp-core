@@ -3,14 +3,13 @@ from pathlib import Path
 import pytest
 import torch
 
-from datp_core.domain.values.counts import Seed, WorkerCount
+from datp_core.domain.values.counts import Seed
 from datp_core.runtime.compute import (
-    canonical_worker_count,
     cuda_provenance,
     require_cuda_available,
     resolve_cuda_device,
 )
-from datp_core.runtime.configuration import CANONICAL_RUNTIME, RepositoryLayout
+from datp_core.runtime.configuration import CANONICAL_RUNTIME, CudaDeviceIndex, RepositoryLayout
 from datp_core.runtime.determinism import (
     configure_deterministic_execution,
     derive_worker_seed,
@@ -18,14 +17,13 @@ from datp_core.runtime.determinism import (
 )
 
 
-def test_canonical_runtime_owns_repository_layout_and_worker_limit() -> None:
+def test_canonical_runtime_owns_repository_layout_and_cuda_device_index() -> None:
     assert CANONICAL_RUNTIME.layout == RepositoryLayout(
         data_root=Path("data"),
         outputs_root=Path("outputs"),
         results_root=Path("results"),
     )
-    assert CANONICAL_RUNTIME.worker_count == WorkerCount(6)
-    assert canonical_worker_count() == WorkerCount(6)
+    assert CANONICAL_RUNTIME.cuda_device_index == CudaDeviceIndex(0)
 
 
 def test_repository_layout_rejects_ambiguous_roots() -> None:
@@ -41,7 +39,7 @@ def test_cuda_device_resolution_never_falls_back_to_cpu() -> None:
     assert device.type == "cuda"
     provenance = cuda_provenance()
     assert provenance.cuda_available is True
-    assert provenance.device_count >= 1
+    assert provenance.device_count.value >= 1
     assert provenance.device_name is not None
     assert provenance.torch_version
 

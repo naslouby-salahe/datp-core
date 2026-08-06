@@ -79,4 +79,4 @@ def test_end_to_end_centralized_pipeline_without_federated_artifacts(tmp_path: P
     assert checkpoint.tensor_path.is_file()
     assert scoring.calibration_scores.path.is_file()
     assert scoring.evaluation_scores.path.is_file()
-    assert evaluation.evaluation_row_count == 40
+    assert evaluation.evaluation_row_count.value == 40

@@ -5,18 +5,12 @@ from enum import StrEnum
 
 from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.enums import ContractSubject
-from datp_core.domain.errors import ScientificContractError
+from datp_core.domain.errors import ScientificContractError, require_contract
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import CalibrationSize, ReplicateIndex, RowCount, Seed
 from datp_core.domain.values.identifiers import StableRowId
 from datp_core.domain.values.ratios import ScoreValue
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
-
-
-def _raise_first_violation(*, requirements: tuple[tuple[bool, str], ...], subject: ContractSubject) -> None:
-    for satisfied, message in requirements:
-        if not satisfied:
-            raise ScientificContractError(message, subject=subject)
 
 
 class CalibrationUnavailableReason(StrEnum):
@@ -52,32 +46,24 @@ class EligibilityDecision:
     reason: CalibrationUnavailableReason | None
 
     def __post_init__(self) -> None:
-        meets_minimum = self.support.benign_calibration_count >= self.minimum_support
+        meets_minimum = self.minimum_support.fits_within(self.support.benign_calibration_count)
         is_eligible = self.status is EligibilityStatus.ELIGIBLE
         is_excluded = self.status is EligibilityStatus.EXCLUDED
-        _raise_first_violation(
-            requirements=(
-                (
-                    not is_eligible or meets_minimum,
-                    "eligible status requires benign calibration count to meet the minimum support",
-                ),
-                (not is_eligible or self.reason is None, "eligible clients cannot carry an unavailability reason"),
-                (not is_excluded or self.reason is not None, "excluded clients require a typed unavailability reason"),
-            ),
-            subject=ContractSubject.CALIBRATION,
+        require_contract(
+            not is_eligible or meets_minimum,
+            "eligible status requires benign calibration count to meet the minimum support",
+            ContractSubject.CALIBRATION,
         )
-
-    @property
-    def client(self) -> ClientIdentity:
-        return self.support.client
-
-    @property
-    def coordinate(self) -> FederatedTrainingCoordinate:
-        return self.support.coordinate
-
-    @property
-    def benign_calibration_count(self) -> RowCount:
-        return self.support.benign_calibration_count
+        require_contract(
+            not is_eligible or self.reason is None,
+            "eligible clients cannot carry an unavailability reason",
+            ContractSubject.CALIBRATION,
+        )
+        require_contract(
+            not is_excluded or self.reason is not None,
+            "excluded clients require a typed unavailability reason",
+            ContractSubject.CALIBRATION,
+        )
 
     @property
     def is_eligible(self) -> bool:
@@ -131,7 +117,7 @@ class CalibrationSubsample:
         return self.references[0].client
 
     @property
-    def stable_row_id_set(self) -> frozenset[str]:
+    def stable_row_id_set(self) -> frozenset[StableRowId]:
         return frozenset(reference.stable_row_id for reference in self.references)
 
 

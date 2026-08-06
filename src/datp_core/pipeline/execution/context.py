@@ -20,12 +20,12 @@ from datp_core.learning.federated.models import (
     PreparedClientProvenance,
 )
 from datp_core.learning.federated.training import preprocessing_state_set_checksum
+from datp_core.pipeline.coordinates import ExperimentCoordinate
 from datp_core.pipeline.execution.layout import (
     ExecutionArtifactDirectory,
     bounded_evidence_seed_directory,
     federated_training_directory,
 )
-from datp_core.pipeline.planning import ExperimentCoordinate
 from datp_core.pipeline.preparation.populations import (
     ConstructDeclaredPopulationRequest,
     ConstructPublishedPopulationRequest,
@@ -53,6 +53,7 @@ from datp_core.protocols.training import (
     resolve_single_model_federated_training_protocol,
 )
 from datp_core.runtime.configuration import DATA_ROOT
+from datp_core.thresholding.assignments import FamilyAssignment
 
 EDGE_FEATURE_NAMES = FeatureNameSequence(tuple(FeatureName(name) for name in EDGE_NUMERIC_FEATURE_COLUMNS))
 
@@ -62,7 +63,7 @@ class FederatedExecutionContext:
     coordinate: FederatedTrainingCoordinate
     execution_identity: ExternalTemporalExecutionIdentity | None
     clients: tuple[ClientIdentity, ...]
-    family_by_client: tuple[tuple[ClientIdentity, FamilyIdentity], ...]
+    family_by_client: tuple[FamilyAssignment, ...]
     preprocessing: FederatedPreprocessingOutcome
     preprocessing_state_set_checksum: Checksum
     split_manifest_checksum: Checksum
@@ -251,8 +252,11 @@ def client_scoring_inputs(
 def family_identities(
     clients: tuple[ClientIdentity, ...],
     family_by_client: tuple[tuple[str, str], ...],
-) -> tuple[tuple[ClientIdentity, FamilyIdentity], ...]:
-    return tuple((client_with_id(clients, client_id), FamilyIdentity(family)) for client_id, family in family_by_client)
+) -> tuple[FamilyAssignment, ...]:
+    return tuple(
+        FamilyAssignment(client=client_with_id(clients, client_id), family=FamilyIdentity(family))
+        for client_id, family in family_by_client
+    )
 
 
 def client_with_id(clients: tuple[ClientIdentity, ...], client_id: str) -> ClientIdentity:

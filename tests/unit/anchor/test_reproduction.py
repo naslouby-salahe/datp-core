@@ -3,14 +3,12 @@ from pathlib import Path
 import pytest
 from tests.unit.anchor.helpers import make_observation, matching_anchor_observations
 
-from datp_core.anchor.models import (
+from datp_core.anchor.reproduction import (
     ANCHOR_CHECKPOINT_STATUS,
     ANCHOR_METRIC,
     ANCHOR_POPULATION,
     ANCHOR_TRAINING_MODEL,
     HistoricalMetricArtifactSource,
-)
-from datp_core.anchor.reproduction import (
     historical_sources_for_seed_directories,
     load_historical_observations,
     references_from_protocol,

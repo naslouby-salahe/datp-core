@@ -6,9 +6,12 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
+from pydantic import model_validator
+
+from datp_core.domain.contracts import StrictModel
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import ByteCount
-from datp_core.pipeline.planning import ExperimentCoordinate
+from datp_core.pipeline.coordinates import ExperimentCoordinate
 
 
 class ArtifactKind(StrEnum):
@@ -48,14 +51,14 @@ class ArtifactRecord:
             raise ValueError("artifact paths must remain inside the publication root")
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
-class CompletionRecord:
+class CompletionRecord(StrictModel):
     plan_digest: Checksum
     campaign_digest: Checksum
     artifacts: tuple[ArtifactRecord, ...]
     state: CompletionState
 
-    def __post_init__(self) -> None:
+    @model_validator(mode="after")
+    def _validate_artifacts(self) -> CompletionRecord:
         paths = tuple(item.relative_path for item in self.artifacts)
         if len(paths) != len(frozenset(paths)):
             raise ValueError("completion-record artifact paths must be unique")
@@ -65,6 +68,7 @@ class CompletionRecord:
             item.state is not ArtifactState.PUBLISHED for item in self.artifacts
         ):
             raise ValueError("complete records may contain only published artifacts")
+        return self
 
     @property
     def complete(self) -> bool:

@@ -21,13 +21,11 @@ from datp_core.domain.enums import (
     PreprocessingProtocolId,
     ScoreFrameColumn,
     SplitProtocolId,
-    TrainingModelId,
 )
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.checksums import Checksum, checksum_file
 from datp_core.domain.values.counts import ClientCount, Seed
 from datp_core.domain.values.identifiers import FeatureNameSequence
-from datp_core.domain.values.paths import FamilyIdentity
 from datp_core.domain.values.ratios import DittoRegularization, ScoreValue
 from datp_core.evaluation.client_metrics import calculate_client_metrics
 from datp_core.evaluation.cohort.construction import build_evaluation_cohort_manifest
@@ -36,7 +34,11 @@ from datp_core.evaluation.confusion import calculate_confusion_counts
 from datp_core.evaluation.fixed_score.checksums import evaluation_label_checksum, source_row_checksum
 from datp_core.evaluation.models import ClientMetricResult
 from datp_core.learning.federated.ditto import DittoTrainingRequest
-from datp_core.learning.federated.models import FederatedTrainingCoordinate, PreparedClientProvenance
+from datp_core.learning.federated.models import (
+    DittoTrainingCoordinates,
+    FederatedTrainingCoordinate,
+    PreparedClientProvenance,
+)
 from datp_core.learning.federated.training import preprocessing_state_set_checksum
 from datp_core.pipeline.checkpoints.service import SelectFederatedCheckpointRequest, select_federated_primary_checkpoint
 from datp_core.pipeline.decision.federated import ConstructFederatedThresholdsRequest, construct_federated_thresholds
@@ -46,6 +48,7 @@ from datp_core.pipeline.execution.context import (
     family_identities,
     training_feature_names,
 )
+from datp_core.pipeline.execution.layout import ExecutionArtifactDirectory, ExecutionRootDirectory
 from datp_core.pipeline.preparation.populations import ConstructDeclaredPopulationRequest, construct_declared_population
 from datp_core.pipeline.scoring.federated import publish_federated_scores
 from datp_core.pipeline.scoring.models import (
@@ -75,7 +78,7 @@ from datp_core.protocols.training import (
     resolve_ditto_protocol,
 )
 from datp_core.runtime.configuration import DATA_ROOT, OUTPUTS_ROOT
-from datp_core.thresholding.assignments import ThresholdAssignment
+from datp_core.thresholding.assignments import FamilyAssignment, ThresholdAssignment
 from datp_core.thresholding.dispatch import ThresholdConstructionRequest
 from datp_core.thresholding.methods.local import LocalThresholdResult
 from datp_core.thresholding.methods.shared import SharedThresholdResult
@@ -100,7 +103,7 @@ class DittoStressTestResult:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class DittoPopulationContext:
     clients: tuple[ClientIdentity, ...]
-    family_by_client: tuple[tuple[ClientIdentity, FamilyIdentity], ...]
+    family_by_client: tuple[FamilyAssignment, ...]
     preprocessing: FederatedPreprocessingOutcome
     split_manifest_checksum: Checksum
     preprocessing_state_set_checksum: Checksum
@@ -122,28 +125,19 @@ def run_ditto_stress_test_seed(*, training_seed: Seed, regularization: DittoRegu
         split_protocol=split_protocol,
         preprocessing_identity=preprocessing_identity,
     )
-    global_coordinate = FederatedTrainingCoordinate(
+    coordinates = DittoTrainingCoordinates.create(
         population=population,
         training_seed=training_seed,
         split_protocol=split_protocol,
         preprocessing_identity=preprocessing_identity,
-        model=TrainingModelId.DITTO_GLOBAL_AUTOENCODER,
-        model_coefficient=None,
+        regularization=regularization,
     )
-    personalized_coordinate = FederatedTrainingCoordinate(
-        population=population,
-        training_seed=training_seed,
-        split_protocol=split_protocol,
-        preprocessing_identity=preprocessing_identity,
-        model=TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER,
-        model_coefficient=regularization,
-    )
+    personalized_coordinate = coordinates.personalized_coordinate
     feature_names = training_feature_names(DatasetId.NBAIOT)
     training = train_ditto_detector(
         TrainDittoDetectorRequest(
             request=DittoTrainingRequest(
-                global_coordinate=global_coordinate,
-                personalized_coordinate=personalized_coordinate,
+                coordinates=coordinates,
                 clients=client_training_inputs(
                     context.preprocessing.client_publications, context.clients, feature_names
                 ),
@@ -180,12 +174,12 @@ def run_ditto_stress_test_seed(*, training_seed: Seed, regularization: DittoRegu
     shared = construct_federated_thresholds(
         ConstructFederatedThresholdsRequest(
             request=ThresholdConstructionRequest(
-                FederatedThresholdMethod.SHARED_THRESHOLD,
-                personalized_coordinate,
-                CANONICAL_QUANTILE,
-                capabilities,
-                scores.eligible_calibration,
-                context.family_by_client,
+                method=FederatedThresholdMethod.SHARED_THRESHOLD,
+                coordinate=personalized_coordinate,
+                quantile=CANONICAL_QUANTILE,
+                capabilities=capabilities,
+                eligible=scores.eligible_calibration,
+                family_by_client=context.family_by_client,
             ),
             output_directory=threshold_directory / FederatedThresholdMethod.SHARED_THRESHOLD.value,
             overwrite=False,
@@ -194,12 +188,12 @@ def run_ditto_stress_test_seed(*, training_seed: Seed, regularization: DittoRegu
     local = construct_federated_thresholds(
         ConstructFederatedThresholdsRequest(
             request=ThresholdConstructionRequest(
-                FederatedThresholdMethod.LOCAL_THRESHOLD,
-                personalized_coordinate,
-                CANONICAL_QUANTILE,
-                capabilities,
-                scores.eligible_calibration,
-                context.family_by_client,
+                method=FederatedThresholdMethod.LOCAL_THRESHOLD,
+                coordinate=personalized_coordinate,
+                quantile=CANONICAL_QUANTILE,
+                capabilities=capabilities,
+                eligible=scores.eligible_calibration,
+                family_by_client=context.family_by_client,
             ),
             output_directory=threshold_directory / FederatedThresholdMethod.LOCAL_THRESHOLD.value,
             overwrite=False,
@@ -253,7 +247,7 @@ def _population_context(
         ConstructDeclaredPopulationRequest(
             population=population,
             dataset=DatasetId.NBAIOT,
-            canonical_root=DATA_ROOT / "canonical" / DatasetId.NBAIOT.value,
+            canonical_root=DATA_ROOT / ExecutionArtifactDirectory.CANONICAL_DATA / DatasetId.NBAIOT.value,
             partition_seed=training_seed,
             split_protocol=split_protocol,
             controlled_condition=None,
@@ -322,7 +316,7 @@ def _personalized_scores(
                 feature_names=feature_names,
                 clients=(_client_scoring_input(context.preprocessing.client_publications, client),),
                 batch_size=BATCH_SIZE,
-                output_directory=personalized_directory / client.client_id / "scores",
+                output_directory=personalized_directory / client.client_id / ExecutionArtifactDirectory.SCORES,
                 preprocessing_state_set_checksum=context.preprocessing_state_set_checksum,
                 split_manifest_checksum=context.split_manifest_checksum,
                 overwrite=False,
@@ -336,7 +330,7 @@ def _personalized_scores(
                 client,
                 personalized_coordinate,
                 tuple(
-                    float(value)
+                    ScoreValue(float(value))
                     for value in pl.read_parquet(record.path)[ScoreFrameColumn.RECONSTRUCTION_ERROR.value].to_list()
                 ),
                 checksum_file(record.path),
@@ -441,7 +435,7 @@ def ditto_directory(
 ) -> Path:
     return (
         OUTPUTS_ROOT
-        / "ditto_stress_test"
+        / ExecutionRootDirectory.DITTO_STRESS_TEST
         / PopulationId.NBAIOT_NATURAL_DEVICES.value
         / str(training_seed.value)
         / str(regularization.value)

@@ -88,7 +88,7 @@ def test_eligibility_decision_excluded_requires_a_reason() -> None:
         build()
 
 
-def test_eligibility_decision_derives_support_coordinates() -> None:
+def test_eligibility_decision_is_eligible_reflects_status() -> None:
     support = _support(120)
     decision = EligibilityDecision(
         support=support,
@@ -97,9 +97,6 @@ def test_eligibility_decision_derives_support_coordinates() -> None:
         reason=None,
     )
     assert decision.is_eligible
-    assert decision.client == support.client
-    assert decision.coordinate == support.coordinate
-    assert decision.benign_calibration_count == support.benign_calibration_count
 
 
 def test_calibration_subsample_rejects_size_mismatch() -> None:

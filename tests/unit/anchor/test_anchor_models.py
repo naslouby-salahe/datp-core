@@ -3,17 +3,19 @@ from pathlib import Path
 import pytest
 from tests.unit.anchor.helpers import make_reference
 
-from datp_core.anchor.models import (
-    ANCHOR_CHECKPOINT_STATUS,
-    ANCHOR_METRIC,
-    ANCHOR_POPULATION,
-    ANCHOR_TRAINING_MODEL,
+from datp_core.anchor.comparison import (
     AbsoluteToleranceRule,
     AnchorObservationSourceKind,
     AnchorObservedMetric,
     ExactEqualityRule,
     MetricInterval,
     RelativeToleranceRule,
+)
+from datp_core.anchor.reproduction import (
+    ANCHOR_CHECKPOINT_STATUS,
+    ANCHOR_METRIC,
+    ANCHOR_POPULATION,
+    ANCHOR_TRAINING_MODEL,
 )
 from datp_core.domain.enums import (
     CheckpointStatus,
@@ -23,6 +25,7 @@ from datp_core.domain.enums import (
     PopulationId,
     TrainingModelId,
 )
+from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import Seed
 from datp_core.domain.values.ratios import MetricValue
@@ -44,7 +47,7 @@ def test_reference_locks_historical_coordinates() -> None:
 
 
 def test_reference_rejects_non_historical_checkpoint_semantics() -> None:
-    with pytest.raises(ValueError, match="historical endpoint"):
+    with pytest.raises(ScientificContractError, match="historical endpoint"):
         make_reference(
             rule=ExactEqualityRule(),
             checkpoint_status=CheckpointStatus.SELECTED_BY_NON_TEST_RULE,

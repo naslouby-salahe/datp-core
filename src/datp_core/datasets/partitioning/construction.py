@@ -154,7 +154,7 @@ def feasibility_from_candidates(request: FeasibilityAssessmentRequest) -> Popula
             accepted_n,
             "observed candidate identities disagree with the audited identity set",
         )
-    if not request.chronology_required and len(request.candidate_ids) != request.expected_count:
+    if not request.chronology_required and len(request.candidate_ids) != request.expected_count.value:
         return _infeasible(
             PopulationFeasibilityReason.CANDIDATE_COUNT_MISMATCH,
             expected,

@@ -16,14 +16,13 @@ from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import Seed
 from datp_core.learning.federated.ditto import DittoTrainingRequest, train_ditto
-from datp_core.learning.federated.models import FederatedTrainingCoordinate
+from datp_core.learning.federated.models import DittoTrainingCoordinates, FederatedTrainingCoordinate
 
 
 def _request(tmp_path: Path) -> DittoTrainingRequest:
-    global_coordinate, personalized_coordinate, regularization = ditto_coordinates(Seed(0))
+    coordinates, regularization = ditto_coordinates(Seed(0))
     return DittoTrainingRequest(
-        global_coordinate=global_coordinate,
-        personalized_coordinate=personalized_coordinate,
+        coordinates=coordinates,
         clients=build_all_client_inputs(tmp_path),
         population_client_count=POPULATION_CLIENT_COUNT,
         autoencoder=AUTOENCODER,
@@ -88,8 +87,7 @@ def test_train_ditto_records_personalized_state_references_every_round(tmp_path:
 def test_train_ditto_rejects_partial_participation(tmp_path: Path) -> None:
     request = _request(tmp_path)
     single_client_request = DittoTrainingRequest(
-        global_coordinate=request.global_coordinate,
-        personalized_coordinate=request.personalized_coordinate,
+        coordinates=request.coordinates,
         clients=(request.clients[0],),
         population_client_count=request.population_client_count,
         autoencoder=request.autoencoder,
@@ -106,33 +104,22 @@ def test_train_ditto_rejects_partial_participation(tmp_path: Path) -> None:
         train_ditto(single_client_request)
 
 
-def test_train_ditto_rejects_mismatched_global_and_personalized_regularization(tmp_path: Path) -> None:
+def test_ditto_training_coordinates_reject_mismatched_regularization(tmp_path: Path) -> None:
+    del tmp_path
     from datp_core.protocols.training import DITTO_REGULARIZATION_GRID
 
-    request = _request(tmp_path)
+    coordinates, _ = ditto_coordinates(Seed(0))
 
     mismatched_personalized = FederatedTrainingCoordinate(
-        population=request.personalized_coordinate.population,
-        training_seed=request.personalized_coordinate.training_seed,
-        split_protocol=request.personalized_coordinate.split_protocol,
-        preprocessing_identity=request.personalized_coordinate.preprocessing_identity,
-        model=request.personalized_coordinate.model,
+        population=coordinates.personalized_coordinate.population,
+        training_seed=coordinates.personalized_coordinate.training_seed,
+        split_protocol=coordinates.personalized_coordinate.split_protocol,
+        preprocessing_identity=coordinates.personalized_coordinate.preprocessing_identity,
+        model=coordinates.personalized_coordinate.model,
         model_coefficient=DITTO_REGULARIZATION_GRID[0],
     )
-    mismatched = DittoTrainingRequest(
-        global_coordinate=request.global_coordinate,
-        personalized_coordinate=mismatched_personalized,
-        clients=request.clients,
-        population_client_count=request.population_client_count,
-        autoencoder=request.autoencoder,
-        training_protocol=request.training_protocol,
-        checkpoint_protocol=request.checkpoint_protocol,
-        training_seed=request.training_seed,
-        batch_size=request.batch_size,
-        learning_rate=request.learning_rate,
-        split_manifest_checksum=request.split_manifest_checksum,
-        global_output_directory=request.global_output_directory,
-        personalized_output_directory=request.personalized_output_directory,
-    )
     with pytest.raises(ScientificContractError, match="must share one experiment identity"):
-        train_ditto(mismatched)
+        DittoTrainingCoordinates(
+            global_coordinate=coordinates.global_coordinate,
+            personalized_coordinate=mismatched_personalized,
+        )

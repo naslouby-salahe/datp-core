@@ -12,6 +12,7 @@ from datp_core.domain.enums import (
 from datp_core.domain.values.checksums import Checksum
 from datp_core.reporting.export import PublicationBundle, ReportProvenance, export_markdown
 from datp_core.reporting.figures import FigureSeries, FigureSpec
+from datp_core.reporting.validation import ClaimDecision, ClaimStatus
 
 
 def _provenance() -> ReportProvenance:
@@ -53,6 +54,28 @@ def test_figure_only_bundle_is_fully_rendered(tmp_path: Path) -> None:
     assert "0.25, 0.5" in content
     assert "Unavailable comparator" in content
     assert "`unavailable`" in content
+
+
+def test_blocked_claims_are_separated_from_permitted_wording_by_status(tmp_path: Path) -> None:
+    destination = tmp_path / "report.md"
+    permitted = ClaimDecision(
+        status=ClaimStatus.PERMITTED,
+        wording="Local thresholding reduces FPR dispersion under the confirmatory ladder.",
+        reason="claim matches evidence scope",
+    )
+    blocked = ClaimDecision(
+        status=ClaimStatus.BLOCKED,
+        wording="",
+        reason="the anchor gate blocks dependent journal claims",
+    )
+    export_markdown(
+        PublicationBundle(provenance=_provenance(), claims=(permitted, blocked), tables=(), figures=()),
+        destination,
+    )
+    content = destination.read_text(encoding="utf-8")
+    assert "Local thresholding reduces FPR dispersion" in content
+    assert "## Suppressed or blocked claims" in content
+    assert "the anchor gate blocks dependent journal claims" in content
 
 
 def test_report_provenance_rejects_primitive_checksum() -> None:

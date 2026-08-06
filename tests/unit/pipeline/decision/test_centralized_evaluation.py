@@ -1,6 +1,5 @@
 from dataclasses import replace
 from pathlib import Path
-from typing import cast
 
 import pytest
 from tests.unit.learning.centralized.helpers import (
@@ -18,42 +17,46 @@ from datp_core.domain.enums import CentralizedThresholdMethod, EvidenceRole, Fed
 from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import RowCount, Seed
+from datp_core.evaluation.models import ConfusionCounts
 from datp_core.pipeline.checkpoints.service import retain_centralized_checkpoint_candidates
 from datp_core.pipeline.decision.centralized import (
     CENTRALIZED_POOLED_QUANTILE_PROTOCOL,
-    CentralizedConfusionCounts,
+    CentralizedDecisionRule,
+    CentralizedEvaluationResult,
     construct_pooled_benign_quantile,
     evaluate_centralized_reference,
     reject_centralized_as_federated_threshold_policy,
     reject_centralized_in_federated_threshold_comparison,
     reject_centralized_result_in_confirmatory_threshold_comparison,
     reject_cross_client_cv_fpr_from_pooled_centralized,
+    threshold_result_checksum,
 )
 from datp_core.pipeline.scoring.centralized import score_centralized_reference
 from datp_core.pipeline.scoring.models import CentralizedScoringRequest
 
 
-def test_centralized_confusion_counts_require_row_count_values() -> None:
-    confusion = CentralizedConfusionCounts(
+def test_centralized_evaluation_rejects_invalid_attack_assignment(tmp_path: Path) -> None:
+    require_cuda()
+    _, threshold, evaluation = _evaluation(tmp_path, 13, 14)
+    invalid_confusion = ConfusionCounts(
         true_negative=RowCount(10),
         false_positive=RowCount(2),
-        true_positive=RowCount(7),
-        false_negative=RowCount(1),
+        true_positive=RowCount(0),
+        false_negative=RowCount(0),
+        attack_assignment_valid=False,
     )
-    assert sum(
-        (
-            confusion.true_negative,
-            confusion.false_positive,
-            confusion.true_positive,
-            confusion.false_negative,
-        )
-    ) == RowCount(20)
-    with pytest.raises(TypeError, match="RowCount"):
-        CentralizedConfusionCounts(
-            true_negative=cast(RowCount, 10),
-            false_positive=RowCount(2),
-            true_positive=RowCount(7),
-            false_negative=RowCount(1),
+    with pytest.raises(ScientificContractError, match="valid attack assignment"):
+        CentralizedEvaluationResult(
+            coordinate=evaluation.coordinate,
+            threshold_method=evaluation.threshold_method,
+            decision_rule=CentralizedDecisionRule.SCORE_STRICTLY_GREATER_THAN_THRESHOLD,
+            threshold=evaluation.threshold,
+            confusion=invalid_confusion,
+            metrics=evaluation.metrics,
+            evaluation_row_count=invalid_confusion.evaluation_row_count,
+            evidence_role=EvidenceRole.SUPPORTIVE,
+            score_artifact_checksum=evaluation.score_artifact_checksum,
+            threshold_checksum=threshold_result_checksum(threshold),
         )
 
 
@@ -95,7 +98,7 @@ def test_pooled_evaluation_metrics_and_confusion(tmp_path: Path) -> None:
     scoring, threshold, evaluation = _evaluation(tmp_path, 9, 10)
     assert evaluation.threshold_method is CentralizedThresholdMethod.POOLED_BENIGN_QUANTILE
     assert evaluation.evidence_role is EvidenceRole.SUPPORTIVE
-    assert evaluation.evaluation_row_count == 40
+    assert evaluation.evaluation_row_count.value == 40
     assert MetricId.AUROC in {item.metric for item in evaluation.metrics}
     with pytest.raises(ScientificContractError, match="frozen checkpoint"):
         evaluate_centralized_reference(

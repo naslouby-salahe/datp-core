@@ -24,12 +24,13 @@ from datp_core.runtime.compute import resolve_cuda_device
 
 
 def test_ditto_end_to_end_train_select_and_score_global_and_personalized(tmp_path: Path) -> None:
-    global_coordinate, personalized_coordinate, regularization = ditto_coordinates(Seed(0))
+    coordinates, regularization = ditto_coordinates(Seed(0))
+    global_coordinate = coordinates.global_coordinate
+    personalized_coordinate = coordinates.personalized_coordinate
     clients = build_all_client_inputs(tmp_path)
     outcome = train_ditto(
         DittoTrainingRequest(
-            global_coordinate=global_coordinate,
-            personalized_coordinate=personalized_coordinate,
+            coordinates=coordinates,
             clients=clients,
             population_client_count=POPULATION_CLIENT_COUNT,
             autoencoder=AUTOENCODER,

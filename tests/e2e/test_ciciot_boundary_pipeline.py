@@ -6,7 +6,7 @@ from datp_core.domain.enums import (
     MetricId,
     PopulationId,
 )
-from datp_core.pipeline.planning import (
+from datp_core.pipeline.feasibility import (
     CiciotBoundaryFeasibilityRequest,
     FeasibilityReason,
     assess_external_temporal_feasibility,

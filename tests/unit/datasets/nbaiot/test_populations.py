@@ -1,3 +1,4 @@
+from functools import reduce
 from pathlib import Path
 
 import polars as pl
@@ -14,7 +15,7 @@ from datp_core.domain.enums import (
     PopulationId,
     SplitProtocolId,
 )
-from datp_core.domain.values.counts import Seed
+from datp_core.domain.values.counts import RowCount, Seed
 from datp_core.domain.values.ratios import DirichletConcentration
 from datp_core.protocols.calibration import MINIMUM_BENIGN_SUPPORT
 
@@ -29,9 +30,9 @@ def test_natural_devices_are_exactly_the_audited_nine(nbaiot_canonical_root: Pat
     assert len(manifest.document.accepted_clients) == 9
     assert membership.get_column("client_id").n_unique() == 9
     assert set(manifest.family_by_client)
-    assert manifest.document.benign_row_count == 9 * 30
-    assert manifest.document.attack_row_count == 9 * 12
-    assert membership.height == manifest.document.total_membership_rows
+    assert manifest.document.benign_row_count.value == 9 * 30
+    assert manifest.document.attack_row_count.value == 9 * 12
+    assert membership.height == manifest.document.total_membership_rows.value
     assert construction.diagnostics is None
 
 
@@ -60,7 +61,7 @@ def test_dirichlet_constructs_twenty_clients_and_conserves_rows(nbaiot_canonical
     assert membership.height == 9 * (30 + 12)
     assert membership.get_column("stable_row_id").n_unique() == membership.height
     assert diagnostics.partition_kind is ControlledPartitionKind.DIRICHLET
-    assert sum(diagnostics.client_row_counts) == membership.height
+    assert reduce(RowCount.plus, diagnostics.client_row_counts, RowCount(0)).value == membership.height
 
 
 def test_iid_is_separate_typed_condition_and_is_deterministic(nbaiot_canonical_root: Path) -> None:

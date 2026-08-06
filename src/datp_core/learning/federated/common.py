@@ -145,11 +145,10 @@ def load_reused_ditto_artifacts(
     directories: tuple[Path, ...],
 ) -> DittoTrainingArtifacts:
     global_directory, personalized_directory = ditto_directories(directories)
-    identity_kind = resolve_population(request.global_coordinate.population).declaration.identity_kind
+    identity_kind = resolve_population(request.coordinates.global_coordinate.population).declaration.identity_kind
     loaded = load_reused_ditto_training(
         ReusedDittoTrainingRequest(
-            global_coordinate=request.global_coordinate,
-            personalized_coordinate=request.personalized_coordinate,
+            coordinates=request.coordinates,
             global_directory=global_directory,
             personalized_directory=personalized_directory,
             clients=tuple(client.client for client in request.clients),

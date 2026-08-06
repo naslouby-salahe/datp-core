@@ -13,7 +13,8 @@ from datp_core.domain.errors import require_contract
 from datp_core.domain.values.base import floats_absolutely_close, floats_exactly_equal
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import RowCount
-from datp_core.domain.values.ratios import Quantile, ThresholdValue
+from datp_core.domain.values.paths import FamilyIdentity
+from datp_core.domain.values.ratios import NormalizedWeight, Quantile, ThresholdValue
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.protocols.splits import FRACTION_TOTAL_ABSOLUTE_TOLERANCE
 
@@ -50,8 +51,14 @@ class ThresholdAssignment:
     threshold: ThresholdValue
 
 
-def mean_local_threshold(quantiles: tuple[LocalQuantile, ...]) -> float:
-    return fmean(item.value.value for item in quantiles)
+@dataclass(frozen=True, slots=True)
+class FamilyAssignment:
+    client: ClientIdentity
+    family: FamilyIdentity
+
+
+def mean_local_threshold(quantiles: tuple[LocalQuantile, ...]) -> ThresholdValue:
+    return ThresholdValue(fmean(item.value.value for item in quantiles))
 
 
 def require_unique_clients(
@@ -88,45 +95,39 @@ def validate_local_quantiles(
 
 def validate_assignments(
     assignments: tuple[ThresholdAssignment, ...],
-    expected_pairs: tuple[tuple[ClientIdentity, ThresholdValue], ...],
+    expected_assignments: tuple[ThresholdAssignment, ...],
     *,
     label: str,
     mismatch_message: str,
 ) -> None:
     assigned_clients = tuple(item.client for item in assignments)
     require_unique_clients(assigned_clients, label)
-    expected_clients = tuple(pair[0] for pair in expected_pairs)
+    expected_clients = tuple(item.client for item in expected_assignments)
     require_unique_clients(expected_clients, "expected clients")
     require_contract(
         frozenset(assigned_clients) == frozenset(expected_clients),
         "threshold assignments must cover exactly the contributing client set",
         ContractSubject.CLIENT_IDENTITY,
     )
-    actual_pairs = frozenset((item.client, item.threshold) for item in assignments)
     require_contract(
-        actual_pairs == frozenset(expected_pairs),
+        frozenset(assignments) == frozenset(expected_assignments),
         mismatch_message,
         ContractSubject.THRESHOLD,
     )
 
 
 def validate_normalized_weights(
-    weights: tuple[float, ...],
-    expected_count: int,
+    weights: tuple[NormalizedWeight, ...],
+    quantiles: tuple[LocalQuantile, ...],
 ) -> None:
     require_contract(
-        len(weights) == expected_count,
+        len(weights) == len(quantiles),
         "one normalized weight is required per contributing local quantile",
         ContractSubject.THRESHOLD,
     )
     require_contract(
-        all(weight >= 0 for weight in weights),
-        "normalized weights must be non-negative",
-        ContractSubject.THRESHOLD,
-    )
-    require_contract(
         floats_absolutely_close(
-            sum(weights),
+            sum(weight.value for weight in weights),
             1.0,
             FRACTION_TOTAL_ABSOLUTE_TOLERANCE,
         ),
@@ -142,6 +143,7 @@ def validate_group_membership(
     *,
     members_label: str,
     match_message: str,
+    threshold_message: str,
 ) -> None:
     require_unique_clients(members, members_label)
     quantile_clients = tuple(item.client for item in contributing_local_quantiles)
@@ -151,15 +153,10 @@ def validate_group_membership(
         match_message,
         ContractSubject.CLIENT_IDENTITY,
     )
-    threshold_message = (
-        "family_threshold must equal the unweighted mean of contributing local quantiles"
-        if "family" in match_message
-        else "cluster_threshold must equal the unweighted mean of contributing local quantiles"
-    )
     require_contract(
         floats_exactly_equal(
             group_threshold.value,
-            mean_local_threshold(contributing_local_quantiles),
+            mean_local_threshold(contributing_local_quantiles).value,
         ),
         threshold_message,
         ContractSubject.THRESHOLD,

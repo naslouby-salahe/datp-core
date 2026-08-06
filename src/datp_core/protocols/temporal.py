@@ -7,7 +7,7 @@ from datp_core.domain.enums import EvidenceRole, PartitionRole, SplitProtocolId,
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.provenance import canonical_checksum
 from datp_core.domain.values.checksums import Checksum
-from datp_core.protocols.inference import ScoreArtifactManifest
+from datp_core.protocols.inference import ClientIdentityContract, ScoreArtifactManifest, TrainingCoordinateContract
 
 
 class TemporalFutureIdentity(StrictModel):
@@ -55,10 +55,10 @@ class TemporalDeploymentProvenance(StrictModel):
         )
 
     @classmethod
-    def from_score_manifest(
+    def from_score_manifest[CoordinateT: TrainingCoordinateContract, ClientT: ClientIdentityContract](
         cls,
         state: TemporalState,
-        manifest: ScoreArtifactManifest,
+        manifest: ScoreArtifactManifest[CoordinateT, ClientT],
     ) -> "TemporalDeploymentProvenance":
         calibration_role, evaluation_role = temporal_partition_roles(state)
         if not manifest.records_for(calibration_role) or not manifest.records_for(evaluation_role):

@@ -34,7 +34,7 @@ class LocalThresholdResult:
         )
         validate_assignments(
             self.assignments,
-            tuple((item.client, item.value) for item in self.local_quantiles),
+            tuple(ThresholdAssignment(item.client, item.value) for item in self.local_quantiles),
             label="threshold assignments",
             mismatch_message=("a local threshold assignment must equal the client's own local quantile"),
         )
