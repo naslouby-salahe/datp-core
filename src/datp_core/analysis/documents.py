@@ -7,7 +7,7 @@ from pydantic import model_validator
 
 from datp_core.analysis.contrasts import PairedContrast, PairedDifferenceCounts, SupplementaryPairedAnalysisPlan
 from datp_core.analysis.descriptive import DescriptiveSummary
-from datp_core.analysis.inference.bootstrap import BootstrapInterval
+from datp_core.analysis.inference.bootstrap.contracts import BootstrapInterval
 from datp_core.analysis.inference.multiplicity import MultiplicityPlan, MultiplicityResult
 from datp_core.analysis.inference.wilcoxon import RankBiserialResult, WilcoxonResult
 from datp_core.analysis.mechanisms import MechanismEvidence
