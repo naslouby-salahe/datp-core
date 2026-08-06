@@ -2,6 +2,7 @@
 
 from datp_core.datasets.capabilities import (
     AttackAssignmentCapability,
+    CapabilityStatus,
     ChronologyCapability,
     DatasetCapabilities,
     ExternalValidationCapability,
@@ -12,7 +13,6 @@ from datp_core.datasets.capabilities import (
     ThresholdMethodCapability,
 )
 from datp_core.domain.enums import (
-    CapabilityStatus,
     EvidenceRole,
     FederatedThresholdMethod,
     MetricId,
@@ -77,28 +77,28 @@ NBAIOT_CAPABILITIES = DatasetCapabilities(
     valid_populations=(PopulationId.NBAIOT_NATURAL_DEVICES, PopulationId.NBAIOT_DIRICHLET_CLIENTS),
     threshold_methods=(
         ThresholdMethodCapability(
-            FederatedThresholdMethod.SHARED_THRESHOLD,
-            CapabilityStatus.SUPPORTED,
-            "Every audited physical device has benign data.",
-            "Shared calibration is a declared threshold scope.",
+            status=CapabilityStatus.SUPPORTED,
+            evidence="Every audited physical device has benign data.",
+            reason="Shared calibration is a declared threshold scope.",
+            method=FederatedThresholdMethod.SHARED_THRESHOLD,
         ),
         ThresholdMethodCapability(
-            FederatedThresholdMethod.LOCAL_THRESHOLD,
-            CapabilityStatus.SUPPORTED,
-            "Every audited physical device has benign data.",
-            "Local calibration is a declared threshold scope.",
+            status=CapabilityStatus.SUPPORTED,
+            evidence="Every audited physical device has benign data.",
+            reason="Local calibration is a declared threshold scope.",
+            method=FederatedThresholdMethod.LOCAL_THRESHOLD,
         ),
         ThresholdMethodCapability(
-            FederatedThresholdMethod.FAMILY_THRESHOLD,
-            CapabilityStatus.SUPPORTED,
-            "N-BaIoT Table III supplies the complete device-family taxonomy.",
-            "Family calibration uses the source-defined membership only.",
+            status=CapabilityStatus.SUPPORTED,
+            evidence="N-BaIoT Table III supplies the complete device-family taxonomy.",
+            reason="Family calibration uses the source-defined membership only.",
+            method=FederatedThresholdMethod.FAMILY_THRESHOLD,
         ),
         ThresholdMethodCapability(
-            FederatedThresholdMethod.CLUSTER_THRESHOLD,
-            CapabilityStatus.CONDITIONAL,
-            "Taxonomy-free clustering may use benign reconstruction-error summaries.",
-            "Execution requires the declared outcome-blind cluster-feasibility criterion.",
+            status=CapabilityStatus.CONDITIONAL,
+            evidence="Taxonomy-free clustering may use benign reconstruction-error summaries.",
+            reason="Execution requires the declared outcome-blind cluster-feasibility criterion.",
+            method=FederatedThresholdMethod.CLUSTER_THRESHOLD,
         ),
     ),
 )

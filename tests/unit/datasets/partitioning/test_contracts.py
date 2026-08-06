@@ -2,12 +2,20 @@ import pytest
 
 from datp_core.datasets.partitioning.contracts import (
     ControlledPartitionCondition,
+    ControlledPartitionKind,
     dirichlet_condition,
     iid_condition,
     synthetic_client_ids,
 )
-from datp_core.domain.enums import ControlledPartitionKind
-from datp_core.domain.values import ClientCount, DirichletConcentration
+from datp_core.domain.values.counts import ClientCount
+from datp_core.domain.values.ratios import DirichletConcentration
+
+
+def test_controlled_partition_kind_member_set_is_exact_and_unique() -> None:
+    assert set(ControlledPartitionKind.__members__) == {"DIRICHLET", "IID"}
+    values = tuple(member.value for member in ControlledPartitionKind)
+    assert len(values) == len(set(values))
+    assert all(value.islower() for value in values)
 
 
 def test_controlled_partition_conditions_separate_iid_from_dirichlet() -> None:

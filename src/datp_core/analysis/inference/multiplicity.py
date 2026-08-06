@@ -6,7 +6,7 @@ from statsmodels.stats.multitest import multipletests
 from datp_core.analysis.inference.wilcoxon import PValue
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import MultiplicityCorrectionId
-from datp_core.domain.values import Ratio
+from datp_core.domain.values.ratios import Ratio
 from datp_core.protocols.statistics import PairedInferenceProtocol
 
 

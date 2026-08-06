@@ -7,7 +7,7 @@ from datp_core.datasets.nbaiot.populations import construct_nbaiot_natural_devic
 from datp_core.datasets.partitioning.contracts import SplitConstructionRequest
 from datp_core.datasets.partitioning.splits import hamilton_integer_counts, split_membership
 from datp_core.domain.enums import DatasetId, PartitionRole, PopulationId, SplitProtocolId
-from datp_core.domain.values import Seed
+from datp_core.domain.values.counts import Seed
 
 
 def test_hamilton_allocation_conserves_rows_and_is_deterministic() -> None:

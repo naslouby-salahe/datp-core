@@ -16,7 +16,8 @@ from datp_core.analysis.adapters.scipy import (
 from datp_core.analysis.inference.wilcoxon import CorrelationCoefficient, PValue
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import AvailabilityStatus, EvidenceRole
-from datp_core.domain.values import MetricValue, PairedObservationCount, Ratio
+from datp_core.domain.values.counts import PairedObservationCount
+from datp_core.domain.values.ratios import MetricValue, Ratio
 
 MINIMUM_ASSOCIATION_OBSERVATIONS = PairedObservationCount(3)
 

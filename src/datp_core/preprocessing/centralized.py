@@ -18,18 +18,19 @@ from datp_core.datasets.registry import construct_population, dataset_binding, r
 from datp_core.domain.enums import (
     ContractSubject,
     DatasetId,
-    PartitionOrdering,
     PartitionRole,
     PopulationId,
-    PreprocessingFitScope,
     PreprocessingProtocolId,
     ProcessedDataBranch,
     PublicationStatus,
     SplitProtocolId,
 )
 from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.values import FeatureName, FeatureNameSequence, RowCount, Seed
+from datp_core.domain.values.counts import RowCount, Seed
+from datp_core.domain.values.identifiers import FeatureName, FeatureNameSequence
 from datp_core.preprocessing.contracts import (
+    PartitionOrdering,
+    PreprocessingFitScope,
     ProcessedAssetName,
     RelativeAssetPathSequence,
     ReusableDataCoordinate,

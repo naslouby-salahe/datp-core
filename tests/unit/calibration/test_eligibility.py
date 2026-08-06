@@ -16,8 +16,9 @@ from datp_core.calibration.eligibility import (
 from datp_core.calibration.models import CalibrationSupport, EligibilityDecision, EligibilityStatus
 from datp_core.domain.enums import PartitionRole
 from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.values import CalibrationSize, Checksum, RowCount, Seed
-from datp_core.protocols.models import CalibrationEligibilityProtocol
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import CalibrationSize, RowCount, Seed
+from datp_core.protocols.calibration import CalibrationEligibilityProtocol
 
 PROTOCOL = CalibrationEligibilityProtocol(minimum_support=CalibrationSize(100))
 

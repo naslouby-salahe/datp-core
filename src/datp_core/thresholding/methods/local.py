@@ -6,7 +6,7 @@ from typing import ClassVar
 from datp_core.domain.enums import ContractSubject, FederatedThresholdMethod
 from datp_core.domain.errors import ScientificContractError
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.protocols.models import QuantileProtocol
+from datp_core.protocols.calibration import QuantileProtocol
 from datp_core.thresholding.assignments import (
     LocalQuantile,
     ThresholdAssignment,

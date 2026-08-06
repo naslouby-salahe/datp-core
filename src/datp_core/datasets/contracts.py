@@ -7,10 +7,10 @@ from pathlib import Path
 import datp_core.domain.enums as domain_enums
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import AvailabilityStatus, DatasetId
-from datp_core.domain.values import (
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import (
     ByteCount,
     CanonicalColumnPosition,
-    Checksum,
     RowCount,
     SourceFileCount,
     SourceRowIndex,

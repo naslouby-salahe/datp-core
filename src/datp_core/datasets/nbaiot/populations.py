@@ -41,7 +41,7 @@ from datp_core.datasets.partitioning.integrity import validate_dirichlet_conserv
 from datp_core.datasets.partitioning.paths import canonical_data_glob
 from datp_core.domain.enums import DatasetId, PopulationId, PopulationIdentityKind, SplitProtocolId
 from datp_core.domain.errors import DataIntegrityError
-from datp_core.domain.values import CalibrationSize, ClientCount, RowCount, Seed
+from datp_core.domain.values.counts import CalibrationSize, ClientCount, RowCount, Seed
 from datp_core.protocols.populations import NBAIOT_DIRICHLET_CLIENTS, NBAIOT_NATURAL_DEVICES
 
 _SOURCE_CLIENT = NBaIoTCanonicalColumn.PHYSICAL_CLIENT_ID
@@ -233,9 +233,7 @@ def _build_diagnostics(
 ) -> DirichletPartitionDiagnosticsDocument:
     client_row_counts = tuple(benign + attack for benign, attack in zip(benign_counts, attack_counts, strict=True))
     empty_ids = tuple(
-        client_id
-        for client_id, count in zip(client_ids, client_row_counts, strict=True)
-        if count.value == 0
+        client_id for client_id, count in zip(client_ids, client_row_counts, strict=True) if count.value == 0
     )
     insufficient = tuple(
         client_id

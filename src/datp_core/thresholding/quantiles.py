@@ -14,17 +14,9 @@ from datp_core.domain.enums import (
     QuantileInterpolationSemantics,
 )
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import (
-    Checksum,
-    ConformalRankIndex,
-    CoverageTarget,
-    Quantile,
-    Ratio,
-    RowCount,
-    SummaryCoefficient,
-    ThresholdValue,
-    checksum_text,
-)
+from datp_core.domain.values.checksums import Checksum, checksum_text
+from datp_core.domain.values.counts import ConformalRankIndex, RowCount
+from datp_core.domain.values.ratios import CoverageTarget, Quantile, Ratio, SummaryCoefficient, ThresholdValue
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.thresholding.assignments import LocalQuantile, ThresholdDiagnostic
 

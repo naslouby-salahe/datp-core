@@ -8,7 +8,8 @@ from datp_core.analysis.descriptive import (
     summarize_values,
 )
 from datp_core.domain.enums import AvailabilityStatus, EvidenceRole
-from datp_core.domain.values import MetricValue, PairedObservationCount, Ratio
+from datp_core.domain.values.counts import PairedObservationCount
+from datp_core.domain.values.ratios import MetricValue, Ratio
 
 _DEFAULT_QUANTILES = QuantileRange(lower=Ratio(0.25), upper=Ratio(0.75))
 

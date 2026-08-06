@@ -1,7 +1,8 @@
 """Central availability semantics for evaluation metrics."""
 
 from datp_core.domain.enums import MetricId
-from datp_core.domain.values import MetricValue, RowCount
+from datp_core.domain.values.counts import RowCount
+from datp_core.domain.values.ratios import MetricValue
 from datp_core.evaluation.models import (
     AvailableMetric,
     MetricAvailability,

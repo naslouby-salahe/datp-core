@@ -8,7 +8,8 @@ from typing import ClassVar, Protocol, runtime_checkable
 from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.enums import ContractSubject, FederatedThresholdMethod
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import Checksum, Quantile, ThresholdValue
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.ratios import Quantile, ThresholdValue
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.thresholding.identities import ThresholdUnavailableResult
 from datp_core.thresholding.methods.cluster import GroupedThresholdResult
@@ -22,7 +23,6 @@ from datp_core.thresholding.methods.shared import (
     SharedThresholdResult,
 )
 from datp_core.thresholding.methods.shrinkage import ShrinkageThresholdResult
-
 
 type ThresholdConstructionResult = (
     SharedThresholdResult

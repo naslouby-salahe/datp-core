@@ -15,7 +15,8 @@ from pydantic import BaseModel
 
 from datp_core.domain.enums import PublicationStatus
 from datp_core.domain.provenance import canonical_json_text
-from datp_core.domain.values import ByteCount, Checksum, checksum_file, checksum_text
+from datp_core.domain.values.checksums import Checksum, checksum_file, checksum_text
+from datp_core.domain.values.counts import ByteCount
 from datp_core.pipeline.publication.models import (
     ArtifactKind,
     ArtifactRecord,

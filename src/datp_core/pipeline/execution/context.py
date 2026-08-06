@@ -10,13 +10,10 @@ from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.datasets.registry import dataset_binding, population_capabilities
 from datp_core.domain.enums import ContractSubject, DatasetId
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import (
-    Checksum,
-    FamilyIdentity,
-    FeatureName,
-    FeatureNameSequence,
-    ProximalCoefficient,
-)
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.identifiers import FeatureName, FeatureNameSequence
+from datp_core.domain.values.paths import FamilyIdentity
+from datp_core.domain.values.ratios import ProximalCoefficient
 from datp_core.learning.federated.models import (
     ClientTrainingInput,
     FederatedTrainingCoordinate,
@@ -38,20 +35,21 @@ from datp_core.pipeline.preparation.populations import (
     construct_published_split,
 )
 from datp_core.pipeline.scoring.models import ClientScoringInput
-from datp_core.preprocessing.models import ClientPreprocessingResult
-from datp_core.preprocessing.service import (
+from datp_core.preprocessing.models import (
+    ClientPreprocessingResult,
     FederatedPreprocessingOutcome,
     FederatedPreprocessingRequest,
     PublishedFederatedPreprocessingRequest,
-    preprocess_federated,
-    preprocess_published_federated,
 )
+from datp_core.preprocessing.service import preprocess_federated, preprocess_published_federated
 from datp_core.protocols.experiments import BOUNDED_EVIDENCE_POPULATIONS, ExternalTemporalExecutionIdentity
-from datp_core.protocols.models import AutoencoderProtocol, FedAvgProtocol, FedProxProtocol
 from datp_core.protocols.training import (
     CICIOT2023_AUTOENCODER,
     EDGE_IIOTSET_NUMERIC_AUTOENCODER,
     NBAIOT_AUTOENCODER,
+    AutoencoderProtocol,
+    FedAvgProtocol,
+    FedProxProtocol,
     resolve_single_model_federated_training_protocol,
 )
 from datp_core.runtime.configuration import DATA_ROOT

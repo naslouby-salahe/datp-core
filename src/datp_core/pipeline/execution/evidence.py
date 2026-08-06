@@ -7,7 +7,8 @@ from pydantic import ValidationError
 
 from datp_core.domain.enums import MetricId, PartitionRole, ScoreFrameColumn
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import MetricValue, checksum_file
+from datp_core.domain.values.checksums import checksum_file
+from datp_core.domain.values.ratios import MetricValue
 from datp_core.evaluation.federated.contracts import FederatedEvaluationDocument
 from datp_core.evaluation.models import MetricStatus, metric_by_id
 from datp_core.pipeline.scoring.models import FederatedScoreArtifactManifest

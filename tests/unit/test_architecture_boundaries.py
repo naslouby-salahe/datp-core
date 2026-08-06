@@ -20,9 +20,7 @@ def _imported_modules(path: Path) -> tuple[str, ...]:
 
 def _source_importers(module: str) -> tuple[Path, ...]:
     return tuple(
-        path.relative_to(_SOURCE_ROOT)
-        for path in _SOURCE_ROOT.rglob("*.py")
-        if module in _imported_modules(path)
+        path.relative_to(_SOURCE_ROOT) for path in _SOURCE_ROOT.rglob("*.py") if module in _imported_modules(path)
     )
 
 
@@ -73,7 +71,7 @@ def test_workspace_contains_only_the_cached_coordinate_coordinator() -> None:
     execution = workspace.parent
     assert (execution / "context.py").is_file()
     assert (execution / "layout.py").is_file()
-    assert (execution / "scoring.py").is_file()
+    assert (execution / "score_generation.py").is_file()
 
 
 def test_fixed_score_controls_have_bounded_owners_without_a_facade() -> None:
@@ -108,3 +106,51 @@ def test_evaluation_cohorts_have_separate_contract_classification_and_evidence_o
     assert (cohort / "evidence.py").is_file()
     assert _source_importers("datp_core.evaluation.cohorts") == ()
     assert "polars" not in _imported_modules(cohort / "construction.py")
+
+
+def test_protocol_declaration_hub_is_deleted_and_has_no_callers() -> None:
+    assert not (_SOURCE_ROOT / "protocols" / "models.py").exists()
+    assert _source_importers("datp_core.protocols.models") == ()
+
+
+def test_domain_values_hub_is_decomposed_into_focused_modules() -> None:
+    values = _SOURCE_ROOT / "domain" / "values"
+    assert not (_SOURCE_ROOT / "domain" / "values.py").exists()
+    assert values.is_dir()
+    for name in ("base", "counts", "ratios", "identifiers", "paths", "checksums"):
+        assert (values / f"{name}.py").is_file()
+    assert _source_importers("datp_core.domain.values") == ()
+
+
+def test_domain_enums_no_longer_declares_relocated_package_identities() -> None:
+    enums = _SOURCE_ROOT / "domain" / "enums.py"
+    declared = tuple(node.name for node in _syntax_tree(enums).body if isinstance(node, ClassDef))
+    relocated = (
+        "ClaimStatus",
+        "ScientificDecision",
+        "WarningCode",
+        "PreprocessingFitScope",
+        "TrustedEstimatorClassName",
+        "PartitionOrdering",
+        "ControlledPartitionKind",
+        "CapabilityStatus",
+        "ConfirmatoryDeltaDirection",
+        "ClusterFingerprintFeature",
+        "ClusterFeatureStandardization",
+        "ClusterAssignmentAlgorithm",
+        "KMeansInitialization",
+        "ClusterThresholdAggregation",
+    )
+    assert not (set(declared) & set(relocated))
+
+
+def test_preprocessing_service_delegates_client_and_artifact_responsibilities() -> None:
+    preprocessing = _SOURCE_ROOT / "preprocessing"
+    assert (preprocessing / "client_partitions.py").is_file()
+    assert (preprocessing / "ciciot_file_clients.py").is_file()
+    assert (preprocessing / "persisted_artifacts.py").is_file()
+    service = preprocessing / "service.py"
+    service_text = service.read_text(encoding="utf-8")
+    assert "_load_published_population_split" not in service_text
+    assert "_preprocess_ciciot_client_local" not in service_text
+    assert "_ciciot_source_files" not in service_text

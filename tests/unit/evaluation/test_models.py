@@ -1,8 +1,23 @@
 import pytest
 
 from datp_core.domain.enums import MetricId
-from datp_core.domain.values import MetricValue, RowCount
-from datp_core.evaluation.models import AvailableMetric, MetricReason, MetricStatus, UnavailableMetric
+from datp_core.domain.values.counts import RowCount
+from datp_core.domain.values.ratios import MetricValue
+from datp_core.evaluation.models import AvailableMetric, MetricReason, MetricStatus, UnavailableMetric, WarningCode
+
+
+def test_warning_code_member_set_is_exact_and_unique() -> None:
+    assert set(WarningCode.__members__) == {
+        "NEAR_ZERO_MEAN_FPR",
+        "UNDEFINED_COEFFICIENT_OF_VARIATION",
+        "UNAVAILABLE_ATTACK_ASSIGNMENT",
+        "INVALID_TEMPORAL_CHRONOLOGY",
+        "UNRESOLVED_CLUSTER_ASSIGNMENTS",
+        "MISSING_TRAFFIC_RATE_EVIDENCE",
+    }
+    values = tuple(member.value for member in WarningCode)
+    assert len(values) == len(set(values))
+    assert all(value.islower() for value in values)
 
 
 def test_available_metric_contains_only_available_state() -> None:

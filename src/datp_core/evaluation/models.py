@@ -4,18 +4,23 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 
 from datp_core.datasets.partitioning.contracts import ClientIdentity, PopulationOutcomeLabel
-from datp_core.domain.enums import (
-    EvaluationCohort,
-    EvidenceRole,
-    FederatedThresholdMethod,
-    MetricId,
-    PartitionRole,
-    WarningCode,
-)
+from datp_core.domain.enums import EvaluationCohort, EvidenceRole, FederatedThresholdMethod, MetricId, PartitionRole
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import Checksum, MetricValue, RowCount, ScoreValue, StableRowId, ThresholdValue
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import RowCount
+from datp_core.domain.values.identifiers import StableRowId
+from datp_core.domain.values.ratios import MetricValue, ScoreValue, ThresholdValue
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.protocols.inference import ScoreRecord
+
+
+class WarningCode(StrEnum):
+    NEAR_ZERO_MEAN_FPR = "near_zero_mean_fpr"
+    UNDEFINED_COEFFICIENT_OF_VARIATION = "undefined_coefficient_of_variation"
+    UNAVAILABLE_ATTACK_ASSIGNMENT = "unavailable_attack_assignment"
+    INVALID_TEMPORAL_CHRONOLOGY = "invalid_temporal_chronology"
+    UNRESOLVED_CLUSTER_ASSIGNMENTS = "unresolved_cluster_assignments"
+    MISSING_TRAFFIC_RATE_EVIDENCE = "missing_traffic_rate_evidence"
 
 
 @dataclass(frozen=True, slots=True)

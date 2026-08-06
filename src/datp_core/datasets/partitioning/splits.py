@@ -17,7 +17,9 @@ from datp_core.domain.errors import (
     LeakageError,
     ScientificContractError,
 )
-from datp_core.domain.values import RowCount, Seed, checksum_text, floats_absolutely_close
+from datp_core.domain.values.base import floats_absolutely_close
+from datp_core.domain.values.checksums import checksum_text
+from datp_core.domain.values.counts import RowCount, Seed
 from datp_core.protocols.splits import (
     FRACTION_TOTAL_ABSOLUTE_TOLERANCE,
     NON_TEMPORAL_SPLIT,

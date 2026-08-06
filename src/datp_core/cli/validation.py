@@ -2,9 +2,15 @@
 
 import typer
 
-from datp_core.datasets.partitioning.contracts import ControlledPartitionCondition, dirichlet_condition, iid_condition
-from datp_core.domain.enums import ControlledPartitionKind, PreprocessingProtocolId
-from datp_core.domain.values import DirichletConcentration, Seed
+from datp_core.datasets.partitioning.contracts import (
+    ControlledPartitionCondition,
+    ControlledPartitionKind,
+    dirichlet_condition,
+    iid_condition,
+)
+from datp_core.domain.enums import PreprocessingProtocolId
+from datp_core.domain.values.counts import Seed
+from datp_core.domain.values.ratios import DirichletConcentration
 from datp_core.protocols.populations import DIRICHLET_CONCENTRATIONS
 from datp_core.protocols.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_SEED_COHORT
 
@@ -59,8 +65,7 @@ def controlled_partition_condition(
         raise typer.BadParameter("Dirichlet construction requires --concentration")
     if concentration not in _DECLARED_DIRICHLET_VALUES:
         raise typer.BadParameter(
-            f"concentration must be one of the declared Dirichlet grid values: "
-            f"{_allowed(_DECLARED_DIRICHLET_VALUES)}"
+            f"concentration must be one of the declared Dirichlet grid values: {_allowed(_DECLARED_DIRICHLET_VALUES)}"
         )
     return dirichlet_condition(DirichletConcentration(concentration))
 

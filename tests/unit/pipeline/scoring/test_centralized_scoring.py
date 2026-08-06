@@ -23,7 +23,9 @@ from datp_core.domain.enums import (
     TrainingModelId,
 )
 from datp_core.domain.errors import LeakageError
-from datp_core.domain.values import Checksum, FeatureCount, MetricValue, RoundNumber, RowCount, Seed, checksum_file
+from datp_core.domain.values.checksums import Checksum, checksum_file
+from datp_core.domain.values.counts import FeatureCount, RoundNumber, RowCount, Seed
+from datp_core.domain.values.ratios import MetricValue
 from datp_core.pipeline.checkpoints.models import CentralizedCheckpointCandidate
 from datp_core.pipeline.checkpoints.service import reject_federated_checkpoint, retain_centralized_checkpoint_candidates
 from datp_core.pipeline.scoring.centralized import (

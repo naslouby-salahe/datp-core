@@ -22,12 +22,12 @@ from datp_core.domain.enums import (
     TemporalState,
     TrainingModelId,
 )
-from datp_core.domain.values import ModelCoefficientValue, Seed
+from datp_core.domain.values.counts import Seed
+from datp_core.domain.values.ratios import ModelCoefficientValue
 from datp_core.preprocessing.models import SCIENTIFIC_FEDERATED_PREPROCESSING_METHOD
-from datp_core.protocols.experiments import EXECUTION_IDENTITY_DECLARATIONS, EXPERIMENTS
-from datp_core.protocols.models import ExperimentDeclaration, SeedCohort
+from datp_core.protocols.experiments import EXECUTION_IDENTITY_DECLARATIONS, EXPERIMENTS, ExperimentDeclaration
 from datp_core.protocols.populations import split_protocol_for_population
-from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT
+from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.protocols.training import DITTO_TRAINING_PROTOCOLS, FEDPROX_TRAINING_PROTOCOLS
 
 _MODEL_COEFFICIENT_TRAINING_MODELS = frozenset(

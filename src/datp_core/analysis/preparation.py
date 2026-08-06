@@ -22,7 +22,7 @@ from datp_core.analysis.temporal import temporal_analysis_record
 from datp_core.domain.enums import EvidenceRole, PopulationId, TemporalState
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.provenance import canonical_checksum
-from datp_core.domain.values import PairedObservationCount
+from datp_core.domain.values.counts import PairedObservationCount
 from datp_core.protocols.experiments import require_execution_identity
 from datp_core.protocols.statistics import PairedInferenceProtocol
 from datp_core.protocols.temporal import validate_frozen_recalibrated_pair

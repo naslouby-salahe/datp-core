@@ -15,7 +15,8 @@ from datp_core.analysis.scientific_decision import ScientificDecisionResult
 from datp_core.analysis.temporal import TemporalAnalysisRecord, TemporalRecoveryResult
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import EvidenceRole
-from datp_core.domain.values import Checksum, Seed
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import Seed
 from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
 from datp_core.protocols.statistics import PairedInferenceProtocol
 from datp_core.protocols.temporal import TemporalDeploymentProvenance

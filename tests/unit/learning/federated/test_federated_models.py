@@ -12,17 +12,10 @@ from tests.unit.learning.federated.helpers import (
 
 from datp_core.domain.enums import CheckpointStatus, CommunicationEstimationMethod, TrainingModelId
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import (
-    BatchSize,
-    ByteCount,
-    Checksum,
-    CudaDeviceName,
-    MetricValue,
-    ProximalCoefficient,
-    RoundNumber,
-    RowCount,
-    Seed,
-)
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import BatchSize, ByteCount, RoundNumber, RowCount, Seed
+from datp_core.domain.values.identifiers import CudaDeviceName
+from datp_core.domain.values.ratios import MetricValue, ProximalCoefficient
 from datp_core.learning.federated.models import (
     CheckpointCandidate,
     CheckpointDecision,
@@ -34,7 +27,7 @@ from datp_core.learning.federated.models import (
     GlobalModelStateReference,
     PersonalizedModelStateReference,
 )
-from datp_core.protocols.models import CheckpointProtocol
+from datp_core.protocols.checkpoints import CheckpointProtocol
 
 SEED = Seed(0)
 

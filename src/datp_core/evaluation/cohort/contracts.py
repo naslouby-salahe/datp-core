@@ -7,7 +7,7 @@ from pydantic import model_validator
 from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import EvaluationCohort, PopulationId
-from datp_core.domain.values import CalibrationSize, RowCount, Seed
+from datp_core.domain.values.counts import CalibrationSize, RowCount, Seed
 from datp_core.protocols.calibration import MINIMUM_BENIGN_SUPPORT
 
 
@@ -36,11 +36,14 @@ class ClientEligibilityRecord(StrictModel):
 
     @model_validator(mode="after")
     def validate_record(self) -> "ClientEligibilityRecord":
-        if min(
-            self.benign_calibration_count,
-            self.benign_evaluation_count,
-            self.attack_evaluation_count,
-        ) < 0:
+        if (
+            min(
+                self.benign_calibration_count,
+                self.benign_evaluation_count,
+                self.attack_evaluation_count,
+            )
+            < 0
+        ):
             raise ValueError("cohort counts must be non-negative")
         if self.calibration_eligible and self.deployment_fallback:
             raise ValueError("deployment-fallback clients cannot be calibration eligible")

@@ -9,7 +9,7 @@ from datp_core.datasets.ciciot2023.schema import (
     CICIOT2023_RAW_COLUMNS,
 )
 from datp_core.domain.enums import AvailabilityStatus, PublicationStatus
-from datp_core.domain.values import RowCount
+from datp_core.domain.values.counts import RowCount
 
 
 def _write_merged(path, rate: str, label: str) -> None:

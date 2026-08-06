@@ -18,9 +18,7 @@ from datp_core.datasets.materialization import (
     canonical_schema_checksum,
 )
 from datp_core.domain.enums import DatasetId
-from datp_core.domain.values import (
-    CanonicalColumnPosition,
-)
+from datp_core.domain.values.counts import CanonicalColumnPosition
 
 
 class EdgeArtifactSuffix(StrEnum):

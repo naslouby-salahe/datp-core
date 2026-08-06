@@ -5,7 +5,7 @@ from typing import Annotated
 import typer
 
 from datp_core.cli.validation import declared_confirmatory_seed
-from datp_core.domain.values import DittoRegularization
+from datp_core.domain.values.ratios import DittoRegularization
 from datp_core.pipeline.workflows.personalization import run_ditto_stress_test_seed
 from datp_core.protocols.training import DITTO_TRAINING_PROTOCOLS
 

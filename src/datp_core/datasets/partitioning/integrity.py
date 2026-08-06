@@ -16,8 +16,9 @@ from datp_core.domain.enums import (
     StageOperationId,
 )
 from datp_core.domain.errors import DataIntegrityError, LeakageError, ScientificContractError
-from datp_core.domain.values import Checksum, ClientCount, RowCount
-from datp_core.protocols.models import PopulationDeclaration
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import ClientCount, RowCount
+from datp_core.protocols.populations import PopulationDeclaration
 
 from .contracts import (
     CLIENT_ID_COLUMN,

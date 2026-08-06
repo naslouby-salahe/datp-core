@@ -6,7 +6,8 @@ from tests.unit.scoring.helpers import selected_checkpoint
 
 from datp_core.domain.enums import CheckpointStatus
 from datp_core.domain.errors import ArtifactIntegrityError, LeakageError, ScientificContractError
-from datp_core.domain.values import Checksum, RowCount, Seed
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import RowCount, Seed
 from datp_core.learning.federated.models import CheckpointCandidate
 from datp_core.pipeline.scoring.federated import generate_federated_scores
 from datp_core.pipeline.scoring.models import ClientScoringInput, ScoreGenerationRequest

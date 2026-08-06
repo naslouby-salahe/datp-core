@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 import torch
 
-from datp_core.domain.values import Seed, WorkerCount
+from datp_core.domain.values.counts import Seed, WorkerCount
 from datp_core.runtime.compute import (
     canonical_worker_count,
     cuda_provenance,

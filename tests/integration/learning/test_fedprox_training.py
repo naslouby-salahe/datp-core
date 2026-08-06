@@ -13,7 +13,8 @@ from tests.unit.learning.federated.helpers import (
     fedprox_protocol,
 )
 
-from datp_core.domain.values import Checksum, RowCount, Seed
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import RowCount, Seed
 from datp_core.learning.federated.checkpoints.selection import select_checkpoint
 from datp_core.learning.federated.global_training import train_global_federated
 from datp_core.learning.federated.training import FederatedTrainingRequest
@@ -99,6 +100,8 @@ def test_fedprox_grid_produces_independent_checksums_per_coefficient(tmp_path: P
                 output_directory=directory / "training",
             )
         )
-        terminal = next(candidate for candidate in outcome.candidates if candidate.round_number == CHECKPOINT.maximum_round)
+        terminal = next(
+            candidate for candidate in outcome.candidates if candidate.round_number == CHECKPOINT.maximum_round
+        )
         checksums.append(terminal.tensor_checksum)
     assert len(set(checksums)) == len(FEDPROX_COEFFICIENTS)

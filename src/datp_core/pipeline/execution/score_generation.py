@@ -3,7 +3,8 @@
 from pathlib import Path
 
 from datp_core.domain.enums import SplitProtocolId
-from datp_core.domain.values import Checksum, FeatureNameSequence
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.identifiers import FeatureNameSequence
 from datp_core.learning.federated.models import CheckpointCandidate
 from datp_core.pipeline.execution.checkpoints import select_execution_checkpoint
 from datp_core.pipeline.execution.context import FederatedExecutionContext, client_scoring_inputs
@@ -15,8 +16,7 @@ from datp_core.pipeline.scoring.models import (
     GenerateFederatedScoresRequest,
     ScoreGenerationRequest,
 )
-from datp_core.protocols.models import AutoencoderProtocol
-from datp_core.protocols.training import BATCH_SIZE
+from datp_core.protocols.training import BATCH_SIZE, AutoencoderProtocol
 from datp_core.runtime.compute import resolve_cuda_device
 
 

@@ -24,16 +24,11 @@ from datp_core.domain.enums import (
     TrainingModelId,
 )
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import (
-    Checksum,
-    ClientCount,
-    DittoRegularization,
-    FamilyIdentity,
-    FeatureNameSequence,
-    ScoreValue,
-    Seed,
-    checksum_file,
-)
+from datp_core.domain.values.checksums import Checksum, checksum_file
+from datp_core.domain.values.counts import ClientCount, Seed
+from datp_core.domain.values.identifiers import FeatureNameSequence
+from datp_core.domain.values.paths import FamilyIdentity
+from datp_core.domain.values.ratios import DittoRegularization, ScoreValue
 from datp_core.evaluation.client_metrics import calculate_client_metrics
 from datp_core.evaluation.cohort.construction import build_evaluation_cohort_manifest
 from datp_core.evaluation.cohort.evidence import client_partition_counts_from_scores
@@ -59,9 +54,17 @@ from datp_core.pipeline.scoring.models import (
     FederatedScoreRecord,
     GenerateFederatedScoresRequest,
 )
-from datp_core.pipeline.training.personalized import TrainDittoDetectorRequest, TrainDittoDetectorResult, train_ditto_detector
-from datp_core.preprocessing.models import ClientPreprocessingResult
-from datp_core.preprocessing.service import FederatedPreprocessingOutcome, FederatedPreprocessingRequest, preprocess_federated
+from datp_core.pipeline.training.personalized import (
+    TrainDittoDetectorRequest,
+    TrainDittoDetectorResult,
+    train_ditto_detector,
+)
+from datp_core.preprocessing.models import (
+    ClientPreprocessingResult,
+    FederatedPreprocessingOutcome,
+    FederatedPreprocessingRequest,
+)
+from datp_core.preprocessing.service import preprocess_federated
 from datp_core.protocols.calibration import CANONICAL_QUANTILE
 from datp_core.protocols.inference import FixedScoreInvariant
 from datp_core.protocols.training import (
@@ -141,7 +144,9 @@ def run_ditto_stress_test_seed(*, training_seed: Seed, regularization: DittoRegu
             request=DittoTrainingRequest(
                 global_coordinate=global_coordinate,
                 personalized_coordinate=personalized_coordinate,
-                clients=client_training_inputs(context.preprocessing.client_publications, context.clients, feature_names),
+                clients=client_training_inputs(
+                    context.preprocessing.client_publications, context.clients, feature_names
+                ),
                 population_client_count=ClientCount(len(context.clients)),
                 autoencoder=NBAIOT_AUTOENCODER,
                 training_protocol=resolve_ditto_protocol(regularization),
@@ -150,7 +155,9 @@ def run_ditto_stress_test_seed(*, training_seed: Seed, regularization: DittoRegu
                 batch_size=BATCH_SIZE,
                 learning_rate=LEARNING_RATE,
                 split_manifest_checksum=context.split_manifest_checksum,
-                global_output_directory=ditto_directory(training_seed, regularization, DittoArtifactBranch.GLOBAL_MODEL),
+                global_output_directory=ditto_directory(
+                    training_seed, regularization, DittoArtifactBranch.GLOBAL_MODEL
+                ),
                 personalized_output_directory=ditto_directory(
                     training_seed,
                     regularization,
@@ -366,8 +373,10 @@ def _client_metric(
 ) -> ClientMetricResult:
     record = _score_record_for_client(manifest.evaluation_records, assignment.client, PartitionRole.EVALUATION)
     frame = pl.read_parquet(record.path)
-    scores = tuple(ScoreValue(float(value)) for value in frame[ScoreFrameColumn.RECONSTRUCTION_ERROR.value].to_list())
-    labels = tuple(PopulationOutcomeLabel(str(value)) for value in frame[ScoreFrameColumn.OUTCOME_LABEL.value].to_list())
+    error_values = frame[ScoreFrameColumn.RECONSTRUCTION_ERROR.value].to_list()
+    outcome_values = frame[ScoreFrameColumn.OUTCOME_LABEL.value].to_list()
+    scores = tuple(ScoreValue(float(value)) for value in error_values)
+    labels = tuple(PopulationOutcomeLabel(str(value)) for value in outcome_values)
     rows = tuple(str(value) for value in frame[ScoreFrameColumn.STABLE_ROW_ID.value].to_list())
     cohort_manifest = build_evaluation_cohort_manifest(
         population=population,

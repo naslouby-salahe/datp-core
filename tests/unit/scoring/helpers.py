@@ -5,14 +5,15 @@ from pathlib import Path
 from tests.unit.learning.federated.helpers import AUTOENCODER, CHECKPOINT, fedavg_coordinate
 
 from datp_core.domain.enums import CheckpointSelectionRule
-from datp_core.domain.values import Checksum, Seed
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import Seed
 from datp_core.learning.federated.checkpoints.candidates import retain_checkpoint_candidates
 from datp_core.learning.federated.checkpoints.selection import select_checkpoint
 from datp_core.learning.federated.models import CheckpointCandidate, RoundSnapshot
 
 
 def selected_checkpoint(output_directory: Path, seed: Seed | None = None) -> CheckpointCandidate:
-    from datp_core.domain.values import MetricValue
+    from datp_core.domain.values.ratios import MetricValue
     from datp_core.learning.autoencoder import ReconstructionAutoencoder
 
     resolved_seed = Seed(0) if seed is None else seed

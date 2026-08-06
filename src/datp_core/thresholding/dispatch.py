@@ -14,14 +14,15 @@ from datp_core.domain.errors import (
     LeakageError,
     ScientificContractError,
 )
-from datp_core.domain.values import FamilyIdentity, Quantile
+from datp_core.domain.values.paths import FamilyIdentity
+from datp_core.domain.values.ratios import Quantile
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.protocols.calibration import (
     CLUSTER_THRESHOLD_PROTOCOL,
     FEDERATED_STATISTICS_PROTOCOL,
     FIXED_SHRINKAGE_PROTOCOL,
+    QuantileProtocol,
 )
-from datp_core.protocols.models import QuantileProtocol
 from datp_core.thresholding.identities import (
     ThresholdInfeasibilityReason,
     ThresholdUnavailableResult,

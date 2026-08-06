@@ -14,7 +14,7 @@ from datp_core.anchor.models import (
 from datp_core.domain.enums import ExperimentReadiness
 from datp_core.domain.errors import AnchorReproductionError
 from datp_core.domain.provenance import canonical_json_text
-from datp_core.domain.values import Checksum, checksum_text
+from datp_core.domain.values.checksums import Checksum, checksum_text
 
 
 def decide_anchor_gate(reproduction: AnchorReproductionResult) -> AnchorGateDecision:

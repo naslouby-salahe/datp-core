@@ -4,11 +4,8 @@ from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.enums import ContractSubject, MetricId
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.provenance import canonical_checksum
-from datp_core.domain.values import (
-    NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
-    AbsoluteTolerance,
-    floats_absolutely_close,
-)
+from datp_core.domain.values.base import floats_absolutely_close
+from datp_core.domain.values.ratios import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE, AbsoluteTolerance
 from datp_core.evaluation.cohort.contracts import EvaluationCohortManifest
 from datp_core.evaluation.fixed_score.checksums import (
     ClientChecksumField,
@@ -171,7 +168,9 @@ def _validate_held_out_rows(
         raise ScientificContractError("fixed-score evidence score ordering checksum does not match evaluation")
     expected_labels = aggregate_client_checksum(clients, ClientChecksumField.EVALUATION_LABEL)
     expected_rows = aggregate_client_checksum(clients, ClientChecksumField.SOURCE_ROW)
-    if evidence.evaluation.label_checksum != expected_labels or evidence.evaluation.source_row_checksum != expected_rows:
+    labels_mismatch = evidence.evaluation.label_checksum != expected_labels
+    rows_mismatch = evidence.evaluation.source_row_checksum != expected_rows
+    if labels_mismatch or rows_mismatch:
         raise ScientificContractError("fixed-score evidence label or source-row checksum does not match evaluation")
 
 

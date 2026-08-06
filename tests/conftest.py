@@ -12,7 +12,7 @@ from datp_core.datasets.edge_iiotset.schema import (
     EdgeSensorGroup,
 )
 from datp_core.datasets.nbaiot.schema import NBAIOT_DEVICE_FAMILIES, NBAIOT_DEVICE_IDENTITIES, NBaIoTDeviceFamily
-from datp_core.domain.values import Checksum
+from datp_core.domain.values.checksums import Checksum
 
 
 def _family_for(device: str) -> str:

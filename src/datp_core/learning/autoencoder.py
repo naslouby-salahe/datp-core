@@ -8,8 +8,8 @@ from torch import nn
 
 from datp_core.domain.enums import ContractSubject
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import BatchSize, Seed
-from datp_core.protocols.models import AutoencoderProtocol
+from datp_core.domain.values.counts import BatchSize, Seed
+from datp_core.protocols.training import AutoencoderProtocol
 from datp_core.runtime.compute import require_cuda_available
 
 type AutoencoderState = dict[str, torch.Tensor]

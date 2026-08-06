@@ -6,16 +6,22 @@ from typing import Annotated
 
 import typer
 
-from datp_core.datasets.partitioning.contracts import ControlledPartitionCondition, dirichlet_condition, iid_condition
-from datp_core.datasets.service import DatasetMaterializationRequest, materialize_datasets as publish_datasets
-from datp_core.domain.enums import (
+from datp_core.datasets.partitioning.contracts import (
+    ControlledPartitionCondition,
     ControlledPartitionKind,
+    dirichlet_condition,
+    iid_condition,
+)
+from datp_core.datasets.service import DatasetMaterializationRequest
+from datp_core.datasets.service import materialize_datasets as publish_datasets
+from datp_core.domain.enums import (
     DatasetId,
     PopulationId,
     PreprocessingProtocolId,
     SplitProtocolId,
 )
-from datp_core.domain.values import DirichletConcentration, DittoRegularization, Seed
+from datp_core.domain.values.counts import Seed
+from datp_core.domain.values.ratios import DirichletConcentration, DittoRegularization
 from datp_core.pipeline.workflows.centralized import run_centralized_reference_seed
 from datp_core.pipeline.workflows.confirmatory import (
     analyze_confirmatory_campaign,
@@ -29,7 +35,8 @@ from datp_core.preprocessing.centralized import (
     CentralizedPopulationPreprocessingRequest,
     preprocess_centralized_population,
 )
-from datp_core.preprocessing.service import FederatedPreprocessingRequest, preprocess_federated
+from datp_core.preprocessing.models import FederatedPreprocessingRequest
+from datp_core.preprocessing.service import preprocess_federated
 from datp_core.protocols.populations import DIRICHLET_CONCENTRATIONS
 from datp_core.protocols.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_SEED_COHORT
 from datp_core.protocols.training import DITTO_TRAINING_PROTOCOLS

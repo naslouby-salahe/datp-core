@@ -1,6 +1,25 @@
+from datp_core.analysis.scientific_decision import ScientificDecision
 from datp_core.analysis.temporal import TemporalInterpretation, decide_temporal, temporal_recovery
-from datp_core.domain.enums import AvailabilityStatus, ScientificDecision
-from datp_core.domain.values import MetricValue, Seed
+from datp_core.domain.enums import AvailabilityStatus
+from datp_core.domain.values.counts import Seed
+from datp_core.domain.values.ratios import MetricValue
+
+
+def test_scientific_decision_member_set_is_exact_and_unique() -> None:
+    assert set(ScientificDecision.__members__) == {
+        "SUPPORTED",
+        "DIRECTIONAL_INCONCLUSIVE",
+        "NO_OBSERVED_ADVANTAGE",
+        "OPPOSITE_DIRECTION",
+        "PARTIAL_ABSORPTION",
+        "FULL_ABSORPTION",
+        "BOUNDARY_RESULT",
+        "INFEASIBLE",
+        "BLOCKED",
+    }
+    values = tuple(member.value for member in ScientificDecision)
+    assert len(values) == len(set(values))
+    assert all(value.islower() for value in values)
 
 
 def test_material_drift_with_recovery_is_supported() -> None:

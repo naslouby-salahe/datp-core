@@ -10,10 +10,14 @@ from datp_core.domain.enums import (
     ProcessedDataBranch,
     SplitProtocolId,
 )
-from datp_core.domain.values import ClientPathToken, Seed
+from datp_core.domain.values.counts import Seed
+from datp_core.domain.values.paths import ClientPathToken
 from datp_core.preprocessing.contracts import (
+    PartitionOrdering,
+    PreprocessingFitScope,
     ProcessedAssetName,
     ReusableDataCoordinate,
+    TrustedEstimatorClassName,
     centralized_branch_directory,
     core_processed_asset_names,
     federated_branch_directory,
@@ -21,6 +25,19 @@ from datp_core.preprocessing.contracts import (
     federated_client_directory,
     processed_branch_coordinate,
 )
+
+
+def test_preprocessing_identity_enum_member_sets_are_exact_and_unique() -> None:
+    cases = (
+        (PreprocessingFitScope, {"CLIENT_LOCAL_TRAINING", "POOLED_TRAINING"}),
+        (TrustedEstimatorClassName, {"STANDARD_SCALER", "MIN_MAX_SCALER"}),
+        (PartitionOrdering, {"PRESERVE_SOURCE_ORDER", "STABLE_ROW_ID"}),
+    )
+    for enum_type, expected_members in cases:
+        assert set(enum_type.__members__) == expected_members
+        values = tuple(member.value for member in enum_type)
+        assert len(values) == len(set(values))
+        assert all(value.islower() for value in values)
 
 
 def _coordinate(

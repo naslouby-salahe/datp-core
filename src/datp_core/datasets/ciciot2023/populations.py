@@ -30,7 +30,7 @@ from datp_core.datasets.partitioning.contracts import (
 from datp_core.datasets.partitioning.paths import canonical_data_glob
 from datp_core.domain.enums import DatasetId, PopulationId, PopulationIdentityKind, SplitProtocolId
 from datp_core.domain.errors import CapabilityError, ScientificContractError
-from datp_core.domain.values import Seed
+from datp_core.domain.values.counts import Seed
 from datp_core.protocols.populations import CICIOT_FILE_CLIENTS
 
 _ELIGIBLE = CICIoT2023Column.MODEL_INPUT_ELIGIBLE

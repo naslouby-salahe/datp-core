@@ -1,11 +1,7 @@
-from datp_core.domain.enums import (
-    ClusterAssignmentAlgorithm,
-    ClusterFeatureStandardization,
-    ClusterFingerprintFeature,
-    ClusterThresholdAggregation,
-    FederatedThresholdMethod,
-    KMeansInitialization,
-)
+import pytest
+
+from datp_core.domain.enums import FederatedThresholdMethod
+from datp_core.domain.values.ratios import CoverageTarget
 from datp_core.protocols.calibration import (
     CALIBRATION_SIZES,
     CANONICAL_QUANTILE,
@@ -16,6 +12,12 @@ from datp_core.protocols.calibration import (
     LOCAL_THRESHOLD_PROTOCOL,
     QUANTILE_GRID,
     SHARED_THRESHOLD_PROTOCOL,
+    ClusterAssignmentAlgorithm,
+    ClusterFeatureStandardization,
+    ClusterFingerprintFeature,
+    ClusterThresholdAggregation,
+    ConformalProtocol,
+    KMeansInitialization,
 )
 
 
@@ -28,6 +30,22 @@ def test_calibration_grids_are_locked() -> None:
     assert FIXED_SHRINKAGE_PROTOCOL.weights[0].value == 0
     assert CONFORMAL_PROTOCOL.coverage.value == 0.95
     assert FEDERATED_STATISTICS_PROTOCOL.coefficients[-1].value == 3
+
+
+def test_conformal_protocol_computes_significance_from_coverage() -> None:
+    conformal = ConformalProtocol(
+        method=FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD,
+        coverage=CoverageTarget(0.8),
+    )
+    assert conformal.significance.value == pytest.approx(0.2)
+
+
+def test_conformal_protocol_serializes_one_authoritative_probability() -> None:
+    assert CONFORMAL_PROTOCOL.significance.value == pytest.approx(0.05)
+    assert CONFORMAL_PROTOCOL.model_dump(mode="json") == {
+        "method": FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD.value,
+        "coverage": 0.95,
+    }
 
 
 def test_grouped_threshold_assignment_matches_the_locked_fingerprint_protocol() -> None:

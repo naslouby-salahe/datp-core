@@ -11,39 +11,24 @@ from datp_core.domain.enums import (
     CentralizedModelId,
     OptimizerId,
     PopulationId,
-    PreprocessingFitScope,
     PreprocessingProtocolId,
     SerializationFormat,
     SplitProtocolId,
-    TrustedEstimatorClassName,
 )
-from datp_core.domain.values import (
-    NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
-    BatchSize,
-    Checksum,
-    FeatureName,
-    FeatureNameSequence,
-    LearningRate,
-    OutcomeLabel,
-    OutcomeLabelSequence,
-    RoundNumber,
-    RowCount,
-    Seed,
-    WeightDecay,
-)
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import BatchSize, RoundNumber, RowCount, Seed
+from datp_core.domain.values.identifiers import FeatureName, FeatureNameSequence, OutcomeLabel, OutcomeLabelSequence
+from datp_core.domain.values.ratios import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE, LearningRate, WeightDecay
 from datp_core.learning.centralized.training import (
     CentralizedTrainingCoordinate,
     CentralizedTrainingExecution,
     CentralizedTrainingRequest,
     train_centralized_autoencoder,
 )
+from datp_core.preprocessing.contracts import PreprocessingFitScope, TrustedEstimatorClassName
 from datp_core.preprocessing.models import CentralizedFittedPreprocessingState, PreprocessingProtocol
-from datp_core.protocols.models import (
-    AutoencoderProtocol,
-    CentralizedTrainingProtocol,
-    CheckpointProtocol,
-    OptimizerProtocol,
-)
+from datp_core.protocols.checkpoints import CheckpointProtocol
+from datp_core.protocols.training import AutoencoderProtocol, CentralizedTrainingProtocol, OptimizerProtocol
 
 FEATURE_NAMES = FeatureNameSequence((FeatureName("f0"), FeatureName("f1"), FeatureName("f2"), FeatureName("f3")))
 AUTOENCODER = AutoencoderProtocol(widths=(4, 3, 2, 3, 4))

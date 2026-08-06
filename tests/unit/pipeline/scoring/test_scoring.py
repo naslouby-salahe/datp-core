@@ -14,16 +14,9 @@ from datp_core.domain.enums import (
     TrainingModelId,
 )
 from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.values import (
-    Checksum,
-    FeatureCount,
-    FeatureName,
-    FeatureNameSequence,
-    RoundNumber,
-    RowCount,
-    Seed,
-    checksum_file,
-)
+from datp_core.domain.values.checksums import Checksum, checksum_file
+from datp_core.domain.values.counts import FeatureCount, RoundNumber, RowCount, Seed
+from datp_core.domain.values.identifiers import FeatureName, FeatureNameSequence
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.pipeline.scoring.frames import (
     SCORE_FRAME_COLUMNS,

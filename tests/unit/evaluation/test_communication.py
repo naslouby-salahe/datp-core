@@ -3,7 +3,7 @@ from tests.unit.learning.federated.helpers import fedavg_coordinate
 
 from datp_core.domain.enums import CommunicationEstimationMethod
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import LogicalElementCount, Seed
+from datp_core.domain.values.counts import LogicalElementCount, Seed
 from datp_core.evaluation.communication import (
     CommunicationMessageDiagnostic,
     MessageDirection,

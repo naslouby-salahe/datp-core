@@ -16,16 +16,16 @@ from datp_core.datasets.partitioning.contracts import (
 )
 from datp_core.domain.enums import ContractSubject, DatasetId, PartitionRole, SplitProtocolId, TemporalState
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import Checksum, FeatureNameSequence
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.identifiers import FeatureNameSequence
 from datp_core.pipeline.execution.context import FederatedExecutionContext, training_feature_names
 from datp_core.pipeline.execution.layout import ExecutionArtifactDirectory, bounded_evidence_seed_directory
 from datp_core.pipeline.scoring.models import ClientScoringInput
+from datp_core.preprocessing.client_partitions import CANONICAL_DATA_DIRECTORY, PARQUET_PATTERN
 from datp_core.preprocessing.models import ClientPreprocessingResult
-from datp_core.preprocessing.service import (
-    CANONICAL_DATA_DIRECTORY,
+from datp_core.preprocessing.persisted_artifacts import (
     MATCHED_STATIC_SPLIT_ASSIGNMENTS_ASSET,
     MATCHED_STATIC_SPLIT_MANIFEST_ASSET,
-    PARQUET_PATTERN,
 )
 from datp_core.preprocessing.state import TrustedScaler, load_estimator
 from datp_core.preprocessing.validation import transform_feature_matrix
@@ -153,8 +153,7 @@ def _transform_matched_static_partition(
     estimator: TrustedScaler,
 ) -> pl.DataFrame:
     source = joined.filter(
-        (pl.col(CLIENT_ID_COLUMN) == client.client_id)
-        & (pl.col(PARTITION_ROLE_COLUMN).cast(pl.String) == role.value)
+        (pl.col(CLIENT_ID_COLUMN) == client.client_id) & (pl.col(PARTITION_ROLE_COLUMN).cast(pl.String) == role.value)
     ).select((STABLE_ROW_ID_COLUMN, OUTCOME_LABEL_COLUMN, *feature_names.names))
     if source.is_empty():
         raise ScientificContractError(

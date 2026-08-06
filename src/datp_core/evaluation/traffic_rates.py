@@ -5,7 +5,7 @@ from enum import StrEnum
 
 from datp_core.domain.enums import PopulationId, TrafficRateEvidenceType
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import TrafficRatePerDay
+from datp_core.domain.values.ratios import TrafficRatePerDay
 
 
 class TrafficRateUnit(StrEnum):

@@ -7,7 +7,8 @@ from tests.unit.learning.federated.helpers import client_identity, fedavg_coordi
 
 from datp_core.datasets.partitioning.contracts import ClientIdentity, PopulationOutcomeLabel
 from datp_core.domain.enums import PartitionRole, ScoreFrameColumn, SerializationFormat
-from datp_core.domain.values import Checksum, FeatureCount, RoundNumber, RowCount, Seed, checksum_file
+from datp_core.domain.values.checksums import Checksum, checksum_file
+from datp_core.domain.values.counts import FeatureCount, RoundNumber, RowCount, Seed
 from datp_core.protocols.inference import ScoreRecord
 
 

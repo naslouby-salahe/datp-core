@@ -3,16 +3,17 @@
 import numpy as np
 
 from datp_core.domain.contracts import ClientCollection, ClientOwned
-from datp_core.domain.enums import ContractSubject, PartitionRole, PreprocessingFitScope, ProcessedDataBranch
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import (
-    ClientPathToken,
-    FeatureNameSequence,
-    OutcomeLabelSequence,
-    RowCount,
-    StableRowIdSequence,
+from datp_core.domain.enums import (
+    ContractSubject,
+    PartitionRole,
+    ProcessedDataBranch,
 )
+from datp_core.domain.errors import ScientificContractError
+from datp_core.domain.values.counts import RowCount
+from datp_core.domain.values.identifiers import FeatureNameSequence, OutcomeLabelSequence, StableRowIdSequence
+from datp_core.domain.values.paths import ClientPathToken
 from datp_core.preprocessing.contracts import (
+    PreprocessingFitScope,
     ProcessedAssetName,
     RelativeAssetPathSequence,
     ReusableDataCoordinate,

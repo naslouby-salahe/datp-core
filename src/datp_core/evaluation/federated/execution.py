@@ -4,15 +4,18 @@ import polars as pl
 
 from datp_core.datasets.partitioning.contracts import ClientIdentity, PopulationOutcomeLabel
 from datp_core.datasets.registry import population_capabilities
-from datp_core.domain.enums import EvaluationCohort, EvidenceRole, MetricId, PartitionRole, ScoreFrameColumn, StageOperationId
+from datp_core.domain.enums import (
+    EvaluationCohort,
+    EvidenceRole,
+    MetricId,
+    PartitionRole,
+    ScoreFrameColumn,
+    StageOperationId,
+)
 from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
 from datp_core.domain.provenance import canonical_checksum
-from datp_core.domain.values import (
-    NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
-    ScoreValue,
-    ThresholdValue,
-    checksum_file,
-)
+from datp_core.domain.values.checksums import checksum_file
+from datp_core.domain.values.ratios import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE, ScoreValue, ThresholdValue
 from datp_core.evaluation.client_metrics import calculate_client_metrics
 from datp_core.evaluation.cohort.construction import cohort_record_for_client
 from datp_core.evaluation.cohort.contracts import ClientEligibilityRecord

@@ -8,16 +8,8 @@ import numpy as np
 from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.enums import MetricId
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import (
-    CalibrationSize,
-    Quantile,
-    Ratio,
-    ReplicateIndex,
-    Seed,
-    SubsampleReplicateCount,
-    ThresholdValue,
-    ThresholdVariance,
-)
+from datp_core.domain.values.counts import CalibrationSize, ReplicateIndex, Seed, SubsampleReplicateCount
+from datp_core.domain.values.ratios import Quantile, Ratio, ThresholdValue, ThresholdVariance
 from datp_core.evaluation.metric_semantics import available, metric_value, unavailable
 from datp_core.evaluation.models import (
     MetricAvailability,

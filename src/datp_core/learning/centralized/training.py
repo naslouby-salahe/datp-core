@@ -34,23 +34,10 @@ from datp_core.domain.errors import (
     ScientificContractError,
     UnresolvedScientificValueError,
 )
-from datp_core.domain.values import (
-    BatchSize,
-    Checksum,
-    CudaDeviceName,
-    FeatureCount,
-    FeatureNameSequence,
-    LearningRate,
-    MetricValue,
-    OutcomeLabel,
-    OutcomeLabelSequence,
-    RoundNumber,
-    RowCount,
-    Seed,
-    WeightDecay,
-    checksum_file,
-    checksum_text,
-)
+from datp_core.domain.values.checksums import Checksum, checksum_file, checksum_text
+from datp_core.domain.values.counts import BatchSize, FeatureCount, RoundNumber, RowCount, Seed
+from datp_core.domain.values.identifiers import CudaDeviceName, FeatureNameSequence, OutcomeLabel, OutcomeLabelSequence
+from datp_core.domain.values.ratios import LearningRate, MetricValue, WeightDecay
 from datp_core.learning.autoencoder import (
     AutoencoderState,
     AutoencoderStateView,
@@ -61,12 +48,7 @@ from datp_core.preprocessing.models import (
     FederatedFittedPreprocessingState,
     FittedPreprocessingState,
 )
-from datp_core.protocols.models import (
-    AutoencoderProtocol,
-    CentralizedTrainingProtocol,
-    CheckpointProtocol,
-    OptimizerProtocol,
-)
+from datp_core.protocols.checkpoints import CheckpointProtocol
 from datp_core.protocols.training import (
     BATCH_SIZE,
     CENTRALIZED_DATALOADER_WORKER_COUNT,
@@ -74,6 +56,9 @@ from datp_core.protocols.training import (
     LEARNING_RATE,
     NBAIOT_AUTOENCODER,
     WEIGHT_DECAY,
+    AutoencoderProtocol,
+    CentralizedTrainingProtocol,
+    OptimizerProtocol,
 )
 from datp_core.runtime.compute import require_cuda_available, resolve_cuda_device
 from datp_core.runtime.determinism import configure_deterministic_execution

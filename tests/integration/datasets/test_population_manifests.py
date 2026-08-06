@@ -4,7 +4,7 @@ from datp_core.datasets.partitioning.construction import PreprocessingHandoffReq
 from datp_core.datasets.partitioning.contracts import PopulationConstructionRequest, iid_condition
 from datp_core.datasets.registry import construct_population
 from datp_core.domain.enums import PopulationId, SplitProtocolId
-from datp_core.domain.values import Seed
+from datp_core.domain.values.counts import Seed
 
 
 def test_end_to_end_manifest_handoff_for_natural_and_dirichlet(nbaiot_canonical_root: Path) -> None:

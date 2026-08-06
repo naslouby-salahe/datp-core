@@ -12,6 +12,7 @@ from datp_core.datasets.partitioning.contracts import (
     OUTCOME_LABEL_COLUMN,
     PARTITION_ROLE_COLUMN,
     STABLE_ROW_ID_COLUMN,
+    ControlledPartitionCondition,
 )
 from datp_core.domain.contracts import ClientCollection, StrictModel
 from datp_core.domain.enums import (
@@ -19,29 +20,29 @@ from datp_core.domain.enums import (
     DatasetId,
     PartitionRole,
     PopulationId,
-    PreprocessingFitScope,
     PreprocessingProtocolId,
     ProcessedDataBranch,
     PublicationStatus,
     SerializationFormat,
     SplitProtocolId,
-    TrustedEstimatorClassName,
 )
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import (
-    NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
-    AbsoluteTolerance,
-    Checksum,
-    ClientPathToken,
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import ClientPublicationCount, RowCount, Seed
+from datp_core.domain.values.identifiers import (
     FeatureNameSequence,
     OutcomeLabel,
     OutcomeLabelSequence,
-    RowCount,
-    Seed,
     StableRowId,
     StableRowIdSequence,
 )
-from datp_core.preprocessing.contracts import RelativeAssetPathSequence
+from datp_core.domain.values.paths import ClientPathToken
+from datp_core.domain.values.ratios import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE, AbsoluteTolerance
+from datp_core.preprocessing.contracts import (
+    PreprocessingFitScope,
+    RelativeAssetPathSequence,
+    TrustedEstimatorClassName,
+)
 from datp_core.preprocessing.state import TrustedScaler
 from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
 
@@ -314,6 +315,44 @@ SCIENTIFIC_CENTRALIZED_PREPROCESSING_METHOD = ScientificPreprocessingMethod(
     fit_partition=PartitionRole.TRAIN,
     numerical_equivalence_absolute_tolerance=NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
 )
+
+
+@dataclass(frozen=True, slots=True)
+class FederatedPreprocessingRequest:
+    population: PopulationId
+    partition_seed: Seed
+    split_protocol: SplitProtocolId
+    preprocessing_identity: PreprocessingProtocolId
+    data_root: Path
+    dirichlet_condition: ControlledPartitionCondition | None
+    capture_timestamp_column: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class PublishedFederatedPreprocessingRequest:
+    execution_identity: ExternalTemporalExecutionIdentity
+    population_directory: Path
+    split_directory: Path
+    preprocessing_identity: PreprocessingProtocolId
+    data_root: Path
+    capture_timestamp_column: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class FederatedPreprocessingOutcome:
+    population: PopulationId
+    dataset: DatasetId
+    partition_seed: Seed
+    split_protocol: SplitProtocolId
+    preprocessing_identity: PreprocessingProtocolId
+    client_publications: tuple[ClientPreprocessingResult, ...]
+    published_count: ClientPublicationCount
+    reused_count: ClientPublicationCount
+    execution_identity: ExternalTemporalExecutionIdentity | None = None
+
+    def __post_init__(self) -> None:
+        if self.published_count.value + self.reused_count.value != len(self.client_publications):
+            raise ValueError("published and reused counts must cover every client publication")
 
 
 def build_preprocessing_protocol(

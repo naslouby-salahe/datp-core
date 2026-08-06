@@ -10,7 +10,8 @@ from datp_core.domain.enums import (
     SplitProtocolId,
     TrainingModelId,
 )
-from datp_core.domain.values import MetricValue, Seed
+from datp_core.domain.values.counts import Seed
+from datp_core.domain.values.ratios import MetricValue
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL
 

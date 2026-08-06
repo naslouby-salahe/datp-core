@@ -2,6 +2,7 @@
 
 from datp_core.datasets.capabilities import (
     AttackAssignmentCapability,
+    CapabilityStatus,
     ChronologyCapability,
     DatasetCapabilities,
     ExternalValidationCapability,
@@ -11,7 +12,12 @@ from datp_core.datasets.capabilities import (
     TemporalCapability,
     ThresholdMethodCapability,
 )
-from datp_core.domain.enums import CapabilityStatus, EvidenceRole, FederatedThresholdMethod, MetricId, PopulationId
+from datp_core.domain.enums import (
+    EvidenceRole,
+    FederatedThresholdMethod,
+    MetricId,
+    PopulationId,
+)
 
 CICIOT2023_CAPABILITIES = DatasetCapabilities(
     physical_clients=PhysicalClientCapability(
@@ -62,22 +68,25 @@ CICIOT2023_CAPABILITIES = DatasetCapabilities(
     valid_populations=(PopulationId.CICIOT_FILE_CLIENTS,),
     threshold_methods=(
         ThresholdMethodCapability(
-            FederatedThresholdMethod.SHARED_THRESHOLD,
-            CapabilityStatus.SUPPORTED,
-            "File-defined pseudo-clients retain benign rows after the declared eligibility gate.",
-            "The shared threshold remains an applicability-boundary comparison only.",
+            status=CapabilityStatus.SUPPORTED,
+            evidence="File-defined pseudo-clients retain benign rows after the declared eligibility gate.",
+            reason="The shared threshold remains an applicability-boundary comparison only.",
+            method=FederatedThresholdMethod.SHARED_THRESHOLD,
         ),
         ThresholdMethodCapability(
-            FederatedThresholdMethod.LOCAL_THRESHOLD,
-            CapabilityStatus.SUPPORTED,
-            "File-defined pseudo-clients retain benign rows after the declared eligibility gate.",
-            "The local threshold remains an applicability-boundary comparison only.",
+            status=CapabilityStatus.SUPPORTED,
+            evidence="File-defined pseudo-clients retain benign rows after the declared eligibility gate.",
+            reason="The local threshold remains an applicability-boundary comparison only.",
+            method=FederatedThresholdMethod.LOCAL_THRESHOLD,
         ),
         ThresholdMethodCapability(
-            FederatedThresholdMethod.CLUSTER_THRESHOLD,
-            CapabilityStatus.CONDITIONAL,
-            "Taxonomy-free clustering may use benign reconstruction-error summaries.",
-            "Execution requires a separately declared, outcome-blind cluster-feasibility criterion after eligibility.",
+            status=CapabilityStatus.CONDITIONAL,
+            evidence="Taxonomy-free clustering may use benign reconstruction-error summaries.",
+            reason=(
+                "Execution requires a separately declared, outcome-blind cluster-feasibility "
+                "criterion after eligibility."
+            ),
+            method=FederatedThresholdMethod.CLUSTER_THRESHOLD,
         ),
     ),
 )

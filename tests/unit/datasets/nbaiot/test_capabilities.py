@@ -1,5 +1,5 @@
+from datp_core.datasets.capabilities import CapabilityStatus
 from datp_core.datasets.nbaiot.capabilities import NBAIOT_CAPABILITIES
-from datp_core.domain.enums import CapabilityStatus
 
 
 def test_nbaio_capability_boundaries() -> None:

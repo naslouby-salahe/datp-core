@@ -8,15 +8,9 @@ import polars as pl
 from datp_core.datasets.partitioning.contracts import ClientIdentity, PopulationOutcomeLabel
 from datp_core.domain.enums import MetricId, ScoreFrameColumn
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import (
-    ConformalRankIndex,
-    CoverageTarget,
-    Quantile,
-    RowCount,
-    Seed,
-    ThresholdValue,
-    checksum_file,
-)
+from datp_core.domain.values.checksums import checksum_file
+from datp_core.domain.values.counts import ConformalRankIndex, RowCount, Seed
+from datp_core.domain.values.ratios import CoverageTarget, Quantile, ThresholdValue
 from datp_core.evaluation.metric_semantics import (
     available,
     metric_value,

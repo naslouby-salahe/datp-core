@@ -7,20 +7,16 @@ from datp_core.domain.enums import (
     DatasetId,
     PartitionRole,
     PopulationId,
-    PreprocessingFitScope,
     PreprocessingProtocolId,
     SerializationFormat,
     SplitProtocolId,
-    TrustedEstimatorClassName,
 )
-from datp_core.domain.values import (
-    AbsoluteTolerance,
-    Checksum,
-    ClientPathToken,
-    FeatureName,
-    FeatureNameSequence,
-    Seed,
-)
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import Seed
+from datp_core.domain.values.identifiers import FeatureName, FeatureNameSequence
+from datp_core.domain.values.paths import ClientPathToken
+from datp_core.domain.values.ratios import AbsoluteTolerance
+from datp_core.preprocessing.contracts import PreprocessingFitScope, TrustedEstimatorClassName
 from datp_core.preprocessing.federated import publish_client_preprocessing
 from datp_core.preprocessing.models import (
     ClientPublishRequest,

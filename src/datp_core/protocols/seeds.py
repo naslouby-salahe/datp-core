@@ -1,8 +1,28 @@
 """Seed declarations."""
 
-from datp_core.domain.values import Seed
+from pydantic import model_validator
 
-from .models import CONFIRMATORY_PAIRED_SEED_COUNT, SeedCohort
+from datp_core.domain.contracts import StrictModel
+from datp_core.domain.values.counts import Seed, SeedCount
+
+CONFIRMATORY_PAIRED_SEED_COUNT = SeedCount(10)
+
+
+class SeedCohort(StrictModel):
+    values: tuple[Seed, ...]
+
+    @model_validator(mode="after")
+    def validate_values(self) -> "SeedCohort":
+        if not self.values:
+            raise ValueError("a seed cohort requires at least one seed")
+        if len(set(self.values)) != len(self.values):
+            raise ValueError("seed cohort values must be unique")
+        return self
+
+    @property
+    def member_count(self) -> SeedCount:
+        return SeedCount(len(self.values))
+
 
 CONFIRMATORY_SEED_COHORT = SeedCohort(
     values=tuple(Seed(value) for value in range(CONFIRMATORY_PAIRED_SEED_COUNT.value))

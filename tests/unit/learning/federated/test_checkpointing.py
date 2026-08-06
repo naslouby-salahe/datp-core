@@ -11,7 +11,9 @@ from tests.unit.learning.federated.helpers import (
 
 from datp_core.domain.enums import CheckpointSelectionRule, CheckpointStatus
 from datp_core.domain.errors import ArtifactIntegrityError, LeakageError, ScientificContractError
-from datp_core.domain.values import Checksum, MetricValue, RoundNumber, Seed
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import RoundNumber, Seed
+from datp_core.domain.values.ratios import MetricValue
 from datp_core.learning.federated.checkpoints.candidates import (
     candidate_tensor_name,
     rebase_checkpoint_candidates,

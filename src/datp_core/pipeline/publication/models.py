@@ -6,7 +6,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-from datp_core.domain.values import ByteCount, Checksum
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import ByteCount
 from datp_core.pipeline.planning import ExperimentCoordinate
 
 

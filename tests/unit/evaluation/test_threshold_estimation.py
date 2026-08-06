@@ -2,7 +2,8 @@ import pytest
 from tests.unit.learning.federated.helpers import client_identity, fedavg_coordinate
 
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import CalibrationSize, Quantile, ReplicateIndex, Seed
+from datp_core.domain.values.counts import CalibrationSize, ReplicateIndex, Seed
+from datp_core.domain.values.ratios import Quantile
 from datp_core.evaluation.threshold_estimation import ThresholdEstimationProvenance
 from datp_core.evaluation.threshold_evidence import verify_held_out_benign_scores
 

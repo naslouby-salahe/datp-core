@@ -16,43 +16,37 @@ from datp_core.domain.enums import (
     OptimizerId,
     PopulationId,
     PopulationIdentityKind,
-    PreprocessingFitScope,
     PreprocessingProtocolId,
     SerializationFormat,
     SplitProtocolId,
     TrainingModelId,
-    TrustedEstimatorClassName,
 )
-from datp_core.domain.values import (
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import BatchSize, ClientCount, LocalEpochCount, RoundNumber, RowCount, Seed
+from datp_core.domain.values.identifiers import FeatureName, FeatureNameSequence
+from datp_core.domain.values.paths import ClientPathToken as PreprocessingClientIdentity
+from datp_core.domain.values.ratios import (
     NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
-    BatchSize,
-    Checksum,
-    ClientCount,
     DittoRegularization,
-    FeatureName,
-    FeatureNameSequence,
     LearningRate,
-    LocalEpochCount,
     ProximalCoefficient,
-    RoundNumber,
-    RowCount,
-    Seed,
 )
-from datp_core.domain.values import ClientPathToken as PreprocessingClientIdentity
 from datp_core.learning.federated.models import ClientTrainingInput, FederatedTrainingCoordinate
+from datp_core.preprocessing.contracts import PreprocessingFitScope, TrustedEstimatorClassName
 from datp_core.preprocessing.models import (
     FederatedFittedPreprocessingState,
     PreprocessingProtocol,
 )
-from datp_core.protocols.models import (
+from datp_core.protocols.checkpoints import CheckpointProtocol
+from datp_core.protocols.training import (
+    DITTO_REGULARIZATION_GRID,
+    WEIGHT_DECAY,
     AutoencoderProtocol,
-    CheckpointProtocol,
     DittoProtocol,
     FedAvgProtocol,
     FedProxProtocol,
     OptimizerProtocol,
 )
-from datp_core.protocols.training import DITTO_REGULARIZATION_GRID, WEIGHT_DECAY
 
 FEATURE_NAMES = FeatureNameSequence((FeatureName("f0"), FeatureName("f1"), FeatureName("f2"), FeatureName("f3")))
 AUTOENCODER = AutoencoderProtocol(widths=(4, 3, 2, 3, 4))

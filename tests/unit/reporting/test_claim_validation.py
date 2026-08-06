@@ -2,9 +2,17 @@ from datp_core.domain.enums import AvailabilityStatus, EvidenceRole, MetricId
 from datp_core.reporting.validation import (
     ClaimKind,
     ClaimRequest,
+    ClaimStatus,
     EvidenceDecision,
     validate_claim,
 )
+
+
+def test_claim_status_member_set_is_exact_and_unique() -> None:
+    assert set(ClaimStatus.__members__) == {"PERMITTED", "NARROWED", "BLOCKED", "UNSUPPORTED", "SUPPRESSED"}
+    values = tuple(member.value for member in ClaimStatus)
+    assert len(values) == len(set(values))
+    assert all(value.islower() for value in values)
 
 
 def claim_request(

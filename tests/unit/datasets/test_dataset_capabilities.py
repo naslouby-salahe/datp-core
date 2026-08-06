@@ -1,7 +1,21 @@
+from datp_core.datasets.capabilities import CapabilityStatus
 from datp_core.datasets.ciciot2023.capabilities import CICIOT2023_CAPABILITIES
 from datp_core.datasets.edge_iiotset.capabilities import EDGE_IIOTSET_CAPABILITIES
 from datp_core.datasets.nbaiot.capabilities import NBAIOT_CAPABILITIES
-from datp_core.domain.enums import CapabilityStatus, PopulationId
+from datp_core.domain.enums import PopulationId
+
+
+def test_capability_status_member_set_is_exact_and_unique() -> None:
+    assert set(CapabilityStatus.__members__) == {
+        "SUPPORTED",
+        "UNSUPPORTED",
+        "CONDITIONAL",
+        "UNAVAILABLE",
+        "NOT_APPLICABLE",
+    }
+    values = tuple(member.value for member in CapabilityStatus)
+    assert len(values) == len(set(values))
+    assert all(value.islower() for value in values)
 
 
 def test_physical_identity_and_attack_assignment_boundaries() -> None:

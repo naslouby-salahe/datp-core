@@ -2,9 +2,10 @@
 
 import numpy as np
 
-from datp_core.domain.enums import EvaluationCohort, MetricId, WarningCode
+from datp_core.domain.enums import EvaluationCohort, MetricId
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import Quantile, RowCount
+from datp_core.domain.values.counts import RowCount
+from datp_core.domain.values.ratios import Quantile
 from datp_core.evaluation.metric_semantics import available, unavailable
 from datp_core.evaluation.models import (
     FPR_POPULATION_METRIC_IDS,
@@ -14,6 +15,7 @@ from datp_core.evaluation.models import (
     MetricStatus,
     MetricWarning,
     PopulationMetricResult,
+    WarningCode,
 )
 from datp_core.protocols.metrics import NEAR_ZERO_MEAN_FPR_WARNING_CUTOFF
 

@@ -6,7 +6,8 @@ import torch
 
 from datp_core.domain.enums import ContractSubject
 from datp_core.domain.errors import ExecutionStateError
-from datp_core.domain.values import CudaDeviceCount, CudaDeviceName, WorkerCount
+from datp_core.domain.values.counts import CudaDeviceCount, WorkerCount
+from datp_core.domain.values.identifiers import CudaDeviceName
 
 from .configuration import CANONICAL_RUNTIME, CudaDeviceIndex
 

@@ -1,6 +1,6 @@
 from tests.unit.thresholding.helpers import client_scores
 
-from datp_core.domain.values import Quantile
+from datp_core.domain.values.ratios import Quantile
 from datp_core.protocols.calibration import FIXED_SHRINKAGE_PROTOCOL
 from datp_core.thresholding.identities import ThresholdInfeasibilityReason
 from datp_core.thresholding.methods.shrinkage import (

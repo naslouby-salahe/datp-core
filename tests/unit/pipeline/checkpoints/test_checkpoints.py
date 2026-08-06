@@ -5,7 +5,9 @@ import pytest
 
 from datp_core.domain.enums import CheckpointStatus
 from datp_core.domain.errors import ArtifactIntegrityError
-from datp_core.domain.values import Checksum, MetricValue, RoundNumber
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import RoundNumber
+from datp_core.domain.values.ratios import MetricValue
 from datp_core.pipeline.checkpoints.service import (
     select_terminal_checkpoint,
     validate_ordered_checkpoint_inventory,
@@ -25,7 +27,7 @@ class _Candidate:
 def _candidate(tmp_path: Path, round_number: int) -> _Candidate:
     path = tmp_path / f"checkpoint_round_{round_number}.safetensors"
     path.write_text(f"round-{round_number}", encoding="utf-8")
-    from datp_core.domain.values import checksum_file
+    from datp_core.domain.values.checksums import checksum_file
 
     return _Candidate(
         round_number=RoundNumber(round_number),

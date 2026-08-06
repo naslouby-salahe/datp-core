@@ -1,5 +1,9 @@
+from datp_core.datasets.capabilities import CapabilityStatus
 from datp_core.datasets.ciciot2023.capabilities import CICIOT2023_CAPABILITIES
-from datp_core.domain.enums import CapabilityStatus, FederatedThresholdMethod, PopulationId
+from datp_core.domain.enums import (
+    FederatedThresholdMethod,
+    PopulationId,
+)
 
 
 def test_ciciot_physical_identity_is_unavailable() -> None:

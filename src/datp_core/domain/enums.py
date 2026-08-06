@@ -25,26 +25,12 @@ class PopulationIdentityKind(StrEnum):
     VERIFIED_TEMPORAL_GROUPS = "verified_temporal_groups"
 
 
-class ControlledPartitionKind(StrEnum):
-    """Construction kind for controlled synthetic client partitions.
-
-    IID is a separate typed construction condition, never an infinite Dirichlet concentration.
-    """
-
-    DIRICHLET = "dirichlet"
-    IID = "iid"
-
-
 class ExperimentReadiness(StrEnum):
     DECLARED = "declared"
     EXECUTABLE = "executable"
     SUPPRESSED = "suppressed"
     INFEASIBLE = "infeasible"
     BLOCKED = "blocked"
-
-
-class ConfirmatoryDeltaDirection(StrEnum):
-    SHARED_MINUS_LOCAL = "shared_minus_local"
 
 
 class EvidenceRole(StrEnum):
@@ -116,29 +102,6 @@ class FederatedThresholdMethod(StrEnum):
     FEDERATED_BENIGN_STATISTICS = "federated_benign_statistics"
 
 
-class ClusterFingerprintFeature(StrEnum):
-    BENIGN_ERROR_MEAN = "benign_error_mean"
-    BENIGN_ERROR_STANDARD_DEVIATION = "benign_error_standard_deviation"
-    BENIGN_ERROR_SKEWNESS = "benign_error_skewness"
-    BENIGN_ERROR_P95 = "benign_error_p95"
-
-
-class ClusterFeatureStandardization(StrEnum):
-    STANDARD_SCALER = "standard_scaler"
-
-
-class ClusterAssignmentAlgorithm(StrEnum):
-    KMEANS = "kmeans"
-
-
-class KMeansInitialization(StrEnum):
-    KMEANS_PLUS_PLUS = "kmeans_plus_plus"
-
-
-class ClusterThresholdAggregation(StrEnum):
-    ARITHMETIC_MEAN_OF_ELIGIBLE_LOCAL_THRESHOLDS = "arithmetic_mean_of_eligible_local_thresholds"
-
-
 class IntervalMethod(StrEnum):
     BCA_PAIRED_ARITHMETIC_MEAN = "bca_paired_arithmetic_mean"
 
@@ -204,37 +167,9 @@ class AvailabilityStatus(StrEnum):
     INFEASIBLE = "infeasible"
 
 
-class CapabilityStatus(StrEnum):
-    SUPPORTED = "supported"
-    UNSUPPORTED = "unsupported"
-    CONDITIONAL = "conditional"
-    UNAVAILABLE = "unavailable"
-    NOT_APPLICABLE = "not_applicable"
-
-
 class PublicationStatus(StrEnum):
     PUBLISHED = "published"
     REUSED = "reused"
-
-
-class ScientificDecision(StrEnum):
-    SUPPORTED = "supported"
-    DIRECTIONAL_INCONCLUSIVE = "directional_inconclusive"
-    NO_OBSERVED_ADVANTAGE = "no_observed_advantage"
-    OPPOSITE_DIRECTION = "opposite_direction"
-    PARTIAL_ABSORPTION = "partial_absorption"
-    FULL_ABSORPTION = "full_absorption"
-    BOUNDARY_RESULT = "boundary_result"
-    INFEASIBLE = "infeasible"
-    BLOCKED = "blocked"
-
-
-class ClaimStatus(StrEnum):
-    PERMITTED = "permitted"
-    NARROWED = "narrowed"
-    BLOCKED = "blocked"
-    UNSUPPORTED = "unsupported"
-    SUPPRESSED = "suppressed"
 
 
 class StageId(StrEnum):
@@ -303,15 +238,6 @@ class CommunicationEstimationMethod(StrEnum):
     MEASURED_NETWORK_TRAFFIC = "measured_network_traffic"
 
 
-class WarningCode(StrEnum):
-    NEAR_ZERO_MEAN_FPR = "near_zero_mean_fpr"
-    UNDEFINED_COEFFICIENT_OF_VARIATION = "undefined_coefficient_of_variation"
-    UNAVAILABLE_ATTACK_ASSIGNMENT = "unavailable_attack_assignment"
-    INVALID_TEMPORAL_CHRONOLOGY = "invalid_temporal_chronology"
-    UNRESOLVED_CLUSTER_ASSIGNMENTS = "unresolved_cluster_assignments"
-    MISSING_TRAFFIC_RATE_EVIDENCE = "missing_traffic_rate_evidence"
-
-
 class TrafficRateEvidenceType(StrEnum):
     MEASURED = "measured"
     DATASET_DERIVED = "dataset_derived"
@@ -338,11 +264,6 @@ class CompletionStatus(StrEnum):
     COMPLETE = "complete"
     FAILED = "failed"
     BLOCKED = "blocked"
-
-
-class PreprocessingFitScope(StrEnum):
-    CLIENT_LOCAL_TRAINING = "client_local_training"
-    POOLED_TRAINING = "pooled_training"
 
 
 class ProcessedDataBranch(StrEnum):
@@ -385,11 +306,6 @@ class PreprocessingProtocolId(StrEnum):
     FEDERATED_CLIENT_LOCAL_STANDARD = "federated_client_local_standard"
     CENTRALIZED_POOLED_MIN_MAX = "centralized_pooled_min_max"
     TEST_COLUMN_ORDER_PROJECTION = "test_column_order_projection"
-
-
-class TrustedEstimatorClassName(StrEnum):
-    STANDARD_SCALER = "standard_scaler"
-    MIN_MAX_SCALER = "min_max_scaler"
 
 
 class TrustedEstimatorModule(StrEnum):
@@ -460,8 +376,3 @@ class QuantileInterpolationSemantics(StrEnum):
     """Operationalization of the exact empirical quantile via NumPy linear interpolation."""
 
     NUMPY_QUANTILE_LINEAR = "numpy_quantile_linear"
-
-
-class PartitionOrdering(StrEnum):
-    PRESERVE_SOURCE_ORDER = "preserve_source_order"
-    STABLE_ROW_ID = "stable_row_id"

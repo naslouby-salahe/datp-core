@@ -5,17 +5,21 @@ from typing import Annotated
 import typer
 
 from datp_core.cli.validation import controlled_partition_condition, require_federated_preprocessing
+from datp_core.datasets.partitioning.contracts import ControlledPartitionKind
 from datp_core.datasets.service import DatasetMaterializationRequest, materialize_datasets
 from datp_core.domain.enums import (
-    ControlledPartitionKind,
     DatasetId,
     PopulationId,
     PreprocessingProtocolId,
     SplitProtocolId,
 )
-from datp_core.domain.values import Seed
-from datp_core.preprocessing.centralized import CentralizedPopulationPreprocessingRequest, preprocess_centralized_population
-from datp_core.preprocessing.service import FederatedPreprocessingRequest, preprocess_federated
+from datp_core.domain.values.counts import Seed
+from datp_core.preprocessing.centralized import (
+    CentralizedPopulationPreprocessingRequest,
+    preprocess_centralized_population,
+)
+from datp_core.preprocessing.models import FederatedPreprocessingRequest
+from datp_core.preprocessing.service import preprocess_federated
 from datp_core.runtime.configuration import DATA_ROOT
 
 app = typer.Typer()
@@ -77,6 +81,5 @@ def preprocess_centralized_command(
         )
     )
     typer.echo(
-        f"population={result.population.value} dataset={result.dataset.value} "
-        f"status={result.publication_status.value}"
+        f"population={result.population.value} dataset={result.dataset.value} status={result.publication_status.value}"
     )

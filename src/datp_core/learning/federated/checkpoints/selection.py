@@ -11,18 +11,19 @@ from datp_core.domain.enums import (
     ProcessedDataBranch,
 )
 from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.values import Checksum, MetricValue
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.ratios import MetricValue
 from datp_core.learning.federated.models import (
     CheckpointCandidate,
     CheckpointDecision,
     FederatedTrainingCoordinate,
 )
 from datp_core.protocols.checkpoints import (
+    CheckpointProtocol,
     select_terminal_checkpoint,
     validate_ordered_checkpoint_inventory,
     validate_persisted_checkpoint_file,
 )
-from datp_core.protocols.models import CheckpointProtocol
 from datp_core.protocols.training import require_non_test_checkpoint_selection_inputs
 
 

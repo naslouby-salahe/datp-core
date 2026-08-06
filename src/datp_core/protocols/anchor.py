@@ -1,9 +1,45 @@
 """Historical anchor declarations."""
 
-from datp_core.domain.enums import FederatedThresholdMethod, MetricId
-from datp_core.domain.values import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE, MetricValue, Seed
+from typing import Literal
 
-from .models import AnchorDecisionProtocol, AnchorReference, SeedCohort
+from pydantic import model_validator
+
+from datp_core.domain.contracts import StrictModel
+from datp_core.domain.enums import FederatedThresholdMethod, MetricId
+from datp_core.domain.values.counts import Seed
+from datp_core.domain.values.ratios import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE, AbsoluteTolerance, MetricValue
+
+from .seeds import SeedCohort
+
+
+class AnchorReference(StrictModel):
+    seed: Seed
+    threshold_method: Literal[
+        FederatedThresholdMethod.SHARED_THRESHOLD,
+        FederatedThresholdMethod.LOCAL_THRESHOLD,
+    ]
+    metric: MetricId
+    value: MetricValue
+    absolute_tolerance: AbsoluteTolerance | MetricValue
+
+
+class AnchorDecisionProtocol(StrictModel):
+    seed_cohort: SeedCohort
+    references: tuple[AnchorReference, ...]
+
+    @model_validator(mode="after")
+    def validate_seed_coverage(self) -> "AnchorDecisionProtocol":
+        reference_seeds = frozenset(reference.seed for reference in self.references)
+        cohort_seeds = frozenset(self.seed_cohort.values)
+        if reference_seeds != cohort_seeds:
+            raise ValueError("anchor references must cover exactly the historical seed cohort")
+        coordinates = tuple(
+            (reference.seed, reference.threshold_method, reference.metric) for reference in self.references
+        )
+        if len(set(coordinates)) != len(coordinates):
+            raise ValueError("anchor references must be unique by seed, threshold method, and metric")
+        return self
+
 
 HISTORICAL_SHARED_THRESHOLD_CV_FPR = (
     MetricValue(1.0448312675151203),

@@ -4,21 +4,13 @@ import pytest
 
 from datp_core.domain.enums import (
     AvailabilityStatus,
-    CapabilityStatus,
     CentralizedModelId,
     CentralizedThresholdMethod,
     CheckpointSelectionRule,
     CheckpointStatus,
-    ClaimStatus,
-    ClusterAssignmentAlgorithm,
-    ClusterFeatureStandardization,
-    ClusterFingerprintFeature,
-    ClusterThresholdAggregation,
     CommunicationEstimationMethod,
     CompletionStatus,
-    ConfirmatoryDeltaDirection,
     ContractSubject,
-    ControlledPartitionKind,
     DatasetId,
     EffectSizeId,
     EvaluationCohort,
@@ -27,7 +19,6 @@ from datp_core.domain.enums import (
     ExperimentReadiness,
     FederatedThresholdMethod,
     IntervalMethod,
-    KMeansInitialization,
     MetricId,
     MultiplicityCorrectionId,
     OptimizerId,
@@ -35,13 +26,11 @@ from datp_core.domain.enums import (
     PopulationId,
     PopulationIdentityKind,
     PreprocessExecutionStatus,
-    PreprocessingFitScope,
     PreprocessingProtocolId,
     ProcessedDataBranch,
     PublicationStatus,
     RawDatasetDirectory,
     ReusableDataCoordinateKind,
-    ScientificDecision,
     ScoreFrameColumn,
     SerializationFormat,
     SplitId,
@@ -52,9 +41,7 @@ from datp_core.domain.enums import (
     TrafficRateEvidenceType,
     TrainingHistoryColumn,
     TrainingModelId,
-    TrustedEstimatorClassName,
     TrustedEstimatorModule,
-    WarningCode,
 )
 
 EXPECTED_MEMBERS = (
@@ -87,11 +74,6 @@ EXPECTED_MEMBERS = (
         ExperimentReadiness,
         frozenset(("DECLARED", "EXECUTABLE", "SUPPRESSED", "INFEASIBLE", "BLOCKED")),
     ),
-    (ConfirmatoryDeltaDirection, frozenset(("SHARED_MINUS_LOCAL",))),
-    (
-        PreprocessingFitScope,
-        frozenset(("CLIENT_LOCAL_TRAINING", "POOLED_TRAINING")),
-    ),
     (ProcessedDataBranch, frozenset(("FEDERATED", "CENTRALIZED_REFERENCE"))),
     (ReusableDataCoordinateKind, frozenset(("CANONICAL", "PROCESSED", "RAW"))),
     (RawDatasetDirectory, frozenset(("NBAIOT", "CICIOT2023", "EDGE_IIOTSET"))),
@@ -114,7 +96,6 @@ EXPECTED_MEMBERS = (
             )
         ),
     ),
-    (TrustedEstimatorClassName, frozenset(("STANDARD_SCALER", "MIN_MAX_SCALER"))),
     (TrustedEstimatorModule, frozenset(("SKLEARN_PREPROCESSING",))),  # value: sklearn_preprocessing
     (
         PreprocessExecutionStatus,
@@ -200,21 +181,6 @@ EXPECTED_MEMBERS = (
         ),
     ),
     (CentralizedThresholdMethod, frozenset(("POOLED_BENIGN_QUANTILE",))),
-    (
-        ClusterFingerprintFeature,
-        frozenset(
-            (
-                "BENIGN_ERROR_MEAN",
-                "BENIGN_ERROR_STANDARD_DEVIATION",
-                "BENIGN_ERROR_SKEWNESS",
-                "BENIGN_ERROR_P95",
-            )
-        ),
-    ),
-    (ClusterFeatureStandardization, frozenset(("STANDARD_SCALER",))),
-    (ClusterAssignmentAlgorithm, frozenset(("KMEANS",))),
-    (KMeansInitialization, frozenset(("KMEANS_PLUS_PLUS",))),
-    (ClusterThresholdAggregation, frozenset(("ARITHMETIC_MEAN_OF_ELIGIBLE_LOCAL_THRESHOLDS",))),
     (IntervalMethod, frozenset(("BCA_PAIRED_ARITHMETIC_MEAN",))),
     (StatisticalTestId, frozenset(("WILCOXON_SIGNED_RANK",))),
     (EffectSizeId, frozenset(("MATCHED_PAIRS_RANK_BISERIAL",))),
@@ -258,24 +224,6 @@ EXPECTED_MEMBERS = (
         ),
     ),
     (AvailabilityStatus, frozenset(("AVAILABLE", "UNAVAILABLE", "UNDEFINED", "SUPPRESSED", "INFEASIBLE"))),
-    (CapabilityStatus, frozenset(("SUPPORTED", "UNSUPPORTED", "CONDITIONAL", "UNAVAILABLE", "NOT_APPLICABLE"))),
-    (
-        ScientificDecision,
-        frozenset(
-            (
-                "SUPPORTED",
-                "DIRECTIONAL_INCONCLUSIVE",
-                "NO_OBSERVED_ADVANTAGE",
-                "OPPOSITE_DIRECTION",
-                "PARTIAL_ABSORPTION",
-                "FULL_ABSORPTION",
-                "BOUNDARY_RESULT",
-                "INFEASIBLE",
-                "BLOCKED",
-            )
-        ),
-    ),
-    (ClaimStatus, frozenset(("PERMITTED", "NARROWED", "BLOCKED", "UNSUPPORTED", "SUPPRESSED"))),
     (
         StageId,
         frozenset(
@@ -309,19 +257,6 @@ EXPECTED_MEMBERS = (
     ),
     (TemporalState, frozenset(("STATIC_REFERENCE", "FROZEN_FUTURE", "RECALIBRATED_FUTURE"))),
     (SerializationFormat, frozenset(("PYDANTIC_JSON", "PARQUET", "SAFETENSORS", "SKOPS"))),
-    (
-        WarningCode,
-        frozenset(
-            (
-                "NEAR_ZERO_MEAN_FPR",
-                "UNDEFINED_COEFFICIENT_OF_VARIATION",
-                "UNAVAILABLE_ATTACK_ASSIGNMENT",
-                "INVALID_TEMPORAL_CHRONOLOGY",
-                "UNRESOLVED_CLUSTER_ASSIGNMENTS",
-                "MISSING_TRAFFIC_RATE_EVIDENCE",
-            )
-        ),
-    ),
     (
         CommunicationEstimationMethod,
         frozenset(
@@ -381,7 +316,6 @@ EXPECTED_MEMBERS = (
         ),
     ),
     (TrainingHistoryColumn, frozenset(("EPOCH", "MEAN_TRAINING_LOSS"))),
-    (ControlledPartitionKind, frozenset(("DIRICHLET", "IID"))),
     (PublicationStatus, frozenset(("PUBLISHED", "REUSED"))),
     (ScoreFrameColumn, frozenset(("STABLE_ROW_ID", "OUTCOME_LABEL", "RECONSTRUCTION_ERROR"))),
 )

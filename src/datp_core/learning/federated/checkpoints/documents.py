@@ -2,16 +2,11 @@
 
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import PopulationId, PreprocessingProtocolId, SplitProtocolId, TrainingModelId
-from datp_core.domain.values import (
-    BatchSize,
-    Checksum,
-    ClientPathToken,
-    ManifestSchemaVersion,
-    ModelCoefficientValue,
-    RoundNumber,
-    SafeTensorFilename,
-    Seed,
-)
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import BatchSize, ManifestSchemaVersion, RoundNumber, Seed
+from datp_core.domain.values.identifiers import SafeTensorFilename
+from datp_core.domain.values.paths import ClientPathToken
+from datp_core.domain.values.ratios import ModelCoefficientValue
 from datp_core.learning.federated.checkpoints.identities import CandidateManifestKind
 
 

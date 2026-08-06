@@ -18,7 +18,7 @@ from datp_core.anchor.reproduction import (
     reproduce_anchor,
 )
 from datp_core.domain.errors import AnchorReproductionError
-from datp_core.domain.values import NonNegativeIntegerValue
+from datp_core.domain.values.base import NonNegativeIntegerValue
 
 
 def verify_anchor(request: VerifyAnchorStageRequest) -> VerifyAnchorStageResult:

@@ -11,7 +11,9 @@ from safetensors.torch import load_file, save_file
 from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.enums import CheckpointStatus, ContractSubject
 from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
-from datp_core.domain.values import Checksum, RoundNumber, SafeTensorFilename, checksum_file
+from datp_core.domain.values.checksums import Checksum, checksum_file
+from datp_core.domain.values.counts import RoundNumber
+from datp_core.domain.values.identifiers import SafeTensorFilename
 from datp_core.learning.autoencoder import AutoencoderStateView, build_autoencoder_for_state
 from datp_core.learning.federated.models import (
     CheckpointCandidate,
@@ -19,10 +21,11 @@ from datp_core.learning.federated.models import (
     RoundSnapshot,
 )
 from datp_core.protocols.checkpoints import (
+    CheckpointProtocol,
     validate_ordered_checkpoint_inventory,
     validate_persisted_checkpoint_file,
 )
-from datp_core.protocols.models import AutoencoderProtocol, CheckpointProtocol
+from datp_core.protocols.training import AutoencoderProtocol
 
 _CANDIDATE_PREFIX = "checkpoint_round_"
 _CANDIDATE_SUFFIX = ".safetensors"

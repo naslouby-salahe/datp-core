@@ -37,10 +37,11 @@ from datp_core.anchor.models import (
 )
 from datp_core.domain.enums import ContractSubject, FederatedThresholdMethod, MetricId
 from datp_core.domain.errors import AnchorReproductionError
-from datp_core.domain.values import MetricValue, Seed, checksum_file
-from datp_core.protocols.anchor import ANCHOR_DECISION_PROTOCOL, HISTORICAL_ANCHOR_SEED_COHORT
-from datp_core.protocols.models import AnchorDecisionProtocol, SeedCohort
-from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT
+from datp_core.domain.values.checksums import checksum_file
+from datp_core.domain.values.counts import Seed
+from datp_core.domain.values.ratios import MetricValue
+from datp_core.protocols.anchor import ANCHOR_DECISION_PROTOCOL, HISTORICAL_ANCHOR_SEED_COHORT, AnchorDecisionProtocol
+from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
 
 
 def references_from_protocol(

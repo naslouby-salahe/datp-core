@@ -9,15 +9,11 @@ from pydantic import ValidationError
 from datp_core.domain.enums import ContractSubject, TrainingModelId
 from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
 from datp_core.domain.provenance import canonical_checksum, serialize_json_model
-from datp_core.domain.values import (
-    BatchSize,
-    Checksum,
-    ClientPathToken,
-    ManifestSchemaVersion,
-    ModelCoefficientValue,
-    SafeTensorFilename,
-    checksum_file,
-)
+from datp_core.domain.values.checksums import Checksum, checksum_file
+from datp_core.domain.values.counts import BatchSize, ManifestSchemaVersion
+from datp_core.domain.values.identifiers import SafeTensorFilename
+from datp_core.domain.values.paths import ClientPathToken
+from datp_core.domain.values.ratios import ModelCoefficientValue
 from datp_core.learning.federated.checkpoints.candidates import (
     retain_checkpoint_candidates,
 )
@@ -43,7 +39,8 @@ from datp_core.learning.federated.models import (
     PersonalizedSnapshotSet,
     RoundSnapshot,
 )
-from datp_core.protocols.models import AutoencoderProtocol, CheckpointProtocol
+from datp_core.protocols.checkpoints import CheckpointProtocol
+from datp_core.protocols.training import AutoencoderProtocol
 
 _MANIFEST_SCHEMA_VERSION = ManifestSchemaVersion(1)
 

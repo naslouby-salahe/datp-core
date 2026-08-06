@@ -16,7 +16,8 @@ from tests.unit.learning.centralized.helpers import (
 )
 
 from datp_core.datasets.partitioning.contracts import PopulationOutcomeLabel
-from datp_core.domain.values import Checksum, RowCount, Seed
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import RowCount, Seed
 from datp_core.learning.centralized.training import CentralizedTrainingRequest, train_centralized_autoencoder
 from datp_core.pipeline.checkpoints.service import retain_centralized_checkpoint_candidates
 from datp_core.pipeline.decision.centralized import (

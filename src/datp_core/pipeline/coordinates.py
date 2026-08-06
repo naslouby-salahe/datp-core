@@ -13,7 +13,7 @@ from datp_core.domain.enums import (
     TemporalState,
     TrainingModelId,
 )
-from datp_core.domain.values import Seed
+from datp_core.domain.values.counts import Seed
 
 
 @runtime_checkable

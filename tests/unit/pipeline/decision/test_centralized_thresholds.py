@@ -16,7 +16,8 @@ from tests.unit.learning.centralized.helpers import (
 from datp_core.datasets.partitioning.contracts import PopulationOutcomeLabel
 from datp_core.domain.enums import CentralizedThresholdMethod, FederatedThresholdMethod, ScoreFrameColumn
 from datp_core.domain.errors import LeakageError
-from datp_core.domain.values import Quantile, RowCount, Seed, ThresholdValue
+from datp_core.domain.values.counts import RowCount, Seed
+from datp_core.domain.values.ratios import Quantile, ThresholdValue
 from datp_core.pipeline.checkpoints.service import retain_centralized_checkpoint_candidates
 from datp_core.pipeline.decision.centralized import (
     CENTRALIZED_POOLED_QUANTILE_PROTOCOL,
@@ -73,7 +74,7 @@ def test_exact_pooled_quantile_unit() -> None:
 
 
 def test_rejects_attack_rows_in_calibration() -> None:
-    from datp_core.domain.values import OutcomeLabel, OutcomeLabelSequence
+    from datp_core.domain.values.identifiers import OutcomeLabel, OutcomeLabelSequence
 
     with pytest.raises(LeakageError, match="attack-labelled"):
         reject_attack_rows_in_benign_calibration(

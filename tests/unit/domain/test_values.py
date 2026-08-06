@@ -3,21 +3,9 @@
 import pytest
 from pydantic import BaseModel
 
-from datp_core.domain.values import (
-    CalibrationSize,
-    ClientCount,
-    GroupCount,
-    MetricValue,
-    Quantile,
-    Ratio,
-    RowCount,
-    ScoreValue,
-    Seed,
-    SeedCount,
-    ThresholdValue,
-)
-from datp_core.protocols.models import SeedCohort
-from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT
+from datp_core.domain.values.counts import CalibrationSize, ClientCount, GroupCount, RowCount, Seed, SeedCount
+from datp_core.domain.values.ratios import MetricValue, Quantile, Ratio, ScoreValue, ThresholdValue
+from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL
 
 

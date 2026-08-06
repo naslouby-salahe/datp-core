@@ -4,15 +4,8 @@ from tests.unit.learning.federated.helpers import (
 )
 
 from datp_core.domain.enums import MetricId
-from datp_core.domain.values import (
-    ConformalRankIndex,
-    CoverageTarget,
-    Quantile,
-    RowCount,
-    ScoreValue,
-    Seed,
-    ThresholdValue,
-)
+from datp_core.domain.values.counts import ConformalRankIndex, RowCount, Seed
+from datp_core.domain.values.ratios import CoverageTarget, Quantile, ScoreValue, ThresholdValue
 from datp_core.evaluation.conformal_coverage import (
     evaluate_held_out_conformal_coverage,
 )

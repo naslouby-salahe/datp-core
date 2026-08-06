@@ -6,17 +6,9 @@ from typing import ClassVar
 from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.enums import ContractSubject, FederatedThresholdMethod
 from datp_core.domain.errors import ScientificContractError, require_contract
-from datp_core.domain.values import (
-    ConformalRankIndex,
-    CoverageTarget,
-    Quantile,
-    Ratio,
-    RowCount,
-    ScoreValue,
-    ThresholdValue,
-    floats_absolutely_close,
-    floats_exactly_equal,
-)
+from datp_core.domain.values.base import floats_absolutely_close, floats_exactly_equal
+from datp_core.domain.values.counts import ConformalRankIndex, RowCount
+from datp_core.domain.values.ratios import CoverageTarget, Quantile, Ratio, ScoreValue, ThresholdValue
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.protocols.splits import FRACTION_TOTAL_ABSOLUTE_TOLERANCE
 from datp_core.thresholding.assignments import validate_client_partition

@@ -4,16 +4,26 @@ from enum import StrEnum
 
 from pydantic import model_validator
 
+from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
     EffectSizeId,
     IntervalMethod,
     MultiplicityCorrectionId,
     StatisticalTestId,
 )
-from datp_core.domain.values import BootstrapReplicateCount, ConfidenceLevel, Ratio
+from datp_core.domain.values.counts import BootstrapReplicateCount, SeedCount
+from datp_core.domain.values.ratios import ConfidenceLevel, Ratio
 
-from .models import StatisticalInferenceProtocol
-from .seeds import CONFIRMATORY_SEED_COHORT
+from .seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
+
+
+class StatisticalInferenceProtocol(StrictModel):
+    confidence_level: ConfidenceLevel
+    seed_cohort: SeedCohort
+
+    @property
+    def paired_seed_count(self) -> SeedCount:
+        return self.seed_cohort.member_count
 
 
 class WilcoxonAlternative(StrEnum):

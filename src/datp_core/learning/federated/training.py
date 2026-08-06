@@ -24,24 +24,10 @@ from datp_core.domain.enums import (
 )
 from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.provenance import canonical_json_text
-from datp_core.domain.values import (
-    BatchSize,
-    ByteCount,
-    Checksum,
-    ClientCount,
-    CudaDeviceName,
-    DittoRegularization,
-    LearningRate,
-    MetricValue,
-    OutcomeLabel,
-    OutcomeLabelSequence,
-    ProximalCoefficient,
-    RoundNumber,
-    RowCount,
-    Seed,
-    checksum_bytes,
-    checksum_text,
-)
+from datp_core.domain.values.checksums import Checksum, checksum_bytes, checksum_text
+from datp_core.domain.values.counts import BatchSize, ByteCount, ClientCount, RoundNumber, RowCount, Seed
+from datp_core.domain.values.identifiers import CudaDeviceName, OutcomeLabel, OutcomeLabelSequence
+from datp_core.domain.values.ratios import DittoRegularization, LearningRate, MetricValue, ProximalCoefficient
 from datp_core.learning.autoencoder import (
     LEARNING_DTYPE,
     TORCH_LEARNING_DTYPE,
@@ -67,14 +53,14 @@ from datp_core.learning.federated.models import (
     PreparedClientProvenance,
     RoundSnapshot,
 )
-from datp_core.protocols.models import (
+from datp_core.protocols.checkpoints import CheckpointProtocol
+from datp_core.protocols.training import (
+    FEDERATED_DATALOADER_WORKER_COUNT,
     AutoencoderProtocol,
-    CheckpointProtocol,
     FedAvgProtocol,
     FedProxProtocol,
     OptimizerProtocol,
 )
-from datp_core.protocols.training import FEDERATED_DATALOADER_WORKER_COUNT
 from datp_core.runtime.compute import resolve_cuda_device
 from datp_core.runtime.determinism import configure_deterministic_execution, derive_worker_seed
 

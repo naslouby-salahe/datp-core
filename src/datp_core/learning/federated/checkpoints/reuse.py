@@ -11,13 +11,10 @@ from datp_core.domain.enums import (
     TrainingModelId,
 )
 from datp_core.domain.errors import ArtifactIntegrityError
-from datp_core.domain.values import (
-    BatchSize,
-    Checksum,
-    ClientPathToken,
-    MetricValue,
-    RoundNumber,
-)
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import BatchSize, RoundNumber
+from datp_core.domain.values.paths import ClientPathToken
+from datp_core.domain.values.ratios import MetricValue
 from datp_core.learning.federated.checkpoints.candidates import (
     candidate_tensor_name,
 )
@@ -51,8 +48,8 @@ from datp_core.learning.federated.models import (
     FederatedTrainingResult,
     PersonalizedCandidateSet,
 )
-from datp_core.protocols.checkpoints import validate_persisted_checkpoint_file
-from datp_core.protocols.models import AutoencoderProtocol, CheckpointProtocol
+from datp_core.protocols.checkpoints import CheckpointProtocol, validate_persisted_checkpoint_file
+from datp_core.protocols.training import AutoencoderProtocol
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

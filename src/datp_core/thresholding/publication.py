@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 from pydantic import TypeAdapter
 
 from datp_core.domain.provenance import canonical_json_text
-from datp_core.domain.values import Checksum, checksum_text
+from datp_core.domain.values.checksums import Checksum, checksum_text
 from datp_core.protocols.inference import ScoreArtifactManifest
 from datp_core.protocols.temporal import TemporalDeploymentProvenance
 from datp_core.thresholding.models import ThresholdConstructionResult

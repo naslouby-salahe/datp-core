@@ -13,9 +13,12 @@ from datp_core.datasets.partitioning.contracts import ClientIdentity, Population
 from datp_core.datasets.partitioning.integrity import reject_non_benign_labels
 from datp_core.domain.enums import ContractSubject, PartitionRole, ScoreFrameColumn
 from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.values import Checksum, RowCount, ScoreValue, StableRowId
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import RowCount
+from datp_core.domain.values.identifiers import StableRowId
+from datp_core.domain.values.ratios import ScoreValue
+from datp_core.protocols.calibration import CalibrationEligibilityProtocol
 from datp_core.protocols.inference import ScoreRecord
-from datp_core.protocols.models import CalibrationEligibilityProtocol
 
 
 def reject_evaluation_partition_in_eligibility(partition_role: PartitionRole) -> None:

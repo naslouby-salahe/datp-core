@@ -16,22 +16,14 @@ from datp_core.domain.enums import (
     TrainingModelId,
 )
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import (
-    BatchSize,
-    ByteCount,
-    Checksum,
-    CudaDeviceName,
-    DittoRegularization,
-    FeatureNameSequence,
-    MetricValue,
-    ProximalCoefficient,
-    RoundNumber,
-    RowCount,
-    Seed,
-)
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import BatchSize, ByteCount, RoundNumber, RowCount, Seed
+from datp_core.domain.values.identifiers import CudaDeviceName, FeatureNameSequence
+from datp_core.domain.values.ratios import DittoRegularization, MetricValue, ProximalCoefficient
 from datp_core.learning.autoencoder import AutoencoderState
 from datp_core.preprocessing.models import FederatedFittedPreprocessingState
-from datp_core.protocols.models import AutoencoderProtocol, CheckpointProtocol
+from datp_core.protocols.checkpoints import CheckpointProtocol
+from datp_core.protocols.training import AutoencoderProtocol
 
 
 def validate_client_preprocessing_match(

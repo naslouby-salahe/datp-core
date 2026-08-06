@@ -5,7 +5,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
-from datp_core.domain.enums import AvailabilityStatus, ClaimStatus, EvidenceRole, MetricId
+from datp_core.domain.enums import AvailabilityStatus, EvidenceRole, MetricId
+
+
+class ClaimStatus(StrEnum):
+    PERMITTED = "permitted"
+    NARROWED = "narrowed"
+    BLOCKED = "blocked"
+    UNSUPPORTED = "unsupported"
+    SUPPRESSED = "suppressed"
 
 
 class ClaimKind(StrEnum):

@@ -41,13 +41,8 @@ from datp_core.datasets.contracts import (
 from datp_core.domain.enums import AvailabilityStatus, ContractSubject, DatasetId, PublicationStatus
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.provenance import canonical_json_text, canonical_mapping, canonical_value
-from datp_core.domain.values import (
-    ByteCount,
-    Checksum,
-    RowCount,
-    checksum_file,
-    checksum_text,
-)
+from datp_core.domain.values.checksums import Checksum, checksum_file, checksum_text
+from datp_core.domain.values.counts import ByteCount, RowCount
 
 _CANONICAL_PUBLICATION_CONTRACT = "canonical_publication_contract"
 _COMPLETE_NAME = CanonicalPublicationArtifact.COMPLETE

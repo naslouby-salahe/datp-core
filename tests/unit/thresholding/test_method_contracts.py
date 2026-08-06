@@ -6,28 +6,30 @@ from tests.unit.thresholding.helpers import COORDINATE, identity
 from datp_core.domain.enums import (
     AvailabilityStatus,
     FederatedThresholdMethod,
-    KMeansInitialization,
 )
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import (
-    AbsoluteThresholdError,
-    Checksum,
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import (
     ClusterIndex,
     ConformalRankIndex,
-    CoverageTarget,
-    FamilyIdentity,
     GroupCount,
     KMeansInitializationCount,
     KMeansMaximumIterationCount,
+    RowCount,
+    Seed,
+)
+from datp_core.domain.values.paths import FamilyIdentity
+from datp_core.domain.values.ratios import (
+    AbsoluteThresholdError,
+    CoverageTarget,
     MetricValue,
     Quantile,
     Ratio,
-    RowCount,
     ScoreValue,
-    Seed,
     ShrinkageWeight,
     ThresholdValue,
 )
+from datp_core.protocols.calibration import KMeansInitialization
 from datp_core.thresholding.assignments import (
     LocalQuantile,
     ThresholdAssignment,

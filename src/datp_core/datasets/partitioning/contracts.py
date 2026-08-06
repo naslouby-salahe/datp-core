@@ -8,12 +8,10 @@ from pathlib import Path
 import polars as pl
 from pydantic import model_validator
 
-from datp_core.datasets.capabilities import DatasetCapabilities
+from datp_core.datasets.capabilities import CapabilityStatus, DatasetCapabilities
 from datp_core.datasets.contracts import CanonicalProvenanceColumn
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
-    CapabilityStatus,
-    ControlledPartitionKind,
     DatasetId,
     EvidenceRole,
     FederatedThresholdMethod,
@@ -23,16 +21,21 @@ from datp_core.domain.enums import (
     SplitProtocolId,
 )
 from datp_core.domain.errors import CapabilityError
-from datp_core.domain.values import (
-    Checksum,
-    ClientCount,
-    DirichletConcentration,
-    NonNegativeIntegerValue,
-    RowCount,
-    Seed,
-    checksum_text,
-)
-from datp_core.protocols.models import PopulationDeclaration
+from datp_core.domain.values.base import NonNegativeIntegerValue
+from datp_core.domain.values.checksums import Checksum, checksum_text
+from datp_core.domain.values.counts import ClientCount, RowCount, Seed
+from datp_core.domain.values.ratios import DirichletConcentration
+from datp_core.protocols.populations import PopulationDeclaration
+
+
+class ControlledPartitionKind(StrEnum):
+    """Construction kind for controlled synthetic client partitions.
+
+    IID is a separate typed construction condition, never an infinite Dirichlet concentration.
+    """
+
+    DIRICHLET = "dirichlet"
+    IID = "iid"
 
 
 class PopulationOutcomeLabel(StrEnum):

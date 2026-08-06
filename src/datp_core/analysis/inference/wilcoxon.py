@@ -11,12 +11,9 @@ from datp_core.analysis.adapters.scipy import StatisticPValueResult, statistic_p
 from datp_core.analysis.contrasts import PairedContrasts
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import AvailabilityStatus, EffectSizeId, StatisticalTestId
-from datp_core.domain.values import (
-    ClosedUnitIntervalValue,
-    MetricValue,
-    PairedObservationCount,
-    RankSum,
-)
+from datp_core.domain.values.base import ClosedUnitIntervalValue
+from datp_core.domain.values.counts import PairedObservationCount
+from datp_core.domain.values.ratios import MetricValue, RankSum
 from datp_core.protocols.statistics import (
     PairedInferenceProtocol,
     WilcoxonComputationMethod,

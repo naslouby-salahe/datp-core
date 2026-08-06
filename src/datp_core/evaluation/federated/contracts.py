@@ -5,7 +5,8 @@ from dataclasses import dataclass
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import EvidenceRole, FederatedThresholdMethod, StageOperationId
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import Checksum, CoverageTarget, ThresholdValue
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.ratios import CoverageTarget, ThresholdValue
 from datp_core.evaluation.cohort.contracts import EvaluationCohortManifest
 from datp_core.evaluation.communication import CommunicationDiagnostic, CommunicationMessageDiagnostic
 from datp_core.evaluation.conformal_coverage import ConformalCoverageDiagnostic

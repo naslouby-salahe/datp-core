@@ -8,7 +8,8 @@ from datp_core.anchor.gate import assert_gate_not_bypassable, decide_anchor_gate
 from datp_core.anchor.models import AnchorGateStatus, AnchorObservationSourceKind, AnchorObservedMetric
 from datp_core.anchor.reproduction import independent_reproduction_dependency_blocker, reproduce_anchor
 from datp_core.domain.enums import EvidenceRole, ExperimentReadiness
-from datp_core.domain.values import Checksum, MetricValue
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.ratios import MetricValue
 
 
 def test_pass_when_all_mandatory_comparisons_match() -> None:

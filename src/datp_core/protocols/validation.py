@@ -3,7 +3,6 @@
 from dataclasses import dataclass
 
 from datp_core.domain.enums import (
-    ConfirmatoryDeltaDirection,
     ContractSubject,
     EvidenceRole,
     ExperimentId,
@@ -15,26 +14,19 @@ from datp_core.domain.enums import (
     TrainingModelId,
 )
 from datp_core.domain.errors import ProtocolValidationError, UnresolvedScientificValueError
-from datp_core.domain.values import CalibrationSize
+from datp_core.domain.values.counts import CalibrationSize
 
-from .anchor import ANCHOR_DECISION_PROTOCOL
-from .calibration import CLUSTER_THRESHOLD_PROTOCOL, MINIMUM_BENIGN_SUPPORT
-from .experiments import EXPERIMENTS
-from .metrics import ATTACK_SENSITIVE_METRICS, SUPPRESSED_OPERATIONAL_METRICS
-from .models import (
-    AnchorDecisionProtocol,
+from .anchor import ANCHOR_DECISION_PROTOCOL, AnchorDecisionProtocol
+from .calibration import (
+    CLUSTER_THRESHOLD_PROTOCOL,
+    MINIMUM_BENIGN_SUPPORT,
     CalibrationEligibilityProtocol,
-    CheckpointProtocol,
     ClusterThresholdProtocol,
-    ConfirmatoryEndpoint,
-    ExperimentDeclaration,
-    FedAvgProtocol,
-    PopulationDeclaration,
-    ResolvedProtocolGraph,
-    StatisticalInferenceProtocol,
-    TrafficRateEvidence,
 )
-from .populations import POPULATIONS
+from .experiments import EXPERIMENTS, ConfirmatoryDeltaDirection, ConfirmatoryEndpoint, ExperimentDeclaration
+from .graph import ResolvedProtocolGraph
+from .metrics import ATTACK_SENSITIVE_METRICS, SUPPRESSED_OPERATIONAL_METRICS
+from .populations import POPULATIONS, PopulationDeclaration
 from .seeds import CONFIRMATORY_SEED_COHORT
 from .splits import (
     NON_TEMPORAL_SPLIT,
@@ -44,9 +36,9 @@ from .splits import (
     StaticReferenceSplitProtocol,
     TemporalSplitProtocol,
 )
-from .statistics import CONFIRMATORY_INFERENCE_PROTOCOL
-from .traffic_rates import TRAFFIC_RATE_EVIDENCE
-from .training import CHECKPOINT_PROTOCOL, FEDAVG_TRAINING_PROTOCOL
+from .statistics import CONFIRMATORY_INFERENCE_PROTOCOL, StatisticalInferenceProtocol
+from .traffic_rates import TRAFFIC_RATE_EVIDENCE, TrafficRateEvidence
+from .training import CHECKPOINT_PROTOCOL, FEDAVG_TRAINING_PROTOCOL, CheckpointProtocol, FedAvgProtocol
 
 CONFIRMATORY_ENDPOINT = ConfirmatoryEndpoint(
     experiment=ExperimentId.SHARED_VS_LOCAL_CONFIRMATION,

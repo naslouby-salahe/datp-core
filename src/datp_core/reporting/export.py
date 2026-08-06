@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from datp_core.domain.enums import EvidenceRole, ExperimentId, PopulationId
-from datp_core.domain.values import Checksum
+from datp_core.domain.values.checksums import Checksum
 from datp_core.reporting.figures import FigureSpec, render_markdown_figure
 from datp_core.reporting.tables import PublicationTable, render_markdown_table
 from datp_core.reporting.validation import ClaimDecision

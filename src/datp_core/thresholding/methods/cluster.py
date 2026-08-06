@@ -13,20 +13,18 @@ from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.enums import (
     ContractSubject,
     FederatedThresholdMethod,
-    KMeansInitialization,
 )
 from datp_core.domain.errors import ScientificContractError, require_contract
-from datp_core.domain.values import (
+from datp_core.domain.values.counts import (
     ClusterIndex,
     GroupCount,
     KMeansInitializationCount,
     KMeansMaximumIterationCount,
     Seed,
-    ThresholdValue,
 )
+from datp_core.domain.values.ratios import ThresholdValue
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.protocols.calibration import CANONICAL_QUANTILE
-from datp_core.protocols.models import ClusterThresholdProtocol
+from datp_core.protocols.calibration import CANONICAL_QUANTILE, ClusterThresholdProtocol, KMeansInitialization
 from datp_core.thresholding.assignments import (
     LocalQuantile,
     ThresholdAssignment,

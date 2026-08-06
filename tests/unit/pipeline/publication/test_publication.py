@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from datp_core.domain.enums import PublicationStatus
-from datp_core.domain.values import checksum_file
+from datp_core.domain.values.checksums import checksum_file
 from datp_core.pipeline.publication.service import (
     ArtifactPublication,
     publish_artifact,

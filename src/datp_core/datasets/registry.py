@@ -20,22 +20,27 @@ from datp_core.datasets.nbaiot.materialize import NBaIoTMaterializer
 from datp_core.datasets.nbaiot.populations import construct_nbaiot_dirichlet_clients, construct_nbaiot_natural_devices
 from datp_core.datasets.nbaiot.schema import NBAIOT_SCHEMA
 from datp_core.datasets.partitioning.contracts import (
+    ControlledPartitionKind,
     PopulationCapabilities,
     PopulationConstructionRequest,
     PopulationConstructionResult,
     build_population_capabilities,
     population_evidence_role,
 )
-from datp_core.domain.enums import ControlledPartitionKind, DatasetId, EvidenceRole, PopulationId
+from datp_core.domain.enums import (
+    DatasetId,
+    EvidenceRole,
+    PopulationId,
+)
 from datp_core.domain.errors import CapabilityError, ScientificContractError
 from datp_core.protocols.calibration import MINIMUM_BENIGN_SUPPORT
-from datp_core.protocols.models import PopulationDeclaration
 from datp_core.protocols.populations import (
     CICIOT_FILE_CLIENTS,
     EDGE_SENSOR_GROUPS,
     EDGE_TEMPORAL_GROUPS,
     NBAIOT_DIRICHLET_CLIENTS,
     NBAIOT_NATURAL_DEVICES,
+    PopulationDeclaration,
 )
 
 type DatasetPublication = MaterializedDataset[StrEnum, StrEnum]

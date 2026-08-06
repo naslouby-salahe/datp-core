@@ -5,7 +5,7 @@ import random
 import numpy as np
 import torch
 
-from datp_core.domain.values import Seed
+from datp_core.domain.values.counts import Seed
 from datp_core.runtime.compute import require_cuda_available
 
 

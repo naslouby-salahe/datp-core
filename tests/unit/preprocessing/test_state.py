@@ -4,9 +4,9 @@ import numpy as np
 import pytest
 from sklearn.decomposition import PCA
 
-from datp_core.domain.enums import TrustedEstimatorClassName
 from datp_core.domain.errors import SerializationSafetyError
-from datp_core.domain.values import AbsoluteTolerance
+from datp_core.domain.values.ratios import AbsoluteTolerance
+from datp_core.preprocessing.contracts import TrustedEstimatorClassName
 from datp_core.preprocessing.state import (
     TransformReloadCheck,
     construct_trusted_estimator,

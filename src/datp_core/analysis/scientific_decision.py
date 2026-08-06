@@ -1,11 +1,25 @@
 """Shared scientific decision contract and confirmatory decision rule."""
 
+from enum import StrEnum
+
 from pydantic import model_validator
 
 from datp_core.analysis.inference.bootstrap.contracts import BootstrapInterval
 from datp_core.domain.contracts import StrictModel
-from datp_core.domain.enums import AvailabilityStatus, EvidenceRole, ScientificDecision
-from datp_core.domain.values import MetricValue
+from datp_core.domain.enums import AvailabilityStatus, EvidenceRole
+from datp_core.domain.values.ratios import MetricValue
+
+
+class ScientificDecision(StrEnum):
+    SUPPORTED = "supported"
+    DIRECTIONAL_INCONCLUSIVE = "directional_inconclusive"
+    NO_OBSERVED_ADVANTAGE = "no_observed_advantage"
+    OPPOSITE_DIRECTION = "opposite_direction"
+    PARTIAL_ABSORPTION = "partial_absorption"
+    FULL_ABSORPTION = "full_absorption"
+    BOUNDARY_RESULT = "boundary_result"
+    INFEASIBLE = "infeasible"
+    BLOCKED = "blocked"
 
 
 class ScientificDecisionResult(StrictModel):

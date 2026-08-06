@@ -22,7 +22,9 @@ from datp_core.domain.enums import (
     PopulationId,
     TrainingModelId,
 )
-from datp_core.domain.values import Checksum, ClientCount, MetricValue, Seed
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import ClientCount, Seed
+from datp_core.domain.values.ratios import MetricValue
 
 
 def matching_anchor_observations() -> tuple[AnchorObservedMetric, ...]:

@@ -10,7 +10,8 @@ from datp_core.datasets.partitioning.contracts import (
     iid_condition,
 )
 from datp_core.domain.enums import SplitProtocolId
-from datp_core.domain.values import DirichletConcentration, Seed
+from datp_core.domain.values.counts import Seed
+from datp_core.domain.values.ratios import DirichletConcentration
 from datp_core.protocols.calibration import MINIMUM_BENIGN_SUPPORT
 
 _CONCENTRATIONS = (0.1, 0.3, 0.5, 1.0, 10.0)

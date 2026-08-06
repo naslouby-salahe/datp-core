@@ -13,7 +13,9 @@ from tests.unit.learning.federated.helpers import (
 )
 
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import Checksum, ProximalCoefficient, Seed
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import Seed
+from datp_core.domain.values.ratios import ProximalCoefficient
 from datp_core.learning.federated.global_training import train_global_federated
 from datp_core.learning.federated.training import FederatedTrainingRequest
 from datp_core.protocols.training import FEDPROX_COEFFICIENTS

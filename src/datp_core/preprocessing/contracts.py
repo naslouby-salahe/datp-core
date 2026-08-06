@@ -13,13 +13,24 @@ from datp_core.domain.enums import (
     ReusableDataCoordinateKind,
     SplitProtocolId,
 )
-from datp_core.domain.values import (
-    ClientPathToken,
-    Seed,
-    _sequence_pydantic_schema,
-    _str_subclass_schema,
-    _validate_non_empty_tuple,
-)
+from datp_core.domain.values.base import _sequence_pydantic_schema, _str_subclass_schema, _validate_non_empty_tuple
+from datp_core.domain.values.counts import Seed
+from datp_core.domain.values.paths import ClientPathToken
+
+
+class PreprocessingFitScope(StrEnum):
+    CLIENT_LOCAL_TRAINING = "client_local_training"
+    POOLED_TRAINING = "pooled_training"
+
+
+class TrustedEstimatorClassName(StrEnum):
+    STANDARD_SCALER = "standard_scaler"
+    MIN_MAX_SCALER = "min_max_scaler"
+
+
+class PartitionOrdering(StrEnum):
+    PRESERVE_SOURCE_ORDER = "preserve_source_order"
+    STABLE_ROW_ID = "stable_row_id"
 
 
 @dataclass(frozen=True, slots=True)

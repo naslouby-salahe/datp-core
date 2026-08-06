@@ -2,7 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from datp_core.domain.values import ByteCount, Checksum, checksum_bytes
+from datp_core.domain.values.checksums import Checksum, checksum_bytes
+from datp_core.domain.values.counts import ByteCount
 from datp_core.pipeline.publication.models import (
     ArtifactKind,
     ArtifactRecord,

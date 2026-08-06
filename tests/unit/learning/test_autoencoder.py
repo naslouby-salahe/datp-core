@@ -2,14 +2,14 @@ import pytest
 import torch
 
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import Seed
+from datp_core.domain.values.counts import Seed
 from datp_core.learning.autoencoder import (
     ReconstructionAutoencoder,
     build_reconstruction_autoencoder,
     clone_autoencoder_state,
     load_autoencoder_state,
 )
-from datp_core.protocols.models import AutoencoderProtocol
+from datp_core.protocols.training import AutoencoderProtocol
 
 
 def test_forward_output_shape_equals_input_shape() -> None:

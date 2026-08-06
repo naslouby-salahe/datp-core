@@ -3,9 +3,9 @@ from typing import cast
 import pytest
 from tests.unit.thresholding.helpers import COORDINATE, client_scores
 
+from datp_core.datasets.capabilities import CapabilityStatus
 from datp_core.datasets.partitioning.contracts import ClientIdentity, PopulationCapabilities
 from datp_core.domain.enums import (
-    CapabilityStatus,
     CentralizedThresholdMethod,
     DatasetId,
     EvidenceRole,
@@ -14,7 +14,9 @@ from datp_core.domain.enums import (
     PopulationIdentityKind,
 )
 from datp_core.domain.errors import CapabilityError, LeakageError, ScientificContractError
-from datp_core.domain.values import ClientCount, FamilyIdentity, Quantile
+from datp_core.domain.values.counts import ClientCount
+from datp_core.domain.values.paths import FamilyIdentity
+from datp_core.domain.values.ratios import Quantile
 from datp_core.thresholding.dispatch import (
     ThresholdConstructionRequest,
     dispatch_federated_threshold,
@@ -203,7 +205,7 @@ def test_threshold_construction_request_rejects_duplicate_eligible_clients() -> 
 def test_threshold_construction_request_rejects_mixed_coordinates() -> None:
     from tests.unit.learning.federated.helpers import fedavg_coordinate
 
-    from datp_core.domain.values import Seed
+    from datp_core.domain.values.counts import Seed
 
     other = client_scores(
         "client_mixed",

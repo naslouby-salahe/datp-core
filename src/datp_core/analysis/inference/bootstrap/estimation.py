@@ -19,7 +19,8 @@ from datp_core.analysis.inference.bootstrap.validation import (
     validate_supplementary_contrasts,
 )
 from datp_core.analysis.inference.wilcoxon import paired_deltas
-from datp_core.domain.values import ConfidenceLevel, MetricValue, Seed
+from datp_core.domain.values.counts import Seed
+from datp_core.domain.values.ratios import ConfidenceLevel, MetricValue
 from datp_core.protocols.statistics import PairedInferenceProtocol
 
 
@@ -184,9 +185,7 @@ def _bca_interval_from_distribution(
     if np.any(np.abs(denominator) <= np.finfo(np.float64).eps):
         return BcaReason.INVALID_ADJUSTED_QUANTILES
     adjusted_quantiles = stats.norm.cdf(bias_correction + shifted / denominator)
-    if np.any(~np.isfinite(adjusted_quantiles)) or np.any(
-        (adjusted_quantiles < 0.0) | (adjusted_quantiles > 1.0)
-    ):
+    if np.any(~np.isfinite(adjusted_quantiles)) or np.any((adjusted_quantiles < 0.0) | (adjusted_quantiles > 1.0)):
         return BcaReason.INVALID_ADJUSTED_QUANTILES
     bounds = np.quantile(distribution, adjusted_quantiles, method="linear")
     return (

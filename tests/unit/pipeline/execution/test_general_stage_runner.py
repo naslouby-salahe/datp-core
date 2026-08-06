@@ -13,7 +13,9 @@ from datp_core.domain.enums import (
     TemporalState,
     TrainingModelId,
 )
-from datp_core.domain.values import ByteCount, Checksum, ModelCoefficientValue, Seed, checksum_bytes
+from datp_core.domain.values.checksums import Checksum, checksum_bytes
+from datp_core.domain.values.counts import ByteCount, Seed
+from datp_core.domain.values.ratios import ModelCoefficientValue
 from datp_core.pipeline.execution.engine import CompletionRecordOutputStore, PipelineStageRunner
 from datp_core.pipeline.execution.models import (
     ExecutionProvenance,

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Protocol
 
+from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
     DatasetId,
     EvidenceRole,
@@ -17,7 +18,35 @@ from datp_core.domain.enums import (
     TemporalState,
     TrainingModelId,
 )
-from datp_core.domain.values import Checksum, Seed
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import Seed
+
+from .anchor import AnchorDecisionProtocol
+from .calibration import CalibrationEligibilityProtocol, ClusterThresholdProtocol
+from .checkpoints import CheckpointProtocol
+from .experiments import ConfirmatoryEndpoint, ExperimentDeclaration
+from .populations import PopulationDeclaration
+from .splits import FractionalSplitProtocol, StaticReferenceSplitProtocol, TemporalSplitProtocol
+from .statistics import StatisticalInferenceProtocol
+from .traffic_rates import TrafficRateEvidence
+from .training import FedAvgProtocol
+
+
+class ResolvedProtocolGraph(StrictModel):
+    populations: tuple[PopulationDeclaration, ...]
+    experiments: tuple[ExperimentDeclaration, ...]
+    suppressed_experiment_ids: tuple[ExperimentId, ...]
+    temporal_split: TemporalSplitProtocol
+    static_reference_split: StaticReferenceSplitProtocol
+    non_temporal_split: FractionalSplitProtocol
+    checkpoint: CheckpointProtocol
+    calibration: CalibrationEligibilityProtocol
+    confirmatory_endpoint: ConfirmatoryEndpoint
+    confirmatory_inference: StatisticalInferenceProtocol
+    anchor: AnchorDecisionProtocol
+    traffic_rate_evidence: tuple[TrafficRateEvidence, ...]
+    cluster_threshold: ClusterThresholdProtocol
+    fedavg_training: FedAvgProtocol
 
 
 class GraphCoordinate(Protocol):

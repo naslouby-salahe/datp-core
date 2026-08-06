@@ -4,25 +4,24 @@ import numpy as np
 import pytest
 
 from datp_core.domain.enums import (
-    PreprocessingFitScope,
     PreprocessingProtocolId,
     SerializationFormat,
-    TrustedEstimatorClassName,
 )
 from datp_core.domain.errors import LeakageError
-from datp_core.domain.values import (
-    NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
-    Checksum,
-    ClientPathToken,
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import RowCount
+from datp_core.domain.values.identifiers import (
     FeatureName,
     FeatureNameSequence,
     OutcomeLabel,
     OutcomeLabelSequence,
-    RowCount,
     StableRowId,
     StableRowIdSequence,
 )
+from datp_core.domain.values.paths import ClientPathToken
+from datp_core.domain.values.ratios import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE
 from datp_core.preprocessing.centralized import fit_pooled_preprocessing, reject_federated_state_for_pooled
+from datp_core.preprocessing.contracts import PreprocessingFitScope, TrustedEstimatorClassName
 from datp_core.preprocessing.models import (
     FederatedFittedPreprocessingState,
     PreprocessingFitBatch,

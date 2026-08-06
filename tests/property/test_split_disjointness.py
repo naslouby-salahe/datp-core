@@ -7,7 +7,7 @@ from datp_core.datasets.nbaiot.populations import construct_nbaiot_natural_devic
 from datp_core.datasets.partitioning.contracts import SplitConstructionRequest
 from datp_core.datasets.partitioning.splits import split_membership
 from datp_core.domain.enums import DatasetId, PopulationId, SplitProtocolId
-from datp_core.domain.values import Seed
+from datp_core.domain.values.counts import Seed
 
 
 @pytest.mark.parametrize("seed", [Seed(0), Seed(1), Seed(2), Seed(3), Seed(4), Seed(5), Seed(6), Seed(7)])

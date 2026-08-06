@@ -2,7 +2,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 from tests.unit.thresholding.helpers import identity
 
-from datp_core.domain.values import ShrinkageWeight, ThresholdValue
+from datp_core.domain.values.ratios import ShrinkageWeight, ThresholdValue
 from datp_core.thresholding.methods.shrinkage import ShrinkageAssignment
 
 CLIENT = identity("client_a")

@@ -7,9 +7,11 @@ from typing import Protocol, runtime_checkable
 
 from datp_core.domain.enums import CheckpointSelectionRule, CheckpointStatus, ContractSubject
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import Checksum, MetricValue, RoundNumber, Seed
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import RoundNumber, Seed
+from datp_core.domain.values.ratios import MetricValue
 from datp_core.learning.centralized.training import CentralizedTrainingCoordinate
-from datp_core.protocols.models import CheckpointProtocol
+from datp_core.protocols.checkpoints import CheckpointProtocol
 
 RETAINED_CHECKPOINT_STATUSES = frozenset(
     {

@@ -13,7 +13,9 @@ from datp_core.domain.enums import (
 )
 from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.provenance import canonical_checksum
-from datp_core.domain.values import Checksum, MetricValue, RoundNumber, Seed
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import RoundNumber, Seed
+from datp_core.domain.values.ratios import MetricValue
 from datp_core.learning.centralized.training import (
     CentralizedTrainingCoordinate,
     CentralizedTrainingExecution,
@@ -38,15 +40,18 @@ from datp_core.pipeline.checkpoints.models import (
     CentralizedCheckpointSetEntry,
     PersistedCheckpoint,
 )
+from datp_core.protocols.checkpoints import CheckpointProtocol, validate_persisted_checkpoint_file
 from datp_core.protocols.checkpoints import (
     select_terminal_checkpoint as apply_terminal_selection,
 )
 from datp_core.protocols.checkpoints import (
     validate_ordered_checkpoint_inventory as validate_inventory,
 )
-from datp_core.protocols.checkpoints import validate_persisted_checkpoint_file
-from datp_core.protocols.models import AutoencoderProtocol, CheckpointProtocol
-from datp_core.protocols.training import CHECKPOINT_SELECTION_RULE, require_non_test_checkpoint_selection_inputs
+from datp_core.protocols.training import (
+    CHECKPOINT_SELECTION_RULE,
+    AutoencoderProtocol,
+    require_non_test_checkpoint_selection_inputs,
+)
 from datp_core.runtime.compute import resolve_cuda_device
 
 

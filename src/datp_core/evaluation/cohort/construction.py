@@ -1,5 +1,6 @@
 """Pure threshold-independent evaluation cohort classification."""
 
+from datp_core.datasets.capabilities import CapabilityStatus
 from datp_core.datasets.partitioning.contracts import (
     ClientIdentity,
     ClientPartitionCounts,
@@ -7,14 +8,13 @@ from datp_core.datasets.partitioning.contracts import (
 )
 from datp_core.datasets.registry import population_capabilities
 from datp_core.domain.enums import (
-    CapabilityStatus,
     ContractSubject,
     EvaluationCohort,
     FederatedThresholdMethod,
     PopulationId,
 )
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import CalibrationSize, Seed
+from datp_core.domain.values.counts import CalibrationSize, Seed
 from datp_core.evaluation.cohort.contracts import (
     ClientEligibilityRecord,
     ClientExclusionReason,
@@ -223,8 +223,7 @@ def _cohort_memberships(
             EvaluationCohortMembership(
                 client=client,
                 cohort=EvaluationCohort.UNAVAILABLE,
-                reasons=_unique_reasons((*reasons, *attack_reasons))
-                or (ClientExclusionReason.CLIENT_NOT_ACCEPTED,),
+                reasons=_unique_reasons((*reasons, *attack_reasons)) or (ClientExclusionReason.CLIENT_NOT_ACCEPTED,),
             )
         )
     return tuple(memberships)

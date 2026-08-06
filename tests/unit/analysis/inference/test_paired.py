@@ -7,7 +7,7 @@ from datp_core.analysis.inference.wilcoxon import (
     paired_wilcoxon,
 )
 from datp_core.domain.enums import AvailabilityStatus
-from datp_core.domain.values import Ratio
+from datp_core.domain.values.ratios import Ratio
 from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL
 
 

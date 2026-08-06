@@ -12,16 +12,10 @@ from datp_core.domain.enums import (
     SplitProtocolId,
     TrainingModelId,
 )
-from datp_core.domain.values import (
-    DittoRegularization,
-    MetricValue,
-    PairedObservationCount,
-    ProximalCoefficient,
-    Ratio,
-    Seed,
-)
+from datp_core.domain.values.counts import PairedObservationCount, Seed
+from datp_core.domain.values.ratios import DittoRegularization, MetricValue, ProximalCoefficient, Ratio
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.protocols.models import SeedCohort
+from datp_core.protocols.seeds import SeedCohort
 from datp_core.protocols.statistics import PairedInferenceProtocol
 
 type MetricSeries = tuple[MetricValue, ...]

@@ -20,19 +20,13 @@ from datp_core.domain.enums import (
     StageOperationId,
     TrainingModelId,
 )
-from datp_core.domain.values import (
-    Checksum,
-    ClientCount,
-    MetricValue,
-    NonNegativeIntegerValue,
-    Seed,
-    SeedCount,
-    _str_enum_schema,
-)
-from datp_core.protocols.anchor import HISTORICAL_ANCHOR_SEED_COHORT
-from datp_core.protocols.models import AnchorDecisionProtocol, SeedCohort
+from datp_core.domain.values.base import NonNegativeIntegerValue, _str_enum_schema
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import ClientCount, Seed, SeedCount
+from datp_core.domain.values.ratios import MetricValue
+from datp_core.protocols.anchor import HISTORICAL_ANCHOR_SEED_COHORT, AnchorDecisionProtocol
 from datp_core.protocols.populations import NBAIOT_NATURAL_DEVICES
-from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT
+from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
 
 
 class AnchorComparisonStrategy(StrEnum):

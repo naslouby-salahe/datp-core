@@ -9,7 +9,7 @@ from datp_core.domain.enums import (
     MetricId,
     PopulationId,
 )
-from datp_core.domain.values import Checksum
+from datp_core.domain.values.checksums import Checksum
 from datp_core.reporting.export import PublicationBundle, ReportProvenance, export_markdown
 from datp_core.reporting.figures import FigureSeries, FigureSpec
 

@@ -12,15 +12,10 @@ from datp_core.calibration.models import (
     EligibilityStatus,
 )
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import (
-    CalibrationSize,
-    Checksum,
-    ReplicateIndex,
-    RowCount,
-    ScoreValue,
-    Seed,
-    StableRowId,
-)
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import CalibrationSize, ReplicateIndex, RowCount, Seed
+from datp_core.domain.values.identifiers import StableRowId
+from datp_core.domain.values.ratios import ScoreValue
 
 CLIENT_A = some_client("client_a")
 CLIENT_B = some_client("client_b")

@@ -13,7 +13,8 @@ from datp_core.domain.enums import (
     StageOperationId,
     TrainingModelId,
 )
-from datp_core.domain.values import ClientPathToken, Seed
+from datp_core.domain.values.counts import Seed
+from datp_core.domain.values.paths import ClientPathToken
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

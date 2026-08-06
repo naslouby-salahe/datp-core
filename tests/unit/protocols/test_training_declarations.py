@@ -1,8 +1,9 @@
 import pytest
 
-from datp_core.domain.enums import OptimizerId, TrainingModelId
+from datp_core.domain.enums import CentralizedModelId, CentralizedThresholdMethod, OptimizerId, TrainingModelId
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import DittoRegularization, ModelCoefficientValue
+from datp_core.domain.values.ratios import DittoRegularization, ModelCoefficientValue, Quantile
+from datp_core.protocols.calibration import CentralizedQuantileProtocol
 from datp_core.protocols.training import (
     BATCH_SIZE,
     CENTRALIZED_TRAINING_PROTOCOL,
@@ -63,6 +64,16 @@ def test_single_model_federated_protocol_resolution_is_authoritative() -> None:
             )
             is protocol
         )
+
+
+def test_centralized_declarations_are_distinct_from_federated_ones() -> None:
+    training = CENTRALIZED_TRAINING_PROTOCOL
+    threshold = CentralizedQuantileProtocol(
+        method=CentralizedThresholdMethod.POOLED_BENIGN_QUANTILE,
+        quantile=Quantile(0.95),
+    )
+    assert training.kind is CentralizedModelId.CENTRALIZED_AUTOENCODER
+    assert threshold.method is CentralizedThresholdMethod.POOLED_BENIGN_QUANTILE
 
 
 def test_single_model_federated_protocol_resolution_rejects_invalid_shapes() -> None:

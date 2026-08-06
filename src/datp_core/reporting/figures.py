@@ -47,6 +47,4 @@ def render_markdown_figure(figure: FigureSpec) -> str:
 
 def _render_series(series: FigureSeries) -> str:
     values = ", ".join(format(value, ".17g") for value in series.values) if series.values else "—"
-    return (
-        f"| {series.label} | `{series.metric.value}` | `{series.availability.value}` | {values} |"
-    )
+    return f"| {series.label} | `{series.metric.value}` | `{series.availability.value}` | {values} |"

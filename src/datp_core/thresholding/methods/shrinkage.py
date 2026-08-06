@@ -9,14 +9,10 @@ from datp_core.domain.enums import (
     FederatedThresholdMethod,
 )
 from datp_core.domain.errors import ScientificContractError, require_contract
-from datp_core.domain.values import (
-    Quantile,
-    ShrinkageWeight,
-    ThresholdValue,
-    floats_exactly_equal,
-)
+from datp_core.domain.values.base import floats_exactly_equal
+from datp_core.domain.values.ratios import Quantile, ShrinkageWeight, ThresholdValue
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.protocols.models import FixedShrinkageProtocol, QuantileProtocol
+from datp_core.protocols.calibration import FixedShrinkageProtocol, QuantileProtocol
 from datp_core.thresholding.identities import (
     ThresholdInfeasibilityReason,
     ThresholdUnavailableResult,

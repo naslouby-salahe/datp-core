@@ -14,7 +14,7 @@ from datp_core.domain.enums import (
 )
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.provenance import canonical_checksum
-from datp_core.domain.values import ScoreValue, ThresholdValue
+from datp_core.domain.values.ratios import ScoreValue, ThresholdValue
 from datp_core.evaluation.client_metrics import calculate_client_metrics
 from datp_core.evaluation.cohort.construction import build_evaluation_cohort_manifest
 from datp_core.evaluation.cohort.contracts import ClientEligibilityRecord, EvaluationCohortManifest

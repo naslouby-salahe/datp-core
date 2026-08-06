@@ -10,7 +10,7 @@ import polars as pl
 from datp_core.datasets.partitioning.contracts import ClientIdentity, PopulationOutcomeLabel
 from datp_core.domain.enums import ScoreFrameColumn
 from datp_core.domain.provenance import canonical_checksum
-from datp_core.domain.values import Checksum
+from datp_core.domain.values.checksums import Checksum
 from datp_core.evaluation.models import ClientMetricResult
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.protocols.inference import ScoreArtifactManifest, ScoreRecord

@@ -37,7 +37,8 @@ from datp_core.datasets.partitioning.contracts import (
 from datp_core.datasets.partitioning.paths import PartitioningFilePattern, canonical_branch_directory
 from datp_core.domain.enums import DatasetId, PopulationId, PopulationIdentityKind, SplitProtocolId
 from datp_core.domain.errors import CapabilityError, DataIntegrityError, ScientificContractError
-from datp_core.domain.values import NonNegativeIntegerValue, RowCount, Seed
+from datp_core.domain.values.base import NonNegativeIntegerValue
+from datp_core.domain.values.counts import RowCount, Seed
 from datp_core.protocols.populations import EDGE_SENSOR_GROUPS, EDGE_TEMPORAL_GROUPS
 
 _GROUP = EdgeCanonicalColumn.BENIGN_SENSOR_GROUP

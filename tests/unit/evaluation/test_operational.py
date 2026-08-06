@@ -1,7 +1,8 @@
 from tests.unit.learning.federated.helpers import client_identity, fedavg_coordinate
 
 from datp_core.domain.enums import PopulationId, TrafficRateEvidenceType
-from datp_core.domain.values import Seed, TrafficRatePerDay
+from datp_core.domain.values.counts import Seed
+from datp_core.domain.values.ratios import TrafficRatePerDay
 from datp_core.evaluation.models import MetricStatus
 from datp_core.evaluation.operational import AlertBurdenSuppressionReason, calculate_alert_burden
 from datp_core.evaluation.traffic_rates import (

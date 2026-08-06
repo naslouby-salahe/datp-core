@@ -15,21 +15,10 @@ from datp_core.domain.enums import (
     TrainingHistoryColumn,
 )
 from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
-from datp_core.domain.values import (
-    BatchSize,
-    Checksum,
-    CudaDeviceName,
-    FeatureCount,
-    FeatureNameSequence,
-    LearningRate,
-    MetricValue,
-    RoundNumber,
-    RowCount,
-    Seed,
-    WeightDecay,
-    checksum_file,
-    checksum_text,
-)
+from datp_core.domain.values.checksums import Checksum, checksum_file, checksum_text
+from datp_core.domain.values.counts import BatchSize, FeatureCount, RoundNumber, RowCount, Seed
+from datp_core.domain.values.identifiers import CudaDeviceName, FeatureNameSequence
+from datp_core.domain.values.ratios import LearningRate, MetricValue, WeightDecay
 from datp_core.learning.centralized.training import (
     CentralizedArtifactName,
     CentralizedEpochLoss,
@@ -46,11 +35,8 @@ from datp_core.pipeline.checkpoints.models import CentralizedCheckpointCandidate
 from datp_core.pipeline.checkpoints.service import candidate_tensor_name, retain_centralized_checkpoint_candidates
 from datp_core.pipeline.publication.service import ArtifactPublication, FunctionalArtifactCodec, publish_artifact
 from datp_core.preprocessing.models import CentralizedFittedPreprocessingState
-from datp_core.protocols.models import (
-    AutoencoderProtocol,
-    CentralizedTrainingProtocol,
-    CheckpointProtocol,
-)
+from datp_core.protocols.checkpoints import CheckpointProtocol
+from datp_core.protocols.training import AutoencoderProtocol, CentralizedTrainingProtocol
 from datp_core.runtime.compute import resolve_cuda_device
 
 

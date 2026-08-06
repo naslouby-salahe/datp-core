@@ -13,7 +13,8 @@ from tests.unit.learning.federated.helpers import (
     ditto_protocol,
 )
 
-from datp_core.domain.values import Checksum, RowCount, Seed
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import RowCount, Seed
 from datp_core.learning.federated.checkpoints.selection import select_checkpoint
 from datp_core.learning.federated.ditto import DittoTrainingRequest, train_ditto
 from datp_core.pipeline.scoring.federated import generate_federated_scores

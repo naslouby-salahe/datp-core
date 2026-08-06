@@ -3,7 +3,7 @@
 from enum import StrEnum
 from pathlib import Path
 
-from datp_core.domain.values import Seed
+from datp_core.domain.values.counts import Seed
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.pipeline.planning import CoordinateIdentitySegment
 from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity

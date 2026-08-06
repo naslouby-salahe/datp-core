@@ -1,7 +1,11 @@
 """Training declarations and authoritative protocol resolution."""
 
 from collections.abc import Sequence
+from typing import Annotated, Literal
 
+from pydantic import Field, model_validator
+
+from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
     CentralizedModelId,
     CheckpointSelectionRule,
@@ -11,29 +15,62 @@ from datp_core.domain.enums import (
     TrainingModelId,
 )
 from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.values import (
-    BatchSize,
-    DataLoaderWorkerCount,
+from datp_core.domain.values.counts import BatchSize, DataLoaderWorkerCount, LocalEpochCount, RoundNumber
+from datp_core.domain.values.ratios import (
     DittoRegularization,
     LearningRate,
-    LocalEpochCount,
     MetricValue,
     ModelCoefficientValue,
     ProximalCoefficient,
     Ratio,
-    RoundNumber,
     WeightDecay,
 )
 
-from .models import (
-    AutoencoderProtocol,
-    CentralizedTrainingProtocol,
-    CheckpointProtocol,
-    DittoProtocol,
-    FedAvgProtocol,
-    FedProxProtocol,
-    OptimizerProtocol,
-)
+from .checkpoints import CheckpointProtocol
+
+
+class AutoencoderProtocol(StrictModel):
+    widths: tuple[int, ...]
+
+    @model_validator(mode="after")
+    def validate_widths(self) -> "AutoencoderProtocol":
+        if not self.widths or any(isinstance(width, bool) or width < 1 for width in self.widths):
+            raise ValueError("autoencoder widths must be positive integers")
+        return self
+
+
+class OptimizerProtocol(StrictModel):
+    identity: OptimizerId
+    weight_decay: WeightDecay
+
+
+class FedAvgProtocol(StrictModel):
+    kind: Literal[TrainingModelId.FEDAVG_AUTOENCODER]
+    local_epochs: LocalEpochCount
+    optimizer: OptimizerProtocol
+
+
+class FedProxProtocol(StrictModel):
+    kind: Literal[TrainingModelId.FEDPROX_AUTOENCODER]
+    local_epochs: LocalEpochCount
+    optimizer: OptimizerProtocol
+    coefficient: ProximalCoefficient
+
+
+class DittoProtocol(StrictModel):
+    kind: Literal[TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER]
+    local_epochs: LocalEpochCount
+    optimizer: OptimizerProtocol
+    regularization: DittoRegularization
+
+
+TrainingProtocol = Annotated[FedAvgProtocol | FedProxProtocol | DittoProtocol, Field(discriminator="kind")]
+
+
+class CentralizedTrainingProtocol(StrictModel):
+    kind: Literal[CentralizedModelId.CENTRALIZED_AUTOENCODER]
+    optimizer: OptimizerProtocol
+
 
 CHECKPOINT_PROTOCOL = CheckpointProtocol(
     candidates=tuple(RoundNumber(value) for value in (25, 50, 75, 100, 125, 150, 200)),

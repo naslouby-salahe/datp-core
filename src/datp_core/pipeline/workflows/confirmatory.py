@@ -9,18 +9,24 @@ from pathlib import Path
 from datp_core.analysis.contrasts import PairedContrast
 from datp_core.domain.enums import EvidenceRole, ExperimentId, FederatedThresholdMethod, MetricId, PopulationId
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import Checksum, MetricValue, Seed
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import Seed
+from datp_core.domain.values.ratios import MetricValue
 from datp_core.evaluation.federated.contracts import FederatedEvaluationDocument
 from datp_core.evaluation.federated.publication import FederatedEvaluationAssetName
 from datp_core.pipeline.decision.evidence import AnalyzeConfirmatoryEvidenceRequest, analyze_confirmatory_evidence
-from datp_core.pipeline.execution.engine import CompletionRecordOutputStore, PipelineStageRunner, build_campaign, execute_campaign
+from datp_core.pipeline.execution.engine import (
+    CompletionRecordOutputStore,
+    PipelineStageRunner,
+    build_campaign,
+    execute_campaign,
+)
 from datp_core.pipeline.execution.evidence import load_evaluation_document, population_metric
 from datp_core.pipeline.execution.layout import EvaluationRunAssetDirectory
 from datp_core.pipeline.planning import ExperimentCoordinate, PlanDisposition, PlanningEvidence, expand_experiment_plan
 from datp_core.pipeline.publication.layout import evaluation_run_directory
-from datp_core.protocols.experiments import EXPERIMENTS
-from datp_core.protocols.models import ExperimentDeclaration, SeedCohort
-from datp_core.protocols.seeds import CONFIRMATORY_ANALYSIS_SEED, CONFIRMATORY_SEED_COHORT
+from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration
+from datp_core.protocols.seeds import CONFIRMATORY_ANALYSIS_SEED, CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL
 from datp_core.runtime.configuration import OUTPUTS_ROOT
 
@@ -78,7 +84,8 @@ def run_confirmatory_seed(training_seed: Seed) -> ConfirmatorySeedResult:
 
 
 def run_confirmatory_campaign() -> ConfirmatoryCampaignResult:
-    return ConfirmatoryCampaignResult(seeds=tuple(run_confirmatory_seed(seed) for seed in CONFIRMATORY_SEED_COHORT.values))
+    seeds = tuple(run_confirmatory_seed(seed) for seed in CONFIRMATORY_SEED_COHORT.values)
+    return ConfirmatoryCampaignResult(seeds=seeds)
 
 
 def analyze_confirmatory_campaign() -> Path:

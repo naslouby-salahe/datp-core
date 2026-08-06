@@ -3,7 +3,12 @@
 from pathlib import Path
 
 from datp_core.datasets.canonical_cache import CanonicalAsset, canonical_directory
-from datp_core.datasets.contracts import CanonicalAssetRole, DatasetValidationReport, MaterializedDataset, SourceFileRole
+from datp_core.datasets.contracts import (
+    CanonicalAssetRole,
+    DatasetValidationReport,
+    MaterializedDataset,
+    SourceFileRole,
+)
 from datp_core.datasets.materialization import (
     CanonicalPublication,
     canonical_data_partition_assets,
@@ -13,7 +18,7 @@ from datp_core.datasets.materialization import (
 )
 from datp_core.datasets.materialization_lifecycle import CanonicalMaterializationRequest, materialize_canonical
 from datp_core.domain.enums import AvailabilityStatus, DatasetId
-from datp_core.domain.values import RowCount, ValidationIssueCount
+from datp_core.domain.values.counts import RowCount, ValidationIssueCount
 
 from .reader import NBaIoTReader
 from .schema import (

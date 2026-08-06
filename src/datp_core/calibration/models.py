@@ -6,15 +6,10 @@ from enum import StrEnum
 from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.enums import ContractSubject
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import (
-    CalibrationSize,
-    Checksum,
-    ReplicateIndex,
-    RowCount,
-    ScoreValue,
-    Seed,
-    StableRowId,
-)
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import CalibrationSize, ReplicateIndex, RowCount, Seed
+from datp_core.domain.values.identifiers import StableRowId
+from datp_core.domain.values.ratios import ScoreValue
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 
 

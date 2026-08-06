@@ -20,7 +20,10 @@ from tests.unit.learning.centralized.helpers import (
 
 from datp_core.datasets.partitioning.contracts import PopulationOutcomeLabel
 from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.values import Checksum, ClientPathToken, OutcomeLabel, OutcomeLabelSequence, RowCount, Seed
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import RowCount, Seed
+from datp_core.domain.values.identifiers import OutcomeLabel, OutcomeLabelSequence
+from datp_core.domain.values.paths import ClientPathToken
 from datp_core.learning.centralized.training import (
     CentralizedTrainingRequest,
     build_centralized_autoencoder,

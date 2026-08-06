@@ -5,12 +5,17 @@ import polars as pl
 from datp_core.datasets.nbaiot.populations import construct_nbaiot_dirichlet_clients, construct_nbaiot_natural_devices
 from datp_core.datasets.nbaiot.schema import NBAIOT_DEVICE_IDENTITIES
 from datp_core.datasets.partitioning.contracts import (
+    ControlledPartitionKind,
     DirichletPartitionDiagnosticsDocument,
     dirichlet_condition,
     iid_condition,
 )
-from datp_core.domain.enums import ControlledPartitionKind, PopulationId, SplitProtocolId
-from datp_core.domain.values import DirichletConcentration, Seed
+from datp_core.domain.enums import (
+    PopulationId,
+    SplitProtocolId,
+)
+from datp_core.domain.values.counts import Seed
+from datp_core.domain.values.ratios import DirichletConcentration
 from datp_core.protocols.calibration import MINIMUM_BENIGN_SUPPORT
 
 

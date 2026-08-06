@@ -4,9 +4,11 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from datp_core.domain.enums import ControlledPartitionKind, PopulationId
+from datp_core.datasets.partitioning.contracts import ControlledPartitionKind
+from datp_core.domain.enums import PopulationId
 from datp_core.domain.errors import DataIntegrityError, ScientificContractError
-from datp_core.domain.values import Checksum, ClientCount, RowCount, Seed, checksum_text
+from datp_core.domain.values.checksums import Checksum, checksum_text
+from datp_core.domain.values.counts import ClientCount, RowCount, Seed
 
 from .contracts import ControlledPartitionCondition
 from .splits import hamilton_integer_counts

@@ -3,7 +3,8 @@
 from tests.unit.learning.federated.helpers import client_identity, fedavg_coordinate
 
 from datp_core.datasets.partitioning.contracts import ClientIdentity
-from datp_core.domain.values import Checksum, Seed
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import Seed
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.thresholding.quantiles import ClientBenignCalibrationScores
 

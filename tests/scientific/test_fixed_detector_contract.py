@@ -10,7 +10,7 @@ from tests.unit.scoring.helpers import selected_checkpoint
 
 from datp_core.datasets.partitioning.contracts import PopulationOutcomeLabel
 from datp_core.domain.enums import FederatedThresholdMethod, ScoreFrameColumn
-from datp_core.domain.values import RowCount, Seed
+from datp_core.domain.values.counts import RowCount, Seed
 from datp_core.learning.federated.models import (
     CheckpointCandidate,
     CheckpointDecision,

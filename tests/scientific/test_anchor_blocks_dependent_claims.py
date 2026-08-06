@@ -10,7 +10,7 @@ from datp_core.anchor.reproduction import (
 )
 from datp_core.domain.enums import ExperimentId, ExperimentReadiness
 from datp_core.domain.errors import AnchorReproductionError
-from datp_core.domain.values import MetricValue
+from datp_core.domain.values.ratios import MetricValue
 from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT
 
 

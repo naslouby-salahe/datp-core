@@ -15,7 +15,8 @@ from datp_core.datasets.partitioning.contracts import (
 )
 from datp_core.domain.enums import SplitProtocolId
 from datp_core.domain.errors import CapabilityError, ScientificContractError
-from datp_core.domain.values import NonNegativeIntegerValue, Seed
+from datp_core.domain.values.base import NonNegativeIntegerValue
+from datp_core.domain.values.counts import Seed
 
 
 def test_edge_static_includes_ten_groups_with_modbus(edge_canonical_root: Path) -> None:

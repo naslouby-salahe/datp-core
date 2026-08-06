@@ -28,7 +28,7 @@ from datp_core.datasets.materialization import (
 )
 from datp_core.datasets.materialization_lifecycle import CanonicalMaterializationRequest, materialize_canonical
 from datp_core.domain.enums import AvailabilityStatus, DatasetId
-from datp_core.domain.values import RowCount, ValidationIssueCount
+from datp_core.domain.values.counts import RowCount, ValidationIssueCount
 
 from .chronology import PcapChronology, paired_capture_path, validate_chronology, write_capture_timeline
 from .reader import EdgeIIoTsetReader

@@ -9,7 +9,7 @@ from tempfile import mkdtemp
 from filelock import FileLock
 
 from datp_core.domain.enums import PublicationStatus
-from datp_core.domain.values import Checksum, checksum_file
+from datp_core.domain.values.checksums import Checksum, checksum_file
 
 
 @dataclass(frozen=True, slots=True)

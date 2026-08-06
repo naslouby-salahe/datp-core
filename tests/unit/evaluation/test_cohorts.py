@@ -8,7 +8,7 @@ from datp_core.domain.enums import (
     PopulationIdentityKind,
 )
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import RowCount, Seed
+from datp_core.domain.values.counts import RowCount, Seed
 from datp_core.evaluation.cohort.construction import (
     assert_cohort_invariant_to_threshold_methods,
     build_evaluation_cohort_manifest,

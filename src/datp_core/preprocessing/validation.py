@@ -15,22 +15,19 @@ from datp_core.datasets.partitioning.contracts import (
 )
 from datp_core.domain.enums import (
     ContractSubject,
-    PartitionOrdering,
     PartitionRole,
-    PreprocessingFitScope,
     ProcessedDataBranch,
     SplitProtocolId,
 )
 from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.provenance import canonical_checksum
-from datp_core.domain.values import (
-    Checksum,
-    ClientPathToken,
-    FeatureNameSequence,
-    RowCount,
-    checksum_file,
-)
+from datp_core.domain.values.checksums import Checksum, checksum_file
+from datp_core.domain.values.counts import RowCount
+from datp_core.domain.values.identifiers import FeatureNameSequence
+from datp_core.domain.values.paths import ClientPathToken
 from datp_core.preprocessing.contracts import (
+    PartitionOrdering,
+    PreprocessingFitScope,
     ProcessedAssetName,
     RelativeAssetPathSequence,
     asset_for_partition,

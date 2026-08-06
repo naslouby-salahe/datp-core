@@ -4,11 +4,12 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from datp_core.datasets.partitioning.contracts import ClientIdentity
-from datp_core.domain.enums import MetricId, WarningCode
+from datp_core.domain.enums import MetricId
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import Ratio, Seed
+from datp_core.domain.values.counts import Seed
+from datp_core.domain.values.ratios import Ratio
 from datp_core.evaluation.metric_semantics import available, metric_value, unavailable
-from datp_core.evaluation.models import MetricAvailability, MetricReason, MetricStatus
+from datp_core.evaluation.models import MetricAvailability, MetricReason, MetricStatus, WarningCode
 from datp_core.evaluation.traffic_rates import ValidatedTrafficRateEvidence, validate_traffic_rate_evidence
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 

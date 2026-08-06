@@ -7,11 +7,9 @@ from pathlib import Path
 from datp_core.datasets.registry import population_capabilities
 from datp_core.domain.enums import PartitionRole
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import (
-    NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
-    ClientCount,
-    FeatureNameSequence,
-)
+from datp_core.domain.values.counts import ClientCount
+from datp_core.domain.values.identifiers import FeatureNameSequence
+from datp_core.domain.values.ratios import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE
 from datp_core.evaluation.federated.contracts import FederatedEvaluationDocument
 from datp_core.evaluation.federated.publication import FederatedEvaluationAssetName
 from datp_core.evaluation.fixed_score.construction import build_federated_evaluation_inputs
@@ -48,11 +46,11 @@ from datp_core.pipeline.training.federated import (
     train_federated_detector,
 )
 from datp_core.protocols.calibration import CANONICAL_QUANTILE
-from datp_core.protocols.models import AutoencoderProtocol
 from datp_core.protocols.training import (
     BATCH_SIZE,
     CHECKPOINT_PROTOCOL,
     LEARNING_RATE,
+    AutoencoderProtocol,
     resolve_single_model_federated_training_protocol,
 )
 from datp_core.thresholding.dispatch import ThresholdConstructionRequest

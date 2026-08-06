@@ -20,10 +20,10 @@ from datp_core.datasets.contracts import (
 from datp_core.datasets.materialization import canonical_schema_checksum
 from datp_core.datasets.nbaiot.schema import NBAIOT_ARROW_SCHEMA, NBAIOT_CANONICAL_COLUMNS, NBAIOT_SCHEMA
 from datp_core.domain.enums import AvailabilityStatus, DatasetId
-from datp_core.domain.values import (
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import (
     ByteCount,
     CanonicalColumnPosition,
-    Checksum,
     RowCount,
     SourceFileCount,
     SourceRowIndex,

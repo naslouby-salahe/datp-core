@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from datp_core.datasets.capabilities import CapabilityStatus
 from datp_core.datasets.partitioning.construction import PreprocessingHandoffRequest, build_preprocessing_handoff
 from datp_core.datasets.partitioning.contracts import PopulationConstructionRequest, iid_condition
 from datp_core.datasets.registry import (
@@ -12,7 +13,6 @@ from datp_core.datasets.registry import (
     resolve_population,
 )
 from datp_core.domain.enums import (
-    CapabilityStatus,
     DatasetId,
     EvidenceRole,
     PopulationId,
@@ -20,7 +20,7 @@ from datp_core.domain.enums import (
     SplitProtocolId,
 )
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import Seed
+from datp_core.domain.values.counts import Seed
 
 
 def test_catalogue_dispatches_every_dataset_id() -> None:

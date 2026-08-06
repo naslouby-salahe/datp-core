@@ -4,9 +4,27 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Protocol
 
+from pydantic import model_validator
+
+from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import CheckpointStatus, ContractSubject, SerializationFormat
 from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
-from datp_core.domain.values import Checksum, RoundNumber, checksum_file
+from datp_core.domain.values.checksums import Checksum, checksum_file
+from datp_core.domain.values.counts import RoundNumber
+
+
+class CheckpointProtocol(StrictModel):
+    candidates: tuple[RoundNumber, ...]
+    maximum_round: RoundNumber
+
+    @model_validator(mode="after")
+    def validate_candidates(self) -> "CheckpointProtocol":
+        values = tuple(candidate.value for candidate in self.candidates)
+        if not values or values != tuple(sorted(values)) or len(set(values)) != len(values):
+            raise ValueError("checkpoint candidates must be unique and ordered")
+        if values[-1] != self.maximum_round.value:
+            raise ValueError("maximum round must be the final checkpoint candidate")
+        return self
 
 
 class PersistedCheckpointContract(Protocol):

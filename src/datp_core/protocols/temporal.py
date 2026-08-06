@@ -6,7 +6,7 @@ from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import EvidenceRole, PartitionRole, SplitProtocolId, TemporalState
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.provenance import canonical_checksum
-from datp_core.domain.values import Checksum
+from datp_core.domain.values.checksums import Checksum
 from datp_core.protocols.inference import ScoreArtifactManifest
 
 

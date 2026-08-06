@@ -21,7 +21,8 @@ from datp_core.domain.enums import (
     PopulationId,
     TrainingModelId,
 )
-from datp_core.domain.values import ClientCount, MetricValue
+from datp_core.domain.values.counts import ClientCount
+from datp_core.domain.values.ratios import MetricValue
 
 
 def test_exact_reproduction_passes() -> None:

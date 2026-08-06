@@ -10,12 +10,13 @@ from datp_core.domain.enums import (
     TrainingModelId,
 )
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import DittoRegularization, Seed, checksum_text
+from datp_core.domain.values.checksums import checksum_text
+from datp_core.domain.values.counts import Seed
+from datp_core.domain.values.ratios import DittoRegularization
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.pipeline.execution.engine import build_campaign
 from datp_core.pipeline.planning import expand_experiment_plan
-from datp_core.protocols.calibration import CANONICAL_QUANTILE
-from datp_core.protocols.models import QuantileProtocol
+from datp_core.protocols.calibration import CANONICAL_QUANTILE, QuantileProtocol
 from datp_core.protocols.training import DITTO_TRAINING_PROTOCOLS, resolve_ditto_protocol
 from datp_core.thresholding.methods.local import construct_local_threshold
 from datp_core.thresholding.methods.shared import construct_shared_threshold

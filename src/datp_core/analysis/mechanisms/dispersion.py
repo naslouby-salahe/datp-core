@@ -5,13 +5,8 @@ from pydantic import model_validator
 
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import AvailabilityStatus, EvidenceRole
-from datp_core.domain.values import (
-    ClusterIndex,
-    MetricValue,
-    PairedObservationCount,
-    Ratio,
-    ThresholdValue,
-)
+from datp_core.domain.values.counts import ClusterIndex, PairedObservationCount
+from datp_core.domain.values.ratios import MetricValue, Ratio, ThresholdValue
 
 
 class GroupDispersionObservation(StrictModel):

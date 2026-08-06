@@ -18,7 +18,8 @@ from datp_core.datasets.service import DatasetMaterializationRequest, materializ
 from datp_core.domain.enums import ExperimentId, PublicationStatus
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.provenance import canonical_checksum
-from datp_core.domain.values import ByteCount, Checksum, checksum_file
+from datp_core.domain.values.checksums import Checksum, checksum_file
+from datp_core.domain.values.counts import ByteCount
 from datp_core.evaluation.federated.publication import FederatedEvaluationAssetName
 from datp_core.evaluation.models import metric_by_id
 from datp_core.pipeline.execution.layout import EvaluationRunAssetDirectory
@@ -205,9 +206,11 @@ class PipelineStageRunner:
             return StageExecution(stage=stage, outcome=StageOutcome.BLOCKED, evidence=str(error))
 
     def _workspace_for(self, coordinate: ExperimentCoordinate, output_root: Path) -> ExperimentWorkspace:
-        if self._workspace is None or self._workspace.coordinate != coordinate or self._workspace.output_root != output_root:
-            self._workspace = ExperimentWorkspace(coordinate=coordinate, output_root=output_root)
-        return self._workspace
+        workspace = self._workspace
+        if workspace is None or workspace.coordinate != coordinate or workspace.output_root != output_root:
+            workspace = ExperimentWorkspace(coordinate=coordinate, output_root=output_root)
+            self._workspace = workspace
+        return workspace
 
     def _run(
         self,
@@ -275,7 +278,8 @@ class PipelineStageRunner:
                 )
 
     def _materialize_dataset(self, stage: PipelineStage, coordinate: ExperimentCoordinate) -> StageExecution:
-        result = materialize_datasets(DatasetMaterializationRequest(data_root=DATA_ROOT, datasets=(coordinate.dataset,)))
+        request = DatasetMaterializationRequest(data_root=DATA_ROOT, datasets=(coordinate.dataset,))
+        result = materialize_datasets(request)
         publication = result.publications[0]
         return StageExecution(
             stage=stage,
@@ -285,7 +289,8 @@ class PipelineStageRunner:
 
     def _train_detector(self, stage: PipelineStage, workspace: ExperimentWorkspace) -> StageExecution:
         result = workspace.training
-        outcome = StageOutcome.COMPLETED if result.publication_status is PublicationStatus.PUBLISHED else StageOutcome.REUSED
+        published = result.publication_status is PublicationStatus.PUBLISHED
+        outcome = StageOutcome.COMPLETED if published else StageOutcome.REUSED
         return StageExecution(
             stage=stage,
             outcome=outcome,
@@ -400,9 +405,7 @@ class PipelineStageRunner:
     ) -> StageExecution:
         selected = workspace.selection.selected
         evaluation_document_path = (
-            workspace.run_directory()
-            / EvaluationRunAssetDirectory.EVALUATION
-            / FederatedEvaluationAssetName.DOCUMENT
+            workspace.run_directory() / EvaluationRunAssetDirectory.EVALUATION / FederatedEvaluationAssetName.DOCUMENT
         )
         if not evaluation_document_path.is_file():
             raise ScientificContractError(

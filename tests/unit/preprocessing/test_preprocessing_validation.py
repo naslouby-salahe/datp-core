@@ -6,18 +6,14 @@ from sklearn.preprocessing import StandardScaler
 from datp_core.datasets.partitioning.contracts import OUTCOME_LABEL_COLUMN, STABLE_ROW_ID_COLUMN
 from datp_core.domain.enums import (
     ContractSubject,
-    PartitionOrdering,
     PartitionRole,
-    PreprocessingFitScope,
     PreprocessingProtocolId,
     ProcessedDataBranch,
     SerializationFormat,
     SplitProtocolId,
-    TrustedEstimatorClassName,
 )
 from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.values import (
-    NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
+from datp_core.domain.values.identifiers import (
     FeatureName,
     FeatureNameSequence,
     OutcomeLabel,
@@ -25,6 +21,8 @@ from datp_core.domain.values import (
     StableRowId,
     StableRowIdSequence,
 )
+from datp_core.domain.values.ratios import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE
+from datp_core.preprocessing.contracts import PartitionOrdering, PreprocessingFitScope, TrustedEstimatorClassName
 from datp_core.preprocessing.models import (
     PreprocessingFitBatch,
     PreprocessingPartition,

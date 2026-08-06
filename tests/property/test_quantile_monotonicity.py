@@ -2,7 +2,7 @@ import numpy as np
 from hypothesis import given
 from hypothesis import strategies as st
 
-from datp_core.domain.values import Quantile
+from datp_core.domain.values.ratios import Quantile
 from datp_core.thresholding.quantiles import exact_empirical_quantile
 
 _SCORE = st.floats(min_value=-1e6, max_value=1e6, allow_nan=False, allow_infinity=False)

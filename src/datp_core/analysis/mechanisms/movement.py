@@ -5,7 +5,7 @@ from typing import ClassVar
 from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import AvailabilityStatus, EvidenceRole
-from datp_core.domain.values import MetricValue, Ratio, ThresholdValue
+from datp_core.domain.values.ratios import MetricValue, Ratio, ThresholdValue
 
 
 class ThresholdOperatingPoint(StrictModel):

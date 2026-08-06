@@ -1,14 +1,17 @@
 """Evidence-backed dataset capability declarations."""
 
 from dataclasses import dataclass
+from enum import StrEnum
 
-from datp_core.domain.enums import (
-    CapabilityStatus,
-    EvidenceRole,
-    FederatedThresholdMethod,
-    MetricId,
-    PopulationId,
-)
+from datp_core.domain.enums import EvidenceRole, FederatedThresholdMethod, MetricId, PopulationId
+
+
+class CapabilityStatus(StrEnum):
+    SUPPORTED = "supported"
+    UNSUPPORTED = "unsupported"
+    CONDITIONAL = "conditional"
+    UNAVAILABLE = "unavailable"
+    NOT_APPLICABLE = "not_applicable"
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,7 +55,7 @@ class MetricCapability(CapabilityStatement):
     unavailable_metrics: tuple[MetricId, ...]
 
     def __post_init__(self) -> None:
-        super().__post_init__()
+        CapabilityStatement.__post_init__(self)
         groups = (self.available_metrics, self.conditional_metrics, self.unavailable_metrics)
         declared = tuple(metric for group in groups for metric in group)
         if not declared or len(declared) != len(frozenset(declared)):
@@ -66,7 +69,9 @@ class MetricCapability(CapabilityStatement):
             )
             if metrics
         )
-        aggregate = CapabilityStatus.SUPPORTED if statuses == {CapabilityStatus.SUPPORTED} else CapabilityStatus.UNAVAILABLE
+        aggregate = (
+            CapabilityStatus.SUPPORTED if statuses == {CapabilityStatus.SUPPORTED} else CapabilityStatus.UNAVAILABLE
+        )
         if len(statuses) > 1 or CapabilityStatus.CONDITIONAL in statuses:
             aggregate = CapabilityStatus.CONDITIONAL
         if self.status is not aggregate:

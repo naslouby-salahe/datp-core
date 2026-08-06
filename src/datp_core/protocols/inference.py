@@ -14,13 +14,8 @@ from datp_core.domain.enums import (
     SplitProtocolId,
 )
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import (
-    Checksum,
-    FeatureCount,
-    RoundNumber,
-    RowCount,
-    checksum_text,
-)
+from datp_core.domain.values.checksums import Checksum, checksum_text
+from datp_core.domain.values.counts import FeatureCount, RoundNumber, RowCount
 
 
 class TrainingCoordinateContract(Protocol):

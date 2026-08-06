@@ -1,5 +1,5 @@
 from datp_core.domain.enums import FederatedThresholdMethod, MetricId
-from datp_core.domain.values import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE
+from datp_core.domain.values.ratios import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE
 from datp_core.protocols.anchor import (
     ANCHOR_DECISION_PROTOCOL,
     HISTORICAL_ANCHOR_SEED_COHORT,

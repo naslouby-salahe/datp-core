@@ -12,7 +12,7 @@ from pydantic import BaseModel, ValidationError
 from datp_core.domain.enums import ContractSubject, PublicationStatus
 from datp_core.domain.errors import ArtifactIntegrityError
 from datp_core.domain.provenance import canonical_json_text
-from datp_core.domain.values import Checksum, checksum_text
+from datp_core.domain.values.checksums import Checksum, checksum_text
 from datp_core.preprocessing.contracts import ProcessedAssetName
 
 

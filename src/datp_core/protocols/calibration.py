@@ -1,35 +1,160 @@
 """Benign-only calibration declarations."""
 
-from datp_core.domain.enums import (
-    ClusterAssignmentAlgorithm,
-    ClusterFeatureStandardization,
-    ClusterThresholdAggregation,
-    FederatedThresholdMethod,
-    KMeansInitialization,
-)
-from datp_core.domain.values import (
-    CalibrationSize,
-    CoverageTarget,
-    Quantile,
-    ShrinkageWeight,
-    SummaryCoefficient,
-)
+from enum import StrEnum
+from typing import Literal
 
-from .models import (
-    LOCKED_CLUSTER_GROUP_COUNT,
-    LOCKED_CLUSTER_INITIALIZATION_COUNT,
-    LOCKED_CLUSTER_MAXIMUM_ITERATIONS,
-    LOCKED_CLUSTER_RANDOM_STATE,
-    REQUIRED_CLUSTER_FINGERPRINT_FEATURES,
-    CalibrationEligibilityProtocol,
-    CalibrationSizeProtocol,
-    ClusterThresholdProtocol,
-    ConformalProtocol,
-    FederatedStatisticsProtocol,
-    FixedShrinkageProtocol,
-    QuantileProtocol,
-    SizeAwareShrinkageProtocol,
+from pydantic import model_validator
+
+from datp_core.domain.contracts import StrictModel
+from datp_core.domain.enums import CentralizedThresholdMethod, FederatedThresholdMethod
+from datp_core.domain.values.counts import (
+    CalibrationSize,
+    GroupCount,
+    KMeansInitializationCount,
+    KMeansMaximumIterationCount,
+    Seed,
 )
+from datp_core.domain.values.ratios import CoverageTarget, Quantile, Ratio, ShrinkageWeight, SummaryCoefficient
+
+
+class ClusterFingerprintFeature(StrEnum):
+    BENIGN_ERROR_MEAN = "benign_error_mean"
+    BENIGN_ERROR_STANDARD_DEVIATION = "benign_error_standard_deviation"
+    BENIGN_ERROR_SKEWNESS = "benign_error_skewness"
+    BENIGN_ERROR_P95 = "benign_error_p95"
+
+
+class ClusterFeatureStandardization(StrEnum):
+    STANDARD_SCALER = "standard_scaler"
+
+
+class ClusterAssignmentAlgorithm(StrEnum):
+    KMEANS = "kmeans"
+
+
+class KMeansInitialization(StrEnum):
+    KMEANS_PLUS_PLUS = "kmeans_plus_plus"
+
+
+class ClusterThresholdAggregation(StrEnum):
+    ARITHMETIC_MEAN_OF_ELIGIBLE_LOCAL_THRESHOLDS = "arithmetic_mean_of_eligible_local_thresholds"
+
+
+REQUIRED_CLUSTER_FINGERPRINT_FEATURES = (
+    ClusterFingerprintFeature.BENIGN_ERROR_MEAN,
+    ClusterFingerprintFeature.BENIGN_ERROR_STANDARD_DEVIATION,
+    ClusterFingerprintFeature.BENIGN_ERROR_SKEWNESS,
+    ClusterFingerprintFeature.BENIGN_ERROR_P95,
+)
+LOCKED_CLUSTER_INITIALIZATION_COUNT = KMeansInitializationCount(10)
+LOCKED_CLUSTER_MAXIMUM_ITERATIONS = KMeansMaximumIterationCount(300)
+LOCKED_CLUSTER_RANDOM_STATE = Seed(42)
+LOCKED_CLUSTER_GROUP_COUNT = GroupCount(3)
+
+
+class CentralizedQuantileProtocol(StrictModel):
+    method: Literal[CentralizedThresholdMethod.POOLED_BENIGN_QUANTILE]
+    quantile: Quantile
+
+
+class CalibrationEligibilityProtocol(StrictModel):
+    minimum_support: CalibrationSize
+
+
+class QuantileProtocol(StrictModel):
+    method: Literal[
+        FederatedThresholdMethod.SHARED_THRESHOLD,
+        FederatedThresholdMethod.LOCAL_THRESHOLD,
+        FederatedThresholdMethod.POOLED_SHARED_QUANTILE,
+        FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD,
+    ]
+    quantile: Quantile
+
+
+class CalibrationSizeProtocol(StrictModel):
+    sizes: tuple[CalibrationSize, ...]
+
+
+class FixedShrinkageProtocol(StrictModel):
+    method: Literal[FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE]
+    weights: tuple[ShrinkageWeight, ...]
+
+
+class SizeAwareShrinkageProtocol(StrictModel):
+    method: Literal[FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE]
+    minimum_support: CalibrationSize
+
+
+class ConformalProtocol(StrictModel):
+    method: Literal[FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD]
+    coverage: CoverageTarget
+
+    @property
+    def significance(self) -> Ratio:
+        return Ratio(1.0 - self.coverage.value)
+
+
+class FederatedStatisticsProtocol(StrictModel):
+    method: Literal[FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS]
+    coefficients: tuple[SummaryCoefficient, ...]
+
+
+class ClusterThresholdProtocol(StrictModel):
+    method: Literal[FederatedThresholdMethod.CLUSTER_THRESHOLD]
+    quantile: Quantile
+    fingerprint_features: tuple[ClusterFingerprintFeature, ...]
+    feature_standardization: ClusterFeatureStandardization
+    assignment_algorithm: ClusterAssignmentAlgorithm
+    initialization: KMeansInitialization
+    initialization_count: KMeansInitializationCount
+    maximum_iterations: KMeansMaximumIterationCount
+    random_state: Seed
+    group_count: GroupCount
+    threshold_aggregation: ClusterThresholdAggregation
+
+    @model_validator(mode="after")
+    def validate_fingerprint_features(self) -> "ClusterThresholdProtocol":
+        requirements = (
+            (
+                self.fingerprint_features == REQUIRED_CLUSTER_FINGERPRINT_FEATURES,
+                "cluster fingerprint must contain mean, standard deviation, skewness, "
+                "and p95 exactly once in locked order",
+            ),
+            (
+                self.feature_standardization is ClusterFeatureStandardization.STANDARD_SCALER,
+                "cluster fingerprint standardization must be StandardScaler",
+            ),
+            (self.assignment_algorithm is ClusterAssignmentAlgorithm.KMEANS, "cluster assignment must be k-means"),
+            (
+                self.initialization is KMeansInitialization.KMEANS_PLUS_PLUS,
+                "cluster initialization must be k-means++",
+            ),
+            (
+                self.initialization_count.value == LOCKED_CLUSTER_INITIALIZATION_COUNT.value,
+                "cluster n_init must match the locked initialization count",
+            ),
+            (
+                self.maximum_iterations.value == LOCKED_CLUSTER_MAXIMUM_ITERATIONS.value,
+                "cluster max_iter must match the locked maximum iteration count",
+            ),
+            (
+                self.random_state == LOCKED_CLUSTER_RANDOM_STATE,
+                "cluster random_state must match the locked seed",
+            ),
+            (
+                self.group_count.value == LOCKED_CLUSTER_GROUP_COUNT.value,
+                "cluster group count must match the locked group count",
+            ),
+            (
+                self.threshold_aggregation is ClusterThresholdAggregation.ARITHMETIC_MEAN_OF_ELIGIBLE_LOCAL_THRESHOLDS,
+                "cluster thresholds must average eligible local thresholds",
+            ),
+        )
+        for satisfied, message in requirements:
+            if not satisfied:
+                raise ValueError(message)
+        return self
+
 
 CANONICAL_QUANTILE = Quantile(0.95)
 QUANTILE_GRID = tuple(Quantile(value) for value in (0.90, 0.95, 0.975, 0.99))

@@ -16,7 +16,7 @@ from datp_core.anchor.models import (
     RelativeToleranceRule,
     SourceDefinedRule,
 )
-from datp_core.domain.values import floats_absolutely_close, floats_exactly_equal, is_numeric_zero
+from datp_core.domain.values.base import floats_absolutely_close, floats_exactly_equal, is_numeric_zero
 
 
 @dataclass(frozen=True, slots=True)

@@ -2,7 +2,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from datp_core.domain.values import Ratio
+from datp_core.domain.values.ratios import Ratio
 
 
 @given(st.floats(min_value=0, max_value=1, allow_nan=False, allow_infinity=False))

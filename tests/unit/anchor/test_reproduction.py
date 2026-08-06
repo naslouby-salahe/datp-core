@@ -19,10 +19,9 @@ from datp_core.anchor.reproduction import (
 )
 from datp_core.domain.enums import CheckpointStatus, FederatedThresholdMethod, MetricId
 from datp_core.domain.errors import AnchorReproductionError
-from datp_core.domain.values import Seed
+from datp_core.domain.values.counts import Seed
 from datp_core.protocols.anchor import ANCHOR_DECISION_PROTOCOL, HISTORICAL_ANCHOR_SEED_COHORT
-from datp_core.protocols.models import SeedCohort
-from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT
+from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
 
 
 def test_historical_cohort_is_exactly_five_seeds() -> None:

@@ -10,7 +10,8 @@ from datp_core.datasets.partitioning.splits import split_membership
 from datp_core.datasets.registry import population_capabilities, population_declaration
 from datp_core.domain.enums import DatasetId, PartitionRole, PopulationId, SplitProtocolId
 from datp_core.domain.errors import DataIntegrityError, LeakageError
-from datp_core.domain.values import Checksum, RowCount, Seed
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import RowCount, Seed
 
 
 def test_integrity_accepts_valid_population_and_split(nbaiot_canonical_root: Path) -> None:

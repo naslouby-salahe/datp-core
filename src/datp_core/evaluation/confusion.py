@@ -6,7 +6,8 @@ from math import isfinite
 from datp_core.datasets.partitioning.contracts import PopulationOutcomeLabel
 from datp_core.domain.enums import ContractSubject, PartitionRole
 from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.values import RowCount, ScoreValue, ThresholdValue
+from datp_core.domain.values.counts import RowCount
+from datp_core.domain.values.ratios import ScoreValue, ThresholdValue
 from datp_core.evaluation.models import ConfusionCounts
 
 

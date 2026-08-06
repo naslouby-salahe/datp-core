@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from datp_core.domain.enums import EvidenceRole, PublicationStatus
-from datp_core.domain.values import Checksum
+from datp_core.domain.values.checksums import Checksum
 from datp_core.evaluation.cohort.contracts import EvaluationCohortManifest
 from datp_core.evaluation.communication import CommunicationMessageDiagnostic
 from datp_core.evaluation.federated.contracts import (

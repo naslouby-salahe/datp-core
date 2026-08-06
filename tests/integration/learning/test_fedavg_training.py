@@ -14,7 +14,8 @@ from tests.unit.learning.federated.helpers import (
 )
 
 from datp_core.domain.enums import PublicationStatus
-from datp_core.domain.values import Checksum, RowCount, Seed
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import RowCount, Seed
 from datp_core.learning.federated.checkpoints.selection import select_checkpoint
 from datp_core.learning.federated.global_training import train_global_federated
 from datp_core.learning.federated.training import FederatedTrainingRequest

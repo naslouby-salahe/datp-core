@@ -1,8 +1,8 @@
 """Model-personalization absorption decisions."""
 
-from datp_core.analysis.scientific_decision import ScientificDecisionResult
-from datp_core.domain.enums import EvidenceRole, ScientificDecision
-from datp_core.domain.values import MetricValue, Ratio
+from datp_core.analysis.scientific_decision import ScientificDecision, ScientificDecisionResult
+from datp_core.domain.enums import EvidenceRole
+from datp_core.domain.values.ratios import MetricValue, Ratio
 
 MODEL_EFFECT_PARTIAL_RETENTION_CUTOFF = Ratio(0.25)
 MODEL_EFFECT_FULL_RETENTION_CUTOFF = Ratio(0.75)

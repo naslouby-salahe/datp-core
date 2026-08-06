@@ -11,9 +11,9 @@ from datp_core.calibration.eligibility import (
     load_benign_calibration_references,
 )
 from datp_core.calibration.models import EligibilityStatus
+from datp_core.datasets.capabilities import CapabilityStatus
 from datp_core.datasets.partitioning.contracts import PopulationCapabilities
 from datp_core.domain.enums import (
-    CapabilityStatus,
     DatasetId,
     EvidenceRole,
     FederatedThresholdMethod,
@@ -22,13 +22,15 @@ from datp_core.domain.enums import (
     PopulationIdentityKind,
     PublicationStatus,
 )
-from datp_core.domain.values import CalibrationSize, ClientCount, Quantile, checksum_file
+from datp_core.domain.values.checksums import checksum_file
+from datp_core.domain.values.counts import CalibrationSize, ClientCount
+from datp_core.domain.values.ratios import Quantile
 from datp_core.pipeline.decision.federated import (
     ConstructFederatedThresholdsRequest,
     construct_federated_thresholds,
 )
+from datp_core.protocols.calibration import CalibrationEligibilityProtocol
 from datp_core.protocols.inference import FixedScoreInvariant, ScoreArtifactManifest
-from datp_core.protocols.models import CalibrationEligibilityProtocol
 from datp_core.thresholding.dispatch import ThresholdConstructionRequest, dispatch_federated_threshold
 from datp_core.thresholding.methods.conformal import ConformalThresholdResult
 from datp_core.thresholding.methods.local import LocalThresholdResult

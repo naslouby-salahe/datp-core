@@ -7,20 +7,14 @@ from sklearn.preprocessing import StandardScaler
 from datp_core.domain.contracts import ClientCollection, ClientOwned
 from datp_core.domain.enums import (
     PartitionRole,
-    PreprocessingFitScope,
     PreprocessingProtocolId,
     SerializationFormat,
-    TrustedEstimatorClassName,
 )
-from datp_core.domain.values import (
-    AbsoluteTolerance,
-    ClientPathToken,
-    FeatureName,
-    FeatureNameSequence,
-    RowCount,
-    StableRowId,
-    StableRowIdSequence,
-)
+from datp_core.domain.values.counts import RowCount
+from datp_core.domain.values.identifiers import FeatureName, FeatureNameSequence, StableRowId, StableRowIdSequence
+from datp_core.domain.values.paths import ClientPathToken
+from datp_core.domain.values.ratios import AbsoluteTolerance
+from datp_core.preprocessing.contracts import PreprocessingFitScope, TrustedEstimatorClassName
 from datp_core.preprocessing.models import (
     SCIENTIFIC_CENTRALIZED_PREPROCESSING_METHOD,
     SCIENTIFIC_FEDERATED_POOLED_MIN_MAX_METHOD,

@@ -2,6 +2,7 @@
 
 from datp_core.datasets.capabilities import (
     AttackAssignmentCapability,
+    CapabilityStatus,
     ChronologyCapability,
     DatasetCapabilities,
     ExternalValidationCapability,
@@ -11,7 +12,12 @@ from datp_core.datasets.capabilities import (
     TemporalCapability,
     ThresholdMethodCapability,
 )
-from datp_core.domain.enums import CapabilityStatus, EvidenceRole, FederatedThresholdMethod, MetricId, PopulationId
+from datp_core.domain.enums import (
+    EvidenceRole,
+    FederatedThresholdMethod,
+    MetricId,
+    PopulationId,
+)
 
 from .schema import EDGE_BENIGN_SENSOR_GROUPS, EdgeSensorGroup
 
@@ -72,46 +78,48 @@ EDGE_IIOTSET_CAPABILITIES = DatasetCapabilities(
     valid_populations=(PopulationId.EDGE_SENSOR_GROUPS, PopulationId.EDGE_TEMPORAL_GROUPS),
     threshold_methods=(
         ThresholdMethodCapability(
-            FederatedThresholdMethod.SHARED_THRESHOLD,
-            CapabilityStatus.SUPPORTED,
-            "Eligible benign sensor groups provide local calibration quantiles.",
-            "The method is limited to benign external and temporal outcomes.",
+            status=CapabilityStatus.SUPPORTED,
+            evidence="Eligible benign sensor groups provide local calibration quantiles.",
+            reason="The method is limited to benign external and temporal outcomes.",
+            method=FederatedThresholdMethod.SHARED_THRESHOLD,
         ),
         ThresholdMethodCapability(
-            FederatedThresholdMethod.POOLED_SHARED_QUANTILE,
-            CapabilityStatus.SUPPORTED,
-            "Eligible benign calibration scores can be pooled without using attack-labelled rows.",
-            "The result remains a shared-threshold external comparator, not a centralized detector.",
+            status=CapabilityStatus.SUPPORTED,
+            evidence="Eligible benign calibration scores can be pooled without using attack-labelled rows.",
+            reason="The result remains a shared-threshold external comparator, not a centralized detector.",
+            method=FederatedThresholdMethod.POOLED_SHARED_QUANTILE,
         ),
         ThresholdMethodCapability(
-            FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD,
-            CapabilityStatus.SUPPORTED,
-            "Eligible local benign thresholds and support counts are available.",
-            "The method is limited to benign external-validation outcomes.",
+            status=CapabilityStatus.SUPPORTED,
+            evidence="Eligible local benign thresholds and support counts are available.",
+            reason="The method is limited to benign external-validation outcomes.",
+            method=FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD,
         ),
         ThresholdMethodCapability(
-            FederatedThresholdMethod.LOCAL_THRESHOLD,
-            CapabilityStatus.SUPPORTED,
-            "Eligible benign sensor groups retain client-local calibration scores.",
-            "The method is limited to benign external and temporal outcomes.",
+            status=CapabilityStatus.SUPPORTED,
+            evidence="Eligible benign sensor groups retain client-local calibration scores.",
+            reason="The method is limited to benign external and temporal outcomes.",
+            method=FederatedThresholdMethod.LOCAL_THRESHOLD,
         ),
         ThresholdMethodCapability(
-            FederatedThresholdMethod.CLUSTER_THRESHOLD,
-            CapabilityStatus.CONDITIONAL,
-            "Eligible clients can be grouped from benign reconstruction-error fingerprints.",
-            "Execution requires the locked group count to be smaller than the eligible population.",
+            status=CapabilityStatus.CONDITIONAL,
+            evidence="Eligible clients can be grouped from benign reconstruction-error fingerprints.",
+            reason="Execution requires the locked group count to be smaller than the eligible population.",
+            method=FederatedThresholdMethod.CLUSTER_THRESHOLD,
         ),
         ThresholdMethodCapability(
-            FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE,
-            CapabilityStatus.SUPPORTED,
-            "Shared and local benign thresholds are available under one frozen detector.",
-            "Only the predeclared fixed shrinkage curve is supported.",
+            status=CapabilityStatus.SUPPORTED,
+            evidence="Shared and local benign thresholds are available under one frozen detector.",
+            reason="Only the predeclared fixed shrinkage curve is supported.",
+            method=FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE,
         ),
         ThresholdMethodCapability(
-            FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS,
-            CapabilityStatus.SUPPORTED,
-            "Eligible clients can publish benign-only summary statistics under the declared comparator protocol.",
-            "The method does not imply formal privacy or attack-sensitive validation.",
+            status=CapabilityStatus.SUPPORTED,
+            evidence=(
+                "Eligible clients can publish benign-only summary statistics under the declared comparator protocol."
+            ),
+            reason="The method does not imply formal privacy or attack-sensitive validation.",
+            method=FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS,
         ),
     ),
 )

@@ -8,7 +8,7 @@ from datp_core.datasets.partitioning.contracts import SplitConstructionRequest
 from datp_core.datasets.partitioning.integrity import validate_no_future_history_leakage
 from datp_core.datasets.partitioning.splits import split_membership
 from datp_core.domain.enums import DatasetId, PartitionRole, PopulationId, SplitProtocolId
-from datp_core.domain.values import Seed
+from datp_core.domain.values.counts import Seed
 
 
 def test_temporal_split_preserves_history_before_future(edge_temporal_eligible_root: Path) -> None:

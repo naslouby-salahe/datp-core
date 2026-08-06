@@ -9,17 +9,10 @@ from tests.unit.learning.federated.helpers import (
 
 from datp_core.datasets.partitioning.contracts import PopulationOutcomeLabel
 from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.values import (
-    BatchSize,
-    Checksum,
-    MetricValue,
-    OutcomeLabel,
-    OutcomeLabelSequence,
-    ProximalCoefficient,
-    RoundNumber,
-    RowCount,
-    Seed,
-)
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import BatchSize, RoundNumber, RowCount, Seed
+from datp_core.domain.values.identifiers import OutcomeLabel, OutcomeLabelSequence
+from datp_core.domain.values.ratios import MetricValue, ProximalCoefficient
 from datp_core.learning.autoencoder import ReconstructionAutoencoder
 from datp_core.learning.federated.models import ClientUpdate
 from datp_core.learning.federated.training import (

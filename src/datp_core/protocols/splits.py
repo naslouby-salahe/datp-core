@@ -5,7 +5,8 @@ from math import fsum
 from pydantic import model_validator
 
 from datp_core.domain.contracts import StrictModel
-from datp_core.domain.values import CoverageTarget, Ratio, floats_absolutely_close
+from datp_core.domain.values.base import floats_absolutely_close
+from datp_core.domain.values.ratios import CoverageTarget, Ratio
 
 UNIT_FRACTION_TOTAL = 1.0
 FRACTION_TOTAL_ABSOLUTE_TOLERANCE = 1e-12

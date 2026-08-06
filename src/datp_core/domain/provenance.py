@@ -11,7 +11,8 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, TypeAdapter
 
 from .enums import DatasetId, PopulationId, SerializationFormat, TrafficRateEvidenceType
-from .values import ByteCount, Checksum, RowCount, checksum_text
+from .values.checksums import Checksum, checksum_text
+from .values.counts import ByteCount, RowCount
 
 if TYPE_CHECKING:
     from _typeshed import DataclassInstance

@@ -8,7 +8,7 @@ from datp_core.analysis.inference.bootstrap.estimation import (
     paired_bca_interval,
     supplementary_paired_bca_interval,
 )
-from datp_core.analysis.scientific_decision import decide_confirmatory
+from datp_core.analysis.scientific_decision import ScientificDecision, decide_confirmatory
 from datp_core.domain.enums import (
     AvailabilityStatus,
     EvidenceRole,
@@ -16,13 +16,13 @@ from datp_core.domain.enums import (
     MetricId,
     PopulationId,
     PreprocessingProtocolId,
-    ScientificDecision,
     SplitProtocolId,
     TrainingModelId,
 )
-from datp_core.domain.values import MetricValue, Seed
+from datp_core.domain.values.counts import Seed
+from datp_core.domain.values.ratios import MetricValue
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.protocols.models import SeedCohort
+from datp_core.protocols.seeds import SeedCohort
 from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL, PairedInferenceProtocol
 
 

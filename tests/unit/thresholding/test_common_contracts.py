@@ -12,7 +12,9 @@ from datp_core.domain.enums import (
     TrainingModelId,
 )
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import Checksum, Quantile, Seed, ThresholdValue
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import Seed
+from datp_core.domain.values.ratios import Quantile, ThresholdValue
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.thresholding.assignments import ThresholdAssignment
 from datp_core.thresholding.models import (

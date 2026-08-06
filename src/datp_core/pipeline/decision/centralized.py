@@ -25,16 +25,10 @@ from datp_core.domain.enums import (
 )
 from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.provenance import canonical_checksum, canonical_json_text
-from datp_core.domain.values import (
-    Checksum,
-    MetricValue,
-    OutcomeLabel,
-    OutcomeLabelSequence,
-    Quantile,
-    RoundNumber,
-    RowCount,
-    ThresholdValue,
-)
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import RoundNumber, RowCount
+from datp_core.domain.values.identifiers import OutcomeLabel, OutcomeLabelSequence
+from datp_core.domain.values.ratios import MetricValue, Quantile, ThresholdValue
 from datp_core.learning.centralized.training import CentralizedTrainingCoordinate
 from datp_core.pipeline.publication.service import (
     ArtifactPublication,
@@ -44,8 +38,7 @@ from datp_core.pipeline.publication.service import (
 )
 from datp_core.pipeline.scoring.centralized import load_score_frame, reject_non_finite_scores
 from datp_core.pipeline.scoring.models import PooledScoreArtifact
-from datp_core.protocols.calibration import CANONICAL_QUANTILE
-from datp_core.protocols.models import CentralizedQuantileProtocol
+from datp_core.protocols.calibration import CANONICAL_QUANTILE, CentralizedQuantileProtocol
 
 BENIGN_OUTCOME_LABEL = PopulationOutcomeLabel.BENIGN
 ATTACK_OUTCOME_LABEL = PopulationOutcomeLabel.ATTACK

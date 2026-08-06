@@ -18,7 +18,8 @@ from datp_core.calibration.models import (
 from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.enums import ContractSubject
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import CalibrationSize, ReplicateIndex, RowCount, Seed, checksum_text
+from datp_core.domain.values.checksums import checksum_text
+from datp_core.domain.values.counts import CalibrationSize, ReplicateIndex, RowCount, Seed
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 
 

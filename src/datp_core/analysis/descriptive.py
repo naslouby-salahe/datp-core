@@ -6,7 +6,8 @@ from pydantic import model_validator
 from datp_core.analysis.contrasts import MetricSeries, PairedDifferenceCounts
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import AvailabilityStatus, EvidenceRole
-from datp_core.domain.values import MetricValue, PairedObservationCount, Ratio
+from datp_core.domain.values.counts import PairedObservationCount
+from datp_core.domain.values.ratios import MetricValue, Ratio
 
 
 class QuantileRange(StrictModel):

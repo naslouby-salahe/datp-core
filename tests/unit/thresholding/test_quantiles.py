@@ -6,14 +6,8 @@ from tests.unit.thresholding.helpers import client_scores
 
 from datp_core.domain.enums import QuantileInterpolationSemantics
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import (
-    ConformalRankIndex,
-    CoverageTarget,
-    Quantile,
-    RowCount,
-    SummaryCoefficient,
-    ThresholdValue,
-)
+from datp_core.domain.values.counts import ConformalRankIndex, RowCount
+from datp_core.domain.values.ratios import CoverageTarget, Quantile, SummaryCoefficient, ThresholdValue
 from datp_core.thresholding.quantiles import (
     achieved_benign_exceedance,
     conformal_rank_index,

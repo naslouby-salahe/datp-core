@@ -45,15 +45,8 @@ from datp_core.datasets.contracts import (
 )
 from datp_core.datasets.publication import publish_canonical_atomically
 from datp_core.domain.enums import DatasetId, PublicationStatus
-from datp_core.domain.values import (
-    ByteCount,
-    CanonicalColumnPosition,
-    Checksum,
-    RowCount,
-    SourceFileCount,
-    checksum_file,
-    checksum_text,
-)
+from datp_core.domain.values.checksums import Checksum, checksum_file, checksum_text
+from datp_core.domain.values.counts import ByteCount, CanonicalColumnPosition, RowCount, SourceFileCount
 
 _COMPLETE_NAME, _MANIFEST_NAME, _SCHEMA_NAME, _SOURCE_STATE_NAME = publication_artifact_names()
 
@@ -267,9 +260,7 @@ def partition_assets[AssetRoleT: StrEnum](
 ) -> tuple[CanonicalAssetLayout[AssetRoleT], ...]:
     if partition_count < 1:
         raise ValueError("canonical partition publication requires at least one partition")
-    return tuple(
-        CanonicalAssetLayout(branch / f"part-{index:05d}.parquet", role) for index in range(partition_count)
-    )
+    return tuple(CanonicalAssetLayout(branch / f"part-{index:05d}.parquet", role) for index in range(partition_count))
 
 
 def canonical_data_partition_assets(partition_count: int) -> tuple[CanonicalAssetLayout[CanonicalAssetRole], ...]:

@@ -24,21 +24,16 @@ from datp_core.analysis.mechanisms.movement import (
     ThresholdOperatingPoint,
     threshold_movement,
 )
+from datp_core.analysis.scientific_decision import ScientificDecision
 from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.enums import (
     AvailabilityStatus,
     EvidenceRole,
     PopulationId,
     PopulationIdentityKind,
-    ScientificDecision,
 )
-from datp_core.domain.values import (
-    ClusterIndex,
-    MetricValue,
-    PairedObservationCount,
-    Ratio,
-    ThresholdValue,
-)
+from datp_core.domain.values.counts import ClusterIndex, PairedObservationCount
+from datp_core.domain.values.ratios import MetricValue, Ratio, ThresholdValue
 
 
 def test_association_reports_all_observations_with_typed_statistics() -> None:

@@ -1,11 +1,6 @@
-from datp_core.domain.enums import (
-    AvailabilityStatus,
-    ClaimStatus,
-    EvidenceRole,
-    MetricId,
-    TemporalState,
-    WarningCode,
-)
+from datp_core.domain.enums import AvailabilityStatus, EvidenceRole, MetricId, TemporalState
+from datp_core.evaluation.models import WarningCode
+from datp_core.reporting.validation import ClaimStatus
 
 
 def test_report_facing_enums_preserve_claim_boundaries() -> None:

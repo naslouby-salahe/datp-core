@@ -11,16 +11,12 @@ from datp_core.domain.enums import (
     FederatedThresholdMethod,
 )
 from datp_core.domain.errors import ScientificContractError, require_contract
-from datp_core.domain.values import (
-    Checksum,
-    Quantile,
-    RowCount,
-    ThresholdValue,
-    checksum_text,
-    floats_exactly_equal,
-)
+from datp_core.domain.values.base import floats_exactly_equal
+from datp_core.domain.values.checksums import Checksum, checksum_text
+from datp_core.domain.values.counts import RowCount
+from datp_core.domain.values.ratios import Quantile, ThresholdValue
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.protocols.models import QuantileProtocol
+from datp_core.protocols.calibration import QuantileProtocol
 from datp_core.thresholding.assignments import (
     LocalQuantile,
     ThresholdAssignment,

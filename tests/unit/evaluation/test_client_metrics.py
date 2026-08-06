@@ -1,6 +1,7 @@
 from datp_core.datasets.partitioning.contracts import PopulationOutcomeLabel
 from datp_core.domain.enums import MetricId
-from datp_core.domain.values import RowCount, ScoreValue
+from datp_core.domain.values.counts import RowCount
+from datp_core.domain.values.ratios import ScoreValue
 from datp_core.evaluation.client_metrics import calculate_client_metrics
 from datp_core.evaluation.models import ConfusionCounts, MetricStatus
 

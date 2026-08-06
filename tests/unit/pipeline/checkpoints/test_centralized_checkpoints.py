@@ -5,7 +5,7 @@ from tests.unit.learning.centralized.helpers import AUTOENCODER, CHECKPOINT, req
 
 from datp_core.domain.enums import CheckpointSelectionRule, CheckpointStatus, TrainingModelId
 from datp_core.domain.errors import LeakageError
-from datp_core.domain.values import MetricValue
+from datp_core.domain.values.ratios import MetricValue
 from datp_core.pipeline.checkpoints.service import (
     reject_federated_checkpoint,
     retain_centralized_checkpoint_candidates,

@@ -13,9 +13,7 @@ import pyarrow.parquet as pq
 from datp_core.datasets.contracts import CanonicalProvenanceColumn, ChronologyValidation
 from datp_core.datasets.materialization import canonical_provenance_arrow_field
 from datp_core.domain.enums import AvailabilityStatus
-from datp_core.domain.values import (
-    RowCount,
-)
+from datp_core.domain.values.counts import RowCount
 
 from .schema import EdgeArtifactSuffix, EdgeCanonicalColumn, source_relative_path
 
