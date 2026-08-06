@@ -1,1 +1,1 @@
-"""Complete pipeline use cases callable from CLI and Dagster."""
+"""Complete pipeline use cases callable from the Typer CLI and internal workflow API."""

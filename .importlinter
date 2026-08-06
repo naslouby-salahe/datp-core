@@ -39,7 +39,6 @@ forbidden_modules =
     datp_core.calibration
     datp_core.reporting
     datp_core.pipeline.workflows
-    datp_core.pipeline.dagster
     datp_core.cli
 
 [importlinter:contract:pipeline-services-do-not-import-workflows]
@@ -59,12 +58,11 @@ ignore_imports =
     datp_core.pipeline.execution.engine -> datp_core.pipeline.workflows.anchor
 
 [importlinter:contract:workflows-do-not-import-adapters]
-name = Workflows must not import Dagster or CLI
+name = Workflows must not import the CLI
 type = forbidden
 source_modules =
     datp_core.pipeline.workflows
 forbidden_modules =
-    datp_core.pipeline.dagster
     datp_core.cli
 
 [importlinter:contract:pipeline-application-boundary]
@@ -82,7 +80,6 @@ source_modules =
     datp_core.learning
 forbidden_modules =
     datp_core.pipeline.workflows
-    datp_core.pipeline.dagster
     datp_core.reporting
     datp_core.cli
 
@@ -93,7 +90,6 @@ source_modules =
     datp_core.datasets
 forbidden_modules =
     datp_core.pipeline.workflows
-    datp_core.pipeline.dagster
     datp_core.reporting
     datp_core.cli
 
@@ -108,7 +104,6 @@ forbidden_modules =
     datp_core.datasets.edge_iiotset
     datp_core.datasets.registry
     datp_core.pipeline.workflows
-    datp_core.pipeline.dagster
     datp_core.reporting
     datp_core.cli
 
@@ -119,7 +114,6 @@ source_modules =
     datp_core.preprocessing
 forbidden_modules =
     datp_core.pipeline.workflows
-    datp_core.pipeline.dagster
     datp_core.reporting
     datp_core.cli
 

@@ -38,8 +38,10 @@ Key boundaries:
 - `datasets` owns audited ingestion, canonical publication, populations, partitioning, and split evidence.
 - `preprocessing`, `learning`, `thresholding`, and `evaluation` own their scientific computations and contracts.
 - `analysis` consumes validated evaluation evidence.
-- `pipeline` composes application workflows without redefining lower-level contracts.
-- `cli` is an adapter over application services.
+- `pipeline` composes application workflows without redefining lower-level contracts. Deterministic planning, stage sequencing, reuse, provenance, completion validation, and publication live under `pipeline/`.
+- `cli` is the only user-facing execution interface (Typer). Experiments run through CLI commands that call `pipeline/workflows/`.
+
+No external orchestration framework is required. Artifact reuse, idempotency, provenance, checksums, and completion validation are repository-owned.
 
 No backwards-compatibility shims, redirect modules, implicit CPU fallback, or alternate scientific interpretations are maintained.
 
@@ -59,7 +61,9 @@ python -m pip install --upgrade pip
 python -m pip install -e '.[dev]'
 ```
 
-## Main commands
+## Execution
+
+Experiments are executed only through the Typer CLI and the underlying pipeline workflows. There is no separate orchestration entrypoint.
 
 ```bash
 python -m datp_core.cli.app --help
@@ -67,12 +71,25 @@ python -m datp_core.cli.app plan validate-protocols
 python -m datp_core.cli.app plan build
 python -m datp_core.cli.app run materialize-datasets
 python -m datp_core.cli.app run confirmatory-campaign
+python -m datp_core.cli.app run family-grouped-mechanism-campaign
+python -m datp_core.cli.app run analyze-confirmatory
+python -m datp_core.cli.app run ditto-stress-test-campaign
+python -m datp_core.cli.app run analyze-ditto-absorption
+python -m datp_core.cli.app run fedprox-coefficient-campaign --coefficient 0.01
+python -m datp_core.cli.app run analyze-fedprox-absorption --coefficient 0.01
+python -m datp_core.cli.app run temporal-evidence-campaign
+python -m datp_core.cli.app run edge-benign-equity-seed --partition-seed 0
+python -m datp_core.cli.app run analyze-edge-benign-equity
+python -m datp_core.cli.app run ciciot-file-client-boundary-seed --partition-seed 0
+python -m datp_core.cli.app run analyze-ciciot-file-client-boundary
+python -m datp_core.cli.app run centralized-reference-seed --training-seed 0
 ```
 
 Inspect command-specific options before execution:
 
 ```bash
 python -m datp_core.cli.app run --help
+python -m datp_core.cli.app plan --help
 ```
 
 ## Validation
@@ -90,7 +107,7 @@ Training and end-to-end execution additionally require the audited raw datasets 
 
 ## Artifact lifecycle
 
-Published artifacts are immutable, checksummed, and coordinate-bound. A complete artifact may be reused only when its request identity and persisted evidence validate under the current contract. Incomplete outputs are not resumed; they are replaced and rebuilt. Changes to artifact layout or scientific contracts intentionally invalidate incompatible prior outputs.
+Artifact reuse, idempotency, provenance, checksums, and completion validation are owned by this repository (not by an external orchestrator). Published artifacts are immutable, checksummed, and coordinate-bound. A complete artifact may be reused only when its request identity and persisted evidence validate under the current contract. Incomplete outputs are not resumed; they are replaced and rebuilt. Changes to artifact layout or scientific contracts intentionally invalidate incompatible prior outputs.
 
 ## Development rules
 

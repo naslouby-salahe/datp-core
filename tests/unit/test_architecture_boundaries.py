@@ -161,6 +161,11 @@ def test_stale_monolithic_cli_run_module_is_removed() -> None:
     assert _source_importers("datp_core.cli.run") == ()
 
 
+def test_legacy_orchestration_package_is_removed() -> None:
+    assert not (_SOURCE_ROOT / "orchestration").exists()
+    assert _source_importers("datp_core.orchestration") == ()
+
+
 def test_analysis_documents_module_remains_deleted() -> None:
     assert not (_SOURCE_ROOT / "analysis" / "documents.py").exists()
     assert _source_importers("datp_core.analysis.documents") == ()
