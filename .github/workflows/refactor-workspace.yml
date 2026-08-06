@@ -65,7 +65,7 @@ jobs:
           uv run ruff format src tests
           git add -A
           base64 --decode tools/refactor-fixes.patch.xz.b64 > /tmp/refactor-fixes.patch.xz
-          echo 'bdb663e5f34c2417848187ba3fbc187a81c2067d6cf52df84bbd34d62ac252a7  /tmp/refactor-fixes.patch.xz' | sha256sum --check --strict
+          echo '958c10867d15ccb24761b09e7e7177adb24e772ec44f43330338df4693dead47  /tmp/refactor-fixes.patch.xz' | sha256sum --check --strict
           xz -dc /tmp/refactor-fixes.patch.xz > /tmp/refactor-fixes.patch
           git apply --index /tmp/refactor-fixes.patch
           git rm tools/refactor-fixes.patch.xz.b64
