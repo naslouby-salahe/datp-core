@@ -60,6 +60,7 @@ from datp_core.evaluation.threshold_estimation import (
     ThresholdEstimationProvenance,
     evaluate_threshold_estimate,
 )
+from datp_core.evaluation.threshold_evidence import VerifiedHeldOutBenignScores
 from datp_core.evaluation.traffic_rates import ValidatedTrafficRateEvidence
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity, require_execution_identity
@@ -98,7 +99,13 @@ class ThresholdEstimationStageInput:
     provenance: ThresholdEstimationProvenance
     estimated_threshold: ThresholdValue
     exact_pooled_benign_quantile_reference: ThresholdValue
-    held_out_benign_scores: tuple[HeldOutBenignScore, ...]
+    verified_benign_scores: VerifiedHeldOutBenignScores
+
+    def __post_init__(self) -> None:
+        if self.verified_benign_scores.client != self.provenance.client:
+            raise ScientificContractError("threshold-estimation evidence must match the evaluated client")
+        if self.verified_benign_scores.coordinate != self.provenance.coordinate:
+            raise ScientificContractError("threshold-estimation evidence must match the evaluated coordinate")
 
 
 @dataclass(frozen=True, slots=True)
@@ -384,7 +391,7 @@ def _evaluate_threshold_estimation_input(
         provenance=diagnostic.provenance,
         estimated_threshold=diagnostic.estimated_threshold,
         exact_pooled_benign_quantile_reference=diagnostic.exact_pooled_benign_quantile_reference,
-        held_out_benign_scores=diagnostic.held_out_benign_scores,
+        verified_benign_scores=diagnostic.verified_benign_scores,
     )
 
 
