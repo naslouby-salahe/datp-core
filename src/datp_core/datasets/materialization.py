@@ -3,7 +3,6 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
-from hashlib import sha256
 from pathlib import Path
 from shutil import rmtree
 
@@ -222,21 +221,20 @@ def _inventory_row_count(sources: tuple[RawSourceFile, ...]) -> RowCount | None:
 
 
 def _inventory_checksum(sources: tuple[RawSourceFile, ...]) -> Checksum:
-    digest = sha256()
-    for source in sources:
-        digest.update(
-            "\t".join(
-                (
-                    source.relative_path.as_posix(),
-                    str(source.size_bytes.value),
-                    source.checksum.value,
-                    source.role.value,
-                    "" if source.observed_row_count is None else str(source.observed_row_count),
-                )
-            ).encode()
+    joined = "".join(
+        "\t".join(
+            (
+                source.relative_path.as_posix(),
+                str(source.size_bytes.value),
+                source.checksum.value,
+                source.role.value,
+                "" if source.observed_row_count is None else str(source.observed_row_count),
+            )
         )
-        digest.update(b"\n")
-    return Checksum(digest.hexdigest())
+        + "\n"
+        for source in sources
+    )
+    return checksum_text(joined)
 
 
 def canonical_schema_checksum(
