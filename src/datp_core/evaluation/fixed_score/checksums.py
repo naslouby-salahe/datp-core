@@ -3,22 +3,19 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
-from hashlib import sha256
 
 import polars as pl
 
 from datp_core.datasets.partitioning.contracts import ClientIdentity, PopulationOutcomeLabel
 from datp_core.domain.enums import ScoreFrameColumn
 from datp_core.domain.provenance import canonical_checksum
-from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.checksums import Checksum, ordered_text_checksum
 from datp_core.evaluation.models import ClientMetricResult
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.protocols.inference import ScoreArtifactManifest, ScoreRecord
 
 type FederatedScoreArtifactManifest = ScoreArtifactManifest[FederatedTrainingCoordinate, ClientIdentity]
 type FederatedScoreRecord = ScoreRecord[FederatedTrainingCoordinate, ClientIdentity]
-
-_LENGTH_PREFIX_BYTES = 8
 
 
 class ClientChecksumField(StrEnum):
@@ -104,18 +101,3 @@ def score_column_checksum(
 ) -> Checksum:
     values = pl.read_parquet(record.path)[column.value].to_list()
     return ordered_text_checksum(tuple(str(value) for value in values))
-
-
-def ordered_text_checksum(values: Sequence[str]) -> Checksum:
-    digest = sha256()
-    for value in values:
-        encoded = value.encode("utf-8")
-        digest.update(
-            len(encoded).to_bytes(
-                _LENGTH_PREFIX_BYTES,
-                byteorder="big",
-                signed=False,
-            )
-        )
-        digest.update(encoded)
-    return Checksum(digest.hexdigest())
