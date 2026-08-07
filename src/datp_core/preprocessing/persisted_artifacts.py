@@ -1,5 +1,3 @@
-"""Persisted population/split artifact loading and validation for published preprocessing."""
-
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -59,26 +57,34 @@ def load_published_population_split(
     identity: ExternalTemporalExecutionIdentity,
 ) -> PublishedPopulationSplit:
     use_static = identity.temporal_state is TemporalState.STATIC_REFERENCE
-    population_manifest_name = MATCHED_STATIC_POPULATION_MANIFEST_ASSET if use_static else POPULATION_MANIFEST_ASSET
-    membership_name = MATCHED_STATIC_POPULATION_MEMBERSHIP_ASSET if use_static else POPULATION_MEMBERSHIP_ASSET
-    split_manifest_name = MATCHED_STATIC_SPLIT_MANIFEST_ASSET if use_static else SPLIT_MANIFEST_ASSET
-    assignments_name = MATCHED_STATIC_SPLIT_ASSIGNMENTS_ASSET if use_static else SPLIT_ASSIGNMENTS_ASSET
-    population_document = _read_population_document(request.population_directory / population_manifest_name)
-    split_document = _read_split_document(request.split_directory / split_manifest_name)
-    membership = _read_parquet(
-        request.population_directory / membership_name,
-        identity.population,
-    )
-    assignments = _read_parquet(
-        request.split_directory / assignments_name,
-        identity.population,
-    )
-    _validate_population_publication(
-        request.population_directory,
-        identity,
-    )
-    _validate_split_publication(request.split_directory, identity)
+    pop_dir = request.population_directory
+    split_dir = request.split_directory
+
+    if use_static:
+        pop_name, mem_name, split_name, assign_name = (
+            MATCHED_STATIC_POPULATION_MANIFEST_ASSET,
+            MATCHED_STATIC_POPULATION_MEMBERSHIP_ASSET,
+            MATCHED_STATIC_SPLIT_MANIFEST_ASSET,
+            MATCHED_STATIC_SPLIT_ASSIGNMENTS_ASSET,
+        )
+    else:
+        pop_name, mem_name, split_name, assign_name = (
+            POPULATION_MANIFEST_ASSET,
+            POPULATION_MEMBERSHIP_ASSET,
+            SPLIT_MANIFEST_ASSET,
+            SPLIT_ASSIGNMENTS_ASSET,
+        )
+
+    population_document = _read_population_document(pop_dir.joinpath(pop_name))
+    split_document = _read_split_document(split_dir.joinpath(split_name))
+    membership = _read_parquet(pop_dir.joinpath(mem_name), identity.population)
+    assignments = _read_parquet(split_dir.joinpath(assign_name), identity.population)
+
+    _validate_population_publication(pop_dir, identity)
+    _validate_split_publication(split_dir, identity)
+
     manifest = _population_manifest_from_document(population_document)
+
     _validate_published_pair(
         manifest,
         membership,
@@ -87,6 +93,7 @@ def load_published_population_split(
         identity,
         use_static,
     )
+
     return PublishedPopulationSplit(
         manifest,
         membership,
@@ -125,15 +132,23 @@ def _validate_population_publication(
 ) -> None:
     complete = _read_complete_digest(directory, identity.population)
     _validate_persisted_execution_identity(directory, identity)
-    primary = _read_population_document(directory / POPULATION_MANIFEST_ASSET)
-    sections = [canonical_json_text(identity), canonical_json_text(primary)]
+    primary = _read_population_document(directory.joinpath(POPULATION_MANIFEST_ASSET))
+
     if primary.population is PopulationId.EDGE_TEMPORAL_GROUPS:
-        sections.extend(
-            (
-                canonical_json_text(_read_chronology_document(directory / CHRONOLOGY_ASSET)),
-                canonical_json_text(_read_population_document(directory / MATCHED_STATIC_POPULATION_MANIFEST_ASSET)),
-            )
+        sections = (
+            canonical_json_text(identity),
+            canonical_json_text(primary),
+            canonical_json_text(_read_chronology_document(directory.joinpath(CHRONOLOGY_ASSET))),
+            canonical_json_text(
+                _read_population_document(directory.joinpath(MATCHED_STATIC_POPULATION_MANIFEST_ASSET))
+            ),
         )
+    else:
+        sections = (
+            canonical_json_text(identity),
+            canonical_json_text(primary),
+        )
+
     if complete != checksum_text("\n".join(sections)):
         raise ScientificContractError(
             "published population COMPLETE digest does not match its manifests",
@@ -147,10 +162,20 @@ def _validate_split_publication(
 ) -> None:
     complete = _read_complete_digest(directory, identity.population)
     _validate_persisted_execution_identity(directory, identity)
-    primary = _read_split_document(directory / SPLIT_MANIFEST_ASSET)
-    sections = [canonical_json_text(identity), canonical_json_text(primary)]
+    primary = _read_split_document(directory.joinpath(SPLIT_MANIFEST_ASSET))
+
     if primary.population is PopulationId.EDGE_TEMPORAL_GROUPS:
-        sections.append(canonical_json_text(_read_split_document(directory / MATCHED_STATIC_SPLIT_MANIFEST_ASSET)))
+        sections = (
+            canonical_json_text(identity),
+            canonical_json_text(primary),
+            canonical_json_text(_read_split_document(directory.joinpath(MATCHED_STATIC_SPLIT_MANIFEST_ASSET))),
+        )
+    else:
+        sections = (
+            canonical_json_text(identity),
+            canonical_json_text(primary),
+        )
+
     if complete != checksum_text("\n".join(sections)):
         raise ScientificContractError(
             "published split COMPLETE digest does not match its manifests",
@@ -164,13 +189,14 @@ def _validate_persisted_execution_identity(
 ) -> None:
     try:
         persisted = ExternalTemporalExecutionIdentity.model_validate_json(
-            (directory / EXECUTION_IDENTITY_ASSET).read_text(encoding="utf-8")
+            directory.joinpath(EXECUTION_IDENTITY_ASSET).read_text(encoding="utf-8")
         )
     except (OSError, ValueError) as error:
         raise ScientificContractError(
             "published artifact lacks a valid execution identity",
             subject=identity.population,
         ) from error
+
     if persisted != identity:
         raise ScientificContractError(
             "published artifact execution identity does not match the request",
@@ -183,7 +209,7 @@ def _read_complete_digest(
     population: PopulationId,
 ) -> Checksum:
     try:
-        return Checksum((directory / COMPLETE_ASSET).read_text(encoding="utf-8").strip())
+        return Checksum(directory.joinpath(COMPLETE_ASSET).read_text(encoding="utf-8").strip())
     except (OSError, ValueError) as error:
         raise ScientificContractError(
             "published artifact COMPLETE marker is missing or invalid",
@@ -233,6 +259,7 @@ def _validate_published_pair(
     use_static_reference: bool,
 ) -> None:
     document = population_manifest.document
+
     if document.population is not identity.population or split_manifest.population is not identity.population:
         raise ScientificContractError(
             "published coordinates do not match execution identity",
@@ -253,14 +280,12 @@ def _validate_published_pair(
             "split manifest is not bound to its population",
             subject=identity.population,
         )
-    if split_manifest.split_protocol is not _expected_split_protocol(
-        identity,
-        use_static_reference,
-    ):
+    if split_manifest.split_protocol is not _expected_split_protocol(identity, use_static_reference):
         raise ScientificContractError(
             "published split protocol is incompatible",
             subject=identity.population,
         )
+
     validate_population_manifest(
         population_manifest,
         membership,
@@ -268,6 +293,7 @@ def _validate_published_pair(
         population_capabilities(identity.population),
     )
     validate_split_manifest(membership, assignments, split_manifest)
+
     if identity.population is PopulationId.EDGE_TEMPORAL_GROUPS and not use_static_reference:
         validate_no_future_history_leakage(
             assignments,

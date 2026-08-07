@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import polars as pl
+from sklearn.preprocessing import StandardScaler
 
 from datp_core.domain.enums import (
     DatasetId,
@@ -24,7 +25,6 @@ from datp_core.preprocessing.models import (
     PreprocessingProtocol,
     PreprocessingPublishContext,
 )
-from datp_core.preprocessing.state import construct_trusted_estimator
 
 
 def _partitions() -> PreprocessingPartitions:
@@ -57,7 +57,7 @@ def _publish(tmp_path: Path, seed: Seed, identity: PreprocessingProtocolId) -> P
         numerical_equivalence_absolute_tolerance=AbsoluteTolerance(1e-12),
     )
     partitions = _partitions()
-    fitted = construct_trusted_estimator(TrustedEstimatorClassName.STANDARD_SCALER).fit(
+    fitted = StandardScaler().fit(
         partitions.require(PartitionRole.TRAIN).frame.select(list(protocol.input_feature_names)).to_numpy()
     )
     result = publish_client_preprocessing(

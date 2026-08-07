@@ -104,6 +104,8 @@ def fit_pooled_preprocessing(
 
 def publish_pooled_preprocessing(request: PooledPublishRequest) -> PooledPreprocessingResult:
     context = request.context
+    cond = context.dirichlet_condition
+
     branch_coordinate_directory = centralized_branch_directory(
         context.data_root,
         ReusableDataCoordinate(
@@ -114,14 +116,11 @@ def publish_pooled_preprocessing(request: PooledPublishRequest) -> PooledPreproc
             preprocessing_identity=context.protocol.identity,
             branch=ProcessedDataBranch.CENTRALIZED_REFERENCE,
             client_identity=None,
-            controlled_partition_kind=(
-                None if context.dirichlet_condition is None else context.dirichlet_condition.kind
-            ),
-            dirichlet_concentration=(
-                None if context.dirichlet_condition is None else context.dirichlet_condition.concentration
-            ),
+            controlled_partition_kind=cond.kind if cond else None,
+            dirichlet_concentration=cond.concentration if cond else None,
         ),
     )
+
     asset_names = processed_asset_names(context.split_protocol_identity)
     asset_paths = RelativeAssetPathSequence(
         tuple(
@@ -129,6 +128,7 @@ def publish_pooled_preprocessing(request: PooledPublishRequest) -> PooledPreproc
             for asset in asset_names
         )
     )
+
     result = publish_preprocessed_partitions(
         context=context,
         branch=ProcessedDataBranch.CENTRALIZED_REFERENCE,
@@ -137,6 +137,7 @@ def publish_pooled_preprocessing(request: PooledPublishRequest) -> PooledPreproc
         partitions=request.partitions,
         asset_paths=asset_paths,
     )
+
     state = centralized_fitted_state_after_publish(
         FittedStatePublishSpec(
             protocol=context.protocol,
@@ -145,6 +146,7 @@ def publish_pooled_preprocessing(request: PooledPublishRequest) -> PooledPreproc
             owner=PooledPreprocessingOwner.POOLED,
         )
     )
+
     return PooledPreprocessingResult(
         paths=build_preprocessed_partition_paths(result.coordinate_directory, context.split_protocol_identity),
         fitted_state=state,
@@ -169,6 +171,7 @@ def preprocess_centralized(
             "centralized preprocessing requires CENTRALIZED_POOLED_MIN_MAX",
             subject=context.protocol.identity,
         )
+
     train_partition = request.partitions.require(PartitionRole.TRAIN)
     fitted = fit_pooled_preprocessing(
         context.protocol,
@@ -178,6 +181,7 @@ def preprocess_centralized(
             training_labels=train_partition.outcome_labels,
         ),
     )
+
     published = publish_pooled_preprocessing(
         PooledPublishRequest(
             context=context,
@@ -185,7 +189,9 @@ def preprocess_centralized(
             partitions=request.partitions,
         )
     )
+
     reject_federated_state_for_pooled(published.fitted_state)
+
     return CentralizedPreprocessingOutcome(
         result=published,
         population=context.population,
@@ -204,13 +210,16 @@ def preprocess_centralized_population(
             "temporal split preprocessing requires future_recalibration assets not yet in the core publish set",
             subject=request.split_protocol,
         )
+
     dataset = resolve_population(request.population).declaration.dataset
     canonical_root = canonical_root_under(request.data_root, dataset)
+
     require_canonical_publication_complete(
         canonical_root,
         dataset,
         ContractSubject.PREPROCESSING,
     )
+
     construction = construct_population(
         PopulationConstructionRequest(
             population_id=request.population,
@@ -220,6 +229,7 @@ def preprocess_centralized_population(
             dirichlet_condition=request.dirichlet_condition,
         )
     )
+
     handoff = build_preprocessing_handoff(
         PreprocessingHandoffRequest(
             construction=construction,
@@ -227,9 +237,11 @@ def preprocess_centralized_population(
             capture_timestamp_column=request.capture_timestamp_column,
         )
     )
+
     schema = dataset_binding(dataset).schema
-    feature_names = FeatureNameSequence(tuple(FeatureName(name) for name in schema.feature_columns))
+    feature_names = FeatureNameSequence(tuple(map(FeatureName, schema.feature_columns)))
     protocol = build_centralized_preprocessing_protocol(feature_names)
+
     partitions = extract_partitions(
         join_handoff_with_canonical_features(
             canonical_root,
@@ -241,7 +253,9 @@ def preprocess_centralized_population(
         branch=ProcessedDataBranch.CENTRALIZED_REFERENCE,
         ordering=PartitionOrdering.STABLE_ROW_ID,
     )
+
     document = construction.manifest.document
+
     return preprocess_centralized(
         CentralizedPreprocessingRequest(
             dataset_context=PreprocessingPublishContext(

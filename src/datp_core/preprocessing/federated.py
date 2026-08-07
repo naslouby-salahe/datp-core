@@ -1,4 +1,4 @@
-"""Client-local federated preprocessing fit and transform."""
+import itertools
 
 import numpy as np
 
@@ -47,7 +47,6 @@ def fit_estimators_for_federated_clients(
     protocol: PreprocessingProtocol,
     client_partitions: ClientCollection[ClientPathToken, PreprocessingPartitions],
 ) -> FederatedFittedEstimators:
-    """Fit client-local or pooled estimators from benign training partitions only."""
     match protocol.fit_scope:
         case PreprocessingFitScope.CLIENT_LOCAL_TRAINING:
             return _fit_client_local_estimators(protocol, client_partitions)
@@ -65,18 +64,19 @@ def _fit_client_local_estimators(
     client_partitions: ClientCollection[ClientPathToken, PreprocessingPartitions],
 ) -> ClientCollection[ClientPathToken, TrustedScaler]:
     feature_names = protocol.input_feature_names
+    feature_names_list = feature_names.as_list()
     fitted = tuple(
         ClientOwned(
             item.client,
             fit_trusted_batch(
                 protocol,
-                _fit_batch(item.value.require(PartitionRole.TRAIN), feature_names),
+                _fit_batch(item.value.require(PartitionRole.TRAIN), feature_names, feature_names_list),
                 subject=PreprocessingFitScope.CLIENT_LOCAL_TRAINING,
             ),
         )
         for item in client_partitions.items
     )
-    if len({id(item.value) for item in fitted}) != len(fitted):
+    if len(set(id(item.value) for item in fitted)) != len(fitted):
         raise ScientificContractError(
             "client-local estimators must be distinct objects",
             subject=ContractSubject.CLIENT_IDENTITY,
@@ -89,20 +89,23 @@ def _fit_pooled_estimator(
     client_partitions: ClientCollection[ClientPathToken, PreprocessingPartitions],
 ) -> TrustedScaler:
     feature_names = protocol.input_feature_names
+    feature_names_list = feature_names.as_list()
     training = tuple(item.value.require(PartitionRole.TRAIN) for item in client_partitions.items)
+
     for partition in training:
         require_columns(partition.frame, feature_names.names, subject=ContractSubject.SCHEMA)
+
     return fit_trusted_batch(
         protocol,
         PreprocessingFitBatch(
-            training_matrix=np.vstack(
-                tuple(partition.frame.select(list(feature_names)).to_numpy() for partition in training)
+            training_matrix=np.concatenate(
+                [partition.frame.select(feature_names_list).to_numpy() for partition in training]
             ),
             training_row_ids=StableRowIdSequence(
-                tuple(row_id for partition in training for row_id in partition.row_ids.row_ids)
+                tuple(itertools.chain.from_iterable(p.row_ids.row_ids for p in training))
             ),
             training_labels=OutcomeLabelSequence(
-                tuple(label for partition in training for label in partition.outcome_labels.labels)
+                tuple(itertools.chain.from_iterable(p.outcome_labels.labels for p in training))
             ),
         ),
         subject=PreprocessingFitScope.POOLED_TRAINING,
@@ -110,12 +113,12 @@ def _fit_pooled_estimator(
 
 
 def _fit_batch(
-    partition: PreprocessingPartition,
-    feature_names: FeatureNameSequence,
+    partition: PreprocessingPartition, feature_names: FeatureNameSequence, feature_names_list: list[str] | None = None
 ) -> PreprocessingFitBatch:
     require_columns(partition.frame, feature_names.names, subject=ContractSubject.SCHEMA)
+    cols = feature_names_list if feature_names_list is not None else feature_names.as_list()
     return PreprocessingFitBatch(
-        training_matrix=partition.frame.select(list(feature_names)).to_numpy(),
+        training_matrix=partition.frame.select(cols).to_numpy(),
         training_row_ids=partition.row_ids,
         training_labels=partition.outcome_labels,
     )
@@ -123,6 +126,8 @@ def _fit_batch(
 
 def publish_client_preprocessing(request: ClientPublishRequest) -> ClientPreprocessingResult:
     context = request.context
+    cond = context.dirichlet_condition
+
     coordinate_directory = federated_client_directory(
         context.data_root,
         ReusableDataCoordinate(
@@ -133,20 +138,18 @@ def publish_client_preprocessing(request: ClientPublishRequest) -> ClientPreproc
             preprocessing_identity=context.protocol.identity,
             branch=ProcessedDataBranch.FEDERATED,
             client_identity=request.client_identity,
-            controlled_partition_kind=(
-                None if context.dirichlet_condition is None else context.dirichlet_condition.kind
-            ),
-            dirichlet_concentration=(
-                None if context.dirichlet_condition is None else context.dirichlet_condition.concentration
-            ),
+            controlled_partition_kind=cond.kind if cond else None,
+            dirichlet_concentration=cond.concentration if cond else None,
         ),
     )
+
     asset_paths = RelativeAssetPathSequence(
         tuple(
             canonical_relative_asset_path(asset, ProcessedDataBranch.FEDERATED, request.client_identity)
             for asset in processed_asset_names(context.split_protocol_identity)
         )
     )
+
     publication = publish_preprocessed_partitions(
         context=context,
         branch=ProcessedDataBranch.FEDERATED,
@@ -155,6 +158,7 @@ def publish_client_preprocessing(request: ClientPublishRequest) -> ClientPreproc
         partitions=request.partitions,
         asset_paths=asset_paths,
     )
+
     state = federated_fitted_state_after_publish(
         FittedStatePublishSpec(
             protocol=context.protocol,
@@ -163,7 +167,8 @@ def publish_client_preprocessing(request: ClientPublishRequest) -> ClientPreproc
             owner=request.client_identity,
         )
     )
-    roles = partition_roles(context.split_protocol_identity)
+
+    roles = frozenset(partition_roles(context.split_protocol_identity))
 
     def row_count(role: PartitionRole) -> RowCount:
         return RowCount(request.partitions.require(role).frame.height) if role in roles else RowCount(0)

@@ -1,5 +1,3 @@
-"""Atomic publication and reload validation for fitted preprocessing outputs."""
-
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -77,14 +75,13 @@ def _write_processed[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseMode
     publication: ProcessedPublication[ManifestT, SchemaT, ReportT],
 ) -> None:
     report = publication.writer(directory)
-    _write_model(publication.manifest, directory / ProcessedAssetName.PREPROCESSING_MANIFEST)
-    _write_model(publication.schema, directory / ProcessedAssetName.SCHEMA)
-    _write_model(report, directory / ProcessedAssetName.VALIDATION_REPORT)
-    digest = complete_digest(
-        (directory / ProcessedAssetName.PREPROCESSING_MANIFEST).read_text(encoding="utf-8"),
-        (directory / ProcessedAssetName.SCHEMA).read_text(encoding="utf-8"),
-    )
-    (directory / ProcessedAssetName.COMPLETE).write_text(digest.value, encoding="utf-8")
+    manifest_payload = _write_model(publication.manifest, directory.joinpath(ProcessedAssetName.PREPROCESSING_MANIFEST))
+    schema_payload = _write_model(publication.schema, directory.joinpath(ProcessedAssetName.SCHEMA))
+    _write_model(report, directory.joinpath(ProcessedAssetName.VALIDATION_REPORT))
+
+    digest = complete_digest(manifest_payload, schema_payload)
+    directory.joinpath(ProcessedAssetName.COMPLETE).write_text(digest.value, encoding="utf-8")
+
     _assert_required_assets(directory, publication.required_assets)
     if not _is_reusable(directory, publication):
         raise ArtifactIntegrityError(
@@ -98,31 +95,41 @@ def _is_reusable[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseModel](
     publication: ProcessedPublication[ManifestT, SchemaT, ReportT],
 ) -> bool:
     try:
-        manifest = _read_model(
-            directory,
-            ProcessedAssetName.PREPROCESSING_MANIFEST,
-            publication.manifest_type,
-        )
-        schema = _read_model(directory, ProcessedAssetName.SCHEMA, publication.schema_type)
+        manifest_path = directory.joinpath(ProcessedAssetName.PREPROCESSING_MANIFEST)
+        schema_path = directory.joinpath(ProcessedAssetName.SCHEMA)
+        complete_path = directory.joinpath(ProcessedAssetName.COMPLETE)
+
+        if not (manifest_path.is_file() and schema_path.is_file() and complete_path.is_file()):
+            return False
+
+        manifest_text = manifest_path.read_text(encoding="utf-8")
+        schema_text = schema_path.read_text(encoding="utf-8")
+
+        expected = complete_digest(manifest_text, schema_text)
+        actual = Checksum(complete_path.read_text(encoding="utf-8").strip())
+
+        if actual != expected:
+            return False
+
+        manifest = publication.manifest_type.model_validate_json(manifest_text)
+        schema = publication.schema_type.model_validate_json(schema_text)
         _read_model(directory, ProcessedAssetName.VALIDATION_REPORT, publication.report_type)
-        expected = complete_digest(
-            (directory / ProcessedAssetName.PREPROCESSING_MANIFEST).read_text(encoding="utf-8"),
-            (directory / ProcessedAssetName.SCHEMA).read_text(encoding="utf-8"),
-        )
-        actual = Checksum((directory / ProcessedAssetName.COMPLETE).read_text(encoding="utf-8").strip())
+
     except (OSError, UnicodeError, ValidationError, ArtifactIntegrityError, ValueError):
         return False
+
     return (
-        actual == expected
-        and manifest == publication.manifest
+        manifest == publication.manifest
         and schema == publication.schema
         and _assets_exist(directory, publication.required_assets)
     )
 
 
-def _write_model(model: BaseModel, destination: Path) -> None:
+def _write_model(model: BaseModel, destination: Path) -> str:
+    payload = canonical_json_text(model)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_text(canonical_json_text(model), encoding="utf-8")
+    destination.write_text(payload, encoding="utf-8")
+    return payload
 
 
 def _read_model[ModelT: BaseModel](
@@ -130,7 +137,7 @@ def _read_model[ModelT: BaseModel](
     asset: ProcessedAssetName,
     model_type: type[ModelT],
 ) -> ModelT:
-    path = directory / asset
+    path = directory.joinpath(asset)
     if not path.is_file():
         raise ArtifactIntegrityError(
             f"missing {asset.value}",
@@ -146,11 +153,11 @@ def _read_model[ModelT: BaseModel](
 
 
 def _assets_exist(directory: Path, required_assets: tuple[ProcessedAssetName, ...]) -> bool:
-    return all((directory / asset).is_file() for asset in required_assets)
+    return all(directory.joinpath(asset).is_file() for asset in required_assets)
 
 
 def _assert_required_assets(directory: Path, required_assets: tuple[ProcessedAssetName, ...]) -> None:
-    missing = tuple(asset for asset in required_assets if not (directory / asset).is_file())
+    missing = tuple(asset for asset in required_assets if not directory.joinpath(asset).is_file())
     if missing:
         raise ArtifactIntegrityError(
             f"processed publication missing assets: {', '.join(asset.value for asset in missing)}",

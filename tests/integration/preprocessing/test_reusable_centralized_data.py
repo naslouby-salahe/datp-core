@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import polars as pl
+from sklearn.preprocessing import StandardScaler
 
 from datp_core.domain.enums import (
     DatasetId,
@@ -24,7 +25,6 @@ from datp_core.preprocessing.models import (
     PreprocessingProtocol,
     PreprocessingPublishContext,
 )
-from datp_core.preprocessing.state import construct_trusted_estimator
 
 
 def test_centralized_publication_is_independent_and_reusable(tmp_path: Path) -> None:
@@ -54,9 +54,7 @@ def test_centralized_publication_is_independent_and_reusable(tmp_path: Path) -> 
         )
     )
     data_root = tmp_path / "data"
-    fitted = construct_trusted_estimator(TrustedEstimatorClassName.STANDARD_SCALER).fit(
-        frame_train.select(list(protocol.input_feature_names)).to_numpy()
-    )
+    fitted = StandardScaler().fit(frame_train.select(list(protocol.input_feature_names)).to_numpy())
     context = PreprocessingPublishContext(
         dataset=DatasetId.NBAIOT,
         population=PopulationId.NBAIOT_NATURAL_DEVICES,

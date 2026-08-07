@@ -69,7 +69,8 @@ def require_columns(
     *,
     subject: ContractSubject | PartitionRole | PreprocessingFitScope | SplitProtocolId,
 ) -> None:
-    missing = tuple(column for column in columns if column not in frame.columns)
+    frame_cols = set(frame.columns)
+    missing = tuple(column for column in columns if column not in frame_cols)
     if missing:
         raise ScientificContractError(f"missing required column(s): {', '.join(missing)}", subject=subject)
 
@@ -95,9 +96,10 @@ def extract_partitions(
     branch: ProcessedDataBranch,
     ordering: PartitionOrdering,
 ) -> PreprocessingPartitions:
+    feat_cols = feature_names.as_list()
     require_columns(
         frame,
-        (PARTITION_ROLE_COLUMN, STABLE_ROW_ID_COLUMN, OUTCOME_LABEL_COLUMN, *feature_names.names),
+        (PARTITION_ROLE_COLUMN, STABLE_ROW_ID_COLUMN, OUTCOME_LABEL_COLUMN, *feat_cols),
         subject=ContractSubject.SCHEMA,
     )
     normalized = frame.with_columns(pl.col(PARTITION_ROLE_COLUMN).cast(pl.String))
@@ -105,30 +107,32 @@ def extract_partitions(
     if role_series.null_count():
         raise ScientificContractError("partition role column contains null values", subject=ContractSubject.SCHEMA)
     expected_roles = partition_roles(split_protocol)
-    if frozenset(role_series.unique().to_list()) != frozenset(role.value for role in expected_roles):
+    if set(role_series.unique()) != {role.value for role in expected_roles}:
         raise ScientificContractError(
             f"extracted roles do not match {split_protocol.value}",
             subject=ContractSubject.SCHEMA,
         )
-    keep = (STABLE_ROW_ID_COLUMN, OUTCOME_LABEL_COLUMN, *feature_names.names)
+    keep = (STABLE_ROW_ID_COLUMN, OUTCOME_LABEL_COLUMN, *feat_cols)
+    selected = normalized.select(PARTITION_ROLE_COLUMN, *keep)
     extracted: list[PreprocessingPartition] = []
+    total_extracted_rows: int = 0
     for role in expected_roles:
-        role_frame = normalized.filter(pl.col(PARTITION_ROLE_COLUMN) == role.value).select(keep)
+        role_frame = selected.filter(pl.col(PARTITION_ROLE_COLUMN) == role.value).select(keep)
         if ordering is PartitionOrdering.STABLE_ROW_ID:
             role_frame = role_frame.sort(STABLE_ROW_ID_COLUMN)
-        if not role_frame.height:
+        height = role_frame.height
+        if not height:
             raise ScientificContractError(f"{branch.value} partition {role.value} is empty", subject=role)
         extracted.append(PreprocessingPartition(role, role_frame))
+        total_extracted_rows += height
     partitions = PreprocessingPartitions(tuple(extracted))
-    if sum(partition.frame.height for partition in partitions.partitions) != normalized.height:
+    if total_extracted_rows != normalized.height:
         raise ScientificContractError("partition extraction lost rows", subject=ContractSubject.ROWS)
     return partitions
 
 
 def validate_no_partition_overlap(partitions: PreprocessingPartitions, *, split_protocol: SplitProtocolId) -> None:
-    groups = tuple(
-        (role, frozenset(partitions.require(role).row_ids.row_ids)) for role in partition_roles(split_protocol)
-    )
+    groups = tuple((role, set(partitions.require(role).row_ids.row_ids)) for role in partition_roles(split_protocol))
     for (left_role, left_ids), (right_role, right_ids) in combinations(groups, 2):
         overlap = left_ids & right_ids
         if overlap:
@@ -242,7 +246,8 @@ def fit_trusted_batch(
     if matrix.shape[1] != len(protocol.input_feature_names):
         raise ScientificContractError("training width must match protocol features", subject=ContractSubject.FEATURES)
     require_finite_matrix(matrix, subject=subject, description="training matrix")
-    if any(label != PopulationOutcomeLabel.BENIGN.value for label in batch.training_labels.labels):
+    benign_value = PopulationOutcomeLabel.BENIGN.value
+    if any(label != benign_value for label in batch.training_labels.labels):
         raise LeakageError("attack-labelled rows cannot enter benign preprocessing fit", subject=ContractSubject.LABEL)
     try:
         fitted = resolve_trusted_estimator_type(protocol.estimator_class_name)()
@@ -308,9 +313,10 @@ def write_fitted_transformed_partitions(
     if type(fitted_estimator) is not resolve_trusted_estimator_type(protocol.estimator_class_name):
         raise ScientificContractError("estimator type does not match protocol", subject=ContractSubject.FEATURES)
     feature_names = protocol.input_feature_names
+    feat_cols = feature_names.as_list()
     train = partitions.require(PartitionRole.TRAIN)
     require_columns(train.frame, feature_names.names, subject=ContractSubject.SCHEMA)
-    train_matrix = train.frame.select(feature_names.as_list()).to_numpy()
+    train_matrix = train.frame.select(feat_cols).to_numpy()
     train_transformed = transform_feature_matrix(
         fitted_estimator,
         train_matrix,
@@ -338,17 +344,18 @@ def write_fitted_transformed_partitions(
             if role is PartitionRole.TRAIN
             else transform_feature_matrix(
                 fitted_estimator,
-                partition.frame.select(feature_names.as_list()).to_numpy(),
+                partition.frame.select(feat_cols).to_numpy(),
                 feature_names,
                 role,
                 description=f"transformed {role.value} matrix",
             )
         )
-        retained = partition.frame.drop(feature_names.as_list())
-        transformed_frame = pl.from_numpy(transformed, schema=feature_names.as_list())
+        retained = partition.frame.drop(feat_cols)
+        transformed_frame = pl.from_numpy(transformed, schema=feat_cols)
         output = transformed_frame if not retained.width else retained.hstack(transformed_frame)
+        out_cols = output.columns
         expected_columns = (*retained.columns, *feature_names.names)
-        if tuple(output.columns) != expected_columns or len(output.columns) != len(frozenset(output.columns)):
+        if tuple(out_cols) != expected_columns or len(out_cols) != len(set(out_cols)):
             raise ScientificContractError("invalid output column ordering", subject=ContractSubject.SCHEMA)
         output.write_parquet(temporary / asset_for_partition(role))
         evidence.append(

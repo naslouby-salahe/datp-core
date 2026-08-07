@@ -19,10 +19,9 @@ from datp_core.preprocessing.contracts import (
     ReusableDataCoordinate,
     TrustedEstimatorClassName,
     centralized_branch_directory,
-    core_processed_asset_names,
-    federated_branch_directory,
     federated_client_coordinate,
     federated_client_directory,
+    processed_asset_names,
     processed_branch_coordinate,
 )
 
@@ -74,7 +73,7 @@ def test_processed_coordinates_match_approved_layout() -> None:
 
 def test_layout_separates_federated_and_centralized_branches() -> None:
     data_root = Path("data")
-    federated = federated_branch_directory(data_root, _coordinate(ProcessedDataBranch.FEDERATED))
+    federated = processed_branch_coordinate(data_root, _coordinate(ProcessedDataBranch.FEDERATED))
     centralized = centralized_branch_directory(data_root, _coordinate(ProcessedDataBranch.CENTRALIZED_REFERENCE))
     client = federated_client_directory(
         data_root, _coordinate(ProcessedDataBranch.FEDERATED, ClientPathToken("device_a"))
@@ -84,5 +83,5 @@ def test_layout_separates_federated_and_centralized_branches() -> None:
     assert client.name == "device_a"
     assert "client" not in client.parts
     assert ProcessedAssetName.STATE == "state.skops"
-    assert ProcessedAssetName.TRAIN in core_processed_asset_names()
+    assert ProcessedAssetName.TRAIN in processed_asset_names(SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS)
     assert "=" not in str(federated)

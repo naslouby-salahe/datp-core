@@ -62,7 +62,7 @@ def ciciot_source_files(
             subject=DatasetId.CICIOT2023,
         )
     source_paths = tuple(source.source_path for source in sources)
-    if len(frozenset(source_paths)) != len(source_paths):
+    if len(set(source_paths)) != len(source_paths):
         raise ScientificContractError(
             "CIC canonical source paths must be unique",
             subject=DatasetId.CICIOT2023,
@@ -74,23 +74,23 @@ def canonical_source_file(
     source_files: tuple[_CanonicalSourceFile, ...],
     source_path: str,
 ) -> _CanonicalSourceFile:
-    matches = tuple(source for source in source_files if source.source_path == source_path)
-    if len(matches) != 1:
-        raise ScientificContractError(
-            "file-defined client source must resolve exactly once",
-            subject=ContractSubject.CLIENT_IDENTITY,
-        )
-    return matches[0]
+    for source in source_files:
+        if source.source_path == source_path:
+            return source
+    raise ScientificContractError(
+        "file-defined client source must resolve exactly once",
+        subject=ContractSubject.CLIENT_IDENTITY,
+    )
 
 
 def single_client_source_path(assignments: pl.DataFrame) -> str:
-    sources = tuple(sorted(str(value) for value in assignments.get_column(SOURCE_PATH_COLUMN).unique().to_list()))
+    sources = assignments.get_column(SOURCE_PATH_COLUMN).unique().to_list()
     if len(sources) != 1:
         raise ScientificContractError(
             "file-defined client assignments must originate from exactly one source file",
             subject=ContractSubject.CLIENT_IDENTITY,
         )
-    return sources[0]
+    return str(sources[0])
 
 
 def preprocess_ciciot_client_local(
@@ -101,30 +101,42 @@ def preprocess_ciciot_client_local(
     feature_names: FeatureNameSequence,
     identity: ExternalTemporalExecutionIdentity,
 ) -> FederatedPreprocessingOutcome:
-    client_ids = tuple(
-        ClientPathToken(str(value)) for value in sorted(assignments.get_column(CLIENT_ID_COLUMN).unique().to_list())
-    )
     source_files = ciciot_source_files(canonical_root)
+
+    client_id_vals = sorted(str(value) for value in assignments.get_column(CLIENT_ID_COLUMN).unique().to_list())
+    grouped_assignments = {str(k): v for k, v in assignments.partition_by(CLIENT_ID_COLUMN, as_dict=True).items()}
+
     publications: list[ClientPreprocessingResult] = []
     published_count = 0
     reused_count = 0
-    for client_id in client_ids:
-        client_assignments = assignments.filter(pl.col(CLIENT_ID_COLUMN) == client_id.value)
+    feature_cache: dict[str, pl.DataFrame] = {}
+
+    for client_str in client_id_vals:
+        client_id = ClientPathToken(client_str)
+        client_assignments = grouped_assignments[client_str]
         source_path = single_client_source_path(client_assignments)
-        features = pl.read_parquet(
-            canonical_source_file(source_files, source_path).parquet_path,
-            columns=[STABLE_ROW_ID_COLUMN, *feature_names],
-        )
+
+        if source_path not in feature_cache:
+            source_file = canonical_source_file(source_files, source_path)
+            feature_cache[source_path] = pl.read_parquet(
+                source_file.parquet_path,
+                columns=[STABLE_ROW_ID_COLUMN, *feature_names],
+            )
+
+        features = feature_cache[source_path]
+
         joined = client_assignments.join(
             features,
             on=STABLE_ROW_ID_COLUMN,
             how="inner",
         ).sort((PARTITION_ROLE_COLUMN, STABLE_ROW_ID_COLUMN))
+
         if joined.height != client_assignments.height:
             raise ScientificContractError(
                 "canonical feature join lost file-client assignment rows",
                 subject=identity.population,
             )
+
         partitions = extract_partitions(
             joined,
             feature_names,
@@ -132,6 +144,7 @@ def preprocess_ciciot_client_local(
             branch=ProcessedDataBranch.FEDERATED,
             ordering=PartitionOrdering.PRESERVE_SOURCE_ORDER,
         )
+
         collection = ClientCollection((ClientOwned(client_id, partitions),))
         estimators = fit_estimators_for_federated_clients(
             context.protocol,
@@ -146,11 +159,13 @@ def preprocess_ciciot_client_local(
                 partitions,
             )
         )
+
         if publication.publication_status is PublicationStatus.REUSED:
             reused_count += 1
         else:
             published_count += 1
         publications.append(publication)
+
     return FederatedPreprocessingOutcome(
         population=identity.population,
         dataset=DatasetId.CICIOT2023,

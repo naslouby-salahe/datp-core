@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import polars as pl
+from sklearn.preprocessing import StandardScaler
 
 from datp_core.domain.enums import (
     DatasetId,
@@ -25,7 +26,6 @@ from datp_core.preprocessing.models import (
     PreprocessingProtocol,
     PreprocessingPublishContext,
 )
-from datp_core.preprocessing.state import construct_trusted_estimator
 
 
 def _protocol() -> PreprocessingProtocol:
@@ -61,7 +61,7 @@ def _partitions() -> PreprocessingPartitions:
 
 def _fitted_estimator(partitions: PreprocessingPartitions, feature_names: tuple[str, ...]):
     matrix = partitions.require(PartitionRole.TRAIN).frame.select(list(feature_names)).to_numpy()
-    return construct_trusted_estimator(TrustedEstimatorClassName.STANDARD_SCALER).fit(matrix)
+    return StandardScaler().fit(matrix)
 
 
 def test_identical_coordinates_reuse_completed_federated_asset(tmp_path: Path) -> None:

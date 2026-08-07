@@ -1,5 +1,3 @@
-"""Preprocessing coordinates, persisted asset identities, and deterministic paths."""
-
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -83,7 +81,7 @@ class RelativeAssetPathSequence:
     def __post_init__(self) -> None:
         if not isinstance(self.paths, tuple):
             raise TypeError("relative asset paths must be an immutable tuple")
-        wrapped = tuple(item if isinstance(item, RelativeAssetPath) else RelativeAssetPath(item) for item in self.paths)
+        wrapped = tuple(item if type(item) is RelativeAssetPath else RelativeAssetPath(item) for item in self.paths)
         object.__setattr__(self, "paths", wrapped)
         validate_non_empty_tuple(self.paths, "relative asset path sequence")
 
@@ -122,23 +120,22 @@ def controlled_partition_path_segment(
 
 
 def processed_root_under(data_root: Path, coordinate: ReusableDataCoordinate) -> Path:
-    return (
-        data_root
-        / ReusableDataCoordinateKind.PROCESSED
-        / coordinate.dataset.value
-        / coordinate.population.value
-        / str(coordinate.partition_seed.value)
-        / coordinate.split_protocol_identity.value
-        / coordinate.preprocessing_identity.value
-        / controlled_partition_path_segment(
+    return data_root.joinpath(
+        ReusableDataCoordinateKind.PROCESSED,
+        coordinate.dataset.value,
+        coordinate.population.value,
+        str(coordinate.partition_seed.value),
+        coordinate.split_protocol_identity.value,
+        coordinate.preprocessing_identity.value,
+        controlled_partition_path_segment(
             coordinate.controlled_partition_kind,
             coordinate.dirichlet_concentration,
-        )
+        ),
     )
 
 
 def processed_branch_coordinate(data_root: Path, coordinate: ReusableDataCoordinate) -> Path:
-    return processed_root_under(data_root, coordinate) / coordinate.branch.value
+    return processed_root_under(data_root, coordinate).joinpath(coordinate.branch.value)
 
 
 def federated_client_coordinate(data_root: Path, coordinate: ReusableDataCoordinate) -> Path:
@@ -146,70 +143,65 @@ def federated_client_coordinate(data_root: Path, coordinate: ReusableDataCoordin
         raise ValueError("only federated coordinates may include client identity")
     if coordinate.client_identity is None:
         raise ValueError("federated client coordinates require a client identity")
-    return processed_branch_coordinate(data_root, coordinate) / coordinate.client_identity.value
+    return processed_branch_coordinate(data_root, coordinate).joinpath(coordinate.client_identity.value)
+
+
+_ASSET_FOR_PARTITION = {
+    PartitionRole.TRAIN: ProcessedAssetName.TRAIN,
+    PartitionRole.CALIBRATION: ProcessedAssetName.CALIBRATION,
+    PartitionRole.EVALUATION: ProcessedAssetName.EVALUATION,
+    PartitionRole.FUTURE_RECALIBRATION: ProcessedAssetName.FUTURE_RECALIBRATION,
+    PartitionRole.STATIC_REFERENCE_RESERVE: ProcessedAssetName.STATIC_REFERENCE_RESERVE,
+}
 
 
 def asset_for_partition(role: PartitionRole) -> ProcessedAssetName:
-    match role:
-        case PartitionRole.TRAIN:
-            return ProcessedAssetName.TRAIN
-        case PartitionRole.CALIBRATION:
-            return ProcessedAssetName.CALIBRATION
-        case PartitionRole.EVALUATION:
-            return ProcessedAssetName.EVALUATION
-        case PartitionRole.FUTURE_RECALIBRATION:
-            return ProcessedAssetName.FUTURE_RECALIBRATION
-        case PartitionRole.STATIC_REFERENCE_RESERVE:
-            return ProcessedAssetName.STATIC_REFERENCE_RESERVE
+    return _ASSET_FOR_PARTITION[role]
+
+
+_PARTITION_ROLES = {
+    SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS: (
+        PartitionRole.TRAIN,
+        PartitionRole.CALIBRATION,
+        PartitionRole.EVALUATION,
+    ),
+    SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE: (
+        PartitionRole.TRAIN,
+        PartitionRole.CALIBRATION,
+        PartitionRole.FUTURE_RECALIBRATION,
+        PartitionRole.EVALUATION,
+    ),
+    SplitProtocolId.RANDOM_FRACTIONAL_STATIC_REFERENCE: (
+        PartitionRole.TRAIN,
+        PartitionRole.CALIBRATION,
+        PartitionRole.STATIC_REFERENCE_RESERVE,
+        PartitionRole.EVALUATION,
+    ),
+}
 
 
 def partition_roles(split_protocol: SplitProtocolId) -> tuple[PartitionRole, ...]:
-    match split_protocol:
-        case SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS:
-            return (PartitionRole.TRAIN, PartitionRole.CALIBRATION, PartitionRole.EVALUATION)
-        case SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE:
-            return (
-                PartitionRole.TRAIN,
-                PartitionRole.CALIBRATION,
-                PartitionRole.FUTURE_RECALIBRATION,
-                PartitionRole.EVALUATION,
-            )
-        case SplitProtocolId.RANDOM_FRACTIONAL_STATIC_REFERENCE:
-            return (
-                PartitionRole.TRAIN,
-                PartitionRole.CALIBRATION,
-                PartitionRole.STATIC_REFERENCE_RESERVE,
-                PartitionRole.EVALUATION,
-            )
+    return _PARTITION_ROLES[split_protocol]
+
+
+_UNSCORED_ROLES = frozenset({PartitionRole.TRAIN, PartitionRole.STATIC_REFERENCE_RESERVE})
 
 
 def scored_partition_roles(split_protocol: SplitProtocolId) -> tuple[PartitionRole, ...]:
-    return tuple(
-        role
-        for role in partition_roles(split_protocol)
-        if role not in {PartitionRole.TRAIN, PartitionRole.STATIC_REFERENCE_RESERVE}
-    )
+    return tuple(role for role in _PARTITION_ROLES[split_protocol] if role not in _UNSCORED_ROLES)
+
+
+_STATIC_PROCESSED_ASSETS = (
+    ProcessedAssetName.STATE,
+    ProcessedAssetName.SCHEMA,
+    ProcessedAssetName.PREPROCESSING_MANIFEST,
+    ProcessedAssetName.VALIDATION_REPORT,
+    ProcessedAssetName.COMPLETE,
+)
 
 
 def processed_asset_names(split_protocol: SplitProtocolId) -> tuple[ProcessedAssetName, ...]:
-    return (
-        *(asset_for_partition(role) for role in partition_roles(split_protocol)),
-        ProcessedAssetName.STATE,
-        ProcessedAssetName.SCHEMA,
-        ProcessedAssetName.PREPROCESSING_MANIFEST,
-        ProcessedAssetName.VALIDATION_REPORT,
-        ProcessedAssetName.COMPLETE,
-    )
-
-
-def core_processed_asset_names() -> tuple[ProcessedAssetName, ...]:
-    return processed_asset_names(SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS)
-
-
-def federated_branch_directory(data_root: Path, coordinate: ReusableDataCoordinate) -> Path:
-    if coordinate.branch is not ProcessedDataBranch.FEDERATED:
-        raise ValueError("federated branch directory requires the federated branch")
-    return processed_branch_coordinate(data_root, coordinate)
+    return tuple(_ASSET_FOR_PARTITION[role] for role in _PARTITION_ROLES[split_protocol]) + _STATIC_PROCESSED_ASSETS
 
 
 def centralized_branch_directory(data_root: Path, coordinate: ReusableDataCoordinate) -> Path:
@@ -223,11 +215,11 @@ def federated_client_directory(data_root: Path, coordinate: ReusableDataCoordina
 
 
 def client_asset_path(client_directory: Path, asset: ProcessedAssetName) -> Path:
-    return client_directory / asset.value
+    return client_directory.joinpath(asset.value)
 
 
 def branch_asset_path(branch_directory: Path, asset: ProcessedAssetName) -> Path:
-    return branch_directory / asset.value
+    return branch_directory.joinpath(asset.value)
 
 
 def canonical_relative_asset_path(

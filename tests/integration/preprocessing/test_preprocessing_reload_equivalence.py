@@ -2,6 +2,7 @@ from pathlib import Path
 
 import numpy as np
 import polars as pl
+from sklearn.preprocessing import StandardScaler
 
 from datp_core.domain.enums import (
     DatasetId,
@@ -27,7 +28,6 @@ from datp_core.preprocessing.models import (
 )
 from datp_core.preprocessing.state import (
     TransformReloadCheck,
-    construct_trusted_estimator,
     reload_and_compare_transform,
 )
 
@@ -70,7 +70,7 @@ def test_reload_transform_matches_pre_save_transform(tmp_path: Path) -> None:
     partitions = _partitions()
     train_frame = partitions.require(PartitionRole.TRAIN).frame
     matrix = np.asarray(train_frame.select(["f0", "f1"]).to_numpy(), dtype=float)
-    estimator = construct_trusted_estimator(TrustedEstimatorClassName.STANDARD_SCALER).fit(matrix)
+    estimator = StandardScaler().fit(matrix)
     expected = np.asarray(estimator.transform(matrix), dtype=float)
     result = publish_client_preprocessing(
         ClientPublishRequest(

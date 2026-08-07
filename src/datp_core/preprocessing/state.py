@@ -1,14 +1,11 @@
-"""Safe trusted preprocessing-estimator construction, persistence, and reload validation."""
-
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import cast
 
 import numpy as np
 import skops.io as skops_io
-from sklearn.base import BaseEstimator, clone
+from sklearn.base import BaseEstimator
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 from datp_core.domain.enums import ContractSubject
@@ -65,45 +62,32 @@ _TRUSTED_ESTIMATORS: tuple[TrustedEstimatorDefinition, ...] = (
     ),
 )
 
+_ESTIMATOR_MAP = {definition.identity: definition for definition in _TRUSTED_ESTIMATORS}
+
+_TRUSTED_TYPES = tuple(definition.estimator_type for definition in _TRUSTED_ESTIMATORS)
+
+_TRUSTED_TYPE_LIST = [
+    f"{definition.estimator_type.__module__}.{definition.estimator_type.__name__}" for definition in _TRUSTED_ESTIMATORS
+]
+
 
 def _definition_for(identity: TrustedEstimatorClassName) -> TrustedEstimatorDefinition:
-    matches = tuple(definition for definition in _TRUSTED_ESTIMATORS if definition.identity is identity)
-    if len(matches) != 1:
+    try:
+        return _ESTIMATOR_MAP[identity]
+    except KeyError as err:
         raise SerializationSafetyError(
             "trusted estimator identity must resolve exactly once",
             subject=SerializationSubject.ESTIMATOR,
-        )
-    return matches[0]
-
-
-def trusted_estimator_type_names() -> frozenset[str]:
-    return frozenset(
-        f"{definition.estimator_type.__module__}.{definition.estimator_type.__name__}"
-        for definition in _TRUSTED_ESTIMATORS
-    )
+        ) from err
 
 
 def resolve_trusted_estimator_type(class_name: TrustedEstimatorClassName) -> type[TrustedScaler]:
     return _definition_for(class_name).estimator_type
 
 
-def construct_trusted_estimator(class_name: TrustedEstimatorClassName) -> TrustedScaler:
-    return _definition_for(class_name).constructor()
-
-
-def clone_trusted_scaler(estimator: TrustedScaler, class_name: TrustedEstimatorClassName) -> TrustedScaler:
-    if type(estimator) is not resolve_trusted_estimator_type(class_name):
-        raise SerializationSafetyError(
-            "estimator class does not match the trusted estimator identity",
-            subject=SerializationSubject.ESTIMATOR,
-        )
-    return cast(TrustedScaler, clone(estimator))
-
-
 def serialize_estimator(estimator: BaseEstimator | TrustedScaler, destination: Path) -> Checksum:
     estimator_type = type(estimator)
-    trusted_types = tuple(definition.estimator_type for definition in _TRUSTED_ESTIMATORS)
-    if estimator_type not in trusted_types:
+    if estimator_type not in _TRUSTED_TYPES:
         raise SerializationSafetyError(
             f"untrusted preprocessing estimator type {estimator_type.__module__}.{estimator_type.__name__}",
             subject=SerializationSubject.PREPROCESSING_ESTIMATOR,
@@ -115,7 +99,7 @@ def serialize_estimator(estimator: BaseEstimator | TrustedScaler, destination: P
 
 def load_estimator(path: Path, class_name: TrustedEstimatorClassName) -> TrustedScaler:
     expected_type = resolve_trusted_estimator_type(class_name)
-    loaded = skops_io.loads(path.read_bytes(), trusted=list(trusted_estimator_type_names()))
+    loaded = skops_io.loads(path.read_bytes(), trusted=_TRUSTED_TYPE_LIST)
     if type(loaded) is not expected_type or not isinstance(loaded, (StandardScaler, MinMaxScaler)):
         raise SerializationSafetyError(
             "reloaded estimator class does not match the trusted estimator identity",
@@ -160,11 +144,3 @@ def reload_and_compare_transform(check: TransformReloadCheck) -> TrustedScaler:
             subject=ContractSubject.ARTIFACT_PATH,
         )
     return estimator
-
-
-def reject_untrusted_state(state_path: Path, class_name: TrustedEstimatorClassName) -> None:
-    try:
-        load_estimator(state_path, class_name)
-    except SerializationSafetyError:
-        return
-    raise SerializationSafetyError("expected untrusted estimator rejection", subject=ContractSubject.ARTIFACT_PATH)
