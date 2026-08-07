@@ -10,6 +10,7 @@ from datp_core.datasets.contracts import (
     DatasetValidationCode,
     DatasetValidationIssue,
     DatasetValidationReport,
+    ExclusionReason,
     MaterializedDataset,
     RawDatasetInventory,
     SourceFileRole,
@@ -18,13 +19,14 @@ from datp_core.datasets.contracts import (
 from datp_core.datasets.materialization import (
     CanonicalPublication,
     canonical_data_partition_assets,
+    excluded_source_file,
     raw_inventory,
     raw_source_file,
     stream_parquet,
 )
 from datp_core.datasets.materialization_lifecycle import CanonicalMaterializationRequest, materialize_canonical
 from datp_core.domain.enums import AvailabilityStatus, DatasetId
-from datp_core.domain.values.counts import RowCount, SourceFileCount, ValidationIssueCount
+from datp_core.domain.values.counts import RowCount, ValidationIssueCount
 
 from .reader import CICIoT2023AuditSummary, CICIoT2023Reader
 from .schema import (
@@ -32,6 +34,7 @@ from .schema import (
     CICIOT2023_MODEL_INPUT_ELIGIBILITY_POLICY,
     CICIOT2023_SCHEMA,
     CICIoT2023ArtifactName,
+    excluded_source_relative_path,
     source_relative_path,
 )
 
@@ -47,15 +50,15 @@ class CICIoT2023Materializer:
     def publish(self, raw_root: Path, canonical_root: Path) -> MaterializedDataset:
         sources = tuple(sorted(raw_root.glob(f"**/{CICIoT2023ArtifactName.MERGED_CSV_DIRECTORY}/*.csv")))
         all_csvs = tuple(sorted(raw_root.glob("**/*.csv")))
-        excluded = max(0, len(all_csvs) - len(sources))
-        return self.materialize(sources, canonical_root, excluded_source_count=excluded)
+        excluded_paths = tuple(path for path in all_csvs if path not in frozenset(sources))
+        return self.materialize(sources, canonical_root, excluded_paths=excluded_paths)
 
     def materialize(
         self,
         source_paths: tuple[Path, ...],
         canonical_root: Path,
         *,
-        excluded_source_count: int = 0,
+        excluded_paths: tuple[Path, ...] = (),
     ) -> MaterializedDataset:
         ordered_paths = tuple(sorted(source_paths))
         return materialize_canonical(
@@ -70,7 +73,7 @@ class CICIoT2023Materializer:
                 prepare_publication=lambda: self._prepare_publication(
                     ordered_paths,
                     canonical_root,
-                    excluded_source_count=excluded_source_count,
+                    excluded_paths=excluded_paths,
                 ),
             )
         )
@@ -80,11 +83,11 @@ class CICIoT2023Materializer:
         source_paths: tuple[Path, ...],
         canonical_root: Path,
         *,
-        excluded_source_count: int = 0,
+        excluded_paths: tuple[Path, ...] = (),
     ) -> CanonicalPublication:
         frames, inventory, report = CICIoT2023Materializer.audit(
             source_paths,
-            excluded_source_count=excluded_source_count,
+            excluded_paths=excluded_paths,
         )
         expected_assets = canonical_data_partition_assets(len(frames))
 
@@ -111,12 +114,12 @@ class CICIoT2023Materializer:
     def audit(
         source_paths: tuple[Path, ...],
         *,
-        excluded_source_count: int = 0,
+        excluded_paths: tuple[Path, ...] = (),
     ) -> tuple[tuple[pl.LazyFrame, ...], RawDatasetInventory, DatasetValidationReport]:
         ordered_paths, frames, summaries = _audited_sources(source_paths)
         return (
             frames,
-            _source_inventory(ordered_paths, summaries, excluded_source_count=excluded_source_count),
+            _source_inventory(ordered_paths, summaries, excluded_paths=excluded_paths),
             _validation_report(summaries),
         )
 
@@ -135,7 +138,7 @@ def _source_inventory(
     paths: tuple[Path, ...],
     summaries: tuple[CICIoT2023AuditSummary, ...],
     *,
-    excluded_source_count: int = 0,
+    excluded_paths: tuple[Path, ...] = (),
 ) -> RawDatasetInventory:
     sources = tuple(
         raw_source_file(DatasetId.CICIOT2023, path, SourceFileRole.MERGED, summary.total_rows, source_relative_path)
@@ -144,7 +147,15 @@ def _source_inventory(
     return raw_inventory(
         DatasetId.CICIOT2023,
         sources,
-        excluded_source_count=SourceFileCount(excluded_source_count),
+        excluded_sources=tuple(
+            excluded_source_file(
+                DatasetId.CICIOT2023,
+                path,
+                ExclusionReason.UNRECOGNIZED_SOURCE,
+                excluded_source_relative_path,
+            )
+            for path in excluded_paths
+        ),
     )
 
 

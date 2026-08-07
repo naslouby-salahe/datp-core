@@ -8,7 +8,8 @@ from datp_core.datasets.ciciot2023.schema import (
     CICIOT2023_MODEL_INPUT_EVIDENCE_COLUMNS,
     CICIOT2023_RAW_COLUMNS,
 )
-from datp_core.domain.enums import AvailabilityStatus, PublicationStatus
+from datp_core.datasets.contracts import ExclusionReason
+from datp_core.domain.enums import AvailabilityStatus, DatasetId, PublicationStatus
 from datp_core.domain.values.counts import RowCount
 
 
@@ -71,3 +72,21 @@ def test_ciciot_rebuilds_when_the_persisted_eligibility_policy_changes(tmp_path)
     rebuilt = materializer.materialize((source,), tmp_path / "canonical")
 
     assert rebuilt.publication_status is PublicationStatus.PUBLISHED
+
+
+def test_ciciot_publish_records_excluded_non_merged_csv_with_provenance(tmp_path) -> None:
+    source = tmp_path / "MERGED_CSV" / "Merged01.csv"
+    _write_merged(source, "1", "BENIGN")
+    stray = tmp_path / "documentation" / "readme.csv"
+    _write_merged(stray, "1", "BENIGN")
+
+    published = CICIoT2023Materializer().publish(tmp_path, tmp_path / "canonical")
+
+    assert published.inventory.excluded_source_count.value == 1
+    excluded = published.inventory.excluded_sources[0]
+    assert excluded.dataset is DatasetId.CICIOT2023
+    assert excluded.relative_path.name == "readme.csv"
+    assert excluded.relative_path.parent.name == "documentation"
+    assert excluded.reason is ExclusionReason.UNRECOGNIZED_SOURCE
+    assert published.inventory.accepted_source_count.value == 1
+    assert '"excluded_sources"' in published.manifest_path.read_text(encoding="utf-8")

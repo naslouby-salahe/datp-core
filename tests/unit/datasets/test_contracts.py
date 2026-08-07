@@ -134,6 +134,7 @@ def test_manifest_rehydrates_all_semantic_counts_and_indices() -> None:
                 }],
                 "accepted_source_count": 1,
                 "excluded_source_count": 0,
+                "excluded_sources": [],
                 "accepted_row_count": 10,
                 "checksum": "inventory"
             },

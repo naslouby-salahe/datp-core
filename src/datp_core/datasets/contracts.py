@@ -117,17 +117,34 @@ class RawSourceFile:
 
 
 @dataclass(frozen=True, slots=True)
+class ExcludedSourceFile:
+    dataset: DatasetId
+    relative_path: Path
+    reason: ExclusionReason
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.dataset, DatasetId):
+            raise TypeError("excluded sources require a typed dataset")
+        if not isinstance(self.reason, ExclusionReason):
+            raise TypeError("excluded sources require a typed exclusion reason")
+        if self.relative_path.is_absolute():
+            raise ValueError("excluded source paths must be relative")
+
+
+@dataclass(frozen=True, slots=True)
 class RawDatasetInventory:
     dataset: DatasetId
     sources: tuple[RawSourceFile, ...]
     accepted_source_count: SourceFileCount
     excluded_source_count: SourceFileCount
+    excluded_sources: tuple[ExcludedSourceFile, ...]
     accepted_row_count: RowCount | None
     checksum: Checksum
 
     def __post_init__(self) -> None:
         _validate_inventory_sources(self.sources, self.accepted_source_count)
         _validate_inventory_count(self.excluded_source_count)
+        _validate_excluded_sources(self.excluded_sources, self.excluded_source_count)
 
 
 @dataclass(frozen=True, slots=True)
@@ -318,6 +335,19 @@ def _validate_inventory_count(excluded_source_count: SourceFileCount) -> None:
         raise TypeError("raw inventories require a typed excluded source count")
 
 
+def _validate_excluded_sources(
+    excluded_sources: tuple[ExcludedSourceFile, ...],
+    excluded_source_count: SourceFileCount,
+) -> None:
+    if not isinstance(excluded_sources, tuple):
+        raise TypeError("excluded sources must be an immutable tuple")
+    if len(excluded_sources) != excluded_source_count.value:
+        raise ValueError("excluded source count must equal excluded source tuple length")
+    relative_paths = tuple(source.relative_path for source in excluded_sources)
+    if len(relative_paths) != len(frozenset(relative_paths)):
+        raise ValueError("excluded source paths must be unique")
+
+
 def _validate_report_collections(
     issues: tuple[DatasetValidationIssue, ...], exclusions: tuple[DatasetExclusion, ...]
 ) -> None:
@@ -482,11 +512,18 @@ class _RawSourceEntry(StrictModel):
     observed_row_count: RowCount | None = None
 
 
+class _ExcludedSourceEntry(StrictModel):
+    dataset: str = ""
+    relative_path: str
+    reason: str
+
+
 class _InventoryEntry(StrictModel):
     dataset: str = ""
     sources: tuple[_RawSourceEntry, ...]
     accepted_source_count: SourceFileCount
     excluded_source_count: SourceFileCount
+    excluded_sources: tuple[_ExcludedSourceEntry, ...]
     accepted_row_count: RowCount | None = None
     checksum: str
 

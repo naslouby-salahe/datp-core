@@ -17,6 +17,7 @@ from datp_core.domain.enums import (
     ExperimentId,
     ExperimentReadiness,
     FederatedThresholdMethod,
+    FedProxCoefficientSelectionRule,
     IntervalMethod,
     MetricId,
     MultiplicityCorrectionId,
@@ -235,6 +236,7 @@ EXPECTED_MEMBERS = (
         frozenset(("HISTORICAL_ENDPOINT", "CANDIDATE", "SELECTED_BY_NON_TEST_RULE", "STABILITY_EVIDENCE")),
     ),
     (CheckpointSelectionRule, frozenset(("FIXED_TERMINAL_MAXIMUM_ROUND",))),
+    (FedProxCoefficientSelectionRule, frozenset(("FEDPROX_MINIMUM_TERMINAL_TRAINING_LOSS",))),
     (
         ContractSubject,
         frozenset(
@@ -253,6 +255,7 @@ EXPECTED_MEMBERS = (
                 "COORDINATE",
                 "CUDA",
                 "FEATURES",
+                "FEDPROX_COEFFICIENT_SELECTION_RULE",
                 "HELD_OUT_METRICS",
                 "LABEL",
                 "LOCAL_QUANTILE_MEAN",

@@ -31,6 +31,8 @@ from datp_core.datasets.contracts import (
     ChronologyValidation,
     ColumnLogicalType,
     DatasetValidationReport,
+    ExcludedSourceFile,
+    ExclusionReason,
     ManifestSerializationRequest,
     MaterializedCanonicalAsset,
     MaterializedDataset,
@@ -165,24 +167,40 @@ def raw_source_file(
     )
 
 
+def excluded_source_file(
+    dataset: DatasetId,
+    path: Path,
+    reason: ExclusionReason,
+    source_path_resolver: SourcePathResolver,
+) -> ExcludedSourceFile:
+    return ExcludedSourceFile(
+        dataset=dataset,
+        relative_path=source_path_resolver(path),
+        reason=reason,
+    )
+
+
 def raw_inventory(
     dataset: DatasetId,
     sources: tuple[RawSourceFile, ...],
     *,
-    excluded_source_count: SourceFileCount | None = None,
+    excluded_sources: tuple[ExcludedSourceFile, ...] = (),
 ) -> RawDatasetInventory:
     if not sources:
         raise ValueError("raw inventories require at least one accepted source")
     ordered_sources = tuple(sorted(sources, key=lambda source: source.relative_path.as_posix()))
     if tuple(source.dataset for source in ordered_sources) != (dataset,) * len(ordered_sources):
         raise ValueError("raw inventory sources must belong to its dataset")
+    if tuple(source.dataset for source in excluded_sources) != (dataset,) * len(excluded_sources):
+        raise ValueError("raw inventory excluded sources must belong to its dataset")
+    ordered_excluded = tuple(sorted(excluded_sources, key=lambda source: source.relative_path.as_posix()))
     total_rows = _inventory_row_count(ordered_sources)
-    excluded = SourceFileCount(0) if excluded_source_count is None else excluded_source_count
     return RawDatasetInventory(
         dataset=dataset,
         sources=ordered_sources,
         accepted_source_count=SourceFileCount(len(ordered_sources)),
-        excluded_source_count=excluded,
+        excluded_source_count=SourceFileCount(len(ordered_excluded)),
+        excluded_sources=ordered_excluded,
         accepted_row_count=total_rows,
         checksum=_inventory_checksum(ordered_sources),
     )

@@ -215,3 +215,7 @@ def source_relative_path(path: Path) -> Path:
     if path.parent.name != CICIoT2023ArtifactName.MERGED_CSV_DIRECTORY:
         raise ValueError("CICIoT2023 sources must remain in the merged-file directory")
     return Path(path.parent.name, path.name)
+
+
+def excluded_source_relative_path(path: Path) -> Path:
+    return Path(path.parent.name, path.name)

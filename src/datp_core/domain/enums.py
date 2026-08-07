@@ -254,6 +254,12 @@ class CheckpointSelectionRule(StrEnum):
     FIXED_TERMINAL_MAXIMUM_ROUND = "fixed_terminal_maximum_round"
 
 
+class FedProxCoefficientSelectionRule(StrEnum):
+    """Locked non-test FedProx proximal-coefficient selection algorithms."""
+
+    FEDPROX_MINIMUM_TERMINAL_TRAINING_LOSS = "fedprox_minimum_terminal_training_loss"
+
+
 class ProcessedDataBranch(StrEnum):
     FEDERATED = "federated"
     CENTRALIZED_REFERENCE = "centralized_reference"
@@ -313,6 +319,7 @@ class ContractSubject(StrEnum):
     COORDINATE = "coordinate"
     CUDA = "cuda"
     FEATURES = "features"
+    FEDPROX_COEFFICIENT_SELECTION_RULE = "fedprox_coefficient_selection_rule"
     HELD_OUT_METRICS = "held_out_metrics"
     LABEL = "label"
     LOCAL_QUANTILE_MEAN = "local_quantile_mean"

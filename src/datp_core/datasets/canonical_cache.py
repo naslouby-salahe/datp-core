@@ -19,6 +19,7 @@ from datp_core.datasets.contracts import (
     DatasetValidationCode,
     DatasetValidationIssue,
     DatasetValidationReport,
+    ExcludedSourceFile,
     ExclusionReason,
     ManifestSerializationRequest,
     MaterializedCanonicalAsset,
@@ -306,11 +307,20 @@ def _inventory_from_serialized(dataset: DatasetId, inventory) -> RawDatasetInven
         )
         for source in inventory.sources
     )
+    excluded_sources = tuple(
+        ExcludedSourceFile(
+            dataset,
+            Path(excluded.relative_path),
+            ExclusionReason(excluded.reason),
+        )
+        for excluded in inventory.excluded_sources
+    )
     return RawDatasetInventory(
         dataset,
         sources,
         inventory.accepted_source_count,
         inventory.excluded_source_count,
+        excluded_sources,
         inventory.accepted_row_count,
         Checksum(inventory.checksum),
     )

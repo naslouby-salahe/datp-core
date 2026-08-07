@@ -2514,7 +2514,9 @@ FedProx was designed to address systems and statistical heterogeneity by adding 
 
 The primary FedProx coefficient must be selected using the pre-registered, non-test rule on Regime A. The test set, attack labels, `CV(FPR)` advantage, and Regime D outcomes cannot choose `mu`.
 
-The complete grid remains reportable.
+**Locked non-test rule (`FEDPROX_MINIMUM_TERMINAL_TRAINING_LOSS`, prospective research amendment).** Among the frozen coefficient grid, the primary FedProx coefficient is the value of `mu` whose population-weighted aggregate federated training loss at the fixed terminal checkpoint round (`200`, the same round `FIXED_TERMINAL_MAXIMUM_ROUND` locks for checkpoint selection) is lowest, averaged across the confirmatory seed cohort on Regime A. Ties are broken by selecting the smallest candidate `mu`. This rule uses only benign federated training-loss trajectories already produced during FedProx training; it never inspects held-out test data, attack labels, `CV(FPR)`, threshold outcomes, or Regime D results. The rule mirrors the original FedProx proposal's own training-loss-driven coefficient behavior and standard benchmark practice of tuning `mu` against training-time convergence signals rather than held-out task performance.[^fedprox]
+
+The complete grid remains reportable regardless of which coefficient is selected as primary.
 
 **Procedure**
 
