@@ -48,6 +48,10 @@ class AnalysisAssetName(StrEnum):
     TEMPORAL_DOCUMENT = "temporal_analysis.json"
 
 
+class SeedEvidenceAssetName(StrEnum):
+    DOCUMENT = "seed.json"
+
+
 @dataclass(frozen=True, slots=True)
 class AnalysisPublication[AnalysisDocumentT: StrictModel]:
     asset_name: AnalysisAssetName

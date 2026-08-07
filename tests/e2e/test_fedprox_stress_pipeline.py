@@ -43,7 +43,5 @@ def test_fedprox_stress_entry_point_marks_experiment_executable_with_standard_ro
     )
     assert coefficients == frozenset(item.value for item in FEDPROX_COEFFICIENTS)
     assert hasattr(personalization_workflow, "run_fedprox_stress_test_seed")
-    assert hasattr(personalization_workflow, "run_fedprox_coefficient_campaign")
-    assert hasattr(personalization_workflow, "run_fedprox_grid_campaign")
     assert hasattr(personalization_workflow, "load_fedprox_cv_fpr_corners")
     assert hasattr(personalization_workflow, "build_fedprox_absorption_observation")

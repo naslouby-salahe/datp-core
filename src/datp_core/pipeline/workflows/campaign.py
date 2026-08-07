@@ -23,8 +23,11 @@ from datp_core.domain.enums import (
     EvidenceRole,
     ExperimentId,
     ExperimentReadiness,
+    FederatedThresholdMethod,
+    FedProxRoleDirectory,
     PopulationId,
     ProgrammeStatus,
+    ThresholdMethodExecutionStatus,
 )
 from datp_core.domain.errors import (
     AnchorReproductionError,
@@ -33,6 +36,7 @@ from datp_core.domain.errors import (
     ScientificContractError,
 )
 from datp_core.domain.values.counts import Seed
+from datp_core.pipeline.execution.layout import ExecutionRootDirectory
 from datp_core.protocols.anchor import ANCHOR_DECISION_PROTOCOL, HISTORICAL_ANCHOR_SEED_COHORT
 from datp_core.protocols.populations import POPULATIONS
 from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
@@ -42,6 +46,7 @@ from datp_core.runtime.configuration import DATA_ROOT, OUTPUTS_ROOT
 
 if TYPE_CHECKING:
     from datp_core.pipeline.workflows import PlanPresentation
+    from datp_core.pipeline.workflows.temporal import TemporalSeedResult
 
 SMOKE_OUTPUT_ROOT = OUTPUTS_ROOT / "smoke"
 ANCHOR_DIAGNOSTICS_DIRECTORY = OUTPUTS_ROOT / "anchor" / "diagnostics"
@@ -87,18 +92,33 @@ def _require_dispatch_covers_registry(dispatch: Mapping[ExperimentId, object], *
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class ThresholdMethodOutcome:
+    method: FederatedThresholdMethod
+    status: ThresholdMethodExecutionStatus
+    detail: str
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class DispatchOutcome:
+    detail: str
+    method_outcomes: tuple[ThresholdMethodOutcome, ...]
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ExperimentRunResult:
     experiment: ExperimentId
     seeds: tuple[Seed, ...]
     smoke: bool
     output_root: Path
     detail: str
+    method_outcomes: tuple[ThresholdMethodOutcome, ...]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CampaignRunResult:
     experiments: tuple[ExperimentRunResult, ...]
     detail: str
+    anchor_failure: str | None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -194,7 +214,7 @@ def run_experiment(
             rmtree(scoped)
     cohort = seed_cohort_for(experiment_id)
     seeds = (canonical_smoke_seed(experiment_id),) if smoke else cohort.values
-    detail = _dispatch_experiment(
+    outcome = _dispatch_experiment(
         experiment_id,
         seeds=seeds,
         output_root=output_root,
@@ -205,74 +225,204 @@ def run_experiment(
         seeds=seeds,
         smoke=smoke,
         output_root=output_root,
-        detail=detail,
+        detail=outcome.detail,
+        method_outcomes=outcome.method_outcomes,
     )
 
 
-def _dispatch_confirmatory(seeds: tuple[Seed, ...], output_root: Path, overwrite: bool) -> str:
+def _declared_threshold_methods(experiment_id: ExperimentId) -> tuple[FederatedThresholdMethod, ...]:
+    from datp_core.pipeline.workflows import require_experiment_declaration
+
+    return require_experiment_declaration(experiment_id).federated_thresholds
+
+
+def _seed_completion_outcomes(
+    *,
+    experiment_id: ExperimentId,
+    completed_by_seed: tuple[tuple[FederatedThresholdMethod, ...], ...],
+) -> tuple[ThresholdMethodOutcome, ...]:
+    declared = _declared_threshold_methods(experiment_id)
+    completed_across_runs = set(declared)
+    for methods in completed_by_seed:
+        completed_across_runs &= set(methods)
+    return tuple(
+        ThresholdMethodOutcome(
+            method=method,
+            status=(
+                ThresholdMethodExecutionStatus.COMPLETED
+                if method in completed_across_runs
+                else ThresholdMethodExecutionStatus.INFEASIBLE
+            ),
+            detail=(
+                f"executed across all {len(completed_by_seed)} runs"
+                if method in completed_across_runs
+                else "declared but not completed in this execution"
+            ),
+        )
+        for method in declared
+    )
+
+
+def _dispatch_confirmatory(seeds: tuple[Seed, ...], output_root: Path, overwrite: bool) -> DispatchOutcome:
     from datp_core.pipeline.workflows.confirmatory import run_confirmatory_seed
 
-    for seed in seeds:
-        run_confirmatory_seed(seed, output_root=output_root, overwrite=overwrite)
-    return f"confirmatory seeds={len(seeds)}"
-
-
-def _dispatch_family_grouped_granularity(seeds: tuple[Seed, ...], output_root: Path, overwrite: bool) -> str:
-    from datp_core.pipeline.workflows.confirmatory import run_family_grouped_mechanism_seed
-
-    for seed in seeds:
-        run_family_grouped_mechanism_seed(seed, output_root=output_root, overwrite=overwrite)
-    return f"family_grouped seeds={len(seeds)}"
-
-
-def _dispatch_edge_benign_equity_validation(seeds: tuple[Seed, ...], output_root: Path, overwrite: bool) -> str:
-    del output_root, overwrite
-    from datp_core.pipeline.workflows.external import run_external_validation_seed
-
-    for seed in seeds:
-        run_external_validation_seed(seed)
-    return f"edge_benign_equity seeds={len(seeds)}"
-
-
-def _dispatch_ciciot_file_client_boundary(seeds: tuple[Seed, ...], output_root: Path, overwrite: bool) -> str:
-    del output_root, overwrite
-    from datp_core.pipeline.workflows.external import run_ciciot_boundary_seed
-
-    for seed in seeds:
-        run_ciciot_boundary_seed(seed)
-    return f"ciciot_boundary seeds={len(seeds)}"
-
-
-def _dispatch_fedprox_absorption_stress_test(seeds: tuple[Seed, ...], output_root: Path, overwrite: bool) -> str:
-    del seeds  # this experiment's seed cohort is owned by run_fedprox_grid_campaign, not the dispatch caller
-    from datp_core.pipeline.workflows.personalization import run_fedprox_grid_campaign
-
-    results = run_fedprox_grid_campaign(output_root=output_root, overwrite=overwrite)
-    return (
-        f"fedprox seeds={len(CONFIRMATORY_SEED_COHORT.values)} "
-        f"coefficients={len(FEDPROX_COEFFICIENTS)} results={len(results)}"
+    results = tuple(run_confirmatory_seed(seed, output_root=output_root, overwrite=overwrite) for seed in seeds)
+    return DispatchOutcome(
+        detail=f"confirmatory seeds={len(seeds)}",
+        method_outcomes=_seed_completion_outcomes(
+            experiment_id=ExperimentId.SHARED_VS_LOCAL_CONFIRMATION,
+            completed_by_seed=tuple(item.completed_threshold_methods for item in results),
+        ),
     )
 
 
-def _dispatch_ditto_absorption_stress_test(seeds: tuple[Seed, ...], output_root: Path, overwrite: bool) -> str:
-    del output_root, overwrite
+def _dispatch_family_grouped_granularity(
+    seeds: tuple[Seed, ...], output_root: Path, overwrite: bool
+) -> DispatchOutcome:
+    from datp_core.pipeline.workflows.confirmatory import run_family_grouped_mechanism_seed
+
+    results = tuple(
+        run_family_grouped_mechanism_seed(seed, output_root=output_root, overwrite=overwrite) for seed in seeds
+    )
+    return DispatchOutcome(
+        detail=f"family_grouped seeds={len(seeds)}",
+        method_outcomes=_seed_completion_outcomes(
+            experiment_id=ExperimentId.FAMILY_AND_GROUPED_GRANULARITY,
+            completed_by_seed=tuple(item.completed_threshold_methods for item in results),
+        ),
+    )
+
+
+def _dispatch_edge_benign_equity_validation(
+    seeds: tuple[Seed, ...], output_root: Path, overwrite: bool
+) -> DispatchOutcome:
+    del overwrite
+    from datp_core.pipeline.workflows.external import run_external_validation_seed
+
+    results = tuple(run_external_validation_seed(seed, output_root=output_root) for seed in seeds)
+    return DispatchOutcome(
+        detail=f"edge_benign_equity seeds={len(seeds)}",
+        method_outcomes=_seed_completion_outcomes(
+            experiment_id=ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION,
+            completed_by_seed=tuple(item.completed_threshold_methods for item in results),
+        ),
+    )
+
+
+def _dispatch_ciciot_file_client_boundary(
+    seeds: tuple[Seed, ...], output_root: Path, overwrite: bool
+) -> DispatchOutcome:
+    del overwrite
+    from datp_core.pipeline.workflows.external import run_ciciot_boundary_seed
+
+    results = tuple(run_ciciot_boundary_seed(seed, output_root=output_root) for seed in seeds)
+    return DispatchOutcome(
+        detail=f"ciciot_boundary seeds={len(seeds)}",
+        method_outcomes=_seed_completion_outcomes(
+            experiment_id=ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY,
+            completed_by_seed=tuple(item.completed_threshold_methods for item in results),
+        ),
+    )
+
+
+def _dispatch_fedprox_absorption_stress_test(
+    seeds: tuple[Seed, ...], output_root: Path, overwrite: bool
+) -> DispatchOutcome:
+    from datp_core.pipeline.workflows.personalization import run_fedprox_stress_test_seed
+
+    results = tuple(
+        run_fedprox_stress_test_seed(
+            training_seed=seed,
+            coefficient=coefficient,
+            output_root=output_root,
+            overwrite=overwrite,
+        )
+        for seed in seeds
+        for coefficient in FEDPROX_COEFFICIENTS
+    )
+    return DispatchOutcome(
+        detail=(f"fedprox seeds={len(seeds)} coefficients={len(FEDPROX_COEFFICIENTS)} executions={len(results)}"),
+        method_outcomes=_seed_completion_outcomes(
+            experiment_id=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST,
+            completed_by_seed=tuple(item.completed_threshold_methods for item in results),
+        ),
+    )
+
+
+def _dispatch_ditto_absorption_stress_test(
+    seeds: tuple[Seed, ...], output_root: Path, overwrite: bool
+) -> DispatchOutcome:
     from datp_core.pipeline.workflows.personalization import run_ditto_stress_test_seed
 
-    for seed in seeds:
-        run_ditto_stress_test_seed(training_seed=seed, regularization=DITTO_PRIMARY_REGULARIZATION)
-    return f"ditto seeds={len(seeds)} regularization={DITTO_PRIMARY_REGULARIZATION.value}"
+    results = tuple(
+        run_ditto_stress_test_seed(
+            training_seed=seed,
+            regularization=DITTO_PRIMARY_REGULARIZATION,
+            output_root=output_root,
+            overwrite=overwrite,
+        )
+        for seed in seeds
+    )
+    return DispatchOutcome(
+        detail=f"ditto seeds={len(seeds)} regularization={DITTO_PRIMARY_REGULARIZATION.value}",
+        method_outcomes=_seed_completion_outcomes(
+            experiment_id=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
+            completed_by_seed=tuple(
+                (result.shared_threshold.method, result.local_threshold.method) for result in results
+            ),
+        ),
+    )
 
 
-def _dispatch_edge_one_shot_recalibration(seeds: tuple[Seed, ...], output_root: Path, overwrite: bool) -> str:
-    del output_root, overwrite
+def _dispatch_edge_one_shot_recalibration(
+    seeds: tuple[Seed, ...], output_root: Path, overwrite: bool
+) -> DispatchOutcome:
+    del overwrite
     from datp_core.pipeline.workflows.temporal import run_temporal_seed
 
-    for seed in seeds:
-        run_temporal_seed(seed)
-    return f"temporal seeds={len(seeds)}"
+    results = tuple(run_temporal_seed(seed, output_root=output_root) for seed in seeds)
+    return DispatchOutcome(
+        detail=f"temporal seeds={len(seeds)}",
+        method_outcomes=_temporal_method_outcomes(results),
+    )
 
 
-_EXPERIMENT_DISPATCH_HANDLERS: dict[ExperimentId, Callable[[tuple[Seed, ...], Path, bool], str]] = {
+def _temporal_method_outcomes(results: tuple[TemporalSeedResult, ...]) -> tuple[ThresholdMethodOutcome, ...]:
+    unavailable: dict[FederatedThresholdMethod, str] = {}
+    completed_per_seed: list[set[FederatedThresholdMethod]] = []
+    for seed_result in results:
+        seed_completed: set[FederatedThresholdMethod] = set()
+        for state in (seed_result.static_reference, seed_result.frozen_future, seed_result.recalibrated_future):
+            seed_completed.update(state.completed_threshold_methods)
+            for item in state.unavailable_methods:
+                unavailable.setdefault(item.method, f"{item.reason.value}: {item.detail}")
+        completed_per_seed.append(seed_completed)
+    completed_across_seeds = set(declared := _declared_threshold_methods(ExperimentId.EDGE_ONE_SHOT_RECALIBRATION))
+    for seed_completed in completed_per_seed:
+        completed_across_seeds &= seed_completed
+    return tuple(
+        ThresholdMethodOutcome(
+            method=method,
+            status=(
+                ThresholdMethodExecutionStatus.COMPLETED
+                if method in completed_across_seeds
+                else (
+                    ThresholdMethodExecutionStatus.UNAVAILABLE
+                    if method in unavailable
+                    else ThresholdMethodExecutionStatus.INFEASIBLE
+                )
+            ),
+            detail=(
+                "executed across all temporal states and seeds"
+                if method in completed_across_seeds
+                else (unavailable[method] if method in unavailable else "declared but not completed in this execution")
+            ),
+        )
+        for method in declared
+    )
+
+
+_EXPERIMENT_DISPATCH_HANDLERS: dict[ExperimentId, Callable[[tuple[Seed, ...], Path, bool], DispatchOutcome]] = {
     ExperimentId.SHARED_VS_LOCAL_CONFIRMATION: _dispatch_confirmatory,
     ExperimentId.FAMILY_AND_GROUPED_GRANULARITY: _dispatch_family_grouped_granularity,
     ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION: _dispatch_edge_benign_equity_validation,
@@ -290,7 +440,7 @@ def _dispatch_experiment(
     seeds: tuple[Seed, ...],
     output_root: Path,
     overwrite: bool,
-) -> str:
+) -> DispatchOutcome:
     try:
         handler = _EXPERIMENT_DISPATCH_HANDLERS[experiment_id]
     except KeyError as error:
@@ -316,17 +466,34 @@ def run_smoke(experiment_id: ExperimentId | None = None, *, overwrite: bool = Fa
     if experiment_id is not None:
         result = run_experiment(experiment_id, overwrite=overwrite, smoke=True)
         _publish_smoke_summary((result,))
-        return CampaignRunResult(experiments=(result,), detail="smoke single experiment")
+        return CampaignRunResult(
+            experiments=(result,),
+            detail="smoke single experiment",
+            anchor_failure=None,
+        )
     results: list[ExperimentRunResult] = []
+    anchor_failure: str | None = None
     try:
-        reproduce_anchor(overwrite=overwrite, smoke=True)
-        verify_anchor_programme(smoke=True)
+        reproduced = reproduce_anchor(overwrite=overwrite, smoke=True)
+        verified = verify_anchor_programme(smoke=True)
     except (AnchorReproductionError, ScientificContractError, MissingPrerequisiteError) as error:
-        _ = error
+        anchor_failure = str(error)
+    else:
+        non_pass = tuple(
+            str(result.gate_status)
+            for result in (reproduced, verified)
+            if result.gate_status not in {AnchorGateStatus.PASS, AnchorGateStatus.PASS_WITH_DECLARED_DISCREPANCY}
+        )
+        if non_pass:
+            anchor_failure = f"anchor gate {','.join(non_pass)}"
     for item in _CAMPAIGN_ORDER:
         results.append(run_experiment(item, overwrite=overwrite, smoke=True))
     _publish_smoke_summary(tuple(results))
-    return CampaignRunResult(experiments=tuple(results), detail=f"smoke experiments={len(results)}")
+    return CampaignRunResult(
+        experiments=tuple(results),
+        detail=f"smoke experiments={len(results)}",
+        anchor_failure=anchor_failure,
+    )
 
 
 def _publish_smoke_summary(results: tuple[ExperimentRunResult, ...]) -> None:
@@ -348,7 +515,6 @@ def run_campaign(*, overwrite: bool = False) -> CampaignRunResult:
     results: list[ExperimentRunResult] = []
     for experiment_id in _CAMPAIGN_ORDER:
         results.append(run_experiment(experiment_id, overwrite=overwrite, smoke=False))
-        generate_report(experiment_id, overwrite=overwrite)
     CAMPAIGN_COMPLETION_MARKER.parent.mkdir(parents=True, exist_ok=True)
     CAMPAIGN_COMPLETION_MARKER.write_text(
         "\n".join(item.experiment.value for item in results) + "\n",
@@ -358,6 +524,7 @@ def run_campaign(*, overwrite: bool = False) -> CampaignRunResult:
     return CampaignRunResult(
         experiments=tuple(results),
         detail=f"campaign experiments={len(results)} report={campaign_report.detail}",
+        anchor_failure=None,
     )
 
 
@@ -494,7 +661,12 @@ def _generate_campaign_report(*, overwrite: bool) -> ReportResult:
     for item in _CAMPAIGN_ORDER:
         try:
             report = generate_report(item, overwrite=overwrite)
-        except (ReportEvidenceError, ScientificContractError, MissingPrerequisiteError) as error:
+        except (
+            AnchorReproductionError,
+            MissingPrerequisiteError,
+            ReportEvidenceError,
+            ScientificContractError,
+        ) as error:
             details.append(f"{item.value}:missing({error})")
             continue
         paths.extend(report.paths)
@@ -519,7 +691,7 @@ def _report_edge_benign_equity_validation(experiment_id: ExperimentId, overwrite
     del experiment_id, overwrite
     from datp_core.pipeline.workflows.external import analyze_external_validation_campaign
 
-    result = analyze_external_validation_campaign()
+    result = analyze_external_validation_campaign(output_root=OUTPUTS_ROOT)
     return (result.output_directory,), str(result.output_directory)
 
 
@@ -527,7 +699,7 @@ def _report_ciciot_file_client_boundary(experiment_id: ExperimentId, overwrite: 
     del experiment_id, overwrite
     from datp_core.pipeline.workflows.external import analyze_ciciot_boundary_campaign
 
-    result = analyze_ciciot_boundary_campaign()
+    result = analyze_ciciot_boundary_campaign(output_root=OUTPUTS_ROOT)
     return (result.output_directory,), str(result.output_directory)
 
 
@@ -540,26 +712,52 @@ def _report_fedprox_absorption_stress_test(
 
 
 def _report_ditto_absorption_stress_test(experiment_id: ExperimentId, overwrite: bool) -> tuple[tuple[Path, ...], str]:
-    del experiment_id, overwrite
-    from datp_core.pipeline.workflows.personalization import run_ditto_absorption_campaign
-
-    analysis_root = (
-        OUTPUTS_ROOT
-        / "ditto_stress_test"
-        / PopulationId.NBAIOT_NATURAL_DEVICES.value
-        / "analysis"
-        / str(DITTO_PRIMARY_REGULARIZATION.value)
+    del experiment_id
+    from datp_core.pipeline.workflows.confirmatory import load_fedavg_cv_fpr_effect
+    from datp_core.pipeline.workflows.personalization import (
+        analyze_ditto_absorption,
+        ditto_analysis_directory,
+        load_ditto_stress_test_evidence,
     )
-    run_ditto_absorption_campaign(regularization=DITTO_PRIMARY_REGULARIZATION, output_directory=analysis_root)
+
+    analysis_root = ditto_analysis_directory(DITTO_PRIMARY_REGULARIZATION, output_root=OUTPUTS_ROOT)
+    if overwrite and analysis_root.exists():
+        rmtree(analysis_root)
+    results = tuple(
+        load_ditto_stress_test_evidence(
+            training_seed=seed,
+            regularization=DITTO_PRIMARY_REGULARIZATION,
+            output_root=OUTPUTS_ROOT,
+        )
+        for seed in CONFIRMATORY_SEED_COHORT.values
+    )
+    reference_evidence = tuple(
+        load_fedavg_cv_fpr_effect(
+            result.personalized_coordinate.training_seed,
+            experiment=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
+        )
+        for result in results
+    )
+    analyze_ditto_absorption(
+        results,
+        reference_evidence=reference_evidence,
+        output_directory=analysis_root,
+    )
     return (analysis_root,), f"analysis={analysis_root}"
 
 
 def _report_edge_one_shot_recalibration(experiment_id: ExperimentId, overwrite: bool) -> tuple[tuple[Path, ...], str]:
     del experiment_id, overwrite
-    from datp_core.pipeline.workflows.temporal import run_temporal_campaign
+    from datp_core.pipeline.workflows.temporal import (
+        TemporalCampaignResult,
+        analyze_temporal_campaign,
+        load_temporal_campaign_seeds,
+    )
 
-    result = run_temporal_campaign()
-    paths = tuple(analysis.output_directory for analysis in result.analyses)
+    seeds = load_temporal_campaign_seeds(output_root=OUTPUTS_ROOT)
+    campaign = TemporalCampaignResult(seeds=seeds)
+    analyses = analyze_temporal_campaign(campaign, output_root=OUTPUTS_ROOT)
+    paths = tuple(analysis.output_directory for analysis in analyses)
     return paths, f"temporal_methods={len(paths)}"
 
 
@@ -590,8 +788,11 @@ def _generate_experiment_report(experiment_id: ExperimentId, *, overwrite: bool)
 def _report_fedprox_absorption(*, overwrite: bool) -> tuple[Path, ...]:
     from datp_core.pipeline.workflows.confirmatory import load_fedavg_cv_fpr_effect
     from datp_core.pipeline.workflows.personalization import (
+        FEDPROX_PRIMARY_COEFFICIENT_DECISION_FILENAME,
         analyze_fedprox_absorption,
         build_fedprox_absorption_observation,
+        fedprox_analysis_directory,
+        fedprox_stress_test_root,
         select_primary_fedprox_coefficient_from_artifacts,
         write_fedprox_primary_coefficient_decision,
     )
@@ -599,10 +800,10 @@ def _report_fedprox_absorption(*, overwrite: bool) -> tuple[Path, ...]:
     paths: list[Path] = []
     try:
         primary = select_primary_fedprox_coefficient_from_artifacts(output_root=OUTPUTS_ROOT)
-        root = OUTPUTS_ROOT / "fedprox_stress_test" / PopulationId.NBAIOT_NATURAL_DEVICES.value
+        root = fedprox_stress_test_root(output_root=OUTPUTS_ROOT)
         decision_path = write_fedprox_primary_coefficient_decision(
             primary,
-            root / "primary_coefficient_decision.json",
+            root / FEDPROX_PRIMARY_COEFFICIENT_DECISION_FILENAME,
         )
         paths.append(decision_path)
         for coefficient in FEDPROX_COEFFICIENTS:
@@ -617,8 +818,13 @@ def _report_fedprox_absorption(*, overwrite: bool) -> tuple[Path, ...]:
                 )
                 for seed in CONFIRMATORY_SEED_COHORT.values
             )
-            role = "primary" if coefficient == primary.primary_coefficient else "sensitivity"
-            output = root / "analysis" / role / str(coefficient.value)
+            output = fedprox_analysis_directory(
+                coefficient,
+                FedProxRoleDirectory.PRIMARY
+                if coefficient == primary.primary_coefficient
+                else FedProxRoleDirectory.SENSITIVITY,
+                output_root=OUTPUTS_ROOT,
+            )
             if overwrite and output.exists():
                 rmtree(output)
             analyze_fedprox_absorption(observations, output_directory=output)
@@ -720,13 +926,90 @@ def _status_for_experiment(experiment_id: ExperimentId, *, anchor_gate: AnchorGa
 
 def _confirmatory_analysis_marker_present(experiment_id: ExperimentId) -> bool:
     del experiment_id
+    from datp_core.pipeline.decision.evidence import AnalysisAssetName
+    from datp_core.pipeline.workflows.confirmatory import ConfirmatoryAssetDirectory
+
     return (
-        OUTPUTS_ROOT / "confirmatory" / PopulationId.NBAIOT_NATURAL_DEVICES.value / "analysis" / "COMPLETE"
+        OUTPUTS_ROOT
+        / ConfirmatoryAssetDirectory.ROOT
+        / PopulationId.NBAIOT_NATURAL_DEVICES.value
+        / ConfirmatoryAssetDirectory.ANALYSIS
+        / AnalysisAssetName.COMPLETE
     ).is_file()
 
 
 def _external_analysis_marker_present(experiment_id: ExperimentId) -> bool:
-    return (OUTPUTS_ROOT / "analysis" / experiment_id.value).exists()
+    from datp_core.pipeline.decision.evidence import AnalysisAssetName
+    from datp_core.pipeline.workflows import require_experiment_declaration
+    from datp_core.pipeline.workflows.external import BoundedExternalAssetDirectory
+
+    declaration = require_experiment_declaration(experiment_id)
+    return (
+        OUTPUTS_ROOT
+        / BoundedExternalAssetDirectory.ANALYSIS
+        / experiment_id.value
+        / declaration.population.value
+        / AnalysisAssetName.COMPLETE
+    ).is_file()
+
+
+def _fedprox_analysis_marker_present(experiment_id: ExperimentId) -> bool:
+    del experiment_id
+    from datp_core.pipeline.workflows.personalization import (
+        FEDPROX_PRIMARY_COEFFICIENT_DECISION_FILENAME,
+        fedprox_analysis_directory,
+        fedprox_stress_test_root,
+        load_fedprox_primary_coefficient_decision,
+    )
+    from datp_core.reporting.export import PUBLICATION_FILENAME
+
+    decision_path = fedprox_stress_test_root(output_root=OUTPUTS_ROOT) / FEDPROX_PRIMARY_COEFFICIENT_DECISION_FILENAME
+    if not decision_path.is_file():
+        return False
+    decision = load_fedprox_primary_coefficient_decision(decision_path)
+    return all(
+        (
+            fedprox_analysis_directory(
+                coefficient,
+                FedProxRoleDirectory.PRIMARY
+                if coefficient == decision.primary_coefficient
+                else FedProxRoleDirectory.SENSITIVITY,
+                output_root=OUTPUTS_ROOT,
+            )
+            / PUBLICATION_FILENAME
+        ).is_file()
+        for coefficient in FEDPROX_COEFFICIENTS
+    )
+
+
+def _ditto_analysis_marker_present(experiment_id: ExperimentId) -> bool:
+    del experiment_id
+    from datp_core.pipeline.workflows.personalization import ditto_analysis_directory
+    from datp_core.reporting.export import MECHANISM_REPORT_FILENAME, PUBLICATION_FILENAME
+
+    root = ditto_analysis_directory(DITTO_PRIMARY_REGULARIZATION, output_root=OUTPUTS_ROOT)
+    return (root / PUBLICATION_FILENAME).is_file() and (root / MECHANISM_REPORT_FILENAME).is_file()
+
+
+def _temporal_analysis_marker_present(experiment_id: ExperimentId) -> bool:
+    from datp_core.pipeline.decision.evidence import AnalysisAssetName
+    from datp_core.pipeline.workflows import require_experiment_declaration
+    from datp_core.pipeline.workflows.temporal import TemporalArtifactDirectory
+
+    declaration = require_experiment_declaration(experiment_id)
+    return all(
+        (
+            OUTPUTS_ROOT
+            / ExecutionRootDirectory.BOUNDED_EVIDENCE
+            / experiment_id.value
+            / declaration.population.value
+            / declaration.role.value
+            / TemporalArtifactDirectory.ANALYSIS
+            / method.value
+            / AnalysisAssetName.COMPLETE
+        ).is_file()
+        for method in declaration.federated_thresholds
+    )
 
 
 _ANALYSIS_MARKER_CHECKS: dict[ExperimentId, Callable[[ExperimentId], bool]] = {
@@ -734,20 +1017,17 @@ _ANALYSIS_MARKER_CHECKS: dict[ExperimentId, Callable[[ExperimentId], bool]] = {
     ExperimentId.FAMILY_AND_GROUPED_GRANULARITY: _confirmatory_analysis_marker_present,
     ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION: _external_analysis_marker_present,
     ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY: _external_analysis_marker_present,
+    ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST: _fedprox_analysis_marker_present,
+    ExperimentId.DITTO_ABSORPTION_STRESS_TEST: _ditto_analysis_marker_present,
+    ExperimentId.EDGE_ONE_SHOT_RECALIBRATION: _temporal_analysis_marker_present,
 }
-if frozenset(_ANALYSIS_MARKER_CHECKS) - REGISTERED_WORKFLOW_EXPERIMENTS:
-    raise ScientificContractError("analysis marker checks must be declared only for registered workflow experiments")
+if frozenset(_ANALYSIS_MARKER_CHECKS) != REGISTERED_WORKFLOW_EXPERIMENTS:
+    raise ScientificContractError("analysis marker checks must be declared exactly for registered workflow experiments")
 
 
 def _analysis_marker_present(experiment_id: ExperimentId) -> bool:
-    """True only for registered experiments with an implemented analysis-marker check.
-
-    Registered experiments absent from ``_ANALYSIS_MARKER_CHECKS`` (currently the
-    FedProx/Ditto stress tests and temporal recalibration) have no published
-    marker artifact convention yet and report as not analysis-complete.
-    """
-    check = _ANALYSIS_MARKER_CHECKS.get(experiment_id)
-    return False if check is None else check(experiment_id)
+    check = _ANALYSIS_MARKER_CHECKS[experiment_id]
+    return check(experiment_id)
 
 
 def format_plan(presentation: PlanPresentation) -> str:

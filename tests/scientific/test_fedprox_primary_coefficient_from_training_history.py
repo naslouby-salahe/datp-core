@@ -17,6 +17,7 @@ from datp_core.pipeline.execution.layout import federated_training_directory
 from datp_core.pipeline.workflows.personalization import (
     collect_fedprox_coefficient_terminal_losses,
     fedprox_training_coordinate,
+    load_fedprox_primary_coefficient_decision,
     read_terminal_aggregate_training_loss,
     select_primary_fedprox_coefficient_from_artifacts,
     write_fedprox_primary_coefficient_decision,
@@ -92,9 +93,9 @@ def test_primary_coefficient_is_lowest_mean_terminal_loss(tmp_path: Path) -> Non
         decision,
         tmp_path / "primary_coefficient_decision.json",
     )
-    text = path.read_text(encoding="utf-8")
-    assert "primary" in text
-    assert str(FEDPROX_COEFFICIENTS[1].value) in text
+    loaded = load_fedprox_primary_coefficient_decision(path)
+    assert loaded == decision
+    assert str(FEDPROX_COEFFICIENTS[1].value) in path.read_text(encoding="utf-8")
 
 
 def test_primary_selection_breaks_ties_with_smallest_coefficient(tmp_path: Path) -> None:

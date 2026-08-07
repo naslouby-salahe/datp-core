@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
+from pydantic import TypeAdapter, ValidationError
+
 from datp_core.analysis.temporal import (
     TemporalClientTrajectory,
     TemporalRecoveryResult,
@@ -23,7 +25,7 @@ from datp_core.domain.enums import (
     TemporalState,
 )
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.provenance import canonical_checksum
+from datp_core.domain.provenance import canonical_checksum, canonical_json_text
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import Seed
 from datp_core.domain.values.ratios import MetricValue
@@ -31,7 +33,12 @@ from datp_core.evaluation.cohort.contracts import EvaluationCohortManifest
 from datp_core.evaluation.fixed_score.construction import build_federated_evaluation_inputs
 from datp_core.evaluation.models import ClientMetricResult, MetricStatus, metric_by_id
 from datp_core.pipeline.coordinates import ExperimentCoordinate
-from datp_core.pipeline.decision.evidence import AnalyzeTemporalEvidenceRequest, analyze_temporal_evidence
+from datp_core.pipeline.decision.evidence import (
+    AnalysisAssetName,
+    AnalyzeTemporalEvidenceRequest,
+    SeedEvidenceAssetName,
+    analyze_temporal_evidence,
+)
 from datp_core.pipeline.decision.federated import (
     ConstructFederatedThresholdsRequest,
     EvaluateFederatedDetectorRequest,
@@ -61,9 +68,8 @@ from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration, 
 from datp_core.protocols.seeds import BOUNDED_EVIDENCE_SEED_COHORT, SeedCohort
 from datp_core.protocols.temporal import TemporalDeploymentProvenance, validate_frozen_recalibrated_pair
 from datp_core.reporting.export import export_temporal_publication
-from datp_core.runtime.configuration import OUTPUTS_ROOT
 from datp_core.thresholding.dispatch import ThresholdConstructionRequest
-from datp_core.thresholding.identities import ThresholdUnavailableResult
+from datp_core.thresholding.identities import ThresholdInfeasibilityReason, ThresholdUnavailableResult
 from datp_core.thresholding.publication import threshold_result_checksum
 
 
@@ -72,6 +78,14 @@ class TemporalArtifactDirectory(StrEnum):
     THRESHOLDS = "thresholds"
     EVALUATIONS = "evaluations"
     ANALYSIS = "analysis"
+    EVIDENCE = "evidence"
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class TemporalMethodUnavailability:
+    method: FederatedThresholdMethod
+    reason: ThresholdInfeasibilityReason
+    detail: str
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -97,6 +111,7 @@ class TemporalStateResult:
     completed_threshold_methods: tuple[FederatedThresholdMethod, ...]
     provenance: TemporalDeploymentProvenance
     outcomes: tuple[TemporalMethodOutcome, ...]
+    unavailable_methods: tuple[TemporalMethodUnavailability, ...]
 
     def outcome_for(self, method: FederatedThresholdMethod) -> TemporalMethodOutcome:
         matches = tuple(outcome for outcome in self.outcomes if outcome.method is method)
@@ -175,17 +190,10 @@ class TemporalCoordinateSet:
                 return self.recalibrated_future
 
 
-def run_temporal_campaign() -> TemporalCampaignResult:
-    seeds = tuple(run_temporal_seed(seed) for seed in BOUNDED_EVIDENCE_SEED_COHORT.values)
-    campaign = TemporalCampaignResult(seeds=seeds)
-    analyses = analyze_temporal_campaign(campaign)
-    return TemporalCampaignResult(seeds=seeds, analyses=analyses)
-
-
-def run_temporal_seed(partition_seed: Seed) -> TemporalSeedResult:
+def run_temporal_seed(partition_seed: Seed, *, output_root: Path) -> TemporalSeedResult:
     declaration = _temporal_declaration()
     coordinates = _temporal_coordinates(partition_seed, declaration)
-    static, frozen, recalibrated = _execute_temporal_states(declaration, coordinates)
+    static, frozen, recalibrated = _execute_temporal_states(declaration, coordinates, output_root=output_root)
     methods = _common_completed_methods(static, frozen, recalibrated)
     recoveries = tuple(
         TemporalMethodRecovery(
@@ -201,16 +209,29 @@ def run_temporal_seed(partition_seed: Seed) -> TemporalSeedResult:
         )
         for method in methods
     )
-    return TemporalSeedResult(
+    result = TemporalSeedResult(
         partition_seed=partition_seed,
         static_reference=static,
         frozen_future=frozen,
         recalibrated_future=recalibrated,
         recoveries=recoveries,
     )
+    _persist_temporal_seed_evidence(result, output_root=output_root)
+    return result
 
 
-def analyze_temporal_campaign(campaign: TemporalCampaignResult) -> tuple[TemporalMethodCampaignAnalysis, ...]:
+def load_temporal_campaign_seeds(*, output_root: Path) -> tuple[TemporalSeedResult, ...]:
+    declaration = _temporal_declaration()
+    return tuple(
+        _load_temporal_seed_evidence(declaration, seed, output_root) for seed in BOUNDED_EVIDENCE_SEED_COHORT.values
+    )
+
+
+def analyze_temporal_campaign(
+    campaign: TemporalCampaignResult,
+    *,
+    output_root: Path,
+) -> tuple[TemporalMethodCampaignAnalysis, ...]:
     if not campaign.seeds:
         raise ScientificContractError("temporal campaign analysis requires completed seed results")
     methods = tuple(item.method for item in campaign.seeds[0].recoveries)
@@ -222,9 +243,64 @@ def analyze_temporal_campaign(campaign: TemporalCampaignResult) -> tuple[Tempora
             method=method,
             campaign=campaign,
             declaration=declaration,
+            output_root=output_root,
         )
         for method in methods
     )
+
+
+def _temporal_seed_evidence_directory(
+    declaration: ExperimentDeclaration,
+    partition_seed: Seed,
+    output_root: Path,
+) -> Path:
+    return (
+        output_root
+        / ExecutionRootDirectory.BOUNDED_EVIDENCE
+        / declaration.id.value
+        / declaration.population.value
+        / declaration.role.value
+        / str(partition_seed.value)
+        / TemporalArtifactDirectory.EVIDENCE
+    )
+
+
+def _persist_temporal_seed_evidence(result: TemporalSeedResult, *, output_root: Path) -> None:
+    declaration = _temporal_declaration()
+    directory = _temporal_seed_evidence_directory(declaration, result.partition_seed, output_root)
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / SeedEvidenceAssetName.DOCUMENT).write_text(canonical_json_text(result), encoding="utf-8")
+    (directory / AnalysisAssetName.COMPLETE).write_text(canonical_checksum(result).value, encoding="utf-8")
+
+
+def _load_temporal_seed_evidence(
+    declaration: ExperimentDeclaration,
+    partition_seed: Seed,
+    output_root: Path,
+) -> TemporalSeedResult:
+    directory = _temporal_seed_evidence_directory(declaration, partition_seed, output_root)
+    document = directory / SeedEvidenceAssetName.DOCUMENT
+    complete = directory / AnalysisAssetName.COMPLETE
+    if not document.is_file() or not complete.is_file():
+        raise ScientificContractError(
+            f"missing completed temporal seed evidence: {directory}",
+            subject=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
+            reason=f"seed={partition_seed.value}",
+        )
+    adapter: TypeAdapter[TemporalSeedResult] = TypeAdapter(TemporalSeedResult)
+    try:
+        result = adapter.validate_json(document.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValidationError) as error:
+        raise ScientificContractError(
+            f"temporal seed evidence is unreadable or invalid: {document}",
+            subject=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
+        ) from error
+    if complete.read_text(encoding="utf-8").strip() != canonical_checksum(result).value:
+        raise ScientificContractError(
+            f"temporal seed evidence checksum does not match its completion marker: {document}",
+            subject=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
+        )
+    return result
 
 
 def _recovery_for_method(
@@ -295,9 +371,11 @@ def _recovery_for_method(
 def _execute_temporal_states(
     declaration: ExperimentDeclaration,
     coordinates: TemporalCoordinateSet,
+    *,
+    output_root: Path,
 ) -> tuple[TemporalStateResult, TemporalStateResult, TemporalStateResult]:
     frozen_coordinate = coordinates.frozen_future
-    context = resolve_execution_context(frozen_coordinate, OUTPUTS_ROOT)
+    context = resolve_execution_context(frozen_coordinate, output_root)
     autoencoder = training_autoencoder(frozen_coordinate.dataset)
     feature_names = training_feature_names(frozen_coordinate.dataset)
     checkpoint = select_execution_checkpoint(context, autoencoder=autoencoder, feature_names=feature_names)
@@ -311,10 +389,10 @@ def _execute_temporal_states(
         preprocessing_state_set_checksum=context.preprocessing_state_set_checksum,
         split_manifest_checksum=context.split_manifest_checksum,
     )
-    static_inputs = matched_static_reference_inputs(context, OUTPUTS_ROOT)
+    static_inputs = matched_static_reference_inputs(context, output_root)
     static_coordinate = coordinates.static_reference
     static_identity = _execution_identity(static_coordinate)
-    static_root = bounded_evidence_seed_directory(static_identity, static_coordinate.training_seed, OUTPUTS_ROOT)
+    static_root = bounded_evidence_seed_directory(static_identity, static_coordinate.training_seed, output_root)
     static_scores = score_selected_checkpoint(
         checkpoint=checkpoint,
         scored_split_protocol=static_coordinate.split_protocol,
@@ -340,6 +418,7 @@ def _execute_temporal_states(
         calibration_role=PartitionRole.CALIBRATION,
         threshold_methods=declaration.federated_thresholds,
         provenance=static_provenance,
+        output_root=output_root,
     )
     frozen = _evaluate_state(
         context=context,
@@ -348,6 +427,7 @@ def _execute_temporal_states(
         calibration_role=PartitionRole.CALIBRATION,
         threshold_methods=declaration.federated_thresholds,
         provenance=frozen_provenance,
+        output_root=output_root,
     )
     recalibrated = _evaluate_state(
         context=context,
@@ -356,6 +436,7 @@ def _execute_temporal_states(
         calibration_role=PartitionRole.FUTURE_RECALIBRATION,
         threshold_methods=declaration.federated_thresholds,
         provenance=recalibrated_provenance,
+        output_root=output_root,
     )
     return static, frozen, recalibrated
 
@@ -368,13 +449,15 @@ def _evaluate_state(
     calibration_role: PartitionRole,
     threshold_methods: tuple[FederatedThresholdMethod, ...],
     provenance: TemporalDeploymentProvenance,
+    output_root: Path,
 ) -> TemporalStateResult:
     eligible = eligible_calibration_scores(scores, calibration_role)
     capabilities = population_capabilities(context.coordinate.population)
     reference_evidence = None
     completed: list[FederatedThresholdMethod] = []
     outcomes: list[TemporalMethodOutcome] = []
-    output_root = bounded_evidence_seed_directory(identity, context.coordinate.training_seed, OUTPUTS_ROOT)
+    unavailable: list[TemporalMethodUnavailability] = []
+    state_root = bounded_evidence_seed_directory(identity, context.coordinate.training_seed, output_root)
     for method in threshold_methods:
         threshold_publication = construct_federated_thresholds(
             ConstructFederatedThresholdsRequest(
@@ -386,7 +469,7 @@ def _evaluate_state(
                     eligible=eligible,
                     family_by_client=context.family_by_client,
                 ),
-                output_directory=output_root / TemporalArtifactDirectory.THRESHOLDS / method.value,
+                output_directory=state_root / TemporalArtifactDirectory.THRESHOLDS / method.value,
                 overwrite=False,
                 temporal_provenance=provenance,
                 temporal_score_manifest=scores,
@@ -394,6 +477,13 @@ def _evaluate_state(
         )
         threshold = threshold_publication.result
         if isinstance(threshold, ThresholdUnavailableResult):
+            unavailable.append(
+                TemporalMethodUnavailability(
+                    method=method,
+                    reason=threshold.reason,
+                    detail=threshold.detail,
+                )
+            )
             continue
         evaluation_inputs = build_federated_evaluation_inputs(scores, method, calibration_role=calibration_role)
         evaluation = evaluate_federated_detector(
@@ -411,7 +501,7 @@ def _evaluate_state(
                 execution_identity=identity,
                 temporal_provenance=provenance,
                 temporal_threshold_provenance=provenance,
-                output_directory=output_root / TemporalArtifactDirectory.EVALUATIONS / method.value,
+                output_directory=state_root / TemporalArtifactDirectory.EVALUATIONS / method.value,
                 overwrite=False,
             )
         )
@@ -466,6 +556,7 @@ def _evaluate_state(
         completed_threshold_methods=tuple(completed),
         provenance=provenance,
         outcomes=tuple(outcomes),
+        unavailable_methods=tuple(unavailable),
     )
 
 
@@ -474,10 +565,11 @@ def _publish_temporal_method_campaign(
     method: FederatedThresholdMethod,
     campaign: TemporalCampaignResult,
     declaration: ExperimentDeclaration,
+    output_root: Path,
 ) -> TemporalMethodCampaignAnalysis:
     records = tuple(seed.recovery_for(method) for seed in campaign.seeds)
     static_provenance, frozen_provenance, recalibrated_provenance = _document_level_deployment_provenance(records)
-    output_directory = _temporal_campaign_analysis_directory(method)
+    output_directory = _temporal_campaign_analysis_directory(method, output_root)
     analysis = analyze_temporal_evidence(
         AnalyzeTemporalEvidenceRequest(
             experiment=declaration.id,
@@ -865,10 +957,10 @@ def _coordinate_for_state(plan: ExperimentPlan, state: TemporalState) -> Experim
     return first
 
 
-def _temporal_campaign_analysis_directory(method: FederatedThresholdMethod) -> Path:
+def _temporal_campaign_analysis_directory(method: FederatedThresholdMethod, output_root: Path) -> Path:
     declaration = _temporal_declaration()
     return (
-        OUTPUTS_ROOT
+        output_root
         / ExecutionRootDirectory.BOUNDED_EVIDENCE
         / declaration.id.value
         / declaration.population.value

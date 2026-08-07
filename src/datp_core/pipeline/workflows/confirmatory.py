@@ -114,7 +114,7 @@ class FedAvgCvFprEffectEvidence:
 def run_confirmatory_seed(
     training_seed: Seed,
     *,
-    output_root: Path | None = None,
+    output_root: Path,
     overwrite: bool = False,
 ) -> ConfirmatorySeedResult:
     declaration = _confirmatory_declaration()
@@ -122,7 +122,7 @@ def run_confirmatory_seed(
         declaration=declaration,
         seed_cohort=SeedCohort(values=(training_seed,)),
         reason="the confirmatory entry point supplies the locked natural-device execution prerequisites",
-        output_root=OUTPUTS_ROOT if output_root is None else output_root,
+        output_root=output_root,
         overwrite=overwrite,
     )
     return ConfirmatorySeedResult(
@@ -135,7 +135,7 @@ def run_confirmatory_seed(
 def run_family_grouped_mechanism_seed(
     training_seed: Seed,
     *,
-    output_root: Path | None = None,
+    output_root: Path,
     overwrite: bool = False,
 ) -> ConfirmatorySeedResult:
     """Execute the family/grouped mechanism ladder for one seed under fixed FedAvg detector.
@@ -155,7 +155,7 @@ def run_family_grouped_mechanism_seed(
             "the family/grouped mechanism entry point supplies the locked "
             "natural-device execution prerequisites for FAMILY_THRESHOLD/CLUSTER_THRESHOLD evidence"
         ),
-        output_root=OUTPUTS_ROOT if output_root is None else output_root,
+        output_root=output_root,
         overwrite=overwrite,
     )
     return ConfirmatorySeedResult(

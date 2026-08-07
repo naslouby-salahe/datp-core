@@ -94,8 +94,14 @@ def smoke_command(
         echo_error(error)
         raise typer.Exit(code=map_exception_to_exit(error)) from error
     typer.echo(f"smoke experiments={len(result.experiments)} detail={result.detail}")
+    if result.anchor_failure is not None:
+        typer.echo(f"anchor_failure={result.anchor_failure}")
     for item in result.experiments:
-        typer.echo(f"{item.experiment.value} seeds={','.join(str(seed.value) for seed in item.seeds)}")
+        outcomes = ",".join(f"{outcome.method.value}={outcome.status.value}" for outcome in item.method_outcomes)
+        typer.echo(
+            f"{item.experiment.value} seeds={','.join(str(seed.value) for seed in item.seeds)} "
+            f"detail={item.detail} methods={outcomes}"
+        )
 
 
 @app.command("report")

@@ -27,9 +27,10 @@ def experiment_command(
     except Exception as error:
         echo_error(error)
         raise typer.Exit(code=map_exception_to_exit(error)) from error
+    outcomes = ",".join(f"{item.method.value}={item.status.value}" for item in result.method_outcomes)
     typer.echo(
         f"experiment={result.experiment.value} seeds={len(result.seeds)} "
-        f"output_root={result.output_root} detail={result.detail}"
+        f"output_root={result.output_root} detail={result.detail} methods={outcomes}"
     )
 
 

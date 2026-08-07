@@ -7,6 +7,7 @@ from enum import StrEnum
 from pathlib import Path
 
 import polars as pl
+from pydantic import TypeAdapter, ValidationError
 
 from datp_core.analysis.mechanisms import (
     AbsorptionCohortResult,
@@ -24,6 +25,7 @@ from datp_core.domain.enums import (
     EvidenceRole,
     ExperimentId,
     FederatedThresholdMethod,
+    FedProxRoleDirectory,
     MetricId,
     PartitionRole,
     PopulationId,
@@ -33,7 +35,7 @@ from datp_core.domain.enums import (
     TrainingModelId,
 )
 from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
-from datp_core.domain.provenance import canonical_json_text
+from datp_core.domain.provenance import canonical_checksum, canonical_json_text
 from datp_core.domain.values.checksums import Checksum, checksum_file, checksum_text
 from datp_core.domain.values.counts import ClientCount, RoundNumber, RowCount, Seed
 from datp_core.domain.values.identifiers import FeatureNameSequence
@@ -62,6 +64,7 @@ from datp_core.learning.federated.models import (
 )
 from datp_core.learning.federated.training import preprocessing_state_set_checksum
 from datp_core.pipeline.checkpoints.service import SelectFederatedCheckpointRequest, select_federated_primary_checkpoint
+from datp_core.pipeline.decision.evidence import AnalysisAssetName, SeedEvidenceAssetName
 from datp_core.pipeline.decision.federated import ConstructFederatedThresholdsRequest, construct_federated_thresholds
 from datp_core.pipeline.execution.context import (
     client_training_inputs,
@@ -90,7 +93,6 @@ from datp_core.pipeline.training.personalized import (
 from datp_core.pipeline.workflows.confirmatory import (
     FedAvgCvFprEffectEvidence,
     absorption_corner_from_evaluation_document,
-    load_fedavg_cv_fpr_effect,
 )
 from datp_core.pipeline.workflows.execution import execute_declared_campaign
 from datp_core.pipeline.workflows.personalization_scoring import (
@@ -131,6 +133,12 @@ class DittoArtifactBranch(StrEnum):
     GLOBAL_MODEL = "global_model"
     PERSONALIZED_MODELS = "personalized_models"
     THRESHOLDS = "thresholds"
+    EVIDENCE = "evidence"
+    ANALYSIS = "analysis"
+
+
+class FedProxArtifactDirectory(StrEnum):
+    ANALYSIS = "analysis"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -141,6 +149,60 @@ class DittoStressTestResult:
     shared_threshold_metrics: tuple[ClientMetricResult, ...]
     local_threshold_metrics: tuple[ClientMetricResult, ...]
     evaluation_cohort: EvaluationCohortManifest
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class DittoStressTestEvidence:
+    """Persistable per-seed Ditto absorption evidence consumed by analysis and reporting."""
+
+    personalized_coordinate: FederatedTrainingCoordinate
+    shared_threshold_metrics: tuple[ClientMetricResult, ...]
+    local_threshold_metrics: tuple[ClientMetricResult, ...]
+    evaluation_cohort: EvaluationCohortManifest
+
+
+def _persist_ditto_evidence(
+    evidence: DittoStressTestEvidence,
+    *,
+    training_seed: Seed,
+    regularization: DittoRegularization,
+    output_root: Path,
+) -> None:
+    directory = ditto_directory(training_seed, regularization, DittoArtifactBranch.EVIDENCE, output_root)
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / SeedEvidenceAssetName.DOCUMENT).write_text(canonical_json_text(evidence), encoding="utf-8")
+    (directory / AnalysisAssetName.COMPLETE).write_text(canonical_checksum(evidence).value, encoding="utf-8")
+
+
+def load_ditto_stress_test_evidence(
+    *,
+    training_seed: Seed,
+    regularization: DittoRegularization,
+    output_root: Path,
+) -> DittoStressTestEvidence:
+    directory = ditto_directory(training_seed, regularization, DittoArtifactBranch.EVIDENCE, output_root)
+    document = directory / SeedEvidenceAssetName.DOCUMENT
+    complete = directory / AnalysisAssetName.COMPLETE
+    if not document.is_file() or not complete.is_file():
+        raise ScientificContractError(
+            f"missing completed Ditto stress-test evidence: {directory}",
+            subject=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
+            reason=f"seed={training_seed.value} regularization={regularization.value}",
+        )
+    adapter: TypeAdapter[DittoStressTestEvidence] = TypeAdapter(DittoStressTestEvidence)
+    try:
+        evidence = adapter.validate_json(document.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValidationError) as error:
+        raise ScientificContractError(
+            f"Ditto stress-test evidence is unreadable or invalid: {document}",
+            subject=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
+        ) from error
+    if complete.read_text(encoding="utf-8").strip() != canonical_checksum(evidence).value:
+        raise ScientificContractError(
+            f"Ditto stress-test evidence checksum does not match its completion marker: {document}",
+            subject=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
+        )
+    return evidence
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -204,7 +266,13 @@ class FedProxCvFprCornerEvidence:
         return MetricValue(self.shared_cv.value - self.local_cv.value)
 
 
-def run_ditto_stress_test_seed(*, training_seed: Seed, regularization: DittoRegularization) -> DittoStressTestResult:
+def run_ditto_stress_test_seed(
+    *,
+    training_seed: Seed,
+    regularization: DittoRegularization,
+    output_root: Path,
+    overwrite: bool = False,
+) -> DittoStressTestResult:
     population = PopulationId.NBAIOT_NATURAL_DEVICES
     split_protocol = SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS
     preprocessing_identity = PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD
@@ -239,15 +307,16 @@ def run_ditto_stress_test_seed(*, training_seed: Seed, regularization: DittoRegu
                 learning_rate=LEARNING_RATE,
                 split_manifest_checksum=context.split_manifest_checksum,
                 global_output_directory=ditto_directory(
-                    training_seed, regularization, DittoArtifactBranch.GLOBAL_MODEL
+                    training_seed, regularization, DittoArtifactBranch.GLOBAL_MODEL, output_root
                 ),
                 personalized_output_directory=ditto_directory(
                     training_seed,
                     regularization,
                     DittoArtifactBranch.PERSONALIZED_MODELS,
+                    output_root,
                 ),
             ),
-            overwrite=False,
+            overwrite=overwrite,
         )
     )
     scores = _personalized_scores(
@@ -257,9 +326,10 @@ def run_ditto_stress_test_seed(*, training_seed: Seed, regularization: DittoRegu
         feature_names=feature_names,
         training_seed=training_seed,
         regularization=regularization,
+        output_root=output_root,
     )
     capabilities = population_capabilities(population)
-    threshold_directory = ditto_directory(training_seed, regularization, DittoArtifactBranch.THRESHOLDS)
+    threshold_directory = ditto_directory(training_seed, regularization, DittoArtifactBranch.THRESHOLDS, output_root)
     shared = construct_federated_thresholds(
         ConstructFederatedThresholdsRequest(
             request=ThresholdConstructionRequest(
@@ -308,7 +378,7 @@ def run_ditto_stress_test_seed(*, training_seed: Seed, regularization: DittoRegu
             FederatedThresholdMethod.LOCAL_THRESHOLD,
         ),
     )
-    return DittoStressTestResult(
+    result = DittoStressTestResult(
         personalized_coordinate=personalized_coordinate,
         shared_threshold=shared,
         local_threshold=local,
@@ -334,10 +404,22 @@ def run_ditto_stress_test_seed(*, training_seed: Seed, regularization: DittoRegu
         ),
         evaluation_cohort=evaluation_cohort,
     )
+    _persist_ditto_evidence(
+        DittoStressTestEvidence(
+            personalized_coordinate=result.personalized_coordinate,
+            shared_threshold_metrics=result.shared_threshold_metrics,
+            local_threshold_metrics=result.local_threshold_metrics,
+            evaluation_cohort=result.evaluation_cohort,
+        ),
+        training_seed=training_seed,
+        regularization=regularization,
+        output_root=output_root,
+    )
+    return result
 
 
 def analyze_ditto_absorption(
-    results: tuple[DittoStressTestResult, ...],
+    results: tuple[DittoStressTestEvidence, ...],
     *,
     reference_evidence: tuple[FedAvgCvFprEffectEvidence, ...],
     output_directory: Path,
@@ -396,42 +478,11 @@ def analyze_ditto_absorption(
     return cohort
 
 
-def run_ditto_absorption_campaign(
-    *,
-    regularization: DittoRegularization,
-    output_directory: Path | None = None,
-) -> AbsorptionCohortResult:
-    """Run Ditto stress seeds over the confirmatory cohort and analyze absorption."""
-    results = tuple(
-        run_ditto_stress_test_seed(training_seed=seed, regularization=regularization)
-        for seed in CONFIRMATORY_SEED_COHORT.values
-    )
-    reference_evidence = tuple(
-        load_fedavg_cv_fpr_effect(
-            result.personalized_coordinate.training_seed,
-            experiment=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
-        )
-        for result in results
-    )
-    target = output_directory or (
-        OUTPUTS_ROOT
-        / ExecutionRootDirectory.DITTO_STRESS_TEST
-        / PopulationId.NBAIOT_NATURAL_DEVICES.value
-        / "analysis"
-        / str(regularization.value)
-    )
-    return analyze_ditto_absorption(
-        results,
-        reference_evidence=reference_evidence,
-        output_directory=target,
-    )
-
-
 def run_fedprox_stress_test_seed(
     *,
     training_seed: Seed,
     coefficient: ProximalCoefficient,
-    output_root: Path | None = None,
+    output_root: Path,
     overwrite: bool = False,
 ) -> FedProxStressTestResult:
     """Train FedProx, score, threshold, and evaluate for one confirmatory seed and coefficient."""
@@ -473,7 +524,7 @@ def run_fedprox_stress_test_seed(
     result = execute_declared_campaign(
         campaign=campaign,
         declaration=declaration,
-        output_root=OUTPUTS_ROOT if output_root is None else output_root,
+        output_root=output_root,
         overwrite=overwrite,
     )
     return FedProxStressTestResult(
@@ -481,41 +532,6 @@ def run_fedprox_stress_test_seed(
         coefficient=coefficient,
         campaign_digest=result.campaign_digest,
         completed_threshold_methods=result.completed_threshold_methods,
-    )
-
-
-def run_fedprox_coefficient_campaign(
-    *,
-    coefficient: ProximalCoefficient,
-    output_root: Path | None = None,
-    overwrite: bool = False,
-) -> tuple[FedProxStressTestResult, ...]:
-    """Run FedProx stress tests for one coefficient across the confirmatory seed cohort."""
-    return tuple(
-        run_fedprox_stress_test_seed(
-            training_seed=seed,
-            coefficient=coefficient,
-            output_root=output_root,
-            overwrite=overwrite,
-        )
-        for seed in CONFIRMATORY_SEED_COHORT.values
-    )
-
-
-def run_fedprox_grid_campaign(
-    *,
-    output_root: Path | None = None,
-    overwrite: bool = False,
-) -> tuple[FedProxStressTestResult, ...]:
-    """Run FedProx stress tests for every declared proximal coefficient and confirmatory seed."""
-    return tuple(
-        result
-        for coefficient in FEDPROX_COEFFICIENTS
-        for result in run_fedprox_coefficient_campaign(
-            coefficient=coefficient,
-            output_root=output_root,
-            overwrite=overwrite,
-        )
     )
 
 
@@ -626,6 +642,9 @@ def collect_fedprox_coefficient_terminal_losses(
     return tuple(candidates)
 
 
+FEDPROX_PRIMARY_COEFFICIENT_DECISION_FILENAME = "primary_coefficient_decision.json"
+
+
 def select_primary_fedprox_coefficient_from_artifacts(
     *,
     output_root: Path,
@@ -669,25 +688,20 @@ def write_fedprox_primary_coefficient_decision(
     destination: Path,
 ) -> Path:
     """Persist the locked primary-μ decision artifact for stress-test reporting."""
-    payload = {
-        "selection_rule": decision.selection_rule,
-        "primary_coefficient": decision.primary_coefficient.value,
-        "decision_checksum": decision.decision_checksum.value,
-        "candidates": tuple(
-            {
-                "coefficient": item.coefficient.value,
-                "mean_terminal_training_loss": item.mean_terminal_training_loss.value,
-                "role": ("primary" if item.coefficient == decision.primary_coefficient else "sensitivity"),
-                "per_seed_terminal_losses": tuple(
-                    {"seed": seed.value, "terminal_training_loss": loss.value}
-                    for seed, loss in item.per_seed_terminal_losses
-                ),
-            }
-            for item in decision.candidates
-        ),
-    }
-    write_text_atomically(destination, canonical_json_text(payload))
+    write_text_atomically(destination, canonical_json_text(decision))
     return destination
+
+
+def load_fedprox_primary_coefficient_decision(destination: Path) -> FedProxPrimaryCoefficientDecision:
+    """Load the locked primary-μ decision artifact back into the typed domain record."""
+    try:
+        adapter: TypeAdapter[FedProxPrimaryCoefficientDecision] = TypeAdapter(FedProxPrimaryCoefficientDecision)
+        return adapter.validate_json(destination.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValidationError) as error:
+        raise ScientificContractError(
+            f"FedProx primary-coefficient decision is unreadable or invalid: {destination}",
+            subject=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST,
+        ) from error
 
 
 def load_fedprox_cv_fpr_corners(
@@ -817,7 +831,7 @@ def _fedprox_evaluation_path(
 
 
 def _population_cv_fpr_effect(
-    result: DittoStressTestResult,
+    result: DittoStressTestEvidence,
 ) -> tuple[MetricValue, MetricValue, MetricValue]:
     """Return shared CV(FPR), local CV(FPR), and Δ = shared − local."""
     shared_population = calculate_population_metrics(
@@ -901,10 +915,13 @@ def _personalized_scores(
     feature_names: FeatureNameSequence,
     training_seed: Seed,
     regularization: DittoRegularization,
+    output_root: Path,
 ) -> PersonalizedScoreCollection:
     eligible: list[ClientBenignCalibrationScores] = []
     manifests: list[ClientOwned[ClientIdentity, FederatedScoreArtifactManifest]] = []
-    personalized_directory = ditto_directory(training_seed, regularization, DittoArtifactBranch.PERSONALIZED_MODELS)
+    personalized_directory = ditto_directory(
+        training_seed, regularization, DittoArtifactBranch.PERSONALIZED_MODELS, output_root
+    )
     for owned in sorted(training.personalized_candidates.items, key=lambda item: item.client):
         client = owned.client
         selection = select_federated_primary_checkpoint(
@@ -966,12 +983,48 @@ def ditto_directory(
     training_seed: Seed,
     regularization: DittoRegularization,
     branch: DittoArtifactBranch,
+    output_root: Path,
 ) -> Path:
     return (
-        OUTPUTS_ROOT
+        output_root
         / ExecutionRootDirectory.DITTO_STRESS_TEST
         / PopulationId.NBAIOT_NATURAL_DEVICES.value
         / str(training_seed.value)
         / str(regularization.value)
         / branch.value
+    )
+
+
+def ditto_analysis_directory(
+    regularization: DittoRegularization,
+    *,
+    output_root: Path,
+) -> Path:
+    """Campaign-level Ditto absorption analysis directory for one regularization."""
+    return (
+        output_root
+        / ExecutionRootDirectory.DITTO_STRESS_TEST
+        / PopulationId.NBAIOT_NATURAL_DEVICES.value
+        / DittoArtifactBranch.ANALYSIS
+        / str(regularization.value)
+    )
+
+
+def fedprox_stress_test_root(*, output_root: Path) -> Path:
+    """Campaign-level FedProx stress-test root shared by decision and analysis artifacts."""
+    return output_root / ExecutionRootDirectory.FEDPROX_STRESS_TEST / PopulationId.NBAIOT_NATURAL_DEVICES.value
+
+
+def fedprox_analysis_directory(
+    coefficient: ProximalCoefficient,
+    role: FedProxRoleDirectory,
+    *,
+    output_root: Path,
+) -> Path:
+    """Per-coefficient FedProx absorption analysis directory under the assigned role."""
+    return (
+        fedprox_stress_test_root(output_root=output_root)
+        / FedProxArtifactDirectory.ANALYSIS
+        / role.value
+        / str(coefficient.value)
     )

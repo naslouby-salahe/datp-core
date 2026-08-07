@@ -188,6 +188,13 @@ class AvailabilityStatus(StrEnum):
     INFEASIBLE = "infeasible"
 
 
+class ThresholdMethodExecutionStatus(StrEnum):
+    COMPLETED = "completed"
+    UNAVAILABLE = "unavailable"
+    INFEASIBLE = "infeasible"
+    FAILED = "failed"
+
+
 class PublicationStatus(StrEnum):
     PUBLISHED = "published"
     REUSED = "reused"
@@ -258,6 +265,13 @@ class FedProxCoefficientSelectionRule(StrEnum):
     """Locked non-test FedProx proximal-coefficient selection algorithms."""
 
     FEDPROX_MINIMUM_TERMINAL_TRAINING_LOSS = "fedprox_minimum_terminal_training_loss"
+
+
+class FedProxRoleDirectory(StrEnum):
+    """Analysis-role directory each FedProx absorption coefficient is published under."""
+
+    PRIMARY = "primary"
+    SENSITIVITY = "sensitivity"
 
 
 class ProcessedDataBranch(StrEnum):

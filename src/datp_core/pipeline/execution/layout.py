@@ -21,6 +21,7 @@ class ExecutionRootDirectory(StrEnum):
     FEDERATED = "federated"
     BOUNDED_EVIDENCE = "bounded_evidence"
     DITTO_STRESS_TEST = "ditto_stress_test"
+    FEDPROX_STRESS_TEST = "fedprox_stress_test"
 
 
 class EvaluationRunAssetDirectory(StrEnum):

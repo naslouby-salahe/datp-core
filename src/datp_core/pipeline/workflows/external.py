@@ -23,7 +23,6 @@ from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration, 
 from datp_core.protocols.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_ANALYSIS_SEED, SeedCohort
 from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL, PairedInferenceProtocol
 from datp_core.reporting.export import export_external_publication
-from datp_core.runtime.configuration import OUTPUTS_ROOT
 
 
 class BoundedExternalPlanningReason(StrEnum):
@@ -56,28 +55,36 @@ class BoundedExternalCampaignAnalysisResult:
     complete_digest: Checksum
 
 
-def run_external_validation_seed(partition_seed: Seed) -> BoundedExternalSeedResult:
+def run_external_validation_seed(partition_seed: Seed, *, output_root: Path) -> BoundedExternalSeedResult:
     return _run_bounded_external_seed(
         experiment=ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION,
         partition_seed=partition_seed,
         reason=BoundedExternalPlanningReason.EDGE_BENIGN_EQUITY_PREREQUISITES,
+        output_root=output_root,
     )
 
 
-def run_ciciot_boundary_seed(partition_seed: Seed) -> BoundedExternalSeedResult:
+def run_ciciot_boundary_seed(partition_seed: Seed, *, output_root: Path) -> BoundedExternalSeedResult:
     return _run_bounded_external_seed(
         experiment=ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY,
         partition_seed=partition_seed,
         reason=BoundedExternalPlanningReason.CICIOT_FILE_CLIENT_PREREQUISITES,
+        output_root=output_root,
     )
 
 
-def analyze_external_validation_campaign() -> BoundedExternalCampaignAnalysisResult:
-    return _analyze_bounded_external_campaign(ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION)
+def analyze_external_validation_campaign(*, output_root: Path) -> BoundedExternalCampaignAnalysisResult:
+    return _analyze_bounded_external_campaign(
+        ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION,
+        output_root=output_root,
+    )
 
 
-def analyze_ciciot_boundary_campaign() -> BoundedExternalCampaignAnalysisResult:
-    return _analyze_bounded_external_campaign(ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY)
+def analyze_ciciot_boundary_campaign(*, output_root: Path) -> BoundedExternalCampaignAnalysisResult:
+    return _analyze_bounded_external_campaign(
+        ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY,
+        output_root=output_root,
+    )
 
 
 def _run_bounded_external_seed(
@@ -85,7 +92,7 @@ def _run_bounded_external_seed(
     experiment: ExperimentId,
     partition_seed: Seed,
     reason: BoundedExternalPlanningReason,
-    output_root: Path | None = None,
+    output_root: Path,
     overwrite: bool = False,
 ) -> BoundedExternalSeedResult:
     declaration = _bounded_external_declaration(experiment)
@@ -93,7 +100,7 @@ def _run_bounded_external_seed(
         declaration=declaration,
         seed_cohort=SeedCohort(values=(partition_seed,)),
         reason=reason.value,
-        output_root=OUTPUTS_ROOT if output_root is None else output_root,
+        output_root=output_root,
         overwrite=overwrite,
     )
     return BoundedExternalSeedResult(
@@ -106,7 +113,9 @@ def _run_bounded_external_seed(
     )
 
 
-def _analyze_bounded_external_campaign(experiment: ExperimentId) -> BoundedExternalCampaignAnalysisResult:
+def _analyze_bounded_external_campaign(
+    experiment: ExperimentId, *, output_root: Path
+) -> BoundedExternalCampaignAnalysisResult:
     declaration = _bounded_external_declaration(experiment)
     seed_cohort = BOUNDED_EVIDENCE_SEED_COHORT
     base = CONFIRMATORY_INFERENCE_PROTOCOL
@@ -134,9 +143,10 @@ def _analyze_bounded_external_campaign(experiment: ExperimentId) -> BoundedExter
         inference_protocol=protocol,
     )
     contrasts = tuple(
-        _external_contrast(declaration, seed, MetricId.FPR_COEFFICIENT_OF_VARIATION) for seed in seed_cohort.values
+        _external_contrast(declaration, seed, MetricId.FPR_COEFFICIENT_OF_VARIATION, output_root)
+        for seed in seed_cohort.values
     )
-    output = OUTPUTS_ROOT / BoundedExternalAssetDirectory.ANALYSIS / declaration.id.value / declaration.population.value
+    output = output_root / BoundedExternalAssetDirectory.ANALYSIS / declaration.id.value / declaration.population.value
     result = analyze_external_evidence(
         AnalyzeExternalEvidenceRequest(
             execution_identity=ExternalTemporalExecutionIdentity(
@@ -164,12 +174,13 @@ def _external_contrast(
     declaration: ExperimentDeclaration,
     partition_seed: Seed,
     metric: MetricId,
+    output_root: Path,
 ) -> PairedContrast:
     shared = load_evaluation_document(
-        _evaluation_path(declaration, partition_seed, FederatedThresholdMethod.SHARED_THRESHOLD, metric)
+        _evaluation_path(declaration, partition_seed, FederatedThresholdMethod.SHARED_THRESHOLD, metric, output_root)
     )
     local = load_evaluation_document(
-        _evaluation_path(declaration, partition_seed, FederatedThresholdMethod.LOCAL_THRESHOLD, metric)
+        _evaluation_path(declaration, partition_seed, FederatedThresholdMethod.LOCAL_THRESHOLD, metric, output_root)
     )
     return build_paired_contrast(
         left=shared,
@@ -190,10 +201,11 @@ def _evaluation_path(
     partition_seed: Seed,
     method: FederatedThresholdMethod,
     metric: MetricId,
+    output_root: Path,
 ) -> Path:
     coordinate = _external_coordinate(declaration, partition_seed, method, metric)
     path = (
-        evaluation_run_directory(OUTPUTS_ROOT, coordinate)
+        evaluation_run_directory(output_root, coordinate)
         / EvaluationRunAssetDirectory.EVALUATION
         / FederatedEvaluationAssetName.DOCUMENT
     )

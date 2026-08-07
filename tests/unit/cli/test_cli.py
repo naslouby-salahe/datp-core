@@ -1,13 +1,24 @@
+import pytest
 from click import unstyle
 from typer.testing import CliRunner
 
 from datp_core.cli.app import app
+from datp_core.pipeline.workflows import CampaignRunResult
 
 runner = CliRunner()
 
 
 def _plain(text: str) -> str:
     return unstyle(text)
+
+
+def _smoke_failing_anchor(experiment_id: object | None = None, *, overwrite: bool = False) -> CampaignRunResult:
+    del experiment_id, overwrite
+    return CampaignRunResult(
+        experiments=(),
+        detail="smoke experiments=0",
+        anchor_failure="anchor gate blocked",
+    )
 
 
 def test_root_exposes_exact_research_command_hierarchy() -> None:
@@ -135,3 +146,29 @@ def test_obsolete_commands_are_absent() -> None:
     ):
         result = runner.invoke(app, list(args))
         assert result.exit_code != 0
+
+
+def test_smoke_echoes_an_anchor_failure_instead_of_hiding_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("datp_core.cli.app.run_smoke", _smoke_failing_anchor)
+
+    result = runner.invoke(app, ["smoke"])
+
+    assert result.exit_code == 0
+    assert "anchor_failure=anchor gate blocked" in _plain(result.stdout)
+
+
+def test_smoke_omits_anchor_failure_when_the_gate_passes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def passing(experiment_id: object | None = None, *, overwrite: bool = False) -> CampaignRunResult:
+        del experiment_id, overwrite
+        return CampaignRunResult(experiments=(), detail="smoke experiments=0", anchor_failure=None)
+
+    monkeypatch.setattr("datp_core.cli.app.run_smoke", passing)
+
+    result = runner.invoke(app, ["smoke"])
+
+    assert result.exit_code == 0
+    assert "anchor_failure=" not in _plain(result.stdout)

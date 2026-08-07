@@ -40,6 +40,9 @@ from datp_core.reporting.validation import (
 )
 from datp_core.runtime.filesystem import write_text_atomically
 
+PUBLICATION_FILENAME = "publication.md"
+MECHANISM_REPORT_FILENAME = "mechanism_report.md"
+
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ReportProvenance:
@@ -146,7 +149,7 @@ def export_confirmatory_publication(
         figures=figures,
     )
     export_analysis_report(document, output_directory / "analysis_report.md")
-    return export_markdown(bundle, output_directory / "publication.md")
+    return export_markdown(bundle, output_directory / PUBLICATION_FILENAME)
 
 
 def export_external_publication(document: ExternalAnalysisDocument, output_directory: Path) -> Path:
@@ -190,7 +193,7 @@ def export_external_publication(document: ExternalAnalysisDocument, output_direc
             tables=(_interval_table(document.interval),),
             figures=(),
         ),
-        output_directory / "publication.md",
+        output_directory / PUBLICATION_FILENAME,
     )
 
 
@@ -295,7 +298,7 @@ def export_temporal_publication(document: TemporalAnalysisDocument, output_direc
             ),
             figures=(),
         ),
-        output_directory / "publication.md",
+        output_directory / PUBLICATION_FILENAME,
     )
 
 
@@ -308,7 +311,7 @@ def export_mechanism_publication(
     evidence_role: EvidenceRole,
 ) -> Path:
     payload = "\n".join(_render_mechanisms(mechanisms))
-    write_text_atomically(output_directory / "mechanism_report.md", payload)
+    write_text_atomically(output_directory / MECHANISM_REPORT_FILENAME, payload)
     tables = _mechanism_tables(mechanisms)
     return export_markdown(
         PublicationBundle(
@@ -342,7 +345,7 @@ def export_mechanism_publication(
             ),
             figures=(),
         ),
-        output_directory / "publication.md",
+        output_directory / PUBLICATION_FILENAME,
     )
 
 
