@@ -1,5 +1,5 @@
 from datp_core.anchor.gate import VerifiedAnchorGateArtifact
-from datp_core.domain.enums import AvailabilityStatus, EvidenceRole, MetricId
+from datp_core.domain.enums import AvailabilityStatus, EvidenceRole, MetricId, PopulationId
 from datp_core.reporting.validation import (
     ClaimKind,
     ClaimRequest,
@@ -26,6 +26,7 @@ def claim_request(
     evidence_decision: EvidenceDecision = EvidenceDecision.SUPPORTED,
     verified_anchor_gate: VerifiedAnchorGateArtifact | None = None,
     traffic_rate_available: bool = False,
+    population: PopulationId | None = None,
 ) -> ClaimRequest:
     return ClaimRequest(
         kind=kind,
@@ -36,6 +37,7 @@ def claim_request(
         verified_anchor_gate=verified_anchor_gate,
         traffic_rate_available=traffic_rate_available,
         wording=wording,
+        population=population,
     )
 
 
@@ -155,3 +157,44 @@ def test_supportive_null_evidence_cannot_render_as_positive_support() -> None:
     )
     assert decision.status is ClaimStatus.NARROWED
     assert decision.wording.startswith("[NARROWED:")
+
+
+def test_physical_device_claim_blocked_by_literal_wording() -> None:
+    decision = validate_claim(
+        claim_request(
+            kind=ClaimKind.EXTERNAL,
+            evidence_role=EvidenceRole.APPLICABILITY_BOUNDARY,
+            metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
+            wording="CIC file clients behave as verified physical device deployments",
+        )
+    )
+    assert decision.status is ClaimStatus.BLOCKED
+    assert "physical devices" in decision.reason
+
+
+def test_physical_device_claim_blocked_by_population_identity_kind_even_when_reworded() -> None:
+    """A pseudo-client population must be blocked by its typed identity kind, not by phrase-matching alone."""
+    decision = validate_claim(
+        claim_request(
+            kind=ClaimKind.EXTERNAL,
+            evidence_role=EvidenceRole.APPLICABILITY_BOUNDARY,
+            metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
+            wording="device-level hardware evidence",
+            population=PopulationId.CICIOT_FILE_CLIENTS,
+        )
+    )
+    assert decision.status is ClaimStatus.BLOCKED
+    assert "physical devices" in decision.reason
+
+
+def test_applicability_boundary_claim_permitted_for_non_pseudo_client_population() -> None:
+    decision = validate_claim(
+        claim_request(
+            kind=ClaimKind.EXTERNAL,
+            evidence_role=EvidenceRole.APPLICABILITY_BOUNDARY,
+            metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
+            wording="N-BaIoT applicability boundary evidence remains claim-bounded",
+            population=PopulationId.NBAIOT_NATURAL_DEVICES,
+        )
+    )
+    assert decision.status is ClaimStatus.PERMITTED

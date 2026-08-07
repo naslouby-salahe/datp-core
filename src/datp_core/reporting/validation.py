@@ -6,8 +6,9 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from datp_core.anchor.gate import VerifiedAnchorGateArtifact
-from datp_core.domain.enums import AvailabilityStatus, EvidenceRole, MetricId
+from datp_core.domain.enums import AvailabilityStatus, EvidenceRole, MetricId, PopulationId, PopulationIdentityKind
 from datp_core.domain.values.checksums import Checksum
+from datp_core.protocols.populations import POPULATIONS
 
 
 class ClaimStatus(StrEnum):
@@ -48,6 +49,7 @@ class ClaimRequest:
     verified_anchor_gate: VerifiedAnchorGateArtifact | None
     traffic_rate_available: bool
     wording: str
+    population: PopulationId | None = None
 
     def __post_init__(self) -> None:
         if not self.wording.strip():
@@ -111,7 +113,9 @@ def validate_claim(request: ClaimRequest) -> ClaimDecision:
         return _suppressed("data locality is not a formal privacy guarantee")
     if "deployment measurement" in normalized_wording or "measured deployment" in normalized_wording:
         return _suppressed("message-size estimates are not deployment measurements")
-    if "physical device" in normalized_wording and request.evidence_role is EvidenceRole.APPLICABILITY_BOUNDARY:
+    if request.evidence_role is EvidenceRole.APPLICABILITY_BOUNDARY and (
+        _cites_file_defined_pseudo_clients(request.population) or "physical device" in normalized_wording
+    ):
         return _blocked("CIC file clients cannot be described as verified physical devices")
     if request.kind is ClaimKind.CONFIRMATORY:
         if request.metric is not MetricId.FPR_COEFFICIENT_OF_VARIATION:
@@ -196,3 +200,14 @@ def _blocked(reason: str) -> ClaimDecision:
 
 def _suppressed(reason: str) -> ClaimDecision:
     return ClaimDecision(status=ClaimStatus.SUPPRESSED, wording="", reason=reason)
+
+
+_POPULATION_IDENTITY_KINDS: dict[PopulationId, PopulationIdentityKind] = {
+    declaration.id: declaration.identity_kind for declaration in POPULATIONS
+}
+
+
+def _cites_file_defined_pseudo_clients(population: PopulationId | None) -> bool:
+    if population is None:
+        return False
+    return _POPULATION_IDENTITY_KINDS[population] is PopulationIdentityKind.FILE_DEFINED_PSEUDO_CLIENTS
