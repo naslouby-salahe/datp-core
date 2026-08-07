@@ -244,17 +244,14 @@ def _dispatch_ciciot_file_client_boundary(seeds: tuple[Seed, ...], output_root: 
 
 
 def _dispatch_fedprox_absorption_stress_test(seeds: tuple[Seed, ...], output_root: Path, overwrite: bool) -> str:
-    from datp_core.pipeline.workflows.personalization import run_fedprox_stress_test_seed
+    del seeds  # this experiment's seed cohort is owned by run_fedprox_grid_campaign, not the dispatch caller
+    from datp_core.pipeline.workflows.personalization import run_fedprox_grid_campaign
 
-    for seed in seeds:
-        for coefficient in FEDPROX_COEFFICIENTS:
-            run_fedprox_stress_test_seed(
-                training_seed=seed,
-                coefficient=coefficient,
-                output_root=output_root,
-                overwrite=overwrite,
-            )
-    return f"fedprox seeds={len(seeds)} coefficients={len(FEDPROX_COEFFICIENTS)}"
+    results = run_fedprox_grid_campaign(output_root=output_root, overwrite=overwrite)
+    return (
+        f"fedprox seeds={len(CONFIRMATORY_SEED_COHORT.values)} "
+        f"coefficients={len(FEDPROX_COEFFICIENTS)} results={len(results)}"
+    )
 
 
 def _dispatch_ditto_absorption_stress_test(seeds: tuple[Seed, ...], output_root: Path, overwrite: bool) -> str:
@@ -542,16 +539,10 @@ def _report_fedprox_absorption_stress_test(
     return paths, f"coefficients={len(paths)}"
 
 
-def _report_reuse_existing_analysis(
-    analysis_root: Path, experiment_id: ExperimentId, *, missing_message: str
-) -> tuple[tuple[Path, ...], str]:
-    if not analysis_root.exists():
-        raise ReportEvidenceError(missing_message, subject=experiment_id)
-    return (analysis_root,), f"reuse_existing_analysis={analysis_root}"
-
-
 def _report_ditto_absorption_stress_test(experiment_id: ExperimentId, overwrite: bool) -> tuple[tuple[Path, ...], str]:
-    del overwrite
+    del experiment_id, overwrite
+    from datp_core.pipeline.workflows.personalization import run_ditto_absorption_campaign
+
     analysis_root = (
         OUTPUTS_ROOT
         / "ditto_stress_test"
@@ -559,20 +550,17 @@ def _report_ditto_absorption_stress_test(experiment_id: ExperimentId, overwrite:
         / "analysis"
         / str(DITTO_PRIMARY_REGULARIZATION.value)
     )
-    return _report_reuse_existing_analysis(
-        analysis_root,
-        experiment_id,
-        missing_message="ditto absorption analysis artifacts are missing; run the experiment before reporting",
-    )
+    run_ditto_absorption_campaign(regularization=DITTO_PRIMARY_REGULARIZATION, output_directory=analysis_root)
+    return (analysis_root,), f"analysis={analysis_root}"
 
 
 def _report_edge_one_shot_recalibration(experiment_id: ExperimentId, overwrite: bool) -> tuple[tuple[Path, ...], str]:
-    del overwrite
-    return _report_reuse_existing_analysis(
-        OUTPUTS_ROOT / "temporal",
-        experiment_id,
-        missing_message="temporal analysis artifacts are missing; run the experiment before reporting",
-    )
+    del experiment_id, overwrite
+    from datp_core.pipeline.workflows.temporal import run_temporal_campaign
+
+    result = run_temporal_campaign()
+    paths = tuple(analysis.output_directory for analysis in result.analyses)
+    return paths, f"temporal_methods={len(paths)}"
 
 
 _EXPERIMENT_REPORT_HANDLERS: dict[ExperimentId, Callable[[ExperimentId, bool], tuple[tuple[Path, ...], str]]] = {

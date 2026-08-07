@@ -484,20 +484,38 @@ def run_fedprox_stress_test_seed(
     )
 
 
-def run_fedprox_coefficient_campaign(*, coefficient: ProximalCoefficient) -> tuple[FedProxStressTestResult, ...]:
+def run_fedprox_coefficient_campaign(
+    *,
+    coefficient: ProximalCoefficient,
+    output_root: Path | None = None,
+    overwrite: bool = False,
+) -> tuple[FedProxStressTestResult, ...]:
     """Run FedProx stress tests for one coefficient across the confirmatory seed cohort."""
     return tuple(
-        run_fedprox_stress_test_seed(training_seed=seed, coefficient=coefficient)
+        run_fedprox_stress_test_seed(
+            training_seed=seed,
+            coefficient=coefficient,
+            output_root=output_root,
+            overwrite=overwrite,
+        )
         for seed in CONFIRMATORY_SEED_COHORT.values
     )
 
 
-def run_fedprox_grid_campaign() -> tuple[FedProxStressTestResult, ...]:
+def run_fedprox_grid_campaign(
+    *,
+    output_root: Path | None = None,
+    overwrite: bool = False,
+) -> tuple[FedProxStressTestResult, ...]:
     """Run FedProx stress tests for every declared proximal coefficient and confirmatory seed."""
     return tuple(
         result
         for coefficient in FEDPROX_COEFFICIENTS
-        for result in run_fedprox_coefficient_campaign(coefficient=coefficient)
+        for result in run_fedprox_coefficient_campaign(
+            coefficient=coefficient,
+            output_root=output_root,
+            overwrite=overwrite,
+        )
     )
 
 
