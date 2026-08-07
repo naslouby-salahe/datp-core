@@ -15,14 +15,12 @@ from datp_core.analysis.mechanisms import (
     AbsorptionSeedObservation,
     decide_absorption_cohort,
 )
-from datp_core.datasets.partitioning.contracts import ClientIdentity, PopulationOutcomeLabel
+from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.datasets.registry import population_capabilities
 from datp_core.domain.contracts import ClientCollection, ClientOwned
 from datp_core.domain.enums import (
     ContractSubject,
     DatasetId,
-    EvaluationCohort,
-    EvidenceRole,
     ExperimentId,
     FederatedThresholdMethod,
     MetricId,
@@ -46,13 +44,10 @@ from datp_core.domain.values.ratios import (
     ProximalCoefficient,
     ScoreValue,
 )
-from datp_core.evaluation.client_metrics import calculate_client_metrics
 from datp_core.evaluation.cohort.construction import build_evaluation_cohort_manifest
 from datp_core.evaluation.cohort.contracts import EvaluationCohortManifest
 from datp_core.evaluation.cohort.evidence import client_partition_counts_from_scores
-from datp_core.evaluation.confusion import calculate_confusion_counts
 from datp_core.evaluation.federated.publication import FederatedEvaluationAssetName
-from datp_core.evaluation.fixed_score.checksums import evaluation_label_checksum, source_row_checksum
 from datp_core.evaluation.models import ClientMetricResult, MetricStatus, PopulationMetricResult, metric_by_id
 from datp_core.evaluation.population_metrics import calculate_population_metrics
 from datp_core.learning.federated.checkpoints.history import history_frames
@@ -84,12 +79,7 @@ from datp_core.pipeline.planning import PlanDisposition, PlanningEvidence, expan
 from datp_core.pipeline.preparation.populations import ConstructDeclaredPopulationRequest, construct_declared_population
 from datp_core.pipeline.publication.layout import evaluation_run_directory
 from datp_core.pipeline.scoring.federated import publish_federated_scores
-from datp_core.pipeline.scoring.models import (
-    ClientScoringInput,
-    FederatedScoreArtifactManifest,
-    FederatedScoreRecord,
-    GenerateFederatedScoresRequest,
-)
+from datp_core.pipeline.scoring.models import FederatedScoreArtifactManifest, GenerateFederatedScoresRequest
 from datp_core.pipeline.training.personalized import (
     TrainDittoDetectorRequest,
     TrainDittoDetectorResult,
@@ -101,11 +91,12 @@ from datp_core.pipeline.workflows.confirmatory import (
     load_fedavg_cv_fpr_effect,
 )
 from datp_core.pipeline.workflows.execution import execute_declared_campaign
-from datp_core.preprocessing.models import (
-    ClientPreprocessingResult,
-    FederatedPreprocessingOutcome,
-    FederatedPreprocessingRequest,
+from datp_core.pipeline.workflows.personalization_scoring import (
+    client_metric,
+    client_scoring_input,
+    score_record_for_client,
 )
+from datp_core.preprocessing.models import FederatedPreprocessingOutcome, FederatedPreprocessingRequest
 from datp_core.preprocessing.service import preprocess_federated
 from datp_core.protocols.calibration import CANONICAL_QUANTILE, MINIMUM_BENIGN_SUPPORT
 from datp_core.protocols.experiments import EXPERIMENTS
@@ -127,7 +118,7 @@ from datp_core.protocols.training import (
 from datp_core.reporting.export import export_mechanism_publication
 from datp_core.runtime.configuration import DATA_ROOT, OUTPUTS_ROOT
 from datp_core.runtime.filesystem import write_text_atomically
-from datp_core.thresholding.assignments import FamilyAssignment, ThresholdAssignment
+from datp_core.thresholding.assignments import FamilyAssignment
 from datp_core.thresholding.dispatch import ThresholdConstructionRequest
 from datp_core.thresholding.methods.local import LocalThresholdResult
 from datp_core.thresholding.methods.shared import SharedThresholdResult
@@ -316,7 +307,7 @@ def run_ditto_stress_test_seed(*, training_seed: Seed, regularization: DittoRegu
         shared_threshold=shared,
         local_threshold=local,
         shared_threshold_metrics=tuple(
-            _client_metric(
+            client_metric(
                 personalized_coordinate,
                 FederatedThresholdMethod.SHARED_THRESHOLD,
                 population,
@@ -326,7 +317,7 @@ def run_ditto_stress_test_seed(*, training_seed: Seed, regularization: DittoRegu
             for assignment in shared.assignments
         ),
         local_threshold_metrics=tuple(
-            _client_metric(
+            client_metric(
                 personalized_coordinate,
                 FederatedThresholdMethod.LOCAL_THRESHOLD,
                 population,
@@ -901,7 +892,7 @@ def _personalized_scores(
                 checkpoint=selection.selected,
                 autoencoder=NBAIOT_AUTOENCODER,
                 feature_names=feature_names,
-                clients=(_client_scoring_input(context.preprocessing.client_publications, client),),
+                clients=(client_scoring_input(context.preprocessing.client_publications, client),),
                 batch_size=BATCH_SIZE,
                 output_directory=personalized_directory / client.client_id / ExecutionArtifactDirectory.SCORES,
                 preprocessing_state_set_checksum=context.preprocessing_state_set_checksum,
@@ -911,7 +902,7 @@ def _personalized_scores(
         ).manifest
         manifests.append(ClientOwned(client=client, value=manifest))
         invariant = FixedScoreInvariant.from_manifest(manifest)
-        record = _score_record_for_client(manifest.calibration_records, client, PartitionRole.CALIBRATION)
+        record = score_record_for_client(manifest.calibration_records, client, PartitionRole.CALIBRATION)
         scores = tuple(
             ScoreValue(float(value))
             for value in pl.read_parquet(record.path)[ScoreFrameColumn.RECONSTRUCTION_ERROR.value].to_list()
@@ -936,91 +927,6 @@ def _personalized_scores(
         eligible_calibration=tuple(eligible),
         manifests=ClientCollection(items=tuple(manifests)),
     )
-
-
-def _client_scoring_input(
-    publications: tuple[ClientPreprocessingResult, ...],
-    client: ClientIdentity,
-) -> ClientScoringInput:
-    matches = tuple(item for item in publications if item.client_identity.value == client.client_id)
-    if len(matches) != 1:
-        raise ScientificContractError(f"expected one preprocessing publication for {client.client_id}")
-    publication = matches[0]
-    return ClientScoringInput(
-        client=client,
-        calibration_features=pl.read_parquet(publication.paths.calibration),
-        evaluation_features=pl.read_parquet(publication.paths.evaluation),
-    )
-
-
-def _client_metric(
-    coordinate: FederatedTrainingCoordinate,
-    threshold_method: FederatedThresholdMethod,
-    population: PopulationId,
-    manifest: FederatedScoreArtifactManifest,
-    assignment: ThresholdAssignment,
-) -> ClientMetricResult:
-    record = _score_record_for_client(manifest.evaluation_records, assignment.client, PartitionRole.EVALUATION)
-    frame = pl.read_parquet(record.path)
-    error_values = frame[ScoreFrameColumn.RECONSTRUCTION_ERROR.value].to_list()
-    outcome_values = frame[ScoreFrameColumn.OUTCOME_LABEL.value].to_list()
-    scores = tuple(ScoreValue(float(value)) for value in error_values)
-    labels = tuple(PopulationOutcomeLabel(str(value)) for value in outcome_values)
-    rows = tuple(str(value) for value in frame[ScoreFrameColumn.STABLE_ROW_ID.value].to_list())
-    cohort_manifest = build_evaluation_cohort_manifest(
-        population=population,
-        partition_seed=coordinate.training_seed,
-        client_counts=client_partition_counts_from_scores(manifest),
-    )
-    eligibility_matches = tuple(item for item in cohort_manifest.records if item.client == assignment.client)
-    if len(eligibility_matches) != 1:
-        raise ScientificContractError(
-            f"expected one evaluation-cohort record for {assignment.client.client_id}",
-            subject=ContractSubject.CLIENT_IDENTITY,
-        )
-    eligibility = eligibility_matches[0]
-    confusion = calculate_confusion_counts(
-        scores=scores,
-        labels=labels,
-        source_row_ids=rows,
-        threshold=assignment.threshold,
-        partition_role=PartitionRole.EVALUATION,
-        attack_assignment_valid=eligibility.attack_evaluable,
-    )
-    if eligibility.fpr_evaluable:
-        cohort = EvaluationCohort.FPR_EVALUABLE
-    elif eligibility.deployment_fallback:
-        cohort = EvaluationCohort.DEPLOYMENT_FALLBACK
-    else:
-        cohort = EvaluationCohort.UNAVAILABLE
-    return ClientMetricResult(
-        coordinate=coordinate,
-        threshold_method=threshold_method,
-        cohort=cohort,
-        client=assignment.client,
-        threshold=assignment.threshold,
-        confusion=confusion,
-        metrics=calculate_client_metrics(confusion=confusion, scores=scores, labels=labels),
-        warnings=(),
-        evidence_role=EvidenceRole.TRAINING_STRESS_TEST,
-        evaluation_score_checksum=record.checksum,
-        evaluation_label_checksum=evaluation_label_checksum(labels),
-        source_row_checksum=source_row_checksum(rows),
-    )
-
-
-def _score_record_for_client(
-    records: tuple[FederatedScoreRecord, ...],
-    client: ClientIdentity,
-    role: PartitionRole,
-) -> FederatedScoreRecord:
-    matches = tuple(item for item in records if item.scored_client == client)
-    if len(matches) != 1:
-        raise ScientificContractError(
-            f"expected one {role.value} score record for {client.client_id}",
-            subject=ContractSubject.CLIENT_IDENTITY,
-        )
-    return matches[0]
 
 
 def ditto_directory(
