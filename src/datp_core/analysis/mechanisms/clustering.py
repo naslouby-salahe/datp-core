@@ -282,7 +282,9 @@ def _cv_fpr_equity_recovery(
         return None, "CV(FPR) equity recovery requires shared, local, and cluster population CV(FPR)"
     gap = shared_cv_fpr.value - local_cv_fpr.value
     if gap <= 0.0:
-        return None, "CV(FPR) equity recovery is undefined when the B1–B2 gap is non-positive"
+        return None, (
+            "CV(FPR) equity recovery is undefined when the SHARED_THRESHOLD–LOCAL_THRESHOLD gap is non-positive"
+        )
     recovered = shared_cv_fpr.value - cluster_cv_fpr.value
     return MetricValue(recovered / gap), None
 

@@ -152,7 +152,7 @@ def run_family_grouped_mechanism_seed(
 
     Publishes FAMILY_THRESHOLD and CLUSTER_THRESHOLD (with the rest of the locked
     ladder methods declared on FAMILY_AND_GROUPED_GRANULARITY) so confirmatory
-    analysis can attach B3/B4 mechanism evidence when present.
+    analysis can attach FAMILY_THRESHOLD/CLUSTER_THRESHOLD mechanism evidence when present.
     """
     matches = tuple(item for item in EXPERIMENTS if item.id is ExperimentId.FAMILY_AND_GROUPED_GRANULARITY)
     if len(matches) != 1:
@@ -163,7 +163,7 @@ def run_family_grouped_mechanism_seed(
         seed_cohort=SeedCohort(values=(training_seed,)),
         reason=(
             "the family/grouped mechanism entry point supplies the locked "
-            "natural-device execution prerequisites for B3/B4 evidence"
+            "natural-device execution prerequisites for FAMILY_THRESHOLD/CLUSTER_THRESHOLD evidence"
         ),
         output_root=OUTPUTS_ROOT if output_root is None else output_root,
         overwrite=overwrite,
@@ -474,9 +474,10 @@ def _client_evaluation_scores(
 def _confirmatory_cluster_mechanisms() -> tuple[MechanismEvidence, ...]:
     """Load CLUSTER_THRESHOLD mechanism evidence when a complete cohort is present.
 
-    Confirmatory B1-versus-B2 analysis does not require B4. A completely absent
-    cluster cohort yields no mechanism records. A partial or corrupt cohort fails
-    closed so incomplete mechanism execution cannot look complete.
+    Confirmatory SHARED_THRESHOLD-versus-LOCAL_THRESHOLD analysis does not require
+    CLUSTER_THRESHOLD. A completely absent cluster cohort yields no mechanism
+    records. A partial or corrupt cohort fails closed so incomplete mechanism
+    execution cannot look complete.
     """
     from pydantic import TypeAdapter, ValidationError
 

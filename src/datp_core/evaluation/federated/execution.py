@@ -403,7 +403,7 @@ def _deployment_fallback_threshold(
     """Outcome-blind deployment fallback for clients excluded from threshold construction.
 
     Shared-scope methods reuse the shared/matched value. Per-client methods use the
-    unweighted mean of constructed assignments (identical to B1 shared construction
+    unweighted mean of constructed assignments (identical to SHARED_THRESHOLD construction
     over the eligible cohort) so ineligible clients remain evaluable without entering
     confirmatory FPR dispersion.
     """
