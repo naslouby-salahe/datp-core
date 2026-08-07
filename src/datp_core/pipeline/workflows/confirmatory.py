@@ -45,21 +45,16 @@ from datp_core.evaluation.federated.publication import FederatedEvaluationAssetN
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.pipeline.coordinates import ExperimentCoordinate
 from datp_core.pipeline.decision.evidence import AnalyzeConfirmatoryEvidenceRequest, analyze_confirmatory_evidence
-from datp_core.pipeline.execution.engine import (
-    CompletionRecordOutputStore,
-    PipelineStageRunner,
-    build_campaign,
-    execute_campaign,
-)
 from datp_core.pipeline.execution.evidence import load_evaluation_document, population_metric
 from datp_core.pipeline.execution.layout import (
     EvaluationRunAssetDirectory,
     ExecutionArtifactDirectory,
     federated_training_directory,
 )
-from datp_core.pipeline.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
+from datp_core.pipeline.planning import expand_experiment_plan
 from datp_core.pipeline.publication.layout import evaluation_run_directory
 from datp_core.pipeline.scoring.models import FederatedScoreAssetName
+from datp_core.pipeline.workflows.execution import execute_declared_experiment_seed
 from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration
 from datp_core.protocols.seeds import CONFIRMATORY_ANALYSIS_SEED, CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL
@@ -128,37 +123,17 @@ def run_confirmatory_seed(
     overwrite: bool = False,
 ) -> ConfirmatorySeedResult:
     declaration = _confirmatory_declaration()
-    plan = expand_experiment_plan(
-        declarations=(declaration,),
+    result = execute_declared_experiment_seed(
+        declaration=declaration,
         seed_cohort=SeedCohort(values=(training_seed,)),
-        evidence=(
-            PlanningEvidence(
-                experiment=declaration.id,
-                disposition=PlanDisposition.EXECUTABLE,
-                reason="the confirmatory entry point supplies the locked natural-device execution prerequisites",
-            ),
-        ),
-    )
-    campaign = build_campaign(plan)
-    if not campaign.entries:
-        raise ScientificContractError("confirmatory planning produced no executable coordinates")
-    execution = execute_campaign(
-        campaign=campaign,
-        stage_runner=PipelineStageRunner(),
-        output_store=CompletionRecordOutputStore(),
+        reason="the confirmatory entry point supplies the locked natural-device execution prerequisites",
         output_root=OUTPUTS_ROOT if output_root is None else output_root,
         overwrite=overwrite,
     )
-    failed = tuple(result for result in execution.experiments if not result.successful)
-    if failed:
-        blocked = ", ".join(result.coordinate.stable_key for result in failed)
-        raise ScientificContractError(f"confirmatory execution did not complete: {blocked}")
-    available_methods = frozenset(entry.coordinate.threshold_method for entry in campaign.entries)
-    methods = tuple(method for method in declaration.federated_thresholds if method in available_methods)
     return ConfirmatorySeedResult(
         training_seed=training_seed,
-        campaign_digest=campaign.digest,
-        completed_threshold_methods=methods,
+        campaign_digest=result.campaign_digest,
+        completed_threshold_methods=result.completed_threshold_methods,
     )
 
 
@@ -183,40 +158,20 @@ def run_family_grouped_mechanism_seed(
     if len(matches) != 1:
         raise ScientificContractError("family/grouped mechanism experiment must be declared exactly once")
     declaration = matches[0]
-    plan = expand_experiment_plan(
-        declarations=(declaration,),
+    result = execute_declared_experiment_seed(
+        declaration=declaration,
         seed_cohort=SeedCohort(values=(training_seed,)),
-        evidence=(
-            PlanningEvidence(
-                experiment=declaration.id,
-                disposition=PlanDisposition.EXECUTABLE,
-                reason=(
-                    "the family/grouped mechanism entry point supplies the locked "
-                    "natural-device execution prerequisites for B3/B4 evidence"
-                ),
-            ),
+        reason=(
+            "the family/grouped mechanism entry point supplies the locked "
+            "natural-device execution prerequisites for B3/B4 evidence"
         ),
-    )
-    campaign = build_campaign(plan)
-    if not campaign.entries:
-        raise ScientificContractError("family/grouped planning produced no executable coordinates")
-    execution = execute_campaign(
-        campaign=campaign,
-        stage_runner=PipelineStageRunner(),
-        output_store=CompletionRecordOutputStore(),
         output_root=OUTPUTS_ROOT if output_root is None else output_root,
         overwrite=overwrite,
     )
-    failed = tuple(result for result in execution.experiments if not result.successful)
-    if failed:
-        blocked = ", ".join(result.coordinate.stable_key for result in failed)
-        raise ScientificContractError(f"family/grouped execution did not complete: {blocked}")
-    available_methods = frozenset(entry.coordinate.threshold_method for entry in campaign.entries)
-    methods = tuple(method for method in declaration.federated_thresholds if method in available_methods)
     return ConfirmatorySeedResult(
         training_seed=training_seed,
-        campaign_digest=campaign.digest,
-        completed_threshold_methods=methods,
+        campaign_digest=result.campaign_digest,
+        completed_threshold_methods=result.completed_threshold_methods,
     )
 
 

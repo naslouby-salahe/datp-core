@@ -72,11 +72,6 @@ from datp_core.pipeline.execution.context import (
     family_identities,
     training_feature_names,
 )
-from datp_core.pipeline.execution.engine import (
-    CompletionRecordOutputStore,
-    PipelineStageRunner,
-    execute_campaign,
-)
 from datp_core.pipeline.execution.evidence import load_evaluation_document
 from datp_core.pipeline.execution.layout import (
     EvaluationRunAssetDirectory,
@@ -105,6 +100,7 @@ from datp_core.pipeline.workflows.confirmatory import (
     absorption_corner_from_evaluation_document,
     load_fedavg_cv_fpr_effect,
 )
+from datp_core.pipeline.workflows.execution import execute_declared_campaign
 from datp_core.preprocessing.models import (
     ClientPreprocessingResult,
     FederatedPreprocessingOutcome,
@@ -476,27 +472,17 @@ def run_fedprox_stress_test_seed(
         digest=campaign_digest(campaign_entries),
         plan_digest=plan.digest,
     )
-    execution = execute_campaign(
+    result = execute_declared_campaign(
         campaign=campaign,
-        stage_runner=PipelineStageRunner(),
-        output_store=CompletionRecordOutputStore(),
+        declaration=declaration,
         output_root=OUTPUTS_ROOT if output_root is None else output_root,
         overwrite=overwrite,
     )
-    failed = tuple(result for result in execution.experiments if not result.successful)
-    if failed:
-        blocked = ", ".join(result.coordinate.stable_key for result in failed)
-        raise ScientificContractError(
-            f"FedProx execution did not complete: {blocked}",
-            subject=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST,
-        )
-    available_methods = frozenset(entry.coordinate.threshold_method for entry in campaign.entries)
-    methods = tuple(method for method in declaration.federated_thresholds if method in available_methods)
     return FedProxStressTestResult(
         training_seed=training_seed,
         coefficient=coefficient,
-        campaign_digest=campaign.digest,
-        completed_threshold_methods=methods,
+        campaign_digest=result.campaign_digest,
+        completed_threshold_methods=result.completed_threshold_methods,
     )
 
 
@@ -675,11 +661,7 @@ def write_fedprox_primary_coefficient_decision(
             {
                 "coefficient": item.coefficient.value,
                 "mean_terminal_training_loss": item.mean_terminal_training_loss.value,
-                "role": (
-                    "primary"
-                    if item.coefficient == decision.primary_coefficient
-                    else "sensitivity"
-                ),
+                "role": ("primary" if item.coefficient == decision.primary_coefficient else "sensitivity"),
                 "per_seed_terminal_losses": tuple(
                     {"seed": seed.value, "terminal_training_loss": loss.value}
                     for seed, loss in item.per_seed_terminal_losses

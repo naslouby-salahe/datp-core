@@ -14,16 +14,11 @@ from datp_core.evaluation.federated.contracts import FederatedEvaluationDocument
 from datp_core.evaluation.federated.publication import FederatedEvaluationAssetName
 from datp_core.pipeline.coordinates import ExperimentCoordinate
 from datp_core.pipeline.decision.evidence import AnalyzeExternalEvidenceRequest, analyze_external_evidence
-from datp_core.pipeline.execution.engine import (
-    CompletionRecordOutputStore,
-    PipelineStageRunner,
-    build_campaign,
-    execute_campaign,
-)
 from datp_core.pipeline.execution.evidence import load_evaluation_document, population_metric
 from datp_core.pipeline.execution.layout import EvaluationRunAssetDirectory
-from datp_core.pipeline.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
+from datp_core.pipeline.planning import expand_experiment_plan
 from datp_core.pipeline.publication.layout import evaluation_run_directory
+from datp_core.pipeline.workflows.execution import execute_declared_experiment_seed
 from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration, ExternalTemporalExecutionIdentity
 from datp_core.protocols.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_ANALYSIS_SEED, SeedCohort
 from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL, PairedInferenceProtocol
@@ -94,46 +89,20 @@ def _run_bounded_external_seed(
     overwrite: bool = False,
 ) -> BoundedExternalSeedResult:
     declaration = _bounded_external_declaration(experiment)
-    plan = expand_experiment_plan(
-        declarations=(declaration,),
+    result = execute_declared_experiment_seed(
+        declaration=declaration,
         seed_cohort=SeedCohort(values=(partition_seed,)),
-        evidence=(
-            PlanningEvidence(
-                experiment=declaration.id,
-                disposition=PlanDisposition.EXECUTABLE,
-                reason=reason.value,
-            ),
-        ),
-    )
-    campaign = build_campaign(plan)
-    if not campaign.entries:
-        raise ScientificContractError(
-            "bounded external planning produced no executable coordinates",
-            subject=declaration.id,
-        )
-    execution = execute_campaign(
-        campaign=campaign,
-        stage_runner=PipelineStageRunner(),
-        output_store=CompletionRecordOutputStore(),
+        reason=reason.value,
         output_root=OUTPUTS_ROOT if output_root is None else output_root,
         overwrite=overwrite,
     )
-    failed = tuple(result for result in execution.experiments if not result.successful)
-    if failed:
-        blocked = ", ".join(result.coordinate.stable_key for result in failed)
-        raise ScientificContractError(
-            f"bounded external execution did not complete: {blocked}",
-            subject=declaration.id,
-        )
-    available_methods = frozenset(entry.coordinate.threshold_method for entry in campaign.entries)
-    methods = tuple(method for method in declaration.federated_thresholds if method in available_methods)
     return BoundedExternalSeedResult(
         experiment=declaration.id,
         evidence_role=declaration.role,
         population=declaration.population,
         partition_seed=partition_seed,
-        campaign_digest=campaign.digest,
-        completed_threshold_methods=methods,
+        campaign_digest=result.campaign_digest,
+        completed_threshold_methods=result.completed_threshold_methods,
     )
 
 

@@ -176,8 +176,11 @@ def test_absorption_and_mechanism_helpers_have_production_callers() -> None:
     assert any(path.parts[0] == "pipeline" for path in mechanisms_importers)
     personalization = (_SOURCE_ROOT / "pipeline" / "workflows" / "personalization.py").read_text(encoding="utf-8")
     assert "decide_absorption_cohort" in personalization
+    campaign = (_SOURCE_ROOT / "pipeline" / "workflows" / "campaign.py").read_text(encoding="utf-8")
+    assert "analyze_fedprox_absorption" in campaign
+    assert "generate_report" in campaign
+    assert "run_experiment" in campaign
     programme = (_SOURCE_ROOT / "pipeline" / "workflows" / "__init__.py").read_text(encoding="utf-8")
-    assert "analyze_fedprox_absorption" in programme
     assert "generate_report" in programme
     assert "run_experiment" in programme
 
