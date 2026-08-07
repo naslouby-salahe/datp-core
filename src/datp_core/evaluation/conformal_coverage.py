@@ -10,6 +10,7 @@ from datp_core.domain.enums import MetricId, ScoreFrameColumn
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.checksums import checksum_file
 from datp_core.domain.values.counts import ConformalRankIndex, RowCount, Seed
+from datp_core.domain.values.identifiers import StableRowId
 from datp_core.domain.values.ratios import CoverageTarget, Quantile, ThresholdValue
 from datp_core.evaluation.metric_semantics import (
     available,
@@ -179,26 +180,27 @@ def _validate_scores(
     coordinate: FederatedTrainingCoordinate,
     scores: tuple[HeldOutBenignScore, ...],
 ) -> None:
-    stable_row_ids = tuple(item.stable_row_id for item in scores)
-    if len(stable_row_ids) != len(frozenset(stable_row_ids)):
-        raise ScientificContractError("held-out coverage rows must be unique")
-    if any(item.client != client for item in scores):
-        raise ScientificContractError("held-out coverage scores must belong to the threshold-assigned client")
-    if any(item.score_record.coordinate != coordinate for item in scores):
-        raise ScientificContractError("held-out coverage score provenance must match the evaluation coordinate")
+    stable_row_ids: set[StableRowId] = set()
+    for item in scores:
+        if item.client != client:
+            raise ScientificContractError("held-out coverage scores must belong to the threshold-assigned client")
+        if item.score_record.coordinate != coordinate:
+            raise ScientificContractError("held-out coverage score provenance must match the evaluation coordinate")
+        if item.stable_row_id in stable_row_ids:
+            raise ScientificContractError("held-out coverage rows must be unique")
+        stable_row_ids.add(item.stable_row_id)
     _verify_score_rows(scores)
 
 
 def _verify_score_rows(
     scores: tuple[HeldOutBenignScore, ...],
 ) -> None:
-    records: list[FederatedScoreRecord] = []
+    records_map: dict[FederatedScoreRecord, list[HeldOutBenignScore]] = {}
     for item in scores:
-        if item.score_record not in records:
-            records.append(item.score_record)
-    for record in records:
-        supplied_rows = tuple(item for item in scores if item.score_record == record)
-        _verify_record_rows(record, supplied_rows)
+        records_map.setdefault(item.score_record, []).append(item)
+
+    for record, supplied_rows in records_map.items():
+        _verify_record_rows(record, tuple(supplied_rows))
 
 
 def _verify_record_rows(
@@ -215,26 +217,23 @@ def _verify_record_rows(
     frame = pl.read_parquet(record.path)
     if any(column not in frame.columns for column in required) or frame.height != record.row_count.value:
         raise ScientificContractError("held-out coverage score provenance has an invalid schema or row count")
-    stable_row_ids = tuple(item.stable_row_id for item in supplied_rows)
-    observed_rows = frame.filter(pl.col(ScoreFrameColumn.STABLE_ROW_ID.value).is_in(stable_row_ids)).select(required)
+
+    supplied_map = {item.stable_row_id: (item.outcome_label, item.score.value) for item in supplied_rows}
+
+    observed_rows = frame.filter(pl.col(ScoreFrameColumn.STABLE_ROW_ID.value).is_in(list(supplied_map.keys()))).select(
+        required
+    )
+
     if observed_rows.height != len(supplied_rows):
         raise ScientificContractError("held-out coverage score rows are not uniquely proven by their score artifact")
-    observed = tuple(
-        (
-            str(row[0]),
-            PopulationOutcomeLabel(str(row[1])),
-            float(row[2]),
-        )
-        for row in observed_rows.iter_rows()
-    )
-    if len({item[0] for item in observed}) != len(supplied_rows):
+
+    observed_dict = {
+        str(row[0]): (PopulationOutcomeLabel(str(row[1])), float(row[2])) for row in observed_rows.iter_rows()
+    }
+
+    if len(observed_dict) != len(supplied_rows):
         raise ScientificContractError("held-out coverage score rows are not uniquely proven by their score artifact")
-    for item in supplied_rows:
-        matches = tuple(
-            (label, score) for stable_row_id, label, score in observed if stable_row_id == item.stable_row_id
-        )
-        if len(matches) != 1 or matches[0] != (
-            item.outcome_label,
-            item.score.value,
-        ):
+
+    for stable_row_id, expected_values in supplied_map.items():
+        if observed_dict.get(stable_row_id) != expected_values:
             raise ScientificContractError("held-out coverage score row is not proven by its score artifact")

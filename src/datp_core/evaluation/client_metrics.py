@@ -33,16 +33,21 @@ def calculate_client_metrics(
         raise ScientificContractError(
             "client scores, labels, and confusion counts must align", subject=ContractSubject.ROWS
         )
-    if any(not isfinite(score.value) for score in scores):
+
+    score_values = np.fromiter((score.value for score in scores), dtype=np.float64, count=len(scores))
+
+    if not np.isfinite(score_values).all():
         raise ScientificContractError("client evaluation scores must be finite", subject=ContractSubject.SCORES)
+
     fpr = _rate(MetricId.FALSE_POSITIVE_RATE, confusion.false_positive, confusion.benign_denominator)
     tpr = _attack_rate(confusion)
+
     return (
         fpr,
         tpr,
         _balanced_accuracy(fpr, tpr),
         _binary_macro_f1(confusion),
-        _auroc(scores, labels, confusion.attack_assignment_valid),
+        _auroc(score_values, labels, confusion.attack_assignment_valid),
     )
 
 
@@ -96,27 +101,34 @@ def _binary_macro_f1(confusion: ConfusionCounts) -> MetricAvailability:
     false_positive = confusion.false_positive.value
     false_negative = confusion.false_negative.value
     true_negative = confusion.true_negative.value
+
     attack_denominator = 2 * true_positive + false_positive + false_negative
     benign_denominator = 2 * true_negative + false_positive + false_negative
+
     if attack_denominator == 0 or benign_denominator == 0:
         return unavailable(
             MetricId.BINARY_MACRO_F1,
             MetricStatus.UNDEFINED,
             MetricReason.UNDEFINED_CLASS_F1,
         )
+
     attack_f1 = 2.0 * true_positive / attack_denominator
     benign_f1 = 2.0 * true_negative / benign_denominator
     return available(MetricId.BINARY_MACRO_F1, (attack_f1 + benign_f1) / 2.0)
 
 
 def _auroc(
-    scores: Sequence[ScoreValue], labels: Sequence[PopulationOutcomeLabel], attack_assignment_valid: bool
+    score_values: np.ndarray, labels: Sequence[PopulationOutcomeLabel], attack_assignment_valid: bool
 ) -> MetricAvailability:
     if not attack_assignment_valid:
         return unavailable(MetricId.AUROC, MetricStatus.UNAVAILABLE, MetricReason.INVALID_ATTACK_ASSIGNMENT)
-    binary = np.asarray([1 if label is PopulationOutcomeLabel.ATTACK else 0 for label in labels], dtype=np.int64)
+
+    binary = np.fromiter(
+        (1 if label is PopulationOutcomeLabel.ATTACK else 0 for label in labels), dtype=np.int64, count=len(labels)
+    )
     positives = int(binary.sum())
     negatives = int(binary.size - positives)
+
     if positives == 0 or negatives == 0:
         return unavailable(
             MetricId.AUROC,
@@ -124,24 +136,29 @@ def _auroc(
             MetricReason.SINGLE_CLASS_SCORES,
             denominator=int(binary.size),
         )
-    ordered_scores = np.asarray([score.value for score in scores], dtype=np.float64)
-    order = np.argsort(ordered_scores, kind="mergesort")
-    sorted_scores = ordered_scores[order]
+
+    order = np.argsort(score_values, kind="mergesort")
+    sorted_scores = score_values[order]
     ranks = _average_ranks(sorted_scores)
     positive_rank_sum = float(ranks[binary[order] == 1].sum())
     value = (positive_rank_sum - positives * (positives + 1.0) / 2.0) / (positives * negatives)
+
     if not isfinite(value):
         return unavailable(MetricId.AUROC, MetricStatus.UNDEFINED, MetricReason.MISSING_CAPABILITY)
     return available(MetricId.AUROC, value, denominator=int(binary.size))
 
 
 def _average_ranks(sorted_scores: np.ndarray) -> np.ndarray:
-    ranks = np.empty(sorted_scores.shape[0], dtype=np.float64)
-    start = 0
-    while start < sorted_scores.shape[0]:
-        end = start + 1
-        while end < sorted_scores.shape[0] and sorted_scores[end] == sorted_scores[start]:
-            end += 1
-        ranks[start:end] = 0.5 * (start + end - 1) + 1.0
-        start = end
-    return ranks
+    if sorted_scores.size == 0:
+        return np.empty(0, dtype=np.float64)
+
+    diffs = sorted_scores[1:] != sorted_scores[:-1]
+    change_indices = np.nonzero(diffs)[0] + 1
+
+    ends = np.append(change_indices, sorted_scores.size)
+    starts = np.insert(change_indices, 0, 0)
+
+    avg_ranks = 0.5 * (starts + ends + 1.0)
+    counts = ends - starts
+
+    return np.repeat(avg_ranks, counts)

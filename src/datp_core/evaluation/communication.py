@@ -82,14 +82,22 @@ class CommunicationDiagnostic:
     def __post_init__(self) -> None:
         if not self.messages:
             raise ScientificContractError("communication diagnostics require at least one message")
-        if any(message.training_seed != self.training_seed for message in self.messages):
-            raise ScientificContractError("communication messages must share their training seed")
-        if self.coordinate.training_seed != self.training_seed or any(
-            message.coordinate != self.coordinate for message in self.messages
-        ):
+
+        if self.coordinate.training_seed != self.training_seed:
             raise ScientificContractError("communication messages must share their full training coordinate")
-        expected_elements = sum(message.payload.logical_element_count.value for message in self.messages)
-        expected_bytes = sum(message.estimated_serialized_bytes.value for message in self.messages)
+
+        expected_elements = 0
+        expected_bytes = 0
+
+        for message in self.messages:
+            if message.training_seed != self.training_seed:
+                raise ScientificContractError("communication messages must share their training seed")
+            if message.coordinate != self.coordinate:
+                raise ScientificContractError("communication messages must share their full training coordinate")
+
+            expected_elements += message.payload.logical_element_count.value
+            expected_bytes += len(message.payload.serialized_bytes)
+
         if (
             self.total_logical_element_count.value != expected_elements
             or self.total_estimated_serialized_bytes.value != expected_bytes
@@ -107,14 +115,17 @@ def summarize_communication(
     messages: tuple[CommunicationMessageDiagnostic, ...],
 ) -> CommunicationDiagnostic:
     """Return exact payload totals; values are serialized-size estimates, not network measurements."""
+    expected_elements = 0
+    expected_bytes = 0
+
+    for message in messages:
+        expected_elements += message.payload.logical_element_count.value
+        expected_bytes += len(message.payload.serialized_bytes)
+
     return CommunicationDiagnostic(
         training_seed=training_seed,
         coordinate=coordinate,
         messages=messages,
-        total_logical_element_count=LogicalElementCount(
-            sum(message.payload.logical_element_count.value for message in messages)
-        ),
-        total_estimated_serialized_bytes=ByteCount(
-            sum(message.estimated_serialized_bytes.value for message in messages)
-        ),
+        total_logical_element_count=LogicalElementCount(expected_elements),
+        total_estimated_serialized_bytes=ByteCount(expected_bytes),
     )
