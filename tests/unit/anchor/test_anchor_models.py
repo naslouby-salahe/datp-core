@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from tests.unit.anchor.helpers import make_reference
 
-from datp_core.anchor.comparison import (
+from datp_core.anchor.models import (
     AbsoluteToleranceRule,
     AnchorObservationSourceKind,
     AnchorObservedMetric,

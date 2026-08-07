@@ -1,7 +1,7 @@
 import pytest
 from tests.unit.anchor.helpers import make_observation, make_reference, matching_anchor_observations
 
-from datp_core.anchor.comparison import ExactEqualityRule
+from datp_core.anchor.models import ExactEqualityRule
 from datp_core.anchor.reproduction import ANCHOR_CHECKPOINT_STATUS, references_from_protocol, reproduce_anchor
 from datp_core.domain.enums import CheckpointStatus, FederatedThresholdMethod, MetricId, TrainingModelId
 from datp_core.domain.errors import AnchorReproductionError, ScientificContractError

@@ -10,16 +10,18 @@ from typing import ClassVar
 
 from pydantic import ValidationError
 
-from datp_core.anchor.comparison import (
-    AnchorObservationSourceKind,
-    AnchorObservedMetric,
-)
 from datp_core.anchor.gate import (
-    AnchorGateDecision,
-    AnchorGateStatus,
     assert_gate_not_bypassable,
     decide_anchor_gate,
     persist_anchor_gate_diagnostics,
+)
+from datp_core.anchor.models import (
+    AnchorDependencyBlocker,
+    AnchorGateDecision,
+    AnchorGateStatus,
+    AnchorObservationSourceKind,
+    AnchorObservedMetric,
+    HistoricalMetricArtifactSource,
 )
 from datp_core.anchor.reproduction import (
     ANCHOR_CHECKPOINT_STATUS,
@@ -27,8 +29,6 @@ from datp_core.anchor.reproduction import (
     ANCHOR_METRIC,
     ANCHOR_POPULATION,
     ANCHOR_TRAINING_MODEL,
-    AnchorDependencyBlocker,
-    HistoricalMetricArtifactSource,
     independent_reproduction_dependency_blocker,
     load_historical_observations,
     reproduce_anchor,

@@ -1,6 +1,7 @@
 from pathlib import Path
 
-from datp_core.anchor.comparison import (
+from datp_core.anchor.models import (
+    AnchorArtifactFileName,
     AnchorMetricReference,
     AnchorObservationSourceKind,
     AnchorObservedMetric,
@@ -13,7 +14,6 @@ from datp_core.anchor.reproduction import (
     ANCHOR_METRIC,
     ANCHOR_POPULATION,
     ANCHOR_TRAINING_MODEL,
-    AnchorArtifactFileName,
     references_from_protocol,
 )
 from datp_core.domain.enums import (

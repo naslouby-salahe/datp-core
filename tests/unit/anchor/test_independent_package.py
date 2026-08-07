@@ -4,8 +4,8 @@ from pathlib import Path
 
 from tests.unit.anchor.helpers import matching_anchor_observations
 
-from datp_core.anchor.comparison import AnchorObservationSourceKind
-from datp_core.anchor.gate import AnchorGateStatus, load_anchor_gate_decision
+from datp_core.anchor.gate import load_anchor_gate_decision
+from datp_core.anchor.models import AnchorGateStatus, AnchorObservationSourceKind
 from datp_core.domain.enums import ExperimentReadiness
 from datp_core.pipeline.workflows.anchor import (
     VerifyAnchorStageRequest,

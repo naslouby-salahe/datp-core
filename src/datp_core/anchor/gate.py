@@ -1,84 +1,34 @@
 """Gate decision for historical anchor reproduction and dependent-experiment readiness."""
 
-from enum import StrEnum
 from pathlib import Path
 
-from pydantic import ValidationError, model_validator
+from pydantic import ValidationError
 
-from datp_core.anchor.comparison import AnchorComparisonDecision, AnchorDiscrepancy
+from datp_core.anchor.models import (
+    AnchorArtifactFileName,
+    AnchorComparisonDecision,
+    AnchorConfirmatoryHandoff,
+    AnchorDiscrepancy,
+    AnchorGateCompletionMarker,
+    AnchorGateDecision,
+    AnchorGateStatus,
+    AnchorReproductionResult,
+    VerifiedAnchorGateArtifact,
+)
 from datp_core.anchor.reproduction import (
     ANCHOR_EXPERIMENT,
     DECLARED_NON_BLOCKING_DISCREPANCY_REASONS,
-    AnchorArtifactFileName,
-    AnchorReproductionResult,
 )
-from datp_core.domain.contracts import StrictModel
-from datp_core.domain.enums import (
-    ExperimentId,
-    ExperimentReadiness,
-    FederatedThresholdMethod,
-    PopulationId,
-    PreprocessingProtocolId,
-    ScoreFrameColumn,
-    SplitProtocolId,
-    TrainingModelId,
-)
+from datp_core.domain.enums import ExperimentReadiness, PreprocessingProtocolId, ScoreFrameColumn
 from datp_core.domain.errors import AnchorReproductionError
 from datp_core.domain.provenance import canonical_checksum, canonical_json_text
 from datp_core.domain.values.checksums import Checksum, checksum_text
 from datp_core.protocols.anchor import ANCHOR_DECISION_PROTOCOL
 from datp_core.protocols.metrics import CONFIRMATORY_METRICS
 from datp_core.protocols.populations import split_protocol_for_population
-from datp_core.protocols.seeds import SeedCohort
 from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL
 from datp_core.protocols.training import CHECKPOINT_PROTOCOL, CHECKPOINT_SELECTION_RULE, NBAIOT_AUTOENCODER
 from datp_core.protocols.validation import CONFIRMATORY_ENDPOINT
-
-
-class AnchorGateStatus(StrEnum):
-    PASS = "pass"
-    PASS_WITH_DECLARED_DISCREPANCY = "pass_with_declared_discrepancy"
-    BLOCKED = "blocked"
-
-
-class AnchorGateDecision(StrictModel):
-    status: AnchorGateStatus
-    dependent_readiness: ExperimentReadiness
-    reproduction: AnchorReproductionResult
-    blocking_discrepancies: tuple[AnchorDiscrepancy, ...]
-    declared_discrepancies: tuple[AnchorDiscrepancy, ...]
-
-    @model_validator(mode="after")
-    def validate_gate_integrity(self) -> "AnchorGateDecision":
-        match self.status:
-            case AnchorGateStatus.PASS:
-                _require_clean_pass(self)
-            case AnchorGateStatus.PASS_WITH_DECLARED_DISCREPANCY:
-                _require_declared_discrepancy_pass(self)
-            case AnchorGateStatus.BLOCKED:
-                _require_blocked_gate(self)
-        return self
-
-
-def _require_clean_pass(decision: AnchorGateDecision) -> None:
-    if decision.blocking_discrepancies or decision.declared_discrepancies:
-        raise ValueError("PASS forbids discrepancies")
-    if decision.dependent_readiness is not ExperimentReadiness.DECLARED:
-        raise ValueError("PASS permits only declared dependent readiness handoff")
-
-
-def _require_declared_discrepancy_pass(decision: AnchorGateDecision) -> None:
-    if decision.blocking_discrepancies or not decision.declared_discrepancies:
-        raise ValueError("PASS_WITH_DECLARED_DISCREPANCY requires only declared discrepancies")
-    if decision.dependent_readiness is not ExperimentReadiness.DECLARED:
-        raise ValueError("declared-discrepancy pass still only unlocks declared dependent readiness")
-
-
-def _require_blocked_gate(decision: AnchorGateDecision) -> None:
-    if not decision.blocking_discrepancies and decision.reproduction.dependency_blocker is None:
-        raise ValueError("BLOCKED requires blocking discrepancies or a dependency blocker")
-    if decision.dependent_readiness is not ExperimentReadiness.BLOCKED:
-        raise ValueError("blocked anchor gate must block dependent readiness")
 
 
 def decide_anchor_gate(reproduction: AnchorReproductionResult) -> AnchorGateDecision:
@@ -169,92 +119,6 @@ def _partition_discrepancies(
     return blocking, declared
 
 
-class AnchorGateCompletionMarker(StrictModel):
-    artifact_checksum: Checksum
-    status: AnchorGateStatus
-
-
-class AnchorHandoffSchemaIdentity(StrEnum):
-    V1 = "anchor_confirmatory_handoff.v1"
-
-
-class VerifiedAnchorGateArtifact(StrictModel):
-    """Checksum-verified anchor-gate artifact that claim export must consume."""
-
-    decision: AnchorGateDecision
-    artifact_checksum: Checksum
-    diagnostics_directory: str
-
-    @model_validator(mode="after")
-    def validate_passed_gate(self) -> "VerifiedAnchorGateArtifact":
-        if self.decision.status is AnchorGateStatus.BLOCKED:
-            raise ValueError("verified anchor-gate artifact cannot be blocked")
-        recomputed = checksum_text(canonical_json_text(self.decision))
-        if recomputed != self.artifact_checksum:
-            raise ValueError("anchor-gate artifact checksum does not match the decision payload")
-        return self
-
-    @property
-    def permits_confirmatory_claims(self) -> bool:
-        return self.decision.status in {
-            AnchorGateStatus.PASS,
-            AnchorGateStatus.PASS_WITH_DECLARED_DISCREPANCY,
-        }
-
-
-class AnchorConfirmatoryHandoff(StrictModel):
-    """Typed anchor→confirmatory binding artifact that locks programme identity."""
-
-    schema_identity: AnchorHandoffSchemaIdentity
-    creation_identity: Checksum
-    anchor_experiment: ExperimentId
-    anchor_seed_cohort: SeedCohort
-    anchor_protocol_checksum: Checksum
-    anchor_references_observations_checksum: Checksum
-    anchor_gate_decision_checksum: Checksum
-    dependent_confirmatory_experiment: ExperimentId
-    dependent_population: PopulationId
-    dependent_model: TrainingModelId
-    dependent_seed_cohort: SeedCohort
-    split_protocol_identity: SplitProtocolId
-    preprocessing_protocol_identity: PreprocessingProtocolId
-    checkpoint_protocol_identity: Checksum
-    scoring_protocol_identity: Checksum
-    threshold_protocol_identities: tuple[FederatedThresholdMethod, ...]
-    evaluation_protocol_identity: Checksum
-    confirmatory_inference_protocol_identity: Checksum
-    complete_artifact_inventory_checksum: Checksum
-    verified_gate_status: AnchorGateStatus
-    verified_gate_artifact_checksum: Checksum
-    diagnostics_directory: str
-
-    @model_validator(mode="after")
-    def validate_handoff_integrity(self) -> "AnchorConfirmatoryHandoff":
-        if self.schema_identity is not AnchorHandoffSchemaIdentity.V1:
-            raise ValueError("unsupported anchor confirmatory handoff schema")
-        if self.anchor_experiment is not ExperimentId.HISTORICAL_DATP_REPRODUCTION:
-            raise ValueError("handoff anchor experiment must be historical DATP reproduction")
-        if self.dependent_confirmatory_experiment is not ExperimentId.SHARED_VS_LOCAL_CONFIRMATION:
-            raise ValueError("handoff dependent experiment must be shared-vs-local confirmation")
-        if self.verified_gate_status is AnchorGateStatus.BLOCKED:
-            raise ValueError("confirmatory handoff cannot bind a blocked gate")
-        if self.verified_gate_status not in {
-            AnchorGateStatus.PASS,
-            AnchorGateStatus.PASS_WITH_DECLARED_DISCREPANCY,
-        }:
-            raise ValueError("confirmatory handoff requires a permitting gate status")
-        if self.anchor_gate_decision_checksum != self.verified_gate_artifact_checksum:
-            raise ValueError("handoff gate decision checksum must match verified gate artifact checksum")
-        if not self.threshold_protocol_identities:
-            raise ValueError("handoff requires at least one threshold protocol identity")
-        if not self.diagnostics_directory.strip():
-            raise ValueError("handoff diagnostics directory must be non-empty")
-        recomputed = _handoff_creation_identity(self)
-        if recomputed != self.creation_identity:
-            raise ValueError("handoff creation identity does not match the binding payload")
-        return self
-
-
 def persist_anchor_gate_diagnostics(decision: AnchorGateDecision, diagnostics_directory: Path | None) -> Checksum:
     """Write gate decision, discrepancy diagnostics, and PASS handoff, returning gate checksum."""
     gate_json = canonical_json_text(decision)
@@ -312,7 +176,6 @@ def build_anchor_confirmatory_handoff(
         observation_artifact_checksums=tuple(item.artifact_checksum for item in decision.reproduction.observations),
     )
     binding = {
-        "schema_identity": AnchorHandoffSchemaIdentity.V1,
         "anchor_experiment": ANCHOR_EXPERIMENT,
         "anchor_seed_cohort": decision.reproduction.seed_cohort,
         "anchor_protocol_checksum": canonical_checksum(ANCHOR_DECISION_PROTOCOL),
@@ -337,8 +200,11 @@ def build_anchor_confirmatory_handoff(
         "verified_gate_artifact_checksum": gate_checksum,
         "diagnostics_directory": str(diagnostics_directory.resolve()),
     }
-    creation_identity = canonical_checksum(binding)
-    return AnchorConfirmatoryHandoff(creation_identity=creation_identity, **binding)
+    handoff = AnchorConfirmatoryHandoff(
+        creation_identity=canonical_checksum(binding),
+        **binding,
+    )
+    return handoff
 
 
 def load_verified_anchor_gate_artifact(diagnostics_directory: Path) -> VerifiedAnchorGateArtifact:
@@ -363,7 +229,7 @@ def load_verified_anchor_gate_artifact(diagnostics_directory: Path) -> VerifiedA
 
 def load_anchor_gate_decision(diagnostics_directory: Path) -> AnchorGateDecision:
     """Load a persisted gate decision without claim-permit filtering (inspect path)."""
-    decision, _checksum = _load_gate_decision_and_checksum(diagnostics_directory)
+    decision, _ = _load_gate_decision_and_checksum(diagnostics_directory)
     return assert_gate_not_bypassable(decision)
 
 
@@ -493,11 +359,6 @@ def _load_gate_decision_and_checksum(diagnostics_directory: Path) -> tuple[Ancho
             reason=str(marker_path),
         )
     return decision, artifact_checksum
-
-
-def _handoff_creation_identity(handoff: AnchorConfirmatoryHandoff) -> Checksum:
-    payload = {name: getattr(handoff, name) for name in type(handoff).model_fields if name != "creation_identity"}
-    return canonical_checksum(payload)
 
 
 def _checkpoint_protocol_identity() -> Checksum:

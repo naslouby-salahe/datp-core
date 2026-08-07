@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from shutil import rmtree
 
-from datp_core.anchor.gate import AnchorGateStatus
+from datp_core.anchor.models import AnchorGateStatus
 from datp_core.datasets.service import DatasetMaterializationRequest, materialize_datasets
 from datp_core.domain.enums import ExperimentId, PublicationStatus
 from datp_core.domain.errors import ScientificContractError

@@ -4,13 +4,11 @@ from pathlib import Path
 import pytest
 
 from datp_core.anchor.gate import (
-    AnchorGateStatus,
     load_anchor_confirmatory_handoff,
     load_verified_anchor_gate_artifact,
 )
+from datp_core.anchor.models import AnchorArtifactFileName, AnchorGateStatus, HistoricalThresholdScopeToken
 from datp_core.anchor.reproduction import (
-    AnchorArtifactFileName,
-    HistoricalThresholdScopeToken,
     historical_sources_for_seed_directories,
     load_historical_observations,
     references_from_protocol,

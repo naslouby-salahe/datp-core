@@ -23,7 +23,7 @@ from datp_core.analysis.mechanisms.movement import (
 )
 from datp_core.analysis.preparation import AnalysisDocument, ExternalAnalysisDocument, TemporalAnalysisDocument
 from datp_core.analysis.scientific_decision import ScientificDecision, ScientificDecisionResult
-from datp_core.anchor.gate import VerifiedAnchorGateArtifact
+from datp_core.anchor.models import VerifiedAnchorGateArtifact
 from datp_core.domain.enums import AvailabilityStatus, EvidenceRole, ExperimentId, MetricId, PopulationId
 from datp_core.domain.provenance import canonical_checksum
 from datp_core.domain.values.checksums import Checksum

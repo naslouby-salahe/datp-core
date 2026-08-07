@@ -4,9 +4,7 @@ import pytest
 from pydantic import ValidationError as PydanticValidationError
 from tests.unit.anchor.helpers import matching_anchor_observations
 
-from datp_core.anchor.comparison import AnchorObservationSourceKind, AnchorObservedMetric
 from datp_core.anchor.gate import (
-    AnchorGateStatus,
     assert_gate_not_bypassable,
     decide_anchor_gate,
     dependent_readiness_from_gate,
@@ -15,8 +13,13 @@ from datp_core.anchor.gate import (
     persist_anchor_gate_diagnostics,
     validate_handoff_against_confirmatory_programme,
 )
-from datp_core.anchor.reproduction import (
+from datp_core.anchor.models import (
     AnchorArtifactFileName,
+    AnchorGateStatus,
+    AnchorObservationSourceKind,
+    AnchorObservedMetric,
+)
+from datp_core.anchor.reproduction import (
     independent_reproduction_dependency_blocker,
     reproduce_anchor,
 )

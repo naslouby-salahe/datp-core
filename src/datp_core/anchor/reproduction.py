@@ -1,25 +1,32 @@
 """Historical five-seed anchor reproduction without confirmatory-cohort substitution."""
 
-from enum import StrEnum
 from json import loads
 from pathlib import Path
 
-from pydantic import ConfigDict, ValidationError, field_validator, model_validator
+from pydantic import ValidationError
 
-from datp_core.anchor.comparison import (
+from datp_core.anchor.comparison import compare_anchor_metric
+from datp_core.anchor.models import (
     AbsoluteToleranceRule,
+    AnchorArtifactFileName,
     AnchorComparisonDecision,
+    AnchorDependencyBlocker,
+    AnchorDependencyKind,
+    AnchorDetail,
     AnchorDiscrepancy,
     AnchorDiscrepancyReason,
     AnchorMetricComparison,
     AnchorMetricReference,
     AnchorObservationSourceKind,
     AnchorObservedMetric,
+    AnchorReproductionResult,
+    AnchorSeedDirectoryPrefix,
     AnchorSeedSubsetComparison,
-    compare_anchor_metric,
+    HistoricalDatasetToken,
+    HistoricalMetricArtifactSource,
+    HistoricalMetricsDocument,
+    HistoricalRegimeToken,
 )
-from datp_core.anchor.models import _require_non_empty_detail
-from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
     CheckpointStatus,
     ContractSubject,
@@ -31,8 +38,7 @@ from datp_core.domain.enums import (
     TrainingModelId,
 )
 from datp_core.domain.errors import AnchorReproductionError
-from datp_core.domain.values.base import str_enum_schema
-from datp_core.domain.values.checksums import Checksum, checksum_file
+from datp_core.domain.values.checksums import checksum_file
 from datp_core.domain.values.counts import ClientCount, Seed, SeedCount
 from datp_core.domain.values.ratios import MetricValue
 from datp_core.protocols.anchor import ANCHOR_DECISION_PROTOCOL, HISTORICAL_ANCHOR_SEED_COHORT, AnchorDecisionProtocol
@@ -51,128 +57,6 @@ HISTORICAL_ELIGIBLE_CLIENT_COUNT: ClientCount = NBAIOT_NATURAL_DEVICES.client_co
 
 # No non-blocking discrepancy reasons are currently declared in the scientific source.
 DECLARED_NON_BLOCKING_DISCREPANCY_REASONS: frozenset[AnchorDiscrepancyReason] = frozenset()
-
-
-class AnchorDependencyKind(StrEnum):
-    FEDERATED_TRAINING_CHECKPOINTING_AND_SCORING = "federated_training_checkpointing_and_scoring"
-    HISTORICAL_ARTIFACT_ROOT = "historical_artifact_root"
-
-
-class HistoricalThresholdScopeToken(StrEnum):
-    """Semantic threshold-scope tokens stored in historical metrics artifacts."""
-
-    ELIGIBLE_CLIENT_ARITHMETIC_MEAN = "eligible_client_arithmetic_mean"
-    PER_CLIENT_PERCENTILE = "per_client_percentile"
-
-    __get_pydantic_core_schema__ = classmethod(str_enum_schema)
-
-    def to_threshold_method(self) -> FederatedThresholdMethod:
-        match self:
-            case HistoricalThresholdScopeToken.ELIGIBLE_CLIENT_ARITHMETIC_MEAN:
-                return FederatedThresholdMethod.SHARED_THRESHOLD
-            case HistoricalThresholdScopeToken.PER_CLIENT_PERCENTILE:
-                return FederatedThresholdMethod.LOCAL_THRESHOLD
-
-
-class HistoricalDatasetToken(StrEnum):
-    NBAIOT = "nbaiot"
-
-    __get_pydantic_core_schema__ = classmethod(str_enum_schema)
-
-
-class HistoricalRegimeToken(StrEnum):
-    PHYSICAL_DEVICE_ANCHOR = "a"
-
-    __get_pydantic_core_schema__ = classmethod(str_enum_schema)
-
-
-class AnchorArtifactFileName(StrEnum):
-    """On-disk artifact file names used by historical load and stage diagnostics."""
-
-    METRICS = "metrics.json"
-    GATE_DECISION = "anchor_gate_decision.json"
-    DISCREPANCIES = "anchor_discrepancies.json"
-    GATE_COMPLETION = "anchor_gate_complete.json"
-    CONFIRMATORY_HANDOFF = "anchor_confirmatory_handoff.json"
-
-
-class AnchorSeedDirectoryPrefix(StrEnum):
-    SEED = "seed_"
-
-
-class HistoricalBoundaryModel(StrictModel):
-    """External historical-artifact boundary. Extra legacy fields are ignored, never trusted."""
-
-    model_config = ConfigDict(frozen=True, extra="ignore", strict=True)
-
-
-class HistoricalArtifactProvenanceDocument(HistoricalBoundaryModel):
-    model_checkpoint_identity: Checksum
-    score_artifact_identity: Checksum
-    split_manifest_identity: Checksum
-    config_identity: Checksum
-    metric_code_version: Checksum
-    threshold_code_version: Checksum
-    package_version: Checksum
-    generated_at_utc: str
-
-
-class HistoricalMetricsDocument(HistoricalBoundaryModel):
-    """Boundary model for historical seed-level metrics artifacts."""
-
-    seed: Seed
-    dataset: HistoricalDatasetToken
-    regime: HistoricalRegimeToken
-    threshold_scope: HistoricalThresholdScopeToken
-    cv_fpr: MetricValue
-    client_count: ClientCount
-    eligible_count: ClientCount
-    provenance: HistoricalArtifactProvenanceDocument
-
-
-class AnchorDependencyBlocker(StrictModel):
-    kind: AnchorDependencyKind
-    detail: str
-
-    @field_validator("detail")
-    @classmethod
-    def validate_detail(cls, v: str) -> str:
-        return _require_non_empty_detail(v)
-
-
-class AnchorReproductionResult(StrictModel):
-    experiment: ExperimentId
-    evidence_role: EvidenceRole
-    seed_cohort: SeedCohort
-    references: tuple[AnchorMetricReference, ...]
-    observations: tuple[AnchorObservedMetric, ...]
-    seed_subset_comparison: AnchorSeedSubsetComparison
-    metric_comparisons: tuple[AnchorMetricComparison, ...]
-    discrepancies: tuple[AnchorDiscrepancy, ...]
-    dependency_blocker: AnchorDependencyBlocker | None = None
-
-    @model_validator(mode="after")
-    def validate_identity(self) -> "AnchorReproductionResult":
-        if self.experiment is not ExperimentId.HISTORICAL_DATP_REPRODUCTION:
-            raise ValueError("anchor reproduction requires the historical DATP reproduction experiment")
-        if self.evidence_role is not EvidenceRole.ANCHOR_REPRODUCTION:
-            raise ValueError("anchor reproduction requires the anchor_reproduction evidence role")
-        return self
-
-
-class HistoricalMetricArtifactSource(StrictModel):
-    path: Path
-    seed: Seed
-    threshold_method: FederatedThresholdMethod
-
-    @model_validator(mode="after")
-    def validate_threshold_method(self) -> "HistoricalMetricArtifactSource":
-        if self.threshold_method not in {
-            FederatedThresholdMethod.SHARED_THRESHOLD,
-            FederatedThresholdMethod.LOCAL_THRESHOLD,
-        }:
-            raise ValueError("historical anchor artifacts support only shared and local thresholds")
-        return self
 
 
 def references_from_protocol(
@@ -241,7 +125,7 @@ def validate_historical_seed_cohort(seed_cohort: SeedCohort) -> SeedCohort:
 def independent_reproduction_dependency_blocker() -> AnchorDependencyBlocker:
     return AnchorDependencyBlocker(
         kind=AnchorDependencyKind.FEDERATED_TRAINING_CHECKPOINTING_AND_SCORING,
-        detail=(
+        detail=AnchorDetail(
             "Independent re-execution of historical training, checkpointing, and scoring "
             "requires the federated training and scoring workflow"
         ),

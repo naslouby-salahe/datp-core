@@ -15,7 +15,8 @@ from pathlib import Path
 from shutil import rmtree
 from typing import TYPE_CHECKING
 
-from datp_core.anchor.gate import AnchorGateStatus, load_anchor_gate_decision
+from datp_core.anchor.gate import load_anchor_gate_decision
+from datp_core.anchor.models import AnchorGateStatus
 from datp_core.datasets.paths import canonical_root_under
 from datp_core.domain.enums import (
     DatasetId,
