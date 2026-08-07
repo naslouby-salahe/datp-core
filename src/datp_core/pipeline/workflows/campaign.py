@@ -9,6 +9,7 @@ from completed evidence, and programme status derivation for the CLI.
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from shutil import rmtree
@@ -46,15 +47,42 @@ ANCHOR_DIAGNOSTICS_DIRECTORY = OUTPUTS_ROOT / "anchor" / "diagnostics"
 CAMPAIGN_COMPLETION_MARKER = OUTPUTS_ROOT / "campaign" / "COMPLETE"
 SMOKE_SUMMARY_DIRECTORY = SMOKE_OUTPUT_ROOT / "summary"
 
-_CAMPAIGN_ORDER: tuple[ExperimentId, ...] = (
-    ExperimentId.SHARED_VS_LOCAL_CONFIRMATION,
-    ExperimentId.FAMILY_AND_GROUPED_GRANULARITY,
-    ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST,
-    ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
-    ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION,
-    ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY,
-    ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class RegisteredWorkflow:
+    """One experiment with a complete workflow implementation, in campaign execution order.
+
+    The single ordered source of truth for which experiments have a registered
+    workflow, the order the campaign runs them in, and which of them depend on
+    the anchor equivalence gate. ``REGISTERED_WORKFLOW_EXPERIMENTS``,
+    ``ANCHOR_GATED_EXPERIMENTS``, and ``_CAMPAIGN_ORDER`` all derive from this
+    tuple so the three sets cannot drift apart.
+    """
+
+    experiment_id: ExperimentId
+    anchor_gated: bool
+
+
+_REGISTERED_WORKFLOWS: tuple[RegisteredWorkflow, ...] = (
+    RegisteredWorkflow(experiment_id=ExperimentId.SHARED_VS_LOCAL_CONFIRMATION, anchor_gated=True),
+    RegisteredWorkflow(experiment_id=ExperimentId.FAMILY_AND_GROUPED_GRANULARITY, anchor_gated=True),
+    RegisteredWorkflow(experiment_id=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST, anchor_gated=True),
+    RegisteredWorkflow(experiment_id=ExperimentId.DITTO_ABSORPTION_STRESS_TEST, anchor_gated=True),
+    RegisteredWorkflow(experiment_id=ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION, anchor_gated=False),
+    RegisteredWorkflow(experiment_id=ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY, anchor_gated=False),
+    RegisteredWorkflow(experiment_id=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION, anchor_gated=False),
 )
+
+_CAMPAIGN_ORDER: tuple[ExperimentId, ...] = tuple(item.experiment_id for item in _REGISTERED_WORKFLOWS)
+REGISTERED_WORKFLOW_EXPERIMENTS: frozenset[ExperimentId] = frozenset(_CAMPAIGN_ORDER)
+ANCHOR_GATED_EXPERIMENTS: frozenset[ExperimentId] = frozenset(
+    item.experiment_id for item in _REGISTERED_WORKFLOWS if item.anchor_gated
+)
+
+
+def _require_dispatch_covers_registry(dispatch: Mapping[ExperimentId, object], *, name: str) -> None:
+    if frozenset(dispatch) != REGISTERED_WORKFLOW_EXPERIMENTS:
+        raise ScientificContractError(f"{name} dispatch table must cover exactly the registered workflow experiments")
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -112,11 +140,7 @@ def canonical_smoke_seed(experiment_id: ExperimentId) -> Seed:
 
 
 def _require_registered_workflow(experiment_id: ExperimentId) -> None:
-    from datp_core.pipeline.workflows import (
-        REGISTERED_WORKFLOW_EXPERIMENTS,
-        reject_anchor_as_experiment,
-        require_experiment_declaration,
-    )
+    from datp_core.pipeline.workflows import reject_anchor_as_experiment, require_experiment_declaration
 
     reject_anchor_as_experiment(experiment_id)
     require_experiment_declaration(experiment_id)
@@ -136,8 +160,6 @@ def _anchor_gate_permits_dependents() -> bool:
 
 
 def _enforce_anchor_gate(experiment_id: ExperimentId) -> None:
-    from datp_core.pipeline.workflows import ANCHOR_GATED_EXPERIMENTS
-
     if experiment_id not in ANCHOR_GATED_EXPERIMENTS:
         return
     if not _anchor_gate_permits_dependents():
@@ -187,6 +209,84 @@ def run_experiment(
     )
 
 
+def _dispatch_confirmatory(seeds: tuple[Seed, ...], output_root: Path, overwrite: bool) -> str:
+    from datp_core.pipeline.workflows.confirmatory import run_confirmatory_seed
+
+    for seed in seeds:
+        run_confirmatory_seed(seed, output_root=output_root, overwrite=overwrite)
+    return f"confirmatory seeds={len(seeds)}"
+
+
+def _dispatch_family_grouped_granularity(seeds: tuple[Seed, ...], output_root: Path, overwrite: bool) -> str:
+    from datp_core.pipeline.workflows.confirmatory import run_family_grouped_mechanism_seed
+
+    for seed in seeds:
+        run_family_grouped_mechanism_seed(seed, output_root=output_root, overwrite=overwrite)
+    return f"family_grouped seeds={len(seeds)}"
+
+
+def _dispatch_edge_benign_equity_validation(seeds: tuple[Seed, ...], output_root: Path, overwrite: bool) -> str:
+    del output_root, overwrite
+    from datp_core.pipeline.workflows.external import run_external_validation_seed
+
+    for seed in seeds:
+        run_external_validation_seed(seed)
+    return f"edge_benign_equity seeds={len(seeds)}"
+
+
+def _dispatch_ciciot_file_client_boundary(seeds: tuple[Seed, ...], output_root: Path, overwrite: bool) -> str:
+    del output_root, overwrite
+    from datp_core.pipeline.workflows.external import run_ciciot_boundary_seed
+
+    for seed in seeds:
+        run_ciciot_boundary_seed(seed)
+    return f"ciciot_boundary seeds={len(seeds)}"
+
+
+def _dispatch_fedprox_absorption_stress_test(seeds: tuple[Seed, ...], output_root: Path, overwrite: bool) -> str:
+    from datp_core.pipeline.workflows.personalization import run_fedprox_stress_test_seed
+
+    for seed in seeds:
+        for coefficient in FEDPROX_COEFFICIENTS:
+            run_fedprox_stress_test_seed(
+                training_seed=seed,
+                coefficient=coefficient,
+                output_root=output_root,
+                overwrite=overwrite,
+            )
+    return f"fedprox seeds={len(seeds)} coefficients={len(FEDPROX_COEFFICIENTS)}"
+
+
+def _dispatch_ditto_absorption_stress_test(seeds: tuple[Seed, ...], output_root: Path, overwrite: bool) -> str:
+    del output_root, overwrite
+    from datp_core.pipeline.workflows.personalization import run_ditto_stress_test_seed
+
+    for seed in seeds:
+        run_ditto_stress_test_seed(training_seed=seed, regularization=DITTO_PRIMARY_REGULARIZATION)
+    return f"ditto seeds={len(seeds)} regularization={DITTO_PRIMARY_REGULARIZATION.value}"
+
+
+def _dispatch_edge_one_shot_recalibration(seeds: tuple[Seed, ...], output_root: Path, overwrite: bool) -> str:
+    del output_root, overwrite
+    from datp_core.pipeline.workflows.temporal import run_temporal_seed
+
+    for seed in seeds:
+        run_temporal_seed(seed)
+    return f"temporal seeds={len(seeds)}"
+
+
+_EXPERIMENT_DISPATCH_HANDLERS: dict[ExperimentId, Callable[[tuple[Seed, ...], Path, bool], str]] = {
+    ExperimentId.SHARED_VS_LOCAL_CONFIRMATION: _dispatch_confirmatory,
+    ExperimentId.FAMILY_AND_GROUPED_GRANULARITY: _dispatch_family_grouped_granularity,
+    ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION: _dispatch_edge_benign_equity_validation,
+    ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY: _dispatch_ciciot_file_client_boundary,
+    ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST: _dispatch_fedprox_absorption_stress_test,
+    ExperimentId.DITTO_ABSORPTION_STRESS_TEST: _dispatch_ditto_absorption_stress_test,
+    ExperimentId.EDGE_ONE_SHOT_RECALIBRATION: _dispatch_edge_one_shot_recalibration,
+}
+_require_dispatch_covers_registry(_EXPERIMENT_DISPATCH_HANDLERS, name="experiment execution")
+
+
 def _dispatch_experiment(
     experiment_id: ExperimentId,
     *,
@@ -194,65 +294,14 @@ def _dispatch_experiment(
     output_root: Path,
     overwrite: bool,
 ) -> str:
-    from datp_core.pipeline.workflows.confirmatory import (
-        run_confirmatory_seed,
-        run_family_grouped_mechanism_seed,
-    )
-    from datp_core.pipeline.workflows.external import (
-        run_ciciot_boundary_seed,
-        run_external_validation_seed,
-    )
-    from datp_core.pipeline.workflows.personalization import (
-        run_ditto_stress_test_seed,
-        run_fedprox_stress_test_seed,
-    )
-    from datp_core.pipeline.workflows.temporal import run_temporal_seed
-
-    detail: str
-    match experiment_id:
-        case ExperimentId.SHARED_VS_LOCAL_CONFIRMATION:
-            for seed in seeds:
-                run_confirmatory_seed(seed, output_root=output_root, overwrite=overwrite)
-            detail = f"confirmatory seeds={len(seeds)}"
-        case ExperimentId.FAMILY_AND_GROUPED_GRANULARITY:
-            for seed in seeds:
-                run_family_grouped_mechanism_seed(seed, output_root=output_root, overwrite=overwrite)
-            detail = f"family_grouped seeds={len(seeds)}"
-        case ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION:
-            for seed in seeds:
-                run_external_validation_seed(seed)
-            detail = f"edge_benign_equity seeds={len(seeds)}"
-        case ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY:
-            for seed in seeds:
-                run_ciciot_boundary_seed(seed)
-            detail = f"ciciot_boundary seeds={len(seeds)}"
-        case ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST:
-            for seed in seeds:
-                for coefficient in FEDPROX_COEFFICIENTS:
-                    run_fedprox_stress_test_seed(
-                        training_seed=seed,
-                        coefficient=coefficient,
-                        output_root=output_root,
-                        overwrite=overwrite,
-                    )
-            detail = f"fedprox seeds={len(seeds)} coefficients={len(FEDPROX_COEFFICIENTS)}"
-        case ExperimentId.DITTO_ABSORPTION_STRESS_TEST:
-            for seed in seeds:
-                run_ditto_stress_test_seed(
-                    training_seed=seed,
-                    regularization=DITTO_PRIMARY_REGULARIZATION,
-                )
-            detail = f"ditto seeds={len(seeds)} regularization={DITTO_PRIMARY_REGULARIZATION.value}"
-        case ExperimentId.EDGE_ONE_SHOT_RECALIBRATION:
-            for seed in seeds:
-                run_temporal_seed(seed)
-            detail = f"temporal seeds={len(seeds)}"
-        case _:
-            raise ScientificContractError(
-                f"no registered complete workflow for experiment {experiment_id.value}",
-                subject=experiment_id,
-            )
-    return detail
+    try:
+        handler = _EXPERIMENT_DISPATCH_HANDLERS[experiment_id]
+    except KeyError as error:
+        raise ScientificContractError(
+            f"no registered complete workflow for experiment {experiment_id.value}",
+            subject=experiment_id,
+        ) from error
+    return handler(seeds, output_root, overwrite)
 
 
 def run_smoke(experiment_id: ExperimentId | None = None, *, overwrite: bool = False) -> CampaignRunResult:
@@ -463,63 +512,97 @@ def _generate_campaign_report(*, overwrite: bool) -> ReportResult:
     return ReportResult(experiment=None, paths=tuple(paths), detail=";".join(details))
 
 
-def _generate_experiment_report(experiment_id: ExperimentId, *, overwrite: bool) -> ReportResult:
+def _report_confirmatory_family(experiment_id: ExperimentId, overwrite: bool) -> tuple[tuple[Path, ...], str]:
+    del overwrite
     from datp_core.pipeline.workflows.confirmatory import analyze_confirmatory_campaign
-    from datp_core.pipeline.workflows.external import (
-        analyze_ciciot_boundary_campaign,
-        analyze_external_validation_campaign,
+
+    path = analyze_confirmatory_campaign()
+    detail = (
+        str(path)
+        if experiment_id is ExperimentId.SHARED_VS_LOCAL_CONFIRMATION
+        else f"mechanism_via_confirmatory:{path}"
+    )
+    return (path,), detail
+
+
+def _report_edge_benign_equity_validation(experiment_id: ExperimentId, overwrite: bool) -> tuple[tuple[Path, ...], str]:
+    del experiment_id, overwrite
+    from datp_core.pipeline.workflows.external import analyze_external_validation_campaign
+
+    result = analyze_external_validation_campaign()
+    return (result.output_directory,), str(result.output_directory)
+
+
+def _report_ciciot_file_client_boundary(experiment_id: ExperimentId, overwrite: bool) -> tuple[tuple[Path, ...], str]:
+    del experiment_id, overwrite
+    from datp_core.pipeline.workflows.external import analyze_ciciot_boundary_campaign
+
+    result = analyze_ciciot_boundary_campaign()
+    return (result.output_directory,), str(result.output_directory)
+
+
+def _report_fedprox_absorption_stress_test(
+    experiment_id: ExperimentId, overwrite: bool
+) -> tuple[tuple[Path, ...], str]:
+    del experiment_id
+    paths = _report_fedprox_absorption(overwrite=overwrite)
+    return paths, f"coefficients={len(paths)}"
+
+
+def _report_reuse_existing_analysis(
+    analysis_root: Path, experiment_id: ExperimentId, *, missing_message: str
+) -> tuple[tuple[Path, ...], str]:
+    if not analysis_root.exists():
+        raise ReportEvidenceError(missing_message, subject=experiment_id)
+    return (analysis_root,), f"reuse_existing_analysis={analysis_root}"
+
+
+def _report_ditto_absorption_stress_test(experiment_id: ExperimentId, overwrite: bool) -> tuple[tuple[Path, ...], str]:
+    del overwrite
+    analysis_root = (
+        OUTPUTS_ROOT
+        / "ditto_stress_test"
+        / PopulationId.NBAIOT_NATURAL_DEVICES.value
+        / "analysis"
+        / str(DITTO_PRIMARY_REGULARIZATION.value)
+    )
+    return _report_reuse_existing_analysis(
+        analysis_root,
+        experiment_id,
+        missing_message="ditto absorption analysis artifacts are missing; run the experiment before reporting",
     )
 
-    paths: tuple[Path, ...]
-    detail: str
-    match experiment_id:
-        case ExperimentId.SHARED_VS_LOCAL_CONFIRMATION | ExperimentId.FAMILY_AND_GROUPED_GRANULARITY:
-            path = analyze_confirmatory_campaign()
-            paths = (path,)
-            if experiment_id is ExperimentId.SHARED_VS_LOCAL_CONFIRMATION:
-                detail = str(path)
-            else:
-                detail = f"mechanism_via_confirmatory:{path}"
-        case ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION:
-            result = analyze_external_validation_campaign()
-            paths = (result.output_directory,)
-            detail = str(result.output_directory)
-        case ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY:
-            result = analyze_ciciot_boundary_campaign()
-            paths = (result.output_directory,)
-            detail = str(result.output_directory)
-        case ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST:
-            paths = _report_fedprox_absorption(overwrite=overwrite)
-            detail = f"coefficients={len(paths)}"
-        case ExperimentId.DITTO_ABSORPTION_STRESS_TEST:
-            analysis_root = (
-                OUTPUTS_ROOT
-                / "ditto_stress_test"
-                / PopulationId.NBAIOT_NATURAL_DEVICES.value
-                / "analysis"
-                / str(DITTO_PRIMARY_REGULARIZATION.value)
-            )
-            if not analysis_root.exists():
-                raise ReportEvidenceError(
-                    "ditto absorption analysis artifacts are missing; run the experiment before reporting",
-                    subject=experiment_id,
-                )
-            paths = (analysis_root,)
-            detail = f"reuse_existing_analysis={analysis_root}"
-        case ExperimentId.EDGE_ONE_SHOT_RECALIBRATION:
-            analysis_root = OUTPUTS_ROOT / "temporal"
-            if not analysis_root.exists():
-                raise ReportEvidenceError(
-                    "temporal analysis artifacts are missing; run the experiment before reporting",
-                    subject=experiment_id,
-                )
-            paths = (analysis_root,)
-            detail = f"reuse_existing_analysis={analysis_root}"
-        case _:
-            raise ReportEvidenceError(
-                f"no report package is declared for experiment {experiment_id.value}",
-                subject=experiment_id,
-            )
+
+def _report_edge_one_shot_recalibration(experiment_id: ExperimentId, overwrite: bool) -> tuple[tuple[Path, ...], str]:
+    del overwrite
+    return _report_reuse_existing_analysis(
+        OUTPUTS_ROOT / "temporal",
+        experiment_id,
+        missing_message="temporal analysis artifacts are missing; run the experiment before reporting",
+    )
+
+
+_EXPERIMENT_REPORT_HANDLERS: dict[ExperimentId, Callable[[ExperimentId, bool], tuple[tuple[Path, ...], str]]] = {
+    ExperimentId.SHARED_VS_LOCAL_CONFIRMATION: _report_confirmatory_family,
+    ExperimentId.FAMILY_AND_GROUPED_GRANULARITY: _report_confirmatory_family,
+    ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION: _report_edge_benign_equity_validation,
+    ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY: _report_ciciot_file_client_boundary,
+    ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST: _report_fedprox_absorption_stress_test,
+    ExperimentId.DITTO_ABSORPTION_STRESS_TEST: _report_ditto_absorption_stress_test,
+    ExperimentId.EDGE_ONE_SHOT_RECALIBRATION: _report_edge_one_shot_recalibration,
+}
+_require_dispatch_covers_registry(_EXPERIMENT_REPORT_HANDLERS, name="experiment report")
+
+
+def _generate_experiment_report(experiment_id: ExperimentId, *, overwrite: bool) -> ReportResult:
+    try:
+        handler = _EXPERIMENT_REPORT_HANDLERS[experiment_id]
+    except KeyError as error:
+        raise ReportEvidenceError(
+            f"no report package is declared for experiment {experiment_id.value}",
+            subject=experiment_id,
+        ) from error
+    paths, detail = handler(experiment_id, overwrite)
     return ReportResult(experiment=experiment_id, paths=paths, detail=detail)
 
 
@@ -589,11 +672,7 @@ def programme_status(experiment_id: ExperimentId | None = None) -> ProgrammeStat
 
 
 def _status_for_experiment(experiment_id: ExperimentId, *, anchor_gate: str) -> ExperimentStatusRecord:
-    from datp_core.pipeline.workflows import (
-        ANCHOR_GATED_EXPERIMENTS,
-        REGISTERED_WORKFLOW_EXPERIMENTS,
-        require_experiment_declaration,
-    )
+    from datp_core.pipeline.workflows import require_experiment_declaration
 
     declaration = require_experiment_declaration(experiment_id)
     registered = experiment_id in REGISTERED_WORKFLOW_EXPERIMENTS
@@ -658,18 +737,36 @@ def _status_for_experiment(experiment_id: ExperimentId, *, anchor_gate: str) -> 
     )
 
 
+def _confirmatory_analysis_marker_present(experiment_id: ExperimentId) -> bool:
+    del experiment_id
+    return (
+        OUTPUTS_ROOT / "confirmatory" / PopulationId.NBAIOT_NATURAL_DEVICES.value / "analysis" / "COMPLETE"
+    ).is_file()
+
+
+def _external_analysis_marker_present(experiment_id: ExperimentId) -> bool:
+    return (OUTPUTS_ROOT / "analysis" / experiment_id.value).exists()
+
+
+_ANALYSIS_MARKER_CHECKS: dict[ExperimentId, Callable[[ExperimentId], bool]] = {
+    ExperimentId.SHARED_VS_LOCAL_CONFIRMATION: _confirmatory_analysis_marker_present,
+    ExperimentId.FAMILY_AND_GROUPED_GRANULARITY: _confirmatory_analysis_marker_present,
+    ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION: _external_analysis_marker_present,
+    ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY: _external_analysis_marker_present,
+}
+if frozenset(_ANALYSIS_MARKER_CHECKS) - REGISTERED_WORKFLOW_EXPERIMENTS:
+    raise ScientificContractError("analysis marker checks must be declared only for registered workflow experiments")
+
+
 def _analysis_marker_present(experiment_id: ExperimentId) -> bool:
-    match experiment_id:
-        case ExperimentId.SHARED_VS_LOCAL_CONFIRMATION | ExperimentId.FAMILY_AND_GROUPED_GRANULARITY:
-            return (
-                OUTPUTS_ROOT / "confirmatory" / PopulationId.NBAIOT_NATURAL_DEVICES.value / "analysis" / "COMPLETE"
-            ).is_file()
-        case ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION:
-            return (OUTPUTS_ROOT / "analysis" / experiment_id.value).exists()
-        case ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY:
-            return (OUTPUTS_ROOT / "analysis" / experiment_id.value).exists()
-        case _:
-            return False
+    """True only for registered experiments with an implemented analysis-marker check.
+
+    Registered experiments absent from ``_ANALYSIS_MARKER_CHECKS`` (currently the
+    FedProx/Ditto stress tests and temporal recalibration) have no published
+    marker artifact convention yet and report as not analysis-complete.
+    """
+    check = _ANALYSIS_MARKER_CHECKS.get(experiment_id)
+    return False if check is None else check(experiment_id)
 
 
 def format_plan(presentation: PlanPresentation) -> str:

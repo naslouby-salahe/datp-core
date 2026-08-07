@@ -10,7 +10,6 @@ seed-cohort selection shared by every registered workflow.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import StrEnum
 
 from datp_core.datasets.service import DatasetMaterializationRequest, materialize_datasets
 from datp_core.domain.enums import (
@@ -31,6 +30,8 @@ from datp_core.pipeline.planning import (
     expand_experiment_plan,
 )
 from datp_core.pipeline.workflows.campaign import (
+    ANCHOR_GATED_EXPERIMENTS,
+    REGISTERED_WORKFLOW_EXPERIMENTS,
     AnchorCommandResult,
     CampaignRunResult,
     ExperimentRunResult,
@@ -57,32 +58,6 @@ from datp_core.protocols.seeds import (
 )
 from datp_core.protocols.validation import CANONICAL_PROTOCOL_GRAPH, ResolvedProtocolGraph, validate_protocol_graph
 from datp_core.runtime.configuration import DATA_ROOT
-
-
-class WorkflowRegistration(StrEnum):
-    """Closed set of experiments with a registered complete workflow implementation."""
-
-    SHARED_VS_LOCAL_CONFIRMATION = ExperimentId.SHARED_VS_LOCAL_CONFIRMATION.value
-    FAMILY_AND_GROUPED_GRANULARITY = ExperimentId.FAMILY_AND_GROUPED_GRANULARITY.value
-    EDGE_BENIGN_EQUITY_VALIDATION = ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION.value
-    CICIOT_FILE_CLIENT_BOUNDARY = ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY.value
-    FEDPROX_ABSORPTION_STRESS_TEST = ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST.value
-    DITTO_ABSORPTION_STRESS_TEST = ExperimentId.DITTO_ABSORPTION_STRESS_TEST.value
-    EDGE_ONE_SHOT_RECALIBRATION = ExperimentId.EDGE_ONE_SHOT_RECALIBRATION.value
-
-
-REGISTERED_WORKFLOW_EXPERIMENTS: frozenset[ExperimentId] = frozenset(
-    ExperimentId(item.value) for item in WorkflowRegistration
-)
-
-ANCHOR_GATED_EXPERIMENTS: frozenset[ExperimentId] = frozenset(
-    (
-        ExperimentId.SHARED_VS_LOCAL_CONFIRMATION,
-        ExperimentId.FAMILY_AND_GROUPED_GRANULARITY,
-        ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST,
-        ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
-    )
-)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -243,7 +218,6 @@ __all__ = [
     "ProgrammeStatusReport",
     "ReportResult",
     "ValidationResult",
-    "WorkflowRegistration",
     "anchor_status",
     "build_programme_plan",
     "format_plan",
