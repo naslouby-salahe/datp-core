@@ -1,6 +1,7 @@
 """Federated training-history persistence and trusted reload."""
 
 from dataclasses import dataclass
+from enum import StrEnum
 from os import replace as atomic_replace
 from pathlib import Path
 
@@ -37,6 +38,25 @@ from datp_core.learning.federated.models import (
     PersonalizedModelStateReference,
 )
 from datp_core.protocols.checkpoints import CheckpointProtocol
+
+
+class _ClientHistoryTable(StrEnum):
+    CLIENT = "client history"
+    PERSONALIZED = "personalized history"
+
+
+@dataclass(frozen=True, slots=True)
+class _ClientRoundRow:
+    client: ClientIdentity
+    sample_count: RowCount
+    local_loss: MetricValue
+
+
+@dataclass(frozen=True, slots=True)
+class _PersonalizedRoundRow:
+    client: ClientIdentity
+    local_loss: MetricValue
+    state_checksum: Checksum
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -101,7 +121,7 @@ def _validate_client_rows(
     *,
     expected_rounds: tuple[RoundNumber, ...],
     expected_clients: tuple[ClientIdentity, ...],
-    table_name: str,
+    table_name: _ClientHistoryTable,
 ) -> None:
     validate_parquet_schema(frame, schema)
     if frame.height < 1:
@@ -137,7 +157,7 @@ def validate_client_history(
         CLIENT_ROUNDS_SCHEMA,
         expected_rounds=expected_rounds,
         expected_clients=expected_clients,
-        table_name="client history",
+        table_name=_ClientHistoryTable.CLIENT,
     )
 
 
@@ -152,7 +172,7 @@ def validate_personalized_history(
         PERSONALIZED_ROUNDS_SCHEMA,
         expected_rounds=expected_rounds,
         expected_clients=expected_clients,
-        table_name="personalized history",
+        table_name=_ClientHistoryTable.PERSONALIZED,
     )
 
 
@@ -302,28 +322,35 @@ def load_federated_training_history(
             )
 
     column = FederatedHistoryColumn
-    client_dict_by_round: dict[RoundNumber, list[tuple[str, int, float]]] = {}
+    client_dict_by_round: dict[RoundNumber, list[_ClientRoundRow]] = {}
     for round_val, client_val, sample_val, loss_val in client_frame.select(
         (column.ROUND_NUMBER.value, column.CLIENT_ID.value, column.SAMPLE_COUNT.value, column.LOCAL_LOSS.value)
     ).iter_rows():
         client_dict_by_round.setdefault(RoundNumber(int(round_val)), []).append(
-            (str(client_val), int(sample_val), float(loss_val))
+            _ClientRoundRow(
+                client=ClientIdentity(coordinate.population, str(client_val), identity_kind),
+                sample_count=RowCount(int(sample_val)),
+                local_loss=MetricValue(float(loss_val)),
+            )
         )
 
-    personalized_dict_by_round: dict[RoundNumber, list[tuple[str, float, str]]] = {}
+    personalized_dict_by_round: dict[RoundNumber, list[_PersonalizedRoundRow]] = {}
     if personalized_frame is not None:
         for round_val, client_val, loss_val, checksum_val in personalized_frame.select(
             (column.ROUND_NUMBER.value, column.CLIENT_ID.value, column.LOCAL_LOSS.value, column.STATE_CHECKSUM.value)
         ).iter_rows():
             personalized_dict_by_round.setdefault(RoundNumber(int(round_val)), []).append(
-                (str(client_val), float(loss_val), str(checksum_val))
+                _PersonalizedRoundRow(
+                    client=ClientIdentity(coordinate.population, str(client_val), identity_kind),
+                    local_loss=MetricValue(float(loss_val)),
+                    state_checksum=Checksum(str(checksum_val)),
+                )
             )
 
     rounds = tuple(
         _round_result(
             coordinate=coordinate,
             personalized_coordinate=personalized_coordinate,
-            identity_kind=identity_kind,
             summary=summary,
             client_data=client_dict_by_round.get(summary.round_number, []),
             personalized_data=personalized_dict_by_round.get(summary.round_number, []),
@@ -359,23 +386,20 @@ def _round_result(
     *,
     coordinate: FederatedTrainingCoordinate,
     personalized_coordinate: FederatedTrainingCoordinate | None,
-    identity_kind: PopulationIdentityKind,
     summary: RoundSummaryRecord,
-    client_data: list[tuple[str, int, float]],
-    personalized_data: list[tuple[str, float, str]],
+    client_data: list[_ClientRoundRow],
+    personalized_data: list[_PersonalizedRoundRow],
 ) -> FederatedRoundResult:
     client_results = tuple(
         ClientTrainingResult(
-            client=ClientIdentity(coordinate.population, client_id, identity_kind),
-            sample_count=RowCount(sample_count),
-            local_loss=MetricValue(local_loss),
+            client=row.client,
+            sample_count=row.sample_count,
+            local_loss=row.local_loss,
         )
-        for client_id, sample_count, local_loss in client_data
+        for row in client_data
     )
     personalized_references = _personalized_references(
-        coordinate=coordinate,
         personalized_coordinate=personalized_coordinate,
-        identity_kind=identity_kind,
         round_number=summary.round_number,
         personalized_data=personalized_data,
     )
@@ -401,11 +425,9 @@ def _round_result(
 
 def _personalized_references(
     *,
-    coordinate: FederatedTrainingCoordinate,
     personalized_coordinate: FederatedTrainingCoordinate | None,
-    identity_kind: PopulationIdentityKind,
     round_number: RoundNumber,
-    personalized_data: list[tuple[str, float, str]],
+    personalized_data: list[_PersonalizedRoundRow],
 ) -> tuple[PersonalizedModelStateReference, ...]:
     if personalized_coordinate is None:
         return ()
@@ -417,11 +439,11 @@ def _personalized_references(
     return tuple(
         PersonalizedModelStateReference(
             coordinate=personalized_coordinate,
-            client=ClientIdentity(coordinate.population, client_id, identity_kind),
+            client=row.client,
             round_number=round_number,
-            local_loss=MetricValue(local_loss),
-            state_checksum=Checksum(state_checksum),
+            local_loss=row.local_loss,
+            state_checksum=row.state_checksum,
             tensor_path=None,
         )
-        for client_id, local_loss, state_checksum in personalized_data
+        for row in personalized_data
     )
