@@ -12,6 +12,7 @@ from datp_core.domain.enums import (
 )
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.provenance import canonical_checksum
+from datp_core.domain.values.identifiers import StableRowId
 from datp_core.domain.values.ratios import ScoreValue, ThresholdValue
 from datp_core.evaluation.client_metrics import calculate_client_metrics
 from datp_core.evaluation.cohort.construction import assert_cohort_invariant_to_threshold_methods
@@ -140,7 +141,7 @@ def _client_auroc_evidence(
 
     scores = tuple(ScoreValue(float(value)) for value in frame_dict[required_cols[0]])
     labels = tuple(PopulationOutcomeLabel(str(value)) for value in frame_dict[required_cols[1]])
-    rows = tuple(str(value) for value in frame_dict[required_cols[2]])
+    rows = tuple(StableRowId(str(value)) for value in frame_dict[required_cols[2]])
 
     confusion = calculate_confusion_counts(
         scores=scores,

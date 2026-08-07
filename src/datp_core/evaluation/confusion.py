@@ -7,6 +7,7 @@ from datp_core.datasets.partitioning.contracts import PopulationOutcomeLabel
 from datp_core.domain.enums import ContractSubject, PartitionRole
 from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.values.counts import RowCount
+from datp_core.domain.values.identifiers import StableRowId
 from datp_core.domain.values.ratios import ScoreValue, ThresholdValue
 from datp_core.evaluation.models import ConfusionCounts
 
@@ -19,7 +20,7 @@ def calculate_confusion_counts(
     *,
     scores: Sequence[ScoreValue],
     labels: Sequence[PopulationOutcomeLabel],
-    source_row_ids: Sequence[str],
+    source_row_ids: Sequence[StableRowId],
     threshold: ThresholdValue,
     partition_role: PartitionRole,
     attack_assignment_valid: bool,
@@ -28,10 +29,18 @@ def calculate_confusion_counts(
         raise LeakageError("confusion counts require held-out evaluation rows", subject=partition_role)
     if len(scores) != len(labels) or len(scores) != len(source_row_ids):
         raise ScientificContractError("scores, labels, and source rows must align", subject=ContractSubject.ROWS)
-    if len(source_row_ids) != len(frozenset(source_row_ids)) or any(not value for value in source_row_ids):
-        raise ScientificContractError("evaluation source rows must be unique and stable", subject=ContractSubject.ROWS)
-    if not isfinite(threshold.value) or any(not isfinite(score.value) for score in scores):
+
+    if not isfinite(threshold.value):
         raise ScientificContractError("scores and thresholds must be finite", subject=ContractSubject.SCORES)
+
+    seen: set[StableRowId] = set()
+    for row_id in source_row_ids:
+        if not row_id or row_id in seen:
+            raise ScientificContractError(
+                "evaluation source rows must be unique and stable", subject=ContractSubject.ROWS
+            )
+        seen.add(row_id)
+
     benign_predictions, attack_predictions = _partition_predictions(scores, labels, threshold)
     if attack_predictions and not attack_assignment_valid:
         raise ScientificContractError(
@@ -39,10 +48,10 @@ def calculate_confusion_counts(
             subject=ContractSubject.ATTACK_LABELS,
         )
     return ConfusionCounts(
-        true_negative=RowCount(sum(not prediction for prediction in benign_predictions)),
-        false_positive=RowCount(sum(benign_predictions)),
-        true_positive=RowCount(sum(attack_predictions)),
-        false_negative=RowCount(sum(not prediction for prediction in attack_predictions)),
+        true_negative=RowCount(benign_predictions.count(False)),
+        false_positive=RowCount(benign_predictions.count(True)),
+        true_positive=RowCount(attack_predictions.count(True)),
+        false_negative=RowCount(attack_predictions.count(False)),
         attack_assignment_valid=attack_assignment_valid,
     )
 
@@ -53,6 +62,8 @@ def _partition_predictions(
     benign: list[bool] = []
     attack: list[bool] = []
     for score, label in zip(scores, labels, strict=True):
+        if not isfinite(score.value):
+            raise ScientificContractError("scores and thresholds must be finite", subject=ContractSubject.SCORES)
         prediction = predicted_attack(score, threshold)
         if label is PopulationOutcomeLabel.BENIGN:
             benign.append(prediction)

@@ -21,6 +21,7 @@ from datp_core.domain.enums import (
     ScoreFrameColumn,
 )
 from datp_core.domain.errors import ScientificContractError
+from datp_core.domain.values.identifiers import StableRowId
 from datp_core.domain.values.ratios import ScoreValue
 from datp_core.evaluation.client_metrics import calculate_client_metrics
 from datp_core.evaluation.cohort.contracts import EvaluationCohortManifest
@@ -61,7 +62,7 @@ def client_metric(
     outcome_values = frame[ScoreFrameColumn.OUTCOME_LABEL.value].to_list()
     scores = tuple(ScoreValue(float(value)) for value in error_values)
     labels = tuple(PopulationOutcomeLabel(str(value)) for value in outcome_values)
-    rows = tuple(str(value) for value in frame[ScoreFrameColumn.STABLE_ROW_ID.value].to_list())
+    rows = tuple(StableRowId(str(value)) for value in frame[ScoreFrameColumn.STABLE_ROW_ID.value].to_list())
     eligibility_matches = tuple(item for item in cohort_manifest.records if item.client == assignment.client)
     if len(eligibility_matches) != 1:
         raise ScientificContractError(

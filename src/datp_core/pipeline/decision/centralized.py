@@ -25,7 +25,7 @@ from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.provenance import canonical_checksum, canonical_json_text
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import RoundNumber, RowCount
-from datp_core.domain.values.identifiers import OutcomeLabel, OutcomeLabelSequence
+from datp_core.domain.values.identifiers import OutcomeLabel, OutcomeLabelSequence, StableRowId
 from datp_core.domain.values.ratios import Quantile, ScoreValue, ThresholdValue
 from datp_core.evaluation.client_metrics import calculate_client_metrics
 from datp_core.evaluation.confusion import calculate_confusion_counts
@@ -645,9 +645,11 @@ def _validate_evaluation_inputs(
 
 def _evaluation_arrays(
     evaluation_scores: PooledScoreArtifact,
-) -> tuple[tuple[str, ...], tuple[PopulationOutcomeLabel, ...], tuple[ScoreValue, ...]]:
+) -> tuple[tuple[StableRowId, ...], tuple[PopulationOutcomeLabel, ...], tuple[ScoreValue, ...]]:
     frame = load_score_frame(evaluation_scores)
-    row_ids = tuple(str(value) for value in frame.get_column(ScoreFrameColumn.STABLE_ROW_ID.value).to_list())
+    row_ids = tuple(
+        StableRowId(str(value)) for value in frame.get_column(ScoreFrameColumn.STABLE_ROW_ID.value).to_list()
+    )
     labels = tuple(
         PopulationOutcomeLabel(str(value)) for value in frame.get_column(ScoreFrameColumn.OUTCOME_LABEL.value).to_list()
     )

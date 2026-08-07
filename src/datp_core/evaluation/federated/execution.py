@@ -18,6 +18,7 @@ from datp_core.domain.enums import (
 from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
 from datp_core.domain.provenance import canonical_checksum
 from datp_core.domain.values.checksums import checksum_file
+from datp_core.domain.values.identifiers import StableRowId
 from datp_core.domain.values.ratios import (
     NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
     ScoreValue,
@@ -424,7 +425,7 @@ def _deployment_fallback_threshold(
 
 def _score_arrays(
     path: str,
-) -> tuple[tuple[ScoreValue, ...], tuple[PopulationOutcomeLabel, ...], tuple[str, ...]]:
+) -> tuple[tuple[ScoreValue, ...], tuple[PopulationOutcomeLabel, ...], tuple[StableRowId, ...]]:
     required = [
         ScoreFrameColumn.STABLE_ROW_ID.value,
         ScoreFrameColumn.OUTCOME_LABEL.value,
@@ -439,5 +440,5 @@ def _score_arrays(
     return (
         tuple(ScoreValue(float(value)) for value in data[required[2]]),
         tuple(PopulationOutcomeLabel(str(value)) for value in data[required[1]]),
-        tuple(str(value) for value in data[required[0]]),
+        tuple(StableRowId(str(value)) for value in data[required[0]]),
     )
