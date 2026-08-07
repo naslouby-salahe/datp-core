@@ -220,11 +220,9 @@ def construct_sample_weighted_shared_threshold(
     counts = tuple(float(item.calibration_count.value) for item in local_quantiles)
     total = sum(counts)
     normalized_weights = tuple(NormalizedWeight(count / total) for count in counts)
-    shared_value = ThresholdValue(
-        sample_weighted_mean(
-            tuple(item.value.value for item in local_quantiles),
-            counts,
-        )
+    shared_value = sample_weighted_mean(
+        tuple(item.value for item in local_quantiles),
+        counts,
     )
     assignments = tuple(ThresholdAssignment(item.client, shared_value) for item in local_quantiles)
     return SampleWeightedSharedThresholdResult(

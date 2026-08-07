@@ -94,8 +94,8 @@ def test_deployment_fallback_uses_mean_of_eligible_local_thresholds() -> None:
     assignments = local.assignments
     fallback = _deployment_fallback_threshold(assignments, local)
     assert fallback is not None
-    expected = unweighted_mean(tuple(item.threshold.value for item in assignments))
-    assert fallback.value == expected
+    expected = unweighted_mean(tuple(item.threshold for item in assignments))
+    assert fallback.value == expected.value
 
 
 def test_calibration_size_protocol_locks_nested_replicate_count() -> None:

@@ -1,5 +1,3 @@
-from typing import cast
-
 import pytest
 from tests.unit.thresholding.helpers import COORDINATE, identity
 
@@ -25,7 +23,9 @@ from datp_core.domain.values.ratios import (
     MetricValue,
     Quantile,
     Ratio,
+    ScoreMoment,
     ScoreValue,
+    ScoreVariance,
     ShrinkageWeight,
     ThresholdValue,
 )
@@ -42,6 +42,7 @@ from datp_core.thresholding.identities import (
 from datp_core.thresholding.methods.cluster import (
     ClusterFingerprint,
     ClusterMembership,
+    FingerprintFeatures,
     GroupedThresholdResult,
 )
 from datp_core.thresholding.methods.conformal import (
@@ -161,17 +162,24 @@ def test_family_membership_enforces_the_same_group_membership_contract_as_cluste
 
 
 def test_cluster_contracts_require_four_features_and_declared_group_count() -> None:
-    short_raw = cast(tuple[float, float, float, float], (1.0, 2.0, 3.0))
-    with pytest.raises(ScientificContractError, match="mean, standard deviation"):
-        ClusterFingerprint(
-            client=CLIENT_A,
-            raw=short_raw,
-            standardized=(1.0, 2.0, 3.0, 4.0),
-        )
+    from datp_core.domain.values.ratios import ScoreMoment
+
+    features = FingerprintFeatures(
+        mean=ScoreMoment(1.0),
+        standard_deviation=ScoreMoment(1.0),
+        skewness=1.0,
+        p95=ThresholdValue(1.0),
+    )
+    standardized = FingerprintFeatures(
+        mean=ScoreMoment(0.0),
+        standard_deviation=ScoreMoment(0.0),
+        skewness=0.0,
+        p95=ThresholdValue(0.0),
+    )
     fingerprint = ClusterFingerprint(
         client=CLIENT_A,
-        raw=(1.0, 1.0, 1.0, 1.0),
-        standardized=(0.0, 0.0, 0.0, 0.0),
+        raw=features,
+        standardized=standardized,
     )
     membership = ClusterMembership(
         cluster_index=ClusterIndex(0),
@@ -267,12 +275,12 @@ def test_conformal_contracts_enforce_rank_and_client_partition() -> None:
 
 
 def test_federated_statistics_contracts_enforce_variance_identities() -> None:
-    with pytest.raises(ScientificContractError, match="non-negative"):
+    with pytest.raises(ValueError, match="non-negative"):
         ClientBenignSummary(
             client=CLIENT_A,
             count=RowCount(10),
-            mean=0.0,
-            variance=-1.0,
+            mean=ScoreMoment(0.0),
+            variance=ScoreVariance(-1.0),
             benign_exceedance_count=None,
         )
     with pytest.raises(
@@ -280,10 +288,10 @@ def test_federated_statistics_contracts_enforce_variance_identities() -> None:
         match="within-client plus between-client",
     ):
         PooledVarianceDecomposition(
-            global_mean=0.0,
-            within_client_variance=1.0,
-            between_client_variance=1.0,
-            full_pooled_variance=3.0,
+            global_mean=ScoreMoment(0.0),
+            within_client_variance=ScoreVariance(1.0),
+            between_client_variance=ScoreVariance(1.0),
+            full_pooled_variance=ScoreVariance(3.0),
             between_ratio=None,
         )
     with pytest.raises(ValueError, match="quantile"):

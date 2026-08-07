@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from math import ceil, sqrt
+from typing import Literal
 
 import numpy as np
 from scipy.stats import norm
@@ -20,7 +21,9 @@ from datp_core.domain.values.ratios import (
     CoverageTarget,
     Quantile,
     Ratio,
+    ScoreMoment,
     ScoreValue,
+    ScoreVariance,
     SummaryCoefficient,
     ThresholdValue,
 )
@@ -96,12 +99,20 @@ def local_quantile(
     )
 
 
+def _numpy_interpolation_method(semantics: QuantileInterpolationSemantics) -> Literal["linear"]:
+    match semantics:
+        case QuantileInterpolationSemantics.NUMPY_QUANTILE_LINEAR:
+            return "linear"
+
+
 def exact_empirical_quantile(
     scores: np.ndarray,
     quantile: Quantile,
 ) -> ThresholdValue:
     _require_score_vector(scores)
-    value = float(np.quantile(scores, quantile.value, method="linear"))
+    semantics = quantile_interpolation_semantics()
+    method = _numpy_interpolation_method(semantics)
+    value = float(np.quantile(scores, quantile.value, method=method))
     if not np.isfinite(value):
         raise ScientificContractError(
             "quantile result must be finite",
@@ -114,19 +125,19 @@ def quantile_interpolation_semantics() -> QuantileInterpolationSemantics:
     return QuantileInterpolationSemantics.NUMPY_QUANTILE_LINEAR
 
 
-def unweighted_mean(values: tuple[float, ...]) -> float:
+def unweighted_mean(values: tuple[ThresholdValue, ...]) -> ThresholdValue:
     if not values:
         raise ScientificContractError(
             "an unweighted mean requires at least one contributing value",
             subject=ContractSubject.THRESHOLD,
         )
-    return sum(values) / len(values)
+    return ThresholdValue(sum(item.value for item in values) / len(values))
 
 
 def sample_weighted_mean(
-    values: tuple[float, ...],
+    values: tuple[ThresholdValue, ...],
     weights: tuple[float, ...],
-) -> float:
+) -> ThresholdValue:
     if not values or len(values) != len(weights):
         raise ScientificContractError(
             "a sample-weighted mean requires one weight per contributing value",
@@ -138,7 +149,9 @@ def sample_weighted_mean(
             "sample-weighted mean requires positive total support",
             subject=ContractSubject.THRESHOLD,
         )
-    return sum(value * weight for value, weight in zip(values, weights, strict=True)) / total_weight
+    return ThresholdValue(
+        sum(item.value * weight for item, weight in zip(values, weights, strict=True)) / total_weight
+    )
 
 
 def conformal_rank_index(
@@ -185,16 +198,11 @@ def achieved_benign_exceedance(
 
 
 def gaussian_matched_exceedance_threshold(
-    mean: float,
-    variance: float,
+    mean: ScoreMoment,
+    variance: ScoreVariance,
     quantile: Quantile,
 ) -> ThresholdValue:
-    if variance < 0:
-        raise ScientificContractError(
-            "variance must be non-negative",
-            subject=ContractSubject.THRESHOLD,
-        )
-    value = mean + float(norm.ppf(quantile.value)) * sqrt(variance)
+    value = mean.value + float(norm.ppf(quantile.value)) * sqrt(variance.value)
     if not np.isfinite(value):
         raise ScientificContractError(
             "matched-exceedance threshold must be finite",
@@ -204,16 +212,11 @@ def gaussian_matched_exceedance_threshold(
 
 
 def fixed_coefficient_threshold(
-    mean: float,
-    variance: float,
+    mean: ScoreMoment,
+    variance: ScoreVariance,
     coefficient: SummaryCoefficient,
 ) -> ThresholdValue:
-    if variance < 0:
-        raise ScientificContractError(
-            "variance must be non-negative",
-            subject=ContractSubject.THRESHOLD,
-        )
-    return ThresholdValue(mean + coefficient.value * sqrt(variance))
+    return ThresholdValue(mean.value + coefficient.value * sqrt(variance.value))
 
 
 def _require_score_vector(scores: np.ndarray) -> None:

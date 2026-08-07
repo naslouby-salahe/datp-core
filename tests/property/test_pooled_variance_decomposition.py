@@ -1,3 +1,4 @@
+import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 from tests.unit.thresholding.helpers import client_scores
@@ -21,11 +22,11 @@ def test_full_pooled_variance_always_equals_within_plus_between(scores_a: list[f
     )
     result = construct_federated_benign_statistics(clients, FEDERATED_STATISTICS_PROTOCOL, QUANTILE)
     decomposition = result.decomposition
-    assert decomposition.full_pooled_variance == (
-        decomposition.within_client_variance + decomposition.between_client_variance
+    assert decomposition.full_pooled_variance.value == pytest.approx(
+        decomposition.within_client_variance.value + decomposition.between_client_variance.value
     )
-    assert decomposition.within_client_variance >= 0
-    assert decomposition.between_client_variance >= 0
+    assert decomposition.within_client_variance.value >= 0
+    assert decomposition.between_client_variance.value >= 0
 
 
 @given(scores=st.lists(_SCORE, min_size=2, max_size=15))
@@ -35,4 +36,4 @@ def test_between_client_variance_vanishes_when_every_client_shares_the_same_scor
         client_scores("client_b", tuple(scores)),
     )
     result = construct_federated_benign_statistics(clients, FEDERATED_STATISTICS_PROTOCOL, QUANTILE)
-    assert abs(result.decomposition.between_client_variance) < 1e-6
+    assert abs(result.decomposition.between_client_variance.value) < 1e-6

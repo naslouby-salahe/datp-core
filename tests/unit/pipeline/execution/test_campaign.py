@@ -86,7 +86,7 @@ def test_ditto_shared_threshold_accepts_distinct_personalized_model_checksums() 
     assert len(local.assignments) == len(eligible)
     assert len({assignment.threshold.value for assignment in local.assignments}) == len(eligible)
     assert shared.shared_threshold.value == pytest.approx(
-        unweighted_mean(tuple(item.value.value for item in local.local_quantiles))
+        unweighted_mean(tuple(item.value for item in local.local_quantiles)).value
     )
     assert all(
         assignment.threshold.value == pytest.approx(shared.shared_threshold.value) for assignment in shared.assignments

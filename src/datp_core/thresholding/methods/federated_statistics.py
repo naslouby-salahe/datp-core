@@ -17,6 +17,8 @@ from datp_core.domain.values.ratios import (
     Quantile,
     Ratio,
     RelativeThresholdError,
+    ScoreMoment,
+    ScoreVariance,
     SummaryCoefficient,
     ThresholdValue,
 )
@@ -40,8 +42,8 @@ from datp_core.thresholding.quantiles import (
 class ClientBenignSummary:
     client: ClientIdentity
     count: RowCount
-    mean: float
-    variance: float
+    mean: ScoreMoment
+    variance: ScoreVariance
     benign_exceedance_count: RowCount | None
 
     def __post_init__(self) -> None:
@@ -49,21 +51,6 @@ class ClientBenignSummary:
             self.count.value >= 1,
             "a benign summary requires at least one calibration score",
             ContractSubject.CALIBRATION,
-        )
-        require_contract(
-            self.variance >= 0,
-            "variance must be non-negative",
-            ContractSubject.THRESHOLD,
-        )
-        require_contract(
-            math.isfinite(self.mean),
-            "summary mean must be finite",
-            ContractSubject.THRESHOLD,
-        )
-        require_contract(
-            math.isfinite(self.variance),
-            "summary variance must be finite",
-            ContractSubject.THRESHOLD,
         )
         if self.benign_exceedance_count is not None:
             require_contract(
@@ -75,39 +62,19 @@ class ClientBenignSummary:
 
 @dataclass(frozen=True, slots=True)
 class PooledVarianceDecomposition:
-    global_mean: float
-    within_client_variance: float
-    between_client_variance: float
-    full_pooled_variance: float
+    global_mean: ScoreMoment
+    within_client_variance: ScoreVariance
+    between_client_variance: ScoreVariance
+    full_pooled_variance: ScoreVariance
     between_ratio: Ratio | None
 
     def __post_init__(self) -> None:
         require_contract(
-            self.within_client_variance >= 0,
-            "within-client variance must be non-negative",
-            ContractSubject.THRESHOLD,
-        )
-        require_contract(
-            self.between_client_variance >= 0,
-            "between-client variance must be non-negative",
-            ContractSubject.THRESHOLD,
-        )
-        require_contract(
             floats_exactly_equal(
-                self.full_pooled_variance,
-                self.within_client_variance + self.between_client_variance,
+                self.full_pooled_variance.value,
+                self.within_client_variance.value + self.between_client_variance.value,
             ),
             "the full pooled variance must equal within-client plus between-client variance",
-            ContractSubject.THRESHOLD,
-        )
-        require_contract(
-            math.isfinite(self.global_mean),
-            "decomposition global mean must be finite",
-            ContractSubject.THRESHOLD,
-        )
-        require_contract(
-            math.isfinite(self.full_pooled_variance),
-            "decomposition full pooled variance must be finite",
             ContractSubject.THRESHOLD,
         )
 
@@ -202,7 +169,7 @@ def construct_federated_benign_statistics(
         matched_threshold,
     )
     signed_attainment_error = achieved_exceedance.value - target_exceedance.value
-    absolute_threshold_error = abs(matched_threshold.value - pooled_quantile.value)
+    absolute_threshold_error = AbsoluteThresholdError(abs(matched_threshold.value - pooled_quantile.value))
     relative_threshold_error = _relative_threshold_error(
         absolute_threshold_error,
         pooled_quantile,
@@ -212,7 +179,7 @@ def construct_federated_benign_statistics(
         achieved_exceedance=achieved_exceedance,
         signed_attainment_error=MetricValue(signed_attainment_error),
         absolute_attainment_error=Ratio(abs(signed_attainment_error)),
-        absolute_threshold_error_vs_pooled_quantile=(AbsoluteThresholdError(absolute_threshold_error)),
+        absolute_threshold_error_vs_pooled_quantile=absolute_threshold_error,
         relative_threshold_error_vs_pooled_quantile=(
             None if relative_threshold_error is None else RelativeThresholdError(relative_threshold_error)
         ),
@@ -250,8 +217,8 @@ def _client_summary(
     return ClientBenignSummary(
         client=client_scores.client,
         count=RowCount(scores.size),
-        mean=float(np.mean(scores)),
-        variance=float(np.var(scores, ddof=0)),
+        mean=ScoreMoment(float(np.mean(scores))),
+        variance=ScoreVariance(float(np.var(scores, ddof=0))),
         benign_exceedance_count=None,
     )
 
@@ -260,15 +227,15 @@ def _decomposition(
     summaries: tuple[ClientBenignSummary, ...],
 ) -> PooledVarianceDecomposition:
     total_count = sum(item.count.value for item in summaries)
-    global_mean = sum(item.count.value * item.mean for item in summaries) / total_count
-    within = sum(item.count.value * item.variance for item in summaries) / total_count
-    between = sum(item.count.value * (item.mean - global_mean) ** 2 for item in summaries) / total_count
+    global_mean = sum(item.count.value * item.mean.value for item in summaries) / total_count
+    within = sum(item.count.value * item.variance.value for item in summaries) / total_count
+    between = sum(item.count.value * (item.mean.value - global_mean) ** 2 for item in summaries) / total_count
     full = within + between
     return PooledVarianceDecomposition(
-        global_mean=global_mean,
-        within_client_variance=within,
-        between_client_variance=between,
-        full_pooled_variance=full,
+        global_mean=ScoreMoment(global_mean),
+        within_client_variance=ScoreVariance(within),
+        between_client_variance=ScoreVariance(between),
+        full_pooled_variance=ScoreVariance(full),
         between_ratio=Ratio(between / full) if full > 0 else None,
     )
 
@@ -281,10 +248,10 @@ def _communication_bytes(
 
 
 def _relative_threshold_error(
-    absolute_error: float,
+    absolute_error: AbsoluteThresholdError,
     pooled_quantile: ThresholdValue,
 ) -> float | None:
     if pooled_quantile.value == 0:
         return None
-    candidate = absolute_error / abs(pooled_quantile.value)
+    candidate = absolute_error.value / abs(pooled_quantile.value)
     return candidate if math.isfinite(candidate) else None

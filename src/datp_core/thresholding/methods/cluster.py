@@ -2,7 +2,7 @@
 
 import math
 from dataclasses import dataclass
-from typing import ClassVar
+from typing import ClassVar, Literal
 
 import numpy as np
 from scipy.stats import skew
@@ -22,7 +22,7 @@ from datp_core.domain.values.counts import (
     KMeansMaximumIterationCount,
     Seed,
 )
-from datp_core.domain.values.ratios import ThresholdValue
+from datp_core.domain.values.ratios import ScoreMoment, ThresholdValue
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.protocols.calibration import (
     CANONICAL_QUANTILE,
@@ -47,27 +47,25 @@ from datp_core.thresholding.quantiles import (
 
 
 @dataclass(frozen=True, slots=True)
-class ClusterFingerprint:
-    client: ClientIdentity
-    raw: tuple[float, float, float, float]
-    standardized: tuple[float, float, float, float]
+class FingerprintFeatures:
+    mean: ScoreMoment
+    standard_deviation: ScoreMoment
+    skewness: float
+    p95: ThresholdValue
 
     def __post_init__(self) -> None:
         require_contract(
-            len(self.raw) == 4 and len(self.standardized) == 4,
-            "a cluster fingerprint must carry exactly mean, standard deviation, skewness, and p95",
+            math.isfinite(self.skewness),
+            "fingerprint skewness must be finite",
             ContractSubject.THRESHOLD,
         )
-        require_contract(
-            all(math.isfinite(value) for value in self.raw),
-            "every raw fingerprint feature must be finite",
-            ContractSubject.THRESHOLD,
-        )
-        require_contract(
-            all(math.isfinite(value) for value in self.standardized),
-            "every standardized fingerprint feature must be finite",
-            ContractSubject.THRESHOLD,
-        )
+
+
+@dataclass(frozen=True, slots=True)
+class ClusterFingerprint:
+    client: ClientIdentity
+    raw: FingerprintFeatures
+    standardized: FingerprintFeatures
 
 
 @dataclass(frozen=True, slots=True)
@@ -175,6 +173,12 @@ class GroupedThresholdResult:
         )
 
 
+def _sklearn_init(initialization: KMeansInitialization) -> Literal["k-means++"]:
+    match initialization:
+        case KMeansInitialization.KMEANS_PLUS_PLUS:
+            return "k-means++"
+
+
 def construct_grouped_threshold(
     eligible: tuple[ClientBenignCalibrationScores, ...],
     protocol: ClusterThresholdProtocol,
@@ -186,7 +190,10 @@ def construct_grouped_threshold(
         )
     ordered = tuple(sorted(eligible, key=lambda item: item.client))
     raw_features = tuple(_raw_fingerprint(item.as_array) for item in ordered)
-    matrix = np.asarray(raw_features, dtype=np.float64)
+    matrix = np.asarray(
+        [(f.mean.value, f.standard_deviation.value, f.skewness, f.p95.value) for f in raw_features],
+        dtype=np.float64,
+    )
     if not np.isfinite(matrix).all():
         raise ScientificContractError(
             "fingerprint matrix must be finite before scaling and clustering",
@@ -195,7 +202,7 @@ def construct_grouped_threshold(
     standardized_matrix = StandardScaler().fit_transform(matrix)
     kmeans = KMeans(
         n_clusters=protocol.group_count.value,
-        init="k-means++",
+        init=_sklearn_init(protocol.initialization),
         max_iter=protocol.maximum_iterations.value,
         random_state=protocol.random_state.value,
     )
@@ -205,7 +212,7 @@ def construct_grouped_threshold(
         ClusterFingerprint(
             client=item.client,
             raw=raw,
-            standardized=_as_quadruple(standardized),
+            standardized=_as_fingerprint_features(standardized),
         )
         for item, raw, standardized in zip(
             ordered,
@@ -235,15 +242,18 @@ def construct_grouped_threshold(
     )
 
 
-def _as_quadruple(
-    row: np.ndarray,
-) -> tuple[float, float, float, float]:
-    return float(row[0]), float(row[1]), float(row[2]), float(row[3])
+def _as_fingerprint_features(row: np.ndarray) -> FingerprintFeatures:
+    return FingerprintFeatures(
+        mean=ScoreMoment(float(row[0])),
+        standard_deviation=ScoreMoment(float(row[1])),
+        skewness=float(row[2]),
+        p95=ThresholdValue(float(row[3])),
+    )
 
 
 def _raw_fingerprint(
     scores: np.ndarray,
-) -> tuple[float, float, float, float]:
+) -> FingerprintFeatures:
     mean = float(np.mean(scores))
     standard_deviation = float(np.std(scores, ddof=0))
     if standard_deviation == 0.0 or np.ptp(scores) == 0.0:
@@ -256,7 +266,12 @@ def _raw_fingerprint(
                 subject=ContractSubject.THRESHOLD,
             )
     p95 = exact_empirical_quantile(scores, CANONICAL_QUANTILE).value
-    return mean, standard_deviation, skewness, p95
+    return FingerprintFeatures(
+        mean=ScoreMoment(mean),
+        standard_deviation=ScoreMoment(standard_deviation),
+        skewness=skewness,
+        p95=ThresholdValue(p95),
+    )
 
 
 def _build_clusters(

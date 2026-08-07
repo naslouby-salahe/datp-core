@@ -7,7 +7,14 @@ from tests.unit.thresholding.helpers import client_scores
 from datp_core.domain.enums import QuantileInterpolationSemantics
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.counts import ConformalRankIndex, RowCount
-from datp_core.domain.values.ratios import CoverageTarget, Quantile, SummaryCoefficient, ThresholdValue
+from datp_core.domain.values.ratios import (
+    CoverageTarget,
+    Quantile,
+    ScoreMoment,
+    ScoreVariance,
+    SummaryCoefficient,
+    ThresholdValue,
+)
 from datp_core.thresholding.quantiles import (
     achieved_benign_exceedance,
     conformal_rank_index,
@@ -41,12 +48,12 @@ def test_quantile_interpolation_semantics_is_the_locked_numpy_linear_rule() -> N
 
 
 def test_unweighted_mean_matches_arithmetic_mean() -> None:
-    assert unweighted_mean((1.0, 2.0, 3.0)) == 2.0
+    assert unweighted_mean(tuple(ThresholdValue(v) for v in (1.0, 2.0, 3.0))) == ThresholdValue(2.0)
 
 
 def test_sample_weighted_mean_matches_manual_computation() -> None:
-    result = sample_weighted_mean((1.0, 3.0), (1.0, 3.0))
-    assert result == (1.0 * 1.0 + 3.0 * 3.0) / 4.0
+    result = sample_weighted_mean(tuple(ThresholdValue(v) for v in (1.0, 3.0)), (1.0, 3.0))
+    assert result == ThresholdValue((1.0 * 1.0 + 3.0 * 3.0) / 4.0)
 
 
 def test_conformal_rank_index_matches_classical_split_conformal_formula() -> None:
@@ -82,12 +89,16 @@ def test_achieved_benign_exceedance_is_the_fraction_strictly_above_threshold() -
 
 
 def test_gaussian_matched_exceedance_threshold_at_the_median_returns_the_mean() -> None:
-    result = gaussian_matched_exceedance_threshold(mean=10.0, variance=4.0, quantile=Quantile(0.5))
+    result = gaussian_matched_exceedance_threshold(
+        mean=ScoreMoment(10.0), variance=ScoreVariance(4.0), quantile=Quantile(0.5)
+    )
     assert math.isclose(result.value, 10.0, abs_tol=1e-9)
 
 
 def test_fixed_coefficient_threshold_matches_mean_plus_k_std() -> None:
-    result = fixed_coefficient_threshold(mean=10.0, variance=4.0, coefficient=SummaryCoefficient(2.0))
+    result = fixed_coefficient_threshold(
+        mean=ScoreMoment(10.0), variance=ScoreVariance(4.0), coefficient=SummaryCoefficient(2.0)
+    )
     assert result.value == 10.0 + 2.0 * 2.0
 
 

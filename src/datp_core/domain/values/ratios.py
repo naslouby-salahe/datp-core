@@ -114,3 +114,15 @@ class MetricDelta(FiniteFloatValue):
 
 class TrafficRatePerDay(NonNegativeFiniteFloatValue):
     validation_name: ClassVar[str] = "traffic rate"
+
+
+class ScoreMoment(FiniteFloatValue):
+    """Arithmetic mean of anomaly scores aggregated across a client or cohort."""
+
+    validation_name: ClassVar[str] = "score moment"
+
+
+class ScoreVariance(NonNegativeFiniteFloatValue):
+    """Population or sample variance of anomaly scores."""
+
+    validation_name: ClassVar[str] = "score variance"

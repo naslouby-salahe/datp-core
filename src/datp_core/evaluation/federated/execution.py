@@ -419,7 +419,7 @@ def _deployment_fallback_threshold(
         ):
             if not assignments:
                 return None
-            return ThresholdValue(unweighted_mean(tuple(item.threshold.value for item in assignments)))
+            return unweighted_mean(tuple(item.threshold for item in assignments))
         case ThresholdUnavailableResult():
             return None
 

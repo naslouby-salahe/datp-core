@@ -37,7 +37,7 @@ from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import CalibrationSize, ClientCount, GroupCount, Seed
 from datp_core.domain.values.identifiers import StableRowId
 from datp_core.domain.values.paths import FamilyIdentity
-from datp_core.domain.values.ratios import Quantile
+from datp_core.domain.values.ratios import Quantile, ScoreMoment, ScoreVariance, ThresholdValue
 from datp_core.pipeline.decision.federated import (
     ConstructFederatedThresholdsRequest,
     construct_federated_thresholds,
@@ -209,15 +209,18 @@ def test_grouped_threshold_fingerprint_matches_locked_formula() -> None:
         )
         for index in range(6)
     )
+    from datp_core.thresholding.methods.cluster import FingerprintFeatures
+
     result = construct_grouped_threshold(clients, CLUSTER_THRESHOLD_PROTOCOL)
     for fingerprint in result.fingerprints:
         scores = next(item.as_array for item in clients if item.client == fingerprint.client)
-        assert fingerprint.raw == (
-            float(np.mean(scores)),
-            float(np.std(scores, ddof=0)),
-            float(skew(scores, bias=True)),
-            float(np.quantile(scores, 0.95, method="linear")),
+        expected = FingerprintFeatures(
+            mean=ScoreMoment(float(np.mean(scores))),
+            standard_deviation=ScoreMoment(float(np.std(scores, ddof=0))),
+            skewness=float(skew(scores, bias=True)),
+            p95=ThresholdValue(float(np.quantile(scores, 0.95, method="linear"))),
         )
+        assert fingerprint.raw == expected
 
 
 def test_cluster_threshold_protocol_locks_reject_non_canonical_hyperparameters() -> None:
@@ -270,9 +273,9 @@ def test_conformal_threshold_never_silently_falls_back_for_insufficient_support(
 def test_pooled_variance_decomposition_requires_between_client_term() -> None:
     with pytest.raises(TypeError):
         PooledVarianceDecomposition(  # type: ignore[call-arg]
-            global_mean=0.0,
-            within_client_variance=1.0,
-            full_pooled_variance=1.0,
+            global_mean=ScoreMoment(0.0),
+            within_client_variance=ScoreVariance(1.0),
+            full_pooled_variance=ScoreVariance(1.0),
             between_ratio=None,
         )
 
