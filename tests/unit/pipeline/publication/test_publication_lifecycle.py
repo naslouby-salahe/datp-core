@@ -14,7 +14,6 @@ from datp_core.pipeline.publication.models import (
 from datp_core.pipeline.publication.service import (
     build_completion_record,
     read_completion_record,
-    require_complete,
     validate_reload,
     write_completion_record,
 )
@@ -42,7 +41,6 @@ def test_completion_and_reload_require_exact_published_artifacts(tmp_path: Path)
         artifacts=(artifact,),
     )
     assert completion.state is CompletionState.COMPLETE
-    require_complete(completion)
     validation = validate_reload(root=tmp_path, completion=completion, observed=(artifact,))
     assert validation.valid
 

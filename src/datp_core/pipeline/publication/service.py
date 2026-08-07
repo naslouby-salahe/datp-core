@@ -309,14 +309,6 @@ def build_completion_record(
     )
 
 
-def require_complete(record: CompletionRecord) -> None:
-    if record.state is not CompletionState.COMPLETE:
-        raise ValueError("experiment publication is incomplete")
-    invalid = tuple(item for item in record.artifacts if item.state is not ArtifactState.PUBLISHED)
-    if invalid:
-        raise ValueError("experiment publication contains non-published artifacts")
-
-
 def write_completion_record(directory: Path, record: CompletionRecord) -> Path:
     """Persist one completion record as canonical JSON. Artifact paths are recorded
     exactly as given (typically relative to a shared output root, not this directory,
@@ -375,10 +367,6 @@ def validate_reload(
             evidence.append(f"artifact byte-count mismatch: {artifact.relative_path.as_posix()}")
 
     return ReloadValidation(valid=not evidence, evidence=tuple(evidence))
-
-
-def canonical_model_json_text(model: BaseModel) -> str:
-    return canonical_json_text(model)
 
 
 def serialize_json_model(model: BaseModel, destination: Path) -> Checksum:

@@ -58,9 +58,3 @@ def experiment_output_directory(root: Path, coordinate: ExperimentCoordinate) ->
         / PublicationArtifactDirectory.METRICS.value
         / coordinate.metric.value
     )
-
-
-def artifact_path(root: Path, coordinate: ExperimentCoordinate, filename: str) -> Path:
-    if not filename or filename in {".", ".."} or Path(filename).name != filename:
-        raise ValueError("artifact filenames must be simple non-empty names")
-    return experiment_output_directory(root, coordinate) / filename

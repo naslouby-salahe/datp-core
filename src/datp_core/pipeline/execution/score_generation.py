@@ -6,9 +6,6 @@ from datp_core.domain.enums import SplitProtocolId
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.identifiers import FeatureNameSequence
 from datp_core.learning.federated.models import CheckpointCandidate
-from datp_core.pipeline.execution.checkpoints import select_execution_checkpoint
-from datp_core.pipeline.execution.context import FederatedExecutionContext, client_scoring_inputs
-from datp_core.pipeline.execution.layout import ExecutionArtifactDirectory
 from datp_core.pipeline.scoring.federated import publish_federated_scores
 from datp_core.pipeline.scoring.models import (
     ClientScoringInput,
@@ -16,29 +13,6 @@ from datp_core.pipeline.scoring.models import (
     GenerateFederatedScoresRequest,
 )
 from datp_core.protocols.training import BATCH_SIZE, AutoencoderProtocol
-
-
-def score_execution_context(
-    context: FederatedExecutionContext,
-    *,
-    autoencoder: AutoencoderProtocol,
-    feature_names: FeatureNameSequence,
-) -> FederatedScoreArtifactManifest:
-    selected = select_execution_checkpoint(
-        context,
-        autoencoder=autoencoder,
-        feature_names=feature_names,
-    )
-    return score_selected_checkpoint(
-        checkpoint=selected,
-        scored_split_protocol=context.coordinate.split_protocol,
-        autoencoder=autoencoder,
-        feature_names=feature_names,
-        clients=client_scoring_inputs(context.preprocessing.client_publications, context.clients),
-        output_directory=context.training_directory / ExecutionArtifactDirectory.SCORES,
-        preprocessing_state_set_checksum=context.preprocessing_state_set_checksum,
-        split_manifest_checksum=context.split_manifest_checksum,
-    )
 
 
 def score_selected_checkpoint(

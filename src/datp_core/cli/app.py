@@ -95,7 +95,7 @@ def smoke_command(
         raise typer.Exit(code=map_exception_to_exit(error)) from error
     typer.echo(f"smoke experiments={len(result.experiments)} detail={result.detail}")
     for item in result.experiments:
-        typer.echo(f"{item.experiment.value} seeds={','.join(str(seed) for seed in item.seeds)}")
+        typer.echo(f"{item.experiment.value} seeds={','.join(str(seed.value) for seed in item.seeds)}")
 
 
 @app.command("report")

@@ -89,7 +89,7 @@ def _require_dispatch_covers_registry(dispatch: Mapping[ExperimentId, object], *
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ExperimentRunResult:
     experiment: ExperimentId
-    seeds: tuple[int, ...]
+    seeds: tuple[Seed, ...]
     smoke: bool
     output_root: Path
     detail: str
@@ -121,14 +121,14 @@ class ExperimentStatusRecord:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ProgrammeStatusReport:
     records: tuple[ExperimentStatusRecord, ...]
-    anchor_gate: str
+    anchor_gate: AnchorGateStatus
     campaign_complete: bool
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class AnchorCommandResult:
-    gate_status: str
-    dependent_readiness: str
+    gate_status: AnchorGateStatus
+    dependent_readiness: ExperimentReadiness
     detail: str
 
 
@@ -194,7 +194,6 @@ def run_experiment(
             rmtree(scoped)
     cohort = seed_cohort_for(experiment_id)
     seeds = (canonical_smoke_seed(experiment_id),) if smoke else cohort.values
-    seed_values = tuple(seed.value for seed in seeds)
     detail = _dispatch_experiment(
         experiment_id,
         seeds=seeds,
@@ -203,7 +202,7 @@ def run_experiment(
     )
     return ExperimentRunResult(
         experiment=experiment_id,
-        seeds=seed_values,
+        seeds=seeds,
         smoke=smoke,
         output_root=output_root,
         detail=detail,
@@ -326,7 +325,6 @@ def run_smoke(experiment_id: ExperimentId | None = None, *, overwrite: bool = Fa
         reproduce_anchor(overwrite=overwrite, smoke=True)
         verify_anchor_programme(smoke=True)
     except (AnchorReproductionError, ScientificContractError, MissingPrerequisiteError) as error:
-        # Smoke still exercises journal workflows when the independent anchor path is blocked.
         _ = error
     for item in _CAMPAIGN_ORDER:
         results.append(run_experiment(item, overwrite=overwrite, smoke=True))
@@ -338,7 +336,7 @@ def _publish_smoke_summary(results: tuple[ExperimentRunResult, ...]) -> None:
     SMOKE_SUMMARY_DIRECTORY.mkdir(parents=True, exist_ok=True)
     lines = [
         "smoke_summary",
-        *[f"{item.experiment.value}:seeds={','.join(str(seed) for seed in item.seeds)}" for item in results],
+        *[f"{item.experiment.value}:seeds={','.join(str(seed.value) for seed in item.seeds)}" for item in results],
     ]
     (SMOKE_SUMMARY_DIRECTORY / "COMPLETE").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -367,12 +365,6 @@ def run_campaign(*, overwrite: bool = False) -> CampaignRunResult:
 
 
 def reproduce_anchor(*, overwrite: bool = False, smoke: bool = False) -> AnchorCommandResult:
-    """Run independent anchor reproduction for the declared historical seed cohort.
-
-    Executes HISTORICAL_DATP_REPRODUCTION for the locked five-seed cohort (or one
-    smoke seed), publishes independent observations from completed evaluations, and
-    applies the equivalence gate against locked historical references.
-    """
     from datp_core.pipeline.workflows import preprocess_datasets, require_experiment_declaration
     from datp_core.pipeline.workflows.anchor import (
         VerifyAnchorStageRequest,
@@ -421,13 +413,13 @@ def reproduce_anchor(*, overwrite: bool = False, smoke: bool = False) -> AnchorC
         )
     except AnchorReproductionError as error:
         return AnchorCommandResult(
-            gate_status=AnchorGateStatus.BLOCKED.value,
-            dependent_readiness=ExperimentReadiness.BLOCKED.value,
+            gate_status=AnchorGateStatus.BLOCKED,
+            dependent_readiness=ExperimentReadiness.BLOCKED,
             detail=str(error),
         )
     return AnchorCommandResult(
-        gate_status=result.status.gate_status.value,
-        dependent_readiness=result.status.dependent_readiness.value,
+        gate_status=result.status.gate_status,
+        dependent_readiness=result.status.dependent_readiness,
         detail=(
             f"seeds={seed_cohort.member_count.value} observations={result.status.observation_count.value} smoke={smoke}"
         ),
@@ -455,8 +447,8 @@ def verify_anchor_programme(*, smoke: bool = False) -> AnchorCommandResult:
         )
     )
     return AnchorCommandResult(
-        gate_status=result.status.gate_status.value,
-        dependent_readiness=result.status.dependent_readiness.value,
+        gate_status=result.status.gate_status,
+        dependent_readiness=result.status.dependent_readiness,
         detail=(
             f"observations={result.status.observation_count.value} "
             f"discrepancies={result.status.discrepancy_count.value}"
@@ -470,8 +462,8 @@ def anchor_status() -> AnchorCommandResult:
         decision = load_anchor_gate_decision(diagnostics)
     except AnchorReproductionError as error:
         return AnchorCommandResult(
-            gate_status=AnchorGateStatus.BLOCKED.value,
-            dependent_readiness=ExperimentReadiness.BLOCKED.value,
+            gate_status=AnchorGateStatus.BLOCKED,
+            dependent_readiness=ExperimentReadiness.BLOCKED,
             detail=str(error),
         )
     blocker = (
@@ -479,8 +471,8 @@ def anchor_status() -> AnchorCommandResult:
     )
     unblocked = decision.status in {AnchorGateStatus.PASS, AnchorGateStatus.PASS_WITH_DECLARED_DISCREPANCY}
     return AnchorCommandResult(
-        gate_status=decision.status.value,
-        dependent_readiness=decision.dependent_readiness.value,
+        gate_status=decision.status,
+        dependent_readiness=decision.dependent_readiness,
         detail=(
             f"discrepancies={len(decision.reproduction.discrepancies)} "
             f"blocker={blocker} dependents_unblocked={unblocked}"
@@ -672,7 +664,7 @@ def programme_status(experiment_id: ExperimentId | None = None) -> ProgrammeStat
     )
 
 
-def _status_for_experiment(experiment_id: ExperimentId, *, anchor_gate: str) -> ExperimentStatusRecord:
+def _status_for_experiment(experiment_id: ExperimentId, *, anchor_gate: AnchorGateStatus) -> ExperimentStatusRecord:
     from datp_core.pipeline.workflows import require_experiment_declaration
 
     declaration = require_experiment_declaration(experiment_id)
@@ -687,8 +679,8 @@ def _status_for_experiment(experiment_id: ExperimentId, *, anchor_gate: str) -> 
             detail="suppressed",
         )
     if experiment_id in ANCHOR_GATED_EXPERIMENTS and anchor_gate not in {
-        AnchorGateStatus.PASS.value,
-        AnchorGateStatus.PASS_WITH_DECLARED_DISCREPANCY.value,
+        AnchorGateStatus.PASS,
+        AnchorGateStatus.PASS_WITH_DECLARED_DISCREPANCY,
     }:
         return ExperimentStatusRecord(
             experiment=experiment_id,
@@ -780,7 +772,7 @@ def format_plan(presentation: PlanPresentation) -> str:
         f"anchor_required={','.join(item.value for item in presentation.anchor_required)}",
     ]
     for experiment_id, seeds in presentation.seed_cohorts:
-        lines.append(f"seeds[{experiment_id.value}]={','.join(str(seed) for seed in seeds)}")
+        lines.append(f"seeds[{experiment_id.value}]={','.join(str(seed.value) for seed in seeds)}")
     disposition_counts: dict[str, int] = {}
     for entry in presentation.plan.entries:
         disposition_counts[entry.disposition.value] = disposition_counts.get(entry.disposition.value, 0) + 1

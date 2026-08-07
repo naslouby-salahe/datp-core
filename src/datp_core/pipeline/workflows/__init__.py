@@ -23,6 +23,7 @@ from datp_core.domain.errors import (
     ScientificContractError,
     UnknownIdentifierError,
 )
+from datp_core.domain.values.counts import Seed
 from datp_core.pipeline.planning import (
     ExperimentPlan,
     PlanDisposition,
@@ -72,7 +73,7 @@ class ValidationResult:
 class PlanPresentation:
     plan: ExperimentPlan
     experiment_ids: tuple[ExperimentId, ...]
-    seed_cohorts: tuple[tuple[ExperimentId, tuple[int, ...]], ...]
+    seed_cohorts: tuple[tuple[ExperimentId, tuple[Seed, ...]], ...]
     anchor_required: tuple[ExperimentId, ...]
     registered_workflows: tuple[ExperimentId, ...]
 
@@ -178,7 +179,7 @@ def build_programme_plan(experiment_id: ExperimentId | None = None) -> PlanPrese
         )
         experiment_ids = (experiment_id,)
     cohorts = tuple(
-        (item, tuple(seed.value for seed in seed_cohort_for(item).values))
+        (item, seed_cohort_for(item).values)
         for item in experiment_ids
         if item is not ExperimentId.HISTORICAL_DATP_REPRODUCTION
     )
