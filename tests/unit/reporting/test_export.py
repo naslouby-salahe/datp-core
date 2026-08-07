@@ -2,6 +2,8 @@ from pathlib import Path
 
 import pytest
 
+from datp_core.analysis.mechanisms import AbsorptionCohortResult
+from datp_core.analysis.scientific_decision import ScientificDecision, ScientificDecisionResult
 from datp_core.domain.enums import (
     AvailabilityStatus,
     EvidenceRole,
@@ -12,7 +14,12 @@ from datp_core.domain.enums import (
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import Seed
 from datp_core.domain.values.ratios import MetricValue
-from datp_core.reporting.export import PublicationBundle, ReportProvenance, export_markdown
+from datp_core.reporting.export import (
+    PublicationBundle,
+    ReportProvenance,
+    export_markdown,
+    export_mechanism_publication,
+)
 from datp_core.reporting.figures import (
     EmpiricalCdfFigureSeries,
     FigureSeries,
@@ -142,6 +149,51 @@ def test_report_provenance_rejects_primitive_checksum() -> None:
             evidence_role=EvidenceRole.CONFIRMATORY,
             analysis_checksum="a" * 64,  # type: ignore[arg-type]
         )
+
+
+@pytest.fixture
+def sample_absorption_mechanisms() -> tuple[AbsorptionCohortResult, ...]:
+    return (
+        AbsorptionCohortResult(
+            observations=(),
+            decision=ScientificDecisionResult(
+                evidence_role=EvidenceRole.TRAINING_STRESS_TEST,
+                decision=ScientificDecision.BLOCKED,
+                point_estimate=None,
+                interval=None,
+                rationale="fixture cohort blocked for evidence-role publication test",
+            ),
+            mean_retention=None,
+        ),
+    )
+
+
+def test_export_mechanism_publication_requires_explicit_evidence_role(
+    tmp_path: Path,
+    sample_absorption_mechanisms: tuple[AbsorptionCohortResult, ...],
+) -> None:
+    with pytest.raises(TypeError):
+        export_mechanism_publication(  # type: ignore[call-arg]
+            sample_absorption_mechanisms,
+            experiment=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
+            population=PopulationId.NBAIOT_NATURAL_DEVICES,
+            output_directory=tmp_path,
+        )
+
+
+def test_export_mechanism_publication_does_not_override_supplied_role(
+    tmp_path: Path,
+    sample_absorption_mechanisms: tuple[AbsorptionCohortResult, ...],
+) -> None:
+    export_mechanism_publication(
+        sample_absorption_mechanisms,
+        experiment=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
+        population=PopulationId.NBAIOT_NATURAL_DEVICES,
+        output_directory=tmp_path,
+        evidence_role=EvidenceRole.TRAINING_STRESS_TEST,
+    )
+    provenance_text = (tmp_path / "publication.md").read_text()
+    assert EvidenceRole.TRAINING_STRESS_TEST.value in provenance_text
 
 
 def test_empirical_cdf_figure_series_uses_reconstruction_and_cumulative_metrics() -> None:

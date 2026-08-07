@@ -230,6 +230,7 @@ def analyze_confirmatory_campaign(
             experiment=ExperimentId.SHARED_VS_LOCAL_CONFIRMATION,
             population=PopulationId.NBAIOT_NATURAL_DEVICES,
             output_directory=output / "mechanisms",
+            evidence_role=EvidenceRole.MECHANISM,
         )
     return output
 

@@ -305,20 +305,17 @@ def export_mechanism_publication(
     experiment: ExperimentId,
     population: PopulationId,
     output_directory: Path,
-    evidence_role: EvidenceRole = EvidenceRole.MECHANISM,
+    evidence_role: EvidenceRole,
 ) -> Path:
     payload = "\n".join(_render_mechanisms(mechanisms))
     write_text_atomically(output_directory / "mechanism_report.md", payload)
     tables = _mechanism_tables(mechanisms)
-    role = evidence_role
-    if any(isinstance(item, AbsorptionCohortResult) for item in mechanisms):
-        role = EvidenceRole.TRAINING_STRESS_TEST
     return export_markdown(
         PublicationBundle(
             provenance=ReportProvenance(
                 experiment=experiment,
                 population=population,
-                evidence_role=role,
+                evidence_role=evidence_role,
                 analysis_checksum=canonical_checksum(mechanisms),
             ),
             claims=(

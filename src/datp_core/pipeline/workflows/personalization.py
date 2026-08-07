@@ -21,6 +21,7 @@ from datp_core.domain.contracts import ClientCollection, ClientOwned
 from datp_core.domain.enums import (
     ContractSubject,
     DatasetId,
+    EvidenceRole,
     ExperimentId,
     FederatedThresholdMethod,
     MetricId,
@@ -385,6 +386,7 @@ def analyze_ditto_absorption(
         experiment=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
         population=PopulationId.NBAIOT_NATURAL_DEVICES,
         output_directory=output_directory,
+        evidence_role=EvidenceRole.TRAINING_STRESS_TEST,
     )
     return cohort
 
@@ -751,6 +753,7 @@ def analyze_fedprox_absorption(
         experiment=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST,
         population=PopulationId.NBAIOT_NATURAL_DEVICES,
         output_directory=output_directory,
+        evidence_role=EvidenceRole.TRAINING_STRESS_TEST,
     )
     return cohort
 
