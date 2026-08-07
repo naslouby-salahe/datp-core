@@ -1,7 +1,6 @@
 """Centralized reconstruction-score generation, persistence, and reuse."""
 
 from dataclasses import replace
-from hashlib import sha256
 from pathlib import Path
 
 import numpy as np
@@ -13,9 +12,16 @@ from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractEr
 from datp_core.domain.provenance import canonical_checksum
 from datp_core.domain.values.checksums import Checksum, checksum_file
 from datp_core.domain.values.counts import FeatureCount, RowCount
+from datp_core.evaluation.fixed_score.checksums import ordered_text_checksum
 from datp_core.learning.autoencoder import ReconstructionAutoencoder
 from datp_core.learning.centralized.training import load_centralized_model_tensors
-from datp_core.pipeline.publication.service import ArtifactPublication, FunctionalArtifactCodec, publish_artifact
+from datp_core.pipeline.publication.service import (
+    ArtifactPublication,
+    FunctionalArtifactCodec,
+    artifact_completion_marker_matches,
+    publish_artifact,
+    write_artifact_completion_marker,
+)
 from datp_core.pipeline.scoring.frames import (
     score_and_persist_autoencoder_frame,
     validate_persisted_score_frame,
@@ -32,8 +38,6 @@ from datp_core.pipeline.scoring.models import (
     ScorePartitionBinding,
 )
 from datp_core.runtime.compute import resolve_cuda_device
-
-IDENTITY_LENGTH_PREFIX_BYTES = 8
 
 
 def generate_centralized_scores(request: GenerateCentralizedScoresRequest) -> GenerateCentralizedScoresResult:
@@ -104,9 +108,9 @@ def write_centralized_scoring(
 ) -> CentralizedScoringResult:
     published_request = replace(request, output_directory=directory)
     scoring = score_centralized_reference(published_request)
-    (directory / CentralizedScoreAssetName.COMPLETE).write_text(
-        score_artifact_set_checksum(published_request, scoring).value,
-        encoding="utf-8",
+    write_artifact_completion_marker(
+        directory / CentralizedScoreAssetName.COMPLETE,
+        score_artifact_set_checksum(published_request, scoring),
     )
     return scoring
 
@@ -136,9 +140,9 @@ def centralized_scoring_is_reusable(request: CentralizedScoringRequest, director
             evaluation_row_count=RowCount(evaluation.height),
         )
         expected = score_artifact_set_checksum(request, scoring)
-        return complete.read_text(encoding="utf-8").strip() == expected.value
-    except (ArtifactIntegrityError, OSError, ScientificContractError, UnicodeError, ValueError):
+    except (ArtifactIntegrityError, OSError, ScientificContractError, ValueError):
         return False
+    return artifact_completion_marker_matches(complete, expected)
 
 
 def load_reused_centralized_scoring(
@@ -350,22 +354,15 @@ def _validated_reused_score_frame(
 
 
 def _score_partition_binding(frame: pl.DataFrame, partition_role: PartitionRole) -> ScorePartitionBinding:
+    columns = (ScoreFrameColumn.STABLE_ROW_ID.value, ScoreFrameColumn.OUTCOME_LABEL.value)
+    identity_values = tuple(
+        str(value) for row_id, label in frame.select(columns).iter_rows() for value in (row_id, label)
+    )
     return ScorePartitionBinding(
         partition_role=partition_role,
         row_count=RowCount(frame.height),
-        ordered_identity_checksum=_ordered_identity_checksum(frame),
+        ordered_identity_checksum=ordered_text_checksum(identity_values),
     )
-
-
-def _ordered_identity_checksum(frame: pl.DataFrame) -> Checksum:
-    digest = sha256()
-    columns = (ScoreFrameColumn.STABLE_ROW_ID.value, ScoreFrameColumn.OUTCOME_LABEL.value)
-    for row_id, label in frame.select(columns).iter_rows():
-        for value in (str(row_id), str(label)):
-            encoded = value.encode("utf-8")
-            digest.update(len(encoded).to_bytes(IDENTITY_LENGTH_PREFIX_BYTES, byteorder="big", signed=False))
-            digest.update(encoded)
-    return Checksum(digest.hexdigest())
 
 
 def _rebase_artifact(artifact: PooledScoreArtifact, path: Path) -> PooledScoreArtifact:

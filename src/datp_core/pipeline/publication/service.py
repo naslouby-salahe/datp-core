@@ -268,6 +268,26 @@ def complete_digest(manifest_payload: str, schema_payload: str) -> Checksum:
     return checksum_text(f"{manifest_payload}\n{schema_payload}")
 
 
+def write_artifact_completion_marker(marker: Path, digest: Checksum) -> None:
+    """Persist one artifact's completion digest as its plain-text COMPLETE marker."""
+    marker.write_text(digest.value, encoding="utf-8")
+
+
+def artifact_completion_marker_matches(marker: Path, expected: Checksum) -> bool:
+    """Compare a persisted completion-marker digest against the freshly computed expected digest.
+
+    A missing, unreadable, or non-UTF-8 marker means the artifact is not reusable rather
+    than a caller bug: it is the same corrupted/incomplete-artifact case as a checksum
+    mismatch, so it must be treated identically by every reuse-validation call site.
+    """
+    if not marker.is_file():
+        return False
+    try:
+        return marker.read_text(encoding="utf-8").strip() == expected.value
+    except (OSError, UnicodeError):
+        return False
+
+
 def build_completion_record(
     *,
     plan_digest: Checksum,

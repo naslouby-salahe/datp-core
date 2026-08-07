@@ -19,7 +19,13 @@ from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractEr
 from datp_core.domain.provenance import canonical_checksum
 from datp_core.domain.values.checksums import checksum_file
 from datp_core.domain.values.counts import FeatureCount, RowCount
-from datp_core.pipeline.publication.service import ArtifactPublication, FunctionalArtifactCodec, publish_artifact
+from datp_core.pipeline.publication.service import (
+    ArtifactPublication,
+    FunctionalArtifactCodec,
+    artifact_completion_marker_matches,
+    publish_artifact,
+    write_artifact_completion_marker,
+)
 from datp_core.pipeline.scoring.frames import (
     load_checkpoint_model,
     score_and_persist_autoencoder_frame,
@@ -111,7 +117,10 @@ def generate_federated_scores(request: ScoreGenerationRequest, device: torch.dev
                 ),
             )
     invariant = _fixed_score_invariant(request, records)
-    _write_complete_marker(request.output_directory, invariant)
+    write_artifact_completion_marker(
+        request.output_directory / FederatedScoreAssetName.COMPLETE.value,
+        canonical_checksum(invariant),
+    )
     return _result_from_inventory(request, records)
 
 
@@ -141,9 +150,9 @@ def federated_scoring_is_reusable(request: ScoreGenerationRequest, directory: Pa
     try:
         loaded = load_reused_federated_scores(request, directory)
         expected = canonical_checksum(_invariant_from_manifest(loaded.manifest))
-        return complete.read_text(encoding="utf-8").strip() == expected.value
     except (ArtifactIntegrityError, OSError, ScientificContractError, ValueError):
         return False
+    return artifact_completion_marker_matches(complete, expected)
 
 
 def load_reused_federated_scores(
@@ -395,8 +404,3 @@ def _asset_name_for_partition(role: PartitionRole) -> FederatedScoreAssetName:
             raise ScientificContractError("training rows are never scored", subject=role)
         case PartitionRole.STATIC_REFERENCE_RESERVE:
             raise ScientificContractError("static-reference reserve rows are never scored", subject=role)
-
-
-def _write_complete_marker(directory: Path, invariant: FixedScoreInvariant) -> None:
-    digest = canonical_checksum(invariant)
-    (directory / FederatedScoreAssetName.COMPLETE.value).write_text(digest.value, encoding="utf-8")
