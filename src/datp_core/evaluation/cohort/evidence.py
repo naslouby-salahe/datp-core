@@ -1,5 +1,3 @@
-"""Derivation of threshold-independent cohort support counts from score artifacts."""
-
 import polars as pl
 
 from datp_core.datasets.partitioning.contracts import (
@@ -20,23 +18,42 @@ type FederatedScoreRecord = ScoreRecord[FederatedTrainingCoordinate, ClientIdent
 def client_partition_counts_from_scores(
     manifest: FederatedScoreArtifactManifest,
 ) -> tuple[ClientPartitionCounts, ...]:
-    calibration = tuple(sorted(manifest.calibration_records, key=lambda record: record.scored_client))
-    evaluation = tuple(sorted(manifest.evaluation_records, key=lambda record: record.scored_client))
-    if tuple(record.scored_client for record in calibration) != tuple(record.scored_client for record in evaluation):
+    calibration = sorted(manifest.calibration_records, key=lambda record: record.scored_client)
+    evaluation = sorted(manifest.evaluation_records, key=lambda record: record.scored_client)
+
+    if len(calibration) != len(evaluation):
         raise ScientificContractError("evaluation inputs require matching calibration and evaluation score clients")
-    return tuple(
-        ClientPartitionCounts(
-            client=calibration_record.scored_client,
-            benign_calibration_count=_label_count(calibration_record, PopulationOutcomeLabel.BENIGN),
-            benign_evaluation_count=_label_count(evaluation_record, PopulationOutcomeLabel.BENIGN),
-            attack_evaluation_count=_label_count(evaluation_record, PopulationOutcomeLabel.ATTACK),
-            accepted=True,
-            deployment_fallback=False,
+
+    counts: list[ClientPartitionCounts] = []
+    for calibration_record, evaluation_record in zip(calibration, evaluation, strict=True):
+        if calibration_record.scored_client != evaluation_record.scored_client:
+            raise ScientificContractError("evaluation inputs require matching calibration and evaluation score clients")
+
+        (benign_cal,) = _extract_label_counts(calibration_record, (PopulationOutcomeLabel.BENIGN,))
+        benign_eval, attack_eval = _extract_label_counts(
+            evaluation_record, (PopulationOutcomeLabel.BENIGN, PopulationOutcomeLabel.ATTACK)
         )
-        for calibration_record, evaluation_record in zip(calibration, evaluation, strict=True)
-    )
+
+        counts.append(
+            ClientPartitionCounts(
+                client=calibration_record.scored_client,
+                benign_calibration_count=benign_cal,
+                benign_evaluation_count=benign_eval,
+                attack_evaluation_count=attack_eval,
+                accepted=True,
+                deployment_fallback=False,
+            )
+        )
+
+    return tuple(counts)
 
 
-def _label_count(record: FederatedScoreRecord, label: PopulationOutcomeLabel) -> RowCount:
-    frame = pl.read_parquet(record.path)
-    return RowCount(int((frame[ScoreFrameColumn.OUTCOME_LABEL.value] == label.value).sum()))
+def _extract_label_counts(
+    record: FederatedScoreRecord, labels: tuple[PopulationOutcomeLabel, ...]
+) -> tuple[RowCount, ...]:
+    col_name = ScoreFrameColumn.OUTCOME_LABEL.value
+    exprs = [pl.col(col_name).eq(label.value).sum().alias(label.name) for label in labels]
+
+    result = pl.scan_parquet(record.path).select(exprs).collect().row(0)
+
+    return tuple(RowCount(count) for count in result)

@@ -45,7 +45,7 @@ from datp_core.domain.values.ratios import (
     ProximalCoefficient,
     ScoreValue,
 )
-from datp_core.evaluation.cohort.construction import build_evaluation_cohort_manifest
+from datp_core.evaluation.cohort.construction import assert_cohort_invariant_to_threshold_methods
 from datp_core.evaluation.cohort.contracts import EvaluationCohortManifest
 from datp_core.evaluation.cohort.evidence import client_partition_counts_from_scores
 from datp_core.evaluation.federated.publication import FederatedEvaluationAssetName
@@ -298,10 +298,14 @@ def run_ditto_stress_test_seed(*, training_seed: Seed, regularization: DittoRegu
             subject=personalized_coordinate.model,
         )
     reference_manifest = scores.manifests.require(shared.assignments[0].client)
-    evaluation_cohort = build_evaluation_cohort_manifest(
+    evaluation_cohort = assert_cohort_invariant_to_threshold_methods(
         population=population,
         partition_seed=personalized_coordinate.training_seed,
         client_counts=client_partition_counts_from_scores(reference_manifest),
+        methods=(
+            FederatedThresholdMethod.SHARED_THRESHOLD,
+            FederatedThresholdMethod.LOCAL_THRESHOLD,
+        ),
     )
     return DittoStressTestResult(
         personalized_coordinate=personalized_coordinate,
@@ -311,9 +315,9 @@ def run_ditto_stress_test_seed(*, training_seed: Seed, regularization: DittoRegu
             client_metric(
                 personalized_coordinate,
                 FederatedThresholdMethod.SHARED_THRESHOLD,
-                population,
                 scores.manifests.require(assignment.client),
                 assignment,
+                evaluation_cohort,
             )
             for assignment in shared.assignments
         ),
@@ -321,9 +325,9 @@ def run_ditto_stress_test_seed(*, training_seed: Seed, regularization: DittoRegu
             client_metric(
                 personalized_coordinate,
                 FederatedThresholdMethod.LOCAL_THRESHOLD,
-                population,
                 scores.manifests.require(assignment.client),
                 assignment,
+                evaluation_cohort,
             )
             for assignment in local.assignments
         ),

@@ -18,14 +18,12 @@ from datp_core.domain.enums import (
     EvidenceRole,
     FederatedThresholdMethod,
     PartitionRole,
-    PopulationId,
     ScoreFrameColumn,
 )
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.ratios import ScoreValue
 from datp_core.evaluation.client_metrics import calculate_client_metrics
-from datp_core.evaluation.cohort.construction import build_evaluation_cohort_manifest
-from datp_core.evaluation.cohort.evidence import client_partition_counts_from_scores
+from datp_core.evaluation.cohort.contracts import EvaluationCohortManifest
 from datp_core.evaluation.confusion import calculate_confusion_counts
 from datp_core.evaluation.fixed_score.checksums import evaluation_label_checksum, source_row_checksum
 from datp_core.evaluation.models import ClientMetricResult
@@ -53,9 +51,9 @@ def client_scoring_input(
 def client_metric(
     coordinate: FederatedTrainingCoordinate,
     threshold_method: FederatedThresholdMethod,
-    population: PopulationId,
     manifest: FederatedScoreArtifactManifest,
     assignment: ThresholdAssignment,
+    cohort_manifest: EvaluationCohortManifest,
 ) -> ClientMetricResult:
     record = score_record_for_client(manifest.evaluation_records, assignment.client, PartitionRole.EVALUATION)
     frame = pl.read_parquet(record.path)
@@ -64,11 +62,6 @@ def client_metric(
     scores = tuple(ScoreValue(float(value)) for value in error_values)
     labels = tuple(PopulationOutcomeLabel(str(value)) for value in outcome_values)
     rows = tuple(str(value) for value in frame[ScoreFrameColumn.STABLE_ROW_ID.value].to_list())
-    cohort_manifest = build_evaluation_cohort_manifest(
-        population=population,
-        partition_seed=coordinate.training_seed,
-        client_counts=client_partition_counts_from_scores(manifest),
-    )
     eligibility_matches = tuple(item for item in cohort_manifest.records if item.client == assignment.client)
     if len(eligibility_matches) != 1:
         raise ScientificContractError(

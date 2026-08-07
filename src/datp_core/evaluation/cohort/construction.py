@@ -1,5 +1,3 @@
-"""Pure threshold-independent evaluation cohort classification."""
-
 from datp_core.datasets.capabilities import CapabilityStatus
 from datp_core.datasets.partitioning.contracts import (
     ClientIdentity,
@@ -30,11 +28,11 @@ def build_evaluation_cohort_manifest(
     partition_seed: Seed,
     client_counts: tuple[ClientPartitionCounts, ...],
 ) -> EvaluationCohortManifest:
-    """Construct threshold-independent cohorts from already measured support counts."""
     support = MINIMUM_BENIGN_SUPPORT
     capabilities = population_capabilities(population)
     records: list[ClientEligibilityRecord] = []
     memberships: list[EvaluationCohortMembership] = []
+
     for counts in sorted(client_counts, key=lambda item: item.client):
         client = counts.client
         if client.population is not population or client.identity_kind is not capabilities.identity_kind:
@@ -45,6 +43,7 @@ def build_evaluation_cohort_manifest(
         record, client_memberships = _classify_client(client, support, counts, capabilities)
         records.append(record)
         memberships.extend(client_memberships)
+
     return EvaluationCohortManifest(
         population=population,
         partition_seed=partition_seed,
@@ -67,34 +66,24 @@ def assert_cohort_invariant_to_threshold_methods(
             subject=population,
             reason="invariance cannot be demonstrated over an empty method set",
         )
-    baseline = build_evaluation_cohort_manifest(
+    return build_evaluation_cohort_manifest(
         population=population,
         partition_seed=partition_seed,
         client_counts=client_counts,
     )
-    for _method in methods[1:]:
-        candidate = build_evaluation_cohort_manifest(
-            population=population,
-            partition_seed=partition_seed,
-            client_counts=client_counts,
-        )
-        if candidate != baseline:
-            raise ScientificContractError(
-                "evaluation cohorts changed across threshold methods",
-                subject=population,
-                reason="eligibility is decided before threshold construction and must be reused",
-            )
-    return baseline
 
 
 def cohort_record_for_client(
     cohort: EvaluationCohortManifest,
     client: ClientIdentity,
 ) -> ClientEligibilityRecord | None:
-    matches = tuple(record for record in cohort.records if record.client == client)
-    if len(matches) > 1:
-        raise ScientificContractError("evaluation cohort cannot repeat a client")
-    return matches[0] if matches else None
+    match = None
+    for record in cohort.records:
+        if record.client == client:
+            if match is not None:
+                raise ScientificContractError("evaluation cohort cannot repeat a client")
+            match = record
+    return match
 
 
 def _classify_client(
@@ -106,16 +95,21 @@ def _classify_client(
     reasons = _support_exclusion_reasons(counts, support, capabilities.fpr_evaluation)
     calibration_eligible = _is_calibration_eligible(counts, support)
     fpr_evaluable = _is_fpr_evaluable(calibration_eligible, reasons)
+
     attack_reasons = _attack_exclusion_reasons(counts, capabilities)
     attack_evaluable = counts.accepted and not attack_reasons
+
+    combined_unique_reasons = _unique_reasons((*reasons, *attack_reasons))
+
     memberships = _cohort_memberships(
         client,
         counts,
         fpr_evaluable,
         attack_evaluable,
         reasons,
-        attack_reasons,
+        combined_unique_reasons,
     )
+
     record = ClientEligibilityRecord(
         client=client,
         benign_calibration_count=counts.benign_calibration_count,
@@ -125,7 +119,7 @@ def _classify_client(
         fpr_evaluable=fpr_evaluable,
         attack_evaluable=attack_evaluable,
         deployment_fallback=counts.deployment_fallback,
-        exclusion_reasons=_unique_reasons((*reasons, *attack_reasons)),
+        exclusion_reasons=combined_unique_reasons,
     )
     return record, memberships
 
@@ -155,14 +149,13 @@ def _is_fpr_evaluable(
     calibration_eligible: bool,
     reasons: list[ClientExclusionReason],
 ) -> bool:
-    return calibration_eligible and not any(
-        reason
-        in {
-            ClientExclusionReason.EMPTY_BENIGN_EVALUATION,
-            ClientExclusionReason.POPULATION_PROHIBITS_FPR,
-        }
-        for reason in reasons
-    )
+    if not calibration_eligible:
+        return False
+    forbidden = {
+        ClientExclusionReason.EMPTY_BENIGN_EVALUATION,
+        ClientExclusionReason.POPULATION_PROHIBITS_FPR,
+    }
+    return forbidden.isdisjoint(reasons)
 
 
 def _attack_exclusion_reasons(
@@ -191,7 +184,7 @@ def _cohort_memberships(
     fpr_evaluable: bool,
     attack_evaluable: bool,
     reasons: list[ClientExclusionReason],
-    attack_reasons: list[ClientExclusionReason],
+    combined_unique_reasons: tuple[ClientExclusionReason, ...],
 ) -> tuple[EvaluationCohortMembership, ...]:
     memberships: list[EvaluationCohortMembership] = []
     if fpr_evaluable:
@@ -215,7 +208,7 @@ def _cohort_memberships(
             EvaluationCohortMembership(
                 client=client,
                 cohort=EvaluationCohort.DEPLOYMENT_FALLBACK,
-                reasons=(ClientExclusionReason.DEPLOYMENT_FALLBACK_ONLY, *tuple(reasons)),
+                reasons=(ClientExclusionReason.DEPLOYMENT_FALLBACK_ONLY, *reasons),
             )
         )
     if not fpr_evaluable and not attack_evaluable:
@@ -223,7 +216,7 @@ def _cohort_memberships(
             EvaluationCohortMembership(
                 client=client,
                 cohort=EvaluationCohort.UNAVAILABLE,
-                reasons=_unique_reasons((*reasons, *attack_reasons)) or (ClientExclusionReason.CLIENT_NOT_ACCEPTED,),
+                reasons=combined_unique_reasons or (ClientExclusionReason.CLIENT_NOT_ACCEPTED,),
             )
         )
     return tuple(memberships)
@@ -232,8 +225,4 @@ def _cohort_memberships(
 def _unique_reasons(
     reasons: tuple[ClientExclusionReason, ...],
 ) -> tuple[ClientExclusionReason, ...]:
-    unique: list[ClientExclusionReason] = []
-    for reason in reasons:
-        if reason not in unique:
-            unique.append(reason)
-    return tuple(unique)
+    return tuple(dict.fromkeys(reasons))

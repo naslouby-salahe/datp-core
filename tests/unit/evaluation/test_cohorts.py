@@ -86,6 +86,16 @@ def test_cohort_membership_is_invariant_to_threshold_method() -> None:
     assert any(item.cohort is EvaluationCohort.FPR_EVALUABLE for item in manifest.memberships)
 
 
+def test_cohort_invariance_requires_methods() -> None:
+    with pytest.raises(ScientificContractError):
+        assert_cohort_invariant_to_threshold_methods(
+            population=PopulationId.NBAIOT_NATURAL_DEVICES,
+            partition_seed=Seed(0),
+            client_counts=(),
+            methods=(),
+        )
+
+
 def test_cohort_rejects_identity_kind_drift() -> None:
     counts = (
         _counts(
@@ -101,16 +111,6 @@ def test_cohort_rejects_identity_kind_drift() -> None:
             population=PopulationId.NBAIOT_NATURAL_DEVICES,
             partition_seed=Seed(0),
             client_counts=counts,
-        )
-
-
-def test_cohort_invariance_requires_methods() -> None:
-    with pytest.raises(ScientificContractError):
-        assert_cohort_invariant_to_threshold_methods(
-            population=PopulationId.NBAIOT_NATURAL_DEVICES,
-            partition_seed=Seed(0),
-            client_counts=(),
-            methods=(),
         )
 
 

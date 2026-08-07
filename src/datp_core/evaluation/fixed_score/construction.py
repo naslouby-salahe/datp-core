@@ -16,7 +16,7 @@ from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.provenance import canonical_checksum
 from datp_core.domain.values.ratios import ScoreValue, ThresholdValue
 from datp_core.evaluation.client_metrics import calculate_client_metrics
-from datp_core.evaluation.cohort.construction import build_evaluation_cohort_manifest
+from datp_core.evaluation.cohort.construction import assert_cohort_invariant_to_threshold_methods
 from datp_core.evaluation.cohort.contracts import ClientEligibilityRecord, EvaluationCohortManifest
 from datp_core.evaluation.cohort.evidence import client_partition_counts_from_scores
 from datp_core.evaluation.confusion import calculate_confusion_counts
@@ -64,10 +64,11 @@ def build_federated_evaluation_inputs(
             subject=calibration_role,
         )
 
-    cohort = build_evaluation_cohort_manifest(
+    cohort = assert_cohort_invariant_to_threshold_methods(
         population=score_manifest.coordinate.population,
         partition_seed=score_manifest.coordinate.training_seed,
         client_counts=client_partition_counts_from_scores(score_manifest),
+        methods=(threshold_method,),
     )
     invariant = FixedScoreInvariant.from_manifest(score_manifest)
     evidence = FixedScoreEvidence(

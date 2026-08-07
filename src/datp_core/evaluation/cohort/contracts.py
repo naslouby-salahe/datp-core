@@ -1,5 +1,3 @@
-"""Persisted threshold-independent evaluation cohort contracts."""
-
 from enum import StrEnum
 
 from pydantic import model_validator
@@ -71,22 +69,31 @@ class EvaluationCohortManifest(StrictModel):
 
     @model_validator(mode="after")
     def validate_manifest(self) -> "EvaluationCohortManifest":
-        record_clients = tuple(record.client for record in self.records)
-        if len(record_clients) != len(frozenset(record_clients)):
-            raise ValueError("cohort records must be unique by client")
-        if any(client.population is not self.population for client in record_clients):
-            raise ValueError("cohort record clients must match the manifest population")
-        membership_clients = tuple(item.client for item in self.memberships)
-        if any(client.population is not self.population for client in membership_clients):
-            raise ValueError("cohort membership clients must match the manifest population")
         if self.minimum_benign_calibration_support != MINIMUM_BENIGN_SUPPORT:
             raise ValueError("cohort manifests must use the locked minimum benign calibration support")
-        fpr_evaluable = frozenset(
-            item.client for item in self.memberships if item.cohort is EvaluationCohort.FPR_EVALUABLE
-        )
-        fallback = frozenset(
-            item.client for item in self.memberships if item.cohort is EvaluationCohort.DEPLOYMENT_FALLBACK
-        )
-        if fpr_evaluable & fallback:
+
+        seen_clients: set[ClientIdentity] = set()
+        for record in self.records:
+            client = record.client
+            if client in seen_clients:
+                raise ValueError("cohort records must be unique by client")
+            if client.population is not self.population:
+                raise ValueError("cohort record clients must match the manifest population")
+            seen_clients.add(client)
+
+        fpr_evaluable: set[ClientIdentity] = set()
+        fallback: set[ClientIdentity] = set()
+        for item in self.memberships:
+            client = item.client
+            if client.population is not self.population:
+                raise ValueError("cohort membership clients must match the manifest population")
+
+            if item.cohort is EvaluationCohort.FPR_EVALUABLE:
+                fpr_evaluable.add(client)
+            elif item.cohort is EvaluationCohort.DEPLOYMENT_FALLBACK:
+                fallback.add(client)
+
+        if not fpr_evaluable.isdisjoint(fallback):
             raise ValueError("deployment-fallback clients cannot enter the FPR-evaluable cohort")
+
         return self
