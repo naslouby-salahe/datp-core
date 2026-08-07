@@ -14,6 +14,7 @@ from pathlib import Path
 
 import polars as pl
 
+from datp_core.datasets.edge_iiotset.schema import EdgeCanonicalColumn
 from datp_core.datasets.partitioning.contracts import (
     ChronologicalPartitionDiagnosticsDocument,
     ControlledPartitionCondition,
@@ -27,11 +28,12 @@ from datp_core.datasets.partitioning.contracts import (
 from datp_core.datasets.partitioning.integrity import membership_frame_checksum, validate_split_manifest
 from datp_core.datasets.partitioning.splits import split_membership
 from datp_core.datasets.registry import construct_population
-from datp_core.domain.enums import DatasetId, PopulationId, PublicationStatus, SplitProtocolId
+from datp_core.domain.enums import ContractSubject, DatasetId, PopulationId, PublicationStatus, SplitProtocolId
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.provenance import canonical_json_text
 from datp_core.domain.values.checksums import Checksum, checksum_text
 from datp_core.domain.values.counts import Seed
+from datp_core.domain.values.identifiers import CaptureTimestampColumn
 from datp_core.pipeline.publication.service import (
     ArtifactPublication,
     FunctionalArtifactCodec,
@@ -99,6 +101,10 @@ def construct_declared_population(
             request.partition_seed,
             request.split_protocol,
             construction.manifest.document.membership_checksum,
+            capture_timestamp_column=_capture_timestamp_column_for_split(
+                request.split_protocol,
+                construction.membership,
+            ),
         )
     )
     return ConstructDeclaredPopulationResult(
@@ -290,6 +296,10 @@ def construct_published_split(request: ConstructPublishedSplitRequest) -> Constr
             partition_seed=request.partition_seed,
             split_protocol=document.split_protocol,
             population_manifest_checksum=document.membership_checksum,
+            capture_timestamp_column=_capture_timestamp_column_for_split(
+                document.split_protocol,
+                request.membership,
+            ),
         )
     )
     validate_split_manifest(request.membership, assignments, manifest)
@@ -570,6 +580,27 @@ def _rebase_population_split(
 ) -> _PopulationSplitArtifacts:
     del directory
     return artifacts
+
+
+def _capture_timestamp_column_for_split(
+    split_protocol: SplitProtocolId,
+    membership: pl.DataFrame,
+) -> CaptureTimestampColumn | None:
+    """Resolve the audited capture-time column required for chronological splits.
+
+    Temporal partitioning is roadmap-locked to verified Edge capture timestamps.
+    Non-temporal protocols never invent a time column.
+    """
+    if split_protocol is not SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE:
+        return None
+    column = CaptureTimestampColumn(EdgeCanonicalColumn.CAPTURE_TIMESTAMP.value)
+    if column not in membership.columns:
+        raise ScientificContractError(
+            "temporal splits require a capture-timestamp column in membership",
+            subject=ContractSubject.SPLIT,
+            reason="chronological partitioning cannot invent time",
+        )
+    return column
 
 
 def _matches_split_static_reference(

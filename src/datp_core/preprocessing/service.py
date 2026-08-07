@@ -19,10 +19,12 @@ from datp_core.domain.values.counts import ClientPublicationCount
 from datp_core.domain.values.identifiers import CaptureTimestampColumn, FeatureNameSequence
 from datp_core.preprocessing.ciciot_file_clients import preprocess_ciciot_client_local
 from datp_core.preprocessing.client_partitions import (
+    MODEL_INPUT_EXCLUSION_ASSET,
     client_partitions,
     join_published_handoff,
     model_feature_names,
     publish_client_partitions,
+    write_model_input_exclusion_evidence,
 )
 from datp_core.preprocessing.contracts import PreprocessingFitScope
 from datp_core.preprocessing.federated import fit_estimators_for_federated_clients
@@ -169,12 +171,17 @@ def preprocess_published_federated(
         deployment_fallback_client_ids=frozenset(),
         client_partition_counts=(),
     )
-    joined = join_published_handoff(
+    joined, exclusion_evidence = join_published_handoff(
         canonical_root,
         handoff,
         feature_names,
         identity,
     )
+    if exclusion_evidence is not None and exclusion_evidence.excluded_row_count.value:
+        write_model_input_exclusion_evidence(
+            request.split_directory.parent / MODEL_INPUT_EXCLUSION_ASSET,
+            exclusion_evidence,
+        )
     partitions = client_partitions(
         joined,
         feature_names,

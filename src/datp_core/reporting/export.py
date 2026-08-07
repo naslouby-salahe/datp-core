@@ -71,6 +71,8 @@ _PUBLISHABLE_CLAIM_STATUSES = frozenset({ClaimStatus.PERMITTED, ClaimStatus.NARR
 def export_markdown(bundle: PublicationBundle, destination: Path) -> Path:
     blocked = tuple(decision for decision in bundle.claims if decision.status not in _PUBLISHABLE_CLAIM_STATUSES)
     permitted = tuple(decision.wording for decision in bundle.claims if decision.status in _PUBLISHABLE_CLAIM_STATUSES)
+    # When every claim is blocked/suppressed, do not emit tables or figures that can look complete.
+    evidence_publishable = bool(permitted) or not bundle.claims
     provenance = bundle.provenance
     header = (
         "# DATP-Core Results",
@@ -86,11 +88,15 @@ def export_markdown(bundle: PublicationBundle, destination: Path) -> Path:
         if blocked
         else ()
     )
-    table_section = tuple(chain.from_iterable(("", render_markdown_table(table)) for table in bundle.tables))
+    table_section = (
+        tuple(chain.from_iterable(("", render_markdown_table(table)) for table in bundle.tables))
+        if evidence_publishable
+        else ()
+    )
     figure_section = (
         ("", "## Figures")
         + tuple(chain.from_iterable(("", render_markdown_figure(figure)) for figure in bundle.figures))
-        if bundle.figures
+        if evidence_publishable and bundle.figures
         else ()
     )
     sections = header + permitted + blocked_section + table_section + figure_section
@@ -276,7 +282,11 @@ def export_temporal_publication(document: TemporalAnalysisDocument, output_direc
                     cells=(
                         TableCell(
                             metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
-                            availability=AvailabilityStatus.AVAILABLE,
+                            availability=(
+                                AvailabilityStatus.UNAVAILABLE
+                                if document.campaign_decision.decision is ScientificDecision.BLOCKED
+                                else AvailabilityStatus.AVAILABLE
+                            ),
                             rendered_value=document.campaign_decision.decision.value,
                             evidence=document.campaign_decision.rationale,
                         ),
@@ -848,16 +858,28 @@ def _paired_values_table(document: AnalysisDocument) -> PublicationTable:
                 ),
             ),
         )
+    interval_available = document.interval.availability is AvailabilityStatus.AVAILABLE
+    decision_blocked = document.decision.decision is ScientificDecision.BLOCKED
+    availability = (
+        AvailabilityStatus.AVAILABLE
+        if interval_available and not decision_blocked
+        else AvailabilityStatus.UNAVAILABLE
+    )
     point = document.interval.point_estimate
-    rendered_value = f"{point.value:.6g}" if point is not None else ""
+    rendered_value = f"{point.value:.6g}" if point is not None and availability is AvailabilityStatus.AVAILABLE else ""
+    evidence = (
+        f"{len(document.contrasts)} paired seeds with fixed-score provenance"
+        if availability is AvailabilityStatus.AVAILABLE
+        else document.decision.rationale or document.unavailable_reason or "confirmatory evidence unavailable"
+    )
     return PublicationTable(
         title="Paired seed inventory",
         cells=(
             TableCell(
                 metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
-                availability=AvailabilityStatus.AVAILABLE,
+                availability=availability,
                 rendered_value=rendered_value,
-                evidence=f"{len(document.contrasts)} paired seeds with fixed-score provenance",
+                evidence=evidence,
             ),
         ),
     )

@@ -86,6 +86,54 @@ def test_blocked_claims_are_separated_from_permitted_wording_by_status(tmp_path:
     assert "the anchor gate blocks dependent journal claims" in content
 
 
+def test_all_blocked_claims_suppress_tables_and_figures(tmp_path: Path) -> None:
+    from datp_core.reporting.tables import PublicationTable, TableCell
+
+    destination = tmp_path / "report.md"
+    blocked = ClaimDecision(
+        status=ClaimStatus.BLOCKED,
+        wording="",
+        reason="confirmatory BCa interval is unavailable",
+    )
+    table = PublicationTable(
+        title="Paired seed inventory",
+        cells=(
+            TableCell(
+                metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
+                availability=AvailabilityStatus.AVAILABLE,
+                rendered_value="0.12",
+                evidence="should not appear when every claim is blocked",
+            ),
+        ),
+    )
+    figure = FigureSpec(
+        title="Should not appear",
+        series=(
+            FigureSeries(
+                label="local",
+                metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
+                availability=AvailabilityStatus.AVAILABLE,
+                values=(0.1, 0.2),
+            ),
+        ),
+    )
+    export_markdown(
+        PublicationBundle(
+            provenance=_provenance(),
+            claims=(blocked,),
+            tables=(table,),
+            figures=(figure,),
+        ),
+        destination,
+    )
+    content = destination.read_text(encoding="utf-8")
+    assert "## Suppressed or blocked claims" in content
+    assert "confirmatory BCa interval is unavailable" in content
+    assert "Paired seed inventory" not in content
+    assert "Should not appear" not in content
+    assert "0.12" not in content
+
+
 def test_report_provenance_rejects_primitive_checksum() -> None:
     with pytest.raises(TypeError, match="typed analysis checksum"):
         ReportProvenance(

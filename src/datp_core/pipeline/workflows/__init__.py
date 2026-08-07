@@ -725,10 +725,19 @@ def _report_fedprox_absorption(*, overwrite: bool) -> tuple[Path, ...]:
     from datp_core.pipeline.workflows.personalization import (
         analyze_fedprox_absorption,
         build_fedprox_absorption_observation,
+        select_primary_fedprox_coefficient_from_artifacts,
+        write_fedprox_primary_coefficient_decision,
     )
 
     paths: list[Path] = []
     try:
+        primary = select_primary_fedprox_coefficient_from_artifacts(output_root=OUTPUTS_ROOT)
+        root = OUTPUTS_ROOT / "fedprox_stress_test" / PopulationId.NBAIOT_NATURAL_DEVICES.value
+        decision_path = write_fedprox_primary_coefficient_decision(
+            primary,
+            root / "primary_coefficient_decision.json",
+        )
+        paths.append(decision_path)
         for coefficient in FEDPROX_COEFFICIENTS:
             observations = tuple(
                 build_fedprox_absorption_observation(
@@ -741,13 +750,12 @@ def _report_fedprox_absorption(*, overwrite: bool) -> tuple[Path, ...]:
                 )
                 for seed in CONFIRMATORY_SEED_COHORT.values
             )
-            output = (
-                OUTPUTS_ROOT
-                / "fedprox_stress_test"
-                / PopulationId.NBAIOT_NATURAL_DEVICES.value
-                / "analysis"
-                / str(coefficient.value)
+            role = (
+                "primary"
+                if coefficient == primary.primary_coefficient
+                else "sensitivity"
             )
+            output = root / "analysis" / role / str(coefficient.value)
             if overwrite and output.exists():
                 rmtree(output)
             analyze_fedprox_absorption(observations, output_directory=output)

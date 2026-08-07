@@ -1,5 +1,6 @@
 """Client partition preparation shared by direct and published-artifact preprocessing."""
 
+from dataclasses import dataclass
 from pathlib import Path
 
 import polars as pl
@@ -16,7 +17,10 @@ from datp_core.datasets.partitioning.contracts import (
 from datp_core.domain.contracts import ClientCollection, ClientOwned
 from datp_core.domain.enums import DatasetId, PopulationId, ProcessedDataBranch, PublicationStatus, SplitProtocolId
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.identifiers import FeatureName, FeatureNameSequence
+from datp_core.domain.provenance import canonical_json_text
+from datp_core.domain.values.checksums import Checksum, checksum_text
+from datp_core.domain.values.counts import RowCount
+from datp_core.domain.values.identifiers import FeatureName, FeatureNameSequence, StableRowId
 from datp_core.domain.values.paths import ClientPathToken
 from datp_core.preprocessing.contracts import PartitionOrdering
 from datp_core.preprocessing.federated import publish_client_preprocessing
@@ -30,9 +34,12 @@ from datp_core.preprocessing.models import (
 from datp_core.preprocessing.state import TrustedScaler
 from datp_core.preprocessing.validation import extract_partitions
 from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
+from datp_core.runtime.filesystem import write_text_atomically
 
 CANONICAL_DATA_DIRECTORY = "data"
 PARQUET_PATTERN = "*.parquet"
+MODEL_INPUT_EXCLUSION_ASSET = "model_input_exclusions.json"
+MODEL_INPUT_EXCLUSION_REASON = "nonfinite_or_null_numeric_model_input_feature"
 
 _EDGE_PUBLISHED_POPULATIONS = frozenset(
     {
@@ -40,6 +47,36 @@ _EDGE_PUBLISHED_POPULATIONS = frozenset(
         PopulationId.EDGE_SENSOR_GROUPS,
     }
 )
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ModelInputExclusionEvidence:
+    """Typed provenance for Edge model-input rows excluded after finite-feature gating."""
+
+    dataset: DatasetId
+    population: PopulationId
+    excluded_stable_row_ids: tuple[StableRowId, ...]
+    total_row_count: RowCount
+    reason: str = MODEL_INPUT_EXCLUSION_REASON
+
+    def __post_init__(self) -> None:
+        if self.reason != MODEL_INPUT_EXCLUSION_REASON:
+            raise ValueError("model-input exclusion reason must match the locked nonfinite gate")
+        if len(self.excluded_stable_row_ids) != len(frozenset(self.excluded_stable_row_ids)):
+            raise ValueError("excluded stable row identities must be unique")
+        if self.total_row_count.value < len(self.excluded_stable_row_ids):
+            raise ValueError("excluded row count cannot exceed total joined rows")
+
+    @property
+    def excluded_row_count(self) -> RowCount:
+        return RowCount(len(self.excluded_stable_row_ids))
+
+    @property
+    def evidence_checksum(self) -> Checksum:
+        ordered = ",".join(str(row_id) for row_id in self.excluded_stable_row_ids)
+        return checksum_text(
+            f"{self.dataset.value}|{self.population.value}|{self.reason}|{self.total_row_count.value}|{ordered}"
+        )
 
 
 def client_partitions(
@@ -107,12 +144,15 @@ def join_published_handoff(
     handoff: PreprocessingHandoff,
     feature_names: FeatureNameSequence,
     identity: ExternalTemporalExecutionIdentity,
-) -> pl.DataFrame:
+) -> tuple[pl.DataFrame, ModelInputExclusionEvidence | None]:
     if identity.population not in _EDGE_PUBLISHED_POPULATIONS:
-        return join_handoff_with_canonical_features(
-            canonical_root,
-            handoff,
-            feature_names,
+        return (
+            join_handoff_with_canonical_features(
+                canonical_root,
+                handoff,
+                feature_names,
+            ),
+            None,
         )
     asset_role = (
         EdgeAssetRole.TEMPORAL_BENIGN
@@ -159,19 +199,52 @@ def exclude_nonfinite_model_input_rows(
     *,
     dataset: DatasetId,
     population: PopulationId,
-) -> pl.DataFrame:
+) -> tuple[pl.DataFrame, ModelInputExclusionEvidence]:
+    if STABLE_ROW_ID_COLUMN not in joined.columns:
+        raise ScientificContractError(
+            "model-input finite gate requires stable row identities",
+            subject=dataset,
+        )
     eligible_expr = pl.all_horizontal(tuple(pl.col(name).is_finite().fill_null(False) for name in feature_names))
     eligible = joined.filter(eligible_expr)
-    excluded_row_count = joined.height - eligible.height
-    if excluded_row_count:
+    excluded = joined.filter(~eligible_expr)
+    excluded_ids = tuple(
+        sorted(
+            (StableRowId(str(value)) for value in excluded.get_column(STABLE_ROW_ID_COLUMN).to_list()),
+            key=str,
+        )
+    )
+    evidence = ModelInputExclusionEvidence(
+        dataset=dataset,
+        population=population,
+        excluded_stable_row_ids=excluded_ids,
+        total_row_count=RowCount(joined.height),
+    )
+    if evidence.excluded_row_count.value:
         structlog.get_logger("datp_core.preprocessing").warning(
             "edge_model_input_rows_excluded_nonfinite",
             dataset=dataset.value,
             population=population.value,
-            excluded_row_count=excluded_row_count,
+            excluded_row_count=evidence.excluded_row_count.value,
             total_row_count=joined.height,
+            exclusion_evidence_checksum=evidence.evidence_checksum.value,
         )
-    return eligible
+    return eligible, evidence
+
+
+def write_model_input_exclusion_evidence(destination: Path, evidence: ModelInputExclusionEvidence) -> Checksum:
+    """Persist typed model-input exclusion provenance next to bounded-evidence preparation."""
+    payload = {
+        "dataset": evidence.dataset.value,
+        "population": evidence.population.value,
+        "reason": evidence.reason,
+        "total_row_count": evidence.total_row_count.value,
+        "excluded_row_count": evidence.excluded_row_count.value,
+        "excluded_stable_row_ids": tuple(str(item) for item in evidence.excluded_stable_row_ids),
+        "evidence_checksum": evidence.evidence_checksum.value,
+    }
+    write_text_atomically(destination, canonical_json_text(payload))
+    return evidence.evidence_checksum
 
 
 def model_feature_names(
