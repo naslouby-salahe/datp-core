@@ -30,7 +30,6 @@ from datp_core.protocols.seeds import SeedCohort
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class DeclaredExperimentSeedResult:
-    declaration: ExperimentDeclaration
     campaign_digest: Checksum
     completed_threshold_methods: tuple[FederatedThresholdMethod, ...]
 
@@ -93,7 +92,6 @@ def execute_declared_campaign(
     available_methods = frozenset(entry.coordinate.threshold_method for entry in campaign.entries)
     methods = tuple(method for method in declaration.federated_thresholds if method in available_methods)
     return DeclaredExperimentSeedResult(
-        declaration=declaration,
         campaign_digest=campaign.digest,
         completed_threshold_methods=methods,
     )

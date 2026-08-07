@@ -43,7 +43,6 @@ def test_execute_declared_experiment_seed_returns_completed_threshold_methods(
         overwrite=False,
     )
 
-    assert result.declaration is declaration
     assert result.completed_threshold_methods == (
         FederatedThresholdMethod.SHARED_THRESHOLD,
         FederatedThresholdMethod.LOCAL_THRESHOLD,
