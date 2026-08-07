@@ -54,16 +54,15 @@ def calculate_alert_burden(
     client: ClientIdentity,
     coordinate: FederatedTrainingCoordinate,
     training_seed: Seed,
-    false_positive_rate: float,
+    false_positive_rate: Ratio,
     evidence: ValidatedTrafficRateEvidence | None,
 ) -> AlertBurdenDiagnostic:
-    fpr = Ratio(false_positive_rate)
     if evidence is None:
         return _suppressed(
             client,
             coordinate,
             training_seed,
-            fpr,
+            false_positive_rate,
             AlertBurdenSuppressionReason.NO_APPLICABLE_TRAFFIC_RATE_EVIDENCE,
         )
     validated = validate_traffic_rate_evidence(evidence)
@@ -72,7 +71,7 @@ def calculate_alert_burden(
             client,
             coordinate,
             training_seed,
-            fpr,
+            false_positive_rate,
             AlertBurdenSuppressionReason.POPULATION_MISMATCH,
         )
     if not validated.applicable_to_each_client:
@@ -80,15 +79,15 @@ def calculate_alert_burden(
             client,
             coordinate,
             training_seed,
-            fpr,
+            false_positive_rate,
             AlertBurdenSuppressionReason.NOT_PER_CLIENT_APPLICABLE,
         )
     return AlertBurdenDiagnostic(
         client=client,
         coordinate=coordinate,
         training_seed=training_seed,
-        false_positive_rate=fpr,
-        metric=available(MetricId.ALERTS_PER_DAY, fpr.value * validated.rate_per_day.value),
+        false_positive_rate=false_positive_rate,
+        metric=available(MetricId.ALERTS_PER_DAY, false_positive_rate.value * validated.rate_per_day.value),
         suppression_reason=None,
         warning=None,
     )

@@ -21,6 +21,7 @@ from datp_core.domain.values.checksums import checksum_file
 from datp_core.domain.values.identifiers import StableRowId
 from datp_core.domain.values.ratios import (
     NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
+    Ratio,
     ScoreValue,
     ShrinkageWeight,
     ThresholdValue,
@@ -314,7 +315,7 @@ def _evaluate_alert_burden(
                     client=client.client,
                     coordinate=coordinate,
                     training_seed=coordinate.training_seed,
-                    false_positive_rate=false_positive_rate.value,
+                    false_positive_rate=Ratio(false_positive_rate.value),
                     evidence=evidence,
                 )
             )

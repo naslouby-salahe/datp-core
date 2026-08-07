@@ -1,5 +1,3 @@
-"""Validation records for operational decision-rate evidence."""
-
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -17,10 +15,17 @@ class TrafficRateGranularity(StrEnum):
     POPULATION = "population"
 
 
+_VALID_EVIDENCE_KINDS = frozenset(
+    {
+        TrafficRateEvidenceType.MEASURED,
+        TrafficRateEvidenceType.DATASET_DERIVED,
+        TrafficRateEvidenceType.EXTERNALLY_CITED,
+    }
+)
+
+
 @dataclass(frozen=True, slots=True)
 class ValidatedTrafficRateEvidence:
-    """Operational rate evidence with explicit applicability and provenance."""
-
     evidence_kind: TrafficRateEvidenceType
     population: PopulationId
     rate_per_day: TrafficRatePerDay
@@ -33,18 +38,13 @@ class ValidatedTrafficRateEvidence:
     def __post_init__(self) -> None:
         if self.evidence_kind is TrafficRateEvidenceType.UNAVAILABLE:
             raise ScientificContractError("unavailable traffic-rate evidence cannot support operational calculation")
-        if not self.source_locator.strip() or not self.provenance.strip():
+        if not self.source_locator or self.source_locator.isspace() or not self.provenance or self.provenance.isspace():
             raise ScientificContractError("traffic-rate evidence requires source and provenance")
         if self.granularity is TrafficRateGranularity.PER_CLIENT and not self.applicable_to_each_client:
             raise ScientificContractError("per-client traffic-rate evidence must be applicable to each client")
 
 
 def validate_traffic_rate_evidence(evidence: ValidatedTrafficRateEvidence) -> ValidatedTrafficRateEvidence:
-    """Provide an explicit validation boundary for only supported evidence kinds."""
-    if evidence.evidence_kind not in {
-        TrafficRateEvidenceType.MEASURED,
-        TrafficRateEvidenceType.DATASET_DERIVED,
-        TrafficRateEvidenceType.EXTERNALLY_CITED,
-    }:
+    if evidence.evidence_kind not in _VALID_EVIDENCE_KINDS:
         raise ScientificContractError("traffic-rate evidence kind is not operationally valid")
     return evidence

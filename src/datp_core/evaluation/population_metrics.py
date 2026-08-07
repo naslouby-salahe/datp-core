@@ -1,11 +1,10 @@
-"""Cross-client aggregates over the declared, never row-weighted cohort."""
-
 import numpy as np
 
+from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.enums import EvaluationCohort, MetricId
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.counts import RowCount
-from datp_core.domain.values.ratios import Quantile
+from datp_core.domain.values.ratios import MetricValue, Quantile
 from datp_core.evaluation.cohort.contracts import EvaluationCohortManifest
 from datp_core.evaluation.metric_semantics import available, unavailable
 from datp_core.evaluation.models import (
@@ -16,6 +15,7 @@ from datp_core.evaluation.models import (
     MetricReason,
     MetricStatus,
     MetricWarning,
+    PopulationMetricAggregates,
     PopulationMetricResult,
     WarningCode,
 )
@@ -27,12 +27,13 @@ def calculate_population_metrics(
     *,
     cohort: EvaluationCohortManifest | None = None,
 ) -> PopulationMetricResult:
-    """Aggregate one threshold method's client results without pooling rows for FPR dispersion."""
     if not results:
         raise ScientificContractError("population evaluation requires client results")
     first = results[0]
+
     if len({result.client for result in results}) != len(results):
         raise ScientificContractError("population results must have one record per client")
+
     if any(
         result.coordinate != first.coordinate
         or result.threshold_method is not first.threshold_method
@@ -42,57 +43,80 @@ def calculate_population_metrics(
         raise ScientificContractError(
             "population results require one fixed coordinate, threshold method, and evidence role"
         )
-    fpr_evaluable = tuple(result for result in results if result.cohort is EvaluationCohort.FPR_EVALUABLE)
-    fallback = tuple(result for result in results if result.cohort is EvaluationCohort.DEPLOYMENT_FALLBACK)
-    unavailable_records = tuple(result for result in results if result.cohort is EvaluationCohort.UNAVAILABLE)
-    fpr_records = tuple(_metric(result, MetricId.FALSE_POSITIVE_RATE) for result in fpr_evaluable)
-    fpr_values = tuple(item.value.value for item in fpr_records if item.value is not None)
-    attack_evaluable = tuple(result for result in fpr_evaluable if result.attack_evaluable)
+
+    fpr_evaluable: list[ClientMetricResult] = []
+    fpr_values: list[MetricValue] = []
+    excluded_clients: list[ClientIdentity] = []
+    attack_evaluable_count = 0
+    fallback_count = 0
+    unavailable_count = 0
+
+    for result in results:
+        if result.cohort is EvaluationCohort.FPR_EVALUABLE:
+            fpr_evaluable.append(result)
+            if result.attack_evaluable:
+                attack_evaluable_count += 1
+
+            fpr_record = next((m for m in result.metrics if m.metric is MetricId.FALSE_POSITIVE_RATE), None)
+            if not fpr_record:
+                msg = f"client result lacks required metric {MetricId.FALSE_POSITIVE_RATE.value}"
+                raise ScientificContractError(msg)
+            if fpr_record.value is not None:
+                fpr_values.append(fpr_record.value)
+        else:
+            excluded_clients.append(result.client)
+            if result.cohort is EvaluationCohort.DEPLOYMENT_FALLBACK:
+                fallback_count += 1
+            elif result.cohort is EvaluationCohort.UNAVAILABLE:
+                unavailable_count += 1
+
+    fpr_evaluable_tuple = tuple(fpr_evaluable)
+    fpr_values_tuple = tuple(fpr_values)
+
     if cohort is None:
         calibration_eligible_count = len(fpr_evaluable)
     else:
         calibration_eligible_count = sum(1 for record in cohort.records if record.calibration_eligible)
-    metric_records, warnings = _population_metric_records(fpr_evaluable, fpr_values)
+
+    aggregates = _population_metric_records(fpr_evaluable_tuple, fpr_values_tuple)
+
     return PopulationMetricResult(
         coordinate=first.coordinate,
         threshold_method=first.threshold_method,
         cohort=EvaluationCohort.FPR_EVALUABLE,
-        metrics=metric_records,
-        candidate_client_count=_count(len(results)),
-        calibration_eligible_client_count=_count(calibration_eligible_count),
-        fpr_evaluable_client_count=_count(len(fpr_values)),
-        attack_evaluable_client_count=_count(len(attack_evaluable)),
-        deployment_fallback_count=_count(len(fallback)),
-        unavailable_client_count=_count(len(unavailable_records)),
-        excluded_clients=tuple(
-            sorted(
-                (result.client for result in results if result not in fpr_evaluable),
-                key=lambda item: item.client_id,
-            )
-        ),
-        warnings=warnings,
+        metrics=aggregates.metrics,
+        candidate_client_count=RowCount(len(results)),
+        calibration_eligible_client_count=RowCount(calibration_eligible_count),
+        fpr_evaluable_client_count=RowCount(len(fpr_values)),
+        attack_evaluable_client_count=RowCount(attack_evaluable_count),
+        deployment_fallback_count=RowCount(fallback_count),
+        unavailable_client_count=RowCount(unavailable_count),
+        excluded_clients=tuple(sorted(excluded_clients, key=lambda item: item.client_id)),
+        warnings=aggregates.warnings,
         evidence_role=first.evidence_role,
     )
 
 
 def _population_metric_records(
-    results: tuple[ClientMetricResult, ...], fpr_values: tuple[float, ...]
-) -> tuple[tuple[MetricAvailability, ...], tuple[MetricWarning, ...]]:
-    fpr_metrics, warnings = _fpr_aggregates(fpr_values)
-    return (
-        (*fpr_metrics, *_attack_aggregates(results)),
-        warnings,
+    results: tuple[ClientMetricResult, ...], fpr_values: tuple[MetricValue, ...]
+) -> PopulationMetricAggregates:
+    fpr_aggregates = _fpr_aggregates(fpr_values)
+    return PopulationMetricAggregates(
+        metrics=(*fpr_aggregates.metrics, *_attack_aggregates(results)),
+        warnings=fpr_aggregates.warnings,
     )
 
 
-def _fpr_aggregates(values: tuple[float, ...]) -> tuple[tuple[MetricAvailability, ...], tuple[MetricWarning, ...]]:
+def _fpr_aggregates(
+    values: tuple[MetricValue, ...],
+) -> PopulationMetricAggregates:
     if not values:
         absent = tuple(
             unavailable(metric, MetricStatus.UNAVAILABLE, MetricReason.NO_EVALUABLE_CLIENTS)
             for metric in (*FPR_POPULATION_METRIC_IDS, *EQUITY_INDEX_METRIC_IDS)
         )
-        return absent, ()
-    array = np.asarray(values, dtype=np.float64)
+        return PopulationMetricAggregates(metrics=absent, warnings=())
+    array = np.fromiter((v.value for v in values), dtype=np.float64, count=len(values))
     mean = float(np.mean(array))
     std = float(np.std(array, ddof=0))
     metrics: list[MetricAvailability] = [
@@ -117,11 +141,10 @@ def _fpr_aggregates(values: tuple[float, ...]) -> tuple[tuple[MetricAvailability
         )
     )
     metrics.extend(_equity_index_metrics(array))
-    return tuple(metrics), warnings
+    return PopulationMetricAggregates(metrics=tuple(metrics), warnings=warnings)
 
 
 def _equity_index_metrics(values: np.ndarray) -> tuple[MetricAvailability, ...]:
-    """Optional FPR equity indices (roadmap §14.2): Jain fairness and Gini on client FPR."""
     total = float(np.sum(values))
     count = int(values.size)
     if total == 0.0:
@@ -141,76 +164,92 @@ def _equity_index_metrics(values: np.ndarray) -> tuple[MetricAvailability, ...]:
 
 
 def _attack_aggregates(results: tuple[ClientMetricResult, ...]) -> tuple[MetricAvailability, ...]:
-    tpr = _available_values(results, MetricId.TRUE_POSITIVE_RATE)
-    macro = _available_values(results, MetricId.BINARY_MACRO_F1)
-    balanced = _available_values(results, MetricId.BALANCED_ACCURACY)
-    tpr_cv = _coefficient_of_variation(MetricId.TPR_COEFFICIENT_OF_VARIATION, tpr)
+    tpr_vals: list[MetricValue] = []
+    macro_vals: list[MetricValue] = []
+    balanced_vals: list[MetricValue] = []
+
+    for result in results:
+        metric_map = {m.metric: m for m in result.metrics}
+
+        for metric_id, val_list in (
+            (MetricId.TRUE_POSITIVE_RATE, tpr_vals),
+            (MetricId.BINARY_MACRO_F1, macro_vals),
+            (MetricId.BALANCED_ACCURACY, balanced_vals),
+        ):
+            record = metric_map.get(metric_id)
+            if not record:
+                raise ScientificContractError(f"client result lacks required metric {metric_id.value}")
+            if record.value is not None:
+                val_list.append(record.value)
+
+    tpr_tuple = tuple(tpr_vals)
+    macro_tuple = tuple(macro_vals)
+    balanced_tuple = tuple(balanced_vals)
+
     return (
-        tpr_cv,
-        _quantile_or_unavailable(MetricId.P10_BINARY_MACRO_F1, macro, Quantile(0.10)),
-        _minimum_or_unavailable(MetricId.WORST_CLIENT_BALANCED_ACCURACY, balanced),
-        _mean_or_unavailable(MetricId.MEAN_CLIENT_MACRO_F1, macro),
+        _coefficient_of_variation(MetricId.TPR_COEFFICIENT_OF_VARIATION, tpr_tuple),
+        _quantile_or_unavailable(MetricId.P10_BINARY_MACRO_F1, macro_tuple, Quantile(0.10)),
+        _minimum_or_unavailable(MetricId.WORST_CLIENT_BALANCED_ACCURACY, balanced_tuple),
+        _mean_or_unavailable(MetricId.MEAN_CLIENT_MACRO_F1, macro_tuple),
         _pooled_macro_f1_or_unavailable(results),
-        _mean_or_unavailable(MetricId.MEAN_CLIENT_BALANCED_ACCURACY, balanced),
+        _mean_or_unavailable(MetricId.MEAN_CLIENT_BALANCED_ACCURACY, balanced_tuple),
     )
 
 
-def _metric(result: ClientMetricResult, metric: MetricId) -> MetricAvailability:
-    for candidate in result.metrics:
-        if candidate.metric is metric:
-            return candidate
-    raise ScientificContractError(f"client result lacks required metric {metric.value}")
-
-
-def _available_values(results: tuple[ClientMetricResult, ...], metric: MetricId) -> tuple[float, ...]:
-    return tuple(record.value.value for result in results if (record := _metric(result, metric)).value is not None)
-
-
-def _coefficient_of_variation(metric: MetricId, values: tuple[float, ...]) -> MetricAvailability:
+def _coefficient_of_variation(metric: MetricId, values: tuple[MetricValue, ...]) -> MetricAvailability:
     if not values:
         return unavailable(metric, MetricStatus.UNAVAILABLE, MetricReason.NO_EVALUABLE_CLIENTS)
-    mean = float(np.mean(values))
+    raw = np.fromiter((v.value for v in values), dtype=np.float64, count=len(values))
+    mean = float(np.mean(raw))
     if mean == 0.0:
         return unavailable(metric, MetricStatus.UNDEFINED, MetricReason.ZERO_MEAN)
-    return available(metric, float(np.std(values, ddof=0)) / mean, denominator=len(values))
+    return available(metric, float(np.std(raw, ddof=0)) / mean, denominator=len(values))
 
 
-def _quantile_or_unavailable(metric: MetricId, values: tuple[float, ...], probability: Quantile) -> MetricAvailability:
+def _quantile_or_unavailable(
+    metric: MetricId, values: tuple[MetricValue, ...], probability: Quantile
+) -> MetricAvailability:
     if not values:
         return unavailable(metric, MetricStatus.UNAVAILABLE, MetricReason.NO_EVALUABLE_CLIENTS)
-    return available(
-        metric, float(np.quantile(np.asarray(values), probability.value, method="linear")), denominator=len(values)
-    )
+    raw = np.fromiter((v.value for v in values), dtype=np.float64, count=len(values))
+    return available(metric, float(np.quantile(raw, probability.value, method="linear")), denominator=len(values))
 
 
-def _minimum_or_unavailable(metric: MetricId, values: tuple[float, ...]) -> MetricAvailability:
+def _minimum_or_unavailable(metric: MetricId, values: tuple[MetricValue, ...]) -> MetricAvailability:
     if not values:
         return unavailable(metric, MetricStatus.UNAVAILABLE, MetricReason.NO_EVALUABLE_CLIENTS)
-    return available(metric, min(values), denominator=len(values))
+    return available(metric, min(v.value for v in values), denominator=len(values))
 
 
-def _mean_or_unavailable(metric: MetricId, values: tuple[float, ...]) -> MetricAvailability:
+def _mean_or_unavailable(metric: MetricId, values: tuple[MetricValue, ...]) -> MetricAvailability:
     if not values:
         return unavailable(metric, MetricStatus.UNAVAILABLE, MetricReason.NO_EVALUABLE_CLIENTS)
-    return available(metric, float(np.mean(values)), denominator=len(values))
+    raw = np.fromiter((v.value for v in values), dtype=np.float64, count=len(values))
+    return available(metric, float(np.mean(raw)), denominator=len(values))
 
 
 def _pooled_macro_f1_or_unavailable(results: tuple[ClientMetricResult, ...]) -> MetricAvailability:
-    eligible = tuple(result for result in results if result.confusion.attack_assignment_valid)
-    if not eligible:
+    eligible_count = 0
+    true_negative = false_positive = true_positive = false_negative = 0
+
+    for result in results:
+        if result.confusion.attack_assignment_valid:
+            eligible_count += 1
+            true_negative += result.confusion.true_negative.value
+            false_positive += result.confusion.false_positive.value
+            true_positive += result.confusion.true_positive.value
+            false_negative += result.confusion.false_negative.value
+
+    if not eligible_count:
         return unavailable(MetricId.POOLED_MACRO_F1, MetricStatus.UNAVAILABLE, MetricReason.NO_EVALUABLE_CLIENTS)
-    true_negative = sum(result.confusion.true_negative.value for result in eligible)
-    false_positive = sum(result.confusion.false_positive.value for result in eligible)
-    true_positive = sum(result.confusion.true_positive.value for result in eligible)
-    false_negative = sum(result.confusion.false_negative.value for result in eligible)
+
     attack_denominator = 2 * true_positive + false_positive + false_negative
     benign_denominator = 2 * true_negative + false_positive + false_negative
+
     if attack_denominator == 0 or benign_denominator == 0:
         return unavailable(MetricId.POOLED_MACRO_F1, MetricStatus.UNDEFINED, MetricReason.UNDEFINED_CLASS_F1)
+
     attack_f1 = 2.0 * true_positive / attack_denominator
     benign_f1 = 2.0 * true_negative / benign_denominator
+
     return available(MetricId.POOLED_MACRO_F1, (attack_f1 + benign_f1) / 2.0)
-
-
-def _count(value: int) -> RowCount:
-    return RowCount(value)

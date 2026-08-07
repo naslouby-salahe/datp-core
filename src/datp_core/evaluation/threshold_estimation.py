@@ -1,5 +1,3 @@
-"""Threshold-estimation diagnostics against an exact pooled benign reference."""
-
 from dataclasses import dataclass
 from itertools import groupby
 
@@ -33,8 +31,6 @@ _THRESHOLD_ESTIMATION_METRICS = frozenset(
 
 @dataclass(frozen=True, slots=True)
 class ThresholdEstimationProvenance:
-    """Immutable coordinate and calibration identity for one threshold estimate."""
-
     client: ClientIdentity
     coordinate: FederatedTrainingCoordinate
     training_seed: Seed
@@ -52,8 +48,6 @@ class ThresholdEstimationProvenance:
 
 @dataclass(frozen=True, slots=True)
 class ThresholdEstimationDiagnostic:
-    """One threshold estimate assessed only with verified benign score evidence."""
-
     provenance: ThresholdEstimationProvenance
     estimated_threshold: ThresholdValue
     exact_pooled_benign_quantile_reference: ThresholdValue
@@ -63,26 +57,29 @@ class ThresholdEstimationDiagnostic:
 
     def __post_init__(self) -> None:
         validate_metric_set(self.metrics, _THRESHOLD_ESTIMATION_METRICS)
-        absolute_threshold = metric_by_id(self.metrics, MetricId.ABSOLUTE_THRESHOLD_ERROR)
-        relative_threshold = metric_by_id(self.metrics, MetricId.RELATIVE_THRESHOLD_ERROR)
-        signed_attainment = metric_by_id(self.metrics, MetricId.SIGNED_ATTAINMENT_ERROR)
-        absolute_attainment = metric_by_id(self.metrics, MetricId.ABSOLUTE_ATTAINMENT_ERROR)
+        metrics_dict = {m.metric: m for m in self.metrics}
+
+        absolute_threshold = metrics_dict[MetricId.ABSOLUTE_THRESHOLD_ERROR]
+        relative_threshold = metrics_dict[MetricId.RELATIVE_THRESHOLD_ERROR]
+        signed_attainment = metrics_dict[MetricId.SIGNED_ATTAINMENT_ERROR]
+        absolute_attainment = metrics_dict[MetricId.ABSOLUTE_ATTAINMENT_ERROR]
+
         if absolute_threshold.value is None or signed_attainment.value is None or absolute_attainment.value is None:
             raise ScientificContractError("absolute and attainment threshold diagnostics must be available")
         if absolute_threshold.value.value < 0 or absolute_attainment.value.value < 0:
             raise ScientificContractError("absolute threshold diagnostics must be non-negative")
         if relative_threshold.value is None and relative_threshold.reason is not MetricReason.ZERO_MEAN:
             raise ScientificContractError("undefined relative threshold error requires a zero-reference reason")
+
         expected_signed = self.achieved_benign_exceedance.value - self.target_exceedance.value
         if signed_attainment.value.value != expected_signed:
             raise ScientificContractError("signed attainment error must match achieved minus target exceedance")
 
     @property
     def absolute_threshold_error(self) -> float:
-        value = metric_value(metric_by_id(self.metrics, MetricId.ABSOLUTE_THRESHOLD_ERROR))
-        if value is None:
-            raise RuntimeError("absolute threshold error is required")
-        return value
+        result = metric_value(metric_by_id(self.metrics, MetricId.ABSOLUTE_THRESHOLD_ERROR))
+        assert result is not None
+        return result
 
     @property
     def relative_threshold_error_status(self) -> MetricStatus:
@@ -94,17 +91,15 @@ class ThresholdEstimationDiagnostic:
 
     @property
     def signed_attainment_error(self) -> float:
-        value = metric_value(metric_by_id(self.metrics, MetricId.SIGNED_ATTAINMENT_ERROR))
-        if value is None:
-            raise RuntimeError("signed attainment error is required")
-        return value
+        result = metric_value(metric_by_id(self.metrics, MetricId.SIGNED_ATTAINMENT_ERROR))
+        assert result is not None
+        return result
 
     @property
     def absolute_attainment_error(self) -> float:
-        value = metric_value(metric_by_id(self.metrics, MetricId.ABSOLUTE_ATTAINMENT_ERROR))
-        if value is None:
-            raise RuntimeError("absolute attainment error is required")
-        return value
+        result = metric_value(metric_by_id(self.metrics, MetricId.ABSOLUTE_ATTAINMENT_ERROR))
+        assert result is not None
+        return result
 
     @property
     def relative_error_unavailable_reason(self) -> MetricReason | None:
@@ -113,8 +108,6 @@ class ThresholdEstimationDiagnostic:
 
 @dataclass(frozen=True, slots=True)
 class SampleEfficiencyPoint:
-    """Nested-replicate threshold variability at one calibration size within one seed."""
-
     client: ClientIdentity
     coordinate: FederatedTrainingCoordinate
     training_seed: Seed
@@ -138,20 +131,23 @@ def evaluate_threshold_estimate(
     exact_pooled_benign_quantile_reference: ThresholdValue,
     verified_benign_scores: VerifiedHeldOutBenignScores,
 ) -> ThresholdEstimationDiagnostic:
-    """Calculate one declared diagnostic from previously verified benign evidence."""
     if verified_benign_scores.client != provenance.client:
         raise ScientificContractError("threshold diagnostics require scores from the evaluated client")
     if verified_benign_scores.coordinate != provenance.coordinate:
         raise ScientificContractError(
             "threshold diagnostics require score provenance matching the evaluation coordinate"
         )
+
     scores = verified_benign_scores.scores
     target_exceedance = 1.0 - provenance.quantile.value
-    achieved = sum(score.score.exceeds(estimated_threshold) for score in scores) / len(scores)
+
+    achieved_count = sum(1 for score in scores if score.score.exceeds(estimated_threshold))
+    achieved = achieved_count / len(scores)
+
     signed_attainment_error = achieved - target_exceedance
     absolute_error = abs(estimated_threshold.value - exact_pooled_benign_quantile_reference.value)
     reference = exact_pooled_benign_quantile_reference.value
-    relative_metric: MetricAvailability
+
     if reference == 0.0:
         relative_metric = unavailable(
             MetricId.RELATIVE_THRESHOLD_ERROR,
@@ -160,6 +156,7 @@ def evaluate_threshold_estimate(
         )
     else:
         relative_metric = available(MetricId.RELATIVE_THRESHOLD_ERROR, absolute_error / abs(reference))
+
     return ThresholdEstimationDiagnostic(
         provenance=provenance,
         estimated_threshold=estimated_threshold,
@@ -178,34 +175,35 @@ def evaluate_threshold_estimate(
 def sample_efficiency_curve(
     diagnostics: tuple[ThresholdEstimationDiagnostic, ...],
 ) -> tuple[SampleEfficiencyPoint, ...]:
-    """Summarize nested calibration replicates inside each client/seed/size cell."""
-    ordered = tuple(
-        sorted(
-            diagnostics,
-            key=lambda item: (
-                item.provenance.coordinate.model.value,
-                item.provenance.coordinate.preprocessing_identity.value,
-                item.provenance.client.client_id,
-                item.provenance.training_seed.value,
-                item.provenance.calibration_size.value,
-            ),
-        )
-    )
-    points: list[SampleEfficiencyPoint] = []
-    for key, items in groupby(
-        ordered,
-        key=lambda item: (
+    def get_group_key(item: ThresholdEstimationDiagnostic):
+        return (
             item.provenance.client,
             item.provenance.coordinate,
             item.provenance.training_seed,
             item.provenance.calibration_size,
-        ),
-    ):
+        )
+
+    def get_sort_key(item: ThresholdEstimationDiagnostic):
+        return (
+            item.provenance.coordinate.model.value,
+            item.provenance.coordinate.preprocessing_identity.value,
+            item.provenance.client.client_id,
+            item.provenance.training_seed.value,
+            item.provenance.calibration_size.value,
+        )
+
+    ordered = tuple(sorted(diagnostics, key=get_sort_key))
+    points: list[SampleEfficiencyPoint] = []
+
+    for key, items in groupby(ordered, key=get_group_key):
         replicate_group = tuple(items)
         indexes = tuple(item.provenance.replicate_index.value for item in replicate_group)
-        if len(indexes) != len(frozenset(indexes)):
+
+        if len(indexes) != len(set(indexes)):
             raise ScientificContractError("nested threshold replicates must be unique within a size cell")
-        values = np.asarray(tuple(item.estimated_threshold.value for item in replicate_group), dtype=np.float64)
+
+        values = np.fromiter((item.estimated_threshold.value for item in replicate_group), dtype=np.float64)
+
         points.append(
             SampleEfficiencyPoint(
                 client=key[0],
@@ -217,4 +215,5 @@ def sample_efficiency_curve(
                 threshold_variance_across_nested_replicates=ThresholdVariance(float(np.var(values, ddof=0))),
             )
         )
+
     return tuple(points)

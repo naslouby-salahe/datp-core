@@ -184,6 +184,12 @@ class ConfusionCounts:
         return self.benign_denominator.plus(self.attack_denominator)
 
 
+@dataclass(frozen=True, slots=True)
+class PopulationMetricAggregates:
+    metrics: tuple[MetricAvailability, ...]
+    warnings: tuple[MetricWarning, ...]
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class MetricResultHeader:
     coordinate: FederatedTrainingCoordinate

@@ -43,7 +43,7 @@ def compare_anchor_metric(
 
     coordinate_failure = _coordinate_mismatch_reason(reference, observation)
     delta = _NumericDelta(reference.value.value, observation.value.value)
-    
+
     if coordinate_failure is not None:
         return _build(
             reference,
@@ -151,12 +151,12 @@ def _interval_result(
             signed=delta.signed,
             relative=delta.relative,
         )
-    
+
     left = reference.interval
     right = observation.interval
     lower_bound = max(left.lower.value, right.lower.value)
     upper_bound = min(left.upper.value, right.upper.value)
-    
+
     if lower_bound <= upper_bound or floats_exactly_equal(lower_bound, upper_bound):
         return _pass(reference, observation, rule, delta)
     return _fail(reference, observation, rule, delta, AnchorDiscrepancyReason.INTERVAL_NO_OVERLAP)
