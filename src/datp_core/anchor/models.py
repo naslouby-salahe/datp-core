@@ -159,6 +159,14 @@ class AnchorScientificCoordinates:
     checkpoint_status: CheckpointStatus
 
 
+_HISTORICAL_THRESHOLDS = frozenset(
+    {
+        FederatedThresholdMethod.SHARED_THRESHOLD,
+        FederatedThresholdMethod.LOCAL_THRESHOLD,
+    }
+)
+
+
 def _require_anchor_coordinates(coordinates: AnchorScientificCoordinates) -> None:
     require_contract(
         coordinates.population is PopulationId.NBAIOT_NATURAL_DEVICES,
@@ -171,11 +179,7 @@ def _require_anchor_coordinates(coordinates: AnchorScientificCoordinates) -> Non
         ContractSubject.COORDINATE,
     )
     require_contract(
-        coordinates.threshold_method
-        in {
-            FederatedThresholdMethod.SHARED_THRESHOLD,
-            FederatedThresholdMethod.LOCAL_THRESHOLD,
-        },
+        coordinates.threshold_method in _HISTORICAL_THRESHOLDS,
         "historical anchor coordinates support only shared and local thresholds",
         ContractSubject.COORDINATE,
     )
@@ -259,15 +263,18 @@ class AnchorMetricComparison(StrictModel):
 
     @property
     def detail(self) -> AnchorDetail:
-        expected = self.reference.value.value
-        observed = None if self.observation is None else self.observation.value.value
+        reference = self.reference
+        observation = self.observation
+        observed = None if observation is None else observation.value.value
+        reason = None if self.reason is None else self.reason.value
+
         return AnchorDetail(
-            f"seed={self.reference.seed.value} "
-            f"method={self.reference.threshold_method.value} "
-            f"metric={self.reference.metric.value} "
-            f"expected={expected!r} observed={observed!r} "
+            f"seed={reference.seed.value} "
+            f"method={reference.threshold_method.value} "
+            f"metric={reference.metric.value} "
+            f"expected={reference.value.value!r} observed={observed!r} "
             f"decision={self.decision.value} "
-            f"reason={None if self.reason is None else self.reason.value}"
+            f"reason={reason}"
         )
 
 
@@ -305,12 +312,13 @@ class AnchorDiscrepancy(StrictModel):
     @classmethod
     def from_comparison(cls, comparison: AnchorMetricComparison) -> AnchorDiscrepancy:
         observation = comparison.observation
+        reference = comparison.reference
         return cls(
             reason=comparison.reason or AnchorDiscrepancyReason.EXACT_MISMATCH,
-            seed=comparison.reference.seed,
-            threshold_method=comparison.reference.threshold_method,
-            metric=comparison.reference.metric,
-            expected_value=comparison.reference.value,
+            seed=reference.seed,
+            threshold_method=reference.threshold_method,
+            metric=reference.metric,
+            expected_value=reference.value,
             observed_value=None if observation is None else observation.value,
             signed_difference=comparison.signed_difference,
             relative_difference=comparison.relative_difference,
@@ -332,6 +340,14 @@ class AnchorGateStatus(StrEnum):
     PASS = "pass"
     PASS_WITH_DECLARED_DISCREPANCY = "pass_with_declared_discrepancy"
     BLOCKED = "blocked"
+
+
+_PERMITTING_GATE_STATUSES = frozenset(
+    {
+        AnchorGateStatus.PASS,
+        AnchorGateStatus.PASS_WITH_DECLARED_DISCREPANCY,
+    }
+)
 
 
 class AnchorGateDecision(StrictModel):
@@ -397,10 +413,7 @@ class VerifiedAnchorGateArtifact(StrictModel):
 
     @property
     def permits_confirmatory_claims(self) -> bool:
-        return self.decision.status in {
-            AnchorGateStatus.PASS,
-            AnchorGateStatus.PASS_WITH_DECLARED_DISCREPANCY,
-        }
+        return self.decision.status in _PERMITTING_GATE_STATUSES
 
 
 class AnchorConfirmatoryHandoff(StrictModel):
@@ -436,10 +449,7 @@ class AnchorConfirmatoryHandoff(StrictModel):
             raise ValueError("handoff dependent experiment must be shared-vs-local confirmation")
         if self.verified_gate_status is AnchorGateStatus.BLOCKED:
             raise ValueError("confirmatory handoff cannot bind a blocked gate")
-        if self.verified_gate_status not in {
-            AnchorGateStatus.PASS,
-            AnchorGateStatus.PASS_WITH_DECLARED_DISCREPANCY,
-        }:
+        if self.verified_gate_status not in _PERMITTING_GATE_STATUSES:
             raise ValueError("confirmatory handoff requires a permitting gate status")
         if self.anchor_gate_decision_checksum != self.verified_gate_artifact_checksum:
             raise ValueError("handoff gate decision checksum must match verified gate artifact checksum")
@@ -453,8 +463,11 @@ class AnchorConfirmatoryHandoff(StrictModel):
         return self
 
 
+_HANDOFF_PAYLOAD_FIELDS = tuple(name for name in AnchorConfirmatoryHandoff.model_fields if name != "creation_identity")
+
+
 def _handoff_creation_identity(handoff: AnchorConfirmatoryHandoff) -> Checksum:
-    payload = {name: getattr(handoff, name) for name in type(handoff).model_fields if name != "creation_identity"}
+    payload = {name: getattr(handoff, name) for name in _HANDOFF_PAYLOAD_FIELDS}
     return canonical_checksum(payload)
 
 
@@ -472,11 +485,9 @@ class HistoricalThresholdScopeToken(StrEnum):
     __get_pydantic_core_schema__ = classmethod(str_enum_schema)
 
     def to_threshold_method(self) -> FederatedThresholdMethod:
-        match self:
-            case HistoricalThresholdScopeToken.ELIGIBLE_CLIENT_ARITHMETIC_MEAN:
-                return FederatedThresholdMethod.SHARED_THRESHOLD
-            case HistoricalThresholdScopeToken.PER_CLIENT_PERCENTILE:
-                return FederatedThresholdMethod.LOCAL_THRESHOLD
+        if self is HistoricalThresholdScopeToken.ELIGIBLE_CLIENT_ARITHMETIC_MEAN:
+            return FederatedThresholdMethod.SHARED_THRESHOLD
+        return FederatedThresholdMethod.LOCAL_THRESHOLD
 
 
 class HistoricalDatasetToken(StrEnum):
@@ -567,9 +578,6 @@ class HistoricalMetricArtifactSource(StrictModel):
 
     @model_validator(mode="after")
     def validate_threshold_method(self) -> HistoricalMetricArtifactSource:
-        if self.threshold_method not in {
-            FederatedThresholdMethod.SHARED_THRESHOLD,
-            FederatedThresholdMethod.LOCAL_THRESHOLD,
-        }:
+        if self.threshold_method not in _HISTORICAL_THRESHOLDS:
             raise ValueError("historical anchor artifacts support only shared and local thresholds")
         return self
