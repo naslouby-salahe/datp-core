@@ -1,12 +1,9 @@
-"""Persistence and reuse of federated evaluation artifacts."""
-
 from enum import StrEnum
 from pathlib import Path
 
-from datp_core.domain.provenance import canonical_checksum, canonical_json_text
+from datp_core.domain.provenance import canonical_json_text
 from datp_core.evaluation.federated.contracts import (
     FederatedEvaluationArtifacts,
-    FederatedEvaluationDocument,
     FederatedEvaluationPublication,
 )
 
@@ -42,9 +39,8 @@ def federated_evaluation_is_reusable(
             return False
         if complete.read_text(encoding="utf-8").strip() != publication.digest.value:
             return False
-        loaded = FederatedEvaluationDocument.model_validate_json(document_path.read_text(encoding="utf-8"))
-        return canonical_checksum(loaded) == publication.digest and loaded == publication.document
-    except (OSError, ValueError, TypeError):
+        return document_path.read_text(encoding="utf-8") == canonical_json_text(publication.document)
+    except OSError:
         return False
 
 
@@ -53,8 +49,7 @@ def load_reused_federated_evaluation(
     directory: Path,
 ) -> FederatedEvaluationArtifacts:
     document_path = directory / FederatedEvaluationAssetName.DOCUMENT
-    loaded = FederatedEvaluationDocument.model_validate_json(document_path.read_text(encoding="utf-8"))
-    if canonical_checksum(loaded) != publication.digest or loaded != publication.document:
+    if document_path.read_text(encoding="utf-8") != canonical_json_text(publication.document):
         raise ValueError("reused federated evaluation document does not match the publication digest")
     return publication.artifacts
 

@@ -4,8 +4,9 @@ import polars as pl
 import pytest
 from tests.unit.learning.federated.helpers import benign_frame, client_identity, fedavg_coordinate, fitted_state
 
-from datp_core.datasets.partitioning.contracts import PopulationOutcomeLabel
+from datp_core.datasets.partitioning.contracts import ClientIdentity, PopulationOutcomeLabel
 from datp_core.domain.enums import (
+    EvaluationCohort,
     FederatedThresholdMethod,
     MetricId,
     PartitionRole,
@@ -17,6 +18,12 @@ from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import FeatureCount, RoundNumber, RowCount, Seed
 from datp_core.domain.values.ratios import ThresholdValue
+from datp_core.evaluation.cohort.contracts import (
+    ClientEligibilityRecord,
+    ClientExclusionReason,
+    EvaluationCohortManifest,
+    EvaluationCohortMembership,
+)
 from datp_core.evaluation.models import AvailableMetric, metric_by_id
 from datp_core.pipeline.scoring.models import FederatedScoreArtifactManifest
 from datp_core.pipeline.workflows.personalization_scoring import (
@@ -25,6 +32,7 @@ from datp_core.pipeline.workflows.personalization_scoring import (
     score_record_for_client,
 )
 from datp_core.preprocessing.models import ClientPreprocessingResult, PreprocessedPartitionPaths, PublicationStatus
+from datp_core.protocols.calibration import MINIMUM_BENIGN_SUPPORT
 from datp_core.protocols.inference import ScoreArtifactManifest, ScoreRecord
 from datp_core.thresholding.assignments import ThresholdAssignment
 
@@ -166,17 +174,45 @@ def _manifest_with_scores(tmp_path: Path) -> FederatedScoreArtifactManifest:
     )
 
 
+def _cohort_manifest(client: ClientIdentity, *, fpr_evaluable: bool = True) -> EvaluationCohortManifest:
+    eligibility = ClientEligibilityRecord(
+        client=client,
+        benign_calibration_count=RowCount(100),
+        benign_evaluation_count=RowCount(10),
+        attack_evaluation_count=RowCount(5),
+        calibration_eligible=fpr_evaluable,
+        fpr_evaluable=fpr_evaluable,
+        attack_evaluable=True,
+        deployment_fallback=not fpr_evaluable,
+        exclusion_reasons=() if fpr_evaluable else (ClientExclusionReason.DEPLOYMENT_FALLBACK_ONLY,),
+    )
+    if fpr_evaluable:
+        cohort = EvaluationCohort.FPR_EVALUABLE
+        reasons: tuple[ClientExclusionReason, ...] = ()
+    else:
+        cohort = EvaluationCohort.DEPLOYMENT_FALLBACK
+        reasons = (ClientExclusionReason.DEPLOYMENT_FALLBACK_ONLY,)
+    return EvaluationCohortManifest(
+        population=_POPULATION,
+        partition_seed=_SEED,
+        minimum_benign_calibration_support=MINIMUM_BENIGN_SUPPORT,
+        records=(eligibility,),
+        memberships=(EvaluationCohortMembership(client=client, cohort=cohort, reasons=reasons),),
+    )
+
+
 def test_client_metric_computes_a_fpr_evaluable_result(tmp_path: Path) -> None:
     manifest = _manifest_with_scores(tmp_path)
     client = client_identity("device_a")
     assignment = ThresholdAssignment(client=client, threshold=ThresholdValue(1.0))
+    cohort = _cohort_manifest(client)
 
     metric = client_metric(
         manifest.coordinate,
         FederatedThresholdMethod.SHARED_THRESHOLD,
-        _POPULATION,
         manifest,
         assignment,
+        cohort,
     )
 
     assert metric.client == client

@@ -1,5 +1,3 @@
-"""Deterministic checksums for ordered held-out evaluation evidence."""
-
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
@@ -66,14 +64,11 @@ def aggregate_client_checksum(
     clients: tuple[ClientMetricResult, ...],
     field: ClientChecksumField,
 ) -> Checksum:
+    is_label_field = field is ClientChecksumField.EVALUATION_LABEL
     entries = tuple(
         ClientEvidenceChecksum(
             client=item.client,
-            checksum=(
-                item.evaluation_label_checksum
-                if field is ClientChecksumField.EVALUATION_LABEL
-                else item.source_row_checksum
-            ),
+            checksum=item.evaluation_label_checksum if is_label_field else item.source_row_checksum,
         )
         for item in sorted(clients, key=lambda result: result.client)
     )
@@ -99,5 +94,5 @@ def score_column_checksum(
     record: FederatedScoreRecord,
     column: ScoreFrameColumn,
 ) -> Checksum:
-    values = pl.read_parquet(record.path)[column.value].to_list()
-    return ordered_text_checksum(tuple(str(value) for value in values))
+    data = pl.read_parquet(record.path, columns=[column.value]).to_dict(as_series=False)
+    return ordered_text_checksum(tuple(str(value) for value in data[column.value]))

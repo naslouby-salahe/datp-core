@@ -1,7 +1,3 @@
-"""Held-out federated evaluation over immutable score and threshold evidence."""
-
-from typing import assert_never
-
 import polars as pl
 
 from datp_core.datasets.partitioning.contracts import (
@@ -148,8 +144,17 @@ def _evaluate(
     if isinstance(request.threshold_result, ShrinkageThresholdResult):
         return _evaluate_shrinkage_curve(request)
     assignments = _assignments(request.threshold_result)
+
+    assignment_map: dict[ClientIdentity, ThresholdValue] = {}
+    for item in assignments:
+        if item.client in assignment_map:
+            raise ScientificContractError("threshold assignments cannot repeat a client")
+        assignment_map[item.client] = item.threshold
+
+    fallback_threshold = _deployment_fallback_threshold(assignments, request.threshold_result)
+
     clients = tuple(
-        _evaluate_score_record(request, assignments, record)
+        _evaluate_score_record(request, assignment_map, fallback_threshold, record)
         for record in sorted(request.score_manifest.evaluation_records, key=lambda item: item.scored_client)
     )
     return clients, calculate_population_metrics(clients, cohort=request.cohort)
@@ -183,11 +188,13 @@ def _validate_evaluation_request(request: FederatedEvaluationRequest) -> None:
 
 def _evaluate_score_record(
     request: FederatedEvaluationRequest,
-    assignments: tuple[ThresholdAssignment, ...],
+    assignment_map: dict[ClientIdentity, ThresholdValue],
+    fallback_threshold: ThresholdValue | None,
     record: FederatedScoreRecord,
 ) -> ClientMetricResult:
     eligibility = cohort_record_for_client(request.cohort, record.scored_client)
-    threshold = _threshold_for_client(assignments, record.scored_client, request.threshold_result)
+    threshold = assignment_map.get(record.scored_client)
+
     if eligibility is None:
         raise ScientificContractError("cohort must cover every evaluated client")
     if threshold is None:
@@ -196,7 +203,7 @@ def _evaluate_score_record(
                 "calibration-eligible clients require a threshold assignment",
                 subject=ContractSubject.THRESHOLD,
             )
-        threshold = _deployment_fallback_threshold(assignments, request.threshold_result)
+        threshold = fallback_threshold
         if threshold is None:
             raise ScientificContractError(
                 "threshold assignment missing for evaluation client without a deployment fallback",
@@ -204,7 +211,8 @@ def _evaluate_score_record(
             )
     if not record.path.is_file() or checksum_file(record.path) != record.checksum:
         raise ArtifactIntegrityError("evaluation score artifact is incomplete or changed")
-    scores, labels, rows = _score_arrays(pl.read_parquet(record.path))
+
+    scores, labels, rows = _score_arrays(str(record.path))
     confusion = calculate_confusion_counts(
         scores=scores,
         labels=labels,
@@ -315,7 +323,6 @@ def _evaluate_alert_burden(
 def _evaluate_shrinkage_curve(
     request: FederatedEvaluationRequest,
 ) -> tuple[tuple[ClientMetricResult, ...], PopulationMetricResult]:
-    """Document operating point uses λ=1; full curve is published under diagnostics."""
     curve = _shrinkage_curve_evaluations(request)
     local_endpoint = ShrinkageWeight(1.0)
     matches = tuple(item for item in curve if item.lambda_weight == local_endpoint)
@@ -333,20 +340,31 @@ def _shrinkage_curve_evaluations(request: FederatedEvaluationRequest) -> tuple[S
     result = request.threshold_result
     if not isinstance(result, ShrinkageThresholdResult):
         raise ScientificContractError("shrinkage curve evaluation requires a shrinkage result")
+
+    weight_to_assignments: dict[ShrinkageWeight, list[ThresholdAssignment]] = {w: [] for w in result.weights}
+    for item in result.assignments:
+        if item.lambda_weight in weight_to_assignments:
+            weight_to_assignments[item.lambda_weight].append(ThresholdAssignment(item.client, item.blended_threshold))
+
     evaluations: list[ShrinkageLambdaEvaluation] = []
     for weight in result.weights:
-        assignments = tuple(
-            ThresholdAssignment(item.client, item.blended_threshold)
-            for item in result.assignments
-            if item.lambda_weight == weight
-        )
+        assignments = tuple(weight_to_assignments[weight])
         if not assignments:
             raise ScientificContractError(
                 f"shrinkage lambda {weight.value} has no client assignments",
                 subject=result.method,
             )
+
+        assignment_map: dict[ClientIdentity, ThresholdValue] = {}
+        for item in assignments:
+            if item.client in assignment_map:
+                raise ScientificContractError("threshold assignments cannot repeat a client")
+            assignment_map[item.client] = item.threshold
+
+        fallback_threshold = _deployment_fallback_threshold(assignments, result)
+
         clients = tuple(
-            _evaluate_score_record(request, assignments, record)
+            _evaluate_score_record(request, assignment_map, fallback_threshold, record)
             for record in sorted(request.score_manifest.evaluation_records, key=lambda item: item.scored_client)
         )
         evaluations.append(
@@ -381,32 +399,10 @@ def _assignments(result: ThresholdConstructionResult) -> tuple[ThresholdAssignme
             return tuple(ThresholdAssignment(item.client, item.threshold) for item in result.assignments)
 
 
-def _threshold_for_client(
-    assignments: tuple[ThresholdAssignment, ...],
-    client: ClientIdentity,
-    result: ThresholdConstructionResult | None = None,
-) -> ThresholdValue | None:
-    matches = tuple(item.threshold for item in assignments if item.client == client)
-    if len(matches) > 1:
-        raise ScientificContractError("threshold assignments cannot repeat a client")
-    if matches:
-        return matches[0]
-    if result is None:
-        return None
-    return _deployment_fallback_threshold(assignments, result)
-
-
 def _deployment_fallback_threshold(
     assignments: tuple[ThresholdAssignment, ...],
     result: ThresholdConstructionResult,
 ) -> ThresholdValue | None:
-    """Outcome-blind deployment fallback for clients excluded from threshold construction.
-
-    Shared-scope methods reuse the shared/matched value. Per-client methods use the
-    unweighted mean of constructed assignments (identical to SHARED_THRESHOLD construction
-    over the eligible cohort) so ineligible clients remain evaluable without entering
-    confirmatory FPR dispersion.
-    """
     match result:
         case SharedThresholdResult() | PooledSharedQuantileResult() | SampleWeightedSharedThresholdResult():
             return result.shared_threshold
@@ -424,22 +420,24 @@ def _deployment_fallback_threshold(
             return ThresholdValue(unweighted_mean(tuple(item.threshold.value for item in assignments)))
         case ThresholdUnavailableResult():
             return None
-        case _ as unreachable:
-            assert_never(unreachable)
 
 
 def _score_arrays(
-    frame: pl.DataFrame,
+    path: str,
 ) -> tuple[tuple[ScoreValue, ...], tuple[PopulationOutcomeLabel, ...], tuple[str, ...]]:
-    required = (
+    required = [
         ScoreFrameColumn.STABLE_ROW_ID.value,
         ScoreFrameColumn.OUTCOME_LABEL.value,
         ScoreFrameColumn.RECONSTRUCTION_ERROR.value,
-    )
-    if any(column not in frame.columns for column in required):
-        raise ArtifactIntegrityError("evaluation score artifact has an invalid schema")
+    ]
+    try:
+        frame = pl.read_parquet(path, columns=required)
+    except pl.exceptions.ColumnNotFoundError as err:
+        raise ArtifactIntegrityError("evaluation score artifact has an invalid schema") from err
+
+    data = frame.to_dict(as_series=False)
     return (
-        tuple(ScoreValue(float(value)) for value in frame[required[2]].to_list()),
-        tuple(PopulationOutcomeLabel(str(value)) for value in frame[required[1]].to_list()),
-        tuple(str(value) for value in frame[required[0]].to_list()),
+        tuple(ScoreValue(float(value)) for value in data[required[2]]),
+        tuple(PopulationOutcomeLabel(str(value)) for value in data[required[1]]),
+        tuple(str(value) for value in data[required[0]]),
     )

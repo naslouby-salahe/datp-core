@@ -1,5 +1,3 @@
-"""Construction of fixed-score evidence from immutable score artifacts."""
-
 import polars as pl
 
 from datp_core.datasets.partitioning.contracts import ClientIdentity, PopulationOutcomeLabel
@@ -102,20 +100,29 @@ def _client_aurocs(
     manifest: FederatedScoreArtifactManifest,
     cohort: EvaluationCohortManifest,
 ) -> tuple[ClientAurocEvidence, ...]:
-    eligibility = tuple(sorted(cohort.records, key=lambda record: record.client))
-    records = tuple(sorted(manifest.evaluation_records, key=lambda record: record.scored_client))
-    if tuple(record.client for record in eligibility) != tuple(record.scored_client for record in records):
+    eligibility = sorted(cohort.records, key=lambda record: record.client)
+    records = sorted(manifest.evaluation_records, key=lambda record: record.scored_client)
+
+    if len(eligibility) != len(records):
         raise ScientificContractError("evaluation inputs require cohort coverage for every score client")
+
     evidence_role = population_capabilities(manifest.coordinate.population).evidentiary_role
-    return tuple(
-        _client_auroc_evidence(
-            manifest.coordinate,
-            score_record,
-            eligibility_record,
-            evidence_role,
+
+    evidences: list[ClientAurocEvidence] = []
+    for score_record, eligibility_record in zip(records, eligibility, strict=True):
+        if score_record.scored_client != eligibility_record.client:
+            raise ScientificContractError("evaluation inputs require cohort coverage for every score client")
+
+        evidences.append(
+            _client_auroc_evidence(
+                manifest.coordinate,
+                score_record,
+                eligibility_record,
+                evidence_role,
+            )
         )
-        for score_record, eligibility_record in zip(records, eligibility, strict=True)
-    )
+
+    return tuple(evidences)
 
 
 def _client_auroc_evidence(
@@ -124,12 +131,17 @@ def _client_auroc_evidence(
     eligibility: ClientEligibilityRecord,
     evidence_role: EvidenceRole,
 ) -> ClientAurocEvidence:
-    frame = pl.read_parquet(record.path)
-    scores = tuple(ScoreValue(float(value)) for value in frame[ScoreFrameColumn.RECONSTRUCTION_ERROR.value].to_list())
-    labels = tuple(
-        PopulationOutcomeLabel(str(value)) for value in frame[ScoreFrameColumn.OUTCOME_LABEL.value].to_list()
-    )
-    rows = tuple(str(value) for value in frame[ScoreFrameColumn.STABLE_ROW_ID.value].to_list())
+    required_cols = [
+        ScoreFrameColumn.RECONSTRUCTION_ERROR.value,
+        ScoreFrameColumn.OUTCOME_LABEL.value,
+        ScoreFrameColumn.STABLE_ROW_ID.value,
+    ]
+    frame_dict = pl.read_parquet(record.path, columns=required_cols).to_dict(as_series=False)
+
+    scores = tuple(ScoreValue(float(value)) for value in frame_dict[required_cols[0]])
+    labels = tuple(PopulationOutcomeLabel(str(value)) for value in frame_dict[required_cols[1]])
+    rows = tuple(str(value) for value in frame_dict[required_cols[2]])
+
     confusion = calculate_confusion_counts(
         scores=scores,
         labels=labels,

@@ -1,5 +1,3 @@
-"""Validation of fixed-score evidence and threshold-policy invariance."""
-
 from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.enums import ContractSubject, MetricId
 from datp_core.domain.errors import ScientificContractError
@@ -152,7 +150,7 @@ def _validate_population_binding(
     cohort: EvaluationCohortManifest,
     clients: tuple[ClientMetricResult, ...],
 ) -> None:
-    expected_population = canonical_checksum(tuple(sorted(client.client for client in clients)))
+    expected_population = canonical_checksum(tuple(sorted([client.client for client in clients])))
     if evidence.population.client_inventory_checksum != expected_population:
         raise ScientificContractError("fixed-score evidence client population checksum does not match evaluation")
     if evidence.population.eligibility_cohort_checksum != canonical_checksum(cohort):
@@ -166,19 +164,24 @@ def _validate_held_out_rows(
 ) -> None:
     if evidence.evaluation.score_order_checksum != evaluation_score_order_checksum(manifest):
         raise ScientificContractError("fixed-score evidence score ordering checksum does not match evaluation")
+
     expected_labels = aggregate_client_checksum(clients, ClientChecksumField.EVALUATION_LABEL)
+    if evidence.evaluation.label_checksum != expected_labels:
+        raise ScientificContractError("fixed-score evidence label or source-row checksum does not match evaluation")
+
     expected_rows = aggregate_client_checksum(clients, ClientChecksumField.SOURCE_ROW)
-    labels_mismatch = evidence.evaluation.label_checksum != expected_labels
-    rows_mismatch = evidence.evaluation.source_row_checksum != expected_rows
-    if labels_mismatch or rows_mismatch:
+    if evidence.evaluation.source_row_checksum != expected_rows:
         raise ScientificContractError("fixed-score evidence label or source-row checksum does not match evaluation")
 
 
 def _validate_aurocs(evidence: FixedScoreEvidence, clients: tuple[ClientMetricResult, ...]) -> None:
-    observed = tuple((client.client, metric_by_id(client.metrics, MetricId.AUROC)) for client in clients)
-    if tuple(item.client for item in evidence.evaluation.aurocs) != tuple(client for client, _ in observed):
+    if len(evidence.evaluation.aurocs) != len(clients):
         raise ScientificContractError("fixed-score AUROC evidence client order does not match evaluation")
-    for expected_item, (_, observed_outcome) in zip(evidence.evaluation.aurocs, observed, strict=True):
+
+    for expected_item, client in zip(evidence.evaluation.aurocs, clients, strict=True):
+        if expected_item.client != client.client:
+            raise ScientificContractError("fixed-score AUROC evidence client order does not match evaluation")
+        observed_outcome = metric_by_id(client.metrics, MetricId.AUROC)
         _require_matching_auroc(expected_item.outcome, observed_outcome)
 
 
@@ -192,12 +195,18 @@ def _require_auroc_invariance(
     second: tuple[ClientAurocEvidence, ...],
     tolerance: AbsoluteTolerance,
 ) -> None:
-    if tuple(item.client for item in first) != tuple(item.client for item in second):
+    if len(first) != len(second):
         raise ScientificContractError(
             "fixed-score control failed: AUROC clients differ",
             subject=ContractSubject.CLIENT_IDENTITY,
         )
+
     for left, right in zip(first, second, strict=True):
+        if left.client != right.client:
+            raise ScientificContractError(
+                "fixed-score control failed: AUROC clients differ",
+                subject=ContractSubject.CLIENT_IDENTITY,
+            )
         if left.outcome.status is not right.outcome.status:
             raise ScientificContractError(
                 "fixed-score control failed: AUROC availability differs",
