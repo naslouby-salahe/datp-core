@@ -92,6 +92,7 @@ class ScoreGenerationRequest:
 @dataclass(slots=True, eq=False, kw_only=True)
 class GenerateFederatedScoresRequest:
     checkpoint: CheckpointCandidate
+    scored_split_protocol: SplitProtocolId
     autoencoder: AutoencoderProtocol
     feature_names: FeatureNameSequence
     clients: tuple[ClientScoringInput, ...]

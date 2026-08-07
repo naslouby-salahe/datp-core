@@ -5,9 +5,8 @@ from tests.unit.learning.federated.helpers import AUTOENCODER, BATCH_SIZE, FEATU
 from tests.unit.scoring.helpers import selected_checkpoint
 
 from datp_core.domain.values.counts import RowCount, Seed
-from datp_core.pipeline.scoring.federated import generate_federated_scores
-from datp_core.pipeline.scoring.models import ClientScoringInput, ScoreGenerationRequest
-from datp_core.runtime.compute import resolve_cuda_device
+from datp_core.pipeline.scoring.federated import publish_federated_scores
+from datp_core.pipeline.scoring.models import ClientScoringInput, GenerateFederatedScoresRequest
 
 
 def _mean_reconstruction_error(path: Path) -> float:
@@ -26,8 +25,8 @@ def _scores(tmp_path: Path):
             evaluation_features=benign_frame(RowCount(8), seed=Seed(2)),
         ),
     )
-    return generate_federated_scores(
-        ScoreGenerationRequest(
+    return publish_federated_scores(
+        GenerateFederatedScoresRequest(
             checkpoint=checkpoint,
             scored_split_protocol=checkpoint.coordinate.split_protocol,
             autoencoder=AUTOENCODER,
@@ -37,8 +36,8 @@ def _scores(tmp_path: Path):
             output_directory=tmp_path / "scores",
             preprocessing_state_set_checksum=checkpoint.preprocessing_state_set_checksum,
             split_manifest_checksum=checkpoint.split_manifest_checksum,
-        ),
-        resolve_cuda_device(),
+            overwrite=False,
+        )
     )
 
 

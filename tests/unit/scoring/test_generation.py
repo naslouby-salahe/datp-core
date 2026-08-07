@@ -9,9 +9,12 @@ from datp_core.domain.errors import ArtifactIntegrityError, LeakageError, Scient
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import RowCount, Seed
 from datp_core.learning.federated.models import CheckpointCandidate
-from datp_core.pipeline.scoring.federated import generate_federated_scores
-from datp_core.pipeline.scoring.models import ClientScoringInput, ScoreGenerationRequest
-from datp_core.runtime.compute import resolve_cuda_device
+from datp_core.pipeline.scoring.federated import publish_federated_scores
+from datp_core.pipeline.scoring.models import (
+    ClientScoringInput,
+    FederatedScoreAssetName,
+    GenerateFederatedScoresRequest,
+)
 
 
 def _clients() -> tuple[ClientScoringInput, ...]:
@@ -35,8 +38,8 @@ def _request(
     *,
     clients: tuple[ClientScoringInput, ...] | None = None,
     preprocessing_state_set_checksum: Checksum | None = None,
-) -> ScoreGenerationRequest:
-    return ScoreGenerationRequest(
+) -> GenerateFederatedScoresRequest:
+    return GenerateFederatedScoresRequest(
         checkpoint=checkpoint,
         scored_split_protocol=checkpoint.coordinate.split_protocol,
         autoencoder=AUTOENCODER,
@@ -50,12 +53,13 @@ def _request(
             else preprocessing_state_set_checksum
         ),
         split_manifest_checksum=checkpoint.split_manifest_checksum,
+        overwrite=False,
     )
 
 
 def test_generate_federated_scores_writes_one_file_per_client_per_partition(tmp_path: Path) -> None:
     checkpoint = selected_checkpoint(tmp_path / "checkpoint")
-    result = generate_federated_scores(_request(tmp_path, checkpoint), resolve_cuda_device())
+    result = publish_federated_scores(_request(tmp_path, checkpoint))
     assert len(result.manifest.calibration_records) == 2
     assert len(result.manifest.evaluation_records) == 2
     for record in (*result.manifest.calibration_records, *result.manifest.evaluation_records):
@@ -76,7 +80,7 @@ def test_generate_federated_scores_rejects_a_raw_candidate_checkpoint(tmp_path: 
         split_manifest_checksum=checkpoint.split_manifest_checksum,
     )
     with pytest.raises(ScientificContractError, match="non-test-selected checkpoint"):
-        generate_federated_scores(_request(tmp_path, raw_candidate), resolve_cuda_device())
+        publish_federated_scores(_request(tmp_path, raw_candidate))
 
 
 def test_generate_federated_scores_rejects_preprocessing_checksum_mismatch(tmp_path: Path) -> None:
@@ -87,22 +91,19 @@ def test_generate_federated_scores_rejects_preprocessing_checksum_mismatch(tmp_p
         preprocessing_state_set_checksum=Checksum("f" * 64),
     )
     with pytest.raises(ScientificContractError, match="preprocessing checksum mismatch"):
-        generate_federated_scores(request, resolve_cuda_device())
+        publish_federated_scores(request)
 
 
 def test_generate_federated_scores_rejects_duplicate_clients(tmp_path: Path) -> None:
     checkpoint = selected_checkpoint(tmp_path / "checkpoint")
     duplicated = (_clients()[0], _clients()[0])
     with pytest.raises(ScientificContractError, match="duplicate client identities"):
-        generate_federated_scores(
-            _request(tmp_path, checkpoint, clients=duplicated),
-            resolve_cuda_device(),
-        )
+        publish_federated_scores(_request(tmp_path, checkpoint, clients=duplicated))
 
 
 def test_score_reload_equality_detects_a_corrupted_file(tmp_path: Path) -> None:
     checkpoint = selected_checkpoint(tmp_path / "checkpoint")
-    result = generate_federated_scores(_request(tmp_path, checkpoint), resolve_cuda_device())
+    result = publish_federated_scores(_request(tmp_path, checkpoint))
     victim = result.manifest.calibration_records[0]
     import polars as pl
 
@@ -131,7 +132,26 @@ def test_scoring_rejects_attack_labelled_calibration_rows(tmp_path: Path) -> Non
         evaluation_features=benign_frame(RowCount(6), seed=Seed(2)),
     )
     with pytest.raises(LeakageError, match="benign calibration"):
-        generate_federated_scores(
-            _request(tmp_path, checkpoint, clients=(attack_client,)),
-            resolve_cuda_device(),
-        )
+        publish_federated_scores(_request(tmp_path, checkpoint, clients=(attack_client,)))
+
+
+def test_federated_scoring_has_single_publication_entry_point() -> None:
+    from datp_core.pipeline.scoring import federated
+
+    assert not hasattr(federated, "generate_federated_scores")
+    assert not hasattr(federated, "write_federated_scores")
+    assert not hasattr(federated, "materialize_federated_scores")
+    assert not hasattr(federated, "_require_empty_output_directory")
+    assert not hasattr(federated, "_remove_incomplete_output")
+
+
+def test_federated_scoring_publication_is_atomic(tmp_path: Path) -> None:
+    checkpoint = selected_checkpoint(tmp_path / "checkpoint")
+    request = _request(tmp_path, checkpoint)
+    result = publish_federated_scores(request)
+
+    complete_marker = request.output_directory / FederatedScoreAssetName.COMPLETE.value
+    assert complete_marker.is_file()
+    assert not any(path.name.startswith(".scores.") for path in tmp_path.iterdir())
+    for record in (*result.manifest.calibration_records, *result.manifest.evaluation_records):
+        assert record.path.is_file()

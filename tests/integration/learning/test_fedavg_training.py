@@ -19,11 +19,10 @@ from datp_core.domain.values.counts import RowCount, Seed
 from datp_core.learning.federated.checkpoints.selection import select_checkpoint
 from datp_core.learning.federated.global_training import train_global_federated
 from datp_core.learning.federated.training import FederatedTrainingRequest
-from datp_core.pipeline.scoring.federated import generate_federated_scores
-from datp_core.pipeline.scoring.models import ClientScoringInput, ScoreGenerationRequest
+from datp_core.pipeline.scoring.federated import publish_federated_scores
+from datp_core.pipeline.scoring.models import ClientScoringInput, GenerateFederatedScoresRequest
 from datp_core.pipeline.training.federated import TrainFederatedDetectorRequest, train_federated_detector
 from datp_core.protocols.training import CHECKPOINT_SELECTION_RULE
-from datp_core.runtime.compute import resolve_cuda_device
 
 
 def _training_request(tmp_path: Path) -> FederatedTrainingRequest:
@@ -66,8 +65,8 @@ def test_fedavg_end_to_end_train_select_and_score(tmp_path: Path) -> None:
         )
         for index, client_dataset in enumerate(request.clients)
     )
-    result = generate_federated_scores(
-        ScoreGenerationRequest(
+    result = publish_federated_scores(
+        GenerateFederatedScoresRequest(
             checkpoint=decision.selected,
             scored_split_protocol=decision.selected.coordinate.split_protocol,
             autoencoder=AUTOENCODER,
@@ -77,8 +76,8 @@ def test_fedavg_end_to_end_train_select_and_score(tmp_path: Path) -> None:
             output_directory=tmp_path / "scores",
             preprocessing_state_set_checksum=decision.selected.preprocessing_state_set_checksum,
             split_manifest_checksum=decision.selected.split_manifest_checksum,
-        ),
-        resolve_cuda_device(),
+            overwrite=False,
+        )
     )
     assert len(result.manifest.calibration_records) == len(request.clients)
     assert len(result.manifest.evaluation_records) == len(request.clients)

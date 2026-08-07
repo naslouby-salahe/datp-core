@@ -1,8 +1,7 @@
 """Federated reconstruction-score generation, persistence, and reuse."""
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
-from shutil import rmtree
 
 import polars as pl
 import torch
@@ -83,9 +82,8 @@ class _ScoreRecordInventory:
         return tuple(self.records_for(role))
 
 
-def generate_federated_scores(request: ScoreGenerationRequest, device: torch.device) -> FederatedScoreGenerationResult:
+def _generate_federated_scores(request: ScoreGenerationRequest, device: torch.device) -> FederatedScoreGenerationResult:
     _validate_request(request)
-    _require_empty_output_directory(request.output_directory)
     model = load_checkpoint_model(request.checkpoint, request.autoencoder, device)
     scored_roles = scored_partition_roles(request.scored_split_protocol)
     records = _ScoreRecordInventory.empty()
@@ -122,25 +120,6 @@ def generate_federated_scores(request: ScoreGenerationRequest, device: torch.dev
         canonical_checksum(invariant),
     )
     return _result_from_inventory(request, records)
-
-
-def write_federated_scores(
-    request: ScoreGenerationRequest,
-    directory: Path,
-    device: torch.device,
-) -> FederatedScoreGenerationResult:
-    return generate_federated_scores(replace(request, output_directory=directory), device)
-
-
-def materialize_federated_scores(
-    request: ScoreGenerationRequest,
-    device: torch.device,
-) -> FederatedScoreGenerationResult:
-    directory = request.output_directory
-    if federated_scoring_is_reusable(request, directory):
-        return load_reused_federated_scores(request, directory)
-    _remove_incomplete_output(directory)
-    return generate_federated_scores(request, device)
 
 
 def federated_scoring_is_reusable(request: ScoreGenerationRequest, directory: Path) -> bool:
@@ -190,8 +169,8 @@ def publish_federated_scores(request: GenerateFederatedScoresRequest) -> Federat
             target=request.output_directory,
             request=request,
             codec=FunctionalArtifactCodec(
-                writer=lambda item, directory: write_federated_scores(
-                    _federated_request(item, directory), directory, resolve_cuda_device()
+                writer=lambda item, directory: _generate_federated_scores(
+                    _federated_request(item, directory), resolve_cuda_device()
                 ),
                 validator=lambda item, directory: federated_scoring_is_reusable(
                     _federated_request(item, directory), directory
@@ -211,7 +190,7 @@ def publish_federated_scores(request: GenerateFederatedScoresRequest) -> Federat
 def _federated_request(request: GenerateFederatedScoresRequest, directory: Path) -> ScoreGenerationRequest:
     return ScoreGenerationRequest(
         checkpoint=request.checkpoint,
-        scored_split_protocol=request.checkpoint.coordinate.split_protocol,
+        scored_split_protocol=request.scored_split_protocol,
         autoencoder=request.autoencoder,
         feature_names=request.feature_names,
         clients=request.clients,
@@ -299,22 +278,6 @@ def _rebased_record(record: FederatedScoreRecord, output_directory: Path) -> Fed
         feature_count=record.feature_count,
         serialization_format=record.serialization_format,
     )
-
-
-def _remove_incomplete_output(directory: Path) -> None:
-    if directory.is_dir():
-        rmtree(directory)
-    elif directory.exists():
-        directory.unlink()
-
-
-def _require_empty_output_directory(directory: Path) -> None:
-    directory.mkdir(parents=True, exist_ok=True)
-    if any(directory.iterdir()):
-        raise ArtifactIntegrityError(
-            "score generation output directory must be empty",
-            subject=ContractSubject.ARTIFACT_PATH,
-        )
 
 
 def _fixed_score_invariant(

@@ -16,10 +16,9 @@ from datp_core.learning.federated.models import (
     CheckpointDecision,
     FederatedTrainingCoordinate,
 )
-from datp_core.pipeline.scoring.federated import generate_federated_scores
-from datp_core.pipeline.scoring.models import ClientScoringInput, ScoreGenerationRequest
+from datp_core.pipeline.scoring.federated import publish_federated_scores
+from datp_core.pipeline.scoring.models import ClientScoringInput, GenerateFederatedScoresRequest, ScoreGenerationRequest
 from datp_core.protocols.inference import FixedScoreInvariant, ScoreArtifactManifest, ScoreRecord
-from datp_core.runtime.compute import resolve_cuda_device
 
 
 def test_federated_training_coordinate_has_no_threshold_identity_field() -> None:
@@ -87,8 +86,8 @@ def _scored_result(tmp_path: Path):
             evaluation_features=_evaluation_frame(),
         ),
     )
-    result = generate_federated_scores(
-        ScoreGenerationRequest(
+    result = publish_federated_scores(
+        GenerateFederatedScoresRequest(
             checkpoint=checkpoint,
             scored_split_protocol=checkpoint.coordinate.split_protocol,
             autoencoder=AUTOENCODER,
@@ -98,8 +97,8 @@ def _scored_result(tmp_path: Path):
             output_directory=tmp_path / "scores",
             preprocessing_state_set_checksum=checkpoint.preprocessing_state_set_checksum,
             split_manifest_checksum=checkpoint.split_manifest_checksum,
-        ),
-        resolve_cuda_device(),
+            overwrite=False,
+        )
     )
     return checkpoint, result
 
@@ -140,7 +139,7 @@ def test_rescoring_the_same_frozen_checkpoint_reproduces_byte_identical_score_ar
     checkpoint, first_result = _scored_result(tmp_path / "run_a")
     first_bytes = first_result.manifest.evaluation_records[0].path.read_bytes()
 
-    request = ScoreGenerationRequest(
+    request = GenerateFederatedScoresRequest(
         checkpoint=checkpoint,
         scored_split_protocol=checkpoint.coordinate.split_protocol,
         autoencoder=AUTOENCODER,
@@ -156,8 +155,9 @@ def test_rescoring_the_same_frozen_checkpoint_reproduces_byte_identical_score_ar
         output_directory=tmp_path / "run_b" / "scores",
         preprocessing_state_set_checksum=checkpoint.preprocessing_state_set_checksum,
         split_manifest_checksum=checkpoint.split_manifest_checksum,
+        overwrite=False,
     )
-    second_result = generate_federated_scores(request, resolve_cuda_device())
+    second_result = publish_federated_scores(request)
     second_bytes = second_result.manifest.evaluation_records[0].path.read_bytes()
 
     assert second_bytes == first_bytes

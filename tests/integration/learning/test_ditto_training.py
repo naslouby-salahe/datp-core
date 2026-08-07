@@ -17,10 +17,9 @@ from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import RowCount, Seed
 from datp_core.learning.federated.checkpoints.selection import select_checkpoint
 from datp_core.learning.federated.ditto import DittoTrainingRequest, train_ditto
-from datp_core.pipeline.scoring.federated import generate_federated_scores
-from datp_core.pipeline.scoring.models import ClientScoringInput, ScoreGenerationRequest
+from datp_core.pipeline.scoring.federated import publish_federated_scores
+from datp_core.pipeline.scoring.models import ClientScoringInput, GenerateFederatedScoresRequest
 from datp_core.protocols.training import CHECKPOINT_SELECTION_RULE
-from datp_core.runtime.compute import resolve_cuda_device
 
 
 def test_ditto_end_to_end_train_select_and_score_global_and_personalized(tmp_path: Path) -> None:
@@ -56,7 +55,6 @@ def test_ditto_end_to_end_train_select_and_score_global_and_personalized(tmp_pat
     )
     assert global_decision.selected.round_number == CHECKPOINT.maximum_round
 
-    device = resolve_cuda_device()
     scoring_clients = tuple(
         ClientScoringInput(
             client=client_dataset.client,
@@ -65,8 +63,8 @@ def test_ditto_end_to_end_train_select_and_score_global_and_personalized(tmp_pat
         )
         for index, client_dataset in enumerate(clients)
     )
-    global_scores = generate_federated_scores(
-        ScoreGenerationRequest(
+    global_scores = publish_federated_scores(
+        GenerateFederatedScoresRequest(
             checkpoint=global_decision.selected,
             scored_split_protocol=global_decision.selected.coordinate.split_protocol,
             autoencoder=AUTOENCODER,
@@ -76,8 +74,8 @@ def test_ditto_end_to_end_train_select_and_score_global_and_personalized(tmp_pat
             output_directory=tmp_path / "scores" / "global",
             preprocessing_state_set_checksum=global_decision.selected.preprocessing_state_set_checksum,
             split_manifest_checksum=global_decision.selected.split_manifest_checksum,
-        ),
-        device,
+            overwrite=False,
+        )
     )
 
     personalized_score_checksums = []
@@ -92,8 +90,8 @@ def test_ditto_end_to_end_train_select_and_score_global_and_personalized(tmp_pat
             preprocessing_state_set_checksum=(personalized_candidates.candidates[0].preprocessing_state_set_checksum),
             split_manifest_checksum=personalized_candidates.candidates[0].split_manifest_checksum,
         )
-        personalized_scores = generate_federated_scores(
-            ScoreGenerationRequest(
+        personalized_scores = publish_federated_scores(
+            GenerateFederatedScoresRequest(
                 checkpoint=decision.selected,
                 scored_split_protocol=decision.selected.coordinate.split_protocol,
                 autoencoder=AUTOENCODER,
@@ -109,8 +107,8 @@ def test_ditto_end_to_end_train_select_and_score_global_and_personalized(tmp_pat
                 output_directory=tmp_path / "scores" / "personalized" / client.client_id,
                 preprocessing_state_set_checksum=decision.selected.preprocessing_state_set_checksum,
                 split_manifest_checksum=decision.selected.split_manifest_checksum,
-            ),
-            device,
+                overwrite=False,
+            )
         )
         personalized_score_checksums.append(personalized_scores.invariant.model_checksum)
 

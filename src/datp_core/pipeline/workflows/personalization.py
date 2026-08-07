@@ -893,6 +893,7 @@ def _personalized_scores(
         manifest = publish_federated_scores(
             GenerateFederatedScoresRequest(
                 checkpoint=selection.selected,
+                scored_split_protocol=selection.selected.coordinate.split_protocol,
                 autoencoder=NBAIOT_AUTOENCODER,
                 feature_names=feature_names,
                 clients=(client_scoring_input(context.preprocessing.client_publications, client),),
