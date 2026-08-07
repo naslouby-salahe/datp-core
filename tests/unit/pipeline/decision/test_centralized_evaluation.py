@@ -13,8 +13,8 @@ from tests.unit.learning.centralized.helpers import (
     training_coordinate,
 )
 
-from datp_core.domain.enums import CentralizedThresholdMethod, EvidenceRole, FederatedThresholdMethod, MetricId
-from datp_core.domain.errors import LeakageError, ScientificContractError
+from datp_core.domain.enums import CentralizedThresholdMethod, EvidenceRole, MetricId
+from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import RowCount, Seed
 from datp_core.evaluation.models import ConfusionCounts
@@ -25,10 +25,6 @@ from datp_core.pipeline.decision.centralized import (
     CentralizedEvaluationResult,
     construct_pooled_benign_quantile,
     evaluate_centralized_reference,
-    reject_centralized_as_federated_threshold_policy,
-    reject_centralized_in_federated_threshold_comparison,
-    reject_centralized_result_in_confirmatory_threshold_comparison,
-    reject_cross_client_cv_fpr_from_pooled_centralized,
     threshold_result_checksum,
 )
 from datp_core.pipeline.scoring.centralized import score_centralized_reference
@@ -108,14 +104,3 @@ def test_pooled_evaluation_metrics_and_confusion(tmp_path: Path) -> None:
         )
 
 
-def test_rejects_confirmatory_and_federated_threshold_use(tmp_path: Path) -> None:
-    require_cuda()
-    _, _, evaluation = _evaluation(tmp_path, 11, 12)
-    with pytest.raises(LeakageError, match="confirmatory shared-versus-local"):
-        reject_centralized_result_in_confirmatory_threshold_comparison(evaluation)
-    with pytest.raises(LeakageError, match="federated threshold policy"):
-        reject_centralized_as_federated_threshold_policy(CentralizedThresholdMethod.POOLED_BENIGN_QUANTILE)
-    with pytest.raises(LeakageError, match="CV\\(FPR\\)"):
-        reject_cross_client_cv_fpr_from_pooled_centralized()
-    with pytest.raises(LeakageError, match="federated threshold-policy comparisons"):
-        reject_centralized_in_federated_threshold_comparison(FederatedThresholdMethod.SHARED_THRESHOLD)

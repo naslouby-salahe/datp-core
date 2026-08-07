@@ -37,6 +37,7 @@ from datp_core.domain.provenance import canonical_json_text
 from datp_core.domain.values.checksums import Checksum, checksum_file, checksum_text
 from datp_core.domain.values.counts import ClientCount, RoundNumber, RowCount, Seed
 from datp_core.domain.values.identifiers import FeatureNameSequence
+from datp_core.domain.values.paths import ClientIdentityToken, FamilyIdentity
 from datp_core.domain.values.ratios import (
     NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
     DittoRegularization,
@@ -853,7 +854,7 @@ def _population_context(
     state_set_checksum = preprocessing_state_set_checksum(
         tuple(
             PreparedClientProvenance(
-                client=client_with_id(clients, item.client_identity.value),
+                client=client_with_id(clients, ClientIdentityToken(item.client_identity.value)),
                 preprocessing_checksum=item.fitted_state.estimator_checksum,
             )
             for item in preprocessing.client_publications
@@ -861,7 +862,13 @@ def _population_context(
     )
     return DittoPopulationContext(
         clients=clients,
-        family_by_client=family_identities(clients, population_result.construction.manifest.family_by_client),
+        family_by_client=family_identities(
+            clients,
+            tuple(
+                (ClientIdentityToken(c), FamilyIdentity(f))
+                for c, f in population_result.construction.manifest.family_by_client
+            ),
+        ),
         preprocessing=preprocessing,
         split_manifest_checksum=population_result.split_manifest.assignment_checksum,
         preprocessing_state_set_checksum=state_set_checksum,

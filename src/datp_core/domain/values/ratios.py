@@ -1,5 +1,6 @@
 """Validated ratios, quantiles, tolerances, and scientific numeric values."""
 
+from dataclasses import dataclass
 from typing import ClassVar
 
 from datp_core.domain.values.base import (
@@ -8,7 +9,10 @@ from datp_core.domain.values.base import (
     NonNegativeFiniteFloatValue,
     OpenUnitIntervalValue,
     PositiveFiniteFloatValue,
+    sequence_pydantic_schema,
+    validate_non_empty_tuple,
 )
+from datp_core.domain.values.counts import RowCount
 
 
 class Ratio(ClosedUnitIntervalValue):
@@ -126,3 +130,40 @@ class ScoreVariance(NonNegativeFiniteFloatValue):
     """Population or sample variance of anomaly scores."""
 
     validation_name: ClassVar[str] = "score variance"
+
+
+class DistributionSkewness(FiniteFloatValue):
+    """Skewness of a score distribution for cluster fingerprinting."""
+
+    validation_name: ClassVar[str] = "distribution skewness"
+
+
+@dataclass(frozen=True, slots=True)
+class CalibrationSampleWeights:
+    """Per-client calibration sample counts used as aggregation weights."""
+
+    weights: tuple[RowCount, ...]
+
+    def __post_init__(self) -> None:
+        validate_non_empty_tuple(self.weights, "calibration sample weights")
+
+    @property
+    def as_floats(self) -> tuple[float, ...]:
+        return tuple(float(w.value) for w in self.weights)
+
+    @property
+    def total(self) -> float:
+        return float(sum(w.value for w in self.weights))
+
+    @property
+    def normalized(self) -> tuple[NormalizedWeight, ...]:
+        t = self.total
+        return tuple(NormalizedWeight(w.value / t) for w in self.weights)
+
+    def __len__(self) -> int:
+        return len(self.weights)
+
+    def __iter__(self):
+        return iter(self.weights)
+
+    __get_pydantic_core_schema__ = classmethod(sequence_pydantic_schema)

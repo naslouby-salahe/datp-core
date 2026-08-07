@@ -14,7 +14,7 @@ from tests.unit.learning.centralized.helpers import (
 )
 
 from datp_core.datasets.partitioning.contracts import PopulationOutcomeLabel
-from datp_core.domain.enums import CentralizedThresholdMethod, FederatedThresholdMethod, ScoreFrameColumn
+from datp_core.domain.enums import CentralizedThresholdMethod, ScoreFrameColumn
 from datp_core.domain.errors import LeakageError
 from datp_core.domain.values.counts import RowCount, Seed
 from datp_core.domain.values.ratios import Quantile, ThresholdValue
@@ -24,9 +24,6 @@ from datp_core.pipeline.decision.centralized import (
     construct_pooled_benign_quantile,
     exact_pooled_quantile,
     reject_attack_rows_in_benign_calibration,
-    reject_centralized_threshold_in_federated_dispatch,
-    reject_federated_scores_for_centralized_threshold,
-    reject_local_quantile_mean_as_centralized,
 )
 from datp_core.pipeline.scoring.centralized import load_score_frame, score_centralized_reference
 from datp_core.pipeline.scoring.models import CentralizedScoringRequest
@@ -85,10 +82,3 @@ def test_rejects_attack_rows_in_calibration() -> None:
         )
 
 
-def test_rejects_federated_scores_and_local_mean() -> None:
-    with pytest.raises(LeakageError, match="federated score"):
-        reject_federated_scores_for_centralized_threshold("fedavg_scores", FederatedThresholdMethod.SHARED_THRESHOLD)
-    with pytest.raises(LeakageError, match="arithmetic mean of local quantiles"):
-        reject_local_quantile_mean_as_centralized((0.1, 0.2, 0.3))
-    with pytest.raises(LeakageError, match="federated threshold dispatch"):
-        reject_centralized_threshold_in_federated_dispatch(CentralizedThresholdMethod.POOLED_BENIGN_QUANTILE)

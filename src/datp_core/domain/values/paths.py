@@ -19,6 +19,17 @@ class ClientPathToken:
 
 
 @dataclass(frozen=True, slots=True)
+class ClientIdentityToken:
+    value: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.value, str) or not self.value:
+            raise ValueError("client identity token must be non-empty")
+
+    __get_pydantic_core_schema__ = classmethod(pydantic_value_schema)
+
+
+@dataclass(frozen=True, slots=True)
 class FamilyIdentity:
     value: str
 

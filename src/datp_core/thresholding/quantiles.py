@@ -18,6 +18,7 @@ from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.checksums import Checksum, checksum_text
 from datp_core.domain.values.counts import ConformalRankIndex, RowCount
 from datp_core.domain.values.ratios import (
+    CalibrationSampleWeights,
     CoverageTarget,
     Quantile,
     Ratio,
@@ -136,21 +137,24 @@ def unweighted_mean(values: tuple[ThresholdValue, ...]) -> ThresholdValue:
 
 def sample_weighted_mean(
     values: tuple[ThresholdValue, ...],
-    weights: tuple[float, ...],
+    weights: CalibrationSampleWeights,
 ) -> ThresholdValue:
-    if not values or len(values) != len(weights):
+    if not values or len(values) != len(weights.weights):
         raise ScientificContractError(
             "a sample-weighted mean requires one weight per contributing value",
             subject=ContractSubject.THRESHOLD,
         )
-    total_weight = sum(weights)
+    total_weight = weights.total
     if total_weight <= 0:
         raise ScientificContractError(
             "sample-weighted mean requires positive total support",
             subject=ContractSubject.THRESHOLD,
         )
     return ThresholdValue(
-        sum(item.value * weight for item, weight in zip(values, weights, strict=True)) / total_weight
+        sum(
+            item.value * float(weight.value) for item, weight in zip(values, weights.weights, strict=True)
+        )
+        / total_weight
     )
 
 

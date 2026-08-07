@@ -197,17 +197,6 @@ class SourceRowReference:
 
 
 @dataclass(frozen=True, slots=True)
-class DatasetRowIdentity:
-    dataset: DatasetId
-    source_row: SourceRowReference
-    stable_id: str
-
-    def __post_init__(self) -> None:
-        if not self.stable_id:
-            raise ValueError("stable row identities must be non-empty")
-
-
-@dataclass(frozen=True, slots=True)
 class DatasetExclusion:
     dataset: DatasetId
     source_path: Path | None

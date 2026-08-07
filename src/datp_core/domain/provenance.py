@@ -2,7 +2,7 @@
 
 import json
 from collections.abc import Mapping
-from dataclasses import dataclass, fields, is_dataclass
+from dataclasses import fields, is_dataclass
 from enum import Enum
 from math import isfinite
 from pathlib import Path
@@ -10,9 +10,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, TypeAdapter
 
-from .enums import DatasetId, PopulationId, SerializationFormat, TrafficRateEvidenceType
 from .values.checksums import Checksum, checksum_text
-from .values.counts import ByteCount, RowCount
 
 if TYPE_CHECKING:
     from _typeshed import DataclassInstance
@@ -30,72 +28,6 @@ type CanonicalValue = (
 )
 
 JSON_SEPARATORS = (",", ":")
-
-
-@dataclass(frozen=True, slots=True)
-class SourceFileProvenance:
-    path: Path
-    size_bytes: ByteCount
-    checksum: Checksum
-    row_count: RowCount
-
-
-@dataclass(frozen=True, slots=True)
-class DatasetProvenance:
-    dataset: DatasetId
-    sources: tuple[SourceFileProvenance, ...]
-    schema_checksum: Checksum
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.sources, tuple):
-            raise TypeError("dataset sources must be an immutable tuple")
-
-
-@dataclass(frozen=True, slots=True)
-class CodeProvenance:
-    revision: str
-    dirty_state: bool
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.revision, str) or not self.revision:
-            raise ValueError("revision must be non-empty")
-        if not isinstance(self.dirty_state, bool):
-            raise TypeError("dirty state must be boolean")
-
-
-@dataclass(frozen=True, slots=True)
-class ProtocolProvenance:
-    resolved_manifest_checksum: Checksum
-
-
-@dataclass(frozen=True, slots=True)
-class CitationProvenance:
-    citation_key: str
-    source_title: str
-    source_locator: str
-
-    def __post_init__(self) -> None:
-        if not all(
-            isinstance(value, str) and value for value in (self.citation_key, self.source_title, self.source_locator)
-        ):
-            raise ValueError("citation fields must be non-empty strings")
-
-
-@dataclass(frozen=True, slots=True)
-class TrafficRateProvenance:
-    kind: TrafficRateEvidenceType
-    source: str
-    units: str
-    applicable_population: PopulationId
-    citation: CitationProvenance
-
-
-@dataclass(frozen=True, slots=True)
-class ArtifactProvenance:
-    path: Path
-    format: SerializationFormat
-    checksum: Checksum
-    schema_checksum: Checksum
 
 
 def canonical_value(value: object) -> CanonicalValue:

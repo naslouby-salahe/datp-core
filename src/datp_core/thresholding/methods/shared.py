@@ -14,7 +14,12 @@ from datp_core.domain.errors import ScientificContractError, require_contract
 from datp_core.domain.values.base import floats_exactly_equal
 from datp_core.domain.values.checksums import Checksum, checksum_text
 from datp_core.domain.values.counts import RowCount
-from datp_core.domain.values.ratios import NormalizedWeight, Quantile, ThresholdValue
+from datp_core.domain.values.ratios import (
+    CalibrationSampleWeights,
+    NormalizedWeight,
+    Quantile,
+    ThresholdValue,
+)
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.protocols.calibration import QuantileProtocol
 from datp_core.thresholding.assignments import (
@@ -217,12 +222,13 @@ def construct_sample_weighted_shared_threshold(
         )
     require_eligible_cohort(eligible, "shared-construction threshold methods")
     local_quantiles = tuple(local_quantile(client_scores, protocol.quantile) for client_scores in eligible)
-    counts = tuple(float(item.calibration_count.value) for item in local_quantiles)
-    total = sum(counts)
-    normalized_weights = tuple(NormalizedWeight(count / total) for count in counts)
+    weights = CalibrationSampleWeights(
+        tuple(item.calibration_count for item in local_quantiles)
+    )
+    normalized_weights = weights.normalized
     shared_value = sample_weighted_mean(
         tuple(item.value for item in local_quantiles),
-        counts,
+        weights,
     )
     assignments = tuple(ThresholdAssignment(item.client, shared_value) for item in local_quantiles)
     return SampleWeightedSharedThresholdResult(

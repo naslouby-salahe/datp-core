@@ -8,6 +8,7 @@ from datp_core.domain.enums import QuantileInterpolationSemantics
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.counts import ConformalRankIndex, RowCount
 from datp_core.domain.values.ratios import (
+    CalibrationSampleWeights,
     CoverageTarget,
     Quantile,
     ScoreMoment,
@@ -52,7 +53,10 @@ def test_unweighted_mean_matches_arithmetic_mean() -> None:
 
 
 def test_sample_weighted_mean_matches_manual_computation() -> None:
-    result = sample_weighted_mean(tuple(ThresholdValue(v) for v in (1.0, 3.0)), (1.0, 3.0))
+    result = sample_weighted_mean(
+        tuple(ThresholdValue(v) for v in (1.0, 3.0)),
+        CalibrationSampleWeights((RowCount(1), RowCount(3))),
+    )
     assert result == ThresholdValue((1.0 * 1.0 + 3.0 * 3.0) / 4.0)
 
 

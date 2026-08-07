@@ -209,6 +209,7 @@ def test_grouped_threshold_fingerprint_matches_locked_formula() -> None:
         )
         for index in range(6)
     )
+    from datp_core.domain.values.ratios import DistributionSkewness
     from datp_core.thresholding.methods.cluster import FingerprintFeatures
 
     result = construct_grouped_threshold(clients, CLUSTER_THRESHOLD_PROTOCOL)
@@ -217,7 +218,7 @@ def test_grouped_threshold_fingerprint_matches_locked_formula() -> None:
         expected = FingerprintFeatures(
             mean=ScoreMoment(float(np.mean(scores))),
             standard_deviation=ScoreMoment(float(np.std(scores, ddof=0))),
-            skewness=float(skew(scores, bias=True)),
+            skewness=DistributionSkewness(float(skew(scores, bias=True))),
             p95=ThresholdValue(float(np.quantile(scores, 0.95, method="linear"))),
         )
         assert fingerprint.raw == expected

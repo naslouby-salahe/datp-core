@@ -1,6 +1,5 @@
 """Cluster threshold construction and persisted result contracts."""
 
-import math
 from dataclasses import dataclass
 from typing import ClassVar, Literal
 
@@ -22,7 +21,7 @@ from datp_core.domain.values.counts import (
     KMeansMaximumIterationCount,
     Seed,
 )
-from datp_core.domain.values.ratios import ScoreMoment, ThresholdValue
+from datp_core.domain.values.ratios import DistributionSkewness, ScoreMoment, ThresholdValue
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.protocols.calibration import (
     CANONICAL_QUANTILE,
@@ -50,15 +49,8 @@ from datp_core.thresholding.quantiles import (
 class FingerprintFeatures:
     mean: ScoreMoment
     standard_deviation: ScoreMoment
-    skewness: float
+    skewness: DistributionSkewness
     p95: ThresholdValue
-
-    def __post_init__(self) -> None:
-        require_contract(
-            math.isfinite(self.skewness),
-            "fingerprint skewness must be finite",
-            ContractSubject.THRESHOLD,
-        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -191,7 +183,7 @@ def construct_grouped_threshold(
     ordered = tuple(sorted(eligible, key=lambda item: item.client))
     raw_features = tuple(_raw_fingerprint(item.as_array) for item in ordered)
     matrix = np.asarray(
-        [(f.mean.value, f.standard_deviation.value, f.skewness, f.p95.value) for f in raw_features],
+        [(f.mean.value, f.standard_deviation.value, f.skewness.value, f.p95.value) for f in raw_features],
         dtype=np.float64,
     )
     if not np.isfinite(matrix).all():
@@ -246,7 +238,7 @@ def _as_fingerprint_features(row: np.ndarray) -> FingerprintFeatures:
     return FingerprintFeatures(
         mean=ScoreMoment(float(row[0])),
         standard_deviation=ScoreMoment(float(row[1])),
-        skewness=float(row[2]),
+        skewness=DistributionSkewness(float(row[2])),
         p95=ThresholdValue(float(row[3])),
     )
 
@@ -257,10 +249,10 @@ def _raw_fingerprint(
     mean = float(np.mean(scores))
     standard_deviation = float(np.std(scores, ddof=0))
     if standard_deviation == 0.0 or np.ptp(scores) == 0.0:
-        skewness = 0.0
+        skewness_value = 0.0
     else:
-        skewness = float(skew(scores, bias=True))
-        if not np.isfinite(skewness):
+        skewness_value = float(skew(scores, bias=True))
+        if not np.isfinite(skewness_value):
             raise ScientificContractError(
                 "fingerprint skewness must be finite",
                 subject=ContractSubject.THRESHOLD,
@@ -269,7 +261,7 @@ def _raw_fingerprint(
     return FingerprintFeatures(
         mean=ScoreMoment(mean),
         standard_deviation=ScoreMoment(standard_deviation),
-        skewness=skewness,
+        skewness=DistributionSkewness(skewness_value),
         p95=ThresholdValue(p95),
     )
 

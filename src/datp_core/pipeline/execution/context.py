@@ -12,7 +12,7 @@ from datp_core.domain.enums import ContractSubject, DatasetId
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.identifiers import FeatureName, FeatureNameSequence
-from datp_core.domain.values.paths import FamilyIdentity
+from datp_core.domain.values.paths import ClientIdentityToken, FamilyIdentity
 from datp_core.domain.values.ratios import ProximalCoefficient
 from datp_core.learning.federated.models import (
     ClientTrainingInput,
@@ -152,7 +152,10 @@ def resolve_execution_context(coordinate: ExperimentCoordinate, output_root: Pat
             )
         )
         clients = population_result.construction.manifest.clients
-        family_pairs = population_result.construction.manifest.family_by_client
+        family_pairs = tuple(
+            (ClientIdentityToken(c), FamilyIdentity(f))
+            for c, f in population_result.construction.manifest.family_by_client
+        )
         split_checksum = population_result.split_manifest.assignment_checksum
         training_directory = federated_training_directory(training_coordinate, output_root)
     else:
@@ -193,13 +196,16 @@ def resolve_execution_context(coordinate: ExperimentCoordinate, output_root: Pat
             )
         )
         clients = population_result.population_manifest.clients
-        family_pairs = population_result.population_manifest.family_by_client
+        family_pairs = tuple(
+            (ClientIdentityToken(c), FamilyIdentity(f))
+            for c, f in population_result.population_manifest.family_by_client
+        )
         split_checksum = split_result.manifest.assignment_checksum
         training_directory = root / ExecutionArtifactDirectory.TRAINING
     state_checksum = preprocessing_state_set_checksum(
         tuple(
             PreparedClientProvenance(
-                client=client_with_id(clients, publication.client_identity.value),
+                client=client_with_id(clients, ClientIdentityToken(publication.client_identity.value)),
                 preprocessing_checksum=publication.fitted_state.estimator_checksum,
             )
             for publication in preprocessing.client_publications
@@ -224,7 +230,7 @@ def client_training_inputs(
 ) -> tuple[ClientTrainingInput, ...]:
     return tuple(
         ClientTrainingInput(
-            client=client_with_id(clients, publication.client_identity.value),
+            client=client_with_id(clients, ClientIdentityToken(publication.client_identity.value)),
             training_features=pl.read_parquet(publication.paths.train),
             feature_names=feature_names,
             preprocessing_state=publication.fitted_state,
@@ -239,7 +245,7 @@ def client_scoring_inputs(
 ) -> tuple[ClientScoringInput, ...]:
     return tuple(
         ClientScoringInput(
-            client=client_with_id(clients, publication.client_identity.value),
+            client=client_with_id(clients, ClientIdentityToken(publication.client_identity.value)),
             calibration_features=pl.read_parquet(publication.paths.calibration),
             evaluation_features=pl.read_parquet(publication.paths.evaluation),
             future_recalibration_features=(
@@ -254,18 +260,18 @@ def client_scoring_inputs(
 
 def family_identities(
     clients: tuple[ClientIdentity, ...],
-    family_by_client: tuple[tuple[str, str], ...],
+    family_by_client: tuple[tuple[ClientIdentityToken, FamilyIdentity], ...],
 ) -> tuple[FamilyAssignment, ...]:
     return tuple(
-        FamilyAssignment(client=client_with_id(clients, client_id), family=FamilyIdentity(family))
+        FamilyAssignment(client=client_with_id(clients, client_id), family=family)
         for client_id, family in family_by_client
     )
 
 
-def client_with_id(clients: tuple[ClientIdentity, ...], client_id: str) -> ClientIdentity:
-    matches = tuple(candidate for candidate in clients if candidate.client_id == client_id)
+def client_with_id(clients: tuple[ClientIdentity, ...], client_id: ClientIdentityToken) -> ClientIdentity:
+    matches = tuple(candidate for candidate in clients if candidate.client_id == client_id.value)
     if len(matches) != 1:
-        raise ScientificContractError(f"population manifest must contain exactly one client {client_id}")
+        raise ScientificContractError(f"population manifest must contain exactly one client {client_id.value}")
     return matches[0]
 
 

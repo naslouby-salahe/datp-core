@@ -14,14 +14,13 @@ from datp_core.domain.enums import (
     CentralizedThresholdMethod,
     ContractSubject,
     EvidenceRole,
-    FederatedThresholdMethod,
     MetricId,
     PartitionRole,
     PublicationStatus,
     QuantileInterpolationSemantics,
     ScoreFrameColumn,
 )
-from datp_core.domain.errors import LeakageError, ScientificContractError
+from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.provenance import canonical_checksum, canonical_json_text
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import RoundNumber, RowCount
@@ -379,39 +378,6 @@ def reject_attack_rows_in_benign_calibration(
     )
 
 
-def reject_federated_scores_for_centralized_threshold(
-    identity: str,
-    method: FederatedThresholdMethod,
-) -> None:
-    raise LeakageError(
-        f"federated score artifact '{identity}' (method={method.value}) "
-        "cannot enter centralized threshold construction",
-        subject=ContractSubject.ARTIFACT_PATH,
-    )
-
-
-def reject_local_quantile_mean_as_centralized(local_quantiles: Sequence[float]) -> None:
-    raise LeakageError(
-        "arithmetic mean of local quantiles is the shared federated construction, not the centralized pooled quantile "
-        f"(received {len(local_quantiles)} local quantile values)",
-        subject=ContractSubject.LOCAL_QUANTILE_MEAN,
-    )
-
-
-def reject_federated_threshold_method_as_centralized(method: FederatedThresholdMethod) -> None:
-    raise LeakageError(
-        "federated threshold methods cannot be relabelled as the centralized pooled quantile",
-        subject=method,
-    )
-
-
-def reject_centralized_threshold_in_federated_dispatch(method: CentralizedThresholdMethod) -> None:
-    raise LeakageError(
-        "centralized pooled quantile cannot enter federated threshold dispatch",
-        subject=method,
-    )
-
-
 def write_threshold_document(result: PooledThresholdResult, directory: Path) -> Path:
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / CentralizedThresholdAssetName.THRESHOLD
@@ -546,29 +512,6 @@ def evaluation_result_checksum(result: CentralizedEvaluationResult) -> Checksum:
     return canonical_checksum(result)
 
 
-def reject_centralized_result_in_confirmatory_threshold_comparison(result: CentralizedEvaluationResult) -> None:
-    raise LeakageError(
-        "centralized reference evaluation cannot enter the confirmatory shared-versus-local threshold comparison",
-        subject=result.threshold_method,
-    )
-
-
-def reject_centralized_as_federated_threshold_policy(method: CentralizedThresholdMethod) -> None:
-    raise LeakageError("centralized pooled quantile is not a federated threshold policy", subject=method)
-
-
-def reject_cross_client_cv_fpr_from_pooled_centralized() -> None:
-    raise LeakageError(
-        "confirmatory cross-client CV(FPR) cannot be computed from the pooled centralized result",
-        subject=MetricId.FPR_COEFFICIENT_OF_VARIATION,
-    )
-
-
-def reject_centralized_in_federated_threshold_comparison(method: FederatedThresholdMethod) -> None:
-    raise LeakageError(
-        "centralized reference cannot be inserted into federated threshold-policy comparisons",
-        subject=method,
-    )
 
 
 def _validate_threshold_inputs(
