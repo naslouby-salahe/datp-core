@@ -1,5 +1,3 @@
-"""Typed federated training coordinate contracts."""
-
 from dataclasses import dataclass
 
 from datp_core.datasets.partitioning.contracts import ControlledPartitionKind
@@ -21,21 +19,25 @@ def _require_model_coefficient(
 ) -> None:
     match model:
         case TrainingModelId.FEDAVG_AUTOENCODER:
-            valid = coefficient is None
-            message = "FedAvg coordinates carry no model coefficient"
+            if coefficient is not None:
+                raise ScientificContractError(
+                    "FedAvg coordinates carry no model coefficient", subject=ContractSubject.TRAINING
+                )
         case TrainingModelId.FEDPROX_AUTOENCODER:
-            valid = isinstance(coefficient, ProximalCoefficient)
-            message = "FedProx coordinates require a proximal coefficient"
+            if not isinstance(coefficient, ProximalCoefficient):
+                raise ScientificContractError(
+                    "FedProx coordinates require a proximal coefficient", subject=ContractSubject.TRAINING
+                )
         case TrainingModelId.DITTO_GLOBAL_AUTOENCODER | TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER:
-            valid = isinstance(coefficient, DittoRegularization)
-            message = "Ditto coordinates require a personalization regularization value"
+            if not isinstance(coefficient, DittoRegularization):
+                raise ScientificContractError(
+                    "Ditto coordinates require a personalization regularization value", subject=ContractSubject.TRAINING
+                )
         case _:
             raise ScientificContractError(
                 f"unsupported federated training model {model}",
                 subject=ContractSubject.TRAINING,
             )
-    if not valid:
-        raise ScientificContractError(message, subject=ContractSubject.TRAINING)
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,21 +53,24 @@ class FederatedTrainingCoordinate:
 
     def __post_init__(self) -> None:
         _require_model_coefficient(self.model, self.model_coefficient)
-        if self.controlled_partition_kind is ControlledPartitionKind.DIRICHLET and self.dirichlet_concentration is None:
+
+        if self.dirichlet_concentration is not None:
+            if self.controlled_partition_kind is None:
+                raise ScientificContractError(
+                    "a Dirichlet concentration requires a controlled partition kind",
+                    subject=ContractSubject.COORDINATE,
+                )
+            if self.controlled_partition_kind is ControlledPartitionKind.IID:
+                raise ScientificContractError(
+                    "IID controlled partitions must not carry a concentration",
+                    subject=ContractSubject.COORDINATE,
+                )
+        elif self.controlled_partition_kind is ControlledPartitionKind.DIRICHLET:
             raise ScientificContractError(
                 "Dirichlet controlled partitions require a concentration",
                 subject=ContractSubject.COORDINATE,
             )
-        if self.controlled_partition_kind is ControlledPartitionKind.IID and self.dirichlet_concentration is not None:
-            raise ScientificContractError(
-                "IID controlled partitions must not carry a concentration",
-                subject=ContractSubject.COORDINATE,
-            )
-        if self.controlled_partition_kind is None and self.dirichlet_concentration is not None:
-            raise ScientificContractError(
-                "a Dirichlet concentration requires a controlled partition kind",
-                subject=ContractSubject.COORDINATE,
-            )
+
         if self.population is PopulationId.NBAIOT_DIRICHLET_CLIENTS and self.controlled_partition_kind is None:
             raise ScientificContractError(
                 "Dirichlet-client populations require an explicit controlled partition condition",
@@ -73,26 +78,27 @@ class FederatedTrainingCoordinate:
             )
 
     def matches_ditto_peer(self, other: "FederatedTrainingCoordinate") -> bool:
-        return (
-            self.population == other.population
-            and self.training_seed == other.training_seed
-            and self.split_protocol == other.split_protocol
-            and self.preprocessing_identity == other.preprocessing_identity
-            and self.model_coefficient == other.model_coefficient
-            and self.controlled_partition_kind == other.controlled_partition_kind
-            and self.dirichlet_concentration == other.dirichlet_concentration
-            and {self.model, other.model}
-            == {
-                TrainingModelId.DITTO_GLOBAL_AUTOENCODER,
-                TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER,
-            }
-        )
+        if (
+            self.model is TrainingModelId.DITTO_GLOBAL_AUTOENCODER
+            and other.model is TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER
+        ) or (
+            self.model is TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER
+            and other.model is TrainingModelId.DITTO_GLOBAL_AUTOENCODER
+        ):
+            return (
+                self.population == other.population
+                and self.training_seed == other.training_seed
+                and self.split_protocol == other.split_protocol
+                and self.preprocessing_identity == other.preprocessing_identity
+                and self.model_coefficient == other.model_coefficient
+                and self.controlled_partition_kind == other.controlled_partition_kind
+                and self.dirichlet_concentration == other.dirichlet_concentration
+            )
+        return False
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class DittoTrainingCoordinates:
-    """The one global/personalized coordinate pair for a Ditto experiment identity."""
-
     global_coordinate: FederatedTrainingCoordinate
     personalized_coordinate: FederatedTrainingCoordinate
 

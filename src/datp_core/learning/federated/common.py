@@ -1,5 +1,3 @@
-"""Shared federated training artifact publication, reuse, and validation."""
-
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -55,18 +53,18 @@ def validate_federated_training_inputs(
             "autoencoder input width must match the transformed feature schema",
             subject=ContractSubject.WIDTHS,
         )
-    if any(client.feature_names != feature_names for client in clients):
-        raise ScientificContractError(
-            "federated clients must share one transformed feature schema",
-            subject=ContractSubject.SCHEMA,
-        )
+    for client in clients[1:]:
+        if client.feature_names != feature_names:
+            raise ScientificContractError(
+                "federated clients must share one transformed feature schema",
+                subject=ContractSubject.SCHEMA,
+            )
 
 
 def materialize_global_federated_training(
     request: FederatedTrainingRequest[GlobalFederatedProtocol],
     directory: Path,
 ) -> FederatedTrainingArtifacts:
-    """Execute and persist global federated training inside an artifact staging directory."""
     outcome = train_global_federated(replace(request, output_directory=directory))
     return FederatedTrainingArtifacts(outcome.training_result, outcome.candidates)
 
@@ -135,9 +133,8 @@ def ditto_training_is_reusable(
 ) -> bool:
     del request
     global_directory, personalized_directory = ditto_directories(directories)
-    return (global_directory / FederatedHistoryAssetName.COMPLETE.value).is_file() and (
-        personalized_directory / FederatedHistoryAssetName.COMPLETE.value
-    ).is_file()
+    filename = FederatedHistoryAssetName.COMPLETE.value
+    return (global_directory / filename).is_file() and (personalized_directory / filename).is_file()
 
 
 def load_reused_ditto_artifacts(
@@ -176,11 +173,13 @@ def rebase_ditto_training(
         global_training=result.global_training,
         global_candidates=rebase_checkpoint_candidates(result.global_candidates, global_directory),
         personalized_candidates=tuple(
-            PersonalizedCandidateSet(
-                client=item.client,
-                candidates=rebase_checkpoint_candidates(item.candidates, personalized_directory),
-            )
-            for item in result.personalized_candidates
+            [
+                PersonalizedCandidateSet(
+                    client=item.client,
+                    candidates=rebase_checkpoint_candidates(item.candidates, personalized_directory),
+                )
+                for item in result.personalized_candidates
+            ]
         ),
     )
 
@@ -194,10 +193,12 @@ def ditto_directories(directories: tuple[Path, ...]) -> tuple[Path, Path]:
 def training_preprocessing_checksum(clients: tuple[ClientTrainingInput, ...]) -> Checksum:
     return preprocessing_state_set_checksum(
         tuple(
-            PreparedClientProvenance(
-                client=client.client,
-                preprocessing_checksum=client.preprocessing_state.estimator_checksum,
-            )
-            for client in clients
+            [
+                PreparedClientProvenance(
+                    client=client.client,
+                    preprocessing_checksum=client.preprocessing_state.estimator_checksum,
+                )
+                for client in clients
+            ]
         )
     )

@@ -1,5 +1,3 @@
-"""Typed federated training record and history contracts."""
-
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -167,12 +165,16 @@ class FederatedRoundResult:
                 "a federated round requires at least one client result",
                 subject=ContractSubject.CLIENT,
             )
-        clients = tuple(result.client for result in self.client_results)
-        if len(set(clients)) != len(clients):
+
+        client_count = len(self.client_results)
+        client_set = {result.client for result in self.client_results}
+
+        if len(client_set) != client_count:
             raise ScientificContractError(
                 "a federated round cannot contain duplicate client results",
                 subject=ContractSubject.CLIENT_IDENTITY,
             )
+
         if self.communication.round_number != self.round_number:
             raise ScientificContractError(
                 "communication round must match the training round",
@@ -186,16 +188,22 @@ class FederatedRoundResult:
 
         coordinate = self.global_state_reference.coordinate
         personalized = self.personalized_state_references
-        personalized_clients = tuple(reference.client for reference in personalized)
-        if len(set(personalized_clients)) != len(personalized_clients):
-            raise ScientificContractError(
-                "a federated round cannot contain duplicate personalized references",
-                subject=ContractSubject.CLIENT_IDENTITY,
-            )
+
+        if personalized:
+            personalized_count = len(personalized)
+            personalized_client_set = {reference.client for reference in personalized}
+
+            if len(personalized_client_set) != personalized_count:
+                raise ScientificContractError(
+                    "a federated round cannot contain duplicate personalized references",
+                    subject=ContractSubject.CLIENT_IDENTITY,
+                )
+        else:
+            personalized_client_set = set()
 
         match coordinate.model:
             case TrainingModelId.DITTO_GLOBAL_AUTOENCODER:
-                if set(personalized_clients) != set(clients):
+                if personalized_client_set != client_set:
                     raise ScientificContractError(
                         "every Ditto global round requires exactly one personalized reference per client",
                         subject=ContractSubject.CLIENT,
@@ -235,22 +243,21 @@ class FederatedTrainingHistory:
                 "federated training history must contain at least one round",
                 subject=ContractSubject.TRAINING,
             )
-        observed_rounds = tuple(item.round_number.value for item in self.rounds)
-        if observed_rounds != tuple(range(1, len(self.rounds) + 1)):
-            raise ScientificContractError(
-                "federated history rounds must be consecutive from one",
-                subject=ContractSubject.CHECKPOINT_CANDIDATES,
-            )
 
         reference_clients = tuple(item.client for item in self.rounds[0].client_results)
-        for item in self.rounds:
+
+        for expected_val, item in enumerate(self.rounds, start=1):
+            if item.round_number.value != expected_val:
+                raise ScientificContractError(
+                    "federated history rounds must be consecutive from one",
+                    subject=ContractSubject.CHECKPOINT_CANDIDATES,
+                )
             if item.global_state_reference.coordinate != self.coordinate:
                 raise ScientificContractError(
                     "every training-history round must use the history coordinate",
                     subject=ContractSubject.COORDINATE,
                 )
-            current_clients = tuple(result.client for result in item.client_results)
-            if current_clients != reference_clients:
+            if tuple(result.client for result in item.client_results) != reference_clients:
                 raise ScientificContractError(
                     "every training-history round must preserve deterministic client ordering",
                     subject=ContractSubject.CLIENT,

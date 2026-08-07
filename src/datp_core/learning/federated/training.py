@@ -1,5 +1,3 @@
-"""Shared deterministic client-local mechanics for federated autoencoder training."""
-
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import IntEnum
@@ -20,7 +18,6 @@ from datp_core.datasets.partitioning.contracts import (
 from datp_core.domain.enums import (
     CommunicationEstimationMethod,
     ContractSubject,
-    OptimizerId,
 )
 from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.provenance import canonical_json_text
@@ -35,6 +32,7 @@ from datp_core.learning.autoencoder import (
     AutoencoderStateView,
     ReconstructionAutoencoder,
     build_autoencoder_for_state,
+    build_optimizer,
     build_reconstruction_autoencoder,
     clone_autoencoder_state,
     clone_state,
@@ -213,25 +211,6 @@ def build_client_loader(
     )
 
 
-def build_optimizer(
-    model: ReconstructionAutoencoder,
-    optimizer_protocol: OptimizerProtocol,
-    learning_rate: LearningRate,
-) -> torch.optim.Optimizer:
-    match optimizer_protocol.identity:
-        case OptimizerId.ADAM:
-            return torch.optim.Adam(
-                model.parameters(),
-                lr=learning_rate.value,
-                weight_decay=optimizer_protocol.weight_decay.value,
-            )
-        case _:
-            raise ScientificContractError(
-                f"unsupported optimizer {optimizer_protocol.identity}",
-                subject=ContractSubject.OPTIMIZER,
-            )
-
-
 def proximal_penalty(
     local_parameters: Sequence[torch.Tensor],
     reference_parameters: Sequence[torch.Tensor],
@@ -242,10 +221,11 @@ def proximal_penalty(
             "proximal regularization requires model parameters",
             subject=ContractSubject.TRAINING,
         )
-    total = torch.zeros((), device=local_parameters[0].device)
-    for local, reference in zip(local_parameters, reference_parameters, strict=True):
-        total = total + torch.sum((local - reference) ** 2)
-    return total * (coefficient.value / 2.0)
+    squared_diffs = [
+        torch.sum(torch.square(local - reference))
+        for local, reference in zip(local_parameters, reference_parameters, strict=True)
+    ]
+    return torch.stack(squared_diffs).sum() * (coefficient.value / 2.0)
 
 
 def _reference_parameters(
@@ -258,8 +238,10 @@ def _reference_parameters(
     reference = proximal_term.reference_state
     try:
         return tuple(
-            reference[name].detach().to(device=device, dtype=parameter.dtype)
-            for name, parameter in model.named_parameters()
+            [
+                reference[name].detach().to(device=device, dtype=parameter.dtype)
+                for name, parameter in model.named_parameters()
+            ]
         )
     except KeyError as exc:
         raise ScientificContractError(
@@ -279,6 +261,7 @@ def _train_one_batch(
     reconstruction = model(batch)
     reconstruction_loss = nn.functional.mse_loss(reconstruction, batch)
     objective = reconstruction_loss
+
     if reference_parameters is not None and proximal_term is not None:
         local_parameters = tuple(parameter for _, parameter in model.named_parameters())
         objective = objective + proximal_penalty(
@@ -286,6 +269,7 @@ def _train_one_batch(
             reference_parameters,
             proximal_term.coefficient,
         )
+
     objective.backward()
     optimizer.step()
     return reconstruction_loss.detach()
@@ -377,7 +361,7 @@ def aggregate_client_updates(updates: Sequence[ClientUpdate]) -> AutoencoderStat
             "aggregation requires at least one client update",
             subject=ContractSubject.CLIENT,
         )
-    total_samples = sum(update.sample_count.value for update in updates)
+    total_samples = sum([update.sample_count.value for update in updates])
     if total_samples < 1:
         raise ScientificContractError(
             "aggregation requires a positive total sample count",
@@ -385,9 +369,10 @@ def aggregate_client_updates(updates: Sequence[ClientUpdate]) -> AutoencoderStat
         )
 
     reference_state = updates[0].state_dict
-    reference_keys = tuple(reference_state)
-    for update in updates:
-        if tuple(update.state_dict) != reference_keys:
+    reference_keys = tuple(reference_state.keys())
+
+    for update in updates[1:]:
+        if tuple(update.state_dict.keys()) != reference_keys:
             raise ScientificContractError(
                 "client update parameter keys do not match",
                 subject=ContractSubject.TRAINING,
@@ -401,13 +386,15 @@ def aggregate_client_updates(updates: Sequence[ClientUpdate]) -> AutoencoderStat
                     subject=ContractSubject.TRAINING,
                 )
 
+    weights = [update.sample_count.value / total_samples for update in updates]
     aggregated: AutoencoderState = {}
+
     for name in reference_keys:
         weighted_sum = torch.zeros_like(reference_state[name], dtype=torch.float64)
-        for update in updates:
-            weight = update.sample_count.value / total_samples
+        for update, weight in zip(updates, weights, strict=True):
             weighted_sum.add_(update.state_dict[name].to(torch.float64), alpha=weight)
         aggregated[name] = weighted_sum.to(reference_state[name].dtype)
+
     return aggregated
 
 
@@ -417,13 +404,13 @@ def compute_weighted_aggregate_loss(updates: Sequence[ClientUpdate]) -> MetricVa
             "aggregate loss requires at least one client update",
             subject=ContractSubject.CLIENT,
         )
-    total_samples = sum(update.sample_count.value for update in updates)
+    total_samples = sum([update.sample_count.value for update in updates])
     if total_samples < 1:
         raise ScientificContractError(
             "aggregate loss requires a positive total sample count",
             subject=ContractSubject.ROWS,
         )
-    return MetricValue(sum(update.local_loss.value * update.sample_count.value for update in updates) / total_samples)
+    return MetricValue(sum([update.local_loss.value * update.sample_count.value for update in updates]) / total_samples)
 
 
 def preprocessing_state_set_checksum(
@@ -490,7 +477,9 @@ def validate_common_request(
             subject=ContractSubject.CLIENT,
         )
     identities = tuple(item.client for item in clients)
-    if len(set(identities)) != len(identities):
+    identity_set = set(identities)
+
+    if len(identity_set) != len(identities):
         raise ScientificContractError(
             "federated training cannot receive duplicate clients",
             subject=ContractSubject.CLIENT_IDENTITY,
@@ -505,7 +494,7 @@ def validate_common_request(
             "request and coordinate training seeds must match",
             subject=ContractSubject.COORDINATE,
         )
-    if any(client.population != coordinate.population for client in identities):
+    if any(client.population != coordinate.population for client in identity_set):
         raise ScientificContractError(
             "every client must belong to the training coordinate population",
             subject=ContractSubject.CLIENT_IDENTITY,
@@ -541,12 +530,15 @@ def run_federated_training[T: FedAvgProtocol | FedProxProtocol](
 
     ordered_inputs = tuple(sorted(request.clients, key=lambda item: item.client))
     prepared = tuple(prepare_federated_client_data(item, request.autoencoder) for item in ordered_inputs)
+
     provenance = tuple(
-        PreparedClientProvenance(
-            client=item.client,
-            preprocessing_checksum=item.preprocessing_checksum,
-        )
-        for item in prepared
+        [
+            PreparedClientProvenance(
+                client=item.client,
+                preprocessing_checksum=item.preprocessing_checksum,
+            )
+            for item in prepared
+        ]
     )
 
     initial_model = build_reconstruction_autoencoder(
@@ -563,6 +555,7 @@ def run_federated_training[T: FedAvgProtocol | FedProxProtocol](
     for round_value in range(1, request.checkpoint_protocol.maximum_round.value + 1):
         round_number = RoundNumber(round_value)
         updates: list[ClientUpdate] = []
+
         for client_data in prepared:
             seed = derive_client_stream_seed(
                 request.training_seed,
@@ -590,12 +583,14 @@ def run_federated_training[T: FedAvgProtocol | FedProxProtocol](
         aggregated = aggregate_client_updates(updates)
         aggregate_loss = compute_weighted_aggregate_loss(updates)
         state_checksum, state_size = serialize_and_checksum_state_dict(aggregated)
+
         communication = create_communication_record(
             round_number,
             state_size,
             upload_count=request.population_client_count,
             download_count=request.population_client_count,
         )
+
         rounds.append(
             FederatedRoundResult(
                 round_number=round_number,
@@ -612,6 +607,7 @@ def run_federated_training[T: FedAvgProtocol | FedProxProtocol](
             )
         )
         global_state = aggregated
+
         if round_number in candidate_rounds:
             snapshots.append(
                 create_round_snapshot(
@@ -635,6 +631,7 @@ def run_federated_training[T: FedAvgProtocol | FedProxProtocol](
         device_name=CudaDeviceName(torch.cuda.get_device_name(device).strip()),
         batch_size_used=request.batch_size,
     )
+
     return FederatedTrainingExecution(
         training_result=result,
         snapshots=tuple(snapshots),

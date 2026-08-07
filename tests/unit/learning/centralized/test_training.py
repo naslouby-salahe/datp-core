@@ -24,9 +24,9 @@ from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import RowCount, Seed
 from datp_core.domain.values.identifiers import OutcomeLabel, OutcomeLabelSequence
 from datp_core.domain.values.paths import ClientPathToken
+from datp_core.learning.autoencoder import construct_autoencoder
 from datp_core.learning.centralized.training import (
     CentralizedTrainingRequest,
-    build_centralized_autoencoder,
     load_centralized_model_tensors,
     reject_attack_rows_in_centralized_training,
     reject_federated_preprocessing_for_training,
@@ -103,6 +103,6 @@ def test_training_rejects_undersized_batch(tmp_path: Path) -> None:
 
 def test_autoencoder_round_trip_shape() -> None:
     require_cuda()
-    model = build_centralized_autoencoder(AUTOENCODER).to("cuda")
+    model = construct_autoencoder(AUTOENCODER).to("cuda")
     features = torch.randn(5, 4, device="cuda")
     assert model(features).shape == features.shape

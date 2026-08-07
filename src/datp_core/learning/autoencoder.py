@@ -1,4 +1,4 @@
-"""Protocol-driven reconstruction autoencoder construction and scoring."""
+"""Protocol-driven reconstruction autoencoder construction, optimization, and scoring."""
 
 from collections.abc import Mapping, Sequence
 
@@ -6,10 +6,11 @@ import numpy as np
 import torch
 from torch import nn
 
-from datp_core.domain.enums import ContractSubject
+from datp_core.domain.enums import ContractSubject, OptimizerId
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.counts import BatchSize, Seed
-from datp_core.protocols.training import AutoencoderArchitecture, AutoencoderProtocol
+from datp_core.domain.values.ratios import LearningRate
+from datp_core.protocols.training import AutoencoderArchitecture, AutoencoderProtocol, OptimizerProtocol
 from datp_core.runtime.compute import require_cuda_available
 
 type AutoencoderState = dict[str, torch.Tensor]
@@ -53,10 +54,29 @@ def _validated_widths(widths: Sequence[int]) -> AutoencoderArchitecture:
         raise ScientificContractError(str(error), subject=ContractSubject.WIDTHS) from error
 
 
-def _construct_autoencoder(protocol: AutoencoderProtocol) -> ReconstructionAutoencoder:
+def construct_autoencoder(protocol: AutoencoderProtocol) -> ReconstructionAutoencoder:
     """Construct without advancing the caller's global CPU RNG state."""
     with torch.random.fork_rng(devices=[]):
         return ReconstructionAutoencoder(protocol.widths)
+
+
+def build_optimizer(
+    model: ReconstructionAutoencoder,
+    optimizer_protocol: OptimizerProtocol,
+    learning_rate: LearningRate,
+) -> torch.optim.Optimizer:
+    match optimizer_protocol.identity:
+        case OptimizerId.ADAM:
+            return torch.optim.Adam(
+                model.parameters(),
+                lr=learning_rate.value,
+                weight_decay=optimizer_protocol.weight_decay.value,
+            )
+        case _:
+            raise ScientificContractError(
+                f"unsupported optimizer {optimizer_protocol.identity}",
+                subject=ContractSubject.OPTIMIZER,
+            )
 
 
 def build_reconstruction_autoencoder(
@@ -65,7 +85,7 @@ def build_reconstruction_autoencoder(
     initialization_seed: Seed,
 ) -> ReconstructionAutoencoder:
     """Construct and initialize a fresh deterministic autoencoder."""
-    model = _construct_autoencoder(protocol)
+    model = construct_autoencoder(protocol)
     generator = torch.Generator(device="cpu")
     generator.manual_seed(initialization_seed.value)
     with torch.no_grad():
@@ -89,7 +109,7 @@ def build_autoencoder_for_state(
     device: torch.device,
 ) -> ReconstructionAutoencoder:
     """Construct an isolated model, load a complete state, and place it on the target device."""
-    model = _construct_autoencoder(protocol).to(device)
+    model = construct_autoencoder(protocol).to(device)
     load_autoencoder_state(model, state)
     return model
 

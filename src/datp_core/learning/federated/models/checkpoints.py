@@ -1,5 +1,3 @@
-"""Typed federated checkpoint candidate, decision, and outcome contracts."""
-
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -82,21 +80,14 @@ class CheckpointDecision:
                 "checkpoint decision candidates must equal the declared ordered rounds",
                 subject=ContractSubject.CHECKPOINT_CANDIDATES,
             )
-
-        reference = self.candidates[0]
-        selected_candidates = tuple(
-            candidate for candidate in self.candidates if candidate.status is CheckpointStatus.SELECTED_BY_NON_TEST_RULE
-        )
-        if selected_candidates != (self.selected,):
-            raise ScientificContractError(
-                "the selected checkpoint must be the unique selected-status candidate",
-                subject=ContractSubject.CHECKPOINT_CANDIDATES,
-            )
         if self.selected.round_number != self.checkpoint_protocol.maximum_round:
             raise ScientificContractError(
                 "the selected checkpoint must be the declared maximum round",
                 subject=ContractSubject.CHECKPOINT_SELECTION_RULE,
             )
+
+        reference = self.candidates[0]
+        selected_count = 0
 
         for candidate in self.candidates:
             if candidate.coordinate != self.coordinate:
@@ -119,16 +110,25 @@ class CheckpointDecision:
                     "decision candidates must share split provenance",
                     subject=ContractSubject.SPLIT,
                 )
-            expected_status = (
-                CheckpointStatus.SELECTED_BY_NON_TEST_RULE
-                if candidate == self.selected
-                else CheckpointStatus.STABILITY_EVIDENCE
-            )
-            if candidate.status is not expected_status:
+
+            if candidate == self.selected:
+                if candidate.status is not CheckpointStatus.SELECTED_BY_NON_TEST_RULE:
+                    raise ScientificContractError(
+                        "checkpoint decision candidates have inconsistent terminal statuses",
+                        subject=ContractSubject.CHECKPOINT_CANDIDATES,
+                    )
+                selected_count += 1
+            elif candidate.status is not CheckpointStatus.STABILITY_EVIDENCE:
                 raise ScientificContractError(
                     "checkpoint decision candidates have inconsistent terminal statuses",
                     subject=ContractSubject.CHECKPOINT_CANDIDATES,
                 )
+
+        if selected_count != 1:
+            raise ScientificContractError(
+                "the selected checkpoint must be the unique selected-status candidate",
+                subject=ContractSubject.CHECKPOINT_CANDIDATES,
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -198,8 +198,7 @@ class FederatedTrainingOutcome:
                 "outcome candidate rounds must equal the checkpoint protocol",
                 subject=ContractSubject.CHECKPOINT_CANDIDATES,
             )
-        paths = tuple(candidate.tensor_path for candidate in self.candidates)
-        if len(set(paths)) != len(paths):
+        if len({candidate.tensor_path for candidate in self.candidates}) != len(self.candidates):
             raise ScientificContractError(
                 "outcome checkpoint paths must be unique",
                 subject=ContractSubject.ARTIFACT_PATH,
@@ -238,8 +237,9 @@ class PersonalizedCandidateSet:
                 "a personalized candidate set requires candidates",
                 subject=ContractSubject.CHECKPOINT_CANDIDATES,
             )
-        rounds = tuple(candidate.round_number for candidate in self.candidates)
-        if rounds != tuple(sorted(set(rounds))):
+
+        rounds = [candidate.round_number for candidate in self.candidates]
+        if any(rounds[i] >= rounds[i + 1] for i in range(len(rounds) - 1)):
             raise ScientificContractError(
                 "personalized candidate rounds must be unique and ordered",
                 subject=ContractSubject.CHECKPOINT_CANDIDATES,
@@ -291,17 +291,18 @@ class DittoTrainingOutcome:
                 "Ditto outcome requires a Ditto global training result",
                 subject=ContractSubject.COORDINATE,
             )
-        global_outcome = FederatedTrainingOutcome(
+
+        FederatedTrainingOutcome(
             training_result=self.global_training_result,
             candidates=self.global_candidates,
         )
-        del global_outcome
 
         expected_rounds = tuple(self.global_training_result.checkpoint_protocol.candidates)
         history_clients = tuple(
             result.client for result in self.global_training_result.history.rounds[0].client_results
         )
         personalized_clients = tuple(item.client for item in self.personalized_candidates)
+
         if personalized_clients != history_clients:
             raise ScientificContractError(
                 "Ditto personalized candidate sets must match deterministic history client order",
@@ -314,22 +315,20 @@ class DittoTrainingOutcome:
                     "global and personalized Ditto candidate rounds must match",
                     subject=ContractSubject.CHECKPOINT_CANDIDATES,
                 )
-            for candidate in candidate_set.candidates:
-                if not self.global_training_result.coordinate.matches_ditto_peer(candidate.coordinate):
-                    raise ScientificContractError(
-                        "global and personalized Ditto candidates must share one experiment identity",
-                        subject=ContractSubject.COORDINATE,
-                    )
-                if (
-                    candidate.preprocessing_state_set_checksum
-                    != self.global_training_result.preprocessing_state_set_checksum
-                ):
-                    raise ScientificContractError(
-                        "global and personalized preprocessing provenance must match",
-                        subject=ContractSubject.PREPROCESSING,
-                    )
-                if candidate.split_manifest_checksum != self.global_training_result.split_manifest_checksum:
-                    raise ScientificContractError(
-                        "global and personalized split provenance must match",
-                        subject=ContractSubject.SPLIT,
-                    )
+
+            ref = candidate_set.candidates[0]
+            if not self.global_training_result.coordinate.matches_ditto_peer(ref.coordinate):
+                raise ScientificContractError(
+                    "global and personalized Ditto candidates must share one experiment identity",
+                    subject=ContractSubject.COORDINATE,
+                )
+            if ref.preprocessing_state_set_checksum != self.global_training_result.preprocessing_state_set_checksum:
+                raise ScientificContractError(
+                    "global and personalized preprocessing provenance must match",
+                    subject=ContractSubject.PREPROCESSING,
+                )
+            if ref.split_manifest_checksum != self.global_training_result.split_manifest_checksum:
+                raise ScientificContractError(
+                    "global and personalized split provenance must match",
+                    subject=ContractSubject.SPLIT,
+                )

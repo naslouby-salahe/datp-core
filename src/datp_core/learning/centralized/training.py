@@ -38,9 +38,13 @@ from datp_core.domain.values.counts import BatchSize, FeatureCount, RoundNumber,
 from datp_core.domain.values.identifiers import CudaDeviceName, FeatureNameSequence, OutcomeLabel, OutcomeLabelSequence
 from datp_core.domain.values.ratios import LearningRate, MetricValue, WeightDecay
 from datp_core.learning.autoencoder import (
+    LEARNING_DTYPE,
+    TORCH_LEARNING_DTYPE,
     AutoencoderState,
     AutoencoderStateView,
     ReconstructionAutoencoder,
+    build_optimizer,
+    construct_autoencoder,
 )
 from datp_core.preprocessing.models import (
     CentralizedFittedPreprocessingState,
@@ -58,7 +62,6 @@ from datp_core.protocols.training import (
     AutoencoderArchitecture,
     AutoencoderProtocol,
     CentralizedTrainingProtocol,
-    OptimizerProtocol,
 )
 from datp_core.runtime.compute import require_cuda_available, resolve_cuda_device
 from datp_core.runtime.determinism import configure_deterministic_execution
@@ -200,11 +203,6 @@ def reject_attack_rows_in_centralized_training(
         )
 
 
-def build_centralized_autoencoder(protocol: AutoencoderProtocol) -> ReconstructionAutoencoder:
-    """Construct the centralized AE shell; training applies the declared training seed."""
-    return ReconstructionAutoencoder(protocol.widths)
-
-
 def train_centralized_autoencoder(request: CentralizedTrainingRequest) -> CentralizedTrainingExecution:
     """Train the independent pooled autoencoder on CUDA with declared hyperparameters."""
     _validate_training_request(request)
@@ -224,8 +222,8 @@ def train_centralized_autoencoder(request: CentralizedTrainingRequest) -> Centra
             subject=ContractSubject.BATCH_SIZE,
         )
 
-    model = build_centralized_autoencoder(request.autoencoder).to(device)
-    optimizer = _build_optimizer(model, request.training_protocol.optimizer, request.learning_rate)
+    model = construct_autoencoder(request.autoencoder).to(device)
+    optimizer = build_optimizer(model, request.training_protocol.optimizer, request.learning_rate)
     loader = _build_loader(
         extracted.feature_matrix,
         batch_size=request.batch_size,
@@ -240,7 +238,7 @@ def train_centralized_autoencoder(request: CentralizedTrainingRequest) -> Centra
     )
     request.output_directory.mkdir(parents=True, exist_ok=True)
     tensor_path = request.output_directory / CentralizedArtifactName.MODEL_TENSORS
-    tensor_checksum = persist_model_tensors(model, tensor_path)
+    tensor_checksum = persist_state_dict_tensors(model.state_dict(), tensor_path)
     assert_safetensors_reload(model, tensor_path, device)
     result = CentralizedTrainingResult(
         coordinate=request.coordinate,
@@ -278,7 +276,7 @@ def load_centralized_model_tensors(
     resolved = resolve_cuda_device() if device is None else device
     if resolved.type != "cuda":
         raise ExecutionStateError("centralized model reload requires CUDA", subject=ContractSubject.CUDA)
-    model = build_centralized_autoencoder(autoencoder).to(resolved)
+    model = construct_autoencoder(autoencoder).to(resolved)
     state = load_file(str(path), device=str(resolved))
     model.load_state_dict(state, strict=True)
     model.eval()
@@ -292,7 +290,7 @@ def model_from_in_memory_snapshot(
 ) -> ReconstructionAutoencoder:
     require_cuda_available()
     resolved = resolve_cuda_device() if device is None else device
-    model = build_centralized_autoencoder(autoencoder).to(resolved)
+    model = construct_autoencoder(autoencoder).to(resolved)
     model.load_state_dict(snapshot.state_dict, strict=True)
     model.eval()
     return model
@@ -315,16 +313,12 @@ def persist_state_dict_tensors(state_dict: AutoencoderStateView, path: Path) -> 
     return checksum_file(path)
 
 
-def persist_model_tensors(model: ReconstructionAutoencoder, path: Path) -> Checksum:
-    return persist_state_dict_tensors(model.state_dict(), path)
-
-
 def assert_safetensors_reload(
     model: ReconstructionAutoencoder,
     path: Path,
     device: torch.device,
 ) -> None:
-    reloaded = build_centralized_autoencoder(AutoencoderProtocol(widths=model.widths)).to(device)
+    reloaded = construct_autoencoder(AutoencoderProtocol(widths=model.widths)).to(device)
     state = load_file(str(path), device=str(device))
     reloaded.load_state_dict(state, strict=True)
     for left, right in zip(model.state_dict().values(), reloaded.state_dict().values(), strict=True):
@@ -433,7 +427,7 @@ def _extract_training_arrays(
     labels = OutcomeLabelSequence(
         tuple(OutcomeLabel(str(value)) for value in frame.get_column(OUTCOME_LABEL_COLUMN).to_list())
     )
-    matrix = frame.select(request.feature_names.as_list()).to_numpy().astype(np.float32, copy=False)
+    matrix = frame.select(request.feature_names.as_list()).to_numpy().astype(LEARNING_DTYPE, copy=False)
     if not np.isfinite(matrix).all():
         raise ScientificContractError(
             "centralized training features must be finite",
@@ -444,20 +438,6 @@ def _extract_training_arrays(
     return _ExtractedTrainingArrays(feature_matrix=matrix, labels=labels)
 
 
-def _build_optimizer(
-    model: ReconstructionAutoencoder,
-    optimizer_protocol: OptimizerProtocol,
-    learning_rate: LearningRate,
-) -> torch.optim.Optimizer:
-    match optimizer_protocol.identity:
-        case OptimizerId.ADAM:
-            return torch.optim.Adam(
-                model.parameters(),
-                lr=learning_rate.value,
-                weight_decay=optimizer_protocol.weight_decay.value,
-            )
-
-
 def _build_loader(
     matrix: np.ndarray,
     *,
@@ -465,7 +445,7 @@ def _build_loader(
     seed: Seed,
 ) -> DataLoader:
     require_cuda_available()
-    tensor = torch.tensor(matrix, dtype=torch.float32)
+    tensor = torch.tensor(matrix, dtype=TORCH_LEARNING_DTYPE)
     dataset = TensorDataset(tensor)
     generator = torch.Generator(device="cpu")
     generator.manual_seed(seed.value)
