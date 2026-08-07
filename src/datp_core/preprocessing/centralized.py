@@ -34,11 +34,9 @@ from datp_core.preprocessing.contracts import (
     ProcessedAssetName,
     RelativeAssetPathSequence,
     ReusableDataCoordinate,
-    asset_for_partition,
     branch_asset_path,
     canonical_relative_asset_path,
     centralized_branch_directory,
-    partition_roles,
     processed_asset_names,
 )
 from datp_core.preprocessing.models import (
@@ -48,13 +46,13 @@ from datp_core.preprocessing.models import (
     FittedStatePublishSpec,
     PooledPreprocessingOwner,
     PooledPreprocessingResult,
-    PreprocessedPartitionPaths,
     PreprocessingFitBatch,
     PreprocessingPartitions,
     PreprocessingProtocol,
     PreprocessingPublishContext,
     build_preprocessing_protocol,
 )
+from datp_core.preprocessing.paths import build_preprocessed_partition_paths
 from datp_core.preprocessing.state import TrustedScaler
 from datp_core.preprocessing.validation import (
     centralized_fitted_state_after_publish,
@@ -147,18 +145,8 @@ def publish_pooled_preprocessing(request: PooledPublishRequest) -> PooledPreproc
             owner=PooledPreprocessingOwner.POOLED,
         )
     )
-    paths_by_role = {
-        role: branch_asset_path(result.coordinate_directory, asset_for_partition(role))
-        for role in partition_roles(context.split_protocol_identity)
-    }
     return PooledPreprocessingResult(
-        paths=PreprocessedPartitionPaths(
-            train=paths_by_role[PartitionRole.TRAIN],
-            calibration=paths_by_role[PartitionRole.CALIBRATION],
-            evaluation=paths_by_role[PartitionRole.EVALUATION],
-            future_recalibration=paths_by_role.get(PartitionRole.FUTURE_RECALIBRATION),
-            static_reference_reserve=paths_by_role.get(PartitionRole.STATIC_REFERENCE_RESERVE),
-        ),
+        paths=build_preprocessed_partition_paths(result.coordinate_directory, context.split_protocol_identity),
         fitted_state=state,
         publication_status=result.publication_status,
     )

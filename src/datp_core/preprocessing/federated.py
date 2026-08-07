@@ -17,7 +17,6 @@ from datp_core.preprocessing.contracts import (
     ProcessedAssetName,
     RelativeAssetPathSequence,
     ReusableDataCoordinate,
-    asset_for_partition,
     canonical_relative_asset_path,
     client_asset_path,
     federated_client_directory,
@@ -29,12 +28,12 @@ from datp_core.preprocessing.models import (
     ClientPublishRequest,
     FederatedFittedEstimators,
     FittedStatePublishSpec,
-    PreprocessedPartitionPaths,
     PreprocessingFitBatch,
     PreprocessingPartition,
     PreprocessingPartitions,
     PreprocessingProtocol,
 )
+from datp_core.preprocessing.paths import build_preprocessed_partition_paths
 from datp_core.preprocessing.state import TrustedScaler
 from datp_core.preprocessing.validation import (
     federated_fitted_state_after_publish,
@@ -165,22 +164,13 @@ def publish_client_preprocessing(request: ClientPublishRequest) -> ClientPreproc
         )
     )
     roles = partition_roles(context.split_protocol_identity)
-    paths_by_role = {
-        role: client_asset_path(publication.coordinate_directory, asset_for_partition(role)) for role in roles
-    }
 
     def row_count(role: PartitionRole) -> RowCount:
         return RowCount(request.partitions.require(role).frame.height) if role in roles else RowCount(0)
 
     return ClientPreprocessingResult(
         client_identity=request.client_identity,
-        paths=PreprocessedPartitionPaths(
-            train=paths_by_role[PartitionRole.TRAIN],
-            calibration=paths_by_role[PartitionRole.CALIBRATION],
-            evaluation=paths_by_role[PartitionRole.EVALUATION],
-            future_recalibration=paths_by_role.get(PartitionRole.FUTURE_RECALIBRATION),
-            static_reference_reserve=paths_by_role.get(PartitionRole.STATIC_REFERENCE_RESERVE),
-        ),
+        paths=build_preprocessed_partition_paths(publication.coordinate_directory, context.split_protocol_identity),
         fitted_state=state,
         publication_status=publication.publication_status,
         train_row_count=row_count(PartitionRole.TRAIN),
