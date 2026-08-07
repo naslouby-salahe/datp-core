@@ -114,7 +114,7 @@ def test_reuse_rejects_changed_calibration_row_identity(tmp_path: Path) -> None:
         preprocessing_state_checksum=preprocessing_checksum,
         split_manifest_checksum=split_checksum,
         training_seed=Seed(1),
-        autoencoder_widths=tuple(AUTOENCODER.widths),
+        autoencoder_widths=AUTOENCODER.widths,
     )
     calibration = benign_frame(RowCount(4), seed=Seed(7))
     evaluation = mixed_evaluation_frame(RowCount(4), seed=Seed(8))

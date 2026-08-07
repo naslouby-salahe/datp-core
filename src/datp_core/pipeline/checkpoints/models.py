@@ -12,6 +12,7 @@ from datp_core.domain.values.counts import RoundNumber, Seed
 from datp_core.domain.values.ratios import MetricValue
 from datp_core.learning.centralized.training import CentralizedTrainingCoordinate
 from datp_core.protocols.checkpoints import CheckpointProtocol
+from datp_core.protocols.training import AutoencoderArchitecture
 
 RETAINED_CHECKPOINT_STATUSES = frozenset(
     {
@@ -61,7 +62,7 @@ class CentralizedCheckpointCandidate:
     preprocessing_state_checksum: Checksum
     split_manifest_checksum: Checksum
     training_seed: Seed
-    autoencoder_widths: tuple[int, ...]
+    autoencoder_widths: AutoencoderArchitecture
 
     def __post_init__(self) -> None:
         if self.status not in RETAINED_CHECKPOINT_STATUSES:

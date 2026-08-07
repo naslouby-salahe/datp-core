@@ -36,10 +36,11 @@ def candidate_tensor_name(
     round_number: RoundNumber,
     client: ClientIdentity | None = None,
 ) -> SafeTensorFilename:
-    base = f"{_CANDIDATE_PREFIX}{round_number.value}"
     if client is not None:
-        base = f"{base}{_PERSONALIZED_INFIX}{client.client_id}"
-    return SafeTensorFilename(f"{base}{_CANDIDATE_SUFFIX}")
+        return SafeTensorFilename(
+            f"{_CANDIDATE_PREFIX}{round_number.value}{_PERSONALIZED_INFIX}{client.client_id}{_CANDIDATE_SUFFIX}"
+        )
+    return SafeTensorFilename(f"{_CANDIDATE_PREFIX}{round_number.value}{_CANDIDATE_SUFFIX}")
 
 
 def persist_checkpoint_tensor(
@@ -51,25 +52,24 @@ def persist_checkpoint_tensor(
     staging = path.with_name(f".{path.name}.tmp")
     cpu_state = {name: tensor.detach().cpu().contiguous() for name, tensor in state_dict.items()}
     save_file(cpu_state, str(staging))
-    _assert_checkpoint_reload_equality(state_dict, staging, autoencoder)
+    _assert_checkpoint_reload_equality(cpu_state, staging, autoencoder)
     atomic_replace(staging, path)
     return checksum_file(path)
 
 
 def _assert_checkpoint_reload_equality(
-    state_dict: AutoencoderStateView,
+    cpu_state_dict: dict[str, torch.Tensor],
     path: Path,
     autoencoder: AutoencoderProtocol,
 ) -> None:
     loaded = load_file(str(path), device="cpu")
-    if loaded.keys() != state_dict.keys():
+    if loaded.keys() != cpu_state_dict.keys():
         raise ArtifactIntegrityError(
             "checkpoint tensor names do not match the expected model state",
             subject=ContractSubject.ARTIFACT_PATH,
         )
-    for name, expected in state_dict.items():
+    for name, reference in cpu_state_dict.items():
         observed = loaded[name]
-        reference = expected.detach().cpu().contiguous()
         if observed.shape != reference.shape or observed.dtype != reference.dtype:
             raise ArtifactIntegrityError(
                 "checkpoint tensor shape or dtype differs from the expected model state",
@@ -157,22 +157,9 @@ def rebase_checkpoint_candidates(
     candidates: Sequence[CheckpointCandidate],
     directory: Path,
 ) -> tuple[CheckpointCandidate, ...]:
-    rebased = tuple(
-        replace(
-            candidate,
-            tensor_path=(
-                directory
-                / candidate_tensor_name(
-                    candidate.round_number,
-                    candidate.client,
-                )
-            ),
-        )
-        for candidate in candidates
-    )
-    for original, candidate in zip(candidates, rebased, strict=True):
-        validate_persisted_checkpoint_file(
-            candidate.tensor_path,
-            original.tensor_checksum,
-        )
-    return rebased
+    rebased_list = []
+    for candidate in candidates:
+        new_path = directory / candidate_tensor_name(candidate.round_number, candidate.client)
+        validate_persisted_checkpoint_file(new_path, candidate.tensor_checksum)
+        rebased_list.append(replace(candidate, tensor_path=new_path))
+    return tuple(rebased_list)

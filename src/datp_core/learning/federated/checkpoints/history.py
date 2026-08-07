@@ -63,8 +63,8 @@ def read_parquet(path: Path) -> pl.DataFrame:
         ) from error
 
 
-def schema_pairs(schema: tuple[ParquetColumnSpec, ...]) -> tuple[tuple[str, type[pl.DataType]], ...]:
-    return tuple((column.identity.value, column.dtype) for column in schema)
+def schema_pairs(schema: tuple[ParquetColumnSpec, ...]) -> dict[str, type[pl.DataType]]:
+    return {column.identity.value: column.dtype for column in schema}
 
 
 def validate_parquet_schema(frame: pl.DataFrame, expected_schema: tuple[ParquetColumnSpec, ...]) -> None:
@@ -106,11 +106,15 @@ def _validate_client_rows(
     validate_parquet_schema(frame, schema)
     if frame.height < 1:
         raise ArtifactIntegrityError(f"{table_name} must contain rows", subject=ContractSubject.SCHEMA)
+
     round_column = FederatedHistoryColumn.ROUND_NUMBER.value
     client_column = FederatedHistoryColumn.CLIENT_ID.value
+
+    observed_rounds = frame.get_column(round_column).to_list()
+    observed_clients_list = frame.get_column(client_column).to_list()
+
     observed_pairs = tuple(
-        (RoundNumber(int(round_value)), str(client_id))
-        for round_value, client_id in frame.select((round_column, client_column)).iter_rows()
+        (RoundNumber(int(r)), str(c)) for r, c in zip(observed_rounds, observed_clients_list, strict=True)
     )
     expected_pairs = tuple(
         (round_number, client.client_id) for round_number in expected_rounds for client in expected_clients
@@ -171,49 +175,64 @@ def persist_federated_training_history(
             "training publication requires a non-empty CUDA device name",
             subject=ContractSubject.CUDA,
         )
-    round_rows = tuple(
-        (
-            item.round_number.value,
-            item.aggregate_loss.value,
-            item.communication.estimated_upload_bytes.value,
-            item.communication.estimated_download_bytes.value,
-            item.global_state_reference.state_checksum.value,
-        )
-        for item in history.rounds
-    )
-    client_rows = tuple(
-        (
-            item.round_number.value,
-            result.client.client_id,
-            result.sample_count.value,
-            result.local_loss.value,
-        )
-        for item in history.rounds
-        for result in item.client_results
-    )
-    personalized_rows = tuple(
-        (
-            item.round_number.value,
-            reference.client.client_id,
-            reference.local_loss.value,
-            reference.state_checksum.value,
-        )
-        for item in history.rounds
-        for reference in item.personalized_state_references
-    )
+
+    r_nums, a_losses, u_bytes, d_bytes, g_sums = [], [], [], [], []
+    c_rounds, c_ids, c_samples, c_losses = [], [], [], []
+    p_rounds, p_ids, p_losses, p_sums = [], [], [], []
+
+    for item in history.rounds:
+        r_nums.append(item.round_number.value)
+        a_losses.append(item.aggregate_loss.value)
+        u_bytes.append(item.communication.estimated_upload_bytes.value)
+        d_bytes.append(item.communication.estimated_download_bytes.value)
+        g_sums.append(item.global_state_reference.state_checksum.value)
+
+        for result in item.client_results:
+            c_rounds.append(item.round_number.value)
+            c_ids.append(result.client.client_id)
+            c_samples.append(result.sample_count.value)
+            c_losses.append(result.local_loss.value)
+
+        for reference in item.personalized_state_references:
+            p_rounds.append(item.round_number.value)
+            p_ids.append(reference.client.client_id)
+            p_losses.append(reference.local_loss.value)
+            p_sums.append(reference.state_checksum.value)
+
     directory.mkdir(parents=True, exist_ok=True)
-    pl.DataFrame(round_rows, schema=schema_pairs(ROUND_SUMMARY_SCHEMA), orient="row").write_parquet(
-        directory / FederatedHistoryAssetName.ROUND_SUMMARY.value
-    )
-    pl.DataFrame(client_rows, schema=schema_pairs(CLIENT_ROUNDS_SCHEMA), orient="row").write_parquet(
-        directory / FederatedHistoryAssetName.CLIENT_ROUNDS.value
-    )
-    if personalized_rows:
+
+    pl.DataFrame(
+        {
+            FederatedHistoryColumn.ROUND_NUMBER.value: r_nums,
+            FederatedHistoryColumn.AGGREGATE_LOSS.value: a_losses,
+            FederatedHistoryColumn.UPLOAD_BYTES.value: u_bytes,
+            FederatedHistoryColumn.DOWNLOAD_BYTES.value: d_bytes,
+            FederatedHistoryColumn.GLOBAL_STATE_CHECKSUM.value: g_sums,
+        },
+        schema=schema_pairs(ROUND_SUMMARY_SCHEMA),
+    ).write_parquet(directory / FederatedHistoryAssetName.ROUND_SUMMARY.value)
+
+    pl.DataFrame(
+        {
+            FederatedHistoryColumn.ROUND_NUMBER.value: c_rounds,
+            FederatedHistoryColumn.CLIENT_ID.value: c_ids,
+            FederatedHistoryColumn.SAMPLE_COUNT.value: c_samples,
+            FederatedHistoryColumn.LOCAL_LOSS.value: c_losses,
+        },
+        schema=schema_pairs(CLIENT_ROUNDS_SCHEMA),
+    ).write_parquet(directory / FederatedHistoryAssetName.CLIENT_ROUNDS.value)
+
+    if p_rounds:
         pl.DataFrame(
-            personalized_rows,
+            {
+                FederatedHistoryColumn.ROUND_NUMBER.value: p_rounds,
+                FederatedHistoryColumn.CLIENT_ID.value: p_ids,
+                FederatedHistoryColumn.LOCAL_LOSS.value: p_losses,
+                FederatedHistoryColumn.STATE_CHECKSUM.value: p_sums,
+            },
             schema=schema_pairs(PERSONALIZED_ROUNDS_SCHEMA),
-            orient="row",
         ).write_parquet(directory / FederatedHistoryAssetName.PERSONALIZED_ROUNDS.value)
+
     atomic_write_text(directory / FederatedHistoryAssetName.DEVICE_NAME.value, normalized_device)
 
 
@@ -252,6 +271,7 @@ def load_federated_training_history(
     training_rounds = tuple(RoundNumber(value) for value in range(1, checkpoint_protocol.maximum_round.value + 1))
     validate_round_summary(round_frame, training_rounds)
     validate_client_history(client_frame, expected_rounds=training_rounds, expected_clients=clients)
+
     match coordinate.model:
         case TrainingModelId.DITTO_GLOBAL_AUTOENCODER:
             if personalized_coordinate is None or personalized_frame is None:
@@ -280,14 +300,33 @@ def load_federated_training_history(
                 "unsupported model in federated history publication",
                 subject=ContractSubject.COORDINATE,
             )
+
+    column = FederatedHistoryColumn
+    client_dict_by_round: dict[RoundNumber, list[tuple[str, int, float]]] = {}
+    for round_val, client_val, sample_val, loss_val in client_frame.select(
+        (column.ROUND_NUMBER.value, column.CLIENT_ID.value, column.SAMPLE_COUNT.value, column.LOCAL_LOSS.value)
+    ).iter_rows():
+        client_dict_by_round.setdefault(RoundNumber(int(round_val)), []).append(
+            (str(client_val), int(sample_val), float(loss_val))
+        )
+
+    personalized_dict_by_round: dict[RoundNumber, list[tuple[str, float, str]]] = {}
+    if personalized_frame is not None:
+        for round_val, client_val, loss_val, checksum_val in personalized_frame.select(
+            (column.ROUND_NUMBER.value, column.CLIENT_ID.value, column.LOCAL_LOSS.value, column.STATE_CHECKSUM.value)
+        ).iter_rows():
+            personalized_dict_by_round.setdefault(RoundNumber(int(round_val)), []).append(
+                (str(client_val), float(loss_val), str(checksum_val))
+            )
+
     rounds = tuple(
         _round_result(
             coordinate=coordinate,
             personalized_coordinate=personalized_coordinate,
             identity_kind=identity_kind,
             summary=summary,
-            client_frame=client_frame,
-            personalized_frame=personalized_frame,
+            client_data=client_dict_by_round.get(summary.round_number, []),
+            personalized_data=personalized_dict_by_round.get(summary.round_number, []),
         )
         for summary in _round_summaries(round_frame)
     )
@@ -322,27 +361,23 @@ def _round_result(
     personalized_coordinate: FederatedTrainingCoordinate | None,
     identity_kind: PopulationIdentityKind,
     summary: RoundSummaryRecord,
-    client_frame: pl.DataFrame,
-    personalized_frame: pl.DataFrame | None,
+    client_data: list[tuple[str, int, float]],
+    personalized_data: list[tuple[str, float, str]],
 ) -> FederatedRoundResult:
-    column = FederatedHistoryColumn
-    client_rows = client_frame.filter(pl.col(column.ROUND_NUMBER.value) == summary.round_number.value)
     client_results = tuple(
         ClientTrainingResult(
-            client=ClientIdentity(coordinate.population, str(client_id), identity_kind),
-            sample_count=RowCount(int(sample_count)),
-            local_loss=MetricValue(float(local_loss)),
+            client=ClientIdentity(coordinate.population, client_id, identity_kind),
+            sample_count=RowCount(sample_count),
+            local_loss=MetricValue(local_loss),
         )
-        for client_id, sample_count, local_loss in client_rows.select(
-            (column.CLIENT_ID.value, column.SAMPLE_COUNT.value, column.LOCAL_LOSS.value)
-        ).iter_rows()
+        for client_id, sample_count, local_loss in client_data
     )
     personalized_references = _personalized_references(
         coordinate=coordinate,
         personalized_coordinate=personalized_coordinate,
         identity_kind=identity_kind,
         round_number=summary.round_number,
-        personalized_frame=personalized_frame,
+        personalized_data=personalized_data,
     )
     return FederatedRoundResult(
         round_number=summary.round_number,
@@ -370,27 +405,23 @@ def _personalized_references(
     personalized_coordinate: FederatedTrainingCoordinate | None,
     identity_kind: PopulationIdentityKind,
     round_number: RoundNumber,
-    personalized_frame: pl.DataFrame | None,
+    personalized_data: list[tuple[str, float, str]],
 ) -> tuple[PersonalizedModelStateReference, ...]:
     if personalized_coordinate is None:
         return ()
-    if personalized_frame is None:
+    if not personalized_data:
         raise ArtifactIntegrityError(
             "personalized coordinate requires personalized history",
             subject=ContractSubject.ARTIFACT_PATH,
         )
-    column = FederatedHistoryColumn
-    rows = personalized_frame.filter(pl.col(column.ROUND_NUMBER.value) == round_number.value)
     return tuple(
         PersonalizedModelStateReference(
             coordinate=personalized_coordinate,
-            client=ClientIdentity(coordinate.population, str(client_id), identity_kind),
+            client=ClientIdentity(coordinate.population, client_id, identity_kind),
             round_number=round_number,
-            local_loss=MetricValue(float(local_loss)),
-            state_checksum=Checksum(str(state_checksum)),
+            local_loss=MetricValue(local_loss),
+            state_checksum=Checksum(state_checksum),
             tensor_path=None,
         )
-        for client_id, local_loss, state_checksum in rows.select(
-            (column.CLIENT_ID.value, column.LOCAL_LOSS.value, column.STATE_CHECKSUM.value)
-        ).iter_rows()
+        for client_id, local_loss, state_checksum in personalized_data
     )

@@ -8,6 +8,7 @@ from datp_core.domain.values.identifiers import SafeTensorFilename
 from datp_core.domain.values.paths import ClientPathToken
 from datp_core.domain.values.ratios import ModelCoefficientValue
 from datp_core.learning.federated.checkpoints.identities import CandidateManifestKind
+from datp_core.protocols.training import AutoencoderArchitecture
 
 
 class CandidateManifestEntry(StrictModel):
@@ -29,7 +30,7 @@ class CandidateManifest(StrictModel):
     preprocessing_state_set_checksum: Checksum
     split_manifest_checksum: Checksum
     checkpoint_rounds: tuple[RoundNumber, ...]
-    autoencoder_widths: tuple[int, ...]
+    autoencoder_widths: AutoencoderArchitecture
     batch_size: BatchSize
     linked_personalized_digest: Checksum | None
     entries: tuple[CandidateManifestEntry, ...]

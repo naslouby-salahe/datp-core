@@ -36,31 +36,27 @@ def validate_candidate_coordinates(
     split_manifest_checksum: Checksum,
 ) -> None:
     for candidate in candidates:
-        checks = (
-            (
-                candidate.coordinate == coordinate,
+        if candidate.coordinate != coordinate:
+            raise ScientificContractError(
                 "checkpoint candidate coordinate mismatch",
-                ContractSubject.COORDINATE,
-            ),
-            (
-                candidate.client == client,
+                subject=ContractSubject.COORDINATE,
+            )
+        if candidate.client != client:
+            raise ScientificContractError(
                 "checkpoint candidate client mismatch",
-                ContractSubject.CLIENT_IDENTITY,
-            ),
-            (
-                candidate.preprocessing_state_set_checksum == preprocessing_state_set_checksum,
+                subject=ContractSubject.CLIENT_IDENTITY,
+            )
+        if candidate.preprocessing_state_set_checksum != preprocessing_state_set_checksum:
+            raise ScientificContractError(
                 "checkpoint candidate preprocessing checksum mismatch",
-                ContractSubject.PREPROCESSING,
-            ),
-            (
-                candidate.split_manifest_checksum == split_manifest_checksum,
+                subject=ContractSubject.PREPROCESSING,
+            )
+        if candidate.split_manifest_checksum != split_manifest_checksum:
+            raise ScientificContractError(
                 "checkpoint candidate split checksum mismatch",
-                ContractSubject.SPLIT,
-            ),
-        )
-        for valid, message, subject in checks:
-            if not valid:
-                raise ScientificContractError(message, subject=subject)
+                subject=ContractSubject.SPLIT,
+            )
+
         validate_persisted_checkpoint_file(
             candidate.tensor_path,
             candidate.tensor_checksum,

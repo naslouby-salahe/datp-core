@@ -218,7 +218,7 @@ def load_reused_centralized_training(
     model_path = directory / CentralizedArtifactName.MODEL_TENSORS
     training = CentralizedTrainingResult(
         coordinate=request.coordinate,
-        autoencoder_widths=tuple(request.autoencoder.widths),
+        autoencoder_widths=request.autoencoder.widths,
         optimizer=CentralizedOptimizerSummary(
             identity=request.training_protocol.optimizer.identity,
             learning_rate=request.learning_rate,
@@ -299,5 +299,5 @@ def _load_reused_candidate(
         preprocessing_state_checksum=request.preprocessing_state.estimator_checksum,
         split_manifest_checksum=request.split_manifest_checksum,
         training_seed=request.training_seed,
-        autoencoder_widths=tuple(request.autoencoder.widths),
+        autoencoder_widths=request.autoencoder.widths,
     )

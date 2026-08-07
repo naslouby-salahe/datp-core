@@ -1,5 +1,3 @@
-"""Write and validate federated checkpoint publications."""
-
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -79,7 +77,7 @@ def build_manifest(
         preprocessing_state_set_checksum=preprocessing_state_set_checksum,
         split_manifest_checksum=split_manifest_checksum,
         checkpoint_rounds=checkpoint_protocol.candidates,
-        autoencoder_widths=tuple(autoencoder.widths),
+        autoencoder_widths=autoencoder.widths,
         batch_size=batch_size,
         linked_personalized_digest=linked_personalized_digest,
         entries=tuple(
@@ -128,23 +126,26 @@ def expected_publication_files(
     *,
     include_history: bool,
 ) -> tuple[str, ...]:
-    names = (
-        FederatedHistoryAssetName.CANDIDATE_MANIFEST.value,
-        *(entry.tensor_name for entry in manifest.entries),
-    )
+    names = [FederatedHistoryAssetName.CANDIDATE_MANIFEST.value]
+    names.extend(entry.tensor_name for entry in manifest.entries)
+
     if not include_history:
-        return tuple(sorted(names))
-    history_names = (
-        FederatedHistoryAssetName.ROUND_SUMMARY.value,
-        FederatedHistoryAssetName.CLIENT_ROUNDS.value,
-        FederatedHistoryAssetName.DEVICE_NAME.value,
+        names.sort()
+        return tuple(names)
+
+    names.extend(
+        (
+            FederatedHistoryAssetName.ROUND_SUMMARY.value,
+            FederatedHistoryAssetName.CLIENT_ROUNDS.value,
+            FederatedHistoryAssetName.DEVICE_NAME.value,
+        )
     )
-    personalized = (
-        (FederatedHistoryAssetName.PERSONALIZED_ROUNDS.value,)
-        if manifest.coordinate_model is TrainingModelId.DITTO_GLOBAL_AUTOENCODER
-        else ()
-    )
-    return tuple(sorted((*names, *history_names, *personalized)))
+
+    if manifest.coordinate_model is TrainingModelId.DITTO_GLOBAL_AUTOENCODER:
+        names.append(FederatedHistoryAssetName.PERSONALIZED_ROUNDS.value)
+
+    names.sort()
+    return tuple(names)
 
 
 def publication_digest(
@@ -242,41 +243,31 @@ def validate_manifest(
             "candidate manifest coordinate does not match the requested experiment",
             subject=ContractSubject.COORDINATE,
         )
-    checks = (
-        (
-            manifest.kind is kind,
-            "candidate manifest kind mismatch",
-            ContractSubject.ARTIFACT_PATH,
-        ),
-        (
-            manifest.preprocessing_state_set_checksum == preprocessing_state_set_checksum,
-            "candidate manifest preprocessing checksum mismatch",
-            ContractSubject.PREPROCESSING,
-        ),
-        (
-            manifest.split_manifest_checksum == split_manifest_checksum,
-            "candidate manifest split checksum mismatch",
-            ContractSubject.SPLIT,
-        ),
-        (
-            manifest.checkpoint_rounds == checkpoint_protocol.candidates,
+
+    if manifest.kind is not kind:
+        raise ArtifactIntegrityError("candidate manifest kind mismatch", subject=ContractSubject.ARTIFACT_PATH)
+
+    if manifest.preprocessing_state_set_checksum != preprocessing_state_set_checksum:
+        raise ArtifactIntegrityError(
+            "candidate manifest preprocessing checksum mismatch", subject=ContractSubject.PREPROCESSING
+        )
+
+    if manifest.split_manifest_checksum != split_manifest_checksum:
+        raise ArtifactIntegrityError("candidate manifest split checksum mismatch", subject=ContractSubject.SPLIT)
+
+    if manifest.checkpoint_rounds != checkpoint_protocol.candidates:
+        raise ArtifactIntegrityError(
             "candidate manifest rounds do not match the checkpoint protocol",
-            ContractSubject.CHECKPOINT_CANDIDATES,
-        ),
-        (
-            manifest.autoencoder_widths == tuple(autoencoder.widths),
-            "candidate manifest autoencoder architecture mismatch",
-            ContractSubject.WIDTHS,
-        ),
-        (
-            manifest.batch_size == batch_size,
-            "candidate manifest batch size mismatch",
-            ContractSubject.BATCH_SIZE,
-        ),
-    )
-    for valid, message, subject in checks:
-        if not valid:
-            raise ArtifactIntegrityError(message, subject=subject)
+            subject=ContractSubject.CHECKPOINT_CANDIDATES,
+        )
+
+    if manifest.autoencoder_widths != autoencoder.widths:
+        raise ArtifactIntegrityError(
+            "candidate manifest autoencoder architecture mismatch", subject=ContractSubject.WIDTHS
+        )
+
+    if manifest.batch_size != batch_size:
+        raise ArtifactIntegrityError("candidate manifest batch size mismatch", subject=ContractSubject.BATCH_SIZE)
 
 
 def stage_personalized_candidates(
@@ -299,7 +290,7 @@ def stage_personalized_candidates(
                 checkpoint_protocol=checkpoint_protocol,
                 autoencoder=autoencoder,
                 output_directory=output_directory,
-                preprocessing_state_set_checksum=(preprocessing_state_set_checksum),
+                preprocessing_state_set_checksum=preprocessing_state_set_checksum,
                 split_manifest_checksum=split_manifest_checksum,
                 client=snapshot_set.client,
             ),
@@ -328,7 +319,6 @@ def write_federated_training(
     execution: FederatedTrainingExecution,
     output_directory: Path,
 ) -> FederatedTrainingOutcome:
-    """Write one global training publication to an empty directory."""
     require_empty_directory(output_directory)
     result = execution.training_result
     persist_federated_training_history(
@@ -342,7 +332,7 @@ def write_federated_training(
         checkpoint_protocol=result.checkpoint_protocol,
         autoencoder=result.autoencoder,
         output_directory=output_directory,
-        preprocessing_state_set_checksum=(result.preprocessing_state_set_checksum),
+        preprocessing_state_set_checksum=result.preprocessing_state_set_checksum,
         split_manifest_checksum=result.split_manifest_checksum,
         client=None,
     )
@@ -353,7 +343,7 @@ def write_federated_training(
         checkpoint_protocol=result.checkpoint_protocol,
         autoencoder=result.autoencoder,
         batch_size=result.batch_size_used,
-        preprocessing_state_set_checksum=(result.preprocessing_state_set_checksum),
+        preprocessing_state_set_checksum=result.preprocessing_state_set_checksum,
         split_manifest_checksum=result.split_manifest_checksum,
     )
     write_manifest(output_directory, manifest)
@@ -373,7 +363,6 @@ def write_ditto_training(
     global_output_directory: Path,
     personalized_output_directory: Path,
 ) -> DittoTrainingOutcome:
-    """Write linked Ditto global and personalized publications to empty directories."""
     require_separate_directories(
         global_output_directory,
         personalized_output_directory,
@@ -386,7 +375,7 @@ def write_ditto_training(
         checkpoint_protocol=global_result.checkpoint_protocol,
         autoencoder=global_result.autoencoder,
         batch_size=global_result.batch_size_used,
-        preprocessing_state_set_checksum=(global_result.preprocessing_state_set_checksum),
+        preprocessing_state_set_checksum=global_result.preprocessing_state_set_checksum,
         split_manifest_checksum=global_result.split_manifest_checksum,
         output_directory=personalized_output_directory,
     )
@@ -401,7 +390,7 @@ def write_ditto_training(
         checkpoint_protocol=global_result.checkpoint_protocol,
         autoencoder=global_result.autoencoder,
         output_directory=global_output_directory,
-        preprocessing_state_set_checksum=(global_result.preprocessing_state_set_checksum),
+        preprocessing_state_set_checksum=global_result.preprocessing_state_set_checksum,
         split_manifest_checksum=global_result.split_manifest_checksum,
         client=None,
     )
@@ -412,7 +401,7 @@ def write_ditto_training(
         checkpoint_protocol=global_result.checkpoint_protocol,
         autoencoder=global_result.autoencoder,
         batch_size=global_result.batch_size_used,
-        preprocessing_state_set_checksum=(global_result.preprocessing_state_set_checksum),
+        preprocessing_state_set_checksum=global_result.preprocessing_state_set_checksum,
         split_manifest_checksum=global_result.split_manifest_checksum,
         linked_personalized_digest=personalized_digest,
     )
@@ -431,7 +420,7 @@ def write_ditto_training(
 
 def require_empty_directory(directory: Path) -> None:
     directory.mkdir(parents=True, exist_ok=True)
-    if any(directory.iterdir()):
+    if next(directory.iterdir(), None) is not None:
         raise ArtifactIntegrityError(
             "checkpoint publication directory must be empty",
             subject=ContractSubject.ARTIFACT_PATH,
@@ -446,8 +435,8 @@ def require_separate_directories(
     personalized_resolved = personalized_directory.resolve()
     if (
         global_resolved == personalized_resolved
-        or global_resolved in personalized_resolved.parents
-        or personalized_resolved in global_resolved.parents
+        or global_resolved.is_relative_to(personalized_resolved)
+        or personalized_resolved.is_relative_to(global_resolved)
     ):
         raise ScientificContractError(
             "Ditto global and personalized output directories must be disjoint",

@@ -13,7 +13,6 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from datp_core.datasets.partitioning.contracts import (
     OUTCOME_LABEL_COLUMN,
-    STABLE_ROW_ID_COLUMN,
     PopulationFrameColumn,
     PopulationOutcomeLabel,
 )
@@ -115,7 +114,7 @@ class CentralizedTrainingResult:
     """Persistable centralized training result with no fabricated in-memory tensor state."""
 
     coordinate: CentralizedTrainingCoordinate
-    autoencoder_widths: tuple[int, ...]
+    autoencoder_widths: AutoencoderArchitecture
     optimizer: CentralizedOptimizerSummary
     checkpoint_protocol: CheckpointProtocol
     training_protocol: CentralizedTrainingProtocol
@@ -212,14 +211,14 @@ def train_centralized_autoencoder(request: CentralizedTrainingRequest) -> Centra
     reject_federated_preprocessing_for_training(request.preprocessing_state)
     configure_deterministic_execution(request.training_seed)
     device = resolve_cuda_device()
-    feature_matrix, labels, _row_ids = _extract_training_arrays(request)
-    reject_attack_rows_in_centralized_training(labels, request.benign_label)
-    if feature_matrix.shape[1] != request.autoencoder.widths[0]:
+    extracted = _extract_training_arrays(request)
+    reject_attack_rows_in_centralized_training(extracted.labels, request.benign_label)
+    if extracted.feature_matrix.shape[1] != request.autoencoder.widths[0]:
         raise ScientificContractError(
             "feature width must match the declared autoencoder input width",
             subject=ContractSubject.FEATURES,
         )
-    if feature_matrix.shape[0] < request.batch_size.value:
+    if extracted.feature_matrix.shape[0] < request.batch_size.value:
         raise ScientificContractError(
             "centralized training requires at least one full declared batch",
             subject=ContractSubject.BATCH_SIZE,
@@ -228,10 +227,9 @@ def train_centralized_autoencoder(request: CentralizedTrainingRequest) -> Centra
     model = build_centralized_autoencoder(request.autoencoder).to(device)
     optimizer = _build_optimizer(model, request.training_protocol.optimizer, request.learning_rate)
     loader = _build_loader(
-        feature_matrix,
+        extracted.feature_matrix,
         batch_size=request.batch_size,
         seed=request.training_seed,
-        device=device,
     )
     epoch_losses, snapshots = _run_training_epochs(
         model=model,
@@ -246,7 +244,7 @@ def train_centralized_autoencoder(request: CentralizedTrainingRequest) -> Centra
     assert_safetensors_reload(model, tensor_path, device)
     result = CentralizedTrainingResult(
         coordinate=request.coordinate,
-        autoencoder_widths=tuple(request.autoencoder.widths),
+        autoencoder_widths=request.autoencoder.widths,
         optimizer=CentralizedOptimizerSummary(
             identity=request.training_protocol.optimizer.identity,
             learning_rate=request.learning_rate,
@@ -256,8 +254,8 @@ def train_centralized_autoencoder(request: CentralizedTrainingRequest) -> Centra
         checkpoint_protocol=request.checkpoint_protocol,
         training_protocol=request.training_protocol,
         training_seed=request.training_seed,
-        train_row_count=RowCount(int(feature_matrix.shape[0])),
-        feature_count=FeatureCount(int(feature_matrix.shape[1])),
+        train_row_count=RowCount(int(extracted.feature_matrix.shape[0])),
+        feature_count=FeatureCount(int(extracted.feature_matrix.shape[1])),
         epoch_losses=epoch_losses,
         model_directory=request.output_directory,
         model_tensor_path=tensor_path,
@@ -326,9 +324,7 @@ def assert_safetensors_reload(
     path: Path,
     device: torch.device,
 ) -> None:
-    reloaded = build_centralized_autoencoder(AutoencoderProtocol(widths=AutoencoderArchitecture(model.widths))).to(
-        device
-    )
+    reloaded = build_centralized_autoencoder(AutoencoderProtocol(widths=model.widths)).to(device)
     state = load_file(str(path), device=str(device))
     reloaded.load_state_dict(state, strict=True)
     for left, right in zip(model.state_dict().values(), reloaded.state_dict().values(), strict=True):
@@ -424,23 +420,28 @@ def _require_training_frame_schema(request: CentralizedTrainingRequest) -> None:
             )
 
 
+@dataclass(frozen=True, slots=True)
+class _ExtractedTrainingArrays:
+    feature_matrix: np.ndarray
+    labels: OutcomeLabelSequence
+
+
 def _extract_training_arrays(
     request: CentralizedTrainingRequest,
-) -> tuple[np.ndarray, OutcomeLabelSequence, tuple[str, ...]]:
+) -> _ExtractedTrainingArrays:
     frame = request.training_features
     labels = OutcomeLabelSequence(
         tuple(OutcomeLabel(str(value)) for value in frame.get_column(OUTCOME_LABEL_COLUMN).to_list())
     )
-    row_ids = tuple(str(value) for value in frame.get_column(STABLE_ROW_ID_COLUMN).to_list())
     matrix = frame.select(request.feature_names.as_list()).to_numpy().astype(np.float32, copy=False)
     if not np.isfinite(matrix).all():
         raise ScientificContractError(
             "centralized training features must be finite",
             subject=ContractSubject.FEATURES,
         )
-    if len(labels) != matrix.shape[0] or len(row_ids) != matrix.shape[0]:
+    if len(labels) != matrix.shape[0]:
         raise ScientificContractError("training arrays must align by row", subject=ContractSubject.ROWS)
-    return matrix, labels, row_ids
+    return _ExtractedTrainingArrays(feature_matrix=matrix, labels=labels)
 
 
 def _build_optimizer(
@@ -462,10 +463,9 @@ def _build_loader(
     *,
     batch_size: BatchSize,
     seed: Seed,
-    device: torch.device,
 ) -> DataLoader:
     require_cuda_available()
-    tensor = torch.tensor(np.asarray(matrix, dtype=np.float32), dtype=torch.float32, device=device)
+    tensor = torch.tensor(matrix, dtype=torch.float32)
     dataset = TensorDataset(tensor)
     generator = torch.Generator(device="cpu")
     generator.manual_seed(seed.value)
@@ -476,6 +476,7 @@ def _build_loader(
         drop_last=True,
         generator=generator,
         num_workers=CENTRALIZED_DATALOADER_WORKER_COUNT.value,
+        pin_memory=True,
     )
 
 
@@ -494,24 +495,31 @@ def _run_training_epochs(
     snapshots: list[InMemoryCentralizedModelSnapshot] = []
     candidate_rounds = frozenset(candidate.value for candidate in checkpoint_protocol.candidates)
     model.train()
+
     for epoch_index in range(1, checkpoint_protocol.maximum_round.value + 1):
-        batch_losses: list[torch.Tensor] = []
+        running_loss = 0.0
+        batch_count = 0
+
         for (batch,) in loader:
-            batch = batch.to(device, non_blocking=False)
+            batch = batch.to(device, non_blocking=True)
             optimizer.zero_grad(set_to_none=True)
             reconstruction = model(batch)
             loss = nn.functional.mse_loss(reconstruction, batch)
             loss.backward()
             optimizer.step()
-            batch_losses.append(loss.detach())
-        if not batch_losses:
+            running_loss += loss.item()
+            batch_count += 1
+
+        if batch_count == 0:
             raise ScientificContractError(
                 "centralized training produced no batches; declared batch size cannot be relaxed",
                 subject=ContractSubject.BATCH_SIZE,
             )
-        mean_loss = MetricValue(float(torch.stack(batch_losses).mean().item()))
+
+        mean_loss = MetricValue(running_loss / batch_count)
         epoch = RoundNumber(epoch_index)
         losses.append(CentralizedEpochLoss(epoch=epoch, mean_training_loss=mean_loss))
+
         if epoch_index in candidate_rounds:
             snapshots.append(
                 InMemoryCentralizedModelSnapshot(
@@ -520,6 +528,7 @@ def _run_training_epochs(
                     mean_training_loss=mean_loss,
                 )
             )
+
     expected = tuple(candidate.value for candidate in checkpoint_protocol.candidates)
     observed = tuple(item.round_number.value for item in snapshots)
     if observed != expected:

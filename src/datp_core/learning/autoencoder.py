@@ -39,16 +39,16 @@ class ReconstructionAutoencoder(nn.Module):
         return self._widths[0]
 
     @property
-    def widths(self) -> tuple[int, ...]:
+    def widths(self) -> AutoencoderArchitecture:
         return self._widths
 
     def forward(self, features: torch.Tensor) -> torch.Tensor:
         return self._network(features)
 
 
-def _validated_widths(widths: Sequence[int]) -> tuple[int, ...]:
+def _validated_widths(widths: Sequence[int]) -> AutoencoderArchitecture:
     try:
-        return tuple(AutoencoderArchitecture(tuple(widths)))
+        return AutoencoderArchitecture(tuple(widths))
     except ValueError as error:
         raise ScientificContractError(str(error), subject=ContractSubject.WIDTHS) from error
 

@@ -104,19 +104,6 @@ class ReusedDittoTrainingRequest:
     split_manifest_checksum: Checksum
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
-class RoundLoss:
-    round_number: RoundNumber
-    loss: MetricValue
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ClientRoundLoss:
-    client_id: ClientPathToken
-    round_number: RoundNumber
-    loss: MetricValue
-
-
 def validated_global_manifest(
     request: ReusedGlobalCandidatesRequest,
 ) -> CandidateManifest:
@@ -128,7 +115,7 @@ def validated_global_manifest(
         checkpoint_protocol=request.checkpoint_protocol,
         autoencoder=request.autoencoder,
         batch_size=request.batch_size,
-        preprocessing_state_set_checksum=(request.preprocessing_state_set_checksum),
+        preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
         split_manifest_checksum=request.split_manifest_checksum,
     )
     verify_completion(request.directory, manifest, include_history=True)
@@ -158,43 +145,41 @@ def load_reused_global_candidates(
         )
     )
     validate_round_summary(round_frame, expected_rounds)
-    losses = tuple(
-        RoundLoss(
-            round_number=RoundNumber(int(round_number)),
-            loss=MetricValue(float(loss)),
-        )
+    losses_by_round: dict[RoundNumber, MetricValue] = {
+        RoundNumber(int(round_number)): MetricValue(float(loss))
         for round_number, loss in round_frame.select(
             (
                 FederatedHistoryColumn.ROUND_NUMBER.value,
                 FederatedHistoryColumn.AGGREGATE_LOSS.value,
             )
         ).iter_rows()
-    )
-    return tuple(_global_candidate(request, entry, losses) for entry in manifest.entries)
+    }
+    return tuple(_global_candidate(request, entry, losses_by_round) for entry in manifest.entries)
 
 
 def _global_candidate(
     request: ReusedGlobalCandidatesRequest,
     entry: CandidateManifestEntry,
-    losses: tuple[RoundLoss, ...],
+    losses_by_round: dict[RoundNumber, MetricValue],
 ) -> CheckpointCandidate:
     path = request.directory / entry.tensor_name
     validate_persisted_checkpoint_file(path, entry.tensor_checksum)
-    matching = tuple(item.loss for item in losses if item.round_number == entry.round_number)
-    if len(matching) != 1:
+
+    if entry.round_number not in losses_by_round:
         raise ArtifactIntegrityError(
             "global checkpoint requires exactly one matching round loss",
             subject=ContractSubject.CHECKPOINT_CANDIDATES,
         )
+
     return CheckpointCandidate(
         coordinate=request.coordinate,
         round_number=entry.round_number,
         client=None,
         tensor_path=path,
         tensor_checksum=entry.tensor_checksum,
-        mean_training_loss=matching[0],
+        mean_training_loss=losses_by_round[entry.round_number],
         status=CheckpointStatus.CANDIDATE,
-        preprocessing_state_set_checksum=(request.preprocessing_state_set_checksum),
+        preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
         split_manifest_checksum=request.split_manifest_checksum,
     )
 
@@ -210,7 +195,7 @@ def validated_personalized_manifest(
         checkpoint_protocol=request.checkpoint_protocol,
         autoencoder=request.autoencoder,
         batch_size=request.batch_size,
-        preprocessing_state_set_checksum=(request.preprocessing_state_set_checksum),
+        preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
         split_manifest_checksum=request.split_manifest_checksum,
     )
     verify_completion(
@@ -255,12 +240,9 @@ def load_reused_personalized_candidates(
         expected_rounds=training_rounds,
         expected_clients=request.clients,
     )
-    losses = tuple(
-        ClientRoundLoss(
-            client_id=ClientPathToken(str(client_id)),
-            round_number=RoundNumber(int(round_number)),
-            loss=MetricValue(float(loss)),
-        )
+
+    losses_by_client_round: dict[tuple[str, RoundNumber], MetricValue] = {
+        (str(client_id), RoundNumber(int(round_number))): MetricValue(float(loss))
         for round_number, client_id, loss in personalized_frame.select(
             (
                 FederatedHistoryColumn.ROUND_NUMBER.value,
@@ -268,14 +250,19 @@ def load_reused_personalized_candidates(
                 FederatedHistoryColumn.LOCAL_LOSS.value,
             )
         ).iter_rows()
-    )
+    }
+
+    entries_by_client: dict[str, list[CandidateManifestEntry]] = {}
+    for entry in manifest.entries:
+        if entry.client_id is not None:
+            entries_by_client.setdefault(str(entry.client_id), []).append(entry)
+
     return tuple(
         PersonalizedCandidateSet(
             client=client,
             candidates=tuple(
-                _personalized_candidate(request, client, entry, losses)
-                for entry in manifest.entries
-                if entry.client_id == client.client_id
+                _personalized_candidate(request, client, entry, losses_by_client_round)
+                for entry in entries_by_client.get(client.client_id, [])
             ),
         )
         for client in request.clients
@@ -286,28 +273,27 @@ def _personalized_candidate(
     request: ReusedPersonalizedCandidatesRequest,
     client: ClientIdentity,
     entry: CandidateManifestEntry,
-    losses: tuple[ClientRoundLoss, ...],
+    losses_by_client_round: dict[tuple[str, RoundNumber], MetricValue],
 ) -> CheckpointCandidate:
     path = request.personalized_output_directory / entry.tensor_name
     validate_persisted_checkpoint_file(path, entry.tensor_checksum)
-    client_token = ClientPathToken(client.client_id)
-    matching = tuple(
-        item.loss for item in losses if item.client_id == client_token and item.round_number == entry.round_number
-    )
-    if len(matching) != 1:
+
+    key = (client.client_id, entry.round_number)
+    if key not in losses_by_client_round:
         raise ArtifactIntegrityError(
             "personalized checkpoint requires exactly one matching client-round loss",
             subject=ContractSubject.CHECKPOINT_CANDIDATES,
         )
+
     return CheckpointCandidate(
         coordinate=request.personalized_coordinate,
         round_number=entry.round_number,
         client=client,
         tensor_path=path,
         tensor_checksum=entry.tensor_checksum,
-        mean_training_loss=matching[0],
+        mean_training_loss=losses_by_client_round[key],
         status=CheckpointStatus.CANDIDATE,
-        preprocessing_state_set_checksum=(request.preprocessing_state_set_checksum),
+        preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
         split_manifest_checksum=request.split_manifest_checksum,
     )
 
@@ -328,7 +314,7 @@ def load_reused_federated_training(
             coordinate=request.coordinate,
             directory=request.directory,
             checkpoint_protocol=request.checkpoint_protocol,
-            preprocessing_state_set_checksum=(request.preprocessing_state_set_checksum),
+            preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
             split_manifest_checksum=request.split_manifest_checksum,
             autoencoder=request.autoencoder,
             batch_size=request.batch_size,
@@ -347,7 +333,7 @@ def load_reused_federated_training(
             autoencoder=request.autoencoder,
             checkpoint_protocol=request.checkpoint_protocol,
             history=history,
-            preprocessing_state_set_checksum=(request.preprocessing_state_set_checksum),
+            preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
             split_manifest_checksum=request.split_manifest_checksum,
             device_name=load_published_device_name(request.directory),
             batch_size_used=request.batch_size,
@@ -363,7 +349,7 @@ def load_reused_ditto_training(
         coordinate=request.coordinates.global_coordinate,
         directory=request.global_directory,
         checkpoint_protocol=request.checkpoint_protocol,
-        preprocessing_state_set_checksum=(request.preprocessing_state_set_checksum),
+        preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
         split_manifest_checksum=request.split_manifest_checksum,
         autoencoder=request.autoencoder,
         batch_size=request.batch_size,
@@ -374,7 +360,7 @@ def load_reused_ditto_training(
         global_history_directory=request.global_directory,
         clients=request.clients,
         checkpoint_protocol=request.checkpoint_protocol,
-        preprocessing_state_set_checksum=(request.preprocessing_state_set_checksum),
+        preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
         split_manifest_checksum=request.split_manifest_checksum,
         autoencoder=request.autoencoder,
         batch_size=request.batch_size,
@@ -406,7 +392,7 @@ def load_reused_ditto_training(
         autoencoder=request.autoencoder,
         checkpoint_protocol=request.checkpoint_protocol,
         history=history,
-        preprocessing_state_set_checksum=(request.preprocessing_state_set_checksum),
+        preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
         split_manifest_checksum=request.split_manifest_checksum,
         device_name=load_published_device_name(request.global_directory),
         batch_size_used=request.batch_size,

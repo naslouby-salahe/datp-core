@@ -133,7 +133,7 @@ def retain_centralized_checkpoint_candidates(
                 preprocessing_state_checksum=training_result.preprocessing_state_checksum,
                 split_manifest_checksum=training_result.split_manifest_checksum,
                 training_seed=training_result.training_seed,
-                autoencoder_widths=tuple(autoencoder.widths),
+                autoencoder_widths=autoencoder.widths,
             )
         )
     return validate_ordered_checkpoint_inventory(tuple(candidates), protocol.candidates)
