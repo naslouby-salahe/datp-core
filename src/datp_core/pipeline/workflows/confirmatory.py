@@ -79,11 +79,6 @@ class ConfirmatorySeedResult:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class ConfirmatoryCampaignResult:
-    seeds: tuple[ConfirmatorySeedResult, ...]
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
 class FedAvgCvFprEffectEvidence:
     """Artifact-bound FedAvg SHARED/LOCAL CV(FPR) corners and paired effect for one seed."""
 
@@ -137,11 +132,6 @@ def run_confirmatory_seed(
     )
 
 
-def run_confirmatory_campaign() -> ConfirmatoryCampaignResult:
-    seeds = tuple(run_confirmatory_seed(seed) for seed in CONFIRMATORY_SEED_COHORT.values)
-    return ConfirmatoryCampaignResult(seeds=seeds)
-
-
 def run_family_grouped_mechanism_seed(
     training_seed: Seed,
     *,
@@ -173,11 +163,6 @@ def run_family_grouped_mechanism_seed(
         campaign_digest=result.campaign_digest,
         completed_threshold_methods=result.completed_threshold_methods,
     )
-
-
-def run_family_grouped_mechanism_campaign() -> ConfirmatoryCampaignResult:
-    seeds = tuple(run_family_grouped_mechanism_seed(seed) for seed in CONFIRMATORY_SEED_COHORT.values)
-    return ConfirmatoryCampaignResult(seeds=seeds)
 
 
 def analyze_confirmatory_campaign(
