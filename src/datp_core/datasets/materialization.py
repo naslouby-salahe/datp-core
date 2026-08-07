@@ -270,7 +270,8 @@ def partition_assets[AssetRoleT: StrEnum](
 
 
 def canonical_data_partition_assets(partition_count: int) -> tuple[CanonicalAssetLayout[CanonicalAssetRole], ...]:
-    return partition_assets(partition_count, Path("."), CanonicalAssetRole.CANONICAL_DATA)
+    """Layout partitions under the canonical ``data/`` branch consumed by population construction."""
+    return partition_assets(partition_count, Path("data"), CanonicalAssetRole.CANONICAL_DATA)
 
 
 def named_assets[AssetRoleT: StrEnum](

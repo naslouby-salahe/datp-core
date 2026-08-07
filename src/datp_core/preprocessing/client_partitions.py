@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import polars as pl
+import structlog
 
 from datp_core.datasets.edge_iiotset.schema import EDGE_NUMERIC_FEATURE_COLUMNS, EdgeAssetRole
 from datp_core.datasets.partitioning.construction import join_handoff_with_canonical_features
@@ -144,7 +145,33 @@ def join_published_handoff(
             "canonical feature join lost assignment rows",
             subject=handoff.population_manifest.document.dataset,
         )
-    return joined
+    return exclude_nonfinite_model_input_rows(
+        joined,
+        feature_names,
+        dataset=handoff.population_manifest.document.dataset,
+        population=handoff.population_manifest.document.population,
+    )
+
+
+def exclude_nonfinite_model_input_rows(
+    joined: pl.DataFrame,
+    feature_names: FeatureNameSequence,
+    *,
+    dataset: DatasetId,
+    population: PopulationId,
+) -> pl.DataFrame:
+    eligible_expr = pl.all_horizontal(tuple(pl.col(name).is_finite().fill_null(False) for name in feature_names))
+    eligible = joined.filter(eligible_expr)
+    excluded_row_count = joined.height - eligible.height
+    if excluded_row_count:
+        structlog.get_logger("datp_core.preprocessing").warning(
+            "edge_model_input_rows_excluded_nonfinite",
+            dataset=dataset.value,
+            population=population.value,
+            excluded_row_count=excluded_row_count,
+            total_row_count=joined.height,
+        )
+    return eligible
 
 
 def model_feature_names(

@@ -173,7 +173,9 @@ class CompletionRecordOutputStore:
         if record is None or record.state is not CompletionState.COMPLETE:
             return ExistingExperimentState.INCOMPLETE
         if provenance is not None and (
-            record.plan_digest != provenance.plan_digest or record.campaign_digest != provenance.campaign_digest
+            record.plan_digest != provenance.plan_digest
+            or record.campaign_digest != provenance.campaign_digest
+            or record.protocol_digest != provenance.protocol_digest
         ):
             return ExistingExperimentState.COMPLETE_INVALID
         observed = _observed_artifacts(output_root, record.artifacts)
@@ -504,6 +506,7 @@ class PipelineStageRunner:
         record = build_completion_record(
             plan_digest=provenance.plan_digest,
             campaign_digest=provenance.campaign_digest,
+            protocol_digest=provenance.protocol_digest,
             artifacts=artifacts,
         )
         write_completion_record(directory, record)

@@ -848,14 +848,15 @@ def _paired_values_table(document: AnalysisDocument) -> PublicationTable:
                 ),
             ),
         )
-    mean_delta = sum(item.delta.value for item in document.contrasts) / len(document.contrasts)
+    point = document.interval.point_estimate
+    rendered_value = f"{point.value:.6g}" if point is not None else ""
     return PublicationTable(
         title="Paired seed inventory",
         cells=(
             TableCell(
                 metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
                 availability=AvailabilityStatus.AVAILABLE,
-                rendered_value=f"{mean_delta:.6g}",
+                rendered_value=rendered_value,
                 evidence=f"{len(document.contrasts)} paired seeds with fixed-score provenance",
             ),
         ),

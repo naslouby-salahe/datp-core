@@ -54,6 +54,7 @@ class ArtifactRecord:
 class CompletionRecord(StrictModel):
     plan_digest: Checksum
     campaign_digest: Checksum
+    protocol_digest: Checksum
     artifacts: tuple[ArtifactRecord, ...]
     state: CompletionState
 

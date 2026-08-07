@@ -140,11 +140,40 @@ def test_output_store_round_trips_a_valid_completion_record(tmp_path: Path) -> N
         state=ArtifactState.PUBLISHED,
     )
     record = build_completion_record(
-        plan_digest=Checksum("plan"), campaign_digest=Checksum("campaign"), artifacts=(artifact,)
+        plan_digest=provenance().plan_digest,
+        campaign_digest=provenance().campaign_digest,
+        protocol_digest=provenance().protocol_digest,
+        artifacts=(artifact,),
     )
     write_completion_record(directory, record)
 
-    assert store.state(coordinate(), tmp_path) is ExistingExperimentState.COMPLETE_VALID
+    assert store.state(coordinate(), tmp_path, provenance()) is ExistingExperimentState.COMPLETE_VALID
 
     store.delete(coordinate(), tmp_path)
     assert store.state(coordinate(), tmp_path) is ExistingExperimentState.ABSENT
+
+
+def test_output_store_detects_protocol_digest_mismatch_on_resume(tmp_path: Path) -> None:
+    store = CompletionRecordOutputStore()
+    directory = experiment_output_directory(tmp_path, coordinate())
+    relative = directory.relative_to(tmp_path) / "result.json"
+    (tmp_path / relative).parent.mkdir(parents=True, exist_ok=True)
+    payload = b"{}"
+    (tmp_path / relative).write_bytes(payload)
+    artifact = ArtifactRecord(
+        kind=ArtifactKind.SUMMARY,
+        relative_path=relative,
+        checksum=checksum_bytes(payload),
+        byte_count=ByteCount(len(payload)),
+        state=ArtifactState.PUBLISHED,
+    )
+    record = build_completion_record(
+        plan_digest=provenance().plan_digest,
+        campaign_digest=provenance().campaign_digest,
+        protocol_digest=provenance().protocol_digest,
+        artifacts=(artifact,),
+    )
+    write_completion_record(directory, record)
+
+    changed_protocol = replace(provenance(), protocol_digest=Checksum("different-protocol"))
+    assert store.state(coordinate(), tmp_path, changed_protocol) is ExistingExperimentState.COMPLETE_INVALID

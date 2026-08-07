@@ -15,8 +15,8 @@ from datp_core.datasets.materialization import (
 def test_canonical_asset_layouts_are_publication_root_relative() -> None:
     partitions = canonical_data_partition_assets(2)
     assert tuple(asset.relative_path for asset in partitions) == (
-        Path("part-00000.parquet"),
-        Path("part-00001.parquet"),
+        Path("data/part-00000.parquet"),
+        Path("data/part-00001.parquet"),
     )
 
     nested = partition_assets(1, Path("training"), CanonicalAssetRole.CANONICAL_DATA)

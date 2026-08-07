@@ -1,3 +1,7 @@
+import numpy as np
+import pytest
+from scipy import stats
+
 from datp_core.analysis.contrasts import FixedScorePairProvenance, PairedContrast, SupplementaryPairedAnalysisPlan
 from datp_core.analysis.inference.bootstrap.contracts import (
     BcaAdjustment,
@@ -178,3 +182,95 @@ def _contrast(
         right_value=local_value,
         fixed_score=_fixed_score(),
     )
+
+
+_ORACLE_DELTAS = (0.10, 0.12, 0.08, 0.15, 0.05, 0.11, 0.09, 0.13, 0.07, 0.14)
+
+
+def test_bca_interval_matches_an_independently_computed_efron_bca_oracle() -> None:
+    values = tuple(
+        _contrast(
+            seed,
+            PopulationId.NBAIOT_NATURAL_DEVICES,
+            EvidenceRole.CONFIRMATORY,
+            local=MetricValue(0.0),
+            shared=MetricValue(delta),
+        )
+        for seed, delta in enumerate(_ORACLE_DELTAS)
+    )
+    analysis_seed = Seed(11)
+    result = paired_bca_interval(
+        values,
+        protocol=CONFIRMATORY_INFERENCE_PROTOCOL,
+        analysis_seed=analysis_seed,
+    )
+    assert result.outcome is BcaOutcome.AVAILABLE
+    assert result.point_estimate is not None
+    assert result.lower_bound is not None
+    assert result.upper_bound is not None
+    assert result.adjustment is not None
+
+    deltas = np.array(_ORACLE_DELTAS, dtype=np.float64)
+    estimate = float(np.mean(deltas))
+    assert result.point_estimate.value == pytest.approx(estimate, abs=1e-12)
+
+    rng = np.random.default_rng(analysis_seed.value)
+    replicate_count = CONFIRMATORY_INFERENCE_PROTOCOL.bootstrap_replicates.value
+    indexes = rng.integers(0, deltas.size, size=(replicate_count, deltas.size))
+    distribution = np.mean(deltas[indexes], axis=1)
+
+    proportion_less = float(np.mean(distribution < estimate))
+    expected_bias_correction = float(stats.norm.ppf(proportion_less))
+    assert result.adjustment.bias_correction.value == pytest.approx(expected_bias_correction, abs=1e-9)
+
+    leave_one_out_means = np.array([np.mean(np.delete(deltas, index)) for index in range(deltas.size)])
+    centered = np.mean(leave_one_out_means) - leave_one_out_means
+    expected_acceleration = float(np.sum(centered**3) / (6.0 * np.sum(centered**2) ** 1.5))
+    assert result.adjustment.acceleration.value == pytest.approx(expected_acceleration, abs=1e-9)
+
+    confidence_level = CONFIRMATORY_INFERENCE_PROTOCOL.confidence_level.value
+    alpha = (1.0 - confidence_level) / 2.0
+    z0 = expected_bias_correction
+    acceleration = expected_acceleration
+    z_lo = z0 + stats.norm.ppf(alpha)
+    z_hi = z0 + stats.norm.ppf(1.0 - alpha)
+    q_lo = stats.norm.cdf(z0 + z_lo / (1.0 - acceleration * z_lo))
+    q_hi = stats.norm.cdf(z0 + z_hi / (1.0 - acceleration * z_hi))
+    expected_lower = float(np.quantile(distribution, q_lo, method="linear"))
+    expected_upper = float(np.quantile(distribution, q_hi, method="linear"))
+    assert result.lower_bound.value == pytest.approx(expected_lower, abs=1e-9)
+    assert result.upper_bound.value == pytest.approx(expected_upper, abs=1e-9)
+
+
+def test_bca_interval_agrees_with_an_independent_scipy_bca_implementation() -> None:
+    values = tuple(
+        _contrast(
+            seed,
+            PopulationId.NBAIOT_NATURAL_DEVICES,
+            EvidenceRole.CONFIRMATORY,
+            local=MetricValue(0.0),
+            shared=MetricValue(delta),
+        )
+        for seed, delta in enumerate(_ORACLE_DELTAS)
+    )
+    result = paired_bca_interval(
+        values,
+        protocol=CONFIRMATORY_INFERENCE_PROTOCOL,
+        analysis_seed=Seed(11),
+    )
+    assert result.outcome is BcaOutcome.AVAILABLE
+    assert result.lower_bound is not None
+    assert result.upper_bound is not None
+
+    deltas = np.array(_ORACLE_DELTAS, dtype=np.float64)
+    reference = stats.bootstrap(
+        (deltas,),
+        np.mean,
+        method="BCa",
+        confidence_level=CONFIRMATORY_INFERENCE_PROTOCOL.confidence_level.value,
+        n_resamples=CONFIRMATORY_INFERENCE_PROTOCOL.bootstrap_replicates.value,
+        rng=np.random.default_rng(0),
+    )
+
+    assert result.lower_bound.value == pytest.approx(reference.confidence_interval.low, abs=1e-2)
+    assert result.upper_bound.value == pytest.approx(reference.confidence_interval.high, abs=1e-2)

@@ -9,7 +9,7 @@ from tests.unit.learning.federated.helpers import AUTOENCODER, BATCH_SIZE, FEATU
 from tests.unit.scoring.helpers import selected_checkpoint
 
 from datp_core.datasets.partitioning.contracts import PopulationOutcomeLabel
-from datp_core.domain.enums import FederatedThresholdMethod, ScoreFrameColumn
+from datp_core.domain.enums import ScoreFrameColumn
 from datp_core.domain.values.counts import RowCount, Seed
 from datp_core.learning.federated.models import (
     CheckpointCandidate,
@@ -18,15 +18,8 @@ from datp_core.learning.federated.models import (
 )
 from datp_core.pipeline.scoring.federated import generate_federated_scores
 from datp_core.pipeline.scoring.models import ClientScoringInput, ScoreGenerationRequest
-from datp_core.protocols.inference import FixedScoreInvariant, ScoreRecord
+from datp_core.protocols.inference import FixedScoreInvariant, ScoreArtifactManifest, ScoreRecord
 from datp_core.runtime.compute import resolve_cuda_device
-
-THRESHOLD_METHODS = (
-    FederatedThresholdMethod.SHARED_THRESHOLD,
-    FederatedThresholdMethod.LOCAL_THRESHOLD,
-    FederatedThresholdMethod.FAMILY_THRESHOLD,
-    FederatedThresholdMethod.CLUSTER_THRESHOLD,
-)
 
 
 def test_federated_training_coordinate_has_no_threshold_identity_field() -> None:
@@ -49,6 +42,24 @@ def test_checkpoint_decision_has_no_threshold_policy_hook() -> None:
 
 def test_score_record_has_no_threshold_identity_field() -> None:
     field_names = frozenset(field.name for field in dataclasses.fields(ScoreRecord))
+    assert "threshold_method" not in field_names
+    assert "threshold_identity" not in field_names
+
+
+def test_score_generation_request_has_no_threshold_identity_field() -> None:
+    field_names = frozenset(field.name for field in dataclasses.fields(ScoreGenerationRequest))
+    assert "threshold_method" not in field_names
+    assert "threshold_identity" not in field_names
+
+
+def test_score_artifact_manifest_has_no_threshold_identity_field() -> None:
+    field_names = frozenset(field.name for field in dataclasses.fields(ScoreArtifactManifest))
+    assert "threshold_method" not in field_names
+    assert "threshold_identity" not in field_names
+
+
+def test_fixed_score_invariant_has_no_threshold_identity_field() -> None:
+    field_names = frozenset(field.name for field in dataclasses.fields(FixedScoreInvariant))
     assert "threshold_method" not in field_names
     assert "threshold_identity" not in field_names
 
@@ -96,9 +107,7 @@ def _scored_result(tmp_path: Path):
 def test_every_threshold_method_receives_identical_detector_provenance(tmp_path: Path) -> None:
     checkpoint, result = _scored_result(tmp_path)
     invariant = FixedScoreInvariant.from_manifest(result.manifest)
-    observed = tuple(invariant for _method in THRESHOLD_METHODS)
 
-    assert len(frozenset(observed)) == 1
     assert invariant.model_checksum == checkpoint.tensor_checksum
     assert invariant.preprocessing_state_set_checksum == checkpoint.preprocessing_state_set_checksum
     assert invariant.split_manifest_checksum == checkpoint.split_manifest_checksum
@@ -106,22 +115,52 @@ def test_every_threshold_method_receives_identical_detector_provenance(tmp_path:
     assert invariant.evaluation_score_set_checksum == result.invariant.evaluation_score_set_checksum
 
 
-def test_auroc_is_identical_for_every_threshold_method(tmp_path: Path) -> None:
-    _checkpoint, result = _scored_result(tmp_path)
-    frame = pl.read_parquet(result.manifest.evaluation_records[0].path)
+def _auroc_from_evaluation_records(manifest) -> float:
+    frame = pl.read_parquet(manifest.evaluation_records[0].path)
     label_column = ScoreFrameColumn.OUTCOME_LABEL.value
     score_column = ScoreFrameColumn.RECONSTRUCTION_ERROR.value
     labels = tuple(
         1 if label == PopulationOutcomeLabel.ATTACK.value else 0 for label in frame.get_column(label_column).to_list()
     )
     scores = tuple(float(score) for score in frame.get_column(score_column).to_list())
-    auroc = float(roc_auc_score(labels, scores))
-    observed = tuple(auroc for _method in THRESHOLD_METHODS)
-    assert len(frozenset(observed)) == 1
+    return float(roc_auc_score(labels, scores))
 
 
-def test_score_artifact_bytes_are_stable_across_repeated_reads(tmp_path: Path) -> None:
-    _checkpoint, result = _scored_result(tmp_path)
-    path = result.manifest.evaluation_records[0].path
-    readings = tuple(path.read_bytes() for _ in THRESHOLD_METHODS)
-    assert len(frozenset(readings)) == 1
+def test_auroc_is_identical_across_independently_generated_score_artifacts(tmp_path: Path) -> None:
+    _checkpoint_a, result_a = _scored_result(tmp_path / "run_a")
+    _checkpoint_b, result_b = _scored_result(tmp_path / "run_b")
+
+    auroc_a = _auroc_from_evaluation_records(result_a.manifest)
+    auroc_b = _auroc_from_evaluation_records(result_b.manifest)
+
+    assert auroc_a == auroc_b
+
+
+def test_rescoring_the_same_frozen_checkpoint_reproduces_byte_identical_score_artifacts(tmp_path: Path) -> None:
+    checkpoint, first_result = _scored_result(tmp_path / "run_a")
+    first_bytes = first_result.manifest.evaluation_records[0].path.read_bytes()
+
+    request = ScoreGenerationRequest(
+        checkpoint=checkpoint,
+        scored_split_protocol=checkpoint.coordinate.split_protocol,
+        autoencoder=AUTOENCODER,
+        feature_names=FEATURE_NAMES,
+        clients=(
+            ClientScoringInput(
+                client=client_identity("client_a"),
+                calibration_features=benign_frame(RowCount(8), seed=Seed(1)),
+                evaluation_features=_evaluation_frame(),
+            ),
+        ),
+        batch_size=BATCH_SIZE,
+        output_directory=tmp_path / "run_b" / "scores",
+        preprocessing_state_set_checksum=checkpoint.preprocessing_state_set_checksum,
+        split_manifest_checksum=checkpoint.split_manifest_checksum,
+    )
+    second_result = generate_federated_scores(request, resolve_cuda_device())
+    second_bytes = second_result.manifest.evaluation_records[0].path.read_bytes()
+
+    assert second_bytes == first_bytes
+    assert FixedScoreInvariant.from_manifest(second_result.manifest) == FixedScoreInvariant.from_manifest(
+        first_result.manifest
+    )

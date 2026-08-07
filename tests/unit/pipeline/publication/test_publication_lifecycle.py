@@ -38,6 +38,7 @@ def test_completion_and_reload_require_exact_published_artifacts(tmp_path: Path)
     completion = build_completion_record(
         plan_digest=Checksum("plan"),
         campaign_digest=Checksum("campaign"),
+        protocol_digest=Checksum("protocol"),
         artifacts=(artifact,),
     )
     assert completion.state is CompletionState.COMPLETE
@@ -53,6 +54,7 @@ def test_reload_detects_file_corruption_even_when_metadata_is_unchanged(tmp_path
     completion = build_completion_record(
         plan_digest=Checksum("plan"),
         campaign_digest=Checksum("campaign"),
+        protocol_digest=Checksum("protocol"),
         artifacts=(artifact,),
     )
     (tmp_path / relative).write_bytes(b'{"corrupt":true}')
@@ -69,6 +71,7 @@ def test_reload_detects_missing_completed_artifact(tmp_path: Path) -> None:
     completion = build_completion_record(
         plan_digest=Checksum("plan"),
         campaign_digest=Checksum("campaign"),
+        protocol_digest=Checksum("protocol"),
         artifacts=(artifact,),
     )
     validation = validate_reload(root=tmp_path, completion=completion, observed=(artifact,))
@@ -86,6 +89,7 @@ def test_complete_record_requires_an_artifact_inventory() -> None:
         CompletionRecord(
             plan_digest=Checksum("plan"),
             campaign_digest=Checksum("campaign"),
+            protocol_digest=Checksum("protocol"),
             artifacts=(),
             state=CompletionState.COMPLETE,
         )
@@ -98,6 +102,7 @@ def test_completion_record_round_trips_through_disk(tmp_path: Path) -> None:
     record = build_completion_record(
         plan_digest=Checksum("plan"),
         campaign_digest=Checksum("campaign"),
+        protocol_digest=Checksum("protocol"),
         artifacts=(artifact,),
     )
 

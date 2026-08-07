@@ -272,6 +272,7 @@ def build_completion_record(
     *,
     plan_digest: Checksum,
     campaign_digest: Checksum,
+    protocol_digest: Checksum,
     artifacts: tuple[ArtifactRecord, ...],
 ) -> CompletionRecord:
     state = (
@@ -282,6 +283,7 @@ def build_completion_record(
     return CompletionRecord(
         plan_digest=plan_digest,
         campaign_digest=campaign_digest,
+        protocol_digest=protocol_digest,
         artifacts=artifacts,
         state=state,
     )
