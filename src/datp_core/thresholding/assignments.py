@@ -7,9 +7,10 @@ from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.enums import (
     AvailabilityStatus,
     ContractSubject,
+    FederatedThresholdMethod,
     QuantileInterpolationSemantics,
 )
-from datp_core.domain.errors import require_contract
+from datp_core.domain.errors import ScientificContractError, require_contract
 from datp_core.domain.values.base import floats_absolutely_close, floats_exactly_equal
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import RowCount
@@ -87,15 +88,22 @@ def validate_local_quantiles(
     quantiles: tuple[LocalQuantile, ...],
     coordinate: FederatedTrainingCoordinate,
     *,
-    label: str,
+    method: FederatedThresholdMethod,
 ) -> None:
-    message = (
-        "shared threshold construction requires at least one contributing local quantile"
-        if label == "contributing local quantiles"
-        else "local threshold construction requires at least one eligible client"
-    )
+    match method:
+        case FederatedThresholdMethod.LOCAL_THRESHOLD:
+            message = "local threshold construction requires at least one eligible client"
+            uniqueness_label = "local quantiles"
+        case FederatedThresholdMethod.SHARED_THRESHOLD | FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD:
+            message = "shared threshold construction requires at least one contributing local quantile"
+            uniqueness_label = "contributing local quantiles"
+        case _:
+            raise ScientificContractError(
+                f"local quantile validation does not support threshold method {method}",
+                subject=ContractSubject.THRESHOLD,
+            )
     require_contract(bool(quantiles), message, ContractSubject.THRESHOLD)
-    require_unique_clients(tuple(item.client for item in quantiles), label)
+    require_unique_clients(tuple(item.client for item in quantiles), uniqueness_label)
     for item in quantiles:
         require_contract(
             item.coordinate == coordinate,

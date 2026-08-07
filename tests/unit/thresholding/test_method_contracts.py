@@ -141,6 +141,25 @@ def test_family_contracts_enforce_membership_and_assignment_coverage() -> None:
         )
 
 
+def test_family_membership_enforces_the_same_group_membership_contract_as_cluster() -> None:
+    with pytest.raises(ScientificContractError, match="exactly match declared family members"):
+        FamilyMembership(
+            family_id=FamilyIdentity("doorbell"),
+            members=(CLIENT_A,),
+            contributing_local_quantiles=(_local_quantile(CLIENT_B, 1.0),),
+            status=AvailabilityStatus.AVAILABLE,
+            family_threshold=ThresholdValue(1.0),
+        )
+    with pytest.raises(ScientificContractError, match="unweighted mean of contributing local quantiles"):
+        FamilyMembership(
+            family_id=FamilyIdentity("doorbell"),
+            members=(CLIENT_A,),
+            contributing_local_quantiles=(_local_quantile(CLIENT_A, 1.0),),
+            status=AvailabilityStatus.AVAILABLE,
+            family_threshold=ThresholdValue(999.0),
+        )
+
+
 def test_cluster_contracts_require_four_features_and_declared_group_count() -> None:
     short_raw = cast(tuple[float, float, float, float], (1.0, 2.0, 3.0))
     with pytest.raises(ScientificContractError, match="mean, standard deviation"):

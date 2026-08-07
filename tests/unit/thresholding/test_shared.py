@@ -5,6 +5,7 @@ from datp_core.domain.enums import FederatedThresholdMethod
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.ratios import Quantile
 from datp_core.protocols.calibration import QuantileProtocol
+from datp_core.thresholding.methods.local import construct_local_threshold
 from datp_core.thresholding.methods.shared import (
     construct_pooled_shared_quantile,
     construct_sample_weighted_shared_threshold,
@@ -41,6 +42,24 @@ def test_construct_shared_threshold_rejects_wrong_protocol_method() -> None:
         match="SHARED_THRESHOLD protocol",
     ):
         construct_shared_threshold((CLIENT_A,), protocol)
+
+
+def test_shared_and_local_construction_raise_via_the_shared_eligibility_helper() -> None:
+    shared_protocol = QuantileProtocol(
+        method=FederatedThresholdMethod.SHARED_THRESHOLD,
+        quantile=QUANTILE,
+    )
+    local_protocol = QuantileProtocol(
+        method=FederatedThresholdMethod.LOCAL_THRESHOLD,
+        quantile=QUANTILE,
+    )
+    with pytest.raises(ScientificContractError) as shared_exc:
+        construct_shared_threshold((), shared_protocol)
+    with pytest.raises(ScientificContractError) as local_exc:
+        construct_local_threshold((), local_protocol)
+    assert shared_exc.value.subject == local_exc.value.subject
+    assert "eligible client" in str(shared_exc.value)
+    assert "eligible client" in str(local_exc.value)
 
 
 def test_construct_pooled_shared_quantile_pools_every_eligible_score() -> None:

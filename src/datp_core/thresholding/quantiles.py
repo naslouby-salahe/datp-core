@@ -64,6 +64,17 @@ def calibration_scores_from_references(
     )
 
 
+def require_eligible_cohort(
+    eligible: tuple[ClientBenignCalibrationScores, ...],
+    policy_label: str,
+) -> None:
+    if not eligible:
+        raise ScientificContractError(
+            f"{policy_label} requires at least one eligible client",
+            subject=ContractSubject.THRESHOLD,
+        )
+
+
 def local_quantile(
     client_scores: ClientBenignCalibrationScores,
     quantile: Quantile,

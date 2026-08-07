@@ -32,8 +32,8 @@ from datp_core.thresholding.quantiles import (
     exact_empirical_quantile,
     local_quantile,
     quantile_interpolation_semantics,
+    require_eligible_cohort,
     sample_weighted_mean,
-    unweighted_mean,
 )
 
 
@@ -50,7 +50,7 @@ class SharedThresholdResult:
         validate_local_quantiles(
             self.contributing_local_quantiles,
             self.coordinate,
-            label="contributing local quantiles",
+            method=FederatedThresholdMethod.SHARED_THRESHOLD,
         )
         validate_assignments(
             self.assignments,
@@ -126,7 +126,7 @@ class SampleWeightedSharedThresholdResult:
         validate_local_quantiles(
             self.contributing_local_quantiles,
             self.coordinate,
-            label="contributing local quantiles",
+            method=FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD,
         )
         validate_assignments(
             self.assignments,
@@ -160,9 +160,9 @@ def construct_shared_threshold(
             "shared threshold construction requires the SHARED_THRESHOLD protocol",
             subject=protocol.method,
         )
-    _require_eligible(eligible)
+    require_eligible_cohort(eligible, "shared-construction threshold methods")
     local_quantiles = tuple(local_quantile(client_scores, protocol.quantile) for client_scores in eligible)
-    shared_value = ThresholdValue(unweighted_mean(tuple(item.value.value for item in local_quantiles)))
+    shared_value = mean_local_threshold(local_quantiles)
     assignments = tuple(ThresholdAssignment(item.client, shared_value) for item in local_quantiles)
     return SharedThresholdResult(
         coordinate=eligible[0].coordinate,
@@ -182,7 +182,7 @@ def construct_pooled_shared_quantile(
             "pooled shared quantile construction requires the POOLED_SHARED_QUANTILE protocol",
             subject=protocol.method,
         )
-    _require_eligible(eligible)
+    require_eligible_cohort(eligible, "shared-construction threshold methods")
     pooled_scores = tuple(score for client_scores in eligible for score in client_scores.scores)
     shared_value = exact_empirical_quantile(
         np.asarray(tuple(score.value for score in pooled_scores), dtype=np.float64),
@@ -215,7 +215,7 @@ def construct_sample_weighted_shared_threshold(
             "sample-weighted shared threshold construction requires the SAMPLE_WEIGHTED_SHARED_THRESHOLD protocol",
             subject=protocol.method,
         )
-    _require_eligible(eligible)
+    require_eligible_cohort(eligible, "shared-construction threshold methods")
     local_quantiles = tuple(local_quantile(client_scores, protocol.quantile) for client_scores in eligible)
     counts = tuple(float(item.calibration_count.value) for item in local_quantiles)
     total = sum(counts)
@@ -235,16 +235,6 @@ def construct_sample_weighted_shared_threshold(
         shared_threshold=shared_value,
         assignments=assignments,
     )
-
-
-def _require_eligible(
-    eligible: tuple[ClientBenignCalibrationScores, ...],
-) -> None:
-    if not eligible:
-        raise ScientificContractError(
-            "shared-construction threshold methods require at least one eligible client",
-            subject=ContractSubject.THRESHOLD,
-        )
 
 
 def _require_common_score_set_checksum(

@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import ClassVar
 
-from datp_core.domain.enums import ContractSubject, FederatedThresholdMethod
+from datp_core.domain.enums import FederatedThresholdMethod
 from datp_core.domain.errors import ScientificContractError
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.protocols.calibration import QuantileProtocol
@@ -16,6 +16,7 @@ from datp_core.thresholding.assignments import (
 from datp_core.thresholding.quantiles import (
     ClientBenignCalibrationScores,
     local_quantile,
+    require_eligible_cohort,
 )
 
 
@@ -30,7 +31,7 @@ class LocalThresholdResult:
         validate_local_quantiles(
             self.local_quantiles,
             self.coordinate,
-            label="local quantiles",
+            method=FederatedThresholdMethod.LOCAL_THRESHOLD,
         )
         validate_assignments(
             self.assignments,
@@ -49,11 +50,7 @@ def construct_local_threshold(
             "local threshold construction requires the LOCAL_THRESHOLD protocol",
             subject=protocol.method,
         )
-    if not eligible:
-        raise ScientificContractError(
-            "local threshold construction requires at least one eligible client",
-            subject=ContractSubject.THRESHOLD,
-        )
+    require_eligible_cohort(eligible, "local threshold construction")
     local_quantiles = tuple(local_quantile(client_scores, protocol.quantile) for client_scores in eligible)
     assignments = tuple(ThresholdAssignment(item.client, item.value) for item in local_quantiles)
     return LocalThresholdResult(

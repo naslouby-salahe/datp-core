@@ -10,7 +10,6 @@ from datp_core.domain.enums import (
     FederatedThresholdMethod,
 )
 from datp_core.domain.errors import ScientificContractError, require_contract
-from datp_core.domain.values.base import floats_exactly_equal
 from datp_core.domain.values.paths import FamilyIdentity
 from datp_core.domain.values.ratios import Quantile, ThresholdValue
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
@@ -21,11 +20,12 @@ from datp_core.thresholding.assignments import (
     mean_local_threshold,
     require_unique_clients,
     validate_assignments,
+    validate_group_membership,
 )
 from datp_core.thresholding.quantiles import (
     ClientBenignCalibrationScores,
     local_quantile,
-    unweighted_mean,
+    require_eligible_cohort,
 )
 
 
@@ -51,24 +51,26 @@ class FamilyMembership:
             "an unavailable family must carry no members and no threshold",
             ContractSubject.THRESHOLD,
         )
-        require_unique_clients(self.members, "family members")
-        quantile_clients = tuple(item.client for item in self.contributing_local_quantiles)
-        require_unique_clients(quantile_clients, "contributing local quantiles")
-        if self.members or quantile_clients:
+        if not self.members:
             require_contract(
-                frozenset(quantile_clients) == frozenset(self.members),
-                "contributing local quantile clients must exactly match declared family members",
+                not self.contributing_local_quantiles,
+                "an empty family membership cannot carry contributing local quantiles",
                 ContractSubject.CLIENT_IDENTITY,
             )
-        if available and self.family_threshold is not None:
-            require_contract(
-                floats_exactly_equal(
-                    self.family_threshold.value,
-                    mean_local_threshold(self.contributing_local_quantiles).value,
-                ),
-                "family_threshold must equal the unweighted mean of contributing local quantiles",
-                ContractSubject.THRESHOLD,
+            return
+        if self.family_threshold is None:
+            raise ScientificContractError(
+                "non-empty family membership requires a constructed threshold",
+                subject=ContractSubject.THRESHOLD,
             )
+        validate_group_membership(
+            self.members,
+            self.contributing_local_quantiles,
+            self.family_threshold,
+            members_label="family members",
+            match_message=("contributing local quantile clients must exactly match declared family members"),
+            threshold_message=("family_threshold must equal the unweighted mean of contributing local quantiles"),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,11 +123,7 @@ def construct_family_threshold(
             "family threshold construction requires a non-empty family taxonomy",
             subject=ContractSubject.THRESHOLD,
         )
-    if not eligible:
-        raise ScientificContractError(
-            "family threshold construction requires at least one eligible client",
-            subject=ContractSubject.THRESHOLD,
-        )
+    require_eligible_cohort(eligible, "family threshold construction")
     eligible_clients = tuple(item.client for item in eligible)
     require_unique_clients(
         eligible_clients,
@@ -187,7 +185,7 @@ def _build_family_membership(
             (),
         )
     local_quantiles = tuple(local_quantile(_eligible_scores(eligible, client), quantile) for client in eligible_members)
-    family_threshold = ThresholdValue(unweighted_mean(tuple(item.value.value for item in local_quantiles)))
+    family_threshold = mean_local_threshold(local_quantiles)
     return (
         FamilyMembership(
             family_id=family_id,
