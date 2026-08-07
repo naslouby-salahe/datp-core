@@ -1,7 +1,6 @@
-import pytest
-
 from datp_core.datasets.ciciot2023.reader import CICIoT2023Reader
 from datp_core.datasets.ciciot2023.schema import (
+    CICIOT2023_MODEL_INPUT_ELIGIBLE_COLUMN,
     CICIOT2023_RAW_COLUMNS,
     CICIoT2023EligibilityReason,
 )
@@ -23,11 +22,11 @@ def test_reader_reports_unrecognized_label_and_rate_anomaly(tmp_path) -> None:
         encoding="utf-8",
     )
     reader = CICIoT2023Reader()
-    summary = reader.validation_summary(reader.read(path))
+    frame = reader.read(path)
+    summary = reader.audit_summary(frame)
 
-    assert tuple(item.value for item in summary) == (1, 1, 1, 0)
-    with pytest.raises(ValueError, match="unrecognized"):
-        reader.validate_labels(reader.read(path))
+    expected = (summary.total_rows, summary.missing_or_unrecognized_labels, summary.infinite_rates, summary.empty_rates)
+    assert tuple(item.value for item in expected) == (1, 1, 1, 0)
 
 
 def test_model_input_eligibility_excludes_only_declared_anomalies(tmp_path) -> None:
@@ -45,10 +44,19 @@ def test_model_input_eligibility_excludes_only_declared_anomalies(tmp_path) -> N
     frame = reader.read(path)
     audited = reader.model_input_eligibility_audit(frame).collect()
 
-    assert tuple(item.value for item in reader.model_input_eligibility_summary(frame)) == (3, 1, 1, 1)
+    summary = reader.audit_summary(frame)
+    expected = (
+        summary.total_rows,
+        summary.missing_or_unrecognized_labels,
+        summary.nonfinite_feature_rows,
+        summary.eligible_rows,
+    )
+    assert tuple(item.value for item in expected) == (3, 1, 1, 1)
+
     assert audited[CICIoT2023EligibilityReason.NONFINITE_FEATURE].to_list() == [False, True, False]
     assert audited[CICIoT2023EligibilityReason.MISSING_OR_UNRECOGNIZED_LABEL].to_list() == [False, False, True]
-    eligible = reader.eligible_model_input(reader.model_input_eligibility_audit(frame)).collect()
+
+    eligible = audited.filter(audited[CICIOT2023_MODEL_INPUT_ELIGIBLE_COLUMN])
     assert eligible.height == 1
     assert eligible[CICIoT2023EligibilityReason.NONFINITE_FEATURE].to_list() == [False]
     assert eligible[CICIoT2023EligibilityReason.MISSING_OR_UNRECOGNIZED_LABEL].to_list() == [False]

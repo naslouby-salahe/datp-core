@@ -13,7 +13,6 @@ from .schema import (
     CICIOT2023_LABELS,
     CICIOT2023_MODEL_INPUT_ELIGIBILITY_POLICY,
     CICIOT2023_MODEL_INPUT_ELIGIBLE_COLUMN,
-    CICIOT2023_MODEL_INPUT_EVIDENCE_COLUMNS,
     CICIOT2023_RAW_COLUMNS,
     CICIOT2023_SCHEMA,
     CanonicalProvenanceColumn,
@@ -103,21 +102,6 @@ class CICIoT2023Reader:
             empty_rates=RowCount(int(summary.item(0, CICIoT2023AuditField.EMPTY_RATES))),
         )
 
-    def validation_summary(self, frame: pl.LazyFrame) -> tuple[RowCount, RowCount, RowCount, RowCount]:
-        summary = self.audit_summary(frame)
-        return (
-            summary.total_rows,
-            summary.missing_or_unrecognized_labels,
-            summary.infinite_rates,
-            summary.empty_rates,
-        )
-
-    def validate_labels(self, frame: pl.LazyFrame) -> RowCount:
-        total_rows, invalid, _, _ = self.validation_summary(frame)
-        if invalid.value > 0:
-            raise ValueError("CICIoT2023 contains empty or unrecognized labels")
-        return total_rows
-
     @staticmethod
     def model_input_eligibility_audit(frame: pl.LazyFrame) -> pl.LazyFrame:
         missing_label = CICIoT2023Reader._missing_or_unrecognized_label_expression()
@@ -135,20 +119,6 @@ class CICIoT2023Reader:
             ).alias(CICIOT2023_MODEL_INPUT_ELIGIBLE_COLUMN),
         )
 
-    def eligible_model_input(self, frame: pl.LazyFrame) -> pl.LazyFrame:
-        available_columns = tuple(frame.collect_schema().names())
-        if not all(column in available_columns for column in CICIOT2023_MODEL_INPUT_EVIDENCE_COLUMNS):
-            raise ValueError("CICIoT2023 model input requires persisted eligibility evidence")
-        return frame.filter(pl.col(CICIOT2023_MODEL_INPUT_ELIGIBLE_COLUMN))
-
-    def model_input_eligibility_summary(self, frame: pl.LazyFrame) -> tuple[RowCount, RowCount, RowCount, RowCount]:
-        summary = self.audit_summary(frame)
-        return (
-            summary.total_rows,
-            summary.missing_or_unrecognized_labels,
-            summary.nonfinite_feature_rows,
-            summary.eligible_rows,
-        )
 
     @staticmethod
     def _missing_or_unrecognized_label_expression() -> pl.Expr:

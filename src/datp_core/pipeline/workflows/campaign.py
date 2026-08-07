@@ -19,7 +19,6 @@ from datp_core.anchor.gate import load_anchor_gate_decision
 from datp_core.anchor.models import AnchorGateStatus
 from datp_core.datasets.paths import canonical_root_under
 from datp_core.domain.enums import (
-    DatasetId,
     EvidenceRole,
     ExperimentId,
     ExperimentReadiness,
@@ -67,6 +66,15 @@ class RegisteredWorkflow:
 
     experiment_id: ExperimentId
     anchor_gated: bool
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class WorkflowHandlers:
+    """Typed bundle of per-experiment handler functions."""
+
+    dispatch: Callable[[tuple[Seed, ...], Path, bool], DispatchOutcome]
+    report: Callable[[ExperimentId, bool], tuple[tuple[Path, ...], str]]
+    analysis_marker: Callable[[ExperimentId], bool]
 
 
 _REGISTERED_WORKFLOWS: tuple[RegisteredWorkflow, ...] = (
@@ -422,18 +430,6 @@ def _temporal_method_outcomes(results: tuple[TemporalSeedResult, ...]) -> tuple[
     )
 
 
-_EXPERIMENT_DISPATCH_HANDLERS: dict[ExperimentId, Callable[[tuple[Seed, ...], Path, bool], DispatchOutcome]] = {
-    ExperimentId.SHARED_VS_LOCAL_CONFIRMATION: _dispatch_confirmatory,
-    ExperimentId.FAMILY_AND_GROUPED_GRANULARITY: _dispatch_family_grouped_granularity,
-    ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION: _dispatch_edge_benign_equity_validation,
-    ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY: _dispatch_ciciot_file_client_boundary,
-    ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST: _dispatch_fedprox_absorption_stress_test,
-    ExperimentId.DITTO_ABSORPTION_STRESS_TEST: _dispatch_ditto_absorption_stress_test,
-    ExperimentId.EDGE_ONE_SHOT_RECALIBRATION: _dispatch_edge_one_shot_recalibration,
-}
-_require_dispatch_covers_registry(_EXPERIMENT_DISPATCH_HANDLERS, name="experiment execution")
-
-
 def _dispatch_experiment(
     experiment_id: ExperimentId,
     *,
@@ -505,6 +501,29 @@ def _publish_smoke_summary(results: tuple[ExperimentRunResult, ...]) -> None:
     (SMOKE_SUMMARY_DIRECTORY / "COMPLETE").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+CENTRALIZED_REFERENCE_COMPLETION_MARKER = OUTPUTS_ROOT / "centralized_reference" / "COMPLETE"
+
+
+def _run_centralized_reference(*, overwrite: bool = False) -> None:
+    from datp_core.pipeline.workflows.centralized import (
+        centralized_reference_directory,
+        run_centralized_reference_seed,
+    )
+
+    if CENTRALIZED_REFERENCE_COMPLETION_MARKER.is_file() and not overwrite:
+        return
+    for seed in CONFIRMATORY_SEED_COHORT.values:
+        directory = centralized_reference_directory(seed)
+        if overwrite and directory.exists():
+            rmtree(directory)
+        run_centralized_reference_seed(seed)
+    CENTRALIZED_REFERENCE_COMPLETION_MARKER.parent.mkdir(parents=True, exist_ok=True)
+    CENTRALIZED_REFERENCE_COMPLETION_MARKER.write_text(
+        "\n".join(str(seed.value) for seed in CONFIRMATORY_SEED_COHORT.values) + "\n",
+        encoding="utf-8",
+    )
+
+
 def run_campaign(*, overwrite: bool = False) -> CampaignRunResult:
     from datp_core.pipeline.workflows import preprocess_datasets, validate_programme
 
@@ -512,6 +531,7 @@ def run_campaign(*, overwrite: bool = False) -> CampaignRunResult:
     preprocess_datasets(overwrite=False)
     reproduce_anchor(overwrite=overwrite)
     verify_anchor_programme()
+    _run_centralized_reference(overwrite=overwrite)
     results: list[ExperimentRunResult] = []
     for experiment_id in _CAMPAIGN_ORDER:
         results.append(run_experiment(experiment_id, overwrite=overwrite, smoke=False))
@@ -529,6 +549,7 @@ def run_campaign(*, overwrite: bool = False) -> CampaignRunResult:
 
 
 def reproduce_anchor(*, overwrite: bool = False, smoke: bool = False) -> AnchorCommandResult:
+    from datp_core.domain.enums import DatasetId
     from datp_core.pipeline.workflows import preprocess_datasets, require_experiment_declaration
     from datp_core.pipeline.workflows.anchor import (
         VerifyAnchorStageRequest,
@@ -541,6 +562,7 @@ def reproduce_anchor(*, overwrite: bool = False, smoke: bool = False) -> AnchorC
     )
     from datp_core.pipeline.workflows.execution import execute_declared_experiment_seed
 
+    preprocess_datasets(DatasetId.NBAIOT, overwrite=False)
     output_root = SMOKE_OUTPUT_ROOT if smoke else OUTPUTS_ROOT
     diagnostics = default_anchor_diagnostics_directory(output_root)
     package_directory = independent_package_directory(output_root)
@@ -548,7 +570,6 @@ def reproduce_anchor(*, overwrite: bool = False, smoke: bool = False) -> AnchorC
         if diagnostics.exists():
             rmtree(diagnostics)
         clear_independent_package(package_directory)
-    preprocess_datasets(DatasetId.NBAIOT, overwrite=False)
     seed_cohort = (
         SeedCohort(values=(HISTORICAL_ANCHOR_SEED_COHORT.values[0],)) if smoke else HISTORICAL_ANCHOR_SEED_COHORT
     )
@@ -759,18 +780,6 @@ def _report_edge_one_shot_recalibration(experiment_id: ExperimentId, overwrite: 
     analyses = analyze_temporal_campaign(campaign, output_root=OUTPUTS_ROOT)
     paths = tuple(analysis.output_directory for analysis in analyses)
     return paths, f"temporal_methods={len(paths)}"
-
-
-_EXPERIMENT_REPORT_HANDLERS: dict[ExperimentId, Callable[[ExperimentId, bool], tuple[tuple[Path, ...], str]]] = {
-    ExperimentId.SHARED_VS_LOCAL_CONFIRMATION: _report_confirmatory_family,
-    ExperimentId.FAMILY_AND_GROUPED_GRANULARITY: _report_confirmatory_family,
-    ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION: _report_edge_benign_equity_validation,
-    ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY: _report_ciciot_file_client_boundary,
-    ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST: _report_fedprox_absorption_stress_test,
-    ExperimentId.DITTO_ABSORPTION_STRESS_TEST: _report_ditto_absorption_stress_test,
-    ExperimentId.EDGE_ONE_SHOT_RECALIBRATION: _report_edge_one_shot_recalibration,
-}
-_require_dispatch_covers_registry(_EXPERIMENT_REPORT_HANDLERS, name="experiment report")
 
 
 def _generate_experiment_report(experiment_id: ExperimentId, *, overwrite: bool) -> ReportResult:
@@ -1012,17 +1021,54 @@ def _temporal_analysis_marker_present(experiment_id: ExperimentId) -> bool:
     )
 
 
-_ANALYSIS_MARKER_CHECKS: dict[ExperimentId, Callable[[ExperimentId], bool]] = {
-    ExperimentId.SHARED_VS_LOCAL_CONFIRMATION: _confirmatory_analysis_marker_present,
-    ExperimentId.FAMILY_AND_GROUPED_GRANULARITY: _confirmatory_analysis_marker_present,
-    ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION: _external_analysis_marker_present,
-    ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY: _external_analysis_marker_present,
-    ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST: _fedprox_analysis_marker_present,
-    ExperimentId.DITTO_ABSORPTION_STRESS_TEST: _ditto_analysis_marker_present,
-    ExperimentId.EDGE_ONE_SHOT_RECALIBRATION: _temporal_analysis_marker_present,
+_WORKFLOW_HANDLERS: dict[ExperimentId, WorkflowHandlers] = {
+    ExperimentId.SHARED_VS_LOCAL_CONFIRMATION: WorkflowHandlers(
+        dispatch=_dispatch_confirmatory,
+        report=_report_confirmatory_family,
+        analysis_marker=_confirmatory_analysis_marker_present,
+    ),
+    ExperimentId.FAMILY_AND_GROUPED_GRANULARITY: WorkflowHandlers(
+        dispatch=_dispatch_family_grouped_granularity,
+        report=_report_confirmatory_family,
+        analysis_marker=_confirmatory_analysis_marker_present,
+    ),
+    ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION: WorkflowHandlers(
+        dispatch=_dispatch_edge_benign_equity_validation,
+        report=_report_edge_benign_equity_validation,
+        analysis_marker=_external_analysis_marker_present,
+    ),
+    ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY: WorkflowHandlers(
+        dispatch=_dispatch_ciciot_file_client_boundary,
+        report=_report_ciciot_file_client_boundary,
+        analysis_marker=_external_analysis_marker_present,
+    ),
+    ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST: WorkflowHandlers(
+        dispatch=_dispatch_fedprox_absorption_stress_test,
+        report=_report_fedprox_absorption_stress_test,
+        analysis_marker=_fedprox_analysis_marker_present,
+    ),
+    ExperimentId.DITTO_ABSORPTION_STRESS_TEST: WorkflowHandlers(
+        dispatch=_dispatch_ditto_absorption_stress_test,
+        report=_report_ditto_absorption_stress_test,
+        analysis_marker=_ditto_analysis_marker_present,
+    ),
+    ExperimentId.EDGE_ONE_SHOT_RECALIBRATION: WorkflowHandlers(
+        dispatch=_dispatch_edge_one_shot_recalibration,
+        report=_report_edge_one_shot_recalibration,
+        analysis_marker=_temporal_analysis_marker_present,
+    ),
 }
-if frozenset(_ANALYSIS_MARKER_CHECKS) != REGISTERED_WORKFLOW_EXPERIMENTS:
-    raise ScientificContractError("analysis marker checks must be declared exactly for registered workflow experiments")
+_require_dispatch_covers_registry(_WORKFLOW_HANDLERS, name="workflow handlers")
+
+_EXPERIMENT_DISPATCH_HANDLERS: dict[ExperimentId, Callable[[tuple[Seed, ...], Path, bool], DispatchOutcome]] = {
+    experiment_id: handlers.dispatch for experiment_id, handlers in _WORKFLOW_HANDLERS.items()
+}
+_EXPERIMENT_REPORT_HANDLERS: dict[ExperimentId, Callable[[ExperimentId, bool], tuple[tuple[Path, ...], str]]] = {
+    experiment_id: handlers.report for experiment_id, handlers in _WORKFLOW_HANDLERS.items()
+}
+_ANALYSIS_MARKER_CHECKS: dict[ExperimentId, Callable[[ExperimentId], bool]] = {
+    experiment_id: handlers.analysis_marker for experiment_id, handlers in _WORKFLOW_HANDLERS.items()
+}
 
 
 def _analysis_marker_present(experiment_id: ExperimentId) -> bool:

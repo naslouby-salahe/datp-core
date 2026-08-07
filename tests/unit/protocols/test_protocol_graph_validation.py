@@ -9,6 +9,7 @@ from datp_core.domain.enums import (
     FederatedThresholdMethod,
     MetricId,
     PopulationId,
+    PreprocessingProtocolId,
     TrainingModelId,
 )
 from datp_core.domain.errors import ProtocolValidationError, UnresolvedScientificValueError
@@ -50,6 +51,7 @@ def test_graph_rejects_attack_metric_without_attack_assignment() -> None:
         role=EvidenceRole.EXTERNAL_VALIDATION,
         population=PopulationId.EDGE_SENSOR_GROUPS,
         training_model=TrainingModelId.FEDAVG_AUTOENCODER,
+        preprocessing_protocol=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
         federated_thresholds=(FederatedThresholdMethod.SHARED_THRESHOLD,),
         metrics=(MetricId.TRUE_POSITIVE_RATE,),
         readiness=ExperimentReadiness.DECLARED,
@@ -65,6 +67,7 @@ def test_graph_rejects_alert_burden_without_evidence_outside_suppressed_operatio
         role=EvidenceRole.EXTERNAL_VALIDATION,
         population=PopulationId.EDGE_SENSOR_GROUPS,
         training_model=TrainingModelId.FEDAVG_AUTOENCODER,
+        preprocessing_protocol=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
         federated_thresholds=(FederatedThresholdMethod.SHARED_THRESHOLD,),
         metrics=(MetricId.ALERTS_PER_DAY,),
         readiness=ExperimentReadiness.DECLARED,
@@ -80,6 +83,7 @@ def test_graph_rejects_temporal_experiment_without_verified_chronology() -> None
         role=EvidenceRole.TEMPORAL_BOUNDARY,
         population=PopulationId.EDGE_SENSOR_GROUPS,
         training_model=TrainingModelId.FEDAVG_AUTOENCODER,
+        preprocessing_protocol=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
         federated_thresholds=(FederatedThresholdMethod.SHARED_THRESHOLD,),
         metrics=(MetricId.FALSE_POSITIVE_RATE,),
         readiness=ExperimentReadiness.DECLARED,
@@ -95,6 +99,7 @@ def test_graph_rejects_premature_executable_readiness() -> None:
         role=EvidenceRole.CONFIRMATORY,
         population=PopulationId.NBAIOT_NATURAL_DEVICES,
         training_model=TrainingModelId.FEDAVG_AUTOENCODER,
+        preprocessing_protocol=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
         federated_thresholds=(
             FederatedThresholdMethod.SHARED_THRESHOLD,
             FederatedThresholdMethod.LOCAL_THRESHOLD,

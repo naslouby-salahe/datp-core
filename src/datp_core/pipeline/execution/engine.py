@@ -452,8 +452,6 @@ class PipelineStageRunner:
             if result.status.gate_status is AnchorGateStatus.BLOCKED and complete_cohort
             else StageOutcome.COMPLETED
         )
-        if result.status.gate_status is AnchorGateStatus.BLOCKED and not complete_cohort:
-            outcome = StageOutcome.COMPLETED
         return StageExecution(
             stage=stage,
             outcome=outcome,

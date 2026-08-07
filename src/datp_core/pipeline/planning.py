@@ -21,7 +21,6 @@ from datp_core.domain.values.checksums import Checksum, checksum_text
 from datp_core.domain.values.counts import Seed
 from datp_core.domain.values.ratios import DirichletConcentration, ModelCoefficientValue, Quantile
 from datp_core.pipeline.coordinates import ExperimentCoordinate
-from datp_core.preprocessing.models import SCIENTIFIC_FEDERATED_PREPROCESSING_METHOD
 from datp_core.protocols.calibration import QUANTILE_GRID
 from datp_core.protocols.experiments import EXECUTION_IDENTITY_DECLARATIONS, EXPERIMENTS, ExperimentDeclaration
 from datp_core.protocols.populations import DIRICHLET_CONCENTRATIONS, split_protocol_for_population
@@ -184,7 +183,7 @@ def _planned_entry(
             training_model=declaration.training_model,
             training_seed=cell.seed,
             split_protocol=_coordinate_split_protocol(declaration.population, cell.temporal_state),
-            preprocessing_protocol=SCIENTIFIC_FEDERATED_PREPROCESSING_METHOD.identity,
+            preprocessing_protocol=declaration.preprocessing_protocol,
             model_coefficient=cell.model_coefficient,
             threshold_method=cell.threshold_method,
             metric=cell.metric,
