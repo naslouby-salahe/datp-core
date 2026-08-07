@@ -858,9 +858,7 @@ def _paired_values_table(document: AnalysisDocument) -> PublicationTable:
     interval_available = document.interval.availability is AvailabilityStatus.AVAILABLE
     decision_blocked = document.decision.decision is ScientificDecision.BLOCKED
     availability = (
-        AvailabilityStatus.AVAILABLE
-        if interval_available and not decision_blocked
-        else AvailabilityStatus.UNAVAILABLE
+        AvailabilityStatus.AVAILABLE if interval_available and not decision_blocked else AvailabilityStatus.UNAVAILABLE
     )
     point = document.interval.point_estimate
     rendered_value = f"{point.value:.6g}" if point is not None and availability is AvailabilityStatus.AVAILABLE else ""

@@ -58,9 +58,7 @@ def test_capture_timestamp_helper_requires_column_for_temporal_protocol() -> Non
 
 def test_capture_timestamp_helper_is_none_for_non_temporal_protocol() -> None:
     membership = _temporal_membership()
-    assert (
-        _capture_timestamp_column_for_split(SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS, membership) is None
-    )
+    assert _capture_timestamp_column_for_split(SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS, membership) is None
 
 
 def test_published_temporal_resolution_enables_chronological_split() -> None:
