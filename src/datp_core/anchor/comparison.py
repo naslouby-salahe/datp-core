@@ -1,7 +1,3 @@
-"""Full-precision anchor comparison logic over typed reference and observation records."""
-
-from dataclasses import dataclass
-
 from datp_core.anchor.models import (
     AbsoluteToleranceRule,
     AnchorComparisonDecision,
@@ -20,20 +16,14 @@ from datp_core.domain.values.base import floats_absolutely_close, floats_exactly
 from datp_core.domain.values.ratios import MetricDelta
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
 class _NumericDelta:
-    expected: float
-    observed: float
+    __slots__ = ("expected", "observed", "signed", "relative")
 
-    @property
-    def signed(self) -> float:
-        return self.observed - self.expected
-
-    @property
-    def relative(self) -> float | None:
-        if is_numeric_zero(self.expected):
-            return None
-        return self.signed / abs(self.expected)
+    def __init__(self, expected: float, observed: float):
+        self.expected = expected
+        self.observed = observed
+        self.signed = observed - expected
+        self.relative = None if is_numeric_zero(expected) else (self.signed / abs(expected))
 
 
 def compare_anchor_metric(
@@ -52,7 +42,8 @@ def compare_anchor_metric(
         )
 
     coordinate_failure = _coordinate_mismatch_reason(reference, observation)
-    delta = _NumericDelta(expected=reference.value.value, observed=observation.value.value)
+    delta = _NumericDelta(reference.value.value, observation.value.value)
+    
     if coordinate_failure is not None:
         return _build(
             reference,
@@ -111,8 +102,6 @@ def _compare_with_rule(
             return _interval_result(reference, observation, rule, delta)
         case ExactCountRule():
             return _count_result(reference, observation, rule, delta)
-        case _:
-            raise ValueError(f"unsupported tolerance rule strategy {rule.strategy}")
 
 
 def _equality_result(
@@ -132,7 +121,7 @@ def _relative_result(
     rule: RelativeToleranceRule,
     delta: _NumericDelta,
 ) -> AnchorMetricComparison:
-    if is_numeric_zero(delta.expected):
+    if delta.relative is None:
         return _build(
             reference,
             observation,
@@ -141,7 +130,7 @@ def _relative_result(
             reason=AnchorDiscrepancyReason.RELATIVE_COMPARISON_UNDEFINED_FOR_ZERO_REFERENCE,
             signed=delta.signed,
         )
-    if delta.relative is not None and abs(delta.relative) <= rule.relative_tolerance.value:
+    if abs(delta.relative) <= rule.relative_tolerance.value:
         return _pass(reference, observation, rule, delta)
     return _fail(reference, observation, rule, delta, AnchorDiscrepancyReason.RELATIVE_TOLERANCE_EXCEEDED)
 
@@ -162,12 +151,13 @@ def _interval_result(
             signed=delta.signed,
             relative=delta.relative,
         )
+    
     left = reference.interval
     right = observation.interval
     lower_bound = max(left.lower.value, right.lower.value)
     upper_bound = min(left.upper.value, right.upper.value)
-    overlaps = lower_bound < upper_bound or floats_exactly_equal(lower_bound, upper_bound)
-    if overlaps:
+    
+    if lower_bound <= upper_bound or floats_exactly_equal(lower_bound, upper_bound):
         return _pass(reference, observation, rule, delta)
     return _fail(reference, observation, rule, delta, AnchorDiscrepancyReason.INTERVAL_NO_OVERLAP)
 
