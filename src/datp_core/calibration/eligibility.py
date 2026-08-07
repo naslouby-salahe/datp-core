@@ -9,7 +9,7 @@ from datp_core.calibration.models import (
     EligibilityDecision,
     EligibilityStatus,
 )
-from datp_core.datasets.partitioning.contracts import ClientIdentity, PopulationOutcomeLabel
+from datp_core.datasets.partitioning.contracts import EligibleCohort, PopulationOutcomeLabel
 from datp_core.datasets.partitioning.integrity import reject_non_benign_labels
 from datp_core.domain.enums import ContractSubject, PartitionRole, ScoreFrameColumn
 from datp_core.domain.errors import LeakageError, ScientificContractError
@@ -33,7 +33,7 @@ def reject_calibration_evaluation_overlap(
     calibration_stable_row_ids: frozenset[StableRowId],
     evaluation_stable_row_ids: frozenset[StableRowId],
 ) -> None:
-    if calibration_stable_row_ids & evaluation_stable_row_ids:
+    if not calibration_stable_row_ids.isdisjoint(evaluation_stable_row_ids):
         raise LeakageError(
             "calibration and evaluation partitions must not share source rows",
             subject=ContractSubject.CALIBRATION,
@@ -41,7 +41,13 @@ def reject_calibration_evaluation_overlap(
 
 
 def reject_score_coordinate_mismatch(records: tuple[ScoreRecord, ...]) -> None:
-    if len(frozenset(record.coordinate for record in records)) > 1:
+    if not records:
+        return
+
+    iterator = iter(records)
+    first_coord = next(iterator).coordinate
+
+    if any(record.coordinate != first_coord for record in iterator):
         raise ScientificContractError(
             "calibration eligibility requires every score record to share one coordinate",
             subject=ContractSubject.COORDINATE,
@@ -54,28 +60,44 @@ def load_benign_calibration_references(
     benign_label: PopulationOutcomeLabel = PopulationOutcomeLabel.BENIGN,
 ) -> tuple[CalibrationSampleReference, ...]:
     reject_evaluation_partition_in_eligibility(record.partition_role)
-    frame = pl.read_parquet(record.path)
-    labels = tuple(str(value) for value in frame.get_column(ScoreFrameColumn.OUTCOME_LABEL.value).to_list())
-    reject_non_benign_labels(
-        labels,
-        message="attack-labelled rows cannot enter benign calibration construction",
-        subject=ContractSubject.CALIBRATION,
-        benign_label=benign_label.value,
+
+    frame = pl.read_parquet(
+        record.path,
+        columns=[
+            ScoreFrameColumn.OUTCOME_LABEL.value,
+            ScoreFrameColumn.STABLE_ROW_ID.value,
+            ScoreFrameColumn.RECONSTRUCTION_ERROR.value,
+        ],
     )
-    stable_row_ids = tuple(str(value) for value in frame.get_column(ScoreFrameColumn.STABLE_ROW_ID.value).to_list())
-    if len(set(stable_row_ids)) != len(stable_row_ids):
+
+    id_col = frame.get_column(ScoreFrameColumn.STABLE_ROW_ID.value)
+
+    if id_col.n_unique() != len(id_col):
         raise ScientificContractError(
             "calibration score rows must have unique stable source-row identities",
             subject=ContractSubject.CALIBRATION,
         )
-    scores = tuple(float(value) for value in frame.get_column(ScoreFrameColumn.RECONSTRUCTION_ERROR.value).to_list())
+
+    label_col = frame.get_column(ScoreFrameColumn.OUTCOME_LABEL.value)
+    score_col = frame.get_column(ScoreFrameColumn.RECONSTRUCTION_ERROR.value)
+
+    reject_non_benign_labels(
+        tuple(label_col.cast(pl.String).to_list()),
+        message="attack-labelled rows cannot enter benign calibration construction",
+        subject=ContractSubject.CALIBRATION,
+        benign_label=benign_label.value,
+    )
+
+    row_ids = id_col.cast(pl.String).to_list()
+    scores = score_col.cast(pl.Float64).to_list()
+
     return tuple(
         CalibrationSampleReference(
             client=record.scored_client,
             stable_row_id=StableRowId(row_id),
             score=ScoreValue(score),
         )
-        for row_id, score in zip(stable_row_ids, scores, strict=True)
+        for row_id, score in zip(row_ids, scores, strict=True)
     )
 
 
@@ -105,22 +127,26 @@ def decide_eligibility(
     )
 
 
-def eligible_clients(decisions: tuple[EligibilityDecision, ...]) -> tuple[ClientIdentity, ...]:
-    return tuple(sorted(decision.support.client for decision in decisions if decision.is_eligible))
+def eligible_clients(decisions: tuple[EligibilityDecision, ...]) -> EligibleCohort:
+    return EligibleCohort(
+        clients=tuple(sorted(decision.support.client for decision in decisions if decision.is_eligible))
+    )
 
 
 def require_common_eligible_cohort(
-    cohorts: tuple[tuple[ClientIdentity, ...], ...],
-) -> tuple[ClientIdentity, ...]:
+    cohorts: tuple[EligibleCohort, ...],
+) -> EligibleCohort:
     if not cohorts:
         raise ScientificContractError(
             "at least one eligible cohort is required for comparison",
             subject=ContractSubject.CALIBRATION,
         )
+
     reference = frozenset(cohorts[0])
     if any(frozenset(cohort) != reference for cohort in cohorts[1:]):
         raise ScientificContractError(
             "threshold methods compared within one score coordinate must share the same eligible cohort",
             subject=ContractSubject.CALIBRATION,
         )
+
     return cohorts[0]

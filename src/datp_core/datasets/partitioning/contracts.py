@@ -12,6 +12,7 @@ from datp_core.datasets.capabilities import CapabilityStatus, DatasetCapabilitie
 from datp_core.datasets.contracts import CanonicalProvenanceColumn
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
+    ContractSubject,
     DatasetId,
     EvidenceRole,
     FederatedThresholdMethod,
@@ -20,7 +21,7 @@ from datp_core.domain.enums import (
     PopulationIdentityKind,
     SplitProtocolId,
 )
-from datp_core.domain.errors import CapabilityError
+from datp_core.domain.errors import CapabilityError, ScientificContractError
 from datp_core.domain.values.base import NonNegativeIntegerValue
 from datp_core.domain.values.checksums import Checksum, checksum_text
 from datp_core.domain.values.counts import ClientCount, RowCount, Seed
@@ -283,6 +284,29 @@ class ClientIdentity:
             other.identity_kind.value,
             other.client_id,
         )
+
+
+@dataclass(frozen=True, slots=True)
+class EligibleCohort:
+    """Sorted, immutable cohort of clients eligible for calibration-threshold comparison."""
+
+    clients: tuple[ClientIdentity, ...]
+
+    def __post_init__(self) -> None:
+        if not self.clients:
+            raise ScientificContractError(
+                "eligible cohort must contain at least one client",
+                subject=ContractSubject.CALIBRATION,
+            )
+
+    def __len__(self) -> int:
+        return len(self.clients)
+
+    def __iter__(self):
+        return iter(self.clients)
+
+    def __contains__(self, client: ClientIdentity) -> bool:
+        return client in frozenset(self.clients)
 
 
 @dataclass(frozen=True, slots=True)

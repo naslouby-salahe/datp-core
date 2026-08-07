@@ -49,34 +49,42 @@ def build_calibration_replicate(
             "calibration references must belong to the replicate's client",
             subject=ContractSubject.CALIBRATION,
         )
-    ordered = tuple(sorted(references, key=lambda reference: reference.stable_row_id))
-    generator = default_rng(replicate_seed(training_seed, client, replicate_index).value)
-    permutation = generator.permutation(len(ordered))
-    permuted = tuple(ordered[index] for index in permutation)
 
-    full_calibration_count = RowCount(len(permuted))
-    subsamples: list[CalibrationSubsample] = []
-    unavailable_sizes: list[CalibrationSize] = []
-    for size in sorted(sizes, key=lambda item: item.value):
-        if size.value > full_calibration_count.value:
-            unavailable_sizes.append(size)
-            continue
-        subsamples.append(
-            CalibrationSubsample(
-                size=size,
-                replicate_index=replicate_index,
-                references=permuted[: size.value],
-            )
+    ordered_list = sorted(references, key=lambda reference: reference.stable_row_id)
+    generator = default_rng(replicate_seed(training_seed, client, replicate_index).value)
+
+    # We maintain the exact sequence of `permutation(int)` rather than in-place `shuffle(list)`
+    # to guarantee exact cryptographic/scientific parity with historical artifacts.
+    permutation = generator.permutation(len(ordered_list))
+    permuted = tuple(ordered_list[index] for index in permutation)
+
+    full_count = len(permuted)
+    sorted_sizes = sorted(sizes, key=lambda item: item.value)
+
+    split_index = len(sorted_sizes)
+    for i, size in enumerate(sorted_sizes):
+        if size.value > full_count:
+            split_index = i
+            break
+
+    subsamples = tuple(
+        CalibrationSubsample(
+            size=size,
+            replicate_index=replicate_index,
+            references=permuted[: size.value],
         )
+        for size in sorted_sizes[:split_index]
+    )
+
     return CalibrationReplicateManifest(
         client=client,
         coordinate=coordinate,
         training_seed=training_seed,
         replicate_index=replicate_index,
-        full_calibration_count=full_calibration_count,
-        subsamples=tuple(subsamples),
-        unavailable_sizes=tuple(unavailable_sizes),
+        full_calibration_count=RowCount(full_count),
+        subsamples=subsamples,
+        unavailable_sizes=tuple(sorted_sizes[split_index:]),
         unavailable_reason=(
-            CalibrationUnavailableReason.CALIBRATION_SIZE_EXCEEDS_SOURCE if unavailable_sizes else None
+            CalibrationUnavailableReason.CALIBRATION_SIZE_EXCEEDS_SOURCE if split_index < len(sorted_sizes) else None
         ),
     )

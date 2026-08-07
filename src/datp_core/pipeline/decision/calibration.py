@@ -8,7 +8,7 @@ from datp_core.calibration.models import (
     EligibilityDecision,
 )
 from datp_core.calibration.service import CalibrationRequest, calibrate
-from datp_core.datasets.partitioning.contracts import ClientIdentity
+from datp_core.datasets.partitioning.contracts import ClientIdentity, EligibleCohort
 from datp_core.datasets.registry import population_capabilities
 from datp_core.domain.enums import EvidenceRole, FederatedThresholdMethod
 from datp_core.domain.errors import ScientificContractError
@@ -49,7 +49,7 @@ class BuildCalibrationRequest:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class BuildCalibrationResult:
     eligibility: tuple[EligibilityDecision, ...]
-    eligible_clients: tuple[ClientIdentity, ...]
+    eligible_clients: EligibleCohort
     replicate_manifests: tuple[CalibrationReplicateManifest, ...]
 
 
@@ -164,7 +164,7 @@ def construct_calibration_size_ablation(
 
 
 def _eligible_scores_for_size(
-    eligible_clients: tuple[ClientIdentity, ...],
+    eligible_clients: EligibleCohort,
     by_client_replicate: dict[tuple[ClientIdentity, int], CalibrationReplicateManifest],
     size: CalibrationSize,
     replicate_index: ReplicateIndex,

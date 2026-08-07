@@ -14,6 +14,7 @@ from datp_core.calibration.eligibility import (
     require_common_eligible_cohort,
 )
 from datp_core.calibration.models import CalibrationSupport, EligibilityDecision, EligibilityStatus
+from datp_core.datasets.partitioning.contracts import EligibleCohort
 from datp_core.domain.enums import PartitionRole
 from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.values.checksums import Checksum
@@ -154,14 +155,14 @@ def test_eligible_clients_filters_and_orders_deterministically() -> None:
 
 
 def test_require_common_eligible_cohort_accepts_matching_cohorts() -> None:
-    cohort = (some_client("client_a"), some_client("client_b"))
+    cohort = EligibleCohort(clients=(some_client("client_a"), some_client("client_b")))
     result = require_common_eligible_cohort((cohort, cohort))
     assert result == cohort
 
 
 def test_require_common_eligible_cohort_rejects_mismatched_cohorts() -> None:
-    first = (some_client("client_a"), some_client("client_b"))
-    second = (some_client("client_a"),)
+    first = EligibleCohort(clients=(some_client("client_a"), some_client("client_b")))
+    second = EligibleCohort(clients=(some_client("client_a"),))
 
     def call() -> None:
         require_common_eligible_cohort((first, second))

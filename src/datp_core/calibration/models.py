@@ -1,5 +1,3 @@
-"""Typed benign-only calibration eligibility and subsampling records."""
-
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -14,8 +12,6 @@ from datp_core.learning.federated.models import FederatedTrainingCoordinate
 
 
 class CalibrationUnavailableReason(StrEnum):
-    """Closed reasons a calibration operation is unavailable for a client."""
-
     INSUFFICIENT_BENIGN_SUPPORT = "insufficient_benign_support"
     CALIBRATION_SIZE_EXCEEDS_SOURCE = "calibration_size_exceeds_source"
 
@@ -28,8 +24,6 @@ class EligibilityStatus(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class CalibrationSupport:
-    """Benign-only calibration support for one client, bound to one frozen score artifact."""
-
     client: ClientIdentity
     coordinate: FederatedTrainingCoordinate
     benign_calibration_count: RowCount
@@ -38,32 +32,31 @@ class CalibrationSupport:
 
 @dataclass(frozen=True, slots=True)
 class EligibilityDecision:
-    """The single eligibility decision for one immutable calibration support record."""
-
     support: CalibrationSupport
     minimum_support: CalibrationSize
     status: EligibilityStatus
     reason: CalibrationUnavailableReason | None
 
     def __post_init__(self) -> None:
-        meets_minimum = self.minimum_support.fits_within(self.support.benign_calibration_count)
         is_eligible = self.status is EligibilityStatus.ELIGIBLE
-        is_excluded = self.status is EligibilityStatus.EXCLUDED
-        require_contract(
-            not is_eligible or meets_minimum,
-            "eligible status requires benign calibration count to meet the minimum support",
-            ContractSubject.CALIBRATION,
-        )
-        require_contract(
-            not is_eligible or self.reason is None,
-            "eligible clients cannot carry an unavailability reason",
-            ContractSubject.CALIBRATION,
-        )
-        require_contract(
-            not is_excluded or self.reason is not None,
-            "excluded clients require a typed unavailability reason",
-            ContractSubject.CALIBRATION,
-        )
+
+        if is_eligible:
+            require_contract(
+                self.minimum_support.fits_within(self.support.benign_calibration_count),
+                "eligible status requires benign calibration count to meet the minimum support",
+                ContractSubject.CALIBRATION,
+            )
+            require_contract(
+                self.reason is None,
+                "eligible clients cannot carry an unavailability reason",
+                ContractSubject.CALIBRATION,
+            )
+        elif self.status is EligibilityStatus.EXCLUDED:
+            require_contract(
+                self.reason is not None,
+                "excluded clients require a typed unavailability reason",
+                ContractSubject.CALIBRATION,
+            )
 
     @property
     def is_eligible(self) -> bool:
@@ -72,8 +65,6 @@ class EligibilityDecision:
 
 @dataclass(frozen=True, slots=True)
 class CalibrationSampleReference:
-    """A reference to one immutable benign calibration score row; never a copy of it."""
-
     client: ClientIdentity
     stable_row_id: StableRowId
     score: ScoreValue
@@ -88,8 +79,6 @@ class CalibrationSampleReference:
 
 @dataclass(frozen=True, slots=True)
 class CalibrationSubsample:
-    """One deterministic, single-client, without-replacement calibration subsample."""
-
     size: CalibrationSize
     replicate_index: ReplicateIndex
     references: tuple[CalibrationSampleReference, ...]
@@ -100,17 +89,25 @@ class CalibrationSubsample:
                 "subsample reference count must equal the declared calibration size",
                 subject=ContractSubject.CALIBRATION,
             )
-        stable_row_ids = tuple(reference.stable_row_id for reference in self.references)
-        if len(set(stable_row_ids)) != len(stable_row_ids):
-            raise ScientificContractError(
-                "subsample references must be drawn without replacement",
-                subject=ContractSubject.CALIBRATION,
-            )
-        if len({reference.client for reference in self.references}) != 1:
-            raise ScientificContractError(
-                "subsample references must belong to exactly one client",
-                subject=ContractSubject.CALIBRATION,
-            )
+
+        if not self.references:
+            return
+
+        first_client = self.references[0].client
+        seen_ids = set()
+
+        for ref in self.references:
+            if ref.client != first_client:
+                raise ScientificContractError(
+                    "subsample references must belong to exactly one client",
+                    subject=ContractSubject.CALIBRATION,
+                )
+            if ref.stable_row_id in seen_ids:
+                raise ScientificContractError(
+                    "subsample references must be drawn without replacement",
+                    subject=ContractSubject.CALIBRATION,
+                )
+            seen_ids.add(ref.stable_row_id)
 
     @property
     def client(self) -> ClientIdentity:
@@ -123,8 +120,6 @@ class CalibrationSubsample:
 
 @dataclass(frozen=True, slots=True)
 class CalibrationReplicateManifest:
-    """One deterministic subsampling replicate for a client, nested within a training seed."""
-
     client: ClientIdentity
     coordinate: FederatedTrainingCoordinate
     training_seed: Seed
@@ -140,14 +135,17 @@ class CalibrationReplicateManifest:
                 "unavailable sizes require exactly one typed reason, and vice versa",
                 subject=ContractSubject.CALIBRATION,
             )
+
+        if not self.subsamples:
+            return
+
         _require_ascending_subsample_order(self.subsamples)
         _require_subsamples_belong_to_client(self.subsamples, self.client)
         _require_nested_subsamples(self.subsamples)
 
 
 def _require_ascending_subsample_order(subsamples: tuple[CalibrationSubsample, ...]) -> None:
-    ordered_sizes = tuple(subsample.size.value for subsample in subsamples)
-    if ordered_sizes != tuple(sorted(ordered_sizes)):
+    if any(a.size.value > b.size.value for a, b in zip(subsamples, subsamples[1:], strict=False)):
         raise ScientificContractError(
             "subsamples must be ordered by ascending calibration size",
             subject=ContractSubject.CALIBRATION,
@@ -163,9 +161,12 @@ def _require_subsamples_belong_to_client(subsamples: tuple[CalibrationSubsample,
 
 
 def _require_nested_subsamples(subsamples: tuple[CalibrationSubsample, ...]) -> None:
-    ordered = sorted(subsamples, key=lambda subsample: subsample.size.value)
-    for smaller, larger in zip(ordered, ordered[1:], strict=False):
-        if not smaller.stable_row_id_set.issubset(larger.stable_row_id_set):
+    if len(subsamples) < 2:
+        return
+
+    cached_sets = [subsample.stable_row_id_set for subsample in subsamples]
+    for smaller, larger in zip(cached_sets, cached_sets[1:], strict=False):
+        if not smaller.issubset(larger):
             raise ScientificContractError(
                 "a smaller calibration subsample must be a subset of the same replicate's larger subsample",
                 subject=ContractSubject.CALIBRATION,
