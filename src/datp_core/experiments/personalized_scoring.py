@@ -17,7 +17,7 @@ from datp_core.core.identifiers import (
 from datp_core.core.numeric import ScoreValue
 from datp_core.data.populations.contracts import ClientIdentity, PopulationOutcomeLabel
 from datp_core.analysis.metrics.client import calculate_client_metrics
-from datp_core.evaluation.cohort.contracts import EvaluationCohortManifest
+from datp_core.analysis.metrics.cohorts import EvaluationCohortManifest
 from datp_core.analysis.metrics.confusion import calculate_confusion_counts
 from datp_core.evaluation.fixed_score.checksums import evaluation_label_checksum, source_row_checksum
 from datp_core.analysis.metrics.models import ClientMetricResult

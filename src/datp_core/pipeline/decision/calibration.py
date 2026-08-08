@@ -9,10 +9,10 @@ from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.checksums import Checksum, checksum_text
 from datp_core.domain.values.counts import CalibrationSize, ReplicateIndex, SubsampleReplicateCount
 from datp_core.domain.values.ratios import Quantile
-from datp_core.evaluation.cohort.contracts import EvaluationCohortManifest
+from datp_core.analysis.metrics.cohorts import EvaluationCohortManifest
 from datp_core.evaluation.federated.contracts import CalibrationSizeAblationCell, FederatedEvaluationRequest
 from datp_core.evaluation.federated.execution import prepare_federated_evaluation
-from datp_core.evaluation.fixed_score.contracts import FixedScoreEvidence
+from datp_core.analysis.metrics.fixed_score import FixedScoreEvidence
 from datp_core.pipeline.scoring.models import FederatedScoreArtifactManifest
 from datp_core.protocols.calibration import (
     CALIBRATION_ELIGIBILITY_PROTOCOL,

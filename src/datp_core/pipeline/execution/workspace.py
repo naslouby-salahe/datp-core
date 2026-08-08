@@ -34,7 +34,7 @@ from datp_core.evaluation.federated.contracts import (
 )
 from datp_core.evaluation.federated.publication import FederatedEvaluationAssetName
 from datp_core.evaluation.fixed_score.construction import build_federated_evaluation_inputs
-from datp_core.evaluation.fixed_score.contracts import FixedScoreEvidence
+from datp_core.analysis.metrics.fixed_score import FixedScoreEvidence
 from datp_core.evaluation.fixed_score.validation import validate_fixed_score_controls
 from datp_core.analysis.metrics.models import HeldOutBenignScore
 from datp_core.analysis.metrics.threshold_estimation import ThresholdEstimationProvenance

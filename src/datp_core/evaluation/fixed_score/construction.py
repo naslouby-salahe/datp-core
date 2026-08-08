@@ -16,7 +16,7 @@ from datp_core.domain.values.identifiers import StableRowId
 from datp_core.domain.values.ratios import ScoreValue, ThresholdValue
 from datp_core.analysis.metrics.client import calculate_client_metrics
 from datp_core.evaluation.cohort.construction import assert_cohort_invariant_to_threshold_methods
-from datp_core.evaluation.cohort.contracts import ClientEligibilityRecord, EvaluationCohortManifest
+from datp_core.analysis.metrics.cohorts import ClientEligibilityRecord, EvaluationCohortManifest
 from datp_core.evaluation.cohort.evidence import client_partition_counts_from_scores
 from datp_core.analysis.metrics.confusion import calculate_confusion_counts
 from datp_core.evaluation.fixed_score.checksums import (
@@ -27,7 +27,7 @@ from datp_core.evaluation.fixed_score.checksums import (
     evaluation_score_order_checksum,
     source_row_checksum,
 )
-from datp_core.evaluation.fixed_score.contracts import (
+from datp_core.analysis.metrics.fixed_score import (
     CalibrationEvidence,
     ClientAurocEvidence,
     DetectorEvidence,

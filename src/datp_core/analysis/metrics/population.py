@@ -4,7 +4,7 @@ from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import EvaluationCohort, MetricId
 from datp_core.core.numeric import MetricValue, Quantile, RowCount
-from datp_core.evaluation.cohort.contracts import EvaluationCohortManifest
+from datp_core.analysis.metrics.cohorts import EvaluationCohortManifest
 from datp_core.analysis.metrics.semantics import available, unavailable
 from datp_core.analysis.metrics.models import (
     EQUITY_INDEX_METRIC_IDS,

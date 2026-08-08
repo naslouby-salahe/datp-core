@@ -34,7 +34,7 @@ from datp_core.artifacts.repositories.thresholds import (
     construct_and_publish_federated_thresholds,
     threshold_result_checksum,
 )
-from datp_core.evaluation.cohort.contracts import EvaluationCohortManifest
+from datp_core.analysis.metrics.cohorts import EvaluationCohortManifest
 from datp_core.evaluation.fixed_score.construction import build_federated_evaluation_inputs
 from datp_core.analysis.metrics.models import ClientMetricResult, MetricStatus, metric_by_id
 from datp_core.experiments.planning import ExperimentPlan, expand_experiment_plan

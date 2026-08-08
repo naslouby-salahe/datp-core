@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.identifiers import FederatedThresholdMethod, MetricId, PartitionRole
-from datp_core.evaluation.cohort.contracts import EvaluationCohortManifest
+from datp_core.analysis.metrics.cohorts import EvaluationCohortManifest
 from datp_core.analysis.metrics.models import MetricAvailability
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 

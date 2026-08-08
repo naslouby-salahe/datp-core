@@ -4,13 +4,13 @@ from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.provenance import canonical_checksum
 from datp_core.domain.values.base import floats_absolutely_close
 from datp_core.domain.values.ratios import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE, AbsoluteTolerance
-from datp_core.evaluation.cohort.contracts import EvaluationCohortManifest
+from datp_core.analysis.metrics.cohorts import EvaluationCohortManifest
 from datp_core.evaluation.fixed_score.checksums import (
     ClientChecksumField,
     aggregate_client_checksum,
     evaluation_score_order_checksum,
 )
-from datp_core.evaluation.fixed_score.contracts import ClientAurocEvidence, FixedScoreEvidence
+from datp_core.analysis.metrics.fixed_score import ClientAurocEvidence, FixedScoreEvidence
 from datp_core.analysis.metrics.models import ClientMetricResult, MetricAvailability, MetricStatus, metric_by_id
 from datp_core.detector.training.models import FederatedTrainingCoordinate
 from datp_core.detector.scoring.contracts import FixedScoreInvariant, ScoreArtifactManifest

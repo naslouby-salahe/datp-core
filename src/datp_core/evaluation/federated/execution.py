@@ -28,7 +28,7 @@ from datp_core.domain.values.ratios import (
 )
 from datp_core.analysis.metrics.client import calculate_client_metrics
 from datp_core.evaluation.cohort.construction import cohort_record_for_client
-from datp_core.evaluation.cohort.contracts import ClientEligibilityRecord
+from datp_core.analysis.metrics.cohorts import ClientEligibilityRecord
 from datp_core.evaluation.communication import summarize_communication
 from datp_core.analysis.metrics.conformal import evaluate_held_out_conformal_coverage
 from datp_core.analysis.metrics.confusion import calculate_confusion_counts

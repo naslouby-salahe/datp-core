@@ -13,7 +13,7 @@ from datp_core.domain.enums import (
 )
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.counts import CalibrationSize, Seed
-from datp_core.evaluation.cohort.contracts import (
+from datp_core.analysis.metrics.cohorts import (
     ClientEligibilityRecord,
     ClientExclusionReason,
     EvaluationCohortManifest,
