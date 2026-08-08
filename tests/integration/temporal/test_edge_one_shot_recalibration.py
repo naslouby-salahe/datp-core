@@ -173,7 +173,7 @@ def _seed_provenance(
     return TemporalSeedProvenance(
         seed=seed,
         experiment=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
-        population=PopulationId.EDGE_TEMPORAL_GROUPS.value,
+        population=PopulationId.EDGE_TEMPORAL_GROUPS,
         threshold_method=FederatedThresholdMethod.LOCAL_THRESHOLD,
         static_reference=static,
         frozen_future=frozen,
