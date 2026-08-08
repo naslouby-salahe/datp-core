@@ -33,7 +33,7 @@ from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration
 from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.runtime.configuration import OUTPUTS_ROOT
-from datp_core.thresholding.publication import FederatedThresholdAssetName
+from datp_core.artifacts.repositories.thresholds import FederatedThresholdAssetName
 
 if TYPE_CHECKING:
     from datp_core.evaluation.federated.contracts import FederatedEvaluationDocument

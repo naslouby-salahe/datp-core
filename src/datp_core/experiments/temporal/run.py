@@ -29,6 +29,11 @@ from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.serializers.json import canonical_checksum, canonical_json_text
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.numeric import MetricValue, Seed
+from datp_core.artifacts.repositories.thresholds import (
+    FederatedThresholdConstructionRequest,
+    construct_and_publish_federated_thresholds,
+    threshold_result_checksum,
+)
 from datp_core.evaluation.cohort.contracts import EvaluationCohortManifest
 from datp_core.evaluation.fixed_score.construction import build_federated_evaluation_inputs
 from datp_core.evaluation.models import ClientMetricResult, MetricStatus, metric_by_id
@@ -41,9 +46,7 @@ from datp_core.pipeline.decision.evidence import (
     analyze_temporal_evidence,
 )
 from datp_core.pipeline.decision.federated import (
-    ConstructFederatedThresholdsRequest,
     EvaluateFederatedDetectorRequest,
-    construct_federated_thresholds,
     evaluate_federated_detector,
 )
 from datp_core.pipeline.execution.checkpoints import select_execution_checkpoint
@@ -72,9 +75,8 @@ from datp_core.protocols.calibration import (
 from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration, ExternalTemporalExecutionIdentity
 from datp_core.experiments.common.seeds import BOUNDED_EVIDENCE_SEED_COHORT, SeedCohort
 from datp_core.protocols.temporal import TemporalDeploymentProvenance, validate_frozen_recalibrated_pair
-from datp_core.thresholding.dispatch import ThresholdConstructionRequest
-from datp_core.thresholding.identities import ThresholdInfeasibilityReason, ThresholdUnavailableResult
-from datp_core.thresholding.publication import threshold_result_checksum
+from datp_core.thresholds.contracts import ThresholdInfeasibilityReason, ThresholdUnavailableResult
+from datp_core.thresholds.dispatch import ThresholdConstructionRequest
 
 
 class TemporalArtifactDirectory(StrEnum):
@@ -495,8 +497,8 @@ def _evaluate_state(
     unavailable: list[TemporalMethodUnavailability] = []
     state_root = bounded_evidence_seed_directory(identity, context.coordinate.training_seed, output_root)
     for method in threshold_methods:
-        threshold_publication = construct_federated_thresholds(
-            ConstructFederatedThresholdsRequest(
+        threshold_publication = construct_and_publish_federated_thresholds(
+            FederatedThresholdConstructionRequest(
                 request=ThresholdConstructionRequest(
                     method=method,
                     coordinate=context.coordinate,

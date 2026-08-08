@@ -46,11 +46,13 @@ from datp_core.pipeline.decision.calibration import (
     construct_calibration_size_ablation,
 )
 from datp_core.pipeline.decision.federated import (
-    ConstructFederatedThresholdsRequest,
     EvaluateFederatedDetectorRequest,
     EvaluateFederatedDetectorResult,
-    construct_federated_thresholds,
     evaluate_federated_detector,
+)
+from datp_core.artifacts.repositories.thresholds import (
+    FederatedThresholdConstructionRequest,
+    construct_and_publish_federated_thresholds,
 )
 from datp_core.pipeline.execution.context import (
     FederatedExecutionContext,
@@ -197,8 +199,8 @@ class ExperimentWorkspace:
 
     @cached_property
     def threshold(self) -> ThresholdConstructionResult:
-        result = construct_federated_thresholds(
-            ConstructFederatedThresholdsRequest(
+        result = construct_and_publish_federated_thresholds(
+            FederatedThresholdConstructionRequest(
                 request=ThresholdConstructionRequest(
                     method=self.coordinate.threshold_method,
                     coordinate=self.scores.coordinate,

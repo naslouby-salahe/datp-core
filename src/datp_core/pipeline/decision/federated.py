@@ -30,33 +30,7 @@ from datp_core.artifacts.repositories.publication import ArtifactPublication, Fu
 from datp_core.pipeline.scoring.models import FederatedScoreArtifactManifest
 from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
 from datp_core.protocols.temporal import TemporalDeploymentProvenance
-from datp_core.thresholding.dispatch import ThresholdConstructionRequest
 from datp_core.thresholding.models import ThresholdConstructionResult
-from datp_core.thresholding.publication import (
-    FederatedThresholdAssetName,
-    FederatedThresholdPublicationRequest,
-    federated_threshold_is_reusable,
-    load_reused_federated_threshold,
-    rebase_federated_threshold,
-    write_federated_threshold,
-)
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ConstructFederatedThresholdsRequest:
-    request: ThresholdConstructionRequest
-    output_directory: Path
-    overwrite: bool
-    temporal_provenance: TemporalDeploymentProvenance | None = None
-    temporal_score_manifest: FederatedScoreArtifactManifest | None = None
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ConstructFederatedThresholdsResult:
-    result: ThresholdConstructionResult
-    publication_status: PublicationStatus
-    complete_digest: Checksum
-    temporal_provenance: TemporalDeploymentProvenance | None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -86,36 +60,6 @@ class EvaluateFederatedDetectorResult:
     population: PopulationMetricResult
     diagnostics: EvaluationDiagnostics
     complete_digest: Checksum
-
-
-def construct_federated_thresholds(
-    request: ConstructFederatedThresholdsRequest,
-) -> ConstructFederatedThresholdsResult:
-    publication_request = FederatedThresholdPublicationRequest(
-        request=request.request,
-        temporal_provenance=request.temporal_provenance,
-        temporal_score_manifest=request.temporal_score_manifest,
-    )
-    publication = publish_artifact(
-        ArtifactPublication(
-            target=request.output_directory,
-            request=publication_request,
-            codec=FunctionalArtifactCodec(
-                writer=write_federated_threshold,
-                validator=federated_threshold_is_reusable,
-                loader=load_reused_federated_threshold,
-                rebaser=rebase_federated_threshold,
-            ),
-            overwrite=request.overwrite,
-            complete_marker=FederatedThresholdAssetName.COMPLETE,
-        )
-    )
-    return ConstructFederatedThresholdsResult(
-        result=publication.value,
-        publication_status=publication.status,
-        complete_digest=publication.complete_digest,
-        temporal_provenance=request.temporal_provenance,
-    )
 
 
 def evaluate_federated_detector(request: EvaluateFederatedDetectorRequest) -> EvaluateFederatedDetectorResult:

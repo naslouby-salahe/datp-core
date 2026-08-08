@@ -1,90 +1,198 @@
-"""Persist canonical threshold assignments and the complete policy result evidence."""
+"""Threshold artifact serialization, validation, reuse, and rebasing."""
 
+from __future__ import annotations
+
+from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from shutil import rmtree
 
-from datp_core.artifacts.provenance import Checksum, canonical_checksum, checksum_file
+from pydantic import TypeAdapter
+
+from datp_core.artifacts.provenance import Checksum, checksum_text
+from datp_core.artifacts.repositories.publication import ArtifactPublication, FunctionalArtifactCodec, publish_artifact
 from datp_core.artifacts.serializers.json import canonical_json_text
-from datp_core.core.contracts import StrictModel
-from datp_core.core.errors import ArtifactIntegrityError
-from datp_core.core.identifiers import FederatedThresholdMethod
-from datp_core.detector.scoring.contracts import FixedScoreInvariant
+from datp_core.core.identifiers import PublicationStatus
+from datp_core.data.populations.contracts import ClientIdentity
+from datp_core.detector.scoring.contracts import ScoreArtifactManifest
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
-from datp_core.thresholds.contracts import ThresholdAssignment
+from datp_core.protocols.temporal import TemporalDeploymentProvenance
+from datp_core.thresholds.dispatch import ThresholdConstructionRequest, ThresholdConstructionResult
+
+type FederatedScoreArtifactManifest = ScoreArtifactManifest[FederatedTrainingCoordinate, ClientIdentity]
 
 
-class ThresholdAsset(StrEnum):
-    MANIFEST = "manifest.json"
-    RESULT = "result.json"
+class FederatedThresholdAssetName(StrEnum):
+    RESULT = "threshold_result.json"
+    TEMPORAL_PROVENANCE = "temporal_threshold_provenance.json"
     COMPLETE = "COMPLETE"
 
 
-class ThresholdManifest(StrictModel):
-    method: FederatedThresholdMethod
-    coordinate: FederatedTrainingCoordinate
-    assignments: tuple[ThresholdAssignment, ...]
-    fixed_score_identity: Checksum
-    result_checksum: Checksum
+@dataclass(frozen=True, slots=True)
+class FederatedThresholdPublicationRequest:
+    request: ThresholdConstructionRequest
+    temporal_provenance: TemporalDeploymentProvenance | None = None
+    temporal_score_manifest: FederatedScoreArtifactManifest | None = None
+
+    def __post_init__(self) -> None:
+        if (self.temporal_provenance is None) != (self.temporal_score_manifest is None):
+            raise ValueError("temporal threshold construction requires both provenance and score manifest")
+        if self.temporal_provenance is not None:
+            if self.temporal_score_manifest is None:
+                raise AssertionError("temporal publication invariant was checked")
+            self.temporal_provenance.validate_score_manifest(self.temporal_score_manifest)
 
 
-class ThresholdPublication(StrictModel):
-    directory: Path
-    manifest: ThresholdManifest
+@dataclass(frozen=True, slots=True, kw_only=True)
+class FederatedThresholdConstructionRequest:
+    request: ThresholdConstructionRequest
+    output_directory: Path
+    overwrite: bool
+    temporal_provenance: TemporalDeploymentProvenance | None = None
+    temporal_score_manifest: FederatedScoreArtifactManifest | None = None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class FederatedThresholdConstructionResult:
+    result: ThresholdConstructionResult
+    publication_status: PublicationStatus
     complete_digest: Checksum
+    temporal_provenance: TemporalDeploymentProvenance | None
 
 
-def publish_threshold_result(
-    *,
-    method: FederatedThresholdMethod,
-    coordinate: FederatedTrainingCoordinate,
-    assignments: tuple[ThresholdAssignment, ...],
-    result: object,
-    fixed_scores: FixedScoreInvariant,
+@dataclass(frozen=True, slots=True)
+class _ThresholdPublicationProjection:
+    result: ThresholdConstructionResult
+    temporal_provenance: TemporalDeploymentProvenance | None
+
+
+def write_federated_threshold(
+    request: FederatedThresholdPublicationRequest,
     directory: Path,
-    overwrite: bool,
-) -> ThresholdPublication:
-    if directory.exists() and not overwrite:
-        return load_threshold_publication(directory)
-    if directory.exists():
-        rmtree(directory)
-    directory.mkdir(parents=True, exist_ok=False)
-    result_text = canonical_json_text(result)
-    result_path = directory / ThresholdAsset.RESULT.value
-    result_path.write_text(result_text, encoding="utf-8")
-    result_checksum = canonical_checksum(result)
-    manifest = ThresholdManifest(
-        method=method,
-        coordinate=coordinate,
-        assignments=assignments,
-        fixed_score_identity=canonical_checksum(fixed_scores),
-        result_checksum=result_checksum,
+) -> ThresholdConstructionResult:
+    result = _dispatch(request.request)
+    (directory / FederatedThresholdAssetName.RESULT).write_text(
+        canonical_json_text(result),
+        encoding="utf-8",
     )
-    manifest_path = directory / ThresholdAsset.MANIFEST.value
-    manifest_path.write_text(canonical_json_text(manifest), encoding="utf-8")
-    digest = canonical_checksum(
-        (
-            (ThresholdAsset.MANIFEST.value, checksum_file(manifest_path)),
-            (ThresholdAsset.RESULT.value, checksum_file(result_path)),
+    if request.temporal_provenance is not None:
+        (directory / FederatedThresholdAssetName.TEMPORAL_PROVENANCE).write_text(
+            canonical_json_text(request.temporal_provenance),
+            encoding="utf-8",
         )
+    (directory / FederatedThresholdAssetName.COMPLETE).write_text(
+        federated_threshold_publication_checksum(result, request.temporal_provenance).value,
+        encoding="utf-8",
     )
-    (directory / ThresholdAsset.COMPLETE.value).write_text(digest.value, encoding="utf-8")
-    return ThresholdPublication(directory=directory, manifest=manifest, complete_digest=digest)
+    return result
 
 
-def load_threshold_publication(directory: Path) -> ThresholdPublication:
-    manifest_path = directory / ThresholdAsset.MANIFEST.value
-    result_path = directory / ThresholdAsset.RESULT.value
-    marker = directory / ThresholdAsset.COMPLETE.value
-    if not manifest_path.is_file() or not result_path.is_file() or not marker.is_file():
-        raise ArtifactIntegrityError(f"threshold publication is incomplete: {directory}")
-    manifest = ThresholdManifest.model_validate_json(manifest_path.read_text(encoding="utf-8"))
-    digest = canonical_checksum(
-        (
-            (ThresholdAsset.MANIFEST.value, checksum_file(manifest_path)),
-            (ThresholdAsset.RESULT.value, checksum_file(result_path)),
+def construct_and_publish_federated_thresholds(
+    request: FederatedThresholdConstructionRequest,
+) -> FederatedThresholdConstructionResult:
+    publication_request = FederatedThresholdPublicationRequest(
+        request=request.request,
+        temporal_provenance=request.temporal_provenance,
+        temporal_score_manifest=request.temporal_score_manifest,
+    )
+    publication = publish_artifact(
+        ArtifactPublication(
+            target=request.output_directory,
+            request=publication_request,
+            codec=FunctionalArtifactCodec(
+                writer=write_federated_threshold,
+                validator=federated_threshold_is_reusable,
+                loader=load_reused_federated_threshold,
+                rebaser=rebase_federated_threshold,
+            ),
+            overwrite=request.overwrite,
+            complete_marker=FederatedThresholdAssetName.COMPLETE,
         )
     )
-    if marker.read_text(encoding="utf-8").strip() != digest.value:
-        raise ArtifactIntegrityError(f"threshold completion digest mismatch: {directory}")
-    return ThresholdPublication(directory=directory, manifest=manifest, complete_digest=digest)
+    return FederatedThresholdConstructionResult(
+        result=publication.value,
+        publication_status=publication.status,
+        complete_digest=publication.complete_digest,
+        temporal_provenance=request.temporal_provenance,
+    )
+
+
+def federated_threshold_is_reusable(
+    request: FederatedThresholdPublicationRequest,
+    directory: Path,
+) -> bool:
+    try:
+        result = _load_result(directory)
+        provenance = _load_temporal_provenance(directory, required=request.temporal_provenance is not None)
+        complete = (directory / FederatedThresholdAssetName.COMPLETE).read_text(encoding="utf-8").strip()
+    except (OSError, ValueError):
+        return False
+    if provenance != request.temporal_provenance:
+        return False
+    expected_result = _dispatch(request.request)
+    if threshold_result_checksum(result) != threshold_result_checksum(expected_result):
+        return False
+    return complete == federated_threshold_publication_checksum(result, provenance).value
+
+
+def load_reused_federated_threshold(
+    request: FederatedThresholdPublicationRequest,
+    directory: Path,
+) -> ThresholdConstructionResult:
+    result = _load_result(directory)
+    provenance = _load_temporal_provenance(directory, required=request.temporal_provenance is not None)
+    if provenance != request.temporal_provenance:
+        raise ValueError("persisted temporal threshold provenance does not match the publication request")
+    return result
+
+
+def rebase_federated_threshold(
+    result: ThresholdConstructionResult,
+    directory: Path,
+) -> ThresholdConstructionResult:
+    del directory
+    return result
+
+
+def threshold_result_checksum(result: ThresholdConstructionResult) -> Checksum:
+    return checksum_text(canonical_json_text(result))
+
+
+def federated_threshold_publication_checksum(
+    result: ThresholdConstructionResult,
+    temporal_provenance: TemporalDeploymentProvenance | None,
+) -> Checksum:
+    return checksum_text(
+        canonical_json_text(
+            _ThresholdPublicationProjection(
+                result=result,
+                temporal_provenance=temporal_provenance,
+            )
+        )
+    )
+
+
+def _load_result(directory: Path) -> ThresholdConstructionResult:
+    path = directory / FederatedThresholdAssetName.RESULT
+    adapter: TypeAdapter[ThresholdConstructionResult] = TypeAdapter(ThresholdConstructionResult)
+    return adapter.validate_json(path.read_text(encoding="utf-8"))
+
+
+def _load_temporal_provenance(
+    directory: Path,
+    *,
+    required: bool,
+) -> TemporalDeploymentProvenance | None:
+    path = directory / FederatedThresholdAssetName.TEMPORAL_PROVENANCE
+    if not path.exists():
+        if required:
+            raise ValueError("temporal threshold provenance is missing")
+        return None
+    if not required:
+        raise ValueError("unexpected temporal threshold provenance is present")
+    return TemporalDeploymentProvenance.model_validate_json(path.read_text(encoding="utf-8"))
+
+
+def _dispatch(request: ThresholdConstructionRequest) -> ThresholdConstructionResult:
+    from datp_core.thresholds.dispatch import dispatch_federated_threshold
+
+    return dispatch_federated_threshold(request)

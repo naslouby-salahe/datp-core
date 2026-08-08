@@ -69,7 +69,10 @@ from datp_core.learning.federated.models import (
 from datp_core.learning.federated.training import preprocessing_state_set_checksum
 from datp_core.pipeline.checkpoints.service import SelectFederatedCheckpointRequest, select_federated_primary_checkpoint
 from datp_core.pipeline.decision.evidence import AnalysisAssetName, SeedEvidenceAssetName
-from datp_core.pipeline.decision.federated import ConstructFederatedThresholdsRequest, construct_federated_thresholds
+from datp_core.artifacts.repositories.thresholds import (
+    FederatedThresholdConstructionRequest,
+    construct_and_publish_federated_thresholds,
+)
 from datp_core.pipeline.execution.context import (
     client_training_inputs,
     client_with_id,
@@ -329,8 +332,8 @@ def run_ditto_stress_test_seed(
     )
     capabilities = population_capabilities(population)
     threshold_directory = ditto_directory(training_seed, regularization, DittoArtifactBranch.THRESHOLDS, output_root)
-    shared = construct_federated_thresholds(
-        ConstructFederatedThresholdsRequest(
+    shared = construct_and_publish_federated_thresholds(
+        FederatedThresholdConstructionRequest(
             request=ThresholdConstructionRequest(
                 method=FederatedThresholdMethod.SHARED_THRESHOLD,
                 coordinate=personalized_coordinate,
@@ -345,8 +348,8 @@ def run_ditto_stress_test_seed(
             overwrite=overwrite,
         )
     ).result
-    local = construct_federated_thresholds(
-        ConstructFederatedThresholdsRequest(
+    local = construct_and_publish_federated_thresholds(
+        FederatedThresholdConstructionRequest(
             request=ThresholdConstructionRequest(
                 method=FederatedThresholdMethod.LOCAL_THRESHOLD,
                 coordinate=personalized_coordinate,

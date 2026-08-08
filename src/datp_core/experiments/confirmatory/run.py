@@ -437,12 +437,12 @@ def _confirmatory_cluster_mechanisms() -> tuple[MechanismEvidence, ...]:
         cluster_stability,
         local_threshold_dispersion,
     )
-    from datp_core.thresholding.methods.cluster import GroupedThresholdResult
-    from datp_core.thresholding.publication import (
+    from datp_core.artifacts.repositories.thresholds import (
         FederatedThresholdAssetName,
         federated_threshold_publication_checksum,
         threshold_result_checksum,
     )
+    from datp_core.thresholds.policies.cluster import GroupedThresholdResult
 
     adapter: TypeAdapter[GroupedThresholdResult] = TypeAdapter(GroupedThresholdResult)
     available: list[tuple[Seed, GroupedThresholdResult, Checksum]] = []
