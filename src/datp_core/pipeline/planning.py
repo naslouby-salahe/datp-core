@@ -22,9 +22,9 @@ from datp_core.domain.values.counts import Seed
 from datp_core.domain.values.ratios import DirichletConcentration, ModelCoefficientValue, Quantile
 from datp_core.pipeline.coordinates import ExperimentCoordinate
 from datp_core.protocols.calibration import QUANTILE_GRID
-from datp_core.protocols.experiments import EXECUTION_IDENTITY_DECLARATIONS, EXPERIMENTS, ExperimentDeclaration
+from datp_core.protocols.experiments import EXECUTION_IDENTITY_DECLARATIONS, ExperimentDeclaration
 from datp_core.protocols.populations import DIRICHLET_CONCENTRATIONS, split_protocol_for_population
-from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
+from datp_core.protocols.seeds import SeedCohort
 from datp_core.protocols.training import DITTO_TRAINING_PROTOCOLS, FEDPROX_TRAINING_PROTOCOLS
 
 
@@ -88,8 +88,8 @@ class ExperimentPlan:
 
 def expand_experiment_plan(
     *,
-    declarations: tuple[ExperimentDeclaration, ...] = EXPERIMENTS,
-    seed_cohort: SeedCohort = CONFIRMATORY_SEED_COHORT,
+    declarations: tuple[ExperimentDeclaration, ...],
+    seed_cohort: SeedCohort,
     evidence: tuple[PlanningEvidence, ...] = (),
 ) -> ExperimentPlan:
     validated_evidence = _validated_evidence(evidence)

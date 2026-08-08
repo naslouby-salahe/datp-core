@@ -164,7 +164,11 @@ def build_programme_plan(experiment_id: ExperimentId | None = None) -> PlanPrese
         evidence = tuple(
             executable_planning_evidence(item.id) for item in EXPERIMENTS if item.id in REGISTERED_WORKFLOW_EXPERIMENTS
         )
-        plan = expand_experiment_plan(declarations=declarations, evidence=evidence)
+        plan = expand_experiment_plan(
+            declarations=declarations,
+            seed_cohort=CONFIRMATORY_SEED_COHORT,
+            evidence=evidence,
+        )
         experiment_ids = tuple(item.id for item in EXPERIMENTS)
     else:
         reject_anchor_as_experiment(experiment_id)

@@ -57,6 +57,7 @@ from datp_core.protocols.anchor import ANCHOR_DECISION_PROTOCOL
 from datp_core.protocols.experiments import EXPERIMENTS
 from datp_core.protocols.graph import ObservationBoundary, ObservationContext, ObservationHook, observe_graph_boundary
 from datp_core.protocols.inference import FixedScoreInvariant
+from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT
 from datp_core.runtime.configuration import DATA_ROOT
 
 
@@ -86,7 +87,7 @@ def build_campaign(plan: ExperimentPlan) -> CampaignPlan:
 def plan_and_build_campaign() -> tuple[ExperimentPlan, CampaignPlan]:
     """Expand the canonical experiment plan and build its executable campaign in one call."""
 
-    plan = expand_experiment_plan()
+    plan = expand_experiment_plan(declarations=EXPERIMENTS, seed_cohort=CONFIRMATORY_SEED_COHORT)
     return plan, build_campaign(plan)
 
 

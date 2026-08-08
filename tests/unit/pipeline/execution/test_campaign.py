@@ -17,6 +17,8 @@ from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.pipeline.execution.engine import build_campaign
 from datp_core.pipeline.planning import expand_experiment_plan
 from datp_core.protocols.calibration import CANONICAL_QUANTILE, QuantileProtocol
+from datp_core.protocols.experiments import EXPERIMENTS
+from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT
 from datp_core.protocols.training import DITTO_TRAINING_PROTOCOLS, resolve_ditto_protocol
 from datp_core.thresholding.methods.local import construct_local_threshold
 from datp_core.thresholding.methods.shared import construct_shared_threshold
@@ -24,7 +26,7 @@ from datp_core.thresholding.quantiles import ClientBenignCalibrationScores, unwe
 
 
 def test_campaign_contains_only_executable_plan_entries() -> None:
-    plan = expand_experiment_plan()
+    plan = expand_experiment_plan(declarations=EXPERIMENTS, seed_cohort=CONFIRMATORY_SEED_COHORT)
     campaign = build_campaign(plan)
     assert all(entry.ordinal == index for index, entry in enumerate(campaign.entries))
     assert campaign.digest.value

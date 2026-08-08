@@ -36,6 +36,42 @@ from datp_core.domain.errors import (
 )
 from datp_core.domain.values.counts import Seed
 from datp_core.pipeline.execution.layout import ExecutionRootDirectory
+from datp_core.pipeline.workflows.threshold_robustness import (
+    calibration_size_ablation_analysis_marker_present as _calibration_size_ablation_analysis_marker_present,
+)
+from datp_core.pipeline.workflows.threshold_robustness import (
+    fixed_shrinkage_curve_analysis_marker_present as _fixed_shrinkage_curve_analysis_marker_present,
+)
+from datp_core.pipeline.workflows.threshold_robustness import (
+    local_conformal_coverage_analysis_marker_present as _local_conformal_coverage_analysis_marker_present,
+)
+from datp_core.pipeline.workflows.threshold_robustness import (
+    quantile_sensitivity_analysis_marker_present as _quantile_sensitivity_analysis_marker_present,
+)
+from datp_core.pipeline.workflows.threshold_robustness import (
+    report_calibration_size_ablation as _report_calibration_size_ablation,
+)
+from datp_core.pipeline.workflows.threshold_robustness import (
+    report_fixed_shrinkage_curve as _report_fixed_shrinkage_curve,
+)
+from datp_core.pipeline.workflows.threshold_robustness import (
+    report_local_conformal_coverage as _report_local_conformal_coverage,
+)
+from datp_core.pipeline.workflows.threshold_robustness import (
+    report_quantile_sensitivity as _report_quantile_sensitivity,
+)
+from datp_core.pipeline.workflows.threshold_robustness import (
+    report_shared_construction_sensitivity as _report_shared_construction_sensitivity,
+)
+from datp_core.pipeline.workflows.threshold_robustness import (
+    report_size_aware_shrinkage as _report_size_aware_shrinkage,
+)
+from datp_core.pipeline.workflows.threshold_robustness import (
+    shared_construction_sensitivity_analysis_marker_present as _shared_construction_sensitivity_analysis_marker_present,
+)
+from datp_core.pipeline.workflows.threshold_robustness import (
+    size_aware_shrinkage_analysis_marker_present as _size_aware_shrinkage_analysis_marker_present,
+)
 from datp_core.protocols.anchor import ANCHOR_DECISION_PROTOCOL, HISTORICAL_ANCHOR_SEED_COHORT
 from datp_core.protocols.populations import POPULATIONS
 from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
@@ -46,6 +82,7 @@ from datp_core.runtime.configuration import DATA_ROOT, OUTPUTS_ROOT
 if TYPE_CHECKING:
     from datp_core.pipeline.workflows import PlanPresentation
     from datp_core.pipeline.workflows.temporal import TemporalSeedResult
+    from datp_core.pipeline.workflows.threshold_robustness import ThresholdRobustnessSeedResult
 
 SMOKE_OUTPUT_ROOT = OUTPUTS_ROOT / "smoke"
 ANCHOR_DIAGNOSTICS_DIRECTORY = OUTPUTS_ROOT / "anchor" / "diagnostics"
@@ -85,6 +122,12 @@ _REGISTERED_WORKFLOWS: tuple[RegisteredWorkflow, ...] = (
     RegisteredWorkflow(experiment_id=ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION, anchor_gated=False),
     RegisteredWorkflow(experiment_id=ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY, anchor_gated=False),
     RegisteredWorkflow(experiment_id=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION, anchor_gated=False),
+    RegisteredWorkflow(experiment_id=ExperimentId.SHARED_CONSTRUCTION_SENSITIVITY, anchor_gated=True),
+    RegisteredWorkflow(experiment_id=ExperimentId.QUANTILE_SENSITIVITY, anchor_gated=True),
+    RegisteredWorkflow(experiment_id=ExperimentId.CALIBRATION_SIZE_ABLATION, anchor_gated=True),
+    RegisteredWorkflow(experiment_id=ExperimentId.FIXED_SHRINKAGE_CURVE, anchor_gated=True),
+    RegisteredWorkflow(experiment_id=ExperimentId.SIZE_AWARE_SHRINKAGE, anchor_gated=True),
+    RegisteredWorkflow(experiment_id=ExperimentId.LOCAL_CONFORMAL_COVERAGE, anchor_gated=True),
 )
 
 _CAMPAIGN_ORDER: tuple[ExperimentId, ...] = tuple(item.experiment_id for item in _REGISTERED_WORKFLOWS)
@@ -392,6 +435,141 @@ def _dispatch_edge_one_shot_recalibration(
     return DispatchOutcome(
         detail=f"temporal seeds={len(seeds)}",
         method_outcomes=_temporal_method_outcomes(results),
+    )
+
+
+def _dispatch_shared_construction_sensitivity(
+    seeds: tuple[Seed, ...], output_root: Path, overwrite: bool
+) -> DispatchOutcome:
+    from datp_core.pipeline.workflows.threshold_robustness import run_shared_construction_sensitivity_seed
+
+    results = tuple(
+        run_shared_construction_sensitivity_seed(seed, output_root=output_root, overwrite=overwrite) for seed in seeds
+    )
+    return DispatchOutcome(
+        detail=f"shared_construction_sensitivity seeds={len(seeds)}",
+        method_outcomes=_seed_completion_outcomes(
+            experiment_id=ExperimentId.SHARED_CONSTRUCTION_SENSITIVITY,
+            completed_by_seed=tuple(item.completed_threshold_methods for item in results),
+        ),
+    )
+
+
+def _dispatch_quantile_sensitivity(
+    seeds: tuple[Seed, ...], output_root: Path, overwrite: bool
+) -> DispatchOutcome:
+    from datp_core.pipeline.workflows.threshold_robustness import run_quantile_sensitivity_seed
+
+    results = tuple(
+        run_quantile_sensitivity_seed(seed, output_root=output_root, overwrite=overwrite) for seed in seeds
+    )
+    return DispatchOutcome(
+        detail=f"quantile_sensitivity seeds={len(seeds)}",
+        method_outcomes=_seed_completion_outcomes(
+            experiment_id=ExperimentId.QUANTILE_SENSITIVITY,
+            completed_by_seed=tuple(item.completed_threshold_methods for item in results),
+        ),
+    )
+
+
+def _dispatch_calibration_size_ablation(
+    seeds: tuple[Seed, ...], output_root: Path, overwrite: bool
+) -> DispatchOutcome:
+    from datp_core.pipeline.workflows.threshold_robustness import run_calibration_size_ablation_seed
+
+    results = tuple(
+        run_calibration_size_ablation_seed(seed, output_root=output_root, overwrite=overwrite) for seed in seeds
+    )
+    return DispatchOutcome(
+        detail=f"calibration_size_ablation seeds={len(seeds)}",
+        method_outcomes=_seed_completion_outcomes(
+            experiment_id=ExperimentId.CALIBRATION_SIZE_ABLATION,
+            completed_by_seed=tuple(item.completed_threshold_methods for item in results),
+        ),
+    )
+
+
+def _dispatch_fixed_shrinkage_curve(
+    seeds: tuple[Seed, ...], output_root: Path, overwrite: bool
+) -> DispatchOutcome:
+    from datp_core.pipeline.workflows.threshold_robustness import run_fixed_shrinkage_curve_seed
+
+    results = tuple(
+        run_fixed_shrinkage_curve_seed(seed, output_root=output_root, overwrite=overwrite) for seed in seeds
+    )
+    return DispatchOutcome(
+        detail=f"fixed_shrinkage_curve seeds={len(seeds)}",
+        method_outcomes=_seed_completion_outcomes(
+            experiment_id=ExperimentId.FIXED_SHRINKAGE_CURVE,
+            completed_by_seed=tuple(item.completed_threshold_methods for item in results),
+        ),
+    )
+
+
+def _dispatch_size_aware_shrinkage(
+    seeds: tuple[Seed, ...], output_root: Path, overwrite: bool
+) -> DispatchOutcome:
+    from datp_core.pipeline.workflows.threshold_robustness import run_size_aware_shrinkage_seed
+
+    results = tuple(
+        run_size_aware_shrinkage_seed(seed, output_root=output_root, overwrite=overwrite) for seed in seeds
+    )
+    return DispatchOutcome(
+        detail=f"size_aware_shrinkage seeds={len(seeds)}",
+        method_outcomes=_size_aware_shrinkage_outcomes(results),
+    )
+
+
+def _size_aware_shrinkage_outcomes(
+    results: tuple[ThresholdRobustnessSeedResult, ...],
+) -> tuple[ThresholdMethodOutcome, ...]:
+    declared = _declared_threshold_methods(ExperimentId.SIZE_AWARE_SHRINKAGE)
+    completed_across_seeds = set(declared)
+    for result in results:
+        completed_across_seeds &= set(result.completed_threshold_methods)
+    outcomes: list[ThresholdMethodOutcome] = []
+    for method in declared:
+        if method is FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE:
+            outcomes.append(
+                ThresholdMethodOutcome(
+                    method=method,
+                    status=ThresholdMethodExecutionStatus.UNAVAILABLE,
+                    detail="no lambda(n_k) formula declared; inventing one is scientifically forbidden",
+                )
+            )
+        elif method in completed_across_seeds:
+            outcomes.append(
+                ThresholdMethodOutcome(
+                    method=method,
+                    status=ThresholdMethodExecutionStatus.COMPLETED,
+                    detail=f"executed across all {len(results)} runs",
+                )
+            )
+        else:
+            outcomes.append(
+                ThresholdMethodOutcome(
+                    method=method,
+                    status=ThresholdMethodExecutionStatus.INFEASIBLE,
+                    detail="declared but not completed in this execution",
+                )
+            )
+    return tuple(outcomes)
+
+
+def _dispatch_local_conformal_coverage(
+    seeds: tuple[Seed, ...], output_root: Path, overwrite: bool
+) -> DispatchOutcome:
+    from datp_core.pipeline.workflows.threshold_robustness import run_local_conformal_coverage_seed
+
+    results = tuple(
+        run_local_conformal_coverage_seed(seed, output_root=output_root, overwrite=overwrite) for seed in seeds
+    )
+    return DispatchOutcome(
+        detail=f"local_conformal_coverage seeds={len(seeds)}",
+        method_outcomes=_seed_completion_outcomes(
+            experiment_id=ExperimentId.LOCAL_CONFORMAL_COVERAGE,
+            completed_by_seed=tuple(item.completed_threshold_methods for item in results),
+        ),
     )
 
 
@@ -1057,6 +1235,36 @@ _WORKFLOW_HANDLERS: dict[ExperimentId, WorkflowHandlers] = {
         report=_report_edge_one_shot_recalibration,
         analysis_marker=_temporal_analysis_marker_present,
     ),
+    ExperimentId.SHARED_CONSTRUCTION_SENSITIVITY: WorkflowHandlers(
+        dispatch=_dispatch_shared_construction_sensitivity,
+        report=_report_shared_construction_sensitivity,
+        analysis_marker=_shared_construction_sensitivity_analysis_marker_present,
+    ),
+    ExperimentId.QUANTILE_SENSITIVITY: WorkflowHandlers(
+        dispatch=_dispatch_quantile_sensitivity,
+        report=_report_quantile_sensitivity,
+        analysis_marker=_quantile_sensitivity_analysis_marker_present,
+    ),
+    ExperimentId.CALIBRATION_SIZE_ABLATION: WorkflowHandlers(
+        dispatch=_dispatch_calibration_size_ablation,
+        report=_report_calibration_size_ablation,
+        analysis_marker=_calibration_size_ablation_analysis_marker_present,
+    ),
+    ExperimentId.FIXED_SHRINKAGE_CURVE: WorkflowHandlers(
+        dispatch=_dispatch_fixed_shrinkage_curve,
+        report=_report_fixed_shrinkage_curve,
+        analysis_marker=_fixed_shrinkage_curve_analysis_marker_present,
+    ),
+    ExperimentId.SIZE_AWARE_SHRINKAGE: WorkflowHandlers(
+        dispatch=_dispatch_size_aware_shrinkage,
+        report=_report_size_aware_shrinkage,
+        analysis_marker=_size_aware_shrinkage_analysis_marker_present,
+    ),
+    ExperimentId.LOCAL_CONFORMAL_COVERAGE: WorkflowHandlers(
+        dispatch=_dispatch_local_conformal_coverage,
+        report=_report_local_conformal_coverage,
+        analysis_marker=_local_conformal_coverage_analysis_marker_present,
+    ),
 }
 _require_dispatch_covers_registry(_WORKFLOW_HANDLERS, name="workflow handlers")
 
@@ -1074,6 +1282,7 @@ _ANALYSIS_MARKER_CHECKS: dict[ExperimentId, Callable[[ExperimentId], bool]] = {
 def _analysis_marker_present(experiment_id: ExperimentId) -> bool:
     check = _ANALYSIS_MARKER_CHECKS[experiment_id]
     return check(experiment_id)
+
 
 
 def format_plan(presentation: PlanPresentation) -> str:

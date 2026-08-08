@@ -284,7 +284,10 @@ class ExperimentWorkspace:
     ) -> tuple[HeldOutBenignScore, ...]:
         if not record.path.is_file() or checksum_file(record.path) != record.checksum:
             raise ScientificContractError("evaluation score provenance is unavailable or changed")
-        frame = pl.read_parquet(record.path)
+        frame = pl.read_parquet(record.path).filter(
+            pl.col(ScoreFrameColumn.OUTCOME_LABEL.value)
+            == PopulationOutcomeLabel.BENIGN.value
+        )
         return tuple(
             HeldOutBenignScore(
                 client=client,
