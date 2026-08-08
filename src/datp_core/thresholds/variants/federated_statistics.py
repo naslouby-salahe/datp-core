@@ -6,30 +6,31 @@ from typing import ClassVar
 
 import numpy as np
 
-from datp_core.datasets.partitioning.contracts import ClientIdentity
-from datp_core.domain.enums import ContractSubject, FederatedThresholdMethod
-from datp_core.domain.errors import ScientificContractError, require_contract
-from datp_core.domain.values.base import floats_exactly_equal
-from datp_core.domain.values.counts import ByteCount, RowCount
-from datp_core.domain.values.ratios import (
+from datp_core.core.errors import ScientificContractError, require_contract
+from datp_core.core.identifiers import ContractSubject, FederatedThresholdMethod
+from datp_core.core.numeric import (
     AbsoluteThresholdError,
+    ByteCount,
     MetricValue,
     Quantile,
     Ratio,
     RelativeThresholdError,
+    RowCount,
     ScoreMoment,
     ScoreVariance,
     SummaryCoefficient,
     ThresholdValue,
+    floats_exactly_equal,
 )
-from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.protocols.calibration import FederatedStatisticsProtocol
-from datp_core.thresholding.assignments import (
+from datp_core.data.populations.contracts import ClientIdentity
+from datp_core.detector.training.contracts import FederatedTrainingCoordinate
+from datp_core.thresholds.contracts import (
+    FederatedStatisticsProtocol,
     ThresholdAssignment,
     require_unique_clients,
     validate_assignments,
 )
-from datp_core.thresholding.quantiles import (
+from datp_core.thresholds.quantiles import (
     ClientBenignCalibrationScores,
     achieved_benign_exceedance,
     exact_empirical_quantile,
@@ -94,7 +95,7 @@ class CentralizedAttainmentDiagnostic:
                 self.signed_attainment_error.value,
                 self.achieved_exceedance.value - self.target_exceedance.value,
             ),
-            "signed attainment error must equal achieved_exceedance - target_exceedance",
+            "signed attainment error must equal achieved_exceedance minus target_exceedance",
             ContractSubject.THRESHOLD,
         )
         require_contract(
@@ -139,7 +140,7 @@ class FederatedStatisticsThresholdResult:
             self.assignments,
             tuple(ThresholdAssignment(client, self.matched_threshold) for client in summary_clients),
             label="threshold assignments",
-            mismatch_message=("every assignment in a shared threshold result must carry the identical shared value"),
+            mismatch_message="every benign-statistics assignment must carry the identical shared value",
         )
 
 
@@ -164,16 +165,10 @@ def construct_federated_benign_statistics(
     pooled_scores = np.concatenate([item.as_array for item in ordered])
     pooled_quantile = exact_empirical_quantile(pooled_scores, quantile)
     target_exceedance = Quantile(1.0 - quantile.value)
-    achieved_exceedance = achieved_benign_exceedance(
-        pooled_scores,
-        matched_threshold,
-    )
+    achieved_exceedance = achieved_benign_exceedance(pooled_scores, matched_threshold)
     signed_attainment_error = achieved_exceedance.value - target_exceedance.value
     absolute_threshold_error = AbsoluteThresholdError(abs(matched_threshold.value - pooled_quantile.value))
-    relative_threshold_error = _relative_threshold_error(
-        absolute_threshold_error,
-        pooled_quantile,
-    )
+    relative_threshold_error = _relative_threshold_error(absolute_threshold_error, pooled_quantile)
     diagnostic = CentralizedAttainmentDiagnostic(
         target_exceedance=target_exceedance,
         achieved_exceedance=achieved_exceedance,
@@ -195,7 +190,6 @@ def construct_federated_benign_statistics(
         )
         for coefficient in protocol.coefficients
     )
-    assignments = tuple(ThresholdAssignment(item.client, matched_threshold) for item in ordered)
     return FederatedStatisticsThresholdResult(
         coordinate=ordered[0].coordinate,
         quantile=quantile,
@@ -205,14 +199,12 @@ def construct_federated_benign_statistics(
         centralized_attainment_diagnostic=diagnostic,
         centralized_pooled_quantile_diagnostic=pooled_quantile,
         fixed_coefficient_curve=fixed_coefficient_curve,
-        assignments=assignments,
+        assignments=tuple(ThresholdAssignment(item.client, matched_threshold) for item in ordered),
         estimated_communication_bytes=_communication_bytes(summaries),
     )
 
 
-def _client_summary(
-    client_scores: ClientBenignCalibrationScores,
-) -> ClientBenignSummary:
+def _client_summary(client_scores: ClientBenignCalibrationScores) -> ClientBenignSummary:
     scores = client_scores.as_array
     return ClientBenignSummary(
         client=client_scores.client,
@@ -223,9 +215,7 @@ def _client_summary(
     )
 
 
-def _decomposition(
-    summaries: tuple[ClientBenignSummary, ...],
-) -> PooledVarianceDecomposition:
+def _decomposition(summaries: tuple[ClientBenignSummary, ...]) -> PooledVarianceDecomposition:
     total_count = sum(item.count.value for item in summaries)
     global_mean = sum(item.count.value * item.mean.value for item in summaries) / total_count
     within = sum(item.count.value * item.variance.value for item in summaries) / total_count
@@ -240,9 +230,7 @@ def _decomposition(
     )
 
 
-def _communication_bytes(
-    summaries: tuple[ClientBenignSummary, ...],
-) -> ByteCount:
+def _communication_bytes(summaries: tuple[ClientBenignSummary, ...]) -> ByteCount:
     scalar_count = sum(3 + (1 if item.benign_exceedance_count is not None else 0) for item in summaries)
     return ByteCount(scalar_count * np.dtype(np.float64).itemsize)
 
