@@ -89,22 +89,22 @@ from datp_core.detector.training.models import (
 from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.experiments.confirmatory import FedAvgCvFprEffectEvidence, absorption_corner_from_evaluation_document
 from datp_core.experiments.execution import execute_declared_campaign
-from datp_core.experiments.personalized_scoring import client_metric, client_scoring_input, score_record_for_client
-from datp_core.experiments.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
-from datp_core.pipeline.execution.context import (
+from datp_core.experiments.execution.context import (
     client_training_inputs,
     client_with_id,
     family_identities,
     training_feature_names,
 )
-from datp_core.pipeline.execution.evidence import load_evaluation_document
-from datp_core.pipeline.execution.layout import (
+from datp_core.experiments.execution.evidence import load_evaluation_document
+from datp_core.experiments.execution.layout import (
     EvaluationRunAssetDirectory,
     ExecutionArtifactDirectory,
     ExecutionRootDirectory,
     federated_training_directory,
 )
-from datp_core.pipeline.execution.models import CampaignEntry, CampaignPlan, campaign_digest
+from datp_core.experiments.execution.models import CampaignEntry, CampaignPlan, campaign_digest
+from datp_core.experiments.personalized_scoring import client_metric, client_scoring_input, score_record_for_client
+from datp_core.experiments.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
 from datp_core.presentation.export import export_mechanism_publication
 from datp_core.protocols.calibration import CANONICAL_QUANTILE, MINIMUM_BENIGN_SUPPORT, CalibrationSupportRule
 from datp_core.protocols.experiments import EXPERIMENTS

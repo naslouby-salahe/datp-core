@@ -42,7 +42,7 @@ from datp_core.detector.training.models import (
     PreparedClientProvenance,
 )
 from datp_core.experiments.common.coordinates import ExperimentCoordinate
-from datp_core.pipeline.execution.layout import (
+from datp_core.experiments.execution.layout import (
     ExecutionArtifactDirectory,
     bounded_evidence_seed_directory,
     federated_training_directory,

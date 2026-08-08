@@ -67,7 +67,7 @@ from datp_core.detector.training.federated_publication import (
 )
 from datp_core.detector.training.models import CheckpointCandidate
 from datp_core.experiments.common.coordinates import ExperimentCoordinate
-from datp_core.pipeline.execution.context import (
+from datp_core.experiments.execution.context import (
     FederatedExecutionContext,
     client_scoring_inputs,
     client_training_inputs,
@@ -75,9 +75,9 @@ from datp_core.pipeline.execution.context import (
     training_autoencoder,
     training_feature_names,
 )
-from datp_core.pipeline.execution.evidence import eligible_calibration_scores, load_evaluation_document
-from datp_core.pipeline.execution.layout import EvaluationRunAssetDirectory, ExecutionArtifactDirectory
-from datp_core.pipeline.execution.score_generation import score_selected_checkpoint
+from datp_core.experiments.execution.evidence import eligible_calibration_scores, load_evaluation_document
+from datp_core.experiments.execution.layout import EvaluationRunAssetDirectory, ExecutionArtifactDirectory
+from datp_core.experiments.execution.score_generation import score_selected_checkpoint
 from datp_core.protocols.calibration import (
     CANONICAL_QUANTILE,
     CalibrationSupportRule,

@@ -29,8 +29,8 @@ from datp_core.detector.training.centralized_publication import (
     TrainCentralizedDetectorRequest,
     train_centralized_detector,
 )
-from datp_core.pipeline.execution.context import training_feature_names
-from datp_core.pipeline.execution.layout import ExecutionArtifactDirectory
+from datp_core.experiments.execution.context import training_feature_names
+from datp_core.experiments.execution.layout import ExecutionArtifactDirectory
 from datp_core.protocols.training import BATCH_SIZE, CHECKPOINT_PROTOCOL, NBAIOT_AUTOENCODER
 from datp_core.runtime.configuration import DATA_ROOT, OUTPUTS_ROOT
 from datp_core.thresholds.centralized import (

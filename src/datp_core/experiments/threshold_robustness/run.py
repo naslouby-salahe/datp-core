@@ -29,9 +29,9 @@ from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.experiments.common.coordinates import ExperimentCoordinate
 from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.experiments.execution import execute_declared_experiment_seed
+from datp_core.experiments.execution.evidence import load_evaluation_document, population_metric
+from datp_core.experiments.execution.layout import EvaluationRunAssetDirectory
 from datp_core.experiments.planning import expand_experiment_plan
-from datp_core.pipeline.execution.evidence import load_evaluation_document, population_metric
-from datp_core.pipeline.execution.layout import EvaluationRunAssetDirectory
 from datp_core.protocols.calibration import (
     CALIBRATION_SIZES,
     QUANTILE_GRID,

@@ -10,11 +10,21 @@ from typing import ClassVar
 
 from pydantic import ValidationError
 
-from datp_core.experiments.anchor.gate import (
-    assert_gate_not_bypassable,
-    decide_anchor_gate,
-    persist_anchor_gate_diagnostics,
+from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
+from datp_core.artifacts.layout import evaluation_run_directory
+from datp_core.artifacts.provenance import Checksum, checksum_file
+from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
+from datp_core.artifacts.serializers.json import canonical_checksum, canonical_json_text
+from datp_core.core.contracts import StrictModel
+from datp_core.core.errors import AnchorReproductionError, ScientificContractError
+from datp_core.core.identifiers import (
+    ExperimentId,
+    ExperimentReadiness,
+    FederatedThresholdMethod,
+    MetricId,
+    StageOperationId,
 )
+from datp_core.core.numeric import NonNegativeIntegerValue
 from datp_core.experiments.anchor.contracts import (
     AnchorDependencyBlocker,
     AnchorGateDecision,
@@ -22,6 +32,11 @@ from datp_core.experiments.anchor.contracts import (
     AnchorObservationSourceKind,
     AnchorObservedMetric,
     HistoricalMetricArtifactSource,
+)
+from datp_core.experiments.anchor.gate import (
+    assert_gate_not_bypassable,
+    decide_anchor_gate,
+    persist_anchor_gate_diagnostics,
 )
 from datp_core.experiments.anchor.reproduction import (
     ANCHOR_CHECKPOINT_STATUS,
@@ -33,25 +48,10 @@ from datp_core.experiments.anchor.reproduction import (
     load_historical_observations,
     reproduce_anchor,
 )
-from datp_core.artifacts.provenance import Checksum, checksum_file
-from datp_core.artifacts.serializers.json import canonical_checksum, canonical_json_text
-from datp_core.core.contracts import StrictModel
-from datp_core.core.identifiers import (
-    ExperimentId,
-    ExperimentReadiness,
-    FederatedThresholdMethod,
-    MetricId,
-    StageOperationId,
-)
-from datp_core.core.errors import AnchorReproductionError, ScientificContractError
-from datp_core.core.numeric import NonNegativeIntegerValue
-from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
-from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
-from datp_core.pipeline.execution.evidence import load_evaluation_document, population_metric
-from datp_core.pipeline.execution.layout import EvaluationRunAssetDirectory
-from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.experiments.anchor.spec import HISTORICAL_ANCHOR_SEED_COHORT, AnchorDecisionProtocol
 from datp_core.experiments.common.seeds import SeedCohort
+from datp_core.experiments.execution.evidence import load_evaluation_document, population_metric
+from datp_core.experiments.execution.layout import EvaluationRunAssetDirectory
 from datp_core.runtime.configuration import OUTPUTS_ROOT
 
 

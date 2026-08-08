@@ -24,9 +24,9 @@ from datp_core.core.numeric import ByteCount
 from datp_core.data.service import DatasetMaterializationRequest, materialize_datasets
 from datp_core.detector.scoring.contracts import FixedScoreInvariant
 from datp_core.experiments.common.coordinates import ExecutionRoute, ExperimentCoordinate, execution_route_for
-from datp_core.pipeline.execution.evidence import load_evaluation_document
-from datp_core.pipeline.execution.layout import EvaluationRunAssetDirectory
-from datp_core.pipeline.execution.models import (
+from datp_core.experiments.execution.evidence import load_evaluation_document
+from datp_core.experiments.execution.layout import EvaluationRunAssetDirectory
+from datp_core.experiments.execution.models import (
     ANCHOR_REPRODUCTION_RECIPE,
     STANDARD_FEDERATED_RECIPE,
     CampaignExecution,
@@ -41,7 +41,7 @@ from datp_core.pipeline.execution.models import (
     StageOutcome,
     StageRunner,
 )
-from datp_core.pipeline.execution.workspace import ExperimentWorkspace
+from datp_core.experiments.execution.workspace import ExperimentWorkspace
 from datp_core.protocols.experiments import EXPERIMENTS
 from datp_core.protocols.graph import ObservationBoundary, ObservationContext, ObservationHook, observe_graph_boundary
 from datp_core.runtime.configuration import DATA_ROOT

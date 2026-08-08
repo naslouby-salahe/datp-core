@@ -50,23 +50,23 @@ from datp_core.data.registry import population_capabilities
 from datp_core.detector.scoring.models import FederatedScoreArtifactManifest
 from datp_core.experiments.common.coordinates import ExperimentCoordinate
 from datp_core.experiments.common.seeds import BOUNDED_EVIDENCE_SEED_COHORT, SeedCohort
-from datp_core.experiments.planning import ExperimentPlan, expand_experiment_plan
-from datp_core.pipeline.execution.checkpoints import select_execution_checkpoint
-from datp_core.pipeline.execution.context import (
+from datp_core.experiments.execution.checkpoints import select_execution_checkpoint
+from datp_core.experiments.execution.context import (
     FederatedExecutionContext,
     client_scoring_inputs,
     resolve_execution_context,
     training_autoencoder,
     training_feature_names,
 )
-from datp_core.pipeline.execution.evidence import eligible_calibration_scores
-from datp_core.pipeline.execution.layout import (
+from datp_core.experiments.execution.evidence import eligible_calibration_scores
+from datp_core.experiments.execution.layout import (
     ExecutionArtifactDirectory,
     ExecutionRootDirectory,
     bounded_evidence_seed_directory,
 )
-from datp_core.pipeline.execution.matched_reference import matched_static_reference_inputs
-from datp_core.pipeline.execution.score_generation import score_selected_checkpoint
+from datp_core.experiments.execution.matched_reference import matched_static_reference_inputs
+from datp_core.experiments.execution.score_generation import score_selected_checkpoint
+from datp_core.experiments.planning import ExperimentPlan, expand_experiment_plan
 from datp_core.presentation.export import export_temporal_publication
 from datp_core.protocols.calibration import (
     CANONICAL_QUANTILE,
