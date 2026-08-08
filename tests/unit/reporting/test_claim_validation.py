@@ -1,6 +1,6 @@
 from datp_core.anchor.models import VerifiedAnchorGateArtifact
 from datp_core.domain.enums import AvailabilityStatus, EvidenceRole, MetricId, PopulationId
-from datp_core.reporting.validation import (
+from datp_core.presentation.validation import (
     ClaimKind,
     ClaimRequest,
     ClaimStatus,
