@@ -6,7 +6,6 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from datp_core.app.planning import expand_experiment_plan
 from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import ExperimentId, FederatedThresholdMethod, MetricId, PopulationId
@@ -18,15 +17,12 @@ from datp_core.domain.values.ratios import MetricDelta, MetricValue, Quantile, R
 from datp_core.evaluation.federated.publication import FederatedEvaluationAssetName
 from datp_core.evaluation.models import MetricStatus, metric_by_id
 from datp_core.experiments.execution import execute_declared_experiment_seed
+from datp_core.experiments.planning import expand_experiment_plan
 from datp_core.pipeline.coordinates import ExperimentCoordinate
 from datp_core.pipeline.execution.evidence import load_evaluation_document, population_metric
 from datp_core.pipeline.execution.layout import EvaluationRunAssetDirectory
 from datp_core.pipeline.publication.layout import evaluation_run_directory
-from datp_core.protocols.calibration import (
-    CALIBRATION_SIZES,
-    CALIBRATION_SUBSAMPLE_REPLICATE_COUNT,
-    QUANTILE_GRID,
-)
+from datp_core.protocols.calibration import CALIBRATION_SIZES, QUANTILE_GRID, require_calibration_subsample_replicate_count
 from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration
 from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.runtime.configuration import OUTPUTS_ROOT
@@ -257,7 +253,7 @@ def run_shared_construction_sensitivity_seed(
     training_seed: Seed,
     *,
     output_root: Path,
-    overwrite: bool = False,
+    overwrite: bool,
 ) -> ThresholdRobustnessSeedResult:
     return _run_robustness_seed(
         ExperimentId.SHARED_CONSTRUCTION_SENSITIVITY,
@@ -306,7 +302,7 @@ def run_quantile_sensitivity_seed(
     training_seed: Seed,
     *,
     output_root: Path,
-    overwrite: bool = False,
+    overwrite: bool,
 ) -> ThresholdRobustnessSeedResult:
     return _run_robustness_seed(ExperimentId.QUANTILE_SENSITIVITY, training_seed, output_root, overwrite)
 
@@ -365,8 +361,9 @@ def run_calibration_size_ablation_seed(
     training_seed: Seed,
     *,
     output_root: Path,
-    overwrite: bool = False,
+    overwrite: bool,
 ) -> ThresholdRobustnessSeedResult:
+    require_calibration_subsample_replicate_count()
     return _run_robustness_seed(ExperimentId.CALIBRATION_SIZE_ABLATION, training_seed, output_root, overwrite)
 
 
@@ -375,6 +372,7 @@ def report_calibration_size_ablation(
     overwrite: bool,
 ) -> tuple[tuple[Path, ...], str]:
     del overwrite
+    replicate_count = require_calibration_subsample_replicate_count()
     declaration = _declaration_for(experiment_id)
     directory = _analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
     directory.mkdir(parents=True, exist_ok=True)
@@ -406,7 +404,7 @@ def report_calibration_size_ablation(
     )
     marker = (
         "calibration_size_ablation_analysis_complete "
-        f"sizes={len(CALIBRATION_SIZES)} replicates={CALIBRATION_SUBSAMPLE_REPLICATE_COUNT.value}\n"
+        f"sizes={len(CALIBRATION_SIZES)} replicates={replicate_count.value}\n"
     )
     return _finalize_report(
         directory,
@@ -424,7 +422,7 @@ def run_fixed_shrinkage_curve_seed(
     training_seed: Seed,
     *,
     output_root: Path,
-    overwrite: bool = False,
+    overwrite: bool,
 ) -> ThresholdRobustnessSeedResult:
     return _run_robustness_seed(ExperimentId.FIXED_SHRINKAGE_CURVE, training_seed, output_root, overwrite)
 
@@ -484,7 +482,7 @@ def run_size_aware_shrinkage_seed(
     training_seed: Seed,
     *,
     output_root: Path,
-    overwrite: bool = False,
+    overwrite: bool,
 ) -> ThresholdRobustnessSeedResult:
     declaration = _declaration_for(ExperimentId.SIZE_AWARE_SHRINKAGE)
     filtered = declaration.model_copy(
@@ -561,7 +559,7 @@ def run_local_conformal_coverage_seed(
     training_seed: Seed,
     *,
     output_root: Path,
-    overwrite: bool = False,
+    overwrite: bool,
 ) -> ThresholdRobustnessSeedResult:
     return _run_robustness_seed(ExperimentId.LOCAL_CONFORMAL_COVERAGE, training_seed, output_root, overwrite)
 
