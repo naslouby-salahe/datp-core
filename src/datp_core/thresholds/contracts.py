@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from enum import StrEnum
 from statistics import fmean
-from typing import Literal
+from typing import ClassVar, Literal, Protocol, runtime_checkable
 
 from pydantic import model_validator
 
@@ -39,6 +39,27 @@ from datp_core.core.numeric import (
 )
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
+
+
+class ThresholdInfeasibilityReason(StrEnum):
+    SIZE_AWARE_SHRINKAGE_FUNCTION_UNRESOLVED = "size_aware_shrinkage_function_unresolved"
+    FAMILY_TAXONOMY_UNAVAILABLE = "family_taxonomy_unavailable"
+    GROUP_COUNT_EXCEEDS_ELIGIBLE_POPULATION = "group_count_exceeds_eligible_population"
+
+
+@dataclass(frozen=True, slots=True)
+class ThresholdUnavailableResult:
+    method: FederatedThresholdMethod
+    coordinate: FederatedTrainingCoordinate
+    reason: ThresholdInfeasibilityReason
+    detail: str
+
+    def __post_init__(self) -> None:
+        require_contract(
+            bool(self.detail.strip()),
+            "an unavailable threshold result requires a human-readable detail",
+            ContractSubject.THRESHOLD,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,6 +98,52 @@ class ThresholdAssignment:
 class FamilyAssignment:
     client: ClientIdentity
     family: FamilyIdentity
+
+
+@runtime_checkable
+class ThresholdAssignmentLike(Protocol):
+    @property
+    def client(self) -> ClientIdentity: ...
+
+    @property
+    def threshold(self) -> ThresholdValue: ...
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ThresholdAssignmentSet[AssignmentT: ThresholdAssignmentLike]:
+    assignments: tuple[AssignmentT, ...]
+
+    def __post_init__(self) -> None:
+        if not self.assignments:
+            raise ScientificContractError(
+                "threshold assignment set requires at least one assignment",
+                subject=ContractSubject.THRESHOLD,
+            )
+        clients = tuple(item.client for item in self.assignments)
+        if len(frozenset(clients)) != len(clients):
+            raise ScientificContractError(
+                "threshold assignment clients must be unique",
+                subject=ContractSubject.CLIENT_IDENTITY,
+            )
+
+    @property
+    def clients(self) -> tuple[ClientIdentity, ...]:
+        return tuple(item.client for item in self.assignments)
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ThresholdConstructionContext:
+    coordinate: FederatedTrainingCoordinate
+    calibration_manifest_checksum: Checksum
+    score_set_checksum: Checksum
+    quantile: Quantile
+
+
+@runtime_checkable
+class FederatedThresholdResult(Protocol):
+    coordinate: FederatedTrainingCoordinate
+    assignments: tuple[ThresholdAssignmentLike, ...]
+    method: ClassVar[FederatedThresholdMethod]
 
 
 def mean_local_threshold(quantiles: tuple[LocalQuantile, ...]) -> ThresholdValue:
