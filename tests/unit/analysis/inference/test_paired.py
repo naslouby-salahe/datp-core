@@ -10,18 +10,19 @@ from datp_core.analysis.inference.multiplicity import (
 )
 from datp_core.analysis.inference.wilcoxon import (
     PValue,
+    WilcoxonComputationMethod,
     matched_pairs_rank_biserial,
     paired_wilcoxon,
 )
-from datp_core.domain.enums import (
+from datp_core.core.identifiers import (
     AvailabilityStatus,
     EvidenceRole,
     ExperimentId,
     FederatedThresholdMethod,
     MetricId,
 )
-from datp_core.domain.values.ratios import Ratio
-from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL, WilcoxonComputationMethod
+from datp_core.core.numeric import Ratio
+from datp_core.experiments.confirmatory.spec import CONFIRMATORY_INFERENCE_PROTOCOL
 
 
 def test_paired_inference_uses_the_declared_protocol() -> None:
