@@ -23,7 +23,7 @@ from datp_core.core.numeric import MetricValue, Ratio, Seed
 from datp_core.analysis.inference.wilcoxon import PairedInferenceProtocol
 from datp_core.experiments.common.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_ANALYSIS_SEED, SeedCohort
 from datp_core.experiments.confirmatory.spec import CONFIRMATORY_INFERENCE_PROTOCOL
-from datp_core.experiments.temporal.spec import TemporalDecisionProtocol, TemporalDeploymentProvenance
+from datp_core.protocols.temporal import TemporalDecisionProtocol, TemporalDeploymentProvenance
 
 
 class TemporalInterpretation(StrEnum):
