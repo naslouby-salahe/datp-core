@@ -1,38 +1,37 @@
-"""Federated threshold-estimation seed runners, reports, and analysis markers.
-
-Covers three threshold-variant experiments:
-- FEDERATED_BENIGN_STATISTICS_COMPARISON
-- FEDERATED_QUANTILE_ESTIMATION
-- FIXED_COEFFICIENT_STATISTICS_SENSITIVITY
-"""
+"""Federated threshold-estimation experiment runners and typed reports."""
 
 from __future__ import annotations
 
-import json
-from dataclasses import asdict, dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 from pydantic import TypeAdapter
 
-from datp_core.domain.enums import (
-    ExperimentId,
-    FederatedThresholdMethod,
-    MetricId,
-    PopulationId,
-)
+from datp_core.app.planning import expand_experiment_plan
+from datp_core.domain.contracts import StrictModel
+from datp_core.domain.enums import ExperimentId, FederatedThresholdMethod, MetricId, PopulationId
 from datp_core.domain.errors import ScientificContractError
+from datp_core.domain.provenance import serialize_json_model
+from datp_core.domain.values.base import NonNegativeFiniteFloatValue
 from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import Seed
+from datp_core.domain.values.counts import ByteCount, Seed, SeedCount
+from datp_core.domain.values.ratios import (
+    AbsoluteThresholdError,
+    MetricValue,
+    Ratio,
+    SummaryCoefficient,
+    ThresholdValue,
+    ThresholdVariance,
+)
 from datp_core.evaluation.federated.publication import FederatedEvaluationAssetName
 from datp_core.evaluation.models import MetricStatus, metric_by_id
+from datp_core.experiments.execution import execute_declared_experiment_seed
 from datp_core.pipeline.coordinates import ExperimentCoordinate
 from datp_core.pipeline.execution.evidence import load_evaluation_document
 from datp_core.pipeline.execution.layout import EvaluationRunAssetDirectory
-from datp_core.pipeline.planning import expand_experiment_plan
 from datp_core.pipeline.publication.layout import evaluation_run_directory
-from datp_core.protocols.experiments import ExperimentDeclaration
+from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration
 from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.runtime.configuration import OUTPUTS_ROOT
 from datp_core.thresholding.publication import FederatedThresholdAssetName
@@ -42,52 +41,66 @@ if TYPE_CHECKING:
     from datp_core.thresholding.models import ThresholdConstructionResult
 
 
-class FederatedEstimationAssetDirectory(StrEnum):
+class AverageByteCount(NonNegativeFiniteFloatValue):
+    validation_name: ClassVar[str] = "average byte count"
+
+
+class FederatedEstimationArtifactName(StrEnum):
     ROOT = "federated_threshold_estimation"
+    ANALYSIS = "analysis"
+    SUMMARY = "summary.json"
 
 
-_SUMMARY_FILENAME = "summary.json"
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class _EstimationSummaryRow:
-    method: str
-    seed_count: int
-    mean_cv_fpr: float | None
-    worst_client_fpr: float | None
-    fpr_coefficient_of_variation: float | None
-    mean_absolute_threshold_error: float | None = None
-    mean_absolute_attainment_error: float | None = None
-    mean_achieved_exceedance: float | None = None
-    mean_threshold_variance: float | None = None
-    estimated_communication_bytes: int | None = None
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class _FixedCoefficientSummaryRow:
-    seed: int
-    coefficient: float | None
-    method: str
-    threshold_value: float | None
-    cv_fpr: float | None
-    worst_client_fpr: float | None
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class FederatedEstimationSeedResult:
+class FederatedEstimationSeedResult(StrictModel):
     training_seed: Seed
     campaign_digest: Checksum
     completed_threshold_methods: tuple[FederatedThresholdMethod, ...]
 
 
+class EstimationSummary(StrictModel):
+    method: FederatedThresholdMethod
+    seed_count: SeedCount
+    mean_cv_fpr: MetricValue | None
+    mean_worst_client_fpr: MetricValue | None
+    cv_fpr_across_seeds: MetricValue | None
+    mean_absolute_threshold_error: AbsoluteThresholdError | None
+    mean_absolute_attainment_error: MetricValue | None
+    mean_achieved_exceedance: Ratio | None
+    mean_threshold_variance: ThresholdVariance | None
+    mean_estimated_communication_bytes: AverageByteCount | None
+
+
+class EstimationSummaryReport(StrictModel):
+    experiment: ExperimentId
+    rows: tuple[EstimationSummary, ...]
+
+
+class FixedCoefficientSummary(StrictModel):
+    seed: Seed
+    coefficient: SummaryCoefficient | None
+    method: FederatedThresholdMethod
+    threshold_value: ThresholdValue | None
+    cv_fpr: MetricValue | None
+    worst_client_fpr: MetricValue | None
+
+
+class FixedCoefficientSummaryReport(StrictModel):
+    experiment: ExperimentId
+    rows: tuple[FixedCoefficientSummary, ...]
+
+
 def _analysis_directory(experiment_id: ExperimentId, population: PopulationId) -> Path:
     return (
         OUTPUTS_ROOT
-        / FederatedEstimationAssetDirectory.ROOT
+        / FederatedEstimationArtifactName.ROOT
         / experiment_id.value
         / population.value
-        / "analysis"
+        / FederatedEstimationArtifactName.ANALYSIS
     )
+
+
+def _summary_path(experiment_id: ExperimentId, population: PopulationId) -> Path:
+    return _analysis_directory(experiment_id, population) / FederatedEstimationArtifactName.SUMMARY
 
 
 def _complete_marker(experiment_id: ExperimentId, population: PopulationId) -> Path:
@@ -97,15 +110,16 @@ def _complete_marker(experiment_id: ExperimentId, population: PopulationId) -> P
 
 
 def _declaration_for(experiment_id: ExperimentId) -> ExperimentDeclaration:
-    from datp_core.pipeline.workflows import require_experiment_declaration
+    matches = tuple(item for item in EXPERIMENTS if item.id is experiment_id)
+    if len(matches) != 1:
+        raise ScientificContractError(
+            f"experiment must be declared exactly once: {experiment_id.value}",
+            subject=experiment_id,
+        )
+    return matches[0]
 
-    return require_experiment_declaration(experiment_id)
 
-
-def _evaluation_document_path(
-    output_root: Path,
-    coordinate: ExperimentCoordinate,
-) -> Path:
+def _evaluation_document_path(output_root: Path, coordinate: ExperimentCoordinate) -> Path:
     return (
         evaluation_run_directory(output_root, coordinate)
         / EvaluationRunAssetDirectory.EVALUATION
@@ -113,10 +127,7 @@ def _evaluation_document_path(
     )
 
 
-def _threshold_result_path(
-    output_root: Path,
-    coordinate: ExperimentCoordinate,
-) -> Path:
+def _threshold_result_path(output_root: Path, coordinate: ExperimentCoordinate) -> Path:
     return (
         evaluation_run_directory(output_root, coordinate)
         / EvaluationRunAssetDirectory.THRESHOLD
@@ -175,25 +186,39 @@ def _threshold_coordinate_for_seed(
     return matches[0]
 
 
-def _try_metric_value(doc: FederatedEvaluationDocument, metric: MetricId) -> float | None:
-    result = metric_by_id(doc.population.metrics, metric)
-    if result.status is MetricStatus.AVAILABLE and result.value is not None:
-        return result.value.value
-    return None
+def _try_metric_value(document: FederatedEvaluationDocument, metric: MetricId) -> MetricValue | None:
+    result = metric_by_id(document.population.metrics, metric)
+    return result.value if result.status is MetricStatus.AVAILABLE else None
 
 
-def _mean(values: list[float]) -> float | None:
-    return sum(values) / len(values) if values else None
+def _mean_metric(values: list[MetricValue]) -> MetricValue | None:
+    return MetricValue(sum(value.value for value in values) / len(values)) if values else None
 
 
-def _coefficient_of_variation(values: list[float]) -> float | None:
+def _cv(values: list[MetricValue]) -> MetricValue | None:
     if len(values) < 2:
         return None
-    mean = sum(values) / len(values)
+    mean = sum(value.value for value in values) / len(values)
     if mean == 0:
         return None
-    variance = sum((value - mean) ** 2 for value in values) / len(values)
-    return variance**0.5 / mean
+    variance = sum((value.value - mean) ** 2 for value in values) / len(values)
+    return MetricValue(variance**0.5 / mean)
+
+
+def _mean_absolute_threshold_error(values: list[float]) -> AbsoluteThresholdError | None:
+    return AbsoluteThresholdError(sum(values) / len(values)) if values else None
+
+
+def _mean_ratio(values: list[float]) -> Ratio | None:
+    return Ratio(sum(values) / len(values)) if values else None
+
+
+def _mean_threshold_variance(values: list[float]) -> ThresholdVariance | None:
+    return ThresholdVariance(sum(values) / len(values)) if values else None
+
+
+def _mean_bytes(values: list[ByteCount]) -> AverageByteCount | None:
+    return AverageByteCount(sum(value.value for value in values) / len(values)) if values else None
 
 
 def _finalize_report(
@@ -215,8 +240,6 @@ def _run_estimation_seed(
     output_root: Path,
     overwrite: bool,
 ) -> FederatedEstimationSeedResult:
-    from datp_core.pipeline.workflows.execution import execute_declared_experiment_seed
-
     declaration = _declaration_for(experiment_id)
     result = execute_declared_experiment_seed(
         declaration=declaration,
@@ -232,7 +255,60 @@ def _run_estimation_seed(
     )
 
 
-# ── FEDERATED_BENIGN_STATISTICS_COMPARISON ─────────────────────────────────
+def _estimation_summary(
+    *,
+    experiment_id: ExperimentId,
+    method: FederatedThresholdMethod,
+    include_threshold_error: bool,
+    include_exceedance_and_variance: bool,
+) -> tuple[EstimationSummary | None, int]:
+    documents: list[FederatedEvaluationDocument] = []
+    missing = 0
+    for seed in CONFIRMATORY_SEED_COHORT.values:
+        try:
+            documents.append(_evaluation_document_for_seed(seed, method, experiment_id, OUTPUTS_ROOT))
+        except ScientificContractError:
+            missing += 1
+    if not documents:
+        return None, missing
+
+    cv_values = [value for document in documents if (value := _try_metric_value(document, MetricId.FPR_COEFFICIENT_OF_VARIATION))]
+    worst_values = [value for document in documents if (value := _try_metric_value(document, MetricId.WORST_CLIENT_FPR))]
+    threshold_errors: list[float] = []
+    attainment_errors: list[float] = []
+    exceedances: list[float] = []
+    variances: list[float] = []
+    communication: list[ByteCount] = []
+    for document in documents:
+        if include_threshold_error:
+            for diagnostic in document.diagnostics.threshold_estimation:
+                threshold_errors.append(diagnostic.absolute_threshold_error)
+                attainment_errors.append(diagnostic.absolute_attainment_error)
+        if include_exceedance_and_variance:
+            for diagnostic in document.diagnostics.threshold_estimation:
+                exceedances.append(diagnostic.achieved_benign_exceedance.value)
+            for point in document.diagnostics.sample_efficiency:
+                variances.append(point.threshold_variance_across_nested_replicates.value)
+        if document.diagnostics.communication is not None:
+            communication.append(document.diagnostics.communication.total_estimated_serialized_bytes)
+
+    return (
+        EstimationSummary(
+            method=method,
+            seed_count=SeedCount(len(documents)),
+            mean_cv_fpr=_mean_metric(cv_values),
+            mean_worst_client_fpr=_mean_metric(worst_values),
+            cv_fpr_across_seeds=_cv(cv_values),
+            mean_absolute_threshold_error=_mean_absolute_threshold_error(threshold_errors),
+            mean_absolute_attainment_error=(
+                MetricValue(sum(attainment_errors) / len(attainment_errors)) if attainment_errors else None
+            ),
+            mean_achieved_exceedance=_mean_ratio(exceedances),
+            mean_threshold_variance=_mean_threshold_variance(variances),
+            mean_estimated_communication_bytes=_mean_bytes(communication),
+        ),
+        missing,
+    )
 
 
 def run_federated_benign_statistics_comparison_seed(
@@ -244,63 +320,35 @@ def run_federated_benign_statistics_comparison_seed(
     return _run_estimation_seed(
         ExperimentId.FEDERATED_BENIGN_STATISTICS_COMPARISON,
         training_seed,
-        output_root=output_root,
-        overwrite=overwrite,
+        output_root,
+        overwrite,
     )
 
 
 def report_federated_benign_statistics_comparison(
-    experiment_id: ExperimentId, overwrite: bool,
+    experiment_id: ExperimentId,
+    overwrite: bool,
 ) -> tuple[tuple[Path, ...], str]:
     del overwrite
     declaration = _declaration_for(experiment_id)
     directory = _analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
     directory.mkdir(parents=True, exist_ok=True)
-    summary: dict[str, _EstimationSummaryRow] = {}
+    rows: list[EstimationSummary] = []
     missing = 0
     for method in declaration.federated_thresholds:
-        cv_values: list[float] = []
-        worst_fpr_values: list[float] = []
-        abs_threshold_errors: list[float] = []
-        abs_attainment_errors: list[float] = []
-        comm_bytes_values: list[int] = []
-        for seed in CONFIRMATORY_SEED_COHORT.values:
-            try:
-                doc = _evaluation_document_for_seed(seed, method, experiment_id, OUTPUTS_ROOT)
-            except ScientificContractError:
-                missing += 1
-                continue
-            cv_val = _try_metric_value(doc, MetricId.FPR_COEFFICIENT_OF_VARIATION)
-            if cv_val is not None:
-                cv_values.append(cv_val)
-            worst_val = _try_metric_value(doc, MetricId.WORST_CLIENT_FPR)
-            if worst_val is not None:
-                worst_fpr_values.append(worst_val)
-            for diag in doc.diagnostics.threshold_estimation:
-                abs_threshold_errors.append(diag.absolute_threshold_error)
-                abs_attainment_errors.append(diag.absolute_attainment_error)
-            if doc.diagnostics.communication is not None:
-                comm_bytes_values.append(
-                    doc.diagnostics.communication.total_estimated_serialized_bytes.value
-                )
-        summary[method.value] = _EstimationSummaryRow(
-            method=method.value,
-            seed_count=len(cv_values),
-            mean_cv_fpr=_mean(cv_values),
-            worst_client_fpr=_mean(worst_fpr_values),
-            fpr_coefficient_of_variation=_coefficient_of_variation(cv_values),
-            mean_absolute_threshold_error=_mean(abs_threshold_errors),
-            mean_absolute_attainment_error=_mean(abs_attainment_errors),
-            estimated_communication_bytes=(
-                int(mean_bytes) if (mean_bytes := _mean([float(b) for b in comm_bytes_values])) is not None
-                else None
-            ),
+        summary, missing_for_method = _estimation_summary(
+            experiment_id=experiment_id,
+            method=method,
+            include_threshold_error=True,
+            include_exceedance_and_variance=False,
         )
-    serialized = {
-        key: {k: v for k, v in asdict(row).items()}
-        for key, row in summary.items()
-    }
-    (directory / _SUMMARY_FILENAME).write_text(json.dumps(serialized, indent=2), encoding="utf-8")
+        missing += missing_for_method
+        if summary is not None:
+            rows.append(summary)
+    serialize_json_model(
+        EstimationSummaryReport(experiment=experiment_id, rows=tuple(rows)),
+        _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
+    )
     return _finalize_report(
         directory,
         _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
@@ -313,78 +361,39 @@ def federated_benign_statistics_comparison_analysis_marker_present(experiment_id
     return _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES).is_file()
 
 
-# ── FEDERATED_QUANTILE_ESTIMATION ──────────────────────────────────────────
-
-
 def run_federated_quantile_estimation_seed(
     training_seed: Seed,
     *,
     output_root: Path,
     overwrite: bool = False,
 ) -> FederatedEstimationSeedResult:
-    return _run_estimation_seed(
-        ExperimentId.FEDERATED_QUANTILE_ESTIMATION,
-        training_seed,
-        output_root=output_root,
-        overwrite=overwrite,
-    )
+    return _run_estimation_seed(ExperimentId.FEDERATED_QUANTILE_ESTIMATION, training_seed, output_root, overwrite)
 
 
 def report_federated_quantile_estimation(
-    experiment_id: ExperimentId, overwrite: bool,
+    experiment_id: ExperimentId,
+    overwrite: bool,
 ) -> tuple[tuple[Path, ...], str]:
     del overwrite
     declaration = _declaration_for(experiment_id)
     directory = _analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
     directory.mkdir(parents=True, exist_ok=True)
-    summary: dict[str, _EstimationSummaryRow] = {}
+    rows: list[EstimationSummary] = []
     missing = 0
     for method in declaration.federated_thresholds:
-        cv_values: list[float] = []
-        worst_fpr_values: list[float] = []
-        achieved_exceedance_values: list[float] = []
-        threshold_variances: list[float] = []
-        comm_bytes_values: list[int] = []
-        for seed in CONFIRMATORY_SEED_COHORT.values:
-            try:
-                doc = _evaluation_document_for_seed(seed, method, experiment_id, OUTPUTS_ROOT)
-            except ScientificContractError:
-                missing += 1
-                continue
-            cv_val = _try_metric_value(doc, MetricId.FPR_COEFFICIENT_OF_VARIATION)
-            if cv_val is not None:
-                cv_values.append(cv_val)
-            worst_val = _try_metric_value(doc, MetricId.WORST_CLIENT_FPR)
-            if worst_val is not None:
-                worst_fpr_values.append(worst_val)
-            for diag in doc.diagnostics.threshold_estimation:
-                achieved_exceedance_values.append(diag.achieved_benign_exceedance.value)
-            for point in doc.diagnostics.sample_efficiency:
-                threshold_variances.append(
-                    point.threshold_variance_across_nested_replicates.value
-                )
-            if doc.diagnostics.communication is not None:
-                comm_bytes_values.append(
-                    doc.diagnostics.communication.total_estimated_serialized_bytes.value
-                )
-        summary[method.value] = _EstimationSummaryRow(
-            method=method.value,
-            seed_count=len(cv_values),
-            mean_cv_fpr=_mean(cv_values),
-            worst_client_fpr=_mean(worst_fpr_values),
-            fpr_coefficient_of_variation=_coefficient_of_variation(cv_values),
-            mean_achieved_exceedance=_mean(achieved_exceedance_values),
-            mean_threshold_variance=_mean(threshold_variances),
-            estimated_communication_bytes=(
-                int(mean_bytes) if (mean_bytes := _mean([float(b) for b in comm_bytes_values])) is not None
-                else None
-            ),
+        summary, missing_for_method = _estimation_summary(
+            experiment_id=experiment_id,
+            method=method,
+            include_threshold_error=False,
+            include_exceedance_and_variance=True,
         )
-    serialized = {
-        key: {k: v for k, v in asdict(row).items()}
-        for key, row in summary.items()
-    }
-    (directory / _SUMMARY_FILENAME).write_text(json.dumps(serialized, indent=2), encoding="utf-8")
+        missing += missing_for_method
+        if summary is not None:
+            rows.append(summary)
+    serialize_json_model(
+        EstimationSummaryReport(experiment=experiment_id, rows=tuple(rows)),
+        _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
+    )
     return _finalize_report(
         directory,
         _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
@@ -397,9 +406,6 @@ def federated_quantile_estimation_analysis_marker_present(experiment_id: Experim
     return _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES).is_file()
 
 
-# ── FIXED_COEFFICIENT_STATISTICS_SENSITIVITY ───────────────────────────────
-
-
 def run_fixed_coefficient_statistics_sensitivity_seed(
     training_seed: Seed,
     *,
@@ -409,73 +415,64 @@ def run_fixed_coefficient_statistics_sensitivity_seed(
     return _run_estimation_seed(
         ExperimentId.FIXED_COEFFICIENT_STATISTICS_SENSITIVITY,
         training_seed,
-        output_root=output_root,
-        overwrite=overwrite,
+        output_root,
+        overwrite,
     )
 
 
 def report_fixed_coefficient_statistics_sensitivity(
-    experiment_id: ExperimentId, overwrite: bool,
+    experiment_id: ExperimentId,
+    overwrite: bool,
 ) -> tuple[tuple[Path, ...], str]:
     del overwrite
     declaration = _declaration_for(experiment_id)
     directory = _analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
     directory.mkdir(parents=True, exist_ok=True)
-    summary: list[_FixedCoefficientSummaryRow] = []
+    rows: list[FixedCoefficientSummary] = []
     missing = 0
     for method in declaration.federated_thresholds:
         for seed in CONFIRMATORY_SEED_COHORT.values:
             try:
-                doc = _evaluation_document_for_seed(seed, method, experiment_id, OUTPUTS_ROOT)
+                document = _evaluation_document_for_seed(seed, method, experiment_id, OUTPUTS_ROOT)
             except ScientificContractError:
                 missing += 1
                 continue
-            cv_val = _try_metric_value(doc, MetricId.FPR_COEFFICIENT_OF_VARIATION)
-            worst_val = _try_metric_value(doc, MetricId.WORST_CLIENT_FPR)
+            cv_fpr = _try_metric_value(document, MetricId.FPR_COEFFICIENT_OF_VARIATION)
+            worst_fpr = _try_metric_value(document, MetricId.WORST_CLIENT_FPR)
             if method is FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS:
                 coordinate = _threshold_coordinate_for_seed(seed, method, experiment_id)
                 threshold_path = _threshold_result_path(OUTPUTS_ROOT, coordinate)
                 if threshold_path.is_file():
-                    thr_result = _load_threshold_result(threshold_path)
-                    from datp_core.thresholding.methods.federated_statistics import (
-                        FederatedStatisticsThresholdResult,
-                    )
-                    if isinstance(thr_result, FederatedStatisticsThresholdResult):
-                        for entry in thr_result.fixed_coefficient_curve:
-                            summary.append(
-                                _FixedCoefficientSummaryRow(
-                                    seed=seed.value,
-                                    coefficient=entry.coefficient.value,
-                                    method=method.value,
-                                    threshold_value=entry.threshold.value,
-                                    cv_fpr=cv_val,
-                                    worst_client_fpr=worst_val,
-                                )
+                    threshold_result = _load_threshold_result(threshold_path)
+                    from datp_core.thresholding.methods.federated_statistics import FederatedStatisticsThresholdResult
+
+                    if isinstance(threshold_result, FederatedStatisticsThresholdResult):
+                        rows.extend(
+                            FixedCoefficientSummary(
+                                seed=seed,
+                                coefficient=entry.coefficient,
+                                method=method,
+                                threshold_value=entry.threshold,
+                                cv_fpr=cv_fpr,
+                                worst_client_fpr=worst_fpr,
                             )
+                            for entry in threshold_result.fixed_coefficient_curve
+                        )
                         continue
-                summary.append(
-                    _FixedCoefficientSummaryRow(
-                        seed=seed.value,
-                        coefficient=None,
-                        method=method.value,
-                        threshold_value=None,
-                        cv_fpr=cv_val,
-                        worst_client_fpr=worst_val,
-                    )
+            rows.append(
+                FixedCoefficientSummary(
+                    seed=seed,
+                    coefficient=None,
+                    method=method,
+                    threshold_value=None,
+                    cv_fpr=cv_fpr,
+                    worst_client_fpr=worst_fpr,
                 )
-            else:
-                summary.append(
-                    _FixedCoefficientSummaryRow(
-                        seed=seed.value,
-                        coefficient=None,
-                        method=method.value,
-                        threshold_value=None,
-                        cv_fpr=cv_val,
-                        worst_client_fpr=worst_val,
-                    )
-                )
-    serialized = [asdict(row) for row in summary]
-    (directory / _SUMMARY_FILENAME).write_text(json.dumps(serialized, indent=2), encoding="utf-8")
+            )
+    serialize_json_model(
+        FixedCoefficientSummaryReport(experiment=experiment_id, rows=tuple(rows)),
+        _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
+    )
     return _finalize_report(
         directory,
         _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
