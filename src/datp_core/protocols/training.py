@@ -18,7 +18,13 @@ from datp_core.domain.enums import (
 )
 from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.values.base import sequence_pydantic_schema, validate_non_empty_tuple
-from datp_core.domain.values.counts import BatchSize, DataLoaderWorkerCount, LocalEpochCount, RoundNumber
+from datp_core.domain.values.counts import (
+    BatchSize,
+    DataLoaderWorkerCount,
+    FeatureCount,
+    LocalEpochCount,
+    RoundNumber,
+)
 from datp_core.domain.values.ratios import (
     DittoRegularization,
     LearningRate,
@@ -33,32 +39,35 @@ from .checkpoints import CheckpointProtocol
 
 
 @dataclass(frozen=True, slots=True)
-class AutoencoderArchitecture(Sequence[int]):
+class AutoencoderArchitecture(Sequence[FeatureCount]):
     """The one authoritative declaration of a symmetric autoencoder layer-width ladder."""
 
-    widths: tuple[int, ...]
+    widths: tuple[FeatureCount, ...]
 
     def __post_init__(self) -> None:
-        validate_non_empty_tuple(self.widths, "autoencoder architecture")
-        if len(self.widths) < 2:
+        normalized = tuple(
+            width if isinstance(width, FeatureCount) else FeatureCount(width)
+            for width in self.widths
+        )
+        object.__setattr__(self, "widths", normalized)
+        validate_non_empty_tuple(normalized, "autoencoder architecture")
+        if len(normalized) < 2:
             raise ValueError("autoencoder architecture requires at least input and output layers")
-        if any(type(width) is not int or width < 1 for width in self.widths):
-            raise ValueError("autoencoder widths must be positive integers")
-        if self.widths[0] != self.widths[-1]:
+        if normalized[0] != normalized[-1]:
             raise ValueError("autoencoder input and output widths must match")
 
     def __len__(self) -> int:
         return len(self.widths)
 
     @overload
-    def __getitem__(self, index: int) -> int: ...
+    def __getitem__(self, index: int) -> FeatureCount: ...
     @overload
-    def __getitem__(self, index: slice) -> tuple[int, ...]: ...
-    def __getitem__(self, index: int | slice) -> int | tuple[int, ...]:
+    def __getitem__(self, index: slice) -> tuple[FeatureCount, ...]: ...
+    def __getitem__(self, index: int | slice) -> FeatureCount | tuple[FeatureCount, ...]:
         return self.widths[index]
 
     @property
-    def input_width(self) -> int:
+    def input_width(self) -> FeatureCount:
         return self.widths[0]
 
     @classmethod
@@ -224,11 +233,15 @@ MODEL_ABSORPTION_DECISION_PROTOCOL = ModelAbsorptionDecisionProtocol(
     full_retention_minimum=DITTO_RETAINED_EFFECT_MINIMUM,
     partial_retention_minimum=DITTO_PARTIAL_EFFECT_MINIMUM,
 )
-NBAIOT_AUTOENCODER = AutoencoderProtocol(widths=AutoencoderArchitecture((115, 86, 58, 38, 29, 38, 58, 86, 115)))
-EDGE_IIOTSET_NUMERIC_AUTOENCODER = AutoencoderProtocol(
-    widths=AutoencoderArchitecture((33, 25, 17, 11, 8, 11, 17, 25, 33))
+NBAIOT_AUTOENCODER = AutoencoderProtocol(
+    widths=AutoencoderArchitecture(tuple(FeatureCount(value) for value in (115, 86, 58, 38, 29, 38, 58, 86, 115)))
 )
-CICIOT2023_AUTOENCODER = AutoencoderProtocol(widths=AutoencoderArchitecture((39, 29, 20, 13, 10, 13, 20, 29, 39)))
+EDGE_IIOTSET_NUMERIC_AUTOENCODER = AutoencoderProtocol(
+    widths=AutoencoderArchitecture(tuple(FeatureCount(value) for value in (33, 25, 17, 11, 8, 11, 17, 25, 33)))
+)
+CICIOT2023_AUTOENCODER = AutoencoderProtocol(
+    widths=AutoencoderArchitecture(tuple(FeatureCount(value) for value in (39, 29, 20, 13, 10, 13, 20, 29, 39)))
+)
 WEIGHT_DECAY = WeightDecay(0.0)
 OPTIMIZER = OptimizerProtocol(identity=OptimizerId.ADAM, weight_decay=WEIGHT_DECAY)
 LEARNING_RATE = LearningRate(0.001)
