@@ -52,10 +52,15 @@ from datp_core.core.numeric import (
 from datp_core.data.populations.contracts import ClientIdentity, PopulationOutcomeLabel
 from datp_core.data.registry import population_capabilities
 from datp_core.detector.checkpoints.selection import CheckpointDecision
+from datp_core.detector.checkpoints.service import SelectFederatedCheckpointRequest, select_federated_primary_checkpoint
 from datp_core.detector.scoring.models import FederatedScoreArtifactManifest, FederatedScoreRecord
 from datp_core.detector.training.engine import FederatedTrainingRequest
+from datp_core.detector.training.federated_publication import (
+    TrainFederatedDetectorRequest,
+    TrainFederatedDetectorResult,
+    train_federated_detector,
+)
 from datp_core.detector.training.models import CheckpointCandidate
-from datp_core.pipeline.checkpoints.service import SelectFederatedCheckpointRequest, select_federated_primary_checkpoint
 from datp_core.pipeline.coordinates import ExperimentCoordinate
 from datp_core.pipeline.decision.calibration import (
     BuildCalibrationResult,
@@ -79,11 +84,6 @@ from datp_core.pipeline.execution.context import (
 from datp_core.pipeline.execution.evidence import eligible_calibration_scores, load_evaluation_document
 from datp_core.pipeline.execution.layout import EvaluationRunAssetDirectory, ExecutionArtifactDirectory
 from datp_core.pipeline.execution.score_generation import score_selected_checkpoint
-from datp_core.pipeline.training.federated import (
-    TrainFederatedDetectorRequest,
-    TrainFederatedDetectorResult,
-    train_federated_detector,
-)
 from datp_core.protocols.calibration import (
     CANONICAL_QUANTILE,
     CalibrationSupportRule,

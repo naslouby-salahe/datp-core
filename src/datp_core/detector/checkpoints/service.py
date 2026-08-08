@@ -22,6 +22,13 @@ from datp_core.detector.checkpoints.contracts import (
 from datp_core.detector.checkpoints.contracts import (
     validate_ordered_checkpoint_inventory as validate_inventory,
 )
+from datp_core.detector.checkpoints.models import (
+    CentralizedCheckpointAssetName,
+    CentralizedCheckpointCandidate,
+    CentralizedCheckpointDecision,
+    CentralizedCheckpointSetEntry,
+    PersistedCheckpoint,
+)
 from datp_core.detector.checkpoints.selection import select_checkpoint
 from datp_core.detector.checkpoints.selection import (
     validate_candidate_coordinates as validate_federated_candidates,
@@ -38,13 +45,6 @@ from datp_core.detector.training.models import (
     CheckpointCandidate,
     CheckpointDecision,
     FederatedTrainingCoordinate,
-)
-from datp_core.pipeline.checkpoints.models import (
-    CentralizedCheckpointAssetName,
-    CentralizedCheckpointCandidate,
-    CentralizedCheckpointDecision,
-    CentralizedCheckpointSetEntry,
-    PersistedCheckpoint,
 )
 from datp_core.protocols.training import (
     CHECKPOINT_SELECTION_RULE,

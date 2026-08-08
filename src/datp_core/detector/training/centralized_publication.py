@@ -31,6 +31,8 @@ from datp_core.core.numeric import (
 from datp_core.data.populations.contracts import PopulationOutcomeLabel
 from datp_core.data.preprocessing.models import CentralizedFittedPreprocessingState
 from datp_core.detector.checkpoints.contracts import CheckpointProtocol
+from datp_core.detector.checkpoints.models import CentralizedCheckpointCandidate
+from datp_core.detector.checkpoints.service import candidate_tensor_name, retain_centralized_checkpoint_candidates
 from datp_core.detector.training.centralized import (
     CentralizedArtifactName,
     CentralizedEpochLoss,
@@ -43,8 +45,6 @@ from datp_core.detector.training.centralized import (
     train_centralized_autoencoder,
     training_history_frame,
 )
-from datp_core.pipeline.checkpoints.models import CentralizedCheckpointCandidate
-from datp_core.pipeline.checkpoints.service import candidate_tensor_name, retain_centralized_checkpoint_candidates
 from datp_core.protocols.training import AutoencoderProtocol, CentralizedTrainingProtocol
 from datp_core.runtime.compute import resolve_cuda_device
 

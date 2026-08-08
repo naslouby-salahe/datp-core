@@ -11,6 +11,7 @@ from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import FeatureNameSequence, PartitionRole, PublicationStatus, SplitProtocolId
 from datp_core.core.numeric import BatchSize, FeatureCount, RoundNumber, RowCount
 from datp_core.data.populations.contracts import ClientIdentity
+from datp_core.detector.checkpoints.models import CentralizedCheckpointCandidate
 from datp_core.detector.scoring.contracts import (
     ScoreArtifact,
     ScoreArtifactManifest,
@@ -19,7 +20,6 @@ from datp_core.detector.scoring.contracts import (
 )
 from datp_core.detector.training.centralized import CentralizedTrainingCoordinate
 from datp_core.detector.training.models import CheckpointCandidate, FederatedTrainingCoordinate
-from datp_core.pipeline.checkpoints.models import CentralizedCheckpointCandidate
 from datp_core.protocols.training import AutoencoderProtocol
 
 type FederatedScoreRecord = ScoreRecord[FederatedTrainingCoordinate, ClientIdentity]
