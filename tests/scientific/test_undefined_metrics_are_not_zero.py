@@ -1,7 +1,7 @@
-from datp_core.domain.enums import MetricId
-from datp_core.domain.values.counts import RowCount
-from datp_core.evaluation.client_metrics import calculate_client_metrics
-from datp_core.evaluation.models import ConfusionCounts, MetricReason, MetricStatus, UnavailableMetric
+from datp_core.analysis.metrics.client import calculate_client_metrics
+from datp_core.analysis.metrics.models import ConfusionCounts, MetricReason, MetricStatus, UnavailableMetric
+from datp_core.core.identifiers import MetricId
+from datp_core.core.numeric import RowCount
 
 
 def test_empty_class_metrics_remain_typed_unavailable_or_undefined_not_zero() -> None:
