@@ -31,7 +31,7 @@ from datp_core.pipeline.execution.evidence import load_evaluation_document
 from datp_core.pipeline.execution.layout import EvaluationRunAssetDirectory
 from datp_core.pipeline.publication.layout import evaluation_run_directory
 from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration
-from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
+from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.runtime.configuration import OUTPUTS_ROOT
 from datp_core.thresholding.publication import FederatedThresholdAssetName
 

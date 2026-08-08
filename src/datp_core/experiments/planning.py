@@ -23,7 +23,7 @@ from datp_core.pipeline.coordinates import ExperimentCoordinate
 from datp_core.protocols.calibration import QUANTILE_GRID
 from datp_core.protocols.experiments import EXECUTION_IDENTITY_DECLARATIONS, ExperimentDeclaration
 from datp_core.data.populations.declarations import DIRICHLET_CONCENTRATIONS, split_protocol_for_population
-from datp_core.protocols.seeds import SeedCohort
+from datp_core.experiments.common.seeds import SeedCohort
 from datp_core.protocols.training import DITTO_TRAINING_PROTOCOLS, FEDPROX_TRAINING_PROTOCOLS
 
 

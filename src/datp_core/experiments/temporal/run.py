@@ -70,7 +70,7 @@ from datp_core.protocols.calibration import (
     ClusterThresholdAggregation,
 )
 from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration, ExternalTemporalExecutionIdentity
-from datp_core.protocols.seeds import BOUNDED_EVIDENCE_SEED_COHORT, SeedCohort
+from datp_core.experiments.common.seeds import BOUNDED_EVIDENCE_SEED_COHORT, SeedCohort
 from datp_core.protocols.temporal import TemporalDeploymentProvenance, validate_frozen_recalibrated_pair
 from datp_core.thresholding.dispatch import ThresholdConstructionRequest
 from datp_core.thresholding.identities import ThresholdInfeasibilityReason, ThresholdUnavailableResult

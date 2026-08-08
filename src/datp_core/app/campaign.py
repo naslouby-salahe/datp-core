@@ -26,7 +26,7 @@ from datp_core.protocols.anchor import HISTORICAL_ANCHOR_SEED_COHORT
 from datp_core.protocols.calibration import require_calibration_subsample_replicate_count
 from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration
 from datp_core.data.populations.declarations import POPULATIONS
-from datp_core.protocols.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_SEED_COHORT, SeedCohort
+from datp_core.experiments.common.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.protocols.validation import CANONICAL_PROTOCOL_GRAPH, ResolvedProtocolGraph, validate_protocol_graph
 from datp_core.runtime.configuration import DATA_ROOT
 

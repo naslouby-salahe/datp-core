@@ -9,7 +9,7 @@ from datp_core.core.errors import ScientificContractError, UnresolvedScientificV
 from datp_core.core.identifiers import EvidenceRole, PartitionRole, SplitProtocolId, TemporalState
 from datp_core.core.numeric import MetricValue, Ratio
 from datp_core.protocols.inference import ClientIdentityContract, ScoreArtifactManifest, TrainingCoordinateContract
-from datp_core.protocols.seeds import SeedCohort
+from datp_core.experiments.common.seeds import SeedCohort
 
 
 class TemporalFutureIdentity(StrictModel):

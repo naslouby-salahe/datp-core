@@ -21,7 +21,7 @@ from datp_core.pipeline.execution.layout import EvaluationRunAssetDirectory
 from datp_core.pipeline.publication.layout import evaluation_run_directory
 from datp_core.presentation.export import export_external_publication
 from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration, ExternalTemporalExecutionIdentity
-from datp_core.protocols.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_ANALYSIS_SEED, SeedCohort
+from datp_core.experiments.common.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_ANALYSIS_SEED, SeedCohort
 from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL, PairedInferenceProtocol
 
 

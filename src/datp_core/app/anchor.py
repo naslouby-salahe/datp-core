@@ -11,7 +11,7 @@ from datp_core.core.errors import AnchorReproductionError
 from datp_core.core.identifiers import DatasetId, ExperimentId, ExperimentReadiness
 from datp_core.experiments.execution import execute_declared_experiment_seed
 from datp_core.protocols.anchor import ANCHOR_DECISION_PROTOCOL, HISTORICAL_ANCHOR_SEED_COHORT
-from datp_core.protocols.seeds import SeedCohort
+from datp_core.experiments.common.seeds import SeedCohort
 from datp_core.runtime.configuration import OUTPUTS_ROOT
 
 

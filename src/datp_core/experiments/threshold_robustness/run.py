@@ -37,7 +37,7 @@ from datp_core.protocols.calibration import (
     require_calibration_subsample_replicate_count,
 )
 from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration
-from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
+from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.runtime.configuration import OUTPUTS_ROOT
 from datp_core.thresholding.identities import ThresholdInfeasibilityReason
 

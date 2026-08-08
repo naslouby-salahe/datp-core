@@ -9,7 +9,7 @@ from datp_core.domain.provenance import canonical_checksum
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.ratios import MetricValue, Ratio
 from datp_core.protocols.inference import ClientIdentityContract, ScoreArtifactManifest, TrainingCoordinateContract
-from datp_core.protocols.seeds import BOUNDED_EVIDENCE_SEED_COHORT, SeedCohort
+from datp_core.experiments.common.seeds import BOUNDED_EVIDENCE_SEED_COHORT, SeedCohort
 
 
 class TemporalFutureIdentity(StrictModel):

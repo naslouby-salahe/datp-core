@@ -99,7 +99,7 @@ from datp_core.presentation.export import export_mechanism_publication
 from datp_core.protocols.calibration import CANONICAL_QUANTILE, MINIMUM_BENIGN_SUPPORT, CalibrationSupportRule
 from datp_core.protocols.experiments import EXPERIMENTS
 from datp_core.protocols.inference import FixedScoreInvariant
-from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
+from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.protocols.training import (
     BATCH_SIZE,
     CHECKPOINT_PROTOCOL,

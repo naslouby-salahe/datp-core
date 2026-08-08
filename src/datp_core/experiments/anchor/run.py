@@ -51,7 +51,7 @@ from datp_core.pipeline.execution.evidence import load_evaluation_document, popu
 from datp_core.pipeline.execution.layout import EvaluationRunAssetDirectory
 from datp_core.pipeline.publication.layout import evaluation_run_directory
 from datp_core.protocols.anchor import HISTORICAL_ANCHOR_SEED_COHORT, AnchorDecisionProtocol
-from datp_core.protocols.seeds import SeedCohort
+from datp_core.experiments.common.seeds import SeedCohort
 from datp_core.runtime.configuration import OUTPUTS_ROOT
 
 
