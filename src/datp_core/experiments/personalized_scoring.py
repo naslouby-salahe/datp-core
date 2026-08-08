@@ -1,11 +1,4 @@
-"""Shared client-scoring and metric-extraction mechanics for personalization stress tests.
-
-`client_scoring_input`, `client_metric`, and `score_record_for_client` operate on the same
-`FederatedScoreArtifactManifest` / `ClientPreprocessingResult` / `ThresholdAssignment` contracts
-regardless of which personalization algorithm (Ditto or FedProx) produced the checkpoint being
-scored. FedProx-only and Ditto-only training and threshold-selection logic stays in
-`pipeline.workflows.personalization`.
-"""
+"""Shared scoring and metric extraction for personalized training stress tests."""
 
 from __future__ import annotations
 
@@ -58,11 +51,15 @@ def client_metric(
 ) -> ClientMetricResult:
     record = score_record_for_client(manifest.evaluation_records, assignment.client, PartitionRole.EVALUATION)
     frame = pl.read_parquet(record.path)
-    error_values = frame[ScoreFrameColumn.RECONSTRUCTION_ERROR.value].to_list()
-    outcome_values = frame[ScoreFrameColumn.OUTCOME_LABEL.value].to_list()
-    scores = tuple(ScoreValue(float(value)) for value in error_values)
-    labels = tuple(PopulationOutcomeLabel(str(value)) for value in outcome_values)
-    rows = tuple(StableRowId(str(value)) for value in frame[ScoreFrameColumn.STABLE_ROW_ID.value].to_list())
+    scores = tuple(
+        ScoreValue(float(value)) for value in frame[ScoreFrameColumn.RECONSTRUCTION_ERROR.value].to_list()
+    )
+    labels = tuple(
+        PopulationOutcomeLabel(str(value)) for value in frame[ScoreFrameColumn.OUTCOME_LABEL.value].to_list()
+    )
+    rows = tuple(
+        StableRowId(str(value)) for value in frame[ScoreFrameColumn.STABLE_ROW_ID.value].to_list()
+    )
     eligibility_matches = tuple(item for item in cohort_manifest.records if item.client == assignment.client)
     if len(eligibility_matches) != 1:
         raise ScientificContractError(
