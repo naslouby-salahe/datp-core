@@ -53,13 +53,13 @@ def plan_command(
 
 @app.command("preprocess")
 def preprocess_command(
-    dataset_id: Annotated[DatasetId | None, typer.Argument(case_sensitive=False)] = None,
+    dataset_id: Annotated[DatasetId, typer.Argument(case_sensitive=False)],
     overwrite: Annotated[
         bool,
         typer.Option("--overwrite", help="Rebuild dataset-level canonical artifacts"),
     ] = False,
 ) -> None:
-    """Materialize canonical datasets, or every declared dataset when omitted."""
+    """Materialize one dataset's canonical artifacts."""
     try:
         result = preprocess_datasets(dataset_id, overwrite=_overwrite_mode(overwrite))
     except (DatpCoreError, ValueError) as error:

@@ -27,3 +27,8 @@ def test_anchor_help_exposes_reproduce_verify_and_status() -> None:
     assert "reproduce" in result.stdout
     assert "verify" in result.stdout
     assert "status" in result.stdout
+
+
+def test_preprocess_requires_a_dataset_identifier() -> None:
+    result = RUNNER.invoke(app, ["preprocess"])
+    assert result.exit_code != 0
