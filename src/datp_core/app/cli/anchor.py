@@ -6,8 +6,8 @@ from typing import Annotated
 
 import typer
 
-from datp_core.cli.validation import echo_error, map_exception_to_exit
-from datp_core.pipeline.workflows import anchor_status, reproduce_anchor, verify_anchor_programme
+from datp_core.app.cli.validation import echo_error, map_exception_to_exit
+from datp_core.app.programme import anchor_status, reproduce_anchor, verify_anchor_programme
 
 app = typer.Typer(no_args_is_help=True, help="Historical anchor equivalence gate.")
 
