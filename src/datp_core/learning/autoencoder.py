@@ -1,6 +1,6 @@
 """Protocol-driven reconstruction autoencoder construction, optimization, and scoring."""
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 
 import numpy as np
 import torch
@@ -8,7 +8,7 @@ from torch import nn
 
 from datp_core.domain.enums import ContractSubject, OptimizerId
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.counts import BatchSize, Seed
+from datp_core.domain.values.counts import BatchSize, FeatureCount, Seed
 from datp_core.domain.values.ratios import LearningRate
 from datp_core.protocols.training import AutoencoderArchitecture, AutoencoderProtocol, OptimizerProtocol
 from datp_core.runtime.compute import require_cuda_available
@@ -23,21 +23,20 @@ TORCH_LEARNING_DTYPE = torch.float32
 class ReconstructionAutoencoder(nn.Module):
     """Symmetric feed-forward autoencoder defined by the declared widths."""
 
-    def __init__(self, widths: Sequence[int]) -> None:
+    def __init__(self, widths: AutoencoderArchitecture) -> None:
         super().__init__()
-        declared = _validated_widths(widths)
-        final_layer_index = len(declared) - 2
+        final_layer_index = len(widths) - 2
         layers: list[nn.Module] = []
-        for layer_index, (left, right) in enumerate(zip(declared[:-1], declared[1:], strict=True)):
-            layers.append(nn.Linear(left, right))
+        for layer_index, (left, right) in enumerate(zip(widths[:-1], widths[1:], strict=True)):
+            layers.append(nn.Linear(left.value, right.value))
             if layer_index != final_layer_index:
                 layers.append(nn.ReLU())
         self._network = nn.Sequential(*layers)
-        self._widths = declared
+        self._widths = widths
 
     @property
-    def input_width(self) -> int:
-        return self._widths[0]
+    def input_width(self) -> FeatureCount:
+        return self._widths.input_width
 
     @property
     def widths(self) -> AutoencoderArchitecture:
@@ -45,13 +44,6 @@ class ReconstructionAutoencoder(nn.Module):
 
     def forward(self, features: torch.Tensor) -> torch.Tensor:
         return self._network(features)
-
-
-def _validated_widths(widths: Sequence[int]) -> AutoencoderArchitecture:
-    try:
-        return AutoencoderArchitecture(tuple(widths))
-    except ValueError as error:
-        raise ScientificContractError(str(error), subject=ContractSubject.WIDTHS) from error
 
 
 def construct_autoencoder(protocol: AutoencoderProtocol) -> ReconstructionAutoencoder:
@@ -132,7 +124,7 @@ def _require_scoreable_feature_matrix(model: ReconstructionAutoencoder, features
             "reconstruction scoring requires a two-dimensional feature matrix",
             subject=ContractSubject.FEATURES,
         )
-    if features.shape[1] != model.input_width:
+    if features.shape[1] != model.input_width.value:
         raise ScientificContractError(
             "feature width mismatch during scoring",
             subject=ContractSubject.FEATURES,
