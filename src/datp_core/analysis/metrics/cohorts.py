@@ -3,9 +3,9 @@ from enum import StrEnum
 from pydantic import model_validator
 
 from datp_core.data.populations.contracts import ClientIdentity
-from datp_core.domain.contracts import StrictModel
-from datp_core.domain.enums import EvaluationCohort, PopulationId
-from datp_core.domain.values.counts import CalibrationSize, RowCount, Seed
+from datp_core.core.contracts import StrictModel
+from datp_core.core.identifiers import EvaluationCohort, PopulationId
+from datp_core.core.numeric import CalibrationSize, RowCount, Seed
 from datp_core.protocols.calibration import MINIMUM_BENIGN_SUPPORT
 
 

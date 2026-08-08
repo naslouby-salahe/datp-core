@@ -40,16 +40,16 @@ from datp_core.analysis.temporal import (
     temporal_analysis_record,
     temporal_seed_series_intervals,
 )
-from datp_core.domain.contracts import StrictModel
-from datp_core.domain.enums import (
+from datp_core.core.contracts import StrictModel
+from datp_core.core.identifiers import (
     EvidenceRole,
     ExperimentId,
     FederatedThresholdMethod,
     PopulationId,
     TemporalState,
 )
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.counts import PairedObservationCount, Seed
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.numeric import PairedObservationCount, Seed
 from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity, require_execution_identity
 from datp_core.protocols.seeds import BOUNDED_EVIDENCE_SEED_COHORT
 from datp_core.protocols.statistics import PairedInferenceProtocol

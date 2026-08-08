@@ -19,8 +19,7 @@ from datp_core.analysis.inference.bootstrap.validation import (
     validate_supplementary_contrasts,
 )
 from datp_core.analysis.inference.wilcoxon import paired_deltas
-from datp_core.domain.values.counts import Seed
-from datp_core.domain.values.ratios import ConfidenceLevel, MetricValue
+from datp_core.core.numeric import ConfidenceLevel, MetricValue, Seed
 from datp_core.protocols.statistics import PairedInferenceProtocol
 
 

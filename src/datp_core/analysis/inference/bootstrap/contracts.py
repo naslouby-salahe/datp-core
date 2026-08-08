@@ -4,10 +4,9 @@ from enum import StrEnum
 
 from pydantic import model_validator
 
-from datp_core.domain.contracts import StrictModel
-from datp_core.domain.enums import AvailabilityStatus, IntervalMethod
-from datp_core.domain.values.counts import BootstrapReplicateCount, Seed
-from datp_core.domain.values.ratios import ConfidenceLevel, MetricValue
+from datp_core.core.contracts import StrictModel
+from datp_core.core.identifiers import AvailabilityStatus, IntervalMethod
+from datp_core.core.numeric import BootstrapReplicateCount, ConfidenceLevel, MetricValue, Seed
 from datp_core.protocols.statistics import PairedInferenceProtocol
 
 

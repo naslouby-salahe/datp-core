@@ -1,9 +1,9 @@
 from dataclasses import dataclass
 from enum import StrEnum
 
-from datp_core.domain.enums import PopulationId, TrafficRateEvidenceType
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.ratios import TrafficRatePerDay
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import PopulationId, TrafficRateEvidenceType
+from datp_core.core.numeric import TrafficRatePerDay
 
 
 class TrafficRateUnit(StrEnum):

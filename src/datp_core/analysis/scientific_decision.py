@@ -5,9 +5,9 @@ from enum import StrEnum
 from pydantic import model_validator
 
 from datp_core.analysis.inference.bootstrap.contracts import BootstrapInterval
-from datp_core.domain.contracts import StrictModel
-from datp_core.domain.enums import AvailabilityStatus, EvidenceRole
-from datp_core.domain.values.ratios import MetricValue
+from datp_core.core.contracts import StrictModel
+from datp_core.core.identifiers import AvailabilityStatus, EvidenceRole
+from datp_core.core.numeric import MetricValue
 
 
 class ScientificDecision(StrEnum):

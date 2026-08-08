@@ -4,11 +4,9 @@ from collections.abc import Sequence
 from math import isfinite
 
 from datp_core.data.populations.contracts import PopulationOutcomeLabel
-from datp_core.domain.enums import ContractSubject, PartitionRole
-from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.values.counts import RowCount
-from datp_core.domain.values.identifiers import StableRowId
-from datp_core.domain.values.ratios import ScoreValue, ThresholdValue
+from datp_core.core.errors import LeakageError, ScientificContractError
+from datp_core.core.identifiers import ContractSubject, PartitionRole, StableRowId
+from datp_core.core.numeric import RowCount, ScoreValue, ThresholdValue
 from datp_core.evaluation.models import ConfusionCounts
 
 

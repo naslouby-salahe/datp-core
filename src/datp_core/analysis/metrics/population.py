@@ -1,10 +1,9 @@
 import numpy as np
 
 from datp_core.data.populations.contracts import ClientIdentity
-from datp_core.domain.enums import EvaluationCohort, MetricId
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.counts import RowCount
-from datp_core.domain.values.ratios import MetricValue, Quantile
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import EvaluationCohort, MetricId
+from datp_core.core.numeric import MetricValue, Quantile, RowCount
 from datp_core.evaluation.cohort.contracts import EvaluationCohortManifest
 from datp_core.evaluation.metric_semantics import available, unavailable
 from datp_core.evaluation.models import (

@@ -4,10 +4,9 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from datp_core.data.populations.contracts import ClientIdentity
-from datp_core.domain.enums import MetricId
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.counts import Seed
-from datp_core.domain.values.ratios import Ratio
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import MetricId
+from datp_core.core.numeric import Ratio, Seed
 from datp_core.evaluation.metric_semantics import available, metric_value, unavailable
 from datp_core.evaluation.models import MetricAvailability, MetricReason, MetricStatus, WarningCode
 from datp_core.evaluation.traffic_rates import ValidatedTrafficRateEvidence, validate_traffic_rate_evidence

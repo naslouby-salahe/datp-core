@@ -6,10 +6,9 @@ from math import isfinite
 import numpy as np
 
 from datp_core.data.populations.contracts import PopulationOutcomeLabel
-from datp_core.domain.enums import ContractSubject, MetricId
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.counts import RowCount
-from datp_core.domain.values.ratios import ScoreValue
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import ContractSubject, MetricId
+from datp_core.core.numeric import RowCount, ScoreValue
 from datp_core.evaluation.metric_semantics import available, unavailable
 from datp_core.evaluation.models import ConfusionCounts, MetricAvailability, MetricReason, MetricStatus
 

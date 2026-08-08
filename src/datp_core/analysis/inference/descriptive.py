@@ -8,11 +8,10 @@ from pydantic import model_validator
 
 from datp_core.analysis.contrasts import MetricSeries, PairedDifferenceCounts
 from datp_core.data.populations.contracts import ClientIdentity
-from datp_core.domain.contracts import StrictModel
-from datp_core.domain.enums import AvailabilityStatus, EvidenceRole, FederatedThresholdMethod
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import PairedObservationCount, Seed
-from datp_core.domain.values.ratios import MetricValue, Ratio
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.contracts import StrictModel
+from datp_core.core.identifiers import AvailabilityStatus, EvidenceRole, FederatedThresholdMethod
+from datp_core.core.numeric import MetricValue, PairedObservationCount, Ratio, Seed
 
 
 class QuantileRange(StrictModel):

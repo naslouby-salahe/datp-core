@@ -14,10 +14,9 @@ from datp_core.analysis.adapters.scipy import (
     statistic_p_value,
 )
 from datp_core.analysis.inference.wilcoxon import CorrelationCoefficient, PValue
-from datp_core.domain.contracts import StrictModel
-from datp_core.domain.enums import AvailabilityStatus, EvidenceRole, ExperimentId, PopulationId
-from datp_core.domain.values.counts import PairedObservationCount, Seed
-from datp_core.domain.values.ratios import MetricValue, Ratio
+from datp_core.core.contracts import StrictModel
+from datp_core.core.identifiers import AvailabilityStatus, EvidenceRole, ExperimentId, PopulationId
+from datp_core.core.numeric import MetricValue, PairedObservationCount, Ratio, Seed
 
 MINIMUM_ASSOCIATION_OBSERVATIONS = PairedObservationCount(3)
 MINIMUM_PUBLICATION_OBSERVATIONS = PairedObservationCount(5)

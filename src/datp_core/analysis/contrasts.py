@@ -2,8 +2,9 @@
 
 from pydantic import model_validator
 
-from datp_core.domain.contracts import StrictModel
-from datp_core.domain.enums import (
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.contracts import StrictModel
+from datp_core.core.identifiers import (
     EvidenceRole,
     FederatedThresholdMethod,
     MetricId,
@@ -12,10 +13,9 @@ from datp_core.domain.enums import (
     SplitProtocolId,
     TrainingModelId,
 )
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import PairedObservationCount, Seed
-from datp_core.domain.values.ratios import (
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.numeric import PairedObservationCount, Seed
+from datp_core.core.numeric import (
     NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
     AbsoluteTolerance,
     DittoRegularization,

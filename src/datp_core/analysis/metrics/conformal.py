@@ -6,12 +6,10 @@ from math import isfinite
 import polars as pl
 
 from datp_core.data.populations.contracts import ClientIdentity, PopulationOutcomeLabel
-from datp_core.domain.enums import MetricId, ScoreFrameColumn
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.checksums import checksum_file
-from datp_core.domain.values.counts import ConformalRankIndex, RowCount, Seed
-from datp_core.domain.values.identifiers import StableRowId
-from datp_core.domain.values.ratios import CoverageTarget, Quantile, ThresholdValue
+from datp_core.artifacts.provenance import checksum_file
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import MetricId, ScoreFrameColumn, StableRowId
+from datp_core.core.numeric import ConformalRankIndex, CoverageTarget, Quantile, RowCount, Seed, ThresholdValue
 from datp_core.evaluation.metric_semantics import (
     available,
     metric_value,
@@ -27,7 +25,7 @@ from datp_core.evaluation.models import (
     validate_metric_set,
 )
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.thresholding.methods.conformal import ConformalAssignment
+from datp_core.thresholds.variants.conformal import ConformalAssignment
 
 _COVERAGE_METRICS = frozenset(
     {
