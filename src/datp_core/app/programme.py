@@ -12,11 +12,13 @@ from datp_core.app.planning import (
     expand_experiment_plan,
     merge_experiment_plans,
 )
+from datp_core.datasets.registry import DatasetPublication
 from datp_core.datasets.service import DatasetMaterializationRequest, materialize_datasets
 from datp_core.domain.enums import DatasetId, ExperimentId, ExperimentReadiness, PopulationId
-from datp_core.domain.errors import ProtocolValidationError, ScientificContractError, UnknownIdentifierError
+from datp_core.domain.errors import ProtocolValidationError, ScientificContractError, UnknownIdentifierError, UnresolvedScientificValueError
 from datp_core.domain.values.counts import Seed
 from datp_core.protocols.anchor import HISTORICAL_ANCHOR_SEED_COHORT
+from datp_core.protocols.calibration import require_calibration_subsample_replicate_count
 from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration
 from datp_core.protocols.populations import POPULATIONS
 from datp_core.protocols.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_SEED_COHORT, SeedCohort
@@ -44,7 +46,7 @@ class PlanPresentation:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PreprocessResult:
     datasets: tuple[DatasetId, ...]
-    publications: tuple[str, ...]
+    publications: tuple[DatasetPublication, ...]
 
 
 def require_experiment_declaration(experiment_id: ExperimentId) -> ExperimentDeclaration:
@@ -65,6 +67,27 @@ def reject_anchor_as_experiment(experiment_id: ExperimentId) -> None:
         )
 
 
+def require_experiment_execution_ready(experiment_id: ExperimentId) -> None:
+    declaration = require_experiment_declaration(experiment_id)
+    if declaration.readiness is ExperimentReadiness.SUPPRESSED:
+        raise ScientificContractError(
+            f"experiment is intentionally suppressed: {experiment_id.value}",
+            subject=experiment_id,
+        )
+    if declaration.readiness is ExperimentReadiness.INFEASIBLE:
+        raise ScientificContractError(
+            f"experiment is scientifically infeasible: {experiment_id.value}",
+            subject=experiment_id,
+        )
+    if declaration.readiness is ExperimentReadiness.BLOCKED:
+        raise ScientificContractError(
+            f"experiment is blocked by its declaration: {experiment_id.value}",
+            subject=experiment_id,
+        )
+    if experiment_id is ExperimentId.CALIBRATION_SIZE_ABLATION:
+        require_calibration_subsample_replicate_count()
+
+
 def seed_cohort_for(experiment_id: ExperimentId) -> SeedCohort:
     declaration = require_experiment_declaration(experiment_id)
     if declaration.population in {
@@ -82,6 +105,26 @@ def executable_planning_evidence(experiment_id: ExperimentId) -> PlanningEvidenc
         disposition=PlanDisposition.EXECUTABLE,
         reason="registered experiment recipe supplies locked execution prerequisites from protocol declarations",
     )
+
+
+def _planning_evidence(declaration: ExperimentDeclaration) -> tuple[PlanningEvidence, ...]:
+    if declaration.readiness is ExperimentReadiness.SUPPRESSED:
+        return ()
+    if declaration.readiness is ExperimentReadiness.INFEASIBLE:
+        return ()
+    if declaration.readiness is ExperimentReadiness.BLOCKED:
+        return ()
+    try:
+        require_experiment_execution_ready(declaration.id)
+    except UnresolvedScientificValueError as error:
+        return (
+            PlanningEvidence(
+                experiment=declaration.id,
+                disposition=PlanDisposition.BLOCKED,
+                reason=str(error),
+            ),
+        )
+    return (executable_planning_evidence(declaration.id),)
 
 
 def validate_programme(experiment_id: ExperimentId | None) -> ValidationResult:
@@ -147,15 +190,10 @@ def _plan_for_declaration(declaration: ExperimentDeclaration) -> ExperimentPlan:
                 ),
             ),
         )
-    evidence = (
-        ()
-        if declaration.readiness is ExperimentReadiness.SUPPRESSED
-        else (executable_planning_evidence(declaration.id),)
-    )
     return expand_experiment_plan(
         declarations=(declaration,),
         seed_cohort=seed_cohort_for(declaration.id),
-        evidence=evidence,
+        evidence=_planning_evidence(declaration),
     )
 
 
@@ -198,11 +236,7 @@ def preprocess_datasets(
             overwrite=overwrite.requested,
         )
     )
-    publications = tuple(
-        f"{publication.dataset.value}:{publication.publication_status.value}"
-        for publication in result.publications
-    )
-    return PreprocessResult(datasets=datasets, publications=publications)
+    return PreprocessResult(datasets=datasets, publications=result.publications)
 
 
 def format_plan(presentation: PlanPresentation) -> str:
