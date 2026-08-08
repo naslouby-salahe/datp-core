@@ -21,7 +21,7 @@ from datp_core.domain.enums import (
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import Seed
 
-from .anchor import AnchorDecisionProtocol
+from datp_core.experiments.anchor.spec import AnchorDecisionProtocol
 from .calibration import CalibrationEligibilityProtocol, ClusterThresholdProtocol
 from datp_core.detector.checkpoints.contracts import CheckpointProtocol
 from .experiments import ConfirmatoryEndpoint, ExperimentDeclaration

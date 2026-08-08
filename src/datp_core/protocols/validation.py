@@ -16,7 +16,7 @@ from datp_core.domain.enums import (
 from datp_core.domain.errors import ProtocolValidationError, UnresolvedScientificValueError
 from datp_core.domain.values.counts import CalibrationSize
 
-from .anchor import ANCHOR_DECISION_PROTOCOL, AnchorDecisionProtocol
+from datp_core.experiments.anchor.spec import ANCHOR_DECISION_PROTOCOL, AnchorDecisionProtocol
 from .calibration import (
     CLUSTER_THRESHOLD_PROTOCOL,
     MINIMUM_BENIGN_SUPPORT,
