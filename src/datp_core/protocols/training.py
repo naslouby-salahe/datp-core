@@ -6,8 +6,9 @@ from typing import Annotated, Literal, Protocol, overload
 
 from pydantic import Field, model_validator
 
-from datp_core.domain.contracts import StrictModel
-from datp_core.domain.enums import (
+from datp_core.core.contracts import StrictModel, sequence_pydantic_schema, validate_non_empty_tuple
+from datp_core.core.errors import LeakageError, ScientificContractError
+from datp_core.core.identifiers import (
     CentralizedModelId,
     CheckpointSelectionRule,
     CheckpointStatus,
@@ -16,16 +17,14 @@ from datp_core.domain.enums import (
     OptimizerId,
     TrainingModelId,
 )
-from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.values.base import sequence_pydantic_schema, validate_non_empty_tuple
-from datp_core.domain.values.counts import (
+from datp_core.core.numeric import (
     BatchSize,
     DataLoaderWorkerCount,
     FeatureCount,
     LocalEpochCount,
     RoundNumber,
 )
-from datp_core.domain.values.ratios import (
+from datp_core.core.numeric import (
     DittoRegularization,
     LearningRate,
     MetricValue,
@@ -45,10 +44,7 @@ class AutoencoderArchitecture(Sequence[FeatureCount]):
     widths: tuple[FeatureCount, ...]
 
     def __post_init__(self) -> None:
-        normalized = tuple(
-            width if isinstance(width, FeatureCount) else FeatureCount(width)
-            for width in self.widths
-        )
+        normalized = tuple(width if isinstance(width, FeatureCount) else FeatureCount(width) for width in self.widths)
         object.__setattr__(self, "widths", normalized)
         validate_non_empty_tuple(normalized, "autoencoder architecture")
         if len(normalized) < 2:

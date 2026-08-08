@@ -5,10 +5,10 @@ from typing import Literal
 
 from pydantic import model_validator
 
-from datp_core.domain.contracts import StrictModel
-from datp_core.domain.enums import CentralizedThresholdMethod, ContractSubject, FederatedThresholdMethod
-from datp_core.domain.errors import UnresolvedScientificValueError
-from datp_core.domain.values.counts import (
+from datp_core.core.contracts import StrictModel
+from datp_core.core.errors import UnresolvedScientificValueError
+from datp_core.core.identifiers import CentralizedThresholdMethod, ContractSubject, FederatedThresholdMethod
+from datp_core.core.numeric import (
     CalibrationSize,
     GroupCount,
     KMeansInitializationCount,
@@ -16,7 +16,7 @@ from datp_core.domain.values.counts import (
     Seed,
     SubsampleReplicateCount,
 )
-from datp_core.domain.values.ratios import CoverageTarget, Quantile, Ratio, ShrinkageWeight, SummaryCoefficient
+from datp_core.core.numeric import CoverageTarget, Quantile, Ratio, ShrinkageWeight, SummaryCoefficient
 
 
 class ClusterFingerprintFeature(StrEnum):
