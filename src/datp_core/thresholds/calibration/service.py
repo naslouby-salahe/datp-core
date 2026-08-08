@@ -7,10 +7,12 @@ import polars as pl
 from datp_core.core.contracts import ClientCollection, ClientOwned
 from datp_core.core.identifiers import ScoreFrameColumn, StableRowId
 from datp_core.core.numeric import CalibrationSize, ReplicateIndex, SubsampleReplicateCount
-from datp_core.data.populations.contracts import EligibleCohort
-from datp_core.detector.scoring.contracts import FixedScoreInvariant, ScoreArtifactManifest, ScoreRecord
+from datp_core.data.populations.contracts import ClientIdentity, EligibleCohort
+from datp_core.detector.scoring.contracts import FixedScoreInvariant
+from datp_core.detector.scoring.models import FederatedScoreArtifactManifest, FederatedScoreRecord
 from datp_core.protocols.calibration import CalibrationEligibilityProtocol
 from datp_core.thresholds.calibration.eligibility import (
+    CalibrationSampleReference,
     EligibilityDecision,
     calibration_support,
     decide_eligibility,
@@ -24,7 +26,7 @@ from datp_core.thresholds.calibration.sampling import CalibrationReplicateManife
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CalibrationRequest:
-    score_manifest: ScoreArtifactManifest
+    score_manifest: FederatedScoreArtifactManifest
     protocol: CalibrationEligibilityProtocol
     calibration_sizes: tuple[CalibrationSize, ...]
     replicate_count: SubsampleReplicateCount
@@ -50,8 +52,8 @@ def calibrate(request: CalibrationRequest) -> CalibrationResult:
         )
     )
 
-    decisions = []
-    references_items = []
+    decisions: list[EligibilityDecision] = []
+    references_items: list[ClientOwned[ClientIdentity, tuple[CalibrationSampleReference, ...]]] = []
 
     ordered_calibration_records = sorted(
         score_manifest.calibration_records,
@@ -73,7 +75,9 @@ def calibrate(request: CalibrationRequest) -> CalibrationResult:
         support = calibration_support(record, references, invariant.calibration_score_set_checksum)
         decisions.append(decide_eligibility(support, request.protocol))
 
-    references_collection = ClientCollection(items=tuple(references_items))
+    references_collection: ClientCollection[ClientIdentity, tuple[CalibrationSampleReference, ...]] = ClientCollection(
+        items=tuple(references_items)
+    )
     decisions_tuple = tuple(decisions)
     eligible = eligible_clients(decisions_tuple)
 
@@ -101,7 +105,7 @@ def calibrate(request: CalibrationRequest) -> CalibrationResult:
     )
 
 
-def _evaluation_stable_row_ids(record: ScoreRecord) -> frozenset[StableRowId]:
+def _evaluation_stable_row_ids(record: FederatedScoreRecord) -> frozenset[StableRowId]:
     frame = pl.read_parquet(record.path, columns=[ScoreFrameColumn.STABLE_ROW_ID.value])
     values = frame.get_column(ScoreFrameColumn.STABLE_ROW_ID.value).cast(pl.String).to_list()
     return frozenset(StableRowId(value) for value in values)

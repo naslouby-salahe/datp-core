@@ -22,11 +22,13 @@ from datp_core.core.numeric import (
 )
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
-from datp_core.thresholds.contracts import (
+from datp_core.protocols.calibration import (
     CANONICAL_QUANTILE,
     ClusterThresholdAggregation,
     ClusterThresholdProtocol,
     KMeansInitialization,
+)
+from datp_core.thresholds.contracts import (
     LocalQuantile,
     ThresholdAssignment,
     mean_local_threshold,
@@ -308,11 +310,7 @@ def _cluster_members(
     labels: np.ndarray,
     cluster_index: ClusterIndex,
 ) -> tuple[ClientIdentity, ...]:
-    return tuple(
-        item.client
-        for item, label in zip(ordered, labels, strict=True)
-        if label == cluster_index.value
-    )
+    return tuple(item.client for item, label in zip(ordered, labels, strict=True) if label == cluster_index.value)
 
 
 def _local_quantile(

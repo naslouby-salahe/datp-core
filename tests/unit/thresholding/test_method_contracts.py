@@ -198,41 +198,32 @@ def test_cluster_contracts_require_four_features_and_declared_group_count() -> N
 
 
 def test_shrinkage_contracts_enforce_formula_and_complete_curve() -> None:
-    with pytest.raises(ScientificContractError, match="lambda \\* local"):
+    local_a = _local_quantile(CLIENT_A, 2.0)
+    local_b = _local_quantile(CLIENT_B, 1.0)
+    with pytest.raises(ScientificContractError, match="convex local-shared combination"):
         ShrinkageAssignment(
             client=CLIENT_A,
-            lambda_weight=ShrinkageWeight(0.5),
-            local_threshold=ThresholdValue(2.0),
+            local_quantile=local_a,
             shared_threshold=ThresholdValue(4.0),
-            blended_threshold=ThresholdValue(999.0),
+            weight=ShrinkageWeight(0.5),
+            threshold=ThresholdValue(999.0),
         )
     assignments = (
         ShrinkageAssignment(
-            CLIENT_A,
-            ShrinkageWeight(0.0),
-            ThresholdValue(1.0),
-            ThresholdValue(2.0),
-            ThresholdValue(2.0),
-        ),
-        ShrinkageAssignment(
-            CLIENT_B,
-            ShrinkageWeight(0.0),
-            ThresholdValue(1.0),
-            ThresholdValue(2.0),
-            ThresholdValue(2.0),
-        ),
-        ShrinkageAssignment(
-            CLIENT_A,
-            ShrinkageWeight(1.0),
-            ThresholdValue(1.0),
-            ThresholdValue(2.0),
-            ThresholdValue(1.0),
+            client=CLIENT_A,
+            local_quantile=local_a,
+            shared_threshold=ThresholdValue(2.0),
+            weight=ShrinkageWeight(0.0),
+            threshold=ThresholdValue(2.0),
         ),
     )
-    with pytest.raises(ScientificContractError, match="same client set"):
+    with pytest.raises(ScientificContractError, match="exactly the contributing client set"):
         ShrinkageThresholdResult(
             coordinate=COORDINATE,
-            weights=(ShrinkageWeight(0.0), ShrinkageWeight(1.0)),
+            quantile=QUANTILE,
+            weight=ShrinkageWeight(0.0),
+            shared_threshold=ThresholdValue(2.0),
+            local_quantiles=(local_a, local_b),
             assignments=assignments,
         )
 

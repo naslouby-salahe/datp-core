@@ -19,9 +19,10 @@ def test_fixed_shrinkage_lambda_zero_reproduces_the_shared_threshold_exactly() -
         FIXED_SHRINKAGE_PROTOCOL,
         QUANTILE,
     )
-    zero_assignments = tuple(item for item in result.assignments if item.lambda_weight.value == 0.0)
+    zero_result = next(item for item in result if item.weight.value == 0.0)
+    zero_assignments = zero_result.assignments
     assert zero_assignments
-    assert all(item.blended_threshold.value == item.shared_threshold.value for item in zero_assignments)
+    assert all(item.threshold.value == item.shared_threshold.value for item in zero_assignments)
 
 
 def test_fixed_shrinkage_lambda_one_reproduces_the_local_threshold_exactly() -> None:
@@ -30,9 +31,10 @@ def test_fixed_shrinkage_lambda_one_reproduces_the_local_threshold_exactly() -> 
         FIXED_SHRINKAGE_PROTOCOL,
         QUANTILE,
     )
-    one_assignments = tuple(item for item in result.assignments if item.lambda_weight.value == 1.0)
+    one_result = next(item for item in result if item.weight.value == 1.0)
+    one_assignments = one_result.assignments
     assert one_assignments
-    assert all(item.blended_threshold.value == item.local_threshold.value for item in one_assignments)
+    assert all(item.threshold.value == item.local_quantile.value.value for item in one_assignments)
 
 
 def test_fixed_shrinkage_covers_the_complete_declared_curve_for_every_client() -> None:
@@ -41,10 +43,10 @@ def test_fixed_shrinkage_covers_the_complete_declared_curve_for_every_client() -
         FIXED_SHRINKAGE_PROTOCOL,
         QUANTILE,
     )
-    assert frozenset(item.lambda_weight.value for item in result.assignments) == frozenset(
+    assert frozenset(item.weight.value for item in result) == frozenset(
         weight.value for weight in FIXED_SHRINKAGE_PROTOCOL.weights
     )
-    assert len(result.assignments) == len(FIXED_SHRINKAGE_PROTOCOL.weights) * 2
+    assert all(len(item.assignments) == 2 for item in result)
 
 
 def test_construct_size_aware_shrinkage_is_typed_unavailability() -> None:
@@ -59,11 +61,11 @@ def test_fixed_shrinkage_curve_preserves_unique_clients_per_lambda() -> None:
         FIXED_SHRINKAGE_PROTOCOL,
         QUANTILE,
     )
-    for weight in result.weights:
-        clients = tuple(item.client for item in result.assignments if item.lambda_weight == weight)
+    for threshold_result in result:
+        clients = tuple(item.client for item in threshold_result.assignments)
         assert len(clients) == len(set(clients))
         assert len(clients) == 2
-    local_endpoint = ShrinkageWeight(1.0)
-    local_clients = tuple(item.client for item in result.assignments if item.lambda_weight == local_endpoint)
+    local_result = next(item for item in result if item.weight == ShrinkageWeight(1.0))
+    local_clients = tuple(item.client for item in local_result.assignments)
     assert len(local_clients) == len(set(local_clients))
-    assert len(result.weights) == 5
+    assert len(result) == 5

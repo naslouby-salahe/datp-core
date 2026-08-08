@@ -17,9 +17,9 @@ from datp_core.core.numeric import (
     floats_exactly_equal,
 )
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
+from datp_core.protocols.calibration import QuantileProtocol
 from datp_core.thresholds.contracts import (
     LocalQuantile,
-    QuantileProtocol,
     ThresholdAssignment,
     ThresholdDiagnostic,
     mean_local_threshold,
@@ -55,7 +55,9 @@ class SharedThresholdResult:
         )
         validate_assignments(
             self.assignments,
-            tuple(ThresholdAssignment(item.client, self.shared_threshold) for item in self.contributing_local_quantiles),
+            tuple(
+                ThresholdAssignment(item.client, self.shared_threshold) for item in self.contributing_local_quantiles
+            ),
             label="threshold assignments",
             mismatch_message="every shared threshold assignment must carry the identical shared value",
         )
@@ -117,7 +119,9 @@ class SampleWeightedSharedThresholdResult:
         )
         validate_assignments(
             self.assignments,
-            tuple(ThresholdAssignment(item.client, self.shared_threshold) for item in self.contributing_local_quantiles),
+            tuple(
+                ThresholdAssignment(item.client, self.shared_threshold) for item in self.contributing_local_quantiles
+            ),
             label="threshold assignments",
             mismatch_message="every sample-weighted shared assignment must carry the identical shared value",
         )

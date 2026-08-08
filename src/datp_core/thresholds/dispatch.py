@@ -8,7 +8,7 @@ from datp_core.core.identifiers import CentralizedThresholdMethod, ContractSubje
 from datp_core.core.numeric import Quantile, RowCount
 from datp_core.data.populations.contracts import PopulationCapabilities
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
-from datp_core.thresholds.contracts import (
+from datp_core.protocols.calibration import (
     CLUSTER_MEDIAN_THRESHOLD_PROTOCOL,
     CLUSTER_THRESHOLD_PROTOCOL,
     FEDERATED_STATISTICS_PROTOCOL,
@@ -16,8 +16,10 @@ from datp_core.thresholds.contracts import (
     MINIMUM_BENIGN_SUPPORT,
     CalibrationSupportRule,
     ClusterThresholdAggregation,
-    FamilyAssignment,
     QuantileProtocol,
+)
+from datp_core.thresholds.contracts import (
+    FamilyAssignment,
     ThresholdInfeasibilityReason,
     ThresholdUnavailableResult,
 )

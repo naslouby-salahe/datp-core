@@ -8,8 +8,8 @@ from datp_core.core.identifiers import ContractSubject, FederatedThresholdMethod
 from datp_core.core.numeric import Quantile, ShrinkageWeight, ThresholdValue, floats_exactly_equal
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
+from datp_core.protocols.calibration import FixedShrinkageProtocol
 from datp_core.thresholds.contracts import (
-    FixedShrinkageProtocol,
     LocalQuantile,
     ThresholdAssignment,
     ThresholdInfeasibilityReason,
@@ -63,8 +63,7 @@ class ShrinkageThresholdResult:
                 ThresholdAssignment(
                     local.client,
                     ThresholdValue(
-                        self.weight.value * local.value.value
-                        + (1.0 - self.weight.value) * self.shared_threshold.value
+                        self.weight.value * local.value.value + (1.0 - self.weight.value) * self.shared_threshold.value
                     ),
                 )
                 for local in self.local_quantiles
@@ -80,7 +79,9 @@ def construct_fixed_shrinkage(
     quantile: Quantile,
 ) -> tuple[ShrinkageThresholdResult, ...]:
     if protocol.method is not FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE:
-        raise ScientificContractError("fixed shrinkage requires the local-global shrinkage protocol", subject=protocol.method)
+        raise ScientificContractError(
+            "fixed shrinkage requires the local-global shrinkage protocol", subject=protocol.method
+        )
     require_eligible_cohort(eligible, "fixed shrinkage construction")
     local_quantiles = tuple(local_quantile(item, quantile) for item in eligible)
     shared = mean_local_threshold(local_quantiles)
@@ -97,9 +98,7 @@ def construct_fixed_shrinkage(
                     local_quantile=local,
                     shared_threshold=shared,
                     weight=weight,
-                    threshold=ThresholdValue(
-                        weight.value * local.value.value + (1.0 - weight.value) * shared.value
-                    ),
+                    threshold=ThresholdValue(weight.value * local.value.value + (1.0 - weight.value) * shared.value),
                 )
                 for local in local_quantiles
             ),
@@ -113,5 +112,7 @@ def construct_size_aware_shrinkage(coordinate: FederatedTrainingCoordinate) -> T
         method=FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE,
         coordinate=coordinate,
         reason=ThresholdInfeasibilityReason.SIZE_AWARE_SHRINKAGE_FUNCTION_UNRESOLVED,
-        detail="The roadmap requires lambda(n_k) to be predeclared, but no size-aware function is scientifically locked.",
+        detail=(
+            "The roadmap requires lambda(n_k) to be predeclared, but no size-aware function is scientifically locked."
+        ),
     )

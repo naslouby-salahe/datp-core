@@ -13,6 +13,7 @@ from datp_core.core.numeric import CalibrationSize, Quantile, ReplicateIndex, Su
 from datp_core.data.populations.contracts import ClientIdentity, EligibleCohort
 from datp_core.data.registry import population_capabilities
 from datp_core.detector.scoring.models import FederatedScoreArtifactManifest
+from datp_core.experiments.common.coordinates import ExternalTemporalExecutionIdentity
 from datp_core.protocols.calibration import (
     CALIBRATION_ELIGIBILITY_PROTOCOL,
     CALIBRATION_SIZE_PROTOCOL,
@@ -21,7 +22,6 @@ from datp_core.protocols.calibration import (
     ClusterThresholdAggregation,
     require_calibration_subsample_replicate_count,
 )
-from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
 from datp_core.thresholds.calibration.eligibility import EligibilityDecision
 from datp_core.thresholds.calibration.sampling import CalibrationReplicateManifest, CalibrationSubsample
 from datp_core.thresholds.calibration.service import CalibrationRequest, calibrate

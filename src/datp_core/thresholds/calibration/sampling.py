@@ -1,8 +1,11 @@
 """Deterministic nested without-replacement calibration subsampling."""
 
 from dataclasses import dataclass
+from typing import cast
 
+import numpy as np
 from numpy.random import default_rng
+from numpy.typing import NDArray
 
 from datp_core.artifacts.provenance import checksum_text
 from datp_core.core.errors import ScientificContractError
@@ -118,8 +121,11 @@ def build_calibration_replicate(
             subject=ContractSubject.CALIBRATION,
         )
     ordered = tuple(sorted(references, key=lambda reference: reference.stable_row_id))
-    permutation = default_rng(replicate_seed(training_seed, client, replicate_index).value).permutation(len(ordered))
-    permuted = tuple(ordered[index] for index in permutation)
+    permutation = cast(
+        NDArray[np.intp],
+        default_rng(replicate_seed(training_seed, client, replicate_index).value).permutation(len(ordered)),
+    )
+    permuted = tuple(ordered[int(index)] for index in permutation)
     sorted_sizes = tuple(sorted(sizes, key=lambda item: item.value))
     if len(frozenset(sorted_sizes)) != len(sorted_sizes):
         raise ScientificContractError(

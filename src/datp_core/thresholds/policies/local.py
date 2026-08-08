@@ -6,9 +6,9 @@ from typing import ClassVar
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import FederatedThresholdMethod
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
+from datp_core.protocols.calibration import QuantileProtocol
 from datp_core.thresholds.contracts import (
     LocalQuantile,
-    QuantileProtocol,
     ThresholdAssignment,
     validate_assignments,
     validate_local_quantiles,
