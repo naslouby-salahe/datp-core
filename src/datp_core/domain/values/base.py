@@ -233,6 +233,10 @@ def _validate_unique(values: tuple[object, ...], field_name: str) -> None:
         raise ValueError(f"{field_name} must be unique")
 
 
+def _sequence_scalar_values(instance) -> list:
+    return [getattr(item, "value", item) for item in instance]
+
+
 def sequence_pydantic_schema(cls: type, _source_type: object, _handler: object) -> object:
     from pydantic_core import core_schema as _cs
 
@@ -245,5 +249,5 @@ def sequence_pydantic_schema(cls: type, _source_type: object, _handler: object) 
 
     return _cs.no_info_plain_validator_function(
         _validate,
-        serialization=_cs.plain_serializer_function_ser_schema(list),
+        serialization=_cs.plain_serializer_function_ser_schema(_sequence_scalar_values),
     )
