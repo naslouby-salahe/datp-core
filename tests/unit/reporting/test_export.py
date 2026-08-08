@@ -14,20 +14,20 @@ from datp_core.domain.enums import (
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import Seed
 from datp_core.domain.values.ratios import MetricValue
-from datp_core.reporting.export import (
+from datp_core.presentation.export import (
     PublicationBundle,
     ReportProvenance,
     export_markdown,
     export_mechanism_publication,
 )
-from datp_core.reporting.figures import (
+from datp_core.presentation.figures import (
     EmpiricalCdfFigureSeries,
     FigureSeries,
     FigureSpec,
     empirical_cdf_series_from_points,
     render_markdown_figure,
 )
-from datp_core.reporting.validation import ClaimDecision, ClaimStatus
+from datp_core.presentation.validation import ClaimDecision, ClaimStatus
 
 
 def _provenance() -> ReportProvenance:
@@ -94,7 +94,7 @@ def test_blocked_claims_are_separated_from_permitted_wording_by_status(tmp_path:
 
 
 def test_all_blocked_claims_suppress_tables_and_figures(tmp_path: Path) -> None:
-    from datp_core.reporting.tables import PublicationTable, TableCell
+    from datp_core.presentation.tables import PublicationTable, TableCell
 
     destination = tmp_path / "report.md"
     blocked = ClaimDecision(
