@@ -5,16 +5,6 @@ from math import isfinite
 
 import polars as pl
 
-from datp_core.data.populations.contracts import ClientIdentity, PopulationOutcomeLabel
-from datp_core.artifacts.provenance import checksum_file
-from datp_core.core.errors import ScientificContractError
-from datp_core.core.identifiers import MetricId, ScoreFrameColumn, StableRowId
-from datp_core.core.numeric import ConformalRankIndex, CoverageTarget, Quantile, RowCount, Seed, ThresholdValue
-from datp_core.analysis.metrics.semantics import (
-    available,
-    metric_value,
-    unavailable,
-)
 from datp_core.analysis.metrics.models import (
     FederatedScoreRecord,
     HeldOutBenignScore,
@@ -24,6 +14,16 @@ from datp_core.analysis.metrics.models import (
     metric_by_id,
     validate_metric_set,
 )
+from datp_core.analysis.metrics.semantics import (
+    available,
+    metric_value,
+    unavailable,
+)
+from datp_core.artifacts.provenance import checksum_file
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import MetricId, ScoreFrameColumn, StableRowId
+from datp_core.core.numeric import ConformalRankIndex, CoverageTarget, Quantile, RowCount, Seed, ThresholdValue
+from datp_core.data.populations.contracts import ClientIdentity, PopulationOutcomeLabel
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 from datp_core.thresholds.variants.conformal import ConformalAssignment
 

@@ -24,7 +24,7 @@ from datp_core.core.numeric import (
     Ratio,
 )
 from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
-from datp_core.evaluation.fixed_score.validation import validate_fixed_score_controls
+from datp_core.analysis.metrics.fixed_score_validation import validate_fixed_score_controls
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 from datp_core.analysis.inference.wilcoxon import PairedInferenceProtocol
 from datp_core.experiments.common.seeds import SeedCohort

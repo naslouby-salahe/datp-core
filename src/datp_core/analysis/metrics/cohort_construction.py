@@ -1,10 +1,16 @@
+from datp_core.analysis.metrics.cohorts import (
+    ClientEligibilityRecord,
+    ClientExclusionReason,
+    EvaluationCohortManifest,
+    EvaluationCohortMembership,
+)
+from datp_core.data.registry import population_capabilities
 from datp_core.datasets.capabilities import CapabilityStatus
 from datp_core.datasets.partitioning.contracts import (
     ClientIdentity,
     ClientPartitionCounts,
     PopulationCapabilities,
 )
-from datp_core.data.registry import population_capabilities
 from datp_core.domain.enums import (
     ContractSubject,
     EvaluationCohort,
@@ -13,12 +19,6 @@ from datp_core.domain.enums import (
 )
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.counts import CalibrationSize, Seed
-from datp_core.analysis.metrics.cohorts import (
-    ClientEligibilityRecord,
-    ClientExclusionReason,
-    EvaluationCohortManifest,
-    EvaluationCohortMembership,
-)
 from datp_core.protocols.calibration import MINIMUM_BENIGN_SUPPORT
 
 

@@ -3,7 +3,15 @@ from itertools import groupby
 
 import numpy as np
 
-from datp_core.data.populations.contracts import ClientIdentity
+from datp_core.analysis.metrics.models import (
+    MetricAvailability,
+    MetricReason,
+    MetricStatus,
+    metric_by_id,
+    validate_metric_set,
+)
+from datp_core.analysis.metrics.semantics import available, metric_value, unavailable
+from datp_core.analysis.metrics.threshold_evidence import VerifiedHeldOutBenignScores
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import MetricId
 from datp_core.core.numeric import (
@@ -16,15 +24,7 @@ from datp_core.core.numeric import (
     ThresholdValue,
     ThresholdVariance,
 )
-from datp_core.analysis.metrics.semantics import available, metric_value, unavailable
-from datp_core.analysis.metrics.models import (
-    MetricAvailability,
-    MetricReason,
-    MetricStatus,
-    metric_by_id,
-    validate_metric_set,
-)
-from datp_core.evaluation.threshold_evidence import VerifiedHeldOutBenignScores
+from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 
 _THRESHOLD_ESTIMATION_METRICS = frozenset(

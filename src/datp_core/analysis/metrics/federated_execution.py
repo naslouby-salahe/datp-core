@@ -1,6 +1,7 @@
 import polars as pl
 
 from datp_core.analysis.metrics.client import calculate_client_metrics
+from datp_core.analysis.metrics.cohort_construction import cohort_record_for_client
 from datp_core.analysis.metrics.cohorts import ClientEligibilityRecord
 from datp_core.analysis.metrics.conformal import evaluate_held_out_conformal_coverage
 from datp_core.analysis.metrics.confusion import calculate_confusion_counts
@@ -12,6 +13,11 @@ from datp_core.analysis.metrics.federated import (
     FederatedEvaluationRequest,
     ShrinkageLambdaEvaluation,
     ThresholdEstimationStageInput,
+)
+from datp_core.analysis.metrics.fixed_score_checksums import evaluation_label_checksum, source_row_checksum
+from datp_core.analysis.metrics.fixed_score_validation import (
+    validate_evaluation_evidence,
+    validate_fixed_score_controls,
 )
 from datp_core.analysis.metrics.models import (
     ClientMetricResult,
@@ -55,9 +61,6 @@ from datp_core.domain.values.ratios import (
     ShrinkageWeight,
     ThresholdValue,
 )
-from datp_core.evaluation.cohort.construction import cohort_record_for_client
-from datp_core.evaluation.fixed_score.checksums import evaluation_label_checksum, source_row_checksum
-from datp_core.evaluation.fixed_score.validation import validate_evaluation_evidence, validate_fixed_score_controls
 from datp_core.protocols.experiments import require_execution_identity
 from datp_core.thresholds.contracts import ThresholdAssignment, ThresholdUnavailableResult
 from datp_core.thresholds.dispatch import ThresholdConstructionResult

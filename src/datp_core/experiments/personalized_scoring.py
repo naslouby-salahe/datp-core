@@ -19,7 +19,7 @@ from datp_core.data.populations.contracts import ClientIdentity, PopulationOutco
 from datp_core.analysis.metrics.client import calculate_client_metrics
 from datp_core.analysis.metrics.cohorts import EvaluationCohortManifest
 from datp_core.analysis.metrics.confusion import calculate_confusion_counts
-from datp_core.evaluation.fixed_score.checksums import evaluation_label_checksum, source_row_checksum
+from datp_core.analysis.metrics.fixed_score_checksums import evaluation_label_checksum, source_row_checksum
 from datp_core.analysis.metrics.models import ClientMetricResult
 from datp_core.detector.training.models import FederatedTrainingCoordinate
 from datp_core.pipeline.scoring.models import ClientScoringInput, FederatedScoreArtifactManifest, FederatedScoreRecord

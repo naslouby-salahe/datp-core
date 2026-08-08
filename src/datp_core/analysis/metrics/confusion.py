@@ -3,11 +3,11 @@
 from collections.abc import Sequence
 from math import isfinite
 
-from datp_core.data.populations.contracts import PopulationOutcomeLabel
+from datp_core.analysis.metrics.models import ConfusionCounts
 from datp_core.core.errors import LeakageError, ScientificContractError
 from datp_core.core.identifiers import ContractSubject, PartitionRole, StableRowId
 from datp_core.core.numeric import RowCount, ScoreValue, ThresholdValue
-from datp_core.analysis.metrics.models import ConfusionCounts
+from datp_core.data.populations.contracts import PopulationOutcomeLabel
 
 
 def predicted_attack(score: ScoreValue, threshold: ThresholdValue) -> bool:

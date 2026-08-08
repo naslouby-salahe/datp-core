@@ -33,12 +33,12 @@ from datp_core.analysis.metrics.federated import (
     ThresholdEstimationStageInput,
 )
 from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
-from datp_core.evaluation.fixed_score.construction import build_federated_evaluation_inputs
+from datp_core.analysis.metrics.fixed_score_construction import build_federated_evaluation_inputs
 from datp_core.analysis.metrics.fixed_score import FixedScoreEvidence
-from datp_core.evaluation.fixed_score.validation import validate_fixed_score_controls
+from datp_core.analysis.metrics.fixed_score_validation import validate_fixed_score_controls
 from datp_core.analysis.metrics.models import HeldOutBenignScore
 from datp_core.analysis.metrics.threshold_estimation import ThresholdEstimationProvenance
-from datp_core.evaluation.threshold_evidence import verify_held_out_benign_scores
+from datp_core.analysis.metrics.threshold_evidence import verify_held_out_benign_scores
 from datp_core.detector.checkpoints.selection import CheckpointDecision
 from datp_core.detector.training.models import CheckpointCandidate
 from datp_core.detector.training.engine import FederatedTrainingRequest

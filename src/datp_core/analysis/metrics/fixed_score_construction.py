@@ -1,7 +1,32 @@
 import polars as pl
 
-from datp_core.datasets.partitioning.contracts import ClientIdentity, PopulationOutcomeLabel
+from datp_core.analysis.metrics.client import calculate_client_metrics
+from datp_core.analysis.metrics.cohort_construction import assert_cohort_invariant_to_threshold_methods
+from datp_core.analysis.metrics.cohort_evidence import client_partition_counts_from_scores
+from datp_core.analysis.metrics.cohorts import ClientEligibilityRecord, EvaluationCohortManifest
+from datp_core.analysis.metrics.confusion import calculate_confusion_counts
+from datp_core.analysis.metrics.fixed_score import (
+    CalibrationEvidence,
+    ClientAurocEvidence,
+    DetectorEvidence,
+    FederatedEvaluationInputs,
+    FixedScoreEvidence,
+    HeldOutEvaluationEvidence,
+    PopulationEvidence,
+)
+from datp_core.analysis.metrics.fixed_score_checksums import (
+    client_population_checksum,
+    evaluation_label_checksum,
+    evaluation_label_set_checksum,
+    evaluation_row_set_checksum,
+    evaluation_score_order_checksum,
+    source_row_checksum,
+)
+from datp_core.analysis.metrics.models import ClientMetricResult, metric_by_id
 from datp_core.data.registry import population_capabilities
+from datp_core.datasets.partitioning.contracts import ClientIdentity, PopulationOutcomeLabel
+from datp_core.detector.scoring.contracts import FixedScoreInvariant, ScoreArtifactManifest, ScoreRecord
+from datp_core.detector.training.models import FederatedTrainingCoordinate
 from datp_core.domain.enums import (
     EvaluationCohort,
     EvidenceRole,
@@ -14,31 +39,6 @@ from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.provenance import canonical_checksum
 from datp_core.domain.values.identifiers import StableRowId
 from datp_core.domain.values.ratios import ScoreValue, ThresholdValue
-from datp_core.analysis.metrics.client import calculate_client_metrics
-from datp_core.evaluation.cohort.construction import assert_cohort_invariant_to_threshold_methods
-from datp_core.analysis.metrics.cohorts import ClientEligibilityRecord, EvaluationCohortManifest
-from datp_core.evaluation.cohort.evidence import client_partition_counts_from_scores
-from datp_core.analysis.metrics.confusion import calculate_confusion_counts
-from datp_core.evaluation.fixed_score.checksums import (
-    client_population_checksum,
-    evaluation_label_checksum,
-    evaluation_label_set_checksum,
-    evaluation_row_set_checksum,
-    evaluation_score_order_checksum,
-    source_row_checksum,
-)
-from datp_core.analysis.metrics.fixed_score import (
-    CalibrationEvidence,
-    ClientAurocEvidence,
-    DetectorEvidence,
-    FederatedEvaluationInputs,
-    FixedScoreEvidence,
-    HeldOutEvaluationEvidence,
-    PopulationEvidence,
-)
-from datp_core.analysis.metrics.models import ClientMetricResult, metric_by_id
-from datp_core.detector.training.models import FederatedTrainingCoordinate
-from datp_core.detector.scoring.contracts import FixedScoreInvariant, ScoreArtifactManifest, ScoreRecord
 
 type FederatedScoreArtifactManifest = ScoreArtifactManifest[FederatedTrainingCoordinate, ClientIdentity]
 type FederatedScoreRecord = ScoreRecord[FederatedTrainingCoordinate, ClientIdentity]
