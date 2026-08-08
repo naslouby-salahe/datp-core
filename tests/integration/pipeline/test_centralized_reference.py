@@ -15,18 +15,18 @@ from tests.unit.learning.centralized.helpers import (
     training_coordinate,
 )
 
-from datp_core.datasets.partitioning.contracts import PopulationOutcomeLabel
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import RowCount, Seed
-from datp_core.learning.centralized.training import CentralizedTrainingRequest, train_centralized_autoencoder
-from datp_core.pipeline.checkpoints.service import retain_centralized_checkpoint_candidates
-from datp_core.pipeline.decision.centralized import (
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.numeric import RowCount, Seed
+from datp_core.data.populations.contracts import PopulationOutcomeLabel
+from datp_core.detector.checkpoints.service import retain_centralized_checkpoint_candidates
+from datp_core.detector.scoring.centralized import score_centralized_reference
+from datp_core.detector.scoring.models import CentralizedScoringRequest
+from datp_core.detector.training.centralized import CentralizedTrainingRequest, train_centralized_autoencoder
+from datp_core.thresholds.centralized import (
     CENTRALIZED_POOLED_QUANTILE_PROTOCOL,
     construct_pooled_benign_quantile,
     evaluate_centralized_reference,
 )
-from datp_core.pipeline.scoring.centralized import score_centralized_reference
-from datp_core.pipeline.scoring.models import CentralizedScoringRequest
 
 
 def test_end_to_end_centralized_pipeline_without_federated_artifacts(tmp_path: Path) -> None:

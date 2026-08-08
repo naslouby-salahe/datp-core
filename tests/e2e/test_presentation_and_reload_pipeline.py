@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from datp_core.domain.enums import AvailabilityStatus, EvidenceRole, ExperimentId, MetricId, PopulationId
-from datp_core.domain.values.checksums import checksum_text
+from datp_core.artifacts.provenance import checksum_text
+from datp_core.core.identifiers import AvailabilityStatus, EvidenceRole, ExperimentId, MetricId, PopulationId
 from datp_core.presentation.export import PublicationBundle, ReportProvenance, export_markdown
 from datp_core.presentation.tables import PublicationTable, TableCell
 from datp_core.presentation.validation import (

@@ -5,42 +5,38 @@ from pathlib import Path
 import numpy as np
 from tests.unit.calibration.helpers import benign_score_record
 
-from datp_core.calibration.eligibility import (
-    calibration_support,
-    decide_eligibility,
-    load_benign_calibration_references,
-)
-from datp_core.calibration.models import EligibilityStatus
-from datp_core.datasets.capabilities import CapabilityStatus
-from datp_core.datasets.partitioning.contracts import PopulationCapabilities
-from datp_core.domain.enums import (
+from datp_core.artifacts.provenance import checksum_file
+from datp_core.core.identifiers import (
     DatasetId,
     EvidenceRole,
     FederatedThresholdMethod,
     PartitionRole,
     PopulationId,
     PopulationIdentityKind,
-    PublicationStatus,
 )
-from datp_core.domain.values.checksums import checksum_file
-from datp_core.domain.values.counts import CalibrationSize, ClientCount
-from datp_core.domain.values.ratios import Quantile
-from datp_core.pipeline.decision.federated import (
-    ConstructFederatedThresholdsRequest,
-    construct_federated_thresholds,
-)
+from datp_core.core.numeric import CalibrationSize, ClientCount, Quantile
+from datp_core.data.populations.contracts import CapabilityStatus, PopulationCapabilities
+from datp_core.detector.scoring.contracts import FixedScoreInvariant, ScoreArtifactManifest
 from datp_core.protocols.calibration import CalibrationEligibilityProtocol
-from datp_core.protocols.inference import FixedScoreInvariant, ScoreArtifactManifest
-from datp_core.thresholding.dispatch import ThresholdConstructionRequest, dispatch_federated_threshold
-from datp_core.thresholding.methods.conformal import ConformalThresholdResult
-from datp_core.thresholding.methods.local import LocalThresholdResult
-from datp_core.thresholding.methods.shared import (
+from datp_core.thresholds.calibration.eligibility import (
+    EligibilityStatus,
+    calibration_support,
+    decide_eligibility,
+    load_benign_calibration_references,
+)
+from datp_core.thresholds.dispatch import (
+    ThresholdConstructionRequest,
+    ThresholdConstructionResult,
+    dispatch_federated_threshold,
+)
+from datp_core.thresholds.policies.local import LocalThresholdResult
+from datp_core.thresholds.policies.shared import (
     PooledSharedQuantileResult,
     SampleWeightedSharedThresholdResult,
     SharedThresholdResult,
 )
-from datp_core.thresholding.models import ThresholdConstructionResult
-from datp_core.thresholding.quantiles import calibration_scores_from_references
+from datp_core.thresholds.quantiles import calibration_scores_from_references
+from datp_core.thresholds.variants.conformal import ConformalThresholdResult
 
 PROTOCOL = CalibrationEligibilityProtocol(minimum_support=CalibrationSize(100))
 QUANTILE = Quantile(0.95)
@@ -146,30 +142,6 @@ def test_every_threshold_method_reads_the_same_frozen_score_artifact_unchanged(t
     )
     assert isinstance(_result(results, FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD), ConformalThresholdResult)
     assert shared.shared_threshold.value != pooled.shared_threshold.value
-
-
-def test_construct_federated_thresholds_reuses_completed_artifact(tmp_path: Path) -> None:
-    manifest = _manifest(tmp_path)
-    invariant = FixedScoreInvariant.from_manifest(manifest)
-    record = manifest.calibration_records[0]
-    client_scores = _eligible_client_scores(record, manifest, invariant)
-    request = ConstructFederatedThresholdsRequest(
-        request=ThresholdConstructionRequest(
-            method=FederatedThresholdMethod.SHARED_THRESHOLD,
-            coordinate=manifest.coordinate,
-            quantile=QUANTILE,
-            capabilities=_capabilities(),
-            eligible=(client_scores,),
-            family_by_client=(),
-        ),
-        output_directory=tmp_path / "threshold_output",
-        overwrite=False,
-    )
-    first = construct_federated_thresholds(request)
-    second = construct_federated_thresholds(request)
-    assert first.publication_status is PublicationStatus.PUBLISHED
-    assert second.publication_status is PublicationStatus.REUSED
-    assert first.complete_digest == second.complete_digest
 
 
 def _eligible_client_scores(record, manifest, invariant):

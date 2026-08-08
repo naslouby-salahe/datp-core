@@ -1,4 +1,4 @@
-from datp_core.domain.enums import (
+from datp_core.core.identifiers import (
     EvidenceRole,
     ExperimentId,
     FederatedThresholdMethod,
@@ -6,11 +6,11 @@ from datp_core.domain.enums import (
     PopulationId,
     TrainingModelId,
 )
-from datp_core.domain.values.counts import Seed
-from datp_core.pipeline.execution.engine import build_campaign
-from datp_core.pipeline.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
+from datp_core.core.numeric import Seed
+from datp_core.experiments.common.seeds import SeedCohort
+from datp_core.experiments.execution.engine import build_campaign
+from datp_core.experiments.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
 from datp_core.protocols.experiments import EXPERIMENTS
-from datp_core.protocols.seeds import SeedCohort
 
 
 def test_confirmatory_campaign_changes_threshold_scope_only() -> None:

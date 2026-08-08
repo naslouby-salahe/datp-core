@@ -4,9 +4,9 @@ import polars as pl
 from tests.unit.learning.federated.helpers import AUTOENCODER, BATCH_SIZE, FEATURE_NAMES, benign_frame, client_identity
 from tests.unit.scoring.helpers import selected_checkpoint
 
-from datp_core.domain.values.counts import RowCount, Seed
-from datp_core.pipeline.scoring.federated import publish_federated_scores
-from datp_core.pipeline.scoring.models import ClientScoringInput, GenerateFederatedScoresRequest
+from datp_core.core.numeric import RowCount, Seed
+from datp_core.detector.scoring.federated import publish_federated_scores
+from datp_core.detector.scoring.models import ClientScoringInput, GenerateFederatedScoresRequest
 
 
 def _mean_reconstruction_error(path: Path) -> float:
