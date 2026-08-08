@@ -4,16 +4,8 @@ from dataclasses import dataclass
 from typing import assert_never
 
 from datp_core.datasets.partitioning.contracts import PopulationCapabilities
-from datp_core.domain.enums import (
-    CentralizedThresholdMethod,
-    ContractSubject,
-    FederatedThresholdMethod,
-)
-from datp_core.domain.errors import (
-    CapabilityError,
-    LeakageError,
-    ScientificContractError,
-)
+from datp_core.domain.enums import CentralizedThresholdMethod, ContractSubject, FederatedThresholdMethod
+from datp_core.domain.errors import CapabilityError, LeakageError, ScientificContractError
 from datp_core.domain.values.counts import RowCount
 from datp_core.domain.values.ratios import Quantile
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
@@ -23,14 +15,12 @@ from datp_core.protocols.calibration import (
     FEDERATED_STATISTICS_PROTOCOL,
     FIXED_SHRINKAGE_PROTOCOL,
     MINIMUM_BENIGN_SUPPORT,
+    CalibrationSupportRule,
     ClusterThresholdAggregation,
     QuantileProtocol,
 )
 from datp_core.thresholding.assignments import FamilyAssignment
-from datp_core.thresholding.identities import (
-    ThresholdInfeasibilityReason,
-    ThresholdUnavailableResult,
-)
+from datp_core.thresholding.identities import ThresholdInfeasibilityReason, ThresholdUnavailableResult
 from datp_core.thresholding.methods.cluster import construct_grouped_threshold
 from datp_core.thresholding.methods.conformal import construct_local_conformal_threshold
 from datp_core.thresholding.methods.family import construct_family_threshold
@@ -46,9 +36,7 @@ from datp_core.thresholding.models import ThresholdConstructionResult
 from datp_core.thresholding.quantiles import ClientBenignCalibrationScores
 
 
-def reject_centralized_threshold_method(
-    method: FederatedThresholdMethod | CentralizedThresholdMethod,
-) -> None:
+def reject_centralized_threshold_method(method: FederatedThresholdMethod | CentralizedThresholdMethod) -> None:
     if isinstance(method, CentralizedThresholdMethod):
         raise LeakageError(
             "centralized threshold methods cannot enter federated dispatch",
@@ -56,10 +44,7 @@ def reject_centralized_threshold_method(
         )
 
 
-def validate_population_capability(
-    capabilities: PopulationCapabilities,
-    method: FederatedThresholdMethod,
-) -> None:
+def validate_population_capability(capabilities: PopulationCapabilities, method: FederatedThresholdMethod) -> None:
     if method not in capabilities.valid_threshold_methods:
         raise CapabilityError(
             f"{method.value} is not a valid threshold method for this population",
@@ -75,8 +60,8 @@ class ThresholdConstructionRequest:
     capabilities: PopulationCapabilities
     eligible: tuple[ClientBenignCalibrationScores, ...]
     family_by_client: tuple[FamilyAssignment, ...]
-    enforce_minimum_support: bool = True
-    cluster_threshold_aggregation: ClusterThresholdAggregation | None = None
+    support_rule: CalibrationSupportRule
+    cluster_threshold_aggregation: ClusterThresholdAggregation | None
 
     def __post_init__(self) -> None:
         if not self.eligible:
@@ -102,20 +87,23 @@ class ThresholdConstructionRequest:
                 "family-by-client entries must have unique client identities",
                 subject=ContractSubject.CLIENT_IDENTITY,
             )
+        if self.method is FederatedThresholdMethod.CLUSTER_THRESHOLD:
+            if self.cluster_threshold_aggregation is None:
+                raise ScientificContractError(
+                    "cluster threshold construction requires an explicit threshold aggregation",
+                    subject=ContractSubject.THRESHOLD,
+                )
+        elif self.cluster_threshold_aggregation is not None:
+            raise ScientificContractError(
+                "cluster threshold aggregation is valid only for CLUSTER_THRESHOLD",
+                subject=ContractSubject.THRESHOLD,
+            )
 
 
-def dispatch_federated_threshold(
-    request: ThresholdConstructionRequest,
-) -> ThresholdConstructionResult:
+def dispatch_federated_threshold(request: ThresholdConstructionRequest) -> ThresholdConstructionResult:
     reject_centralized_threshold_method(request.method)
     validate_population_capability(request.capabilities, request.method)
-    if request.enforce_minimum_support:
-        for item in request.eligible:
-            if not MINIMUM_BENIGN_SUPPORT.fits_within(RowCount(len(item.scores))):
-                raise ScientificContractError(
-                    "threshold construction rejects clients below the minimum benign calibration support",
-                    subject=ContractSubject.CALIBRATION,
-                )
+    _validate_support(request)
     match request.method:
         case FederatedThresholdMethod.SHARED_THRESHOLD:
             return construct_shared_threshold(
@@ -160,6 +148,21 @@ def dispatch_federated_threshold(
             assert_never(request.method)
 
 
+def _validate_support(request: ThresholdConstructionRequest) -> None:
+    match request.support_rule:
+        case CalibrationSupportRule.CANONICAL_MINIMUM_SUPPORT:
+            for item in request.eligible:
+                if not MINIMUM_BENIGN_SUPPORT.fits_within(RowCount(len(item.scores))):
+                    raise ScientificContractError(
+                        "threshold construction rejects clients below the minimum benign calibration support",
+                        subject=ContractSubject.CALIBRATION,
+                    )
+        case CalibrationSupportRule.DECLARED_SIZE_ABLATION:
+            return
+        case _:
+            assert_never(request.support_rule)
+
+
 def _family_threshold_or_unavailable(request: ThresholdConstructionRequest) -> ThresholdConstructionResult:
     if not request.family_by_client:
         return ThresholdUnavailableResult(
@@ -179,10 +182,17 @@ def _cluster_threshold_or_unavailable(request: ThresholdConstructionRequest) -> 
             reason=ThresholdInfeasibilityReason.GROUP_COUNT_EXCEEDS_ELIGIBLE_POPULATION,
             detail="The eligible population does not exceed the locked cluster group count.",
         )
-    base_protocol = (
-        CLUSTER_MEDIAN_THRESHOLD_PROTOCOL
-        if request.cluster_threshold_aggregation is ClusterThresholdAggregation.MEDIAN_OF_ELIGIBLE_LOCAL_THRESHOLDS
-        else CLUSTER_THRESHOLD_PROTOCOL
-    )
+    match request.cluster_threshold_aggregation:
+        case ClusterThresholdAggregation.ARITHMETIC_MEAN_OF_ELIGIBLE_LOCAL_THRESHOLDS:
+            base_protocol = CLUSTER_THRESHOLD_PROTOCOL
+        case ClusterThresholdAggregation.MEDIAN_OF_ELIGIBLE_LOCAL_THRESHOLDS:
+            base_protocol = CLUSTER_MEDIAN_THRESHOLD_PROTOCOL
+        case None:
+            raise ScientificContractError(
+                "cluster threshold construction requires an explicit aggregation",
+                subject=ContractSubject.THRESHOLD,
+            )
+        case _:
+            assert_never(request.cluster_threshold_aggregation)
     protocol = base_protocol.model_copy(update={"quantile": request.quantile})
     return construct_grouped_threshold(request.eligible, protocol)
