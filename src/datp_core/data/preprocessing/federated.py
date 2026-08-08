@@ -2,17 +2,13 @@ import itertools
 
 import numpy as np
 
-from datp_core.domain.contracts import ClientCollection, ClientOwned
-from datp_core.domain.enums import (
-    ContractSubject,
-    PartitionRole,
-    ProcessedDataBranch,
+from datp_core.data.preprocessing.artifact_validation import (
+    federated_fitted_state_after_publish,
+    fit_trusted_batch,
+    publish_preprocessed_partitions,
+    require_columns,
 )
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.counts import RowCount
-from datp_core.domain.values.identifiers import FeatureNameSequence, OutcomeLabelSequence, StableRowIdSequence
-from datp_core.domain.values.paths import ClientPathToken
-from datp_core.preprocessing.contracts import (
+from datp_core.data.preprocessing.artifacts import (
     PreprocessingFitScope,
     ProcessedAssetName,
     RelativeAssetPathSequence,
@@ -23,7 +19,7 @@ from datp_core.preprocessing.contracts import (
     partition_roles,
     processed_asset_names,
 )
-from datp_core.preprocessing.models import (
+from datp_core.data.preprocessing.models import (
     ClientPreprocessingResult,
     ClientPublishRequest,
     FederatedFittedEstimators,
@@ -33,14 +29,18 @@ from datp_core.preprocessing.models import (
     PreprocessingPartitions,
     PreprocessingProtocol,
 )
-from datp_core.preprocessing.paths import build_preprocessed_partition_paths
-from datp_core.preprocessing.state import TrustedScaler
-from datp_core.preprocessing.validation import (
-    federated_fitted_state_after_publish,
-    fit_trusted_batch,
-    publish_preprocessed_partitions,
-    require_columns,
+from datp_core.data.preprocessing.paths import build_preprocessed_partition_paths
+from datp_core.data.preprocessing.state import TrustedScaler
+from datp_core.domain.contracts import ClientCollection, ClientOwned
+from datp_core.domain.enums import (
+    ContractSubject,
+    PartitionRole,
+    ProcessedDataBranch,
 )
+from datp_core.domain.errors import ScientificContractError
+from datp_core.domain.values.counts import RowCount
+from datp_core.domain.values.identifiers import FeatureNameSequence, OutcomeLabelSequence, StableRowIdSequence
+from datp_core.domain.values.paths import ClientPathToken
 
 
 def fit_estimators_for_federated_clients(

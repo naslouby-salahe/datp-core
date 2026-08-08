@@ -13,19 +13,7 @@ from datp_core.data.populations.contracts import (
     STABLE_ROW_ID_COLUMN,
     PopulationOutcomeLabel,
 )
-from datp_core.domain.enums import (
-    ContractSubject,
-    PartitionRole,
-    ProcessedDataBranch,
-    SplitProtocolId,
-)
-from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.provenance import canonical_checksum
-from datp_core.domain.values.checksums import Checksum, checksum_file
-from datp_core.domain.values.counts import RowCount
-from datp_core.domain.values.identifiers import FeatureNameSequence
-from datp_core.domain.values.paths import ClientPathToken
-from datp_core.preprocessing.contracts import (
+from datp_core.data.preprocessing.artifacts import (
     PartitionOrdering,
     PreprocessingFitScope,
     ProcessedAssetName,
@@ -34,7 +22,7 @@ from datp_core.preprocessing.contracts import (
     partition_roles,
     processed_asset_names,
 )
-from datp_core.preprocessing.models import (
+from datp_core.data.preprocessing.models import (
     CentralizedFittedPreprocessingState,
     FederatedFittedPreprocessingState,
     FittedStatePublishSpec,
@@ -49,18 +37,30 @@ from datp_core.preprocessing.models import (
     PreprocessingValidationReport,
     TransformedSchema,
 )
-from datp_core.preprocessing.publication import (
+from datp_core.data.preprocessing.publication import (
     ProcessedPublication,
     ProcessedPublicationResult,
     publish_processed,
 )
-from datp_core.preprocessing.state import (
+from datp_core.data.preprocessing.state import (
     TransformReloadCheck,
     TrustedScaler,
     reload_and_compare_transform,
     resolve_trusted_estimator_type,
     serialize_estimator,
 )
+from datp_core.domain.enums import (
+    ContractSubject,
+    PartitionRole,
+    ProcessedDataBranch,
+    SplitProtocolId,
+)
+from datp_core.domain.errors import LeakageError, ScientificContractError
+from datp_core.domain.provenance import canonical_checksum
+from datp_core.domain.values.checksums import Checksum, checksum_file
+from datp_core.domain.values.counts import RowCount
+from datp_core.domain.values.identifiers import FeatureNameSequence
+from datp_core.domain.values.paths import ClientPathToken
 
 
 def require_columns(

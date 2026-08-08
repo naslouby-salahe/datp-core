@@ -11,26 +11,26 @@ from datp_core.data.populations.contracts import (
     SOURCE_PATH_COLUMN,
     STABLE_ROW_ID_COLUMN,
 )
+from datp_core.data.preprocessing.artifact_validation import extract_partitions
+from datp_core.data.preprocessing.artifacts import PartitionOrdering
+from datp_core.data.preprocessing.client_partitions import (
+    CANONICAL_DATA_DIRECTORY,
+    PARQUET_PATTERN,
+    estimator_for_client,
+)
+from datp_core.data.preprocessing.federated import fit_estimators_for_federated_clients, publish_client_preprocessing
+from datp_core.data.preprocessing.models import (
+    ClientPreprocessingResult,
+    ClientPublishRequest,
+    FederatedPreprocessingOutcome,
+    PreprocessingPublishContext,
+)
 from datp_core.domain.contracts import ClientCollection, ClientOwned
 from datp_core.domain.enums import ContractSubject, DatasetId, ProcessedDataBranch, PublicationStatus
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.counts import ClientPublicationCount
 from datp_core.domain.values.identifiers import FeatureNameSequence
 from datp_core.domain.values.paths import ClientPathToken
-from datp_core.preprocessing.client_partitions import (
-    CANONICAL_DATA_DIRECTORY,
-    PARQUET_PATTERN,
-    estimator_for_client,
-)
-from datp_core.preprocessing.contracts import PartitionOrdering
-from datp_core.preprocessing.federated import fit_estimators_for_federated_clients, publish_client_preprocessing
-from datp_core.preprocessing.models import (
-    ClientPreprocessingResult,
-    ClientPublishRequest,
-    FederatedPreprocessingOutcome,
-    PreprocessingPublishContext,
-)
-from datp_core.preprocessing.validation import extract_partitions
 from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
 
 

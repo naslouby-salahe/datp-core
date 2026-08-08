@@ -35,7 +35,7 @@ from datp_core.domain.values.identifiers import CudaDeviceName, FeatureNameSeque
 from datp_core.domain.values.ratios import LearningRate, MetricValue, WeightDecay
 from datp_core.pipeline.checkpoints.models import CentralizedCheckpointCandidate
 from datp_core.pipeline.checkpoints.service import candidate_tensor_name, retain_centralized_checkpoint_candidates
-from datp_core.preprocessing.models import CentralizedFittedPreprocessingState
+from datp_core.data.preprocessing.models import CentralizedFittedPreprocessingState
 from datp_core.protocols.training import AutoencoderProtocol, CentralizedTrainingProtocol
 from datp_core.runtime.compute import resolve_cuda_device
 

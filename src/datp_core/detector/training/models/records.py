@@ -12,7 +12,7 @@ from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import ByteCount, LogicalElementCount, RoundNumber, RowCount
 from datp_core.domain.values.identifiers import FeatureNameSequence
 from datp_core.domain.values.ratios import MetricValue
-from datp_core.preprocessing.models import FederatedFittedPreprocessingState
+from datp_core.data.preprocessing.models import FederatedFittedPreprocessingState
 
 
 def validate_client_preprocessing_match(

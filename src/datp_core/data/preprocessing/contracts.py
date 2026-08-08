@@ -19,7 +19,6 @@ from datp_core.core.identifiers import (
 from datp_core.core.numeric import RowCount
 from datp_core.data.populations.contracts import ClientIdentity
 
-
 type TrustedScaler = StandardScaler | MinMaxScaler
 
 

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from datp_core.data.canonical_cache import require_canonical_publication_complete
+from datp_core.data.paths import canonical_root_under
 from datp_core.data.populations.construction import (
     build_preprocessing_handoff,
     join_handoff_with_canonical_features,
@@ -13,7 +14,38 @@ from datp_core.data.populations.contracts import (
     PopulationConstructionRequest,
     PreprocessingHandoffRequest,
 )
-from datp_core.data.paths import canonical_root_under
+from datp_core.data.preprocessing.artifact_validation import (
+    centralized_fitted_state_after_publish,
+    extract_partitions,
+    fit_trusted_batch,
+    publish_preprocessed_partitions,
+)
+from datp_core.data.preprocessing.artifacts import (
+    PartitionOrdering,
+    PreprocessingFitScope,
+    ProcessedAssetName,
+    RelativeAssetPathSequence,
+    ReusableDataCoordinate,
+    branch_asset_path,
+    canonical_relative_asset_path,
+    centralized_branch_directory,
+    processed_asset_names,
+)
+from datp_core.data.preprocessing.models import (
+    SCIENTIFIC_CENTRALIZED_PREPROCESSING_METHOD,
+    FederatedFittedPreprocessingState,
+    FittedPreprocessingState,
+    FittedStatePublishSpec,
+    PooledPreprocessingOwner,
+    PooledPreprocessingResult,
+    PreprocessingFitBatch,
+    PreprocessingPartitions,
+    PreprocessingProtocol,
+    PreprocessingPublishContext,
+    build_preprocessing_protocol,
+)
+from datp_core.data.preprocessing.paths import build_preprocessed_partition_paths
+from datp_core.data.preprocessing.state import TrustedScaler
 from datp_core.data.registry import construct_population, dataset_binding, resolve_population
 from datp_core.domain.enums import (
     ContractSubject,
@@ -28,38 +60,6 @@ from datp_core.domain.enums import (
 from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.values.counts import RowCount, Seed
 from datp_core.domain.values.identifiers import CaptureTimestampColumn, FeatureName, FeatureNameSequence
-from datp_core.preprocessing.contracts import (
-    PartitionOrdering,
-    PreprocessingFitScope,
-    ProcessedAssetName,
-    RelativeAssetPathSequence,
-    ReusableDataCoordinate,
-    branch_asset_path,
-    canonical_relative_asset_path,
-    centralized_branch_directory,
-    processed_asset_names,
-)
-from datp_core.preprocessing.models import (
-    SCIENTIFIC_CENTRALIZED_PREPROCESSING_METHOD,
-    FederatedFittedPreprocessingState,
-    FittedPreprocessingState,
-    FittedStatePublishSpec,
-    PooledPreprocessingOwner,
-    PooledPreprocessingResult,
-    PreprocessingFitBatch,
-    PreprocessingPartitions,
-    PreprocessingProtocol,
-    PreprocessingPublishContext,
-    build_preprocessing_protocol,
-)
-from datp_core.preprocessing.paths import build_preprocessed_partition_paths
-from datp_core.preprocessing.state import TrustedScaler
-from datp_core.preprocessing.validation import (
-    centralized_fitted_state_after_publish,
-    extract_partitions,
-    fit_trusted_batch,
-    publish_preprocessed_partitions,
-)
 
 
 @dataclass(slots=True, eq=False)

@@ -32,10 +32,7 @@ def transform_federated_preprocessing(
             "fitted preprocessing and transform inputs must cover the same client inventory",
             subject=ContractSubject.CLIENT_IDENTITY,
         )
-    results = tuple(
-        _transform_client(by_client[item.client], item.state)
-        for item in fitted.clients
-    )
+    results = tuple(_transform_client(by_client[item.client], item.state) for item in fitted.clients)
     return FederatedPreprocessingResult(fitted=fitted, clients=results)
 
 

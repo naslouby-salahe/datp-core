@@ -35,13 +35,13 @@ from datp_core.pipeline.preparation.populations import (
     construct_published_split,
 )
 from datp_core.pipeline.scoring.models import ClientScoringInput
-from datp_core.preprocessing.models import (
+from datp_core.data.preprocessing.models import (
     ClientPreprocessingResult,
     FederatedPreprocessingOutcome,
     FederatedPreprocessingRequest,
     PublishedFederatedPreprocessingRequest,
 )
-from datp_core.preprocessing.service import preprocess_federated, preprocess_published_federated
+from datp_core.data.preprocessing.service import preprocess_federated, preprocess_published_federated
 from datp_core.protocols.experiments import BOUNDED_EVIDENCE_POPULATIONS, ExternalTemporalExecutionIdentity
 from datp_core.protocols.training import (
     CICIOT2023_AUTOENCODER,

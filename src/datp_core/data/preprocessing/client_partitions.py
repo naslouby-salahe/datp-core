@@ -12,6 +12,17 @@ from datp_core.data.populations.contracts import (
     STABLE_ROW_ID_COLUMN,
     PreprocessingHandoff,
 )
+from datp_core.data.preprocessing.artifact_validation import extract_partitions
+from datp_core.data.preprocessing.artifacts import PartitionOrdering
+from datp_core.data.preprocessing.federated import publish_client_preprocessing
+from datp_core.data.preprocessing.models import (
+    ClientPreprocessingResult,
+    ClientPublishRequest,
+    FederatedFittedEstimators,
+    PreprocessingPartitions,
+    PreprocessingPublishContext,
+)
+from datp_core.data.preprocessing.state import TrustedScaler
 from datp_core.domain.contracts import ClientCollection, ClientOwned
 from datp_core.domain.enums import DatasetId, PopulationId, ProcessedDataBranch, PublicationStatus, SplitProtocolId
 from datp_core.domain.errors import ScientificContractError
@@ -20,17 +31,6 @@ from datp_core.domain.values.checksums import Checksum, checksum_text
 from datp_core.domain.values.counts import ClientPublicationCount, RowCount
 from datp_core.domain.values.identifiers import FeatureName, FeatureNameSequence, StableRowId
 from datp_core.domain.values.paths import ClientPathToken
-from datp_core.preprocessing.contracts import PartitionOrdering
-from datp_core.preprocessing.federated import publish_client_preprocessing
-from datp_core.preprocessing.models import (
-    ClientPreprocessingResult,
-    ClientPublishRequest,
-    FederatedFittedEstimators,
-    PreprocessingPartitions,
-    PreprocessingPublishContext,
-)
-from datp_core.preprocessing.state import TrustedScaler
-from datp_core.preprocessing.validation import extract_partitions
 from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
 from datp_core.runtime.filesystem import write_text_atomically
 
@@ -228,7 +228,7 @@ def exclude_nonfinite_model_input_rows(
     )
 
     if evidence.excluded_row_count.value:
-        structlog.get_logger("datp_core.preprocessing").warning(
+        structlog.get_logger("datp_core.data.preprocessing").warning(
             "edge_model_input_rows_excluded_nonfinite",
             dataset=dataset.value,
             population=population.value,

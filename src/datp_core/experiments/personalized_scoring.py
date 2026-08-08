@@ -23,7 +23,7 @@ from datp_core.analysis.metrics.fixed_score_checksums import evaluation_label_ch
 from datp_core.analysis.metrics.models import ClientMetricResult
 from datp_core.detector.training.models import FederatedTrainingCoordinate
 from datp_core.pipeline.scoring.models import ClientScoringInput, FederatedScoreArtifactManifest, FederatedScoreRecord
-from datp_core.preprocessing.models import ClientPreprocessingResult
+from datp_core.data.preprocessing.models import ClientPreprocessingResult
 from datp_core.thresholds.contracts import ThresholdAssignment
 
 

@@ -103,8 +103,8 @@ from datp_core.pipeline.training.personalized import (
     TrainDittoDetectorResult,
     train_ditto_detector,
 )
-from datp_core.preprocessing.models import FederatedPreprocessingOutcome, FederatedPreprocessingRequest
-from datp_core.preprocessing.service import preprocess_federated
+from datp_core.data.preprocessing.models import FederatedPreprocessingOutcome, FederatedPreprocessingRequest
+from datp_core.data.preprocessing.service import preprocess_federated
 from datp_core.presentation.export import export_mechanism_publication
 from datp_core.protocols.calibration import CANONICAL_QUANTILE, MINIMUM_BENIGN_SUPPORT, CalibrationSupportRule
 from datp_core.protocols.experiments import EXPERIMENTS

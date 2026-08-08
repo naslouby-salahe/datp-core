@@ -58,7 +58,7 @@ from datp_core.detector.autoencoder import (
     construct_autoencoder,
 )
 from datp_core.detector.checkpoints.contracts import CheckpointProtocol
-from datp_core.preprocessing.models import (
+from datp_core.data.preprocessing.models import (
     CentralizedFittedPreprocessingState,
     FederatedFittedPreprocessingState,
     FittedPreprocessingState,

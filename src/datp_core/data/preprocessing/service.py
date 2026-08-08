@@ -1,5 +1,6 @@
 from datp_core.data.canonical_cache import require_canonical_publication_complete
 from datp_core.data.edge_iiotset.schema import EdgeCanonicalColumn
+from datp_core.data.paths import canonical_root_under
 from datp_core.data.populations.construction import (
     build_preprocessing_handoff,
     join_handoff_with_canonical_features,
@@ -9,13 +10,9 @@ from datp_core.data.populations.contracts import (
     PreprocessingHandoff,
     PreprocessingHandoffRequest,
 )
-from datp_core.data.paths import canonical_root_under
-from datp_core.data.registry import construct_population, dataset_binding, resolve_population
-from datp_core.domain.enums import ContractSubject, DatasetId, PopulationId, PreprocessingProtocolId, SplitProtocolId
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.identifiers import CaptureTimestampColumn, FeatureName, FeatureNameSequence
-from datp_core.preprocessing.ciciot_file_clients import preprocess_ciciot_client_local
-from datp_core.preprocessing.client_partitions import (
+from datp_core.data.preprocessing.artifacts import PreprocessingFitScope
+from datp_core.data.preprocessing.ciciot_file_clients import preprocess_ciciot_client_local
+from datp_core.data.preprocessing.client_partitions import (
     MODEL_INPUT_EXCLUSION_ASSET,
     client_partitions,
     join_published_handoff,
@@ -23,9 +20,8 @@ from datp_core.preprocessing.client_partitions import (
     publish_client_partitions,
     write_model_input_exclusion_evidence,
 )
-from datp_core.preprocessing.contracts import PreprocessingFitScope
-from datp_core.preprocessing.federated import fit_estimators_for_federated_clients
-from datp_core.preprocessing.models import (
+from datp_core.data.preprocessing.federated import fit_estimators_for_federated_clients
+from datp_core.data.preprocessing.models import (
     SCIENTIFIC_FEDERATED_POOLED_MIN_MAX_METHOD,
     SCIENTIFIC_FEDERATED_PREPROCESSING_METHOD,
     FederatedPreprocessingOutcome,
@@ -35,7 +31,11 @@ from datp_core.preprocessing.models import (
     PublishedFederatedPreprocessingRequest,
     build_preprocessing_protocol,
 )
-from datp_core.preprocessing.persisted_artifacts import load_published_population_split
+from datp_core.data.preprocessing.persisted_artifacts import load_published_population_split
+from datp_core.data.registry import construct_population, dataset_binding, resolve_population
+from datp_core.domain.enums import ContractSubject, DatasetId, PopulationId, PreprocessingProtocolId, SplitProtocolId
+from datp_core.domain.errors import ScientificContractError
+from datp_core.domain.values.identifiers import CaptureTimestampColumn, FeatureName, FeatureNameSequence
 from datp_core.protocols.experiments import require_execution_identity
 
 _FEDERATED_METHODS = frozenset(

@@ -32,7 +32,7 @@ from datp_core.pipeline.preparation.populations import ConstructDeclaredPopulati
 from datp_core.pipeline.scoring.centralized import generate_centralized_scores
 from datp_core.pipeline.scoring.models import GenerateCentralizedScoresRequest
 from datp_core.pipeline.training.centralized import TrainCentralizedDetectorRequest, train_centralized_detector
-from datp_core.preprocessing.centralized import (
+from datp_core.data.preprocessing.centralized import (
     CentralizedPopulationPreprocessingRequest,
     preprocess_centralized_population,
 )

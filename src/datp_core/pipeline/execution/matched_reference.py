@@ -21,14 +21,14 @@ from datp_core.domain.values.identifiers import FeatureNameSequence
 from datp_core.pipeline.execution.context import FederatedExecutionContext, training_feature_names
 from datp_core.pipeline.execution.layout import ExecutionArtifactDirectory, bounded_evidence_seed_directory
 from datp_core.pipeline.scoring.models import ClientScoringInput
-from datp_core.preprocessing.client_partitions import CANONICAL_DATA_DIRECTORY, PARQUET_PATTERN
-from datp_core.preprocessing.models import ClientPreprocessingResult
-from datp_core.preprocessing.persisted_artifacts import (
+from datp_core.data.preprocessing.client_partitions import CANONICAL_DATA_DIRECTORY, PARQUET_PATTERN
+from datp_core.data.preprocessing.models import ClientPreprocessingResult
+from datp_core.data.preprocessing.persisted_artifacts import (
     MATCHED_STATIC_SPLIT_ASSIGNMENTS_ASSET,
     MATCHED_STATIC_SPLIT_MANIFEST_ASSET,
 )
-from datp_core.preprocessing.state import TrustedScaler, load_estimator
-from datp_core.preprocessing.validation import transform_feature_matrix
+from datp_core.data.preprocessing.state import TrustedScaler, load_estimator
+from datp_core.data.preprocessing.artifact_validation import transform_feature_matrix
 from datp_core.runtime.configuration import DATA_ROOT
 
 
