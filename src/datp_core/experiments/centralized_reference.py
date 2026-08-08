@@ -13,7 +13,7 @@ from datp_core.core.identifiers import (
     SplitProtocolId,
 )
 from datp_core.core.numeric import Seed
-from datp_core.learning.centralized.training import CentralizedTrainingCoordinate
+from datp_core.detector.training.centralized import CentralizedTrainingCoordinate
 from datp_core.pipeline.checkpoints.service import (
     SelectCentralizedCheckpointRequest,
     select_centralized_primary_checkpoint,

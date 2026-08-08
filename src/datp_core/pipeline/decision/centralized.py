@@ -7,8 +7,15 @@ from pathlib import Path
 
 import numpy as np
 
+from datp_core.artifacts.repositories.publication import (
+    ArtifactPublication,
+    FunctionalArtifactCodec,
+    publish_artifact,
+    serialize_json_model,
+)
 from datp_core.datasets.partitioning.contracts import PopulationOutcomeLabel
 from datp_core.datasets.partitioning.integrity import reject_non_benign_labels
+from datp_core.detector.training.centralized import CentralizedTrainingCoordinate
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
     CentralizedThresholdMethod,
@@ -29,13 +36,6 @@ from datp_core.domain.values.ratios import Quantile, ScoreValue, ThresholdValue
 from datp_core.evaluation.client_metrics import calculate_client_metrics
 from datp_core.evaluation.confusion import calculate_confusion_counts
 from datp_core.evaluation.models import ConfusionCounts, MetricAvailability
-from datp_core.learning.centralized.training import CentralizedTrainingCoordinate
-from datp_core.artifacts.repositories.publication import (
-    ArtifactPublication,
-    FunctionalArtifactCodec,
-    publish_artifact,
-    serialize_json_model,
-)
 from datp_core.pipeline.scoring.centralized import load_score_frame, reject_non_finite_scores
 from datp_core.pipeline.scoring.models import PooledScoreArtifact
 from datp_core.protocols.calibration import CANONICAL_QUANTILE, CentralizedQuantileProtocol
