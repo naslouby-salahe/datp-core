@@ -65,7 +65,11 @@ from datp_core.pipeline.execution.layout import EvaluationRunAssetDirectory, Exe
 from datp_core.pipeline.execution.score_generation import score_selected_checkpoint
 from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.pipeline.scoring.models import FederatedScoreArtifactManifest, FederatedScoreRecord
-from datp_core.pipeline.training.federated import TrainFederatedDetectorRequest, TrainFederatedDetectorResult, train_federated_detector
+from datp_core.pipeline.training.federated import (
+    TrainFederatedDetectorRequest,
+    TrainFederatedDetectorResult,
+    train_federated_detector,
+)
 from datp_core.protocols.calibration import (
     CANONICAL_QUANTILE,
     CalibrationSupportRule,
@@ -327,15 +331,11 @@ class ExperimentWorkspace:
         for assignment in threshold_result.assignments:
             client = assignment.client
             estimated = (
-                assignment.blended_threshold
-                if isinstance(assignment, ShrinkageAssignment)
-                else assignment.threshold
+                assignment.blended_threshold if isinstance(assignment, ShrinkageAssignment) else assignment.threshold
             )
             calibration_scores = calibration_by_client.get(client)
             if calibration_scores is None:
-                raise ScientificContractError(
-                    "threshold assignment client has no eligible benign calibration evidence"
-                )
+                raise ScientificContractError("threshold assignment client has no eligible benign calibration evidence")
             provenance = ThresholdEstimationProvenance(
                 client=client,
                 coordinate=coordinate,

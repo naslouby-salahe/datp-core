@@ -35,7 +35,7 @@ from datp_core.artifacts.repositories.publication import (
     publish_artifact,
 )
 from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
-from datp_core.protocols.statistics import PairedInferenceProtocol
+from datp_core.analysis.inference.wilcoxon import PairedInferenceProtocol
 from datp_core.protocols.temporal import TemporalDeploymentProvenance
 
 AnalysisDocumentT = TypeVar("AnalysisDocumentT", bound=StrictModel)

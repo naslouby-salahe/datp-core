@@ -512,8 +512,6 @@ def evaluation_result_checksum(result: CentralizedEvaluationResult) -> Checksum:
     return canonical_checksum(result)
 
 
-
-
 def _validate_threshold_inputs(
     coordinate: CentralizedTrainingCoordinate,
     calibration_scores: PooledScoreArtifact,

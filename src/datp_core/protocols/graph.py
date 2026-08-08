@@ -27,7 +27,7 @@ from datp_core.detector.checkpoints.contracts import CheckpointProtocol
 from .experiments import ConfirmatoryEndpoint, ExperimentDeclaration
 from .populations import PopulationDeclaration
 from .splits import FractionalSplitProtocol, StaticReferenceSplitProtocol, TemporalSplitProtocol
-from .statistics import StatisticalInferenceProtocol
+from datp_core.analysis.inference.wilcoxon import PairedInferenceProtocol
 from .traffic_rates import TrafficRateEvidence
 from .training import FedAvgProtocol
 
@@ -42,7 +42,7 @@ class ResolvedProtocolGraph(StrictModel):
     checkpoint: CheckpointProtocol
     calibration: CalibrationEligibilityProtocol
     confirmatory_endpoint: ConfirmatoryEndpoint
-    confirmatory_inference: StatisticalInferenceProtocol
+    confirmatory_inference: PairedInferenceProtocol
     anchor: AnchorDecisionProtocol
     traffic_rate_evidence: tuple[TrafficRateEvidence, ...]
     cluster_threshold: ClusterThresholdProtocol

@@ -24,7 +24,7 @@ from datp_core.core.identifiers import ExperimentReadiness, PreprocessingProtoco
 from datp_core.experiments.anchor.spec import ANCHOR_DECISION_PROTOCOL
 from datp_core.protocols.metrics import CONFIRMATORY_METRICS
 from datp_core.data.populations.declarations import split_protocol_for_population
-from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL
+from datp_core.experiments.confirmatory.spec import CONFIRMATORY_INFERENCE_PROTOCOL
 from datp_core.protocols.training import CHECKPOINT_PROTOCOL, CHECKPOINT_SELECTION_RULE, NBAIOT_AUTOENCODER
 from datp_core.protocols.validation import CONFIRMATORY_ENDPOINT
 

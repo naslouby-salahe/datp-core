@@ -36,7 +36,8 @@ from .splits import (
     StaticReferenceSplitProtocol,
     TemporalSplitProtocol,
 )
-from .statistics import CONFIRMATORY_INFERENCE_PROTOCOL, StatisticalInferenceProtocol
+from datp_core.analysis.inference.wilcoxon import PairedInferenceProtocol
+from datp_core.experiments.confirmatory.spec import CONFIRMATORY_INFERENCE_PROTOCOL
 from .traffic_rates import TRAFFIC_RATE_EVIDENCE, TrafficRateEvidence
 from .training import CHECKPOINT_PROTOCOL, FEDAVG_TRAINING_PROTOCOL, CheckpointProtocol, FedAvgProtocol
 
@@ -65,7 +66,7 @@ class ProtocolGraphInputs:
     minimum_support: CalibrationSize
     traffic_rate_evidence: tuple[TrafficRateEvidence, ...]
     confirmatory_endpoint: ConfirmatoryEndpoint
-    confirmatory_inference: StatisticalInferenceProtocol
+    confirmatory_inference: PairedInferenceProtocol
     anchor: AnchorDecisionProtocol
     cluster_threshold: ClusterThresholdProtocol
     fedavg_training: FedAvgProtocol

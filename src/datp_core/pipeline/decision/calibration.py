@@ -95,8 +95,7 @@ def construct_calibration_size_ablation(
     capabilities = population_capabilities(request.score_manifest.coordinate.population)
     replicate_count = require_calibration_subsample_replicate_count()
     by_client_replicate = {
-        (manifest.client, manifest.replicate_index): manifest
-        for manifest in request.calibration.replicate_manifests
+        (manifest.client, manifest.replicate_index): manifest for manifest in request.calibration.replicate_manifests
     }
     for size in CALIBRATION_SIZE_PROTOCOL.sizes:
         for replicate_value in range(replicate_count.value):

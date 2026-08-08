@@ -58,7 +58,7 @@ from datp_core.presentation.export import export_confirmatory_publication, expor
 from datp_core.presentation.figures import FigureSpec
 from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration
 from datp_core.experiments.common.seeds import CONFIRMATORY_ANALYSIS_SEED, CONFIRMATORY_SEED_COHORT, SeedCohort
-from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL
+from datp_core.experiments.confirmatory.spec import CONFIRMATORY_INFERENCE_PROTOCOL
 from datp_core.runtime.configuration import OUTPUTS_ROOT
 
 

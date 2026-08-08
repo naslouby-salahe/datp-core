@@ -22,7 +22,8 @@ from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.presentation.export import export_external_publication
 from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration, ExternalTemporalExecutionIdentity
 from datp_core.experiments.common.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_ANALYSIS_SEED, SeedCohort
-from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL, PairedInferenceProtocol
+from datp_core.analysis.inference.wilcoxon import PairedInferenceProtocol
+from datp_core.experiments.confirmatory.spec import CONFIRMATORY_INFERENCE_PROTOCOL
 
 
 class BoundedExternalPlanningReason(StrEnum):
