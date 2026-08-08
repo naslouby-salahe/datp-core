@@ -14,20 +14,18 @@ def _imported_modules(path: Path) -> tuple[str, ...]:
     return tuple(modules)
 
 
-def test_federated_evaluation_separates_contracts_execution_and_publication() -> None:
-    evaluation = _SOURCE_ROOT / "evaluation"
-    federated = evaluation / "federated"
+def test_federated_analysis_separates_metrics_execution_and_publication() -> None:
+    metrics = _SOURCE_ROOT / "analysis" / "metrics"
 
-    assert not (evaluation / "population.py").exists()
-    assert (federated / "contracts.py").is_file()
-    assert (federated / "execution.py").is_file()
-    assert (federated / "publication.py").is_file()
-    assert "polars" not in _imported_modules(federated / "contracts.py")
-    assert "polars" not in _imported_modules(federated / "publication.py")
+    assert (metrics / "population.py").is_file()
+    assert (metrics / "federated.py").is_file()
+    assert (metrics / "federated_execution.py").is_file()
+    assert (metrics / "federated_publication.py").is_file()
+    assert "polars" not in _imported_modules(metrics / "federated.py")
 
-    stale_importers = tuple(
+    direct_importers = tuple(
         path.relative_to(_SOURCE_ROOT)
         for path in _SOURCE_ROOT.rglob("*.py")
-        if "datp_core.evaluation.population" in _imported_modules(path)
+        if "datp_core.analysis.metrics.population" in _imported_modules(path)
     )
-    assert stale_importers == ()
+    assert direct_importers

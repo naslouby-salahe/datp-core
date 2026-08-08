@@ -58,7 +58,7 @@ def test_canonical_packages_own_the_scientific_cutover() -> None:
 
 
 def test_cli_surface_is_research_facing_only() -> None:
-    cli = _SOURCE_ROOT / "cli"
+    cli = _SOURCE_ROOT / "app" / "cli"
     present = {path.name for path in cli.glob("*.py")}
     assert present == {"__init__.py", "app.py", "anchor.py", "execution.py", "validation.py"}
     app_text = (cli / "app.py").read_text(encoding="utf-8")
