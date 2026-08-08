@@ -4,12 +4,10 @@ from dataclasses import dataclass
 
 import torch
 
-from datp_core.domain.enums import ContractSubject
-from datp_core.domain.errors import ExecutionStateError
-from datp_core.domain.values.counts import CudaDeviceCount
-from datp_core.domain.values.identifiers import CudaDeviceName
-
-from .configuration import CANONICAL_RUNTIME, CudaDeviceIndex
+from datp_core.core.errors import ExecutionStateError
+from datp_core.core.identifiers import ContractSubject, CudaDeviceName
+from datp_core.core.numeric import CudaDeviceCount
+from datp_core.runtime.configuration import CANONICAL_RUNTIME, CudaDeviceIndex
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,14 +20,6 @@ class CudaProvenance:
     torch_version: str
 
     def __post_init__(self) -> None:
-        if not isinstance(self.cuda_available, bool):
-            raise TypeError("CUDA availability must be boolean")
-        if not isinstance(self.device_count, CudaDeviceCount):
-            raise TypeError("CUDA provenance requires a typed device count")
-        if self.device_index is not None and not isinstance(self.device_index, CudaDeviceIndex):
-            raise TypeError("CUDA provenance requires a typed device index")
-        if self.device_name is not None and not isinstance(self.device_name, CudaDeviceName):
-            raise TypeError("CUDA provenance requires a typed device name")
         selected = self.device_index is not None and self.device_name is not None
         if self.cuda_available != (self.device_count.value > 0 and selected):
             raise ValueError("CUDA availability must match the recorded selected device")
