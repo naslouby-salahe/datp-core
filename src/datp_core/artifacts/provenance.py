@@ -1,19 +1,63 @@
-"""Immutable provenance records and canonical scientific identity serialization."""
+"""Checksums, canonical identities, and deterministic scientific provenance."""
 
 import json
-from collections.abc import Mapping
-from dataclasses import fields, is_dataclass
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, fields, is_dataclass
 from enum import Enum
+from hashlib import file_digest, sha256
 from math import isfinite
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, TypeAdapter
 
-from .values.checksums import Checksum, checksum_text
+from datp_core.core.contracts import pydantic_value_schema
 
 if TYPE_CHECKING:
     from _typeshed import DataclassInstance
+
+_ORDERED_TEXT_LENGTH_PREFIX_BYTES = 8
+JSON_SEPARATORS = (",", ":")
+
+
+@dataclass(frozen=True, slots=True)
+class Checksum:
+    value: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.value, str) or not self.value.strip():
+            raise ValueError("checksum must be non-empty")
+        object.__setattr__(self, "value", self.value.strip().lower())
+
+    __get_pydantic_core_schema__ = classmethod(pydantic_value_schema)
+
+
+def checksum_text(payload: str) -> Checksum:
+    return Checksum(sha256(payload.encode()).hexdigest())
+
+
+def checksum_bytes(payload: bytes) -> Checksum:
+    return Checksum(sha256(payload).hexdigest())
+
+
+def checksum_file(path: Path) -> Checksum:
+    with path.open("rb") as source:
+        return Checksum(file_digest(source, "sha256").hexdigest())
+
+
+def ordered_text_checksum(values: Sequence[str]) -> Checksum:
+    digest = sha256()
+    for value in values:
+        encoded = value.encode("utf-8")
+        digest.update(
+            len(encoded).to_bytes(
+                _ORDERED_TEXT_LENGTH_PREFIX_BYTES,
+                byteorder="big",
+                signed=False,
+            )
+        )
+        digest.update(encoded)
+    return Checksum(digest.hexdigest())
 
 
 type CanonicalValue = (
@@ -27,11 +71,9 @@ type CanonicalValue = (
     | dict[str, "CanonicalValue"]
 )
 
-JSON_SEPARATORS = (",", ":")
-
 
 def canonical_value(value: object) -> CanonicalValue:
-    """Convert one supported scientific value into a deterministic finite JSON value."""
+    """Convert a supported scientific value into deterministic finite JSON data."""
     if value is None or isinstance(value, (bool, int, str)):
         return value
     if isinstance(value, float):
@@ -65,7 +107,6 @@ def canonical_mapping(value: object) -> dict[str, CanonicalValue]:
 
 
 def canonical_json_text(value: object) -> str:
-    """Serialize one supported value using the repository canonical identity contract."""
     return json.dumps(
         canonical_value(value),
         sort_keys=True,
@@ -80,7 +121,6 @@ def canonical_checksum(value: object) -> Checksum:
 
 
 def serialize_json_model(model: BaseModel, destination: Path) -> Checksum:
-    """Persist one strict model through the repository canonical JSON contract."""
     destination.parent.mkdir(parents=True, exist_ok=True)
     payload = canonical_json_text(model)
     destination.write_text(payload, encoding="utf-8")
