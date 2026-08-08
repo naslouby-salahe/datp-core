@@ -197,9 +197,21 @@ def persist_federated_training_history(
             subject=ContractSubject.CUDA,
         )
 
-    r_nums, a_losses, u_bytes, d_bytes, s_bytes, l_counts, g_sums = [], [], [], [], [], [], []
-    c_rounds, c_ids, c_samples, c_losses = [], [], [], []
-    p_rounds, p_ids, p_losses, p_sums = [], [], [], []
+    r_nums: list[int] = []
+    a_losses: list[float] = []
+    u_bytes: list[int] = []
+    d_bytes: list[int] = []
+    s_bytes: list[int] = []
+    l_counts: list[int] = []
+    g_sums: list[str] = []
+    c_rounds: list[int] = []
+    c_ids: list[str] = []
+    c_samples: list[int] = []
+    c_losses: list[float] = []
+    p_rounds: list[int] = []
+    p_ids: list[str] = []
+    p_losses: list[float] = []
+    p_sums: list[str] = []
 
     for item in history.rounds:
         r_nums.append(item.round_number.value)

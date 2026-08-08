@@ -156,7 +156,7 @@ def rebase_checkpoint_candidates(
     candidates: Sequence[CheckpointCandidate],
     directory: Path,
 ) -> tuple[CheckpointCandidate, ...]:
-    rebased_list = []
+    rebased_list: list[CheckpointCandidate] = []
     for candidate in candidates:
         new_path = directory / candidate_tensor_name(candidate.round_number, candidate.client)
         validate_persisted_checkpoint_file(new_path, candidate.tensor_checksum)

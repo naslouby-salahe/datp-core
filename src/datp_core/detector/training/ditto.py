@@ -125,7 +125,7 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
     global_state = clone_autoencoder_state(initial_model)
 
     personalized_states = {item.client: clone_state(global_state) for item in prepared}
-    personalized_snapshots = {item.client: [] for item in prepared}
+    personalized_snapshots: dict[ClientIdentity, list[RoundSnapshot]] = {item.client: [] for item in prepared}
 
     candidate_rounds = frozenset(request.checkpoint_protocol.candidates)
     rounds: list[FederatedRoundResult] = []

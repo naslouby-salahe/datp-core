@@ -211,7 +211,7 @@ def build_client_loader(
     *,
     batch_size: BatchSize,
     seed: Seed,
-) -> DataLoader:
+) -> DataLoader[tuple[torch.Tensor, ...]]:
     generator = torch.Generator(device="cpu")
     generator.manual_seed(seed.value)
     return DataLoader(
@@ -283,7 +283,7 @@ def _train_one_batch(
             proximal_term.coefficient,
         )
 
-    objective.backward()
+    torch.autograd.backward(objective)
     optimizer.step()
     return reconstruction_loss.detach()
 
@@ -291,7 +291,7 @@ def _train_one_batch(
 def run_local_epoch(
     model: ReconstructionAutoencoder,
     optimizer: torch.optim.Optimizer,
-    loader: DataLoader,
+    loader: DataLoader[tuple[torch.Tensor, ...]],
     device: torch.device,
     *,
     proximal_term: ProximalTerm | None = None,

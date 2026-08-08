@@ -21,7 +21,8 @@ from datp_core.core.identifiers import (
 )
 from datp_core.core.numeric import MetricValue, RoundNumber, Seed
 from datp_core.data.populations.contracts import ClientIdentity
-from datp_core.detector.training.contracts import AutoencoderArchitecture, FederatedTrainingCoordinate
+from datp_core.detector.training.contracts import FederatedTrainingCoordinate
+from datp_core.protocols.training import AutoencoderArchitecture
 
 if TYPE_CHECKING:
     from datp_core.detector.training.centralized import CentralizedTrainingCoordinate

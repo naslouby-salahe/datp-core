@@ -146,8 +146,6 @@ class CentralizedTrainingResult:
     final_epoch: RoundNumber
 
     def __post_init__(self) -> None:
-        if not isinstance(self.device_name, CudaDeviceName):
-            raise TypeError("centralized training results require a typed CUDA device name")
         if self.train_row_count.value < 1:
             raise ValueError("centralized training requires at least one benign training row")
         if self.batch_size_used != self.optimizer.batch_size:
@@ -454,7 +452,7 @@ def _build_loader(
     *,
     batch_size: BatchSize,
     seed: Seed,
-) -> DataLoader:
+) -> DataLoader[tuple[torch.Tensor, ...]]:
     require_cuda_available()
     tensor = torch.tensor(matrix, dtype=TORCH_LEARNING_DTYPE)
     dataset = TensorDataset(tensor)
@@ -475,7 +473,7 @@ def _run_training_epochs(
     *,
     model: ReconstructionAutoencoder,
     optimizer: torch.optim.Optimizer,
-    loader: DataLoader,
+    loader: DataLoader[tuple[torch.Tensor, ...]],
     checkpoint_protocol: CheckpointProtocol,
     device: torch.device,
 ) -> tuple[
@@ -496,7 +494,7 @@ def _run_training_epochs(
             optimizer.zero_grad(set_to_none=True)
             reconstruction = model(batch)
             loss = nn.functional.mse_loss(reconstruction, batch)
-            loss.backward()
+            torch.autograd.backward(loss)
             optimizer.step()
             running_loss += loss.item()
             batch_count += 1

@@ -33,7 +33,7 @@ class TrainFederatedDetectorResult:
 
 def train_federated_detector(request: TrainFederatedDetectorRequest) -> TrainFederatedDetectorResult:
     training_request = request.request
-    validate_federated_training_inputs(training_request.clients, training_request.autoencoder.widths[0])
+    validate_federated_training_inputs(training_request.clients, training_request.autoencoder.widths[0].value)
     publication = publish_artifact(
         ArtifactPublication(
             target=training_request.output_directory,

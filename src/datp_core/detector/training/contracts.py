@@ -41,7 +41,7 @@ class AutoencoderArchitecture(Sequence[FeatureCount]):
     widths: tuple[FeatureCount, ...]
 
     def __post_init__(self) -> None:
-        normalized = tuple(width if isinstance(width, FeatureCount) else FeatureCount(width) for width in self.widths)
+        normalized = self.widths
         object.__setattr__(self, "widths", normalized)
         validate_non_empty_tuple(normalized, "autoencoder architecture")
         if len(normalized) < 2:

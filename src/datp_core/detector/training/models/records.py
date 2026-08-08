@@ -196,7 +196,7 @@ class FederatedRoundResult:
 
         if personalized:
             personalized_count = len(personalized)
-            personalized_client_set = {reference.client for reference in personalized}
+            personalized_client_set: set[ClientIdentity] = {reference.client for reference in personalized}
 
             if len(personalized_client_set) != personalized_count:
                 raise ScientificContractError(
@@ -204,7 +204,7 @@ class FederatedRoundResult:
                     subject=ContractSubject.CLIENT_IDENTITY,
                 )
         else:
-            personalized_client_set = set()
+            personalized_client_set: set[ClientIdentity] = set()
 
         match coordinate.model:
             case TrainingModelId.DITTO_GLOBAL_AUTOENCODER:

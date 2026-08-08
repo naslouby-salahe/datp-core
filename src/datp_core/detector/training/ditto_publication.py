@@ -45,7 +45,7 @@ class TrainDittoDetectorResult:
 
 def train_ditto_detector(request: TrainDittoDetectorRequest) -> TrainDittoDetectorResult:
     training_request = request.request
-    validate_federated_training_inputs(training_request.clients, training_request.autoencoder.widths[0])
+    validate_federated_training_inputs(training_request.clients, training_request.autoencoder.widths[0].value)
     publication = publish_related_artifacts(
         RelatedArtifactPublication(
             request=training_request,

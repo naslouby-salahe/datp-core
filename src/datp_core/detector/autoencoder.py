@@ -9,7 +9,7 @@ from torch import nn
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import ContractSubject, OptimizerId
 from datp_core.core.numeric import BatchSize, FeatureCount, LearningRate, Seed
-from datp_core.detector.training.contracts import AutoencoderArchitecture, AutoencoderProtocol, OptimizerProtocol
+from datp_core.protocols.training import AutoencoderArchitecture, AutoencoderProtocol, OptimizerProtocol
 from datp_core.runtime.compute import require_cuda_available
 
 type AutoencoderState = dict[str, torch.Tensor]
@@ -46,8 +46,7 @@ class ReconstructionAutoencoder(nn.Module):
 
 
 def construct_autoencoder(protocol: AutoencoderProtocol) -> ReconstructionAutoencoder:
-    with torch.random.fork_rng(devices=[]):
-        return ReconstructionAutoencoder(protocol.widths)
+    return ReconstructionAutoencoder(protocol.widths)
 
 
 def build_optimizer(
@@ -82,9 +81,7 @@ def build_reconstruction_autoencoder(
             if not isinstance(module, nn.Linear):
                 continue
             nn.init.kaiming_uniform_(module.weight, a=5**0.5, generator=generator)
-            if module.bias is None:
-                continue
-            fan_in, _ = nn.init._calculate_fan_in_and_fan_out(module.weight)
+            fan_in = module.weight.shape[1]
             bound = 1.0 / fan_in**0.5
             nn.init.uniform_(module.bias, -bound, bound, generator=generator)
     model.train()
