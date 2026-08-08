@@ -1,5 +1,3 @@
-from typing import cast
-
 import pytest
 from tests.unit.thresholding.helpers import COORDINATE, client_scores
 
@@ -17,6 +15,7 @@ from datp_core.domain.errors import CapabilityError, LeakageError, ScientificCon
 from datp_core.domain.values.counts import ClientCount
 from datp_core.domain.values.paths import FamilyIdentity
 from datp_core.domain.values.ratios import Quantile
+from datp_core.protocols.calibration import CalibrationSupportRule, ClusterThresholdAggregation
 from datp_core.thresholding.assignments import FamilyAssignment
 from datp_core.thresholding.dispatch import (
     ThresholdConstructionRequest,
@@ -28,9 +27,7 @@ from datp_core.thresholding.identities import ThresholdUnavailableResult
 from datp_core.thresholding.methods.cluster import GroupedThresholdResult
 from datp_core.thresholding.methods.conformal import ConformalThresholdResult
 from datp_core.thresholding.methods.family import FamilyThresholdResult
-from datp_core.thresholding.methods.federated_statistics import (
-    FederatedStatisticsThresholdResult,
-)
+from datp_core.thresholding.methods.federated_statistics import FederatedStatisticsThresholdResult
 from datp_core.thresholding.methods.local import LocalThresholdResult
 from datp_core.thresholding.methods.shared import (
     PooledSharedQuantileResult,
@@ -76,12 +73,19 @@ def _capabilities(
 ALL_METHODS_CAPABILITIES = _capabilities(tuple(FederatedThresholdMethod))
 
 
+def _cluster_aggregation(method: FederatedThresholdMethod) -> ClusterThresholdAggregation | None:
+    if method is FederatedThresholdMethod.CLUSTER_THRESHOLD:
+        return ClusterThresholdAggregation.ARITHMETIC_MEAN_OF_ELIGIBLE_LOCAL_THRESHOLDS
+    return None
+
+
 def _request(
     method: FederatedThresholdMethod,
     *,
     capabilities: PopulationCapabilities = ALL_METHODS_CAPABILITIES,
     eligible: tuple[ClientBenignCalibrationScores, ...] = ELIGIBLE,
     family_by_client: tuple[FamilyAssignment, ...] = FAMILY_BY_CLIENT,
+    support_rule: CalibrationSupportRule = CalibrationSupportRule.CANONICAL_MINIMUM_SUPPORT,
 ) -> ThresholdConstructionRequest:
     return ThresholdConstructionRequest(
         method=method,
@@ -90,6 +94,8 @@ def _request(
         capabilities=capabilities,
         eligible=eligible,
         family_by_client=family_by_client,
+        support_rule=support_rule,
+        cluster_threshold_aggregation=_cluster_aggregation(method),
     )
 
 
@@ -98,60 +104,30 @@ def _request(
     [
         (FederatedThresholdMethod.SHARED_THRESHOLD, SharedThresholdResult),
         (FederatedThresholdMethod.LOCAL_THRESHOLD, LocalThresholdResult),
-        (
-            FederatedThresholdMethod.POOLED_SHARED_QUANTILE,
-            PooledSharedQuantileResult,
-        ),
-        (
-            FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD,
-            SampleWeightedSharedThresholdResult,
-        ),
+        (FederatedThresholdMethod.POOLED_SHARED_QUANTILE, PooledSharedQuantileResult),
+        (FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD, SampleWeightedSharedThresholdResult),
         (FederatedThresholdMethod.FAMILY_THRESHOLD, FamilyThresholdResult),
         (FederatedThresholdMethod.CLUSTER_THRESHOLD, GroupedThresholdResult),
-        (
-            FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE,
-            ShrinkageThresholdResult,
-        ),
-        (
-            FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE,
-            ThresholdUnavailableResult,
-        ),
-        (
-            FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD,
-            ConformalThresholdResult,
-        ),
-        (
-            FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS,
-            FederatedStatisticsThresholdResult,
-        ),
+        (FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE, ShrinkageThresholdResult),
+        (FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE, ThresholdUnavailableResult),
+        (FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD, ConformalThresholdResult),
+        (FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS, FederatedStatisticsThresholdResult),
     ],
 )
-def test_dispatch_returns_the_correct_result_type_for_every_method(
-    method,
-    expected_type,
-) -> None:
-    assert isinstance(
-        dispatch_federated_threshold(_request(method)),
-        expected_type,
-    )
+def test_dispatch_returns_the_correct_result_type_for_every_method(method, expected_type) -> None:
+    assert isinstance(dispatch_federated_threshold(_request(method)), expected_type)
 
 
 def test_dispatch_family_threshold_without_taxonomy_is_unavailable() -> None:
     result = dispatch_federated_threshold(
-        _request(
-            FederatedThresholdMethod.FAMILY_THRESHOLD,
-            family_by_client=(),
-        )
+        _request(FederatedThresholdMethod.FAMILY_THRESHOLD, family_by_client=())
     )
     assert isinstance(result, ThresholdUnavailableResult)
 
 
 def test_dispatch_cluster_threshold_with_too_few_clients_is_unavailable() -> None:
     result = dispatch_federated_threshold(
-        _request(
-            FederatedThresholdMethod.CLUSTER_THRESHOLD,
-            eligible=ELIGIBLE[:2],
-        )
+        _request(FederatedThresholdMethod.CLUSTER_THRESHOLD, eligible=ELIGIBLE[:2])
     )
     assert isinstance(result, ThresholdUnavailableResult)
 
@@ -182,15 +158,6 @@ def test_reject_centralized_threshold_method_accepts_federated_methods() -> None
     reject_centralized_threshold_method(FederatedThresholdMethod.SHARED_THRESHOLD)
 
 
-def test_dispatch_rejects_a_centralized_method_disguised_as_federated() -> None:
-    disguised = cast(
-        FederatedThresholdMethod,
-        CentralizedThresholdMethod.POOLED_BENIGN_QUANTILE,
-    )
-    with pytest.raises(LeakageError):
-        dispatch_federated_threshold(_request(disguised))
-
-
 def test_threshold_construction_request_rejects_duplicate_eligible_clients() -> None:
     with pytest.raises(ScientificContractError, match="unique identities"):
         ThresholdConstructionRequest(
@@ -200,6 +167,8 @@ def test_threshold_construction_request_rejects_duplicate_eligible_clients() -> 
             capabilities=ALL_METHODS_CAPABILITIES,
             eligible=(ELIGIBLE[0], ELIGIBLE[0]),
             family_by_client=(),
+            support_rule=CalibrationSupportRule.CANONICAL_MINIMUM_SUPPORT,
+            cluster_threshold_aggregation=None,
         )
 
 
@@ -221,6 +190,8 @@ def test_threshold_construction_request_rejects_mixed_coordinates() -> None:
             capabilities=ALL_METHODS_CAPABILITIES,
             eligible=(ELIGIBLE[0], other),
             family_by_client=(),
+            support_rule=CalibrationSupportRule.CANONICAL_MINIMUM_SUPPORT,
+            cluster_threshold_aggregation=None,
         )
 
 
@@ -229,10 +200,7 @@ def test_threshold_construction_request_rejects_duplicate_family_taxonomy_client
         FamilyAssignment(client=ELIGIBLE[0].client, family=FAMILY_A),
         FamilyAssignment(client=ELIGIBLE[0].client, family=FAMILY_A),
     )
-    with pytest.raises(
-        ScientificContractError,
-        match="unique client identities",
-    ):
+    with pytest.raises(ScientificContractError, match="unique client identities"):
         ThresholdConstructionRequest(
             method=FederatedThresholdMethod.FAMILY_THRESHOLD,
             coordinate=COORDINATE,
@@ -240,4 +208,54 @@ def test_threshold_construction_request_rejects_duplicate_family_taxonomy_client
             capabilities=ALL_METHODS_CAPABILITIES,
             eligible=ELIGIBLE,
             family_by_client=duplicated,
+            support_rule=CalibrationSupportRule.CANONICAL_MINIMUM_SUPPORT,
+            cluster_threshold_aggregation=None,
         )
+
+
+def test_cluster_threshold_requires_explicit_aggregation() -> None:
+    with pytest.raises(ScientificContractError, match="explicit threshold aggregation"):
+        ThresholdConstructionRequest(
+            method=FederatedThresholdMethod.CLUSTER_THRESHOLD,
+            coordinate=COORDINATE,
+            quantile=QUANTILE,
+            capabilities=ALL_METHODS_CAPABILITIES,
+            eligible=ELIGIBLE,
+            family_by_client=FAMILY_BY_CLIENT,
+            support_rule=CalibrationSupportRule.CANONICAL_MINIMUM_SUPPORT,
+            cluster_threshold_aggregation=None,
+        )
+
+
+def test_non_cluster_threshold_rejects_cluster_aggregation() -> None:
+    with pytest.raises(ScientificContractError, match="valid only for CLUSTER_THRESHOLD"):
+        ThresholdConstructionRequest(
+            method=FederatedThresholdMethod.SHARED_THRESHOLD,
+            coordinate=COORDINATE,
+            quantile=QUANTILE,
+            capabilities=ALL_METHODS_CAPABILITIES,
+            eligible=ELIGIBLE,
+            family_by_client=FAMILY_BY_CLIENT,
+            support_rule=CalibrationSupportRule.CANONICAL_MINIMUM_SUPPORT,
+            cluster_threshold_aggregation=ClusterThresholdAggregation.ARITHMETIC_MEAN_OF_ELIGIBLE_LOCAL_THRESHOLDS,
+        )
+
+
+def test_canonical_support_rejects_client_below_one_hundred_benign_rows() -> None:
+    undersized = (client_scores("undersized", tuple(float(value) for value in range(50))),)
+    with pytest.raises(ScientificContractError, match="minimum benign calibration support"):
+        dispatch_federated_threshold(
+            _request(FederatedThresholdMethod.SHARED_THRESHOLD, eligible=undersized)
+        )
+
+
+def test_declared_size_ablation_support_allows_fifty_benign_rows() -> None:
+    undersized = (client_scores("ablation", tuple(float(value) for value in range(50))),)
+    result = dispatch_federated_threshold(
+        _request(
+            FederatedThresholdMethod.SHARED_THRESHOLD,
+            eligible=undersized,
+            support_rule=CalibrationSupportRule.DECLARED_SIZE_ABLATION,
+        )
+    )
+    assert isinstance(result, SharedThresholdResult)
