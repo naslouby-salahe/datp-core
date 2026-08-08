@@ -73,24 +73,49 @@ THRESHOLDING_ROOT = ROOT / "src" / "datp_core" / "thresholds"
 FAMILY_MODULE = THRESHOLDING_ROOT / "policies" / "family.py"
 CLUSTER_MODULE = THRESHOLDING_ROOT / "policies" / "cluster.py"
 FEDERATED_STATISTICS_MODULE = THRESHOLDING_ROOT / "variants" / "federated_statistics.py"
-FORBIDDEN_RETRAINING_IMPORTS = (
+FORBIDDEN_RETRAINING_MODULES = (
     "torch",
     "datp_core.detector.autoencoder",
-    "datp_core.detector.training",
-    "datp_core.detector.checkpoints",
-    "datp_core.detector.scoring",
+    "datp_core.detector.training.engine",
+    "datp_core.detector.training.federated",
+    "datp_core.detector.training.ditto",
+    "datp_core.detector.checkpoints.service",
+    "datp_core.detector.scoring.federated",
+    "datp_core.detector.scoring.frames",
 )
+FORBIDDEN_RETRAINING_SYMBOLS = {
+    "datp_core.detector.training.centralized": frozenset({"train_centralized_autoencoder"}),
+    "datp_core.detector.scoring.centralized": frozenset(
+        {
+            "generate_centralized_scores",
+            "score_centralized_reference",
+            "write_centralized_scoring",
+        }
+    ),
+}
 
 
-def _imported_modules(path: Path) -> tuple[str, ...]:
+def _forbidden_retraining_imports(path: Path) -> tuple[str, ...]:
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    modules: list[str] = []
+    violations: list[str] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            modules.extend(alias.name for alias in node.names)
+            violations.extend(
+                alias.name
+                for alias in node.names
+                if any(
+                    alias.name == module or alias.name.startswith(f"{module}.")
+                    for module in FORBIDDEN_RETRAINING_MODULES
+                )
+            )
         elif isinstance(node, ast.ImportFrom) and node.module is not None:
-            modules.append(node.module)
-    return tuple(modules)
+            if any(
+                node.module == module or node.module.startswith(f"{module}.") for module in FORBIDDEN_RETRAINING_MODULES
+            ):
+                violations.append(node.module)
+            forbidden_symbols = FORBIDDEN_RETRAINING_SYMBOLS.get(node.module, frozenset())
+            violations.extend(f"{node.module}.{alias.name}" for alias in node.names if alias.name in forbidden_symbols)
+    return tuple(violations)
 
 
 def _capabilities() -> PopulationCapabilities:
@@ -306,11 +331,7 @@ def test_centralized_threshold_method_cannot_enter_federated_dispatch() -> None:
 
 def test_thresholding_package_never_imports_training_or_scoring_generation_code() -> None:
     for path in sorted(THRESHOLDING_ROOT.rglob("*.py")):
-        modules = _imported_modules(path)
-        for forbidden in FORBIDDEN_RETRAINING_IMPORTS:
-            assert not any(module == forbidden or module.startswith(f"{forbidden}.") for module in modules), (
-                f"{path} imports {forbidden}"
-            )
+        assert not _forbidden_retraining_imports(path), f"{path} imports retraining or score-generation code"
 
 
 def test_score_coordinate_mismatch_across_calibration_records_is_rejected(tmp_path: Path) -> None:

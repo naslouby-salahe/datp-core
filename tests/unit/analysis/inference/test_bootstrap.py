@@ -12,7 +12,7 @@ from datp_core.analysis.inference.bootstrap.estimation import (
     paired_bca_interval,
     supplementary_paired_bca_interval,
 )
-from datp_core.analysis.inference.wilcoxon import PairedInferenceProtocol
+from datp_core.analysis.inference.contracts import PairedInferenceProtocol
 from datp_core.analysis.scientific_decision import ScientificDecision, decide_confirmatory
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.identifiers import (
@@ -25,7 +25,7 @@ from datp_core.core.identifiers import (
     SplitProtocolId,
     TrainingModelId,
 )
-from datp_core.core.numeric import MetricValue, Seed
+from datp_core.core.numeric import MetricValue, Seed, SeedCount
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 from datp_core.experiments.common.seeds import SeedCohort
 from datp_core.experiments.confirmatory.spec import CONFIRMATORY_INFERENCE_PROTOCOL
@@ -64,7 +64,7 @@ def test_supplementary_interval_cannot_be_promoted_to_confirmatory() -> None:
     protocol = PairedInferenceProtocol(
         **{
             **CONFIRMATORY_INFERENCE_PROTOCOL.model_dump(),
-            "seed_cohort": seed_cohort,
+            "paired_seed_count": SeedCount(4),
         }
     )
     plan = SupplementaryPairedAnalysisPlan(

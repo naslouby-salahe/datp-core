@@ -34,5 +34,5 @@ def test_communication_totals_are_exact_serialized_byte_counts() -> None:
 
 
 def test_logical_element_count_rejects_zero() -> None:
-    with pytest.raises(ValueError, match="positive integer"):
+    with pytest.raises(ValueError, match="greater than or equal to 1"):
         LogicalElementCount(0)

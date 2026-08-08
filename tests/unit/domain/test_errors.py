@@ -59,7 +59,7 @@ def test_errors_do_not_accept_arbitrary_dictionary_context() -> None:
 
 
 def test_errors_module_does_not_swallow_broad_exceptions() -> None:
-    source_path = Path(__file__).parents[3] / "src" / "datp_core" / "domain" / "errors.py"
+    source_path = Path(__file__).parents[3] / "src" / "datp_core" / "core" / "errors.py"
     tree = ast.parse(source_path.read_text(encoding="utf-8"), filename=str(source_path))
     broad_handlers = tuple(
         node

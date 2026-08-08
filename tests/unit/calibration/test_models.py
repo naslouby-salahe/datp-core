@@ -163,7 +163,7 @@ def test_replicate_manifest_requires_nested_subsamples() -> None:
             unavailable_reason=None,
         )
 
-    with pytest.raises(ScientificContractError, match="subset of the same replicate's larger subsample"):
+    with pytest.raises(ScientificContractError, match="nested in larger sizes within a replicate"):
         build()
 
 

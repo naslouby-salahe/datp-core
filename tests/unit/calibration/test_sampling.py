@@ -115,7 +115,7 @@ def test_build_calibration_replicate_rejects_foreign_client_references() -> None
             sizes=SIZES,
         )
 
-    with pytest.raises(ScientificContractError, match="belong to the replicate's client"):
+    with pytest.raises(ScientificContractError, match="belong to the replicate client"):
         call()
 
 
