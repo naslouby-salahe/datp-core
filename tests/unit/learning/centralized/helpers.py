@@ -5,9 +5,6 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 import torch
-from datp_core.datasets.partitioning.contracts import OUTCOME_LABEL_COLUMN, STABLE_ROW_ID_COLUMN, PopulationOutcomeLabel
-from datp_core.preprocessing.contracts import PreprocessingFitScope, TrustedEstimatorClassName
-from datp_core.preprocessing.models import CentralizedFittedPreprocessingState, PreprocessingProtocol
 from datp_core.protocols.checkpoints import CheckpointProtocol
 
 from datp_core.artifacts.provenance import Checksum
@@ -32,6 +29,9 @@ from datp_core.core.numeric import (
     Seed,
     WeightDecay,
 )
+from datp_core.data.populations.contracts import OUTCOME_LABEL_COLUMN, STABLE_ROW_ID_COLUMN, PopulationOutcomeLabel
+from datp_core.data.preprocessing.contracts import PreprocessingFitScope, TrustedEstimatorClassName
+from datp_core.data.preprocessing.models import CentralizedFittedPreprocessingState, PreprocessingProtocol
 from datp_core.detector.training.centralized import (
     CentralizedTrainingCoordinate,
     CentralizedTrainingExecution,

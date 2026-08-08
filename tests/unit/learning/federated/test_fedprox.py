@@ -97,7 +97,7 @@ def test_train_fedprox_rejects_mismatched_coordinate_and_protocol_coefficient(tm
 
 
 def test_global_training_module_owns_fedavg_and_fedprox_dispatch() -> None:
-    import datp_core.learning.federated.global_training as global_training
+    import datp_core.detector.training.fedavg as global_training
 
     source = Path(global_training.__file__).read_text(encoding="utf-8")
     assert "FedAvgProtocol" in source

@@ -158,7 +158,7 @@ def test_family_membership_enforces_the_same_group_membership_contract_as_cluste
 
 
 def test_cluster_contracts_require_four_features_and_declared_group_count() -> None:
-    from datp_core.domain.values.ratios import DistributionSkewness, ScoreMoment
+    from datp_core.core.numeric import DistributionSkewness, ScoreMoment
 
     features = FingerprintFeatures(
         mean=ScoreMoment(1.0),

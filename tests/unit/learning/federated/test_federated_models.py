@@ -68,7 +68,7 @@ def _round_result(coordinate, round_number: RoundNumber) -> FederatedRoundResult
 
 
 def test_coordinate_rejects_coefficient_for_fedavg() -> None:
-    from datp_core.learning.federated.models import FederatedTrainingCoordinate
+    from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 
     with pytest.raises(ScientificContractError, match="no model coefficient"):
         FederatedTrainingCoordinate(

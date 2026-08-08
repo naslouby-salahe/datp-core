@@ -115,14 +115,14 @@ def test_score_reload_equality_detects_a_corrupted_file(tmp_path: Path) -> None:
         }
     )
     replacement.write_parquet(victim.path)
-    from datp_core.pipeline.scoring.frames import validate_persisted_score_frame
+    from datp_core.detector.scoring.frames import validate_persisted_score_frame
 
     with pytest.raises(ArtifactIntegrityError, match="checksum changed"):
         validate_persisted_score_frame(victim.path, victim.checksum, victim.row_count)
 
 
 def test_scoring_rejects_attack_labelled_calibration_rows(tmp_path: Path) -> None:
-    from datp_core.datasets.partitioning.contracts import PopulationOutcomeLabel
+    from datp_core.data.populations.contracts import PopulationOutcomeLabel
 
     checkpoint = selected_checkpoint(tmp_path / "checkpoint")
     attack_frame = benign_frame(RowCount(6), seed=Seed(1), label=PopulationOutcomeLabel.ATTACK.value)
@@ -136,7 +136,7 @@ def test_scoring_rejects_attack_labelled_calibration_rows(tmp_path: Path) -> Non
 
 
 def test_federated_scoring_has_single_publication_entry_point() -> None:
-    from datp_core.pipeline.scoring import federated
+    from datp_core.detector.scoring import federated
 
     assert not hasattr(federated, "generate_federated_scores")
     assert not hasattr(federated, "write_federated_scores")

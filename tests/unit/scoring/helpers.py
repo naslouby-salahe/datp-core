@@ -14,8 +14,8 @@ from datp_core.detector.training.models.snapshots import RoundSnapshot
 
 
 def selected_checkpoint(output_directory: Path, seed: Seed | None = None) -> CheckpointCandidate:
-    from datp_core.domain.values.ratios import MetricValue
-    from datp_core.learning.autoencoder import ReconstructionAutoencoder
+    from datp_core.core.numeric import MetricValue
+    from datp_core.detector.autoencoder import ReconstructionAutoencoder
 
     resolved_seed = Seed(0) if seed is None else seed
     coordinate = fedavg_coordinate(resolved_seed)

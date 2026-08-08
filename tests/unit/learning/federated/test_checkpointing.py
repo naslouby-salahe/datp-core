@@ -28,7 +28,7 @@ from datp_core.detector.training.models.snapshots import RoundSnapshot
 
 def _snapshots() -> tuple[RoundSnapshot, ...]:
     device = require_cuda()
-    from datp_core.learning.autoencoder import ReconstructionAutoencoder
+    from datp_core.detector.autoencoder import ReconstructionAutoencoder
 
     model = ReconstructionAutoencoder(AUTOENCODER.widths).to(device)
     state = {name: tensor.detach().clone() for name, tensor in model.state_dict().items()}
@@ -133,7 +133,7 @@ def test_select_checkpoint_rejects_attack_labels(tmp_path: Path) -> None:
 def test_retain_checkpoint_candidates_rejects_missing_declared_round(tmp_path: Path) -> None:
     coordinate = fedavg_coordinate(Seed(0))
     device = require_cuda()
-    from datp_core.learning.autoencoder import ReconstructionAutoencoder
+    from datp_core.detector.autoencoder import ReconstructionAutoencoder
 
     model = ReconstructionAutoencoder(AUTOENCODER.widths).to(device)
     state = {name: tensor.detach().clone() for name, tensor in model.state_dict().items()}

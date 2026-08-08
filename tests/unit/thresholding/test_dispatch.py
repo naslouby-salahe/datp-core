@@ -166,8 +166,9 @@ def test_threshold_construction_request_rejects_duplicate_eligible_clients() -> 
 
 
 def test_threshold_construction_request_rejects_mixed_coordinates() -> None:
-    from datp_core.domain.values.counts import Seed
     from tests.unit.learning.federated.helpers import fedavg_coordinate
+
+    from datp_core.core.numeric import Seed
 
     other = client_scores(
         "client_mixed",
