@@ -12,6 +12,7 @@ from datp_core.analysis.metrics.models import AvailableMetric, metric_by_id
 from datp_core.app.contracts import AnchorRequirement, OverwriteMode
 from datp_core.app.layout import ANCHOR_DIAGNOSTICS_DIRECTORY, ResearchArtifact, ResearchDirectory
 from datp_core.app.models import DetailText, DispatchOutcome, ThresholdMethodOutcome
+from datp_core.app.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
 from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
 from datp_core.artifacts.serializers.json import canonical_checksum
@@ -63,7 +64,6 @@ from datp_core.experiments.heterogeneity import (
     analyze_threshold_movement_tradeoff,
     run_controlled_heterogeneity_sweep_seed,
 )
-from datp_core.experiments.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
 from datp_core.experiments.temporal import (
     TemporalArtifactDirectory,
     TemporalCampaignResult,

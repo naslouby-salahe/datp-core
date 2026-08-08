@@ -29,6 +29,7 @@ from datp_core.analysis.mechanisms import (
     threshold_movements_from_evaluations,
 )
 from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
+from datp_core.app.planning import expand_experiment_plan
 from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
@@ -55,7 +56,6 @@ from datp_core.experiments.execution.layout import (
     ExecutionArtifactDirectory,
     federated_training_directory,
 )
-from datp_core.experiments.planning import expand_experiment_plan
 from datp_core.presentation.export import export_mechanism_publication
 from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration
 from datp_core.protocols.metrics import FIXED_SCORE_AUROC_INVARIANCE_TOLERANCE

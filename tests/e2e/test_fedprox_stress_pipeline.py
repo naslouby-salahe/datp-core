@@ -1,8 +1,8 @@
+from datp_core.app.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
 from datp_core.core.identifiers import EvidenceRole, ExperimentId, PopulationId, TrainingModelId
 from datp_core.core.numeric import Seed
 from datp_core.experiments.common.coordinates import ExecutionRoute, execution_route_for
 from datp_core.experiments.common.seeds import SeedCohort
-from datp_core.experiments.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
 from datp_core.experiments.training_stress import run as personalization_workflow
 from datp_core.protocols.experiments import EXPERIMENTS
 from datp_core.protocols.training import FEDPROX_COEFFICIENTS

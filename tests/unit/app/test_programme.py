@@ -8,11 +8,11 @@ from datp_core.app.campaign import (
     seed_cohort_for,
     validate_programme,
 )
+from datp_core.app.planning import PlanDisposition
 from datp_core.app.research import registered_experiment_ids
 from datp_core.core.errors import UnresolvedScientificValueError
 from datp_core.core.identifiers import ExperimentId, ExperimentReadiness, FederatedThresholdMethod
 from datp_core.experiments.common.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_SEED_COHORT
-from datp_core.experiments.planning import PlanDisposition
 from datp_core.protocols.experiments import EXPERIMENTS
 
 

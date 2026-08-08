@@ -22,6 +22,7 @@ from datp_core.analysis.metrics.cohort_evidence import client_partition_counts_f
 from datp_core.analysis.metrics.cohorts import EvaluationCohortManifest
 from datp_core.analysis.metrics.models import ClientMetricResult, MetricStatus, PopulationMetricResult, metric_by_id
 from datp_core.analysis.metrics.population import calculate_population_metrics
+from datp_core.app.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
 from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.artifacts.provenance import Checksum, checksum_file
 from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
@@ -107,7 +108,6 @@ from datp_core.experiments.execution.layout import (
 )
 from datp_core.experiments.execution.models import CampaignEntry, CampaignPlan, campaign_digest
 from datp_core.experiments.personalized_scoring import client_metric, client_scoring_input, score_record_for_client
-from datp_core.experiments.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
 from datp_core.presentation.export import export_mechanism_publication
 from datp_core.protocols.calibration import CANONICAL_QUANTILE, MINIMUM_BENIGN_SUPPORT, CalibrationSupportRule
 from datp_core.protocols.experiments import EXPERIMENTS

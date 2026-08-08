@@ -1,5 +1,6 @@
 import pytest
 
+from datp_core.app.planning import expand_experiment_plan
 from datp_core.artifacts.provenance import checksum_text
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import (
@@ -15,7 +16,6 @@ from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT
 from datp_core.experiments.execution import build_campaign
-from datp_core.experiments.planning import expand_experiment_plan
 from datp_core.protocols.calibration import CANONICAL_QUANTILE, QuantileProtocol
 from datp_core.protocols.experiments import EXPERIMENTS
 from datp_core.protocols.training import DITTO_TRAINING_PROTOCOLS, resolve_ditto_protocol

@@ -28,6 +28,7 @@ from datp_core.analysis.temporal import (
     TemporalSeedProvenance,
     temporal_recovery,
 )
+from datp_core.app.planning import ExperimentPlan, expand_experiment_plan
 from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.repositories.thresholds import (
     FederatedThresholdConstructionRequest,
@@ -66,7 +67,6 @@ from datp_core.experiments.execution.layout import (
 )
 from datp_core.experiments.execution.matched_reference import matched_static_reference_inputs
 from datp_core.experiments.execution.score_generation import score_selected_checkpoint
-from datp_core.experiments.planning import ExperimentPlan, expand_experiment_plan
 from datp_core.presentation.export import export_temporal_publication
 from datp_core.protocols.calibration import (
     CANONICAL_QUANTILE,

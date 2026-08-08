@@ -22,8 +22,8 @@ def test_deleted_architectures_do_not_exist() -> None:
     assert not (SOURCE_ROOT / "reporting").exists()
     assert not (SOURCE_ROOT / "pipeline").exists()
     assert (SOURCE_ROOT / "app" / "campaign.py").is_file()
-    assert not (SOURCE_ROOT / "app" / "planning.py").exists()
-    assert (SOURCE_ROOT / "experiments" / "planning.py").is_file()
+    assert (SOURCE_ROOT / "app" / "planning.py").is_file()
+    assert not (SOURCE_ROOT / "experiments" / "planning.py").exists()
 
 
 def test_source_does_not_import_deleted_module_paths() -> None:
@@ -44,12 +44,16 @@ def test_source_does_not_import_deleted_module_paths() -> None:
     assert offenders == ()
 
 
-def test_experiment_modules_do_not_import_application_layer() -> None:
+def test_experiment_modules_import_only_the_application_planning_owner() -> None:
     experiment_root = SOURCE_ROOT / "experiments"
     offenders = tuple(
         path.relative_to(SOURCE_ROOT)
         for path in experiment_root.rglob("*.py")
-        if any(imported == "datp_core.app" or imported.startswith("datp_core.app.") for imported in _imports(path))
+        if any(
+            imported == "datp_core.app"
+            or (imported.startswith("datp_core.app.") and imported != "datp_core.app.planning")
+            for imported in _imports(path)
+        )
     )
     assert offenders == ()
 

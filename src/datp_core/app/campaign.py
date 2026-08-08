@@ -5,6 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from datp_core.app.contracts import OverwriteMode
+from datp_core.app.planning import (
+    ExperimentPlan,
+    PlanDisposition,
+    PlanningEvidence,
+    expand_experiment_plan,
+    merge_experiment_plans,
+)
 from datp_core.core.errors import (
     ProtocolValidationError,
     ScientificContractError,
@@ -18,13 +25,6 @@ from datp_core.data.registry import DatasetPublication
 from datp_core.data.service import DatasetMaterializationRequest, materialize_datasets
 from datp_core.experiments.anchor.spec import HISTORICAL_ANCHOR_SEED_COHORT
 from datp_core.experiments.common.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_SEED_COHORT, SeedCohort
-from datp_core.experiments.planning import (
-    ExperimentPlan,
-    PlanDisposition,
-    PlanningEvidence,
-    expand_experiment_plan,
-    merge_experiment_plans,
-)
 from datp_core.protocols.calibration import require_calibration_subsample_replicate_count
 from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration
 from datp_core.protocols.validation import CANONICAL_PROTOCOL_GRAPH, ResolvedProtocolGraph, validate_protocol_graph

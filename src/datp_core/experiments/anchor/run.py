@@ -218,7 +218,7 @@ def collect_independent_observations_from_evaluations(
     seed_cohort: SeedCohort = HISTORICAL_ANCHOR_SEED_COHORT,
 ) -> tuple[AnchorObservedMetric, ...]:
     """Load SHARED/LOCAL CV(FPR) evaluations for every historical seed as independent observations."""
-    from datp_core.experiments.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
+    from datp_core.app.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
     from datp_core.protocols.experiments import EXPERIMENTS
 
     declaration = next(item for item in EXPERIMENTS if item.id is ExperimentId.HISTORICAL_DATP_REPRODUCTION)

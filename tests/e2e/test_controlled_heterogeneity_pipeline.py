@@ -1,3 +1,4 @@
+from datp_core.app.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
 from datp_core.core.identifiers import (
     EvidenceRole,
     ExperimentId,
@@ -9,7 +10,6 @@ from datp_core.core.numeric import Seed
 from datp_core.data.populations.contracts import ControlledPartitionKind
 from datp_core.data.populations.declarations import DIRICHLET_CONCENTRATIONS
 from datp_core.experiments.common.seeds import SeedCohort
-from datp_core.experiments.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
 from datp_core.protocols.experiments import EXPERIMENTS
 
 
