@@ -1,25 +1,95 @@
-"""Paired Wilcoxon inference and matched-pairs rank-biserial effect size."""
+"""Generic paired-inference contracts, Wilcoxon testing, and rank-biserial effect size."""
 
-from typing import ClassVar, cast
+from enum import StrEnum
+from math import isfinite
+from typing import ClassVar, Protocol, SupportsFloat, cast
 
 import numpy as np
 from numpy.typing import NDArray
 from pydantic import model_validator
 from scipy import stats
 
-from datp_core.analysis.adapters.scipy import StatisticPValueResult, statistic_p_value
-from datp_core.analysis.contrasts import PairedContrasts
-from datp_core.domain.contracts import StrictModel
-from datp_core.domain.enums import AvailabilityStatus, EffectSizeId, StatisticalTestId
-from datp_core.domain.values.base import ClosedUnitIntervalValue
-from datp_core.domain.values.counts import PairedObservationCount
-from datp_core.domain.values.ratios import MetricValue, RankSum
-from datp_core.protocols.statistics import (
-    PairedInferenceProtocol,
-    WilcoxonComputationMethod,
-    WilcoxonComputationPreference,
-    WilcoxonZeroMethod,
+from datp_core.analysis.inference.contrasts import PairedContrasts
+from datp_core.core.contracts import StrictModel
+from datp_core.core.identifiers import (
+    AvailabilityStatus,
+    EffectSizeId,
+    IntervalMethod,
+    MultiplicityCorrectionId,
+    StatisticalTestId,
 )
+from datp_core.core.numeric import (
+    BootstrapReplicateCount,
+    ClosedUnitIntervalValue,
+    ConfidenceLevel,
+    MetricValue,
+    PairedObservationCount,
+    RankSum,
+    Ratio,
+    SeedCount,
+)
+
+
+class StatisticPValueResult(Protocol):
+    statistic: SupportsFloat
+    pvalue: SupportsFloat
+
+
+def statistic_p_value(result: StatisticPValueResult) -> tuple[float, float] | None:
+    statistic, pvalue = float(result.statistic), float(result.pvalue)
+    if not all(isfinite(value) for value in (statistic, pvalue)):
+        return None
+    return statistic, pvalue
+
+
+class WilcoxonAlternative(StrEnum):
+    TWO_SIDED = "two-sided"
+
+
+class WilcoxonZeroMethod(StrEnum):
+    PRATT = "pratt"
+
+
+class WilcoxonComputationMethod(StrEnum):
+    EXACT = "exact"
+    ASYMPTOTIC = "asymptotic"
+
+
+class WilcoxonComputationPreference(StrEnum):
+    EXACT_PREFERRED = "exact_preferred"
+
+
+class PairedInferenceProtocol(StrictModel):
+    """Numerical/procedural choices for a pre-declared paired analysis.
+
+    Exact seed identities are owned by an experiment specification. The generic
+    analysis layer receives only the required pair count and statistical rules.
+    """
+
+    confidence_level: ConfidenceLevel
+    paired_seed_count: SeedCount
+    interval_method: IntervalMethod
+    bootstrap_replicates: BootstrapReplicateCount
+    statistical_test: StatisticalTestId
+    wilcoxon_alternative: WilcoxonAlternative
+    wilcoxon_zero_method: WilcoxonZeroMethod
+    wilcoxon_computation_preference: WilcoxonComputationPreference
+    effect_size: EffectSizeId
+    multiplicity_correction: MultiplicityCorrectionId
+    descriptive_lower_quantile: Ratio
+    descriptive_upper_quantile: Ratio
+
+    @model_validator(mode="after")
+    def validate_protocol(self) -> "PairedInferenceProtocol":
+        if self.wilcoxon_alternative is not WilcoxonAlternative.TWO_SIDED:
+            raise ValueError("paired Wilcoxon alternative must remain two-sided")
+        if self.wilcoxon_zero_method is not WilcoxonZeroMethod.PRATT:
+            raise ValueError("paired Wilcoxon zero handling must remain Pratt")
+        if self.wilcoxon_computation_preference is not WilcoxonComputationPreference.EXACT_PREFERRED:
+            raise ValueError("paired Wilcoxon must prefer exact computation when feasible")
+        if self.descriptive_lower_quantile > self.descriptive_upper_quantile:
+            raise ValueError("descriptive lower quantile cannot exceed the upper quantile")
+        return self
 
 
 class PValue(ClosedUnitIntervalValue):
@@ -109,10 +179,9 @@ def paired_deltas(contrasts: PairedContrasts) -> NDArray[np.float64]:
     return values
 
 
-def paired_wilcoxon(
-    contrasts: PairedContrasts,
-    protocol: PairedInferenceProtocol,
-) -> WilcoxonResult:
+def paired_wilcoxon(contrasts: PairedContrasts, protocol: PairedInferenceProtocol) -> WilcoxonResult:
+    if len(contrasts) != protocol.paired_seed_count.value:
+        return blocked_wilcoxon("paired contrast count does not match the declared inference protocol")
     if protocol.statistical_test is not StatisticalTestId.WILCOXON_SIGNED_RANK:
         raise ValueError("paired Wilcoxon requires the Wilcoxon signed-rank protocol")
     if protocol.wilcoxon_computation_preference is not WilcoxonComputationPreference.EXACT_PREFERRED:
@@ -176,6 +245,8 @@ def matched_pairs_rank_biserial(
     contrasts: PairedContrasts,
     protocol: PairedInferenceProtocol,
 ) -> RankBiserialResult:
+    if len(contrasts) != protocol.paired_seed_count.value:
+        return blocked_rank_biserial("paired contrast count does not match the declared inference protocol")
     if protocol.effect_size is not EffectSizeId.MATCHED_PAIRS_RANK_BISERIAL:
         raise ValueError("paired effect size requires matched-pairs rank-biserial correlation")
     deltas = paired_deltas(contrasts)
@@ -187,7 +258,7 @@ def matched_pairs_rank_biserial(
             negative_rank_sum=None,
             nonzero_pair_count=PairedObservationCount(0),
             availability=AvailabilityStatus.UNDEFINED,
-            reason=("rank-biserial correlation requires at least one nonzero paired difference"),
+            reason="rank-biserial correlation requires at least one nonzero paired difference",
         )
     ranks = np.asarray(stats.rankdata(np.abs(nonzero), method="average"), dtype=np.float64)
     positive_rank_sum = float(np.sum(ranks[nonzero > 0.0]))
@@ -233,12 +304,6 @@ def _select_wilcoxon_method(
     deltas: NDArray[np.float64],
     protocol: PairedInferenceProtocol,
 ) -> tuple[WilcoxonComputationMethod, str | None]:
-    """Prefer exact when scientifically and numerically feasible; otherwise asymptotic.
-
-    Exact eligibility follows SciPy's signed-rank constraints: non-zero differences after
-    zero handling, no absolute-value ties that make exact combinatorics unavailable, and
-    successful execution of SciPy's exact path with the protocol's alternative/zero method.
-    """
     zero_method = protocol.wilcoxon_zero_method.value
     alternative = protocol.wilcoxon_alternative.value
     nonzero = deltas[deltas != 0.0]
@@ -255,11 +320,10 @@ def _select_wilcoxon_method(
         )
     zero_count = int(deltas.size - nonzero.size)
     if zero_count > 0:
-        # Pratt retains zeros; SciPy exact path is not feasible for that configuration.
         return (
             WilcoxonComputationMethod.ASYMPTOTIC,
             (
-                "exact Wilcoxon unavailable: non-zero absolute ties or zero differences with "
+                "exact Wilcoxon unavailable: zero differences are present with "
                 f"declared zero handling `{zero_method}` (zeros={zero_count})"
             ),
         )
@@ -271,10 +335,7 @@ def _select_wilcoxon_method(
             method="exact",
         )
     except ValueError as error:
-        return (
-            WilcoxonComputationMethod.ASYMPTOTIC,
-            f"exact Wilcoxon unavailable: {error}",
-        )
+        return WilcoxonComputationMethod.ASYMPTOTIC, f"exact Wilcoxon unavailable: {error}"
     extracted = statistic_p_value(cast(StatisticPValueResult, result))
     if extracted is None:
         return (
