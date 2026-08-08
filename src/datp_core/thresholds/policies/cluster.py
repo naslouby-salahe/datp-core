@@ -22,12 +22,6 @@ from datp_core.core.numeric import (
 )
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
-from datp_core.protocols.calibration import (
-    CANONICAL_QUANTILE,
-    ClusterThresholdAggregation,
-    ClusterThresholdProtocol,
-    KMeansInitialization,
-)
 from datp_core.thresholds.contracts import (
     LocalQuantile,
     ThresholdAssignment,
@@ -36,6 +30,12 @@ from datp_core.thresholds.contracts import (
     require_unique_clients,
     validate_assignments,
     validate_group_membership,
+)
+from datp_core.thresholds.protocols import (
+    CANONICAL_QUANTILE,
+    ClusterThresholdAggregation,
+    ClusterThresholdProtocol,
+    KMeansInitialization,
 )
 from datp_core.thresholds.quantiles import ClientBenignCalibrationScores, exact_empirical_quantile, local_quantile
 

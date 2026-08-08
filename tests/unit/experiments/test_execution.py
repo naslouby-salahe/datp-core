@@ -8,7 +8,7 @@ from datp_core.core.numeric import Seed
 from datp_core.experiments.common.seeds import SeedCohort
 from datp_core.experiments.execution import execute_declared_experiment_seed
 from datp_core.experiments.execution.models import ExistingExperimentState
-from datp_core.protocols.experiments import EXPERIMENTS
+from datp_core.experiments.registry import EXPERIMENTS
 
 
 def _declaration(experiment_id: ExperimentId):

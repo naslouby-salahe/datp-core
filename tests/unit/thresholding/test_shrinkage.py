@@ -1,8 +1,8 @@
 from tests.unit.thresholding.helpers import client_scores
 
 from datp_core.core.numeric import Quantile, ShrinkageWeight
-from datp_core.protocols.calibration import FIXED_SHRINKAGE_PROTOCOL
 from datp_core.thresholds.contracts import ThresholdInfeasibilityReason
+from datp_core.thresholds.protocols import FIXED_SHRINKAGE_PROTOCOL
 from datp_core.thresholds.variants.shrinkage import (
     construct_fixed_shrinkage,
     construct_size_aware_shrinkage,

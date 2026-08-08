@@ -42,6 +42,12 @@ from datp_core.detector.training.models import (
     FederatedTrainingCoordinate,
     PreparedClientProvenance,
 )
+from datp_core.detector.training.protocols import (
+    CICIOT2023_AUTOENCODER,
+    EDGE_IIOTSET_NUMERIC_AUTOENCODER,
+    NBAIOT_AUTOENCODER,
+    resolve_single_model_federated_training_protocol,
+)
 from datp_core.experiments.common.coordinates import (
     BOUNDED_EVIDENCE_POPULATIONS,
     ExperimentCoordinate,
@@ -51,12 +57,6 @@ from datp_core.experiments.execution.layout import (
     ExecutionArtifactDirectory,
     bounded_evidence_seed_directory,
     federated_training_directory,
-)
-from datp_core.protocols.training import (
-    CICIOT2023_AUTOENCODER,
-    EDGE_IIOTSET_NUMERIC_AUTOENCODER,
-    NBAIOT_AUTOENCODER,
-    resolve_single_model_federated_training_protocol,
 )
 from datp_core.runtime.configuration import DATA_ROOT
 from datp_core.thresholds.contracts import FamilyAssignment

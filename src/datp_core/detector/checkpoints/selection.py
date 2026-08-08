@@ -19,12 +19,12 @@ from datp_core.detector.checkpoints.contracts import (
     validate_ordered_checkpoint_inventory,
     validate_persisted_checkpoint_file,
 )
+from datp_core.detector.checkpoints.protocols import require_non_test_checkpoint_selection_inputs
 from datp_core.detector.training.models import (
     CheckpointCandidate,
     CheckpointDecision,
     FederatedTrainingCoordinate,
 )
-from datp_core.protocols.training import require_non_test_checkpoint_selection_inputs
 
 
 def validate_candidate_coordinates(

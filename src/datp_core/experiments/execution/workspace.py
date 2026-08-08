@@ -57,6 +57,7 @@ from datp_core.core.numeric import (
 )
 from datp_core.data.populations.contracts import ClientIdentity, PopulationOutcomeLabel
 from datp_core.data.registry import population_capabilities
+from datp_core.detector.checkpoints.protocols import CHECKPOINT_PROTOCOL
 from datp_core.detector.checkpoints.selection import CheckpointDecision
 from datp_core.detector.checkpoints.service import SelectFederatedCheckpointRequest, select_federated_primary_checkpoint
 from datp_core.detector.scoring.models import FederatedScoreArtifactManifest, FederatedScoreRecord
@@ -68,6 +69,11 @@ from datp_core.detector.training.federated_publication import (
     train_federated_detector,
 )
 from datp_core.detector.training.models import CheckpointCandidate
+from datp_core.detector.training.protocols import (
+    BATCH_SIZE,
+    LEARNING_RATE,
+    resolve_single_model_federated_training_protocol,
+)
 from datp_core.experiments.common.coordinates import ExperimentCoordinate
 from datp_core.experiments.execution.context import (
     FederatedExecutionContext,
@@ -80,17 +86,6 @@ from datp_core.experiments.execution.context import (
 from datp_core.experiments.execution.evidence import eligible_calibration_scores, load_evaluation_document
 from datp_core.experiments.execution.layout import EvaluationRunAssetDirectory, ExecutionArtifactDirectory
 from datp_core.experiments.execution.score_generation import score_selected_checkpoint
-from datp_core.protocols.calibration import (
-    CANONICAL_QUANTILE,
-    CalibrationSupportRule,
-    ClusterThresholdAggregation,
-)
-from datp_core.protocols.training import (
-    BATCH_SIZE,
-    CHECKPOINT_PROTOCOL,
-    LEARNING_RATE,
-    resolve_single_model_federated_training_protocol,
-)
 from datp_core.thresholds.calibration.construction import (
     BuildCalibrationResult,
     ConstructCalibrationSizeAblationRequest,
@@ -99,6 +94,11 @@ from datp_core.thresholds.calibration.construction import (
 )
 from datp_core.thresholds.contracts import ThresholdUnavailableResult
 from datp_core.thresholds.dispatch import ThresholdConstructionRequest, ThresholdConstructionResult
+from datp_core.thresholds.protocols import (
+    CANONICAL_QUANTILE,
+    CalibrationSupportRule,
+    ClusterThresholdAggregation,
+)
 from datp_core.thresholds.quantiles import ClientBenignCalibrationScores, exact_empirical_quantile
 from datp_core.thresholds.variants.conformal import ConformalThresholdResult
 

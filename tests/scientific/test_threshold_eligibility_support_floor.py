@@ -80,8 +80,8 @@ def test_deployment_fallback_uses_mean_of_eligible_local_thresholds() -> None:
     from datp_core.analysis.metrics.federated_execution import _deployment_fallback_threshold
     from datp_core.core.identifiers import FederatedThresholdMethod
     from datp_core.core.numeric import Quantile
-    from datp_core.protocols.calibration import QuantileProtocol
     from datp_core.thresholds.policies.local import construct_local_threshold
+    from datp_core.thresholds.protocols import QuantileProtocol
     from datp_core.thresholds.quantiles import unweighted_mean
 
     eligible = (
@@ -100,6 +100,6 @@ def test_deployment_fallback_uses_mean_of_eligible_local_thresholds() -> None:
 
 
 def test_calibration_size_protocol_locks_declared_size_grid() -> None:
-    from datp_core.protocols.calibration import CALIBRATION_SIZE_PROTOCOL
+    from datp_core.thresholds.protocols import CALIBRATION_SIZE_PROTOCOL
 
     assert CALIBRATION_SIZE_PROTOCOL.sizes[0].value == 50

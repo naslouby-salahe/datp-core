@@ -60,9 +60,9 @@ from datp_core.experiments.execution.layout import (
     ExecutionArtifactDirectory,
     federated_training_directory,
 )
+from datp_core.experiments.registry import EXPERIMENTS, ExperimentDeclaration
 from datp_core.presentation.export import export_confirmatory_publication, export_mechanism_publication
 from datp_core.presentation.figures import FigureSpec
-from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration
 from datp_core.runtime.configuration import OUTPUTS_ROOT
 from datp_core.thresholds.policies.cluster import GroupedThresholdResult
 

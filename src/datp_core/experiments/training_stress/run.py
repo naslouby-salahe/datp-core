@@ -71,6 +71,7 @@ from datp_core.data.preprocessing.service import preprocess_federated
 from datp_core.data.registry import population_capabilities
 from datp_core.detector.checkpoints.history import history_frames
 from datp_core.detector.checkpoints.identities import FederatedHistoryColumn
+from datp_core.detector.checkpoints.protocols import CHECKPOINT_PROTOCOL
 from datp_core.detector.checkpoints.service import SelectFederatedCheckpointRequest, select_federated_primary_checkpoint
 from datp_core.detector.scoring.contracts import FixedScoreInvariant
 from datp_core.detector.scoring.federated import publish_federated_scores
@@ -90,6 +91,18 @@ from datp_core.detector.training.models import (
     FederatedTrainingCoordinate,
     PreparedClientProvenance,
 )
+from datp_core.detector.training.protocols import (
+    BATCH_SIZE,
+    DITTO_ALTERNATIVE_ROUTE_DIFFERENCE,
+    FEDPROX_COEFFICIENT_SELECTION_RULE,
+    FEDPROX_COEFFICIENTS,
+    LEARNING_RATE,
+    MODEL_ABSORPTION_DECISION_PROTOCOL,
+    NBAIOT_AUTOENCODER,
+    require_non_test_fedprox_coefficient_selection_inputs,
+    resolve_ditto_protocol,
+    select_primary_fedprox_coefficient,
+)
 from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.experiments.confirmatory.run import FedAvgCvFprEffectEvidence, absorption_corner_from_evaluation_document
 from datp_core.experiments.execution import execute_declared_campaign
@@ -108,28 +121,15 @@ from datp_core.experiments.execution.layout import (
 )
 from datp_core.experiments.execution.models import CampaignEntry, CampaignPlan, campaign_digest
 from datp_core.experiments.personalized_scoring import client_metric, client_scoring_input, score_record_for_client
+from datp_core.experiments.registry import EXPERIMENTS
 from datp_core.presentation.export import export_mechanism_publication
-from datp_core.protocols.calibration import CANONICAL_QUANTILE, MINIMUM_BENIGN_SUPPORT, CalibrationSupportRule
-from datp_core.protocols.experiments import EXPERIMENTS
-from datp_core.protocols.training import (
-    BATCH_SIZE,
-    CHECKPOINT_PROTOCOL,
-    DITTO_ALTERNATIVE_ROUTE_DIFFERENCE,
-    FEDPROX_COEFFICIENT_SELECTION_RULE,
-    FEDPROX_COEFFICIENTS,
-    LEARNING_RATE,
-    MODEL_ABSORPTION_DECISION_PROTOCOL,
-    NBAIOT_AUTOENCODER,
-    require_non_test_fedprox_coefficient_selection_inputs,
-    resolve_ditto_protocol,
-    select_primary_fedprox_coefficient,
-)
 from datp_core.runtime.configuration import DATA_ROOT, OUTPUTS_ROOT
 from datp_core.runtime.filesystem import write_text_atomically
 from datp_core.thresholds.contracts import FamilyAssignment
 from datp_core.thresholds.dispatch import ThresholdConstructionRequest
 from datp_core.thresholds.policies.local import LocalThresholdResult
 from datp_core.thresholds.policies.shared import SharedThresholdResult
+from datp_core.thresholds.protocols import CANONICAL_QUANTILE, MINIMUM_BENIGN_SUPPORT, CalibrationSupportRule
 from datp_core.thresholds.quantiles import ClientBenignCalibrationScores
 
 _MODEL_ABSORPTION_DECISION_PROTOCOL = DetectorModelAbsorptionDecisionProtocol.model_validate(

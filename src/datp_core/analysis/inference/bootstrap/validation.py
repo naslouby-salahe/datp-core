@@ -4,7 +4,7 @@ from datp_core.analysis.contrasts import FixedScorePairProvenance, PairedContras
 from datp_core.analysis.inference.bootstrap.contracts import BcaReason
 from datp_core.analysis.inference.contracts import PairedInferenceProtocol
 from datp_core.core.identifiers import EvidenceRole, FederatedThresholdMethod
-from datp_core.protocols.validation import CANONICAL_PROTOCOL_GRAPH
+from datp_core.experiments.graph import CANONICAL_PROTOCOL_GRAPH
 
 
 class PairedAnalysisContractError(ValueError):

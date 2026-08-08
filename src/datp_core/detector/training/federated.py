@@ -4,7 +4,7 @@ from datp_core.detector.checkpoints.publication import write_federated_training 
 from datp_core.detector.training.contracts import FedAvgProtocol, FedProxProtocol
 from datp_core.detector.training.engine import FederatedTrainingRequest, run_federated_training
 from datp_core.detector.training.models import FederatedTrainingOutcome
-from datp_core.protocols.training import FEDAVG_LOCAL_EPOCHS
+from datp_core.detector.training.protocols import FEDAVG_LOCAL_EPOCHS
 
 type GlobalFederatedProtocol = FedAvgProtocol | FedProxProtocol
 

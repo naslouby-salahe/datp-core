@@ -16,7 +16,7 @@ from datp_core.core.identifiers import (
 )
 from datp_core.core.numeric import Seed
 from datp_core.experiments.common.coordinates import ExperimentCoordinate
-from datp_core.protocols.graph import (
+from datp_core.experiments.graph import (
     IdentityObservationHook,
     ObservationBoundary,
     ObservationContext,

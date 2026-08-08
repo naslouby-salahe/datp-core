@@ -5,7 +5,7 @@ from datp_core.core.identifiers import (
     PopulationId,
     TrainingModelId,
 )
-from datp_core.protocols.experiments import EXPERIMENTS
+from datp_core.experiments.registry import EXPERIMENTS
 
 
 def test_ditto_personalization_cannot_replace_the_confirmatory_detector() -> None:

@@ -29,6 +29,10 @@ from datp_core.detector.checkpoints.models import (
     CentralizedCheckpointSetEntry,
     PersistedCheckpoint,
 )
+from datp_core.detector.checkpoints.protocols import (
+    CHECKPOINT_SELECTION_RULE,
+    require_non_test_checkpoint_selection_inputs,
+)
 from datp_core.detector.checkpoints.selection import select_checkpoint
 from datp_core.detector.checkpoints.selection import (
     validate_candidate_coordinates as validate_federated_candidates,
@@ -46,10 +50,6 @@ from datp_core.detector.training.models import (
     CheckpointCandidate,
     CheckpointDecision,
     FederatedTrainingCoordinate,
-)
-from datp_core.protocols.training import (
-    CHECKPOINT_SELECTION_RULE,
-    require_non_test_checkpoint_selection_inputs,
 )
 from datp_core.runtime.compute import resolve_cuda_device
 

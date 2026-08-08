@@ -19,7 +19,7 @@ from datp_core.data.populations.contracts import (
     PopulationCapabilities,
 )
 from datp_core.data.registry import population_capabilities
-from datp_core.protocols.calibration import MINIMUM_BENIGN_SUPPORT
+from datp_core.thresholds.protocols import MINIMUM_BENIGN_SUPPORT
 
 
 def build_evaluation_cohort_manifest(

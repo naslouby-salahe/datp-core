@@ -13,6 +13,11 @@ from datp_core.detector.checkpoints.identities import (
     FederatedHistoryAssetName,
     FederatedHistoryColumn,
 )
+from datp_core.detector.checkpoints.protocols import CHECKPOINT_PROTOCOL
+from datp_core.detector.training.protocols import (
+    FEDPROX_COEFFICIENTS,
+    require_non_test_fedprox_coefficient_selection_inputs,
+)
 from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT
 from datp_core.experiments.execution.layout import federated_training_directory
 from datp_core.experiments.training_stress.run import (
@@ -22,11 +27,6 @@ from datp_core.experiments.training_stress.run import (
     read_terminal_aggregate_training_loss,
     select_primary_fedprox_coefficient_from_artifacts,
     write_fedprox_primary_coefficient_decision,
-)
-from datp_core.protocols.training import (
-    CHECKPOINT_PROTOCOL,
-    FEDPROX_COEFFICIENTS,
-    require_non_test_fedprox_coefficient_selection_inputs,
 )
 
 
@@ -124,7 +124,7 @@ def test_selection_inputs_still_reject_held_out_metrics() -> None:
     with pytest.raises(LeakageError, match="held-out evaluation outcomes"):
         require_non_test_fedprox_coefficient_selection_inputs(
             selection_rule=__import__(
-                "datp_core.protocols.training",
+                "datp_core.detector.training.protocols",
                 fromlist=["FEDPROX_COEFFICIENT_SELECTION_RULE"],
             ).FEDPROX_COEFFICIENT_SELECTION_RULE,
             held_out_metrics=(MetricValue(0.1),),

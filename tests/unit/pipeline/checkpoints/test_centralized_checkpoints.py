@@ -6,12 +6,12 @@ from tests.unit.learning.centralized.helpers import AUTOENCODER, CHECKPOINT, req
 from datp_core.core.errors import LeakageError
 from datp_core.core.identifiers import CheckpointSelectionRule, CheckpointStatus, TrainingModelId
 from datp_core.core.numeric import MetricValue
+from datp_core.detector.checkpoints.protocols import CHECKPOINT_SELECTION_RULE
 from datp_core.detector.checkpoints.service import (
     reject_federated_checkpoint,
     retain_centralized_checkpoint_candidates,
     select_centralized_checkpoint,
 )
-from datp_core.protocols.training import CHECKPOINT_SELECTION_RULE
 
 
 def test_retains_declared_checkpoint_candidates(tmp_path: Path) -> None:

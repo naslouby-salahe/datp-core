@@ -18,7 +18,6 @@ from datp_core.core.identifiers import (
 from datp_core.core.numeric import CalibrationSize, ClientCount, Quantile
 from datp_core.data.populations.contracts import CapabilityStatus, PopulationCapabilities
 from datp_core.detector.scoring.contracts import FixedScoreInvariant, ScoreArtifactManifest
-from datp_core.protocols.calibration import CalibrationEligibilityProtocol, CalibrationSupportRule
 from datp_core.thresholds.calibration.eligibility import (
     EligibilityStatus,
     calibration_support,
@@ -36,6 +35,7 @@ from datp_core.thresholds.policies.shared import (
     SampleWeightedSharedThresholdResult,
     SharedThresholdResult,
 )
+from datp_core.thresholds.protocols import CalibrationEligibilityProtocol, CalibrationSupportRule
 from datp_core.thresholds.quantiles import calibration_scores_from_references
 from datp_core.thresholds.variants.conformal import ConformalThresholdResult
 

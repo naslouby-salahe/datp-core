@@ -13,11 +13,6 @@ from datp_core.core.identifiers import (
 )
 from datp_core.core.numeric import ClientCount, Quantile
 from datp_core.data.populations.contracts import CapabilityStatus, PopulationCapabilities
-from datp_core.protocols.calibration import (
-    FIXED_SHRINKAGE_PROTOCOL,
-    CalibrationSupportRule,
-    ClusterThresholdAggregation,
-)
 from datp_core.thresholds.contracts import FamilyAssignment, ThresholdUnavailableResult
 from datp_core.thresholds.dispatch import (
     ThresholdConstructionRequest,
@@ -32,6 +27,11 @@ from datp_core.thresholds.policies.shared import (
     PooledSharedQuantileResult,
     SampleWeightedSharedThresholdResult,
     SharedThresholdResult,
+)
+from datp_core.thresholds.protocols import (
+    FIXED_SHRINKAGE_PROTOCOL,
+    CalibrationSupportRule,
+    ClusterThresholdAggregation,
 )
 from datp_core.thresholds.quantiles import ClientBenignCalibrationScores
 from datp_core.thresholds.variants.conformal import ConformalThresholdResult

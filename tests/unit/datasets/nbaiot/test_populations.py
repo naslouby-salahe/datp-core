@@ -16,7 +16,7 @@ from datp_core.data.populations.contracts import (
     dirichlet_condition,
     iid_condition,
 )
-from datp_core.protocols.calibration import MINIMUM_BENIGN_SUPPORT
+from datp_core.thresholds.protocols import MINIMUM_BENIGN_SUPPORT
 
 
 def test_natural_devices_are_exactly_the_audited_nine(nbaiot_canonical_root: Path) -> None:

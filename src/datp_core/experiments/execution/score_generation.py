@@ -12,7 +12,7 @@ from datp_core.detector.scoring.models import (
 )
 from datp_core.detector.training.contracts import AutoencoderProtocol
 from datp_core.detector.training.models import CheckpointCandidate
-from datp_core.protocols.training import BATCH_SIZE
+from datp_core.detector.training.protocols import BATCH_SIZE
 
 
 def score_selected_checkpoint(

@@ -1,5 +1,5 @@
 from datp_core.core.identifiers import EvidenceRole, ExperimentId
-from datp_core.protocols.experiments import EXPERIMENTS
+from datp_core.experiments.registry import EXPERIMENTS
 
 
 def test_exactly_one_confirmatory_experiment_exists() -> None:

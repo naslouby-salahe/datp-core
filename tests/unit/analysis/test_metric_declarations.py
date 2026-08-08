@@ -1,10 +1,10 @@
-from datp_core.core.identifiers import AvailabilityStatus, MetricId
-from datp_core.protocols.metrics import (
+from datp_core.analysis.metrics.protocols import (
     ATTACK_QUALITY_CONTROL_METRICS,
     CONFIRMATORY_METRICS,
     CV_ZERO_MEAN_POLICY,
     NEAR_ZERO_MEAN_FPR_WARNING_CUTOFF,
 )
+from datp_core.core.identifiers import AvailabilityStatus, MetricId
 
 
 def test_metric_semantics_are_explicit() -> None:

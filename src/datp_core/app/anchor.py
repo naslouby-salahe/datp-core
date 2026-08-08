@@ -20,7 +20,8 @@ def _output_root(mode: ProgrammeExecutionMode):
 
 
 def reproduce_anchor(*, overwrite: OverwriteMode, mode: ProgrammeExecutionMode) -> AnchorCommandResult:
-    from datp_core.app.campaign import preprocess_datasets, require_experiment_declaration
+    from datp_core.app.campaign import preprocess_datasets
+    from datp_core.app.validation import require_experiment_declaration
     from datp_core.experiments.anchor.run import (
         VerifyAnchorStageRequest,
         clear_independent_package,

@@ -14,7 +14,7 @@ from datp_core.core.identifiers import (
 )
 from datp_core.core.numeric import Seed
 from datp_core.experiments.common.seeds import SeedCohort
-from datp_core.protocols.experiments import ExperimentDeclaration
+from datp_core.experiments.registry import ExperimentDeclaration
 
 
 def test_plan_expansion_is_deterministic_and_records_complete_coordinates() -> None:

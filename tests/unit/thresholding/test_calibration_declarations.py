@@ -2,7 +2,7 @@ import pytest
 
 from datp_core.core.identifiers import FederatedThresholdMethod
 from datp_core.core.numeric import CoverageTarget
-from datp_core.protocols.calibration import (
+from datp_core.thresholds.protocols import (
     CALIBRATION_SIZE_PROTOCOL,
     CALIBRATION_SIZES,
     CANONICAL_QUANTILE,

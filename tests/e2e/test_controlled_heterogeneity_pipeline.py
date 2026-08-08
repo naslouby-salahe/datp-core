@@ -10,7 +10,7 @@ from datp_core.core.numeric import Seed
 from datp_core.data.populations.contracts import ControlledPartitionKind
 from datp_core.data.populations.declarations import DIRICHLET_CONCENTRATIONS
 from datp_core.experiments.common.seeds import SeedCohort
-from datp_core.protocols.experiments import EXPERIMENTS
+from datp_core.experiments.registry import EXPERIMENTS
 
 
 def test_controlled_heterogeneity_is_mechanism_evidence_not_a_second_confirmation() -> None:

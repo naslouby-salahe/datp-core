@@ -1,7 +1,7 @@
 from inspect import getsource
 
 from datp_core.experiments.execution.engine import PipelineStageRunner
-from datp_core.protocols.graph import ObservationBoundary
+from datp_core.experiments.graph import ObservationBoundary
 
 
 def test_canonical_runner_invokes_every_declared_observation_boundary() -> None:

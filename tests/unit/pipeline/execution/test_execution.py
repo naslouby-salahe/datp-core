@@ -18,6 +18,7 @@ from datp_core.core.identifiers import (
     TrainingModelId,
 )
 from datp_core.core.numeric import ModelCoefficientValue, Seed
+from datp_core.detector.training.protocols import DITTO_TRAINING_PROTOCOLS
 from datp_core.experiments.common.coordinates import ExperimentCoordinate
 from datp_core.experiments.execution.engine import execute_experiment, resolve_execution_recipe
 from datp_core.experiments.execution.models import (
@@ -29,7 +30,6 @@ from datp_core.experiments.execution.models import (
     StageExecution,
     StageOutcome,
 )
-from datp_core.protocols.training import DITTO_TRAINING_PROTOCOLS
 
 OUTPUT_ROOT = Path("outputs")
 

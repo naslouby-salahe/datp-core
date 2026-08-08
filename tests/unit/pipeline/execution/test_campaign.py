@@ -14,13 +14,13 @@ from datp_core.core.identifiers import (
 from datp_core.core.numeric import DittoRegularization, ScoreValue, Seed
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
+from datp_core.detector.training.protocols import DITTO_TRAINING_PROTOCOLS, resolve_ditto_protocol
 from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT
 from datp_core.experiments.execution import build_campaign
-from datp_core.protocols.calibration import CANONICAL_QUANTILE, QuantileProtocol
-from datp_core.protocols.experiments import EXPERIMENTS
-from datp_core.protocols.training import DITTO_TRAINING_PROTOCOLS, resolve_ditto_protocol
+from datp_core.experiments.registry import EXPERIMENTS
 from datp_core.thresholds.policies.local import construct_local_threshold
 from datp_core.thresholds.policies.shared import construct_shared_threshold
+from datp_core.thresholds.protocols import CANONICAL_QUANTILE, QuantileProtocol
 from datp_core.thresholds.quantiles import ClientBenignCalibrationScores, unweighted_mean
 
 

@@ -13,12 +13,12 @@ from datp_core.analysis.metrics.models import (
     PopulationMetricResult,
     WarningCode,
 )
+from datp_core.analysis.metrics.protocols import NEAR_ZERO_MEAN_FPR_WARNING_CUTOFF
 from datp_core.analysis.metrics.semantics import available, unavailable
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import EvaluationCohort, MetricId
 from datp_core.core.numeric import MetricValue, Quantile, RowCount
 from datp_core.data.populations.contracts import ClientIdentity
-from datp_core.protocols.metrics import NEAR_ZERO_MEAN_FPR_WARNING_CUTOFF
 
 
 def calculate_population_metrics(

@@ -16,13 +16,13 @@ from tests.unit.learning.federated.helpers import (
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.identifiers import PublicationStatus
 from datp_core.core.numeric import RowCount, Seed
+from datp_core.detector.checkpoints.protocols import CHECKPOINT_SELECTION_RULE
 from datp_core.detector.checkpoints.selection import select_checkpoint
 from datp_core.detector.scoring.federated import publish_federated_scores
 from datp_core.detector.scoring.models import ClientScoringInput, GenerateFederatedScoresRequest
 from datp_core.detector.training.engine import FederatedTrainingRequest
 from datp_core.detector.training.federated import train_global_federated
 from datp_core.detector.training.federated_publication import TrainFederatedDetectorRequest, train_federated_detector
-from datp_core.protocols.training import CHECKPOINT_SELECTION_RULE
 
 
 def _training_request(tmp_path: Path) -> FederatedTrainingRequest:

@@ -15,11 +15,11 @@ from tests.unit.learning.federated.helpers import (
 
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.numeric import RowCount, Seed
+from datp_core.detector.checkpoints.protocols import CHECKPOINT_SELECTION_RULE
 from datp_core.detector.checkpoints.selection import select_checkpoint
 from datp_core.detector.scoring.federated import publish_federated_scores
 from datp_core.detector.scoring.models import ClientScoringInput, GenerateFederatedScoresRequest
 from datp_core.detector.training.ditto import DittoTrainingRequest, train_ditto
-from datp_core.protocols.training import CHECKPOINT_SELECTION_RULE
 
 
 def test_ditto_end_to_end_train_select_and_score_global_and_personalized(tmp_path: Path) -> None:

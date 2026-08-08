@@ -9,7 +9,6 @@ type = forbidden
 source_modules =
     datp_core.core
 forbidden_modules =
-    datp_core.protocols
     datp_core.data
     datp_core.detector
     datp_core.thresholds
@@ -26,22 +25,12 @@ type = forbidden
 source_modules =
     datp_core.runtime
 forbidden_modules =
-    datp_core.protocols
     datp_core.data
     datp_core.detector
     datp_core.thresholds
     datp_core.analysis
     datp_core.experiments
     datp_core.artifacts
-    datp_core.presentation
-    datp_core.app
-
-[importlinter:contract:protocols-no-adapters]
-name = Scientific protocols must not depend on application or presentation adapters
-type = forbidden
-source_modules =
-    datp_core.protocols
-forbidden_modules =
     datp_core.presentation
     datp_core.app
 

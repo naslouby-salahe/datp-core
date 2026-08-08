@@ -16,7 +16,7 @@ from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.numeric import ProximalCoefficient, Seed
 from datp_core.detector.training.federated import FederatedTrainingRequest, train_global_federated
-from datp_core.protocols.training import FEDPROX_COEFFICIENTS
+from datp_core.detector.training.protocols import FEDPROX_COEFFICIENTS
 
 
 def _request(tmp_path: Path, coefficient: ProximalCoefficient) -> FederatedTrainingRequest:

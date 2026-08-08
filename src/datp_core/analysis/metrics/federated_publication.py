@@ -17,6 +17,7 @@ from datp_core.analysis.metrics.fixed_score import FixedScoreEvidence
 from datp_core.analysis.metrics.models import ClientMetricResult, PopulationMetricResult
 from datp_core.analysis.operational.communication import CommunicationMessageDiagnostic
 from datp_core.analysis.operational.traffic_rates import ValidatedTrafficRateEvidence
+from datp_core.analysis.temporal import TemporalDeploymentProvenance
 from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.repositories.evaluations import (
     FederatedEvaluationAssetName,
@@ -29,7 +30,6 @@ from datp_core.artifacts.repositories.publication import ArtifactPublication, Fu
 from datp_core.core.identifiers import EvidenceRole, PublicationStatus
 from datp_core.detector.scoring.models import FederatedScoreArtifactManifest
 from datp_core.experiments.common.coordinates import ExternalTemporalExecutionIdentity
-from datp_core.protocols.temporal import TemporalDeploymentProvenance
 from datp_core.thresholds.dispatch import ThresholdConstructionResult
 
 

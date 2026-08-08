@@ -15,6 +15,7 @@ from datp_core.analysis.metrics.threshold_evidence import VerifiedHeldOutBenignS
 from datp_core.analysis.operational.alert_burden import AlertBurdenDiagnostic
 from datp_core.analysis.operational.communication import CommunicationDiagnostic, CommunicationMessageDiagnostic
 from datp_core.analysis.operational.traffic_rates import ValidatedTrafficRateEvidence
+from datp_core.analysis.temporal import TemporalDeploymentProvenance
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.contracts import StrictModel
 from datp_core.core.errors import ScientificContractError
@@ -31,7 +32,6 @@ from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.scoring.contracts import ScoreArtifactManifest
 from datp_core.detector.training.models import FederatedTrainingCoordinate
 from datp_core.experiments.common.coordinates import ExternalTemporalExecutionIdentity
-from datp_core.protocols.temporal import TemporalDeploymentProvenance
 from datp_core.thresholds.dispatch import ThresholdConstructionResult
 from datp_core.thresholds.variants.conformal import ConformalAssignment
 

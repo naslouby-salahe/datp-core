@@ -13,7 +13,7 @@ from datp_core.data.populations.contracts import ClientIdentity, EligibleCohort,
 from datp_core.data.populations.integrity import reject_non_benign_labels
 from datp_core.detector.scoring.contracts import FederatedScoreRecord
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
-from datp_core.protocols.calibration import CalibrationEligibilityProtocol
+from datp_core.thresholds.protocols import CalibrationEligibilityProtocol
 
 
 class CalibrationUnavailableReason(StrEnum):

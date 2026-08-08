@@ -68,7 +68,7 @@ from datp_core.detector.training.contracts import (
     AutoencoderProtocol,
     CentralizedTrainingProtocol,
 )
-from datp_core.protocols.training import (
+from datp_core.detector.training.protocols import (
     BATCH_SIZE,
     CENTRALIZED_DATALOADER_WORKER_COUNT,
     CENTRALIZED_TRAINING_PROTOCOL,

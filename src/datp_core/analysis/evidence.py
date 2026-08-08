@@ -23,7 +23,7 @@ from datp_core.analysis.preparation import (
     prepare_external_analysis,
     prepare_temporal_analysis,
 )
-from datp_core.analysis.temporal import TemporalRecoveryResult
+from datp_core.analysis.temporal import TemporalDeploymentProvenance, TemporalRecoveryResult
 from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.repositories.publication import (
     ArtifactPublication,
@@ -37,7 +37,6 @@ from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import ExperimentId, FederatedThresholdMethod, PublicationStatus
 from datp_core.core.numeric import Seed
 from datp_core.experiments.common.coordinates import ExternalTemporalExecutionIdentity
-from datp_core.protocols.temporal import TemporalDeploymentProvenance
 
 if TYPE_CHECKING:
     from datp_core.analysis.mechanisms import MechanismEvidence

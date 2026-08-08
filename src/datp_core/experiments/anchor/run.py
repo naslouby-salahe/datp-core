@@ -27,6 +27,7 @@ from datp_core.core.identifiers import (
     StageOperationId,
 )
 from datp_core.core.numeric import NonNegativeIntegerValue
+from datp_core.detector.checkpoints.protocols import CHECKPOINT_PROTOCOL
 from datp_core.experiments.anchor.contracts import (
     AnchorDependencyBlocker,
     AnchorDiscrepancyReason,
@@ -55,7 +56,6 @@ from datp_core.experiments.anchor.spec import HISTORICAL_ANCHOR_SEED_COHORT, Anc
 from datp_core.experiments.common.seeds import SeedCohort
 from datp_core.experiments.execution.evidence import load_evaluation_document, population_metric
 from datp_core.experiments.execution.layout import EvaluationRunAssetDirectory
-from datp_core.protocols.training import CHECKPOINT_PROTOCOL
 from datp_core.runtime.configuration import OUTPUTS_ROOT
 
 
@@ -245,7 +245,7 @@ def collect_independent_observations_from_evaluations(
 ) -> tuple[AnchorObservedMetric, ...]:
     """Load SHARED/LOCAL CV(FPR) evaluations for every historical seed as independent observations."""
     from datp_core.app.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
-    from datp_core.protocols.experiments import EXPERIMENTS
+    from datp_core.experiments.registry import EXPERIMENTS
 
     declaration = next(item for item in EXPERIMENTS if item.id is ExperimentId.HISTORICAL_DATP_REPRODUCTION)
     plan = expand_experiment_plan(

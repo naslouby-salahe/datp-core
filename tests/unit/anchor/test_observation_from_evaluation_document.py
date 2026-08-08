@@ -37,13 +37,13 @@ from datp_core.core.identifiers import (
 )
 from datp_core.core.numeric import RoundNumber, RowCount, ScoreValue, Seed, ThresholdValue
 from datp_core.data.populations.contracts import PopulationOutcomeLabel
+from datp_core.detector.checkpoints.protocols import CHECKPOINT_PROTOCOL
 from datp_core.experiments.anchor.contracts import (
     AnchorDiscrepancyReason,
     AnchorObservationSourceKind,
 )
 from datp_core.experiments.anchor.run import observation_from_evaluation_document
-from datp_core.protocols.calibration import MINIMUM_BENIGN_SUPPORT
-from datp_core.protocols.training import CHECKPOINT_PROTOCOL
+from datp_core.thresholds.protocols import MINIMUM_BENIGN_SUPPORT
 
 _POPULATION = PopulationId.NBAIOT_NATURAL_DEVICES
 _SEED = Seed(0)

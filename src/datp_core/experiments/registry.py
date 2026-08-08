@@ -1,30 +1,23 @@
 """Typed experiment catalogue."""
 
-from enum import StrEnum
-from typing import Literal
-
 from pydantic import model_validator
 
+from datp_core.analysis.metrics.protocols import (
+    CONFIRMATORY_METRICS,
+    OPERATING_POINT_METRICS,
+    OPTIONAL_EQUITY_INDEX_METRICS,
+)
 from datp_core.core.contracts import StrictModel
 from datp_core.core.identifiers import (
     EvidenceRole,
     ExperimentId,
     ExperimentReadiness,
     FederatedThresholdMethod,
-    IntervalMethod,
     MetricId,
     PopulationId,
     PreprocessingProtocolId,
     TrainingModelId,
 )
-from datp_core.core.numeric import ConfidenceLevel
-from datp_core.experiments.common.seeds import CONFIRMATORY_PAIRED_SEED_COUNT, SeedCohort
-
-from .metrics import CONFIRMATORY_METRICS, OPERATING_POINT_METRICS, OPTIONAL_EQUITY_INDEX_METRICS
-
-
-class ConfirmatoryDeltaDirection(StrEnum):
-    SHARED_MINUS_LOCAL = "shared_minus_local"
 
 
 class ExperimentDeclaration(StrictModel):
@@ -47,25 +40,6 @@ class ExperimentDeclaration(StrictModel):
             raise ValueError("experiment metrics must be unique")
         if self.readiness is ExperimentReadiness.EXECUTABLE and self.role is EvidenceRole.OPERATIONAL_TRANSLATION:
             raise ValueError("operational translation experiments cannot be marked executable without rate evidence")
-        return self
-
-
-class ConfirmatoryEndpoint(StrictModel):
-    experiment: Literal[ExperimentId.SHARED_VS_LOCAL_CONFIRMATION]
-    population: Literal[PopulationId.NBAIOT_NATURAL_DEVICES]
-    training_model: Literal[TrainingModelId.FEDAVG_AUTOENCODER]
-    shared_threshold: Literal[FederatedThresholdMethod.SHARED_THRESHOLD]
-    local_threshold: Literal[FederatedThresholdMethod.LOCAL_THRESHOLD]
-    metric: Literal[MetricId.FPR_COEFFICIENT_OF_VARIATION]
-    seed_cohort: SeedCohort
-    positive_direction: Literal[ConfirmatoryDeltaDirection.SHARED_MINUS_LOCAL]
-    interval_method: Literal[IntervalMethod.BCA_PAIRED_ARITHMETIC_MEAN]
-    confidence_level: ConfidenceLevel
-
-    @model_validator(mode="after")
-    def validate_endpoint(self) -> "ConfirmatoryEndpoint":
-        if self.seed_cohort.member_count != CONFIRMATORY_PAIRED_SEED_COUNT:
-            raise ValueError("confirmatory endpoint requires the paired ten-seed journal cohort")
         return self
 
 

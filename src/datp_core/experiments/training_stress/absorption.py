@@ -5,6 +5,7 @@ from pydantic import model_validator
 from datp_core.analysis.inference.bootstrap.contracts import BcaOutcome, BootstrapInterval
 from datp_core.analysis.inference.bootstrap.estimation import seed_level_bca_interval
 from datp_core.analysis.inference.contracts import PairedInferenceProtocol
+from datp_core.analysis.metrics.protocols import ABSORPTION_REFERENCE_EFFECT_MATERIALITY_CUTOFF
 from datp_core.analysis.scientific_decision import ScientificDecision, ScientificDecisionResult
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.contracts import StrictModel
@@ -19,7 +20,6 @@ from datp_core.core.numeric import (
 from datp_core.detector.training.contracts import ModelAbsorptionDecisionProtocol
 from datp_core.experiments.common.seeds import CONFIRMATORY_ANALYSIS_SEED, CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.experiments.confirmatory.spec import CONFIRMATORY_INFERENCE_PROTOCOL
-from datp_core.protocols.metrics import ABSORPTION_REFERENCE_EFFECT_MATERIALITY_CUTOFF
 
 
 class AbsorptionCornerEvidence(StrictModel):

@@ -13,7 +13,7 @@ from datp_core.experiments.common.coordinates import ExecutionRoute, execution_r
 from datp_core.experiments.common.seeds import SeedCohort
 from datp_core.experiments.execution.engine import CompletionRecordOutputStore, PipelineStageRunner, execute_campaign
 from datp_core.experiments.execution.models import CampaignEntry, CampaignPlan, campaign_digest
-from datp_core.protocols.experiments import ExperimentDeclaration
+from datp_core.experiments.registry import ExperimentDeclaration
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

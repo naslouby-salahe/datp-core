@@ -15,12 +15,12 @@ from datp_core.core.identifiers import (
 )
 from datp_core.core.numeric import SeedCount
 from datp_core.data.populations.contracts import POPULATIONS
-from datp_core.protocols.experiments import ExperimentDeclaration
-from datp_core.protocols.validation import (
+from datp_core.experiments.graph import (
     CANONICAL_PROTOCOL_GRAPH,
     CONFIRMATORY_ENDPOINT,
     validate_protocol_graph,
 )
+from datp_core.experiments.registry import ExperimentDeclaration
 
 
 def test_canonical_graph_is_fully_resolved() -> None:
@@ -94,7 +94,7 @@ def test_graph_rejects_temporal_experiment_without_verified_chronology() -> None
 
 
 def test_temporal_decision_protocol_raises_until_criteria_are_predeclared() -> None:
-    from datp_core.protocols.temporal import require_temporal_decision_protocol
+    from datp_core.analysis.temporal import require_temporal_decision_protocol
 
     with pytest.raises(UnresolvedScientificValueError, match="does not declare either numeric value"):
         require_temporal_decision_protocol()

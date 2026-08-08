@@ -34,13 +34,6 @@ from datp_core.core.numeric import (
     ThresholdValue,
 )
 from datp_core.data.populations.contracts import CapabilityStatus, EligibleCohort, PopulationCapabilities
-from datp_core.protocols.calibration import (
-    CLUSTER_THRESHOLD_PROTOCOL,
-    FEDERATED_STATISTICS_PROTOCOL,
-    CalibrationEligibilityProtocol,
-    CalibrationSupportRule,
-    ClusterThresholdProtocol,
-)
 from datp_core.thresholds.calibration.eligibility import (
     calibration_support,
     decide_eligibility,
@@ -59,6 +52,13 @@ from datp_core.thresholds.dispatch import (
 )
 from datp_core.thresholds.policies.cluster import construct_grouped_threshold
 from datp_core.thresholds.policies.family import construct_family_threshold
+from datp_core.thresholds.protocols import (
+    CLUSTER_THRESHOLD_PROTOCOL,
+    FEDERATED_STATISTICS_PROTOCOL,
+    CalibrationEligibilityProtocol,
+    CalibrationSupportRule,
+    ClusterThresholdProtocol,
+)
 from datp_core.thresholds.variants.conformal import construct_local_conformal_threshold
 from datp_core.thresholds.variants.federated_statistics import (
     PooledVarianceDecomposition,

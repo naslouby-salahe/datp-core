@@ -2,11 +2,14 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from datp_core.analysis.metrics.protocols import CONFIRMATORY_METRICS
 from datp_core.artifacts.provenance import Checksum, checksum_text
 from datp_core.artifacts.serializers.json import canonical_checksum, canonical_json_text
 from datp_core.core.errors import AnchorReproductionError
 from datp_core.core.identifiers import ExperimentReadiness, PreprocessingProtocolId, ScoreFrameColumn
 from datp_core.data.populations.declarations import split_protocol_for_population
+from datp_core.detector.checkpoints.protocols import CHECKPOINT_PROTOCOL, CHECKPOINT_SELECTION_RULE
+from datp_core.detector.training.protocols import NBAIOT_AUTOENCODER
 from datp_core.experiments.anchor.contracts import (
     AnchorArtifactFileName,
     AnchorComparisonDecision,
@@ -24,9 +27,7 @@ from datp_core.experiments.anchor.reproduction import (
 )
 from datp_core.experiments.anchor.spec import ANCHOR_DECISION_PROTOCOL
 from datp_core.experiments.confirmatory.spec import CONFIRMATORY_INFERENCE_PROTOCOL
-from datp_core.protocols.metrics import CONFIRMATORY_METRICS
-from datp_core.protocols.training import CHECKPOINT_PROTOCOL, CHECKPOINT_SELECTION_RULE, NBAIOT_AUTOENCODER
-from datp_core.protocols.validation import CONFIRMATORY_ENDPOINT
+from datp_core.experiments.graph import CONFIRMATORY_ENDPOINT
 
 _DECLARED_REASONS_SET = frozenset(DECLARED_NON_BLOCKING_DISCREPANCY_REASONS)
 

@@ -39,7 +39,7 @@ from datp_core.data.populations.integrity import reject_non_benign_labels
 from datp_core.detector.scoring.centralized import load_score_frame, reject_non_finite_scores
 from datp_core.detector.scoring.models import PooledScoreArtifact
 from datp_core.detector.training.centralized import CentralizedTrainingCoordinate
-from datp_core.protocols.calibration import CANONICAL_QUANTILE, CentralizedQuantileProtocol
+from datp_core.thresholds.protocols import CANONICAL_QUANTILE, CentralizedQuantileProtocol
 
 
 class CentralizedThresholdAssetName(StrEnum):

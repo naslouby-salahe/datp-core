@@ -1,37 +1,33 @@
-"""Whole-graph scientific validation."""
+"""Whole-graph scientific declarations, observation contracts, and validation."""
+
+from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
+from typing import Protocol
 
 from datp_core.analysis.inference.contracts import PairedInferenceProtocol
+from datp_core.analysis.metrics.protocols import ATTACK_SENSITIVE_METRICS, SUPPRESSED_OPERATIONAL_METRICS
+from datp_core.analysis.operational.traffic_rates import TRAFFIC_RATE_EVIDENCE, TrafficRateEvidence
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.contracts import StrictModel
 from datp_core.core.errors import ProtocolValidationError, UnresolvedScientificValueError
 from datp_core.core.identifiers import (
     ContractSubject,
+    DatasetId,
     EvidenceRole,
     ExperimentId,
     ExperimentReadiness,
     FederatedThresholdMethod,
-    IntervalMethod,
     MetricId,
     PopulationId,
+    SplitProtocolId,
+    TemporalState,
     TrainingModelId,
 )
-from datp_core.core.numeric import CalibrationSize
+from datp_core.core.numeric import CalibrationSize, Seed
 from datp_core.data.populations.contracts import POPULATIONS, PopulationDeclaration
-from datp_core.detector.training.contracts import FedAvgProtocol
-from datp_core.experiments.anchor.spec import ANCHOR_DECISION_PROTOCOL, AnchorDecisionProtocol
-from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT
-from datp_core.experiments.confirmatory.spec import CONFIRMATORY_INFERENCE_PROTOCOL
-
-from .calibration import (
-    CLUSTER_THRESHOLD_PROTOCOL,
-    MINIMUM_BENIGN_SUPPORT,
-    CalibrationEligibilityProtocol,
-    ClusterThresholdProtocol,
-)
-from .experiments import EXPERIMENTS, ConfirmatoryDeltaDirection, ConfirmatoryEndpoint, ExperimentDeclaration
-from .graph import ResolvedProtocolGraph
-from .metrics import ATTACK_SENSITIVE_METRICS, SUPPRESSED_OPERATIONAL_METRICS
-from .splits import (
+from datp_core.data.populations.protocols import (
     NON_TEMPORAL_SPLIT,
     STATIC_REFERENCE_SPLIT,
     TEMPORAL_SPLIT,
@@ -39,21 +35,128 @@ from .splits import (
     StaticReferenceSplitProtocol,
     TemporalSplitProtocol,
 )
-from .traffic_rates import TRAFFIC_RATE_EVIDENCE, TrafficRateEvidence
-from .training import CHECKPOINT_PROTOCOL, FEDAVG_TRAINING_PROTOCOL, CheckpointProtocol
-
-CONFIRMATORY_ENDPOINT = ConfirmatoryEndpoint(
-    experiment=ExperimentId.SHARED_VS_LOCAL_CONFIRMATION,
-    population=PopulationId.NBAIOT_NATURAL_DEVICES,
-    training_model=TrainingModelId.FEDAVG_AUTOENCODER,
-    shared_threshold=FederatedThresholdMethod.SHARED_THRESHOLD,
-    local_threshold=FederatedThresholdMethod.LOCAL_THRESHOLD,
-    metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
-    seed_cohort=CONFIRMATORY_SEED_COHORT,
-    positive_direction=ConfirmatoryDeltaDirection.SHARED_MINUS_LOCAL,
-    interval_method=IntervalMethod.BCA_PAIRED_ARITHMETIC_MEAN,
-    confidence_level=CONFIRMATORY_INFERENCE_PROTOCOL.confidence_level,
+from datp_core.detector.checkpoints.contracts import CheckpointProtocol
+from datp_core.detector.checkpoints.protocols import CHECKPOINT_PROTOCOL
+from datp_core.detector.training.contracts import FedAvgProtocol
+from datp_core.detector.training.protocols import FEDAVG_TRAINING_PROTOCOL
+from datp_core.experiments.anchor.spec import ANCHOR_DECISION_PROTOCOL, AnchorDecisionProtocol
+from datp_core.experiments.confirmatory.spec import (
+    CONFIRMATORY_ENDPOINT,
+    CONFIRMATORY_INFERENCE_PROTOCOL,
+    ConfirmatoryEndpoint,
 )
+from datp_core.experiments.registry import EXPERIMENTS, ExperimentDeclaration
+from datp_core.thresholds.protocols import (
+    CLUSTER_THRESHOLD_PROTOCOL,
+    MINIMUM_BENIGN_SUPPORT,
+    CalibrationEligibilityProtocol,
+    ClusterThresholdProtocol,
+)
+
+
+class ResolvedProtocolGraph(StrictModel):
+    populations: tuple[PopulationDeclaration, ...]
+    experiments: tuple[ExperimentDeclaration, ...]
+    suppressed_experiment_ids: tuple[ExperimentId, ...]
+    temporal_split: TemporalSplitProtocol
+    static_reference_split: StaticReferenceSplitProtocol
+    non_temporal_split: FractionalSplitProtocol
+    checkpoint: CheckpointProtocol
+    calibration: CalibrationEligibilityProtocol
+    confirmatory_endpoint: ConfirmatoryEndpoint
+    confirmatory_inference: PairedInferenceProtocol
+    anchor: AnchorDecisionProtocol
+    traffic_rate_evidence: tuple[TrafficRateEvidence, ...]
+    cluster_threshold: ClusterThresholdProtocol
+    fedavg_training: FedAvgProtocol
+
+
+class GraphCoordinate(Protocol):
+    """Scientific identity exposed to observation-only graph extensions."""
+
+    @property
+    def experiment(self) -> ExperimentId: ...
+
+    @property
+    def evidence_role(self) -> EvidenceRole: ...
+
+    @property
+    def dataset(self) -> DatasetId: ...
+
+    @property
+    def population(self) -> PopulationId: ...
+
+    @property
+    def training_model(self) -> TrainingModelId: ...
+
+    @property
+    def training_seed(self) -> Seed: ...
+
+    @property
+    def split_protocol(self) -> SplitProtocolId: ...
+
+    @property
+    def threshold_method(self) -> FederatedThresholdMethod: ...
+
+    @property
+    def metric(self) -> MetricId: ...
+
+    @property
+    def temporal_state(self) -> TemporalState | None: ...
+
+
+class ObservationBoundary(StrEnum):
+    AFTER_SCORE_GENERATION_BEFORE_CALIBRATION = "after_score_generation_before_calibration"
+    AFTER_CALIBRATION_BEFORE_THRESHOLD_CONSTRUCTION = "after_calibration_before_threshold_construction"
+    AFTER_THRESHOLD_CONSTRUCTION_BEFORE_EVALUATION = "after_threshold_construction_before_evaluation"
+    AFTER_EVALUATION_BEFORE_ANALYSIS = "after_evaluation_before_analysis"
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ObservationContext:
+    boundary: ObservationBoundary
+    coordinate: GraphCoordinate
+    input_checksum: Checksum
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ObservationResult:
+    boundary: ObservationBoundary
+    coordinate: GraphCoordinate
+    input_checksum: Checksum
+    output_checksum: Checksum
+
+    def __post_init__(self) -> None:
+        if self.input_checksum != self.output_checksum:
+            raise ValueError("observation hooks cannot alter scientific artifacts")
+
+
+class ObservationHook(Protocol):
+    def observe(self, context: ObservationContext) -> ObservationResult: ...
+
+
+@dataclass(frozen=True, slots=True)
+class IdentityObservationHook:
+    def observe(self, context: ObservationContext) -> ObservationResult:
+        return ObservationResult(
+            boundary=context.boundary,
+            coordinate=context.coordinate,
+            input_checksum=context.input_checksum,
+            output_checksum=context.input_checksum,
+        )
+
+
+def observe_graph_boundary(
+    context: ObservationContext,
+    hook: ObservationHook | None,
+) -> ObservationResult:
+    selected_hook = hook if hook is not None else IdentityObservationHook()
+    result = selected_hook.observe(context)
+    if result.boundary is not context.boundary or result.coordinate != context.coordinate:
+        raise ValueError("observation hook changed its scientific boundary or coordinate")
+    if result.input_checksum != context.input_checksum or result.output_checksum != context.input_checksum:
+        raise ValueError("observation hook changed a scientific artifact identity")
+    return result
 
 
 @dataclass(frozen=True, slots=True)
@@ -171,10 +274,8 @@ def _require_endpoint_matches_inference(
     endpoint: ConfirmatoryEndpoint,
     inference: PairedInferenceProtocol,
 ) -> None:
-    if endpoint.seed_cohort.member_count != inference.paired_seed_count:
-        raise ProtocolValidationError("Confirmatory endpoint seed cohort must match confirmatory inference pair count")
-    if endpoint.confidence_level != inference.confidence_level:
-        raise ProtocolValidationError("Confirmatory endpoint confidence must match confirmatory inference")
+    if endpoint.inference_protocol != inference:
+        raise ProtocolValidationError("Confirmatory endpoint inference must match confirmatory inference")
 
 
 def _require_endpoint_matches_experiment(

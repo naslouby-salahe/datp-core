@@ -8,7 +8,6 @@ from datp_core.core.identifiers import ContractSubject, FederatedThresholdMethod
 from datp_core.core.numeric import Quantile, ShrinkageWeight, ThresholdValue, floats_exactly_equal
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
-from datp_core.protocols.calibration import FixedShrinkageProtocol
 from datp_core.thresholds.contracts import (
     LocalQuantile,
     ThresholdAssignment,
@@ -17,6 +16,7 @@ from datp_core.thresholds.contracts import (
     mean_local_threshold,
     validate_assignments,
 )
+from datp_core.thresholds.protocols import FixedShrinkageProtocol
 from datp_core.thresholds.quantiles import ClientBenignCalibrationScores, local_quantile, require_eligible_cohort
 
 

@@ -10,7 +10,6 @@ from datp_core.core.numeric import CalibrationSize, ReplicateIndex, SubsampleRep
 from datp_core.data.populations.contracts import ClientIdentity, EligibleCohort
 from datp_core.detector.scoring.contracts import FixedScoreInvariant
 from datp_core.detector.scoring.models import FederatedScoreArtifactManifest, FederatedScoreRecord
-from datp_core.protocols.calibration import CalibrationEligibilityProtocol
 from datp_core.thresholds.calibration.eligibility import (
     CalibrationSampleReference,
     EligibilityDecision,
@@ -22,6 +21,7 @@ from datp_core.thresholds.calibration.eligibility import (
     reject_score_coordinate_mismatch,
 )
 from datp_core.thresholds.calibration.sampling import CalibrationReplicateManifest, build_calibration_replicate
+from datp_core.thresholds.protocols import CalibrationEligibilityProtocol
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

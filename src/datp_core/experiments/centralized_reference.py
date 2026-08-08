@@ -34,6 +34,7 @@ from datp_core.data.preprocessing.centralized import (
     CentralizedPopulationPreprocessingRequest,
     preprocess_centralized_population,
 )
+from datp_core.detector.checkpoints.protocols import CHECKPOINT_PROTOCOL
 from datp_core.detector.checkpoints.service import (
     SelectCentralizedCheckpointRequest,
     select_centralized_primary_checkpoint,
@@ -46,6 +47,7 @@ from datp_core.detector.training.centralized_publication import (
     train_centralized_detector,
 )
 from datp_core.detector.training.contracts import AutoencoderProtocol
+from datp_core.detector.training.protocols import BATCH_SIZE, CICIOT2023_AUTOENCODER, NBAIOT_AUTOENCODER
 from datp_core.experiments.common.seeds import (
     BOUNDED_EVIDENCE_SEED_COHORT,
     CONFIRMATORY_SEED_COHORT,
@@ -56,7 +58,6 @@ from datp_core.experiments.execution.layout import ExecutionArtifactDirectory
 from datp_core.presentation.export import PUBLICATION_FILENAME, PublicationBundle, ReportProvenance, export_markdown
 from datp_core.presentation.tables import PublicationTable, TableCell
 from datp_core.presentation.validation import ClaimKind, ClaimRequest, EvidenceDecision, validate_claim
-from datp_core.protocols.training import BATCH_SIZE, CHECKPOINT_PROTOCOL, CICIOT2023_AUTOENCODER, NBAIOT_AUTOENCODER
 from datp_core.runtime.configuration import DATA_ROOT, OUTPUTS_ROOT
 from datp_core.runtime.filesystem import write_text_atomically
 from datp_core.thresholds.centralized import (

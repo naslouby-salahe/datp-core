@@ -2,7 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from datp_core.core.numeric import Ratio
-from datp_core.protocols.splits import TEMPORAL_SPLIT, FractionalSplitProtocol, TemporalSplitProtocol
+from datp_core.data.populations.protocols import TEMPORAL_SPLIT, FractionalSplitProtocol, TemporalSplitProtocol
 
 
 def test_temporal_split_is_locked() -> None:

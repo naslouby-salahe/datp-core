@@ -5,11 +5,10 @@ import pytest
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import CentralizedModelId, CentralizedThresholdMethod, OptimizerId, TrainingModelId
 from datp_core.core.numeric import DittoRegularization, FeatureCount, ModelCoefficientValue, Quantile
-from datp_core.protocols.calibration import CentralizedQuantileProtocol
-from datp_core.protocols.training import (
+from datp_core.detector.checkpoints.protocols import CHECKPOINT_PROTOCOL
+from datp_core.detector.training.protocols import (
     BATCH_SIZE,
     CENTRALIZED_TRAINING_PROTOCOL,
-    CHECKPOINT_PROTOCOL,
     CICIOT2023_AUTOENCODER,
     DITTO_ALTERNATIVE_ROUTE_DIFFERENCE,
     DITTO_PARTIAL_EFFECT_MINIMUM,
@@ -28,6 +27,7 @@ from datp_core.protocols.training import (
     OPTIMIZER,
     resolve_single_model_federated_training_protocol,
 )
+from datp_core.thresholds.protocols import CentralizedQuantileProtocol
 
 
 def _width_values(protocol) -> tuple[int, ...]:

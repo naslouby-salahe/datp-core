@@ -84,7 +84,6 @@ strict = [
     "src/datp_core/data",
     "src/datp_core/detector",
     "src/datp_core/thresholds",
-    "src/datp_core/protocols",
 ]
 pythonVersion = "3.12"
 typeCheckingMode = "standard"

@@ -8,7 +8,6 @@ from datp_core.core.errors import LeakageError, ScientificContractError
 from datp_core.core.identifiers import PartitionRole, StableRowId
 from datp_core.core.numeric import CalibrationSize, RowCount, Seed
 from datp_core.data.populations.contracts import EligibleCohort
-from datp_core.protocols.calibration import CalibrationEligibilityProtocol
 from datp_core.thresholds.calibration.eligibility import (
     CalibrationSupport,
     EligibilityDecision,
@@ -22,6 +21,7 @@ from datp_core.thresholds.calibration.eligibility import (
     reject_score_coordinate_mismatch,
     require_common_eligible_cohort,
 )
+from datp_core.thresholds.protocols import CalibrationEligibilityProtocol
 
 PROTOCOL = CalibrationEligibilityProtocol(minimum_support=CalibrationSize(100))
 

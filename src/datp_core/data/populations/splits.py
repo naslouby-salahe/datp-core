@@ -20,7 +20,7 @@ from datp_core.core.identifiers import (
     StageOperationId,
 )
 from datp_core.core.numeric import RowCount, Seed, floats_absolutely_close
-from datp_core.protocols.splits import (
+from datp_core.data.populations.protocols import (
     FRACTION_TOTAL_ABSOLUTE_TOLERANCE,
     NON_TEMPORAL_SPLIT,
     STATIC_REFERENCE_SPLIT,

@@ -4,6 +4,8 @@ from pydantic import ValidationError
 from datp_core.analysis.scientific_decision import ScientificDecision
 from datp_core.analysis.temporal import (
     TemporalClientTrajectory,
+    TemporalDecisionProtocol,
+    TemporalDeploymentProvenance,
     TemporalInterpretation,
     TemporalSeedProvenance,
     decide_temporal_campaign,
@@ -23,7 +25,6 @@ from datp_core.core.identifiers import (
 from datp_core.core.numeric import MetricValue, Ratio, Seed
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.experiments.common.seeds import BOUNDED_EVIDENCE_SEED_COHORT
-from datp_core.protocols.temporal import TemporalDecisionProtocol, TemporalDeploymentProvenance
 
 _TEST_TEMPORAL_DECISION_PROTOCOL = TemporalDecisionProtocol(
     drift_excess_materiality_threshold=MetricValue(0.1),

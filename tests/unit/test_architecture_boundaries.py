@@ -45,7 +45,6 @@ def test_production_modules_do_not_import_retired_owners() -> None:
 def test_canonical_packages_own_the_scientific_cutover() -> None:
     for owner in (
         "core",
-        "protocols",
         "runtime",
         "artifacts",
         "data",

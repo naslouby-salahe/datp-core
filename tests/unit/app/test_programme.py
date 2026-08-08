@@ -2,18 +2,14 @@
 
 import pytest
 
-from datp_core.app.campaign import (
-    build_programme_plan,
-    require_experiment_execution_ready,
-    seed_cohort_for,
-    validate_programme,
-)
+from datp_core.app.campaign import build_programme_plan, seed_cohort_for
 from datp_core.app.planning import PlanDisposition
 from datp_core.app.research import registered_experiment_ids
+from datp_core.app.validation import require_experiment_execution_ready, validate_programme
 from datp_core.core.errors import UnresolvedScientificValueError
 from datp_core.core.identifiers import ExperimentId, ExperimentReadiness, FederatedThresholdMethod
 from datp_core.experiments.common.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_SEED_COHORT
-from datp_core.protocols.experiments import EXPERIMENTS
+from datp_core.experiments.registry import EXPERIMENTS
 
 
 def test_every_non_suppressed_experiment_has_exactly_one_recipe() -> None:

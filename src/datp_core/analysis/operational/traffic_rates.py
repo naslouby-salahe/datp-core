@@ -1,6 +1,9 @@
 from dataclasses import dataclass
 from enum import StrEnum
 
+from pydantic import model_validator
+
+from datp_core.core.contracts import StrictModel
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import PopulationId, TrafficRateEvidenceType
 from datp_core.core.numeric import TrafficRatePerDay
@@ -48,3 +51,18 @@ def validate_traffic_rate_evidence(evidence: ValidatedTrafficRateEvidence) -> Va
     if evidence.evidence_kind not in _VALID_EVIDENCE_KINDS:
         raise ScientificContractError("traffic-rate evidence kind is not operationally valid")
     return evidence
+
+
+class TrafficRateEvidence(StrictModel):
+    population: PopulationId
+    rate_per_day: TrafficRatePerDay
+    source_locator: str
+
+    @model_validator(mode="after")
+    def validate_source_locator(self) -> "TrafficRateEvidence":
+        if not self.source_locator.strip():
+            raise ValueError("traffic-rate evidence requires a source locator")
+        return self
+
+
+TRAFFIC_RATE_EVIDENCE: tuple[TrafficRateEvidence, ...] = ()

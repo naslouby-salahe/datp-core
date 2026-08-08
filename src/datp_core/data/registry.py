@@ -39,7 +39,7 @@ from datp_core.data.populations.contracts import (
     build_population_capabilities,
     population_evidence_role,
 )
-from datp_core.protocols.calibration import MINIMUM_BENIGN_SUPPORT
+from datp_core.thresholds.protocols import MINIMUM_BENIGN_SUPPORT
 
 type DatasetPublication = MaterializedDataset[StrEnum, StrEnum]
 

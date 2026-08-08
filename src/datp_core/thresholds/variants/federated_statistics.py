@@ -24,12 +24,12 @@ from datp_core.core.numeric import (
 )
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
-from datp_core.protocols.calibration import FederatedStatisticsProtocol
 from datp_core.thresholds.contracts import (
     ThresholdAssignment,
     require_unique_clients,
     validate_assignments,
 )
+from datp_core.thresholds.protocols import FederatedStatisticsProtocol
 from datp_core.thresholds.quantiles import (
     ClientBenignCalibrationScores,
     achieved_benign_exceedance,

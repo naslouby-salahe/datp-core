@@ -17,7 +17,6 @@ from datp_core.core.numeric import (
     floats_exactly_equal,
 )
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
-from datp_core.protocols.calibration import QuantileProtocol
 from datp_core.thresholds.contracts import (
     LocalQuantile,
     ThresholdAssignment,
@@ -28,6 +27,7 @@ from datp_core.thresholds.contracts import (
     validate_local_quantiles,
     validate_normalized_weights,
 )
+from datp_core.thresholds.protocols import QuantileProtocol
 from datp_core.thresholds.quantiles import (
     ClientBenignCalibrationScores,
     exact_empirical_quantile,

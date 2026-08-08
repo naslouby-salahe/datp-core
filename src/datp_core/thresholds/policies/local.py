@@ -6,13 +6,13 @@ from typing import ClassVar
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import FederatedThresholdMethod
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
-from datp_core.protocols.calibration import QuantileProtocol
 from datp_core.thresholds.contracts import (
     LocalQuantile,
     ThresholdAssignment,
     validate_assignments,
     validate_local_quantiles,
 )
+from datp_core.thresholds.protocols import QuantileProtocol
 from datp_core.thresholds.quantiles import ClientBenignCalibrationScores, local_quantile, require_eligible_cohort
 
 

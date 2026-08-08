@@ -42,8 +42,8 @@ from datp_core.experiments.execution.models import (
     StageRunner,
 )
 from datp_core.experiments.execution.workspace import ExperimentWorkspace
-from datp_core.protocols.experiments import EXPERIMENTS
-from datp_core.protocols.graph import ObservationBoundary, ObservationContext, ObservationHook, observe_graph_boundary
+from datp_core.experiments.graph import ObservationBoundary, ObservationContext, ObservationHook, observe_graph_boundary
+from datp_core.experiments.registry import EXPERIMENTS
 from datp_core.runtime.configuration import DATA_ROOT
 
 

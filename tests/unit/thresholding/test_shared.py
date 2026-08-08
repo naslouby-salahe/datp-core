@@ -4,13 +4,13 @@ from tests.unit.thresholding.helpers import client_scores
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import FederatedThresholdMethod
 from datp_core.core.numeric import Quantile
-from datp_core.protocols.calibration import QuantileProtocol
 from datp_core.thresholds.policies.local import construct_local_threshold
 from datp_core.thresholds.policies.shared import (
     construct_pooled_shared_quantile,
     construct_sample_weighted_shared_threshold,
     construct_shared_threshold,
 )
+from datp_core.thresholds.protocols import QuantileProtocol
 
 QUANTILE = Quantile(0.5)
 CLIENT_A = client_scores("client_a", (1.0, 2.0, 3.0, 4.0, 5.0))

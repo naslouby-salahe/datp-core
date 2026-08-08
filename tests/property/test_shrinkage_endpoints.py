@@ -4,7 +4,7 @@ from tests.unit.thresholding.helpers import client_scores
 
 from datp_core.core.identifiers import FederatedThresholdMethod
 from datp_core.core.numeric import Quantile, ShrinkageWeight
-from datp_core.protocols.calibration import FixedShrinkageProtocol
+from datp_core.thresholds.protocols import FixedShrinkageProtocol
 from datp_core.thresholds.variants.shrinkage import construct_fixed_shrinkage
 
 

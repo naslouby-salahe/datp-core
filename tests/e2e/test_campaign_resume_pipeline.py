@@ -13,7 +13,7 @@ from datp_core.experiments.execution.models import (
     StageExecution,
     StageOutcome,
 )
-from datp_core.protocols.experiments import EXPERIMENTS
+from datp_core.experiments.registry import EXPERIMENTS
 
 
 class _IncompleteStore:

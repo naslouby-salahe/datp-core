@@ -12,7 +12,7 @@ from datp_core.data.populations.contracts import (
     dirichlet_condition,
     iid_condition,
 )
-from datp_core.protocols.calibration import MINIMUM_BENIGN_SUPPORT
+from datp_core.thresholds.protocols import MINIMUM_BENIGN_SUPPORT
 
 _CONCENTRATIONS = (0.1, 0.3, 0.5, 1.0, 10.0)
 

@@ -8,6 +8,7 @@ from pathlib import Path
 
 from pydantic import TypeAdapter
 
+from datp_core.analysis.temporal import TemporalDeploymentProvenance
 from datp_core.artifacts.provenance import Checksum, checksum_text
 from datp_core.artifacts.repositories.publication import ArtifactPublication, FunctionalArtifactCodec, publish_artifact
 from datp_core.artifacts.serializers.json import canonical_json_text
@@ -15,7 +16,6 @@ from datp_core.core.identifiers import PublicationStatus
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.scoring.contracts import ScoreArtifactManifest
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
-from datp_core.protocols.temporal import TemporalDeploymentProvenance
 from datp_core.thresholds.dispatch import ThresholdConstructionRequest, ThresholdConstructionResult
 
 type FederatedScoreArtifactManifest = ScoreArtifactManifest[FederatedTrainingCoordinate, ClientIdentity]

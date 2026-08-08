@@ -30,8 +30,8 @@ from datp_core.data.preprocessing.models import ClientPreprocessingResult, Prepr
 from datp_core.detector.scoring.contracts import ScoreArtifactManifest, ScoreRecord
 from datp_core.detector.scoring.models import FederatedScoreArtifactManifest
 from datp_core.experiments.personalized_scoring import client_metric, client_scoring_input, score_record_for_client
-from datp_core.protocols.calibration import MINIMUM_BENIGN_SUPPORT
 from datp_core.thresholds.contracts import ThresholdAssignment
+from datp_core.thresholds.protocols import MINIMUM_BENIGN_SUPPORT
 
 _POPULATION = PopulationId.NBAIOT_NATURAL_DEVICES
 _SEED = Seed(0)

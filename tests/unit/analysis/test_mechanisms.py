@@ -36,6 +36,7 @@ from datp_core.analysis.mechanisms.movement import (
     ThresholdOperatingPoint,
     threshold_movement,
 )
+from datp_core.analysis.metrics.protocols import ABSORPTION_REFERENCE_EFFECT_MATERIALITY_CUTOFF
 from datp_core.analysis.scientific_decision import ScientificDecision
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.identifiers import (
@@ -65,7 +66,6 @@ from datp_core.detector.training.contracts import (
     FederatedTrainingCoordinate,
 )
 from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT
-from datp_core.protocols.metrics import ABSORPTION_REFERENCE_EFFECT_MATERIALITY_CUTOFF
 
 
 def test_association_reports_all_observations_with_typed_statistics() -> None:

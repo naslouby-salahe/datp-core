@@ -28,7 +28,6 @@ from datp_core.core.numeric import (
     ShrinkageWeight,
     ThresholdValue,
 )
-from datp_core.protocols.calibration import KMeansInitialization
 from datp_core.thresholds.contracts import (
     LocalQuantile,
     ThresholdAssignment,
@@ -48,6 +47,7 @@ from datp_core.thresholds.policies.family import (
 )
 from datp_core.thresholds.policies.local import LocalThresholdResult
 from datp_core.thresholds.policies.shared import SharedThresholdResult
+from datp_core.thresholds.protocols import KMeansInitialization
 from datp_core.thresholds.variants.conformal import (
     ConformalAssignment,
     ConformalThresholdResult,

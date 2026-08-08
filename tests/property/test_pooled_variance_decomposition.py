@@ -4,7 +4,7 @@ from hypothesis import strategies as st
 from tests.unit.thresholding.helpers import client_scores
 
 from datp_core.core.numeric import Quantile
-from datp_core.protocols.calibration import FEDERATED_STATISTICS_PROTOCOL
+from datp_core.thresholds.protocols import FEDERATED_STATISTICS_PROTOCOL
 from datp_core.thresholds.variants.federated_statistics import construct_federated_benign_statistics
 
 QUANTILE = Quantile(0.95)

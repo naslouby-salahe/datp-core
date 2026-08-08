@@ -57,7 +57,7 @@ from datp_core.detector.training.models import (
     DittoTrainingCoordinates,
     FederatedTrainingCoordinate,
 )
-from datp_core.protocols.training import (
+from datp_core.detector.training.protocols import (
     DITTO_REGULARIZATION_GRID,
     WEIGHT_DECAY,
 )

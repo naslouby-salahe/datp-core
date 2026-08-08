@@ -26,6 +26,7 @@ from datp_core.core.identifiers import (
     ThresholdMethodExecutionStatus,
 )
 from datp_core.core.numeric import Seed
+from datp_core.detector.training.protocols import DITTO_PRIMARY_REGULARIZATION, FEDPROX_COEFFICIENTS
 from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.experiments.confirmatory.run import (
     ConfirmatoryAssetDirectory,
@@ -95,7 +96,6 @@ from datp_core.experiments.threshold_robustness import (
     size_aware_shrinkage_analysis_marker_present,
 )
 from datp_core.presentation.export import MECHANISM_REPORT_FILENAME, PUBLICATION_FILENAME
-from datp_core.protocols.training import DITTO_PRIMARY_REGULARIZATION, FEDPROX_COEFFICIENTS
 from datp_core.runtime.configuration import OUTPUTS_ROOT
 from datp_core.runtime.filesystem import write_text_atomically
 

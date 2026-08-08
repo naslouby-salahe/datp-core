@@ -71,7 +71,7 @@ from datp_core.detector.training.models import (
     PreparedClientProvenance,
     RoundSnapshot,
 )
-from datp_core.protocols.training import (
+from datp_core.detector.training.protocols import (
     FEDERATED_DATALOADER_WORKER_COUNT,
 )
 from datp_core.runtime.compute import resolve_cuda_device

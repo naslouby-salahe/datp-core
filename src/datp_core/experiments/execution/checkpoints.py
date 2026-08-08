@@ -2,19 +2,19 @@
 
 from datp_core.core.identifiers import FeatureNameSequence
 from datp_core.core.numeric import ClientCount
+from datp_core.detector.checkpoints.protocols import CHECKPOINT_PROTOCOL
 from datp_core.detector.checkpoints.selection import CheckpointDecision
 from datp_core.detector.checkpoints.service import SelectFederatedCheckpointRequest, select_federated_primary_checkpoint
 from datp_core.detector.training.contracts import AutoencoderProtocol
 from datp_core.detector.training.engine import FederatedTrainingRequest
 from datp_core.detector.training.federated_publication import TrainFederatedDetectorRequest, train_federated_detector
 from datp_core.detector.training.models import CheckpointCandidate
-from datp_core.experiments.execution.context import FederatedExecutionContext, client_training_inputs
-from datp_core.protocols.training import (
+from datp_core.detector.training.protocols import (
     BATCH_SIZE,
-    CHECKPOINT_PROTOCOL,
     LEARNING_RATE,
     resolve_single_model_federated_training_protocol,
 )
+from datp_core.experiments.execution.context import FederatedExecutionContext, client_training_inputs
 
 
 def select_execution_checkpoint(

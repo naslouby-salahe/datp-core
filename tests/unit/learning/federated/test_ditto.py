@@ -107,7 +107,7 @@ def test_train_ditto_rejects_partial_participation(tmp_path: Path) -> None:
 
 def test_ditto_training_coordinates_reject_mismatched_regularization(tmp_path: Path) -> None:
     del tmp_path
-    from datp_core.protocols.training import DITTO_REGULARIZATION_GRID
+    from datp_core.detector.training.protocols import DITTO_REGULARIZATION_GRID
 
     coordinates, _ = ditto_coordinates(Seed(0))
 
