@@ -2143,6 +2143,8 @@ A size is evaluated only when the client has sufficient source calibration recor
 
 Each subsample size must use multiple deterministic subsampling replicates nested within each training seed. Subsampling replicates quantify calibration sampling variability; they are not counted as independent training seeds.
 
+**Locked replicate count (`CALIBRATION_SUBSAMPLE_REPLICATE_COUNT`, prospective research amendment).** Each subsample size uses `10` deterministic nested replicates per (training seed, client). Ten replicates are enough to summarize within-seed threshold/CV variability at each declared calibration size while keeping the grid computationally bounded; replicates are drawn without replacement via a deterministic hash of `(training_seed, client, replicate_index)` and are always summarized within seed before any across-seed inference (§12.5) — they are never treated as an independent inferential unit and never increase the seed count.
+
 **Comparison set**
 
 - B1;
@@ -3509,6 +3511,8 @@ drift\_excess
 \]
 
 `recovery_ratio` is computed only when `drift_excess` satisfies a positive-materiality threshold specified before analysis.
+
+**Locked temporal decision values (`TEMPORAL_DECISION_PROTOCOL`, prospective research amendment).** `drift_excess_materiality_threshold = 0.05` (`CV(FPR)` units), matching the identical practical-indistinguishability convention already locked for the Ditto absorption comparison (§11: "within `0.05`"), so materiality is judged against the same magnitude this roadmap already treats as scientifically distinguishable rather than an unrelated imported constant. `material_recovery_ratio_minimum = 0.5`: one-shot recalibration must recover at least half of the drift excess to be reported as meaningful recovery, the conventional majority bar in recovery/restoration literature absent a study-specific reason to require more. Both values apply across the locked temporal seed cohort (Regime D-temporal, bounded-evidence seeds).
 
 Otherwise:
 

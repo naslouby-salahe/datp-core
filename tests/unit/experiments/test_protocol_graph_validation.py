@@ -93,11 +93,13 @@ def test_graph_rejects_temporal_experiment_without_verified_chronology() -> None
         validate_protocol_graph(graph)
 
 
-def test_temporal_decision_protocol_raises_until_criteria_are_predeclared() -> None:
+def test_temporal_decision_protocol_supplies_locked_criteria() -> None:
     from datp_core.analysis.temporal import require_temporal_decision_protocol
 
-    with pytest.raises(UnresolvedScientificValueError, match="neither numeric value is declared"):
-        require_temporal_decision_protocol()
+    protocol = require_temporal_decision_protocol()
+
+    assert protocol.drift_excess_materiality_threshold.value == 0.05
+    assert protocol.material_recovery_ratio_minimum.value == 0.5
 
 
 def test_graph_rejects_premature_executable_readiness() -> None:

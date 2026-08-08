@@ -13,7 +13,7 @@ from datp_core.analysis.scientific_decision import ScientificDecision, Scientifi
 from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.serializers.json import canonical_checksum
 from datp_core.core.contracts import StrictModel
-from datp_core.core.errors import ScientificContractError, UnresolvedScientificValueError
+from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import (
     AvailabilityStatus,
     EvidenceRole,
@@ -712,9 +712,17 @@ class TemporalDecisionProtocol(StrictModel):
         return self
 
 
+# drift_excess_materiality_threshold reuses the CV(FPR) indistinguishability magnitude used for Ditto absorption.
+LOCKED_TEMPORAL_DECISION_PROTOCOL = TemporalDecisionProtocol(
+    drift_excess_materiality_threshold=MetricValue(0.05),
+    material_recovery_ratio_minimum=Ratio(0.5),
+    seed_cohort=BOUNDED_EVIDENCE_SEED_COHORT,
+    undefined_recovery_when_drift_not_material=True,
+    mixed_seed_publication_support=False,
+    require_full_seed_provenance=True,
+    require_uncertainty_for_supported=True,
+)
+
+
 def require_temporal_decision_protocol() -> TemporalDecisionProtocol:
-    raise UnresolvedScientificValueError(
-        "a positive drift-excess materiality threshold and a meaningful-recovery criterion must be "
-        "pre-specified, but neither numeric value is declared",
-        subject=EvidenceRole.TEMPORAL_BOUNDARY,
-    )
+    return LOCKED_TEMPORAL_DECISION_PROTOCOL

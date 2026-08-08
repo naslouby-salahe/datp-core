@@ -30,6 +30,7 @@ from datp_core.analysis.operational.communication import (
     SerializedPayloadEvidence,
     ThresholdPayloadKind,
 )
+from datp_core.analysis.operational.traffic_rates import traffic_rate_evidence_for_population
 from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.artifacts.provenance import checksum_file
 from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
@@ -442,7 +443,7 @@ class ExperimentWorkspace:
                 conformal_coverage_inputs=self._conformal_coverage_inputs(),
                 threshold_estimation_inputs=self._threshold_estimation_inputs(),
                 communication_messages=self._communication_messages(),
-                traffic_rate_evidence=None,
+                traffic_rate_evidence=traffic_rate_evidence_for_population(self.coordinate.population),
                 execution_identity=self.context.execution_identity,
                 output_directory=self.run_directory() / EvaluationRunAssetDirectory.EVALUATION,
                 overwrite=False,

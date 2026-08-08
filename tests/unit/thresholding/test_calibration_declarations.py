@@ -11,6 +11,7 @@ from datp_core.thresholds.protocols import (
     FEDERATED_STATISTICS_PROTOCOL,
     FIXED_SHRINKAGE_PROTOCOL,
     LOCAL_THRESHOLD_PROTOCOL,
+    LOCKED_CALIBRATION_SUBSAMPLE_REPLICATE_COUNT,
     QUANTILE_GRID,
     SHARED_THRESHOLD_PROTOCOL,
     ClusterAssignmentAlgorithm,
@@ -19,6 +20,7 @@ from datp_core.thresholds.protocols import (
     ClusterThresholdAggregation,
     ConformalProtocol,
     KMeansInitialization,
+    require_calibration_subsample_replicate_count,
 )
 
 
@@ -32,6 +34,11 @@ def test_calibration_grids_are_locked() -> None:
     assert FIXED_SHRINKAGE_PROTOCOL.weights[0].value == 0
     assert CONFORMAL_PROTOCOL.coverage.value == 0.95
     assert FEDERATED_STATISTICS_PROTOCOL.coefficients[-1].value == 3
+
+
+def test_calibration_subsample_replicate_count_is_locked() -> None:
+    assert LOCKED_CALIBRATION_SUBSAMPLE_REPLICATE_COUNT.value == 10
+    assert require_calibration_subsample_replicate_count() == LOCKED_CALIBRATION_SUBSAMPLE_REPLICATE_COUNT
 
 
 def test_conformal_protocol_computes_significance_from_coverage() -> None:

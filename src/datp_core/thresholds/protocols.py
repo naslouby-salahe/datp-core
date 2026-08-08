@@ -6,8 +6,7 @@ from typing import Literal
 from pydantic import model_validator
 
 from datp_core.core.contracts import StrictModel
-from datp_core.core.errors import UnresolvedScientificValueError
-from datp_core.core.identifiers import CentralizedThresholdMethod, ContractSubject, FederatedThresholdMethod
+from datp_core.core.identifiers import CentralizedThresholdMethod, FederatedThresholdMethod
 from datp_core.core.numeric import (
     CalibrationSize,
     CoverageTarget,
@@ -186,6 +185,8 @@ class ClusterThresholdProtocol(StrictModel):
 CANONICAL_QUANTILE = Quantile(0.95)
 QUANTILE_GRID = tuple(Quantile(value) for value in (0.90, 0.95, 0.975, 0.99))
 MINIMUM_BENIGN_SUPPORT = CalibrationSize(100)
+# Ten nested replicates per (seed, client); summarized within seed, never treated as an independent sample.
+LOCKED_CALIBRATION_SUBSAMPLE_REPLICATE_COUNT = SubsampleReplicateCount(10)
 CALIBRATION_SIZES = tuple(CalibrationSize(value) for value in (50, 100, 250, 500, 1000, 5000))
 FIXED_SHRINKAGE_WEIGHTS = tuple(ShrinkageWeight(value) for value in (0, 0.25, 0.5, 0.75, 1))
 CONFORMAL_COVERAGE = CoverageTarget(0.95)
@@ -253,8 +254,4 @@ CLUSTER_MEDIAN_THRESHOLD_PROTOCOL = ClusterThresholdProtocol(
 
 
 def require_calibration_subsample_replicate_count() -> SubsampleReplicateCount:
-    raise UnresolvedScientificValueError(
-        "multiple deterministic calibration subsampling replicates must be pre-specified, "
-        "but their count is not declared",
-        subject=ContractSubject.CALIBRATION,
-    )
+    return LOCKED_CALIBRATION_SUBSAMPLE_REPLICATE_COUNT
