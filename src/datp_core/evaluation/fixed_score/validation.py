@@ -185,7 +185,7 @@ def _validate_aurocs(evidence: FixedScoreEvidence, clients: tuple[ClientMetricRe
         _require_matching_auroc(expected_item.outcome, observed_outcome)
 
 
-def _require_equal(left: object, right: object, subject: ContractSubject, name: str) -> None:
+def _require_equal[ValueT](left: ValueT, right: ValueT, subject: ContractSubject, name: str) -> None:
     if left != right:
         raise ScientificContractError(f"fixed-score control failed: {name} differs", subject=subject)
 
