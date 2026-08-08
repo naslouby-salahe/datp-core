@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from shutil import rmtree
+from typing import Protocol
 
 from datp_core.anchor.gate import load_anchor_gate_decision
 from datp_core.anchor.models import AnchorGateStatus
@@ -17,6 +17,7 @@ from datp_core.app.contracts import (
     ProgrammeExecutionMode,
     RecipeRegistration,
 )
+from datp_core.app.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
 from datp_core.datasets.paths import canonical_root_under
 from datp_core.domain.enums import (
     DatasetId,
@@ -75,7 +76,6 @@ from datp_core.experiments.heterogeneity import (
     analyze_threshold_movement_tradeoff,
     run_controlled_heterogeneity_sweep_seed,
 )
-from datp_core.experiments.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
 from datp_core.experiments.threshold_robustness import (
     ThresholdRobustnessSeedResult,
     calibration_size_ablation_analysis_marker_present,
@@ -199,11 +199,45 @@ class AnchorCommandResult:
     detail: DetailText
 
 
-type DispatchHandler = Callable[[tuple[Seed, ...], Path, OverwriteMode], DispatchOutcome]
-type ReportHandler = Callable[[ExperimentId, OverwriteMode], tuple[tuple[Path, ...], DetailText]]
-type AnalysisMarker = Callable[[ExperimentId], bool]
-type RobustnessRunner = Callable[..., ThresholdRobustnessSeedResult]
-type FederatedEstimationRunner = Callable[..., FederatedEstimationSeedResult]
+class RobustnessRunner(Protocol):
+    def __call__(
+        self,
+        training_seed: Seed,
+        *,
+        output_root: Path,
+        overwrite: bool,
+    ) -> ThresholdRobustnessSeedResult: ...
+
+
+class FederatedEstimationRunner(Protocol):
+    def __call__(
+        self,
+        training_seed: Seed,
+        *,
+        output_root: Path,
+        overwrite: bool,
+    ) -> FederatedEstimationSeedResult: ...
+
+
+class DispatchHandler(Protocol):
+    def __call__(
+        self,
+        seeds: tuple[Seed, ...],
+        output_root: Path,
+        overwrite: OverwriteMode,
+    ) -> DispatchOutcome: ...
+
+
+class ReportHandler(Protocol):
+    def __call__(
+        self,
+        experiment_id: ExperimentId,
+        overwrite: OverwriteMode,
+    ) -> tuple[tuple[Path, ...], DetailText]: ...
+
+
+class AnalysisMarker(Protocol):
+    def __call__(self, experiment_id: ExperimentId) -> bool: ...
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -337,7 +371,11 @@ def _seed_completion_outcomes(
     )
 
 
-def _dispatch_confirmatory(seeds: tuple[Seed, ...], output_root: Path, overwrite: OverwriteMode) -> DispatchOutcome:
+def _dispatch_confirmatory(
+    seeds: tuple[Seed, ...],
+    output_root: Path,
+    overwrite: OverwriteMode,
+) -> DispatchOutcome:
     results = tuple(
         run_confirmatory_seed(seed, output_root=output_root, overwrite=overwrite.requested)
         for seed in seeds
@@ -351,7 +389,11 @@ def _dispatch_confirmatory(seeds: tuple[Seed, ...], output_root: Path, overwrite
     )
 
 
-def _dispatch_family_grouped(seeds: tuple[Seed, ...], output_root: Path, overwrite: OverwriteMode) -> DispatchOutcome:
+def _dispatch_family_grouped(
+    seeds: tuple[Seed, ...],
+    output_root: Path,
+    overwrite: OverwriteMode,
+) -> DispatchOutcome:
     results = tuple(
         run_family_grouped_mechanism_seed(seed, output_root=output_root, overwrite=overwrite.requested)
         for seed in seeds
@@ -392,7 +434,11 @@ def _dispatch_external(
     )
 
 
-def _dispatch_fedprox(seeds: tuple[Seed, ...], output_root: Path, overwrite: OverwriteMode) -> DispatchOutcome:
+def _dispatch_fedprox(
+    seeds: tuple[Seed, ...],
+    output_root: Path,
+    overwrite: OverwriteMode,
+) -> DispatchOutcome:
     from datp_core.experiments.training_stress import run_fedprox_stress_test_seed
 
     results = tuple(
@@ -416,7 +462,11 @@ def _dispatch_fedprox(seeds: tuple[Seed, ...], output_root: Path, overwrite: Ove
     )
 
 
-def _dispatch_ditto(seeds: tuple[Seed, ...], output_root: Path, overwrite: OverwriteMode) -> DispatchOutcome:
+def _dispatch_ditto(
+    seeds: tuple[Seed, ...],
+    output_root: Path,
+    overwrite: OverwriteMode,
+) -> DispatchOutcome:
     from datp_core.experiments.training_stress import run_ditto_stress_test_seed
 
     results = tuple(
@@ -437,7 +487,23 @@ def _dispatch_ditto(seeds: tuple[Seed, ...], output_root: Path, overwrite: Overw
     )
 
 
-def _dispatch_temporal(seeds: tuple[Seed, ...], output_root: Path, overwrite: OverwriteMode) -> DispatchOutcome:
+def _temporal_unavailable_detail(
+    seed_results: tuple,
+    method: FederatedThresholdMethod,
+) -> DetailText | None:
+    for seed_result in seed_results:
+        for state in (seed_result.static_reference, seed_result.frozen_future, seed_result.recalibrated_future):
+            for unavailable in state.unavailable_methods:
+                if unavailable.method is method:
+                    return DetailText(f"{unavailable.reason.value}: {unavailable.detail}")
+    return None
+
+
+def _dispatch_temporal(
+    seeds: tuple[Seed, ...],
+    output_root: Path,
+    overwrite: OverwriteMode,
+) -> DispatchOutcome:
     from datp_core.experiments.temporal import run_temporal_seed
 
     results = tuple(
@@ -446,36 +512,28 @@ def _dispatch_temporal(seeds: tuple[Seed, ...], output_root: Path, overwrite: Ov
     )
     declared = _declared_threshold_methods(ExperimentId.EDGE_ONE_SHOT_RECALIBRATION)
     completed = frozenset(declared)
-    unavailable_by_method: dict[FederatedThresholdMethod, str] = {}
     for seed_result in results:
+        seed_completed: set[FederatedThresholdMethod] = set()
         for state in (seed_result.static_reference, seed_result.frozen_future, seed_result.recalibrated_future):
-            completed = completed.intersection(state.completed_threshold_methods)
-            for unavailable in state.unavailable_methods:
-                unavailable_by_method.setdefault(
-                    unavailable.method,
-                    f"{unavailable.reason.value}: {unavailable.detail}",
-                )
-    outcomes = tuple(
-        ThresholdMethodOutcome(
-            method=method,
-            status=(
-                ThresholdMethodExecutionStatus.COMPLETED
-                if method in completed
-                else (
-                    ThresholdMethodExecutionStatus.UNAVAILABLE
-                    if method in unavailable_by_method
-                    else ThresholdMethodExecutionStatus.INFEASIBLE
-                )
-            ),
-            detail=DetailText(
-                "executed across all temporal states and seeds"
-                if method in completed
-                else unavailable_by_method.get(method, "declared but not completed in this execution")
-            ),
-        )
-        for method in declared
+            seed_completed.update(state.completed_threshold_methods)
+        completed = completed.intersection(seed_completed)
+    outcomes: list[ThresholdMethodOutcome] = []
+    for method in declared:
+        unavailable_detail = _temporal_unavailable_detail(results, method)
+        if method in completed:
+            status = ThresholdMethodExecutionStatus.COMPLETED
+            detail = DetailText("executed across all temporal states and seeds")
+        elif unavailable_detail is not None:
+            status = ThresholdMethodExecutionStatus.UNAVAILABLE
+            detail = unavailable_detail
+        else:
+            status = ThresholdMethodExecutionStatus.INFEASIBLE
+            detail = DetailText("declared but not completed in this execution")
+        outcomes.append(ThresholdMethodOutcome(method=method, status=status, detail=detail))
+    return DispatchOutcome(
+        detail=DetailText(f"temporal seeds={len(seeds)}"),
+        method_outcomes=tuple(outcomes),
     )
-    return DispatchOutcome(detail=DetailText(f"temporal seeds={len(seeds)}"), method_outcomes=outcomes)
 
 
 def _dispatch_robustness(
@@ -613,7 +671,11 @@ def _dispatch_analysis_only(experiment_id: ExperimentId) -> DispatchOutcome:
     )
 
 
-def run_smoke(experiment_id: ExperimentId | None, *, overwrite: OverwriteMode) -> CampaignRunResult:
+def run_smoke(
+    experiment_id: ExperimentId | None,
+    *,
+    overwrite: OverwriteMode,
+) -> CampaignRunResult:
     from datp_core.app.programme import reject_anchor_as_experiment
 
     if experiment_id is not None:
@@ -869,13 +931,19 @@ def _generate_campaign_report(overwrite: OverwriteMode) -> ReportResult:
     )
 
 
-def _report_confirmatory(experiment_id: ExperimentId, overwrite: OverwriteMode) -> tuple[tuple[Path, ...], DetailText]:
+def _report_confirmatory(
+    experiment_id: ExperimentId,
+    overwrite: OverwriteMode,
+) -> tuple[tuple[Path, ...], DetailText]:
     del experiment_id, overwrite
     path = analyze_confirmatory_campaign()
     return (path,), DetailText(str(path))
 
 
-def _report_external(experiment_id: ExperimentId, overwrite: OverwriteMode) -> tuple[tuple[Path, ...], DetailText]:
+def _report_external(
+    experiment_id: ExperimentId,
+    overwrite: OverwriteMode,
+) -> tuple[tuple[Path, ...], DetailText]:
     del overwrite
     if experiment_id is ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION:
         result = analyze_external_validation_campaign(output_root=OUTPUTS_ROOT)
@@ -886,7 +954,10 @@ def _report_external(experiment_id: ExperimentId, overwrite: OverwriteMode) -> t
     return (result.output_directory,), DetailText(str(result.output_directory))
 
 
-def _report_heterogeneity(experiment_id: ExperimentId, overwrite: OverwriteMode) -> tuple[tuple[Path, ...], DetailText]:
+def _report_heterogeneity(
+    experiment_id: ExperimentId,
+    overwrite: OverwriteMode,
+) -> tuple[tuple[Path, ...], DetailText]:
     if experiment_id is ExperimentId.CONTROLLED_HETEROGENEITY_SWEEP:
         path = analyze_controlled_heterogeneity_sweep(overwrite=overwrite.requested)
     elif experiment_id is ExperimentId.PER_CLIENT_SCORE_GEOMETRY:
@@ -900,7 +971,10 @@ def _report_heterogeneity(experiment_id: ExperimentId, overwrite: OverwriteMode)
     return (path,), DetailText(str(path))
 
 
-def _report_fedprox(experiment_id: ExperimentId, overwrite: OverwriteMode) -> tuple[tuple[Path, ...], DetailText]:
+def _report_fedprox(
+    experiment_id: ExperimentId,
+    overwrite: OverwriteMode,
+) -> tuple[tuple[Path, ...], DetailText]:
     del experiment_id
     from datp_core.experiments.training_stress import (
         TrainingStressArtifactName,
@@ -952,7 +1026,10 @@ def _report_fedprox(experiment_id: ExperimentId, overwrite: OverwriteMode) -> tu
     return tuple(paths), DetailText(f"coefficients={len(paths) - 1}")
 
 
-def _report_ditto(experiment_id: ExperimentId, overwrite: OverwriteMode) -> tuple[tuple[Path, ...], DetailText]:
+def _report_ditto(
+    experiment_id: ExperimentId,
+    overwrite: OverwriteMode,
+) -> tuple[tuple[Path, ...], DetailText]:
     del experiment_id
     from datp_core.experiments.training_stress import (
         analyze_ditto_absorption,
@@ -982,7 +1059,10 @@ def _report_ditto(experiment_id: ExperimentId, overwrite: OverwriteMode) -> tupl
     return (analysis_root,), DetailText(f"analysis={analysis_root}")
 
 
-def _report_temporal(experiment_id: ExperimentId, overwrite: OverwriteMode) -> tuple[tuple[Path, ...], DetailText]:
+def _report_temporal(
+    experiment_id: ExperimentId,
+    overwrite: OverwriteMode,
+) -> tuple[tuple[Path, ...], DetailText]:
     del experiment_id, overwrite
     from datp_core.experiments.temporal import TemporalCampaignResult, analyze_temporal_campaign, load_temporal_campaign_seeds
 
@@ -992,7 +1072,10 @@ def _report_temporal(experiment_id: ExperimentId, overwrite: OverwriteMode) -> t
     return paths, DetailText(f"temporal_methods={len(paths)}")
 
 
-def _report_robustness(experiment_id: ExperimentId, overwrite: OverwriteMode) -> tuple[tuple[Path, ...], DetailText]:
+def _report_robustness(
+    experiment_id: ExperimentId,
+    overwrite: OverwriteMode,
+) -> tuple[tuple[Path, ...], DetailText]:
     if experiment_id is ExperimentId.SHARED_CONSTRUCTION_SENSITIVITY:
         paths, detail = report_shared_construction_sensitivity(experiment_id, overwrite.requested)
     elif experiment_id is ExperimentId.QUANTILE_SENSITIVITY:
@@ -1010,7 +1093,10 @@ def _report_robustness(experiment_id: ExperimentId, overwrite: OverwriteMode) ->
     return paths, DetailText(detail)
 
 
-def _report_federated_estimation(experiment_id: ExperimentId, overwrite: OverwriteMode) -> tuple[tuple[Path, ...], DetailText]:
+def _report_federated_estimation(
+    experiment_id: ExperimentId,
+    overwrite: OverwriteMode,
+) -> tuple[tuple[Path, ...], DetailText]:
     if experiment_id is ExperimentId.FEDERATED_BENIGN_STATISTICS_COMPARISON:
         paths, detail = report_federated_benign_statistics_comparison(experiment_id, overwrite.requested)
     elif experiment_id is ExperimentId.FEDERATED_QUANTILE_ESTIMATION:
@@ -1026,7 +1112,10 @@ def _supplementary_report_directory(experiment_id: ExperimentId) -> Path:
     return OUTPUTS_ROOT / ResearchDirectory.SUPPLEMENTARY / experiment_id.value
 
 
-def _report_supplementary(experiment_id: ExperimentId, overwrite: OverwriteMode) -> tuple[tuple[Path, ...], DetailText]:
+def _report_supplementary(
+    experiment_id: ExperimentId,
+    overwrite: OverwriteMode,
+) -> tuple[tuple[Path, ...], DetailText]:
     from datp_core.app.programme import require_experiment_declaration, seed_cohort_for
 
     declaration = require_experiment_declaration(experiment_id)
@@ -1107,7 +1196,10 @@ def programme_status(experiment_id: ExperimentId | None) -> ProgrammeStatusRepor
     )
 
 
-def _status_for_experiment(experiment_id: ExperimentId, anchor_gate: AnchorGateStatus) -> ExperimentStatusRecord:
+def _status_for_experiment(
+    experiment_id: ExperimentId,
+    anchor_gate: AnchorGateStatus,
+) -> ExperimentStatusRecord:
     from datp_core.app.programme import require_experiment_declaration
 
     declaration = require_experiment_declaration(experiment_id)
@@ -1196,7 +1288,10 @@ def _fedprox_marker(experiment_id: ExperimentId) -> bool:
         load_fedprox_primary_coefficient_decision,
     )
 
-    decision_path = fedprox_stress_test_root(output_root=OUTPUTS_ROOT) / TrainingStressArtifactName.PRIMARY_COEFFICIENT_DECISION
+    decision_path = (
+        fedprox_stress_test_root(output_root=OUTPUTS_ROOT)
+        / TrainingStressArtifactName.PRIMARY_COEFFICIENT_DECISION
+    )
     if not decision_path.is_file():
         return False
     decision = load_fedprox_primary_coefficient_decision(decision_path)
@@ -1296,14 +1391,20 @@ def _dispatch_external_recipe(experiment_id: ExperimentId) -> DispatchHandler:
     return dispatch
 
 
-def _dispatch_robustness_recipe(experiment_id: ExperimentId, runner: RobustnessRunner) -> DispatchHandler:
+def _dispatch_robustness_recipe(
+    experiment_id: ExperimentId,
+    runner: RobustnessRunner,
+) -> DispatchHandler:
     def dispatch(seeds: tuple[Seed, ...], output_root: Path, overwrite: OverwriteMode) -> DispatchOutcome:
         return _dispatch_robustness(experiment_id, runner, seeds, output_root, overwrite)
 
     return dispatch
 
 
-def _dispatch_federated_recipe(experiment_id: ExperimentId, runner: FederatedEstimationRunner) -> DispatchHandler:
+def _dispatch_federated_recipe(
+    experiment_id: ExperimentId,
+    runner: FederatedEstimationRunner,
+) -> DispatchHandler:
     def dispatch(seeds: tuple[Seed, ...], output_root: Path, overwrite: OverwriteMode) -> DispatchOutcome:
         return _dispatch_federated_estimation(experiment_id, runner, seeds, output_root, overwrite)
 
@@ -1418,35 +1519,50 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
     ExperimentRecipe(
         experiment=ExperimentId.QUANTILE_SENSITIVITY,
         anchor_requirement=AnchorRequirement.REQUIRED,
-        dispatch=_dispatch_robustness_recipe(ExperimentId.QUANTILE_SENSITIVITY, run_quantile_sensitivity_seed),
+        dispatch=_dispatch_robustness_recipe(
+            ExperimentId.QUANTILE_SENSITIVITY,
+            run_quantile_sensitivity_seed,
+        ),
         report=_report_robustness,
         analysis_marker=_robustness_marker,
     ),
     ExperimentRecipe(
         experiment=ExperimentId.CALIBRATION_SIZE_ABLATION,
         anchor_requirement=AnchorRequirement.REQUIRED,
-        dispatch=_dispatch_robustness_recipe(ExperimentId.CALIBRATION_SIZE_ABLATION, run_calibration_size_ablation_seed),
+        dispatch=_dispatch_robustness_recipe(
+            ExperimentId.CALIBRATION_SIZE_ABLATION,
+            run_calibration_size_ablation_seed,
+        ),
         report=_report_robustness,
         analysis_marker=_robustness_marker,
     ),
     ExperimentRecipe(
         experiment=ExperimentId.FIXED_SHRINKAGE_CURVE,
         anchor_requirement=AnchorRequirement.REQUIRED,
-        dispatch=_dispatch_robustness_recipe(ExperimentId.FIXED_SHRINKAGE_CURVE, run_fixed_shrinkage_curve_seed),
+        dispatch=_dispatch_robustness_recipe(
+            ExperimentId.FIXED_SHRINKAGE_CURVE,
+            run_fixed_shrinkage_curve_seed,
+        ),
         report=_report_robustness,
         analysis_marker=_robustness_marker,
     ),
     ExperimentRecipe(
         experiment=ExperimentId.SIZE_AWARE_SHRINKAGE,
         anchor_requirement=AnchorRequirement.REQUIRED,
-        dispatch=_dispatch_robustness_recipe(ExperimentId.SIZE_AWARE_SHRINKAGE, run_size_aware_shrinkage_seed),
+        dispatch=_dispatch_robustness_recipe(
+            ExperimentId.SIZE_AWARE_SHRINKAGE,
+            run_size_aware_shrinkage_seed,
+        ),
         report=_report_robustness,
         analysis_marker=_robustness_marker,
     ),
     ExperimentRecipe(
         experiment=ExperimentId.LOCAL_CONFORMAL_COVERAGE,
         anchor_requirement=AnchorRequirement.REQUIRED,
-        dispatch=_dispatch_robustness_recipe(ExperimentId.LOCAL_CONFORMAL_COVERAGE, run_local_conformal_coverage_seed),
+        dispatch=_dispatch_robustness_recipe(
+            ExperimentId.LOCAL_CONFORMAL_COVERAGE,
+            run_local_conformal_coverage_seed,
+        ),
         report=_report_robustness,
         analysis_marker=_robustness_marker,
     ),
@@ -1493,28 +1609,6 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
         analysis_marker=_supplementary_marker,
     ),
 )
-
-
-def format_plan(presentation: object) -> str:
-    from datp_core.app.programme import PlanPresentation
-
-    if not isinstance(presentation, PlanPresentation):
-        raise TypeError("format_plan requires PlanPresentation")
-    lines = [
-        f"plan_digest={presentation.plan.digest.value}",
-        f"entries={len(presentation.plan.entries)}",
-        f"executable={len(presentation.plan.executable)}",
-        f"experiments={','.join(item.value for item in presentation.experiment_ids)}",
-        f"registered={','.join(item.value for item in presentation.registered_recipes)}",
-        f"anchor_required={','.join(item.value for item in presentation.anchor_required)}",
-    ]
-    for experiment_id, seeds in presentation.seed_cohorts:
-        lines.append(f"seeds[{experiment_id.value}]={','.join(str(seed.value) for seed in seeds)}")
-    for disposition in PlanDisposition:
-        count = sum(1 for entry in presentation.plan.entries if entry.disposition is disposition)
-        if count:
-            lines.append(f"disposition[{disposition.value}]={count}")
-    return "\n".join(lines)
 
 
 def format_status(report: ProgrammeStatusReport) -> str:
