@@ -27,7 +27,7 @@ from datp_core.artifacts.repositories.evaluations import (
 )
 from datp_core.artifacts.repositories.publication import ArtifactPublication, FunctionalArtifactCodec, publish_artifact
 from datp_core.core.identifiers import EvidenceRole, PublicationStatus
-from datp_core.pipeline.scoring.models import FederatedScoreArtifactManifest
+from datp_core.detector.scoring.models import FederatedScoreArtifactManifest
 from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
 from datp_core.protocols.temporal import TemporalDeploymentProvenance
 from datp_core.thresholds.dispatch import ThresholdConstructionResult

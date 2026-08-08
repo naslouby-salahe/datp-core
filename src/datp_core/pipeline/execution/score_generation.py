@@ -4,13 +4,13 @@ from pathlib import Path
 
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.identifiers import FeatureNameSequence, SplitProtocolId
-from datp_core.detector.training.models import CheckpointCandidate
-from datp_core.pipeline.scoring.federated import publish_federated_scores
-from datp_core.pipeline.scoring.models import (
+from datp_core.detector.scoring.federated import publish_federated_scores
+from datp_core.detector.scoring.models import (
     ClientScoringInput,
     FederatedScoreArtifactManifest,
     GenerateFederatedScoresRequest,
 )
+from datp_core.detector.training.models import CheckpointCandidate
 from datp_core.protocols.training import BATCH_SIZE, AutoencoderProtocol
 
 

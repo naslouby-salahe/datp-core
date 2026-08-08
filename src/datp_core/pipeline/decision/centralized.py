@@ -36,9 +36,9 @@ from datp_core.core.identifiers import (
 from datp_core.core.numeric import Quantile, RoundNumber, RowCount, ScoreValue, ThresholdValue
 from datp_core.data.populations.contracts import PopulationOutcomeLabel
 from datp_core.data.populations.integrity import reject_non_benign_labels
+from datp_core.detector.scoring.centralized import load_score_frame, reject_non_finite_scores
+from datp_core.detector.scoring.models import PooledScoreArtifact
 from datp_core.detector.training.centralized import CentralizedTrainingCoordinate
-from datp_core.pipeline.scoring.centralized import load_score_frame, reject_non_finite_scores
-from datp_core.pipeline.scoring.models import PooledScoreArtifact
 from datp_core.protocols.calibration import CANONICAL_QUANTILE, CentralizedQuantileProtocol
 
 

@@ -20,13 +20,12 @@ from datp_core.core.errors import ArtifactIntegrityError, ScientificContractErro
 from datp_core.core.identifiers import ContractSubject, PartitionRole, ScoreFrameColumn, SerializationFormat
 from datp_core.core.numeric import FeatureCount, RowCount
 from datp_core.detector.autoencoder import ReconstructionAutoencoder
-from datp_core.detector.training.centralized import load_centralized_model_tensors
-from datp_core.pipeline.scoring.frames import (
+from datp_core.detector.scoring.frames import (
     score_and_persist_autoencoder_frame,
     validate_persisted_score_frame,
     validate_score_input_frame,
 )
-from datp_core.pipeline.scoring.models import (
+from datp_core.detector.scoring.models import (
     CentralizedScoreAssetName,
     CentralizedScoringPublicationBinding,
     CentralizedScoringRequest,
@@ -36,6 +35,7 @@ from datp_core.pipeline.scoring.models import (
     PooledScoreArtifact,
     ScorePartitionBinding,
 )
+from datp_core.detector.training.centralized import load_centralized_model_tensors
 from datp_core.runtime.compute import resolve_cuda_device
 
 

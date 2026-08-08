@@ -32,9 +32,9 @@ from datp_core.data.preprocessing.persisted_artifacts import (
     MATCHED_STATIC_SPLIT_MANIFEST_ASSET,
 )
 from datp_core.data.preprocessing.state import TrustedScaler, load_estimator
+from datp_core.detector.scoring.models import ClientScoringInput
 from datp_core.pipeline.execution.context import FederatedExecutionContext, training_feature_names
 from datp_core.pipeline.execution.layout import ExecutionArtifactDirectory, bounded_evidence_seed_directory
-from datp_core.pipeline.scoring.models import ClientScoringInput
 from datp_core.runtime.configuration import DATA_ROOT
 
 

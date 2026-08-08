@@ -33,12 +33,12 @@ from datp_core.detector.scoring.contracts import (
     ScoreRecord,
     record_set_checksum,
 )
-from datp_core.pipeline.scoring.frames import (
+from datp_core.detector.scoring.frames import (
     load_checkpoint_model,
     score_and_persist_autoencoder_frame,
     validate_persisted_score_frame,
 )
-from datp_core.pipeline.scoring.models import (
+from datp_core.detector.scoring.models import (
     FederatedScoreArtifactManifest,
     FederatedScoreAssetName,
     FederatedScoreGenerationResult,

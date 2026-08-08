@@ -12,7 +12,7 @@ from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import ContractSubject, MetricId, PartitionRole, ScoreFrameColumn
 from datp_core.core.numeric import MetricValue, RowCount, ScoreValue
 from datp_core.detector.scoring.contracts import FixedScoreInvariant
-from datp_core.pipeline.scoring.models import FederatedScoreArtifactManifest
+from datp_core.detector.scoring.models import FederatedScoreArtifactManifest
 from datp_core.protocols.calibration import MINIMUM_BENIGN_SUPPORT
 from datp_core.thresholds.quantiles import ClientBenignCalibrationScores
 

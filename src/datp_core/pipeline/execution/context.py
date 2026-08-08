@@ -26,6 +26,7 @@ from datp_core.data.preprocessing.models import (
 )
 from datp_core.data.preprocessing.service import preprocess_federated, preprocess_published_federated
 from datp_core.data.registry import dataset_binding, population_capabilities
+from datp_core.detector.scoring.models import ClientScoringInput
 from datp_core.detector.training.engine import preprocessing_state_set_checksum
 from datp_core.detector.training.models import (
     ClientTrainingInput,
@@ -46,7 +47,6 @@ from datp_core.pipeline.preparation.populations import (
     construct_published_population,
     construct_published_split,
 )
-from datp_core.pipeline.scoring.models import ClientScoringInput
 from datp_core.protocols.experiments import BOUNDED_EVIDENCE_POPULATIONS, ExternalTemporalExecutionIdentity
 from datp_core.protocols.training import (
     CICIOT2023_AUTOENCODER,
