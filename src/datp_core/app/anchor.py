@@ -2,8 +2,8 @@
 
 from shutil import rmtree
 
-from datp_core.anchor.gate import load_anchor_gate_decision
-from datp_core.anchor.models import AnchorGateStatus
+from datp_core.experiments.anchor.contracts import AnchorGateStatus
+from datp_core.experiments.anchor.gate import load_anchor_gate_decision
 from datp_core.app.contracts import OverwriteMode, ProgrammeExecutionMode
 from datp_core.app.layout import ANCHOR_DIAGNOSTICS_DIRECTORY, SMOKE_OUTPUT_ROOT
 from datp_core.app.models import AnchorCommandResult, DetailText

@@ -2,7 +2,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from datp_core.anchor.models import (
+from datp_core.experiments.anchor.contracts import (
     AnchorArtifactFileName,
     AnchorComparisonDecision,
     AnchorConfirmatoryHandoff,
@@ -13,14 +13,14 @@ from datp_core.anchor.models import (
     AnchorReproductionResult,
     VerifiedAnchorGateArtifact,
 )
-from datp_core.anchor.reproduction import (
+from datp_core.experiments.anchor.reproduction import (
     ANCHOR_EXPERIMENT,
     DECLARED_NON_BLOCKING_DISCREPANCY_REASONS,
 )
-from datp_core.domain.enums import ExperimentReadiness, PreprocessingProtocolId, ScoreFrameColumn
-from datp_core.domain.errors import AnchorReproductionError
-from datp_core.domain.provenance import canonical_checksum, canonical_json_text
-from datp_core.domain.values.checksums import Checksum, checksum_text
+from datp_core.artifacts.provenance import Checksum, checksum_text
+from datp_core.artifacts.serializers.json import canonical_checksum, canonical_json_text
+from datp_core.core.errors import AnchorReproductionError
+from datp_core.core.identifiers import ExperimentReadiness, PreprocessingProtocolId, ScoreFrameColumn
 from datp_core.protocols.anchor import ANCHOR_DECISION_PROTOCOL
 from datp_core.protocols.metrics import CONFIRMATORY_METRICS
 from datp_core.data.populations.declarations import split_protocol_for_population

@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from shutil import rmtree
 
-from datp_core.anchor.models import AnchorGateStatus
+from datp_core.experiments.anchor.contracts import AnchorGateStatus
 from datp_core.app.anchor import (
     anchor_gate_permits_dependents,
     anchor_status,

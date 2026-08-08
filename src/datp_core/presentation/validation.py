@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
-from datp_core.anchor.models import VerifiedAnchorGateArtifact
+from datp_core.experiments.anchor.contracts import VerifiedAnchorGateArtifact
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.identifiers import AvailabilityStatus, EvidenceRole, MetricId, PopulationId, PopulationIdentityKind
 from datp_core.data.populations.declarations import POPULATIONS

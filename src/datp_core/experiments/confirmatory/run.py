@@ -157,7 +157,7 @@ def run_family_grouped_mechanism_seed(
 
 
 def analyze_confirmatory_campaign(*, anchor_gate_diagnostics_directory: Path | None = None) -> Path:
-    from datp_core.anchor.gate import load_anchor_confirmatory_handoff, load_verified_anchor_gate_artifact
+    from datp_core.experiments.anchor.gate import load_anchor_confirmatory_handoff, load_verified_anchor_gate_artifact
 
     output = (
         OUTPUTS_ROOT

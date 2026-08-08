@@ -1,4 +1,4 @@
-from datp_core.anchor.models import (
+from datp_core.experiments.anchor.contracts import (
     AbsoluteToleranceRule,
     AnchorComparisonDecision,
     AnchorDiscrepancyReason,
