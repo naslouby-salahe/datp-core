@@ -2,11 +2,6 @@ from json import dumps
 from pathlib import Path
 
 import pytest
-from datp_core.protocols.anchor import (
-    ANCHOR_DECISION_PROTOCOL,
-    HISTORICAL_LOCAL_THRESHOLD_CV_FPR,
-    HISTORICAL_SHARED_THRESHOLD_CV_FPR,
-)
 
 from datp_core.core.errors import AnchorReproductionError
 from datp_core.core.identifiers import ExperimentId, ExperimentReadiness, FederatedThresholdMethod
@@ -27,6 +22,11 @@ from datp_core.experiments.anchor.reproduction import (
     reproduce_anchor,
 )
 from datp_core.experiments.anchor.run import VerifyAnchorStageRequest, verify_anchor
+from datp_core.experiments.anchor.spec import (
+    ANCHOR_DECISION_PROTOCOL,
+    HISTORICAL_LOCAL_THRESHOLD_CV_FPR,
+    HISTORICAL_SHARED_THRESHOLD_CV_FPR,
+)
 
 
 def _write_metrics(

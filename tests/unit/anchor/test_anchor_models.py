@@ -1,20 +1,6 @@
 from pathlib import Path
 
 import pytest
-from datp_core.anchor.models import (
-    AbsoluteToleranceRule,
-    AnchorObservationSourceKind,
-    AnchorObservedMetric,
-    ExactEqualityRule,
-    MetricInterval,
-    RelativeToleranceRule,
-)
-from datp_core.anchor.reproduction import (
-    ANCHOR_CHECKPOINT_STATUS,
-    ANCHOR_METRIC,
-    ANCHOR_POPULATION,
-    ANCHOR_TRAINING_MODEL,
-)
 from tests.unit.anchor.helpers import make_reference
 
 from datp_core.artifacts.provenance import Checksum
@@ -28,6 +14,20 @@ from datp_core.core.identifiers import (
     TrainingModelId,
 )
 from datp_core.core.numeric import MetricValue, Seed
+from datp_core.experiments.anchor.contracts import (
+    AbsoluteToleranceRule,
+    AnchorObservationSourceKind,
+    AnchorObservedMetric,
+    ExactEqualityRule,
+    MetricInterval,
+    RelativeToleranceRule,
+)
+from datp_core.experiments.anchor.reproduction import (
+    ANCHOR_CHECKPOINT_STATUS,
+    ANCHOR_METRIC,
+    ANCHOR_POPULATION,
+    ANCHOR_TRAINING_MODEL,
+)
 
 
 def test_reference_locks_historical_coordinates() -> None:

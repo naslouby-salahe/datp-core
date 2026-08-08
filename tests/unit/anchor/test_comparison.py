@@ -1,18 +1,4 @@
 import pytest
-from datp_core.anchor.comparison import (
-    compare_anchor_metric,
-    full_precision_failure_stands_despite_rounded_equality,
-    reject_global_floating_point_tolerance,
-)
-from datp_core.anchor.models import (
-    AbsoluteToleranceRule,
-    AnchorComparisonDecision,
-    AnchorDiscrepancyReason,
-    ExactCountRule,
-    IntervalOverlapRule,
-    MetricInterval,
-    RelativeToleranceRule,
-)
 from tests.unit.anchor.helpers import make_observation, make_reference
 
 from datp_core.core.identifiers import (
@@ -22,6 +8,20 @@ from datp_core.core.identifiers import (
     TrainingModelId,
 )
 from datp_core.core.numeric import ClientCount, MetricValue
+from datp_core.experiments.anchor.comparison import (
+    compare_anchor_metric,
+    full_precision_failure_stands_despite_rounded_equality,
+    reject_global_floating_point_tolerance,
+)
+from datp_core.experiments.anchor.contracts import (
+    AbsoluteToleranceRule,
+    AnchorComparisonDecision,
+    AnchorDiscrepancyReason,
+    ExactCountRule,
+    IntervalOverlapRule,
+    MetricInterval,
+    RelativeToleranceRule,
+)
 
 
 def test_exact_reproduction_passes() -> None:

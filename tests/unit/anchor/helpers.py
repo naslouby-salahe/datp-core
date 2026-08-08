@@ -1,22 +1,5 @@
 from pathlib import Path
 
-from datp_core.anchor.models import (
-    AnchorArtifactFileName,
-    AnchorMetricReference,
-    AnchorObservationSourceKind,
-    AnchorObservedMetric,
-    AnchorToleranceRule,
-    ExactEqualityRule,
-    MetricInterval,
-)
-from datp_core.anchor.reproduction import (
-    ANCHOR_CHECKPOINT_STATUS,
-    ANCHOR_METRIC,
-    ANCHOR_POPULATION,
-    ANCHOR_TRAINING_MODEL,
-    references_from_protocol,
-)
-
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.identifiers import (
     CheckpointStatus,
@@ -27,6 +10,22 @@ from datp_core.core.identifiers import (
     TrainingModelId,
 )
 from datp_core.core.numeric import ClientCount, MetricValue, Seed
+from datp_core.experiments.anchor.contracts import (
+    AnchorArtifactFileName,
+    AnchorMetricReference,
+    AnchorObservationSourceKind,
+    AnchorObservedMetric,
+    AnchorToleranceRule,
+    ExactEqualityRule,
+    MetricInterval,
+)
+from datp_core.experiments.anchor.reproduction import (
+    ANCHOR_CHECKPOINT_STATUS,
+    ANCHOR_METRIC,
+    ANCHOR_POPULATION,
+    ANCHOR_TRAINING_MODEL,
+    references_from_protocol,
+)
 
 
 def matching_anchor_observations() -> tuple[AnchorObservedMetric, ...]:
