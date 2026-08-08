@@ -1,186 +1,123 @@
-import itertools
+"""Train-only fitting for client-local and pooled preprocessing protocols."""
 
 import numpy as np
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
-from datp_core.domain.contracts import ClientCollection, ClientOwned
-from datp_core.domain.enums import (
-    ContractSubject,
-    PartitionRole,
-    ProcessedDataBranch,
-)
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.counts import RowCount
-from datp_core.domain.values.identifiers import FeatureNameSequence, OutcomeLabelSequence, StableRowIdSequence
-from datp_core.domain.values.paths import ClientPathToken
-from datp_core.preprocessing.contracts import (
+from datp_core.artifacts.provenance import ordered_text_checksum
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import ContractSubject, PartitionRole
+from datp_core.core.numeric import RowCount
+from datp_core.data.preprocessing.contracts import (
+    CentralizedPreprocessingInput,
+    ClientFittedPreprocessing,
+    ClientPreprocessingInput,
+    FederatedFittedPreprocessing,
+    FittedPreprocessingState,
     PreprocessingFitScope,
-    ProcessedAssetName,
-    RelativeAssetPathSequence,
-    ReusableDataCoordinate,
-    canonical_relative_asset_path,
-    client_asset_path,
-    federated_client_directory,
-    partition_roles,
-    processed_asset_names,
-)
-from datp_core.preprocessing.models import (
-    ClientPreprocessingResult,
-    ClientPublishRequest,
-    FederatedFittedEstimators,
-    FittedStatePublishSpec,
-    PreprocessingFitBatch,
-    PreprocessingPartition,
-    PreprocessingPartitions,
     PreprocessingProtocol,
+    ScalerFamily,
+    TrustedScaler,
 )
-from datp_core.preprocessing.paths import build_preprocessed_partition_paths
-from datp_core.preprocessing.state import TrustedScaler
-from datp_core.preprocessing.validation import (
-    federated_fitted_state_after_publish,
-    fit_trusted_batch,
-    publish_preprocessed_partitions,
-    require_columns,
-)
+from datp_core.data.preprocessing.validation import validate_fit_partition, validate_fitted_state
 
 
-def fit_estimators_for_federated_clients(
+def fit_federated_preprocessing(
+    inputs: tuple[ClientPreprocessingInput, ...],
     protocol: PreprocessingProtocol,
-    client_partitions: ClientCollection[ClientPathToken, PreprocessingPartitions],
-) -> FederatedFittedEstimators:
+) -> FederatedFittedPreprocessing:
+    if not inputs:
+        raise ScientificContractError(
+            "federated preprocessing requires at least one client",
+            subject=ContractSubject.PREPROCESSING,
+        )
+    ordered = tuple(sorted(inputs, key=lambda item: item.client))
+    identities = tuple(item.client for item in ordered)
+    if len(frozenset(identities)) != len(identities):
+        raise ScientificContractError(
+            "federated preprocessing inputs must be unique by client",
+            subject=ContractSubject.CLIENT_IDENTITY,
+        )
     match protocol.fit_scope:
         case PreprocessingFitScope.CLIENT_LOCAL_TRAINING:
-            return _fit_client_local_estimators(protocol, client_partitions)
+            fitted = tuple(_fit_client(item, protocol) for item in ordered)
+            return FederatedFittedPreprocessing(protocol=protocol, clients=fitted, pooled_state=None)
         case PreprocessingFitScope.POOLED_TRAINING:
-            return _fit_pooled_estimator(protocol, client_partitions)
-        case _:
-            raise ScientificContractError(
-                "unsupported federated preprocessing fit scope",
-                subject=protocol.fit_scope,
+            state = _fit_pooled(ordered, protocol)
+            return FederatedFittedPreprocessing(
+                protocol=protocol,
+                clients=tuple(ClientFittedPreprocessing(client=item.client, state=state) for item in ordered),
+                pooled_state=state,
             )
 
 
-def _fit_client_local_estimators(
-    protocol: PreprocessingProtocol,
-    client_partitions: ClientCollection[ClientPathToken, PreprocessingPartitions],
-) -> ClientCollection[ClientPathToken, TrustedScaler]:
-    feature_names = protocol.input_feature_names
-    feature_names_list = feature_names.as_list()
-    fitted = tuple(
-        ClientOwned(
-            item.client,
-            fit_trusted_batch(
-                protocol,
-                _fit_batch(item.value.require(PartitionRole.TRAIN), feature_names, feature_names_list),
-                subject=PreprocessingFitScope.CLIENT_LOCAL_TRAINING,
-            ),
-        )
-        for item in client_partitions.items
-    )
-    if len(set(id(item.value) for item in fitted)) != len(fitted):
+def fit_centralized_preprocessing(request: CentralizedPreprocessingInput) -> FittedPreprocessingState:
+    if request.protocol.fit_scope is not PreprocessingFitScope.POOLED_TRAINING:
         raise ScientificContractError(
-            "client-local estimators must be distinct objects",
-            subject=ContractSubject.CLIENT_IDENTITY,
+            "centralized preprocessing requires a pooled training protocol",
+            subject=ContractSubject.PREPROCESSING,
         )
-    return ClientCollection(fitted)
+    training = request.partitions.require(PartitionRole.TRAIN)
+    validate_fit_partition(training, request.protocol)
+    state = FittedPreprocessingState(
+        protocol=request.protocol,
+        estimator=_fit_scaler(training.frame.to_numpy(), request.protocol.scaler_family),
+        fit_row_count=RowCount(training.frame.height),
+        fit_row_checksum=ordered_text_checksum(tuple(str(row_id) for row_id in training.row_ids)),
+        owner=None,
+    )
+    validate_fitted_state(state)
+    return state
 
 
-def _fit_pooled_estimator(
+def _fit_client(item: ClientPreprocessingInput, protocol: PreprocessingProtocol) -> ClientFittedPreprocessing:
+    training = item.partitions.require(PartitionRole.TRAIN)
+    validate_fit_partition(training, protocol)
+    state = FittedPreprocessingState(
+        protocol=protocol,
+        estimator=_fit_scaler(training.frame.to_numpy(), protocol.scaler_family),
+        fit_row_count=RowCount(training.frame.height),
+        fit_row_checksum=ordered_text_checksum(tuple(str(row_id) for row_id in training.row_ids)),
+        owner=item.client,
+    )
+    validate_fitted_state(state)
+    return ClientFittedPreprocessing(client=item.client, state=state)
+
+
+def _fit_pooled(
+    ordered: tuple[ClientPreprocessingInput, ...],
     protocol: PreprocessingProtocol,
-    client_partitions: ClientCollection[ClientPathToken, PreprocessingPartitions],
-) -> TrustedScaler:
-    feature_names = protocol.input_feature_names
-    feature_names_list = feature_names.as_list()
-    training = tuple(item.value.require(PartitionRole.TRAIN) for item in client_partitions.items)
-
-    for partition in training:
-        require_columns(partition.frame, feature_names.names, subject=ContractSubject.SCHEMA)
-
-    return fit_trusted_batch(
-        protocol,
-        PreprocessingFitBatch(
-            training_matrix=np.concatenate(
-                [partition.frame.select(feature_names_list).to_numpy() for partition in training]
-            ),
-            training_row_ids=StableRowIdSequence(
-                tuple(itertools.chain.from_iterable(p.row_ids.row_ids for p in training))
-            ),
-            training_labels=OutcomeLabelSequence(
-                tuple(itertools.chain.from_iterable(p.outcome_labels.labels for p in training))
-            ),
-        ),
-        subject=PreprocessingFitScope.POOLED_TRAINING,
+) -> FittedPreprocessingState:
+    training_partitions = tuple(item.partitions.require(PartitionRole.TRAIN) for item in ordered)
+    for partition in training_partitions:
+        validate_fit_partition(partition, protocol)
+    values = np.concatenate(tuple(partition.frame.to_numpy() for partition in training_partitions), axis=0)
+    row_ids = tuple(str(row_id) for partition in training_partitions for row_id in partition.row_ids)
+    state = FittedPreprocessingState(
+        protocol=protocol,
+        estimator=_fit_scaler(values, protocol.scaler_family),
+        fit_row_count=RowCount(values.shape[0]),
+        fit_row_checksum=ordered_text_checksum(row_ids),
+        owner=None,
     )
+    validate_fitted_state(state)
+    return state
 
 
-def _fit_batch(
-    partition: PreprocessingPartition, feature_names: FeatureNameSequence, feature_names_list: list[str] | None = None
-) -> PreprocessingFitBatch:
-    require_columns(partition.frame, feature_names.names, subject=ContractSubject.SCHEMA)
-    cols = feature_names_list if feature_names_list is not None else feature_names.as_list()
-    return PreprocessingFitBatch(
-        training_matrix=partition.frame.select(cols).to_numpy(),
-        training_row_ids=partition.row_ids,
-        training_labels=partition.outcome_labels,
-    )
-
-
-def publish_client_preprocessing(request: ClientPublishRequest) -> ClientPreprocessingResult:
-    context = request.context
-    cond = context.dirichlet_condition
-
-    coordinate_directory = federated_client_directory(
-        context.data_root,
-        ReusableDataCoordinate(
-            dataset=context.dataset,
-            population=context.population,
-            partition_seed=context.partition_seed,
-            split_protocol_identity=context.split_protocol_identity,
-            preprocessing_identity=context.protocol.identity,
-            branch=ProcessedDataBranch.FEDERATED,
-            client_identity=request.client_identity,
-            controlled_partition_kind=cond.kind if cond else None,
-            dirichlet_concentration=cond.concentration if cond else None,
-        ),
-    )
-
-    asset_paths = RelativeAssetPathSequence(
-        tuple(
-            canonical_relative_asset_path(asset, ProcessedDataBranch.FEDERATED, request.client_identity)
-            for asset in processed_asset_names(context.split_protocol_identity)
+def _fit_scaler(values: np.ndarray, family: ScalerFamily) -> TrustedScaler:
+    if values.ndim != 2 or values.shape[0] < 1:
+        raise ScientificContractError(
+            "preprocessing fit requires a non-empty two-dimensional matrix",
+            subject=ContractSubject.PREPROCESSING,
         )
-    )
-
-    publication = publish_preprocessed_partitions(
-        context=context,
-        branch=ProcessedDataBranch.FEDERATED,
-        coordinate_directory=coordinate_directory,
-        fitted_estimator=request.fitted_estimator,
-        partitions=request.partitions,
-        asset_paths=asset_paths,
-    )
-
-    state = federated_fitted_state_after_publish(
-        FittedStatePublishSpec(
-            protocol=context.protocol,
-            estimator_path=client_asset_path(publication.coordinate_directory, ProcessedAssetName.STATE),
-            fit_row_count=RowCount(request.partitions.require(PartitionRole.TRAIN).frame.height),
-            owner=request.client_identity,
-        )
-    )
-
-    roles = frozenset(partition_roles(context.split_protocol_identity))
-
-    def row_count(role: PartitionRole) -> RowCount:
-        return RowCount(request.partitions.require(role).frame.height) if role in roles else RowCount(0)
-
-    return ClientPreprocessingResult(
-        client_identity=request.client_identity,
-        paths=build_preprocessed_partition_paths(publication.coordinate_directory, context.split_protocol_identity),
-        fitted_state=state,
-        publication_status=publication.publication_status,
-        train_row_count=row_count(PartitionRole.TRAIN),
-        calibration_row_count=row_count(PartitionRole.CALIBRATION),
-        evaluation_row_count=row_count(PartitionRole.EVALUATION),
-        future_recalibration_row_count=row_count(PartitionRole.FUTURE_RECALIBRATION),
-        static_reference_reserve_row_count=row_count(PartitionRole.STATIC_REFERENCE_RESERVE),
-    )
+    match family:
+        case ScalerFamily.STANDARD:
+            estimator: TrustedScaler = StandardScaler(with_mean=True, with_std=True)
+        case ScalerFamily.MIN_MAX:
+            estimator = MinMaxScaler(clip=False)
+        case ScalerFamily.COLUMN_ORDER_PROJECTION:
+            raise ScientificContractError(
+                "column-order projection does not fit a statistical estimator",
+                subject=ContractSubject.PREPROCESSING,
+            )
+    estimator.fit(values)
+    return estimator
