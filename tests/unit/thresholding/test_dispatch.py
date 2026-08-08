@@ -13,7 +13,11 @@ from datp_core.core.identifiers import (
 )
 from datp_core.core.numeric import ClientCount, Quantile
 from datp_core.data.populations.contracts import CapabilityStatus, PopulationCapabilities
-from datp_core.protocols.calibration import CalibrationSupportRule, ClusterThresholdAggregation
+from datp_core.protocols.calibration import (
+    FIXED_SHRINKAGE_PROTOCOL,
+    CalibrationSupportRule,
+    ClusterThresholdAggregation,
+)
 from datp_core.thresholds.contracts import FamilyAssignment, ThresholdUnavailableResult
 from datp_core.thresholds.dispatch import (
     ThresholdConstructionRequest,
@@ -105,7 +109,7 @@ def _request(
         (FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD, SampleWeightedSharedThresholdResult),
         (FederatedThresholdMethod.FAMILY_THRESHOLD, FamilyThresholdResult),
         (FederatedThresholdMethod.CLUSTER_THRESHOLD, GroupedThresholdResult),
-        (FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE, ShrinkageThresholdResult),
+        (FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE, tuple),
         (FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE, ThresholdUnavailableResult),
         (FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD, ConformalThresholdResult),
         (FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS, FederatedStatisticsThresholdResult),
@@ -113,6 +117,15 @@ def _request(
 )
 def test_dispatch_returns_the_correct_result_type_for_every_method(method, expected_type) -> None:
     assert isinstance(dispatch_federated_threshold(_request(method)), expected_type)
+
+
+def test_dispatch_returns_the_complete_declared_shrinkage_curve() -> None:
+    result = dispatch_federated_threshold(_request(FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE))
+
+    assert isinstance(result, tuple)
+    assert result
+    assert all(isinstance(item, ShrinkageThresholdResult) for item in result)
+    assert tuple(item.weight for item in result) == FIXED_SHRINKAGE_PROTOCOL.weights
 
 
 def test_dispatch_family_threshold_without_taxonomy_is_unavailable() -> None:

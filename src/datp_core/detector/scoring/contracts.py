@@ -83,7 +83,7 @@ class ScoreRecord[
     scored_client: ClientT
 
     def __post_init__(self) -> None:
-        super().__post_init__()
+        ScoreArtifact.__post_init__(self)
         if self.scored_client.population is not self.coordinate.population:
             raise ScientificContractError(
                 "scored client population must match the training coordinate",
@@ -217,7 +217,8 @@ def _require_consistent_partition_records[
     for record in records:
         if record.partition_role is not role:
             raise ScientificContractError(
-                f"score record partition role {record.partition_role.value} does not match {role.value}",
+                f"score record partition role {record.partition_role.value} does not match "
+                f"expected collection role {role.value}",
                 subject=ContractSubject.SCORES,
             )
         _require_record_matches_manifest(manifest, record)
