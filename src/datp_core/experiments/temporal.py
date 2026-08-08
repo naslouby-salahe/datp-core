@@ -15,7 +15,6 @@ from datp_core.analysis.temporal import (
     TemporalSeedProvenance,
     temporal_recovery,
 )
-from datp_core.app.planning import ExperimentPlan, expand_experiment_plan
 from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.datasets.registry import population_capabilities
 from datp_core.domain.enums import (
@@ -34,6 +33,7 @@ from datp_core.domain.values.ratios import MetricValue
 from datp_core.evaluation.cohort.contracts import EvaluationCohortManifest
 from datp_core.evaluation.fixed_score.construction import build_federated_evaluation_inputs
 from datp_core.evaluation.models import ClientMetricResult, MetricStatus, metric_by_id
+from datp_core.experiments.planning import ExperimentPlan, expand_experiment_plan
 from datp_core.pipeline.coordinates import ExperimentCoordinate
 from datp_core.pipeline.decision.evidence import (
     AnalysisAssetName,
@@ -65,7 +65,11 @@ from datp_core.pipeline.execution.matched_reference import matched_static_refere
 from datp_core.pipeline.execution.score_generation import score_selected_checkpoint
 from datp_core.pipeline.scoring.models import FederatedScoreArtifactManifest
 from datp_core.presentation.export import export_temporal_publication
-from datp_core.protocols.calibration import CANONICAL_QUANTILE
+from datp_core.protocols.calibration import (
+    CANONICAL_QUANTILE,
+    CalibrationSupportRule,
+    ClusterThresholdAggregation,
+)
 from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration, ExternalTemporalExecutionIdentity
 from datp_core.protocols.seeds import BOUNDED_EVIDENCE_SEED_COHORT, SeedCohort
 from datp_core.protocols.temporal import TemporalDeploymentProvenance, validate_frozen_recalibrated_pair
@@ -462,6 +466,12 @@ def _execute_temporal_states(
     return static, frozen, recalibrated
 
 
+def _cluster_aggregation(method: FederatedThresholdMethod) -> ClusterThresholdAggregation | None:
+    if method is FederatedThresholdMethod.CLUSTER_THRESHOLD:
+        return ClusterThresholdAggregation.ARITHMETIC_MEAN_OF_ELIGIBLE_LOCAL_THRESHOLDS
+    return None
+
+
 def _evaluate_state(
     *,
     context: FederatedExecutionContext,
@@ -490,6 +500,8 @@ def _evaluate_state(
                     capabilities=capabilities,
                     eligible=eligible,
                     family_by_client=context.family_by_client,
+                    support_rule=CalibrationSupportRule.CANONICAL_MINIMUM_SUPPORT,
+                    cluster_threshold_aggregation=_cluster_aggregation(method),
                 ),
                 output_directory=state_root / TemporalArtifactDirectory.THRESHOLDS.value / method.value,
                 overwrite=overwrite,
