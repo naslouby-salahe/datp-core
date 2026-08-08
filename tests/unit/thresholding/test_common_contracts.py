@@ -2,8 +2,9 @@ from dataclasses import dataclass
 
 import pytest
 
-from datp_core.datasets.partitioning.contracts import ClientIdentity
-from datp_core.domain.enums import (
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import (
     FederatedThresholdMethod,
     PopulationId,
     PopulationIdentityKind,
@@ -11,14 +12,12 @@ from datp_core.domain.enums import (
     SplitProtocolId,
     TrainingModelId,
 )
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import Seed
-from datp_core.domain.values.ratios import Quantile, ThresholdValue
-from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.thresholding.assignments import ThresholdAssignment
-from datp_core.thresholding.models import (
+from datp_core.core.numeric import Quantile, Seed, ThresholdValue
+from datp_core.data.populations.contracts import ClientIdentity
+from datp_core.detector.training.contracts import FederatedTrainingCoordinate
+from datp_core.thresholds.contracts import (
     FederatedThresholdResult,
+    ThresholdAssignment,
     ThresholdAssignmentSet,
     ThresholdConstructionContext,
 )

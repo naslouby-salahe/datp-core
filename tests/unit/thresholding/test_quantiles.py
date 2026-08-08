@@ -4,19 +4,20 @@ import numpy as np
 import pytest
 from tests.unit.thresholding.helpers import client_scores
 
-from datp_core.domain.enums import QuantileInterpolationSemantics
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.counts import ConformalRankIndex, RowCount
-from datp_core.domain.values.ratios import (
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import QuantileInterpolationSemantics
+from datp_core.core.numeric import (
     CalibrationSampleWeights,
+    ConformalRankIndex,
     CoverageTarget,
     Quantile,
+    RowCount,
     ScoreMoment,
     ScoreVariance,
     SummaryCoefficient,
     ThresholdValue,
 )
-from datp_core.thresholding.quantiles import (
+from datp_core.thresholds.quantiles import (
     achieved_benign_exceedance,
     conformal_rank_index,
     exact_empirical_quantile,
