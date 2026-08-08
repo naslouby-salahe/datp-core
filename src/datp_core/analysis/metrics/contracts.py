@@ -1,7 +1,7 @@
 """Metric declarations and explicit undefined-result policy."""
 
-from datp_core.domain.enums import AvailabilityStatus, MetricId
-from datp_core.domain.values.ratios import MetricValue, Ratio
+from datp_core.core.identifiers import AvailabilityStatus, MetricId
+from datp_core.core.numeric import MetricValue, Ratio
 
 OPERATING_POINT_METRICS = (
     MetricId.FALSE_POSITIVE_RATE,
