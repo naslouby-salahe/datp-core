@@ -123,7 +123,15 @@ Successor N-BaIoT federated-AE work often uses global/collaborative min–max fo
 
 These locks are prospective research amendments that complete the fixed-detector contract. Confirmatory client-local StandardScaler is paper-and-anchor backed; pooled MinMax is a declared supportive alternative from successor FL literature, not the confirmatory default.
 
+### 2.2.2 Fixed-score identity and serialization tolerance
 
+Two distinct notions of score equality apply within DATP-Core and must never be conflated.
+
+**Scientific fixed-score identity.** Within any fixed-detector threshold comparison, calibration scores and evaluation scores are immutable scientific inputs. Every compared threshold policy must reference the same score-artifact identity, ordered row identities, client identities, split identities, detector identity, checkpoint identity, preprocessing identity, and evaluation labels. Policy-level score equality is proven by scientific artifact identity and provenance, never by two independently generated floating-point arrays being numerically close. A threshold policy must never independently regenerate scores when the scientific contract requires reuse of one score artifact.
+
+**Serialization/reload equivalence.** The `1e-12` absolute tolerance defined in §2.2.1 applies only to serialization/reload numerical equivalence (for example, confirming a persisted and reloaded preprocessing state reproduces the same transform). It must not be silently redefined as the threshold-policy score-identity criterion.
+
+**AUROC.** AUROC is a detector-quality control computed from the fixed continuous evaluation-score and evaluation-label artifact; the threshold policy itself is not an AUROC input. Within one fixed-detector threshold ladder, AUROC is computed once from the canonical score/label artifact, or is proven to derive from that exact artifact by scientific artifact identity. A threshold-policy-specific AUROC difference indicates a score/provenance identity failure, not a threshold-scope effect.
 
 **2.3 Sole manipulated variable**
 
@@ -193,11 +201,15 @@ For temporal experiments:
 
 **3.3 Client eligibility**
 
-The canonical minimum benign calibration support is:
+Two explicit calibration-size quantities apply throughout DATP-Core. `n_k_source` is the number of benign calibration records available to client `k` **before** any experimental calibration-size subsampling. `m` is the calibration sample size actually used by the calibration-size ablation (03 — Experiment Catalogue, §8.1); its locked grid is `m in {50, 100, 250, 500, 1000, 5000}`.
+
+The canonical minimum benign calibration support for primary-analysis eligibility is:
 
 ```text
-n_k >= 100
+n_k_source >= 100
 ```
+
+Eligibility is determined from the source calibration pool, before calibration-size experimental subsampling (03 — Experiment Catalogue, §8.1). It is never recomputed simply because a declared ablation cell deliberately uses fewer than 100 observations.
 
 Only eligible clients enter the primary cross-client false-positive dispersion calculation.
 
@@ -633,6 +645,10 @@ Without verified physical-device identities, CICIoT2023 cannot be repartitioned 
 
 The lossless canonical artifact remains the raw-fidelity record. Before any file-defined client construction, split, fitting, calibration, or evaluation, a CICIoT2023 row is eligible for model input if and only if its normalized label is recognized and every declared model-input feature is finite. The gate records the missing-or-unrecognized-label and non-finite-feature signals independently, preserves stable row identity and source provenance, and applies identically to every compared method. It never imputes, zero-fills, caps, clips, replaces infinities, or infers labels.
 
+**No additional CICIoT2023 physical-device population is defined.** The currently available CICIoT2023 artifact supports `CICIOT_FILE_CLIENTS` only. The original study's device count must not be substituted for missing device-level provenance in the available DATP artifact. Do not construct inferred devices, MAC-derived clients without verified MAC provenance, artificial physical-device mappings, or synthetic replacements masquerading as natural devices.
+
+A future CICIoT2023 physical-device population would constitute a new scientific population and may be added only if independently verified device-level provenance becomes available and the roadmap is explicitly revised before execution.
+
 **9.3 Controlled heterogeneity regime**
 
 The Dirichlet N-BaIoT regime is a controlled sensitivity experiment.
@@ -688,7 +704,7 @@ This limit prevents the paper from becoming a generic multi-dataset FL-IDS bench
 
 ### 10. Included scientific scope
 
-DATP-Core strengthens the original DATP study along five bounded directions.
+DATP-Core strengthens the original DATP study along six bounded directions.
 
 **10.1 External validation**
 
@@ -920,7 +936,6 @@ Regime identifiers remain:
 ```text
 Regime A
 Regime B-a
-Regime B-b
 Regime C
 Regime D
 Regime D-temporal
@@ -1250,8 +1265,10 @@ The training seed is the independent replication unit. Clients, records, checkpo
 The canonical eligibility threshold is:
 
 ```text
-n_k >= 100 benign calibration samples
+n_k_source >= 100 benign calibration samples
 ```
+
+`n_k_source` is the client's benign calibration support **before** any experimental calibration-size subsampling (08 — Calibration robustness programme, §8.1, which separately defines the experimental sample size `m`). Eligibility is always determined from this source pool and is never recomputed because a calibration-size ablation cell deliberately evaluates fewer observations than the canonical minimum.
 
 Only eligible clients enter the primary cross-client `CV(FPR)` calculation.
 
@@ -1606,7 +1623,7 @@ The Edge-IIoTset paper presents a purpose-built IoT/IIoT testbed with devices, s
 
 Ten benign sensor-group folders form the static external client population. The Modbus folder is valid for static benign-equity evaluation because its rows retain the declared 63-column layout; its `frame.time` values are address literals and therefore exclude it only from the temporal population.
 
-Eligible-benign coverage is 1.0 under the locked `n_k >= 100` rule.
+Eligible-benign coverage is 1.0 under the locked `n_k_source >= 100` rule.
 
 **Model-input representation and architecture**
 
@@ -1759,7 +1776,7 @@ Threshold-calibration scope:
 **Procedure**
 
 1. Reproduce the locked five-seed subset using the journal implementation.
-2. Verify that the reproduced five-seed result is not materially inconsistent with the conference reference.
+2. Apply the anchor reproduction gate (§5.2) to the reproduced five-seed result. Do not proceed to step 3 unless the gate emits an anchor-success verdict.
 3. Extend execution to ten paired seeds.
 4. For every seed, compute per-client FPR under B1 and B2.
 5. Compute `CV(FPR)` over the same eligible clients.
@@ -1811,6 +1828,9 @@ The estimate is approximately null and the interval includes zero.
 **Opposite direction**
 B2 increases `CV(FPR)` relative to B1.
 
+**Confirmatory inference unavailable**
+The locked 95% BCa interval cannot validly be produced (see §5.3). The confirmatory claim is not established; no other interval or test substitutes for it.
+
 Every outcome becomes the main ten-seed result. The five-seed result is labelled preliminary when the ten-seed evidence is weaker or materially different.
 
 **Prohibited uses**
@@ -1819,6 +1839,83 @@ Every outcome becomes the main ten-seed result. The five-seed result is labelled
 - no replacement by B4, shrinkage, or B2-conf if the endpoint fails;
 - no removal of unfavorable seeds;
 - no claim that B2 improves overall detection performance.
+
+**5.2 Anchor reproduction gate**
+
+This is an anchor reproduction/compatibility gate. It is not a formal statistical equivalence test. No additional equivalence margin is invented.
+
+**Locked historical reference**
+
+```text
+reference 95% BCa interval = [0.647, 0.769]
+reference interval width   = 0.122
+maximum width multiplier   = 1.20
+maximum exact reproduced interval width = 1.20 x 0.122 = 0.1464
+display-only three-decimal value = 0.147
+```
+
+`0.1464` is the operative exact bound used for the pass/fail decision. `0.147` is a display-only rounded representation of the same bound; it never introduces a second, looser threshold.
+
+**Acceptance conditions**
+
+The reproduced five-seed anchor passes only when all of the following hold:
+
+1. the exact historical five-seed cohort is used;
+2. the historical anchor dataset identity is preserved;
+3. the historical client population is preserved;
+4. the historical preprocessing identity is preserved;
+5. the historical training protocol is preserved;
+6. the historical checkpoint-selection semantics are preserved;
+7. the historical scoring semantics are preserved;
+8. the historical threshold semantics are preserved;
+9. the historical eligibility semantics are preserved;
+10. the historical metric definition is preserved;
+11. the reproduced 95% BCa interval remains entirely positive;
+12. the reproduced interval overlaps `[0.647, 0.769]`;
+13. the reproduced interval width is `<= 0.1464`;
+14. required artifact lineage, provenance, identity, serialization, and reload-validation gates pass.
+
+If every condition passes, the existing appropriate anchor-success state is emitted and execution may proceed to the ten-seed extension.
+
+**`ANCHOR_REPRODUCTION_FAILED`**
+
+If any condition fails, the anchor status is exactly `ANCHOR_REPRODUCTION_FAILED`. This status:
+
+- blocks the ten-seed journal extension;
+- blocks downstream journal claim-generating execution;
+- requires investigation;
+- requires a successful anchor reproduction before proceeding;
+- is not overridden by supportive evidence;
+- is not overridden by external validation;
+- is not overridden by favorable alternative threshold methods;
+- is never relaxed after observing the result; the fourteen acceptance conditions above cannot be loosened post hoc.
+
+**Deterministic anchor path**
+
+```text
+anchor reproduction -> anchor verification -> anchor acceptance verdict -> permission or prohibition to continue
+```
+
+**5.3 Confirmatory inference unavailable**
+
+The sole confirmatory endpoint locks a 95% BCa confidence interval (§11.2 of Evaluation, statistical analysis, and reporting). `CONFIRMATORY_INFERENCE_UNAVAILABLE` is the explicit outcome when that locked interval cannot validly be produced, including at minimum:
+
+- fewer than ten valid paired seed deltas;
+- undefined BCa acceleration;
+- invalid BCa acceleration;
+- degenerate bootstrap distribution;
+- another explicitly detected BCa degeneracy that prevents valid computation of the locked interval.
+
+When this occurs, the report must include:
+
+- every available paired seed-level delta;
+- the arithmetic mean paired delta;
+- sign counts;
+- the exact reason BCa inference was unavailable;
+- valid descriptive secondary statistics;
+- percentile/basic bootstrap intervals only when explicitly labelled as diagnostics.
+
+**Scientific interpretation.** The confirmatory claim is **not established**. This must not be silently converted to `CONFIRMATORY_SUPPORT` or to `NO_OBSERVED_ADVANTAGE`. No secondary result -- percentile bootstrap, basic bootstrap, normal bootstrap, Wilcoxon, another statistical test, a supportive threshold result, mechanism analysis, an external dataset, a FedProx result, a Ditto result, or an exploratory result -- may rescue an unavailable confirmatory inference. The manuscript must explicitly report that the confirmatory endpoint was inferentially unavailable under the locked protocol while separately reporting descriptive observations.
 
 ---
 
@@ -1928,12 +2025,20 @@ For every seed and severity:
 
 1. construct the partition using the locked seed and partition rule;
 2. retain the pre-specified partition;
-3. train or reuse the correct regime-specific model without cross-severity test selection;
+3. train a separate `FEDAVG` detector for this `(training seed, heterogeneity severity)` cell under the fixed training protocol below — this includes IID as one severity condition in this grid; never reuse another severity's fitted preprocessing state, detector weights, checkpoint, calibration scores, or evaluation scores;
 4. compute B1, B2, and B4;
 5. report heterogeneity diagnostics;
 6. compute the B1–B2 `CV(FPR)` difference;
 7. report uncertainty per alpha;
 8. display seed distributions rather than only point estimates.
+
+**Detector training discipline**
+
+For every `(training seed, heterogeneity severity)` cell, including IID, a separate `FEDAVG` detector is trained. The training **protocol** remains fixed across severities: model family; architecture apart from feature-schema-driven input dimension; optimizer; loss; training hyperparameters; local epoch count; participation; aggregation semantics; round budget; checkpoint candidates; checkpoint-selection rule; training-seed semantics; and named preprocessing protocol identity.
+
+The following scientific states must never be reused between different severity/population cells: population-dependent fitted preprocessing state; detector weights; detector checkpoint; calibration scores; evaluation scores.
+
+Within one fixed `(seed, heterogeneity severity)` cell, B1, B2, and B4 reuse exactly the same frozen detector, checkpoint, fitted preprocessing state, calibration scores, evaluation scores, evaluation labels, and eligibility state.
 
 **Required heterogeneity diagnostics**
 
@@ -1948,6 +2053,8 @@ At minimum:
 **Interpretation**
 
 A smooth monotone curve is not required. Low-alpha conditions may form one broad high-heterogeneity band. The result is associative and does not establish that the selected heterogeneity statistic causally determines DATP benefit.
+
+Comparisons across heterogeneity severities are **supportive / associative**, not threshold-only causal comparisons. Changing heterogeneity changes the federated training problem and may change the resulting detector; cross-severity results must not be interpreted as isolating a causal effect of heterogeneity on threshold scope independently of detector learning.
 
 ---
 
@@ -2131,13 +2238,36 @@ This experiment quantifies the equity–sensitivity trade-off surface. It does n
 
 How much benign calibration data is required before local thresholds become stable?
 
+**Two distinct calibration-size quantities**
+
+`n_k_source` is client `k`'s benign calibration support before any experimental subsampling (Scientific identity, scope, and claims, §3.3, locks canonical eligibility at `n_k_source >= 100`). `m` is the calibration sample size drawn for this ablation. Canonical eligibility is fixed from `n_k_source` before this experiment subsamples anything and is never recomputed from `m`.
+
 **Calibration-size grid**
 
 ```text
-n_k in {50, 100, 250, 500, 1000, 5000}
+m in {50, 100, 250, 500, 1000, 5000}
 ```
 
-A size is evaluated only when the client has sufficient source calibration records.
+**Feasibility rule**
+
+A `(client, m)` experimental cell is feasible only when:
+
+```text
+n_k_source >= m
+```
+
+The `m = 50` condition is an explicit **sample-starved supportive/diagnostic condition**, deliberately below the canonical deployment-support requirement of `n_k_source >= 100`. It does not redefine canonical eligibility to 50, and it does not enter the sole confirmatory B1-versus-B2 endpoint.
+
+**Fixed-cohort comparator discipline**
+
+Within one `m` condition:
+
+- every compared threshold policy receives the same client cohort;
+- every compared threshold policy starts from the same source calibration records for that client;
+- deterministic subsampling is policy-independent;
+- eligibility/feasibility cannot vary by threshold policy.
+
+For cross-size population-level comparisons intended to estimate calibration-size effects, use the intersection of clients feasible across every size directly compared. Size-specific cohorts (all clients feasible at one size, without cross-size intersection) may additionally be reported descriptively only when their coverage and client count are explicit and they are not presented as fixed-cohort calibration-size comparisons.
 
 **Repetition**
 
@@ -2155,15 +2285,16 @@ Each subsample size must use multiple deterministic subsampling replicates neste
 
 **Procedure**
 
-For every seed, client, size, and subsample replicate:
+For every seed, client, size `m`, and subsample replicate:
 
-1. draw benign calibration records without replacement;
-2. compute the declared thresholds;
-3. evaluate on the unchanged held-out test set;
-4. record threshold variance across subsamples;
-5. record FPR target error;
-6. record `CV(FPR)`, worst-client FPR, IQR, range, P10 Macro-F1, and balanced accuracy;
-7. report clients unavailable at each size.
+1. verify `(client, m)` feasibility (`n_k_source >= m`);
+2. draw `m` benign calibration records without replacement from that client's source pool;
+3. compute the declared thresholds;
+4. evaluate on the unchanged held-out test set;
+5. record threshold variance across subsamples;
+6. record FPR target error;
+7. record `CV(FPR)`, worst-client FPR, IQR, range, P10 Macro-F1, and balanced accuracy over the fixed-cohort intersection defined above for cross-size comparisons;
+8. report clients infeasible at each size, with the reason.
 
 **Interpretation**
 
@@ -2174,7 +2305,7 @@ B2 remains stable as calibration shrinks.
 Naive B2 destabilizes while shrinkage reduces variance without erasing most personalization.
 
 **Sample-starved boundary**
-Local thresholds become unreliable below a clear range.
+Local thresholds become unreliable below a clear range. The `m = 50` cell is always this sample-starved supportive/diagnostic condition, never a canonical eligibility redefinition.
 
 **No sample-size effect**
 Threshold stability changes little over the tested grid.
@@ -2849,7 +2980,7 @@ Within B1–B4, every policy uses the same:
 - eligibility decisions;
 - metric implementation.
 
-Only thresholds may change.
+Only thresholds may change. Calibration scores and evaluation scores are immutable scientific inputs; policy-level score equality is proven by scientific artifact identity and provenance (Scientific identity, scope, and claims, §2.2.2), not by two independently regenerated floating-point arrays being numerically close. The `1e-12` absolute tolerance defined in §2.2.1 of that section applies only to serialization/reload numerical equivalence.
 
 **1.2 Independent unit**
 
@@ -2904,10 +3035,10 @@ This invariant is structurally guaranteed by the mean-squared-error formula used
 A client is primary-analysis eligible when:
 
 ```text
-benign_calibration_count >= 100
+n_k_source >= 100
 ```
 
-Eligibility is determined before test evaluation and remains identical across policies in the same comparison.
+`n_k_source` (equivalently `benign_calibration_count`) is the client's benign calibration support before any experimental calibration-size subsampling (03 — Experiment Catalogue, §8.1, which separately defines the experimental sample size `m`). Eligibility is determined before test evaluation, from the source pool, and remains identical across policies in the same comparison.
 
 **3.2 FPR-evaluable population**
 
@@ -2991,9 +3122,9 @@ Do not silently convert undefined class metrics to zero.
 
 **4.5 AUROC**
 
-AUROC uses continuous anomaly scores and requires both classes.
+AUROC uses continuous anomaly scores and requires both classes. AUROC is computed from the fixed continuous evaluation-score and evaluation-label artifact; threshold-calibration scope is not an AUROC input (Scientific identity, scope, and claims, §2.2.2).
 
-Within a fixed-score B1–B4 comparison, AUROC must be identical up to numerical tolerance. Any policy-dependent difference indicates mismatched scores or unintended model variation.
+Within a fixed-score B1–B4 comparison, AUROC is computed once from the canonical score/label artifact, or is proven to derive from that exact artifact by scientific artifact identity (matching score-artifact identity, ordered row identities, client identities, split identities, detector identity, checkpoint identity, and preprocessing identity) rather than by numerical closeness. A policy-dependent AUROC difference indicates a score/provenance identity failure, not a threshold-scope effect.
 
 AUROC is a model-quality control, not a threshold-policy verdict.
 
@@ -3366,11 +3497,12 @@ The interval resamples paired seed deltas with replacement, uses the arithmetic 
 
 **11.3 Degenerate BCa**
 
-If BCa is undefined or unstable because of identical deltas, invalid acceleration, a degenerate bootstrap distribution, or fewer than ten valid pairs:
+If BCa is undefined or unstable because of identical deltas, invalid acceleration, a degenerate bootstrap distribution, or fewer than ten valid pairs, the result is `CONFIRMATORY_INFERENCE_UNAVAILABLE` (03 — Experiment Catalogue, §5.3):
 
 - report the paired values and point estimate;
 - allow percentile or basic intervals only as diagnostics;
-- do not silently substitute another interval for the confirmatory rule.
+- do not silently substitute another interval for the confirmatory rule;
+- report the confirmatory claim as **not established**; never silently convert this outcome to `CONFIRMATORY_SUPPORT` or `NO_OBSERVED_ADVANTAGE`, and never rescue it with a secondary result, another statistical test, or supportive/mechanism/external/stress-test evidence.
 
 **11.4 Sign consistency**
 
@@ -3460,7 +3592,7 @@ Adjusted Rand index is descriptive and must be accompanied by memberships, clust
 
 **13.1 Anchor checkpoint**
 
-The conference anchor preserves its historical endpoint and checkpoint semantics; it is not retrofitted with journal checkpoint selection merely to improve reproduction.
+The conference anchor preserves its historical endpoint and checkpoint semantics; it is not retrofitted with journal checkpoint selection merely to improve reproduction. Historical checkpoint-selection semantics are one of the fourteen acceptance conditions of the anchor reproduction gate (03 — Experiment Catalogue, §5.2); a violation of this rule produces `ANCHOR_REPRODUCTION_FAILED` rather than a retrofitted selection.
 
 **13.2 Primary journal round**
 
