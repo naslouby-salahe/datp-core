@@ -12,12 +12,12 @@ from datp_core.domain.values.checksums import checksum_file
 from datp_core.domain.values.counts import ConformalRankIndex, RowCount, Seed
 from datp_core.domain.values.identifiers import StableRowId
 from datp_core.domain.values.ratios import CoverageTarget, Quantile, ThresholdValue
-from datp_core.evaluation.metric_semantics import (
+from datp_core.analysis.metrics.semantics import (
     available,
     metric_value,
     unavailable,
 )
-from datp_core.evaluation.models import (
+from datp_core.analysis.metrics.models import (
     FederatedScoreRecord,
     HeldOutBenignScore,
     MetricAvailability,

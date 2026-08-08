@@ -36,7 +36,7 @@ from datp_core.evaluation.fixed_score.contracts import (
     HeldOutEvaluationEvidence,
     PopulationEvidence,
 )
-from datp_core.evaluation.models import ClientMetricResult, metric_by_id
+from datp_core.analysis.metrics.models import ClientMetricResult, metric_by_id
 from datp_core.detector.training.models import FederatedTrainingCoordinate
 from datp_core.detector.scoring.contracts import FixedScoreInvariant, ScoreArtifactManifest, ScoreRecord
 

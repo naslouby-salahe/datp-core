@@ -6,8 +6,8 @@ from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.counts import RowCount
 from datp_core.domain.values.ratios import MetricValue, Quantile
 from datp_core.evaluation.cohort.contracts import EvaluationCohortManifest
-from datp_core.evaluation.metric_semantics import available, unavailable
-from datp_core.evaluation.models import (
+from datp_core.analysis.metrics.semantics import available, unavailable
+from datp_core.analysis.metrics.models import (
     EQUITY_INDEX_METRIC_IDS,
     FPR_POPULATION_METRIC_IDS,
     ClientMetricResult,

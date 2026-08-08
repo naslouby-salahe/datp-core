@@ -10,8 +10,8 @@ from datp_core.domain.enums import ContractSubject, MetricId
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.counts import RowCount
 from datp_core.domain.values.ratios import ScoreValue
-from datp_core.evaluation.metric_semantics import available, unavailable
-from datp_core.evaluation.models import ConfusionCounts, MetricAvailability, MetricReason, MetricStatus
+from datp_core.analysis.metrics.semantics import available, unavailable
+from datp_core.analysis.metrics.models import ConfusionCounts, MetricAvailability, MetricReason, MetricStatus
 
 CLIENT_METRICS: tuple[MetricId, ...] = (
     MetricId.FALSE_POSITIVE_RATE,

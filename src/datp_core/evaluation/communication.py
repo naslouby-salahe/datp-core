@@ -7,8 +7,8 @@ from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.enums import CommunicationEstimationMethod, MetricId
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.counts import ByteCount, LogicalElementCount, Seed
-from datp_core.evaluation.metric_semantics import available
-from datp_core.evaluation.models import AvailableMetric
+from datp_core.analysis.metrics.semantics import available
+from datp_core.analysis.metrics.models import AvailableMetric
 from datp_core.detector.training.models import FederatedTrainingCoordinate
 
 

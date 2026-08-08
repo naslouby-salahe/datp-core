@@ -9,7 +9,7 @@ from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.values.counts import RowCount
 from datp_core.domain.values.identifiers import StableRowId
 from datp_core.domain.values.ratios import ScoreValue, ThresholdValue
-from datp_core.evaluation.models import ConfusionCounts
+from datp_core.analysis.metrics.models import ConfusionCounts
 
 
 def predicted_attack(score: ScoreValue, threshold: ThresholdValue) -> bool:

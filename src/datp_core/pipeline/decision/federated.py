@@ -25,7 +25,7 @@ from datp_core.evaluation.federated.publication import (
     write_federated_evaluation,
 )
 from datp_core.evaluation.fixed_score.contracts import FixedScoreEvidence
-from datp_core.evaluation.models import ClientMetricResult, PopulationMetricResult
+from datp_core.analysis.metrics.models import ClientMetricResult, PopulationMetricResult
 from datp_core.evaluation.traffic_rates import ValidatedTrafficRateEvidence
 from datp_core.pipeline.scoring.models import FederatedScoreArtifactManifest
 from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity

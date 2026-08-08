@@ -12,7 +12,7 @@ from datp_core.domain.values.checksums import checksum_file
 from datp_core.domain.values.counts import RowCount
 from datp_core.domain.values.ratios import MetricValue, ScoreValue
 from datp_core.evaluation.federated.contracts import FederatedEvaluationDocument
-from datp_core.evaluation.models import MetricStatus, metric_by_id
+from datp_core.analysis.metrics.models import MetricStatus, metric_by_id
 from datp_core.pipeline.scoring.models import FederatedScoreArtifactManifest
 from datp_core.protocols.calibration import MINIMUM_BENIGN_SUPPORT
 from datp_core.thresholds.quantiles import ClientBenignCalibrationScores

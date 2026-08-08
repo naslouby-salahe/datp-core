@@ -43,7 +43,12 @@ from datp_core.evaluation.federated.contracts import (
 )
 from datp_core.evaluation.fixed_score.checksums import evaluation_label_checksum, source_row_checksum
 from datp_core.evaluation.fixed_score.validation import validate_evaluation_evidence, validate_fixed_score_controls
-from datp_core.evaluation.models import ClientMetricResult, FederatedScoreRecord, PopulationMetricResult, metric_by_id
+from datp_core.analysis.metrics.models import (
+    ClientMetricResult,
+    FederatedScoreRecord,
+    PopulationMetricResult,
+    metric_by_id,
+)
 from datp_core.evaluation.operational import AlertBurdenDiagnostic, calculate_alert_burden
 from datp_core.evaluation.population_metrics import calculate_population_metrics
 from datp_core.evaluation.threshold_estimation import (
