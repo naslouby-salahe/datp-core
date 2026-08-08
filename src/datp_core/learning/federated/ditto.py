@@ -4,17 +4,18 @@ from pathlib import Path
 import torch
 
 from datp_core.datasets.partitioning.contracts import ClientIdentity
+from datp_core.detector.autoencoder import (
+    build_reconstruction_autoencoder,
+    clone_autoencoder_state,
+    clone_state,
+)
+from datp_core.detector.checkpoints.contracts import CheckpointProtocol
 from datp_core.domain.enums import ContractSubject, TrainingModelId
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import BatchSize, ClientCount, RoundNumber, Seed
 from datp_core.domain.values.identifiers import CudaDeviceName
 from datp_core.domain.values.ratios import LearningRate
-from datp_core.learning.autoencoder import (
-    build_reconstruction_autoencoder,
-    clone_autoencoder_state,
-    clone_state,
-)
 from datp_core.learning.federated.checkpoints.publication import write_ditto_training
 from datp_core.learning.federated.models import (
     ClientTrainingInput,
@@ -45,7 +46,6 @@ from datp_core.learning.federated.training import (
     train_client_update,
     validate_common_request,
 )
-from datp_core.detector.checkpoints.contracts import CheckpointProtocol
 from datp_core.protocols.training import AutoencoderProtocol, DittoProtocol
 from datp_core.runtime.compute import resolve_cuda_device
 from datp_core.runtime.determinism import configure_deterministic_execution

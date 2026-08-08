@@ -4,13 +4,13 @@ from pathlib import Path
 import polars as pl
 
 from datp_core.datasets.partitioning.contracts import ClientIdentity
+from datp_core.detector.autoencoder import AutoencoderState
 from datp_core.domain.enums import CommunicationEstimationMethod, ContractSubject, TrainingModelId
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import ByteCount, LogicalElementCount, RoundNumber, RowCount
 from datp_core.domain.values.identifiers import FeatureNameSequence
 from datp_core.domain.values.ratios import MetricValue
-from datp_core.learning.autoencoder import AutoencoderState
 from datp_core.learning.federated.models.coordinates import FederatedTrainingCoordinate
 from datp_core.preprocessing.models import FederatedFittedPreprocessingState
 

@@ -13,6 +13,8 @@ from datp_core.datasets.partitioning.contracts import (
     STABLE_ROW_ID_COLUMN,
     PopulationOutcomeLabel,
 )
+from datp_core.detector.autoencoder import LEARNING_DTYPE, ReconstructionAutoencoder, reconstruction_errors
+from datp_core.detector.checkpoints.contracts import validate_persisted_checkpoint_file
 from datp_core.domain.enums import ContractSubject, PartitionRole, ScoreFrameColumn
 from datp_core.domain.errors import (
     ArtifactIntegrityError,
@@ -22,10 +24,8 @@ from datp_core.domain.errors import (
 from datp_core.domain.values.checksums import Checksum, checksum_file
 from datp_core.domain.values.counts import BatchSize, FeatureCount, RowCount
 from datp_core.domain.values.identifiers import FeatureNameSequence
-from datp_core.learning.autoencoder import LEARNING_DTYPE, ReconstructionAutoencoder, reconstruction_errors
 from datp_core.learning.federated.models import CheckpointCandidate
 from datp_core.pipeline.scoring.models import PersistedScoreFrame
-from datp_core.detector.checkpoints.contracts import validate_persisted_checkpoint_file
 from datp_core.protocols.training import AutoencoderProtocol
 
 SCORE_FRAME_COLUMNS = (

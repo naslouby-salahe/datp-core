@@ -15,6 +15,19 @@ from datp_core.datasets.partitioning.contracts import (
     ClientIdentity,
     PopulationOutcomeLabel,
 )
+from datp_core.detector.autoencoder import (
+    LEARNING_DTYPE,
+    TORCH_LEARNING_DTYPE,
+    AutoencoderState,
+    AutoencoderStateView,
+    ReconstructionAutoencoder,
+    build_autoencoder_for_state,
+    build_optimizer,
+    build_reconstruction_autoencoder,
+    clone_autoencoder_state,
+    clone_state,
+)
+from datp_core.detector.checkpoints.contracts import CheckpointProtocol
 from datp_core.domain.enums import (
     CommunicationEstimationMethod,
     ContractSubject,
@@ -33,18 +46,6 @@ from datp_core.domain.values.counts import (
 )
 from datp_core.domain.values.identifiers import CudaDeviceName, OutcomeLabel, OutcomeLabelSequence
 from datp_core.domain.values.ratios import DittoRegularization, LearningRate, MetricValue, ProximalCoefficient
-from datp_core.learning.autoencoder import (
-    LEARNING_DTYPE,
-    TORCH_LEARNING_DTYPE,
-    AutoencoderState,
-    AutoencoderStateView,
-    ReconstructionAutoencoder,
-    build_autoencoder_for_state,
-    build_optimizer,
-    build_reconstruction_autoencoder,
-    clone_autoencoder_state,
-    clone_state,
-)
 from datp_core.learning.federated.models import (
     ClientTrainingInput,
     ClientTrainingResult,
@@ -59,7 +60,6 @@ from datp_core.learning.federated.models import (
     PreparedClientProvenance,
     RoundSnapshot,
 )
-from datp_core.detector.checkpoints.contracts import CheckpointProtocol
 from datp_core.protocols.training import (
     FEDERATED_DATALOADER_WORKER_COUNT,
     AutoencoderProtocol,

@@ -16,6 +16,16 @@ from datp_core.datasets.partitioning.contracts import (
     PopulationFrameColumn,
     PopulationOutcomeLabel,
 )
+from datp_core.detector.autoencoder import (
+    LEARNING_DTYPE,
+    TORCH_LEARNING_DTYPE,
+    AutoencoderState,
+    AutoencoderStateView,
+    ReconstructionAutoencoder,
+    build_optimizer,
+    construct_autoencoder,
+)
+from datp_core.detector.checkpoints.contracts import CheckpointProtocol
 from datp_core.domain.enums import (
     CentralizedModelId,
     ContractSubject,
@@ -37,21 +47,11 @@ from datp_core.domain.values.checksums import Checksum, checksum_file, checksum_
 from datp_core.domain.values.counts import BatchSize, FeatureCount, RoundNumber, RowCount, Seed
 from datp_core.domain.values.identifiers import CudaDeviceName, FeatureNameSequence, OutcomeLabel, OutcomeLabelSequence
 from datp_core.domain.values.ratios import LearningRate, MetricValue, WeightDecay
-from datp_core.learning.autoencoder import (
-    LEARNING_DTYPE,
-    TORCH_LEARNING_DTYPE,
-    AutoencoderState,
-    AutoencoderStateView,
-    ReconstructionAutoencoder,
-    build_optimizer,
-    construct_autoencoder,
-)
 from datp_core.preprocessing.models import (
     CentralizedFittedPreprocessingState,
     FederatedFittedPreprocessingState,
     FittedPreprocessingState,
 )
-from datp_core.detector.checkpoints.contracts import CheckpointProtocol
 from datp_core.protocols.training import (
     BATCH_SIZE,
     CENTRALIZED_DATALOADER_WORKER_COUNT,
