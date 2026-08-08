@@ -4,7 +4,14 @@ from dataclasses import dataclass
 
 import polars as pl
 
-from datp_core.calibration.eligibility import (
+from datp_core.core.contracts import ClientCollection, ClientOwned
+from datp_core.core.identifiers import ScoreFrameColumn, StableRowId
+from datp_core.core.numeric import CalibrationSize, ReplicateIndex, SubsampleReplicateCount
+from datp_core.data.populations.contracts import EligibleCohort
+from datp_core.detector.scoring.contracts import FixedScoreInvariant, ScoreArtifactManifest, ScoreRecord
+from datp_core.protocols.calibration import CalibrationEligibilityProtocol
+from datp_core.thresholds.calibration.eligibility import (
+    EligibilityDecision,
     calibration_support,
     decide_eligibility,
     eligible_clients,
@@ -12,15 +19,7 @@ from datp_core.calibration.eligibility import (
     reject_calibration_evaluation_overlap,
     reject_score_coordinate_mismatch,
 )
-from datp_core.calibration.models import CalibrationReplicateManifest, EligibilityDecision
-from datp_core.calibration.sampling import build_calibration_replicate
-from datp_core.datasets.partitioning.contracts import EligibleCohort
-from datp_core.domain.contracts import ClientCollection, ClientOwned
-from datp_core.domain.enums import ScoreFrameColumn
-from datp_core.domain.values.counts import CalibrationSize, ReplicateIndex, SubsampleReplicateCount
-from datp_core.domain.values.identifiers import StableRowId
-from datp_core.protocols.calibration import CalibrationEligibilityProtocol
-from datp_core.detector.scoring.contracts import FixedScoreInvariant, ScoreArtifactManifest, ScoreRecord
+from datp_core.thresholds.calibration.sampling import CalibrationReplicateManifest, build_calibration_replicate
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
