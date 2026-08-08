@@ -17,10 +17,24 @@ from datp_core.core.identifiers import (
     SplitProtocolId,
     TemporalState,
 )
-from datp_core.core.numeric import MetricValue, Seed
+from datp_core.core.numeric import MetricValue, Ratio, Seed
+from datp_core.experiments.common.coordinates import ExternalTemporalExecutionIdentity
 from datp_core.experiments.common.seeds import BOUNDED_EVIDENCE_SEED_COHORT
-from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
-from datp_core.protocols.temporal import TemporalDeploymentProvenance, validate_frozen_recalibrated_pair
+from datp_core.protocols.temporal import (
+    TemporalDecisionProtocol,
+    TemporalDeploymentProvenance,
+    validate_frozen_recalibrated_pair,
+)
+
+_TEST_DECISION_PROTOCOL = TemporalDecisionProtocol(
+    drift_excess_materiality_threshold=MetricValue(0.1),
+    material_recovery_ratio_minimum=Ratio(0.5),
+    seed_cohort=BOUNDED_EVIDENCE_SEED_COHORT,
+    undefined_recovery_when_drift_not_material=True,
+    mixed_seed_publication_support=False,
+    require_full_seed_provenance=True,
+    require_uncertainty_for_supported=True,
+)
 
 
 def test_recalibrated_future_can_change_only_calibration_window() -> None:
@@ -58,6 +72,7 @@ def test_temporal_analysis_publishes_campaign_decision_over_seed_cohort(tmp_path
             frozen_future_cv=MetricValue(0.5),
             recalibrated_future_cv=MetricValue(0.3),
             provenance=_seed_provenance(seed, static=static, frozen=frozen, recalibrated=recalibrated),
+            decision_protocol=_TEST_DECISION_PROTOCOL,
         )
         for seed in BOUNDED_EVIDENCE_SEED_COHORT.values
     )
@@ -107,6 +122,7 @@ def test_incomplete_temporal_cohort_cannot_publish_supported(tmp_path: Path) -> 
             frozen_future_cv=MetricValue(0.3),
             recalibrated_future_cv=MetricValue(0.2),
             provenance=_seed_provenance(Seed(0), static=static, frozen=frozen, recalibrated=recalibrated),
+            decision_protocol=_TEST_DECISION_PROTOCOL,
         ),
     )
     request = AnalyzeTemporalEvidenceRequest(

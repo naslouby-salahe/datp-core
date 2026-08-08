@@ -16,8 +16,8 @@ from datp_core.core.identifiers import (
     SplitProtocolId,
 )
 from datp_core.core.numeric import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE, Seed
+from datp_core.data.preprocessing.artifacts import PreprocessingFitScope, TrustedEstimatorClassName
 from datp_core.data.preprocessing.centralized import PooledPublishRequest, publish_pooled_preprocessing
-from datp_core.data.preprocessing.contracts import PreprocessingFitScope, TrustedEstimatorClassName
 from datp_core.data.preprocessing.models import (
     CentralizedFittedPreprocessingState,
     PreprocessingPartition,

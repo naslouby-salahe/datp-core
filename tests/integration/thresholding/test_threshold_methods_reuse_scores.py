@@ -17,7 +17,7 @@ from datp_core.core.identifiers import (
 from datp_core.core.numeric import CalibrationSize, ClientCount, Quantile
 from datp_core.data.populations.contracts import CapabilityStatus, PopulationCapabilities
 from datp_core.detector.scoring.contracts import FixedScoreInvariant, ScoreArtifactManifest
-from datp_core.protocols.calibration import CalibrationEligibilityProtocol
+from datp_core.protocols.calibration import CalibrationEligibilityProtocol, CalibrationSupportRule
 from datp_core.thresholds.calibration.eligibility import (
     EligibilityStatus,
     calibration_support,
@@ -111,6 +111,8 @@ def test_every_threshold_method_reads_the_same_frozen_score_artifact_unchanged(t
                     capabilities=_capabilities(),
                     eligible=eligible,
                     family_by_client=(),
+                    support_rule=CalibrationSupportRule.CANONICAL_MINIMUM_SUPPORT,
+                    cluster_threshold_aggregation=None,
                 )
             ),
         )

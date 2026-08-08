@@ -38,8 +38,7 @@ def test_nbaio_materialization_streams_complete_reusable_partitions(tmp_path, mo
     assert reused.publication_status is PublicationStatus.REUSED
     assert all(pq.ParquetFile(asset.path).schema_arrow.equals(NBAIOT_ARROW_SCHEMA) for asset in published.assets)
     assert all(
-        "/tmp/" not in pq.read_table(asset.path, columns=["source_path"]).column(0).to_pylist()[0]
-        for asset in published.assets
+        "/tmp/" not in pl.read_parquet(asset.path, columns=["source_path"]).item(0, 0) for asset in published.assets
     )
 
 

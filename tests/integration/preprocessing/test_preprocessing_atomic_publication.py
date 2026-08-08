@@ -16,7 +16,11 @@ from datp_core.core.identifiers import (
     SplitProtocolId,
 )
 from datp_core.core.numeric import AbsoluteTolerance, Seed
-from datp_core.data.preprocessing.contracts import PreprocessingFitScope, ProcessedAssetName, TrustedEstimatorClassName
+from datp_core.data.preprocessing.artifacts import (
+    PreprocessingFitScope,
+    ProcessedAssetName,
+    TrustedEstimatorClassName,
+)
 from datp_core.data.preprocessing.federated import publish_client_preprocessing
 from datp_core.data.preprocessing.models import (
     ClientPublishRequest,
