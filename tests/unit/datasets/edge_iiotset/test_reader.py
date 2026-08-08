@@ -1,5 +1,5 @@
-from datp_core.datasets.edge_iiotset.reader import EdgeIIoTsetReader
-from datp_core.datasets.edge_iiotset.schema import EDGE_RAW_COLUMNS
+from datp_core.data.edge_iiotset.reader import EdgeIIoTsetReader
+from datp_core.data.edge_iiotset.schema import EDGE_RAW_COLUMNS
 
 
 def test_edge_benign_reader_adds_sensor_identity(tmp_path) -> None:

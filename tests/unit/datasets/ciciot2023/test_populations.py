@@ -1,15 +1,15 @@
 from pathlib import Path
 
 import pytest
+from datp_core.domain.enums import SplitProtocolId
+from datp_core.domain.errors import CapabilityError
+from datp_core.domain.values.counts import Seed
 
-from datp_core.datasets.ciciot2023.populations import (
+from datp_core.data.ciciot2023.populations import (
     construct_ciciot_file_clients,
     reject_family_interpretation,
     reject_physical_device_interpretation,
 )
-from datp_core.domain.enums import SplitProtocolId
-from datp_core.domain.errors import CapabilityError
-from datp_core.domain.values.counts import Seed
 
 
 def test_ciciot_builds_exactly_sixty_three_file_clients(ciciot_canonical_root: Path) -> None:

@@ -1,5 +1,5 @@
-from datp_core.datasets.ciciot2023.reader import CICIoT2023Reader
-from datp_core.datasets.ciciot2023.schema import (
+from datp_core.data.ciciot2023.reader import CICIoT2023Reader
+from datp_core.data.ciciot2023.schema import (
     CICIOT2023_MODEL_INPUT_ELIGIBLE_COLUMN,
     CICIOT2023_RAW_COLUMNS,
     CICIoT2023EligibilityReason,

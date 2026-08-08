@@ -4,10 +4,10 @@ from types import SimpleNamespace
 
 import pytest
 
-import datp_core.datasets.materialization_lifecycle as lifecycle
-from datp_core.datasets.contracts import CanonicalAssetRole
-from datp_core.datasets.materialization_lifecycle import CanonicalMaterializationRequest, materialize_canonical
-from datp_core.datasets.nbaiot.schema import NBAIOT_SCHEMA, source_relative_path
+import datp_core.data.materialization_lifecycle as lifecycle
+from datp_core.data.contracts import CanonicalAssetRole
+from datp_core.data.materialization_lifecycle import CanonicalMaterializationRequest, materialize_canonical
+from datp_core.data.nbaiot.schema import NBAIOT_SCHEMA, source_relative_path
 
 
 class _Reason(StrEnum):

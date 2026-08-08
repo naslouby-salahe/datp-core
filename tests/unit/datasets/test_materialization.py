@@ -2,11 +2,12 @@
 
 from pathlib import Path
 
-from datp_core.datasets.contracts import RawSourceFile, SourceFileRole
-from datp_core.datasets.materialization import _inventory_checksum
 from datp_core.domain.enums import DatasetId
 from datp_core.domain.values.checksums import Checksum, checksum_text
 from datp_core.domain.values.counts import ByteCount, RowCount
+
+from datp_core.data.contracts import RawSourceFile, SourceFileRole
+from datp_core.data.materialization import _inventory_checksum
 
 
 def test_inventory_checksum_uses_domain_checksum_text() -> None:

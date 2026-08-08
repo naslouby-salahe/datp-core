@@ -1,4 +1,4 @@
-from datp_core.datasets.ciciot2023.schema import CICIOT2023_FEATURE_COLUMNS, CICIOT2023_LABELS
+from datp_core.data.ciciot2023.schema import CICIOT2023_FEATURE_COLUMNS, CICIOT2023_LABELS
 
 
 def test_audited_ciciot_schema() -> None:

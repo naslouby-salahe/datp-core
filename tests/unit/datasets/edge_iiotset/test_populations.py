@@ -1,22 +1,22 @@
 from pathlib import Path
 
 import pytest
+from datp_core.domain.enums import SplitProtocolId
+from datp_core.domain.errors import CapabilityError, ScientificContractError
+from datp_core.domain.values.base import NonNegativeIntegerValue
+from datp_core.domain.values.counts import Seed
 
-from datp_core.datasets.edge_iiotset.populations import (
+from datp_core.data.edge_iiotset.populations import (
     construct_edge_sensor_groups,
     construct_edge_temporal_groups,
     reject_attack_sensitive_request,
     reject_family_thresholding,
 )
-from datp_core.datasets.edge_iiotset.schema import EDGE_BENIGN_SENSOR_GROUPS
-from datp_core.datasets.partitioning.contracts import (
+from datp_core.data.edge_iiotset.schema import EDGE_BENIGN_SENSOR_GROUPS
+from datp_core.data.populations.contracts import (
     ChronologicalPartitionDiagnosticsDocument,
     PopulationFeasibilityStatus,
 )
-from datp_core.domain.enums import SplitProtocolId
-from datp_core.domain.errors import CapabilityError, ScientificContractError
-from datp_core.domain.values.base import NonNegativeIntegerValue
-from datp_core.domain.values.counts import Seed
 
 
 def test_edge_static_includes_ten_groups_with_modbus(edge_canonical_root: Path) -> None:

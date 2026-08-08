@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from datp_core.datasets.paths import canonical_root_under, raw_dataset_directory, raw_dataset_root
-from datp_core.domain.enums import DatasetId, RawDatasetDirectory
+from datp_core.core.identifiers import DatasetId, RawDatasetDirectory
+from datp_core.data.paths import canonical_root_under, raw_dataset_directory, raw_dataset_root
 
 
 def test_dataset_paths_are_enum_backed_and_root_relative() -> None:

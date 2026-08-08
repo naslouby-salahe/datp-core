@@ -4,15 +4,14 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from datp_core.datasets.nbaiot.populations import construct_nbaiot_dirichlet_clients
-from datp_core.datasets.partitioning.contracts import (
+from datp_core.core.identifiers import SplitProtocolId
+from datp_core.core.numeric import DirichletConcentration, RowCount, Seed
+from datp_core.data.nbaiot.populations import construct_nbaiot_dirichlet_clients
+from datp_core.data.populations.contracts import (
     DirichletPartitionDiagnosticsDocument,
     dirichlet_condition,
     iid_condition,
 )
-from datp_core.domain.enums import SplitProtocolId
-from datp_core.domain.values.counts import RowCount, Seed
-from datp_core.domain.values.ratios import DirichletConcentration
 from datp_core.protocols.calibration import MINIMUM_BENIGN_SUPPORT
 
 _CONCENTRATIONS = (0.1, 0.3, 0.5, 1.0, 10.0)
