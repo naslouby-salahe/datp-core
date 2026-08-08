@@ -45,7 +45,7 @@ from datp_core.core.numeric import (
     Seed,
     WeightDecay,
 )
-from datp_core.learning.autoencoder import (
+from datp_core.detector.autoencoder import (
     LEARNING_DTYPE,
     TORCH_LEARNING_DTYPE,
     AutoencoderState,

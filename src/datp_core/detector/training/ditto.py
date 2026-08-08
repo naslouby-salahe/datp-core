@@ -8,7 +8,7 @@ from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import ContractSubject, CudaDeviceName, TrainingModelId
 from datp_core.core.numeric import BatchSize, ClientCount, LearningRate, RoundNumber, Seed
-from datp_core.learning.autoencoder import (
+from datp_core.detector.autoencoder import (
     build_reconstruction_autoencoder,
     clone_autoencoder_state,
     clone_state,
