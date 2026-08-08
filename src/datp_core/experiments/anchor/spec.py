@@ -1,15 +1,43 @@
-"""Historical anchor declarations."""
+"""Historical DATP anchor specification and reference decision protocol."""
 
 from typing import Literal
 
 from pydantic import model_validator
 
-from datp_core.domain.contracts import StrictModel
-from datp_core.domain.enums import FederatedThresholdMethod, MetricId
-from datp_core.domain.values.counts import Seed
-from datp_core.domain.values.ratios import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE, AbsoluteTolerance, MetricValue
+from datp_core.analysis.metrics.contracts import OPERATING_POINT_METRICS
+from datp_core.core.contracts import StrictModel
+from datp_core.core.identifiers import (
+    EvidenceRole,
+    ExperimentId,
+    ExperimentReadiness,
+    FederatedThresholdMethod,
+    MetricId,
+    PopulationId,
+    PreprocessingProtocolId,
+    TrainingModelId,
+)
+from datp_core.core.numeric import (
+    NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
+    AbsoluteTolerance,
+    MetricValue,
+    Seed,
+)
+from datp_core.experiments.common.coordinates import ExperimentSpec
+from datp_core.experiments.common.seeds import SeedCohort
 
-from .seeds import SeedCohort
+ANCHOR_EXPERIMENT = ExperimentSpec(
+    id=ExperimentId.HISTORICAL_DATP_REPRODUCTION,
+    role=EvidenceRole.ANCHOR_REPRODUCTION,
+    population=PopulationId.NBAIOT_NATURAL_DEVICES,
+    training_model=TrainingModelId.FEDAVG_AUTOENCODER,
+    preprocessing_protocol=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
+    federated_thresholds=(
+        FederatedThresholdMethod.SHARED_THRESHOLD,
+        FederatedThresholdMethod.LOCAL_THRESHOLD,
+    ),
+    metrics=OPERATING_POINT_METRICS,
+    readiness=ExperimentReadiness.DECLARED,
+)
 
 
 class AnchorReference(StrictModel):
@@ -36,7 +64,7 @@ class AnchorDecisionProtocol(StrictModel):
         coordinates = tuple(
             (reference.seed, reference.threshold_method, reference.metric) for reference in self.references
         )
-        if len(set(coordinates)) != len(coordinates):
+        if len(frozenset(coordinates)) != len(coordinates):
             raise ValueError("anchor references must be unique by seed, threshold method, and metric")
         return self
 
