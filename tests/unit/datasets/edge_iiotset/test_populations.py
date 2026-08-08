@@ -1,11 +1,10 @@
 from pathlib import Path
 
 import pytest
-from datp_core.domain.enums import SplitProtocolId
-from datp_core.domain.errors import CapabilityError, ScientificContractError
-from datp_core.domain.values.base import NonNegativeIntegerValue
-from datp_core.domain.values.counts import Seed
 
+from datp_core.core.errors import CapabilityError, ScientificContractError
+from datp_core.core.identifiers import SplitProtocolId
+from datp_core.core.numeric import NonNegativeIntegerValue, Seed
 from datp_core.data.edge_iiotset.populations import (
     construct_edge_sensor_groups,
     construct_edge_temporal_groups,

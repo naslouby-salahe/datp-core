@@ -3,8 +3,8 @@ from datetime import UTC, datetime
 
 import pyarrow.parquet as pq
 
-from datp_core.datasets.edge_iiotset.materialize import EdgeIIoTsetMaterializer
-from datp_core.datasets.edge_iiotset.schema import EDGE_ARROW_SCHEMA, EDGE_RAW_COLUMNS, EdgeAssetRole
+from datp_core.data.edge_iiotset.materialize import EdgeIIoTsetMaterializer
+from datp_core.data.edge_iiotset.schema import EDGE_ARROW_SCHEMA, EDGE_RAW_COLUMNS, EdgeAssetRole
 
 
 def _write_edge(path, timestamp: str, label: str, attack_type: str) -> None:

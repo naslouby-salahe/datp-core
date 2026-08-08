@@ -1,10 +1,10 @@
 from pathlib import Path
 
 import pytest
-from datp_core.domain.enums import SplitProtocolId
-from datp_core.domain.errors import CapabilityError
-from datp_core.domain.values.counts import Seed
 
+from datp_core.core.errors import CapabilityError
+from datp_core.core.identifiers import SplitProtocolId
+from datp_core.core.numeric import Seed
 from datp_core.data.ciciot2023.populations import (
     construct_ciciot_file_clients,
     reject_family_interpretation,

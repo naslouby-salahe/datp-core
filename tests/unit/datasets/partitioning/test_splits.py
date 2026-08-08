@@ -3,11 +3,11 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from datp_core.datasets.nbaiot.populations import construct_nbaiot_natural_devices
-from datp_core.datasets.partitioning.contracts import SplitConstructionRequest
-from datp_core.datasets.partitioning.splits import hamilton_integer_counts, split_membership
-from datp_core.domain.enums import DatasetId, PartitionRole, PopulationId, SplitProtocolId
-from datp_core.domain.values.counts import Seed
+from datp_core.core.identifiers import DatasetId, PartitionRole, PopulationId, SplitProtocolId
+from datp_core.core.numeric import Seed
+from datp_core.data.nbaiot.populations import construct_nbaiot_natural_devices
+from datp_core.data.populations.contracts import SplitConstructionRequest
+from datp_core.data.populations.splits import hamilton_integer_counts, split_membership
 
 
 def test_hamilton_allocation_conserves_rows_and_is_deterministic() -> None:

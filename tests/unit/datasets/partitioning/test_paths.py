@@ -1,7 +1,7 @@
 from enum import StrEnum
 from pathlib import Path
 
-from datp_core.datasets.partitioning.paths import (
+from datp_core.data.populations.paths import (
     PartitioningFilePattern,
     canonical_branch_directory,
     canonical_data_directory,

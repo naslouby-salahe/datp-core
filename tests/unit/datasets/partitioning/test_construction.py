@@ -1,6 +1,6 @@
-from datp_core.datasets.partitioning.construction import FeasibilityAssessmentRequest, feasibility_from_candidates
-from datp_core.datasets.partitioning.contracts import PopulationFeasibilityReason, PopulationFeasibilityStatus
-from datp_core.domain.values.counts import ClientCount
+from datp_core.core.numeric import ClientCount
+from datp_core.data.populations.construction import FeasibilityAssessmentRequest, feasibility_from_candidates
+from datp_core.data.populations.contracts import PopulationFeasibilityReason, PopulationFeasibilityStatus
 
 
 def test_feasibility_matches_declaration() -> None:

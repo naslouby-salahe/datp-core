@@ -3,9 +3,9 @@ from hashlib import sha256
 
 import pyarrow.parquet as pq
 
-from datp_core.datasets.nbaiot.materialize import NBaIoTMaterializer
-from datp_core.datasets.nbaiot.schema import NBAIOT_FEATURE_COLUMNS
-from datp_core.domain.enums import PublicationStatus
+from datp_core.core.identifiers import PublicationStatus
+from datp_core.data.nbaiot.materialize import NBaIoTMaterializer
+from datp_core.data.nbaiot.schema import NBAIOT_FEATURE_COLUMNS
 
 
 def _write_benign(path, value: str) -> None:

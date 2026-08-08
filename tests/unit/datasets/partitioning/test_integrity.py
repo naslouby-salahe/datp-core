@@ -3,15 +3,15 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from datp_core.datasets.nbaiot.populations import construct_nbaiot_natural_devices
-from datp_core.datasets.partitioning.contracts import SplitConstructionRequest, SplitManifestDocument
-from datp_core.datasets.partitioning.integrity import validate_population_manifest, validate_split_manifest
-from datp_core.datasets.partitioning.splits import split_membership
-from datp_core.datasets.registry import population_capabilities, population_declaration
-from datp_core.domain.enums import DatasetId, PartitionRole, PopulationId, SplitProtocolId
-from datp_core.domain.errors import DataIntegrityError, LeakageError
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import RowCount, Seed
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.errors import DataIntegrityError, LeakageError
+from datp_core.core.identifiers import DatasetId, PartitionRole, PopulationId, SplitProtocolId
+from datp_core.core.numeric import RowCount, Seed
+from datp_core.data.nbaiot.populations import construct_nbaiot_natural_devices
+from datp_core.data.populations.contracts import SplitConstructionRequest, SplitManifestDocument
+from datp_core.data.populations.integrity import validate_population_manifest, validate_split_manifest
+from datp_core.data.populations.splits import split_membership
+from datp_core.data.registry import population_capabilities, population_declaration
 
 
 def test_integrity_accepts_valid_population_and_split(nbaiot_canonical_root: Path) -> None:

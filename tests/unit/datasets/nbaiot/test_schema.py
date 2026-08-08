@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from datp_core.datasets.nbaiot.schema import (
+from datp_core.data.nbaiot.schema import (
     NBAIOT_DEVICE_IDENTITIES,
     NBAIOT_FEATURE_COLUMNS,
     NBaIoTDevice,
