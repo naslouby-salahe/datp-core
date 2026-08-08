@@ -1,7 +1,6 @@
 from dataclasses import replace
 
 import pytest
-from datp_core.protocols.populations import POPULATIONS
 
 from datp_core.core.errors import ProtocolValidationError, UnresolvedScientificValueError
 from datp_core.core.identifiers import (
@@ -15,6 +14,7 @@ from datp_core.core.identifiers import (
     TrainingModelId,
 )
 from datp_core.core.numeric import SeedCount
+from datp_core.data.populations.declarations import POPULATIONS
 from datp_core.protocols.experiments import ExperimentDeclaration
 from datp_core.protocols.validation import (
     CANONICAL_PROTOCOL_GRAPH,

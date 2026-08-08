@@ -1,11 +1,15 @@
 import pytest
-from datp_core.anchor.models import ExactEqualityRule
-from datp_core.anchor.reproduction import ANCHOR_CHECKPOINT_STATUS, references_from_protocol, reproduce_anchor
-from datp_core.protocols.anchor import HISTORICAL_ANCHOR_SEED_COHORT
 from tests.unit.anchor.helpers import make_observation, make_reference, matching_anchor_observations
 
 from datp_core.core.errors import AnchorReproductionError, ScientificContractError
 from datp_core.core.identifiers import CheckpointStatus, FederatedThresholdMethod, MetricId, TrainingModelId
+from datp_core.experiments.anchor.contracts import ExactEqualityRule
+from datp_core.experiments.anchor.reproduction import (
+    ANCHOR_CHECKPOINT_STATUS,
+    references_from_protocol,
+    reproduce_anchor,
+)
+from datp_core.experiments.anchor.spec import HISTORICAL_ANCHOR_SEED_COHORT
 from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT
 
 

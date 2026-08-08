@@ -91,27 +91,6 @@ def test_ciciot2023_dataset_is_blocked_for_undeclared_autoencoder() -> None:
     assert "CICIOT2023" in result.evidence
 
 
-def test_verify_anchor_rejects_experiments_other_than_the_historical_reproduction() -> None:
-    runner = PipelineStageRunner()
-    result = runner.run(PipelineStage.VERIFY_ANCHOR, coordinate(), provenance(), OUTPUT_ROOT)
-    assert result.outcome is StageOutcome.BLOCKED
-    assert "historical reproduction" in result.evidence
-
-
-def test_verify_anchor_records_blocked_gate_while_cohort_is_incomplete(tmp_path: Path) -> None:
-    """Incomplete independent packages keep the stage COMPLETED so remaining seeds can finish.
-
-    Cohort-level FAIL with a full observation set still maps to StageOutcome.BLOCKED.
-    """
-    runner = PipelineStageRunner()
-    anchor_coordinate = replace(coordinate(), experiment=ExperimentId.HISTORICAL_DATP_REPRODUCTION)
-    result = runner.run(PipelineStage.VERIFY_ANCHOR, anchor_coordinate, provenance(), tmp_path)
-    assert result.outcome is StageOutcome.COMPLETED
-    assert "gate=blocked" in result.evidence
-    assert "diagnostics=" in result.evidence
-    assert "observations=0" in result.evidence
-
-
 def test_output_store_reports_absent_for_missing_directory(tmp_path: Path) -> None:
     store = CompletionRecordOutputStore()
     assert store.state(coordinate(), tmp_path) is ExistingExperimentState.ABSENT

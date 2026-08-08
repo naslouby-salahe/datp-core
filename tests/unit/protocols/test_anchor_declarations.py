@@ -1,12 +1,11 @@
-from datp_core.protocols.anchor import (
+from datp_core.core.identifiers import FederatedThresholdMethod, MetricId
+from datp_core.core.numeric import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE
+from datp_core.experiments.anchor.spec import (
     ANCHOR_DECISION_PROTOCOL,
     HISTORICAL_ANCHOR_SEED_COHORT,
     HISTORICAL_LOCAL_THRESHOLD_CV_FPR,
     HISTORICAL_SHARED_THRESHOLD_CV_FPR,
 )
-
-from datp_core.core.identifiers import FederatedThresholdMethod, MetricId
-from datp_core.core.numeric import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE
 from datp_core.experiments.confirmatory.spec import CONFIRMATORY_INFERENCE_PROTOCOL
 
 
