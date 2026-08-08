@@ -161,7 +161,7 @@ def prepare_federated_client_data(
             "federated labels and features must align by row",
             subject=ContractSubject.ROWS,
         )
-    if matrix.shape[1] != autoencoder.widths[0]:
+    if matrix.shape[1] != autoencoder.widths[0].value:
         raise ScientificContractError(
             "feature width does not match the autoencoder input width",
             subject=ContractSubject.FEATURES,

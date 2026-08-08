@@ -220,7 +220,7 @@ def train_centralized_autoencoder(request: CentralizedTrainingRequest) -> Centra
     device = resolve_cuda_device()
     extracted = _extract_training_arrays(request)
     reject_attack_rows_in_centralized_training(extracted.labels, request.benign_label)
-    if extracted.feature_matrix.shape[1] != request.autoencoder.widths[0]:
+    if extracted.feature_matrix.shape[1] != request.autoencoder.widths[0].value:
         raise ScientificContractError(
             "feature width must match the declared autoencoder input width",
             subject=ContractSubject.FEATURES,

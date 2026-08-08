@@ -137,7 +137,7 @@ def train_centralized_detector(request: TrainCentralizedDetectorRequest) -> Trai
 
 
 def validate_centralized_training_request(request: CentralizedTrainingPublicationRequest) -> None:
-    if request.autoencoder.widths[0] != len(request.feature_names):
+    if request.autoencoder.widths[0].value != len(request.feature_names):
         raise ScientificContractError(
             "autoencoder input width must match the feature schema",
             subject=ContractSubject.AUTOENCODER,
