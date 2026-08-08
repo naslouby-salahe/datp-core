@@ -188,6 +188,6 @@ def _seed_provenance(
         eligibility_checksum=checksum("a2"),
         source_row_checksum=checksum("a3"),
         row_order_checksum=checksum("a4"),
-        exclusions=(),
+        excluded_clients=(),
         unavailable_reasons=(),
     )
