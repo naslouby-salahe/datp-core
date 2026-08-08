@@ -1,9 +1,9 @@
-"""Seed declarations."""
+"""Locked experiment seed cohorts."""
 
 from pydantic import model_validator
 
-from datp_core.domain.contracts import StrictModel
-from datp_core.domain.values.counts import Seed, SeedCount
+from datp_core.core.contracts import StrictModel
+from datp_core.core.numeric import Seed, SeedCount
 
 CONFIRMATORY_PAIRED_SEED_COUNT = SeedCount(10)
 
