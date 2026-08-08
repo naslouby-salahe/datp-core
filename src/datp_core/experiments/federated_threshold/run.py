@@ -8,8 +8,10 @@ from typing import TYPE_CHECKING, ClassVar
 
 from pydantic import TypeAdapter
 
+from datp_core.analysis.metrics.models import MetricStatus, metric_by_id
 from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.artifacts.provenance import Checksum
+from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
 from datp_core.artifacts.repositories.thresholds import FederatedThresholdAssetName
 from datp_core.artifacts.serializers.json import serialize_json_model
 from datp_core.core.contracts import StrictModel
@@ -27,8 +29,6 @@ from datp_core.core.numeric import (
     ThresholdValue,
     ThresholdVariance,
 )
-from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
-from datp_core.analysis.metrics.models import MetricStatus, metric_by_id
 from datp_core.experiments.common.coordinates import ExperimentCoordinate
 from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.experiments.execution import execute_declared_experiment_seed
@@ -106,7 +106,7 @@ def _summary_path(experiment_id: ExperimentId, population: PopulationId) -> Path
 
 
 def _complete_marker(experiment_id: ExperimentId, population: PopulationId) -> Path:
-    from datp_core.pipeline.decision.evidence import AnalysisAssetName
+    from datp_core.analysis.evidence import AnalysisAssetName
 
     return _analysis_directory(experiment_id, population) / AnalysisAssetName.COMPLETE
 

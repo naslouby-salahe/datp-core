@@ -23,7 +23,7 @@ from datp_core.core.identifiers import ExperimentId, PublicationStatus
 from datp_core.core.numeric import ByteCount
 from datp_core.data.service import DatasetMaterializationRequest, materialize_datasets
 from datp_core.detector.scoring.contracts import FixedScoreInvariant
-from datp_core.pipeline.coordinates import ExecutionRoute, ExperimentCoordinate, execution_route_for
+from datp_core.experiments.common.coordinates import ExecutionRoute, ExperimentCoordinate, execution_route_for
 from datp_core.pipeline.execution.evidence import load_evaluation_document
 from datp_core.pipeline.execution.layout import EvaluationRunAssetDirectory
 from datp_core.pipeline.execution.models import (

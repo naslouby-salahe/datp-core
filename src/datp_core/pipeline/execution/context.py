@@ -18,6 +18,14 @@ from datp_core.core.identifiers import (
 from datp_core.core.numeric import ProximalCoefficient
 from datp_core.data.edge_iiotset.schema import EDGE_NUMERIC_FEATURE_COLUMNS
 from datp_core.data.populations.contracts import ClientIdentity, ControlledPartitionCondition
+from datp_core.data.populations.publication import (
+    ConstructDeclaredPopulationRequest,
+    ConstructPublishedPopulationRequest,
+    ConstructPublishedSplitRequest,
+    construct_declared_population,
+    construct_published_population,
+    construct_published_split,
+)
 from datp_core.data.preprocessing.models import (
     ClientPreprocessingResult,
     FederatedPreprocessingOutcome,
@@ -33,19 +41,11 @@ from datp_core.detector.training.models import (
     FederatedTrainingCoordinate,
     PreparedClientProvenance,
 )
-from datp_core.pipeline.coordinates import ExperimentCoordinate
+from datp_core.experiments.common.coordinates import ExperimentCoordinate
 from datp_core.pipeline.execution.layout import (
     ExecutionArtifactDirectory,
     bounded_evidence_seed_directory,
     federated_training_directory,
-)
-from datp_core.pipeline.preparation.populations import (
-    ConstructDeclaredPopulationRequest,
-    ConstructPublishedPopulationRequest,
-    ConstructPublishedSplitRequest,
-    construct_declared_population,
-    construct_published_population,
-    construct_published_split,
 )
 from datp_core.protocols.experiments import BOUNDED_EVIDENCE_POPULATIONS, ExternalTemporalExecutionIdentity
 from datp_core.protocols.training import (

@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Protocol
 
 from datp_core.artifacts.provenance import Checksum, checksum_text
-from datp_core.pipeline.coordinates import ExperimentCoordinate
+from datp_core.experiments.common.coordinates import ExperimentCoordinate
 
 
 class PipelineStage(StrEnum):
