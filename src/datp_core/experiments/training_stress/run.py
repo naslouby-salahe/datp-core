@@ -64,7 +64,7 @@ from datp_core.evaluation.cohort.contracts import EvaluationCohortManifest
 from datp_core.evaluation.cohort.evidence import client_partition_counts_from_scores
 from datp_core.evaluation.federated.publication import FederatedEvaluationAssetName
 from datp_core.analysis.metrics.models import ClientMetricResult, MetricStatus, PopulationMetricResult, metric_by_id
-from datp_core.evaluation.population_metrics import calculate_population_metrics
+from datp_core.analysis.metrics.population import calculate_population_metrics
 from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.experiments.confirmatory import FedAvgCvFprEffectEvidence, absorption_corner_from_evaluation_document
 from datp_core.experiments.execution import execute_declared_campaign

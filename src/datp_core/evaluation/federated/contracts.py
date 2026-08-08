@@ -12,11 +12,11 @@ from datp_core.domain.values.counts import CalibrationSize, ReplicateIndex
 from datp_core.domain.values.ratios import CoverageTarget, ShrinkageWeight, ThresholdValue
 from datp_core.evaluation.cohort.contracts import EvaluationCohortManifest
 from datp_core.evaluation.communication import CommunicationDiagnostic, CommunicationMessageDiagnostic
-from datp_core.evaluation.conformal_coverage import ConformalCoverageDiagnostic
+from datp_core.analysis.metrics.conformal import ConformalCoverageDiagnostic
 from datp_core.evaluation.fixed_score.contracts import FixedScoreEvidence
 from datp_core.analysis.metrics.models import ClientMetricResult, HeldOutBenignScore, PopulationMetricResult
 from datp_core.evaluation.operational import AlertBurdenDiagnostic
-from datp_core.evaluation.threshold_estimation import (
+from datp_core.analysis.metrics.threshold_estimation import (
     SampleEfficiencyPoint,
     ThresholdEstimationDiagnostic,
     ThresholdEstimationProvenance,

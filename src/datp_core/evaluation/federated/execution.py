@@ -26,12 +26,12 @@ from datp_core.domain.values.ratios import (
     ShrinkageWeight,
     ThresholdValue,
 )
-from datp_core.evaluation.client_metrics import calculate_client_metrics
+from datp_core.analysis.metrics.client import calculate_client_metrics
 from datp_core.evaluation.cohort.construction import cohort_record_for_client
 from datp_core.evaluation.cohort.contracts import ClientEligibilityRecord
 from datp_core.evaluation.communication import summarize_communication
-from datp_core.evaluation.conformal_coverage import evaluate_held_out_conformal_coverage
-from datp_core.evaluation.confusion import calculate_confusion_counts
+from datp_core.analysis.metrics.conformal import evaluate_held_out_conformal_coverage
+from datp_core.analysis.metrics.confusion import calculate_confusion_counts
 from datp_core.evaluation.federated.contracts import (
     EvaluationDiagnostics,
     FederatedEvaluationArtifacts,
@@ -50,8 +50,8 @@ from datp_core.analysis.metrics.models import (
     metric_by_id,
 )
 from datp_core.evaluation.operational import AlertBurdenDiagnostic, calculate_alert_burden
-from datp_core.evaluation.population_metrics import calculate_population_metrics
-from datp_core.evaluation.threshold_estimation import (
+from datp_core.analysis.metrics.population import calculate_population_metrics
+from datp_core.analysis.metrics.threshold_estimation import (
     ThresholdEstimationDiagnostic,
     evaluate_threshold_estimate,
     sample_efficiency_curve,
