@@ -2,8 +2,10 @@
 
 ## Scientific Implementation Contract for DATP-Core
 
-> **STATUS: NOT STARTED**
+> **STATUS: IN PROGRESS**
 > **PRIORITY: ABSOLUTE PREREQUISITE**
+> **SOURCE: docs/Journal_Extension_Master_Roadmap.md**
+> **READ DATE: 2026-08-08**
 
 This document summarizes the scientific implementation contract that the code is expected to satisfy based on the authoritative DATP-Core journal roadmap.
 
@@ -11,9 +13,10 @@ This document summarizes the scientific implementation contract that the code is
 
 ## Journal Source
 
-**Authoritative Document:** `docs/Journal_Extension_Master_Roadmap.md`
-**Read Status:** Pending
-**Summary Status:** Pending
+**Authoritative Document:** `docs/Journal_Extension_Master_Roadmap.md`  
+**Document Length:** 3,543 lines  
+**Read Status:** Partially Complete (Core sections 1-13, Experiment catalogue 1-5, Evaluation sections 1-3)  
+**Summary Status:** In Progress
 
 ---
 
