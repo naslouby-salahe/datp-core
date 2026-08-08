@@ -7,9 +7,9 @@ from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import CommunicationEstimationMethod, MetricId
 from datp_core.core.numeric import ByteCount, LogicalElementCount, Seed
-from datp_core.evaluation.metric_semantics import available
-from datp_core.evaluation.models import AvailableMetric
-from datp_core.learning.federated.models import FederatedTrainingCoordinate
+from datp_core.analysis.metrics.models import AvailableMetric
+from datp_core.analysis.metrics.semantics import available
+from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 
 
 class MessageDirection(StrEnum):

@@ -22,7 +22,7 @@ from datp_core.artifacts.serializers.json import canonical_checksum
 from datp_core.core.errors import ReportEvidenceError, ScientificContractError
 from datp_core.core.numeric import Seed
 from datp_core.evaluation.federated.publication import FederatedEvaluationAssetName
-from datp_core.evaluation.models import AvailableMetric, metric_by_id
+from datp_core.analysis.metrics.models import AvailableMetric, metric_by_id
 from datp_core.experiments.confirmatory import (
     ConfirmatoryAssetDirectory,
     analyze_confirmatory_campaign,

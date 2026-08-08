@@ -25,7 +25,7 @@ from datp_core.core.numeric import (
 )
 from datp_core.evaluation.federated.contracts import FederatedEvaluationDocument
 from datp_core.evaluation.fixed_score.validation import validate_fixed_score_controls
-from datp_core.learning.federated.models import FederatedTrainingCoordinate
+from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 from datp_core.protocols.seeds import SeedCohort
 from datp_core.protocols.statistics import PairedInferenceProtocol
 

@@ -16,8 +16,8 @@ from datp_core.core.numeric import (
     ThresholdValue,
     ThresholdVariance,
 )
-from datp_core.evaluation.metric_semantics import available, metric_value, unavailable
-from datp_core.evaluation.models import (
+from datp_core.analysis.metrics.semantics import available, metric_value, unavailable
+from datp_core.analysis.metrics.models import (
     MetricAvailability,
     MetricReason,
     MetricStatus,
@@ -25,7 +25,7 @@ from datp_core.evaluation.models import (
     validate_metric_set,
 )
 from datp_core.evaluation.threshold_evidence import VerifiedHeldOutBenignScores
-from datp_core.learning.federated.models import FederatedTrainingCoordinate
+from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 
 _THRESHOLD_ESTIMATION_METRICS = frozenset(
     {

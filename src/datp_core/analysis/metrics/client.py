@@ -9,8 +9,8 @@ from datp_core.data.populations.contracts import PopulationOutcomeLabel
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import ContractSubject, MetricId
 from datp_core.core.numeric import RowCount, ScoreValue
-from datp_core.evaluation.metric_semantics import available, unavailable
-from datp_core.evaluation.models import ConfusionCounts, MetricAvailability, MetricReason, MetricStatus
+from datp_core.analysis.metrics.models import ConfusionCounts, MetricAvailability, MetricReason, MetricStatus
+from datp_core.analysis.metrics.semantics import available, unavailable
 
 CLIENT_METRICS: tuple[MetricId, ...] = (
     MetricId.FALSE_POSITIVE_RATE,

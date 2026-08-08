@@ -3,15 +3,20 @@
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from datp_core.datasets.partitioning.contracts import ClientIdentity, PopulationOutcomeLabel
-from datp_core.domain.enums import EvaluationCohort, EvidenceRole, FederatedThresholdMethod, MetricId, PartitionRole
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import RowCount
-from datp_core.domain.values.identifiers import StableRowId
-from datp_core.domain.values.ratios import MetricValue, ScoreValue, ThresholdValue
-from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.protocols.inference import ScoreRecord
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import (
+    EvaluationCohort,
+    EvidenceRole,
+    FederatedThresholdMethod,
+    MetricId,
+    PartitionRole,
+    StableRowId,
+)
+from datp_core.core.numeric import MetricValue, RowCount, ScoreValue, ThresholdValue
+from datp_core.data.populations.contracts import ClientIdentity, PopulationOutcomeLabel
+from datp_core.detector.scoring.contracts import ScoreRecord
+from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 
 type FederatedScoreRecord = ScoreRecord[FederatedTrainingCoordinate, ClientIdentity]
 

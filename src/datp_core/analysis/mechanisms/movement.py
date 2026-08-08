@@ -15,7 +15,7 @@ from datp_core.core.identifiers import (
     PopulationId,
 )
 from datp_core.core.numeric import MetricValue, Ratio, Seed, ThresholdValue
-from datp_core.learning.federated.models import FederatedTrainingCoordinate
+from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 
 
 class ThresholdOperatingPoint(StrictModel):

@@ -10,12 +10,12 @@ from datp_core.artifacts.provenance import checksum_file
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import MetricId, ScoreFrameColumn, StableRowId
 from datp_core.core.numeric import ConformalRankIndex, CoverageTarget, Quantile, RowCount, Seed, ThresholdValue
-from datp_core.evaluation.metric_semantics import (
+from datp_core.analysis.metrics.semantics import (
     available,
     metric_value,
     unavailable,
 )
-from datp_core.evaluation.models import (
+from datp_core.analysis.metrics.models import (
     FederatedScoreRecord,
     HeldOutBenignScore,
     MetricAvailability,
@@ -24,7 +24,7 @@ from datp_core.evaluation.models import (
     metric_by_id,
     validate_metric_set,
 )
-from datp_core.learning.federated.models import FederatedTrainingCoordinate
+from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 from datp_core.thresholds.variants.conformal import ConformalAssignment
 
 _COVERAGE_METRICS = frozenset(
