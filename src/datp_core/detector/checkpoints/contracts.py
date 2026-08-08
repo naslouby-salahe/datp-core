@@ -17,6 +17,7 @@ from datp_core.core.identifiers import (
     CheckpointStatus,
     ContractSubject,
     SerializationFormat,
+    TrainingModelId,
 )
 from datp_core.core.numeric import MetricValue, RoundNumber, Seed
 from datp_core.data.populations.contracts import ClientIdentity
@@ -31,7 +32,7 @@ class CheckpointProtocol(StrictModel):
     maximum_round: RoundNumber
 
     @model_validator(mode="after")
-    def validate_candidates(self) -> "CheckpointProtocol":
+    def validate_candidates(self) -> CheckpointProtocol:
         values = tuple(candidate.value for candidate in self.candidates)
         if not values or values != tuple(sorted(values)) or len(frozenset(values)) != len(values):
             raise ValueError("checkpoint candidates must be unique and ordered")
@@ -123,6 +124,22 @@ class CheckpointCandidate:
     def __post_init__(self) -> None:
         if self.status not in RETAINED_CHECKPOINT_STATUSES:
             raise ScientificContractError("checkpoint candidate has an invalid status", subject=self.status)
+        if self.coordinate.model is TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER:
+            if self.client is None:
+                raise ScientificContractError(
+                    "Ditto personalized checkpoints require a client",
+                    subject=ContractSubject.CLIENT_IDENTITY,
+                )
+            if self.client.population != self.coordinate.population:
+                raise ScientificContractError(
+                    "checkpoint client population must match its coordinate",
+                    subject=ContractSubject.CLIENT_IDENTITY,
+                )
+        elif self.client is not None:
+            raise ScientificContractError(
+                "global checkpoints cannot carry a client identity",
+                subject=ContractSubject.CLIENT_IDENTITY,
+            )
 
 
 @dataclass(frozen=True, slots=True)
