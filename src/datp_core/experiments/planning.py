@@ -7,7 +7,7 @@ from enum import StrEnum
 
 from datp_core.data.populations.contracts import ControlledPartitionKind
 from datp_core.data.registry import population_capabilities, population_declaration
-from datp_core.domain.enums import (
+from datp_core.core.identifiers import (
     ExperimentId,
     ExperimentReadiness,
     FederatedThresholdMethod,
@@ -17,9 +17,8 @@ from datp_core.domain.enums import (
     TemporalState,
     TrainingModelId,
 )
-from datp_core.domain.values.checksums import Checksum, checksum_text
-from datp_core.domain.values.counts import Seed
-from datp_core.domain.values.ratios import DirichletConcentration, ModelCoefficientValue, Quantile
+from datp_core.artifacts.provenance import Checksum, checksum_text
+from datp_core.core.numeric import DirichletConcentration, ModelCoefficientValue, Quantile, Seed
 from datp_core.pipeline.coordinates import ExperimentCoordinate
 from datp_core.protocols.calibration import QUANTILE_GRID
 from datp_core.protocols.experiments import EXECUTION_IDENTITY_DECLARATIONS, ExperimentDeclaration

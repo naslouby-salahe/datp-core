@@ -18,8 +18,10 @@ from datp_core.analysis.mechanisms import (
 )
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.data.registry import population_capabilities
-from datp_core.domain.contracts import ClientCollection, ClientOwned
-from datp_core.domain.enums import (
+from datp_core.artifacts.provenance import Checksum, checksum_file
+from datp_core.artifacts.serializers.json import canonical_checksum, canonical_json_text
+from datp_core.core.contracts import ClientCollection, ClientOwned
+from datp_core.core.identifiers import (
     ContractSubject,
     DatasetId,
     EvidenceRole,
@@ -35,13 +37,10 @@ from datp_core.domain.enums import (
     SplitProtocolId,
     TrainingModelId,
 )
-from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
-from datp_core.domain.provenance import canonical_checksum, canonical_json_text
-from datp_core.domain.values.checksums import Checksum, checksum_file
-from datp_core.domain.values.counts import ClientCount, RoundNumber, RowCount, Seed
-from datp_core.domain.values.identifiers import FeatureNameSequence
-from datp_core.domain.values.paths import ClientIdentityToken, FamilyIdentity
-from datp_core.domain.values.ratios import (
+from datp_core.core.errors import ArtifactIntegrityError, ScientificContractError
+from datp_core.core.identifiers import ClientIdentityToken, FamilyIdentity, FeatureNameSequence
+from datp_core.core.numeric import ClientCount, RoundNumber, RowCount, Seed
+from datp_core.core.numeric import (
     NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
     DittoRegularization,
     MetricValue,

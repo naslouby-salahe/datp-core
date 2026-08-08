@@ -5,11 +5,11 @@ from pydantic import model_validator
 from datp_core.analysis.inference.bootstrap.contracts import BcaOutcome, BootstrapInterval
 from datp_core.analysis.inference.bootstrap.estimation import seed_level_bca_interval
 from datp_core.analysis.scientific_decision import ScientificDecision, ScientificDecisionResult
-from datp_core.domain.contracts import StrictModel
-from datp_core.domain.enums import EvidenceRole, ExperimentId, FederatedThresholdMethod, TrainingModelId
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import Seed
-from datp_core.domain.values.ratios import (
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.contracts import StrictModel
+from datp_core.core.identifiers import EvidenceRole, ExperimentId, FederatedThresholdMethod, TrainingModelId
+from datp_core.core.numeric import Seed
+from datp_core.core.numeric import (
     NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
     MetricValue,
     ModelCoefficientValue,

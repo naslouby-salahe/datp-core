@@ -17,7 +17,7 @@ from datp_core.analysis.temporal import (
 )
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.data.registry import population_capabilities
-from datp_core.domain.enums import (
+from datp_core.core.identifiers import (
     EvaluationCohort,
     ExperimentId,
     FederatedThresholdMethod,
@@ -25,11 +25,10 @@ from datp_core.domain.enums import (
     PartitionRole,
     TemporalState,
 )
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.provenance import canonical_checksum, canonical_json_text
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import Seed
-from datp_core.domain.values.ratios import MetricValue
+from datp_core.artifacts.provenance import Checksum
+from datp_core.artifacts.serializers.json import canonical_checksum, canonical_json_text
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.numeric import MetricValue, Seed
 from datp_core.evaluation.cohort.contracts import EvaluationCohortManifest
 from datp_core.evaluation.fixed_score.construction import build_federated_evaluation_inputs
 from datp_core.evaluation.models import ClientMetricResult, MetricStatus, metric_by_id

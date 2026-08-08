@@ -2,12 +2,12 @@
 
 from pydantic import model_validator
 
-from datp_core.domain.contracts import StrictModel
-from datp_core.domain.enums import EvidenceRole, PartitionRole, SplitProtocolId, TemporalState
-from datp_core.domain.errors import ScientificContractError, UnresolvedScientificValueError
-from datp_core.domain.provenance import canonical_checksum
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.ratios import MetricValue, Ratio
+from datp_core.artifacts.provenance import Checksum
+from datp_core.artifacts.serializers.json import canonical_checksum
+from datp_core.core.contracts import StrictModel
+from datp_core.core.errors import ScientificContractError, UnresolvedScientificValueError
+from datp_core.core.identifiers import EvidenceRole, PartitionRole, SplitProtocolId, TemporalState
+from datp_core.core.numeric import MetricValue, Ratio
 from datp_core.protocols.inference import ClientIdentityContract, ScoreArtifactManifest, TrainingCoordinateContract
 from datp_core.protocols.seeds import SeedCohort
 

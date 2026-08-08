@@ -8,14 +8,13 @@ from typing import TYPE_CHECKING, ClassVar
 
 from pydantic import TypeAdapter
 
-from datp_core.domain.contracts import StrictModel
-from datp_core.domain.enums import ExperimentId, FederatedThresholdMethod, MetricId, PopulationId
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.provenance import serialize_json_model
-from datp_core.domain.values.base import NonNegativeFiniteFloatValue
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import ByteCount, Seed, SeedCount
-from datp_core.domain.values.ratios import (
+from datp_core.artifacts.provenance import Checksum
+from datp_core.artifacts.serializers.json import serialize_json_model
+from datp_core.core.contracts import StrictModel
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import ExperimentId, FederatedThresholdMethod, MetricId, PopulationId
+from datp_core.core.numeric import ByteCount, NonNegativeFiniteFloatValue, Seed, SeedCount
+from datp_core.core.numeric import (
     AbsoluteThresholdError,
     MetricValue,
     Ratio,
