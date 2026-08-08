@@ -28,9 +28,9 @@ from datp_core.domain.enums import AvailabilityStatus, EvidenceRole, ExperimentI
 from datp_core.domain.provenance import canonical_checksum
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.ratios import MetricValue
-from datp_core.reporting.figures import FigureSpec, render_markdown_figure
-from datp_core.reporting.tables import PublicationTable, TableCell, render_markdown_table
-from datp_core.reporting.validation import (
+from datp_core.presentation.figures import FigureSpec, render_markdown_figure
+from datp_core.presentation.tables import PublicationTable, TableCell, render_markdown_table
+from datp_core.presentation.validation import (
     ClaimDecision,
     ClaimKind,
     ClaimRequest,
@@ -74,7 +74,6 @@ _PUBLISHABLE_CLAIM_STATUSES = frozenset({ClaimStatus.PERMITTED, ClaimStatus.NARR
 def export_markdown(bundle: PublicationBundle, destination: Path) -> Path:
     blocked = tuple(decision for decision in bundle.claims if decision.status not in _PUBLISHABLE_CLAIM_STATUSES)
     permitted = tuple(decision.wording for decision in bundle.claims if decision.status in _PUBLISHABLE_CLAIM_STATUSES)
-    # When every claim is blocked/suppressed, do not emit tables or figures that can look complete.
     evidence_publishable = bool(permitted) or not bundle.claims
     provenance = bundle.provenance
     header = (
