@@ -6,7 +6,6 @@ from pathlib import Path
 from shutil import rmtree
 
 from datp_core.analysis.contrasts import PairedContrast, SupplementaryPairedAnalysisPlan, build_paired_contrast
-from datp_core.app.planning import expand_experiment_plan
 from datp_core.domain.enums import EvidenceRole, ExperimentId, FederatedThresholdMethod, MetricId, PopulationId
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.checksums import Checksum
@@ -15,6 +14,7 @@ from datp_core.domain.values.ratios import MetricValue
 from datp_core.evaluation.federated.contracts import FederatedEvaluationDocument
 from datp_core.evaluation.federated.publication import FederatedEvaluationAssetName
 from datp_core.experiments.execution import execute_declared_experiment_seed
+from datp_core.experiments.planning import expand_experiment_plan
 from datp_core.pipeline.coordinates import ExperimentCoordinate
 from datp_core.pipeline.decision.evidence import AnalyzeExternalEvidenceRequest, analyze_external_evidence
 from datp_core.pipeline.execution.evidence import load_evaluation_document, population_metric
