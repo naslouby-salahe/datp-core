@@ -7,12 +7,11 @@ DATP-Core implements the journal-extension programme defined by `docs/Journal_Ex
 For scientific decisions, authority is:
 
 1. the master roadmap;
-2. validated protocol declarations;
-3. typed domain contracts;
-4. implementation;
-5. tests and documentation.
+2. the canonical experiment specifications and typed core/scientific contracts;
+3. implementation;
+4. tests and documentation.
 
-Never change the roadmap or weaken a scientific invariant to preserve an implementation or stale test.
+Never change the roadmap or weaken a scientific invariant to preserve an implementation, an old package boundary, or a stale test.
 
 ## 2. Locked scientific identity
 
@@ -39,41 +38,264 @@ Training-side FedProx and genuine Ditto studies use separate detectors and remai
 
 Do not add security attacks, defenses, formal privacy claims, deployment claims, additional external datasets, or new scientific methods outside the roadmap.
 
-## 3. Architecture
+## 3. Canonical source architecture
 
-The canonical dependency direction is:
+The source tree below is the canonical DATP-Core architecture. It is an ownership contract, not a suggestion. Production functionality must live in these packages and files; obsolete roots are deleted after every active caller has been migrated. Do not preserve old locations with aliases, re-exports, forwarding modules, redirects, fallback imports, or compatibility packages.
 
 ```text
-domain
-  -> protocols
-  -> datasets / preprocessing / learning / calibration / thresholding / evaluation
-  -> analysis
-  -> pipeline foundations
-  -> experiments
-  -> presentation
-  -> app programme / research services
-  -> app CLI
+src/datp_core/
+├── core/
+│   ├── errors.py
+│   ├── identifiers.py
+│   ├── numeric.py
+│   └── contracts.py
+│
+├── data/
+│   ├── populations/
+│   │   ├── contracts.py
+│   │   ├── construction.py
+│   │   ├── controlled.py
+│   │   ├── splits.py
+│   │   └── integrity.py
+│   │
+│   ├── preprocessing/
+│   │   ├── contracts.py
+│   │   ├── fitting.py
+│   │   ├── transforms.py
+│   │   └── validation.py
+│   │
+│   ├── nbaiot/
+│   │   ├── capabilities.py
+│   │   ├── schema.py
+│   │   ├── reader.py
+│   │   ├── materialize.py
+│   │   └── populations.py
+│   │
+│   ├── ciciot2023/
+│   │   ├── capabilities.py
+│   │   ├── schema.py
+│   │   ├── reader.py
+│   │   ├── materialize.py
+│   │   ├── populations.py
+│   │   └── file_clients.py
+│   │
+│   └── edge_iiotset/
+│       ├── capabilities.py
+│       ├── schema.py
+│       ├── reader.py
+│       ├── chronology.py
+│       ├── materialize.py
+│       └── populations.py
+│
+├── detector/
+│   ├── autoencoder.py
+│   │
+│   ├── training/
+│   │   ├── contracts.py
+│   │   ├── common.py
+│   │   ├── centralized.py
+│   │   ├── fedavg.py
+│   │   ├── fedprox.py
+│   │   └── ditto.py
+│   │
+│   ├── checkpoints/
+│   │   ├── contracts.py
+│   │   └── selection.py
+│   │
+│   └── scoring/
+│       ├── contracts.py
+│       ├── frames.py
+│       ├── centralized.py
+│       └── federated.py
+│
+├── thresholds/
+│   ├── contracts.py
+│   ├── dispatch.py
+│   ├── quantiles.py
+│   │
+│   ├── calibration/
+│   │   ├── eligibility.py
+│   │   └── sampling.py
+│   │
+│   ├── policies/
+│   │   ├── shared.py
+│   │   ├── local.py
+│   │   ├── family.py
+│   │   └── cluster.py
+│   │
+│   └── variants/
+│       ├── shrinkage.py
+│       ├── conformal.py
+│       └── federated_statistics.py
+│
+├── analysis/
+│   ├── metrics/
+│   │   ├── contracts.py
+│   │   ├── confusion.py
+│   │   ├── client.py
+│   │   ├── population.py
+│   │   ├── cohorts.py
+│   │   ├── fixed_score.py
+│   │   ├── conformal.py
+│   │   └── threshold_estimation.py
+│   │
+│   ├── inference/
+│   │   ├── descriptive.py
+│   │   ├── contrasts.py
+│   │   ├── bootstrap.py
+│   │   ├── wilcoxon.py
+│   │   ├── multiplicity.py
+│   │   └── decisions.py
+│   │
+│   ├── mechanisms/
+│   │   ├── absorption.py
+│   │   ├── association.py
+│   │   ├── clustering.py
+│   │   ├── dispersion.py
+│   │   ├── divergence.py
+│   │   └── movement.py
+│   │
+│   └── operational/
+│       ├── communication.py
+│       ├── alert_burden.py
+│       └── traffic_rates.py
+│
+├── experiments/
+│   ├── registry.py
+│   │
+│   ├── common/
+│   │   ├── coordinates.py
+│   │   └── seeds.py
+│   │
+│   ├── anchor/
+│   │   ├── spec.py
+│   │   ├── run.py
+│   │   ├── analyze.py
+│   │   └── report.py
+│   │
+│   ├── confirmatory/
+│   │   ├── spec.py
+│   │   ├── run.py
+│   │   ├── analyze.py
+│   │   └── report.py
+│   │
+│   ├── threshold_robustness/
+│   │   ├── spec.py
+│   │   ├── run.py
+│   │   ├── analyze.py
+│   │   └── report.py
+│   │
+│   ├── federated_threshold/
+│   │   ├── spec.py
+│   │   ├── run.py
+│   │   ├── analyze.py
+│   │   └── report.py
+│   │
+│   ├── heterogeneity/
+│   │   ├── spec.py
+│   │   ├── run.py
+│   │   ├── analyze.py
+│   │   └── report.py
+│   │
+│   ├── training_stress/
+│   │   ├── fedprox.py
+│   │   ├── ditto.py
+│   │   └── absorption.py
+│   │
+│   ├── external/
+│   │   ├── spec.py
+│   │   ├── run.py
+│   │   ├── analyze.py
+│   │   └── report.py
+│   │
+│   ├── applicability/
+│   │   ├── spec.py
+│   │   ├── run.py
+│   │   ├── analyze.py
+│   │   └── report.py
+│   │
+│   └── temporal/
+│       ├── spec.py
+│       ├── run.py
+│       ├── analyze.py
+│       └── report.py
+│
+├── artifacts/
+│   ├── layout.py
+│   ├── provenance.py
+│   ├── publication.py
+│   ├── reuse.py
+│   │
+│   ├── serializers/
+│   │   ├── json.py
+│   │   ├── parquet.py
+│   │   ├── safetensors.py
+│   │   └── skops.py
+│   │
+│   └── repositories/
+│       ├── datasets.py
+│       ├── populations.py
+│       ├── preprocessing.py
+│       ├── checkpoints.py
+│       ├── scores.py
+│       ├── thresholds.py
+│       └── evaluations.py
+│
+├── presentation/
+│   ├── tables.py
+│   ├── figures.py
+│   └── validation.py
+│
+├── app/
+│   ├── planning.py
+│   ├── campaign.py
+│   ├── validation.py
+│   └── cli/
+│       ├── app.py
+│       ├── execution.py
+│       └── anchor.py
+│
+└── runtime/
+    ├── compute.py
+    ├── configuration.py
+    ├── determinism.py
+    └── filesystem.py
 ```
 
-Ownership is exclusive:
+`__init__.py` package markers are permitted and should remain empty unless a package genuinely owns a stable public facade. Do not use them as re-export barrels.
 
-- `domain`: identities, errors, provenance, value objects, immutable shared contracts.
-- `protocols`: scientific declarations and validation only.
-- scientific capability packages: numerical/data kernels and their typed results.
-- `pipeline`: reusable execution foundations, coordinates, stage services, scoring, checkpointing, decision evidence, artifact publication.
-- `experiments`: complete scientific experiment recipes and experiment-specific analyses.
-- `presentation`: tables, figures, publication exports, presentation validation.
-- `app`: programme planning, exact recipe registration, anchor gate, campaign lifecycle, reporting orchestration, status, CLI.
+Canonical ownership is:
 
-The following architectures are deleted and must never be recreated:
+- `core`: lowest-level errors, identifiers/enums/value identities, numeric value objects, and immutable cross-cutting contracts.
+- `data`: dataset capability/schema/reader/materialization logic, population construction/splitting/integrity, and preprocessing fitting/transformation/validation.
+- `detector`: autoencoder, training algorithms, checkpoint contracts/selection, and score generation.
+- `thresholds`: benign calibration eligibility/sampling, quantile construction, threshold policies, and declared threshold variants.
+- `analysis`: metrics, statistical inference/decisions, mechanisms, and operational translation only. It does not execute experiments or own persistence.
+- `experiments`: experiment declarations/specifications plus complete run/analyze/report recipes. `anchor` is an experiment, not a top-level package. Training-side stress tests remain scientifically separate from the fixed-detector threshold ladder.
+- `artifacts`: all generic layout, provenance, serialization, publication, reuse, and artifact-repository ownership. Dataset, detector, threshold, evaluation, and experiment code must not invent parallel persistence stacks.
+- `presentation`: reusable table/figure construction and presentation validation only. Experiment-specific reporting belongs to each experiment's `report.py`.
+- `app`: public programme planning/campaign/validation and CLI adapters only. It does not own scientific execution kernels.
+- `runtime`: compute/device, deterministic execution, process configuration, and filesystem primitives.
 
-- `datp_core.cli`;
-- `datp_core.pipeline.workflows`;
+The following source roots and architectural concepts are obsolete and must not exist after the cutover:
+
+- `datp_core.anchor`;
+- `datp_core.calibration`;
+- `datp_core.datasets`;
+- `datp_core.domain`;
+- `datp_core.evaluation`;
+- `datp_core.learning`;
+- `datp_core.pipeline`;
+- `datp_core.preprocessing`;
+- `datp_core.protocols`;
+- `datp_core.thresholding`;
 - `datp_core.reporting`;
-- alternate/duplicate planners;
+- `datp_core.cli`;
+- experiment execution as large flat modules when the target package has `spec.py`, `run.py`, `analyze.py`, and `report.py`;
+- generic `service.py`, `models.py`, `publication.py`, `paths.py`, `registry.py`, or `utils.py` modules whose responsibility belongs to one of the explicit files above;
 - forwarding or redirect modules preserving deleted imports.
 
-A structural change may add, move, merge, split, rename, or delete source files when it produces the canonical architecture. Do not preserve an inferior layout merely because it already exists.
+A structural change may move, merge, split, rename, or delete source files when required by this tree. Never keep a superseded package merely because it already contains working code.
 
 ## 4. No backward compatibility
 
@@ -116,7 +338,7 @@ External-library dictionaries may exist only at a narrow boundary and must immed
 
 ## 6. Configuration and reproducibility
 
-Scientific and runtime behavior must come from roadmap-backed validated declarations or explicit structural invariants.
+Scientific and runtime behavior must come from roadmap-backed validated experiment specifications or explicit structural invariants.
 
 Do not hardcode or invent:
 
@@ -176,13 +398,13 @@ status [EXPERIMENT_ID]
 
 CLI booleans are adapter input only. Convert lifecycle choices immediately to typed application enums. Do not add scientific hyperparameters to the command line.
 
-Every non-suppressed, non-anchor experiment declaration must have exactly one registered application recipe. Suppressed experiments must remain explicitly suppressed. Registry validation fails on missing, duplicate, or stale recipes.
+Every non-suppressed, non-anchor experiment specification must have exactly one registered application execution path. Suppressed experiments must remain explicitly suppressed. Registry validation fails on missing, duplicate, or stale experiment wiring.
 
 Full programme planning must use each experiment's declared seed cohort rather than applying one global cohort to all datasets/regimes.
 
 ## 10. Artifact lifecycle
 
-Use the repository's canonical coordinates, checksums, publication layouts, atomic writing, and completion validation.
+Use `artifacts` as the single owner of generic coordinates/layout, checksums/provenance, serialization, persistence repositories, completion validation, and reusable publication mechanics.
 
 Do not introduce:
 
@@ -192,7 +414,8 @@ Do not introduce:
 - duplicate manifests;
 - hidden caches;
 - partial outputs marked complete;
-- incompatible evidence reuse.
+- incompatible evidence reuse;
+- package-specific ad-hoc persistence when an `artifacts.repositories` owner exists.
 
 Smoke evidence is isolated under the smoke root and is never confirmatory evidence. `--overwrite` deletes/rebuilds only the owning scope.
 
@@ -227,14 +450,14 @@ When architecture changes, rewrite or delete stale tests. Never preserve dead pr
 
 Prioritize tests for:
 
-- protocol/registry validation;
+- experiment/registry validation;
 - fixed-score and leakage controls;
 - capability gating;
 - deterministic planning and correct seed cohorts;
 - artifact completion/reuse;
 - threshold and metric semantics;
 - application/CLI public contracts;
-- import/architecture boundaries;
+- exact package/import architecture boundaries;
 - previously observed defects.
 
 Do not weaken assertions, skip failures, or shrink scientific protocols merely to make tests pass.
@@ -257,10 +480,10 @@ Fix root causes rather than changing quality configuration to hide findings. If 
 For broad work:
 
 1. read the roadmap and this contract;
-2. inspect current declarations, call graph, datasets/capabilities, artifacts, and tests;
+2. inspect current experiment specifications, call graph, datasets/capabilities, artifacts, and tests;
 3. search for reusable implementations;
-4. define the clean target ownership and delete duplicate paths;
-5. implement the canonical contract and migrate every active caller;
+4. define clean target ownership using the canonical tree and delete duplicate paths;
+5. implement the canonical contracts and migrate every active caller;
 6. validate registry, planning, fixed-score science, naming, typing, imports, dead code, and tests;
 7. perform a final scientific-drift audit against the roadmap;
-8. leave one coherent architecture with no compatibility layer.
+8. leave exactly one coherent architecture with no compatibility layer.
