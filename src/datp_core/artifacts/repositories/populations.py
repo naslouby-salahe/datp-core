@@ -58,7 +58,9 @@ def publish_population(
     _prepare(directory)
     membership_checksum, _ = write_frame(manifest.membership, directory / PopulationAsset.MEMBERSHIP.value)
     (directory / PopulationAsset.MANIFEST.value).write_text(canonical_json_text(manifest.document), encoding="utf-8")
-    (directory / PopulationAsset.FAMILY.value).write_text(canonical_json_text(manifest.family_by_client), encoding="utf-8")
+    (directory / PopulationAsset.FAMILY.value).write_text(
+        canonical_json_text(manifest.family_by_client), encoding="utf-8"
+    )
     digest = _completion_digest(
         directory,
         (PopulationAsset.MANIFEST.value, PopulationAsset.FAMILY.value, PopulationAsset.MEMBERSHIP.value),
@@ -127,7 +129,9 @@ def publish_split(split: SplitManifest, directory: Path, *, overwrite: bool) -> 
 
 def load_split(directory: Path) -> SplitPublication:
     _require_complete(directory, SplitAsset.COMPLETE.value)
-    document = SplitManifestDocument.model_validate_json((directory / SplitAsset.MANIFEST.value).read_text(encoding="utf-8"))
+    document = SplitManifestDocument.model_validate_json(
+        (directory / SplitAsset.MANIFEST.value).read_text(encoding="utf-8")
+    )
     assignments = read_frame(directory / SplitAsset.ASSIGNMENTS.value)
     if assignments.height != document.assignment_row_count.value:
         raise ArtifactIntegrityError("split assignment row count disagrees with its manifest")

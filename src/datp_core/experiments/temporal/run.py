@@ -33,7 +33,7 @@ from datp_core.evaluation.cohort.contracts import EvaluationCohortManifest
 from datp_core.evaluation.fixed_score.construction import build_federated_evaluation_inputs
 from datp_core.evaluation.models import ClientMetricResult, MetricStatus, metric_by_id
 from datp_core.experiments.planning import ExperimentPlan, expand_experiment_plan
-from datp_core.pipeline.coordinates import ExperimentCoordinate
+from datp_core.experiments.common.coordinates import ExperimentCoordinate
 from datp_core.pipeline.decision.evidence import (
     AnalysisAssetName,
     AnalyzeTemporalEvidenceRequest,

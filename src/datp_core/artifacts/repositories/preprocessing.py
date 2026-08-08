@@ -171,7 +171,9 @@ def reload_client_preprocessing(publication: PreprocessingPublication) -> Client
         fit_row_checksum=manifest.fit_row_checksum,
         owner=manifest.client if manifest.fit_scope is PreprocessingFitScope.CLIENT_LOCAL_TRAINING else None,
     )
-    partitions = tuple(_reload_partition(item, publication.directory, manifest.feature_names) for item in manifest.partitions)
+    partitions = tuple(
+        _reload_partition(item, publication.directory, manifest.feature_names) for item in manifest.partitions
+    )
     return ClientPreprocessingResult(client=manifest.client, state=state, partitions=partitions)
 
 
@@ -199,10 +201,16 @@ def _reload_partition(
         expected_row_count=persisted.row_count,
     )
     row_ids = StableRowIdSequence(
-        tuple(StableRowId(value) for value in payload.get_column(PopulationFrameColumn.STABLE_ROW_ID.value).cast(pl.String))
+        tuple(
+            StableRowId(value)
+            for value in payload.get_column(PopulationFrameColumn.STABLE_ROW_ID.value).cast(pl.String)
+        )
     )
     labels = OutcomeLabelSequence(
-        tuple(OutcomeLabel(value) for value in payload.get_column(PopulationFrameColumn.OUTCOME_LABEL.value).cast(pl.String))
+        tuple(
+            OutcomeLabel(value)
+            for value in payload.get_column(PopulationFrameColumn.OUTCOME_LABEL.value).cast(pl.String)
+        )
     )
     frame = payload.select(tuple(feature_names))
     return TransformedPartition(

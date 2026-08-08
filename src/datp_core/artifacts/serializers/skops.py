@@ -16,9 +16,7 @@ _TRUSTED_TYPES = frozenset({StandardScaler, MinMaxScaler})
 
 def dump_scaler(estimator: TrustedScaler, destination: Path) -> Checksum:
     if type(estimator) not in _TRUSTED_TYPES:
-        raise SerializationSafetyError(
-            f"unsupported preprocessing estimator type: {type(estimator).__qualname__}"
-        )
+        raise SerializationSafetyError(f"unsupported preprocessing estimator type: {type(estimator).__qualname__}")
     destination.parent.mkdir(parents=True, exist_ok=True)
     sio.dump(estimator, destination)
     return checksum_file(destination)

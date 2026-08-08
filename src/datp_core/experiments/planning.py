@@ -19,7 +19,7 @@ from datp_core.core.identifiers import (
 )
 from datp_core.artifacts.provenance import Checksum, checksum_text
 from datp_core.core.numeric import DirichletConcentration, ModelCoefficientValue, Quantile, Seed
-from datp_core.pipeline.coordinates import ExperimentCoordinate
+from datp_core.experiments.common.coordinates import ExperimentCoordinate
 from datp_core.protocols.calibration import QUANTILE_GRID
 from datp_core.protocols.experiments import EXECUTION_IDENTITY_DECLARATIONS, ExperimentDeclaration
 from datp_core.data.populations.declarations import DIRICHLET_CONCENTRATIONS, split_protocol_for_population

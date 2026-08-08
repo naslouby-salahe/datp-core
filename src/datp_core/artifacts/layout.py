@@ -3,7 +3,7 @@
 from enum import StrEnum
 from pathlib import Path
 
-from datp_core.pipeline.coordinates import CoordinateIdentitySegment, ExperimentCoordinate
+from datp_core.experiments.common.coordinates import CoordinateIdentitySegment, ExperimentCoordinate
 
 
 class PublicationArtifactDirectory(StrEnum):

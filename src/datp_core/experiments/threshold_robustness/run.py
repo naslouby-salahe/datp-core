@@ -27,7 +27,7 @@ from datp_core.evaluation.federated.publication import FederatedEvaluationAssetN
 from datp_core.evaluation.models import MetricStatus, metric_by_id
 from datp_core.experiments.execution import execute_declared_experiment_seed
 from datp_core.experiments.planning import expand_experiment_plan
-from datp_core.pipeline.coordinates import ExperimentCoordinate
+from datp_core.experiments.common.coordinates import ExperimentCoordinate
 from datp_core.pipeline.execution.evidence import load_evaluation_document, population_metric
 from datp_core.pipeline.execution.layout import EvaluationRunAssetDirectory
 from datp_core.pipeline.publication.layout import evaluation_run_directory
