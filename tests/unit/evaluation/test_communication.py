@@ -1,15 +1,15 @@
 import pytest
 from tests.unit.learning.federated.helpers import fedavg_coordinate
 
-from datp_core.domain.enums import CommunicationEstimationMethod
-from datp_core.domain.values.counts import LogicalElementCount, Seed
-from datp_core.evaluation.communication import (
+from datp_core.analysis.operational.communication import (
     CommunicationMessageDiagnostic,
     MessageDirection,
     SerializedPayloadEvidence,
     ThresholdPayloadKind,
     summarize_communication,
 )
+from datp_core.core.identifiers import CommunicationEstimationMethod
+from datp_core.core.numeric import LogicalElementCount, Seed
 
 
 def test_communication_totals_are_exact_serialized_byte_counts() -> None:

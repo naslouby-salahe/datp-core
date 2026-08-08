@@ -1,8 +1,8 @@
 import pytest
 
-from datp_core.domain.enums import MetricId
-from datp_core.evaluation.metric_semantics import available, unavailable
-from datp_core.evaluation.models import MetricReason, MetricStatus
+from datp_core.analysis.metrics.models import MetricReason, MetricStatus
+from datp_core.analysis.metrics.semantics import available, unavailable
+from datp_core.core.identifiers import MetricId
 
 
 def test_available_preserves_numeric_denominator() -> None:
