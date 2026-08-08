@@ -2,7 +2,8 @@
 
 from dataclasses import dataclass
 
-from datp_core.domain.enums import PublicationStatus
+from datp_core.artifacts.repositories.publication import ArtifactPublication, FunctionalArtifactCodec, publish_artifact
+from datp_core.core.identifiers import PublicationStatus
 from datp_core.detector.checkpoints.identities import FederatedHistoryAssetName
 from datp_core.detector.training.common import (
     FederatedTrainingArtifacts,
@@ -12,10 +13,9 @@ from datp_core.detector.training.common import (
     rebase_federated_training,
     validate_federated_training_inputs,
 )
+from datp_core.detector.training.engine import FederatedTrainingRequest
 from datp_core.detector.training.federated import GlobalFederatedProtocol
 from datp_core.detector.training.models import CheckpointCandidate, FederatedTrainingResult
-from datp_core.detector.training.engine import FederatedTrainingRequest
-from datp_core.artifacts.repositories.publication import ArtifactPublication, FunctionalArtifactCodec, publish_artifact
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

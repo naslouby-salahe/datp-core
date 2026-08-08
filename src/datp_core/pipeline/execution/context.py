@@ -5,6 +5,17 @@ from pathlib import Path
 
 import polars as pl
 
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import (
+    ClientIdentityToken,
+    ContractSubject,
+    DatasetId,
+    FamilyIdentity,
+    FeatureName,
+    FeatureNameSequence,
+)
+from datp_core.core.numeric import ProximalCoefficient
 from datp_core.data.edge_iiotset.schema import EDGE_NUMERIC_FEATURE_COLUMNS
 from datp_core.data.populations.contracts import ClientIdentity, ControlledPartitionCondition
 from datp_core.data.preprocessing.models import (
@@ -21,12 +32,6 @@ from datp_core.detector.training.models import (
     FederatedTrainingCoordinate,
     PreparedClientProvenance,
 )
-from datp_core.domain.enums import ContractSubject, DatasetId
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.identifiers import FeatureName, FeatureNameSequence
-from datp_core.domain.values.paths import ClientIdentityToken, FamilyIdentity
-from datp_core.domain.values.ratios import ProximalCoefficient
 from datp_core.pipeline.coordinates import ExperimentCoordinate
 from datp_core.pipeline.execution.layout import (
     ExecutionArtifactDirectory,

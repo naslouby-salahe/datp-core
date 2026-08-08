@@ -1,10 +1,10 @@
 """Federated training execution and primary checkpoint selection."""
 
-from datp_core.domain.values.counts import ClientCount
-from datp_core.domain.values.identifiers import FeatureNameSequence
+from datp_core.core.identifiers import FeatureNameSequence
+from datp_core.core.numeric import ClientCount
 from datp_core.detector.checkpoints.selection import CheckpointDecision
-from datp_core.detector.training.models import CheckpointCandidate
 from datp_core.detector.training.engine import FederatedTrainingRequest
+from datp_core.detector.training.models import CheckpointCandidate
 from datp_core.pipeline.checkpoints.service import SelectFederatedCheckpointRequest, select_federated_primary_checkpoint
 from datp_core.pipeline.execution.context import FederatedExecutionContext, client_training_inputs
 from datp_core.pipeline.training.federated import TrainFederatedDetectorRequest, train_federated_detector

@@ -7,7 +7,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Protocol
 
-from datp_core.domain.values.checksums import Checksum, checksum_text
+from datp_core.artifacts.provenance import Checksum, checksum_text
 from datp_core.pipeline.coordinates import ExperimentCoordinate
 
 

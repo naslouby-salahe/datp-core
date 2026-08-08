@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from datp_core.data.populations.contracts import ControlledPartitionKind
-from datp_core.domain.enums import (
+from datp_core.core.identifiers import (
     DatasetId,
     EvidenceRole,
     ExperimentId,
@@ -16,8 +16,8 @@ from datp_core.domain.enums import (
     TemporalState,
     TrainingModelId,
 )
-from datp_core.domain.values.counts import Seed
-from datp_core.domain.values.ratios import DirichletConcentration, ModelCoefficientValue, Quantile
+from datp_core.core.numeric import Seed
+from datp_core.core.numeric import DirichletConcentration, ModelCoefficientValue, Quantile
 
 _MODEL_COEFFICIENT_TRAINING_MODELS = frozenset(
     (TrainingModelId.FEDPROX_AUTOENCODER, TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER)

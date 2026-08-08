@@ -7,6 +7,7 @@ import numpy as np
 import polars as pl
 import torch
 
+from datp_core.artifacts.provenance import Checksum, checksum_file, ordered_text_checksum
 from datp_core.artifacts.repositories.publication import (
     ArtifactPublication,
     FunctionalArtifactCodec,
@@ -14,13 +15,12 @@ from datp_core.artifacts.repositories.publication import (
     publish_artifact,
     write_artifact_completion_marker,
 )
+from datp_core.artifacts.serializers.json import canonical_checksum
+from datp_core.core.errors import ArtifactIntegrityError, ScientificContractError
+from datp_core.core.identifiers import ContractSubject, PartitionRole, ScoreFrameColumn, SerializationFormat
+from datp_core.core.numeric import FeatureCount, RowCount
 from datp_core.detector.autoencoder import ReconstructionAutoencoder
 from datp_core.detector.training.centralized import load_centralized_model_tensors
-from datp_core.domain.enums import ContractSubject, PartitionRole, ScoreFrameColumn, SerializationFormat
-from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
-from datp_core.domain.provenance import canonical_checksum
-from datp_core.domain.values.checksums import Checksum, checksum_file, ordered_text_checksum
-from datp_core.domain.values.counts import FeatureCount, RowCount
 from datp_core.pipeline.scoring.frames import (
     score_and_persist_autoencoder_frame,
     validate_persisted_score_frame,

@@ -9,6 +9,8 @@ from datp_core.artifacts.repositories.publication import (
     RelatedPublicationMember,
     publish_related_artifacts,
 )
+from datp_core.core.contracts import ClientCollection, ClientOwned
+from datp_core.core.identifiers import PublicationStatus
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.training.common import (
     DittoTrainingArtifacts,
@@ -20,8 +22,6 @@ from datp_core.detector.training.common import (
 )
 from datp_core.detector.training.ditto import DittoTrainingRequest
 from datp_core.detector.training.models import CheckpointCandidate, FederatedTrainingResult
-from datp_core.domain.contracts import ClientCollection, ClientOwned
-from datp_core.domain.enums import PublicationStatus
 
 
 class DittoPublicationMember(StrEnum):

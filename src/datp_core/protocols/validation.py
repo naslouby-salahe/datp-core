@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from datp_core.domain.enums import (
+from datp_core.core.identifiers import (
     ContractSubject,
     EvidenceRole,
     ExperimentId,
@@ -13,8 +13,8 @@ from datp_core.domain.enums import (
     PopulationId,
     TrainingModelId,
 )
-from datp_core.domain.errors import ProtocolValidationError, UnresolvedScientificValueError
-from datp_core.domain.values.counts import CalibrationSize
+from datp_core.core.errors import ProtocolValidationError, UnresolvedScientificValueError
+from datp_core.core.numeric import CalibrationSize
 
 from datp_core.experiments.anchor.spec import ANCHOR_DECISION_PROTOCOL, AnchorDecisionProtocol
 from .calibration import (

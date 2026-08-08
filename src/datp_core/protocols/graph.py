@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Protocol
 
-from datp_core.domain.contracts import StrictModel
-from datp_core.domain.enums import (
+from datp_core.core.contracts import StrictModel
+from datp_core.core.identifiers import (
     DatasetId,
     EvidenceRole,
     ExperimentId,
@@ -18,8 +18,8 @@ from datp_core.domain.enums import (
     TemporalState,
     TrainingModelId,
 )
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import Seed
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.numeric import Seed
 
 from datp_core.experiments.anchor.spec import AnchorDecisionProtocol
 from .calibration import CalibrationEligibilityProtocol, ClusterThresholdProtocol

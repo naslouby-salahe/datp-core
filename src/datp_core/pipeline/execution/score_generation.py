@@ -2,9 +2,8 @@
 
 from pathlib import Path
 
-from datp_core.domain.enums import SplitProtocolId
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.identifiers import FeatureNameSequence
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.identifiers import FeatureNameSequence, SplitProtocolId
 from datp_core.detector.training.models import CheckpointCandidate
 from datp_core.pipeline.scoring.federated import publish_federated_scores
 from datp_core.pipeline.scoring.models import (

@@ -5,14 +5,13 @@ from pathlib import Path
 import polars as pl
 from pydantic import ValidationError
 
-from datp_core.detector.scoring.contracts import FixedScoreInvariant
-from datp_core.domain.enums import ContractSubject, MetricId, PartitionRole, ScoreFrameColumn
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.checksums import checksum_file
-from datp_core.domain.values.counts import RowCount
-from datp_core.domain.values.ratios import MetricValue, ScoreValue
 from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
 from datp_core.analysis.metrics.models import MetricStatus, metric_by_id
+from datp_core.artifacts.provenance import checksum_file
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import ContractSubject, MetricId, PartitionRole, ScoreFrameColumn
+from datp_core.core.numeric import MetricValue, RowCount, ScoreValue
+from datp_core.detector.scoring.contracts import FixedScoreInvariant
 from datp_core.pipeline.scoring.models import FederatedScoreArtifactManifest
 from datp_core.protocols.calibration import MINIMUM_BENIGN_SUPPORT
 from datp_core.thresholds.quantiles import ClientBenignCalibrationScores
@@ -69,8 +68,8 @@ def load_evaluation_document(path: Path) -> FederatedEvaluationDocument:
     Analysis and peer fixed-score discovery must not accept incomplete, partial,
     or hand-edited documents that lack a matching publication COMPLETE marker.
     """
-    from datp_core.domain.provenance import canonical_checksum
     from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
+    from datp_core.artifacts.serializers.json import canonical_checksum
 
     complete_path = path.with_name(FederatedEvaluationAssetName.COMPLETE)
     try:

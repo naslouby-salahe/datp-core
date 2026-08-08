@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from datp_core.analysis.contrasts import PairedContrast, SupplementaryPairedAnalysisPlan
 from datp_core.analysis.inference.multiplicity import MultiplicityPlan
+from datp_core.analysis.inference.wilcoxon import PairedInferenceProtocol
 from datp_core.analysis.mechanisms import MechanismEvidence
 from datp_core.analysis.preparation import (
     AnalysisDocument,
@@ -22,20 +23,19 @@ from datp_core.analysis.preparation import (
     prepare_temporal_analysis,
 )
 from datp_core.analysis.temporal import TemporalRecoveryResult
-from datp_core.domain.contracts import StrictModel
-from datp_core.domain.enums import ExperimentId, FederatedThresholdMethod, PublicationStatus
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.provenance import canonical_checksum, canonical_json_text
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import Seed
+from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.repositories.publication import (
     ArtifactPublication,
     ArtifactPublicationResult,
     FunctionalArtifactCodec,
     publish_artifact,
 )
+from datp_core.artifacts.serializers.json import canonical_checksum, canonical_json_text
+from datp_core.core.contracts import StrictModel
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import ExperimentId, FederatedThresholdMethod, PublicationStatus
+from datp_core.core.numeric import Seed
 from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
-from datp_core.analysis.inference.wilcoxon import PairedInferenceProtocol
 from datp_core.protocols.temporal import TemporalDeploymentProvenance
 
 AnalysisDocumentT = TypeVar("AnalysisDocumentT", bound=StrictModel)

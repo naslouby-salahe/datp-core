@@ -2,9 +2,9 @@
 
 from pydantic import model_validator
 
-from datp_core.domain.contracts import StrictModel
-from datp_core.domain.enums import PopulationId
-from datp_core.domain.values.ratios import TrafficRatePerDay
+from datp_core.core.contracts import StrictModel
+from datp_core.core.identifiers import PopulationId
+from datp_core.core.numeric import TrafficRatePerDay
 
 
 class TrafficRateEvidence(StrictModel):
