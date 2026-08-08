@@ -355,7 +355,7 @@ def _recovery_for_method(
     provenance = TemporalSeedProvenance(
         seed=partition_seed,
         experiment=declaration.id,
-        population=declaration.population.value,
+        population=declaration.population,
         threshold_method=method,
         static_reference=static.provenance,
         frozen_future=frozen.provenance,
@@ -742,26 +742,28 @@ def _build_client_trajectories(
     frozen_outcome: TemporalMethodOutcome,
     recalibrated_outcome: TemporalMethodOutcome,
 ) -> tuple[TemporalClientTrajectory, ...]:
-    client_ids = tuple(
+    clients = tuple(
         sorted(
-            frozenset(item.client.client_id for item in static_outcome.clients)
-            | frozenset(item.client.client_id for item in frozen_outcome.clients)
-            | frozenset(item.client.client_id for item in recalibrated_outcome.clients)
+            frozenset(item.client for item in static_outcome.clients)
+            | frozenset(item.client for item in frozen_outcome.clients)
+            | frozenset(item.client for item in recalibrated_outcome.clients)
         )
     )
     trajectories: list[TemporalClientTrajectory] = []
-    for client_id in client_ids:
-        static_client = _client_by_id(static_outcome.clients, client_id)
-        frozen_client = _client_by_id(frozen_outcome.clients, client_id)
-        recalibrated_client = _client_by_id(recalibrated_outcome.clients, client_id)
+    for client in clients:
+        static_client = _client_by_identity(static_outcome.clients, client)
+        frozen_client = _client_by_identity(frozen_outcome.clients, client)
+        recalibrated_client = _client_by_identity(recalibrated_outcome.clients, client)
         eligible = _client_is_eligible(static_client, frozen_client, recalibrated_client)
         trajectories.append(
             TemporalClientTrajectory(
                 seed=seed,
-                client_id=client_id,
+                client=client,
                 threshold_method=method,
                 eligible=eligible,
-                exclusion_reason=None if eligible else _exclusion_reason(client_id, static_outcome, frozen_outcome, recalibrated_outcome),
+                exclusion_reason=None
+                if eligible
+                else _exclusion_reason(client, static_outcome, frozen_outcome, recalibrated_outcome),
                 threshold_static=_client_threshold(static_client),
                 threshold_frozen=_client_threshold(frozen_client),
                 threshold_recalibrated=_client_threshold(recalibrated_client),
@@ -782,15 +784,15 @@ def _build_client_trajectories(
     return tuple(trajectories)
 
 
-def _client_by_id(clients: tuple[ClientMetricResult, ...], client_id: str) -> ClientMetricResult | None:
-    return next((client for client in clients if client.client.client_id == client_id), None)
+def _client_by_identity(clients: tuple[ClientMetricResult, ...], identity: ClientIdentity) -> ClientMetricResult | None:
+    return next((client for client in clients if client.client == identity), None)
 
 
 def _exclusion_reason(
-    client_id: str,
+    client: ClientIdentity,
     *outcomes: TemporalMethodOutcome,
 ) -> str:
-    excluded = any(client.client_id == client_id for outcome in outcomes for client in outcome.excluded_clients)
+    excluded = any(excluded_client == client for outcome in outcomes for excluded_client in outcome.excluded_clients)
     return "excluded_from_fpr_evaluable_cohort" if excluded else "client_not_evaluable"
 
 
