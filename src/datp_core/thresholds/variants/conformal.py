@@ -1,18 +1,26 @@
-"""Finite-sample local conformal threshold construction and contracts."""
+"""Finite-sample local conformal threshold construction."""
 
 from dataclasses import dataclass
 from typing import ClassVar
 
-from datp_core.datasets.partitioning.contracts import ClientIdentity
-from datp_core.domain.enums import ContractSubject, FederatedThresholdMethod
-from datp_core.domain.errors import ScientificContractError, require_contract
-from datp_core.domain.values.base import floats_absolutely_close, floats_exactly_equal
-from datp_core.domain.values.counts import ConformalRankIndex, RowCount
-from datp_core.domain.values.ratios import CoverageTarget, Quantile, Ratio, ScoreValue, ThresholdValue
-from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.protocols.splits import FRACTION_TOTAL_ABSOLUTE_TOLERANCE
-from datp_core.thresholding.assignments import validate_client_partition
-from datp_core.thresholding.quantiles import (
+from datp_core.core.errors import ScientificContractError, require_contract
+from datp_core.core.identifiers import ContractSubject, FederatedThresholdMethod
+from datp_core.core.numeric import (
+    ConformalRankIndex,
+    CoverageTarget,
+    NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
+    Quantile,
+    Ratio,
+    RowCount,
+    ScoreValue,
+    ThresholdValue,
+    floats_absolutely_close,
+    floats_exactly_equal,
+)
+from datp_core.data.populations.contracts import ClientIdentity
+from datp_core.detector.training.contracts import FederatedTrainingCoordinate
+from datp_core.thresholds.contracts import validate_client_partition
+from datp_core.thresholds.quantiles import (
     ClientBenignCalibrationScores,
     conformal_rank_index,
     finite_sample_conformal_threshold,
@@ -36,10 +44,7 @@ class ConformalAssignment:
             ContractSubject.THRESHOLD,
         )
         require_contract(
-            floats_exactly_equal(
-                self.threshold.value,
-                self.selected_score.value,
-            ),
+            floats_exactly_equal(self.threshold.value, self.selected_score.value),
             "conformal threshold value must equal the selected score",
             ContractSubject.THRESHOLD,
         )
@@ -47,9 +52,9 @@ class ConformalAssignment:
             floats_absolutely_close(
                 self.effective_quantile.value,
                 self.rank_index.value / self.calibration_count.value,
-                FRACTION_TOTAL_ABSOLUTE_TOLERANCE,
+                NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE.value,
             ),
-            "conformal effective quantile must equal rank_index / calibration_count",
+            "conformal effective quantile must equal rank_index divided by calibration_count",
             ContractSubject.THRESHOLD,
         )
 
