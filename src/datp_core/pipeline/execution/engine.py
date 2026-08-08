@@ -33,7 +33,7 @@ from datp_core.pipeline.execution.models import (
     StageRunner,
 )
 from datp_core.pipeline.execution.workspace import ExperimentWorkspace
-from datp_core.pipeline.publication.layout import experiment_output_directory
+from datp_core.artifacts.layout import experiment_output_directory
 from datp_core.artifacts.repositories.models import ArtifactKind, ArtifactRecord, ArtifactState, CompletionState
 from datp_core.artifacts.repositories.publication import (
     build_completion_record,

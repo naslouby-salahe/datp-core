@@ -63,7 +63,7 @@ from datp_core.pipeline.execution.context import (
 from datp_core.pipeline.execution.evidence import eligible_calibration_scores, load_evaluation_document
 from datp_core.pipeline.execution.layout import EvaluationRunAssetDirectory, ExecutionArtifactDirectory
 from datp_core.pipeline.execution.score_generation import score_selected_checkpoint
-from datp_core.pipeline.publication.layout import evaluation_run_directory
+from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.pipeline.scoring.models import FederatedScoreArtifactManifest, FederatedScoreRecord
 from datp_core.pipeline.training.federated import TrainFederatedDetectorRequest, TrainFederatedDetectorResult, train_federated_detector
 from datp_core.protocols.calibration import (
