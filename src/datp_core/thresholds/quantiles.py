@@ -1,4 +1,4 @@
-"""Quantile and finite-sample rank computations for federated thresholds."""
+"""Quantile and finite-sample rank computations for benign thresholds."""
 
 from dataclasses import dataclass
 from math import ceil, sqrt
@@ -7,29 +7,26 @@ from typing import Literal
 import numpy as np
 from scipy.stats import norm
 
-from datp_core.calibration.models import CalibrationSampleReference
-from datp_core.datasets.partitioning.contracts import ClientIdentity
-from datp_core.domain.enums import (
-    AvailabilityStatus,
-    ContractSubject,
-    QuantileInterpolationSemantics,
-)
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.checksums import Checksum, checksum_text
-from datp_core.domain.values.counts import ConformalRankIndex, RowCount
-from datp_core.domain.values.ratios import (
+from datp_core.artifacts.provenance import Checksum, checksum_text
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import AvailabilityStatus, ContractSubject, QuantileInterpolationSemantics
+from datp_core.core.numeric import (
     CalibrationSampleWeights,
+    ConformalRankIndex,
     CoverageTarget,
     Quantile,
     Ratio,
+    RowCount,
     ScoreMoment,
     ScoreValue,
     ScoreVariance,
     SummaryCoefficient,
     ThresholdValue,
 )
-from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.thresholding.assignments import LocalQuantile, ThresholdDiagnostic
+from datp_core.data.populations.contracts import ClientIdentity
+from datp_core.detector.training.contracts import FederatedTrainingCoordinate
+from datp_core.thresholds.calibration.eligibility import CalibrationSampleReference
+from datp_core.thresholds.contracts import LocalQuantile, ThresholdDiagnostic
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +55,11 @@ def calibration_scores_from_references(
     references: tuple[CalibrationSampleReference, ...],
     score_set_checksum: Checksum,
 ) -> ClientBenignCalibrationScores:
+    if any(reference.client != client for reference in references):
+        raise ScientificContractError(
+            "calibration score references must belong to one declared client",
+            subject=ContractSubject.CLIENT_IDENTITY,
+        )
     manifest_checksum = checksum_text("|".join(sorted(reference.stable_row_id for reference in references)))
     return ClientBenignCalibrationScores(
         client=client,
@@ -79,10 +81,7 @@ def require_eligible_cohort(
         )
 
 
-def local_quantile(
-    client_scores: ClientBenignCalibrationScores,
-    quantile: Quantile,
-) -> LocalQuantile:
+def local_quantile(client_scores: ClientBenignCalibrationScores, quantile: Quantile) -> LocalQuantile:
     value = exact_empirical_quantile(client_scores.as_array, quantile)
     return LocalQuantile(
         client=client_scores.client,
@@ -93,7 +92,7 @@ def local_quantile(
         diagnostic=ThresholdDiagnostic(
             quantile_interpolation=quantile_interpolation_semantics(),
             score_set_checksum=client_scores.score_set_checksum,
-            calibration_manifest_checksum=(client_scores.calibration_manifest_checksum),
+            calibration_manifest_checksum=client_scores.calibration_manifest_checksum,
             tie_count=RowCount(0),
             availability=AvailabilityStatus.AVAILABLE,
         ),
@@ -106,19 +105,12 @@ def _numpy_interpolation_method(semantics: QuantileInterpolationSemantics) -> Li
             return "linear"
 
 
-def exact_empirical_quantile(
-    scores: np.ndarray,
-    quantile: Quantile,
-) -> ThresholdValue:
+def exact_empirical_quantile(scores: np.ndarray, quantile: Quantile) -> ThresholdValue:
     _require_score_vector(scores)
-    semantics = quantile_interpolation_semantics()
-    method = _numpy_interpolation_method(semantics)
+    method = _numpy_interpolation_method(quantile_interpolation_semantics())
     value = float(np.quantile(scores, quantile.value, method=method))
     if not np.isfinite(value):
-        raise ScientificContractError(
-            "quantile result must be finite",
-            subject=ContractSubject.THRESHOLD,
-        )
+        raise ScientificContractError("quantile result must be finite", subject=ContractSubject.THRESHOLD)
     return ThresholdValue(value)
 
 
@@ -144,24 +136,18 @@ def sample_weighted_mean(
             "a sample-weighted mean requires one weight per contributing value",
             subject=ContractSubject.THRESHOLD,
         )
-    total_weight = weights.total
-    if total_weight <= 0:
+    if weights.total <= 0:
         raise ScientificContractError(
             "sample-weighted mean requires positive total support",
             subject=ContractSubject.THRESHOLD,
         )
     return ThresholdValue(
-        sum(
-            item.value * float(weight.value) for item, weight in zip(values, weights.weights, strict=True)
-        )
-        / total_weight
+        sum(item.value * float(weight.value) for item, weight in zip(values, weights.weights, strict=True))
+        / weights.total
     )
 
 
-def conformal_rank_index(
-    calibration_count: RowCount,
-    coverage: CoverageTarget,
-) -> ConformalRankIndex:
+def conformal_rank_index(calibration_count: RowCount, coverage: CoverageTarget) -> ConformalRankIndex:
     if calibration_count.value < 1:
         raise ScientificContractError(
             "conformal rank requires at least one calibration score",
@@ -185,18 +171,10 @@ def finite_sample_conformal_threshold(
     ordered = np.sort(scores)
     selected = float(ordered[rank_index.value - 1])
     tie_count = RowCount(int(np.count_nonzero(ordered == selected)) - 1)
-    return (
-        ThresholdValue(selected),
-        rank_index,
-        Quantile(rank_index.value / calibration_count.value),
-        tie_count,
-    )
+    return ThresholdValue(selected), rank_index, Quantile(rank_index.value / calibration_count.value), tie_count
 
 
-def achieved_benign_exceedance(
-    scores: np.ndarray,
-    threshold: ThresholdValue,
-) -> Ratio:
+def achieved_benign_exceedance(scores: np.ndarray, threshold: ThresholdValue) -> Ratio:
     _require_score_vector(scores)
     return Ratio(float(np.mean(scores > threshold.value)))
 
@@ -230,7 +208,4 @@ def _require_score_vector(scores: np.ndarray) -> None:
             subject=ContractSubject.SCORES,
         )
     if not np.isfinite(scores).all():
-        raise ScientificContractError(
-            "scores must be finite",
-            subject=ContractSubject.SCORES,
-        )
+        raise ScientificContractError("scores must be finite", subject=ContractSubject.SCORES)
