@@ -1,4 +1,4 @@
-"""Deterministic experiment plan expansion and digesting."""
+"""Deterministic experiment-plan expansion and digesting."""
 
 from __future__ import annotations
 
@@ -26,16 +26,6 @@ from datp_core.protocols.experiments import EXECUTION_IDENTITY_DECLARATIONS, Exp
 from datp_core.protocols.populations import DIRICHLET_CONCENTRATIONS, split_protocol_for_population
 from datp_core.protocols.seeds import SeedCohort
 from datp_core.protocols.training import DITTO_TRAINING_PROTOCOLS, FEDPROX_TRAINING_PROTOCOLS
-
-
-def _declared_model_coefficients(training_model: TrainingModelId) -> tuple[ModelCoefficientValue | None, ...]:
-    match training_model:
-        case TrainingModelId.FEDPROX_AUTOENCODER:
-            return tuple(ModelCoefficientValue(protocol.coefficient.value) for protocol in FEDPROX_TRAINING_PROTOCOLS)
-        case TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER:
-            return tuple(ModelCoefficientValue(protocol.regularization.value) for protocol in DITTO_TRAINING_PROTOCOLS)
-        case _:
-            return (None,)
 
 
 class PlanDisposition(StrEnum):
@@ -86,6 +76,16 @@ class ExperimentPlan:
         return tuple(entry for entry in self.entries if entry.disposition is PlanDisposition.EXECUTABLE)
 
 
+def merge_experiment_plans(plans: tuple[ExperimentPlan, ...]) -> ExperimentPlan:
+    entries = tuple(
+        sorted(
+            (entry for plan in plans for entry in plan.entries),
+            key=lambda entry: entry.coordinate.stable_key,
+        )
+    )
+    return ExperimentPlan(entries=entries, digest=_digest_entries(entries))
+
+
 def expand_experiment_plan(
     *,
     declarations: tuple[ExperimentDeclaration, ...],
@@ -116,6 +116,16 @@ class _SweptCell:
     threshold_quantile: Quantile | None
     controlled_partition_kind: ControlledPartitionKind | None
     dirichlet_concentration: DirichletConcentration | None
+
+
+def _declared_model_coefficients(training_model: TrainingModelId) -> tuple[ModelCoefficientValue | None, ...]:
+    match training_model:
+        case TrainingModelId.FEDPROX_AUTOENCODER:
+            return tuple(ModelCoefficientValue(protocol.coefficient.value) for protocol in FEDPROX_TRAINING_PROTOCOLS)
+        case TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER:
+            return tuple(ModelCoefficientValue(protocol.regularization.value) for protocol in DITTO_TRAINING_PROTOCOLS)
+        case _:
+            return (None,)
 
 
 def _swept_cells(declaration: ExperimentDeclaration, seed_cohort: SeedCohort) -> tuple[_SweptCell, ...]:
@@ -151,12 +161,6 @@ def _controlled_partition_cells(
 ) -> tuple[tuple[ControlledPartitionKind | None, DirichletConcentration | None], ...]:
     if declaration.population is not PopulationId.NBAIOT_DIRICHLET_CLIENTS:
         return ((None, None),)
-    if declaration.id is ExperimentId.CONTROLLED_HETEROGENEITY_SWEEP:
-        dirichlet_cells = tuple(
-            (ControlledPartitionKind.DIRICHLET, concentration) for concentration in DIRICHLET_CONCENTRATIONS
-        )
-        return (*dirichlet_cells, (ControlledPartitionKind.IID, None))
-    # Any other Dirichlet experiment still requires an explicit condition; use the full grid.
     dirichlet_cells = tuple(
         (ControlledPartitionKind.DIRICHLET, concentration) for concentration in DIRICHLET_CONCENTRATIONS
     )
@@ -252,5 +256,7 @@ def _validated_evidence(evidence: tuple[PlanningEvidence, ...]) -> tuple[Plannin
 
 
 def _digest_entries(entries: tuple[PlannedExperiment, ...]) -> Checksum:
-    payload = "\n".join(f"{entry.coordinate.stable_key}|{entry.disposition.value}|{entry.reason}" for entry in entries)
+    payload = "\n".join(
+        f"{entry.coordinate.stable_key}|{entry.disposition.value}|{entry.reason}" for entry in entries
+    )
     return checksum_text(payload)
