@@ -21,11 +21,7 @@ from datp_core.domain.values.counts import Seed
 from datp_core.domain.values.ratios import MetricValue, Ratio
 from datp_core.protocols.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_ANALYSIS_SEED, SeedCohort
 from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL, PairedInferenceProtocol
-from datp_core.protocols.temporal import (
-    TEMPORAL_DECISION_PROTOCOL,
-    TemporalDecisionProtocol,
-    TemporalDeploymentProvenance,
-)
+from datp_core.protocols.temporal import TemporalDecisionProtocol, TemporalDeploymentProvenance
 
 
 class TemporalInterpretation(StrEnum):
@@ -176,8 +172,8 @@ class TemporalRecoveryResult(StrictModel):
         return MetricValue(self.frozen_future_cv.value - self.recalibrated_future_cv.value)
 
     @property
-    def materiality_cutoff(self) -> MetricValue:
-        return self.decision_protocol.cv_materiality_cutoff
+    def drift_excess_materiality_threshold(self) -> MetricValue:
+        return self.decision_protocol.drift_excess_materiality_threshold
 
     @property
     def material_recovery_ratio_minimum(self) -> Ratio:
@@ -187,7 +183,7 @@ class TemporalRecoveryResult(StrictModel):
     def recovery_ratio(self) -> MetricValue | None:
         if self.unavailable_reason is not None:
             return None
-        if self.drift_excess.value <= self.materiality_cutoff.value:
+        if self.drift_excess.value <= self.drift_excess_materiality_threshold.value:
             return None
         return MetricValue(self.recovered_amount.value / self.drift_excess.value)
 
@@ -248,7 +244,7 @@ def temporal_recovery(
     frozen_future_cv: MetricValue,
     recalibrated_future_cv: MetricValue,
     provenance: TemporalSeedProvenance,
-    decision_protocol: TemporalDecisionProtocol = TEMPORAL_DECISION_PROTOCOL,
+    decision_protocol: TemporalDecisionProtocol,
     mean_fpr_static: MetricValue | None = None,
     mean_fpr_frozen: MetricValue | None = None,
     mean_fpr_recalibrated: MetricValue | None = None,
@@ -292,7 +288,6 @@ def decide_temporal_campaign(
         return blocked
     protocol = inference_protocol or _temporal_inference_protocol(required_seed_cohort)
     defined_ratios = tuple(record.recovery_ratio for record in records if record.recovery_ratio is not None)
-    # Recovery-ratio BCa is defined only when every seed has a defined ratio (full cohort).
     recovery_interval = (
         seed_level_bca_interval(
             defined_ratios,
