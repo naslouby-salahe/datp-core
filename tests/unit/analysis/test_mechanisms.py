@@ -60,10 +60,12 @@ from datp_core.core.numeric import (
     ThresholdValue,
 )
 from datp_core.data.populations.contracts import ClientIdentity
-from datp_core.detector.training.contracts import FederatedTrainingCoordinate
+from datp_core.detector.training.contracts import (
+    MODEL_ABSORPTION_DECISION_PROTOCOL,
+    FederatedTrainingCoordinate,
+)
 from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT
 from datp_core.protocols.metrics import ABSORPTION_REFERENCE_EFFECT_MATERIALITY_CUTOFF
-from datp_core.protocols.training import MODEL_ABSORPTION_DECISION_PROTOCOL
 
 
 def test_association_reports_all_observations_with_typed_statistics() -> None:

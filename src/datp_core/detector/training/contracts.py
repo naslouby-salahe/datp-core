@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Annotated, Literal, Protocol, overload
 
-from pydantic import Field, model_validator
+from pydantic import Field, GetCoreSchemaHandler, model_validator
 
 from datp_core.core.contracts import StrictModel, sequence_pydantic_schema, validate_non_empty_tuple
 from datp_core.core.errors import LeakageError, ScientificContractError
@@ -66,7 +66,11 @@ class AutoencoderArchitecture(Sequence[FeatureCount]):
         return self.widths[0]
 
     @classmethod
-    def __get_pydantic_core_schema__(cls, source_type: object, handler: object) -> object:
+    def __get_pydantic_core_schema__(
+        cls,
+        source_type: object,
+        handler: GetCoreSchemaHandler,
+    ) -> object:
         return sequence_pydantic_schema(cls, source_type, handler)
 
 
