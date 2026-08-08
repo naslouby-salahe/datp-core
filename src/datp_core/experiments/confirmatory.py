@@ -25,6 +25,7 @@ from datp_core.analysis.mechanisms import (
     summarize_threshold_movements_across_seeds,
     threshold_movements_from_evaluations,
 )
+from datp_core.app.planning import expand_experiment_plan
 from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.enums import (
     EvidenceRole,
@@ -42,6 +43,7 @@ from datp_core.domain.values.counts import Seed
 from datp_core.domain.values.ratios import MetricValue, ModelCoefficientValue
 from datp_core.evaluation.federated.contracts import FederatedEvaluationDocument
 from datp_core.evaluation.federated.publication import FederatedEvaluationAssetName
+from datp_core.experiments.execution import execute_declared_experiment_seed
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.pipeline.coordinates import ExperimentCoordinate
 from datp_core.pipeline.decision.evidence import AnalyzeConfirmatoryEvidenceRequest, analyze_confirmatory_evidence
@@ -51,18 +53,16 @@ from datp_core.pipeline.execution.layout import (
     ExecutionArtifactDirectory,
     federated_training_directory,
 )
-from datp_core.pipeline.planning import expand_experiment_plan
 from datp_core.pipeline.publication.layout import evaluation_run_directory
 from datp_core.pipeline.scoring.models import FederatedScoreAssetName
-from datp_core.pipeline.workflows.execution import execute_declared_experiment_seed
-from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration
-from datp_core.protocols.seeds import CONFIRMATORY_ANALYSIS_SEED, CONFIRMATORY_SEED_COHORT, SeedCohort
-from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL
-from datp_core.reporting.export import (
+from datp_core.presentation.export import (
     export_confirmatory_publication,
     export_mechanism_publication,
 )
-from datp_core.reporting.figures import FigureSpec
+from datp_core.presentation.figures import FigureSpec
+from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration
+from datp_core.protocols.seeds import CONFIRMATORY_ANALYSIS_SEED, CONFIRMATORY_SEED_COHORT, SeedCohort
+from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL
 from datp_core.runtime.configuration import OUTPUTS_ROOT
 
 
@@ -80,7 +80,7 @@ class ConfirmatorySeedResult:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class FedAvgCvFprEffectEvidence:
-    """Artifact-bound FedAvg SHARED/LOCAL CV(FPR) corners and paired effect for one seed."""
+    """Artifact-bound FedAvg shared/local CV(FPR) corners and paired effect for one seed."""
 
     seed: Seed
     shared: AbsorptionCornerEvidence
@@ -138,12 +138,7 @@ def run_family_grouped_mechanism_seed(
     output_root: Path,
     overwrite: bool = False,
 ) -> ConfirmatorySeedResult:
-    """Execute the family/grouped mechanism ladder for one seed under fixed FedAvg detector.
-
-    Publishes FAMILY_THRESHOLD and CLUSTER_THRESHOLD (with the rest of the locked
-    ladder methods declared on FAMILY_AND_GROUPED_GRANULARITY) so confirmatory
-    analysis can attach FAMILY_THRESHOLD/CLUSTER_THRESHOLD mechanism evidence when present.
-    """
+    """Execute the family/grouped mechanism ladder for one seed under the fixed FedAvg detector."""
     matches = tuple(item for item in EXPERIMENTS if item.id is ExperimentId.FAMILY_AND_GROUPED_GRANULARITY)
     if len(matches) != 1:
         raise ScientificContractError("family/grouped mechanism experiment must be declared exactly once")
@@ -153,7 +148,7 @@ def run_family_grouped_mechanism_seed(
         seed_cohort=SeedCohort(values=(training_seed,)),
         reason=(
             "the family/grouped mechanism entry point supplies the locked "
-            "natural-device execution prerequisites for FAMILY_THRESHOLD/CLUSTER_THRESHOLD evidence"
+            "natural-device execution prerequisites for family/cluster threshold evidence"
         ),
         output_root=output_root,
         overwrite=overwrite,
@@ -169,11 +164,6 @@ def analyze_confirmatory_campaign(
     *,
     anchor_gate_diagnostics_directory: Path | None = None,
 ) -> Path:
-    """Analyze confirmatory campaign and export publication artifacts.
-
-    Confirmatory claims require a checksum-verified anchor-gate artifact and a
-    programme-bound confirmatory handoff. Missing or stale gate evidence fails closed.
-    """
     from datp_core.anchor.gate import (
         load_anchor_confirmatory_handoff,
         load_verified_anchor_gate_artifact,
@@ -263,11 +253,6 @@ def _confirmatory_mechanisms() -> tuple[MechanismEvidence, ...]:
 
 
 def _confirmatory_score_geometry() -> tuple[tuple[ScoreGeometryResult, ...], tuple[FigureSpec, ...]]:
-    """Build per-seed score geometry evidence and empirical-CDF figure specs.
-
-    Every evaluation-document client is retained. Missing score artifacts raise.
-    Unavailable roles become typed unavailable CDF series rather than silent omission.
-    """
     geometries: list[ScoreGeometryResult] = []
     figures: list[FigureSpec] = []
     for seed in CONFIRMATORY_SEED_COHORT.values:
@@ -316,7 +301,7 @@ def _persist_score_geometry(
 
 
 def _empirical_cdf_figure_from_geometry(geometry: ScoreGeometryResult) -> FigureSpec:
-    from datp_core.reporting.figures import EmpiricalCdfFigureSeries, empirical_cdf_series_from_points
+    from datp_core.presentation.figures import EmpiricalCdfFigureSeries, empirical_cdf_series_from_points
 
     series: list[EmpiricalCdfFigureSeries] = []
     for client_geometry in geometry.clients:
@@ -458,13 +443,6 @@ def _client_evaluation_scores(
 
 
 def _confirmatory_cluster_mechanisms() -> tuple[MechanismEvidence, ...]:
-    """Load CLUSTER_THRESHOLD mechanism evidence when a complete cohort is present.
-
-    Confirmatory SHARED_THRESHOLD-versus-LOCAL_THRESHOLD analysis does not require
-    CLUSTER_THRESHOLD. A completely absent cluster cohort yields no mechanism
-    records. A partial or corrupt cohort fails closed so incomplete mechanism
-    execution cannot look complete.
-    """
     from pydantic import TypeAdapter, ValidationError
 
     from datp_core.analysis.mechanisms import (
@@ -595,7 +573,6 @@ def _confirmatory_declaration() -> ExperimentDeclaration:
 
 
 def _declaration_for_threshold_method(method: FederatedThresholdMethod) -> ExperimentDeclaration:
-    """Map threshold methods to the experiment declaration that publishes their run layout."""
     if method in {
         FederatedThresholdMethod.SHARED_THRESHOLD,
         FederatedThresholdMethod.LOCAL_THRESHOLD,
@@ -606,7 +583,7 @@ def _declaration_for_threshold_method(method: FederatedThresholdMethod) -> Exper
         if len(matches) != 1:
             raise ScientificContractError("family/grouped mechanism experiment must be declared exactly once")
         return matches[0]
-    raise ScientificContractError(f"confirmatory workflow cannot resolve a publication coordinate for {method.value}")
+    raise ScientificContractError(f"confirmatory experiment cannot resolve a publication coordinate for {method.value}")
 
 
 def _confirmatory_coordinate(training_seed: Seed, method: FederatedThresholdMethod) -> ExperimentCoordinate:
@@ -644,10 +621,6 @@ def load_fedavg_cv_fpr_effect(
     *,
     experiment: ExperimentId,
 ) -> FedAvgCvFprEffectEvidence:
-    """Load FedAvg SHARED/LOCAL CV(FPR) corners with evaluation provenance from confirmatory artifacts.
-
-    ``experiment`` stamps the absorption (or other consumer) observation identity onto the corners.
-    """
     shared_document = load_evaluation_document(
         _evaluation_path(training_seed, FederatedThresholdMethod.SHARED_THRESHOLD)
     )
@@ -664,7 +637,6 @@ def absorption_corner_from_evaluation_document(
     *,
     experiment: ExperimentId,
 ) -> AbsorptionCornerEvidence:
-    """Map one federated evaluation document into typed absorption corner provenance."""
     coordinate = document.score_coordinate
     evidence = document.fixed_score_evidence
     coefficient = (
