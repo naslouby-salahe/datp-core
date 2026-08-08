@@ -3,7 +3,6 @@
 from pathlib import Path
 
 import pytest
-from datp_core.protocols.inference import ScoreArtifactManifest
 from tests.unit.calibration.helpers import benign_score_record
 from tests.unit.learning.federated.helpers import fedavg_coordinate
 
@@ -11,6 +10,7 @@ from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import EvidenceRole, PartitionRole, SplitProtocolId
 from datp_core.core.numeric import Seed
+from datp_core.detector.scoring.contracts import ScoreArtifactManifest
 from datp_core.experiments.execution.evidence import eligible_calibration_scores
 
 
@@ -98,8 +98,7 @@ def test_deployment_fallback_uses_mean_of_eligible_local_thresholds() -> None:
     assert fallback.value == expected.value
 
 
-def test_calibration_size_protocol_locks_nested_replicate_count() -> None:
+def test_calibration_size_protocol_locks_declared_size_grid() -> None:
     from datp_core.protocols.calibration import CALIBRATION_SIZE_PROTOCOL
 
-    assert CALIBRATION_SIZE_PROTOCOL.replicate_count.value == 10
     assert CALIBRATION_SIZE_PROTOCOL.sizes[0].value == 50

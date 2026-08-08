@@ -4,7 +4,6 @@ import dataclasses
 from pathlib import Path
 
 import polars as pl
-from datp_core.protocols.inference import FixedScoreInvariant, ScoreArtifactManifest, ScoreRecord
 from sklearn.metrics import roc_auc_score
 from tests.unit.learning.federated.helpers import AUTOENCODER, BATCH_SIZE, FEATURE_NAMES, benign_frame, client_identity
 from tests.unit.scoring.helpers import selected_checkpoint
@@ -12,13 +11,14 @@ from tests.unit.scoring.helpers import selected_checkpoint
 from datp_core.core.identifiers import ScoreFrameColumn
 from datp_core.core.numeric import RowCount, Seed
 from datp_core.data.populations.contracts import PopulationOutcomeLabel
-from datp_core.detector.scoring.federated import publish_federated_scores
-from datp_core.detector.scoring.models import ClientScoringInput, GenerateFederatedScoresRequest, ScoreGenerationRequest
-from datp_core.detector.training.contracts import FederatedTrainingCoordinate
-from datp_core.detector.training.models.checkpoints import (
+from datp_core.detector.checkpoints.contracts import (
     CheckpointCandidate,
     CheckpointDecision,
 )
+from datp_core.detector.scoring.contracts import FixedScoreInvariant, ScoreArtifactManifest, ScoreRecord
+from datp_core.detector.scoring.federated import publish_federated_scores
+from datp_core.detector.scoring.models import ClientScoringInput, GenerateFederatedScoresRequest, ScoreGenerationRequest
+from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 
 
 def test_federated_training_coordinate_has_no_threshold_identity_field() -> None:
