@@ -4,7 +4,7 @@ from pydantic import model_validator
 
 from datp_core.analysis.inference.bootstrap.contracts import BcaOutcome, BootstrapInterval
 from datp_core.analysis.inference.bootstrap.estimation import seed_level_bca_interval
-from datp_core.analysis.inference.wilcoxon import PairedInferenceProtocol
+from datp_core.analysis.inference.contracts import PairedInferenceProtocol
 from datp_core.analysis.scientific_decision import ScientificDecision, ScientificDecisionResult
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.contracts import StrictModel

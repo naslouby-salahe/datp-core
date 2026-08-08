@@ -7,7 +7,7 @@ from shutil import rmtree
 
 from datp_core.analysis.contrasts import PairedContrast, SupplementaryPairedAnalysisPlan, build_paired_contrast
 from datp_core.analysis.evidence import AnalyzeExternalEvidenceRequest, analyze_external_evidence
-from datp_core.analysis.inference.wilcoxon import PairedInferenceProtocol
+from datp_core.analysis.inference.contracts import PairedInferenceProtocol
 from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
 from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.artifacts.provenance import Checksum

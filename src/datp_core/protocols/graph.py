@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Protocol
 
+from datp_core.analysis.inference.contracts import PairedInferenceProtocol
+from datp_core.artifacts.provenance import Checksum
 from datp_core.core.contracts import StrictModel
 from datp_core.core.identifiers import (
     DatasetId,
@@ -18,16 +20,14 @@ from datp_core.core.identifiers import (
     TemporalState,
     TrainingModelId,
 )
-from datp_core.artifacts.provenance import Checksum
 from datp_core.core.numeric import Seed
-
-from datp_core.experiments.anchor.spec import AnchorDecisionProtocol
-from .calibration import CalibrationEligibilityProtocol, ClusterThresholdProtocol
+from datp_core.data.populations.contracts import PopulationDeclaration
 from datp_core.detector.checkpoints.contracts import CheckpointProtocol
+from datp_core.experiments.anchor.spec import AnchorDecisionProtocol
+
+from .calibration import CalibrationEligibilityProtocol, ClusterThresholdProtocol
 from .experiments import ConfirmatoryEndpoint, ExperimentDeclaration
-from .populations import PopulationDeclaration
 from .splits import FractionalSplitProtocol, StaticReferenceSplitProtocol, TemporalSplitProtocol
-from datp_core.analysis.inference.wilcoxon import PairedInferenceProtocol
 from .traffic_rates import TrafficRateEvidence
 from .training import FedAvgProtocol
 

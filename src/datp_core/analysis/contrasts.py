@@ -2,7 +2,7 @@
 
 from pydantic import model_validator
 
-from datp_core.analysis.inference.wilcoxon import PairedInferenceProtocol
+from datp_core.analysis.inference.contracts import PairedInferenceProtocol
 from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
 from datp_core.analysis.metrics.fixed_score_validation import validate_fixed_score_controls
 from datp_core.artifacts.provenance import Checksum
@@ -137,8 +137,8 @@ class SupplementaryPairedAnalysisPlan(StrictModel):
             raise ValueError("supplementary paired analysis requires non-confirmatory evidence")
         if self.left_method is self.right_method:
             raise ValueError("supplementary paired analysis requires two distinct threshold methods")
-        if self.seed_cohort != self.inference_protocol.seed_cohort:
-            raise ValueError("supplementary plan and inference protocol must share one seed cohort")
+        if self.seed_cohort.member_count != self.inference_protocol.paired_seed_count:
+            raise ValueError("supplementary plan and inference protocol must require the same seed count")
         return self
 
 

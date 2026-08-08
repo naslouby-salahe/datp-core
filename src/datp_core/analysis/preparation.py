@@ -22,9 +22,9 @@ from datp_core.analysis.inference.bootstrap.validation import (
     validate_confirmatory_contrasts,
     validate_supplementary_contrasts,
 )
+from datp_core.analysis.inference.contracts import PairedInferenceProtocol
 from datp_core.analysis.inference.multiplicity import MultiplicityPlan, MultiplicityResult, holm_adjust
 from datp_core.analysis.inference.wilcoxon import (
-    PairedInferenceProtocol,
     RankBiserialResult,
     WilcoxonResult,
     blocked_rank_biserial,

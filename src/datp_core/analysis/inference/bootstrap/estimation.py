@@ -18,7 +18,8 @@ from datp_core.analysis.inference.bootstrap.validation import (
     validate_confirmatory_contrasts,
     validate_supplementary_contrasts,
 )
-from datp_core.analysis.inference.wilcoxon import PairedInferenceProtocol, paired_deltas
+from datp_core.analysis.inference.contracts import PairedInferenceProtocol
+from datp_core.analysis.inference.wilcoxon import paired_deltas
 from datp_core.core.numeric import ConfidenceLevel, MetricValue, Seed
 
 
@@ -232,7 +233,7 @@ def seed_level_bca_interval(
             point_estimate=None,
             reason=BcaReason.SEED_COHORT_MISMATCH,
         )
-    if require_full_cohort and len(values) != protocol.seed_cohort.member_count.value:
+    if require_full_cohort and len(values) != protocol.paired_seed_count.value:
         return BootstrapInterval.blocked(
             protocol=protocol,
             analysis_seed=analysis_seed,

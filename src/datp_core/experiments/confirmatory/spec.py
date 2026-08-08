@@ -5,13 +5,12 @@ from typing import Literal
 
 from pydantic import model_validator
 
-from datp_core.analysis.inference.wilcoxon import (
+from datp_core.analysis.inference.contracts import (
     PairedInferenceProtocol,
     WilcoxonAlternative,
     WilcoxonComputationPreference,
     WilcoxonZeroMethod,
 )
-from datp_core.protocols.metrics import CONFIRMATORY_METRICS
 from datp_core.core.contracts import StrictModel
 from datp_core.core.identifiers import (
     EffectSizeId,
@@ -35,6 +34,7 @@ from datp_core.experiments.common.seeds import (
     CONFIRMATORY_SEED_COHORT,
     SeedCohort,
 )
+from datp_core.protocols.metrics import CONFIRMATORY_METRICS
 
 
 class ConfirmatoryDeltaDirection(StrEnum):

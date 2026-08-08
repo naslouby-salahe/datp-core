@@ -20,20 +20,17 @@ from datp_core.core.identifiers import (
 from datp_core.core.numeric import (
     BatchSize,
     DataLoaderWorkerCount,
-    FeatureCount,
-    LocalEpochCount,
-    RoundNumber,
-)
-from datp_core.core.numeric import (
     DittoRegularization,
+    FeatureCount,
     LearningRate,
+    LocalEpochCount,
     MetricValue,
     ModelCoefficientValue,
     ProximalCoefficient,
     Ratio,
+    RoundNumber,
     WeightDecay,
 )
-
 from datp_core.detector.checkpoints.contracts import CheckpointProtocol
 
 
@@ -44,7 +41,7 @@ class AutoencoderArchitecture(Sequence[FeatureCount]):
     widths: tuple[FeatureCount, ...]
 
     def __post_init__(self) -> None:
-        normalized = tuple(width if isinstance(width, FeatureCount) else FeatureCount(width) for width in self.widths)
+        normalized = self.widths
         object.__setattr__(self, "widths", normalized)
         validate_non_empty_tuple(normalized, "autoencoder architecture")
         if len(normalized) < 2:

@@ -23,7 +23,7 @@ from datp_core.core.numeric import CalibrationSize, CoverageTarget, ReplicateInd
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.scoring.contracts import ScoreArtifactManifest
 from datp_core.detector.training.models import FederatedTrainingCoordinate
-from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
+from datp_core.experiments.common.coordinates import ExternalTemporalExecutionIdentity
 from datp_core.protocols.temporal import TemporalDeploymentProvenance
 from datp_core.thresholds.dispatch import ThresholdConstructionResult
 from datp_core.thresholds.variants.conformal import ConformalAssignment

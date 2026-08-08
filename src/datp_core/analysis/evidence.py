@@ -8,8 +8,8 @@ from typing import TypeVar
 from pydantic import ValidationError
 
 from datp_core.analysis.contrasts import PairedContrast, SupplementaryPairedAnalysisPlan
+from datp_core.analysis.inference.contracts import PairedInferenceProtocol
 from datp_core.analysis.inference.multiplicity import MultiplicityPlan
-from datp_core.analysis.inference.wilcoxon import PairedInferenceProtocol
 from datp_core.analysis.mechanisms import MechanismEvidence
 from datp_core.analysis.preparation import (
     AnalysisDocument,
@@ -35,7 +35,7 @@ from datp_core.core.contracts import StrictModel
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import ExperimentId, FederatedThresholdMethod, PublicationStatus
 from datp_core.core.numeric import Seed
-from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
+from datp_core.experiments.common.coordinates import ExternalTemporalExecutionIdentity
 from datp_core.protocols.temporal import TemporalDeploymentProvenance
 
 AnalysisDocumentT = TypeVar("AnalysisDocumentT", bound=StrictModel)

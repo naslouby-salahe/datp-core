@@ -7,7 +7,7 @@ from pydantic import model_validator
 
 from datp_core.analysis.inference.bootstrap.contracts import BootstrapInterval
 from datp_core.analysis.inference.bootstrap.estimation import seed_level_bca_interval
-from datp_core.analysis.inference.wilcoxon import PairedInferenceProtocol
+from datp_core.analysis.inference.contracts import PairedInferenceProtocol
 from datp_core.analysis.scientific_decision import ScientificDecision, ScientificDecisionResult
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.contracts import StrictModel
@@ -511,7 +511,7 @@ def _temporal_inference_protocol(seed_cohort: SeedCohort) -> PairedInferenceProt
     base = CONFIRMATORY_INFERENCE_PROTOCOL
     return PairedInferenceProtocol(
         confidence_level=base.confidence_level,
-        seed_cohort=seed_cohort,
+        paired_seed_count=seed_cohort.member_count,
         interval_method=base.interval_method,
         bootstrap_replicates=base.bootstrap_replicates,
         statistical_test=base.statistical_test,

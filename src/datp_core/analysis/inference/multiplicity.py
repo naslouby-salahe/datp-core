@@ -5,7 +5,8 @@ from typing import ClassVar
 from pydantic import model_validator
 from statsmodels.stats.multitest import multipletests
 
-from datp_core.analysis.inference.wilcoxon import PairedInferenceProtocol, PValue
+from datp_core.analysis.inference.contracts import PairedInferenceProtocol
+from datp_core.analysis.inference.wilcoxon import PValue
 from datp_core.core.contracts import StrictModel
 from datp_core.core.identifiers import (
     EvidenceRole,

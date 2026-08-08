@@ -4,7 +4,7 @@ from enum import StrEnum
 
 from pydantic import model_validator
 
-from datp_core.analysis.inference.wilcoxon import PairedInferenceProtocol
+from datp_core.analysis.inference.contracts import PairedInferenceProtocol
 from datp_core.core.contracts import StrictModel
 from datp_core.core.identifiers import AvailabilityStatus, IntervalMethod
 from datp_core.core.numeric import BootstrapReplicateCount, ConfidenceLevel, MetricValue, Seed

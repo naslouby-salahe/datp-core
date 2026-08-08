@@ -2,7 +2,7 @@
 
 from datp_core.analysis.inference.bootstrap.contracts import BootstrapInterval
 from datp_core.analysis.inference.bootstrap.estimation import paired_bca_interval
-from datp_core.analysis.inference.contrasts import PairedContrasts
+from datp_core.analysis.contrasts import PairedContrasts
 from datp_core.analysis.inference.decisions import ScientificDecision, ScientificDecisionResult, blocked_decision
 from datp_core.analysis.inference.wilcoxon import (
     RankBiserialResult,
