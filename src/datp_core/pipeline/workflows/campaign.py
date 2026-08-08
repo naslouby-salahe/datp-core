@@ -54,6 +54,14 @@ from datp_core.pipeline.workflows.federated_threshold_estimation import (
 from datp_core.pipeline.workflows.federated_threshold_estimation import (
     report_fixed_coefficient_statistics_sensitivity as _report_fixed_coefficient,
 )
+from datp_core.pipeline.workflows.heterogeneity import (
+    MechanismAnalysisDirectory,
+    analyze_controlled_heterogeneity_sweep,
+    analyze_heterogeneity_benefit_association,
+    analyze_per_client_score_geometry,
+    analyze_threshold_movement_tradeoff,
+    run_controlled_heterogeneity_sweep_seed,
+)
 from datp_core.pipeline.workflows.threshold_robustness import (
     calibration_size_ablation_analysis_marker_present as _calibration_size_ablation_analysis_marker_present,
 )
@@ -149,6 +157,10 @@ _REGISTERED_WORKFLOWS: tuple[RegisteredWorkflow, ...] = (
     RegisteredWorkflow(experiment_id=ExperimentId.FIXED_SHRINKAGE_CURVE, anchor_gated=True),
     RegisteredWorkflow(experiment_id=ExperimentId.SIZE_AWARE_SHRINKAGE, anchor_gated=True),
     RegisteredWorkflow(experiment_id=ExperimentId.LOCAL_CONFORMAL_COVERAGE, anchor_gated=True),
+    RegisteredWorkflow(experiment_id=ExperimentId.CONTROLLED_HETEROGENEITY_SWEEP, anchor_gated=True),
+    RegisteredWorkflow(experiment_id=ExperimentId.PER_CLIENT_SCORE_GEOMETRY, anchor_gated=True),
+    RegisteredWorkflow(experiment_id=ExperimentId.HETEROGENEITY_BENEFIT_ASSOCIATION, anchor_gated=True),
+    RegisteredWorkflow(experiment_id=ExperimentId.THRESHOLD_MOVEMENT_TRADEOFF, anchor_gated=True),
 )
 
 _CAMPAIGN_ORDER: tuple[ExperimentId, ...] = tuple(item.experiment_id for item in _REGISTERED_WORKFLOWS)
@@ -654,6 +666,57 @@ def _dispatch_fixed_coefficient_statistics_sensitivity(
     )
 
 
+def _dispatch_controlled_heterogeneity_sweep(
+    seeds: tuple[Seed, ...], output_root: Path, overwrite: bool
+) -> DispatchOutcome:
+    results = tuple(
+        run_controlled_heterogeneity_sweep_seed(seed, output_root=output_root, overwrite=overwrite) for seed in seeds
+    )
+    return DispatchOutcome(
+        detail=f"controlled_heterogeneity_sweep seeds={len(seeds)}",
+        method_outcomes=_seed_completion_outcomes(
+            experiment_id=ExperimentId.CONTROLLED_HETEROGENEITY_SWEEP,
+            completed_by_seed=tuple(item.completed_threshold_methods for item in results),
+        ),
+    )
+
+
+def _dispatch_analysis_only_prerequisite_check(experiment_id: ExperimentId) -> DispatchOutcome:
+    declared = _declared_threshold_methods(experiment_id)
+    return DispatchOutcome(
+        detail=f"analysis-only experiment {experiment_id.value}: reuses frozen confirmatory score artifacts",
+        method_outcomes=tuple(
+            ThresholdMethodOutcome(
+                method=method,
+                status=ThresholdMethodExecutionStatus.COMPLETED,
+                detail="analysis-only: reuses frozen confirmatory score artifacts",
+            )
+            for method in declared
+        ),
+    )
+
+
+def _dispatch_per_client_score_geometry(
+    seeds: tuple[Seed, ...], output_root: Path, overwrite: bool
+) -> DispatchOutcome:
+    del seeds, output_root, overwrite
+    return _dispatch_analysis_only_prerequisite_check(ExperimentId.PER_CLIENT_SCORE_GEOMETRY)
+
+
+def _dispatch_heterogeneity_benefit_association(
+    seeds: tuple[Seed, ...], output_root: Path, overwrite: bool
+) -> DispatchOutcome:
+    del seeds, output_root, overwrite
+    return _dispatch_analysis_only_prerequisite_check(ExperimentId.HETEROGENEITY_BENEFIT_ASSOCIATION)
+
+
+def _dispatch_threshold_movement_tradeoff(
+    seeds: tuple[Seed, ...], output_root: Path, overwrite: bool
+) -> DispatchOutcome:
+    del seeds, output_root, overwrite
+    return _dispatch_analysis_only_prerequisite_check(ExperimentId.THRESHOLD_MOVEMENT_TRADEOFF)
+
+
 def _temporal_method_outcomes(results: tuple[TemporalSeedResult, ...]) -> tuple[ThresholdMethodOutcome, ...]:
     unavailable: dict[FederatedThresholdMethod, str] = {}
     completed_per_seed: list[set[FederatedThresholdMethod]] = []
@@ -983,6 +1046,38 @@ def _report_ciciot_file_client_boundary(experiment_id: ExperimentId, overwrite: 
     return (result.output_directory,), str(result.output_directory)
 
 
+def _report_controlled_heterogeneity_sweep(
+    experiment_id: ExperimentId, overwrite: bool
+) -> tuple[tuple[Path, ...], str]:
+    del experiment_id
+    path = analyze_controlled_heterogeneity_sweep(overwrite=overwrite)
+    return (path,), str(path)
+
+
+def _report_per_client_score_geometry(
+    experiment_id: ExperimentId, overwrite: bool
+) -> tuple[tuple[Path, ...], str]:
+    del experiment_id
+    path = analyze_per_client_score_geometry(overwrite=overwrite)
+    return (path,), str(path)
+
+
+def _report_heterogeneity_benefit_association(
+    experiment_id: ExperimentId, overwrite: bool
+) -> tuple[tuple[Path, ...], str]:
+    del experiment_id
+    path = analyze_heterogeneity_benefit_association(overwrite=overwrite)
+    return (path,), str(path)
+
+
+def _report_threshold_movement_tradeoff(
+    experiment_id: ExperimentId, overwrite: bool
+) -> tuple[tuple[Path, ...], str]:
+    del experiment_id
+    path = analyze_threshold_movement_tradeoff(overwrite=overwrite)
+    return (path,), str(path)
+
+
 def _report_fedprox_absorption_stress_test(
     experiment_id: ExperimentId, overwrite: bool
 ) -> tuple[tuple[Path, ...], str]:
@@ -1280,6 +1375,23 @@ def _temporal_analysis_marker_present(experiment_id: ExperimentId) -> bool:
     )
 
 
+def _heterogeneity_analysis_marker_present(experiment_id: ExperimentId) -> bool:
+    from datp_core.reporting.export import MECHANISM_REPORT_FILENAME, PUBLICATION_FILENAME
+
+    directory = (
+        OUTPUTS_ROOT
+        / MechanismAnalysisDirectory.ROOT
+        / experiment_id.value
+        / (
+            PopulationId.NBAIOT_DIRICHLET_CLIENTS.value
+            if experiment_id is ExperimentId.CONTROLLED_HETEROGENEITY_SWEEP
+            else PopulationId.NBAIOT_NATURAL_DEVICES.value
+        )
+        / MechanismAnalysisDirectory.ANALYSIS
+    )
+    return (directory / PUBLICATION_FILENAME).is_file() and (directory / MECHANISM_REPORT_FILENAME).is_file()
+
+
 _WORKFLOW_HANDLERS: dict[ExperimentId, WorkflowHandlers] = {
     ExperimentId.SHARED_VS_LOCAL_CONFIRMATION: WorkflowHandlers(
         dispatch=_dispatch_confirmatory,
@@ -1360,6 +1472,26 @@ _WORKFLOW_HANDLERS: dict[ExperimentId, WorkflowHandlers] = {
         dispatch=_dispatch_fixed_coefficient_statistics_sensitivity,
         report=_report_fixed_coefficient,
         analysis_marker=_fixed_coefficient_analysis_marker_present,
+    ),
+    ExperimentId.CONTROLLED_HETEROGENEITY_SWEEP: WorkflowHandlers(
+        dispatch=_dispatch_controlled_heterogeneity_sweep,
+        report=_report_controlled_heterogeneity_sweep,
+        analysis_marker=_heterogeneity_analysis_marker_present,
+    ),
+    ExperimentId.PER_CLIENT_SCORE_GEOMETRY: WorkflowHandlers(
+        dispatch=_dispatch_per_client_score_geometry,
+        report=_report_per_client_score_geometry,
+        analysis_marker=_heterogeneity_analysis_marker_present,
+    ),
+    ExperimentId.HETEROGENEITY_BENEFIT_ASSOCIATION: WorkflowHandlers(
+        dispatch=_dispatch_heterogeneity_benefit_association,
+        report=_report_heterogeneity_benefit_association,
+        analysis_marker=_heterogeneity_analysis_marker_present,
+    ),
+    ExperimentId.THRESHOLD_MOVEMENT_TRADEOFF: WorkflowHandlers(
+        dispatch=_dispatch_threshold_movement_tradeoff,
+        report=_report_threshold_movement_tradeoff,
+        analysis_marker=_heterogeneity_analysis_marker_present,
     ),
 }
 _require_dispatch_covers_registry(_WORKFLOW_HANDLERS, name="workflow handlers")
