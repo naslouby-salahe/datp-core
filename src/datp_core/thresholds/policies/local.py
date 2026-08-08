@@ -3,21 +3,17 @@
 from dataclasses import dataclass
 from typing import ClassVar
 
-from datp_core.domain.enums import FederatedThresholdMethod
-from datp_core.domain.errors import ScientificContractError
-from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.protocols.calibration import QuantileProtocol
-from datp_core.thresholding.assignments import (
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import FederatedThresholdMethod
+from datp_core.detector.training.contracts import FederatedTrainingCoordinate
+from datp_core.thresholds.contracts import (
     LocalQuantile,
+    QuantileProtocol,
     ThresholdAssignment,
     validate_assignments,
     validate_local_quantiles,
 )
-from datp_core.thresholding.quantiles import (
-    ClientBenignCalibrationScores,
-    local_quantile,
-    require_eligible_cohort,
-)
+from datp_core.thresholds.quantiles import ClientBenignCalibrationScores, local_quantile, require_eligible_cohort
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,7 +33,7 @@ class LocalThresholdResult:
             self.assignments,
             tuple(ThresholdAssignment(item.client, item.value) for item in self.local_quantiles),
             label="threshold assignments",
-            mismatch_message=("a local threshold assignment must equal the client's own local quantile"),
+            mismatch_message="a local threshold assignment must equal the client's own local quantile",
         )
 
 
@@ -52,9 +48,8 @@ def construct_local_threshold(
         )
     require_eligible_cohort(eligible, "local threshold construction")
     local_quantiles = tuple(local_quantile(client_scores, protocol.quantile) for client_scores in eligible)
-    assignments = tuple(ThresholdAssignment(item.client, item.value) for item in local_quantiles)
     return LocalThresholdResult(
         coordinate=eligible[0].coordinate,
         local_quantiles=local_quantiles,
-        assignments=assignments,
+        assignments=tuple(ThresholdAssignment(item.client, item.value) for item in local_quantiles),
     )
