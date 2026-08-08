@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from datp_core.domain.enums import DatasetId, RawDatasetDirectory, ReusableDataCoordinateKind
+from datp_core.core.identifiers import DatasetId, RawDatasetDirectory, ReusableDataCoordinateKind
 
 
 def raw_dataset_directory(dataset: DatasetId) -> RawDatasetDirectory:

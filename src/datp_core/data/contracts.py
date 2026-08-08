@@ -7,11 +7,11 @@ from pathlib import Path
 import pyarrow as pa
 
 import datp_core.domain.enums as domain_enums
-from datp_core.domain.contracts import StrictModel
-from datp_core.domain.enums import AvailabilityStatus, DatasetId
-from datp_core.domain.provenance import canonical_json_text, canonical_mapping
-from datp_core.domain.values.checksums import Checksum, checksum_text
-from datp_core.domain.values.counts import (
+from datp_core.artifacts.provenance import Checksum, checksum_text
+from datp_core.artifacts.serializers.json import canonical_json_text, canonical_mapping
+from datp_core.core.contracts import StrictModel
+from datp_core.core.identifiers import AvailabilityStatus, DatasetId
+from datp_core.core.numeric import (
     ByteCount,
     CanonicalColumnPosition,
     RowCount,

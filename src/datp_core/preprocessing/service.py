@@ -1,4 +1,4 @@
-from datp_core.datasets.canonical_cache import require_canonical_publication_complete
+from datp_core.data.canonical_cache import require_canonical_publication_complete
 from datp_core.datasets.edge_iiotset.schema import EdgeCanonicalColumn
 from datp_core.datasets.partitioning.construction import (
     build_preprocessing_handoff,
@@ -9,8 +9,8 @@ from datp_core.datasets.partitioning.contracts import (
     PreprocessingHandoff,
     PreprocessingHandoffRequest,
 )
-from datp_core.datasets.paths import canonical_root_under
-from datp_core.datasets.registry import construct_population, dataset_binding, resolve_population
+from datp_core.data.paths import canonical_root_under
+from datp_core.data.registry import construct_population, dataset_binding, resolve_population
 from datp_core.domain.enums import ContractSubject, DatasetId, PopulationId, PreprocessingProtocolId, SplitProtocolId
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.identifiers import CaptureTimestampColumn, FeatureName, FeatureNameSequence

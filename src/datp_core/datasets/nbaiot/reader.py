@@ -4,8 +4,8 @@ from pathlib import Path
 
 import polars as pl
 
-from datp_core.datasets.contracts import AggregateCountColumn, CanonicalProvenanceColumn
-from datp_core.datasets.materialization import provenance_expressions
+from datp_core.data.contracts import AggregateCountColumn, CanonicalProvenanceColumn
+from datp_core.data.materialization import provenance_expressions
 
 from .schema import (
     NBAIOT_FEATURE_COLUMNS,

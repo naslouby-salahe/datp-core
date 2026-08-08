@@ -5,9 +5,9 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-from datp_core.datasets.canonical_cache import CanonicalReuseRequest, reuse_published_canonical
-from datp_core.datasets.contracts import CanonicalSchema, MaterializedDataset, ModelInputEligibilityPolicy
-from datp_core.datasets.materialization import CanonicalPublication, publish_canonical
+from datp_core.data.canonical_cache import CanonicalReuseRequest, reuse_published_canonical
+from datp_core.data.contracts import CanonicalSchema, MaterializedDataset, ModelInputEligibilityPolicy
+from datp_core.data.materialization import CanonicalPublication, publish_canonical
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

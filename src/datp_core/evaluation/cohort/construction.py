@@ -4,7 +4,7 @@ from datp_core.datasets.partitioning.contracts import (
     ClientPartitionCounts,
     PopulationCapabilities,
 )
-from datp_core.datasets.registry import population_capabilities
+from datp_core.data.registry import population_capabilities
 from datp_core.domain.enums import (
     ContractSubject,
     EvaluationCohort,

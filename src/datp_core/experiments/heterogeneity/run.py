@@ -58,7 +58,7 @@ from datp_core.pipeline.scoring.models import FederatedScoreAssetName
 from datp_core.presentation.export import export_mechanism_publication
 from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration
 from datp_core.protocols.metrics import FIXED_SCORE_AUROC_INVARIANCE_TOLERANCE
-from datp_core.protocols.populations import DIRICHLET_CONCENTRATIONS
+from datp_core.data.populations.declarations import DIRICHLET_CONCENTRATIONS
 from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.runtime.configuration import OUTPUTS_ROOT
 

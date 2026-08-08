@@ -10,7 +10,7 @@ import polars as pl
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from datp_core.datasets.canonical_cache import (
+from datp_core.data.canonical_cache import (
     CanonicalAsset,
     CanonicalAssetLayout,
     PublicationMatchRequest,
@@ -21,7 +21,7 @@ from datp_core.datasets.canonical_cache import (
     serialized_manifest_json,
     write_source_state,
 )
-from datp_core.datasets.contracts import (
+from datp_core.data.contracts import (
     CanonicalAssetRole,
     CanonicalColumn,
     CanonicalColumnRole,
@@ -44,10 +44,10 @@ from datp_core.datasets.contracts import (
     schema_checksum_document_json,
     schema_content,
 )
-from datp_core.datasets.publication import publish_canonical_atomically
-from datp_core.domain.enums import DatasetId, PublicationStatus
-from datp_core.domain.values.checksums import Checksum, checksum_file, checksum_text
-from datp_core.domain.values.counts import ByteCount, CanonicalColumnPosition, RowCount, SourceFileCount
+from datp_core.artifacts.provenance import Checksum, checksum_file, checksum_text
+from datp_core.core.identifiers import DatasetId, PublicationStatus
+from datp_core.core.numeric import ByteCount, CanonicalColumnPosition, RowCount, SourceFileCount
+from datp_core.data.publication import publish_canonical_atomically
 
 _COMPLETE_NAME, _MANIFEST_NAME, _SCHEMA_NAME, _SOURCE_STATE_NAME = publication_artifact_names()
 
@@ -397,7 +397,7 @@ def _validate_written_assets[AssetRoleT: StrEnum](
         raise ValueError("canonical writer returned unexpected assets")
     if not _asset_paths_are_unique(assets):
         raise ValueError("canonical writer returned duplicate asset paths")
-    from datp_core.datasets.canonical_cache import asset_is_valid, serialized_asset
+    from datp_core.data.canonical_cache import asset_is_valid, serialized_asset
 
     if not all(asset_is_valid(temporary, serialized_asset(asset), expected_physical_schema) for asset in assets):
         raise ValueError("canonical writer returned an invalid Parquet asset")

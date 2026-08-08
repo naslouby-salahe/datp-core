@@ -12,7 +12,7 @@ from datp_core.datasets.ciciot2023.schema import (
     CICIoT2023EligibilityReason,
     CICIoT2023NormalizedLabel,
 )
-from datp_core.datasets.contracts import CanonicalProvenanceColumn
+from datp_core.data.contracts import CanonicalProvenanceColumn
 from datp_core.datasets.partitioning.construction import PopulationFinalizationRequest, finalize_population
 from datp_core.datasets.partitioning.contracts import (
     CLIENT_ID_COLUMN,
@@ -31,7 +31,7 @@ from datp_core.datasets.partitioning.paths import canonical_data_glob
 from datp_core.domain.enums import DatasetId, PopulationId, PopulationIdentityKind, SplitProtocolId
 from datp_core.domain.errors import CapabilityError, ScientificContractError
 from datp_core.domain.values.counts import Seed
-from datp_core.protocols.populations import CICIOT_FILE_CLIENTS
+from datp_core.data.populations.declarations import CICIOT_FILE_CLIENTS
 
 _ELIGIBLE = CICIoT2023Column.MODEL_INPUT_ELIGIBLE
 _LABEL = CICIoT2023Column.LABEL

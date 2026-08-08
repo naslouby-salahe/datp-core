@@ -23,7 +23,7 @@ from datp_core.domain.provenance import canonical_checksum, canonical_json_text
 from datp_core.domain.values.checksums import Checksum, checksum_text
 from datp_core.protocols.anchor import ANCHOR_DECISION_PROTOCOL
 from datp_core.protocols.metrics import CONFIRMATORY_METRICS
-from datp_core.protocols.populations import split_protocol_for_population
+from datp_core.data.populations.declarations import split_protocol_for_population
 from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL
 from datp_core.protocols.training import CHECKPOINT_PROTOCOL, CHECKPOINT_SELECTION_RULE, NBAIOT_AUTOENCODER
 from datp_core.protocols.validation import CONFIRMATORY_ENDPOINT

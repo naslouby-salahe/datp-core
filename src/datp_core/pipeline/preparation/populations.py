@@ -27,7 +27,7 @@ from datp_core.datasets.partitioning.contracts import (
 )
 from datp_core.datasets.partitioning.integrity import membership_frame_checksum, validate_split_manifest
 from datp_core.datasets.partitioning.splits import split_membership
-from datp_core.datasets.registry import construct_population
+from datp_core.data.registry import construct_population
 from datp_core.domain.enums import ContractSubject, DatasetId, PopulationId, PublicationStatus, SplitProtocolId
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.provenance import canonical_json_text

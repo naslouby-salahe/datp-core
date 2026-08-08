@@ -5,7 +5,7 @@ from datp_core.datasets.partitioning.contracts import (
     PopulationOutcomeLabel,
     population_allowed_evidence_roles,
 )
-from datp_core.datasets.registry import population_capabilities
+from datp_core.data.registry import population_capabilities
 from datp_core.domain.enums import (
     ContractSubject,
     EvaluationCohort,

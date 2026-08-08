@@ -5,7 +5,7 @@ from pathlib import Path
 
 import polars as pl
 
-from datp_core.datasets.materialization import provenance_expressions
+from datp_core.data.materialization import provenance_expressions
 from datp_core.domain.values.counts import RowCount
 
 from .schema import (

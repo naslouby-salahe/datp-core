@@ -4,7 +4,7 @@ from pathlib import Path
 
 import polars as pl
 
-from datp_core.datasets.contracts import (
+from datp_core.data.contracts import (
     CanonicalManifestDocument,
     CanonicalProvenanceColumn,
     CanonicalPublicationArtifact,
@@ -39,7 +39,7 @@ from datp_core.domain.enums import DatasetId, PopulationId, PopulationIdentityKi
 from datp_core.domain.errors import CapabilityError, DataIntegrityError, ScientificContractError
 from datp_core.domain.values.base import NonNegativeIntegerValue
 from datp_core.domain.values.counts import RowCount, Seed
-from datp_core.protocols.populations import EDGE_SENSOR_GROUPS, EDGE_TEMPORAL_GROUPS
+from datp_core.data.populations.declarations import EDGE_SENSOR_GROUPS, EDGE_TEMPORAL_GROUPS
 
 _GROUP = EdgeCanonicalColumn.BENIGN_SENSOR_GROUP
 _CAPTURE = EdgeCanonicalColumn.CAPTURE_TIMESTAMP

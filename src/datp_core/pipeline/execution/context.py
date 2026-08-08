@@ -7,7 +7,7 @@ import polars as pl
 
 from datp_core.datasets.edge_iiotset.schema import EDGE_NUMERIC_FEATURE_COLUMNS
 from datp_core.datasets.partitioning.contracts import ClientIdentity, ControlledPartitionCondition
-from datp_core.datasets.registry import dataset_binding, population_capabilities
+from datp_core.data.registry import dataset_binding, population_capabilities
 from datp_core.domain.enums import ContractSubject, DatasetId
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.checksums import Checksum

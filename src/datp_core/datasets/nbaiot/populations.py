@@ -4,7 +4,7 @@ from pathlib import Path
 
 import polars as pl
 
-from datp_core.datasets.contracts import CanonicalProvenanceColumn
+from datp_core.data.contracts import CanonicalProvenanceColumn
 from datp_core.datasets.nbaiot.capabilities import NBAIOT_CAPABILITIES
 from datp_core.datasets.nbaiot.schema import (
     NBAIOT_DEVICE_IDENTITIES,
@@ -42,7 +42,7 @@ from datp_core.datasets.partitioning.paths import canonical_data_glob
 from datp_core.domain.enums import DatasetId, PopulationId, PopulationIdentityKind, SplitProtocolId
 from datp_core.domain.errors import DataIntegrityError
 from datp_core.domain.values.counts import CalibrationSize, ClientCount, RowCount, Seed
-from datp_core.protocols.populations import NBAIOT_DIRICHLET_CLIENTS, NBAIOT_NATURAL_DEVICES
+from datp_core.data.populations.declarations import NBAIOT_DIRICHLET_CLIENTS, NBAIOT_NATURAL_DEVICES
 
 _SOURCE_CLIENT = NBaIoTCanonicalColumn.PHYSICAL_CLIENT_ID
 _SOURCE_FAMILY = NBaIoTCanonicalColumn.PHYSICAL_DEVICE_FAMILY

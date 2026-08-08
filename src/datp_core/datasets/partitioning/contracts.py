@@ -9,7 +9,7 @@ import polars as pl
 from pydantic import model_validator
 
 from datp_core.datasets.capabilities import CapabilityStatus, DatasetCapabilities
-from datp_core.datasets.contracts import CanonicalProvenanceColumn
+from datp_core.data.contracts import CanonicalProvenanceColumn
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
     ContractSubject,
@@ -27,7 +27,7 @@ from datp_core.domain.values.checksums import Checksum, checksum_text
 from datp_core.domain.values.counts import ClientCount, RowCount, Seed
 from datp_core.domain.values.identifiers import CaptureTimestampColumn
 from datp_core.domain.values.ratios import DirichletConcentration
-from datp_core.protocols.populations import PopulationDeclaration
+from datp_core.data.populations.declarations import PopulationDeclaration
 
 
 class ControlledPartitionKind(StrEnum):

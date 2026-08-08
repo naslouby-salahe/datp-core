@@ -5,14 +5,14 @@ from pathlib import Path
 
 import pyarrow as pa
 
-from datp_core.datasets.contracts import (
+from datp_core.data.contracts import (
     CanonicalColumn,
     CanonicalColumnRole,
     CanonicalProvenanceColumn,
     CanonicalSchema,
     ColumnLogicalType,
 )
-from datp_core.datasets.materialization import (
+from datp_core.data.materialization import (
     canonical_provenance_arrow_field,
     canonical_provenance_column,
     canonical_schema_checksum,

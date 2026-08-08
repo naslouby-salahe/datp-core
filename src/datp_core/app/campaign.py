@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from datp_core.app.contracts import OverwriteMode
-from datp_core.datasets.registry import DatasetPublication
-from datp_core.datasets.service import DatasetMaterializationRequest, materialize_datasets
+from datp_core.data.registry import DatasetPublication
+from datp_core.data.service import DatasetMaterializationRequest, materialize_datasets
 from datp_core.domain.enums import DatasetId, ExperimentId, ExperimentReadiness, PopulationId
 from datp_core.domain.errors import (
     ProtocolValidationError,
@@ -25,7 +25,7 @@ from datp_core.experiments.planning import (
 from datp_core.protocols.anchor import HISTORICAL_ANCHOR_SEED_COHORT
 from datp_core.protocols.calibration import require_calibration_subsample_replicate_count
 from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration
-from datp_core.protocols.populations import POPULATIONS
+from datp_core.data.populations.declarations import POPULATIONS
 from datp_core.protocols.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.protocols.validation import CANONICAL_PROTOCOL_GRAPH, ResolvedProtocolGraph, validate_protocol_graph
 from datp_core.runtime.configuration import DATA_ROOT

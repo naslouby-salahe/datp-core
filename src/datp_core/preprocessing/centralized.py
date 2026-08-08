@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from datp_core.datasets.canonical_cache import require_canonical_publication_complete
+from datp_core.data.canonical_cache import require_canonical_publication_complete
 from datp_core.datasets.partitioning.construction import (
     build_preprocessing_handoff,
     join_handoff_with_canonical_features,
@@ -13,8 +13,8 @@ from datp_core.datasets.partitioning.contracts import (
     PopulationConstructionRequest,
     PreprocessingHandoffRequest,
 )
-from datp_core.datasets.paths import canonical_root_under
-from datp_core.datasets.registry import construct_population, dataset_binding, resolve_population
+from datp_core.data.paths import canonical_root_under
+from datp_core.data.registry import construct_population, dataset_binding, resolve_population
 from datp_core.domain.enums import (
     ContractSubject,
     DatasetId,

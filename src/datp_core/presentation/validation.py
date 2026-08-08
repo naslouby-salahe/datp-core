@@ -8,7 +8,7 @@ from enum import StrEnum
 from datp_core.anchor.models import VerifiedAnchorGateArtifact
 from datp_core.domain.enums import AvailabilityStatus, EvidenceRole, MetricId, PopulationId, PopulationIdentityKind
 from datp_core.domain.values.checksums import Checksum
-from datp_core.protocols.populations import POPULATIONS
+from datp_core.data.populations.declarations import POPULATIONS
 
 
 class ClaimStatus(StrEnum):

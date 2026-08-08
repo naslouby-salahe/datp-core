@@ -1,7 +1,7 @@
 from dataclasses import dataclass, replace
 from pathlib import Path
 
-from datp_core.datasets.registry import resolve_population
+from datp_core.data.registry import resolve_population
 from datp_core.domain.enums import ContractSubject
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.checksums import Checksum

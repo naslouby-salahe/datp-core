@@ -42,7 +42,7 @@ from datp_core.domain.values.checksums import checksum_file
 from datp_core.domain.values.counts import ClientCount, Seed, SeedCount
 from datp_core.domain.values.ratios import MetricValue
 from datp_core.protocols.anchor import ANCHOR_DECISION_PROTOCOL, HISTORICAL_ANCHOR_SEED_COHORT, AnchorDecisionProtocol
-from datp_core.protocols.populations import NBAIOT_NATURAL_DEVICES
+from datp_core.data.populations.declarations import NBAIOT_NATURAL_DEVICES
 from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
 
 ANCHOR_EXPERIMENT: ExperimentId = ExperimentId.HISTORICAL_DATP_REPRODUCTION

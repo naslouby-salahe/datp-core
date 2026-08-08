@@ -4,21 +4,21 @@ from pathlib import Path
 
 import polars as pl
 
-from datp_core.datasets.contracts import (
+from datp_core.data.contracts import (
     CanonicalManifestDocument,
     CanonicalProvenanceColumn,
     CanonicalPublicationArtifact,
 )
-from datp_core.datasets.edge_iiotset.capabilities import EDGE_IIOTSET_CAPABILITIES, EDGE_TEMPORAL_SENSOR_GROUPS
-from datp_core.datasets.edge_iiotset.schema import (
+from datp_core.data.edge_iiotset.capabilities import EDGE_IIOTSET_CAPABILITIES, EDGE_TEMPORAL_SENSOR_GROUPS
+from datp_core.data.edge_iiotset.schema import (
     EDGE_BENIGN_SENSOR_GROUPS,
     EDGE_SCHEMA,
     EdgeAssetRole,
     EdgeCanonicalColumn,
     EdgeSensorGroup,
 )
-from datp_core.datasets.partitioning.construction import PopulationFinalizationRequest, finalize_population
-from datp_core.datasets.partitioning.contracts import (
+from datp_core.data.populations.construction import PopulationFinalizationRequest, finalize_population
+from datp_core.data.populations.contracts import (
     CLIENT_ID_COLUMN,
     OUTCOME_LABEL_COLUMN,
     SOURCE_PATH_COLUMN,
@@ -34,12 +34,11 @@ from datp_core.datasets.partitioning.contracts import (
     population_evidence_role,
     select_membership_frame,
 )
-from datp_core.datasets.partitioning.paths import PartitioningFilePattern, canonical_branch_directory
-from datp_core.domain.enums import DatasetId, PopulationId, PopulationIdentityKind, SplitProtocolId
-from datp_core.domain.errors import CapabilityError, DataIntegrityError, ScientificContractError
-from datp_core.domain.values.base import NonNegativeIntegerValue
-from datp_core.domain.values.counts import RowCount, Seed
-from datp_core.protocols.populations import EDGE_SENSOR_GROUPS, EDGE_TEMPORAL_GROUPS
+from datp_core.data.populations.paths import PartitioningFilePattern, canonical_branch_directory
+from datp_core.core.errors import CapabilityError, DataIntegrityError, ScientificContractError
+from datp_core.core.identifiers import DatasetId, PopulationId, PopulationIdentityKind, SplitProtocolId
+from datp_core.core.numeric import NonNegativeIntegerValue, RowCount, Seed
+from datp_core.data.populations.declarations import EDGE_SENSOR_GROUPS, EDGE_TEMPORAL_GROUPS
 
 _GROUP = EdgeCanonicalColumn.BENIGN_SENSOR_GROUP
 _CAPTURE = EdgeCanonicalColumn.CAPTURE_TIMESTAMP

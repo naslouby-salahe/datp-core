@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pyarrow as pa
 
-from datp_core.datasets.contracts import (
+from datp_core.data.contracts import (
     CanonicalColumn,
     CanonicalColumnRole,
     CanonicalProvenanceColumn,
@@ -13,13 +13,13 @@ from datp_core.datasets.contracts import (
     ColumnLogicalType,
     ModelInputEligibilityPolicy,
 )
-from datp_core.datasets.materialization import (
+from datp_core.data.materialization import (
     canonical_provenance_arrow_field,
     canonical_provenance_column,
     canonical_schema_checksum,
 )
-from datp_core.domain.enums import DatasetId
-from datp_core.domain.values.counts import CanonicalColumnPosition, ClientCount
+from datp_core.core.identifiers import DatasetId
+from datp_core.core.numeric import CanonicalColumnPosition, ClientCount
 
 
 class CICIoT2023Column(StrEnum):

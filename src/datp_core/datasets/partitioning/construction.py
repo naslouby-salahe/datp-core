@@ -18,7 +18,7 @@ from datp_core.domain.values.base import NonNegativeIntegerValue
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import ClientCount, RowCount, Seed
 from datp_core.domain.values.identifiers import FeatureNameSequence
-from datp_core.protocols.populations import PopulationDeclaration
+from datp_core.data.populations.declarations import PopulationDeclaration
 
 from .contracts import (
     CLIENT_ID_COLUMN,

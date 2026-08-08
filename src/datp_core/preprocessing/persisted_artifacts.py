@@ -18,7 +18,7 @@ from datp_core.datasets.partitioning.integrity import (
     validate_population_manifest,
     validate_split_manifest,
 )
-from datp_core.datasets.registry import population_capabilities, population_declaration
+from datp_core.data.registry import population_capabilities, population_declaration
 from datp_core.domain.enums import PopulationId, SplitProtocolId, TemporalState
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.provenance import canonical_json_text
@@ -28,7 +28,7 @@ from datp_core.domain.values.counts import ClientCount
 from datp_core.domain.values.identifiers import CaptureTimestampColumn
 from datp_core.preprocessing.models import PublishedFederatedPreprocessingRequest
 from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
-from datp_core.protocols.populations import split_protocol_for_population
+from datp_core.data.populations.declarations import split_protocol_for_population
 
 EXECUTION_IDENTITY_ASSET = "execution_identity.json"
 POPULATION_MANIFEST_ASSET = "population_manifest.json"

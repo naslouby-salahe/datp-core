@@ -4,9 +4,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from shutil import rmtree
 
-from datp_core.datasets.paths import canonical_root_under, raw_dataset_root
-from datp_core.datasets.registry import DatasetPublication, dataset_binding
-from datp_core.domain.enums import DatasetId
+from datp_core.core.identifiers import DatasetId
+from datp_core.data.paths import canonical_root_under, raw_dataset_root
+from datp_core.data.registry import DatasetPublication, dataset_binding
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

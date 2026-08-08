@@ -9,7 +9,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from filelock import FileLock
 
-from datp_core.datasets.contracts import (
+from datp_core.data.contracts import (
     CanonicalAssetRole,
     CanonicalManifestDocument,
     CanonicalPublicationArtifact,
@@ -40,11 +40,11 @@ from datp_core.datasets.contracts import (
     complete_digest,
     schema_content,
 )
-from datp_core.domain.enums import AvailabilityStatus, ContractSubject, DatasetId, PublicationStatus
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.provenance import canonical_json_text, canonical_value
-from datp_core.domain.values.checksums import Checksum, checksum_file, checksum_text
-from datp_core.domain.values.counts import ByteCount, RowCount
+from datp_core.artifacts.provenance import Checksum, checksum_file, checksum_text
+from datp_core.artifacts.serializers.json import canonical_json_text, canonical_value
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import AvailabilityStatus, ContractSubject, DatasetId, PublicationStatus
+from datp_core.core.numeric import ByteCount, RowCount
 
 SourcePathResolver = Callable[[Path], Path]
 

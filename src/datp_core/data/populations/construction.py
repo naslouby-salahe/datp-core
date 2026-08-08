@@ -5,7 +5,7 @@ from pathlib import Path
 
 import polars as pl
 
-from datp_core.domain.enums import (
+from datp_core.core.identifiers import (
     ContractSubject,
     DatasetId,
     PartitionRole,
@@ -13,12 +13,11 @@ from datp_core.domain.enums import (
     PopulationIdentityKind,
     SplitProtocolId,
 )
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.base import NonNegativeIntegerValue
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import ClientCount, RowCount, Seed
-from datp_core.domain.values.identifiers import FeatureNameSequence
-from datp_core.protocols.populations import PopulationDeclaration
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import FeatureNameSequence
+from datp_core.core.numeric import ClientCount, NonNegativeIntegerValue, RowCount, Seed
+from datp_core.data.populations.declarations import PopulationDeclaration
 
 from .contracts import (
     CLIENT_ID_COLUMN,

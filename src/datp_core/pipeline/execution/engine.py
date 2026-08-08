@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from shutil import rmtree
 
-from datp_core.datasets.service import DatasetMaterializationRequest, materialize_datasets
+from datp_core.data.service import DatasetMaterializationRequest, materialize_datasets
 from datp_core.domain.enums import ExperimentId, PublicationStatus
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.provenance import canonical_checksum

@@ -1,6 +1,6 @@
 """Capability declaration for the audited Edge-IIoTset artifact."""
 
-from datp_core.datasets.capabilities import (
+from datp_core.data.populations.contracts import (
     AttackAssignmentCapability,
     CapabilityStatus,
     ChronologyCapability,
@@ -12,7 +12,7 @@ from datp_core.datasets.capabilities import (
     TemporalCapability,
     ThresholdMethodCapability,
 )
-from datp_core.domain.enums import (
+from datp_core.core.identifiers import (
     EvidenceRole,
     FederatedThresholdMethod,
     MetricId,

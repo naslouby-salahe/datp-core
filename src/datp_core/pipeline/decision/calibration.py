@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datp_core.calibration.models import CalibrationReplicateManifest, CalibrationSubsample, EligibilityDecision
 from datp_core.calibration.service import CalibrationRequest, calibrate
 from datp_core.datasets.partitioning.contracts import ClientIdentity, EligibleCohort
-from datp_core.datasets.registry import population_capabilities
+from datp_core.data.registry import population_capabilities
 from datp_core.domain.enums import EvidenceRole, FederatedThresholdMethod
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.checksums import Checksum, checksum_text

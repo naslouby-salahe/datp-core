@@ -5,21 +5,20 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-from datp_core.datasets.capabilities import DatasetCapabilities
-from datp_core.datasets.ciciot2023.capabilities import CICIOT2023_CAPABILITIES
-from datp_core.datasets.ciciot2023.materialize import CICIoT2023Materializer
-from datp_core.datasets.ciciot2023.populations import construct_ciciot_file_clients
-from datp_core.datasets.ciciot2023.schema import CICIOT2023_SCHEMA
-from datp_core.datasets.contracts import CanonicalSchema, MaterializedDataset
-from datp_core.datasets.edge_iiotset.capabilities import EDGE_IIOTSET_CAPABILITIES
-from datp_core.datasets.edge_iiotset.materialize import EdgeIIoTsetMaterializer
-from datp_core.datasets.edge_iiotset.populations import construct_edge_sensor_groups, construct_edge_temporal_groups
-from datp_core.datasets.edge_iiotset.schema import EDGE_SCHEMA
-from datp_core.datasets.nbaiot.capabilities import NBAIOT_CAPABILITIES
-from datp_core.datasets.nbaiot.materialize import NBaIoTMaterializer
-from datp_core.datasets.nbaiot.populations import construct_nbaiot_dirichlet_clients, construct_nbaiot_natural_devices
-from datp_core.datasets.nbaiot.schema import NBAIOT_SCHEMA
-from datp_core.datasets.partitioning.contracts import (
+from datp_core.data.ciciot2023.capabilities import CICIOT2023_CAPABILITIES
+from datp_core.data.ciciot2023.materialize import CICIoT2023Materializer
+from datp_core.data.ciciot2023.populations import construct_ciciot_file_clients
+from datp_core.data.ciciot2023.schema import CICIOT2023_SCHEMA
+from datp_core.data.contracts import CanonicalSchema, MaterializedDataset
+from datp_core.data.edge_iiotset.capabilities import EDGE_IIOTSET_CAPABILITIES
+from datp_core.data.edge_iiotset.materialize import EdgeIIoTsetMaterializer
+from datp_core.data.edge_iiotset.populations import construct_edge_sensor_groups, construct_edge_temporal_groups
+from datp_core.data.edge_iiotset.schema import EDGE_SCHEMA
+from datp_core.data.nbaiot.capabilities import NBAIOT_CAPABILITIES
+from datp_core.data.nbaiot.materialize import NBaIoTMaterializer
+from datp_core.data.nbaiot.populations import construct_nbaiot_dirichlet_clients, construct_nbaiot_natural_devices
+from datp_core.data.nbaiot.schema import NBAIOT_SCHEMA
+from datp_core.data.populations.contracts import (
     ControlledPartitionKind,
     PopulationCapabilities,
     PopulationConstructionRequest,
@@ -27,14 +26,14 @@ from datp_core.datasets.partitioning.contracts import (
     build_population_capabilities,
     population_evidence_role,
 )
-from datp_core.domain.enums import (
+from datp_core.core.identifiers import (
     DatasetId,
     EvidenceRole,
     PopulationId,
 )
-from datp_core.domain.errors import CapabilityError, ScientificContractError
+from datp_core.core.errors import CapabilityError, ScientificContractError
 from datp_core.protocols.calibration import MINIMUM_BENIGN_SUPPORT
-from datp_core.protocols.populations import (
+from datp_core.data.populations.declarations import (
     CICIOT_FILE_CLIENTS,
     EDGE_SENSOR_GROUPS,
     EDGE_TEMPORAL_GROUPS,

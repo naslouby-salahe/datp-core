@@ -6,8 +6,8 @@ from shutil import rmtree
 
 import polars as pl
 
-from datp_core.datasets.canonical_cache import CanonicalAsset, CanonicalAssetLayout, canonical_directory
-from datp_core.datasets.contracts import (
+from datp_core.data.canonical_cache import CanonicalAsset, CanonicalAssetLayout, canonical_directory
+from datp_core.data.contracts import (
     CanonicalProvenanceColumn,
     ChronologyValidation,
     DatasetValidationCode,
@@ -18,7 +18,7 @@ from datp_core.datasets.contracts import (
     SourceFileRole,
     ValidationSeverity,
 )
-from datp_core.datasets.materialization import (
+from datp_core.data.materialization import (
     CanonicalPublication,
     empty_asset,
     named_assets,
@@ -26,7 +26,7 @@ from datp_core.datasets.materialization import (
     raw_source_file,
     stream_parquet,
 )
-from datp_core.datasets.materialization_lifecycle import CanonicalMaterializationRequest, materialize_canonical
+from datp_core.data.materialization_lifecycle import CanonicalMaterializationRequest, materialize_canonical
 from datp_core.domain.enums import AvailabilityStatus, DatasetId
 from datp_core.domain.values.counts import RowCount, ValidationIssueCount
 

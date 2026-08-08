@@ -1,7 +1,7 @@
 import polars as pl
 
 from datp_core.datasets.partitioning.contracts import ClientIdentity, PopulationOutcomeLabel
-from datp_core.datasets.registry import population_capabilities
+from datp_core.data.registry import population_capabilities
 from datp_core.domain.enums import (
     EvaluationCohort,
     EvidenceRole,

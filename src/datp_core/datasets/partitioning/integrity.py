@@ -19,7 +19,7 @@ from datp_core.domain.errors import DataIntegrityError, LeakageError, Scientific
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import ClientCount, RowCount
 from datp_core.domain.values.identifiers import CaptureTimestampColumn
-from datp_core.protocols.populations import PopulationDeclaration
+from datp_core.data.populations.declarations import PopulationDeclaration
 
 from .contracts import (
     CLIENT_ID_COLUMN,

@@ -2,10 +2,9 @@
 
 from pydantic import model_validator
 
-from datp_core.domain.contracts import StrictModel
-from datp_core.domain.enums import DatasetId, PopulationId, PopulationIdentityKind, SplitProtocolId
-from datp_core.domain.values.counts import ClientCount
-from datp_core.domain.values.ratios import DirichletConcentration
+from datp_core.core.contracts import StrictModel
+from datp_core.core.identifiers import DatasetId, PopulationId, PopulationIdentityKind, SplitProtocolId
+from datp_core.core.numeric import ClientCount, DirichletConcentration
 
 
 class PopulationDeclaration(StrictModel):
