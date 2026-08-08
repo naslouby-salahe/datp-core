@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from datp_core.analysis.inference.bootstrap.contracts import BcaReason, BootstrapInterval
 from datp_core.analysis.mechanisms import AbsorptionCohortResult
 from datp_core.analysis.scientific_decision import ScientificDecision, ScientificDecisionResult
 from datp_core.artifacts.provenance import Checksum
@@ -16,6 +17,7 @@ from datp_core.core.numeric import MetricValue, Seed
 from datp_core.presentation.export import (
     PublicationBundle,
     ReportProvenance,
+    _interval_table,
     export_markdown,
     export_mechanism_publication,
 )
@@ -36,6 +38,19 @@ def _provenance() -> ReportProvenance:
         evidence_role=EvidenceRole.CONFIRMATORY,
         analysis_checksum=Checksum("a" * 64),
     )
+
+
+def test_interval_table_surfaces_the_bca_degeneracy_reason() -> None:
+    from datp_core.experiments.confirmatory.spec import CONFIRMATORY_INFERENCE_PROTOCOL
+
+    interval = BootstrapInterval.blocked(
+        protocol=CONFIRMATORY_INFERENCE_PROTOCOL,
+        analysis_seed=Seed(3),
+        point_estimate=None,
+        reason=BcaReason.SEED_COHORT_MISMATCH,
+    )
+    table = _interval_table(interval)
+    assert table.cells[0].evidence == "BCa outcome=blocked reason=seed_cohort_mismatch"
 
 
 def test_figure_only_bundle_is_fully_rendered(tmp_path: Path) -> None:

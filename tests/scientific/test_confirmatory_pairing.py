@@ -59,7 +59,7 @@ def test_invalid_contrasts_block_all_dependent_statistics() -> None:
             analysis_seed=Seed(17),
         )
     )
-    assert document.decision.decision.value == "blocked"
+    assert document.decision.decision.value == "not_established"
     assert document.wilcoxon.availability is AvailabilityStatus.UNAVAILABLE
     assert document.rank_biserial.availability is AvailabilityStatus.UNAVAILABLE
     assert document.multiplicity_result is None

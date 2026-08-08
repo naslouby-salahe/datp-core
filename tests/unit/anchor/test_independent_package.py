@@ -55,7 +55,7 @@ def test_independent_verify_without_package_fails_closed(tmp_path: Path) -> None
             request_independent_reproduction=True,
         )
     )
-    assert result.status.gate_status is AnchorGateStatus.BLOCKED
+    assert result.status.gate_status is AnchorGateStatus.ANCHOR_REPRODUCTION_FAILED
     assert result.status.dependent_readiness is ExperimentReadiness.BLOCKED
     assert result.status.observation_count.value == 0
     assert result.status.dependency_blocker is not None

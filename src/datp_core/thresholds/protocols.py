@@ -51,6 +51,11 @@ class CalibrationSupportRule(StrEnum):
     DECLARED_SIZE_ABLATION = "declared_size_ablation"
 
 
+class CalibrationSizeClassification(StrEnum):
+    SAMPLE_STARVED_DIAGNOSTIC = "sample_starved_diagnostic"
+    FEASIBLE_ABLATION_SIZE = "feasible_ablation_size"
+
+
 REQUIRED_CLUSTER_FINGERPRINT_FEATURES = (
     ClusterFingerprintFeature.BENIGN_ERROR_MEAN,
     ClusterFingerprintFeature.BENIGN_ERROR_STANDARD_DEVIATION,
@@ -188,6 +193,7 @@ MINIMUM_BENIGN_SUPPORT = CalibrationSize(100)
 # Ten nested replicates per (seed, client); summarized within seed, never treated as an independent sample.
 LOCKED_CALIBRATION_SUBSAMPLE_REPLICATE_COUNT = SubsampleReplicateCount(10)
 CALIBRATION_SIZES = tuple(CalibrationSize(value) for value in (50, 100, 250, 500, 1000, 5000))
+SAMPLE_STARVED_CALIBRATION_SIZE = CalibrationSize(50)
 FIXED_SHRINKAGE_WEIGHTS = tuple(ShrinkageWeight(value) for value in (0, 0.25, 0.5, 0.75, 1))
 CONFORMAL_COVERAGE = CoverageTarget(0.95)
 SUMMARY_COEFFICIENTS = tuple(SummaryCoefficient(value) for value in (2, 2.5, 3))
@@ -255,3 +261,9 @@ CLUSTER_MEDIAN_THRESHOLD_PROTOCOL = ClusterThresholdProtocol(
 
 def require_calibration_subsample_replicate_count() -> SubsampleReplicateCount:
     return LOCKED_CALIBRATION_SUBSAMPLE_REPLICATE_COUNT
+
+
+def classify_calibration_size(size: CalibrationSize) -> CalibrationSizeClassification:
+    if size == SAMPLE_STARVED_CALIBRATION_SIZE:
+        return CalibrationSizeClassification.SAMPLE_STARVED_DIAGNOSTIC
+    return CalibrationSizeClassification.FEASIBLE_ABLATION_SIZE

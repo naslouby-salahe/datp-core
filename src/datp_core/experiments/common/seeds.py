@@ -28,6 +28,7 @@ CONFIRMATORY_SEED_COHORT = SeedCohort(
     values=tuple(Seed(value) for value in range(CONFIRMATORY_PAIRED_SEED_COUNT.value))
 )
 CONFIRMATORY_ANALYSIS_SEED = Seed(31)
+ANCHOR_ANALYSIS_SEED = Seed(29)
 BOUNDED_EVIDENCE_PAIRED_SEED_COUNT = SeedCount(10)
 BOUNDED_EVIDENCE_SEED_COHORT = SeedCohort(
     values=tuple(Seed(value) for value in range(BOUNDED_EVIDENCE_PAIRED_SEED_COUNT.value))

@@ -9,6 +9,7 @@ from typing import Annotated, Literal
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
+from datp_core.analysis.inference.bootstrap.contracts import BootstrapInterval
 from datp_core.artifacts.provenance import Checksum, checksum_text
 from datp_core.artifacts.serializers.json import canonical_checksum, canonical_json_text
 from datp_core.core.contracts import StrictModel, str_enum_schema
@@ -79,6 +80,10 @@ class AnchorDiscrepancyReason(StrEnum):
     MISSING_TOLERANCE_RULE = "missing_tolerance_rule"
     DEPENDENCY_BLOCKER = "dependency_blocker"
     ROUNDED_EQUALITY_CANNOT_OVERRIDE_FULL_PRECISION_FAILURE = "rounded_equality_cannot_override_full_precision_failure"
+    BCA_INTERVAL_UNAVAILABLE = "bca_interval_unavailable"
+    BCA_INTERVAL_NOT_ENTIRELY_POSITIVE = "bca_interval_not_entirely_positive"
+    BCA_INTERVAL_DOES_NOT_OVERLAP_REFERENCE = "bca_interval_does_not_overlap_reference"
+    BCA_INTERVAL_WIDTH_EXCEEDS_MAXIMUM = "bca_interval_width_exceeds_maximum"
 
 
 class ExactEqualityRule(StrictModel):
@@ -284,6 +289,22 @@ class AnchorSeedSubsetComparison(StrictModel):
     reason: AnchorDiscrepancyReason | None
 
 
+class AnchorBcaComparison(StrictModel):
+    """Reproduced five-seed shared-minus-local CV(FPR) BCa interval versus the locked historical reference."""
+
+    interval: BootstrapInterval
+    reference_interval: MetricInterval
+    maximum_operative_width: MetricValue
+    decision: AnchorComparisonDecision
+    reason: AnchorDiscrepancyReason | None
+
+    @model_validator(mode="after")
+    def validate_decision(self) -> AnchorBcaComparison:
+        if (self.decision is AnchorComparisonDecision.EQUIVALENT) != (self.reason is None):
+            raise ValueError("an equivalent BCa comparison must carry no discrepancy reason")
+        return self
+
+
 class AnchorDiscrepancy(StrictModel):
     reason: AnchorDiscrepancyReason
     seed: Seed | None = None
@@ -334,11 +355,26 @@ class AnchorDiscrepancy(StrictModel):
             detail=blocker.detail,
         )
 
+    @classmethod
+    def from_bca_comparison(cls, comparison: AnchorBcaComparison) -> AnchorDiscrepancy:
+        interval = comparison.interval
+        lower = None if interval.lower_bound is None else interval.lower_bound.value
+        upper = None if interval.upper_bound is None else interval.upper_bound.value
+        reference = comparison.reference_interval
+        return cls(
+            reason=comparison.reason or AnchorDiscrepancyReason.BCA_INTERVAL_UNAVAILABLE,
+            detail=AnchorDetail(
+                f"reproduced BCa interval outcome={interval.outcome.value} lower={lower!r} upper={upper!r}; "
+                f"reference=[{reference.lower.value},{reference.upper.value}] "
+                f"maximum_operative_width={comparison.maximum_operative_width.value!r}"
+            ),
+        )
+
 
 class AnchorGateStatus(StrEnum):
     PASS = "pass"
     PASS_WITH_DECLARED_DISCREPANCY = "pass_with_declared_discrepancy"
-    BLOCKED = "blocked"
+    ANCHOR_REPRODUCTION_FAILED = "anchor_reproduction_failed"
 
 
 _PERMITTING_GATE_STATUSES = frozenset(
@@ -363,7 +399,7 @@ class AnchorGateDecision(StrictModel):
                 _require_clean_pass(self)
             case AnchorGateStatus.PASS_WITH_DECLARED_DISCREPANCY:
                 _require_declared_discrepancy_pass(self)
-            case AnchorGateStatus.BLOCKED:
+            case AnchorGateStatus.ANCHOR_REPRODUCTION_FAILED:
                 _require_blocked_gate(self)
         return self
 
@@ -403,7 +439,7 @@ class VerifiedAnchorGateArtifact(StrictModel):
 
     @model_validator(mode="after")
     def validate_passed_gate(self) -> VerifiedAnchorGateArtifact:
-        if self.decision.status is AnchorGateStatus.BLOCKED:
+        if self.decision.status is AnchorGateStatus.ANCHOR_REPRODUCTION_FAILED:
             raise ValueError("verified anchor-gate artifact cannot be blocked")
         recomputed = checksum_text(canonical_json_text(self.decision))
         if recomputed != self.artifact_checksum:
@@ -446,7 +482,7 @@ class AnchorConfirmatoryHandoff(StrictModel):
             raise ValueError("handoff anchor experiment must be historical DATP reproduction")
         if self.dependent_confirmatory_experiment is not ExperimentId.SHARED_VS_LOCAL_CONFIRMATION:
             raise ValueError("handoff dependent experiment must be shared-vs-local confirmation")
-        if self.verified_gate_status is AnchorGateStatus.BLOCKED:
+        if self.verified_gate_status is AnchorGateStatus.ANCHOR_REPRODUCTION_FAILED:
             raise ValueError("confirmatory handoff cannot bind a blocked gate")
         if self.verified_gate_status not in _PERMITTING_GATE_STATUSES:
             raise ValueError("confirmatory handoff requires a permitting gate status")
@@ -558,6 +594,7 @@ class AnchorReproductionResult(StrictModel):
     observations: tuple[AnchorObservedMetric, ...]
     seed_subset_comparison: AnchorSeedSubsetComparison
     metric_comparisons: tuple[AnchorMetricComparison, ...]
+    bca_comparison: AnchorBcaComparison
     discrepancies: tuple[AnchorDiscrepancy, ...]
     dependency_blocker: AnchorDependencyBlocker | None = None
 

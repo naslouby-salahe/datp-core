@@ -8,6 +8,7 @@ from typing import Protocol
 import polars as pl
 
 from datp_core.artifacts.provenance import Checksum, checksum_text
+from datp_core.artifacts.serializers.json import canonical_checksum
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import (
     CheckpointStatus,
@@ -167,6 +168,7 @@ class ScoreArtifactManifest[
 @dataclass(frozen=True, slots=True)
 class FixedScoreInvariant:
     model_checksum: Checksum
+    coordinate_checksum: Checksum
     calibration_score_set_checksum: Checksum
     evaluation_score_set_checksum: Checksum
     preprocessing_state_set_checksum: Checksum
@@ -182,6 +184,7 @@ class FixedScoreInvariant:
     ) -> "FixedScoreInvariant":
         return FixedScoreInvariant(
             model_checksum=manifest.checkpoint_checksum,
+            coordinate_checksum=canonical_checksum(manifest.coordinate),
             calibration_score_set_checksum=manifest.score_set_checksum(PartitionRole.CALIBRATION),
             evaluation_score_set_checksum=manifest.score_set_checksum(PartitionRole.EVALUATION),
             preprocessing_state_set_checksum=manifest.preprocessing_state_set_checksum,

@@ -4,17 +4,31 @@ from typing import Literal
 
 from pydantic import model_validator
 
+from datp_core.analysis.inference.contracts import (
+    PairedInferenceProtocol,
+    WilcoxonAlternative,
+    WilcoxonComputationPreference,
+    WilcoxonZeroMethod,
+)
 from datp_core.core.contracts import StrictModel
 from datp_core.core.identifiers import (
+    EffectSizeId,
     FederatedThresholdMethod,
+    IntervalMethod,
     MetricId,
+    MultiplicityCorrectionId,
+    StatisticalTestId,
 )
 from datp_core.core.numeric import (
     NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
     AbsoluteTolerance,
+    BootstrapReplicateCount,
+    ConfidenceLevel,
     MetricValue,
+    Ratio,
     Seed,
 )
+from datp_core.experiments.anchor.contracts import MetricInterval
 from datp_core.experiments.common.seeds import SeedCohort
 
 
@@ -94,4 +108,26 @@ ANCHOR_DECISION_PROTOCOL = AnchorDecisionProtocol(
             strict=True,
         )
     ),
+)
+
+ANCHOR_REFERENCE_INTERVAL = MetricInterval(lower=MetricValue(0.647), upper=MetricValue(0.769))
+ANCHOR_REFERENCE_INTERVAL_WIDTH = MetricValue(0.122)
+ANCHOR_MAXIMUM_WIDTH_MULTIPLIER = MetricValue(1.20)
+ANCHOR_MAXIMUM_OPERATIVE_WIDTH = MetricValue(
+    ANCHOR_REFERENCE_INTERVAL_WIDTH.value * ANCHOR_MAXIMUM_WIDTH_MULTIPLIER.value
+)
+
+ANCHOR_INFERENCE_PROTOCOL = PairedInferenceProtocol(
+    confidence_level=ConfidenceLevel(0.95),
+    paired_seed_count=HISTORICAL_ANCHOR_SEED_COHORT.member_count,
+    interval_method=IntervalMethod.BCA_PAIRED_ARITHMETIC_MEAN,
+    bootstrap_replicates=BootstrapReplicateCount(10_000),
+    statistical_test=StatisticalTestId.WILCOXON_SIGNED_RANK,
+    wilcoxon_alternative=WilcoxonAlternative.TWO_SIDED,
+    wilcoxon_zero_method=WilcoxonZeroMethod.PRATT,
+    wilcoxon_computation_preference=WilcoxonComputationPreference.EXACT_PREFERRED,
+    effect_size=EffectSizeId.MATCHED_PAIRS_RANK_BISERIAL,
+    multiplicity_correction=MultiplicityCorrectionId.HOLM,
+    descriptive_lower_quantile=Ratio(0.25),
+    descriptive_upper_quantile=Ratio(0.75),
 )

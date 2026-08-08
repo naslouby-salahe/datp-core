@@ -807,6 +807,9 @@ def _render_one_mechanism(mechanism: MechanismEvidence) -> list[str]:
 
 def _interval_table(interval: BootstrapInterval) -> PublicationTable:
     point = f"{interval.point_estimate.value:.6g}" if interval.point_estimate else ""
+    evidence = f"BCa outcome={interval.outcome.value}"
+    if interval.reason is not None:
+        evidence = f"{evidence} reason={interval.reason.value}"
     return PublicationTable(
         title="Paired BCa interval",
         cells=(
@@ -814,7 +817,7 @@ def _interval_table(interval: BootstrapInterval) -> PublicationTable:
                 metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
                 availability=interval.availability,
                 rendered_value=point,
-                evidence=f"BCa outcome={interval.outcome.value}",
+                evidence=evidence,
             ),
         ),
     )
@@ -858,16 +861,18 @@ def _paired_values_table(document: AnalysisDocument) -> PublicationTable:
             ),
         )
     interval_available = document.interval.availability is AvailabilityStatus.AVAILABLE
-    decision_blocked = document.decision.decision is ScientificDecision.BLOCKED
+    decision_not_established = document.decision.decision is ScientificDecision.NOT_ESTABLISHED
     availability = (
-        AvailabilityStatus.AVAILABLE if interval_available and not decision_blocked else AvailabilityStatus.UNAVAILABLE
+        AvailabilityStatus.AVAILABLE
+        if interval_available and not decision_not_established
+        else AvailabilityStatus.UNAVAILABLE
     )
     point = document.interval.point_estimate
     rendered_value = f"{point.value:.6g}" if point is not None and availability is AvailabilityStatus.AVAILABLE else ""
     evidence = (
         f"{len(document.contrasts)} paired seeds with fixed-score provenance"
         if availability is AvailabilityStatus.AVAILABLE
-        else document.decision.rationale or document.unavailable_reason or "confirmatory evidence unavailable"
+        else document.unavailable_reason or document.decision.rationale or "confirmatory evidence unavailable"
     )
     return PublicationTable(
         title="Paired seed inventory",
@@ -898,5 +903,7 @@ def _map_decision(decision: ScientificDecision) -> EvidenceDecision:
             return EvidenceDecision.NULL
         case ScientificDecision.BOUNDARY_RESULT:
             return EvidenceDecision.BOUNDARY
+        case ScientificDecision.NOT_ESTABLISHED:
+            return EvidenceDecision.NOT_ESTABLISHED
         case _:
             return EvidenceDecision.UNSTABLE

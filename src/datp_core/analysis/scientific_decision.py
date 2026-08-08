@@ -20,6 +20,7 @@ class ScientificDecision(StrEnum):
     BOUNDARY_RESULT = "boundary_result"
     INFEASIBLE = "infeasible"
     BLOCKED = "blocked"
+    NOT_ESTABLISHED = "not_established"
 
 
 class ScientificDecisionResult(StrictModel):
@@ -40,13 +41,15 @@ class ScientificDecisionResult(StrictModel):
     @property
     def availability(self) -> AvailabilityStatus:
         return (
-            AvailabilityStatus.UNAVAILABLE
-            if self.decision is ScientificDecision.BLOCKED
-            else AvailabilityStatus.AVAILABLE
+            AvailabilityStatus.UNAVAILABLE if self.decision in _UNAVAILABLE_DECISIONS else AvailabilityStatus.AVAILABLE
         )
 
 
+_UNAVAILABLE_DECISIONS = frozenset({ScientificDecision.BLOCKED, ScientificDecision.NOT_ESTABLISHED})
+
+
 def decide_confirmatory(interval: BootstrapInterval) -> ScientificDecisionResult:
+    """CONFIRMATORY_INFERENCE_UNAVAILABLE yields NOT_ESTABLISHED, distinct from a valid interval crossing zero."""
     if (
         interval.availability is not AvailabilityStatus.AVAILABLE
         or interval.point_estimate is None
@@ -55,7 +58,7 @@ def decide_confirmatory(interval: BootstrapInterval) -> ScientificDecisionResult
     ):
         return ScientificDecisionResult(
             evidence_role=EvidenceRole.CONFIRMATORY,
-            decision=ScientificDecision.BLOCKED,
+            decision=ScientificDecision.NOT_ESTABLISHED,
             point_estimate=interval.point_estimate,
             interval=interval,
             rationale="confirmatory BCa interval is unavailable or degenerate",

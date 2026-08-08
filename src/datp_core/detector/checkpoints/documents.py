@@ -1,5 +1,7 @@
 """Strict persisted documents for federated checkpoint inventories."""
 
+from pydantic import model_validator
+
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.contracts import StrictModel
 from datp_core.core.identifiers import (
@@ -10,7 +12,15 @@ from datp_core.core.identifiers import (
     SplitProtocolId,
     TrainingModelId,
 )
-from datp_core.core.numeric import BatchSize, ManifestSchemaVersion, ModelCoefficientValue, RoundNumber, Seed
+from datp_core.core.numeric import (
+    BatchSize,
+    DirichletConcentration,
+    ManifestSchemaVersion,
+    ModelCoefficientValue,
+    RoundNumber,
+    Seed,
+)
+from datp_core.data.populations.contracts import ControlledPartitionKind
 from datp_core.detector.checkpoints.identities import CandidateManifestKind
 from datp_core.detector.training.contracts import AutoencoderArchitecture
 
@@ -31,6 +41,8 @@ class CandidateManifest(StrictModel):
     coordinate_preprocessing_identity: PreprocessingProtocolId
     coordinate_model: TrainingModelId
     coordinate_model_coefficient: ModelCoefficientValue | None
+    coordinate_controlled_partition_kind: ControlledPartitionKind | None
+    coordinate_dirichlet_concentration: DirichletConcentration | None
     preprocessing_state_set_checksum: Checksum
     split_manifest_checksum: Checksum
     checkpoint_rounds: tuple[RoundNumber, ...]
@@ -38,3 +50,19 @@ class CandidateManifest(StrictModel):
     batch_size: BatchSize
     linked_personalized_digest: Checksum | None
     entries: tuple[CandidateManifestEntry, ...]
+
+    @model_validator(mode="after")
+    def validate_controlled_partition_coordinate(self) -> "CandidateManifest":
+        if self.coordinate_controlled_partition_kind is None and self.coordinate_dirichlet_concentration is not None:
+            raise ValueError("a Dirichlet concentration requires a controlled partition kind")
+        if (
+            self.coordinate_controlled_partition_kind is ControlledPartitionKind.IID
+            and self.coordinate_dirichlet_concentration is not None
+        ):
+            raise ValueError("IID controlled partitions must not carry a concentration")
+        if (
+            self.coordinate_controlled_partition_kind is ControlledPartitionKind.DIRICHLET
+            and self.coordinate_dirichlet_concentration is None
+        ):
+            raise ValueError("Dirichlet controlled partitions require a concentration")
+        return self

@@ -48,6 +48,7 @@ def test_scientific_decision_member_set_is_exact_and_unique() -> None:
         "BOUNDARY_RESULT",
         "INFEASIBLE",
         "BLOCKED",
+        "NOT_ESTABLISHED",
     }
     values = tuple(member.value for member in ScientificDecision)
     assert len(values) == len(set(values))

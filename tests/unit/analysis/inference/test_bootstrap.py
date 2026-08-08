@@ -6,6 +6,7 @@ from datp_core.analysis.contrasts import FixedScorePairProvenance, PairedContras
 from datp_core.analysis.inference.bootstrap.contracts import (
     BcaAdjustment,
     BcaOutcome,
+    BcaReason,
     BootstrapInterval,
 )
 from datp_core.analysis.inference.bootstrap.estimation import (
@@ -106,6 +107,19 @@ def test_confirmatory_decision_uses_the_interval_only() -> None:
     result = decide_confirmatory(interval)
     assert result.decision is ScientificDecision.SUPPORTED
     assert result.availability is AvailabilityStatus.AVAILABLE
+
+
+def test_confirmatory_decision_is_not_established_when_bca_is_unavailable() -> None:
+    blocked_interval = BootstrapInterval.blocked(
+        protocol=CONFIRMATORY_INFERENCE_PROTOCOL,
+        analysis_seed=Seed(3),
+        point_estimate=None,
+        reason=BcaReason.SEED_COHORT_MISMATCH,
+    )
+    result = decide_confirmatory(blocked_interval)
+    assert result.decision is ScientificDecision.NOT_ESTABLISHED
+    assert result.availability is AvailabilityStatus.UNAVAILABLE
+    assert result.decision is not ScientificDecision.BLOCKED
 
 
 def test_bca_handles_ties_with_identical_deltas_as_degenerate() -> None:

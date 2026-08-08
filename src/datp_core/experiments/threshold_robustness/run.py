@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from datp_core.analysis.metrics.models import MetricStatus, metric_by_id
+from datp_core.analysis.metrics.population import calculate_population_metrics
 from datp_core.app.planning import expand_experiment_plan
 from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.artifacts.provenance import Checksum
@@ -17,6 +18,7 @@ from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import ExperimentId, FederatedThresholdMethod, MetricId, PopulationId
 from datp_core.core.numeric import (
     CalibrationSize,
+    ClientCount,
     MetricDelta,
     MetricValue,
     Quantile,
@@ -33,16 +35,22 @@ from datp_core.experiments.execution import execute_declared_experiment_seed
 from datp_core.experiments.execution.evidence import load_evaluation_document, population_metric
 from datp_core.experiments.execution.layout import EvaluationRunAssetDirectory
 from datp_core.experiments.registry import EXPERIMENTS, ExperimentDeclaration
+from datp_core.experiments.threshold_robustness.cohorts import (
+    compute_intersection_cohort,
+    extract_feasible_clients_by_size,
+)
 from datp_core.runtime.configuration import OUTPUTS_ROOT
 from datp_core.thresholds.contracts import ThresholdInfeasibilityReason
 from datp_core.thresholds.protocols import (
     CALIBRATION_SIZES,
     QUANTILE_GRID,
+    CalibrationSizeClassification,
+    classify_calibration_size,
     require_calibration_subsample_replicate_count,
 )
 
 if TYPE_CHECKING:
-    from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
+    from datp_core.analysis.metrics.federated import CalibrationSizeAblationCell, FederatedEvaluationDocument
     from datp_core.analysis.metrics.models import MetricAvailability
 
 
@@ -86,7 +94,26 @@ class CalibrationSizeAblationRow(StrictModel):
     seed: Seed
     method: FederatedThresholdMethod
     calibration_size: CalibrationSize
+    size_classification: CalibrationSizeClassification
     replicate: ReplicateIndex
+    cv_fpr: MetricValue | None
+    worst_client_fpr: MetricValue | None
+    p10_macro_f1: MetricValue | None
+
+
+class CalibrationSizeFixedCohortRow(StrictModel):
+    """Population-level cross-size row restricted to the intersection of feasible clients.
+
+    Descriptive per-size rows (`CalibrationSizeAblationRow`) independently include every client
+    feasible at that one size and must never be mixed with this fixed-cohort comparison.
+    """
+
+    seed: Seed
+    method: FederatedThresholdMethod
+    calibration_size: CalibrationSize
+    replicate: ReplicateIndex
+    intersection_client_count: ClientCount
+    coverage: Ratio
     cv_fpr: MetricValue | None
     worst_client_fpr: MetricValue | None
     p10_macro_f1: MetricValue | None
@@ -95,6 +122,7 @@ class CalibrationSizeAblationRow(StrictModel):
 class CalibrationSizeAblationReport(StrictModel):
     experiment: ExperimentId
     rows: tuple[CalibrationSizeAblationRow, ...]
+    fixed_cohort_rows: tuple[CalibrationSizeFixedCohortRow, ...] = ()
 
 
 class ShrinkageCurveRow(StrictModel):
@@ -392,6 +420,7 @@ def report_calibration_size_ablation(
     directory = _analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
     directory.mkdir(parents=True, exist_ok=True)
     rows: list[CalibrationSizeAblationRow] = []
+    fixed_cohort_rows: list[CalibrationSizeFixedCohortRow] = []
     missing = 0
     for method in declaration.federated_thresholds:
         for seed in CONFIRMATORY_SEED_COHORT.values:
@@ -400,21 +429,28 @@ def report_calibration_size_ablation(
             except ScientificContractError:
                 missing += 1
                 continue
-            for cell in document.diagnostics.calibration_size_ablation:
+            cells = document.diagnostics.calibration_size_ablation
+            for cell in cells:
                 metrics = cell.population.metrics
                 rows.append(
                     CalibrationSizeAblationRow(
                         seed=seed,
                         method=method,
                         calibration_size=cell.calibration_size,
+                        size_classification=classify_calibration_size(cell.calibration_size),
                         replicate=cell.replicate_index,
                         cv_fpr=_available_metric_value(metrics, MetricId.FPR_COEFFICIENT_OF_VARIATION),
                         worst_client_fpr=_available_metric_value(metrics, MetricId.WORST_CLIENT_FPR),
                         p10_macro_f1=_available_metric_value(metrics, MetricId.P10_BINARY_MACRO_F1),
                     )
                 )
+            fixed_cohort_rows.extend(_fixed_cohort_rows_for_seed(seed, method, cells))
     serialize_json_model(
-        CalibrationSizeAblationReport(experiment=experiment_id, rows=tuple(rows)),
+        CalibrationSizeAblationReport(
+            experiment=experiment_id,
+            rows=tuple(rows),
+            fixed_cohort_rows=tuple(fixed_cohort_rows),
+        ),
         _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
     )
     marker = (
@@ -427,6 +463,45 @@ def report_calibration_size_ablation(
         missing,
         marker_text=marker,
     )
+
+
+def _fixed_cohort_rows_for_seed(
+    seed: Seed,
+    method: FederatedThresholdMethod,
+    cells: tuple[CalibrationSizeAblationCell, ...],
+) -> tuple[CalibrationSizeFixedCohortRow, ...]:
+    """Restrict each replicate's cells to the intersection of clients feasible at every locked size."""
+    by_replicate: dict[ReplicateIndex, list[CalibrationSizeAblationCell]] = {}
+    for cell in cells:
+        by_replicate.setdefault(cell.replicate_index, []).append(cell)
+
+    def _generate():
+        for replicate_index, replicate_cells in by_replicate.items():
+            sizes = tuple(cell.calibration_size for cell in replicate_cells)
+            feasible_by_size = extract_feasible_clients_by_size(tuple(replicate_cells))
+            union_clients = frozenset(client for clients in feasible_by_size.values() for client in clients)
+            total_eligible = ClientCount(len(union_clients))
+            intersection_cohort = compute_intersection_cohort(sizes, feasible_by_size, total_eligible)
+            for cell in replicate_cells:
+                intersection_results = tuple(
+                    result for result in cell.clients if result.client in intersection_cohort.intersection_clients
+                )
+                if not intersection_results:
+                    continue
+                population = calculate_population_metrics(intersection_results)
+                yield CalibrationSizeFixedCohortRow(
+                    seed=seed,
+                    method=method,
+                    calibration_size=cell.calibration_size,
+                    replicate=replicate_index,
+                    intersection_client_count=ClientCount(intersection_cohort.intersection_count.value),
+                    coverage=Ratio(intersection_cohort.intersection_count.value / total_eligible.value),
+                    cv_fpr=_available_metric_value(population.metrics, MetricId.FPR_COEFFICIENT_OF_VARIATION),
+                    worst_client_fpr=_available_metric_value(population.metrics, MetricId.WORST_CLIENT_FPR),
+                    p10_macro_f1=_available_metric_value(population.metrics, MetricId.P10_BINARY_MACRO_F1),
+                )
+
+    return tuple(_generate())
 
 
 def calibration_size_ablation_analysis_marker_present(experiment_id: ExperimentId) -> bool:

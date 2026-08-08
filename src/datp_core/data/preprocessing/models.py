@@ -33,6 +33,7 @@ from datp_core.core.numeric import (
     NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
     AbsoluteTolerance,
     ClientPublicationCount,
+    DirichletConcentration,
     RowCount,
     Seed,
 )
@@ -41,6 +42,7 @@ from datp_core.data.populations.contracts import (
     PARTITION_ROLE_COLUMN,
     STABLE_ROW_ID_COLUMN,
     ControlledPartitionCondition,
+    ControlledPartitionKind,
 )
 from datp_core.data.preprocessing.artifacts import (
     PreprocessingFitScope,
@@ -198,6 +200,8 @@ class PreprocessingManifest(StrictModel):
     serialization_format: SerializationFormat
     asset_paths: RelativeAssetPathSequence
     fit_partition: PartitionRole
+    controlled_partition_kind: ControlledPartitionKind | None
+    dirichlet_concentration: DirichletConcentration | None
     execution_identity: ExternalTemporalExecutionIdentity | None = None
 
     @model_validator(mode="after")
@@ -206,6 +210,12 @@ class PreprocessingManifest(StrictModel):
             raise ValueError("preprocessing manifests must record train-only fitting")
         if not self.asset_paths:
             raise ValueError("preprocessing manifests require published assets")
+        if self.controlled_partition_kind is None and self.dirichlet_concentration is not None:
+            raise ValueError("a Dirichlet concentration requires a controlled partition kind")
+        if self.controlled_partition_kind is ControlledPartitionKind.IID and self.dirichlet_concentration is not None:
+            raise ValueError("IID controlled partitions must not carry a concentration")
+        if self.controlled_partition_kind is ControlledPartitionKind.DIRICHLET and self.dirichlet_concentration is None:
+            raise ValueError("Dirichlet controlled partitions require a concentration")
         return self
 
 

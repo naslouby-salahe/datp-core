@@ -198,6 +198,10 @@ def build_preprocessing_manifest(
         serialization_format=protocol.serialization_format,
         asset_paths=asset_paths,
         fit_partition=PartitionRole.TRAIN,
+        controlled_partition_kind=(None if context.dirichlet_condition is None else context.dirichlet_condition.kind),
+        dirichlet_concentration=(
+            None if context.dirichlet_condition is None else context.dirichlet_condition.concentration
+        ),
         execution_identity=context.execution_identity,
     )
 

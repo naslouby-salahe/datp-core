@@ -40,7 +40,7 @@ def test_blocked_anchor_prevents_claim_permitted_dependent_readiness() -> None:
         evidence_role=first.evidence_role,
     )
     decision = decide_anchor_gate(reproduce_anchor(observations=tuple(observations)))
-    assert decision.status is AnchorGateStatus.BLOCKED
+    assert decision.status is AnchorGateStatus.ANCHOR_REPRODUCTION_FAILED
     assert decision.dependent_readiness is ExperimentReadiness.BLOCKED
     assert dependent_readiness_from_gate(decision) is not ExperimentReadiness.EXECUTABLE
     assert decision.reproduction.experiment is ExperimentId.HISTORICAL_DATP_REPRODUCTION
@@ -53,7 +53,7 @@ def test_dependency_blocker_blocks_dependent_extension_evidence() -> None:
             dependency_blocker=independent_reproduction_dependency_blocker(),
         )
     )
-    assert decision.status is AnchorGateStatus.BLOCKED
+    assert decision.status is AnchorGateStatus.ANCHOR_REPRODUCTION_FAILED
     assert decision.dependent_readiness is ExperimentReadiness.BLOCKED
     assert decision.reproduction.dependency_blocker is not None
 

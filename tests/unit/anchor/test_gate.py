@@ -54,7 +54,7 @@ def test_blocked_gate_propagates_to_dependent_readiness() -> None:
         evidence_role=first.evidence_role,
     )
     decision = decide_anchor_gate(reproduce_anchor(observations=tuple(observations)))
-    assert decision.status is AnchorGateStatus.BLOCKED
+    assert decision.status is AnchorGateStatus.ANCHOR_REPRODUCTION_FAILED
     assert decision.dependent_readiness is ExperimentReadiness.BLOCKED
     assert dependent_readiness_from_gate(decision) is ExperimentReadiness.BLOCKED
     assert decision.blocking_discrepancies
@@ -68,7 +68,7 @@ def test_diagnostics_remain_available_when_blocked() -> None:
             dependency_blocker=independent_reproduction_dependency_blocker(),
         )
     )
-    assert decision.status is AnchorGateStatus.BLOCKED
+    assert decision.status is AnchorGateStatus.ANCHOR_REPRODUCTION_FAILED
     assert decision.reproduction.dependency_blocker is not None
     assert decision.reproduction.discrepancies
     guarded = assert_gate_not_bypassable(decision)
@@ -91,7 +91,7 @@ def test_assert_gate_rejects_blocked_without_diagnostics() -> None:
     decision = decide_anchor_gate(reproduce_anchor(observations=matching_anchor_observations()))
     with pytest.raises(ValueError):
         type(decision)(
-            status=AnchorGateStatus.BLOCKED,
+            status=AnchorGateStatus.ANCHOR_REPRODUCTION_FAILED,
             dependent_readiness=ExperimentReadiness.BLOCKED,
             reproduction=decision.reproduction,
             blocking_discrepancies=(),
@@ -104,7 +104,7 @@ def test_no_manual_override_api_on_gate_decision() -> None:
     assert not hasattr(decision, "override")
     assert not hasattr(decision, "force_pass")
     with pytest.raises((AttributeError, PydanticValidationError)):
-        decision.__setattr__("status", AnchorGateStatus.BLOCKED)
+        decision.__setattr__("status", AnchorGateStatus.ANCHOR_REPRODUCTION_FAILED)
 
 
 def test_observation_source_kind_remains_explicit() -> None:
@@ -142,7 +142,7 @@ def test_blocked_gate_artifact_cannot_verify_as_passed(tmp_path: Path) -> None:
             dependency_blocker=independent_reproduction_dependency_blocker(),
         )
     )
-    assert decision.status is AnchorGateStatus.BLOCKED
+    assert decision.status is AnchorGateStatus.ANCHOR_REPRODUCTION_FAILED
     persist_anchor_gate_diagnostics(decision, tmp_path)
     with pytest.raises(AnchorReproductionError):
         load_verified_anchor_gate_artifact(tmp_path)

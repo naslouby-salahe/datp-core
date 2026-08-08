@@ -39,7 +39,7 @@ def decide_anchor_gate(reproduction: AnchorReproductionResult) -> AnchorGateDeci
 
     if reproduction.dependency_blocker is not None or blocking or not mandatory_ok:
         return AnchorGateDecision(
-            status=AnchorGateStatus.BLOCKED,
+            status=AnchorGateStatus.ANCHOR_REPRODUCTION_FAILED,
             dependent_readiness=ExperimentReadiness.BLOCKED,
             reproduction=reproduction,
             blocking_discrepancies=blocking or reproduction.discrepancies,
@@ -66,7 +66,7 @@ def decide_anchor_gate(reproduction: AnchorReproductionResult) -> AnchorGateDeci
 
 def dependent_readiness_from_gate(decision: AnchorGateDecision) -> ExperimentReadiness:
     """Map gate status to dependent-experiment readiness. No caller override is accepted."""
-    if decision.status is AnchorGateStatus.BLOCKED:
+    if decision.status is AnchorGateStatus.ANCHOR_REPRODUCTION_FAILED:
         return ExperimentReadiness.BLOCKED
     if decision.status in {AnchorGateStatus.PASS, AnchorGateStatus.PASS_WITH_DECLARED_DISCREPANCY}:
         return ExperimentReadiness.DECLARED
@@ -83,7 +83,7 @@ def assert_gate_not_bypassable(decision: AnchorGateDecision) -> AnchorGateDecisi
             "anchor gate cannot mark dependent experiments executable",
             subject=decision.dependent_readiness,
         )
-    if decision.status is AnchorGateStatus.BLOCKED:
+    if decision.status is AnchorGateStatus.ANCHOR_REPRODUCTION_FAILED:
         _assert_blocked_gate_integrity(decision)
     return decision
 
@@ -104,6 +104,9 @@ def _assert_blocked_gate_integrity(decision: AnchorGateDecision) -> None:
 
 def _all_mandatory_comparisons_equivalent(reproduction: AnchorReproductionResult) -> bool:
     if reproduction.seed_subset_comparison.decision is not AnchorComparisonDecision.EQUIVALENT:
+        return False
+
+    if reproduction.bca_comparison.decision is not AnchorComparisonDecision.EQUIVALENT:
         return False
 
     comparisons = reproduction.metric_comparisons
@@ -177,7 +180,7 @@ def build_anchor_confirmatory_handoff(
     diagnostics_directory: Path,
 ) -> AnchorConfirmatoryHandoff:
     """Construct the typed programme-binding handoff for a permitting gate decision."""
-    if decision.status is AnchorGateStatus.BLOCKED:
+    if decision.status is AnchorGateStatus.ANCHOR_REPRODUCTION_FAILED:
         raise AnchorReproductionError(
             "blocked anchor gate cannot produce a confirmatory handoff",
             subject=decision.status,
@@ -224,28 +227,30 @@ def build_anchor_confirmatory_handoff(
         "diagnostics_directory": str(diagnostics_directory.resolve()),
     }
 
-    return AnchorConfirmatoryHandoff(
-        creation_identity=canonical_checksum(binding),
-        anchor_experiment=ANCHOR_EXPERIMENT,
-        anchor_seed_cohort=decision.reproduction.seed_cohort,
-        anchor_protocol_checksum=canonical_checksum(ANCHOR_DECISION_PROTOCOL),
-        anchor_references_observations_checksum=references_observations_checksum,
-        anchor_gate_decision_checksum=gate_checksum,
-        dependent_confirmatory_experiment=endpoint.experiment,
-        dependent_population=endpoint.population,
-        dependent_model=endpoint.training_model,
-        dependent_seed_cohort=endpoint.seed_cohort,
-        split_protocol_identity=split_protocol_for_population(endpoint.population),
-        preprocessing_protocol_identity=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
-        checkpoint_protocol_identity=_checkpoint_protocol_identity(),
-        scoring_protocol_identity=_scoring_protocol_identity(),
-        threshold_protocol_identities=(endpoint.shared_threshold, endpoint.local_threshold),
-        evaluation_protocol_identity=_evaluation_protocol_identity(),
-        confirmatory_inference_protocol_identity=canonical_checksum(CONFIRMATORY_INFERENCE_PROTOCOL),
-        complete_artifact_inventory_checksum=inventory_checksum,
-        verified_gate_status=decision.status,
-        verified_gate_artifact_checksum=gate_checksum,
-        diagnostics_directory=str(diagnostics_directory.resolve()),
+    return validate_handoff_against_confirmatory_programme(
+        AnchorConfirmatoryHandoff(
+            creation_identity=canonical_checksum(binding),
+            anchor_experiment=ANCHOR_EXPERIMENT,
+            anchor_seed_cohort=decision.reproduction.seed_cohort,
+            anchor_protocol_checksum=canonical_checksum(ANCHOR_DECISION_PROTOCOL),
+            anchor_references_observations_checksum=references_observations_checksum,
+            anchor_gate_decision_checksum=gate_checksum,
+            dependent_confirmatory_experiment=endpoint.experiment,
+            dependent_population=endpoint.population,
+            dependent_model=endpoint.training_model,
+            dependent_seed_cohort=endpoint.seed_cohort,
+            split_protocol_identity=split_protocol_for_population(endpoint.population),
+            preprocessing_protocol_identity=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
+            checkpoint_protocol_identity=_checkpoint_protocol_identity(),
+            scoring_protocol_identity=_scoring_protocol_identity(),
+            threshold_protocol_identities=(endpoint.shared_threshold, endpoint.local_threshold),
+            evaluation_protocol_identity=_evaluation_protocol_identity(),
+            confirmatory_inference_protocol_identity=canonical_checksum(CONFIRMATORY_INFERENCE_PROTOCOL),
+            complete_artifact_inventory_checksum=inventory_checksum,
+            verified_gate_status=decision.status,
+            verified_gate_artifact_checksum=gate_checksum,
+            diagnostics_directory=str(diagnostics_directory.resolve()),
+        )
     )
 
 
@@ -258,7 +263,7 @@ def load_verified_anchor_gate_artifact(diagnostics_directory: Path) -> VerifiedA
     decision, artifact_checksum = _load_gate_decision_and_checksum(diagnostics_directory)
     decision = assert_gate_not_bypassable(decision)
 
-    if decision.status is AnchorGateStatus.BLOCKED:
+    if decision.status is AnchorGateStatus.ANCHOR_REPRODUCTION_FAILED:
         raise AnchorReproductionError(
             "anchor gate is blocked and cannot permit confirmatory claims",
             subject=decision.status,

@@ -37,7 +37,7 @@ from datp_core.detector.training.models import (
     RoundSnapshot,
 )
 
-_MANIFEST_SCHEMA_VERSION = ManifestSchemaVersion(1)
+_MANIFEST_SCHEMA_VERSION = ManifestSchemaVersion(2)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -71,6 +71,8 @@ def build_manifest(
             if coordinate.model_coefficient is not None
             else None
         ),
+        coordinate_controlled_partition_kind=coordinate.controlled_partition_kind,
+        coordinate_dirichlet_concentration=coordinate.dirichlet_concentration,
         preprocessing_state_set_checksum=preprocessing_state_set_checksum,
         split_manifest_checksum=split_manifest_checksum,
         checkpoint_rounds=checkpoint_protocol.candidates,
@@ -234,6 +236,8 @@ def validate_manifest(
         and manifest.coordinate_preprocessing_identity == coordinate.preprocessing_identity
         and manifest.coordinate_model == coordinate.model
         and manifest.coordinate_model_coefficient == expected_coefficient
+        and manifest.coordinate_controlled_partition_kind == coordinate.controlled_partition_kind
+        and manifest.coordinate_dirichlet_concentration == coordinate.dirichlet_concentration
     )
     if not coordinate_matches:
         raise ArtifactIntegrityError(

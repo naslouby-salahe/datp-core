@@ -5,6 +5,8 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from datp_core.analysis.inference.bootstrap.contracts import BcaOutcome, BcaReason, BootstrapInterval
+from datp_core.analysis.inference.bootstrap.estimation import seed_level_bca_interval
 from datp_core.artifacts.provenance import checksum_file
 from datp_core.core.errors import AnchorReproductionError
 from datp_core.core.identifiers import (
@@ -23,6 +25,7 @@ from datp_core.experiments.anchor.comparison import compare_anchor_metric
 from datp_core.experiments.anchor.contracts import (
     AbsoluteToleranceRule,
     AnchorArtifactFileName,
+    AnchorBcaComparison,
     AnchorComparisonDecision,
     AnchorDependencyBlocker,
     AnchorDependencyKind,
@@ -43,10 +46,13 @@ from datp_core.experiments.anchor.contracts import (
 )
 from datp_core.experiments.anchor.spec import (
     ANCHOR_DECISION_PROTOCOL,
+    ANCHOR_INFERENCE_PROTOCOL,
+    ANCHOR_MAXIMUM_OPERATIVE_WIDTH,
+    ANCHOR_REFERENCE_INTERVAL,
     HISTORICAL_ANCHOR_SEED_COHORT,
     AnchorDecisionProtocol,
 )
-from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
+from datp_core.experiments.common.seeds import ANCHOR_ANALYSIS_SEED, CONFIRMATORY_SEED_COHORT, SeedCohort
 
 ANCHOR_EXPERIMENT: ExperimentId = ExperimentId.HISTORICAL_DATP_REPRODUCTION
 ANCHOR_POPULATION: PopulationId = PopulationId.NBAIOT_NATURAL_DEVICES
@@ -299,7 +305,9 @@ def reproduce_anchor(
         for reference in references
     )
 
-    discrepancies = _collect_discrepancies(comparisons, seed_subset, dependency_blocker)
+    bca_comparison = _anchor_bca_comparison(resolved_observations, seed_cohort)
+
+    discrepancies = _collect_discrepancies(comparisons, seed_subset, bca_comparison, dependency_blocker)
 
     return AnchorReproductionResult(
         experiment=ANCHOR_EXPERIMENT,
@@ -309,6 +317,7 @@ def reproduce_anchor(
         observations=resolved_observations,
         seed_subset_comparison=seed_subset,
         metric_comparisons=comparisons,
+        bca_comparison=bca_comparison,
         discrepancies=discrepancies,
         dependency_blocker=dependency_blocker,
     )
@@ -378,6 +387,7 @@ def _reject_non_historical_checkpoint(observations: tuple[AnchorObservedMetric, 
 def _collect_discrepancies(
     comparisons: tuple[AnchorMetricComparison, ...],
     seed_subset: AnchorSeedSubsetComparison,
+    bca_comparison: AnchorBcaComparison,
     dependency_blocker: AnchorDependencyBlocker | None,
 ) -> tuple[AnchorDiscrepancy, ...]:
     def _generate():
@@ -386,7 +396,74 @@ def _collect_discrepancies(
         for comparison in comparisons:
             if comparison.decision is not AnchorComparisonDecision.EQUIVALENT:
                 yield AnchorDiscrepancy.from_comparison(comparison)
+        if bca_comparison.decision is not AnchorComparisonDecision.EQUIVALENT:
+            yield AnchorDiscrepancy.from_bca_comparison(bca_comparison)
         if dependency_blocker is not None:
             yield AnchorDiscrepancy.from_dependency_blocker(dependency_blocker)
 
     return tuple(_generate())
+
+
+def _anchor_bca_comparison(
+    observations: tuple[AnchorObservedMetric, ...],
+    seed_cohort: SeedCohort,
+) -> AnchorBcaComparison:
+    """Reproduced shared-minus-local CV(FPR) BCa interval over the historical five-seed cohort."""
+    shared = {
+        item.seed: item.value
+        for item in observations
+        if item.threshold_method is FederatedThresholdMethod.SHARED_THRESHOLD
+    }
+    local = {
+        item.seed: item.value
+        for item in observations
+        if item.threshold_method is FederatedThresholdMethod.LOCAL_THRESHOLD
+    }
+    expected_seeds = frozenset(seed_cohort.values)
+    if frozenset(shared) != expected_seeds or frozenset(local) != expected_seeds:
+        interval = BootstrapInterval.blocked(
+            protocol=ANCHOR_INFERENCE_PROTOCOL,
+            analysis_seed=ANCHOR_ANALYSIS_SEED,
+            point_estimate=None,
+            reason=BcaReason.SEED_COHORT_MISMATCH,
+        )
+    else:
+        deltas = tuple(MetricValue(shared[seed].value - local[seed].value) for seed in seed_cohort.values)
+        interval = seed_level_bca_interval(
+            deltas,
+            protocol=ANCHOR_INFERENCE_PROTOCOL,
+            analysis_seed=ANCHOR_ANALYSIS_SEED,
+        )
+    return _classify_bca_comparison(interval)
+
+
+def _classify_bca_comparison(interval: BootstrapInterval) -> AnchorBcaComparison:
+    if interval.outcome is not BcaOutcome.AVAILABLE or interval.lower_bound is None or interval.upper_bound is None:
+        return AnchorBcaComparison(
+            interval=interval,
+            reference_interval=ANCHOR_REFERENCE_INTERVAL,
+            maximum_operative_width=ANCHOR_MAXIMUM_OPERATIVE_WIDTH,
+            decision=AnchorComparisonDecision.UNAVAILABLE,
+            reason=AnchorDiscrepancyReason.BCA_INTERVAL_UNAVAILABLE,
+        )
+
+    lower = interval.lower_bound.value
+    upper = interval.upper_bound.value
+    reference = ANCHOR_REFERENCE_INTERVAL
+    if lower <= 0.0:
+        reason = AnchorDiscrepancyReason.BCA_INTERVAL_NOT_ENTIRELY_POSITIVE
+    elif lower > reference.upper.value or upper < reference.lower.value:
+        reason = AnchorDiscrepancyReason.BCA_INTERVAL_DOES_NOT_OVERLAP_REFERENCE
+    elif (upper - lower) > ANCHOR_MAXIMUM_OPERATIVE_WIDTH.value:
+        reason = AnchorDiscrepancyReason.BCA_INTERVAL_WIDTH_EXCEEDS_MAXIMUM
+    else:
+        reason = None
+
+    decision = AnchorComparisonDecision.EQUIVALENT if reason is None else AnchorComparisonDecision.MATERIAL_DISCREPANCY
+    return AnchorBcaComparison(
+        interval=interval,
+        reference_interval=reference,
+        maximum_operative_width=ANCHOR_MAXIMUM_OPERATIVE_WIDTH,
+        decision=decision,
+        reason=reason,
+    )

@@ -289,6 +289,7 @@ def _fixed_score_invariant(
     future_records = records.immutable_records_for(PartitionRole.FUTURE_RECALIBRATION)
     return FixedScoreInvariant(
         model_checksum=request.checkpoint.tensor_checksum,
+        coordinate_checksum=canonical_checksum(request.checkpoint.coordinate),
         calibration_score_set_checksum=record_set_checksum(records.immutable_records_for(PartitionRole.CALIBRATION)),
         evaluation_score_set_checksum=record_set_checksum(records.immutable_records_for(PartitionRole.EVALUATION)),
         preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
@@ -300,6 +301,7 @@ def _fixed_score_invariant(
 def _invariant_from_manifest(manifest: FederatedScoreArtifactManifest) -> FixedScoreInvariant:
     return FixedScoreInvariant(
         model_checksum=manifest.checkpoint_checksum,
+        coordinate_checksum=canonical_checksum(manifest.coordinate),
         calibration_score_set_checksum=record_set_checksum(manifest.calibration_records),
         evaluation_score_set_checksum=record_set_checksum(manifest.evaluation_records),
         preprocessing_state_set_checksum=manifest.preprocessing_state_set_checksum,

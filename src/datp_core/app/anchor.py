@@ -69,7 +69,7 @@ def reproduce_anchor(*, overwrite: OverwriteMode, mode: ProgrammeExecutionMode) 
         )
     except AnchorReproductionError as error:
         return AnchorCommandResult(
-            gate_status=AnchorGateStatus.BLOCKED,
+            gate_status=AnchorGateStatus.ANCHOR_REPRODUCTION_FAILED,
             dependent_readiness=ExperimentReadiness.BLOCKED,
             detail=DetailText(str(error)),
         )
@@ -115,7 +115,7 @@ def anchor_status() -> AnchorCommandResult:
         decision = load_anchor_gate_decision(ANCHOR_DIAGNOSTICS_DIRECTORY)
     except AnchorReproductionError as error:
         return AnchorCommandResult(
-            gate_status=AnchorGateStatus.BLOCKED,
+            gate_status=AnchorGateStatus.ANCHOR_REPRODUCTION_FAILED,
             dependent_readiness=ExperimentReadiness.BLOCKED,
             detail=DetailText(str(error)),
         )

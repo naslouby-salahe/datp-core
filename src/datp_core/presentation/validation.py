@@ -37,6 +37,7 @@ class EvidenceDecision(StrEnum):
     UNSTABLE = "unstable"
     BOUNDARY = "boundary"
     SUPPRESSED = "suppressed"
+    NOT_ESTABLISHED = "not_established"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

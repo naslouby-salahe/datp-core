@@ -350,7 +350,7 @@ def _blocked_confirmatory_document(
         interval=interval,
         decision=ScientificDecisionResult(
             evidence_role=EvidenceRole.CONFIRMATORY,
-            decision=ScientificDecision.BLOCKED,
+            decision=ScientificDecision.NOT_ESTABLISHED,
             point_estimate=None,
             interval=interval,
             rationale=f"confirmatory analysis blocked: {reason}",

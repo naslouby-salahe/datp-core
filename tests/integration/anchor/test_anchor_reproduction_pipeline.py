@@ -133,7 +133,7 @@ def test_pipeline_blocks_stale_mismatched_value(tmp_path: Path) -> None:
             diagnostics_directory=tmp_path / "diag",
         )
     )
-    assert result.status.gate_status is AnchorGateStatus.BLOCKED
+    assert result.status.gate_status is AnchorGateStatus.ANCHOR_REPRODUCTION_FAILED
     assert result.gate.reproduction.discrepancies
     assert (tmp_path / "diag" / "anchor_discrepancies.json").exists()
 

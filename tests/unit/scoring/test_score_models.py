@@ -5,14 +5,25 @@ from tests.unit.learning.federated.helpers import client_identity, fedavg_coordi
 
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import ScientificContractError
-from datp_core.core.identifiers import CheckpointStatus, PartitionRole, SerializationFormat, SplitProtocolId
-from datp_core.core.numeric import FeatureCount, RoundNumber, RowCount, Seed
+from datp_core.core.identifiers import (
+    CheckpointStatus,
+    PartitionRole,
+    PopulationId,
+    PopulationIdentityKind,
+    PreprocessingProtocolId,
+    SerializationFormat,
+    SplitProtocolId,
+    TrainingModelId,
+)
+from datp_core.core.numeric import DirichletConcentration, FeatureCount, RoundNumber, RowCount, Seed
+from datp_core.data.populations.contracts import ClientIdentity, ControlledPartitionKind
 from datp_core.detector.scoring.contracts import (
     FixedScoreInvariant,
     ScoreArtifactManifest,
     ScoreGenerationResult,
     ScoreRecord,
 )
+from datp_core.detector.training.models import FederatedTrainingCoordinate
 
 _DEFAULT_SEED = Seed(0)
 
@@ -168,3 +179,51 @@ def test_score_generation_result_derives_its_invariant_from_the_manifest(tmp_pat
     result = ScoreGenerationResult(manifest=manifest)
 
     assert result.invariant == FixedScoreInvariant.from_manifest(manifest)
+
+
+def test_fixed_score_invariant_differs_across_dirichlet_severities(tmp_path: Path) -> None:
+    def _dirichlet_coordinate(concentration: float) -> FederatedTrainingCoordinate:
+        return FederatedTrainingCoordinate(
+            population=PopulationId.NBAIOT_DIRICHLET_CLIENTS,
+            training_seed=Seed(0),
+            split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
+            preprocessing_identity=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
+            model=TrainingModelId.FEDAVG_AUTOENCODER,
+            model_coefficient=None,
+            controlled_partition_kind=ControlledPartitionKind.DIRICHLET,
+            dirichlet_concentration=DirichletConcentration(concentration),
+        )
+
+    def _record_for(coordinate: FederatedTrainingCoordinate, role: PartitionRole, path: Path) -> ScoreRecord:
+        return ScoreRecord(
+            coordinate=coordinate,
+            scored_client=ClientIdentity(
+                coordinate.population, "client_a", PopulationIdentityKind.SYNTHETIC_DIRICHLET_CLIENTS
+            ),
+            partition_role=role,
+            checkpoint_round=RoundNumber(2),
+            checkpoint_checksum=Checksum("a" * 64),
+            path=path,
+            checksum=Checksum("b" * 64),
+            row_count=RowCount(4),
+            feature_count=FeatureCount(4),
+            serialization_format=SerializationFormat.PARQUET,
+        )
+
+    def _manifest_for(coordinate: FederatedTrainingCoordinate) -> ScoreArtifactManifest:
+        return ScoreArtifactManifest(
+            coordinate=coordinate,
+            scored_split_protocol=coordinate.split_protocol,
+            checkpoint_round=RoundNumber(2),
+            checkpoint_checksum=Checksum("a" * 64),
+            checkpoint_status=CheckpointStatus.SELECTED_BY_NON_TEST_RULE,
+            preprocessing_state_set_checksum=Checksum("c" * 64),
+            split_manifest_checksum=Checksum("d" * 64),
+            calibration_records=(_record_for(coordinate, PartitionRole.CALIBRATION, tmp_path / "cal.parquet"),),
+            evaluation_records=(_record_for(coordinate, PartitionRole.EVALUATION, tmp_path / "eval.parquet"),),
+        )
+
+    low_alpha = FixedScoreInvariant.from_manifest(_manifest_for(_dirichlet_coordinate(0.1)))
+    high_alpha = FixedScoreInvariant.from_manifest(_manifest_for(_dirichlet_coordinate(0.3)))
+    assert low_alpha != high_alpha
+    assert low_alpha.coordinate_checksum != high_alpha.coordinate_checksum
