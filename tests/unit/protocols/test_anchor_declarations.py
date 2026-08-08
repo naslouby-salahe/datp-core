@@ -4,10 +4,10 @@ from datp_core.protocols.anchor import (
     HISTORICAL_LOCAL_THRESHOLD_CV_FPR,
     HISTORICAL_SHARED_THRESHOLD_CV_FPR,
 )
-from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL
 
 from datp_core.core.identifiers import FederatedThresholdMethod, MetricId
 from datp_core.core.numeric import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE
+from datp_core.experiments.confirmatory.spec import CONFIRMATORY_INFERENCE_PROTOCOL
 
 
 def test_anchor_references_lock_each_historical_threshold_scope() -> None:

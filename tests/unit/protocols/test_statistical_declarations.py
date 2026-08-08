@@ -1,7 +1,6 @@
-from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT
-from datp_core.protocols.statistics import BOOTSTRAP_REPLICATE_COUNT, CONFIRMATORY_INFERENCE_PROTOCOL
-
 from datp_core.core.identifiers import EffectSizeId, IntervalMethod, MultiplicityCorrectionId, StatisticalTestId
+from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT
+from datp_core.experiments.confirmatory.spec import BOOTSTRAP_REPLICATE_COUNT, CONFIRMATORY_INFERENCE_PROTOCOL
 
 
 def test_confirmatory_statistics_are_one_complete_locked_protocol() -> None:

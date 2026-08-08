@@ -3,15 +3,15 @@
 from pathlib import Path
 
 import pytest
+from datp_core.protocols.inference import ScoreArtifactManifest
 from tests.unit.calibration.helpers import benign_score_record
 from tests.unit.learning.federated.helpers import fedavg_coordinate
 
-from datp_core.domain.enums import EvidenceRole, PartitionRole, SplitProtocolId
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import Seed
-from datp_core.pipeline.execution.evidence import eligible_calibration_scores
-from datp_core.protocols.inference import ScoreArtifactManifest
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import EvidenceRole, PartitionRole, SplitProtocolId
+from datp_core.core.numeric import Seed
+from datp_core.experiments.execution.evidence import eligible_calibration_scores
 
 
 def _manifest(tmp_path: Path, calibration_sizes: dict[str, int]) -> ScoreArtifactManifest:
@@ -63,8 +63,8 @@ def test_eligible_calibration_scores_fails_when_no_client_meets_support(tmp_path
 
 
 def test_training_stress_test_role_is_authorized_on_nbaiot_natural() -> None:
-    from datp_core.datasets.partitioning.contracts import population_allowed_evidence_roles
-    from datp_core.domain.enums import PopulationId
+    from datp_core.core.identifiers import PopulationId
+    from datp_core.data.populations.contracts import population_allowed_evidence_roles
 
     allowed = population_allowed_evidence_roles(PopulationId.NBAIOT_NATURAL_DEVICES)
     assert EvidenceRole.TRAINING_STRESS_TEST in allowed
@@ -76,12 +76,12 @@ def test_training_stress_test_role_is_authorized_on_nbaiot_natural() -> None:
 def test_deployment_fallback_uses_mean_of_eligible_local_thresholds() -> None:
     from tests.unit.thresholding.helpers import client_scores
 
-    from datp_core.domain.enums import FederatedThresholdMethod
-    from datp_core.domain.values.ratios import Quantile
-    from datp_core.evaluation.federated.execution import _deployment_fallback_threshold
+    from datp_core.analysis.metrics.federated_execution import _deployment_fallback_threshold
+    from datp_core.core.identifiers import FederatedThresholdMethod
+    from datp_core.core.numeric import Quantile
     from datp_core.protocols.calibration import QuantileProtocol
-    from datp_core.thresholding.methods.local import construct_local_threshold
-    from datp_core.thresholding.quantiles import unweighted_mean
+    from datp_core.thresholds.policies.local import construct_local_threshold
+    from datp_core.thresholds.quantiles import unweighted_mean
 
     eligible = (
         client_scores("client_a", tuple(float(i) for i in range(100))),

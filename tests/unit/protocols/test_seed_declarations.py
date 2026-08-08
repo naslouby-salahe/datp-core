@@ -1,9 +1,9 @@
-from datp_core.protocols.seeds import (
+from datp_core.experiments.common.seeds import (
     BOUNDED_EVIDENCE_SEED_COHORT,
     CONFIRMATORY_ANALYSIS_SEED,
     CONFIRMATORY_SEED_COHORT,
 )
-from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL
+from datp_core.experiments.confirmatory.spec import CONFIRMATORY_INFERENCE_PROTOCOL
 
 
 def test_seed_values_are_pre_registered() -> None:

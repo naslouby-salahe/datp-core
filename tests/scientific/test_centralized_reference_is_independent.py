@@ -2,22 +2,24 @@ from pathlib import Path
 
 import pytest
 
-from datp_core.domain.enums import (
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.errors import LeakageError
+from datp_core.core.identifiers import (
+    ClientPathToken,
+    FeatureName,
+    FeatureNameSequence,
+    PreprocessingFitScope,
     PreprocessingProtocolId,
     SerializationFormat,
     TrainingModelId,
+    TrustedEstimatorClassName,
 )
-from datp_core.domain.errors import LeakageError
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import RowCount
-from datp_core.domain.values.identifiers import FeatureName, FeatureNameSequence
-from datp_core.domain.values.paths import ClientPathToken
-from datp_core.domain.values.ratios import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE
-from datp_core.learning.centralized.training import reject_federated_preprocessing_for_training
-from datp_core.pipeline.checkpoints.service import reject_federated_checkpoint
-from datp_core.preprocessing.centralized import reject_federated_state_for_pooled
-from datp_core.preprocessing.contracts import PreprocessingFitScope, TrustedEstimatorClassName
-from datp_core.preprocessing.models import FederatedFittedPreprocessingState, PreprocessingProtocol
+from datp_core.core.numeric import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE, RowCount
+from datp_core.data.preprocessing.centralized import reject_federated_state_for_pooled
+from datp_core.data.preprocessing.contracts import PreprocessingProtocol
+from datp_core.data.preprocessing.models import FederatedFittedPreprocessingState
+from datp_core.detector.checkpoints.service import reject_federated_checkpoint
+from datp_core.detector.training.centralized import reject_federated_preprocessing_for_training
 
 
 def _federated_state(path: Path) -> FederatedFittedPreprocessingState:
