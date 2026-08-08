@@ -13,7 +13,7 @@ from datp_core.core.identifiers import OutcomeLabel, OutcomeLabelSequence
 from datp_core.core.numeric import BatchSize, MetricValue, ProximalCoefficient, RoundNumber, RowCount, Seed
 from datp_core.data.populations.contracts import PopulationOutcomeLabel
 from datp_core.detector.autoencoder import ReconstructionAutoencoder
-from datp_core.detector.training.federated import (
+from datp_core.detector.training.engine import (
     ProximalTerm,
     TrainingStream,
     aggregate_client_updates,

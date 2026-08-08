@@ -17,8 +17,7 @@ from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import LeakageError, ScientificContractError
 from datp_core.core.numeric import RowCount, Seed
 from datp_core.data.populations.contracts import PopulationOutcomeLabel
-from datp_core.detector.training.fedavg import train_global_federated
-from datp_core.detector.training.federated import FederatedTrainingRequest
+from datp_core.detector.training.federated import FederatedTrainingRequest, train_global_federated
 
 
 def _request(tmp_path: Path, seed: Seed | None = None) -> FederatedTrainingRequest:

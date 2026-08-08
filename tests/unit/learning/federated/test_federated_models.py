@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import pytest
-from datp_core.protocols.checkpoints import CheckpointProtocol
 from tests.unit.learning.federated.helpers import (
     AUTOENCODER,
     CHECKPOINT,
@@ -24,6 +23,7 @@ from datp_core.core.numeric import (
     RowCount,
     Seed,
 )
+from datp_core.detector.checkpoints.contracts import CheckpointProtocol
 from datp_core.detector.training.models import (
     CheckpointCandidate,
     CheckpointDecision,
