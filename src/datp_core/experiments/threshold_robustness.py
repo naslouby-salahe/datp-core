@@ -1,119 +1,145 @@
-"""Threshold robustness seed runners, reports, and analysis markers.
-
-Covers six supportive threshold experiments:
-- SHARED_CONSTRUCTION_SENSITIVITY
-- QUANTILE_SENSITIVITY (planning sweeps quantile grid)
-- CALIBRATION_SIZE_ABLATION (dormant workspace wiring)
-- FIXED_SHRINKAGE_CURVE (LOCAL_GLOBAL_SHRINKAGE)
-- SIZE_AWARE_SHRINKAGE (scientifically unavailable)
-- LOCAL_CONFORMAL_COVERAGE (LOCAL_CONFORMAL_THRESHOLD)
-"""
+"""Threshold-robustness experiment runners and typed evidence summaries."""
 
 from __future__ import annotations
 
-import json
-from dataclasses import asdict, dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from datp_core.domain.enums import (
-    ExperimentId,
-    FederatedThresholdMethod,
-    MetricId,
-    PopulationId,
-)
+from datp_core.app.planning import expand_experiment_plan
+from datp_core.datasets.partitioning.contracts import ClientIdentity
+from datp_core.domain.contracts import StrictModel
+from datp_core.domain.enums import ExperimentId, FederatedThresholdMethod, MetricId, PopulationId
 from datp_core.domain.errors import ScientificContractError
+from datp_core.domain.provenance import serialize_json_model
 from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import Seed
-from datp_core.domain.values.ratios import Quantile
+from datp_core.domain.values.counts import CalibrationSize, ReplicateIndex, Seed, SeedCount
+from datp_core.domain.values.ratios import MetricDelta, MetricValue, Quantile, Ratio, ShrinkageWeight
 from datp_core.evaluation.federated.publication import FederatedEvaluationAssetName
 from datp_core.evaluation.models import MetricStatus, metric_by_id
+from datp_core.experiments.execution import execute_declared_experiment_seed
 from datp_core.pipeline.coordinates import ExperimentCoordinate
 from datp_core.pipeline.execution.evidence import load_evaluation_document, population_metric
 from datp_core.pipeline.execution.layout import EvaluationRunAssetDirectory
-from datp_core.pipeline.planning import expand_experiment_plan
 from datp_core.pipeline.publication.layout import evaluation_run_directory
-from datp_core.pipeline.workflows.execution import execute_declared_experiment_seed
 from datp_core.protocols.calibration import (
     CALIBRATION_SIZES,
     CALIBRATION_SUBSAMPLE_REPLICATE_COUNT,
     QUANTILE_GRID,
 )
-from datp_core.protocols.experiments import ExperimentDeclaration
+from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration
 from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.runtime.configuration import OUTPUTS_ROOT
+from datp_core.thresholding.identities import ThresholdInfeasibilityReason
 
 if TYPE_CHECKING:
     from datp_core.evaluation.federated.contracts import FederatedEvaluationDocument
     from datp_core.evaluation.models import MetricAvailability
 
-_SUMMARY_FILENAME = "summary.json"
 
-
-class ThresholdRobustnessAssetDirectory(StrEnum):
+class ThresholdRobustnessArtifactName(StrEnum):
     ROOT = "threshold_robustness"
+    ANALYSIS = "analysis"
+    SUMMARY = "summary.json"
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
-class _MethodCvSummaryRow:
-    seed_count: int
-    mean_cv_fpr: float | None
-    worst_client_fpr: float | None
-    fpr_coefficient_of_variation: float | None
+class ThresholdRobustnessSeedResult(StrictModel):
+    training_seed: Seed
+    campaign_digest: Checksum
+    completed_threshold_methods: tuple[FederatedThresholdMethod, ...]
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
-class _CalibrationSizeAblationRow:
-    seed: int
-    method: str
-    calibration_size: int
-    replicate: int
-    cv_fpr: float | None
-    worst_client_fpr: float | None
-    p10_macro_f1: float | None
+class MethodCvSummary(StrictModel):
+    method: FederatedThresholdMethod
+    seed_count: SeedCount
+    mean_cv_fpr: MetricValue | None
+    mean_worst_client_fpr: MetricValue | None
+    cv_fpr_across_seeds: MetricValue | None
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
-class _ShrinkageCurveRow:
-    seed: int
-    lambda_weight: float
-    cv_fpr: float | None
-    worst_client_fpr: float | None
+class MethodCvSummaryReport(StrictModel):
+    experiment: ExperimentId
+    rows: tuple[MethodCvSummary, ...]
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
-class _ConformalCoverageRow:
-    seed: int
-    client: str
-    target_coverage: float
-    achieved_coverage: float | None
-    signed_coverage_error: float | None
-    absolute_coverage_error: float | None
-    client_fpr: float | None
+class QuantileSummary(StrictModel):
+    method: FederatedThresholdMethod
+    quantile: Quantile
+    summary: MethodCvSummary
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
-class _SizeAwareShrinkageSummary:
-    unavailable_note: str
-    shared_threshold: _MethodCvSummaryRow | None
-    local_threshold: _MethodCvSummaryRow | None
+class QuantileSummaryReport(StrictModel):
+    experiment: ExperimentId
+    rows: tuple[QuantileSummary, ...]
 
 
-def _threshold_robustness_analysis_directory(experiment_id: ExperimentId, population: PopulationId) -> Path:
+class CalibrationSizeAblationRow(StrictModel):
+    seed: Seed
+    method: FederatedThresholdMethod
+    calibration_size: CalibrationSize
+    replicate: ReplicateIndex
+    cv_fpr: MetricValue | None
+    worst_client_fpr: MetricValue | None
+    p10_macro_f1: MetricValue | None
+
+
+class CalibrationSizeAblationReport(StrictModel):
+    experiment: ExperimentId
+    rows: tuple[CalibrationSizeAblationRow, ...]
+
+
+class ShrinkageCurveRow(StrictModel):
+    seed: Seed
+    lambda_weight: ShrinkageWeight
+    cv_fpr: MetricValue | None
+    worst_client_fpr: MetricValue | None
+
+
+class ShrinkageCurveReport(StrictModel):
+    experiment: ExperimentId
+    rows: tuple[ShrinkageCurveRow, ...]
+
+
+class ConformalCoverageRow(StrictModel):
+    seed: Seed
+    client: ClientIdentity
+    target_coverage: Ratio
+    achieved_coverage: Ratio | None
+    signed_coverage_error: MetricDelta | None
+    absolute_coverage_error: MetricValue | None
+    client_fpr: MetricValue | None
+
+
+class ConformalCoverageReport(StrictModel):
+    experiment: ExperimentId
+    rows: tuple[ConformalCoverageRow, ...]
+
+
+class SizeAwareShrinkageReport(StrictModel):
+    experiment: ExperimentId
+    unavailable_reason: ThresholdInfeasibilityReason
+    shared_threshold: MethodCvSummary
+    local_threshold: MethodCvSummary
+
+
+def _analysis_directory(experiment_id: ExperimentId, population: PopulationId) -> Path:
     return (
         OUTPUTS_ROOT
-        / ThresholdRobustnessAssetDirectory.ROOT
+        / ThresholdRobustnessArtifactName.ROOT
         / experiment_id.value
         / population.value
-        / "analysis"
+        / ThresholdRobustnessArtifactName.ANALYSIS
     )
 
 
-def _threshold_robustness_complete_marker(experiment_id: ExperimentId, population: PopulationId) -> Path:
+def _complete_marker(experiment_id: ExperimentId, population: PopulationId) -> Path:
     from datp_core.pipeline.decision.evidence import AnalysisAssetName
 
-    return _threshold_robustness_analysis_directory(experiment_id, population) / AnalysisAssetName.COMPLETE.value
+    return _analysis_directory(experiment_id, population) / AnalysisAssetName.COMPLETE.value
+
+
+def _summary_path(experiment_id: ExperimentId, population: PopulationId) -> Path:
+    return _analysis_directory(experiment_id, population) / ThresholdRobustnessArtifactName.SUMMARY
 
 
 def _finalize_report(
@@ -129,23 +155,17 @@ def _finalize_report(
     return (directory,), f"{marker_text.strip().split(chr(10), 1)[0]} ({missing_count} seed(s) missing)"
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ThresholdRobustnessSeedResult:
-    training_seed: Seed
-    campaign_digest: Checksum
-    completed_threshold_methods: tuple[FederatedThresholdMethod, ...]
-
-
 def _declaration_for(experiment_id: ExperimentId) -> ExperimentDeclaration:
-    from datp_core.pipeline.workflows import require_experiment_declaration
+    matches = tuple(item for item in EXPERIMENTS if item.id is experiment_id)
+    if len(matches) != 1:
+        raise ScientificContractError(
+            f"experiment must be declared exactly once: {experiment_id.value}",
+            subject=experiment_id,
+        )
+    return matches[0]
 
-    return require_experiment_declaration(experiment_id)
 
-
-def _evaluation_document_path(
-    output_root: Path,
-    coordinate: ExperimentCoordinate,
-) -> Path:
+def _evaluation_document_path(output_root: Path, coordinate: ExperimentCoordinate) -> Path:
     return (
         evaluation_run_directory(output_root, coordinate)
         / EvaluationRunAssetDirectory.EVALUATION
@@ -202,32 +222,35 @@ def _run_robustness_seed(
     )
 
 
-def _available_metric_value(
-    metrics: tuple[MetricAvailability, ...],
-    metric_id: MetricId,
-) -> float | None:
-    """Return the metric value if AVAILABLE, None otherwise."""
+def _available_metric_value(metrics: tuple[MetricAvailability, ...], metric_id: MetricId) -> MetricValue | None:
     result = metric_by_id(metrics, metric_id)
-    if result.status is MetricStatus.AVAILABLE and result.value is not None:
-        return result.value.value
-    return None
+    return result.value if result.status is MetricStatus.AVAILABLE else None
 
 
-def _mean(values: list[float]) -> float | None:
-    return sum(values) / len(values) if values else None
+def _mean(values: list[MetricValue]) -> MetricValue | None:
+    return MetricValue(sum(value.value for value in values) / len(values)) if values else None
 
 
-def _coefficient_of_variation(values: list[float]) -> float | None:
+def _coefficient_of_variation(values: list[MetricValue]) -> MetricValue | None:
     if len(values) < 2:
         return None
-    mean = sum(values) / len(values)
+    mean = sum(value.value for value in values) / len(values)
     if mean == 0:
         return None
-    variance = sum((value - mean) ** 2 for value in values) / len(values)
-    return variance**0.5 / mean
+    variance = sum((value.value - mean) ** 2 for value in values) / len(values)
+    return MetricValue(variance**0.5 / mean)
 
 
-# ── SHARED_CONSTRUCTION_SENSITIVITY ──────────────────────────────────────────
+def _method_summary(method: FederatedThresholdMethod, documents: tuple[FederatedEvaluationDocument, ...]) -> MethodCvSummary:
+    cv_values = [population_metric(document, MetricId.FPR_COEFFICIENT_OF_VARIATION) for document in documents]
+    worst_values = [population_metric(document, MetricId.WORST_CLIENT_FPR) for document in documents]
+    return MethodCvSummary(
+        method=method,
+        seed_count=SeedCount(len(documents)),
+        mean_cv_fpr=_mean(cv_values),
+        mean_worst_client_fpr=_mean(worst_values),
+        cv_fpr_across_seeds=_coefficient_of_variation(cv_values),
+    )
 
 
 def run_shared_construction_sensitivity_seed(
@@ -239,51 +262,44 @@ def run_shared_construction_sensitivity_seed(
     return _run_robustness_seed(
         ExperimentId.SHARED_CONSTRUCTION_SENSITIVITY,
         training_seed,
-        output_root=output_root,
-        overwrite=overwrite,
+        output_root,
+        overwrite,
     )
 
 
 def report_shared_construction_sensitivity(
-    experiment_id: ExperimentId, overwrite: bool,
+    experiment_id: ExperimentId,
+    overwrite: bool,
 ) -> tuple[tuple[Path, ...], str]:
     del overwrite
     declaration = _declaration_for(experiment_id)
-    directory = _threshold_robustness_analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
+    directory = _analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
     directory.mkdir(parents=True, exist_ok=True)
-    summary: dict[str, _MethodCvSummaryRow] = {}
+    rows: list[MethodCvSummary] = []
     missing = 0
     for method in declaration.federated_thresholds:
-        cv_values: list[float] = []
-        worst_fpr_values: list[float] = []
+        documents: list[FederatedEvaluationDocument] = []
         for seed in CONFIRMATORY_SEED_COHORT.values:
             try:
-                doc = _evaluation_document_for_seed(seed, method, experiment_id, OUTPUTS_ROOT)
-                cv_values.append(population_metric(doc, MetricId.FPR_COEFFICIENT_OF_VARIATION).value)
-                worst_fpr_values.append(population_metric(doc, MetricId.WORST_CLIENT_FPR).value)
+                documents.append(_evaluation_document_for_seed(seed, method, experiment_id, OUTPUTS_ROOT))
             except ScientificContractError:
                 missing += 1
-        summary[method.value] = _MethodCvSummaryRow(
-            seed_count=len(cv_values),
-            mean_cv_fpr=_mean(cv_values),
-            worst_client_fpr=_mean(worst_fpr_values),
-            fpr_coefficient_of_variation=_coefficient_of_variation(cv_values),
-        )
-    serialized = {method: asdict(row) for method, row in summary.items()}
-    (directory / _SUMMARY_FILENAME).write_text(json.dumps(serialized, indent=2), encoding="utf-8")
+        if documents:
+            rows.append(_method_summary(method, tuple(documents)))
+    serialize_json_model(
+        MethodCvSummaryReport(experiment=experiment_id, rows=tuple(rows)),
+        _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
+    )
     return _finalize_report(
         directory,
-        _threshold_robustness_complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
+        _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
         missing,
         marker_text="shared_construction_sensitivity_analysis_complete\n",
     )
 
 
 def shared_construction_sensitivity_analysis_marker_present(experiment_id: ExperimentId) -> bool:
-    return _threshold_robustness_complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES).is_file()
-
-
-# ── QUANTILE_SENSITIVITY ─────────────────────────────────────────────────────
+    return _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES).is_file()
 
 
 def run_quantile_sensitivity_seed(
@@ -292,60 +308,57 @@ def run_quantile_sensitivity_seed(
     output_root: Path,
     overwrite: bool = False,
 ) -> ThresholdRobustnessSeedResult:
-    return _run_robustness_seed(
-        ExperimentId.QUANTILE_SENSITIVITY,
-        training_seed,
-        output_root=output_root,
-        overwrite=overwrite,
-    )
+    return _run_robustness_seed(ExperimentId.QUANTILE_SENSITIVITY, training_seed, output_root, overwrite)
 
 
-def report_quantile_sensitivity(experiment_id: ExperimentId, overwrite: bool) -> tuple[tuple[Path, ...], str]:
+def report_quantile_sensitivity(
+    experiment_id: ExperimentId,
+    overwrite: bool,
+) -> tuple[tuple[Path, ...], str]:
     del overwrite
     declaration = _declaration_for(experiment_id)
-    directory = _threshold_robustness_analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
+    directory = _analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
     directory.mkdir(parents=True, exist_ok=True)
-    summary: dict[str, dict[str, _MethodCvSummaryRow]] = {}
+    rows: list[QuantileSummary] = []
     missing = 0
     for method in declaration.federated_thresholds:
-        method_summary: dict[str, _MethodCvSummaryRow] = {}
         for quantile in QUANTILE_GRID:
-            cv_values: list[float] = []
-            worst_fpr_values: list[float] = []
+            documents: list[FederatedEvaluationDocument] = []
             for seed in CONFIRMATORY_SEED_COHORT.values:
                 try:
-                    doc = _evaluation_document_for_seed(
-                        seed, method, experiment_id, OUTPUTS_ROOT, quantile=quantile
+                    documents.append(
+                        _evaluation_document_for_seed(
+                            seed,
+                            method,
+                            experiment_id,
+                            OUTPUTS_ROOT,
+                            quantile=quantile,
+                        )
                     )
-                    cv_values.append(population_metric(doc, MetricId.FPR_COEFFICIENT_OF_VARIATION).value)
-                    worst_fpr_values.append(population_metric(doc, MetricId.WORST_CLIENT_FPR).value)
                 except ScientificContractError:
                     missing += 1
-            method_summary[str(quantile.value)] = _MethodCvSummaryRow(
-                seed_count=len(cv_values),
-                mean_cv_fpr=_mean(cv_values),
-                worst_client_fpr=_mean(worst_fpr_values),
-                fpr_coefficient_of_variation=_coefficient_of_variation(cv_values),
-            )
-        summary[method.value] = method_summary
-    serialized = {
-        method: {quantile: asdict(row) for quantile, row in quantile_summary.items()}
-        for method, quantile_summary in summary.items()
-    }
-    (directory / _SUMMARY_FILENAME).write_text(json.dumps(serialized, indent=2), encoding="utf-8")
+            if documents:
+                rows.append(
+                    QuantileSummary(
+                        method=method,
+                        quantile=quantile,
+                        summary=_method_summary(method, tuple(documents)),
+                    )
+                )
+    serialize_json_model(
+        QuantileSummaryReport(experiment=experiment_id, rows=tuple(rows)),
+        _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
+    )
     return _finalize_report(
         directory,
-        _threshold_robustness_complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
+        _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
         missing,
         marker_text="quantile_sensitivity_analysis_complete\n",
     )
 
 
 def quantile_sensitivity_analysis_marker_present(experiment_id: ExperimentId) -> bool:
-    return _threshold_robustness_complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES).is_file()
-
-
-# ── CALIBRATION_SIZE_ABLATION ────────────────────────────────────────────────
+    return _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES).is_file()
 
 
 def run_calibration_size_ablation_seed(
@@ -354,57 +367,57 @@ def run_calibration_size_ablation_seed(
     output_root: Path,
     overwrite: bool = False,
 ) -> ThresholdRobustnessSeedResult:
-    return _run_robustness_seed(
-        ExperimentId.CALIBRATION_SIZE_ABLATION,
-        training_seed,
-        output_root=output_root,
-        overwrite=overwrite,
-    )
+    return _run_robustness_seed(ExperimentId.CALIBRATION_SIZE_ABLATION, training_seed, output_root, overwrite)
 
 
-def report_calibration_size_ablation(experiment_id: ExperimentId, overwrite: bool) -> tuple[tuple[Path, ...], str]:
+def report_calibration_size_ablation(
+    experiment_id: ExperimentId,
+    overwrite: bool,
+) -> tuple[tuple[Path, ...], str]:
     del overwrite
     declaration = _declaration_for(experiment_id)
-    directory = _threshold_robustness_analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
+    directory = _analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
     directory.mkdir(parents=True, exist_ok=True)
-    summary: list[_CalibrationSizeAblationRow] = []
+    rows: list[CalibrationSizeAblationRow] = []
     missing = 0
     for method in declaration.federated_thresholds:
         for seed in CONFIRMATORY_SEED_COHORT.values:
             try:
-                doc = _evaluation_document_for_seed(seed, method, experiment_id, OUTPUTS_ROOT)
-                for cell in doc.diagnostics.calibration_size_ablation:
-                    pop_metrics = cell.population.metrics
-                    summary.append(
-                        _CalibrationSizeAblationRow(
-                            seed=seed.value,
-                            method=method.value,
-                            calibration_size=cell.calibration_size.value,
-                            replicate=cell.replicate_index.value,
-                            cv_fpr=_available_metric_value(pop_metrics, MetricId.FPR_COEFFICIENT_OF_VARIATION),
-                            worst_client_fpr=_available_metric_value(pop_metrics, MetricId.WORST_CLIENT_FPR),
-                            p10_macro_f1=_available_metric_value(pop_metrics, MetricId.P10_BINARY_MACRO_F1),
-                        )
-                    )
+                document = _evaluation_document_for_seed(seed, method, experiment_id, OUTPUTS_ROOT)
             except ScientificContractError:
                 missing += 1
-    serialized = [asdict(row) for row in summary]
-    (directory / _SUMMARY_FILENAME).write_text(json.dumps(serialized, indent=2), encoding="utf-8")
-    _size = len(CALIBRATION_SIZES)
-    _reps = CALIBRATION_SUBSAMPLE_REPLICATE_COUNT
+                continue
+            for cell in document.diagnostics.calibration_size_ablation:
+                metrics = cell.population.metrics
+                rows.append(
+                    CalibrationSizeAblationRow(
+                        seed=seed,
+                        method=method,
+                        calibration_size=cell.calibration_size,
+                        replicate=cell.replicate_index,
+                        cv_fpr=_available_metric_value(metrics, MetricId.FPR_COEFFICIENT_OF_VARIATION),
+                        worst_client_fpr=_available_metric_value(metrics, MetricId.WORST_CLIENT_FPR),
+                        p10_macro_f1=_available_metric_value(metrics, MetricId.P10_BINARY_MACRO_F1),
+                    )
+                )
+    serialize_json_model(
+        CalibrationSizeAblationReport(experiment=experiment_id, rows=tuple(rows)),
+        _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
+    )
+    marker = (
+        "calibration_size_ablation_analysis_complete "
+        f"sizes={len(CALIBRATION_SIZES)} replicates={CALIBRATION_SUBSAMPLE_REPLICATE_COUNT.value}\n"
+    )
     return _finalize_report(
         directory,
-        _threshold_robustness_complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
+        _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
         missing,
-        marker_text=f"calibration_size_ablation_analysis_complete sizes={_size} replicates={_reps}\n",
+        marker_text=marker,
     )
 
 
 def calibration_size_ablation_analysis_marker_present(experiment_id: ExperimentId) -> bool:
-    return _threshold_robustness_complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES).is_file()
-
-
-# ── FIXED_SHRINKAGE_CURVE ────────────────────────────────────────────────────
+    return _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES).is_file()
 
 
 def run_fixed_shrinkage_curve_seed(
@@ -413,52 +426,58 @@ def run_fixed_shrinkage_curve_seed(
     output_root: Path,
     overwrite: bool = False,
 ) -> ThresholdRobustnessSeedResult:
-    return _run_robustness_seed(
-        ExperimentId.FIXED_SHRINKAGE_CURVE,
-        training_seed,
-        output_root=output_root,
-        overwrite=overwrite,
-    )
+    return _run_robustness_seed(ExperimentId.FIXED_SHRINKAGE_CURVE, training_seed, output_root, overwrite)
 
 
-def report_fixed_shrinkage_curve(experiment_id: ExperimentId, overwrite: bool) -> tuple[tuple[Path, ...], str]:
+def report_fixed_shrinkage_curve(
+    experiment_id: ExperimentId,
+    overwrite: bool,
+) -> tuple[tuple[Path, ...], str]:
     del overwrite
-    directory = _threshold_robustness_analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
+    directory = _analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
     directory.mkdir(parents=True, exist_ok=True)
-    summary: list[_ShrinkageCurveRow] = []
+    rows: list[ShrinkageCurveRow] = []
     missing = 0
     for seed in CONFIRMATORY_SEED_COHORT.values:
         try:
-            doc = _evaluation_document_for_seed(
-                seed, FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE, experiment_id, OUTPUTS_ROOT
+            document = _evaluation_document_for_seed(
+                seed,
+                FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE,
+                experiment_id,
+                OUTPUTS_ROOT,
             )
-            for evaluation in doc.diagnostics.shrinkage_curve:
-                pop_metrics = evaluation.population.metrics
-                summary.append(
-                    _ShrinkageCurveRow(
-                        seed=seed.value,
-                        lambda_weight=evaluation.lambda_weight.value,
-                        cv_fpr=_available_metric_value(pop_metrics, MetricId.FPR_COEFFICIENT_OF_VARIATION),
-                        worst_client_fpr=_available_metric_value(pop_metrics, MetricId.WORST_CLIENT_FPR),
-                    )
-                )
         except ScientificContractError:
             missing += 1
-    serialized = [asdict(row) for row in summary]
-    (directory / _SUMMARY_FILENAME).write_text(json.dumps(serialized, indent=2), encoding="utf-8")
+            continue
+        for evaluation in document.diagnostics.shrinkage_curve:
+            rows.append(
+                ShrinkageCurveRow(
+                    seed=seed,
+                    lambda_weight=evaluation.lambda_weight,
+                    cv_fpr=_available_metric_value(
+                        evaluation.population.metrics,
+                        MetricId.FPR_COEFFICIENT_OF_VARIATION,
+                    ),
+                    worst_client_fpr=_available_metric_value(
+                        evaluation.population.metrics,
+                        MetricId.WORST_CLIENT_FPR,
+                    ),
+                )
+            )
+    serialize_json_model(
+        ShrinkageCurveReport(experiment=experiment_id, rows=tuple(rows)),
+        _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
+    )
     return _finalize_report(
         directory,
-        _threshold_robustness_complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
+        _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
         missing,
         marker_text="fixed_shrinkage_curve_analysis_complete\n",
     )
 
 
 def fixed_shrinkage_curve_analysis_marker_present(experiment_id: ExperimentId) -> bool:
-    return _threshold_robustness_complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES).is_file()
-
-
-# ── SIZE_AWARE_SHRINKAGE ─────────────────────────────────────────────────────
+    return _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES).is_file()
 
 
 def run_size_aware_shrinkage_seed(
@@ -467,25 +486,21 @@ def run_size_aware_shrinkage_seed(
     output_root: Path,
     overwrite: bool = False,
 ) -> ThresholdRobustnessSeedResult:
-    """Execute SHARED_THRESHOLD and LOCAL_THRESHOLD reference corners only.
-
-    SIZE_AWARE_SHRINKAGE returns ThresholdUnavailableResult at construction time
-    because no lambda(n_k) formula is declared. The experiment runs the two
-    executable threshold methods as reference corners and reports the
-    SIZE_AWARE_SHRINKAGE method as scientifically UNAVAILABLE.
-    """
     declaration = _declaration_for(ExperimentId.SIZE_AWARE_SHRINKAGE)
-    executable_thresholds = (
-        FederatedThresholdMethod.SHARED_THRESHOLD,
-        FederatedThresholdMethod.LOCAL_THRESHOLD,
+    filtered = declaration.model_copy(
+        update={
+            "federated_thresholds": (
+                FederatedThresholdMethod.SHARED_THRESHOLD,
+                FederatedThresholdMethod.LOCAL_THRESHOLD,
+            )
+        }
     )
-    filtered = declaration.model_copy(update={"federated_thresholds": executable_thresholds})
     result = execute_declared_experiment_seed(
         declaration=filtered,
         seed_cohort=SeedCohort(values=(training_seed,)),
         reason=(
-            "size-aware shrinkage entry point executes reference corners only; "
-            "shrinkage estimator is scientifically unavailable"
+            "size-aware shrinkage executes its declared reference corners only because "
+            "the roadmap does not declare a lambda(n_k) function"
         ),
         output_root=output_root,
         overwrite=overwrite,
@@ -497,52 +512,49 @@ def run_size_aware_shrinkage_seed(
     )
 
 
-def report_size_aware_shrinkage(experiment_id: ExperimentId, overwrite: bool) -> tuple[tuple[Path, ...], str]:
+def report_size_aware_shrinkage(
+    experiment_id: ExperimentId,
+    overwrite: bool,
+) -> tuple[tuple[Path, ...], str]:
     del overwrite
-    declaration = _declaration_for(experiment_id)
-    directory = _threshold_robustness_analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
+    directory = _analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
     directory.mkdir(parents=True, exist_ok=True)
     missing = 0
-    rows: dict[FederatedThresholdMethod, _MethodCvSummaryRow] = {}
-    for method in declaration.federated_thresholds:
-        if method is FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE:
-            continue
-        cv_values: list[float] = []
-        worst_fpr_values: list[float] = []
+    summaries: list[MethodCvSummary] = []
+    for method in (FederatedThresholdMethod.SHARED_THRESHOLD, FederatedThresholdMethod.LOCAL_THRESHOLD):
+        documents: list[FederatedEvaluationDocument] = []
         for seed in CONFIRMATORY_SEED_COHORT.values:
             try:
-                doc = _evaluation_document_for_seed(seed, method, experiment_id, OUTPUTS_ROOT)
-                cv_values.append(population_metric(doc, MetricId.FPR_COEFFICIENT_OF_VARIATION).value)
-                worst_fpr_values.append(population_metric(doc, MetricId.WORST_CLIENT_FPR).value)
+                documents.append(_evaluation_document_for_seed(seed, method, experiment_id, OUTPUTS_ROOT))
             except ScientificContractError:
                 missing += 1
-        rows[method] = _MethodCvSummaryRow(
-            seed_count=len(cv_values),
-            mean_cv_fpr=_mean(cv_values),
-            worst_client_fpr=_mean(worst_fpr_values),
-            fpr_coefficient_of_variation=_coefficient_of_variation(cv_values),
-        )
-    summary = _SizeAwareShrinkageSummary(
-        unavailable_note=(
-            "UNAVAILABLE: no lambda(n_k) formula declared; inventing one is scientifically forbidden"
+        if documents:
+            summaries.append(_method_summary(method, tuple(documents)))
+    summary_by_method = {summary.method: summary for summary in summaries}
+    if set(summary_by_method) != {
+        FederatedThresholdMethod.SHARED_THRESHOLD,
+        FederatedThresholdMethod.LOCAL_THRESHOLD,
+    }:
+        raise ScientificContractError("size-aware shrinkage report requires both executable reference corners")
+    serialize_json_model(
+        SizeAwareShrinkageReport(
+            experiment=experiment_id,
+            unavailable_reason=ThresholdInfeasibilityReason.SIZE_AWARE_SHRINKAGE_FUNCTION_UNRESOLVED,
+            shared_threshold=summary_by_method[FederatedThresholdMethod.SHARED_THRESHOLD],
+            local_threshold=summary_by_method[FederatedThresholdMethod.LOCAL_THRESHOLD],
         ),
-        shared_threshold=rows[FederatedThresholdMethod.SHARED_THRESHOLD],
-        local_threshold=rows[FederatedThresholdMethod.LOCAL_THRESHOLD],
+        _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
     )
-    (directory / _SUMMARY_FILENAME).write_text(json.dumps(asdict(summary), indent=2), encoding="utf-8")
     return _finalize_report(
         directory,
-        _threshold_robustness_complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
+        _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
         missing,
         marker_text="size_aware_shrinkage_analysis_complete\n",
     )
 
 
 def size_aware_shrinkage_analysis_marker_present(experiment_id: ExperimentId) -> bool:
-    return _threshold_robustness_complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES).is_file()
-
-
-# ── LOCAL_CONFORMAL_COVERAGE ─────────────────────────────────────────────────
+    return _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES).is_file()
 
 
 def run_local_conformal_coverage_seed(
@@ -551,55 +563,71 @@ def run_local_conformal_coverage_seed(
     output_root: Path,
     overwrite: bool = False,
 ) -> ThresholdRobustnessSeedResult:
-    return _run_robustness_seed(
-        ExperimentId.LOCAL_CONFORMAL_COVERAGE,
-        training_seed,
-        output_root=output_root,
-        overwrite=overwrite,
-    )
+    return _run_robustness_seed(ExperimentId.LOCAL_CONFORMAL_COVERAGE, training_seed, output_root, overwrite)
 
 
-def report_local_conformal_coverage(experiment_id: ExperimentId, overwrite: bool) -> tuple[tuple[Path, ...], str]:
+def report_local_conformal_coverage(
+    experiment_id: ExperimentId,
+    overwrite: bool,
+) -> tuple[tuple[Path, ...], str]:
     del overwrite
-    directory = _threshold_robustness_analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
+    directory = _analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
     directory.mkdir(parents=True, exist_ok=True)
-    summary: list[_ConformalCoverageRow] = []
+    rows: list[ConformalCoverageRow] = []
     missing = 0
     for seed in CONFIRMATORY_SEED_COHORT.values:
         try:
-            doc = _evaluation_document_for_seed(
-                seed, FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD, experiment_id, OUTPUTS_ROOT
+            document = _evaluation_document_for_seed(
+                seed,
+                FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD,
+                experiment_id,
+                OUTPUTS_ROOT,
             )
-            for diagnostic in doc.diagnostics.conformal_coverage:
-                client_fpr: float | None = None
-                for client_result in doc.clients:
-                    if client_result.client == diagnostic.client:
-                        fpr_metric = metric_by_id(client_result.metrics, MetricId.FALSE_POSITIVE_RATE)
-                        if fpr_metric.status is MetricStatus.AVAILABLE and fpr_metric.value is not None:
-                            client_fpr = fpr_metric.value.value
-                        break
-                summary.append(
-                    _ConformalCoverageRow(
-                        seed=seed.value,
-                        client=diagnostic.client.client_id,
-                        target_coverage=diagnostic.target_coverage.value,
-                        achieved_coverage=diagnostic.achieved_held_out_benign_coverage,
-                        signed_coverage_error=diagnostic.signed_coverage_error,
-                        absolute_coverage_error=diagnostic.absolute_coverage_error,
-                        client_fpr=client_fpr,
-                    )
-                )
         except ScientificContractError:
             missing += 1
-    serialized = [asdict(row) for row in summary]
-    (directory / _SUMMARY_FILENAME).write_text(json.dumps(serialized, indent=2), encoding="utf-8")
+            continue
+        for diagnostic in document.diagnostics.conformal_coverage:
+            client_fpr: MetricValue | None = None
+            for client_result in document.clients:
+                if client_result.client == diagnostic.client:
+                    metric = metric_by_id(client_result.metrics, MetricId.FALSE_POSITIVE_RATE)
+                    if metric.status is MetricStatus.AVAILABLE:
+                        client_fpr = metric.value
+                    break
+            rows.append(
+                ConformalCoverageRow(
+                    seed=seed,
+                    client=diagnostic.client,
+                    target_coverage=Ratio(diagnostic.target_coverage.value),
+                    achieved_coverage=(
+                        None
+                        if diagnostic.achieved_held_out_benign_coverage is None
+                        else Ratio(diagnostic.achieved_held_out_benign_coverage)
+                    ),
+                    signed_coverage_error=(
+                        None
+                        if diagnostic.signed_coverage_error is None
+                        else MetricDelta(diagnostic.signed_coverage_error)
+                    ),
+                    absolute_coverage_error=(
+                        None
+                        if diagnostic.absolute_coverage_error is None
+                        else MetricValue(diagnostic.absolute_coverage_error)
+                    ),
+                    client_fpr=client_fpr,
+                )
+            )
+    serialize_json_model(
+        ConformalCoverageReport(experiment=experiment_id, rows=tuple(rows)),
+        _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
+    )
     return _finalize_report(
         directory,
-        _threshold_robustness_complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
+        _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
         missing,
         marker_text="local_conformal_coverage_analysis_complete\n",
     )
 
 
 def local_conformal_coverage_analysis_marker_present(experiment_id: ExperimentId) -> bool:
-    return _threshold_robustness_complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES).is_file()
+    return _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES).is_file()
