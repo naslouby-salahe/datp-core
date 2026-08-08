@@ -8,16 +8,14 @@ from datp_core.core.identifiers import (
     ClientPathToken,
     FeatureName,
     FeatureNameSequence,
-    PreprocessingFitScope,
     PreprocessingProtocolId,
     SerializationFormat,
     TrainingModelId,
-    TrustedEstimatorClassName,
 )
 from datp_core.core.numeric import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE, RowCount
+from datp_core.data.preprocessing.artifacts import PreprocessingFitScope, TrustedEstimatorClassName
 from datp_core.data.preprocessing.centralized import reject_federated_state_for_pooled
-from datp_core.data.preprocessing.contracts import PreprocessingProtocol
-from datp_core.data.preprocessing.models import FederatedFittedPreprocessingState
+from datp_core.data.preprocessing.models import FederatedFittedPreprocessingState, PreprocessingProtocol
 from datp_core.detector.checkpoints.service import reject_federated_checkpoint
 from datp_core.detector.training.centralized import reject_federated_preprocessing_for_training
 

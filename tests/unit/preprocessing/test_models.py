@@ -16,7 +16,7 @@ from datp_core.core.identifiers import (
     StableRowIdSequence,
 )
 from datp_core.core.numeric import AbsoluteTolerance, RowCount
-from datp_core.data.preprocessing.contracts import PreprocessingFitScope, TrustedEstimatorClassName
+from datp_core.data.preprocessing.artifacts import PreprocessingFitScope, TrustedEstimatorClassName
 from datp_core.data.preprocessing.models import (
     SCIENTIFIC_CENTRALIZED_PREPROCESSING_METHOD,
     SCIENTIFIC_FEDERATED_POOLED_MIN_MAX_METHOD,

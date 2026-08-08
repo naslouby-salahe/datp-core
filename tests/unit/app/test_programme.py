@@ -1,7 +1,6 @@
 """Programme registry, planning, feasibility, and scientific naming invariants."""
 
 import pytest
-from datp_core.protocols.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_SEED_COHORT
 
 from datp_core.app.campaign import (
     build_programme_plan,
@@ -12,6 +11,7 @@ from datp_core.app.campaign import (
 from datp_core.app.research import registered_experiment_ids
 from datp_core.core.errors import UnresolvedScientificValueError
 from datp_core.core.identifiers import ExperimentId, ExperimentReadiness, FederatedThresholdMethod
+from datp_core.experiments.common.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_SEED_COHORT
 from datp_core.experiments.planning import PlanDisposition
 from datp_core.protocols.experiments import EXPERIMENTS
 

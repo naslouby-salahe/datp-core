@@ -20,10 +20,20 @@ from datp_core.core.identifiers import (
     SplitProtocolId,
     TemporalState,
 )
-from datp_core.core.numeric import MetricValue, Seed
+from datp_core.core.numeric import MetricValue, Ratio, Seed
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.experiments.common.seeds import BOUNDED_EVIDENCE_SEED_COHORT
-from datp_core.protocols.temporal import TEMPORAL_DECISION_PROTOCOL, TemporalDeploymentProvenance
+from datp_core.protocols.temporal import TemporalDecisionProtocol, TemporalDeploymentProvenance
+
+_TEST_TEMPORAL_DECISION_PROTOCOL = TemporalDecisionProtocol(
+    drift_excess_materiality_threshold=MetricValue(0.1),
+    material_recovery_ratio_minimum=Ratio(0.5),
+    seed_cohort=BOUNDED_EVIDENCE_SEED_COHORT,
+    undefined_recovery_when_drift_not_material=True,
+    mixed_seed_publication_support=False,
+    require_full_seed_provenance=True,
+    require_uncertainty_for_supported=True,
+)
 
 
 def test_scientific_decision_member_set_is_exact_and_unique() -> None:
@@ -44,7 +54,7 @@ def test_scientific_decision_member_set_is_exact_and_unique() -> None:
 
 
 def test_material_recovery_ratio_minimum_is_half() -> None:
-    assert TEMPORAL_DECISION_PROTOCOL.material_recovery_ratio_minimum.value == 0.50
+    assert _TEST_TEMPORAL_DECISION_PROTOCOL.material_recovery_ratio_minimum.value == 0.50
 
 
 def test_material_drift_with_recovery_is_supported_only_at_campaign_level() -> None:
@@ -195,6 +205,7 @@ def test_cloned_provenance_across_seeds_is_blocked() -> None:
                 source_row_checksum=shared.source_row_checksum,
                 row_order_checksum=shared.row_order_checksum,
             ),
+            decision_protocol=_TEST_TEMPORAL_DECISION_PROTOCOL,
         )
         for seed in BOUNDED_EVIDENCE_SEED_COHORT.values
     )
@@ -213,6 +224,7 @@ def test_provenance_seed_mismatch_is_rejected() -> None:
             frozen_future_cv=MetricValue(0.30),
             recalibrated_future_cv=MetricValue(0.12),
             provenance=provenance,
+            decision_protocol=_TEST_TEMPORAL_DECISION_PROTOCOL,
         )
 
 
@@ -288,6 +300,7 @@ def test_client_trajectories_attach_to_recovery() -> None:
         frozen_future_cv=MetricValue(0.30),
         recalibrated_future_cv=MetricValue(0.12),
         provenance=_seed_provenance(0),
+        decision_protocol=_TEST_TEMPORAL_DECISION_PROTOCOL,
         client_trajectories=trajectories,
     )
     assert len(result.client_trajectories) == 1
@@ -315,6 +328,7 @@ def _recovery(
         frozen_future_cv=MetricValue(frozen_cv),
         recalibrated_future_cv=MetricValue(recalibrated_cv),
         provenance=_seed_provenance(seed, method=method),
+        decision_protocol=_TEST_TEMPORAL_DECISION_PROTOCOL,
     )
 
 

@@ -7,7 +7,7 @@ from sklearn.preprocessing import StandardScaler
 
 from datp_core.core.errors import SerializationSafetyError
 from datp_core.core.numeric import AbsoluteTolerance
-from datp_core.data.preprocessing.contracts import TrustedEstimatorClassName
+from datp_core.data.preprocessing.artifacts import TrustedEstimatorClassName
 from datp_core.data.preprocessing.state import (
     TransformReloadCheck,
     load_estimator,

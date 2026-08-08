@@ -5,7 +5,6 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 import torch
-from datp_core.protocols.checkpoints import CheckpointProtocol
 
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.identifiers import (
@@ -23,6 +22,7 @@ from datp_core.core.identifiers import (
 from datp_core.core.numeric import (
     NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
     BatchSize,
+    FeatureCount,
     LearningRate,
     RoundNumber,
     RowCount,
@@ -30,15 +30,16 @@ from datp_core.core.numeric import (
     WeightDecay,
 )
 from datp_core.data.populations.contracts import OUTCOME_LABEL_COLUMN, STABLE_ROW_ID_COLUMN, PopulationOutcomeLabel
-from datp_core.data.preprocessing.contracts import PreprocessingFitScope, TrustedEstimatorClassName
+from datp_core.data.preprocessing.artifacts import PreprocessingFitScope, TrustedEstimatorClassName
 from datp_core.data.preprocessing.models import CentralizedFittedPreprocessingState, PreprocessingProtocol
+from datp_core.detector.checkpoints.contracts import CheckpointProtocol
 from datp_core.detector.training.centralized import (
     CentralizedTrainingCoordinate,
     CentralizedTrainingExecution,
     CentralizedTrainingRequest,
     train_centralized_autoencoder,
 )
-from datp_core.protocols.training import (
+from datp_core.detector.training.contracts import (
     AutoencoderArchitecture,
     AutoencoderProtocol,
     CentralizedTrainingProtocol,
@@ -46,7 +47,11 @@ from datp_core.protocols.training import (
 )
 
 FEATURE_NAMES = FeatureNameSequence((FeatureName("f0"), FeatureName("f1"), FeatureName("f2"), FeatureName("f3")))
-AUTOENCODER = AutoencoderProtocol(widths=AutoencoderArchitecture((4, 3, 2, 3, 4)))
+AUTOENCODER = AutoencoderProtocol(
+    widths=AutoencoderArchitecture(
+        (FeatureCount(4), FeatureCount(3), FeatureCount(2), FeatureCount(3), FeatureCount(4))
+    )
+)
 CHECKPOINT = CheckpointProtocol(candidates=(RoundNumber(2),), maximum_round=RoundNumber(2))
 TRAINING_PROTOCOL = CentralizedTrainingProtocol(
     kind=CentralizedModelId.CENTRALIZED_AUTOENCODER,

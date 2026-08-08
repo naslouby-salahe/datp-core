@@ -17,8 +17,8 @@ from datp_core.core.identifiers import (
     StableRowIdSequence,
 )
 from datp_core.core.numeric import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE, RowCount
+from datp_core.data.preprocessing.artifacts import PreprocessingFitScope, TrustedEstimatorClassName
 from datp_core.data.preprocessing.centralized import fit_pooled_preprocessing, reject_federated_state_for_pooled
-from datp_core.data.preprocessing.contracts import PreprocessingFitScope, TrustedEstimatorClassName
 from datp_core.data.preprocessing.models import (
     FederatedFittedPreprocessingState,
     PreprocessingFitBatch,

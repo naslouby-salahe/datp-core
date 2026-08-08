@@ -20,19 +20,19 @@ from datp_core.core.identifiers import (
 )
 from datp_core.core.numeric import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE
 from datp_core.data.populations.contracts import OUTCOME_LABEL_COLUMN, STABLE_ROW_ID_COLUMN
-from datp_core.data.preprocessing.contracts import PartitionOrdering, PreprocessingFitScope, TrustedEstimatorClassName
-from datp_core.data.preprocessing.models import (
-    PreprocessingFitBatch,
-    PreprocessingPartition,
-    PreprocessingPartitions,
-    PreprocessingProtocol,
-)
-from datp_core.data.preprocessing.validation import (
+from datp_core.data.preprocessing.artifact_validation import (
     extract_partitions,
     fit_trusted_batch,
     require_finite_matrix,
     transform_feature_matrix,
     validate_no_partition_overlap,
+)
+from datp_core.data.preprocessing.artifacts import PartitionOrdering, PreprocessingFitScope, TrustedEstimatorClassName
+from datp_core.data.preprocessing.models import (
+    PreprocessingFitBatch,
+    PreprocessingPartition,
+    PreprocessingPartitions,
+    PreprocessingProtocol,
 )
 
 

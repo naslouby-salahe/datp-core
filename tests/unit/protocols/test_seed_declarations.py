@@ -7,7 +7,7 @@ from datp_core.experiments.confirmatory.spec import CONFIRMATORY_INFERENCE_PROTO
 
 
 def test_seed_values_are_pre_registered() -> None:
-    assert CONFIRMATORY_SEED_COHORT == CONFIRMATORY_INFERENCE_PROTOCOL.seed_cohort
+    assert CONFIRMATORY_SEED_COHORT.member_count == CONFIRMATORY_INFERENCE_PROTOCOL.paired_seed_count
     assert tuple(seed.value for seed in CONFIRMATORY_SEED_COHORT.values) == tuple(
         range(CONFIRMATORY_INFERENCE_PROTOCOL.paired_seed_count.value)
     )

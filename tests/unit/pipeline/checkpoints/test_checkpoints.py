@@ -2,12 +2,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
-from datp_core.protocols.checkpoints import validate_persisted_checkpoint_file
 
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import ArtifactIntegrityError
 from datp_core.core.identifiers import CheckpointStatus
 from datp_core.core.numeric import MetricValue, RoundNumber
+from datp_core.detector.checkpoints.contracts import validate_persisted_checkpoint_file
 from datp_core.detector.checkpoints.service import (
     select_terminal_checkpoint,
     validate_ordered_checkpoint_inventory,

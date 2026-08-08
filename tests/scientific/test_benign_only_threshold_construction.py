@@ -38,6 +38,7 @@ from datp_core.protocols.calibration import (
     CLUSTER_THRESHOLD_PROTOCOL,
     FEDERATED_STATISTICS_PROTOCOL,
     CalibrationEligibilityProtocol,
+    CalibrationSupportRule,
     ClusterThresholdProtocol,
 )
 from datp_core.thresholds.calibration.eligibility import (
@@ -170,6 +171,8 @@ def test_family_threshold_without_taxonomy_reports_typed_unavailability_not_a_cr
             capabilities=_capabilities(),
             eligible=eligible,
             family_by_client=(),
+            support_rule=CalibrationSupportRule.CANONICAL_MINIMUM_SUPPORT,
+            cluster_threshold_aggregation=None,
         )
     )
     assert isinstance(result, ThresholdUnavailableResult)
@@ -348,6 +351,8 @@ def test_dispatch_rejects_method_unsupported_by_population_capabilities() -> Non
                 capabilities=restricted,
                 eligible=eligible,
                 family_by_client=(),
+                support_rule=CalibrationSupportRule.CANONICAL_MINIMUM_SUPPORT,
+                cluster_threshold_aggregation=None,
             )
         )
 
@@ -363,5 +368,7 @@ def test_dispatch_rejects_clients_below_minimum_benign_support() -> None:
                 capabilities=_capabilities(),
                 eligible=eligible,
                 family_by_client=(),
+                support_rule=CalibrationSupportRule.CANONICAL_MINIMUM_SUPPORT,
+                cluster_threshold_aggregation=None,
             )
         )

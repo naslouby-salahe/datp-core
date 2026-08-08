@@ -12,7 +12,7 @@ from datp_core.core.identifiers import (
     SplitProtocolId,
 )
 from datp_core.core.numeric import Seed
-from datp_core.data.preprocessing.contracts import (
+from datp_core.data.preprocessing.artifacts import (
     PartitionOrdering,
     PreprocessingFitScope,
     ProcessedAssetName,

@@ -88,7 +88,10 @@ def test_read_terminal_loss_uses_locked_maximum_round(tmp_path: Path) -> None:
 
 def test_primary_coefficient_is_lowest_mean_terminal_loss(tmp_path: Path) -> None:
     _populate_grid(tmp_path, (1.0, 0.1, 0.5, 0.8))
-    decision = select_primary_fedprox_coefficient_from_artifacts(output_root=tmp_path)
+    decision = select_primary_fedprox_coefficient_from_artifacts(
+        output_root=tmp_path,
+        seed_cohort=CONFIRMATORY_SEED_COHORT,
+    )
     assert decision.primary_coefficient == FEDPROX_COEFFICIENTS[1]
     assert decision.selection_rule == "fedprox_minimum_terminal_training_loss"
     path = write_fedprox_primary_coefficient_decision(
@@ -102,13 +105,19 @@ def test_primary_coefficient_is_lowest_mean_terminal_loss(tmp_path: Path) -> Non
 
 def test_primary_selection_breaks_ties_with_smallest_coefficient(tmp_path: Path) -> None:
     _populate_grid(tmp_path, (0.2, 0.2, 0.2, 0.2))
-    decision = select_primary_fedprox_coefficient_from_artifacts(output_root=tmp_path)
+    decision = select_primary_fedprox_coefficient_from_artifacts(
+        output_root=tmp_path,
+        seed_cohort=CONFIRMATORY_SEED_COHORT,
+    )
     assert decision.primary_coefficient == FEDPROX_COEFFICIENTS[0]
 
 
 def test_missing_history_fails_closed(tmp_path: Path) -> None:
     with pytest.raises(ScientificContractError, match="terminal training loss"):
-        collect_fedprox_coefficient_terminal_losses(output_root=tmp_path)
+        collect_fedprox_coefficient_terminal_losses(
+            output_root=tmp_path,
+            seed_cohort=CONFIRMATORY_SEED_COHORT,
+        )
 
 
 def test_selection_inputs_still_reject_held_out_metrics() -> None:

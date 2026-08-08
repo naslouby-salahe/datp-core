@@ -7,14 +7,13 @@ from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import StableRowId
 from datp_core.core.numeric import CalibrationSize, ReplicateIndex, RowCount, ScoreValue, Seed
 from datp_core.thresholds.calibration.eligibility import (
-    CalibrationReplicateManifest,
     CalibrationSampleReference,
-    CalibrationSubsample,
     CalibrationSupport,
     CalibrationUnavailableReason,
     EligibilityDecision,
     EligibilityStatus,
 )
+from datp_core.thresholds.calibration.sampling import CalibrationReplicateManifest, CalibrationSubsample
 
 CLIENT_A = some_client("client_a")
 CLIENT_B = some_client("client_b")

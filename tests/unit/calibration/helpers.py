@@ -3,13 +3,13 @@
 from pathlib import Path
 
 import polars as pl
-from datp_core.protocols.inference import ScoreRecord
 from tests.unit.learning.federated.helpers import client_identity, fedavg_coordinate
 
 from datp_core.artifacts.provenance import Checksum, checksum_file
 from datp_core.core.identifiers import PartitionRole, ScoreFrameColumn, SerializationFormat
 from datp_core.core.numeric import FeatureCount, RoundNumber, RowCount, Seed
 from datp_core.data.populations.contracts import ClientIdentity, PopulationOutcomeLabel
+from datp_core.detector.scoring.contracts import ScoreRecord
 
 
 def write_score_parquet(

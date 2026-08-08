@@ -22,7 +22,8 @@ from datp_core.core.identifiers import (
 )
 from datp_core.core.numeric import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE, RowCount
 from datp_core.data.populations.contracts import OUTCOME_LABEL_COLUMN, STABLE_ROW_ID_COLUMN, PopulationOutcomeLabel
-from datp_core.data.preprocessing.contracts import PreprocessingFitScope, TrustedEstimatorClassName
+from datp_core.data.preprocessing.artifact_validation import fit_trusted_batch
+from datp_core.data.preprocessing.artifacts import PreprocessingFitScope, TrustedEstimatorClassName
 from datp_core.data.preprocessing.federated import fit_estimators_for_federated_clients
 from datp_core.data.preprocessing.models import (
     CentralizedFittedPreprocessingState,
@@ -32,7 +33,6 @@ from datp_core.data.preprocessing.models import (
     PreprocessingPartitions,
     PreprocessingProtocol,
 )
-from datp_core.data.preprocessing.validation import fit_trusted_batch
 
 
 def _protocol(scope: PreprocessingFitScope = PreprocessingFitScope.CLIENT_LOCAL_TRAINING) -> PreprocessingProtocol:

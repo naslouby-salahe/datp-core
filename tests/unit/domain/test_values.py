@@ -1,8 +1,6 @@
 """Tests for semantic value-object validation and isolation."""
 
 import pytest
-from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
-from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL
 from pydantic import BaseModel
 
 from datp_core.core.numeric import (
@@ -18,6 +16,8 @@ from datp_core.core.numeric import (
     SeedCount,
     ThresholdValue,
 )
+from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
+from datp_core.experiments.confirmatory.spec import CONFIRMATORY_INFERENCE_PROTOCOL
 
 
 class _ValueDocument(BaseModel):

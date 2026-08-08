@@ -15,9 +15,8 @@ from datp_core.core.identifiers import (
     TrainingModelId,
 )
 from datp_core.core.numeric import ModelCoefficientValue, Seed
-from datp_core.experiments.common.coordinates import ExperimentCoordinate
+from datp_core.experiments.common.coordinates import ExperimentCoordinate, ExternalTemporalExecutionIdentity
 from datp_core.experiments.execution.layout import bounded_evidence_seed_directory
-from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
 
 
 def coordinate() -> ExperimentCoordinate:

@@ -22,10 +22,10 @@ from datp_core.data.ciciot2023.schema import (
 from datp_core.data.contracts import (
     CanonicalManifestDocument,
     ChronologyValidation,
+    ManifestChronologyEntry,
     RawSourceFile,
     SourceFileRole,
     SourceStateEntryDocument,
-    _ChronologyEntry,
 )
 from datp_core.data.materialization import canonical_schema_checksum
 from datp_core.data.nbaiot.schema import NBAIOT_ARROW_SCHEMA, NBAIOT_CANONICAL_COLUMNS, NBAIOT_SCHEMA
@@ -80,7 +80,7 @@ def test_chronology_rejects_raw_duplicate_timestamp_count() -> None:
 
 
 def test_manifest_chronology_rehydrates_typed_duplicate_count() -> None:
-    entry = _ChronologyEntry.model_validate_json(
+    entry = ManifestChronologyEntry.model_validate_json(
         """{
             "group_identity": "Modbus",
             "status": "available",

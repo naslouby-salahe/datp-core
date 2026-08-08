@@ -8,7 +8,7 @@ from datp_core.artifacts.provenance import Checksum
 from datp_core.core.identifiers import CheckpointSelectionRule
 from datp_core.core.numeric import Seed
 from datp_core.detector.checkpoints.candidates import retain_checkpoint_candidates
-from datp_core.detector.checkpoints.models import CheckpointCandidate
+from datp_core.detector.checkpoints.contracts import CheckpointCandidate
 from datp_core.detector.checkpoints.selection import select_checkpoint
 from datp_core.detector.training.models.snapshots import RoundSnapshot
 
