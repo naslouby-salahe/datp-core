@@ -64,13 +64,13 @@ forbidden_modules =
     datp_core.presentation
     datp_core.app
 
-[importlinter:contract:experiments-not-cli]
-name = Experiment recipes must not import the CLI adapter
+[importlinter:contract:experiment-direction]
+name = Scientific experiment recipes must not depend on application composition
 type = forbidden
 source_modules =
     datp_core.experiments
 forbidden_modules =
-    datp_core.app.cli
+    datp_core.app
 
 [importlinter:contract:presentation-not-cli]
 name = Presentation must not import command-line adapters
