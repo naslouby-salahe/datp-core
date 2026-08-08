@@ -55,7 +55,7 @@ class TemporalSeedProvenance(StrictModel):
     eligibility_checksum: Checksum
     source_row_checksum: Checksum
     row_order_checksum: Checksum
-    exclusions: tuple[str, ...] = ()
+    excluded_clients: tuple[ClientIdentity, ...] = ()
     unavailable_reasons: tuple[str, ...] = ()
 
     @model_validator(mode="after")
@@ -74,6 +74,10 @@ class TemporalSeedProvenance(StrictModel):
             raise ValueError("static and frozen temporal states must share detector and preprocessing identity")
         if self.frozen_future.future_identity != self.recalibrated_future.future_identity:
             raise ValueError("frozen and recalibrated future must share detector, split, and evaluation scores")
+        if any(client.population is not self.population for client in self.excluded_clients):
+            raise ValueError("temporal exclusions must match the provenance population")
+        if len(self.excluded_clients) != len(frozenset(self.excluded_clients)):
+            raise ValueError("temporal excluded clients must be unique")
         return self
 
 
