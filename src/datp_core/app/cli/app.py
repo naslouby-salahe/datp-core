@@ -66,7 +66,7 @@ def preprocess_command(
     except (DatpCoreError, ValueError) as error:
         fail(error)
     for publication in result.publications:
-        typer.echo(publication)
+        typer.echo(f"{publication.dataset.value}:{publication.publication_status.value}")
 
 
 @app.command("smoke")
