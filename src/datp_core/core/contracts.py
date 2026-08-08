@@ -1,4 +1,4 @@
-"""Shared domain contracts."""
+"""Shared immutable contracts and Pydantic integration helpers."""
 
 from dataclasses import dataclass
 
@@ -6,9 +6,79 @@ from pydantic import BaseModel, ConfigDict
 
 
 class StrictModel(BaseModel):
-    """Immutable, strict document model used at every serialized-domain boundary."""
+    """Immutable strict model for serialized scientific boundaries."""
 
     model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
+
+
+def pydantic_value_schema(cls, _source_type, _handler):
+    """Validate scalar-backed value objects and serialize their scalar value."""
+    from pydantic_core import core_schema
+
+    def validate(value):
+        return value if isinstance(value, cls) else cls(value)
+
+    return core_schema.no_info_plain_validator_function(
+        validate,
+        serialization=core_schema.plain_serializer_function_ser_schema(lambda instance: instance.value),
+    )
+
+
+def str_subclass_schema(cls: type, _source_type: object, _handler: object) -> object:
+    """Validate immutable string identities and serialize them as strings."""
+    from pydantic_core import core_schema
+
+    def validate(value: object) -> object:
+        return value if isinstance(value, cls) else cls(value)
+
+    return core_schema.no_info_plain_validator_function(
+        validate,
+        serialization=core_schema.plain_serializer_function_ser_schema(str),
+    )
+
+
+def str_enum_schema(cls, _source_type, _handler):
+    """Validate a raw string into one member of a closed string enum."""
+    from pydantic_core import core_schema
+
+    def validate(value):
+        if isinstance(value, cls):
+            return value
+        if not isinstance(value, str):
+            raise TypeError(f"expected {cls.__name__} or str")
+        return cls(value)
+
+    return core_schema.no_info_plain_validator_function(validate)
+
+
+def sequence_pydantic_schema(cls: type, _source_type: object, _handler: object) -> object:
+    """Validate immutable typed sequences and serialize their scalar members."""
+    from pydantic_core import core_schema
+
+    def validate(value: object) -> object:
+        if isinstance(value, cls):
+            return value
+        if isinstance(value, (list, tuple)):
+            return cls(tuple(value))
+        raise ValueError(f"expected sequence, got {type(value)}")
+
+    def scalar_values(instance) -> list:
+        return [getattr(item, "value", item) for item in instance]
+
+    return core_schema.no_info_plain_validator_function(
+        validate,
+        serialization=core_schema.plain_serializer_function_ser_schema(scalar_values),
+    )
+
+
+def validate_non_empty_tuple(values: tuple[object, ...], field_name: str) -> None:
+    if not isinstance(values, tuple) or not values:
+        raise ValueError(f"{field_name} requires a non-empty tuple")
+
+
+def validate_unique(values: tuple[object, ...], field_name: str) -> None:
+    if len(frozenset(values)) != len(values):
+        raise ValueError(f"{field_name} must be unique")
 
 
 @dataclass(frozen=True, slots=True)
