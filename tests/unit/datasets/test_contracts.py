@@ -3,9 +3,10 @@ from pathlib import Path
 
 import pyarrow as pa
 import pytest
-from datp_core.domain.enums import AvailabilityStatus, DatasetId
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import (
+
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.identifiers import AvailabilityStatus, DatasetId
+from datp_core.core.numeric import (
     ByteCount,
     CanonicalColumnPosition,
     RowCount,
@@ -13,7 +14,6 @@ from datp_core.domain.values.counts import (
     SourceRowIndex,
     ValidationIssueCount,
 )
-
 from datp_core.data.canonical_cache import canonical_directory
 from datp_core.data.ciciot2023.schema import (
     CICIOT2023_MODEL_INPUT_ELIGIBILITY_POLICY,

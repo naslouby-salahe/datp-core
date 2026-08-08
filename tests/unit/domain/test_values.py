@@ -1,12 +1,23 @@
 """Tests for semantic value-object validation and isolation."""
 
 import pytest
-from pydantic import BaseModel
-
-from datp_core.domain.values.counts import CalibrationSize, ClientCount, GroupCount, RowCount, Seed, SeedCount
-from datp_core.domain.values.ratios import MetricValue, Quantile, Ratio, ScoreValue, ThresholdValue
 from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL
+from pydantic import BaseModel
+
+from datp_core.core.numeric import (
+    CalibrationSize,
+    ClientCount,
+    GroupCount,
+    MetricValue,
+    Quantile,
+    Ratio,
+    RowCount,
+    ScoreValue,
+    Seed,
+    SeedCount,
+    ThresholdValue,
+)
 
 
 class _ValueDocument(BaseModel):

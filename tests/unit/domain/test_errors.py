@@ -3,8 +3,7 @@ import inspect
 from collections.abc import Mapping
 from pathlib import Path
 
-from datp_core.domain.enums import ContractSubject
-from datp_core.domain.errors import (
+from datp_core.core.errors import (
     AnchorReproductionError,
     ArtifactIntegrityError,
     CapabilityError,
@@ -18,6 +17,7 @@ from datp_core.domain.errors import (
     SerializationSafetyError,
     UnresolvedScientificValueError,
 )
+from datp_core.core.identifiers import ContractSubject
 
 DIRECT_ERRORS = (
     ScientificContractError,

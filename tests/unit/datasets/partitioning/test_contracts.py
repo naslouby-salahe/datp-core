@@ -1,14 +1,13 @@
 import pytest
 
-from datp_core.datasets.partitioning.contracts import (
+from datp_core.core.numeric import ClientCount, DirichletConcentration
+from datp_core.data.populations.contracts import (
     ControlledPartitionCondition,
     ControlledPartitionKind,
     dirichlet_condition,
     iid_condition,
     synthetic_client_ids,
 )
-from datp_core.domain.values.counts import ClientCount
-from datp_core.domain.values.ratios import DirichletConcentration
 
 
 def test_controlled_partition_kind_member_set_is_exact_and_unique() -> None:

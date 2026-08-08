@@ -2,10 +2,9 @@
 
 from pathlib import Path
 
-from datp_core.domain.enums import DatasetId
-from datp_core.domain.values.checksums import Checksum, checksum_text
-from datp_core.domain.values.counts import ByteCount, RowCount
-
+from datp_core.artifacts.provenance import Checksum, checksum_text
+from datp_core.core.identifiers import DatasetId
+from datp_core.core.numeric import ByteCount, RowCount
 from datp_core.data.contracts import RawSourceFile, SourceFileRole
 from datp_core.data.materialization import _inventory_checksum
 

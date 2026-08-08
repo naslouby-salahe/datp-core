@@ -2,7 +2,11 @@ import pytest
 from tests.unit.calibration.helpers import some_client
 from tests.unit.learning.federated.helpers import fedavg_coordinate
 
-from datp_core.calibration.models import (
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import StableRowId
+from datp_core.core.numeric import CalibrationSize, ReplicateIndex, RowCount, ScoreValue, Seed
+from datp_core.thresholds.calibration.eligibility import (
     CalibrationReplicateManifest,
     CalibrationSampleReference,
     CalibrationSubsample,
@@ -11,11 +15,6 @@ from datp_core.calibration.models import (
     EligibilityDecision,
     EligibilityStatus,
 )
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import CalibrationSize, ReplicateIndex, RowCount, Seed
-from datp_core.domain.values.identifiers import StableRowId
-from datp_core.domain.values.ratios import ScoreValue
 
 CLIENT_A = some_client("client_a")
 CLIENT_B = some_client("client_b")

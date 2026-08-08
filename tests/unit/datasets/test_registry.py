@@ -1,16 +1,16 @@
 from pathlib import Path
 
 import pytest
-from datp_core.domain.enums import (
+
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import (
     DatasetId,
     EvidenceRole,
     PopulationId,
     PopulationIdentityKind,
     SplitProtocolId,
 )
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.counts import Seed
-
+from datp_core.core.numeric import Seed
 from datp_core.data.populations.construction import PreprocessingHandoffRequest, build_preprocessing_handoff
 from datp_core.data.populations.contracts import CapabilityStatus, PopulationConstructionRequest, iid_condition
 from datp_core.data.registry import (

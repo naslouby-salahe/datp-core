@@ -1,5 +1,4 @@
-from datp_core.domain.enums import PopulationId
-
+from datp_core.core.identifiers import PopulationId
 from datp_core.data.ciciot2023.capabilities import CICIOT2023_CAPABILITIES
 from datp_core.data.edge_iiotset.capabilities import EDGE_IIOTSET_CAPABILITIES
 from datp_core.data.nbaiot.capabilities import NBAIOT_CAPABILITIES

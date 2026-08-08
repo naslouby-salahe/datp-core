@@ -2,7 +2,7 @@ from enum import StrEnum
 
 import pytest
 
-from datp_core.domain.enums import (
+from datp_core.core.identifiers import (
     AvailabilityStatus,
     CentralizedModelId,
     CentralizedThresholdMethod,

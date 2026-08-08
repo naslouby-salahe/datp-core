@@ -5,29 +5,26 @@ import polars as pl
 import pytest
 from sklearn.preprocessing import StandardScaler
 
-from datp_core.datasets.partitioning.contracts import OUTCOME_LABEL_COLUMN, STABLE_ROW_ID_COLUMN, PopulationOutcomeLabel
-from datp_core.domain.contracts import ClientCollection, ClientOwned
-from datp_core.domain.enums import (
-    PartitionRole,
-    PreprocessingProtocolId,
-    SerializationFormat,
-)
-from datp_core.domain.errors import LeakageError
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import RowCount
-from datp_core.domain.values.identifiers import (
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.contracts import ClientCollection, ClientOwned
+from datp_core.core.errors import LeakageError
+from datp_core.core.identifiers import (
+    ClientPathToken,
     FeatureName,
     FeatureNameSequence,
     OutcomeLabel,
     OutcomeLabelSequence,
+    PartitionRole,
+    PreprocessingProtocolId,
+    SerializationFormat,
     StableRowId,
     StableRowIdSequence,
 )
-from datp_core.domain.values.paths import ClientPathToken
-from datp_core.domain.values.ratios import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE
-from datp_core.preprocessing.contracts import PreprocessingFitScope, TrustedEstimatorClassName
-from datp_core.preprocessing.federated import fit_estimators_for_federated_clients
-from datp_core.preprocessing.models import (
+from datp_core.core.numeric import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE, RowCount
+from datp_core.data.populations.contracts import OUTCOME_LABEL_COLUMN, STABLE_ROW_ID_COLUMN, PopulationOutcomeLabel
+from datp_core.data.preprocessing.contracts import PreprocessingFitScope, TrustedEstimatorClassName
+from datp_core.data.preprocessing.federated import fit_estimators_for_federated_clients
+from datp_core.data.preprocessing.models import (
     CentralizedFittedPreprocessingState,
     FederatedFittedPreprocessingState,
     PreprocessingFitBatch,
@@ -35,7 +32,7 @@ from datp_core.preprocessing.models import (
     PreprocessingPartitions,
     PreprocessingProtocol,
 )
-from datp_core.preprocessing.validation import fit_trusted_batch
+from datp_core.data.preprocessing.validation import fit_trusted_batch
 
 
 def _protocol(scope: PreprocessingFitScope = PreprocessingFitScope.CLIENT_LOCAL_TRAINING) -> PreprocessingProtocol:

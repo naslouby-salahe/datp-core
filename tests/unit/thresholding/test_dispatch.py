@@ -1,41 +1,38 @@
 import pytest
 from tests.unit.thresholding.helpers import COORDINATE, client_scores
 
-from datp_core.datasets.capabilities import CapabilityStatus
-from datp_core.datasets.partitioning.contracts import PopulationCapabilities
-from datp_core.domain.enums import (
+from datp_core.core.errors import CapabilityError, LeakageError, ScientificContractError
+from datp_core.core.identifiers import (
     CentralizedThresholdMethod,
     DatasetId,
     EvidenceRole,
+    FamilyIdentity,
     FederatedThresholdMethod,
     PopulationId,
     PopulationIdentityKind,
 )
-from datp_core.domain.errors import CapabilityError, LeakageError, ScientificContractError
-from datp_core.domain.values.counts import ClientCount
-from datp_core.domain.values.paths import FamilyIdentity
-from datp_core.domain.values.ratios import Quantile
+from datp_core.core.numeric import ClientCount, Quantile
+from datp_core.data.populations.contracts import CapabilityStatus, PopulationCapabilities
 from datp_core.protocols.calibration import CalibrationSupportRule, ClusterThresholdAggregation
-from datp_core.thresholding.assignments import FamilyAssignment
-from datp_core.thresholding.dispatch import (
+from datp_core.thresholds.contracts import FamilyAssignment, ThresholdUnavailableResult
+from datp_core.thresholds.dispatch import (
     ThresholdConstructionRequest,
     dispatch_federated_threshold,
     reject_centralized_threshold_method,
     validate_population_capability,
 )
-from datp_core.thresholding.identities import ThresholdUnavailableResult
-from datp_core.thresholding.methods.cluster import GroupedThresholdResult
-from datp_core.thresholding.methods.conformal import ConformalThresholdResult
-from datp_core.thresholding.methods.family import FamilyThresholdResult
-from datp_core.thresholding.methods.federated_statistics import FederatedStatisticsThresholdResult
-from datp_core.thresholding.methods.local import LocalThresholdResult
-from datp_core.thresholding.methods.shared import (
+from datp_core.thresholds.policies.cluster import GroupedThresholdResult
+from datp_core.thresholds.policies.family import FamilyThresholdResult
+from datp_core.thresholds.policies.local import LocalThresholdResult
+from datp_core.thresholds.policies.shared import (
     PooledSharedQuantileResult,
     SampleWeightedSharedThresholdResult,
     SharedThresholdResult,
 )
-from datp_core.thresholding.methods.shrinkage import ShrinkageThresholdResult
-from datp_core.thresholding.quantiles import ClientBenignCalibrationScores
+from datp_core.thresholds.quantiles import ClientBenignCalibrationScores
+from datp_core.thresholds.variants.conformal import ConformalThresholdResult
+from datp_core.thresholds.variants.federated_statistics import FederatedStatisticsThresholdResult
+from datp_core.thresholds.variants.shrinkage import ShrinkageThresholdResult
 
 QUANTILE = Quantile(0.5)
 ELIGIBLE = tuple(
@@ -119,16 +116,12 @@ def test_dispatch_returns_the_correct_result_type_for_every_method(method, expec
 
 
 def test_dispatch_family_threshold_without_taxonomy_is_unavailable() -> None:
-    result = dispatch_federated_threshold(
-        _request(FederatedThresholdMethod.FAMILY_THRESHOLD, family_by_client=())
-    )
+    result = dispatch_federated_threshold(_request(FederatedThresholdMethod.FAMILY_THRESHOLD, family_by_client=()))
     assert isinstance(result, ThresholdUnavailableResult)
 
 
 def test_dispatch_cluster_threshold_with_too_few_clients_is_unavailable() -> None:
-    result = dispatch_federated_threshold(
-        _request(FederatedThresholdMethod.CLUSTER_THRESHOLD, eligible=ELIGIBLE[:2])
-    )
+    result = dispatch_federated_threshold(_request(FederatedThresholdMethod.CLUSTER_THRESHOLD, eligible=ELIGIBLE[:2]))
     assert isinstance(result, ThresholdUnavailableResult)
 
 
@@ -173,9 +166,8 @@ def test_threshold_construction_request_rejects_duplicate_eligible_clients() -> 
 
 
 def test_threshold_construction_request_rejects_mixed_coordinates() -> None:
-    from tests.unit.learning.federated.helpers import fedavg_coordinate
-
     from datp_core.domain.values.counts import Seed
+    from tests.unit.learning.federated.helpers import fedavg_coordinate
 
     other = client_scores(
         "client_mixed",
@@ -244,9 +236,7 @@ def test_non_cluster_threshold_rejects_cluster_aggregation() -> None:
 def test_canonical_support_rejects_client_below_one_hundred_benign_rows() -> None:
     undersized = (client_scores("undersized", tuple(float(value) for value in range(50))),)
     with pytest.raises(ScientificContractError, match="minimum benign calibration support"):
-        dispatch_federated_threshold(
-            _request(FederatedThresholdMethod.SHARED_THRESHOLD, eligible=undersized)
-        )
+        dispatch_federated_threshold(_request(FederatedThresholdMethod.SHARED_THRESHOLD, eligible=undersized))
 
 
 def test_declared_size_ablation_support_allows_fifty_benign_rows() -> None:

@@ -2,9 +2,8 @@ from pathlib import Path
 
 import polars as pl
 
-from datp_core.domain.enums import DatasetId, PopulationId
-from datp_core.domain.values.identifiers import FeatureName, FeatureNameSequence, StableRowId
-from datp_core.preprocessing.client_partitions import (
+from datp_core.core.identifiers import DatasetId, FeatureName, FeatureNameSequence, PopulationId, StableRowId
+from datp_core.data.preprocessing.client_partitions import (
     exclude_nonfinite_model_input_rows,
     write_model_input_exclusion_evidence,
 )

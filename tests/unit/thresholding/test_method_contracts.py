@@ -1,66 +1,62 @@
 import pytest
 from tests.unit.thresholding.helpers import COORDINATE, identity
 
-from datp_core.domain.enums import (
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import (
     AvailabilityStatus,
+    FamilyIdentity,
     FederatedThresholdMethod,
 )
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import (
+from datp_core.core.numeric import (
+    AbsoluteThresholdError,
     ClusterIndex,
     ConformalRankIndex,
+    CoverageTarget,
     GroupCount,
     KMeansInitializationCount,
     KMeansMaximumIterationCount,
-    RowCount,
-    Seed,
-)
-from datp_core.domain.values.paths import FamilyIdentity
-from datp_core.domain.values.ratios import (
-    AbsoluteThresholdError,
-    CoverageTarget,
     MetricValue,
     Quantile,
     Ratio,
+    RowCount,
     ScoreMoment,
     ScoreValue,
     ScoreVariance,
+    Seed,
     ShrinkageWeight,
     ThresholdValue,
 )
 from datp_core.protocols.calibration import KMeansInitialization
-from datp_core.thresholding.assignments import (
+from datp_core.thresholds.contracts import (
     LocalQuantile,
     ThresholdAssignment,
     ThresholdDiagnostic,
-)
-from datp_core.thresholding.identities import (
     ThresholdInfeasibilityReason,
     ThresholdUnavailableResult,
 )
-from datp_core.thresholding.methods.cluster import (
+from datp_core.thresholds.policies.cluster import (
     ClusterFingerprint,
     ClusterMembership,
     FingerprintFeatures,
     GroupedThresholdResult,
 )
-from datp_core.thresholding.methods.conformal import (
-    ConformalAssignment,
-    ConformalThresholdResult,
-)
-from datp_core.thresholding.methods.family import (
+from datp_core.thresholds.policies.family import (
     FamilyMembership,
     FamilyThresholdResult,
 )
-from datp_core.thresholding.methods.federated_statistics import (
+from datp_core.thresholds.policies.local import LocalThresholdResult
+from datp_core.thresholds.policies.shared import SharedThresholdResult
+from datp_core.thresholds.variants.conformal import (
+    ConformalAssignment,
+    ConformalThresholdResult,
+)
+from datp_core.thresholds.variants.federated_statistics import (
     CentralizedAttainmentDiagnostic,
     ClientBenignSummary,
     PooledVarianceDecomposition,
 )
-from datp_core.thresholding.methods.local import LocalThresholdResult
-from datp_core.thresholding.methods.shared import SharedThresholdResult
-from datp_core.thresholding.methods.shrinkage import (
+from datp_core.thresholds.variants.shrinkage import (
     ShrinkageAssignment,
     ShrinkageThresholdResult,
 )
