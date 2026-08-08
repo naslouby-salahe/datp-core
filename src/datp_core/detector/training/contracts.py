@@ -1,4 +1,4 @@
-"""Training declarations and authoritative protocol resolution."""
+"""Training declarations, protocol resolution, and typed federated coordinates."""
 
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -6,49 +6,42 @@ from typing import Annotated, Literal, Protocol, overload
 
 from pydantic import Field, model_validator
 
-from datp_core.domain.contracts import StrictModel
-from datp_core.domain.enums import (
+from datp_core.core.contracts import StrictModel, sequence_pydantic_schema, validate_non_empty_tuple
+from datp_core.core.errors import LeakageError, ScientificContractError
+from datp_core.core.identifiers import (
     CentralizedModelId,
-    CheckpointSelectionRule,
-    CheckpointStatus,
     ContractSubject,
     FedProxCoefficientSelectionRule,
     OptimizerId,
+    PopulationId,
+    PreprocessingProtocolId,
+    SplitProtocolId,
     TrainingModelId,
 )
-from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.values.base import sequence_pydantic_schema, validate_non_empty_tuple
-from datp_core.domain.values.counts import (
+from datp_core.core.numeric import (
     BatchSize,
     DataLoaderWorkerCount,
-    FeatureCount,
-    LocalEpochCount,
-    RoundNumber,
-)
-from datp_core.domain.values.ratios import (
     DittoRegularization,
+    FeatureCount,
     LearningRate,
+    LocalEpochCount,
     MetricValue,
     ModelCoefficientValue,
     ProximalCoefficient,
     Ratio,
+    Seed,
     WeightDecay,
+    DirichletConcentration,
 )
-
-from .checkpoints import CheckpointProtocol
+from datp_core.data.populations.contracts import ControlledPartitionKind
 
 
 @dataclass(frozen=True, slots=True)
 class AutoencoderArchitecture(Sequence[FeatureCount]):
-    """The one authoritative declaration of a symmetric autoencoder layer-width ladder."""
-
     widths: tuple[FeatureCount, ...]
 
     def __post_init__(self) -> None:
-        normalized = tuple(
-            width if isinstance(width, FeatureCount) else FeatureCount(width)
-            for width in self.widths
-        )
+        normalized = tuple(width if isinstance(width, FeatureCount) else FeatureCount(width) for width in self.widths)
         object.__setattr__(self, "widths", normalized)
         validate_non_empty_tuple(normalized, "autoencoder architecture")
         if len(normalized) < 2:
@@ -61,8 +54,10 @@ class AutoencoderArchitecture(Sequence[FeatureCount]):
 
     @overload
     def __getitem__(self, index: int) -> FeatureCount: ...
+
     @overload
     def __getitem__(self, index: slice) -> tuple[FeatureCount, ...]: ...
+
     def __getitem__(self, index: int | slice) -> FeatureCount | tuple[FeatureCount, ...]:
         return self.widths[index]
 
@@ -77,6 +72,12 @@ class AutoencoderArchitecture(Sequence[FeatureCount]):
 
 class AutoencoderProtocol(StrictModel):
     widths: AutoencoderArchitecture
+
+    @model_validator(mode="after")
+    def validate_widths(self) -> "AutoencoderProtocol":
+        if self.widths.input_width.value < 1:
+            raise ValueError("autoencoder input width must be positive")
+        return self
 
 
 class OptimizerProtocol(StrictModel):
@@ -113,8 +114,6 @@ class CentralizedTrainingProtocol(StrictModel):
 
 
 class ModelAbsorptionDecisionProtocol(StrictModel):
-    """Locked retention boundaries for the model-personalization absorption verdict."""
-
     full_retention_minimum: Ratio
     partial_retention_minimum: Ratio
 
@@ -123,48 +122,6 @@ class ModelAbsorptionDecisionProtocol(StrictModel):
         if self.partial_retention_minimum.value >= self.full_retention_minimum.value:
             raise ValueError("partial retention minimum must be below the full retention minimum")
         return self
-
-
-CHECKPOINT_PROTOCOL = CheckpointProtocol(
-    candidates=tuple(RoundNumber(value) for value in (25, 50, 75, 100, 125, 150, 200)),
-    maximum_round=RoundNumber(200),
-)
-CHECKPOINT_SELECTION_RULE = CheckpointSelectionRule.FIXED_TERMINAL_MAXIMUM_ROUND
-
-
-def require_non_test_checkpoint_selection_inputs(
-    *,
-    selection_rule: CheckpointSelectionRule,
-    held_out_metrics: Sequence[MetricValue] | None,
-    attack_labels_present: bool,
-    branch_label: str,
-) -> None:
-    """Reject test leakage and unsupported selection rules before branch-specific selection."""
-    if held_out_metrics is not None:
-        raise LeakageError(
-            f"held-out evaluation outcomes cannot influence {branch_label} checkpoint selection",
-            subject=ContractSubject.HELD_OUT_METRICS,
-        )
-    if attack_labels_present:
-        raise LeakageError(
-            f"attack labels cannot influence {branch_label} checkpoint selection",
-            subject=ContractSubject.ATTACK_LABELS,
-        )
-    if selection_rule is not CheckpointSelectionRule.FIXED_TERMINAL_MAXIMUM_ROUND:
-        raise ScientificContractError(
-            f"unsupported {branch_label} checkpoint selection rule",
-            subject=ContractSubject.CHECKPOINT_SELECTION_RULE,
-        )
-
-
-def fixed_terminal_checkpoint_status(
-    round_number: RoundNumber,
-    maximum_round: RoundNumber,
-) -> CheckpointStatus:
-    """Map a candidate round onto FIXED_TERMINAL_MAXIMUM_ROUND statuses."""
-    if round_number == maximum_round:
-        return CheckpointStatus.SELECTED_BY_NON_TEST_RULE
-    return CheckpointStatus.STABILITY_EVIDENCE
 
 
 FEDAVG_LOCAL_EPOCHS = LocalEpochCount(1)
@@ -178,7 +135,6 @@ def require_non_test_fedprox_coefficient_selection_inputs(
     held_out_metrics: Sequence[MetricValue] | None,
     attack_labels_present: bool,
 ) -> None:
-    """Reject test leakage and unsupported selection rules before FedProx coefficient selection."""
     if held_out_metrics is not None:
         raise LeakageError(
             "held-out evaluation outcomes cannot influence FedProx coefficient selection",
@@ -207,13 +163,6 @@ class FedProxCoefficientTrainingLossContract(Protocol):
 def select_primary_fedprox_coefficient[CandidateT: FedProxCoefficientTrainingLossContract](
     candidates: Sequence[CandidateT],
 ) -> CandidateT:
-    """Select the FedProx coefficient with the lowest mean terminal training loss.
-
-    Implements FEDPROX_MINIMUM_TERMINAL_TRAINING_LOSS: candidates carry only benign
-    federated training-loss information at the fixed terminal checkpoint round,
-    averaged across the confirmatory seed cohort. Ties are broken by the smallest
-    coefficient value.
-    """
     observed = tuple(candidate.coefficient for candidate in candidates)
     if observed != FEDPROX_COEFFICIENTS:
         raise ScientificContractError(
@@ -308,24 +257,139 @@ def resolve_single_model_federated_training_protocol(
     model: TrainingModelId,
     coefficient: ModelCoefficientValue | ProximalCoefficient | DittoRegularization | None,
 ) -> FedAvgProtocol | FedProxProtocol:
-    """Resolve the only supported single-model federated training protocol for a typed identity."""
     match model:
         case TrainingModelId.FEDAVG_AUTOENCODER:
             if coefficient is not None:
-                raise ScientificContractError(
-                    "FedAvg must not declare a model coefficient",
-                    subject=model,
-                )
+                raise ScientificContractError("FedAvg must not declare a model coefficient", subject=model)
             return FEDAVG_TRAINING_PROTOCOL
         case TrainingModelId.FEDPROX_AUTOENCODER:
             if coefficient is None or isinstance(coefficient, DittoRegularization):
-                raise ScientificContractError(
-                    "FedProx requires a declared proximal coefficient",
-                    subject=model,
-                )
+                raise ScientificContractError("FedProx requires a declared proximal coefficient", subject=model)
             return resolve_fedprox_protocol(coefficient)
         case TrainingModelId.DITTO_GLOBAL_AUTOENCODER | TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER:
             raise ScientificContractError(
                 "Ditto requires its related global and personalized execution route",
                 subject=model,
             )
+
+
+def _require_model_coefficient(
+    model: TrainingModelId,
+    coefficient: ProximalCoefficient | DittoRegularization | None,
+) -> None:
+    match model:
+        case TrainingModelId.FEDAVG_AUTOENCODER:
+            if coefficient is not None:
+                raise ScientificContractError("FedAvg coordinates carry no model coefficient", subject=ContractSubject.TRAINING)
+        case TrainingModelId.FEDPROX_AUTOENCODER:
+            if not isinstance(coefficient, ProximalCoefficient):
+                raise ScientificContractError("FedProx coordinates require a proximal coefficient", subject=ContractSubject.TRAINING)
+        case TrainingModelId.DITTO_GLOBAL_AUTOENCODER | TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER:
+            if not isinstance(coefficient, DittoRegularization):
+                raise ScientificContractError("Ditto coordinates require a personalization regularization value", subject=ContractSubject.TRAINING)
+        case _:
+            raise ScientificContractError(f"unsupported federated training model {model}", subject=ContractSubject.TRAINING)
+
+
+@dataclass(frozen=True, slots=True)
+class FederatedTrainingCoordinate:
+    population: PopulationId
+    training_seed: Seed
+    split_protocol: SplitProtocolId
+    preprocessing_identity: PreprocessingProtocolId
+    model: TrainingModelId
+    model_coefficient: ProximalCoefficient | DittoRegularization | None
+    controlled_partition_kind: ControlledPartitionKind | None = None
+    dirichlet_concentration: DirichletConcentration | None = None
+
+    def __post_init__(self) -> None:
+        _require_model_coefficient(self.model, self.model_coefficient)
+        if self.dirichlet_concentration is not None:
+            if self.controlled_partition_kind is None:
+                raise ScientificContractError(
+                    "a Dirichlet concentration requires a controlled partition kind",
+                    subject=ContractSubject.COORDINATE,
+                )
+            if self.controlled_partition_kind is ControlledPartitionKind.IID:
+                raise ScientificContractError(
+                    "IID controlled partitions must not carry a concentration",
+                    subject=ContractSubject.COORDINATE,
+                )
+        elif self.controlled_partition_kind is ControlledPartitionKind.DIRICHLET:
+            raise ScientificContractError(
+                "Dirichlet controlled partitions require a concentration",
+                subject=ContractSubject.COORDINATE,
+            )
+        if self.population is PopulationId.NBAIOT_DIRICHLET_CLIENTS and self.controlled_partition_kind is None:
+            raise ScientificContractError(
+                "Dirichlet-client populations require an explicit controlled partition condition",
+                subject=ContractSubject.COORDINATE,
+            )
+
+    def matches_ditto_peer(self, other: "FederatedTrainingCoordinate") -> bool:
+        model_pair = (self.model, other.model)
+        if model_pair not in {
+            (TrainingModelId.DITTO_GLOBAL_AUTOENCODER, TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER),
+            (TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER, TrainingModelId.DITTO_GLOBAL_AUTOENCODER),
+        }:
+            return False
+        return (
+            self.population == other.population
+            and self.training_seed == other.training_seed
+            and self.split_protocol == other.split_protocol
+            and self.preprocessing_identity == other.preprocessing_identity
+            and self.model_coefficient == other.model_coefficient
+            and self.controlled_partition_kind == other.controlled_partition_kind
+            and self.dirichlet_concentration == other.dirichlet_concentration
+        )
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class DittoTrainingCoordinates:
+    global_coordinate: FederatedTrainingCoordinate
+    personalized_coordinate: FederatedTrainingCoordinate
+
+    def __post_init__(self) -> None:
+        if self.global_coordinate.model is not TrainingModelId.DITTO_GLOBAL_AUTOENCODER:
+            raise ScientificContractError(
+                "Ditto training coordinates require the global Ditto coordinate",
+                subject=ContractSubject.COORDINATE,
+            )
+        if self.personalized_coordinate.model is not TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER:
+            raise ScientificContractError(
+                "Ditto training coordinates require the personalized Ditto coordinate",
+                subject=ContractSubject.COORDINATE,
+            )
+        if not self.global_coordinate.matches_ditto_peer(self.personalized_coordinate):
+            raise ScientificContractError(
+                "Ditto global and personalized coordinates must share one experiment identity",
+                subject=ContractSubject.COORDINATE,
+            )
+
+    @classmethod
+    def create(
+        cls,
+        population: PopulationId,
+        training_seed: Seed,
+        split_protocol: SplitProtocolId,
+        preprocessing_identity: PreprocessingProtocolId,
+        regularization: DittoRegularization,
+    ) -> "DittoTrainingCoordinates":
+        return cls(
+            global_coordinate=FederatedTrainingCoordinate(
+                population=population,
+                training_seed=training_seed,
+                split_protocol=split_protocol,
+                preprocessing_identity=preprocessing_identity,
+                model=TrainingModelId.DITTO_GLOBAL_AUTOENCODER,
+                model_coefficient=regularization,
+            ),
+            personalized_coordinate=FederatedTrainingCoordinate(
+                population=population,
+                training_seed=training_seed,
+                split_protocol=split_protocol,
+                preprocessing_identity=preprocessing_identity,
+                model=TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER,
+                model_coefficient=regularization,
+            ),
+        )
