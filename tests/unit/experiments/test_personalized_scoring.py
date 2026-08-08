@@ -4,33 +4,33 @@ import polars as pl
 import pytest
 from tests.unit.learning.federated.helpers import benign_frame, client_identity, fedavg_coordinate, fitted_state
 
-from datp_core.datasets.partitioning.contracts import ClientIdentity, PopulationOutcomeLabel
-from datp_core.domain.enums import (
-    EvaluationCohort,
-    FederatedThresholdMethod,
-    MetricId,
-    PartitionRole,
-    PopulationId,
-    ScoreFrameColumn,
-    SerializationFormat,
-)
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import FeatureCount, RoundNumber, RowCount, Seed
-from datp_core.domain.values.ratios import ThresholdValue
-from datp_core.evaluation.cohort.contracts import (
+from datp_core.analysis.metrics.cohorts import (
     ClientEligibilityRecord,
     ClientExclusionReason,
     EvaluationCohortManifest,
     EvaluationCohortMembership,
 )
-from datp_core.evaluation.models import AvailableMetric, metric_by_id
+from datp_core.analysis.metrics.models import AvailableMetric, metric_by_id
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import (
+    EvaluationCohort,
+    FederatedThresholdMethod,
+    MetricId,
+    PartitionRole,
+    PopulationId,
+    PublicationStatus,
+    ScoreFrameColumn,
+    SerializationFormat,
+)
+from datp_core.core.numeric import FeatureCount, RoundNumber, RowCount, Seed, ThresholdValue
+from datp_core.data.populations.contracts import ClientIdentity, PopulationOutcomeLabel
+from datp_core.data.preprocessing.models import ClientPreprocessingResult, PreprocessedPartitionPaths
+from datp_core.detector.scoring.contracts import ScoreArtifactManifest, ScoreRecord
+from datp_core.detector.scoring.models import FederatedScoreArtifactManifest
 from datp_core.experiments.personalized_scoring import client_metric, client_scoring_input, score_record_for_client
-from datp_core.pipeline.scoring.models import FederatedScoreArtifactManifest
-from datp_core.preprocessing.models import ClientPreprocessingResult, PreprocessedPartitionPaths, PublicationStatus
 from datp_core.protocols.calibration import MINIMUM_BENIGN_SUPPORT
-from datp_core.protocols.inference import ScoreArtifactManifest, ScoreRecord
-from datp_core.thresholding.assignments import ThresholdAssignment
+from datp_core.thresholds.contracts import ThresholdAssignment
 
 _POPULATION = PopulationId.NBAIOT_NATURAL_DEVICES
 _SEED = Seed(0)

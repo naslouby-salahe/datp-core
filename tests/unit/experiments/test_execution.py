@@ -2,13 +2,13 @@ from pathlib import Path
 
 import pytest
 
-from datp_core.domain.enums import ExperimentId, FederatedThresholdMethod
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.counts import Seed
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import ExperimentId, FederatedThresholdMethod
+from datp_core.core.numeric import Seed
+from datp_core.experiments.common.seeds import SeedCohort
 from datp_core.experiments.execution import execute_declared_experiment_seed
-from datp_core.pipeline.execution.models import ExistingExperimentState
+from datp_core.experiments.execution.models import ExistingExperimentState
 from datp_core.protocols.experiments import EXPERIMENTS
-from datp_core.protocols.seeds import SeedCohort
 
 
 def _declaration(experiment_id: ExperimentId):

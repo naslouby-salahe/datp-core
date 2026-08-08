@@ -3,10 +3,10 @@ from pathlib import Path
 import pytest
 from tests.unit.learning.centralized.helpers import AUTOENCODER, CHECKPOINT, require_cuda, run_miniature_training
 
-from datp_core.domain.enums import CheckpointSelectionRule, CheckpointStatus, TrainingModelId
-from datp_core.domain.errors import LeakageError
-from datp_core.domain.values.ratios import MetricValue
-from datp_core.pipeline.checkpoints.service import (
+from datp_core.core.errors import LeakageError
+from datp_core.core.identifiers import CheckpointSelectionRule, CheckpointStatus, TrainingModelId
+from datp_core.core.numeric import MetricValue
+from datp_core.detector.checkpoints.service import (
     reject_federated_checkpoint,
     retain_centralized_checkpoint_candidates,
     select_centralized_checkpoint,

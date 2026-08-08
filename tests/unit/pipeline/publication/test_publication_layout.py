@@ -1,7 +1,8 @@
 from dataclasses import replace
 from pathlib import Path
 
-from datp_core.domain.enums import (
+from datp_core.artifacts.layout import evaluation_run_directory, experiment_output_directory
+from datp_core.core.identifiers import (
     DatasetId,
     EvidenceRole,
     ExperimentId,
@@ -13,11 +14,9 @@ from datp_core.domain.enums import (
     TemporalState,
     TrainingModelId,
 )
-from datp_core.domain.values.counts import Seed
-from datp_core.domain.values.ratios import ModelCoefficientValue
-from datp_core.pipeline.coordinates import ExperimentCoordinate
-from datp_core.pipeline.execution.layout import bounded_evidence_seed_directory
-from datp_core.pipeline.publication.layout import evaluation_run_directory, experiment_output_directory
+from datp_core.core.numeric import ModelCoefficientValue, Seed
+from datp_core.experiments.common.coordinates import ExperimentCoordinate
+from datp_core.experiments.execution.layout import bounded_evidence_seed_directory
 from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
 
 
@@ -56,8 +55,8 @@ def test_threshold_methods_keep_distinct_evaluation_runs() -> None:
 
 
 def test_every_non_metric_coordinate_dimension_changes_the_run_identity() -> None:
-    from datp_core.datasets.partitioning.contracts import ControlledPartitionKind
-    from datp_core.domain.values.ratios import DirichletConcentration, Quantile
+    from datp_core.core.numeric import DirichletConcentration, Quantile
+    from datp_core.data.populations.contracts import ControlledPartitionKind
 
     root = Path("outputs")
     primary = coordinate()
@@ -89,8 +88,8 @@ def test_every_non_metric_coordinate_dimension_changes_the_run_identity() -> Non
 
 
 def test_quantile_and_controlled_partition_are_path_identity_dimensions() -> None:
-    from datp_core.datasets.partitioning.contracts import ControlledPartitionKind
-    from datp_core.domain.values.ratios import DirichletConcentration, Quantile
+    from datp_core.core.numeric import DirichletConcentration, Quantile
+    from datp_core.data.populations.contracts import ControlledPartitionKind
 
     root = Path("outputs")
     base = coordinate()

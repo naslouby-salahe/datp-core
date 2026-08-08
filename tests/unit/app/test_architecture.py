@@ -20,19 +20,17 @@ def _imports(path: Path) -> tuple[str, ...]:
 def test_deleted_architectures_do_not_exist() -> None:
     assert not (SOURCE_ROOT / "cli").exists()
     assert not (SOURCE_ROOT / "reporting").exists()
-    assert not (SOURCE_ROOT / "pipeline" / "workflows").exists()
-    assert not (SOURCE_ROOT / "pipeline" / "planning.py").exists()
+    assert not (SOURCE_ROOT / "pipeline").exists()
     assert (SOURCE_ROOT / "app" / "campaign.py").is_file()
     assert (SOURCE_ROOT / "app" / "planning.py").is_file()
     assert (SOURCE_ROOT / "experiments" / "planning.py").is_file()
 
 
 def test_source_does_not_import_deleted_module_paths() -> None:
-    forbidden = (
+    legacy_roots = (
         "datp_core.cli",
         "datp_core.reporting",
-        "datp_core.pipeline.workflows",
-        "datp_core.pipeline.planning",
+        "datp_core." + "pipeline",
     )
     offenders = tuple(
         path.relative_to(SOURCE_ROOT)
@@ -40,7 +38,7 @@ def test_source_does_not_import_deleted_module_paths() -> None:
         if any(
             imported == prefix or imported.startswith(f"{prefix}.")
             for imported in _imports(path)
-            for prefix in forbidden
+            for prefix in legacy_roots
         )
     )
     assert offenders == ()

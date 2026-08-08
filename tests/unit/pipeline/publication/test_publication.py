@@ -3,12 +3,12 @@ from pathlib import Path
 
 import pytest
 
-from datp_core.domain.enums import PublicationStatus
-from datp_core.domain.values.checksums import checksum_file
-from datp_core.pipeline.publication.service import (
+from datp_core.artifacts.provenance import checksum_file
+from datp_core.artifacts.repositories.publication import (
     ArtifactPublication,
     publish_artifact,
 )
+from datp_core.core.identifiers import PublicationStatus
 
 
 @dataclass(frozen=True, slots=True)

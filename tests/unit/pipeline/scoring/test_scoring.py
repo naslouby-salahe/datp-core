@@ -4,7 +4,11 @@ import numpy as np
 import polars as pl
 import pytest
 
-from datp_core.domain.enums import (
+from datp_core.artifacts.provenance import Checksum, checksum_file
+from datp_core.core.errors import LeakageError, ScientificContractError
+from datp_core.core.identifiers import (
+    FeatureName,
+    FeatureNameSequence,
     PartitionRole,
     PopulationId,
     PreprocessingProtocolId,
@@ -13,19 +17,16 @@ from datp_core.domain.enums import (
     SplitProtocolId,
     TrainingModelId,
 )
-from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.values.checksums import Checksum, checksum_file
-from datp_core.domain.values.counts import FeatureCount, RoundNumber, RowCount, Seed
-from datp_core.domain.values.identifiers import FeatureName, FeatureNameSequence
-from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.pipeline.scoring.frames import (
+from datp_core.core.numeric import FeatureCount, RoundNumber, RowCount, Seed
+from datp_core.detector.scoring.contracts import ScoreArtifact
+from datp_core.detector.scoring.frames import (
     SCORE_FRAME_COLUMNS,
     SCORE_FRAME_DTYPES,
     score_frame,
     validate_persisted_score_frame,
     validate_score_input_frame,
 )
-from datp_core.protocols.inference import ScoreArtifact
+from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 
 FEATURE_NAMES = FeatureNameSequence((FeatureName("f0"), FeatureName("f1")))
 

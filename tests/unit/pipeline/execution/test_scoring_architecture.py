@@ -15,10 +15,9 @@ def _imported_modules(path: Path) -> tuple[str, ...]:
 
 
 def test_execution_scoring_responsibilities_have_distinct_owners() -> None:
-    execution = _SOURCE_ROOT / "pipeline" / "execution"
+    execution = _SOURCE_ROOT / "experiments" / "execution"
 
     assert not (execution / "scoring.py").exists()
-    assert (execution / "checkpoints.py").is_file()
     assert (execution / "score_generation.py").is_file()
     assert (execution / "matched_reference.py").is_file()
     assert (execution / "evidence.py").is_file()
@@ -26,6 +25,6 @@ def test_execution_scoring_responsibilities_have_distinct_owners() -> None:
     stale_importers = tuple(
         path.relative_to(_SOURCE_ROOT)
         for path in _SOURCE_ROOT.rglob("*.py")
-        if "datp_core.pipeline.execution.scoring" in _imported_modules(path)
+        if "datp_core." + "pipeline.execution.scoring" in _imported_modules(path)
     )
     assert stale_importers == ()
