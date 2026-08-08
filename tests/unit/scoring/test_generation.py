@@ -8,13 +8,13 @@ from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import ArtifactIntegrityError, LeakageError, ScientificContractError
 from datp_core.core.identifiers import CheckpointStatus
 from datp_core.core.numeric import RowCount, Seed
-from datp_core.detector.checkpoints.contracts import CheckpointCandidate
 from datp_core.detector.scoring.federated import publish_federated_scores
 from datp_core.detector.scoring.models import (
     ClientScoringInput,
     FederatedScoreAssetName,
     GenerateFederatedScoresRequest,
 )
+from datp_core.detector.training.models import CheckpointCandidate
 
 
 def _clients() -> tuple[ClientScoringInput, ...]:

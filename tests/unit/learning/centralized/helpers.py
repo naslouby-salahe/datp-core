@@ -39,7 +39,7 @@ from datp_core.detector.training.centralized import (
     CentralizedTrainingRequest,
     train_centralized_autoencoder,
 )
-from datp_core.detector.training.contracts import (
+from datp_core.protocols.training import (
     AutoencoderArchitecture,
     AutoencoderProtocol,
     CentralizedTrainingProtocol,

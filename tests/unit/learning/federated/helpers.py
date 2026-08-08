@@ -44,7 +44,12 @@ from datp_core.data.preprocessing.models import (
     PreprocessingProtocol,
 )
 from datp_core.detector.checkpoints.contracts import CheckpointProtocol
-from datp_core.detector.training.contracts import (
+from datp_core.detector.training.models import (
+    ClientTrainingInput,
+    DittoTrainingCoordinates,
+    FederatedTrainingCoordinate,
+)
+from datp_core.protocols.training import (
     DITTO_REGULARIZATION_GRID,
     WEIGHT_DECAY,
     AutoencoderArchitecture,
@@ -53,11 +58,6 @@ from datp_core.detector.training.contracts import (
     FedAvgProtocol,
     FedProxProtocol,
     OptimizerProtocol,
-)
-from datp_core.detector.training.models import (
-    ClientTrainingInput,
-    DittoTrainingCoordinates,
-    FederatedTrainingCoordinate,
 )
 
 FEATURE_NAMES = FeatureNameSequence((FeatureName("f0"), FeatureName("f1"), FeatureName("f2"), FeatureName("f3")))
