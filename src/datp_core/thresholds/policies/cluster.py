@@ -1,4 +1,4 @@
-"""Cluster threshold construction and persisted result contracts."""
+"""Data-driven client-cluster threshold construction."""
 
 from dataclasses import dataclass
 from typing import ClassVar, Literal
@@ -8,28 +8,25 @@ from scipy.stats import skew
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 
-from datp_core.datasets.partitioning.contracts import ClientIdentity
-from datp_core.domain.enums import (
-    ContractSubject,
-    FederatedThresholdMethod,
-)
-from datp_core.domain.errors import ScientificContractError, require_contract
-from datp_core.domain.values.counts import (
+from datp_core.core.errors import ScientificContractError, require_contract
+from datp_core.core.identifiers import ContractSubject, FederatedThresholdMethod
+from datp_core.core.numeric import (
     ClusterIndex,
+    DistributionSkewness,
     GroupCount,
     KMeansInitializationCount,
     KMeansMaximumIterationCount,
+    ScoreMoment,
     Seed,
+    ThresholdValue,
 )
-from datp_core.domain.values.ratios import DistributionSkewness, ScoreMoment, ThresholdValue
-from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.protocols.calibration import (
+from datp_core.data.populations.contracts import ClientIdentity
+from datp_core.detector.training.contracts import FederatedTrainingCoordinate
+from datp_core.thresholds.contracts import (
     CANONICAL_QUANTILE,
     ClusterThresholdAggregation,
     ClusterThresholdProtocol,
     KMeansInitialization,
-)
-from datp_core.thresholding.assignments import (
     LocalQuantile,
     ThresholdAssignment,
     mean_local_threshold,
@@ -38,11 +35,7 @@ from datp_core.thresholding.assignments import (
     validate_assignments,
     validate_group_membership,
 )
-from datp_core.thresholding.quantiles import (
-    ClientBenignCalibrationScores,
-    exact_empirical_quantile,
-    local_quantile,
-)
+from datp_core.thresholds.quantiles import ClientBenignCalibrationScores, exact_empirical_quantile, local_quantile
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,18 +76,17 @@ class ClusterMembership:
                 "non-empty cluster membership requires a cluster threshold",
                 subject=ContractSubject.THRESHOLD,
             )
-        expected = _aggregate_local_thresholds(
-            self.contributing_local_quantiles,
-            self.threshold_aggregation,
-        )
         validate_group_membership(
             self.members,
             self.contributing_local_quantiles,
             self.cluster_threshold,
             members_label="cluster members",
-            match_message=("contributing local quantile clients must exactly equal cluster members"),
-            threshold_message=("cluster_threshold must equal the declared aggregation of contributing local quantiles"),
-            expected_group_threshold=expected,
+            match_message="contributing local quantile clients must exactly equal cluster members",
+            threshold_message="cluster threshold must equal the declared local-threshold aggregation",
+            expected_group_threshold=_aggregate_local_thresholds(
+                self.contributing_local_quantiles,
+                self.threshold_aggregation,
+            ),
         )
 
 
@@ -117,15 +109,12 @@ class GroupedThresholdResult:
             "the number of clusters must equal the declared group count",
             ContractSubject.THRESHOLD,
         )
-        require_unique_clients(
-            tuple(item.client for item in self.fingerprints),
-            "fingerprint",
-        )
+        require_unique_clients(tuple(item.client for item in self.fingerprints), "fingerprint")
         cluster_indices = tuple(item.cluster_index.value for item in self.clusters)
-        expected_indices = set(range(self.group_count.value))
+        expected_indices = frozenset(range(self.group_count.value))
         require_contract(
-            set(cluster_indices) == expected_indices and len(cluster_indices) == len(expected_indices),
-            "cluster indices must equal exactly 0..group_count.value - 1",
+            frozenset(cluster_indices) == expected_indices and len(cluster_indices) == len(expected_indices),
+            "cluster indices must equal exactly 0 through group_count minus one",
             ContractSubject.THRESHOLD,
         )
         for cluster in self.clusters:
@@ -137,7 +126,7 @@ class GroupedThresholdResult:
                 )
         all_members = tuple(client for cluster in self.clusters for client in cluster.members)
         require_contract(
-            len(set(all_members)) == len(all_members),
+            len(frozenset(all_members)) == len(all_members),
             "a client cannot belong to more than one cluster",
             ContractSubject.CLIENT_IDENTITY,
         )
@@ -149,18 +138,18 @@ class GroupedThresholdResult:
         expected_assignments = tuple(
             ThresholdAssignment(client, cluster.cluster_threshold)
             for cluster in self.clusters
-            for client in cluster.members
             if cluster.cluster_threshold is not None
+            for client in cluster.members
         )
         validate_assignments(
             self.assignments,
             expected_assignments,
             label="threshold assignments",
-            mismatch_message=("a cluster threshold assignment must use its cluster's threshold"),
+            mismatch_message="a cluster threshold assignment must use its cluster threshold",
         )
         require_contract(
             all((not cluster.members) == (cluster.cluster_threshold is None) for cluster in self.clusters),
-            "empty clusters must omit thresholds; non-empty clusters must declare them",
+            "empty clusters must omit thresholds and non-empty clusters must declare them",
             ContractSubject.THRESHOLD,
         )
 
@@ -183,7 +172,10 @@ def construct_grouped_threshold(
     ordered = tuple(sorted(eligible, key=lambda item: item.client))
     raw_features = tuple(_raw_fingerprint(item.as_array) for item in ordered)
     matrix = np.asarray(
-        [(f.mean.value, f.standard_deviation.value, f.skewness.value, f.p95.value) for f in raw_features],
+        [
+            (features.mean.value, features.standard_deviation.value, features.skewness.value, features.p95.value)
+            for features in raw_features
+        ],
         dtype=np.float64,
     )
     if not np.isfinite(matrix).all():
@@ -192,26 +184,20 @@ def construct_grouped_threshold(
             subject=ContractSubject.THRESHOLD,
         )
     standardized_matrix = StandardScaler().fit_transform(matrix)
-    kmeans = KMeans(
+    labels = KMeans(
         n_clusters=protocol.group_count.value,
         init=_sklearn_init(protocol.initialization),
+        n_init=protocol.initialization_count.value,
         max_iter=protocol.maximum_iterations.value,
         random_state=protocol.random_state.value,
-    )
-    kmeans.set_params(n_init=protocol.initialization_count.value)
-    labels = kmeans.fit_predict(standardized_matrix)
+    ).fit_predict(standardized_matrix)
     fingerprints = tuple(
         ClusterFingerprint(
             client=item.client,
             raw=raw,
             standardized=_as_fingerprint_features(standardized),
         )
-        for item, raw, standardized in zip(
-            ordered,
-            raw_features,
-            standardized_matrix,
-            strict=True,
-        )
+        for item, raw, standardized in zip(ordered, raw_features, standardized_matrix, strict=True)
     )
     local_quantiles = tuple(local_quantile(item, protocol.quantile) for item in ordered)
     clusters, assignments = _build_clusters(
@@ -243,9 +229,7 @@ def _as_fingerprint_features(row: np.ndarray) -> FingerprintFeatures:
     )
 
 
-def _raw_fingerprint(
-    scores: np.ndarray,
-) -> FingerprintFeatures:
+def _raw_fingerprint(scores: np.ndarray) -> FingerprintFeatures:
     mean = float(np.mean(scores))
     standard_deviation = float(np.std(scores, ddof=0))
     if standard_deviation == 0.0 or np.ptp(scores) == 0.0:
@@ -257,12 +241,11 @@ def _raw_fingerprint(
                 "fingerprint skewness must be finite",
                 subject=ContractSubject.THRESHOLD,
             )
-    p95 = exact_empirical_quantile(scores, CANONICAL_QUANTILE).value
     return FingerprintFeatures(
         mean=ScoreMoment(mean),
         standard_deviation=ScoreMoment(standard_deviation),
         skewness=DistributionSkewness(skewness_value),
-        p95=ThresholdValue(p95),
+        p95=ThresholdValue(exact_empirical_quantile(scores, CANONICAL_QUANTILE).value),
     )
 
 
@@ -325,12 +308,11 @@ def _cluster_members(
     labels: np.ndarray,
     cluster_index: ClusterIndex,
 ) -> tuple[ClientIdentity, ...]:
-    """Return members for a declared cluster index.
-
-    Empty memberships are preserved as explicit negative evidence rather than
-    aborting construction before the evidence layer can record the outcome.
-    """
-    return tuple(item.client for item, label in zip(ordered, labels, strict=True) if label == cluster_index.value)
+    return tuple(
+        item.client
+        for item, label in zip(ordered, labels, strict=True)
+        if label == cluster_index.value
+    )
 
 
 def _local_quantile(
