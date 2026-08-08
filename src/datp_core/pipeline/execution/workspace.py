@@ -9,25 +9,12 @@ import polars as pl
 
 from datp_core.datasets.partitioning.contracts import ClientIdentity, PopulationOutcomeLabel
 from datp_core.datasets.registry import population_capabilities
-from datp_core.domain.enums import (
-    ExperimentId,
-    FederatedThresholdMethod,
-    PartitionRole,
-    ScoreFrameColumn,
-)
+from datp_core.domain.enums import ExperimentId, FederatedThresholdMethod, PartitionRole, ScoreFrameColumn
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.checksums import checksum_file
-from datp_core.domain.values.counts import (
-    CalibrationSize,
-    ClientCount,
-    ReplicateIndex,
-)
+from datp_core.domain.values.counts import CalibrationSize, ClientCount, ReplicateIndex
 from datp_core.domain.values.identifiers import FeatureNameSequence, StableRowId
-from datp_core.domain.values.ratios import (
-    NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
-    Quantile,
-    ScoreValue,
-)
+from datp_core.domain.values.ratios import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE, Quantile, ScoreValue
 from datp_core.evaluation.communication import (
     CommunicationMessageDiagnostic,
     MessageDirection,
@@ -78,12 +65,12 @@ from datp_core.pipeline.execution.layout import EvaluationRunAssetDirectory, Exe
 from datp_core.pipeline.execution.score_generation import score_selected_checkpoint
 from datp_core.pipeline.publication.layout import evaluation_run_directory
 from datp_core.pipeline.scoring.models import FederatedScoreArtifactManifest, FederatedScoreRecord
-from datp_core.pipeline.training.federated import (
-    TrainFederatedDetectorRequest,
-    TrainFederatedDetectorResult,
-    train_federated_detector,
+from datp_core.pipeline.training.federated import TrainFederatedDetectorRequest, TrainFederatedDetectorResult, train_federated_detector
+from datp_core.protocols.calibration import (
+    CANONICAL_QUANTILE,
+    CalibrationSupportRule,
+    ClusterThresholdAggregation,
 )
-from datp_core.protocols.calibration import CANONICAL_QUANTILE
 from datp_core.protocols.training import (
     BATCH_SIZE,
     CHECKPOINT_PROTOCOL,
@@ -93,7 +80,7 @@ from datp_core.protocols.training import (
 )
 from datp_core.thresholding.dispatch import ThresholdConstructionRequest
 from datp_core.thresholding.identities import ThresholdUnavailableResult
-from datp_core.thresholding.methods.conformal import ConformalAssignment, ConformalThresholdResult
+from datp_core.thresholding.methods.conformal import ConformalThresholdResult
 from datp_core.thresholding.methods.shrinkage import ShrinkageAssignment
 from datp_core.thresholding.models import ThresholdConstructionResult
 from datp_core.thresholding.quantiles import ClientBenignCalibrationScores, exact_empirical_quantile
@@ -179,11 +166,8 @@ class ExperimentWorkspace:
             split_manifest_checksum=self.context.split_manifest_checksum,
         )
 
-    def eligible_calibration_scores(
-        self,
-        role: PartitionRole = PartitionRole.CALIBRATION,
-    ) -> tuple[ClientBenignCalibrationScores, ...]:
-        return eligible_calibration_scores(self.scores, role)
+    def eligible_calibration_scores(self) -> tuple[ClientBenignCalibrationScores, ...]:
+        return eligible_calibration_scores(self.scores, PartitionRole.CALIBRATION)
 
     def run_directory(self) -> Path:
         return evaluation_run_directory(self.output_root, self.coordinate)
@@ -200,16 +184,15 @@ class ExperimentWorkspace:
             return None
         return build_declared_calibration(self.scores)
 
+    def _cluster_aggregation(self) -> ClusterThresholdAggregation | None:
+        if self.coordinate.threshold_method is not FederatedThresholdMethod.CLUSTER_THRESHOLD:
+            return None
+        if self.coordinate.experiment is ExperimentId.GROUP_MEDIAN_SUPPLEMENT:
+            return ClusterThresholdAggregation.MEDIAN_OF_ELIGIBLE_LOCAL_THRESHOLDS
+        return ClusterThresholdAggregation.ARITHMETIC_MEAN_OF_ELIGIBLE_LOCAL_THRESHOLDS
+
     @cached_property
     def threshold(self) -> ThresholdConstructionResult:
-        from datp_core.protocols.calibration import ClusterThresholdAggregation
-
-        cluster_aggregation = (
-            ClusterThresholdAggregation.MEDIAN_OF_ELIGIBLE_LOCAL_THRESHOLDS
-            if self.coordinate.experiment is ExperimentId.GROUP_MEDIAN_SUPPLEMENT
-            and self.coordinate.threshold_method is FederatedThresholdMethod.CLUSTER_THRESHOLD
-            else None
-        )
         result = construct_federated_thresholds(
             ConstructFederatedThresholdsRequest(
                 request=ThresholdConstructionRequest(
@@ -219,7 +202,8 @@ class ExperimentWorkspace:
                     capabilities=population_capabilities(self.coordinate.population),
                     eligible=self.eligible_calibration_scores(),
                     family_by_client=self.context.family_by_client,
-                    cluster_threshold_aggregation=cluster_aggregation,
+                    support_rule=CalibrationSupportRule.CANONICAL_MINIMUM_SUPPORT,
+                    cluster_threshold_aggregation=self._cluster_aggregation(),
                 ),
                 output_directory=self.run_directory() / EvaluationRunAssetDirectory.THRESHOLD,
                 overwrite=False,
@@ -285,8 +269,7 @@ class ExperimentWorkspace:
         if not record.path.is_file() or checksum_file(record.path) != record.checksum:
             raise ScientificContractError("evaluation score provenance is unavailable or changed")
         frame = pl.read_parquet(record.path).filter(
-            pl.col(ScoreFrameColumn.OUTCOME_LABEL.value)
-            == PopulationOutcomeLabel.BENIGN.value
+            pl.col(ScoreFrameColumn.OUTCOME_LABEL.value) == PopulationOutcomeLabel.BENIGN.value
         )
         return tuple(
             HeldOutBenignScore(
@@ -330,43 +313,34 @@ class ExperimentWorkspace:
         if isinstance(self.threshold, (ConformalThresholdResult, ThresholdUnavailableResult)):
             return ()
         threshold_result = self.threshold
-        calibration_by_client = {
-            scores.client: scores
-            for scores in self.eligible_calibration_scores()
-        }
+        calibration_by_client = {scores.client: scores for scores in self.eligible_calibration_scores()}
         client_scores: dict[ClientIdentity, list[HeldOutBenignScore]] = {}
         for record in self.scores.evaluation_records:
             scores = self._read_benign_evaluation_scores(record, record.scored_client)
             client_scores.setdefault(record.scored_client, []).extend(scores)
-        all_pooled = tuple(
-            item for scores in client_scores.values() for item in scores
-        )
-        pooled_values = np.array(
-            [item.score.value for item in all_pooled], dtype=np.float64
-        )
+        all_pooled = tuple(item for scores in client_scores.values() for item in scores)
+        pooled_values = np.array([item.score.value for item in all_pooled], dtype=np.float64)
         pooled_quantile = exact_empirical_quantile(pooled_values, self.threshold_quantile)
         inputs: list[ThresholdEstimationStageInput] = []
         coordinate = self.scores.coordinate
         training_seed = coordinate.training_seed
         for assignment in threshold_result.assignments:
             client = assignment.client
-            if isinstance(assignment, ShrinkageAssignment):
-                estimated = assignment.blended_threshold
-            elif isinstance(assignment, ConformalAssignment):
-                estimated = assignment.threshold
-            else:
-                estimated = assignment.threshold
-            calibration_scores = calibration_by_client.get(client)
-            calibration_size = (
-                CalibrationSize(len(calibration_scores.scores))
-                if calibration_scores is not None
-                else CalibrationSize(0)
+            estimated = (
+                assignment.blended_threshold
+                if isinstance(assignment, ShrinkageAssignment)
+                else assignment.threshold
             )
+            calibration_scores = calibration_by_client.get(client)
+            if calibration_scores is None:
+                raise ScientificContractError(
+                    "threshold assignment client has no eligible benign calibration evidence"
+                )
             provenance = ThresholdEstimationProvenance(
                 client=client,
                 coordinate=coordinate,
                 training_seed=training_seed,
-                calibration_size=calibration_size,
+                calibration_size=CalibrationSize(len(calibration_scores.scores)),
                 replicate_index=ReplicateIndex(0),
                 quantile=self.threshold_quantile,
             )
