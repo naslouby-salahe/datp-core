@@ -1,4 +1,4 @@
-"""Execution enums, recipes, provenance, and campaign contracts."""
+"""Execution recipes, provenance, and deterministic campaign contracts."""
 
 from __future__ import annotations
 
@@ -23,13 +23,10 @@ class PipelineStage(StrEnum):
     CONSTRUCT_THRESHOLDS = "construct_thresholds"
     EVALUATE_DETECTOR = "evaluate_detector"
     ANALYZE_EVIDENCE = "analyze_evidence"
-    VERIFY_ANCHOR = "verify_anchor"
     FINALIZE_PUBLICATION = "finalize_publication"
 
 
 class ExecutionRecipeId(StrEnum):
-    """Typed stage sequence selected for one single-coordinate experiment."""
-
     STANDARD_FEDERATED = "standard_federated"
     ANCHOR_REPRODUCTION = "anchor_reproduction"
 
@@ -63,20 +60,20 @@ _THRESHOLD_EVALUATION_FRAGMENT: tuple[PipelineStage, ...] = (
     PipelineStage.EVALUATE_DETECTOR,
     PipelineStage.ANALYZE_EVIDENCE,
 )
+_STANDARD_STAGE_SEQUENCE = (
+    _POPULATION_FRAGMENT
+    + _TRAINING_FRAGMENT
+    + _THRESHOLD_EVALUATION_FRAGMENT
+    + (PipelineStage.FINALIZE_PUBLICATION,)
+)
 
 STANDARD_FEDERATED_RECIPE = ExecutionRecipe(
     recipe_id=ExecutionRecipeId.STANDARD_FEDERATED,
-    stages=_POPULATION_FRAGMENT
-    + _TRAINING_FRAGMENT
-    + _THRESHOLD_EVALUATION_FRAGMENT
-    + (PipelineStage.FINALIZE_PUBLICATION,),
+    stages=_STANDARD_STAGE_SEQUENCE,
 )
 ANCHOR_REPRODUCTION_RECIPE = ExecutionRecipe(
     recipe_id=ExecutionRecipeId.ANCHOR_REPRODUCTION,
-    stages=_POPULATION_FRAGMENT
-    + _TRAINING_FRAGMENT
-    + _THRESHOLD_EVALUATION_FRAGMENT
-    + (PipelineStage.VERIFY_ANCHOR, PipelineStage.FINALIZE_PUBLICATION),
+    stages=_STANDARD_STAGE_SEQUENCE,
 )
 
 
@@ -170,8 +167,7 @@ class CampaignEntry:
 
 
 def campaign_digest(entries: tuple[CampaignEntry, ...]) -> Checksum:
-    payload = "\n".join(f"{entry.ordinal}|{entry.coordinate.stable_key}" for entry in entries)
-    return checksum_text(payload)
+    return checksum_text("\n".join(f"{entry.ordinal}|{entry.coordinate.stable_key}" for entry in entries))
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
