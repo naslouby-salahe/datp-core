@@ -1,8 +1,9 @@
-"""Bounded external and applicability-boundary campaign execution and analysis."""
+"""External benign-equity validation and CICIoT applicability-boundary experiments."""
 
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+from shutil import rmtree
 
 from datp_core.analysis.contrasts import PairedContrast, SupplementaryPairedAnalysisPlan, build_paired_contrast
 from datp_core.app.planning import expand_experiment_plan
@@ -26,12 +27,8 @@ from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL, Pair
 
 
 class BoundedExternalPlanningReason(StrEnum):
-    EDGE_BENIGN_EQUITY_PREREQUISITES = (
-        "the external-validation entry point supplies the audited Edge benign-equity prerequisites"
-    )
-    CICIOT_FILE_CLIENT_PREREQUISITES = (
-        "the applicability-boundary entry point supplies the audited CICIoT2023 file-client prerequisites"
-    )
+    EDGE_BENIGN_EQUITY_PREREQUISITES = "audited Edge benign-equity prerequisites"
+    CICIOT_FILE_CLIENT_PREREQUISITES = "audited CICIoT2023 file-client prerequisites"
 
 
 class BoundedExternalAssetDirectory(StrEnum):
@@ -55,47 +52,38 @@ class BoundedExternalCampaignAnalysisResult:
     complete_digest: Checksum
 
 
-def run_external_validation_seed(partition_seed: Seed, *, output_root: Path) -> BoundedExternalSeedResult:
-    return _run_bounded_external_seed(
-        experiment=ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION,
-        partition_seed=partition_seed,
-        reason=BoundedExternalPlanningReason.EDGE_BENIGN_EQUITY_PREREQUISITES,
-        output_root=output_root,
-    )
-
-
-def run_ciciot_boundary_seed(partition_seed: Seed, *, output_root: Path) -> BoundedExternalSeedResult:
-    return _run_bounded_external_seed(
-        experiment=ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY,
-        partition_seed=partition_seed,
-        reason=BoundedExternalPlanningReason.CICIOT_FILE_CLIENT_PREREQUISITES,
-        output_root=output_root,
-    )
-
-
-def analyze_external_validation_campaign(*, output_root: Path) -> BoundedExternalCampaignAnalysisResult:
-    return _analyze_bounded_external_campaign(
+def run_external_validation_seed(
+    partition_seed: Seed, *, output_root: Path, overwrite: bool
+) -> BoundedExternalSeedResult:
+    return _run_seed(
         ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION,
-        output_root=output_root,
+        partition_seed,
+        BoundedExternalPlanningReason.EDGE_BENIGN_EQUITY_PREREQUISITES,
+        output_root,
+        overwrite,
     )
 
 
-def analyze_ciciot_boundary_campaign(*, output_root: Path) -> BoundedExternalCampaignAnalysisResult:
-    return _analyze_bounded_external_campaign(
+def run_ciciot_boundary_seed(
+    partition_seed: Seed, *, output_root: Path, overwrite: bool
+) -> BoundedExternalSeedResult:
+    return _run_seed(
         ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY,
-        output_root=output_root,
+        partition_seed,
+        BoundedExternalPlanningReason.CICIOT_FILE_CLIENT_PREREQUISITES,
+        output_root,
+        overwrite,
     )
 
 
-def _run_bounded_external_seed(
-    *,
+def _run_seed(
     experiment: ExperimentId,
     partition_seed: Seed,
     reason: BoundedExternalPlanningReason,
     output_root: Path,
-    overwrite: bool = False,
+    overwrite: bool,
 ) -> BoundedExternalSeedResult:
-    declaration = _bounded_external_declaration(experiment)
+    declaration = _declaration(experiment)
     result = execute_declared_experiment_seed(
         declaration=declaration,
         seed_cohort=SeedCohort(values=(partition_seed,)),
@@ -113,15 +101,24 @@ def _run_bounded_external_seed(
     )
 
 
-def _analyze_bounded_external_campaign(
-    experiment: ExperimentId, *, output_root: Path
+def analyze_external_validation_campaign(
+    *, output_root: Path, overwrite: bool
 ) -> BoundedExternalCampaignAnalysisResult:
-    declaration = _bounded_external_declaration(experiment)
-    seed_cohort = BOUNDED_EVIDENCE_SEED_COHORT
+    return _analyze(ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION, output_root, overwrite)
+
+
+def analyze_ciciot_boundary_campaign(
+    *, output_root: Path, overwrite: bool
+) -> BoundedExternalCampaignAnalysisResult:
+    return _analyze(ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY, output_root, overwrite)
+
+
+def _analyze(experiment: ExperimentId, output_root: Path, overwrite: bool) -> BoundedExternalCampaignAnalysisResult:
+    declaration = _declaration(experiment)
     base = CONFIRMATORY_INFERENCE_PROTOCOL
     protocol = PairedInferenceProtocol(
         confidence_level=base.confidence_level,
-        seed_cohort=seed_cohort,
+        seed_cohort=BOUNDED_EVIDENCE_SEED_COHORT,
         interval_method=base.interval_method,
         bootstrap_replicates=base.bootstrap_replicates,
         statistical_test=base.statistical_test,
@@ -139,14 +136,15 @@ def _analyze_bounded_external_campaign(
         metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
         left_method=FederatedThresholdMethod.SHARED_THRESHOLD,
         right_method=FederatedThresholdMethod.LOCAL_THRESHOLD,
-        seed_cohort=seed_cohort,
+        seed_cohort=BOUNDED_EVIDENCE_SEED_COHORT,
         inference_protocol=protocol,
     )
     contrasts = tuple(
-        _external_contrast(declaration, seed, MetricId.FPR_COEFFICIENT_OF_VARIATION, output_root)
-        for seed in seed_cohort.values
+        _contrast(declaration, seed, output_root) for seed in BOUNDED_EVIDENCE_SEED_COHORT.values
     )
-    output = output_root / BoundedExternalAssetDirectory.ANALYSIS / declaration.id.value / declaration.population.value
+    output = output_root / BoundedExternalAssetDirectory.ANALYSIS.value / declaration.id.value / declaration.population.value
+    if overwrite and output.exists():
+        rmtree(output)
     result = analyze_external_evidence(
         AnalyzeExternalEvidenceRequest(
             execution_identity=ExternalTemporalExecutionIdentity(
@@ -159,7 +157,7 @@ def _analyze_bounded_external_campaign(
             plan=plan,
             analysis_seed=CONFIRMATORY_ANALYSIS_SEED,
             output_directory=output,
-            overwrite=False,
+            overwrite=overwrite,
         )
     )
     export_external_publication(result.document, output)
@@ -170,18 +168,10 @@ def _analyze_bounded_external_campaign(
     )
 
 
-def _external_contrast(
-    declaration: ExperimentDeclaration,
-    partition_seed: Seed,
-    metric: MetricId,
-    output_root: Path,
-) -> PairedContrast:
-    shared = load_evaluation_document(
-        _evaluation_path(declaration, partition_seed, FederatedThresholdMethod.SHARED_THRESHOLD, metric, output_root)
-    )
-    local = load_evaluation_document(
-        _evaluation_path(declaration, partition_seed, FederatedThresholdMethod.LOCAL_THRESHOLD, metric, output_root)
-    )
+def _contrast(declaration: ExperimentDeclaration, seed: Seed, output_root: Path) -> PairedContrast:
+    metric = MetricId.FPR_COEFFICIENT_OF_VARIATION
+    shared = load_evaluation_document(_evaluation_path(declaration, seed, FederatedThresholdMethod.SHARED_THRESHOLD, output_root))
+    local = load_evaluation_document(_evaluation_path(declaration, seed, FederatedThresholdMethod.LOCAL_THRESHOLD, output_root))
     return build_paired_contrast(
         left=shared,
         right=local,
@@ -198,56 +188,37 @@ def _required_metric(document: FederatedEvaluationDocument, metric: MetricId) ->
 
 def _evaluation_path(
     declaration: ExperimentDeclaration,
-    partition_seed: Seed,
+    seed: Seed,
     method: FederatedThresholdMethod,
-    metric: MetricId,
     output_root: Path,
 ) -> Path:
-    coordinate = _external_coordinate(declaration, partition_seed, method, metric)
-    path = (
-        evaluation_run_directory(output_root, coordinate)
-        / EvaluationRunAssetDirectory.EVALUATION
-        / FederatedEvaluationAssetName.DOCUMENT
-    )
+    coordinate = _coordinate(declaration, seed, method)
+    path = evaluation_run_directory(output_root, coordinate) / EvaluationRunAssetDirectory.EVALUATION / FederatedEvaluationAssetName.DOCUMENT
     if not path.is_file():
         raise ScientificContractError(f"missing completed evaluation document: {path}")
     return path
 
 
-def _external_coordinate(
-    declaration: ExperimentDeclaration,
-    partition_seed: Seed,
-    method: FederatedThresholdMethod,
-    metric: MetricId,
+def _coordinate(
+    declaration: ExperimentDeclaration, seed: Seed, method: FederatedThresholdMethod
 ) -> ExperimentCoordinate:
-    plan = expand_experiment_plan(
-        declarations=(declaration,),
-        seed_cohort=SeedCohort(values=(partition_seed,)),
-    )
+    plan = expand_experiment_plan(declarations=(declaration,), seed_cohort=SeedCohort(values=(seed,)))
     matches = tuple(
         entry.coordinate
         for entry in plan.entries
-        if entry.coordinate.threshold_method is method and entry.coordinate.metric is metric
+        if entry.coordinate.threshold_method is method
+        and entry.coordinate.metric is MetricId.FPR_COEFFICIENT_OF_VARIATION
     )
     if len(matches) != 1:
         raise ScientificContractError("external evaluation coordinate must resolve exactly once")
     return matches[0]
 
 
-def _bounded_external_declaration(experiment: ExperimentId) -> ExperimentDeclaration:
+def _declaration(experiment: ExperimentId) -> ExperimentDeclaration:
     matches = tuple(item for item in EXPERIMENTS if item.id is experiment)
     if len(matches) != 1:
-        raise ScientificContractError(
-            "the bounded external experiment must be declared exactly once",
-            subject=experiment,
-        )
+        raise ScientificContractError("bounded external experiment must be declared exactly once", subject=experiment)
     declaration = matches[0]
-    if declaration.role not in (
-        EvidenceRole.EXTERNAL_VALIDATION,
-        EvidenceRole.APPLICABILITY_BOUNDARY,
-    ):
-        raise ScientificContractError(
-            "bounded external execution accepts only external-validation or applicability-boundary evidence",
-            subject=declaration.role,
-        )
+    if declaration.role not in (EvidenceRole.EXTERNAL_VALIDATION, EvidenceRole.APPLICABILITY_BOUNDARY):
+        raise ScientificContractError("invalid bounded external evidence role", subject=declaration.role)
     return declaration
