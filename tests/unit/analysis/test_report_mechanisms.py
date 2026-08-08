@@ -18,8 +18,8 @@ from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import Seed
 from datp_core.domain.values.ratios import MetricValue
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
+from datp_core.presentation.export import export_analysis_report
 from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL
-from datp_core.reporting.export import export_analysis_report
 
 
 def test_analysis_report_contains_actual_mechanism_values(tmp_path: Path) -> None:
