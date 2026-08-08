@@ -5,8 +5,7 @@ from pathlib import Path
 
 from datp_core.core.numeric import Seed
 from datp_core.detector.training.models import FederatedTrainingCoordinate
-from datp_core.experiments.common.coordinates import CoordinateIdentitySegment
-from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
+from datp_core.experiments.common.coordinates import CoordinateIdentitySegment, ExternalTemporalExecutionIdentity
 
 
 class ExecutionArtifactDirectory(StrEnum):

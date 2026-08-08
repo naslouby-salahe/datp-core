@@ -258,7 +258,7 @@ class PipelineStageRunner:
 
     def _materialize_dataset(self, stage: PipelineStage, coordinate: ExperimentCoordinate) -> StageExecution:
         result = materialize_datasets(
-            DatasetMaterializationRequest(data_root=DATA_ROOT, datasets=(coordinate.dataset,))
+            DatasetMaterializationRequest(data_root=DATA_ROOT, datasets=(coordinate.dataset,), overwrite=False)
         )
         publication = result.publications[0]
         return StageExecution(

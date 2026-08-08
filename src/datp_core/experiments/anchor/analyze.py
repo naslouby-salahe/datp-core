@@ -1,3 +1,4 @@
+from datp_core.core.numeric import MetricDelta, floats_absolutely_close, floats_exactly_equal, is_numeric_zero
 from datp_core.experiments.anchor.contracts import (
     AbsoluteToleranceRule,
     AnchorComparisonDecision,
@@ -12,7 +13,6 @@ from datp_core.experiments.anchor.contracts import (
     RelativeToleranceRule,
     SourceDefinedRule,
 )
-from datp_core.core.numeric import MetricDelta, floats_absolutely_close, floats_exactly_equal, is_numeric_zero
 
 
 class _NumericDelta:

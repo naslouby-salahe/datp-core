@@ -100,7 +100,6 @@ from datp_core.thresholds.contracts import ThresholdUnavailableResult
 from datp_core.thresholds.dispatch import ThresholdConstructionRequest, ThresholdConstructionResult
 from datp_core.thresholds.quantiles import ClientBenignCalibrationScores, exact_empirical_quantile
 from datp_core.thresholds.variants.conformal import ConformalThresholdResult
-from datp_core.thresholds.variants.shrinkage import ShrinkageAssignment
 
 
 @dataclass(kw_only=True)
@@ -327,7 +326,7 @@ class ExperimentWorkspace:
         return tuple(inputs)
 
     def _threshold_estimation_inputs(self) -> tuple[ThresholdEstimationStageInput, ...]:
-        if isinstance(self.threshold, (ConformalThresholdResult, ThresholdUnavailableResult)):
+        if isinstance(self.threshold, (tuple, ConformalThresholdResult, ThresholdUnavailableResult)):
             return ()
         threshold_result = self.threshold
         calibration_by_client = {scores.client: scores for scores in self.eligible_calibration_scores()}
@@ -343,9 +342,7 @@ class ExperimentWorkspace:
         training_seed = coordinate.training_seed
         for assignment in threshold_result.assignments:
             client = assignment.client
-            estimated = (
-                assignment.blended_threshold if isinstance(assignment, ShrinkageAssignment) else assignment.threshold
-            )
+            estimated = assignment.threshold
             calibration_scores = calibration_by_client.get(client)
             if calibration_scores is None:
                 raise ScientificContractError("threshold assignment client has no eligible benign calibration evidence")

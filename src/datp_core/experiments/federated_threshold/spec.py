@@ -1,6 +1,5 @@
 """Benign-only federated threshold-comparator experiment specifications."""
 
-from datp_core.protocols.metrics import ATTACK_QUALITY_CONTROL_METRICS, OPERATING_POINT_METRICS
 from datp_core.core.identifiers import (
     EvidenceRole,
     ExperimentId,
@@ -12,6 +11,7 @@ from datp_core.core.identifiers import (
     TrainingModelId,
 )
 from datp_core.experiments.common.coordinates import ExperimentSpec
+from datp_core.protocols.metrics import ATTACK_QUALITY_CONTROL_METRICS, OPERATING_POINT_METRICS
 
 FEDERATED_BENIGN_STATISTICS_COMPARISON = ExperimentSpec(
     id=ExperimentId.FEDERATED_BENIGN_STATISTICS_COMPARISON,

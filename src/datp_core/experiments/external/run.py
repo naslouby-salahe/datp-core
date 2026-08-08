@@ -15,7 +15,7 @@ from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAsse
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import EvidenceRole, ExperimentId, FederatedThresholdMethod, MetricId, PopulationId
 from datp_core.core.numeric import MetricValue, Seed
-from datp_core.experiments.common.coordinates import ExperimentCoordinate
+from datp_core.experiments.common.coordinates import ExperimentCoordinate, ExternalTemporalExecutionIdentity
 from datp_core.experiments.common.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_ANALYSIS_SEED, SeedCohort
 from datp_core.experiments.confirmatory.spec import CONFIRMATORY_INFERENCE_PROTOCOL
 from datp_core.experiments.execution import execute_declared_experiment_seed
@@ -23,7 +23,7 @@ from datp_core.experiments.execution.evidence import load_evaluation_document, p
 from datp_core.experiments.execution.layout import EvaluationRunAssetDirectory
 from datp_core.experiments.planning import expand_experiment_plan
 from datp_core.presentation.export import export_external_publication
-from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration, ExternalTemporalExecutionIdentity
+from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration
 
 
 class BoundedExternalPlanningReason(StrEnum):
@@ -114,7 +114,7 @@ def _analyze(experiment: ExperimentId, output_root: Path, overwrite: bool) -> Bo
     base = CONFIRMATORY_INFERENCE_PROTOCOL
     protocol = PairedInferenceProtocol(
         confidence_level=base.confidence_level,
-        seed_cohort=BOUNDED_EVIDENCE_SEED_COHORT,
+        paired_seed_count=BOUNDED_EVIDENCE_SEED_COHORT.member_count,
         interval_method=base.interval_method,
         bootstrap_replicates=base.bootstrap_replicates,
         statistical_test=base.statistical_test,

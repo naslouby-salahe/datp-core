@@ -48,7 +48,7 @@ from datp_core.core.numeric import MetricValue, Seed
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.data.registry import population_capabilities
 from datp_core.detector.scoring.models import FederatedScoreArtifactManifest
-from datp_core.experiments.common.coordinates import ExperimentCoordinate
+from datp_core.experiments.common.coordinates import ExperimentCoordinate, ExternalTemporalExecutionIdentity
 from datp_core.experiments.common.seeds import BOUNDED_EVIDENCE_SEED_COHORT, SeedCohort
 from datp_core.experiments.execution.checkpoints import select_execution_checkpoint
 from datp_core.experiments.execution.context import (
@@ -73,8 +73,12 @@ from datp_core.protocols.calibration import (
     CalibrationSupportRule,
     ClusterThresholdAggregation,
 )
-from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration, ExternalTemporalExecutionIdentity
-from datp_core.protocols.temporal import TemporalDeploymentProvenance, validate_frozen_recalibrated_pair
+from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration
+from datp_core.protocols.temporal import (
+    TemporalDeploymentProvenance,
+    require_temporal_decision_protocol,
+    validate_frozen_recalibrated_pair,
+)
 from datp_core.thresholds.contracts import ThresholdInfeasibilityReason, ThresholdUnavailableResult
 from datp_core.thresholds.dispatch import ThresholdConstructionRequest
 
@@ -388,6 +392,7 @@ def _recovery_for_method(
         static_reference_cv=static_outcome.fpr_coefficient_of_variation,
         frozen_future_cv=frozen_outcome.fpr_coefficient_of_variation,
         recalibrated_future_cv=recalibrated_outcome.fpr_coefficient_of_variation,
+        decision_protocol=require_temporal_decision_protocol(),
         mean_fpr_static=static_outcome.mean_fpr,
         mean_fpr_frozen=frozen_outcome.mean_fpr,
         mean_fpr_recalibrated=recalibrated_outcome.mean_fpr,

@@ -4,7 +4,6 @@ from typing import Literal
 
 from pydantic import model_validator
 
-from datp_core.protocols.metrics import OPERATING_POINT_METRICS
 from datp_core.core.contracts import StrictModel
 from datp_core.core.identifiers import (
     EvidenceRole,
@@ -24,6 +23,7 @@ from datp_core.core.numeric import (
 )
 from datp_core.experiments.common.coordinates import ExperimentSpec
 from datp_core.experiments.common.seeds import SeedCohort
+from datp_core.protocols.metrics import OPERATING_POINT_METRICS
 
 ANCHOR_EXPERIMENT = ExperimentSpec(
     id=ExperimentId.HISTORICAL_DATP_REPRODUCTION,

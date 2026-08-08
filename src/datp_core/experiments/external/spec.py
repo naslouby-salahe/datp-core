@@ -1,6 +1,5 @@
 """Edge-IIoTset benign-equity external-validation specification."""
 
-from datp_core.protocols.metrics import OPERATING_POINT_METRICS
 from datp_core.core.identifiers import (
     EvidenceRole,
     ExperimentId,
@@ -11,6 +10,7 @@ from datp_core.core.identifiers import (
     TrainingModelId,
 )
 from datp_core.experiments.common.coordinates import ExperimentSpec
+from datp_core.protocols.metrics import OPERATING_POINT_METRICS
 
 EDGE_BENIGN_EQUITY_VALIDATION = ExperimentSpec(
     id=ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION,

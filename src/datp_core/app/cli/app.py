@@ -1,5 +1,8 @@
 """Thin research-facing Typer CLI for DATP-Core."""
 
+# Typer's public command-decorator overloads intentionally return Any.
+# pyright: reportUnknownMemberType=false
+
 from __future__ import annotations
 
 from typing import Annotated

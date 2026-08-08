@@ -2,6 +2,11 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from datp_core.artifacts.provenance import Checksum, checksum_text
+from datp_core.artifacts.serializers.json import canonical_checksum, canonical_json_text
+from datp_core.core.errors import AnchorReproductionError
+from datp_core.core.identifiers import ExperimentReadiness, PreprocessingProtocolId, ScoreFrameColumn
+from datp_core.data.populations.declarations import split_protocol_for_population
 from datp_core.experiments.anchor.contracts import (
     AnchorArtifactFileName,
     AnchorComparisonDecision,
@@ -17,14 +22,9 @@ from datp_core.experiments.anchor.reproduction import (
     ANCHOR_EXPERIMENT,
     DECLARED_NON_BLOCKING_DISCREPANCY_REASONS,
 )
-from datp_core.artifacts.provenance import Checksum, checksum_text
-from datp_core.artifacts.serializers.json import canonical_checksum, canonical_json_text
-from datp_core.core.errors import AnchorReproductionError
-from datp_core.core.identifiers import ExperimentReadiness, PreprocessingProtocolId, ScoreFrameColumn
 from datp_core.experiments.anchor.spec import ANCHOR_DECISION_PROTOCOL
-from datp_core.protocols.metrics import CONFIRMATORY_METRICS
-from datp_core.data.populations.declarations import split_protocol_for_population
 from datp_core.experiments.confirmatory.spec import CONFIRMATORY_INFERENCE_PROTOCOL
+from datp_core.protocols.metrics import CONFIRMATORY_METRICS
 from datp_core.protocols.training import CHECKPOINT_PROTOCOL, CHECKPOINT_SELECTION_RULE, NBAIOT_AUTOENCODER
 from datp_core.protocols.validation import CONFIRMATORY_ENDPOINT
 
@@ -119,8 +119,8 @@ def _partition_discrepancies(
     if not _DECLARED_REASONS_SET:
         return discrepancies, ()
 
-    blocking = []
-    declared = []
+    blocking: list[AnchorDiscrepancy] = []
+    declared: list[AnchorDiscrepancy] = []
 
     for item in discrepancies:
         if item.reason in _DECLARED_REASONS_SET:
@@ -225,7 +225,26 @@ def build_anchor_confirmatory_handoff(
 
     return AnchorConfirmatoryHandoff(
         creation_identity=canonical_checksum(binding),
-        **binding,
+        anchor_experiment=ANCHOR_EXPERIMENT,
+        anchor_seed_cohort=decision.reproduction.seed_cohort,
+        anchor_protocol_checksum=canonical_checksum(ANCHOR_DECISION_PROTOCOL),
+        anchor_references_observations_checksum=references_observations_checksum,
+        anchor_gate_decision_checksum=gate_checksum,
+        dependent_confirmatory_experiment=endpoint.experiment,
+        dependent_population=endpoint.population,
+        dependent_model=endpoint.training_model,
+        dependent_seed_cohort=endpoint.seed_cohort,
+        split_protocol_identity=split_protocol_for_population(endpoint.population),
+        preprocessing_protocol_identity=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
+        checkpoint_protocol_identity=_checkpoint_protocol_identity(),
+        scoring_protocol_identity=_scoring_protocol_identity(),
+        threshold_protocol_identities=(endpoint.shared_threshold, endpoint.local_threshold),
+        evaluation_protocol_identity=_evaluation_protocol_identity(),
+        confirmatory_inference_protocol_identity=canonical_checksum(CONFIRMATORY_INFERENCE_PROTOCOL),
+        complete_artifact_inventory_checksum=inventory_checksum,
+        verified_gate_status=decision.status,
+        verified_gate_artifact_checksum=gate_checksum,
+        diagnostics_directory=str(diagnostics_directory.resolve()),
     )
 
 

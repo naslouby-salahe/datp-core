@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from shutil import rmtree
 
-from datp_core.experiments.anchor.contracts import AnchorGateStatus
 from datp_core.app.anchor import (
     anchor_gate_permits_dependents,
     anchor_status,
@@ -40,7 +39,6 @@ from datp_core.app.recipes import (
     recipe_for,
     registered_experiment_ids,
 )
-from datp_core.data.paths import canonical_root_under
 from datp_core.core.errors import (
     AnchorReproductionError,
     MissingPrerequisiteError,
@@ -50,7 +48,9 @@ from datp_core.core.errors import (
 )
 from datp_core.core.identifiers import ExperimentId, ExperimentReadiness, ProgrammeStatus
 from datp_core.core.numeric import Seed
+from datp_core.data.paths import canonical_root_under
 from datp_core.data.populations.declarations import POPULATIONS
+from datp_core.experiments.anchor.contracts import AnchorGateStatus
 from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT
 from datp_core.runtime.configuration import DATA_ROOT, OUTPUTS_ROOT
 from datp_core.runtime.filesystem import write_text_atomically

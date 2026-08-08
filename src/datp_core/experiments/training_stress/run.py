@@ -74,6 +74,9 @@ from datp_core.detector.checkpoints.service import SelectFederatedCheckpointRequ
 from datp_core.detector.scoring.contracts import FixedScoreInvariant
 from datp_core.detector.scoring.federated import publish_federated_scores
 from datp_core.detector.scoring.models import FederatedScoreArtifactManifest, GenerateFederatedScoresRequest
+from datp_core.detector.training.contracts import (
+    ModelAbsorptionDecisionProtocol as DetectorModelAbsorptionDecisionProtocol,
+)
 from datp_core.detector.training.ditto import DittoTrainingRequest
 from datp_core.detector.training.ditto_publication import (
     TrainDittoDetectorRequest,
@@ -128,6 +131,10 @@ from datp_core.thresholds.dispatch import ThresholdConstructionRequest
 from datp_core.thresholds.policies.local import LocalThresholdResult
 from datp_core.thresholds.policies.shared import SharedThresholdResult
 from datp_core.thresholds.quantiles import ClientBenignCalibrationScores
+
+_MODEL_ABSORPTION_DECISION_PROTOCOL = DetectorModelAbsorptionDecisionProtocol.model_validate(
+    MODEL_ABSORPTION_DECISION_PROTOCOL.model_dump()
+)
 
 
 class DittoArtifactBranch(StrEnum):
@@ -467,7 +474,7 @@ def analyze_ditto_absorption(
         )
     cohort = decide_absorption_cohort(
         tuple(observations),
-        MODEL_ABSORPTION_DECISION_PROTOCOL,
+        _MODEL_ABSORPTION_DECISION_PROTOCOL,
         alternative_route_seed_count=alternative_route,
     )
     export_mechanism_publication(
@@ -727,7 +734,7 @@ def analyze_fedprox_absorption(
             "FedProx absorption requires four-corner provenance on every seed observation",
             subject=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST,
         )
-    cohort = decide_absorption_cohort(observations, MODEL_ABSORPTION_DECISION_PROTOCOL)
+    cohort = decide_absorption_cohort(observations, _MODEL_ABSORPTION_DECISION_PROTOCOL)
     export_mechanism_publication(
         (cohort,),
         experiment=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST,

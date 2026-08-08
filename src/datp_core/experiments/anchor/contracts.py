@@ -12,6 +12,7 @@ from pydantic import ConfigDict, Field, field_validator, model_validator
 from datp_core.artifacts.provenance import Checksum, checksum_text
 from datp_core.artifacts.serializers.json import canonical_checksum, canonical_json_text
 from datp_core.core.contracts import StrictModel, str_enum_schema
+from datp_core.core.errors import require_contract
 from datp_core.core.identifiers import (
     CheckpointStatus,
     ContractSubject,
@@ -20,13 +21,12 @@ from datp_core.core.identifiers import (
     ExperimentReadiness,
     FederatedThresholdMethod,
     MetricId,
+    NonEmptyString,
     PopulationId,
     PreprocessingProtocolId,
     SplitProtocolId,
     TrainingModelId,
 )
-from datp_core.core.errors import require_contract
-from datp_core.core.identifiers import NonEmptyString
 from datp_core.core.numeric import ClientCount, MetricDelta, MetricValue, Seed
 from datp_core.experiments.common.seeds import SeedCohort
 

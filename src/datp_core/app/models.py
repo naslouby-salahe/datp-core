@@ -3,17 +3,18 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from datp_core.experiments.anchor.contracts import AnchorGateStatus
 from datp_core.app.contracts import ArtifactPresence, ProgrammeExecutionMode, RecipeRegistration
 from datp_core.core.identifiers import (
     EvidenceRole,
     ExperimentId,
     ExperimentReadiness,
     FederatedThresholdMethod,
+    NonEmptyString,
     ProgrammeStatus,
     ThresholdMethodExecutionStatus,
 )
-from datp_core.core.numeric import NonEmptyString, Seed
+from datp_core.core.numeric import Seed
+from datp_core.experiments.anchor.contracts import AnchorGateStatus
 
 
 class DetailText(NonEmptyString):
