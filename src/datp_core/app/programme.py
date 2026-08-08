@@ -1,36 +1,16 @@
-"""Research-facing programme services composed from typed experiment workflows.
+"""Research-facing programme services composed from typed experiment families.
 
-Public CLI commands call these entry points, plus the campaign, reporting, and
-status orchestration re-exported from :mod:`datp_core.pipeline.workflows.campaign`.
-Experiment-specific scientific behaviour remains in the dedicated workflow
-modules; this module owns generic protocol validation, planning, and
-seed-cohort selection shared by every registered workflow.
+Public CLI commands call these entry points. Experiment-specific scientific
+behaviour remains in dedicated experiment modules; this module owns generic
+protocol validation, deterministic planning, dataset preprocessing, and
+seed-cohort selection shared by every registered experiment.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from datp_core.datasets.service import DatasetMaterializationRequest, materialize_datasets
-from datp_core.domain.enums import (
-    DatasetId,
-    ExperimentId,
-    ExperimentReadiness,
-    PopulationId,
-)
-from datp_core.domain.errors import (
-    ProtocolValidationError,
-    ScientificContractError,
-    UnknownIdentifierError,
-)
-from datp_core.domain.values.counts import Seed
-from datp_core.pipeline.planning import (
-    ExperimentPlan,
-    PlanDisposition,
-    PlanningEvidence,
-    expand_experiment_plan,
-)
-from datp_core.pipeline.workflows.campaign import (
+from datp_core.app.campaign import (
     ANCHOR_GATED_EXPERIMENTS,
     REGISTERED_WORKFLOW_EXPERIMENTS,
     AnchorCommandResult,
@@ -50,6 +30,25 @@ from datp_core.pipeline.workflows.campaign import (
     run_smoke,
     verify_anchor_programme,
 )
+from datp_core.app.planning import (
+    ExperimentPlan,
+    PlanDisposition,
+    PlanningEvidence,
+    expand_experiment_plan,
+)
+from datp_core.datasets.service import DatasetMaterializationRequest, materialize_datasets
+from datp_core.domain.enums import (
+    DatasetId,
+    ExperimentId,
+    ExperimentReadiness,
+    PopulationId,
+)
+from datp_core.domain.errors import (
+    ProtocolValidationError,
+    ScientificContractError,
+    UnknownIdentifierError,
+)
+from datp_core.domain.values.counts import Seed
 from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration
 from datp_core.protocols.populations import POPULATIONS
 from datp_core.protocols.seeds import (
@@ -117,7 +116,7 @@ def executable_planning_evidence(experiment_id: ExperimentId) -> PlanningEvidenc
     return PlanningEvidence(
         experiment=experiment_id,
         disposition=PlanDisposition.EXECUTABLE,
-        reason="registered workflow entry supplies locked execution prerequisites from protocol declarations",
+        reason="registered experiment supplies locked execution prerequisites from protocol declarations",
     )
 
 
