@@ -1,32 +1,26 @@
-"""Hard population, split, and cohort invariants.
-
-Validators receive their declaration and capability context as explicit typed
-inputs rather than resolving them from global registry state, so this module
-stays independent of any specific dataset implementation or the registry.
-"""
+"""Population, split, cohort, and chronology integrity invariants."""
 
 from collections.abc import Iterable
 
 import polars as pl
 
-from datp_core.domain.enums import (
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.errors import DataIntegrityError, LeakageError, ScientificContractError
+from datp_core.core.identifiers import (
+    CaptureTimestampColumn,
     ContractSubject,
     PartitionRole,
     PopulationId,
     StageOperationId,
 )
-from datp_core.domain.errors import DataIntegrityError, LeakageError, ScientificContractError
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import ClientCount, RowCount
-from datp_core.domain.values.identifiers import CaptureTimestampColumn
-from datp_core.protocols.populations import PopulationDeclaration
-
-from .contracts import (
+from datp_core.core.numeric import ClientCount, RowCount
+from datp_core.data.populations.contracts import (
     CLIENT_ID_COLUMN,
     OUTCOME_LABEL_COLUMN,
     PARTITION_ROLE_COLUMN,
     STABLE_ROW_ID_COLUMN,
     PopulationCapabilities,
+    PopulationDeclaration,
     PopulationFrameColumn,
     PopulationManifest,
     PopulationOutcomeLabel,
@@ -93,14 +87,14 @@ def validate_split_manifest(
 ) -> None:
     _require_columns(assignments, assignment_column_names(), StageOperationId.SPLIT)
     document = split_manifest
-    population = document.population
-    _require_assignment_row_contract(assignments, membership, document.assignment_row_count, population)
+    _require_assignment_row_contract(assignments, membership, document.assignment_row_count, document.population)
     _require_role_counts(assignments, document)
-    _require_benign_only_fit_roles(assignments, population)
+    _require_benign_only_fit_roles(assignments, document.population)
 
 
 def validate_no_future_history_leakage(
-    assignments: pl.DataFrame, capture_timestamp_column: CaptureTimestampColumn
+    assignments: pl.DataFrame,
+    capture_timestamp_column: CaptureTimestampColumn,
 ) -> None:
     if capture_timestamp_column not in assignments.columns:
         raise ScientificContractError(
@@ -152,7 +146,9 @@ def validate_dirichlet_conservation(
 
 
 def _require_membership_row_contract(
-    membership: pl.DataFrame, expected_rows: RowCount, population: PopulationId
+    membership: pl.DataFrame,
+    expected_rows: RowCount,
+    population: PopulationId,
 ) -> None:
     if membership.height != expected_rows.value:
         raise DataIntegrityError(
@@ -181,8 +177,7 @@ def _require_membership_client_subset(
             subject=population,
             reason="membership may only contain accepted clients; empty accepted clients may lack rows",
         )
-    empty_with_rows = bool(accepted_clients) and not observed_clients and membership.height > 0
-    if empty_with_rows:
+    if accepted_clients and not observed_clients and membership.height > 0:
         raise DataIntegrityError(
             "membership is empty while the manifest records rows",
             subject=population,
@@ -190,7 +185,11 @@ def _require_membership_client_subset(
         )
 
 
-def _require_candidate_count(candidates: tuple[str, ...], expected: ClientCount, population: PopulationId) -> None:
+def _require_candidate_count(
+    candidates: tuple[str, ...],
+    expected: ClientCount,
+    population: PopulationId,
+) -> None:
     if len(candidates) != expected.value:
         raise DataIntegrityError(
             "candidate client count disagrees with the population declaration",
@@ -243,10 +242,10 @@ def _require_role_counts(assignments: pl.DataFrame, document: SplitManifestDocum
 
 
 def _require_benign_only_fit_roles(assignments: pl.DataFrame, population: PopulationId) -> None:
-    train_cal = assignments.filter(
+    train_calibration = assignments.filter(
         pl.col(PARTITION_ROLE_COLUMN).is_in([PartitionRole.TRAIN, PartitionRole.CALIBRATION])
     )
-    if train_cal.filter(pl.col(OUTCOME_LABEL_COLUMN) == _ATTACK).height > 0:
+    if train_calibration.filter(pl.col(OUTCOME_LABEL_COLUMN) == _ATTACK).height > 0:
         raise LeakageError(
             "attack rows entered training or calibration",
             subject=population,
@@ -274,7 +273,11 @@ def _reject_client_future_history_leakage(
         )
 
 
-def _validate_label_counts(membership: pl.DataFrame, benign_count: RowCount, attack_count: RowCount) -> None:
+def _validate_label_counts(
+    membership: pl.DataFrame,
+    benign_count: RowCount,
+    attack_count: RowCount,
+) -> None:
     observed_benign, observed_attack = outcome_row_counts(membership)
     if observed_benign != benign_count or observed_attack != attack_count:
         raise DataIntegrityError(
@@ -284,8 +287,12 @@ def _validate_label_counts(membership: pl.DataFrame, benign_count: RowCount, att
         )
 
 
-def _require_columns(frame: pl.DataFrame, columns: tuple[str, ...], subject: StageOperationId) -> None:
-    missing = [column for column in columns if column not in frame.columns]
+def _require_columns(
+    frame: pl.DataFrame,
+    columns: tuple[str, ...],
+    subject: StageOperationId,
+) -> None:
+    missing = tuple(column for column in columns if column not in frame.columns)
     if missing:
         raise DataIntegrityError(
             f"{subject.value} is missing required columns",
