@@ -2,7 +2,6 @@ import pytest
 from tests.unit.learning.federated.helpers import fedavg_coordinate
 
 from datp_core.domain.enums import CommunicationEstimationMethod
-from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.counts import LogicalElementCount, Seed
 from datp_core.evaluation.communication import (
     CommunicationMessageDiagnostic,
@@ -34,6 +33,6 @@ def test_communication_totals_are_exact_serialized_byte_counts() -> None:
     assert result.estimated_serialized_bytes_metric.value.value == 3.0
 
 
-def test_empty_payload_is_rejected() -> None:
-    with pytest.raises(ScientificContractError, match="typed logical element count"):
-        SerializedPayloadEvidence(b"", 0)  # type: ignore[arg-type]
+def test_logical_element_count_rejects_zero() -> None:
+    with pytest.raises(ValueError, match="positive integer"):
+        LogicalElementCount(0)
