@@ -9,22 +9,21 @@ from tests.unit.learning.federated.helpers import (
     require_cuda,
 )
 
-from datp_core.domain.enums import CheckpointSelectionRule, CheckpointStatus
-from datp_core.domain.errors import ArtifactIntegrityError, LeakageError, ScientificContractError
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import RoundNumber, Seed
-from datp_core.domain.values.ratios import MetricValue
-from datp_core.learning.federated.checkpoints.candidates import (
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.errors import ArtifactIntegrityError, LeakageError, ScientificContractError
+from datp_core.core.identifiers import CheckpointSelectionRule, CheckpointStatus
+from datp_core.core.numeric import MetricValue, RoundNumber, Seed
+from datp_core.detector.checkpoints.candidates import (
     candidate_tensor_name,
     rebase_checkpoint_candidates,
     retain_checkpoint_candidates,
 )
-from datp_core.learning.federated.checkpoints.selection import (
+from datp_core.detector.checkpoints.selection import (
     reject_centralized_checkpoint,
     select_checkpoint,
     validate_candidate_coordinates,
 )
-from datp_core.learning.federated.models import RoundSnapshot
+from datp_core.detector.training.models.snapshots import RoundSnapshot
 
 
 def _snapshots() -> tuple[RoundSnapshot, ...]:

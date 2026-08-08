@@ -5,14 +5,24 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 import torch
-
 from datp_core.datasets.partitioning.contracts import (
     OUTCOME_LABEL_COLUMN,
     STABLE_ROW_ID_COLUMN,
     ClientIdentity,
     PopulationOutcomeLabel,
 )
-from datp_core.domain.enums import (
+from datp_core.preprocessing.contracts import PreprocessingFitScope, TrustedEstimatorClassName
+from datp_core.preprocessing.models import (
+    FederatedFittedPreprocessingState,
+    PreprocessingProtocol,
+)
+from datp_core.protocols.checkpoints import CheckpointProtocol
+
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.identifiers import ClientPathToken as PreprocessingClientIdentity
+from datp_core.core.identifiers import (
+    FeatureName,
+    FeatureNameSequence,
     OptimizerId,
     PopulationId,
     PopulationIdentityKind,
@@ -21,27 +31,23 @@ from datp_core.domain.enums import (
     SplitProtocolId,
     TrainingModelId,
 )
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import BatchSize, ClientCount, LocalEpochCount, RoundNumber, RowCount, Seed
-from datp_core.domain.values.identifiers import FeatureName, FeatureNameSequence
-from datp_core.domain.values.paths import ClientPathToken as PreprocessingClientIdentity
-from datp_core.domain.values.ratios import (
+from datp_core.core.numeric import (
     NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
+    BatchSize,
+    ClientCount,
     DittoRegularization,
     LearningRate,
+    LocalEpochCount,
     ProximalCoefficient,
+    RoundNumber,
+    RowCount,
+    Seed,
 )
-from datp_core.learning.federated.models import (
+from datp_core.detector.training.models import (
     ClientTrainingInput,
     DittoTrainingCoordinates,
     FederatedTrainingCoordinate,
 )
-from datp_core.preprocessing.contracts import PreprocessingFitScope, TrustedEstimatorClassName
-from datp_core.preprocessing.models import (
-    FederatedFittedPreprocessingState,
-    PreprocessingProtocol,
-)
-from datp_core.protocols.checkpoints import CheckpointProtocol
 from datp_core.protocols.training import (
     DITTO_REGULARIZATION_GRID,
     WEIGHT_DECAY,

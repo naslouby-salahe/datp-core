@@ -1,9 +1,9 @@
 import pytest
 import torch
 
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.counts import Seed
-from datp_core.learning.autoencoder import (
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.numeric import Seed
+from datp_core.detector.autoencoder import (
     ReconstructionAutoencoder,
     build_reconstruction_autoencoder,
     clone_autoencoder_state,

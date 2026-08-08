@@ -2,6 +2,8 @@ from pathlib import Path
 
 import pytest
 import torch
+from datp_core.datasets.partitioning.contracts import PopulationOutcomeLabel
+from datp_core.preprocessing.models import FederatedFittedPreprocessingState
 from tests.unit.learning.centralized.helpers import (
     AUTOENCODER,
     BATCH_SIZE,
@@ -18,21 +20,18 @@ from tests.unit.learning.centralized.helpers import (
     training_coordinate,
 )
 
-from datp_core.datasets.partitioning.contracts import PopulationOutcomeLabel
-from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import RowCount, Seed
-from datp_core.domain.values.identifiers import OutcomeLabel, OutcomeLabelSequence
-from datp_core.domain.values.paths import ClientPathToken
-from datp_core.learning.autoencoder import construct_autoencoder
-from datp_core.learning.centralized.training import (
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.errors import LeakageError, ScientificContractError
+from datp_core.core.identifiers import ClientPathToken, OutcomeLabel, OutcomeLabelSequence
+from datp_core.core.numeric import RowCount, Seed
+from datp_core.detector.autoencoder import construct_autoencoder
+from datp_core.detector.training.centralized import (
     CentralizedTrainingRequest,
     load_centralized_model_tensors,
     reject_attack_rows_in_centralized_training,
     reject_federated_preprocessing_for_training,
     train_centralized_autoencoder,
 )
-from datp_core.preprocessing.models import FederatedFittedPreprocessingState
 
 
 def test_rejects_federated_preprocessing_state(tmp_path: Path) -> None:

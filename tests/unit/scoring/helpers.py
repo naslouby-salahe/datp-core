@@ -4,12 +4,13 @@ from pathlib import Path
 
 from tests.unit.learning.federated.helpers import AUTOENCODER, CHECKPOINT, fedavg_coordinate
 
-from datp_core.domain.enums import CheckpointSelectionRule
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import Seed
-from datp_core.learning.federated.checkpoints.candidates import retain_checkpoint_candidates
-from datp_core.learning.federated.checkpoints.selection import select_checkpoint
-from datp_core.learning.federated.models import CheckpointCandidate, RoundSnapshot
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.identifiers import CheckpointSelectionRule
+from datp_core.core.numeric import Seed
+from datp_core.detector.checkpoints.candidates import retain_checkpoint_candidates
+from datp_core.detector.checkpoints.models import CheckpointCandidate
+from datp_core.detector.checkpoints.selection import select_checkpoint
+from datp_core.detector.training.models.snapshots import RoundSnapshot
 
 
 def selected_checkpoint(output_directory: Path, seed: Seed | None = None) -> CheckpointCandidate:

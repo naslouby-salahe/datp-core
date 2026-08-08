@@ -12,11 +12,12 @@ from tests.unit.learning.federated.helpers import (
     ditto_protocol,
 )
 
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import Seed
-from datp_core.learning.federated.ditto import DittoTrainingRequest, train_ditto
-from datp_core.learning.federated.models import DittoTrainingCoordinates, FederatedTrainingCoordinate
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.numeric import Seed
+from datp_core.detector.training.contracts import FederatedTrainingCoordinate
+from datp_core.detector.training.ditto import DittoTrainingRequest, train_ditto
+from datp_core.detector.training.models import DittoTrainingCoordinates
 
 
 def _request(tmp_path: Path) -> DittoTrainingRequest:

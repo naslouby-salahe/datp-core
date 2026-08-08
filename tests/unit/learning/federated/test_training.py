@@ -1,5 +1,6 @@
 import pytest
 import torch
+from datp_core.datasets.partitioning.contracts import PopulationOutcomeLabel
 from tests.unit.learning.federated.helpers import (
     AUTOENCODER,
     build_client_input,
@@ -7,15 +8,12 @@ from tests.unit.learning.federated.helpers import (
     require_cuda,
 )
 
-from datp_core.datasets.partitioning.contracts import PopulationOutcomeLabel
-from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import BatchSize, RoundNumber, RowCount, Seed
-from datp_core.domain.values.identifiers import OutcomeLabel, OutcomeLabelSequence
-from datp_core.domain.values.ratios import MetricValue, ProximalCoefficient
-from datp_core.learning.autoencoder import ReconstructionAutoencoder
-from datp_core.learning.federated.models import ClientUpdate
-from datp_core.learning.federated.training import (
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.errors import LeakageError, ScientificContractError
+from datp_core.core.identifiers import OutcomeLabel, OutcomeLabelSequence
+from datp_core.core.numeric import BatchSize, MetricValue, ProximalCoefficient, RoundNumber, RowCount, Seed
+from datp_core.detector.autoencoder import ReconstructionAutoencoder
+from datp_core.detector.training.federated import (
     ProximalTerm,
     TrainingStream,
     aggregate_client_updates,
@@ -28,6 +26,7 @@ from datp_core.learning.federated.training import (
     run_local_epoch,
     serialize_and_checksum_state_dict,
 )
+from datp_core.detector.training.models import ClientUpdate
 
 
 def test_derive_client_stream_seed_is_deterministic_and_client_specific() -> None:

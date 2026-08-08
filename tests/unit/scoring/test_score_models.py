@@ -1,13 +1,13 @@
 from pathlib import Path
 
 import pytest
+from datp_core.protocols.inference import FixedScoreInvariant, ScoreArtifactManifest, ScoreGenerationResult, ScoreRecord
 from tests.unit.learning.federated.helpers import client_identity, fedavg_coordinate
 
-from datp_core.domain.enums import PartitionRole, SerializationFormat, SplitProtocolId
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import FeatureCount, RoundNumber, RowCount, Seed
-from datp_core.protocols.inference import FixedScoreInvariant, ScoreArtifactManifest, ScoreGenerationResult, ScoreRecord
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import PartitionRole, SerializationFormat, SplitProtocolId
+from datp_core.core.numeric import FeatureCount, RoundNumber, RowCount, Seed
 
 _DEFAULT_SEED = Seed(0)
 

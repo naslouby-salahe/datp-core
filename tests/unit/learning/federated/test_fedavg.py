@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+from datp_core.datasets.partitioning.contracts import PopulationOutcomeLabel
 from tests.unit.learning.federated.helpers import (
     AUTOENCODER,
     BATCH_SIZE,
@@ -13,12 +14,11 @@ from tests.unit.learning.federated.helpers import (
     fedavg_coordinate,
 )
 
-from datp_core.datasets.partitioning.contracts import PopulationOutcomeLabel
-from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import RowCount, Seed
-from datp_core.learning.federated.global_training import train_global_federated
-from datp_core.learning.federated.training import FederatedTrainingRequest
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.errors import LeakageError, ScientificContractError
+from datp_core.core.numeric import RowCount, Seed
+from datp_core.detector.training.fedavg import train_global_federated
+from datp_core.detector.training.federated import FederatedTrainingRequest
 
 
 def _request(tmp_path: Path, seed: Seed | None = None) -> FederatedTrainingRequest:
@@ -87,9 +87,8 @@ def test_train_fedavg_rejects_partial_client_participation(tmp_path: Path) -> No
 
 
 def test_train_fedavg_rejects_a_fedprox_coordinate(tmp_path: Path) -> None:
-    from tests.unit.learning.federated.helpers import fedprox_coordinate
-
     from datp_core.domain.values.ratios import ProximalCoefficient
+    from tests.unit.learning.federated.helpers import fedprox_coordinate
 
     request = _request(tmp_path)
     wrong_coordinate = fedprox_coordinate(Seed(0), ProximalCoefficient(0.1))

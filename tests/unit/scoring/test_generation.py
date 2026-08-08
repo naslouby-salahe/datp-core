@@ -4,13 +4,13 @@ import pytest
 from tests.unit.learning.federated.helpers import AUTOENCODER, BATCH_SIZE, FEATURE_NAMES, benign_frame, client_identity
 from tests.unit.scoring.helpers import selected_checkpoint
 
-from datp_core.domain.enums import CheckpointStatus
-from datp_core.domain.errors import ArtifactIntegrityError, LeakageError, ScientificContractError
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import RowCount, Seed
-from datp_core.learning.federated.models import CheckpointCandidate
-from datp_core.pipeline.scoring.federated import publish_federated_scores
-from datp_core.pipeline.scoring.models import (
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.errors import ArtifactIntegrityError, LeakageError, ScientificContractError
+from datp_core.core.identifiers import CheckpointStatus
+from datp_core.core.numeric import RowCount, Seed
+from datp_core.detector.checkpoints.models import CheckpointCandidate
+from datp_core.detector.scoring.federated import publish_federated_scores
+from datp_core.detector.scoring.models import (
     ClientScoringInput,
     FederatedScoreAssetName,
     GenerateFederatedScoresRequest,
