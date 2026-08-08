@@ -19,12 +19,12 @@ from datp_core.detector.checkpoints.contracts import (
     validate_ordered_checkpoint_inventory,
     validate_persisted_checkpoint_file,
 )
+from datp_core.detector.training.contracts import AutoencoderProtocol
 from datp_core.detector.training.models import (
     CheckpointCandidate,
     FederatedTrainingCoordinate,
     RoundSnapshot,
 )
-from datp_core.protocols.training import AutoencoderProtocol
 
 _CANDIDATE_PREFIX = "checkpoint_round_"
 _CANDIDATE_SUFFIX = ".safetensors"

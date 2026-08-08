@@ -9,7 +9,7 @@ from torch import nn
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import ContractSubject, OptimizerId
 from datp_core.core.numeric import BatchSize, FeatureCount, LearningRate, Seed
-from datp_core.protocols.training import AutoencoderArchitecture, AutoencoderProtocol, OptimizerProtocol
+from datp_core.detector.training.contracts import AutoencoderArchitecture, AutoencoderProtocol, OptimizerProtocol
 from datp_core.runtime.compute import require_cuda_available
 
 type AutoencoderState = dict[str, torch.Tensor]

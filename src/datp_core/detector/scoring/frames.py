@@ -24,8 +24,8 @@ from datp_core.data.populations.contracts import (
 from datp_core.detector.autoencoder import LEARNING_DTYPE, ReconstructionAutoencoder, reconstruction_errors
 from datp_core.detector.checkpoints.contracts import validate_persisted_checkpoint_file
 from datp_core.detector.scoring.models import PersistedScoreFrame
+from datp_core.detector.training.contracts import AutoencoderProtocol
 from datp_core.detector.training.models import CheckpointCandidate
-from datp_core.protocols.training import AutoencoderProtocol
 
 SCORE_FRAME_COLUMNS = (
     ScoreFrameColumn.STABLE_ROW_ID.value,

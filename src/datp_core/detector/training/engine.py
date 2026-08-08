@@ -51,6 +51,7 @@ from datp_core.detector.autoencoder import (
     clone_state,
 )
 from datp_core.detector.checkpoints.contracts import CheckpointProtocol
+from datp_core.detector.training.contracts import AutoencoderProtocol
 from datp_core.detector.training.models import (
     ClientTrainingInput,
     ClientTrainingResult,
@@ -67,7 +68,6 @@ from datp_core.detector.training.models import (
 )
 from datp_core.protocols.training import (
     FEDERATED_DATALOADER_WORKER_COUNT,
-    AutoencoderProtocol,
     FedAvgProtocol,
     FedProxProtocol,
     OptimizerProtocol,

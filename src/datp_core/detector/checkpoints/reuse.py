@@ -40,6 +40,7 @@ from datp_core.detector.checkpoints.publication import (
     validate_manifest,
     verify_completion,
 )
+from datp_core.detector.training.contracts import AutoencoderProtocol
 from datp_core.detector.training.models import (
     CheckpointCandidate,
     DittoTrainingCoordinates,
@@ -49,7 +50,6 @@ from datp_core.detector.training.models import (
     FederatedTrainingResult,
     PersonalizedCandidateSet,
 )
-from datp_core.protocols.training import AutoencoderProtocol
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

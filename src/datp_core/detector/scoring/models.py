@@ -19,8 +19,8 @@ from datp_core.detector.scoring.contracts import (
     ScoreRecord,
 )
 from datp_core.detector.training.centralized import CentralizedTrainingCoordinate
+from datp_core.detector.training.contracts import AutoencoderProtocol
 from datp_core.detector.training.models import CheckpointCandidate, FederatedTrainingCoordinate
-from datp_core.protocols.training import AutoencoderProtocol
 
 type FederatedScoreRecord = ScoreRecord[FederatedTrainingCoordinate, ClientIdentity]
 type FederatedScoreArtifactManifest = ScoreArtifactManifest[FederatedTrainingCoordinate, ClientIdentity]

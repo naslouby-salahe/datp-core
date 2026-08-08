@@ -22,8 +22,7 @@ from datp_core.core.numeric import BatchSize, FeatureCount, RoundNumber, RowCoun
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.checkpoints.contracts import CentralizedCheckpointCandidate, CheckpointCandidate
 from datp_core.detector.training.centralized import CentralizedTrainingCoordinate
-from datp_core.detector.training.contracts import FederatedTrainingCoordinate
-from datp_core.protocols.training import AutoencoderProtocol
+from datp_core.detector.training.contracts import AutoencoderProtocol, FederatedTrainingCoordinate
 
 
 class TrainingCoordinateContract(Protocol):

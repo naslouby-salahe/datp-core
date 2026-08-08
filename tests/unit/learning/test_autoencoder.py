@@ -9,7 +9,7 @@ from datp_core.detector.autoencoder import (
     clone_autoencoder_state,
     load_autoencoder_state,
 )
-from datp_core.protocols.training import AutoencoderArchitecture, AutoencoderProtocol
+from datp_core.detector.training.contracts import AutoencoderArchitecture, AutoencoderProtocol
 
 _ARCHITECTURE = AutoencoderArchitecture(
     (FeatureCount(4), FeatureCount(3), FeatureCount(2), FeatureCount(3), FeatureCount(4))

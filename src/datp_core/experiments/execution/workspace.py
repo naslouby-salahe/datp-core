@@ -59,6 +59,7 @@ from datp_core.data.registry import population_capabilities
 from datp_core.detector.checkpoints.selection import CheckpointDecision
 from datp_core.detector.checkpoints.service import SelectFederatedCheckpointRequest, select_federated_primary_checkpoint
 from datp_core.detector.scoring.models import FederatedScoreArtifactManifest, FederatedScoreRecord
+from datp_core.detector.training.contracts import AutoencoderProtocol
 from datp_core.detector.training.engine import FederatedTrainingRequest
 from datp_core.detector.training.federated_publication import (
     TrainFederatedDetectorRequest,
@@ -87,7 +88,6 @@ from datp_core.protocols.training import (
     BATCH_SIZE,
     CHECKPOINT_PROTOCOL,
     LEARNING_RATE,
-    AutoencoderProtocol,
     resolve_single_model_federated_training_protocol,
 )
 from datp_core.thresholds.calibration.construction import (

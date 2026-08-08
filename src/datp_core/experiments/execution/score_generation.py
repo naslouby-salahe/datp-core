@@ -10,8 +10,9 @@ from datp_core.detector.scoring.models import (
     FederatedScoreArtifactManifest,
     GenerateFederatedScoresRequest,
 )
+from datp_core.detector.training.contracts import AutoencoderProtocol
 from datp_core.detector.training.models import CheckpointCandidate
-from datp_core.protocols.training import BATCH_SIZE, AutoencoderProtocol
+from datp_core.protocols.training import BATCH_SIZE
 
 
 def score_selected_checkpoint(

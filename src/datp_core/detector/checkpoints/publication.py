@@ -24,6 +24,7 @@ from datp_core.detector.checkpoints.identities import (
     CandidateManifestKind,
     FederatedHistoryAssetName,
 )
+from datp_core.detector.training.contracts import AutoencoderProtocol
 from datp_core.detector.training.models import (
     CheckpointCandidate,
     DittoTrainingOutcome,
@@ -35,7 +36,6 @@ from datp_core.detector.training.models import (
     PersonalizedSnapshotSet,
     RoundSnapshot,
 )
-from datp_core.protocols.training import AutoencoderProtocol
 
 _MANIFEST_SCHEMA_VERSION = ManifestSchemaVersion(1)
 

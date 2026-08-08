@@ -45,9 +45,9 @@ class AutoencoderArchitecture(Sequence[FeatureCount]):
         object.__setattr__(self, "widths", normalized)
         validate_non_empty_tuple(normalized, "autoencoder architecture")
         if len(normalized) < 2:
-            raise ValueError("autoencoder architecture requires at least input and output layers")
+            raise ScientificContractError("autoencoder architecture requires at least input and output layers")
         if normalized[0] != normalized[-1]:
-            raise ValueError("autoencoder input and output widths must match")
+            raise ScientificContractError("autoencoder input and output widths must match")
 
     def __len__(self) -> int:
         return len(self.widths)

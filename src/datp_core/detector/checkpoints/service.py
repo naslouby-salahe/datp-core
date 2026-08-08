@@ -41,6 +41,7 @@ from datp_core.detector.training.centralized import (
     model_from_in_memory_snapshot,
     persist_state_dict_tensors,
 )
+from datp_core.detector.training.contracts import AutoencoderProtocol
 from datp_core.detector.training.models import (
     CheckpointCandidate,
     CheckpointDecision,
@@ -48,7 +49,6 @@ from datp_core.detector.training.models import (
 )
 from datp_core.protocols.training import (
     CHECKPOINT_SELECTION_RULE,
-    AutoencoderProtocol,
     require_non_test_checkpoint_selection_inputs,
 )
 from datp_core.runtime.compute import resolve_cuda_device
