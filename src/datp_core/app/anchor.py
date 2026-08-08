@@ -28,7 +28,7 @@ def anchor_gate_permits_dependents() -> bool:
 
 
 def reproduce_anchor(*, overwrite: OverwriteMode, mode: ProgrammeExecutionMode) -> AnchorCommandResult:
-    from datp_core.app.programme import preprocess_datasets, require_experiment_declaration
+    from datp_core.app.campaign import preprocess_datasets, require_experiment_declaration
     from datp_core.experiments.anchor import (
         VerifyAnchorStageRequest,
         clear_independent_package,

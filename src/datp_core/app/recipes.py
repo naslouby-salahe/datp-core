@@ -150,7 +150,7 @@ class ExperimentRecipe:
 
 
 def _declaration(experiment_id: ExperimentId):
-    from datp_core.app.programme import require_experiment_declaration
+    from datp_core.app.campaign import require_experiment_declaration
 
     return require_experiment_declaration(experiment_id)
 
@@ -573,7 +573,7 @@ def _supplementary_directory(experiment_id: ExperimentId) -> Path:
 
 
 def _report_supplementary(experiment_id: ExperimentId, overwrite: OverwriteMode) -> tuple[tuple[Path, ...], DetailText]:
-    from datp_core.app.programme import seed_cohort_for
+    from datp_core.app.campaign import seed_cohort_for
 
     declaration = _declaration(experiment_id)
     plan = expand_experiment_plan(

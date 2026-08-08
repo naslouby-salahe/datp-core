@@ -2,7 +2,7 @@
 
 import pytest
 
-from datp_core.app.programme import (
+from datp_core.app.campaign import (
     build_programme_plan,
     require_experiment_execution_ready,
     seed_cohort_for,
