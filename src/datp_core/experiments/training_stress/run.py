@@ -71,7 +71,12 @@ from datp_core.learning.federated.training import preprocessing_state_set_checks
 from datp_core.pipeline.checkpoints.service import SelectFederatedCheckpointRequest, select_federated_primary_checkpoint
 from datp_core.pipeline.decision.evidence import AnalysisAssetName, SeedEvidenceAssetName
 from datp_core.pipeline.decision.federated import ConstructFederatedThresholdsRequest, construct_federated_thresholds
-from datp_core.pipeline.execution.context import client_training_inputs, client_with_id, family_identities, training_feature_names
+from datp_core.pipeline.execution.context import (
+    client_training_inputs,
+    client_with_id,
+    family_identities,
+    training_feature_names,
+)
 from datp_core.pipeline.execution.evidence import load_evaluation_document
 from datp_core.pipeline.execution.layout import (
     EvaluationRunAssetDirectory,
@@ -84,7 +89,11 @@ from datp_core.pipeline.preparation.populations import ConstructDeclaredPopulati
 from datp_core.pipeline.publication.layout import evaluation_run_directory
 from datp_core.pipeline.scoring.federated import publish_federated_scores
 from datp_core.pipeline.scoring.models import FederatedScoreArtifactManifest, GenerateFederatedScoresRequest
-from datp_core.pipeline.training.personalized import TrainDittoDetectorRequest, TrainDittoDetectorResult, train_ditto_detector
+from datp_core.pipeline.training.personalized import (
+    TrainDittoDetectorRequest,
+    TrainDittoDetectorResult,
+    train_ditto_detector,
+)
 from datp_core.preprocessing.models import FederatedPreprocessingOutcome, FederatedPreprocessingRequest
 from datp_core.preprocessing.service import preprocess_federated
 from datp_core.presentation.export import export_mechanism_publication
@@ -496,7 +505,9 @@ def run_fedprox_stress_test_seed(
             f"FedProx planning produced no executable coordinates for coefficient={coefficient.value}",
             subject=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST,
         )
-    campaign_entries = tuple(CampaignEntry(ordinal=index, coordinate=coordinate) for index, coordinate in enumerate(coordinates))
+    campaign_entries = tuple(
+        CampaignEntry(ordinal=index, coordinate=coordinate) for index, coordinate in enumerate(coordinates)
+    )
     campaign = CampaignPlan(
         entries=campaign_entries,
         digest=campaign_digest(campaign_entries),
@@ -598,7 +609,9 @@ def collect_fedprox_coefficient_terminal_losses(
         candidates.append(
             FedProxCoefficientTerminalLoss(
                 coefficient=coefficient,
-                mean_terminal_training_loss=MetricValue(sum(loss.value for _seed, loss in seed_losses) / len(seed_losses)),
+                mean_terminal_training_loss=MetricValue(
+                    sum(loss.value for _seed, loss in seed_losses) / len(seed_losses)
+                ),
                 per_seed_terminal_losses=tuple(seed_losses),
             )
         )
@@ -648,11 +661,15 @@ def load_fedprox_cv_fpr_corners(
 ) -> FedProxCvFprCornerEvidence:
     experiment = ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST
     shared = absorption_corner_from_evaluation_document(
-        load_evaluation_document(_fedprox_evaluation_path(training_seed, coefficient, FederatedThresholdMethod.SHARED_THRESHOLD)),
+        load_evaluation_document(
+            _fedprox_evaluation_path(training_seed, coefficient, FederatedThresholdMethod.SHARED_THRESHOLD)
+        ),
         experiment=experiment,
     )
     local = absorption_corner_from_evaluation_document(
-        load_evaluation_document(_fedprox_evaluation_path(training_seed, coefficient, FederatedThresholdMethod.LOCAL_THRESHOLD)),
+        load_evaluation_document(
+            _fedprox_evaluation_path(training_seed, coefficient, FederatedThresholdMethod.LOCAL_THRESHOLD)
+        ),
         experiment=experiment,
     )
     return FedProxCvFprCornerEvidence(seed=training_seed, coefficient=coefficient, shared=shared, local=local)
@@ -690,9 +707,13 @@ def analyze_fedprox_absorption(
     *,
     output_directory: Path,
 ) -> AbsorptionCohortResult:
-    if observations and any(item.experiment is not ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST for item in observations):
+    if observations and any(
+        item.experiment is not ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST for item in observations
+    ):
         raise ScientificContractError("FedProx absorption requires FEDPROX_ABSORPTION_STRESS_TEST observations")
-    if observations and any(item.personalized_model is not TrainingModelId.FEDPROX_AUTOENCODER for item in observations):
+    if observations and any(
+        item.personalized_model is not TrainingModelId.FEDPROX_AUTOENCODER for item in observations
+    ):
         raise ScientificContractError("FedProx absorption requires FEDPROX personalized model identity")
     if observations and any(item.corners is None for item in observations):
         raise ScientificContractError(
@@ -728,10 +749,15 @@ def _fedprox_evaluation_path(
     )
     if len(matches) != 1:
         raise ScientificContractError(
-            f"FedProx evaluation coordinate unresolved for seed={training_seed.value} coefficient={coefficient.value} method={method.value}",
+            "FedProx evaluation coordinate unresolved for "
+            f"seed={training_seed.value} coefficient={coefficient.value} method={method.value}",
             subject=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST,
         )
-    path = evaluation_run_directory(OUTPUTS_ROOT, matches[0]) / EvaluationRunAssetDirectory.EVALUATION / FederatedEvaluationAssetName.DOCUMENT
+    path = (
+        evaluation_run_directory(OUTPUTS_ROOT, matches[0])
+        / EvaluationRunAssetDirectory.EVALUATION
+        / FederatedEvaluationAssetName.DOCUMENT
+    )
     if not path.is_file():
         raise ScientificContractError(f"missing FedProx evaluation document: {path}")
     return path
@@ -917,4 +943,9 @@ def fedprox_analysis_directory(
     *,
     output_root: Path,
 ) -> Path:
-    return fedprox_stress_test_root(output_root=output_root) / FedProxArtifactDirectory.ANALYSIS / role.value / str(coefficient.value)
+    return (
+        fedprox_stress_test_root(output_root=output_root)
+        / FedProxArtifactDirectory.ANALYSIS
+        / role.value
+        / str(coefficient.value)
+    )

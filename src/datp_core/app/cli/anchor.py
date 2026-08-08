@@ -11,7 +11,6 @@ from datp_core.app.contracts import OverwriteMode, ProgrammeExecutionMode
 from datp_core.app.research import anchor_status, reproduce_anchor, verify_anchor_programme
 from datp_core.domain.errors import DatpCoreError
 
-
 app = typer.Typer(no_args_is_help=True, help="Historical anchor equivalence gate.")
 
 
@@ -34,9 +33,7 @@ def reproduce_command(
         )
     except (DatpCoreError, ValueError) as error:
         fail(error)
-    typer.echo(
-        f"gate={result.gate_status.value} readiness={result.dependent_readiness.value} detail={result.detail}"
-    )
+    typer.echo(f"gate={result.gate_status.value} readiness={result.dependent_readiness.value} detail={result.detail}")
 
 
 @app.command("verify")
@@ -46,9 +43,7 @@ def verify_command() -> None:
         result = verify_anchor_programme(mode=ProgrammeExecutionMode.FULL)
     except (DatpCoreError, ValueError) as error:
         fail(error)
-    typer.echo(
-        f"gate={result.gate_status.value} readiness={result.dependent_readiness.value} detail={result.detail}"
-    )
+    typer.echo(f"gate={result.gate_status.value} readiness={result.dependent_readiness.value} detail={result.detail}")
 
 
 @app.command("status")
@@ -58,6 +53,4 @@ def status_command() -> None:
         result = anchor_status()
     except (DatpCoreError, ValueError) as error:
         fail(error)
-    typer.echo(
-        f"gate={result.gate_status.value} readiness={result.dependent_readiness.value} detail={result.detail}"
-    )
+    typer.echo(f"gate={result.gate_status.value} readiness={result.dependent_readiness.value} detail={result.detail}")

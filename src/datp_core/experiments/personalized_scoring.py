@@ -51,15 +51,11 @@ def client_metric(
 ) -> ClientMetricResult:
     record = score_record_for_client(manifest.evaluation_records, assignment.client, PartitionRole.EVALUATION)
     frame = pl.read_parquet(record.path)
-    scores = tuple(
-        ScoreValue(float(value)) for value in frame[ScoreFrameColumn.RECONSTRUCTION_ERROR.value].to_list()
-    )
+    scores = tuple(ScoreValue(float(value)) for value in frame[ScoreFrameColumn.RECONSTRUCTION_ERROR.value].to_list())
     labels = tuple(
         PopulationOutcomeLabel(str(value)) for value in frame[ScoreFrameColumn.OUTCOME_LABEL.value].to_list()
     )
-    rows = tuple(
-        StableRowId(str(value)) for value in frame[ScoreFrameColumn.STABLE_ROW_ID.value].to_list()
-    )
+    rows = tuple(StableRowId(str(value)) for value in frame[ScoreFrameColumn.STABLE_ROW_ID.value].to_list())
     eligibility_matches = tuple(item for item in cohort_manifest.records if item.client == assignment.client)
     if len(eligibility_matches) != 1:
         raise ScientificContractError(

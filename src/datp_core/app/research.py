@@ -55,7 +55,6 @@ from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT
 from datp_core.runtime.configuration import DATA_ROOT, OUTPUTS_ROOT
 from datp_core.runtime.filesystem import write_text_atomically
 
-
 __all__ = (
     "anchor_gated_experiment_ids",
     "anchor_status",
@@ -197,7 +196,10 @@ def _publish_smoke_summary(results: tuple[ExperimentRunResult, ...]) -> None:
 
 
 def _run_centralized_reference(overwrite: OverwriteMode) -> None:
-    from datp_core.experiments.centralized_reference import centralized_reference_directory, run_centralized_reference_seed
+    from datp_core.experiments.centralized_reference import (
+        centralized_reference_directory,
+        run_centralized_reference_seed,
+    )
 
     if CENTRALIZED_REFERENCE_COMPLETION_MARKER.is_file() and not overwrite.requested:
         return
@@ -269,7 +271,12 @@ def _generate_campaign_report(overwrite: OverwriteMode) -> ReportResult:
     for recipe in EXPERIMENT_RECIPES:
         try:
             report = generate_report(recipe.experiment, overwrite=overwrite)
-        except (AnchorReproductionError, MissingPrerequisiteError, ReportEvidenceError, ScientificContractError) as error:
+        except (
+            AnchorReproductionError,
+            MissingPrerequisiteError,
+            ReportEvidenceError,
+            ScientificContractError,
+        ) as error:
             details.append(f"{recipe.experiment.value}:missing({error})")
             continue
         paths.extend(report.paths)

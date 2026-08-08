@@ -337,7 +337,9 @@ def _client_threshold_overlay_pairs(
     overlays: tuple[ScoreGeometryThresholdOverlay, ...],
     client: ClientIdentity,
 ) -> tuple[tuple[str, float], ...]:
-    return tuple((item.method.value, item.threshold.value) for item in overlays if item.client is None or item.client == client)
+    return tuple(
+        (item.method.value, item.threshold.value) for item in overlays if item.client is None or item.client == client
+    )
 
 
 def _score_geometry_threshold_overlays(
@@ -379,8 +381,12 @@ def _client_evaluation_scores(
 
     ordered_document_clients = tuple(sorted(document_clients))
     if frozenset(ordered_document_clients) != frozenset(expected_clients):
-        missing = sorted(client.client_id for client in expected_clients if client not in frozenset(ordered_document_clients))
-        extra = sorted(client.client_id for client in ordered_document_clients if client not in frozenset(expected_clients))
+        missing = sorted(
+            client.client_id for client in expected_clients if client not in frozenset(ordered_document_clients)
+        )
+        extra = sorted(
+            client.client_id for client in ordered_document_clients if client not in frozenset(expected_clients)
+        )
         raise ScientificContractError(
             "evaluation document clients do not match the expected score-geometry client set"
             f" missing={missing} extra={extra}"
@@ -405,7 +411,9 @@ def _client_evaluation_scores(
         scores_raw = frame.get_column(score_column).to_list()
         labels = frame.get_column(label_column).to_list()
         if len(scores_raw) != len(labels):
-            raise ScientificContractError(f"score and label columns are misaligned for client {client.client_id}: {path}")
+            raise ScientificContractError(
+                f"score and label columns are misaligned for client {client.client_id}: {path}"
+            )
         if benign_only:
             scores = tuple(
                 MetricValue(float(score))
@@ -425,7 +433,11 @@ def _client_evaluation_scores(
 def _confirmatory_cluster_mechanisms() -> tuple[MechanismEvidence, ...]:
     from pydantic import TypeAdapter, ValidationError
 
-    from datp_core.analysis.mechanisms import cluster_evidence_from_grouped_result, cluster_stability, local_threshold_dispersion
+    from datp_core.analysis.mechanisms import (
+        cluster_evidence_from_grouped_result,
+        cluster_stability,
+        local_threshold_dispersion,
+    )
     from datp_core.thresholding.methods.cluster import GroupedThresholdResult
     from datp_core.thresholding.publication import (
         FederatedThresholdAssetName,
@@ -513,7 +525,9 @@ def _confirmatory_cluster_mechanisms() -> tuple[MechanismEvidence, ...]:
 
 
 def _client_score_vectors(document: FederatedEvaluationDocument) -> tuple[tuple[ClientScoreVector, ...], Checksum]:
-    score_root = federated_training_directory(document.score_coordinate, OUTPUTS_ROOT) / ExecutionArtifactDirectory.SCORES
+    score_root = (
+        federated_training_directory(document.score_coordinate, OUTPUTS_ROOT) / ExecutionArtifactDirectory.SCORES
+    )
     vectors: list[ClientScoreVector] = []
     for client_result in sorted(document.clients, key=lambda item: item.client):
         path = score_root / client_result.client.client_id / FederatedScoreAssetName.CALIBRATION.value
@@ -586,7 +600,9 @@ def _confirmatory_contrast(training_seed: Seed) -> PairedContrast:
 
 
 def load_fedavg_cv_fpr_effect(training_seed: Seed, *, experiment: ExperimentId) -> FedAvgCvFprEffectEvidence:
-    shared_document = load_evaluation_document(_evaluation_path(training_seed, FederatedThresholdMethod.SHARED_THRESHOLD))
+    shared_document = load_evaluation_document(
+        _evaluation_path(training_seed, FederatedThresholdMethod.SHARED_THRESHOLD)
+    )
     local_document = load_evaluation_document(_evaluation_path(training_seed, FederatedThresholdMethod.LOCAL_THRESHOLD))
     return FedAvgCvFprEffectEvidence(
         seed=training_seed,
@@ -602,7 +618,9 @@ def absorption_corner_from_evaluation_document(
 ) -> AbsorptionCornerEvidence:
     coordinate = document.score_coordinate
     evidence = document.fixed_score_evidence
-    coefficient = ModelCoefficientValue(coordinate.model_coefficient.value) if coordinate.model_coefficient is not None else None
+    coefficient = (
+        ModelCoefficientValue(coordinate.model_coefficient.value) if coordinate.model_coefficient is not None else None
+    )
     return AbsorptionCornerEvidence(
         seed=coordinate.training_seed,
         experiment=experiment,

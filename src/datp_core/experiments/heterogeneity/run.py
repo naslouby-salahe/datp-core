@@ -497,7 +497,9 @@ def _load_heterogeneity_evaluation(
 def _client_score_vectors(
     document: FederatedEvaluationDocument,
 ) -> tuple[tuple[ClientScoreVector, ...], Checksum]:
-    score_root = federated_training_directory(document.score_coordinate, OUTPUTS_ROOT) / ExecutionArtifactDirectory.SCORES
+    score_root = (
+        federated_training_directory(document.score_coordinate, OUTPUTS_ROOT) / ExecutionArtifactDirectory.SCORES
+    )
     vectors: list[ClientScoreVector] = []
     for client_result in sorted(document.clients, key=lambda item: item.client):
         path = score_root / client_result.client.client_id / FederatedScoreAssetName.CALIBRATION.value

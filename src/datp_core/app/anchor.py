@@ -126,11 +126,18 @@ def anchor_status() -> AnchorCommandResult:
             dependent_readiness=ExperimentReadiness.BLOCKED,
             detail=DetailText(str(error)),
         )
-    blocker = None if decision.reproduction.dependency_blocker is None else decision.reproduction.dependency_blocker.detail
-    readiness = "unblocked" if decision.status in {
-        AnchorGateStatus.PASS,
-        AnchorGateStatus.PASS_WITH_DECLARED_DISCREPANCY,
-    } else "blocked"
+    blocker = (
+        None if decision.reproduction.dependency_blocker is None else decision.reproduction.dependency_blocker.detail
+    )
+    readiness = (
+        "unblocked"
+        if decision.status
+        in {
+            AnchorGateStatus.PASS,
+            AnchorGateStatus.PASS_WITH_DECLARED_DISCREPANCY,
+        }
+        else "blocked"
+    )
     return AnchorCommandResult(
         gate_status=decision.status,
         dependent_readiness=decision.dependent_readiness,

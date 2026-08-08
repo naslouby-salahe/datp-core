@@ -64,9 +64,7 @@ def run_external_validation_seed(
     )
 
 
-def run_ciciot_boundary_seed(
-    partition_seed: Seed, *, output_root: Path, overwrite: bool
-) -> BoundedExternalSeedResult:
+def run_ciciot_boundary_seed(partition_seed: Seed, *, output_root: Path, overwrite: bool) -> BoundedExternalSeedResult:
     return _run_seed(
         ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY,
         partition_seed,
@@ -107,9 +105,7 @@ def analyze_external_validation_campaign(
     return _analyze(ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION, output_root, overwrite)
 
 
-def analyze_ciciot_boundary_campaign(
-    *, output_root: Path, overwrite: bool
-) -> BoundedExternalCampaignAnalysisResult:
+def analyze_ciciot_boundary_campaign(*, output_root: Path, overwrite: bool) -> BoundedExternalCampaignAnalysisResult:
     return _analyze(ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY, output_root, overwrite)
 
 
@@ -139,10 +135,10 @@ def _analyze(experiment: ExperimentId, output_root: Path, overwrite: bool) -> Bo
         seed_cohort=BOUNDED_EVIDENCE_SEED_COHORT,
         inference_protocol=protocol,
     )
-    contrasts = tuple(
-        _contrast(declaration, seed, output_root) for seed in BOUNDED_EVIDENCE_SEED_COHORT.values
+    contrasts = tuple(_contrast(declaration, seed, output_root) for seed in BOUNDED_EVIDENCE_SEED_COHORT.values)
+    output = (
+        output_root / BoundedExternalAssetDirectory.ANALYSIS.value / declaration.id.value / declaration.population.value
     )
-    output = output_root / BoundedExternalAssetDirectory.ANALYSIS.value / declaration.id.value / declaration.population.value
     if overwrite and output.exists():
         rmtree(output)
     result = analyze_external_evidence(
@@ -170,8 +166,12 @@ def _analyze(experiment: ExperimentId, output_root: Path, overwrite: bool) -> Bo
 
 def _contrast(declaration: ExperimentDeclaration, seed: Seed, output_root: Path) -> PairedContrast:
     metric = MetricId.FPR_COEFFICIENT_OF_VARIATION
-    shared = load_evaluation_document(_evaluation_path(declaration, seed, FederatedThresholdMethod.SHARED_THRESHOLD, output_root))
-    local = load_evaluation_document(_evaluation_path(declaration, seed, FederatedThresholdMethod.LOCAL_THRESHOLD, output_root))
+    shared = load_evaluation_document(
+        _evaluation_path(declaration, seed, FederatedThresholdMethod.SHARED_THRESHOLD, output_root)
+    )
+    local = load_evaluation_document(
+        _evaluation_path(declaration, seed, FederatedThresholdMethod.LOCAL_THRESHOLD, output_root)
+    )
     return build_paired_contrast(
         left=shared,
         right=local,
@@ -193,7 +193,11 @@ def _evaluation_path(
     output_root: Path,
 ) -> Path:
     coordinate = _coordinate(declaration, seed, method)
-    path = evaluation_run_directory(output_root, coordinate) / EvaluationRunAssetDirectory.EVALUATION / FederatedEvaluationAssetName.DOCUMENT
+    path = (
+        evaluation_run_directory(output_root, coordinate)
+        / EvaluationRunAssetDirectory.EVALUATION
+        / FederatedEvaluationAssetName.DOCUMENT
+    )
     if not path.is_file():
         raise ScientificContractError(f"missing completed evaluation document: {path}")
     return path

@@ -9,7 +9,7 @@ from datp_core.domain.provenance import canonical_checksum
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.ratios import MetricValue, Ratio
 from datp_core.protocols.inference import ClientIdentityContract, ScoreArtifactManifest, TrainingCoordinateContract
-from datp_core.protocols.seeds import BOUNDED_EVIDENCE_SEED_COHORT, SeedCohort
+from datp_core.protocols.seeds import SeedCohort
 
 
 class TemporalFutureIdentity(StrictModel):
@@ -161,6 +161,7 @@ class TemporalDecisionProtocol(StrictModel):
 
 def require_temporal_decision_protocol() -> TemporalDecisionProtocol:
     raise UnresolvedScientificValueError(
-        "the master roadmap requires a pre-specified positive drift-excess materiality threshold and a criterion for a meaningful recovery portion, but does not declare either numeric value",
+        "the master roadmap requires a pre-specified positive drift-excess materiality threshold and a criterion "
+        "for a meaningful recovery portion, but does not declare either numeric value",
         subject=EvidenceRole.TEMPORAL_BOUNDARY,
     )

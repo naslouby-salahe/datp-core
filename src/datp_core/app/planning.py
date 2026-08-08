@@ -256,7 +256,5 @@ def _validated_evidence(evidence: tuple[PlanningEvidence, ...]) -> tuple[Plannin
 
 
 def _digest_entries(entries: tuple[PlannedExperiment, ...]) -> Checksum:
-    payload = "\n".join(
-        f"{entry.coordinate.stable_key}|{entry.disposition.value}|{entry.reason}" for entry in entries
-    )
+    payload = "\n".join(f"{entry.coordinate.stable_key}|{entry.disposition.value}|{entry.reason}" for entry in entries)
     return checksum_text(payload)

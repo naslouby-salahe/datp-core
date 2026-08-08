@@ -186,7 +186,9 @@ def _method_outcomes(
 
 
 def _dispatch_confirmatory(seeds: tuple[Seed, ...], output_root: Path, overwrite: OverwriteMode) -> DispatchOutcome:
-    results = tuple(run_confirmatory_seed(seed, output_root=output_root, overwrite=overwrite.requested) for seed in seeds)
+    results = tuple(
+        run_confirmatory_seed(seed, output_root=output_root, overwrite=overwrite.requested) for seed in seeds
+    )
     return DispatchOutcome(
         detail=DetailText(f"confirmatory seeds={len(seeds)}"),
         method_outcomes=_method_outcomes(
@@ -198,7 +200,8 @@ def _dispatch_confirmatory(seeds: tuple[Seed, ...], output_root: Path, overwrite
 
 def _dispatch_family(seeds: tuple[Seed, ...], output_root: Path, overwrite: OverwriteMode) -> DispatchOutcome:
     results = tuple(
-        run_family_grouped_mechanism_seed(seed, output_root=output_root, overwrite=overwrite.requested) for seed in seeds
+        run_family_grouped_mechanism_seed(seed, output_root=output_root, overwrite=overwrite.requested)
+        for seed in seeds
     )
     return DispatchOutcome(
         detail=DetailText(f"family_grouped seeds={len(seeds)}"),
@@ -220,7 +223,9 @@ def _dispatch_external(
             run_external_validation_seed(seed, output_root=output_root, overwrite=overwrite.requested) for seed in seeds
         )
     elif experiment_id is ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY:
-        results = tuple(run_ciciot_boundary_seed(seed, output_root=output_root, overwrite=overwrite.requested) for seed in seeds)
+        results = tuple(
+            run_ciciot_boundary_seed(seed, output_root=output_root, overwrite=overwrite.requested) for seed in seeds
+        )
     else:
         raise ScientificContractError(f"unsupported external experiment: {experiment_id.value}")
     return DispatchOutcome(
@@ -660,7 +665,9 @@ def _fedprox_marker(experiment_id: ExperimentId) -> bool:
         load_fedprox_primary_coefficient_decision,
     )
 
-    decision_path = fedprox_stress_test_root(output_root=OUTPUTS_ROOT) / TrainingStressArtifactName.PRIMARY_COEFFICIENT_DECISION
+    decision_path = (
+        fedprox_stress_test_root(output_root=OUTPUTS_ROOT) / TrainingStressArtifactName.PRIMARY_COEFFICIENT_DECISION
+    )
     if not decision_path.is_file():
         return False
     decision = load_fedprox_primary_coefficient_decision(decision_path)
@@ -787,28 +794,166 @@ def _analysis_recipe(experiment_id: ExperimentId) -> DispatchHandler:
 
 
 EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
-    ExperimentRecipe(experiment=ExperimentId.SHARED_VS_LOCAL_CONFIRMATION, anchor_requirement=AnchorRequirement.REQUIRED, dispatch=_dispatch_confirmatory, report=_report_confirmatory, analysis_marker=_confirmatory_marker),
-    ExperimentRecipe(experiment=ExperimentId.FAMILY_AND_GROUPED_GRANULARITY, anchor_requirement=AnchorRequirement.REQUIRED, dispatch=_dispatch_family, report=_report_supplementary, analysis_marker=_supplementary_marker),
-    ExperimentRecipe(experiment=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST, anchor_requirement=AnchorRequirement.REQUIRED, dispatch=_dispatch_fedprox, report=_report_fedprox, analysis_marker=_fedprox_marker),
-    ExperimentRecipe(experiment=ExperimentId.DITTO_ABSORPTION_STRESS_TEST, anchor_requirement=AnchorRequirement.REQUIRED, dispatch=_dispatch_ditto, report=_report_ditto, analysis_marker=_ditto_marker),
-    ExperimentRecipe(experiment=ExperimentId.FEDERATED_BENIGN_STATISTICS_COMPARISON, anchor_requirement=AnchorRequirement.REQUIRED, dispatch=_estimation_recipe(ExperimentId.FEDERATED_BENIGN_STATISTICS_COMPARISON, run_federated_benign_statistics_comparison_seed), report=_report_estimation, analysis_marker=_estimation_marker),
-    ExperimentRecipe(experiment=ExperimentId.FEDERATED_QUANTILE_ESTIMATION, anchor_requirement=AnchorRequirement.REQUIRED, dispatch=_estimation_recipe(ExperimentId.FEDERATED_QUANTILE_ESTIMATION, run_federated_quantile_estimation_seed), report=_report_estimation, analysis_marker=_estimation_marker),
-    ExperimentRecipe(experiment=ExperimentId.FIXED_COEFFICIENT_STATISTICS_SENSITIVITY, anchor_requirement=AnchorRequirement.REQUIRED, dispatch=_estimation_recipe(ExperimentId.FIXED_COEFFICIENT_STATISTICS_SENSITIVITY, run_fixed_coefficient_statistics_sensitivity_seed), report=_report_estimation, analysis_marker=_estimation_marker),
-    ExperimentRecipe(experiment=ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION, anchor_requirement=AnchorRequirement.NOT_REQUIRED, dispatch=_external_recipe(ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION), report=_report_external, analysis_marker=_external_marker),
-    ExperimentRecipe(experiment=ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY, anchor_requirement=AnchorRequirement.NOT_REQUIRED, dispatch=_external_recipe(ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY), report=_report_external, analysis_marker=_external_marker),
-    ExperimentRecipe(experiment=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION, anchor_requirement=AnchorRequirement.NOT_REQUIRED, dispatch=_dispatch_temporal, report=_report_temporal, analysis_marker=_temporal_marker),
-    ExperimentRecipe(experiment=ExperimentId.SHARED_CONSTRUCTION_SENSITIVITY, anchor_requirement=AnchorRequirement.REQUIRED, dispatch=_robustness_recipe(ExperimentId.SHARED_CONSTRUCTION_SENSITIVITY, run_shared_construction_sensitivity_seed), report=_report_robustness, analysis_marker=_robustness_marker),
-    ExperimentRecipe(experiment=ExperimentId.QUANTILE_SENSITIVITY, anchor_requirement=AnchorRequirement.REQUIRED, dispatch=_robustness_recipe(ExperimentId.QUANTILE_SENSITIVITY, run_quantile_sensitivity_seed), report=_report_robustness, analysis_marker=_robustness_marker),
-    ExperimentRecipe(experiment=ExperimentId.CALIBRATION_SIZE_ABLATION, anchor_requirement=AnchorRequirement.REQUIRED, dispatch=_robustness_recipe(ExperimentId.CALIBRATION_SIZE_ABLATION, run_calibration_size_ablation_seed), report=_report_robustness, analysis_marker=_robustness_marker),
-    ExperimentRecipe(experiment=ExperimentId.FIXED_SHRINKAGE_CURVE, anchor_requirement=AnchorRequirement.REQUIRED, dispatch=_robustness_recipe(ExperimentId.FIXED_SHRINKAGE_CURVE, run_fixed_shrinkage_curve_seed), report=_report_robustness, analysis_marker=_robustness_marker),
-    ExperimentRecipe(experiment=ExperimentId.SIZE_AWARE_SHRINKAGE, anchor_requirement=AnchorRequirement.REQUIRED, dispatch=_robustness_recipe(ExperimentId.SIZE_AWARE_SHRINKAGE, run_size_aware_shrinkage_seed), report=_report_robustness, analysis_marker=_robustness_marker),
-    ExperimentRecipe(experiment=ExperimentId.LOCAL_CONFORMAL_COVERAGE, anchor_requirement=AnchorRequirement.REQUIRED, dispatch=_robustness_recipe(ExperimentId.LOCAL_CONFORMAL_COVERAGE, run_local_conformal_coverage_seed), report=_report_robustness, analysis_marker=_robustness_marker),
-    ExperimentRecipe(experiment=ExperimentId.CONTROLLED_HETEROGENEITY_SWEEP, anchor_requirement=AnchorRequirement.REQUIRED, dispatch=_dispatch_heterogeneity, report=_report_heterogeneity, analysis_marker=_heterogeneity_marker),
-    ExperimentRecipe(experiment=ExperimentId.PER_CLIENT_SCORE_GEOMETRY, anchor_requirement=AnchorRequirement.REQUIRED, dispatch=_analysis_recipe(ExperimentId.PER_CLIENT_SCORE_GEOMETRY), report=_report_heterogeneity, analysis_marker=_heterogeneity_marker),
-    ExperimentRecipe(experiment=ExperimentId.HETEROGENEITY_BENEFIT_ASSOCIATION, anchor_requirement=AnchorRequirement.REQUIRED, dispatch=_analysis_recipe(ExperimentId.HETEROGENEITY_BENEFIT_ASSOCIATION), report=_report_heterogeneity, analysis_marker=_heterogeneity_marker),
-    ExperimentRecipe(experiment=ExperimentId.THRESHOLD_MOVEMENT_TRADEOFF, anchor_requirement=AnchorRequirement.REQUIRED, dispatch=_analysis_recipe(ExperimentId.THRESHOLD_MOVEMENT_TRADEOFF), report=_report_heterogeneity, analysis_marker=_heterogeneity_marker),
-    ExperimentRecipe(experiment=ExperimentId.GROUP_MEDIAN_SUPPLEMENT, anchor_requirement=AnchorRequirement.REQUIRED, dispatch=_declared_recipe(ExperimentId.GROUP_MEDIAN_SUPPLEMENT), report=_report_supplementary, analysis_marker=_supplementary_marker),
-    ExperimentRecipe(experiment=ExperimentId.OPTIONAL_EQUITY_INDICES, anchor_requirement=AnchorRequirement.REQUIRED, dispatch=_declared_recipe(ExperimentId.OPTIONAL_EQUITY_INDICES), report=_report_supplementary, analysis_marker=_supplementary_marker),
+    ExperimentRecipe(
+        experiment=ExperimentId.SHARED_VS_LOCAL_CONFIRMATION,
+        anchor_requirement=AnchorRequirement.REQUIRED,
+        dispatch=_dispatch_confirmatory,
+        report=_report_confirmatory,
+        analysis_marker=_confirmatory_marker,
+    ),
+    ExperimentRecipe(
+        experiment=ExperimentId.FAMILY_AND_GROUPED_GRANULARITY,
+        anchor_requirement=AnchorRequirement.REQUIRED,
+        dispatch=_dispatch_family,
+        report=_report_supplementary,
+        analysis_marker=_supplementary_marker,
+    ),
+    ExperimentRecipe(
+        experiment=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST,
+        anchor_requirement=AnchorRequirement.REQUIRED,
+        dispatch=_dispatch_fedprox,
+        report=_report_fedprox,
+        analysis_marker=_fedprox_marker,
+    ),
+    ExperimentRecipe(
+        experiment=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
+        anchor_requirement=AnchorRequirement.REQUIRED,
+        dispatch=_dispatch_ditto,
+        report=_report_ditto,
+        analysis_marker=_ditto_marker,
+    ),
+    ExperimentRecipe(
+        experiment=ExperimentId.FEDERATED_BENIGN_STATISTICS_COMPARISON,
+        anchor_requirement=AnchorRequirement.REQUIRED,
+        dispatch=_estimation_recipe(
+            ExperimentId.FEDERATED_BENIGN_STATISTICS_COMPARISON, run_federated_benign_statistics_comparison_seed
+        ),
+        report=_report_estimation,
+        analysis_marker=_estimation_marker,
+    ),
+    ExperimentRecipe(
+        experiment=ExperimentId.FEDERATED_QUANTILE_ESTIMATION,
+        anchor_requirement=AnchorRequirement.REQUIRED,
+        dispatch=_estimation_recipe(ExperimentId.FEDERATED_QUANTILE_ESTIMATION, run_federated_quantile_estimation_seed),
+        report=_report_estimation,
+        analysis_marker=_estimation_marker,
+    ),
+    ExperimentRecipe(
+        experiment=ExperimentId.FIXED_COEFFICIENT_STATISTICS_SENSITIVITY,
+        anchor_requirement=AnchorRequirement.REQUIRED,
+        dispatch=_estimation_recipe(
+            ExperimentId.FIXED_COEFFICIENT_STATISTICS_SENSITIVITY, run_fixed_coefficient_statistics_sensitivity_seed
+        ),
+        report=_report_estimation,
+        analysis_marker=_estimation_marker,
+    ),
+    ExperimentRecipe(
+        experiment=ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION,
+        anchor_requirement=AnchorRequirement.NOT_REQUIRED,
+        dispatch=_external_recipe(ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION),
+        report=_report_external,
+        analysis_marker=_external_marker,
+    ),
+    ExperimentRecipe(
+        experiment=ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY,
+        anchor_requirement=AnchorRequirement.NOT_REQUIRED,
+        dispatch=_external_recipe(ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY),
+        report=_report_external,
+        analysis_marker=_external_marker,
+    ),
+    ExperimentRecipe(
+        experiment=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
+        anchor_requirement=AnchorRequirement.NOT_REQUIRED,
+        dispatch=_dispatch_temporal,
+        report=_report_temporal,
+        analysis_marker=_temporal_marker,
+    ),
+    ExperimentRecipe(
+        experiment=ExperimentId.SHARED_CONSTRUCTION_SENSITIVITY,
+        anchor_requirement=AnchorRequirement.REQUIRED,
+        dispatch=_robustness_recipe(
+            ExperimentId.SHARED_CONSTRUCTION_SENSITIVITY, run_shared_construction_sensitivity_seed
+        ),
+        report=_report_robustness,
+        analysis_marker=_robustness_marker,
+    ),
+    ExperimentRecipe(
+        experiment=ExperimentId.QUANTILE_SENSITIVITY,
+        anchor_requirement=AnchorRequirement.REQUIRED,
+        dispatch=_robustness_recipe(ExperimentId.QUANTILE_SENSITIVITY, run_quantile_sensitivity_seed),
+        report=_report_robustness,
+        analysis_marker=_robustness_marker,
+    ),
+    ExperimentRecipe(
+        experiment=ExperimentId.CALIBRATION_SIZE_ABLATION,
+        anchor_requirement=AnchorRequirement.REQUIRED,
+        dispatch=_robustness_recipe(ExperimentId.CALIBRATION_SIZE_ABLATION, run_calibration_size_ablation_seed),
+        report=_report_robustness,
+        analysis_marker=_robustness_marker,
+    ),
+    ExperimentRecipe(
+        experiment=ExperimentId.FIXED_SHRINKAGE_CURVE,
+        anchor_requirement=AnchorRequirement.REQUIRED,
+        dispatch=_robustness_recipe(ExperimentId.FIXED_SHRINKAGE_CURVE, run_fixed_shrinkage_curve_seed),
+        report=_report_robustness,
+        analysis_marker=_robustness_marker,
+    ),
+    ExperimentRecipe(
+        experiment=ExperimentId.SIZE_AWARE_SHRINKAGE,
+        anchor_requirement=AnchorRequirement.REQUIRED,
+        dispatch=_robustness_recipe(ExperimentId.SIZE_AWARE_SHRINKAGE, run_size_aware_shrinkage_seed),
+        report=_report_robustness,
+        analysis_marker=_robustness_marker,
+    ),
+    ExperimentRecipe(
+        experiment=ExperimentId.LOCAL_CONFORMAL_COVERAGE,
+        anchor_requirement=AnchorRequirement.REQUIRED,
+        dispatch=_robustness_recipe(ExperimentId.LOCAL_CONFORMAL_COVERAGE, run_local_conformal_coverage_seed),
+        report=_report_robustness,
+        analysis_marker=_robustness_marker,
+    ),
+    ExperimentRecipe(
+        experiment=ExperimentId.CONTROLLED_HETEROGENEITY_SWEEP,
+        anchor_requirement=AnchorRequirement.REQUIRED,
+        dispatch=_dispatch_heterogeneity,
+        report=_report_heterogeneity,
+        analysis_marker=_heterogeneity_marker,
+    ),
+    ExperimentRecipe(
+        experiment=ExperimentId.PER_CLIENT_SCORE_GEOMETRY,
+        anchor_requirement=AnchorRequirement.REQUIRED,
+        dispatch=_analysis_recipe(ExperimentId.PER_CLIENT_SCORE_GEOMETRY),
+        report=_report_heterogeneity,
+        analysis_marker=_heterogeneity_marker,
+    ),
+    ExperimentRecipe(
+        experiment=ExperimentId.HETEROGENEITY_BENEFIT_ASSOCIATION,
+        anchor_requirement=AnchorRequirement.REQUIRED,
+        dispatch=_analysis_recipe(ExperimentId.HETEROGENEITY_BENEFIT_ASSOCIATION),
+        report=_report_heterogeneity,
+        analysis_marker=_heterogeneity_marker,
+    ),
+    ExperimentRecipe(
+        experiment=ExperimentId.THRESHOLD_MOVEMENT_TRADEOFF,
+        anchor_requirement=AnchorRequirement.REQUIRED,
+        dispatch=_analysis_recipe(ExperimentId.THRESHOLD_MOVEMENT_TRADEOFF),
+        report=_report_heterogeneity,
+        analysis_marker=_heterogeneity_marker,
+    ),
+    ExperimentRecipe(
+        experiment=ExperimentId.GROUP_MEDIAN_SUPPLEMENT,
+        anchor_requirement=AnchorRequirement.REQUIRED,
+        dispatch=_declared_recipe(ExperimentId.GROUP_MEDIAN_SUPPLEMENT),
+        report=_report_supplementary,
+        analysis_marker=_supplementary_marker,
+    ),
+    ExperimentRecipe(
+        experiment=ExperimentId.OPTIONAL_EQUITY_INDICES,
+        anchor_requirement=AnchorRequirement.REQUIRED,
+        dispatch=_declared_recipe(ExperimentId.OPTIONAL_EQUITY_INDICES),
+        report=_report_supplementary,
+        analysis_marker=_supplementary_marker,
+    ),
 )
 
 
@@ -817,14 +962,20 @@ def registered_experiment_ids() -> tuple[ExperimentId, ...]:
 
 
 def anchor_gated_experiment_ids() -> tuple[ExperimentId, ...]:
-    return tuple(recipe.experiment for recipe in EXPERIMENT_RECIPES if recipe.anchor_requirement is AnchorRequirement.REQUIRED)
+    return tuple(
+        recipe.experiment for recipe in EXPERIMENT_RECIPES if recipe.anchor_requirement is AnchorRequirement.REQUIRED
+    )
 
 
 def recipe_for(experiment_id: ExperimentId) -> ExperimentRecipe:
     declaration = _declaration(experiment_id)
     if declaration.readiness is ExperimentReadiness.SUPPRESSED:
-        raise ScientificContractError(f"experiment is intentionally suppressed: {experiment_id.value}", subject=experiment_id)
+        raise ScientificContractError(
+            f"experiment is intentionally suppressed: {experiment_id.value}", subject=experiment_id
+        )
     matches = tuple(recipe for recipe in EXPERIMENT_RECIPES if recipe.experiment is experiment_id)
     if len(matches) != 1:
-        raise ScientificContractError(f"experiment recipe must resolve exactly once: {experiment_id.value}", subject=experiment_id)
+        raise ScientificContractError(
+            f"experiment recipe must resolve exactly once: {experiment_id.value}", subject=experiment_id
+        )
     return matches[0]

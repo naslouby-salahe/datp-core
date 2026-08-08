@@ -22,7 +22,11 @@ from datp_core.pipeline.coordinates import ExperimentCoordinate
 from datp_core.pipeline.execution.evidence import load_evaluation_document, population_metric
 from datp_core.pipeline.execution.layout import EvaluationRunAssetDirectory
 from datp_core.pipeline.publication.layout import evaluation_run_directory
-from datp_core.protocols.calibration import CALIBRATION_SIZES, QUANTILE_GRID, require_calibration_subsample_replicate_count
+from datp_core.protocols.calibration import (
+    CALIBRATION_SIZES,
+    QUANTILE_GRID,
+    require_calibration_subsample_replicate_count,
+)
 from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration
 from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.runtime.configuration import OUTPUTS_ROOT
@@ -237,7 +241,9 @@ def _coefficient_of_variation(values: list[MetricValue]) -> MetricValue | None:
     return MetricValue(variance**0.5 / mean)
 
 
-def _method_summary(method: FederatedThresholdMethod, documents: tuple[FederatedEvaluationDocument, ...]) -> MethodCvSummary:
+def _method_summary(
+    method: FederatedThresholdMethod, documents: tuple[FederatedEvaluationDocument, ...]
+) -> MethodCvSummary:
     cv_values = [population_metric(document, MetricId.FPR_COEFFICIENT_OF_VARIATION) for document in documents]
     worst_values = [population_metric(document, MetricId.WORST_CLIENT_FPR) for document in documents]
     return MethodCvSummary(

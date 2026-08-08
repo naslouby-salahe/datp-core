@@ -433,7 +433,9 @@ def _execute_temporal_states(
     )
     static_provenance = TemporalDeploymentProvenance.from_score_manifest(TemporalState.STATIC_REFERENCE, static_scores)
     frozen_provenance = TemporalDeploymentProvenance.from_score_manifest(TemporalState.FROZEN_FUTURE, future_scores)
-    recalibrated_provenance = TemporalDeploymentProvenance.from_score_manifest(TemporalState.RECALIBRATED_FUTURE, future_scores)
+    recalibrated_provenance = TemporalDeploymentProvenance.from_score_manifest(
+        TemporalState.RECALIBRATED_FUTURE, future_scores
+    )
     validate_frozen_recalibrated_pair(frozen_provenance, recalibrated_provenance)
     _validate_shared_temporal_detector(static_provenance, frozen_provenance)
     static = _evaluate_state(
@@ -514,7 +516,9 @@ def _evaluate_state(
         )
         threshold = threshold_publication.result
         if isinstance(threshold, ThresholdUnavailableResult):
-            unavailable.append(TemporalMethodUnavailability(method=method, reason=threshold.reason, detail=threshold.detail))
+            unavailable.append(
+                TemporalMethodUnavailability(method=method, reason=threshold.reason, detail=threshold.detail)
+            )
             continue
         evaluation_inputs = build_federated_evaluation_inputs(scores, method, calibration_role=calibration_role)
         evaluation = evaluate_federated_detector(
@@ -565,7 +569,9 @@ def _evaluate_state(
             )
         )
     if not completed:
-        raise ScientificContractError("temporal execution produced no evaluable threshold method", subject=identity.temporal_state)
+        raise ScientificContractError(
+            "temporal execution produced no evaluable threshold method", subject=identity.temporal_state
+        )
     if identity.temporal_state is None:
         raise ScientificContractError("temporal result requires an explicit state")
     return TemporalStateResult(
@@ -613,7 +619,9 @@ def _publish_temporal_method_campaign(
     )
 
 
-def _validate_shared_temporal_detector(static: TemporalDeploymentProvenance, frozen: TemporalDeploymentProvenance) -> None:
+def _validate_shared_temporal_detector(
+    static: TemporalDeploymentProvenance, frozen: TemporalDeploymentProvenance
+) -> None:
     if (
         static.checkpoint_checksum != frozen.checkpoint_checksum
         or static.preprocessing_state_set_checksum != frozen.preprocessing_state_set_checksum
@@ -699,9 +707,15 @@ def _document_level_deployment_provenance(
         coordinate_checksum=static_template.coordinate_checksum,
         checkpoint_checksum=static_template.checkpoint_checksum,
         preprocessing_state_set_checksum=static_template.preprocessing_state_set_checksum,
-        split_manifest_checksum=_aggregate_checksums(tuple(item.provenance.static_reference.split_manifest_checksum for item in records)),
-        calibration_score_set_checksum=_aggregate_checksums(tuple(item.provenance.static_reference.calibration_score_set_checksum for item in records)),
-        evaluation_score_set_checksum=_aggregate_checksums(tuple(item.provenance.static_reference.evaluation_score_set_checksum for item in records)),
+        split_manifest_checksum=_aggregate_checksums(
+            tuple(item.provenance.static_reference.split_manifest_checksum for item in records)
+        ),
+        calibration_score_set_checksum=_aggregate_checksums(
+            tuple(item.provenance.static_reference.calibration_score_set_checksum for item in records)
+        ),
+        evaluation_score_set_checksum=_aggregate_checksums(
+            tuple(item.provenance.static_reference.evaluation_score_set_checksum for item in records)
+        ),
     )
     frozen = TemporalDeploymentProvenance(
         state=TemporalState.FROZEN_FUTURE,
@@ -711,9 +725,15 @@ def _document_level_deployment_provenance(
         coordinate_checksum=frozen_template.coordinate_checksum,
         checkpoint_checksum=frozen_template.checkpoint_checksum,
         preprocessing_state_set_checksum=frozen_template.preprocessing_state_set_checksum,
-        split_manifest_checksum=_aggregate_checksums(tuple(item.provenance.frozen_future.split_manifest_checksum for item in records)),
-        calibration_score_set_checksum=_aggregate_checksums(tuple(item.provenance.frozen_future.calibration_score_set_checksum for item in records)),
-        evaluation_score_set_checksum=_aggregate_checksums(tuple(item.provenance.frozen_future.evaluation_score_set_checksum for item in records)),
+        split_manifest_checksum=_aggregate_checksums(
+            tuple(item.provenance.frozen_future.split_manifest_checksum for item in records)
+        ),
+        calibration_score_set_checksum=_aggregate_checksums(
+            tuple(item.provenance.frozen_future.calibration_score_set_checksum for item in records)
+        ),
+        evaluation_score_set_checksum=_aggregate_checksums(
+            tuple(item.provenance.frozen_future.evaluation_score_set_checksum for item in records)
+        ),
     )
     recalibrated = TemporalDeploymentProvenance(
         state=TemporalState.RECALIBRATED_FUTURE,
@@ -724,7 +744,9 @@ def _document_level_deployment_provenance(
         checkpoint_checksum=recalibrated_template.checkpoint_checksum,
         preprocessing_state_set_checksum=recalibrated_template.preprocessing_state_set_checksum,
         split_manifest_checksum=frozen.split_manifest_checksum,
-        calibration_score_set_checksum=_aggregate_checksums(tuple(item.provenance.recalibrated_future.calibration_score_set_checksum for item in records)),
+        calibration_score_set_checksum=_aggregate_checksums(
+            tuple(item.provenance.recalibrated_future.calibration_score_set_checksum for item in records)
+        ),
         evaluation_score_set_checksum=frozen.evaluation_score_set_checksum,
     )
     validate_frozen_recalibrated_pair(frozen, recalibrated)
@@ -855,7 +877,11 @@ def _common_completed_methods(
     frozen: TemporalStateResult,
     recalibrated: TemporalStateResult,
 ) -> tuple[FederatedThresholdMethod, ...]:
-    if not (static.completed_threshold_methods == frozen.completed_threshold_methods == recalibrated.completed_threshold_methods):
+    if not (
+        static.completed_threshold_methods
+        == frozen.completed_threshold_methods
+        == recalibrated.completed_threshold_methods
+    ):
         raise ScientificContractError(
             "all temporal states must complete the same declared threshold methods",
             subject=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
@@ -874,7 +900,9 @@ def _execution_identity(coordinate: ExperimentCoordinate) -> ExternalTemporalExe
     )
 
 
-def _declaration_identity(declaration: ExperimentDeclaration, state: TemporalState) -> ExternalTemporalExecutionIdentity:
+def _declaration_identity(
+    declaration: ExperimentDeclaration, state: TemporalState
+) -> ExternalTemporalExecutionIdentity:
     return ExternalTemporalExecutionIdentity(
         experiment=declaration.id,
         population=declaration.population,

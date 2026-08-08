@@ -272,8 +272,12 @@ def _estimation_summary(
     if not documents:
         return None, missing
 
-    cv_values = [value for document in documents if (value := _try_metric_value(document, MetricId.FPR_COEFFICIENT_OF_VARIATION))]
-    worst_values = [value for document in documents if (value := _try_metric_value(document, MetricId.WORST_CLIENT_FPR))]
+    cv_values = [
+        value for document in documents if (value := _try_metric_value(document, MetricId.FPR_COEFFICIENT_OF_VARIATION))
+    ]
+    worst_values = [
+        value for document in documents if (value := _try_metric_value(document, MetricId.WORST_CLIENT_FPR))
+    ]
     threshold_errors: list[float] = []
     attainment_errors: list[float] = []
     exceedances: list[float] = []

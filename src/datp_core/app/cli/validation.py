@@ -18,7 +18,6 @@ from datp_core.domain.errors import (
     UnknownIdentifierError,
 )
 
-
 type CliHandledError = DatpCoreError | ValueError
 
 
