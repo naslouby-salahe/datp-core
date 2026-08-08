@@ -11,7 +11,7 @@ from safetensors.torch import load_file, save_file
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
-from datp_core.datasets.partitioning.contracts import (
+from datp_core.data.populations.contracts import (
     OUTCOME_LABEL_COLUMN,
     PopulationFrameColumn,
     PopulationOutcomeLabel,

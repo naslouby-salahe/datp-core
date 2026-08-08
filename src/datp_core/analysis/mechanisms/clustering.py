@@ -7,7 +7,7 @@ from pydantic import model_validator
 from sklearn.metrics import adjusted_rand_score
 
 from datp_core.analysis.inference.wilcoxon import CorrelationCoefficient
-from datp_core.datasets.partitioning.contracts import ClientIdentity
+from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.domain.contracts import ClientOwned, StrictModel
 from datp_core.domain.enums import AvailabilityStatus, EvidenceRole, FederatedThresholdMethod
 from datp_core.domain.values.checksums import Checksum

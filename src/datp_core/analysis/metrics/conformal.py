@@ -5,7 +5,7 @@ from math import isfinite
 
 import polars as pl
 
-from datp_core.datasets.partitioning.contracts import ClientIdentity, PopulationOutcomeLabel
+from datp_core.data.populations.contracts import ClientIdentity, PopulationOutcomeLabel
 from datp_core.domain.enums import MetricId, ScoreFrameColumn
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.checksums import checksum_file

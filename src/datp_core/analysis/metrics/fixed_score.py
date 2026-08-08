@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from datp_core.datasets.partitioning.contracts import ClientIdentity
+from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.domain.enums import FederatedThresholdMethod, MetricId, PartitionRole
 from datp_core.domain.values.checksums import Checksum
 from datp_core.evaluation.cohort.contracts import EvaluationCohortManifest

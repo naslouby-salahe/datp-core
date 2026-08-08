@@ -3,7 +3,7 @@ from pathlib import Path
 
 import torch
 
-from datp_core.datasets.partitioning.contracts import ClientIdentity
+from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.domain.enums import ContractSubject, TrainingModelId
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.checksums import Checksum

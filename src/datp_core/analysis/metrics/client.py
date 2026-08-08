@@ -5,7 +5,7 @@ from math import isfinite
 
 import numpy as np
 
-from datp_core.datasets.partitioning.contracts import PopulationOutcomeLabel
+from datp_core.data.populations.contracts import PopulationOutcomeLabel
 from datp_core.domain.enums import ContractSubject, MetricId
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.counts import RowCount

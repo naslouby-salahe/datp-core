@@ -25,7 +25,7 @@ from datp_core.analysis.mechanisms import (
     summarize_threshold_movements_across_seeds,
     threshold_movements_from_evaluations,
 )
-from datp_core.datasets.partitioning.contracts import ClientIdentity
+from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.domain.enums import (
     EvidenceRole,
     ExperimentId,
@@ -377,7 +377,7 @@ def _client_evaluation_scores(
     expected_clients: tuple[ClientIdentity, ...],
     benign_only: bool,
 ) -> tuple[tuple[ClientIdentity, tuple[MetricValue, ...]], ...]:
-    from datp_core.datasets.partitioning.contracts import PopulationOutcomeLabel
+    from datp_core.data.populations.contracts import PopulationOutcomeLabel
 
     ordered_document_clients = tuple(sorted(document_clients))
     if frozenset(ordered_document_clients) != frozenset(expected_clients):

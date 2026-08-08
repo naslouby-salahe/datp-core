@@ -8,7 +8,7 @@ from numpy.typing import NDArray
 from pydantic import model_validator
 from scipy.spatial.distance import jensenshannon
 
-from datp_core.datasets.partitioning.contracts import ClientIdentity
+from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import AvailabilityStatus, EvidenceRole
 from datp_core.domain.values.base import PositiveIntegerValue

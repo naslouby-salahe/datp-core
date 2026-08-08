@@ -15,7 +15,7 @@ from datp_core.analysis.temporal import (
     TemporalSeedProvenance,
     temporal_recovery,
 )
-from datp_core.datasets.partitioning.contracts import ClientIdentity
+from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.data.registry import population_capabilities
 from datp_core.domain.enums import (
     EvaluationCohort,

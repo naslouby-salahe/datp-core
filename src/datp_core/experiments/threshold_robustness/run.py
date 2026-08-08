@@ -6,7 +6,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from datp_core.datasets.partitioning.contracts import ClientIdentity
+from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import ExperimentId, FederatedThresholdMethod, MetricId, PopulationId
 from datp_core.domain.errors import ScientificContractError

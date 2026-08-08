@@ -16,7 +16,7 @@ from datp_core.analysis.mechanisms import (
     AbsorptionSeedObservation,
     decide_absorption_cohort,
 )
-from datp_core.datasets.partitioning.contracts import ClientIdentity
+from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.data.registry import population_capabilities
 from datp_core.domain.contracts import ClientCollection, ClientOwned
 from datp_core.domain.enums import (

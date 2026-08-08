@@ -8,7 +8,7 @@ from pydantic import model_validator
 from datp_core.analysis.inference.bootstrap.contracts import BootstrapInterval
 from datp_core.analysis.inference.bootstrap.estimation import seed_level_bca_interval
 from datp_core.analysis.scientific_decision import ScientificDecision, ScientificDecisionResult
-from datp_core.datasets.partitioning.contracts import ClientIdentity
+from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
     AvailabilityStatus,

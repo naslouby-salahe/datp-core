@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
-from datp_core.datasets.partitioning.contracts import ControlledPartitionKind
+from datp_core.data.populations.contracts import ControlledPartitionKind
 from datp_core.data.registry import population_capabilities, population_declaration
 from datp_core.domain.enums import (
     ExperimentId,

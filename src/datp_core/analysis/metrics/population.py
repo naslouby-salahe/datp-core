@@ -1,6 +1,6 @@
 import numpy as np
 
-from datp_core.datasets.partitioning.contracts import ClientIdentity
+from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.domain.enums import EvaluationCohort, MetricId
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.counts import RowCount

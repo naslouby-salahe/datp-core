@@ -8,7 +8,7 @@ import polars as pl
 import torch
 from safetensors.torch import load_file
 
-from datp_core.datasets.partitioning.contracts import (
+from datp_core.data.populations.contracts import (
     OUTCOME_LABEL_COLUMN,
     STABLE_ROW_ID_COLUMN,
     PopulationOutcomeLabel,

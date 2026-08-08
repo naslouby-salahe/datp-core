@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 from dataclasses import replace
 
-from datp_core.datasets.partitioning.contracts import ClientIdentity
+from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.domain.enums import (
     CheckpointSelectionRule,
     CheckpointStatus,

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pyarrow as pa
 
-import datp_core.domain.enums as domain_enums
+import datp_core.core.identifiers as domain_enums
 from datp_core.artifacts.provenance import Checksum, checksum_text
 from datp_core.artifacts.serializers.json import canonical_json_text, canonical_mapping
 from datp_core.core.contracts import StrictModel

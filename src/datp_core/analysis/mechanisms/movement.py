@@ -4,7 +4,7 @@ from typing import ClassVar
 
 from pydantic import model_validator
 
-from datp_core.datasets.partitioning.contracts import ClientIdentity
+from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
     AvailabilityStatus,

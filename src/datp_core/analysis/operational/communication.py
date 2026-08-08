@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from enum import StrEnum
 
-from datp_core.datasets.partitioning.contracts import ClientIdentity
+from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.domain.enums import CommunicationEstimationMethod, MetricId
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.counts import ByteCount, LogicalElementCount, Seed
