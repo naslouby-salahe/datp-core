@@ -106,7 +106,6 @@ class TemporalMethodOutcome:
     row_order_checksum: Checksum
     clients: tuple[ClientMetricResult, ...]
     excluded_clients: tuple[ClientIdentity, ...]
-    exclusions: tuple[str, ...]
     unavailable_reasons: tuple[str, ...]
 
 
@@ -370,7 +369,11 @@ def _recovery_for_method(
         eligibility_checksum=frozen_outcome.eligibility_checksum,
         source_row_checksum=frozen_outcome.source_row_checksum,
         row_order_checksum=frozen_outcome.row_order_checksum,
-        exclusions=_union_text(static_outcome.exclusions, frozen_outcome.exclusions, recalibrated_outcome.exclusions),
+        excluded_clients=_union_clients(
+            static_outcome.excluded_clients,
+            frozen_outcome.excluded_clients,
+            recalibrated_outcome.excluded_clients,
+        ),
         unavailable_reasons=_union_text(
             static_outcome.unavailable_reasons,
             frozen_outcome.unavailable_reasons,
@@ -543,7 +546,7 @@ def _evaluate_state(
         if reference_evidence is None:
             reference_evidence = evaluation_inputs.fixed_score_evidence
         evidence = evaluation_inputs.fixed_score_evidence
-        exclusions, unavailable_reasons = _cohort_exclusion_records(evaluation_inputs.cohort)
+        unavailable_reasons = _cohort_unavailable_reasons(evaluation_inputs.cohort)
         completed.append(method)
         outcomes.append(
             TemporalMethodOutcome(
@@ -558,7 +561,6 @@ def _evaluate_state(
                 row_order_checksum=evidence.evaluation.score_order_checksum,
                 clients=evaluation.clients,
                 excluded_clients=evaluation.population.excluded_clients,
-                exclusions=exclusions,
                 unavailable_reasons=unavailable_reasons,
             )
         )
@@ -820,19 +822,21 @@ def _client_metric(client: ClientMetricResult | None, metric: MetricId) -> Metri
     return result.value if result.status is MetricStatus.AVAILABLE else None
 
 
-def _cohort_exclusion_records(cohort: EvaluationCohortManifest) -> tuple[tuple[str, ...], tuple[str, ...]]:
-    exclusions: list[str] = []
-    unavailable_reasons: list[str] = []
+def _cohort_unavailable_reasons(cohort: EvaluationCohortManifest) -> tuple[str, ...]:
+    reasons: list[str] = []
     for record in sorted(cohort.records, key=lambda item: item.client.client_id):
         if record.fpr_evaluable:
             continue
         client_id = record.client.client_id
-        exclusions.append(client_id)
         if record.exclusion_reasons:
-            unavailable_reasons.extend(f"{client_id}:{reason.value}" for reason in record.exclusion_reasons)
+            reasons.extend(f"{client_id}:{reason.value}" for reason in record.exclusion_reasons)
         else:
-            unavailable_reasons.append(f"{client_id}:not_fpr_evaluable")
-    return tuple(exclusions), tuple(unavailable_reasons)
+            reasons.append(f"{client_id}:not_fpr_evaluable")
+    return tuple(reasons)
+
+
+def _union_clients(*groups: tuple[ClientIdentity, ...]) -> tuple[ClientIdentity, ...]:
+    return tuple(sorted(frozenset(client for group in groups for client in group)))
 
 
 def _union_text(*groups: tuple[str, ...]) -> tuple[str, ...]:
