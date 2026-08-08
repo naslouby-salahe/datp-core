@@ -1,6 +1,6 @@
 """CICIoT2023 file-defined pseudo-client applicability-boundary specification."""
 
-from datp_core.analysis.metrics.contracts import OPERATING_POINT_METRICS
+from datp_core.protocols.metrics import OPERATING_POINT_METRICS
 from datp_core.core.identifiers import (
     EvidenceRole,
     ExperimentId,

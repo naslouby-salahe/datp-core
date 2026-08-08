@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import model_validator
 
-from datp_core.analysis.metrics.contracts import OPERATING_POINT_METRICS
+from datp_core.protocols.metrics import OPERATING_POINT_METRICS
 from datp_core.core.contracts import StrictModel
 from datp_core.core.identifiers import (
     EvidenceRole,

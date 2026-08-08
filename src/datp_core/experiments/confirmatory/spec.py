@@ -11,7 +11,7 @@ from datp_core.analysis.inference.wilcoxon import (
     WilcoxonComputationPreference,
     WilcoxonZeroMethod,
 )
-from datp_core.analysis.metrics.contracts import CONFIRMATORY_METRICS
+from datp_core.protocols.metrics import CONFIRMATORY_METRICS
 from datp_core.core.contracts import StrictModel
 from datp_core.core.identifiers import (
     EffectSizeId,

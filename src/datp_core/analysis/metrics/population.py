@@ -18,7 +18,7 @@ from datp_core.analysis.metrics.models import (
     PopulationMetricResult,
     WarningCode,
 )
-from datp_core.analysis.metrics.contracts import NEAR_ZERO_MEAN_FPR_WARNING_CUTOFF
+from datp_core.protocols.metrics import NEAR_ZERO_MEAN_FPR_WARNING_CUTOFF
 
 
 def calculate_population_metrics(

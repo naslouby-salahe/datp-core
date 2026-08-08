@@ -150,7 +150,7 @@ def _population(
 
 def _validate_confirmatory_endpoint(
     endpoint: ConfirmatoryEndpoint,
-    inference: StatisticalInferenceProtocol,
+    inference: PairedInferenceProtocol,
     experiments: tuple[ExperimentDeclaration, ...],
     populations: tuple[PopulationDeclaration, ...],
 ) -> None:
@@ -168,10 +168,10 @@ def _validate_confirmatory_endpoint(
 
 def _require_endpoint_matches_inference(
     endpoint: ConfirmatoryEndpoint,
-    inference: StatisticalInferenceProtocol,
+    inference: PairedInferenceProtocol,
 ) -> None:
-    if endpoint.seed_cohort != inference.seed_cohort:
-        raise ProtocolValidationError("Confirmatory endpoint seed cohort must match confirmatory inference")
+    if endpoint.seed_cohort.member_count != inference.paired_seed_count:
+        raise ProtocolValidationError("Confirmatory endpoint seed cohort must match confirmatory inference pair count")
     if endpoint.confidence_level != inference.confidence_level:
         raise ProtocolValidationError("Confirmatory endpoint confidence must match confirmatory inference")
 
