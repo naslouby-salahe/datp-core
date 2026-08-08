@@ -181,7 +181,9 @@ class DittoCheckpointCandidate:
                 "Ditto personalized checkpoint candidates must be unique by client",
                 subject=ContractSubject.CLIENT_IDENTITY,
             )
-        if any(candidate.round_number != self.global_candidate.round_number for candidate in self.personalized_candidates):
+        if any(
+            candidate.round_number != self.global_candidate.round_number for candidate in self.personalized_candidates
+        ):
             raise ScientificContractError(
                 "Ditto global and personalized candidates must share one checkpoint round",
                 subject=ContractSubject.CHECKPOINT_CANDIDATES,
@@ -222,7 +224,9 @@ class CentralizedCheckpointDecision:
                 subject=ContractSubject.CHECKPOINT_CANDIDATES,
             )
         if self.status is not CheckpointStatus.SELECTED_BY_NON_TEST_RULE:
-            raise ScientificContractError("centralized checkpoint decision status must be selected-by-rule", subject=self.status)
+            raise ScientificContractError(
+                "centralized checkpoint decision status must be selected-by-rule", subject=self.status
+            )
         if self.selection_rule is not CHECKPOINT_SELECTION_RULE:
             raise ScientificContractError(
                 "centralized checkpoint decision must use the fixed terminal selection rule",
@@ -249,7 +253,9 @@ def validate_persisted_checkpoint_file(
     serialization_format: SerializationFormat = SerializationFormat.SAFETENSORS,
 ) -> None:
     if not path.is_file():
-        raise ArtifactIntegrityError("checkpoint candidate tensor file is missing", subject=ContractSubject.ARTIFACT_PATH)
+        raise ArtifactIntegrityError(
+            "checkpoint candidate tensor file is missing", subject=ContractSubject.ARTIFACT_PATH
+        )
     if checksum_file(path) != checksum:
         raise ArtifactIntegrityError("checkpoint candidate checksum mismatch", subject=ContractSubject.ARTIFACT_PATH)
     if path.suffix != f".{serialization_format.value}":
@@ -272,11 +278,15 @@ def validate_ordered_checkpoint_inventory[CandidateT: PersistedCheckpoint](
         )
     paths = tuple(candidate.tensor_path for candidate in ordered)
     if len(frozenset(paths)) != len(paths):
-        raise ArtifactIntegrityError("checkpoint candidate paths must be unique", subject=ContractSubject.CHECKPOINT_CANDIDATES)
+        raise ArtifactIntegrityError(
+            "checkpoint candidate paths must be unique", subject=ContractSubject.CHECKPOINT_CANDIDATES
+        )
     return ordered
 
 
-def validate_checkpoint_inventory_files[CandidateT: CheckpointIntegrityContract](candidates: Sequence[CandidateT]) -> None:
+def validate_checkpoint_inventory_files[CandidateT: CheckpointIntegrityContract](
+    candidates: Sequence[CandidateT],
+) -> None:
     for candidate in candidates:
         validate_persisted_checkpoint_file(candidate.tensor_path, candidate.tensor_checksum)
 

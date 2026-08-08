@@ -35,7 +35,16 @@ from datp_core.core.errors import (
 )
 from datp_core.artifacts.provenance import Checksum, checksum_file, checksum_text
 from datp_core.core.identifiers import CudaDeviceName, FeatureNameSequence, OutcomeLabel, OutcomeLabelSequence
-from datp_core.core.numeric import BatchSize, FeatureCount, LearningRate, MetricValue, RoundNumber, RowCount, Seed, WeightDecay
+from datp_core.core.numeric import (
+    BatchSize,
+    FeatureCount,
+    LearningRate,
+    MetricValue,
+    RoundNumber,
+    RowCount,
+    Seed,
+    WeightDecay,
+)
 from datp_core.learning.autoencoder import (
     LEARNING_DTYPE,
     TORCH_LEARNING_DTYPE,
@@ -50,7 +59,7 @@ from datp_core.preprocessing.models import (
     FederatedFittedPreprocessingState,
     FittedPreprocessingState,
 )
-from datp_core.protocols.checkpoints import CheckpointProtocol
+from datp_core.detector.checkpoints.contracts import CheckpointProtocol
 from datp_core.protocols.training import (
     BATCH_SIZE,
     CENTRALIZED_DATALOADER_WORKER_COUNT,

@@ -69,7 +69,9 @@ class ScoreArtifact[CoordinateT: TrainingCoordinateContract]:
                 subject=self.partition_role,
             )
         if self.serialization_format is not SerializationFormat.PARQUET:
-            raise ScientificContractError("score artifacts must use Parquet serialization", subject=ContractSubject.SCHEMA)
+            raise ScientificContractError(
+                "score artifacts must use Parquet serialization", subject=ContractSubject.SCHEMA
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -228,8 +230,13 @@ def _require_record_matches_manifest[
     record: ScoreRecord[CoordinateT, ClientT],
 ) -> None:
     if record.coordinate != manifest.coordinate:
-        raise ScientificContractError("score record coordinate must match the manifest coordinate", subject=ContractSubject.COORDINATE)
-    if record.checkpoint_checksum != manifest.checkpoint_checksum or record.checkpoint_round != manifest.checkpoint_round:
+        raise ScientificContractError(
+            "score record coordinate must match the manifest coordinate", subject=ContractSubject.COORDINATE
+        )
+    if (
+        record.checkpoint_checksum != manifest.checkpoint_checksum
+        or record.checkpoint_round != manifest.checkpoint_round
+    ):
         raise ScientificContractError(
             "score record checkpoint identity must match the manifest checkpoint",
             subject=ContractSubject.CHECKPOINT_CANDIDATES,
@@ -258,7 +265,9 @@ def _require_consistent_feature_count[
 ](manifest: ScoreArtifactManifest[CoordinateT, ClientT]) -> None:
     records = (*manifest.calibration_records, *manifest.evaluation_records, *manifest.future_recalibration_records)
     if len(frozenset(record.feature_count for record in records)) != 1:
-        raise ScientificContractError("all score records must share the same feature count", subject=ContractSubject.FEATURES)
+        raise ScientificContractError(
+            "all score records must share the same feature count", subject=ContractSubject.FEATURES
+        )
 
 
 type FederatedScoreRecord = ScoreRecord[FederatedTrainingCoordinate, ClientIdentity]
@@ -301,7 +310,9 @@ class ClientScoringInput:
                 return self.calibration_features
             case PartitionRole.FUTURE_RECALIBRATION:
                 if self.future_recalibration_features is None:
-                    raise ScientificContractError("temporal score input is missing future recalibration features", subject=role)
+                    raise ScientificContractError(
+                        "temporal score input is missing future recalibration features", subject=role
+                    )
                 return self.future_recalibration_features
             case PartitionRole.EVALUATION:
                 return self.evaluation_features

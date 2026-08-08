@@ -26,8 +26,13 @@ def train_fedavg(
     learning_rate: LearningRate,
     batch_size: BatchSize,
 ) -> FederatedTrainingResult:
-    if coordinate.model is not TrainingModelId.FEDAVG_AUTOENCODER or protocol.kind is not TrainingModelId.FEDAVG_AUTOENCODER:
-        raise ScientificContractError("FedAvg training requires a FedAvg coordinate and protocol", subject=ContractSubject.TRAINING)
+    if (
+        coordinate.model is not TrainingModelId.FEDAVG_AUTOENCODER
+        or protocol.kind is not TrainingModelId.FEDAVG_AUTOENCODER
+    ):
+        raise ScientificContractError(
+            "FedAvg training requires a FedAvg coordinate and protocol", subject=ContractSubject.TRAINING
+        )
     if coordinate.model_coefficient is not None:
         raise ScientificContractError("FedAvg cannot carry a model coefficient", subject=ContractSubject.TRAINING)
     if protocol.local_epochs.value != 1:

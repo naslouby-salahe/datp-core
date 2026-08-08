@@ -40,7 +40,11 @@ from datp_core.core.identifiers import (
 )
 from datp_core.core.errors import AnchorReproductionError
 from datp_core.core.numeric import ClientCount, MetricValue, Seed, SeedCount
-from datp_core.protocols.anchor import ANCHOR_DECISION_PROTOCOL, HISTORICAL_ANCHOR_SEED_COHORT, AnchorDecisionProtocol
+from datp_core.experiments.anchor.spec import (
+    ANCHOR_DECISION_PROTOCOL,
+    HISTORICAL_ANCHOR_SEED_COHORT,
+    AnchorDecisionProtocol,
+)
 from datp_core.data.populations.declarations import NBAIOT_NATURAL_DEVICES
 from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
 

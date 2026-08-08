@@ -14,7 +14,12 @@ from datp_core.detector.training.common import (
     train_federated_global,
     train_local_model,
 )
-from datp_core.detector.training.contracts import AutoencoderProtocol, FederatedTrainingCoordinate, FedProxProtocol, OptimizerProtocol
+from datp_core.detector.training.contracts import (
+    AutoencoderProtocol,
+    FederatedTrainingCoordinate,
+    FedProxProtocol,
+    OptimizerProtocol,
+)
 
 
 def train_fedprox(
@@ -26,12 +31,21 @@ def train_fedprox(
     learning_rate: LearningRate,
     batch_size: BatchSize,
 ) -> FederatedTrainingResult:
-    if coordinate.model is not TrainingModelId.FEDPROX_AUTOENCODER or protocol.kind is not TrainingModelId.FEDPROX_AUTOENCODER:
-        raise ScientificContractError("FedProx training requires a FedProx coordinate and protocol", subject=ContractSubject.TRAINING)
+    if (
+        coordinate.model is not TrainingModelId.FEDPROX_AUTOENCODER
+        or protocol.kind is not TrainingModelId.FEDPROX_AUTOENCODER
+    ):
+        raise ScientificContractError(
+            "FedProx training requires a FedProx coordinate and protocol", subject=ContractSubject.TRAINING
+        )
     if coordinate.model_coefficient != protocol.coefficient:
-        raise ScientificContractError("FedProx coordinate coefficient must match the selected protocol", subject=ContractSubject.TRAINING)
+        raise ScientificContractError(
+            "FedProx coordinate coefficient must match the selected protocol", subject=ContractSubject.TRAINING
+        )
     if protocol.local_epochs.value != 1:
-        raise ScientificContractError("DATP-Core FedProx is locked to one local epoch", subject=ContractSubject.TRAINING)
+        raise ScientificContractError(
+            "DATP-Core FedProx is locked to one local epoch", subject=ContractSubject.TRAINING
+        )
 
     def local_update(
         *,

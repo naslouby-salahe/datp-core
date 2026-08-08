@@ -22,7 +22,7 @@ from datp_core.experiments.planning import (
     expand_experiment_plan,
     merge_experiment_plans,
 )
-from datp_core.protocols.anchor import HISTORICAL_ANCHOR_SEED_COHORT
+from datp_core.experiments.anchor.spec import HISTORICAL_ANCHOR_SEED_COHORT
 from datp_core.protocols.calibration import require_calibration_subsample_replicate_count
 from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration
 from datp_core.data.populations.declarations import POPULATIONS

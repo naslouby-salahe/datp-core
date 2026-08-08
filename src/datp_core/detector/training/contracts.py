@@ -280,15 +280,23 @@ def _require_model_coefficient(
     match model:
         case TrainingModelId.FEDAVG_AUTOENCODER:
             if coefficient is not None:
-                raise ScientificContractError("FedAvg coordinates carry no model coefficient", subject=ContractSubject.TRAINING)
+                raise ScientificContractError(
+                    "FedAvg coordinates carry no model coefficient", subject=ContractSubject.TRAINING
+                )
         case TrainingModelId.FEDPROX_AUTOENCODER:
             if not isinstance(coefficient, ProximalCoefficient):
-                raise ScientificContractError("FedProx coordinates require a proximal coefficient", subject=ContractSubject.TRAINING)
+                raise ScientificContractError(
+                    "FedProx coordinates require a proximal coefficient", subject=ContractSubject.TRAINING
+                )
         case TrainingModelId.DITTO_GLOBAL_AUTOENCODER | TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER:
             if not isinstance(coefficient, DittoRegularization):
-                raise ScientificContractError("Ditto coordinates require a personalization regularization value", subject=ContractSubject.TRAINING)
+                raise ScientificContractError(
+                    "Ditto coordinates require a personalization regularization value", subject=ContractSubject.TRAINING
+                )
         case _:
-            raise ScientificContractError(f"unsupported federated training model {model}", subject=ContractSubject.TRAINING)
+            raise ScientificContractError(
+                f"unsupported federated training model {model}", subject=ContractSubject.TRAINING
+            )
 
 
 @dataclass(frozen=True, slots=True)

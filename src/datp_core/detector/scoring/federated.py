@@ -39,7 +39,7 @@ from datp_core.pipeline.scoring.models import (
     ScoreGenerationRequest,
 )
 from datp_core.preprocessing.contracts import scored_partition_roles
-from datp_core.protocols.inference import (
+from datp_core.detector.scoring.contracts import (
     FixedScoreInvariant,
     ScoreArtifactManifest,
     ScoreGenerationResult,

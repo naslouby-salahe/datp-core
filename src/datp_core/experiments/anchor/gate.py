@@ -21,7 +21,7 @@ from datp_core.artifacts.provenance import Checksum, checksum_text
 from datp_core.artifacts.serializers.json import canonical_checksum, canonical_json_text
 from datp_core.core.errors import AnchorReproductionError
 from datp_core.core.identifiers import ExperimentReadiness, PreprocessingProtocolId, ScoreFrameColumn
-from datp_core.protocols.anchor import ANCHOR_DECISION_PROTOCOL
+from datp_core.experiments.anchor.spec import ANCHOR_DECISION_PROTOCOL
 from datp_core.protocols.metrics import CONFIRMATORY_METRICS
 from datp_core.data.populations.declarations import split_protocol_for_population
 from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL
