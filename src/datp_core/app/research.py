@@ -207,13 +207,13 @@ def _publish_smoke_summary(results: tuple[ExperimentRunResult, ...]) -> None:
 def _run_centralized_reference(overwrite: OverwriteMode) -> None:
     from datp_core.experiments.centralized_reference import (
         CIC_CENTRALIZED_REFERENCE,
-        REGIME_A_CENTRALIZED_REFERENCE,
+        NBAIOT_CENTRALIZED_REFERENCE,
         centralized_reference_completion_marker,
         centralized_reference_directory,
         run_centralized_reference_seed,
     )
 
-    for scope in (REGIME_A_CENTRALIZED_REFERENCE, CIC_CENTRALIZED_REFERENCE):
+    for scope in (NBAIOT_CENTRALIZED_REFERENCE, CIC_CENTRALIZED_REFERENCE):
         marker = centralized_reference_completion_marker(scope)
         if marker.is_file() and not overwrite.requested:
             continue

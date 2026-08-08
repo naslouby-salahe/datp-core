@@ -513,7 +513,7 @@ def run_size_aware_shrinkage_seed(
         seed_cohort=SeedCohort(values=(training_seed,)),
         reason=(
             "size-aware shrinkage executes its declared reference corners only because "
-            "the roadmap does not declare a lambda(n_k) function"
+            "no lambda(n_k) function is declared"
         ),
         output_root=output_root,
         overwrite=overwrite,

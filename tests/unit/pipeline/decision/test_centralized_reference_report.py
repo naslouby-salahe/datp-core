@@ -18,7 +18,7 @@ from datp_core.core.numeric import MetricValue, RowCount, Seed, ThresholdValue
 from datp_core.detector.training.centralized import CentralizedTrainingCoordinate
 from datp_core.experiments.centralized_reference import (
     CIC_CENTRALIZED_REFERENCE,
-    REGIME_A_CENTRALIZED_REFERENCE,
+    NBAIOT_CENTRALIZED_REFERENCE,
     CentralizedReferenceArtifactDirectory,
     CentralizedReferenceReportAsset,
     CentralizedReferenceReportManifest,
@@ -85,7 +85,7 @@ def test_report_centralized_reference_publishes_validated_b0_evidence(tmp_path: 
     output_root = tmp_path / "outputs"
     _write_independent_reference(output_root)
     report_directory = report_centralized_reference(
-        REGIME_A_CENTRALIZED_REFERENCE, output_root=output_root, overwrite=False
+        NBAIOT_CENTRALIZED_REFERENCE, output_root=output_root, overwrite=False
     )
 
     assert (report_directory / CentralizedReferenceReportAsset.MANIFEST).is_file()
@@ -133,7 +133,7 @@ def test_report_centralized_reference_fails_closed_without_root_completion(tmp_p
             "complete", encoding="utf-8"
         )
     with pytest.raises(ReportEvidenceError, match="completion marker is missing"):
-        report_centralized_reference(REGIME_A_CENTRALIZED_REFERENCE, output_root=output_root, overwrite=False)
+        report_centralized_reference(NBAIOT_CENTRALIZED_REFERENCE, output_root=output_root, overwrite=False)
 
 
 def test_report_centralized_reference_fails_closed_without_per_seed_evaluation(tmp_path: Path) -> None:
@@ -142,4 +142,4 @@ def test_report_centralized_reference_fails_closed_without_per_seed_evaluation(t
     root.mkdir(parents=True, exist_ok=True)
     (root / CentralizedReferenceReportAsset.COMPLETE).write_text("complete", encoding="utf-8")
     with pytest.raises(ReportEvidenceError, match="evaluation is incomplete for seed 0"):
-        report_centralized_reference(REGIME_A_CENTRALIZED_REFERENCE, output_root=output_root, overwrite=False)
+        report_centralized_reference(NBAIOT_CENTRALIZED_REFERENCE, output_root=output_root, overwrite=False)

@@ -594,7 +594,7 @@ def _capture_timestamp_column_for_split(
 ) -> CaptureTimestampColumn | None:
     """Resolve the audited capture-time column required for chronological splits.
 
-    Temporal partitioning is roadmap-locked to verified Edge capture timestamps.
+    Temporal partitioning is locked to verified Edge capture timestamps.
     Non-temporal protocols never invent a time column.
     """
     if split_protocol is not SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE:

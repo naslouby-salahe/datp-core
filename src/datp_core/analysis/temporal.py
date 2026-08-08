@@ -714,7 +714,7 @@ class TemporalDecisionProtocol(StrictModel):
 
 def require_temporal_decision_protocol() -> TemporalDecisionProtocol:
     raise UnresolvedScientificValueError(
-        "the master roadmap requires a pre-specified positive drift-excess materiality threshold "
-        "and a criterion for a meaningful recovery portion, but does not declare either numeric value",
+        "a positive drift-excess materiality threshold and a meaningful-recovery criterion must be "
+        "pre-specified, but neither numeric value is declared",
         subject=EvidenceRole.TEMPORAL_BOUNDARY,
     )

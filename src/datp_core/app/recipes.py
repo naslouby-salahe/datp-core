@@ -343,7 +343,7 @@ def _dispatch_robustness(
                     )
                 ),
                 detail=DetailText(
-                    "no lambda(n_k) function is declared by the roadmap; inventing one is scientifically forbidden"
+                    "no lambda(n_k) function is declared; inventing one is scientifically forbidden"
                     if method is FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE
                     else (
                         f"executed across all {len(results)} runs"
@@ -427,12 +427,12 @@ def _dispatch_analysis(experiment_id: ExperimentId) -> DispatchOutcome:
 def _report_confirmatory(experiment_id: ExperimentId, overwrite: OverwriteMode) -> tuple[tuple[Path, ...], DetailText]:
     del experiment_id
     from datp_core.experiments.centralized_reference import (
-        REGIME_A_CENTRALIZED_REFERENCE,
+        NBAIOT_CENTRALIZED_REFERENCE,
         report_centralized_reference,
     )
 
     centralized = report_centralized_reference(
-        REGIME_A_CENTRALIZED_REFERENCE, output_root=OUTPUTS_ROOT, overwrite=overwrite.requested
+        NBAIOT_CENTRALIZED_REFERENCE, output_root=OUTPUTS_ROOT, overwrite=overwrite.requested
     )
     path = analyze_confirmatory_campaign(anchor_gate_diagnostics_directory=ANCHOR_DIAGNOSTICS_DIRECTORY)
     return (centralized, path), DetailText(f"centralized_reference={centralized} confirmatory={path}")

@@ -530,7 +530,7 @@ def _grouped_dispersion_evidence(
     result: GroupedThresholdResult,
     cluster_document: FederatedEvaluationDocument,
 ) -> GroupedDispersionResult:
-    """Build within/across-group threshold and FPR dispersion from B4 memberships and cluster evaluations."""
+    """Build within/across-group threshold and FPR dispersion from group memberships and cluster evaluations."""
     fpr_by_client = {
         item.client: metric_by_id(item.metrics, MetricId.FALSE_POSITIVE_RATE)
         for item in cluster_document.clients

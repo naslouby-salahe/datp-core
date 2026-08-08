@@ -113,6 +113,6 @@ def construct_size_aware_shrinkage(coordinate: FederatedTrainingCoordinate) -> T
         coordinate=coordinate,
         reason=ThresholdInfeasibilityReason.SIZE_AWARE_SHRINKAGE_FUNCTION_UNRESOLVED,
         detail=(
-            "The roadmap requires lambda(n_k) to be predeclared, but no size-aware function is scientifically locked."
+            "Lambda(n_k) must be predeclared, but no size-aware function is scientifically locked."
         ),
     )

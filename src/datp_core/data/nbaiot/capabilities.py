@@ -103,31 +103,31 @@ NBAIOT_CAPABILITIES = DatasetCapabilities(
         ThresholdMethodCapability(
             status=CapabilityStatus.SUPPORTED,
             evidence="Eligible clients supply benign calibration scores for pooled quantile construction.",
-            reason="Pooled shared quantile is a shared-construction control on Regime A.",
+            reason="Pooled shared quantile is a shared-construction control for the natural-device population.",
             method=FederatedThresholdMethod.POOLED_SHARED_QUANTILE,
         ),
         ThresholdMethodCapability(
             status=CapabilityStatus.SUPPORTED,
             evidence="Eligible clients supply benign calibration counts for sample-weighted shared construction.",
-            reason="Sample-weighted shared threshold is a shared-construction control on Regime A.",
+            reason="Sample-weighted shared threshold is a shared-construction control for natural devices.",
             method=FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD,
         ),
         ThresholdMethodCapability(
             status=CapabilityStatus.SUPPORTED,
             evidence="Shared and local endpoints are available under one frozen detector.",
-            reason="The predeclared fixed-lambda shrinkage curve is supported on Regime A.",
+            reason="The predeclared fixed-lambda shrinkage curve is supported for the natural-device population.",
             method=FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE,
         ),
         ThresholdMethodCapability(
             status=CapabilityStatus.SUPPORTED,
             evidence="Eligible clients supply ordered benign calibration scores for finite-sample conformal ranks.",
-            reason="Local conformal threshold is a supportive coverage diagnostic on Regime A.",
+            reason="Local conformal threshold is a supportive coverage diagnostic for the natural-device population.",
             method=FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD,
         ),
         ThresholdMethodCapability(
             status=CapabilityStatus.SUPPORTED,
             evidence="Eligible clients can publish benign-only summary statistics under the declared comparator.",
-            reason="Federated benign-statistics is a threshold-variant comparator on Regime A.",
+            reason="Federated benign-statistics is a threshold-variant comparator for the natural-device population.",
             method=FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS,
         ),
         ThresholdMethodCapability(

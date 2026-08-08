@@ -9,7 +9,7 @@ def test_nbaio_capability_boundaries() -> None:
     assert NBAIOT_CAPABILITIES.family_taxonomy.status is CapabilityStatus.SUPPORTED
 
 
-def test_nbaiot_declares_roadmap_threshold_variants_as_supported() -> None:
+def test_nbaiot_declares_threshold_variants_as_supported() -> None:
     methods = {capability.method: capability.status for capability in NBAIOT_CAPABILITIES.threshold_methods}
     for method in (
         FederatedThresholdMethod.SHARED_THRESHOLD,

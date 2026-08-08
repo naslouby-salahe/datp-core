@@ -1,6 +1,6 @@
-"""Privacy-incompatible centralized reference (B0) execution and report consumption.
+"""Privacy-incompatible centralized reference execution and report consumption.
 
-B0 is a pooled-data centralized autoencoder reference with a pooled benign quantile
+The centralized reference is a pooled-data autoencoder baseline with a pooled benign quantile
 threshold. It provides context for the cost of federation and is never part of the
 federated threshold-scope causal ladder. Every scope uses its own pooled
 preprocessing, model, and scores; federated state is never reused.
@@ -103,7 +103,7 @@ class CentralizedReferenceScope:
     claim_wording: str
 
 
-REGIME_A_CENTRALIZED_REFERENCE = CentralizedReferenceScope(
+NBAIOT_CENTRALIZED_REFERENCE = CentralizedReferenceScope(
     population=PopulationId.NBAIOT_NATURAL_DEVICES,
     dataset=DatasetId.NBAIOT,
     autoencoder=NBAIOT_AUTOENCODER,
@@ -258,11 +258,12 @@ def report_centralized_reference(
     output_root: Path,
     overwrite: bool,
 ) -> Path:
-    """Validate every independent B0 artifact and publish the contextual reference."""
+    """Validate every independent centralized-reference artifact and publish the contextual reference."""
     root = output_root / CentralizedReferenceArtifactDirectory.ROOT / scope.population.value
     if not (root / CentralizedReferenceReportAsset.COMPLETE).is_file():
         raise ReportEvidenceError(
-            "centralized reference completion marker is missing; B0 seed artifacts are not all present",
+            "centralized reference completion marker is missing; "
+            "centralized-reference seed artifacts are not all present",
             subject=scope.population,
         )
     evaluations: list[CentralizedEvaluationDocument] = []

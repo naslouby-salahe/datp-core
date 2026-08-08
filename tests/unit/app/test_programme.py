@@ -59,9 +59,9 @@ def test_calibration_size_ablation_is_blocked_until_replicate_count_is_declared(
     assert presentation.plan.executable == ()
     assert presentation.plan.entries
     assert all(entry.disposition is PlanDisposition.BLOCKED for entry in presentation.plan.entries)
-    assert all("does not declare their count" in entry.reason for entry in presentation.plan.entries)
+    assert all("their count is not declared" in entry.reason for entry in presentation.plan.entries)
 
-    with pytest.raises(UnresolvedScientificValueError, match="does not declare their count"):
+    with pytest.raises(UnresolvedScientificValueError, match="their count is not declared"):
         require_experiment_execution_ready(ExperimentId.CALIBRATION_SIZE_ABLATION)
 
 

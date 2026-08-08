@@ -254,7 +254,7 @@ CLUSTER_MEDIAN_THRESHOLD_PROTOCOL = ClusterThresholdProtocol(
 
 def require_calibration_subsample_replicate_count() -> SubsampleReplicateCount:
     raise UnresolvedScientificValueError(
-        "the master roadmap requires multiple deterministic calibration subsampling replicates "
-        "but does not declare their count",
+        "multiple deterministic calibration subsampling replicates must be pre-specified, "
+        "but their count is not declared",
         subject=ContractSubject.CALIBRATION,
     )

@@ -96,7 +96,7 @@ def test_graph_rejects_temporal_experiment_without_verified_chronology() -> None
 def test_temporal_decision_protocol_raises_until_criteria_are_predeclared() -> None:
     from datp_core.analysis.temporal import require_temporal_decision_protocol
 
-    with pytest.raises(UnresolvedScientificValueError, match="does not declare either numeric value"):
+    with pytest.raises(UnresolvedScientificValueError, match="neither numeric value is declared"):
         require_temporal_decision_protocol()
 
 
