@@ -85,7 +85,7 @@ def executable_planning_evidence(experiment_id: ExperimentId) -> PlanningEvidenc
 
 
 def validate_programme(experiment_id: ExperimentId | None) -> ValidationResult:
-    from datp_core.app.campaign import anchor_gated_experiment_ids, registered_experiment_ids
+    from datp_core.app.research import anchor_gated_experiment_ids, registered_experiment_ids
 
     graph = validate_protocol_graph(CANONICAL_PROTOCOL_GRAPH)
     registered = registered_experiment_ids()
@@ -108,9 +108,7 @@ def validate_programme(experiment_id: ExperimentId | None) -> ValidationResult:
     known_populations = frozenset(population.id for population in POPULATIONS)
     for declaration in graph.experiments:
         if declaration.population not in known_populations:
-            raise ProtocolValidationError(
-                f"experiment references unknown population: {declaration.id.value}",
-            )
+            raise ProtocolValidationError(f"experiment references unknown population: {declaration.id.value}")
     if experiment_id is None:
         experiment_ids = tuple(
             item.id for item in graph.experiments if item.id is not ExperimentId.HISTORICAL_DATP_REPRODUCTION
@@ -162,7 +160,7 @@ def _plan_for_declaration(declaration: ExperimentDeclaration) -> ExperimentPlan:
 
 
 def build_programme_plan(experiment_id: ExperimentId | None) -> PlanPresentation:
-    from datp_core.app.campaign import anchor_gated_experiment_ids
+    from datp_core.app.research import anchor_gated_experiment_ids
 
     validation = validate_programme(experiment_id)
     declarations = EXPERIMENTS if experiment_id is None else (require_experiment_declaration(experiment_id),)
@@ -177,9 +175,7 @@ def build_programme_plan(experiment_id: ExperimentId | None) -> PlanPresentation
         )
         for declaration in declarations
     )
-    anchor_required = tuple(
-        item for item in experiment_ids if item in frozenset(anchor_gated_experiment_ids())
-    )
+    anchor_required = tuple(item for item in experiment_ids if item in frozenset(anchor_gated_experiment_ids()))
     return PlanPresentation(
         plan=plan,
         experiment_ids=experiment_ids,
@@ -207,3 +203,21 @@ def preprocess_datasets(
         for publication in result.publications
     )
     return PreprocessResult(datasets=datasets, publications=publications)
+
+
+def format_plan(presentation: PlanPresentation) -> str:
+    lines = [
+        f"plan_digest={presentation.plan.digest.value}",
+        f"entries={len(presentation.plan.entries)}",
+        f"executable={len(presentation.plan.executable)}",
+        f"experiments={','.join(item.value for item in presentation.experiment_ids)}",
+        f"registered={','.join(item.value for item in presentation.registered_recipes)}",
+        f"anchor_required={','.join(item.value for item in presentation.anchor_required)}",
+    ]
+    for experiment_id, seeds in presentation.seed_cohorts:
+        lines.append(f"seeds[{experiment_id.value}]={','.join(str(seed.value) for seed in seeds)}")
+    for disposition in PlanDisposition:
+        count = sum(1 for entry in presentation.plan.entries if entry.disposition is disposition)
+        if count:
+            lines.append(f"disposition[{disposition.value}]={count}")
+    return "\n".join(lines)
