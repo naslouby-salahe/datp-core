@@ -20,7 +20,7 @@ from datp_core.domain.values.checksums import checksum_file
 from datp_core.domain.values.counts import CalibrationSize, ClientCount, ReplicateIndex
 from datp_core.domain.values.identifiers import FeatureNameSequence, StableRowId
 from datp_core.domain.values.ratios import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE, Quantile, ScoreValue
-from datp_core.evaluation.communication import (
+from datp_core.analysis.operational.communication import (
     CommunicationMessageDiagnostic,
     MessageDirection,
     SerializedPayloadEvidence,

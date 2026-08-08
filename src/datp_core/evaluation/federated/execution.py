@@ -49,14 +49,14 @@ from datp_core.analysis.metrics.models import (
     PopulationMetricResult,
     metric_by_id,
 )
-from datp_core.evaluation.operational import AlertBurdenDiagnostic, calculate_alert_burden
+from datp_core.analysis.operational.alert_burden import AlertBurdenDiagnostic, calculate_alert_burden
 from datp_core.analysis.metrics.population import calculate_population_metrics
 from datp_core.analysis.metrics.threshold_estimation import (
     ThresholdEstimationDiagnostic,
     evaluate_threshold_estimate,
     sample_efficiency_curve,
 )
-from datp_core.evaluation.traffic_rates import ValidatedTrafficRateEvidence
+from datp_core.analysis.operational.traffic_rates import ValidatedTrafficRateEvidence
 from datp_core.detector.training.models import FederatedTrainingCoordinate
 from datp_core.protocols.experiments import require_execution_identity
 from datp_core.thresholds.contracts import ThresholdAssignment, ThresholdUnavailableResult

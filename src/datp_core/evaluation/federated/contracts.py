@@ -11,18 +11,18 @@ from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import CalibrationSize, ReplicateIndex
 from datp_core.domain.values.ratios import CoverageTarget, ShrinkageWeight, ThresholdValue
 from datp_core.analysis.metrics.cohorts import EvaluationCohortManifest
-from datp_core.evaluation.communication import CommunicationDiagnostic, CommunicationMessageDiagnostic
+from datp_core.analysis.operational.communication import CommunicationDiagnostic, CommunicationMessageDiagnostic
 from datp_core.analysis.metrics.conformal import ConformalCoverageDiagnostic
 from datp_core.analysis.metrics.fixed_score import FixedScoreEvidence
 from datp_core.analysis.metrics.models import ClientMetricResult, HeldOutBenignScore, PopulationMetricResult
-from datp_core.evaluation.operational import AlertBurdenDiagnostic
+from datp_core.analysis.operational.alert_burden import AlertBurdenDiagnostic
 from datp_core.analysis.metrics.threshold_estimation import (
     SampleEfficiencyPoint,
     ThresholdEstimationDiagnostic,
     ThresholdEstimationProvenance,
 )
 from datp_core.evaluation.threshold_evidence import VerifiedHeldOutBenignScores
-from datp_core.evaluation.traffic_rates import ValidatedTrafficRateEvidence
+from datp_core.analysis.operational.traffic_rates import ValidatedTrafficRateEvidence
 from datp_core.detector.training.models import FederatedTrainingCoordinate
 from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
 from datp_core.protocols.temporal import TemporalDeploymentProvenance
