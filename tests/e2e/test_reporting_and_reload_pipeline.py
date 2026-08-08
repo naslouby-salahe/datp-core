@@ -2,9 +2,9 @@ from pathlib import Path
 
 from datp_core.domain.enums import AvailabilityStatus, EvidenceRole, ExperimentId, MetricId, PopulationId
 from datp_core.domain.values.checksums import checksum_text
-from datp_core.reporting.export import PublicationBundle, ReportProvenance, export_markdown
-from datp_core.reporting.tables import PublicationTable, TableCell
-from datp_core.reporting.validation import (
+from datp_core.presentation.export import PublicationBundle, ReportProvenance, export_markdown
+from datp_core.presentation.tables import PublicationTable, TableCell
+from datp_core.presentation.validation import (
     ClaimKind,
     ClaimRequest,
     ClaimStatus,
@@ -16,7 +16,6 @@ from datp_core.reporting.validation import (
 def test_reporting_export_is_deterministic_and_preserves_provenance_and_unavailable_outcomes(
     tmp_path: Path,
 ) -> None:
-    # Confirmatory claims fail closed without a checksum-verified anchor-gate artifact.
     blocked_confirmatory = validate_claim(
         ClaimRequest(
             kind=ClaimKind.CONFIRMATORY,
