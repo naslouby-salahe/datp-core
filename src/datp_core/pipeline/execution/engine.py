@@ -1,11 +1,4 @@
-"""Recipe resolution, deterministic campaign construction, and stage sequencing.
-
-The VERIFY_ANCHOR stage is the one narrow, deliberate exception to the services-do-not-
-import-workflows direction: anchor verification is a self-contained scientific gate over
-``datp_core.anchor`` with no further dependency on any other service or workflow, it applies
-only to the rare historical-reproduction recipe, and importing it here creates no import
-cycle (``workflows.anchor`` never imports this module).
-"""
+"""Deterministic stage execution over already-planned experiment coordinates."""
 
 from __future__ import annotations
 
@@ -13,7 +6,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from shutil import rmtree
 
-from datp_core.anchor.models import AnchorGateStatus
 from datp_core.datasets.service import DatasetMaterializationRequest, materialize_datasets
 from datp_core.domain.enums import ExperimentId, PublicationStatus
 from datp_core.domain.errors import ScientificContractError
@@ -28,7 +20,6 @@ from datp_core.pipeline.execution.layout import EvaluationRunAssetDirectory
 from datp_core.pipeline.execution.models import (
     ANCHOR_REPRODUCTION_RECIPE,
     STANDARD_FEDERATED_RECIPE,
-    CampaignEntry,
     CampaignExecution,
     CampaignPlan,
     ExecutionProvenance,
@@ -40,10 +31,8 @@ from datp_core.pipeline.execution.models import (
     StageExecution,
     StageOutcome,
     StageRunner,
-    campaign_digest,
 )
 from datp_core.pipeline.execution.workspace import ExperimentWorkspace
-from datp_core.pipeline.planning import ExperimentPlan, PlanDisposition, expand_experiment_plan
 from datp_core.pipeline.publication.layout import experiment_output_directory
 from datp_core.pipeline.publication.models import ArtifactKind, ArtifactRecord, ArtifactState, CompletionState
 from datp_core.pipeline.publication.service import (
@@ -52,12 +41,9 @@ from datp_core.pipeline.publication.service import (
     validate_reload,
     write_completion_record,
 )
-from datp_core.pipeline.workflows.anchor import VerifyAnchorStageRequest, verify_anchor
-from datp_core.protocols.anchor import ANCHOR_DECISION_PROTOCOL
 from datp_core.protocols.experiments import EXPERIMENTS
 from datp_core.protocols.graph import ObservationBoundary, ObservationContext, ObservationHook, observe_graph_boundary
 from datp_core.protocols.inference import FixedScoreInvariant
-from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT
 from datp_core.runtime.configuration import DATA_ROOT
 
 
@@ -65,30 +51,12 @@ def resolve_execution_recipe(coordinate: ExperimentCoordinate) -> ExecutionRecip
     route = execution_route_for(coordinate)
     if route is not ExecutionRoute.SINGLE_COORDINATE:
         raise ScientificContractError(
-            f"{route.value} coordinates execute through their dedicated joint workflow, not a single-coordinate recipe",
+            f"{route.value} coordinates require their dedicated joint experiment execution route",
             subject=coordinate.experiment,
         )
     if coordinate.experiment is ExperimentId.HISTORICAL_DATP_REPRODUCTION:
         return ANCHOR_REPRODUCTION_RECIPE
     return STANDARD_FEDERATED_RECIPE
-
-
-def build_campaign(plan: ExperimentPlan) -> CampaignPlan:
-    coordinates = tuple(
-        entry.coordinate
-        for entry in plan.entries
-        if entry.disposition is PlanDisposition.EXECUTABLE
-        and execution_route_for(entry.coordinate) is ExecutionRoute.SINGLE_COORDINATE
-    )
-    entries = tuple(CampaignEntry(ordinal=index, coordinate=coordinate) for index, coordinate in enumerate(coordinates))
-    return CampaignPlan(entries=entries, digest=campaign_digest(entries), plan_digest=plan.digest)
-
-
-def plan_and_build_campaign() -> tuple[ExperimentPlan, CampaignPlan]:
-    """Expand the canonical experiment plan and build its executable campaign in one call."""
-
-    plan = expand_experiment_plan(declarations=EXPERIMENTS, seed_cohort=CONFIRMATORY_SEED_COHORT)
-    return plan, build_campaign(plan)
 
 
 def protocol_digest() -> Checksum:
@@ -102,7 +70,7 @@ def execute_experiment(
     stage_runner: StageRunner,
     output_store: ExperimentOutputStore,
     output_root: Path,
-    overwrite: bool = False,
+    overwrite: bool,
 ) -> ExperimentExecution:
     recipe = resolve_execution_recipe(coordinate)
     existing_state = output_store.state(coordinate, output_root, provenance)
@@ -138,7 +106,7 @@ def execute_campaign(
     stage_runner: StageRunner,
     output_store: ExperimentOutputStore,
     output_root: Path,
-    overwrite: bool = False,
+    overwrite: bool,
 ) -> CampaignExecution:
     provenance = ExecutionProvenance(
         plan_digest=campaign.plan_digest,
@@ -205,7 +173,7 @@ def _observed_artifacts(output_root: Path, declared: tuple[ArtifactRecord, ...])
 
 @dataclass
 class PipelineStageRunner:
-    """Coordinates services through one cached :class:`ExperimentWorkspace` per coordinate."""
+    """Execute lower-level capability stages for one coordinate at a time."""
 
     observation_hook: ObservationHook | None = None
     _workspace: ExperimentWorkspace | None = field(default=None, init=False, repr=False)
@@ -284,14 +252,12 @@ class PipelineStageRunner:
                 return self._evaluate_detector(stage, coordinate, workspace)
             case PipelineStage.ANALYZE_EVIDENCE:
                 return self._analyze_evidence(stage, coordinate, workspace)
-            case PipelineStage.VERIFY_ANCHOR:
-                return self._verify_anchor(stage, coordinate, workspace)
             case PipelineStage.FINALIZE_PUBLICATION:
                 return self._finalize_publication(stage, coordinate, provenance, output_root, workspace)
+        raise ScientificContractError(f"unsupported execution stage: {stage.value}", subject=coordinate.experiment)
 
     def _materialize_dataset(self, stage: PipelineStage, coordinate: ExperimentCoordinate) -> StageExecution:
-        request = DatasetMaterializationRequest(data_root=DATA_ROOT, datasets=(coordinate.dataset,))
-        result = materialize_datasets(request)
+        result = materialize_datasets(DatasetMaterializationRequest(data_root=DATA_ROOT, datasets=(coordinate.dataset,)))
         publication = result.publications[0]
         return StageExecution(
             stage=stage,
@@ -301,8 +267,11 @@ class PipelineStageRunner:
 
     def _train_detector(self, stage: PipelineStage, workspace: ExperimentWorkspace) -> StageExecution:
         result = workspace.training
-        published = result.publication_status is PublicationStatus.PUBLISHED
-        outcome = StageOutcome.COMPLETED if published else StageOutcome.REUSED
+        outcome = (
+            StageOutcome.COMPLETED
+            if result.publication_status is PublicationStatus.PUBLISHED
+            else StageOutcome.REUSED
+        )
         return StageExecution(
             stage=stage,
             outcome=outcome,
@@ -341,11 +310,7 @@ class PipelineStageRunner:
                 f"replicates={len(lattice.replicate_manifests)}"
             )
         self._observe(ObservationBoundary.AFTER_CALIBRATION_BEFORE_THRESHOLD_CONSTRUCTION, coordinate, checksum)
-        return StageExecution(
-            stage=stage,
-            outcome=StageOutcome.COMPLETED,
-            evidence=evidence,
-        )
+        return StageExecution(stage=stage, outcome=StageOutcome.COMPLETED, evidence=evidence)
 
     def _construct_thresholds(
         self,
@@ -388,82 +353,6 @@ class PipelineStageRunner:
             evidence=f"metric={coordinate.metric.value} status={result.status.value}",
         )
 
-    def _verify_anchor(
-        self,
-        stage: PipelineStage,
-        coordinate: ExperimentCoordinate,
-        workspace: ExperimentWorkspace,
-    ) -> StageExecution:
-        """Register this coordinate's independent observation when eligible; gate is cohort-level.
-
-        Seed-level VERIFY_ANCHOR stages complete after publishing the local observation so
-        training/evaluation can finish for every historical seed. The programme-level
-        ``anchor reproduce`` / ``anchor verify`` commands resolve the full five-seed gate.
-        """
-        if coordinate.experiment is not ExperimentId.HISTORICAL_DATP_REPRODUCTION:
-            raise ScientificContractError(
-                "the anchor gate applies only to the historical reproduction experiment",
-                subject=coordinate.experiment,
-            )
-        from datp_core.domain.enums import FederatedThresholdMethod, MetricId
-        from datp_core.pipeline.workflows.anchor import (
-            collect_independent_observations_from_evaluations,
-            default_anchor_diagnostics_directory,
-            independent_package_directory,
-            observation_from_evaluation_document,
-            publish_independent_observations,
-        )
-
-        diagnostics_directory = default_anchor_diagnostics_directory(workspace.output_root)
-        package_directory = independent_package_directory(workspace.output_root)
-        eligible = coordinate.metric is MetricId.FPR_COEFFICIENT_OF_VARIATION and coordinate.threshold_method in {
-            FederatedThresholdMethod.SHARED_THRESHOLD,
-            FederatedThresholdMethod.LOCAL_THRESHOLD,
-        }
-        if eligible:
-            document_path = (
-                workspace.run_directory()
-                / EvaluationRunAssetDirectory.EVALUATION
-                / FederatedEvaluationAssetName.DOCUMENT
-            )
-            if document_path.is_file():
-                try:
-                    document = workspace.evaluation_document()
-                    observation_from_evaluation_document(document, document_path=document_path)
-                except ScientificContractError:
-                    document = None
-                else:
-                    observations = collect_independent_observations_from_evaluations(output_root=workspace.output_root)
-                    if observations:
-                        publish_independent_observations(package_directory, observations)
-        result = verify_anchor(
-            VerifyAnchorStageRequest(
-                protocol=ANCHOR_DECISION_PROTOCOL,
-                diagnostics_directory=diagnostics_directory,
-                independent_package_directory=package_directory,
-                request_independent_reproduction=True,
-            )
-        )
-        # Incomplete independent packages leave the gate blocked without stopping remaining seeds.
-        # A complete package that fails equivalence surfaces as a blocked stage outcome.
-        expected_observations = len(ANCHOR_DECISION_PROTOCOL.references)
-        complete_cohort = result.status.observation_count.value >= expected_observations
-        outcome = (
-            StageOutcome.BLOCKED
-            if result.status.gate_status is AnchorGateStatus.BLOCKED and complete_cohort
-            else StageOutcome.COMPLETED
-        )
-        return StageExecution(
-            stage=stage,
-            outcome=outcome,
-            evidence=(
-                f"gate={result.status.gate_status.value} "
-                f"readiness={result.status.dependent_readiness.value} "
-                f"observations={result.status.observation_count.value} "
-                f"diagnostics={diagnostics_directory}"
-            ),
-        )
-
     def _finalize_publication(
         self,
         stage: PipelineStage,
@@ -476,7 +365,6 @@ class PipelineStageRunner:
         evaluation_directory = workspace.run_directory() / EvaluationRunAssetDirectory.EVALUATION
         evaluation_document_path = evaluation_directory / FederatedEvaluationAssetName.DOCUMENT
         evaluation_complete_path = evaluation_directory / FederatedEvaluationAssetName.COMPLETE
-        # Fail closed unless the document and COMPLETE marker agree on identity.
         load_evaluation_document(evaluation_document_path)
         artifacts = (
             ArtifactRecord(
