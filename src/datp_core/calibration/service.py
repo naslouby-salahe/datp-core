@@ -20,7 +20,7 @@ from datp_core.domain.enums import ScoreFrameColumn
 from datp_core.domain.values.counts import CalibrationSize, ReplicateIndex, SubsampleReplicateCount
 from datp_core.domain.values.identifiers import StableRowId
 from datp_core.protocols.calibration import CalibrationEligibilityProtocol
-from datp_core.protocols.inference import FixedScoreInvariant, ScoreArtifactManifest, ScoreRecord
+from datp_core.detector.scoring.contracts import FixedScoreInvariant, ScoreArtifactManifest, ScoreRecord
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

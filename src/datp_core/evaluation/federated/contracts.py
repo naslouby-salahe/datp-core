@@ -24,7 +24,7 @@ from datp_core.evaluation.threshold_evidence import VerifiedHeldOutBenignScores
 from datp_core.evaluation.traffic_rates import ValidatedTrafficRateEvidence
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
-from datp_core.protocols.inference import ScoreArtifactManifest
+from datp_core.detector.scoring.contracts import ScoreArtifactManifest
 from datp_core.protocols.temporal import TemporalDeploymentProvenance
 from datp_core.thresholding.methods.conformal import ConformalAssignment
 from datp_core.thresholding.models import ThresholdConstructionResult

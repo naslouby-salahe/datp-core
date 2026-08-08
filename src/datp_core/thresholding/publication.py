@@ -13,7 +13,7 @@ from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.provenance import canonical_json_text
 from datp_core.domain.values.checksums import Checksum, checksum_text
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.protocols.inference import ScoreArtifactManifest
+from datp_core.detector.scoring.contracts import ScoreArtifactManifest
 from datp_core.protocols.temporal import TemporalDeploymentProvenance
 from datp_core.thresholding.models import ThresholdConstructionResult
 

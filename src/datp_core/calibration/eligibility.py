@@ -18,7 +18,7 @@ from datp_core.domain.values.counts import RowCount
 from datp_core.domain.values.identifiers import StableRowId
 from datp_core.domain.values.ratios import ScoreValue
 from datp_core.protocols.calibration import CalibrationEligibilityProtocol
-from datp_core.protocols.inference import ScoreRecord
+from datp_core.detector.scoring.contracts import ScoreRecord
 
 
 def reject_evaluation_partition_in_eligibility(partition_role: PartitionRole) -> None:

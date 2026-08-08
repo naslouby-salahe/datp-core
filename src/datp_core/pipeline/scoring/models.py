@@ -15,7 +15,7 @@ from datp_core.domain.values.identifiers import FeatureNameSequence
 from datp_core.learning.centralized.training import CentralizedTrainingCoordinate
 from datp_core.learning.federated.models import CheckpointCandidate, FederatedTrainingCoordinate
 from datp_core.pipeline.checkpoints.models import CentralizedCheckpointCandidate
-from datp_core.protocols.inference import (
+from datp_core.detector.scoring.contracts import (
     ScoreArtifact,
     ScoreArtifactManifest,
     ScoreGenerationResult,

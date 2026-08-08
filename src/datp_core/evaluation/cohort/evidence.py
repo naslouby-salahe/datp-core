@@ -9,7 +9,7 @@ from datp_core.domain.enums import ScoreFrameColumn
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.counts import RowCount
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.protocols.inference import ScoreArtifactManifest, ScoreRecord
+from datp_core.detector.scoring.contracts import ScoreArtifactManifest, ScoreRecord
 
 type FederatedScoreArtifactManifest = ScoreArtifactManifest[FederatedTrainingCoordinate, ClientIdentity]
 type FederatedScoreRecord = ScoreRecord[FederatedTrainingCoordinate, ClientIdentity]

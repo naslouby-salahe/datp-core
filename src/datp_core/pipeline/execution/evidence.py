@@ -14,7 +14,7 @@ from datp_core.evaluation.federated.contracts import FederatedEvaluationDocument
 from datp_core.evaluation.models import MetricStatus, metric_by_id
 from datp_core.pipeline.scoring.models import FederatedScoreArtifactManifest
 from datp_core.protocols.calibration import MINIMUM_BENIGN_SUPPORT
-from datp_core.protocols.inference import FixedScoreInvariant
+from datp_core.detector.scoring.contracts import FixedScoreInvariant
 from datp_core.thresholding.quantiles import ClientBenignCalibrationScores
 
 

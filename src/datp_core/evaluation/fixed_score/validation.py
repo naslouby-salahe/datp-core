@@ -13,7 +13,7 @@ from datp_core.evaluation.fixed_score.checksums import (
 from datp_core.evaluation.fixed_score.contracts import ClientAurocEvidence, FixedScoreEvidence
 from datp_core.evaluation.models import ClientMetricResult, MetricAvailability, MetricStatus, metric_by_id
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.protocols.inference import FixedScoreInvariant, ScoreArtifactManifest
+from datp_core.detector.scoring.contracts import FixedScoreInvariant, ScoreArtifactManifest
 
 type FederatedScoreArtifactManifest = ScoreArtifactManifest[FederatedTrainingCoordinate, ClientIdentity]
 

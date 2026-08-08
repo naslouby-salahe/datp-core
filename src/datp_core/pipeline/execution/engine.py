@@ -43,7 +43,7 @@ from datp_core.artifacts.repositories.publication import (
 )
 from datp_core.protocols.experiments import EXPERIMENTS
 from datp_core.protocols.graph import ObservationBoundary, ObservationContext, ObservationHook, observe_graph_boundary
-from datp_core.protocols.inference import FixedScoreInvariant
+from datp_core.detector.scoring.contracts import FixedScoreInvariant
 from datp_core.runtime.configuration import DATA_ROOT
 
 

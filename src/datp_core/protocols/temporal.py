@@ -8,7 +8,7 @@ from datp_core.core.contracts import StrictModel
 from datp_core.core.errors import ScientificContractError, UnresolvedScientificValueError
 from datp_core.core.identifiers import EvidenceRole, PartitionRole, SplitProtocolId, TemporalState
 from datp_core.core.numeric import MetricValue, Ratio
-from datp_core.protocols.inference import ClientIdentityContract, ScoreArtifactManifest, TrainingCoordinateContract
+from datp_core.detector.scoring.contracts import ClientIdentityContract, ScoreArtifactManifest, TrainingCoordinateContract
 from datp_core.experiments.common.seeds import BOUNDED_EVIDENCE_SEED_COHORT, SeedCohort
 
 
