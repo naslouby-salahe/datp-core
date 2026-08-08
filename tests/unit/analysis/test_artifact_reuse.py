@@ -1,7 +1,12 @@
 from pathlib import Path
 
 from datp_core.analysis.contrasts import FixedScorePairProvenance, PairedContrast
-from datp_core.domain.enums import (
+from datp_core.analysis.evidence import (
+    AnalyzeConfirmatoryEvidenceRequest,
+    analyze_confirmatory_evidence,
+)
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.identifiers import (
     EvidenceRole,
     FederatedThresholdMethod,
     MetricId,
@@ -11,15 +16,9 @@ from datp_core.domain.enums import (
     SplitProtocolId,
     TrainingModelId,
 )
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import Seed
-from datp_core.domain.values.ratios import MetricValue
-from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.pipeline.decision.evidence import (
-    AnalyzeConfirmatoryEvidenceRequest,
-    analyze_confirmatory_evidence,
-)
-from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL
+from datp_core.core.numeric import MetricValue, Seed
+from datp_core.detector.training.contracts import FederatedTrainingCoordinate
+from datp_core.experiments.confirmatory.spec import CONFIRMATORY_INFERENCE_PROTOCOL
 
 
 def test_analysis_reuse_loads_and_validates_persisted_json(tmp_path: Path) -> None:

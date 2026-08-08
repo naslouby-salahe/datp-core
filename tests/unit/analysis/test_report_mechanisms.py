@@ -3,8 +3,8 @@ from pathlib import Path
 from datp_core.analysis.contrasts import FixedScorePairProvenance, PairedContrast
 from datp_core.analysis.mechanisms.divergence import ClientScoreVector, jensen_shannon_divergence
 from datp_core.analysis.preparation import ConfirmatoryAnalysisRequest, prepare_confirmatory_analysis
-from datp_core.datasets.partitioning.contracts import ClientIdentity
-from datp_core.domain.enums import (
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.identifiers import (
     EvidenceRole,
     FederatedThresholdMethod,
     MetricId,
@@ -14,12 +14,11 @@ from datp_core.domain.enums import (
     SplitProtocolId,
     TrainingModelId,
 )
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import Seed
-from datp_core.domain.values.ratios import MetricValue
-from datp_core.learning.federated.models import FederatedTrainingCoordinate
+from datp_core.core.numeric import MetricValue, Seed
+from datp_core.data.populations.contracts import ClientIdentity
+from datp_core.detector.training.contracts import FederatedTrainingCoordinate
+from datp_core.experiments.confirmatory.spec import CONFIRMATORY_INFERENCE_PROTOCOL
 from datp_core.presentation.export import export_analysis_report
-from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL
 
 
 def test_analysis_report_contains_actual_mechanism_values(tmp_path: Path) -> None:
