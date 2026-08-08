@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from datp_core.domain.enums import AvailabilityStatus, MetricId
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import Seed
-from datp_core.domain.values.ratios import MetricValue
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.identifiers import AvailabilityStatus, MetricId
+from datp_core.core.numeric import MetricValue, Seed
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

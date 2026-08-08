@@ -4,12 +4,10 @@ from pathlib import Path
 import torch
 
 from datp_core.data.populations.contracts import ClientIdentity
-from datp_core.domain.enums import ContractSubject, TrainingModelId
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import BatchSize, ClientCount, RoundNumber, Seed
-from datp_core.domain.values.identifiers import CudaDeviceName
-from datp_core.domain.values.ratios import LearningRate
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import ContractSubject, CudaDeviceName, TrainingModelId
+from datp_core.core.numeric import BatchSize, ClientCount, LearningRate, RoundNumber, Seed
 from datp_core.learning.autoencoder import (
     build_reconstruction_autoencoder,
     clone_autoencoder_state,

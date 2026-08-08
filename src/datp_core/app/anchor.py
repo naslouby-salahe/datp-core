@@ -7,8 +7,8 @@ from datp_core.anchor.models import AnchorGateStatus
 from datp_core.app.contracts import OverwriteMode, ProgrammeExecutionMode
 from datp_core.app.layout import ANCHOR_DIAGNOSTICS_DIRECTORY, SMOKE_OUTPUT_ROOT
 from datp_core.app.models import AnchorCommandResult, DetailText
-from datp_core.domain.enums import DatasetId, ExperimentId, ExperimentReadiness
-from datp_core.domain.errors import AnchorReproductionError
+from datp_core.core.errors import AnchorReproductionError
+from datp_core.core.identifiers import DatasetId, ExperimentId, ExperimentReadiness
 from datp_core.experiments.execution import execute_declared_experiment_seed
 from datp_core.protocols.anchor import ANCHOR_DECISION_PROTOCOL, HISTORICAL_ANCHOR_SEED_COHORT
 from datp_core.protocols.seeds import SeedCohort

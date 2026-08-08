@@ -7,14 +7,14 @@ from dataclasses import dataclass
 from datp_core.app.contracts import OverwriteMode
 from datp_core.data.registry import DatasetPublication
 from datp_core.data.service import DatasetMaterializationRequest, materialize_datasets
-from datp_core.domain.enums import DatasetId, ExperimentId, ExperimentReadiness, PopulationId
-from datp_core.domain.errors import (
+from datp_core.core.errors import (
     ProtocolValidationError,
     ScientificContractError,
     UnknownIdentifierError,
     UnresolvedScientificValueError,
 )
-from datp_core.domain.values.counts import Seed
+from datp_core.core.identifiers import DatasetId, ExperimentId, ExperimentReadiness, PopulationId
+from datp_core.core.numeric import Seed
 from datp_core.experiments.planning import (
     ExperimentPlan,
     PlanDisposition,

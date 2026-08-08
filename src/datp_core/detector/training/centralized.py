@@ -16,7 +16,7 @@ from datp_core.data.populations.contracts import (
     PopulationFrameColumn,
     PopulationOutcomeLabel,
 )
-from datp_core.domain.enums import (
+from datp_core.core.identifiers import (
     CentralizedModelId,
     ContractSubject,
     OptimizerId,
@@ -26,17 +26,16 @@ from datp_core.domain.enums import (
     SplitProtocolId,
     TrainingHistoryColumn,
 )
-from datp_core.domain.errors import (
+from datp_core.core.errors import (
     ArtifactIntegrityError,
     ExecutionStateError,
     LeakageError,
     ScientificContractError,
     UnresolvedScientificValueError,
 )
-from datp_core.domain.values.checksums import Checksum, checksum_file, checksum_text
-from datp_core.domain.values.counts import BatchSize, FeatureCount, RoundNumber, RowCount, Seed
-from datp_core.domain.values.identifiers import CudaDeviceName, FeatureNameSequence, OutcomeLabel, OutcomeLabelSequence
-from datp_core.domain.values.ratios import LearningRate, MetricValue, WeightDecay
+from datp_core.artifacts.provenance import Checksum, checksum_file, checksum_text
+from datp_core.core.identifiers import CudaDeviceName, FeatureNameSequence, OutcomeLabel, OutcomeLabelSequence
+from datp_core.core.numeric import BatchSize, FeatureCount, LearningRate, MetricValue, RoundNumber, RowCount, Seed, WeightDecay
 from datp_core.learning.autoencoder import (
     LEARNING_DTYPE,
     TORCH_LEARNING_DTYPE,

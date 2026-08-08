@@ -13,15 +13,14 @@ from datp_core.data.populations.contracts import (
     STABLE_ROW_ID_COLUMN,
     PopulationOutcomeLabel,
 )
-from datp_core.domain.enums import ContractSubject, PartitionRole, ScoreFrameColumn
-from datp_core.domain.errors import (
+from datp_core.core.errors import (
     ArtifactIntegrityError,
     LeakageError,
     ScientificContractError,
 )
-from datp_core.domain.values.checksums import Checksum, checksum_file
-from datp_core.domain.values.counts import BatchSize, FeatureCount, RowCount
-from datp_core.domain.values.identifiers import FeatureNameSequence
+from datp_core.artifacts.provenance import Checksum, checksum_file
+from datp_core.core.identifiers import ContractSubject, FeatureNameSequence, PartitionRole, ScoreFrameColumn
+from datp_core.core.numeric import BatchSize, FeatureCount, RowCount
 from datp_core.learning.autoencoder import LEARNING_DTYPE, ReconstructionAutoencoder, reconstruction_errors
 from datp_core.learning.federated.models import CheckpointCandidate
 from datp_core.pipeline.scoring.models import PersistedScoreFrame

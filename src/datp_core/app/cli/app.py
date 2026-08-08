@@ -12,8 +12,8 @@ from datp_core.app.cli.execution import app as run_app
 from datp_core.app.cli.validation import fail
 from datp_core.app.contracts import OverwriteMode
 from datp_core.app.research import format_status, generate_report, programme_status, run_smoke
-from datp_core.domain.enums import DatasetId, ExperimentId
-from datp_core.domain.errors import DatpCoreError
+from datp_core.core.errors import DatpCoreError
+from datp_core.core.identifiers import DatasetId, ExperimentId
 
 app = typer.Typer(no_args_is_help=True, help="DATP-Core journal-extension research interface.")
 app.add_typer(run_app, name="run")

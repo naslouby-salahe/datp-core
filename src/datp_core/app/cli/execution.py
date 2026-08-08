@@ -9,8 +9,8 @@ import typer
 from datp_core.app.cli.validation import fail
 from datp_core.app.contracts import OverwriteMode, ProgrammeExecutionMode
 from datp_core.app.research import run_campaign, run_experiment
-from datp_core.domain.enums import ExperimentId
-from datp_core.domain.errors import DatpCoreError
+from datp_core.core.errors import DatpCoreError
+from datp_core.core.identifiers import ExperimentId
 
 app = typer.Typer(no_args_is_help=True, help="Run one experiment or the complete campaign.")
 

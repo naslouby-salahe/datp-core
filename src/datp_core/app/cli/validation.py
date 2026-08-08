@@ -6,7 +6,7 @@ from typing import Never
 
 import typer
 
-from datp_core.domain.errors import (
+from datp_core.core.errors import (
     AnchorReproductionError,
     ArtifactIntegrityError,
     CliExitCode,

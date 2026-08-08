@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from datp_core.domain.enums import AvailabilityStatus, MetricId
+from datp_core.core.identifiers import AvailabilityStatus, MetricId
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

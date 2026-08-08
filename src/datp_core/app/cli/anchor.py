@@ -9,7 +9,7 @@ import typer
 from datp_core.app.cli.validation import fail
 from datp_core.app.contracts import OverwriteMode, ProgrammeExecutionMode
 from datp_core.app.research import anchor_status, reproduce_anchor, verify_anchor_programme
-from datp_core.domain.errors import DatpCoreError
+from datp_core.core.errors import DatpCoreError
 
 app = typer.Typer(no_args_is_help=True, help="Historical anchor equivalence gate.")
 

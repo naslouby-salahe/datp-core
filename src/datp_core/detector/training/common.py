@@ -2,9 +2,9 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 from datp_core.data.registry import resolve_population
-from datp_core.domain.enums import ContractSubject
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.checksums import Checksum
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import ContractSubject
 from datp_core.learning.federated.checkpoints.candidates import rebase_checkpoint_candidates
 from datp_core.learning.federated.checkpoints.identities import FederatedHistoryAssetName
 from datp_core.learning.federated.checkpoints.reuse import (
