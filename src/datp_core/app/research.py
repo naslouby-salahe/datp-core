@@ -47,6 +47,7 @@ from datp_core.domain.errors import (
     MissingPrerequisiteError,
     ReportEvidenceError,
     ScientificContractError,
+    UnresolvedScientificValueError,
 )
 from datp_core.domain.values.counts import Seed
 from datp_core.protocols.populations import POPULATIONS
@@ -97,9 +98,14 @@ def run_experiment(
     overwrite: OverwriteMode,
     mode: ProgrammeExecutionMode,
 ) -> ExperimentRunResult:
-    from datp_core.app.programme import reject_anchor_as_experiment, seed_cohort_for
+    from datp_core.app.programme import (
+        reject_anchor_as_experiment,
+        require_experiment_execution_ready,
+        seed_cohort_for,
+    )
 
     reject_anchor_as_experiment(experiment_id)
+    require_experiment_execution_ready(experiment_id)
     recipe = recipe_for(experiment_id)
     if mode is ProgrammeExecutionMode.FULL:
         _enforce_anchor_gate(experiment_id, recipe.anchor_requirement)
@@ -208,9 +214,11 @@ def _run_centralized_reference(overwrite: OverwriteMode) -> None:
 
 
 def run_campaign(*, overwrite: OverwriteMode) -> CampaignRunResult:
-    from datp_core.app.programme import preprocess_datasets, validate_programme
+    from datp_core.app.programme import preprocess_datasets, require_experiment_execution_ready, validate_programme
 
     validate_programme(None)
+    for recipe in EXPERIMENT_RECIPES:
+        require_experiment_execution_ready(recipe.experiment)
     preprocess_datasets(None, overwrite=OverwriteMode.KEEP_EXISTING)
     reproduced = reproduce_anchor(overwrite=overwrite, mode=ProgrammeExecutionMode.FULL)
     verified = verify_anchor_programme(mode=ProgrammeExecutionMode.FULL)
@@ -300,7 +308,7 @@ def _status_for_experiment(
     experiment_id: ExperimentId,
     anchor_gate: AnchorGateStatus,
 ) -> ExperimentStatusRecord:
-    from datp_core.app.programme import require_experiment_declaration
+    from datp_core.app.programme import require_experiment_declaration, require_experiment_execution_ready
 
     declaration = require_experiment_declaration(experiment_id)
     if declaration.readiness is ExperimentReadiness.SUPPRESSED:
@@ -311,6 +319,17 @@ def _status_for_experiment(
             readiness=declaration.readiness,
             registration=RecipeRegistration.SUPPRESSED,
             detail=DetailText("suppressed by protocol declaration"),
+        )
+    try:
+        require_experiment_execution_ready(experiment_id)
+    except UnresolvedScientificValueError as error:
+        return ExperimentStatusRecord(
+            experiment=experiment_id,
+            status=ProgrammeStatus.BLOCKED_BY_DEPENDENCY,
+            role=declaration.role,
+            readiness=declaration.readiness,
+            registration=RecipeRegistration.REGISTERED,
+            detail=DetailText(str(error)),
         )
     recipe = recipe_for(experiment_id)
     if recipe.anchor_requirement is AnchorRequirement.REQUIRED and anchor_gate not in {
