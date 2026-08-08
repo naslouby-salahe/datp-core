@@ -8,9 +8,8 @@ from shutil import rmtree
 from typing import Protocol
 
 from datp_core.app.contracts import AnchorRequirement, OverwriteMode
-from datp_core.app.layout import ResearchArtifact, ResearchDirectory
+from datp_core.app.layout import ANCHOR_DIAGNOSTICS_DIRECTORY, ResearchArtifact, ResearchDirectory
 from datp_core.app.models import DetailText, DispatchOutcome, ThresholdMethodOutcome
-from datp_core.app.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
 from datp_core.domain.enums import (
     ExperimentId,
     ExperimentReadiness,
@@ -59,10 +58,11 @@ from datp_core.experiments.heterogeneity import (
     analyze_threshold_movement_tradeoff,
     run_controlled_heterogeneity_sweep_seed,
 )
+from datp_core.experiments.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
 from datp_core.experiments.temporal import (
+    TemporalArtifactDirectory,
     TemporalCampaignResult,
     TemporalSeedResult,
-    TemporalArtifactDirectory,
     analyze_temporal_campaign,
     load_temporal_campaign_seeds,
     run_temporal_seed,
@@ -186,10 +186,7 @@ def _method_outcomes(
 
 
 def _dispatch_confirmatory(seeds: tuple[Seed, ...], output_root: Path, overwrite: OverwriteMode) -> DispatchOutcome:
-    results = tuple(
-        run_confirmatory_seed(seed, output_root=output_root, overwrite=overwrite.requested)
-        for seed in seeds
-    )
+    results = tuple(run_confirmatory_seed(seed, output_root=output_root, overwrite=overwrite.requested) for seed in seeds)
     return DispatchOutcome(
         detail=DetailText(f"confirmatory seeds={len(seeds)}"),
         method_outcomes=_method_outcomes(
@@ -201,8 +198,7 @@ def _dispatch_confirmatory(seeds: tuple[Seed, ...], output_root: Path, overwrite
 
 def _dispatch_family(seeds: tuple[Seed, ...], output_root: Path, overwrite: OverwriteMode) -> DispatchOutcome:
     results = tuple(
-        run_family_grouped_mechanism_seed(seed, output_root=output_root, overwrite=overwrite.requested)
-        for seed in seeds
+        run_family_grouped_mechanism_seed(seed, output_root=output_root, overwrite=overwrite.requested) for seed in seeds
     )
     return DispatchOutcome(
         detail=DetailText(f"family_grouped seeds={len(seeds)}"),
@@ -221,22 +217,15 @@ def _dispatch_external(
 ) -> DispatchOutcome:
     if experiment_id is ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION:
         results = tuple(
-            run_external_validation_seed(seed, output_root=output_root, overwrite=overwrite.requested)
-            for seed in seeds
+            run_external_validation_seed(seed, output_root=output_root, overwrite=overwrite.requested) for seed in seeds
         )
     elif experiment_id is ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY:
-        results = tuple(
-            run_ciciot_boundary_seed(seed, output_root=output_root, overwrite=overwrite.requested)
-            for seed in seeds
-        )
+        results = tuple(run_ciciot_boundary_seed(seed, output_root=output_root, overwrite=overwrite.requested) for seed in seeds)
     else:
         raise ScientificContractError(f"unsupported external experiment: {experiment_id.value}")
     return DispatchOutcome(
         detail=DetailText(f"{experiment_id.value} seeds={len(seeds)}"),
-        method_outcomes=_method_outcomes(
-            experiment_id,
-            tuple(item.completed_threshold_methods for item in results),
-        ),
+        method_outcomes=_method_outcomes(experiment_id, tuple(item.completed_threshold_methods for item in results)),
     )
 
 
@@ -286,8 +275,7 @@ def _dispatch_ditto(seeds: tuple[Seed, ...], output_root: Path, overwrite: Overw
 
 
 def _temporal_unavailable(
-    results: tuple[TemporalSeedResult, ...],
-    method: FederatedThresholdMethod,
+    results: tuple[TemporalSeedResult, ...], method: FederatedThresholdMethod
 ) -> DetailText | None:
     for seed_result in results:
         for state in (seed_result.static_reference, seed_result.frozen_future, seed_result.recalibrated_future):
@@ -298,10 +286,7 @@ def _temporal_unavailable(
 
 
 def _dispatch_temporal(seeds: tuple[Seed, ...], output_root: Path, overwrite: OverwriteMode) -> DispatchOutcome:
-    results = tuple(
-        run_temporal_seed(seed, output_root=output_root, overwrite=overwrite.requested)
-        for seed in seeds
-    )
+    results = tuple(run_temporal_seed(seed, output_root=output_root, overwrite=overwrite.requested) for seed in seeds)
     declared = _declared_methods(ExperimentId.EDGE_ONE_SHOT_RECALIBRATION)
     completed = frozenset(declared)
     for result in results:
@@ -322,10 +307,7 @@ def _dispatch_temporal(seeds: tuple[Seed, ...], output_root: Path, overwrite: Ov
             status = ThresholdMethodExecutionStatus.INFEASIBLE
             detail = DetailText("declared but not completed in this execution")
         outcomes.append(ThresholdMethodOutcome(method=method, status=status, detail=detail))
-    return DispatchOutcome(
-        detail=DetailText(f"temporal seeds={len(seeds)}"),
-        method_outcomes=tuple(outcomes),
-    )
+    return DispatchOutcome(detail=DetailText(f"temporal seeds={len(seeds)}"), method_outcomes=tuple(outcomes))
 
 
 def _dispatch_robustness(
@@ -366,10 +348,7 @@ def _dispatch_robustness(
             for method in declared
         )
     else:
-        outcomes = _method_outcomes(
-            experiment_id,
-            tuple(item.completed_threshold_methods for item in results),
-        )
+        outcomes = _method_outcomes(experiment_id, tuple(item.completed_threshold_methods for item in results))
     return DispatchOutcome(detail=DetailText(f"{experiment_id.value} seeds={len(seeds)}"), method_outcomes=outcomes)
 
 
@@ -383,10 +362,7 @@ def _dispatch_estimation(
     results = tuple(runner(seed, output_root=output_root, overwrite=overwrite.requested) for seed in seeds)
     return DispatchOutcome(
         detail=DetailText(f"{experiment_id.value} seeds={len(seeds)}"),
-        method_outcomes=_method_outcomes(
-            experiment_id,
-            tuple(item.completed_threshold_methods for item in results),
-        ),
+        method_outcomes=_method_outcomes(experiment_id, tuple(item.completed_threshold_methods for item in results)),
     )
 
 
@@ -423,10 +399,7 @@ def _dispatch_declared(
     )
     return DispatchOutcome(
         detail=DetailText(f"{experiment_id.value} seeds={len(seeds)}"),
-        method_outcomes=_method_outcomes(
-            experiment_id,
-            tuple(item.completed_threshold_methods for item in results),
-        ),
+        method_outcomes=_method_outcomes(experiment_id, tuple(item.completed_threshold_methods for item in results)),
     )
 
 
@@ -446,16 +419,15 @@ def _dispatch_analysis(experiment_id: ExperimentId) -> DispatchOutcome:
 
 def _report_confirmatory(experiment_id: ExperimentId, overwrite: OverwriteMode) -> tuple[tuple[Path, ...], DetailText]:
     del experiment_id, overwrite
-    path = analyze_confirmatory_campaign()
+    path = analyze_confirmatory_campaign(anchor_gate_diagnostics_directory=ANCHOR_DIAGNOSTICS_DIRECTORY)
     return (path,), DetailText(str(path))
 
 
 def _report_external(experiment_id: ExperimentId, overwrite: OverwriteMode) -> tuple[tuple[Path, ...], DetailText]:
-    del overwrite
     if experiment_id is ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION:
-        result = analyze_external_validation_campaign(output_root=OUTPUTS_ROOT)
+        result = analyze_external_validation_campaign(output_root=OUTPUTS_ROOT, overwrite=overwrite.requested)
     elif experiment_id is ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY:
-        result = analyze_ciciot_boundary_campaign(output_root=OUTPUTS_ROOT)
+        result = analyze_ciciot_boundary_campaign(output_root=OUTPUTS_ROOT, overwrite=overwrite.requested)
     else:
         raise ReportEvidenceError(f"unsupported external report: {experiment_id.value}")
     return (result.output_directory,), DetailText(str(result.output_directory))
@@ -561,11 +533,7 @@ def _report_temporal(experiment_id: ExperimentId, overwrite: OverwriteMode) -> t
     del experiment_id
     seeds = load_temporal_campaign_seeds(output_root=OUTPUTS_ROOT)
     campaign = TemporalCampaignResult(seeds=seeds, analyses=())
-    analyses = analyze_temporal_campaign(
-        campaign,
-        output_root=OUTPUTS_ROOT,
-        overwrite=overwrite.requested,
-    )
+    analyses = analyze_temporal_campaign(campaign, output_root=OUTPUTS_ROOT, overwrite=overwrite.requested)
     paths = tuple(item.output_directory for item in analyses)
     return paths, DetailText(f"temporal_methods={len(paths)}")
 
@@ -692,10 +660,7 @@ def _fedprox_marker(experiment_id: ExperimentId) -> bool:
         load_fedprox_primary_coefficient_decision,
     )
 
-    decision_path = (
-        fedprox_stress_test_root(output_root=OUTPUTS_ROOT)
-        / TrainingStressArtifactName.PRIMARY_COEFFICIENT_DECISION
-    )
+    decision_path = fedprox_stress_test_root(output_root=OUTPUTS_ROOT) / TrainingStressArtifactName.PRIMARY_COEFFICIENT_DECISION
     if not decision_path.is_file():
         return False
     decision = load_fedprox_primary_coefficient_decision(decision_path)
