@@ -6,7 +6,7 @@ from datp_core.analysis.metrics.fixed_score_checksums import (
     evaluation_score_order_checksum,
 )
 from datp_core.analysis.metrics.models import ClientMetricResult, MetricAvailability, MetricStatus, metric_by_id
-from datp_core.datasets.partitioning.contracts import ClientIdentity
+from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.scoring.contracts import FixedScoreInvariant, ScoreArtifactManifest
 from datp_core.detector.training.models import FederatedTrainingCoordinate
 from datp_core.domain.enums import ContractSubject, MetricId

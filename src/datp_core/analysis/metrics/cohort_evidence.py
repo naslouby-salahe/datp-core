@@ -1,6 +1,6 @@
 import polars as pl
 
-from datp_core.datasets.partitioning.contracts import (
+from datp_core.data.populations.contracts import (
     ClientIdentity,
     ClientPartitionCounts,
     PopulationOutcomeLabel,

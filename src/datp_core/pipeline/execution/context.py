@@ -5,21 +5,28 @@ from pathlib import Path
 
 import polars as pl
 
+from datp_core.data.edge_iiotset.schema import EDGE_NUMERIC_FEATURE_COLUMNS
+from datp_core.data.populations.contracts import ClientIdentity, ControlledPartitionCondition
+from datp_core.data.preprocessing.models import (
+    ClientPreprocessingResult,
+    FederatedPreprocessingOutcome,
+    FederatedPreprocessingRequest,
+    PublishedFederatedPreprocessingRequest,
+)
+from datp_core.data.preprocessing.service import preprocess_federated, preprocess_published_federated
 from datp_core.data.registry import dataset_binding, population_capabilities
-from datp_core.datasets.edge_iiotset.schema import EDGE_NUMERIC_FEATURE_COLUMNS
-from datp_core.datasets.partitioning.contracts import ClientIdentity, ControlledPartitionCondition
+from datp_core.detector.training.engine import preprocessing_state_set_checksum
+from datp_core.detector.training.models import (
+    ClientTrainingInput,
+    FederatedTrainingCoordinate,
+    PreparedClientProvenance,
+)
 from datp_core.domain.enums import ContractSubject, DatasetId
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.identifiers import FeatureName, FeatureNameSequence
 from datp_core.domain.values.paths import ClientIdentityToken, FamilyIdentity
 from datp_core.domain.values.ratios import ProximalCoefficient
-from datp_core.detector.training.models import (
-    ClientTrainingInput,
-    FederatedTrainingCoordinate,
-    PreparedClientProvenance,
-)
-from datp_core.detector.training.engine import preprocessing_state_set_checksum
 from datp_core.pipeline.coordinates import ExperimentCoordinate
 from datp_core.pipeline.execution.layout import (
     ExecutionArtifactDirectory,
@@ -35,13 +42,6 @@ from datp_core.pipeline.preparation.populations import (
     construct_published_split,
 )
 from datp_core.pipeline.scoring.models import ClientScoringInput
-from datp_core.data.preprocessing.models import (
-    ClientPreprocessingResult,
-    FederatedPreprocessingOutcome,
-    FederatedPreprocessingRequest,
-    PublishedFederatedPreprocessingRequest,
-)
-from datp_core.data.preprocessing.service import preprocess_federated, preprocess_published_federated
 from datp_core.protocols.experiments import BOUNDED_EVIDENCE_POPULATIONS, ExternalTemporalExecutionIdentity
 from datp_core.protocols.training import (
     CICIOT2023_AUTOENCODER,

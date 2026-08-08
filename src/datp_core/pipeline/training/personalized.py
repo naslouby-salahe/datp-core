@@ -3,9 +3,13 @@
 from dataclasses import dataclass
 from enum import StrEnum
 
-from datp_core.datasets.partitioning.contracts import ClientIdentity
-from datp_core.domain.contracts import ClientCollection, ClientOwned
-from datp_core.domain.enums import PublicationStatus
+from datp_core.artifacts.repositories.publication import (
+    FunctionalRelatedArtifactCodec,
+    RelatedArtifactPublication,
+    RelatedPublicationMember,
+    publish_related_artifacts,
+)
+from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.training.common import (
     DittoTrainingArtifacts,
     ditto_training_is_reusable,
@@ -16,12 +20,8 @@ from datp_core.detector.training.common import (
 )
 from datp_core.detector.training.ditto import DittoTrainingRequest
 from datp_core.detector.training.models import CheckpointCandidate, FederatedTrainingResult
-from datp_core.artifacts.repositories.publication import (
-    FunctionalRelatedArtifactCodec,
-    RelatedArtifactPublication,
-    RelatedPublicationMember,
-    publish_related_artifacts,
-)
+from datp_core.domain.contracts import ClientCollection, ClientOwned
+from datp_core.domain.enums import PublicationStatus
 
 
 class DittoPublicationMember(StrEnum):

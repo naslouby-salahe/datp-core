@@ -23,8 +23,8 @@ from datp_core.analysis.metrics.fixed_score_checksums import (
     source_row_checksum,
 )
 from datp_core.analysis.metrics.models import ClientMetricResult, metric_by_id
+from datp_core.data.populations.contracts import ClientIdentity, PopulationOutcomeLabel
 from datp_core.data.registry import population_capabilities
-from datp_core.datasets.partitioning.contracts import ClientIdentity, PopulationOutcomeLabel
 from datp_core.detector.scoring.contracts import FixedScoreInvariant, ScoreArtifactManifest, ScoreRecord
 from datp_core.detector.training.models import FederatedTrainingCoordinate
 from datp_core.domain.enums import (

@@ -34,12 +34,12 @@ from datp_core.analysis.metrics.threshold_estimation import (
 from datp_core.analysis.operational.alert_burden import AlertBurdenDiagnostic, calculate_alert_burden
 from datp_core.analysis.operational.communication import summarize_communication
 from datp_core.analysis.operational.traffic_rates import ValidatedTrafficRateEvidence
-from datp_core.data.registry import population_capabilities
-from datp_core.datasets.partitioning.contracts import (
+from datp_core.data.populations.contracts import (
     ClientIdentity,
     PopulationOutcomeLabel,
     population_allowed_evidence_roles,
 )
+from datp_core.data.registry import population_capabilities
 from datp_core.detector.training.models import FederatedTrainingCoordinate
 from datp_core.domain.enums import (
     ContractSubject,

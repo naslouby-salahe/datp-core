@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from datp_core.datasets.partitioning.contracts import ClientIdentity
+from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.checkpoints.candidates import (
     candidate_tensor_name,
 )

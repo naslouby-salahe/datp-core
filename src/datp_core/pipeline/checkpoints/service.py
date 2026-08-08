@@ -4,13 +4,17 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from datp_core.datasets.partitioning.contracts import ClientIdentity
+from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.checkpoints.contracts import CheckpointProtocol, validate_persisted_checkpoint_file
 from datp_core.detector.checkpoints.contracts import (
     select_terminal_checkpoint as apply_terminal_selection,
 )
 from datp_core.detector.checkpoints.contracts import (
     validate_ordered_checkpoint_inventory as validate_inventory,
+)
+from datp_core.detector.checkpoints.selection import select_checkpoint
+from datp_core.detector.checkpoints.selection import (
+    validate_candidate_coordinates as validate_federated_candidates,
 )
 from datp_core.detector.training.centralized import (
     CentralizedTrainingCoordinate,
@@ -19,6 +23,11 @@ from datp_core.detector.training.centralized import (
     assert_safetensors_reload,
     model_from_in_memory_snapshot,
     persist_state_dict_tensors,
+)
+from datp_core.detector.training.models import (
+    CheckpointCandidate,
+    CheckpointDecision,
+    FederatedTrainingCoordinate,
 )
 from datp_core.domain.enums import (
     CheckpointSelectionRule,
@@ -31,15 +40,6 @@ from datp_core.domain.provenance import canonical_checksum
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import RoundNumber, Seed
 from datp_core.domain.values.ratios import MetricValue
-from datp_core.detector.checkpoints.selection import select_checkpoint
-from datp_core.detector.checkpoints.selection import (
-    validate_candidate_coordinates as validate_federated_candidates,
-)
-from datp_core.detector.training.models import (
-    CheckpointCandidate,
-    CheckpointDecision,
-    FederatedTrainingCoordinate,
-)
 from datp_core.pipeline.checkpoints.models import (
     CentralizedCheckpointAssetName,
     CentralizedCheckpointCandidate,

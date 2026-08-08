@@ -7,41 +7,41 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
-from datp_core.artifacts.layout import evaluation_run_directory
-from datp_core.artifacts.repositories.thresholds import (
-    FederatedThresholdConstructionRequest,
-    construct_and_publish_federated_thresholds,
-)
-from datp_core.data.registry import population_capabilities
-from datp_core.datasets.partitioning.contracts import ClientIdentity, PopulationOutcomeLabel
-from datp_core.domain.enums import ExperimentId, FederatedThresholdMethod, PartitionRole, ScoreFrameColumn
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.checksums import checksum_file
-from datp_core.domain.values.counts import CalibrationSize, ClientCount, ReplicateIndex
-from datp_core.domain.values.identifiers import FeatureNameSequence, StableRowId
-from datp_core.domain.values.ratios import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE, Quantile, ScoreValue
-from datp_core.analysis.operational.communication import (
-    CommunicationMessageDiagnostic,
-    MessageDirection,
-    SerializedPayloadEvidence,
-    ThresholdPayloadKind,
-)
 from datp_core.analysis.metrics.federated import (
     CalibrationSizeAblationCell,
     ConformalCoverageStageInput,
     FederatedEvaluationDocument,
     ThresholdEstimationStageInput,
 )
-from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
-from datp_core.analysis.metrics.fixed_score_construction import build_federated_evaluation_inputs
 from datp_core.analysis.metrics.fixed_score import FixedScoreEvidence
+from datp_core.analysis.metrics.fixed_score_construction import build_federated_evaluation_inputs
 from datp_core.analysis.metrics.fixed_score_validation import validate_fixed_score_controls
 from datp_core.analysis.metrics.models import HeldOutBenignScore
 from datp_core.analysis.metrics.threshold_estimation import ThresholdEstimationProvenance
 from datp_core.analysis.metrics.threshold_evidence import verify_held_out_benign_scores
+from datp_core.analysis.operational.communication import (
+    CommunicationMessageDiagnostic,
+    MessageDirection,
+    SerializedPayloadEvidence,
+    ThresholdPayloadKind,
+)
+from datp_core.artifacts.layout import evaluation_run_directory
+from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
+from datp_core.artifacts.repositories.thresholds import (
+    FederatedThresholdConstructionRequest,
+    construct_and_publish_federated_thresholds,
+)
+from datp_core.data.populations.contracts import ClientIdentity, PopulationOutcomeLabel
+from datp_core.data.registry import population_capabilities
 from datp_core.detector.checkpoints.selection import CheckpointDecision
-from datp_core.detector.training.models import CheckpointCandidate
 from datp_core.detector.training.engine import FederatedTrainingRequest
+from datp_core.detector.training.models import CheckpointCandidate
+from datp_core.domain.enums import ExperimentId, FederatedThresholdMethod, PartitionRole, ScoreFrameColumn
+from datp_core.domain.errors import ScientificContractError
+from datp_core.domain.values.checksums import checksum_file
+from datp_core.domain.values.counts import CalibrationSize, ClientCount, ReplicateIndex
+from datp_core.domain.values.identifiers import FeatureNameSequence, StableRowId
+from datp_core.domain.values.ratios import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE, Quantile, ScoreValue
 from datp_core.pipeline.checkpoints.service import SelectFederatedCheckpointRequest, select_federated_primary_checkpoint
 from datp_core.pipeline.coordinates import ExperimentCoordinate
 from datp_core.pipeline.decision.calibration import (

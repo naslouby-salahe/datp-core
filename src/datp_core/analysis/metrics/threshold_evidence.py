@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import polars as pl
 
 from datp_core.analysis.metrics.models import FederatedScoreRecord, HeldOutBenignScore
-from datp_core.datasets.partitioning.contracts import ClientIdentity, PopulationOutcomeLabel
+from datp_core.data.populations.contracts import ClientIdentity, PopulationOutcomeLabel
 from datp_core.detector.training.models import FederatedTrainingCoordinate
 from datp_core.domain.enums import ScoreFrameColumn
 from datp_core.domain.errors import ScientificContractError

@@ -5,8 +5,8 @@ from pathlib import Path
 
 import polars as pl
 
-from datp_core.datasets.edge_iiotset.schema import EdgeAssetRole
-from datp_core.datasets.partitioning.contracts import (
+from datp_core.data.edge_iiotset.schema import EdgeAssetRole
+from datp_core.data.populations.contracts import (
     CLIENT_ID_COLUMN,
     OUTCOME_LABEL_COLUMN,
     PARTITION_ROLE_COLUMN,
@@ -14,13 +14,7 @@ from datp_core.datasets.partitioning.contracts import (
     ClientIdentity,
     SplitManifestDocument,
 )
-from datp_core.domain.enums import ContractSubject, DatasetId, PartitionRole, SplitProtocolId, TemporalState
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.identifiers import FeatureNameSequence
-from datp_core.pipeline.execution.context import FederatedExecutionContext, training_feature_names
-from datp_core.pipeline.execution.layout import ExecutionArtifactDirectory, bounded_evidence_seed_directory
-from datp_core.pipeline.scoring.models import ClientScoringInput
+from datp_core.data.preprocessing.artifact_validation import transform_feature_matrix
 from datp_core.data.preprocessing.client_partitions import CANONICAL_DATA_DIRECTORY, PARQUET_PATTERN
 from datp_core.data.preprocessing.models import ClientPreprocessingResult
 from datp_core.data.preprocessing.persisted_artifacts import (
@@ -28,7 +22,13 @@ from datp_core.data.preprocessing.persisted_artifacts import (
     MATCHED_STATIC_SPLIT_MANIFEST_ASSET,
 )
 from datp_core.data.preprocessing.state import TrustedScaler, load_estimator
-from datp_core.data.preprocessing.artifact_validation import transform_feature_matrix
+from datp_core.domain.enums import ContractSubject, DatasetId, PartitionRole, SplitProtocolId, TemporalState
+from datp_core.domain.errors import ScientificContractError
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.identifiers import FeatureNameSequence
+from datp_core.pipeline.execution.context import FederatedExecutionContext, training_feature_names
+from datp_core.pipeline.execution.layout import ExecutionArtifactDirectory, bounded_evidence_seed_directory
+from datp_core.pipeline.scoring.models import ClientScoringInput
 from datp_core.runtime.configuration import DATA_ROOT
 
 

@@ -15,7 +15,7 @@ from datp_core.analysis.metrics.threshold_evidence import VerifiedHeldOutBenignS
 from datp_core.analysis.operational.alert_burden import AlertBurdenDiagnostic
 from datp_core.analysis.operational.communication import CommunicationDiagnostic, CommunicationMessageDiagnostic
 from datp_core.analysis.operational.traffic_rates import ValidatedTrafficRateEvidence
-from datp_core.datasets.partitioning.contracts import ClientIdentity
+from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.scoring.contracts import ScoreArtifactManifest
 from datp_core.detector.training.models import FederatedTrainingCoordinate
 from datp_core.domain.contracts import StrictModel

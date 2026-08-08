@@ -6,7 +6,7 @@ from pathlib import Path
 
 import polars as pl
 
-from datp_core.datasets.partitioning.contracts import ClientIdentity
+from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.scoring.contracts import (
     ScoreArtifact,
     ScoreArtifactManifest,
@@ -14,12 +14,12 @@ from datp_core.detector.scoring.contracts import (
     ScoreRecord,
 )
 from datp_core.detector.training.centralized import CentralizedTrainingCoordinate
+from datp_core.detector.training.models import CheckpointCandidate, FederatedTrainingCoordinate
 from datp_core.domain.enums import PartitionRole, PublicationStatus, SplitProtocolId
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import BatchSize, FeatureCount, RoundNumber, RowCount
 from datp_core.domain.values.identifiers import FeatureNameSequence
-from datp_core.detector.training.models import CheckpointCandidate, FederatedTrainingCoordinate
 from datp_core.pipeline.checkpoints.models import CentralizedCheckpointCandidate
 from datp_core.protocols.training import AutoencoderProtocol
 

@@ -8,7 +8,7 @@ from pathlib import Path
 import polars as pl
 from polars.exceptions import PolarsError
 
-from datp_core.datasets.partitioning.contracts import ClientIdentity
+from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.checkpoints.contracts import CheckpointProtocol
 from datp_core.detector.checkpoints.identities import (
     CLIENT_ROUNDS_SCHEMA,

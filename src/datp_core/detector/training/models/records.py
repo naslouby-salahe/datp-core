@@ -3,7 +3,8 @@ from pathlib import Path
 
 import polars as pl
 
-from datp_core.datasets.partitioning.contracts import ClientIdentity
+from datp_core.data.populations.contracts import ClientIdentity
+from datp_core.data.preprocessing.models import FederatedFittedPreprocessingState
 from datp_core.detector.autoencoder import AutoencoderState
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 from datp_core.domain.enums import CommunicationEstimationMethod, ContractSubject, TrainingModelId
@@ -12,7 +13,6 @@ from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import ByteCount, LogicalElementCount, RoundNumber, RowCount
 from datp_core.domain.values.identifiers import FeatureNameSequence
 from datp_core.domain.values.ratios import MetricValue
-from datp_core.data.preprocessing.models import FederatedFittedPreprocessingState
 
 
 def validate_client_preprocessing_match(

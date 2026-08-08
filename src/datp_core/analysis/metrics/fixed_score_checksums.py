@@ -5,7 +5,7 @@ from enum import StrEnum
 import polars as pl
 
 from datp_core.analysis.metrics.models import ClientMetricResult
-from datp_core.datasets.partitioning.contracts import ClientIdentity, PopulationOutcomeLabel
+from datp_core.data.populations.contracts import ClientIdentity, PopulationOutcomeLabel
 from datp_core.detector.scoring.contracts import ScoreArtifactManifest, ScoreRecord
 from datp_core.detector.training.models import FederatedTrainingCoordinate
 from datp_core.domain.enums import ScoreFrameColumn

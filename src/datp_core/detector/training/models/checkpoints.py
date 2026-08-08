@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from datp_core.datasets.partitioning.contracts import ClientIdentity
+from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.checkpoints.contracts import CheckpointProtocol
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 from datp_core.detector.training.models.records import FederatedTrainingHistory

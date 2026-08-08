@@ -4,13 +4,13 @@ from datp_core.analysis.metrics.cohorts import (
     EvaluationCohortManifest,
     EvaluationCohortMembership,
 )
-from datp_core.data.registry import population_capabilities
-from datp_core.datasets.capabilities import CapabilityStatus
-from datp_core.datasets.partitioning.contracts import (
+from datp_core.data.populations.contracts import (
+    CapabilityStatus,
     ClientIdentity,
     ClientPartitionCounts,
     PopulationCapabilities,
 )
+from datp_core.data.registry import population_capabilities
 from datp_core.domain.enums import (
     ContractSubject,
     EvaluationCohort,

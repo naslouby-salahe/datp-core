@@ -8,7 +8,7 @@ from pathlib import Path
 import torch
 from safetensors.torch import load_file, save_file
 
-from datp_core.datasets.partitioning.contracts import ClientIdentity
+from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.autoencoder import AutoencoderStateView, build_autoencoder_for_state
 from datp_core.detector.checkpoints.contracts import (
     CheckpointProtocol,
