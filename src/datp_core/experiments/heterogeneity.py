@@ -1,9 +1,8 @@
-"""Controlled heterogeneity sweep and mechanism experiment workflows.
+"""Controlled heterogeneity sweep and mechanism experiment execution.
 
-CONTROLLED_HETEROGENEITY_SWEEP executes training on Dirichlet populations.
-PER_CLIENT_SCORE_GEOMETRY, HETEROGENEITY_BENEFIT_ASSOCIATION, and
-THRESHOLD_MOVEMENT_TRADEOFF are analysis-only experiments that reuse frozen
-score artifacts from the confirmatory experiment.
+The controlled heterogeneity sweep executes training on the declared Dirichlet
+populations. Score geometry, heterogeneity-benefit association, and threshold
+movement analyses reuse frozen confirmatory score artifacts.
 """
 
 from __future__ import annotations
@@ -29,6 +28,7 @@ from datp_core.analysis.mechanisms import (
     summarize_threshold_movements_across_seeds,
     threshold_movements_from_evaluations,
 )
+from datp_core.app.planning import expand_experiment_plan
 from datp_core.datasets.partitioning.contracts import ClientIdentity, ControlledPartitionKind
 from datp_core.domain.enums import (
     EvidenceRole,
@@ -44,6 +44,7 @@ from datp_core.domain.values.counts import Seed
 from datp_core.domain.values.ratios import DirichletConcentration, MetricValue
 from datp_core.evaluation.federated.contracts import FederatedEvaluationDocument
 from datp_core.evaluation.federated.publication import FederatedEvaluationAssetName
+from datp_core.experiments.execution import execute_declared_experiment_seed
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.pipeline.coordinates import ExperimentCoordinate
 from datp_core.pipeline.execution.evidence import load_evaluation_document, population_metric
@@ -52,13 +53,13 @@ from datp_core.pipeline.execution.layout import (
     ExecutionArtifactDirectory,
     federated_training_directory,
 )
-from datp_core.pipeline.planning import expand_experiment_plan
 from datp_core.pipeline.publication.layout import evaluation_run_directory
 from datp_core.pipeline.scoring.models import FederatedScoreAssetName
+from datp_core.presentation.export import export_mechanism_publication
 from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration
+from datp_core.protocols.metrics import FIXED_SCORE_AUROC_INVARIANCE_TOLERANCE
 from datp_core.protocols.populations import DIRICHLET_CONCENTRATIONS
 from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
-from datp_core.reporting.export import export_mechanism_publication
 from datp_core.runtime.configuration import OUTPUTS_ROOT
 
 
@@ -80,8 +81,6 @@ def run_controlled_heterogeneity_sweep_seed(
     output_root: Path,
     overwrite: bool = False,
 ) -> HeterogeneitySweepSeedResult:
-    from datp_core.pipeline.workflows.execution import execute_declared_experiment_seed
-
     declaration = _require_declaration(ExperimentId.CONTROLLED_HETEROGENEITY_SWEEP)
     result = execute_declared_experiment_seed(
         declaration=declaration,
@@ -98,7 +97,6 @@ def run_controlled_heterogeneity_sweep_seed(
 
 
 def analyze_controlled_heterogeneity_sweep(*, overwrite: bool = False) -> Path:
-    """Analyze the controlled heterogeneity sweep campaign and export mechanism publication."""
     output = (
         OUTPUTS_ROOT
         / MechanismAnalysisDirectory.ROOT
@@ -108,18 +106,23 @@ def analyze_controlled_heterogeneity_sweep(*, overwrite: bool = False) -> Path:
     )
     if overwrite and output.exists():
         from shutil import rmtree
+
         rmtree(output)
 
     mechanisms: list[MechanismEvidence] = []
     for seed in CONFIRMATORY_SEED_COHORT.values:
         for concentration in DIRICHLET_CONCENTRATIONS:
             shared = _load_heterogeneity_evaluation(
-                seed, FederatedThresholdMethod.SHARED_THRESHOLD,
-                ControlledPartitionKind.DIRICHLET, concentration,
+                seed,
+                FederatedThresholdMethod.SHARED_THRESHOLD,
+                ControlledPartitionKind.DIRICHLET,
+                concentration,
             )
             local = _load_heterogeneity_evaluation(
-                seed, FederatedThresholdMethod.LOCAL_THRESHOLD,
-                ControlledPartitionKind.DIRICHLET, concentration,
+                seed,
+                FederatedThresholdMethod.LOCAL_THRESHOLD,
+                ControlledPartitionKind.DIRICHLET,
+                concentration,
             )
             movement = threshold_movements_from_evaluations(
                 shared=shared,
@@ -128,40 +131,46 @@ def analyze_controlled_heterogeneity_sweep(*, overwrite: bool = False) -> Path:
             )
             mechanisms.append(movement)
             vectors, score_checksum = _client_score_vectors(shared)
-            divergence = jensen_shannon_from_client_scores(vectors, source_score_checksum=score_checksum)
-            mechanisms.append(divergence)
+            mechanisms.append(jensen_shannon_from_client_scores(vectors, source_score_checksum=score_checksum))
         iid_shared = _load_heterogeneity_evaluation(
-            seed, FederatedThresholdMethod.SHARED_THRESHOLD,
-            ControlledPartitionKind.IID, None,
+            seed,
+            FederatedThresholdMethod.SHARED_THRESHOLD,
+            ControlledPartitionKind.IID,
+            None,
         )
         iid_local = _load_heterogeneity_evaluation(
-            seed, FederatedThresholdMethod.LOCAL_THRESHOLD,
-            ControlledPartitionKind.IID, None,
+            seed,
+            FederatedThresholdMethod.LOCAL_THRESHOLD,
+            ControlledPartitionKind.IID,
+            None,
         )
-        iid_movement = threshold_movements_from_evaluations(
-            shared=iid_shared,
-            local=iid_local,
-            experiment=ExperimentId.CONTROLLED_HETEROGENEITY_SWEEP,
+        mechanisms.append(
+            threshold_movements_from_evaluations(
+                shared=iid_shared,
+                local=iid_local,
+                experiment=ExperimentId.CONTROLLED_HETEROGENEITY_SWEEP,
+            )
         )
-        mechanisms.append(iid_movement)
         iid_vectors, iid_score_checksum = _client_score_vectors(iid_shared)
-        iid_divergence = jensen_shannon_from_client_scores(iid_vectors, source_score_checksum=iid_score_checksum)
-        mechanisms.append(iid_divergence)
+        mechanisms.append(jensen_shannon_from_client_scores(iid_vectors, source_score_checksum=iid_score_checksum))
 
     association_observations: list[AssociationObservation] = []
     for seed in CONFIRMATORY_SEED_COHORT.values:
         for concentration in DIRICHLET_CONCENTRATIONS:
             shared = _load_heterogeneity_evaluation(
-                seed, FederatedThresholdMethod.SHARED_THRESHOLD,
-                ControlledPartitionKind.DIRICHLET, concentration,
+                seed,
+                FederatedThresholdMethod.SHARED_THRESHOLD,
+                ControlledPartitionKind.DIRICHLET,
+                concentration,
             )
             local = _load_heterogeneity_evaluation(
-                seed, FederatedThresholdMethod.LOCAL_THRESHOLD,
-                ControlledPartitionKind.DIRICHLET, concentration,
+                seed,
+                FederatedThresholdMethod.LOCAL_THRESHOLD,
+                ControlledPartitionKind.DIRICHLET,
+                concentration,
             )
             shared_cv = population_metric(shared, MetricId.FPR_COEFFICIENT_OF_VARIATION)
             local_cv = population_metric(local, MetricId.FPR_COEFFICIENT_OF_VARIATION)
-            benefit = MetricValue(shared_cv.value - local_cv.value)
             vectors, score_checksum = _client_score_vectors(shared)
             divergence = jensen_shannon_from_client_scores(vectors, source_score_checksum=score_checksum)
             if divergence.aggregate is not None:
@@ -172,20 +181,21 @@ def analyze_controlled_heterogeneity_sweep(*, overwrite: bool = False) -> Path:
                         population=PopulationId.NBAIOT_DIRICHLET_CLIENTS,
                         regime_label=f"alpha_{concentration.value}",
                         heterogeneity=divergence.aggregate,
-                        benefit=benefit,
+                        benefit=MetricValue(shared_cv.value - local_cv.value),
                     )
                 )
         iid_shared = _load_heterogeneity_evaluation(
-            seed, FederatedThresholdMethod.SHARED_THRESHOLD,
-            ControlledPartitionKind.IID, None,
+            seed,
+            FederatedThresholdMethod.SHARED_THRESHOLD,
+            ControlledPartitionKind.IID,
+            None,
         )
         iid_local = _load_heterogeneity_evaluation(
-            seed, FederatedThresholdMethod.LOCAL_THRESHOLD,
-            ControlledPartitionKind.IID, None,
+            seed,
+            FederatedThresholdMethod.LOCAL_THRESHOLD,
+            ControlledPartitionKind.IID,
+            None,
         )
-        iid_shared_cv = population_metric(iid_shared, MetricId.FPR_COEFFICIENT_OF_VARIATION)
-        iid_local_cv = population_metric(iid_local, MetricId.FPR_COEFFICIENT_OF_VARIATION)
-        iid_benefit = MetricValue(iid_shared_cv.value - iid_local_cv.value)
         iid_vectors, iid_score_checksum = _client_score_vectors(iid_shared)
         iid_divergence = jensen_shannon_from_client_scores(iid_vectors, source_score_checksum=iid_score_checksum)
         if iid_divergence.aggregate is not None:
@@ -196,7 +206,10 @@ def analyze_controlled_heterogeneity_sweep(*, overwrite: bool = False) -> Path:
                     population=PopulationId.NBAIOT_DIRICHLET_CLIENTS,
                     regime_label="IID",
                     heterogeneity=iid_divergence.aggregate,
-                    benefit=iid_benefit,
+                    benefit=MetricValue(
+                        population_metric(iid_shared, MetricId.FPR_COEFFICIENT_OF_VARIATION).value
+                        - population_metric(iid_local, MetricId.FPR_COEFFICIENT_OF_VARIATION).value
+                    ),
                 )
             )
 
@@ -206,18 +219,20 @@ def analyze_controlled_heterogeneity_sweep(*, overwrite: bool = False) -> Path:
     movement_cohorts: list[ThresholdMovementCohort] = []
     for seed in CONFIRMATORY_SEED_COHORT.values:
         for concentration in DIRICHLET_CONCENTRATIONS:
-            shared = _load_heterogeneity_evaluation(
-                seed, FederatedThresholdMethod.SHARED_THRESHOLD,
-                ControlledPartitionKind.DIRICHLET, concentration,
-            )
-            local = _load_heterogeneity_evaluation(
-                seed, FederatedThresholdMethod.LOCAL_THRESHOLD,
-                ControlledPartitionKind.DIRICHLET, concentration,
-            )
             movement_cohorts.append(
                 threshold_movements_from_evaluations(
-                    shared=shared,
-                    local=local,
+                    shared=_load_heterogeneity_evaluation(
+                        seed,
+                        FederatedThresholdMethod.SHARED_THRESHOLD,
+                        ControlledPartitionKind.DIRICHLET,
+                        concentration,
+                    ),
+                    local=_load_heterogeneity_evaluation(
+                        seed,
+                        FederatedThresholdMethod.LOCAL_THRESHOLD,
+                        ControlledPartitionKind.DIRICHLET,
+                        concentration,
+                    ),
                     experiment=ExperimentId.CONTROLLED_HETEROGENEITY_SWEEP,
                 )
             )
@@ -241,7 +256,6 @@ def analyze_controlled_heterogeneity_sweep(*, overwrite: bool = False) -> Path:
 
 
 def analyze_per_client_score_geometry(*, overwrite: bool = False) -> Path:
-    """Compute per-client benign/attack score geometry from frozen confirmatory artifacts."""
     output = (
         OUTPUTS_ROOT
         / MechanismAnalysisDirectory.ROOT
@@ -251,6 +265,7 @@ def analyze_per_client_score_geometry(*, overwrite: bool = False) -> Path:
     )
     if overwrite and output.exists():
         from shutil import rmtree
+
         rmtree(output)
 
     geometries: list[ScoreGeometryResult] = []
@@ -274,17 +289,17 @@ def analyze_per_client_score_geometry(*, overwrite: bool = False) -> Path:
             benign_only=False,
         )
         attack_available = any(scores for _, scores in attack_eval)
-        threshold_overlays = _score_geometry_threshold_overlays(seed, expected_clients)
-        geometry = score_geometry_from_client_vectors(
-            seed=seed,
-            source_score_checksum=shared.fixed_score_evidence.evaluation.score_checksum,
-            benign_evaluation=benign_eval,
-            attack_evaluation=attack_eval,
-            threshold_overlays=threshold_overlays,
-            attack_geometry_available=attack_available,
-            attack_geometry_reason=None if attack_available else "attack evaluation scores unavailable",
+        geometries.append(
+            score_geometry_from_client_vectors(
+                seed=seed,
+                source_score_checksum=shared.fixed_score_evidence.evaluation.score_checksum,
+                benign_evaluation=benign_eval,
+                attack_evaluation=attack_eval,
+                threshold_overlays=_score_geometry_threshold_overlays(seed, expected_clients),
+                attack_geometry_available=attack_available,
+                attack_geometry_reason=None if attack_available else "attack evaluation scores unavailable",
+            )
         )
-        geometries.append(geometry)
 
     _persist_score_geometry(tuple(geometries), output / "score_geometry")
     if geometries:
@@ -299,7 +314,6 @@ def analyze_per_client_score_geometry(*, overwrite: bool = False) -> Path:
 
 
 def analyze_heterogeneity_benefit_association(*, overwrite: bool = False) -> Path:
-    """Compute heterogeneity-benefit association from frozen confirmatory artifacts."""
     output = (
         OUTPUTS_ROOT
         / MechanismAnalysisDirectory.ROOT
@@ -309,6 +323,7 @@ def analyze_heterogeneity_benefit_association(*, overwrite: bool = False) -> Pat
     )
     if overwrite and output.exists():
         from shutil import rmtree
+
         rmtree(output)
 
     mechanisms: list[MechanismEvidence] = []
@@ -318,7 +333,6 @@ def analyze_heterogeneity_benefit_association(*, overwrite: bool = False) -> Pat
         local = _load_confirmatory_evaluation(seed, FederatedThresholdMethod.LOCAL_THRESHOLD)
         shared_cv = population_metric(shared, MetricId.FPR_COEFFICIENT_OF_VARIATION)
         local_cv = population_metric(local, MetricId.FPR_COEFFICIENT_OF_VARIATION)
-        benefit = MetricValue(shared_cv.value - local_cv.value)
         vectors, score_checksum = _client_score_vectors(shared)
         divergence = jensen_shannon_from_client_scores(vectors, source_score_checksum=score_checksum)
         mechanisms.append(divergence)
@@ -330,7 +344,7 @@ def analyze_heterogeneity_benefit_association(*, overwrite: bool = False) -> Pat
                     population=PopulationId.NBAIOT_NATURAL_DEVICES,
                     regime_label=f"seed_{seed.value}",
                     heterogeneity=divergence.aggregate,
-                    benefit=benefit,
+                    benefit=MetricValue(shared_cv.value - local_cv.value),
                 )
             )
     if association_observations:
@@ -348,7 +362,6 @@ def analyze_heterogeneity_benefit_association(*, overwrite: bool = False) -> Pat
 
 
 def analyze_threshold_movement_tradeoff(*, overwrite: bool = False) -> Path:
-    """Compute threshold-movement tradeoff evidence from frozen confirmatory artifacts."""
     output = (
         OUTPUTS_ROOT
         / MechanismAnalysisDirectory.ROOT
@@ -358,6 +371,7 @@ def analyze_threshold_movement_tradeoff(*, overwrite: bool = False) -> Path:
     )
     if overwrite and output.exists():
         from shutil import rmtree
+
         rmtree(output)
 
     mechanisms: list[MechanismEvidence] = []
@@ -381,32 +395,27 @@ def analyze_threshold_movement_tradeoff(*, overwrite: bool = False) -> Path:
         )
     )
 
-    if mechanisms:
-        export_mechanism_publication(
-            tuple(mechanisms),
-            experiment=ExperimentId.THRESHOLD_MOVEMENT_TRADEOFF,
-            population=PopulationId.NBAIOT_NATURAL_DEVICES,
-            output_directory=output,
-            evidence_role=EvidenceRole.MECHANISM,
-        )
+    export_mechanism_publication(
+        tuple(mechanisms),
+        experiment=ExperimentId.THRESHOLD_MOVEMENT_TRADEOFF,
+        population=PopulationId.NBAIOT_NATURAL_DEVICES,
+        output_directory=output,
+        evidence_role=EvidenceRole.MECHANISM,
+    )
     return output
-
-
-AUROC_INVARIANCE_TOLERANCE = 1e-10
 
 
 def _verify_auroc_invariance(
     shared: FederatedEvaluationDocument,
     local: FederatedEvaluationDocument,
 ) -> None:
-    """AUROC must remain invariant across threshold-only policy changes."""
     shared_auroc = population_metric(shared, MetricId.AUROC)
     local_auroc = population_metric(local, MetricId.AUROC)
-    if abs(shared_auroc.value - local_auroc.value) > AUROC_INVARIANCE_TOLERANCE:
+    difference = abs(shared_auroc.value - local_auroc.value)
+    if difference > FIXED_SCORE_AUROC_INVARIANCE_TOLERANCE.value:
         raise ScientificContractError(
             "AUROC must be invariant across threshold-only policies; "
-            f"shared={shared_auroc.value} local={local_auroc.value} "
-            f"difference={abs(shared_auroc.value - local_auroc.value)}",
+            f"shared={shared_auroc.value} local={local_auroc.value} difference={difference}",
             subject=ExperimentId.THRESHOLD_MOVEMENT_TRADEOFF,
         )
 
@@ -419,12 +428,10 @@ def _require_declaration(experiment_id: ExperimentId) -> ExperimentDeclaration:
 
 
 def _confirmatory_coordinate(training_seed: Seed, method: FederatedThresholdMethod) -> ExperimentCoordinate:
-    from datp_core.pipeline.workflows import require_experiment_declaration
-
     if method in {FederatedThresholdMethod.SHARED_THRESHOLD, FederatedThresholdMethod.LOCAL_THRESHOLD}:
-        declaration = require_experiment_declaration(ExperimentId.SHARED_VS_LOCAL_CONFIRMATION)
+        declaration = _require_declaration(ExperimentId.SHARED_VS_LOCAL_CONFIRMATION)
     elif method is FederatedThresholdMethod.CLUSTER_THRESHOLD:
-        declaration = require_experiment_declaration(ExperimentId.FAMILY_AND_GROUPED_GRANULARITY)
+        declaration = _require_declaration(ExperimentId.FAMILY_AND_GROUPED_GRANULARITY)
     else:
         raise ScientificContractError(f"cannot resolve confirmatory coordinate for {method.value}")
     plan = expand_experiment_plan(declarations=(declaration,), seed_cohort=SeedCohort(values=(training_seed,)))
@@ -441,8 +448,11 @@ def _confirmatory_coordinate(training_seed: Seed, method: FederatedThresholdMeth
 
 def _load_confirmatory_evaluation(training_seed: Seed, method: FederatedThresholdMethod) -> FederatedEvaluationDocument:
     coordinate = _confirmatory_coordinate(training_seed, method)
-    eval_dir = evaluation_run_directory(OUTPUTS_ROOT, coordinate) / EvaluationRunAssetDirectory.EVALUATION
-    eval_path = eval_dir / FederatedEvaluationAssetName.DOCUMENT
+    eval_path = (
+        evaluation_run_directory(OUTPUTS_ROOT, coordinate)
+        / EvaluationRunAssetDirectory.EVALUATION
+        / FederatedEvaluationAssetName.DOCUMENT
+    )
     return load_evaluation_document(eval_path)
 
 
@@ -471,13 +481,16 @@ def _load_heterogeneity_evaluation(
         )
     )
     if len(matches) != 1:
+        alpha = concentration.value if concentration is not None else None
         raise ScientificContractError(
-            f"heterogeneity evaluation coordinate for {method.value} partition={partition_kind.value}"
-            f" alpha={concentration.value if concentration else 'None'} must resolve exactly once"
+            f"heterogeneity evaluation coordinate for {method.value} partition={partition_kind.value} "
+            f"alpha={alpha} must resolve exactly once"
         )
-    coordinate = matches[0]
-    eval_dir = evaluation_run_directory(OUTPUTS_ROOT, coordinate) / EvaluationRunAssetDirectory.EVALUATION
-    eval_path = eval_dir / FederatedEvaluationAssetName.DOCUMENT
+    eval_path = (
+        evaluation_run_directory(OUTPUTS_ROOT, matches[0])
+        / EvaluationRunAssetDirectory.EVALUATION
+        / FederatedEvaluationAssetName.DOCUMENT
+    )
     return load_evaluation_document(eval_path)
 
 
@@ -500,9 +513,7 @@ def _client_score_vectors(
             for value in pl.read_parquet(path)[ScoreFrameColumn.RECONSTRUCTION_ERROR.value].to_list()
         )
         if not scores:
-            raise ScientificContractError(
-                f"empty calibration score vector for client {client_result.client.client_id}",
-            )
+            raise ScientificContractError(f"empty calibration score vector for client {client_result.client.client_id}")
         vectors.append(ClientScoreVector(client=client_result.client, scores=scores))
     if len(vectors) < 2:
         raise ScientificContractError("Jensen-Shannon construction requires at least two client score vectors")
@@ -553,18 +564,11 @@ def _client_evaluation_scores(
             raise ScientificContractError(
                 f"score and label columns are misaligned for client {client.client_id}: {path}"
             )
-        if benign_only:
-            scores = tuple(
-                MetricValue(float(score))
-                for score, label in zip(scores_raw, labels, strict=True)
-                if str(label) == benign_label
-            )
-        else:
-            scores = tuple(
-                MetricValue(float(score))
-                for score, label in zip(scores_raw, labels, strict=True)
-                if str(label) != benign_label
-            )
+        scores = tuple(
+            MetricValue(float(score))
+            for score, label in zip(scores_raw, labels, strict=True)
+            if (str(label) == benign_label) is benign_only
+        )
         pairs.append((client, scores))
     return tuple(pairs)
 
