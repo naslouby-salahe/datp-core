@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-from datp_core.datasets.partitioning.contracts import ControlledPartitionKind
+from datp_core.data.populations.contracts import ControlledPartitionKind
 from datp_core.domain.enums import (
     DatasetId,
     PartitionRole,

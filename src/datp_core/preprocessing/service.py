@@ -1,10 +1,10 @@
 from datp_core.data.canonical_cache import require_canonical_publication_complete
-from datp_core.datasets.edge_iiotset.schema import EdgeCanonicalColumn
-from datp_core.datasets.partitioning.construction import (
+from datp_core.data.edge_iiotset.schema import EdgeCanonicalColumn
+from datp_core.data.populations.construction import (
     build_preprocessing_handoff,
     join_handoff_with_canonical_features,
 )
-from datp_core.datasets.partitioning.contracts import (
+from datp_core.data.populations.contracts import (
     PopulationConstructionRequest,
     PreprocessingHandoff,
     PreprocessingHandoffRequest,

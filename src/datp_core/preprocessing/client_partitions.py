@@ -4,9 +4,9 @@ from pathlib import Path
 import polars as pl
 import structlog
 
-from datp_core.datasets.edge_iiotset.schema import EDGE_NUMERIC_FEATURE_COLUMNS, EdgeAssetRole
-from datp_core.datasets.partitioning.construction import join_handoff_with_canonical_features
-from datp_core.datasets.partitioning.contracts import (
+from datp_core.data.edge_iiotset.schema import EDGE_NUMERIC_FEATURE_COLUMNS, EdgeAssetRole
+from datp_core.data.populations.construction import join_handoff_with_canonical_features
+from datp_core.data.populations.contracts import (
     CLIENT_ID_COLUMN,
     PARTITION_ROLE_COLUMN,
     STABLE_ROW_ID_COLUMN,

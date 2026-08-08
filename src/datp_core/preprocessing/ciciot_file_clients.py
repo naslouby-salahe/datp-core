@@ -5,7 +5,7 @@ from pathlib import Path
 
 import polars as pl
 
-from datp_core.datasets.partitioning.contracts import (
+from datp_core.data.populations.contracts import (
     CLIENT_ID_COLUMN,
     PARTITION_ROLE_COLUMN,
     SOURCE_PATH_COLUMN,

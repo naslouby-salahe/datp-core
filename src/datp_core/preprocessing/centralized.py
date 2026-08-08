@@ -4,11 +4,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from datp_core.data.canonical_cache import require_canonical_publication_complete
-from datp_core.datasets.partitioning.construction import (
+from datp_core.data.populations.construction import (
     build_preprocessing_handoff,
     join_handoff_with_canonical_features,
 )
-from datp_core.datasets.partitioning.contracts import (
+from datp_core.data.populations.contracts import (
     ControlledPartitionCondition,
     PopulationConstructionRequest,
     PreprocessingHandoffRequest,

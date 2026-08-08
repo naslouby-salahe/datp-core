@@ -3,8 +3,8 @@ from pathlib import Path
 
 import polars as pl
 
-from datp_core.datasets.edge_iiotset.schema import EdgeCanonicalColumn
-from datp_core.datasets.partitioning.contracts import (
+from datp_core.data.edge_iiotset.schema import EdgeCanonicalColumn
+from datp_core.data.populations.contracts import (
     ChronologicalPartitionDiagnosticsDocument,
     PopulationFeasibility,
     PopulationManifest,
@@ -12,7 +12,7 @@ from datp_core.datasets.partitioning.contracts import (
     SplitManifestDocument,
     client_identities,
 )
-from datp_core.datasets.partitioning.integrity import (
+from datp_core.data.populations.integrity import (
     membership_frame_checksum,
     validate_no_future_history_leakage,
     validate_population_manifest,

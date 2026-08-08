@@ -8,7 +8,7 @@ import numpy as np
 import polars as pl
 from pydantic import model_validator
 
-from datp_core.datasets.partitioning.contracts import (
+from datp_core.data.populations.contracts import (
     OUTCOME_LABEL_COLUMN,
     PARTITION_ROLE_COLUMN,
     STABLE_ROW_ID_COLUMN,
