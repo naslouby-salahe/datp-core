@@ -1,61 +1,25 @@
-"""Research-facing programme services composed from typed experiment families.
-
-Public CLI commands call these entry points. Experiment-specific scientific
-behaviour remains in dedicated experiment modules; this module owns generic
-protocol validation, deterministic planning, dataset preprocessing, and
-seed-cohort selection shared by every registered experiment.
-"""
+"""Generic programme validation, planning, and dataset preparation services."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from datp_core.app.campaign import (
-    ANCHOR_GATED_EXPERIMENTS,
-    REGISTERED_WORKFLOW_EXPERIMENTS,
-    AnchorCommandResult,
-    CampaignRunResult,
-    ExperimentRunResult,
-    ExperimentStatusRecord,
-    ProgrammeStatusReport,
-    ReportResult,
-    anchor_status,
-    format_plan,
-    format_status,
-    generate_report,
-    programme_status,
-    reproduce_anchor,
-    run_campaign,
-    run_experiment,
-    run_smoke,
-    verify_anchor_programme,
-)
-from datp_core.app.planning import (
+from datp_core.app.contracts import OverwriteMode
+from datp_core.datasets.service import DatasetMaterializationRequest, materialize_datasets
+from datp_core.domain.enums import DatasetId, ExperimentId, ExperimentReadiness, PopulationId
+from datp_core.domain.errors import ProtocolValidationError, ScientificContractError, UnknownIdentifierError
+from datp_core.domain.values.counts import Seed
+from datp_core.experiments.planning import (
     ExperimentPlan,
     PlanDisposition,
     PlanningEvidence,
     expand_experiment_plan,
+    merge_experiment_plans,
 )
-from datp_core.datasets.service import DatasetMaterializationRequest, materialize_datasets
-from datp_core.domain.enums import (
-    DatasetId,
-    ExperimentId,
-    ExperimentReadiness,
-    PopulationId,
-)
-from datp_core.domain.errors import (
-    ProtocolValidationError,
-    ScientificContractError,
-    UnknownIdentifierError,
-)
-from datp_core.domain.values.counts import Seed
+from datp_core.protocols.anchor import HISTORICAL_ANCHOR_SEED_COHORT
 from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration
 from datp_core.protocols.populations import POPULATIONS
-from datp_core.protocols.seeds import (
-    BOUNDED_EVIDENCE_SEED_COHORT,
-    CONFIRMATORY_SEED_COHORT,
-    SeedCohort,
-)
+from datp_core.protocols.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.protocols.validation import CANONICAL_PROTOCOL_GRAPH, ResolvedProtocolGraph, validate_protocol_graph
 from datp_core.runtime.configuration import DATA_ROOT
 
@@ -64,8 +28,8 @@ from datp_core.runtime.configuration import DATA_ROOT
 class ValidationResult:
     graph: ResolvedProtocolGraph
     experiment_ids: tuple[ExperimentId, ...]
-    registered_workflows: tuple[ExperimentId, ...]
-    unregistered_declared: tuple[ExperimentId, ...]
+    registered_recipes: tuple[ExperimentId, ...]
+    suppressed_experiments: tuple[ExperimentId, ...]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -74,7 +38,7 @@ class PlanPresentation:
     experiment_ids: tuple[ExperimentId, ...]
     seed_cohorts: tuple[tuple[ExperimentId, tuple[Seed, ...]], ...]
     anchor_required: tuple[ExperimentId, ...]
-    registered_workflows: tuple[ExperimentId, ...]
+    registered_recipes: tuple[ExperimentId, ...]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -116,123 +80,130 @@ def executable_planning_evidence(experiment_id: ExperimentId) -> PlanningEvidenc
     return PlanningEvidence(
         experiment=experiment_id,
         disposition=PlanDisposition.EXECUTABLE,
-        reason="registered experiment supplies locked execution prerequisites from protocol declarations",
+        reason="registered experiment recipe supplies locked execution prerequisites from protocol declarations",
     )
 
 
-def validate_programme(experiment_id: ExperimentId | None = None) -> ValidationResult:
+def validate_programme(experiment_id: ExperimentId | None) -> ValidationResult:
+    from datp_core.app.campaign import anchor_gated_experiment_ids, registered_experiment_ids
+
     graph = validate_protocol_graph(CANONICAL_PROTOCOL_GRAPH)
+    registered = registered_experiment_ids()
+    if len(registered) != len(frozenset(registered)):
+        raise ProtocolValidationError("experiment recipe registry contains duplicate experiment identities")
+    declared_runnable = tuple(
+        item.id
+        for item in graph.experiments
+        if item.id is not ExperimentId.HISTORICAL_DATP_REPRODUCTION
+        and item.readiness is not ExperimentReadiness.SUPPRESSED
+    )
+    if frozenset(registered) != frozenset(declared_runnable):
+        missing = tuple(item for item in declared_runnable if item not in frozenset(registered))
+        stale = tuple(item for item in registered if item not in frozenset(declared_runnable))
+        raise ProtocolValidationError(
+            "experiment recipe registry must cover every non-suppressed experiment exactly once; "
+            f"missing={','.join(item.value for item in missing) or 'none'}; "
+            f"stale={','.join(item.value for item in stale) or 'none'}"
+        )
+    known_populations = frozenset(population.id for population in POPULATIONS)
+    for declaration in graph.experiments:
+        if declaration.population not in known_populations:
+            raise ProtocolValidationError(
+                f"experiment references unknown population: {declaration.id.value}",
+            )
     if experiment_id is None:
         experiment_ids = tuple(
             item.id for item in graph.experiments if item.id is not ExperimentId.HISTORICAL_DATP_REPRODUCTION
         )
     else:
         reject_anchor_as_experiment(experiment_id)
-        require_experiment_declaration(experiment_id)
+        declaration = require_experiment_declaration(experiment_id)
         experiment_ids = (experiment_id,)
-        _ = expand_experiment_plan(
-            declarations=(require_experiment_declaration(experiment_id),),
-            seed_cohort=seed_cohort_for(experiment_id),
-        )
-    registered = tuple(item for item in experiment_ids if item in REGISTERED_WORKFLOW_EXPERIMENTS)
-    unregistered = tuple(
+        if declaration.readiness is not ExperimentReadiness.SUPPRESSED and experiment_id not in registered:
+            raise ProtocolValidationError(f"experiment has no registered recipe: {experiment_id.value}")
+    suppressed = tuple(
         item
         for item in experiment_ids
-        if item not in REGISTERED_WORKFLOW_EXPERIMENTS
-        and item is not ExperimentId.HISTORICAL_DATP_REPRODUCTION
-        and require_experiment_declaration(item).readiness is not ExperimentReadiness.SUPPRESSED
+        if require_experiment_declaration(item).readiness is ExperimentReadiness.SUPPRESSED
     )
-    for experiment in experiment_ids:
-        if experiment is ExperimentId.HISTORICAL_DATP_REPRODUCTION:
-            continue
-        declaration = require_experiment_declaration(experiment)
-        if declaration.population not in {population.id for population in POPULATIONS}:
-            raise ProtocolValidationError("experiment references an unknown population")
+    if any(item not in registered for item in anchor_gated_experiment_ids()):
+        raise ProtocolValidationError("anchor-gated experiment set contains an unregistered recipe")
     return ValidationResult(
         graph=graph,
         experiment_ids=experiment_ids,
-        registered_workflows=registered,
-        unregistered_declared=unregistered,
+        registered_recipes=tuple(item for item in experiment_ids if item in frozenset(registered)),
+        suppressed_experiments=suppressed,
     )
 
 
-def build_programme_plan(experiment_id: ExperimentId | None = None) -> PlanPresentation:
-    validate_programme(experiment_id)
-    if experiment_id is None:
-        declarations = EXPERIMENTS
-        evidence = tuple(
-            executable_planning_evidence(item.id) for item in EXPERIMENTS if item.id in REGISTERED_WORKFLOW_EXPERIMENTS
-        )
-        plan = expand_experiment_plan(
-            declarations=declarations,
-            seed_cohort=CONFIRMATORY_SEED_COHORT,
-            evidence=evidence,
-        )
-        experiment_ids = tuple(item.id for item in EXPERIMENTS)
-    else:
-        reject_anchor_as_experiment(experiment_id)
-        declaration = require_experiment_declaration(experiment_id)
-        evidence = (
-            (executable_planning_evidence(experiment_id),) if experiment_id in REGISTERED_WORKFLOW_EXPERIMENTS else ()
-        )
-        plan = expand_experiment_plan(
+def _plan_for_declaration(declaration: ExperimentDeclaration) -> ExperimentPlan:
+    if declaration.id is ExperimentId.HISTORICAL_DATP_REPRODUCTION:
+        return expand_experiment_plan(
             declarations=(declaration,),
-            seed_cohort=seed_cohort_for(experiment_id),
-            evidence=evidence,
+            seed_cohort=HISTORICAL_ANCHOR_SEED_COHORT,
+            evidence=(
+                PlanningEvidence(
+                    experiment=declaration.id,
+                    disposition=PlanDisposition.EXECUTABLE,
+                    reason="historical anchor reproduction uses the locked historical seed cohort",
+                ),
+            ),
         )
-        experiment_ids = (experiment_id,)
-    cohorts = tuple(
-        (item, seed_cohort_for(item).values)
-        for item in experiment_ids
-        if item is not ExperimentId.HISTORICAL_DATP_REPRODUCTION
+    evidence = (
+        ()
+        if declaration.readiness is ExperimentReadiness.SUPPRESSED
+        else (executable_planning_evidence(declaration.id),)
     )
-    anchor_required = tuple(item for item in experiment_ids if item in ANCHOR_GATED_EXPERIMENTS)
-    registered = tuple(item for item in experiment_ids if item in REGISTERED_WORKFLOW_EXPERIMENTS)
+    return expand_experiment_plan(
+        declarations=(declaration,),
+        seed_cohort=seed_cohort_for(declaration.id),
+        evidence=evidence,
+    )
+
+
+def build_programme_plan(experiment_id: ExperimentId | None) -> PlanPresentation:
+    from datp_core.app.campaign import anchor_gated_experiment_ids
+
+    validation = validate_programme(experiment_id)
+    declarations = EXPERIMENTS if experiment_id is None else (require_experiment_declaration(experiment_id),)
+    plan = merge_experiment_plans(tuple(_plan_for_declaration(declaration) for declaration in declarations))
+    experiment_ids = tuple(declaration.id for declaration in declarations)
+    cohorts = tuple(
+        (
+            declaration.id,
+            HISTORICAL_ANCHOR_SEED_COHORT.values
+            if declaration.id is ExperimentId.HISTORICAL_DATP_REPRODUCTION
+            else seed_cohort_for(declaration.id).values,
+        )
+        for declaration in declarations
+    )
+    anchor_required = tuple(
+        item for item in experiment_ids if item in frozenset(anchor_gated_experiment_ids())
+    )
     return PlanPresentation(
         plan=plan,
         experiment_ids=experiment_ids,
         seed_cohorts=cohorts,
         anchor_required=anchor_required,
-        registered_workflows=registered,
+        registered_recipes=validation.registered_recipes,
     )
 
 
 def preprocess_datasets(
-    dataset_id: DatasetId | None = None,
+    dataset_id: DatasetId | None,
     *,
-    overwrite: bool = False,
+    overwrite: OverwriteMode,
 ) -> PreprocessResult:
     datasets = tuple(DatasetId) if dataset_id is None else (dataset_id,)
     result = materialize_datasets(
-        DatasetMaterializationRequest(data_root=DATA_ROOT, datasets=datasets, overwrite=overwrite)
+        DatasetMaterializationRequest(
+            data_root=DATA_ROOT,
+            datasets=datasets,
+            overwrite=overwrite.requested,
+        )
     )
     publications = tuple(
-        f"{publication.dataset.value}:{publication.publication_status.value}" for publication in result.publications
+        f"{publication.dataset.value}:{publication.publication_status.value}"
+        for publication in result.publications
     )
     return PreprocessResult(datasets=datasets, publications=publications)
-
-
-__all__ = [
-    "AnchorCommandResult",
-    "CampaignRunResult",
-    "ExperimentRunResult",
-    "ExperimentStatusRecord",
-    "PlanPresentation",
-    "PreprocessResult",
-    "ProgrammeStatusReport",
-    "ReportResult",
-    "ValidationResult",
-    "anchor_status",
-    "build_programme_plan",
-    "format_plan",
-    "format_status",
-    "generate_report",
-    "preprocess_datasets",
-    "programme_status",
-    "reproduce_anchor",
-    "run_campaign",
-    "run_experiment",
-    "run_smoke",
-    "validate_programme",
-    "verify_anchor_programme",
-]
