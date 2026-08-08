@@ -3,13 +3,12 @@
 from dataclasses import dataclass
 from typing import assert_never
 
-from datp_core.datasets.partitioning.contracts import PopulationCapabilities
-from datp_core.domain.enums import CentralizedThresholdMethod, ContractSubject, FederatedThresholdMethod
-from datp_core.domain.errors import CapabilityError, LeakageError, ScientificContractError
-from datp_core.domain.values.counts import RowCount
-from datp_core.domain.values.ratios import Quantile
-from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.protocols.calibration import (
+from datp_core.core.errors import CapabilityError, LeakageError, ScientificContractError
+from datp_core.core.identifiers import CentralizedThresholdMethod, ContractSubject, FederatedThresholdMethod
+from datp_core.core.numeric import Quantile, RowCount
+from datp_core.data.populations.contracts import PopulationCapabilities
+from datp_core.detector.training.contracts import FederatedTrainingCoordinate
+from datp_core.thresholds.contracts import (
     CLUSTER_MEDIAN_THRESHOLD_PROTOCOL,
     CLUSTER_THRESHOLD_PROTOCOL,
     FEDERATED_STATISTICS_PROTOCOL,
@@ -17,23 +16,46 @@ from datp_core.protocols.calibration import (
     MINIMUM_BENIGN_SUPPORT,
     CalibrationSupportRule,
     ClusterThresholdAggregation,
+    FamilyAssignment,
     QuantileProtocol,
+    ThresholdInfeasibilityReason,
+    ThresholdUnavailableResult,
 )
-from datp_core.thresholding.assignments import FamilyAssignment
-from datp_core.thresholding.identities import ThresholdInfeasibilityReason, ThresholdUnavailableResult
-from datp_core.thresholding.methods.cluster import construct_grouped_threshold
-from datp_core.thresholding.methods.conformal import construct_local_conformal_threshold
-from datp_core.thresholding.methods.family import construct_family_threshold
-from datp_core.thresholding.methods.federated_statistics import construct_federated_benign_statistics
-from datp_core.thresholding.methods.local import construct_local_threshold
-from datp_core.thresholding.methods.shared import (
+from datp_core.thresholds.policies.cluster import GroupedThresholdResult, construct_grouped_threshold
+from datp_core.thresholds.policies.family import FamilyThresholdResult, construct_family_threshold
+from datp_core.thresholds.policies.local import LocalThresholdResult, construct_local_threshold
+from datp_core.thresholds.policies.shared import (
+    PooledSharedQuantileResult,
+    SampleWeightedSharedThresholdResult,
+    SharedThresholdResult,
     construct_pooled_shared_quantile,
     construct_sample_weighted_shared_threshold,
     construct_shared_threshold,
 )
-from datp_core.thresholding.methods.shrinkage import construct_fixed_shrinkage, construct_size_aware_shrinkage
-from datp_core.thresholding.models import ThresholdConstructionResult
-from datp_core.thresholding.quantiles import ClientBenignCalibrationScores
+from datp_core.thresholds.quantiles import ClientBenignCalibrationScores
+from datp_core.thresholds.variants.conformal import ConformalThresholdResult, construct_local_conformal_threshold
+from datp_core.thresholds.variants.federated_statistics import (
+    FederatedStatisticsThresholdResult,
+    construct_federated_benign_statistics,
+)
+from datp_core.thresholds.variants.shrinkage import (
+    ShrinkageThresholdResult,
+    construct_fixed_shrinkage,
+    construct_size_aware_shrinkage,
+)
+
+type ThresholdConstructionResult = (
+    SharedThresholdResult
+    | PooledSharedQuantileResult
+    | SampleWeightedSharedThresholdResult
+    | LocalThresholdResult
+    | FamilyThresholdResult
+    | GroupedThresholdResult
+    | tuple[ShrinkageThresholdResult, ...]
+    | ConformalThresholdResult
+    | FederatedStatisticsThresholdResult
+    | ThresholdUnavailableResult
+)
 
 
 def reject_centralized_threshold_method(method: FederatedThresholdMethod | CentralizedThresholdMethod) -> None:
