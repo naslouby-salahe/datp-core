@@ -2,11 +2,7 @@
 
 from dataclasses import dataclass
 
-from datp_core.calibration.models import (
-    CalibrationReplicateManifest,
-    CalibrationSubsample,
-    EligibilityDecision,
-)
+from datp_core.calibration.models import CalibrationReplicateManifest, CalibrationSubsample, EligibilityDecision
 from datp_core.calibration.service import CalibrationRequest, calibrate
 from datp_core.datasets.partitioning.contracts import ClientIdentity, EligibleCohort
 from datp_core.datasets.registry import population_capabilities
@@ -16,10 +12,7 @@ from datp_core.domain.values.checksums import Checksum, checksum_text
 from datp_core.domain.values.counts import CalibrationSize, ReplicateIndex, SubsampleReplicateCount
 from datp_core.domain.values.ratios import Quantile
 from datp_core.evaluation.cohort.contracts import EvaluationCohortManifest
-from datp_core.evaluation.federated.contracts import (
-    CalibrationSizeAblationCell,
-    FederatedEvaluationRequest,
-)
+from datp_core.evaluation.federated.contracts import CalibrationSizeAblationCell, FederatedEvaluationRequest
 from datp_core.evaluation.federated.execution import prepare_federated_evaluation
 from datp_core.evaluation.fixed_score.contracts import FixedScoreEvidence
 from datp_core.pipeline.scoring.models import FederatedScoreArtifactManifest
@@ -27,15 +20,15 @@ from datp_core.protocols.calibration import (
     CALIBRATION_ELIGIBILITY_PROTOCOL,
     CALIBRATION_SIZE_PROTOCOL,
     CalibrationEligibilityProtocol,
+    CalibrationSupportRule,
+    ClusterThresholdAggregation,
+    require_calibration_subsample_replicate_count,
 )
 from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
 from datp_core.thresholding.assignments import FamilyAssignment
 from datp_core.thresholding.dispatch import ThresholdConstructionRequest, dispatch_federated_threshold
 from datp_core.thresholding.identities import ThresholdUnavailableResult
-from datp_core.thresholding.quantiles import (
-    ClientBenignCalibrationScores,
-    calibration_scores_from_references,
-)
+from datp_core.thresholding.quantiles import ClientBenignCalibrationScores, calibration_scores_from_references
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -83,13 +76,13 @@ def build_calibration(request: BuildCalibrationRequest) -> BuildCalibrationResul
 
 
 def build_declared_calibration(score_manifest: FederatedScoreArtifactManifest) -> BuildCalibrationResult:
-    """Construct the locked calibration-size ablation subsample lattice."""
+    """Construct the declared calibration-size ablation lattice once replication is specified."""
     return build_calibration(
         BuildCalibrationRequest(
             score_manifest=score_manifest,
             protocol=CALIBRATION_ELIGIBILITY_PROTOCOL,
             calibration_sizes=CALIBRATION_SIZE_PROTOCOL.sizes,
-            replicate_count=CALIBRATION_SIZE_PROTOCOL.replicate_count,
+            replicate_count=require_calibration_subsample_replicate_count(),
         )
     )
 
@@ -97,20 +90,22 @@ def build_declared_calibration(score_manifest: FederatedScoreArtifactManifest) -
 def construct_calibration_size_ablation(
     request: ConstructCalibrationSizeAblationRequest,
 ) -> tuple[CalibrationSizeAblationCell, ...]:
-    """Evaluate the locked size × replicate grid on the unchanged held-out test set."""
+    """Evaluate the declared size × replicate grid on the unchanged held-out test set."""
     cells: list[CalibrationSizeAblationCell] = []
     capabilities = population_capabilities(request.score_manifest.coordinate.population)
+    replicate_count = require_calibration_subsample_replicate_count()
     by_client_replicate = {
-        (manifest.client, manifest.replicate_index.value): manifest
+        (manifest.client, manifest.replicate_index): manifest
         for manifest in request.calibration.replicate_manifests
     }
     for size in CALIBRATION_SIZE_PROTOCOL.sizes:
-        for replicate_index in range(CALIBRATION_SIZE_PROTOCOL.replicate_count.value):
+        for replicate_value in range(replicate_count.value):
+            replicate_index = ReplicateIndex(replicate_value)
             eligible = _eligible_scores_for_size(
                 request.calibration.eligible_clients,
                 by_client_replicate,
                 size,
-                ReplicateIndex(replicate_index),
+                replicate_index,
             )
             if not eligible:
                 continue
@@ -122,8 +117,12 @@ def construct_calibration_size_ablation(
                     capabilities=capabilities,
                     eligible=eligible,
                     family_by_client=request.family_by_client,
-                    # Nested size grid includes n_k=50 below confirmatory eligibility.
-                    enforce_minimum_support=False,
+                    support_rule=CalibrationSupportRule.DECLARED_SIZE_ABLATION,
+                    cluster_threshold_aggregation=(
+                        ClusterThresholdAggregation.ARITHMETIC_MEAN_OF_ELIGIBLE_LOCAL_THRESHOLDS
+                        if request.method is FederatedThresholdMethod.CLUSTER_THRESHOLD
+                        else None
+                    ),
                 )
             )
             if isinstance(threshold, ThresholdUnavailableResult):
@@ -149,7 +148,7 @@ def construct_calibration_size_ablation(
             cells.append(
                 CalibrationSizeAblationCell(
                     calibration_size=size,
-                    replicate_index=ReplicateIndex(replicate_index),
+                    replicate_index=replicate_index,
                     method=request.method,
                     clients=publication.artifacts.clients,
                     population=publication.artifacts.population,
@@ -165,13 +164,13 @@ def construct_calibration_size_ablation(
 
 def _eligible_scores_for_size(
     eligible_clients: EligibleCohort,
-    by_client_replicate: dict[tuple[ClientIdentity, int], CalibrationReplicateManifest],
+    by_client_replicate: dict[tuple[ClientIdentity, ReplicateIndex], CalibrationReplicateManifest],
     size: CalibrationSize,
     replicate_index: ReplicateIndex,
 ) -> tuple[ClientBenignCalibrationScores, ...]:
     scores: list[ClientBenignCalibrationScores] = []
     for client in eligible_clients:
-        manifest = by_client_replicate.get((client, replicate_index.value))
+        manifest = by_client_replicate.get((client, replicate_index))
         if manifest is None:
             continue
         matches = tuple(item for item in manifest.subsamples if item.size == size)
@@ -189,10 +188,7 @@ def _eligible_scores_for_size(
     return tuple(scores)
 
 
-def _subsample_checksum(
-    manifest: CalibrationReplicateManifest,
-    subsample: CalibrationSubsample,
-) -> Checksum:
+def _subsample_checksum(manifest: CalibrationReplicateManifest, subsample: CalibrationSubsample) -> Checksum:
     payload = "|".join(
         (
             manifest.client.client_id,
