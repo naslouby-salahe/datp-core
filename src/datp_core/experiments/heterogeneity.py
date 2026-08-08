@@ -28,7 +28,6 @@ from datp_core.analysis.mechanisms import (
     summarize_threshold_movements_across_seeds,
     threshold_movements_from_evaluations,
 )
-from datp_core.app.planning import expand_experiment_plan
 from datp_core.datasets.partitioning.contracts import ClientIdentity, ControlledPartitionKind
 from datp_core.domain.enums import (
     EvidenceRole,
@@ -45,6 +44,7 @@ from datp_core.domain.values.ratios import DirichletConcentration, MetricValue
 from datp_core.evaluation.federated.contracts import FederatedEvaluationDocument
 from datp_core.evaluation.federated.publication import FederatedEvaluationAssetName
 from datp_core.experiments.execution import execute_declared_experiment_seed
+from datp_core.experiments.planning import expand_experiment_plan
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.pipeline.coordinates import ExperimentCoordinate
 from datp_core.pipeline.execution.evidence import load_evaluation_document, population_metric
@@ -79,7 +79,7 @@ def run_controlled_heterogeneity_sweep_seed(
     training_seed: Seed,
     *,
     output_root: Path,
-    overwrite: bool = False,
+    overwrite: bool,
 ) -> HeterogeneitySweepSeedResult:
     declaration = _require_declaration(ExperimentId.CONTROLLED_HETEROGENEITY_SWEEP)
     result = execute_declared_experiment_seed(
@@ -96,7 +96,7 @@ def run_controlled_heterogeneity_sweep_seed(
     )
 
 
-def analyze_controlled_heterogeneity_sweep(*, overwrite: bool = False) -> Path:
+def analyze_controlled_heterogeneity_sweep(*, overwrite: bool) -> Path:
     output = (
         OUTPUTS_ROOT
         / MechanismAnalysisDirectory.ROOT
@@ -255,7 +255,7 @@ def analyze_controlled_heterogeneity_sweep(*, overwrite: bool = False) -> Path:
     return output
 
 
-def analyze_per_client_score_geometry(*, overwrite: bool = False) -> Path:
+def analyze_per_client_score_geometry(*, overwrite: bool) -> Path:
     output = (
         OUTPUTS_ROOT
         / MechanismAnalysisDirectory.ROOT
@@ -313,7 +313,7 @@ def analyze_per_client_score_geometry(*, overwrite: bool = False) -> Path:
     return output
 
 
-def analyze_heterogeneity_benefit_association(*, overwrite: bool = False) -> Path:
+def analyze_heterogeneity_benefit_association(*, overwrite: bool) -> Path:
     output = (
         OUTPUTS_ROOT
         / MechanismAnalysisDirectory.ROOT
@@ -361,7 +361,7 @@ def analyze_heterogeneity_benefit_association(*, overwrite: bool = False) -> Pat
     return output
 
 
-def analyze_threshold_movement_tradeoff(*, overwrite: bool = False) -> Path:
+def analyze_threshold_movement_tradeoff(*, overwrite: bool) -> Path:
     output = (
         OUTPUTS_ROOT
         / MechanismAnalysisDirectory.ROOT
@@ -497,9 +497,7 @@ def _load_heterogeneity_evaluation(
 def _client_score_vectors(
     document: FederatedEvaluationDocument,
 ) -> tuple[tuple[ClientScoreVector, ...], Checksum]:
-    score_root = (
-        federated_training_directory(document.score_coordinate, OUTPUTS_ROOT) / ExecutionArtifactDirectory.SCORES
-    )
+    score_root = federated_training_directory(document.score_coordinate, OUTPUTS_ROOT) / ExecutionArtifactDirectory.SCORES
     vectors: list[ClientScoreVector] = []
     for client_result in sorted(document.clients, key=lambda item: item.client):
         path = score_root / client_result.client.client_id / FederatedScoreAssetName.CALIBRATION.value
