@@ -6,7 +6,7 @@ from enum import StrEnum
 from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.contracts import ClientCollection, ClientOwned
 from datp_core.domain.enums import PublicationStatus
-from datp_core.learning.federated.common import (
+from datp_core.detector.training.common import (
     DittoTrainingArtifacts,
     ditto_training_is_reusable,
     load_reused_ditto_artifacts,
@@ -14,7 +14,7 @@ from datp_core.learning.federated.common import (
     validate_federated_training_inputs,
     write_ditto_training,
 )
-from datp_core.learning.federated.ditto import DittoTrainingRequest
+from datp_core.detector.training.ditto import DittoTrainingRequest
 from datp_core.detector.training.models import CheckpointCandidate, FederatedTrainingResult
 from datp_core.artifacts.repositories.publication import (
     FunctionalRelatedArtifactCodec,

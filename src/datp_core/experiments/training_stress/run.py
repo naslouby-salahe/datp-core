@@ -72,13 +72,13 @@ from datp_core.experiments.personalized_scoring import client_metric, client_sco
 from datp_core.experiments.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
 from datp_core.detector.checkpoints.history import history_frames
 from datp_core.detector.checkpoints.identities import FederatedHistoryColumn
-from datp_core.learning.federated.ditto import DittoTrainingRequest
+from datp_core.detector.training.ditto import DittoTrainingRequest
 from datp_core.detector.training.models import (
     DittoTrainingCoordinates,
     FederatedTrainingCoordinate,
     PreparedClientProvenance,
 )
-from datp_core.learning.federated.training import preprocessing_state_set_checksum
+from datp_core.detector.training.engine import preprocessing_state_set_checksum
 from datp_core.pipeline.checkpoints.service import SelectFederatedCheckpointRequest, select_federated_primary_checkpoint
 from datp_core.pipeline.decision.evidence import AnalysisAssetName, SeedEvidenceAssetName
 from datp_core.pipeline.execution.context import (

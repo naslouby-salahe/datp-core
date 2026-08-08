@@ -14,7 +14,7 @@ from datp_core.detector.training.common import (
     train_federated_global,
     train_local_model,
 )
-from datp_core.detector.training.contracts import AutoencoderProtocol, FederatedTrainingCoordinate, FedAvgProtocol
+from datp_core.detector.training.contracts import AutoencoderProtocol, FedAvgProtocol, FederatedTrainingCoordinate
 
 
 def train_fedavg(

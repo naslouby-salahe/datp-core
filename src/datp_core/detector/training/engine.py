@@ -28,6 +28,20 @@ from datp_core.detector.autoencoder import (
     clone_state,
 )
 from datp_core.detector.checkpoints.contracts import CheckpointProtocol
+from datp_core.detector.training.models import (
+    ClientTrainingInput,
+    ClientTrainingResult,
+    ClientUpdate,
+    CommunicationRecord,
+    FederatedRoundResult,
+    FederatedTrainingCoordinate,
+    FederatedTrainingExecution,
+    FederatedTrainingHistory,
+    FederatedTrainingResult,
+    GlobalModelStateReference,
+    PreparedClientProvenance,
+    RoundSnapshot,
+)
 from datp_core.domain.enums import (
     CommunicationEstimationMethod,
     ContractSubject,
@@ -46,20 +60,6 @@ from datp_core.domain.values.counts import (
 )
 from datp_core.domain.values.identifiers import CudaDeviceName, OutcomeLabel, OutcomeLabelSequence
 from datp_core.domain.values.ratios import DittoRegularization, LearningRate, MetricValue, ProximalCoefficient
-from datp_core.detector.training.models import (
-    ClientTrainingInput,
-    ClientTrainingResult,
-    ClientUpdate,
-    CommunicationRecord,
-    FederatedRoundResult,
-    FederatedTrainingCoordinate,
-    FederatedTrainingExecution,
-    FederatedTrainingHistory,
-    FederatedTrainingResult,
-    GlobalModelStateReference,
-    PreparedClientProvenance,
-    RoundSnapshot,
-)
 from datp_core.protocols.training import (
     FEDERATED_DATALOADER_WORKER_COUNT,
     AutoencoderProtocol,

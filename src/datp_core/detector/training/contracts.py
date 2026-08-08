@@ -21,6 +21,7 @@ from datp_core.core.identifiers import (
 from datp_core.core.numeric import (
     BatchSize,
     DataLoaderWorkerCount,
+    DirichletConcentration,
     DittoRegularization,
     FeatureCount,
     LearningRate,
@@ -31,7 +32,6 @@ from datp_core.core.numeric import (
     Ratio,
     Seed,
     WeightDecay,
-    DirichletConcentration,
 )
 from datp_core.data.populations.contracts import ControlledPartitionKind
 

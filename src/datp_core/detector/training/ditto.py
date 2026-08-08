@@ -3,17 +3,32 @@ from pathlib import Path
 
 import torch
 
-from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import ContractSubject, CudaDeviceName, TrainingModelId
 from datp_core.core.numeric import BatchSize, ClientCount, LearningRate, RoundNumber, Seed
+from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.autoencoder import (
     build_reconstruction_autoencoder,
     clone_autoencoder_state,
     clone_state,
 )
+from datp_core.detector.checkpoints.contracts import CheckpointProtocol
 from datp_core.detector.checkpoints.publication import write_ditto_training
+from datp_core.detector.training.engine import (
+    ProximalTerm,
+    TrainingStream,
+    aggregate_client_updates,
+    compute_weighted_aggregate_loss,
+    create_communication_record,
+    create_round_snapshot,
+    derive_client_stream_seed,
+    prepare_federated_client_data,
+    preprocessing_state_set_checksum,
+    serialize_and_checksum_state_dict,
+    train_client_update,
+    validate_common_request,
+)
 from datp_core.detector.training.models import (
     ClientTrainingInput,
     ClientTrainingResult,
@@ -29,21 +44,6 @@ from datp_core.detector.training.models import (
     PreparedClientProvenance,
     RoundSnapshot,
 )
-from datp_core.learning.federated.training import (
-    ProximalTerm,
-    TrainingStream,
-    aggregate_client_updates,
-    compute_weighted_aggregate_loss,
-    create_communication_record,
-    create_round_snapshot,
-    derive_client_stream_seed,
-    prepare_federated_client_data,
-    preprocessing_state_set_checksum,
-    serialize_and_checksum_state_dict,
-    train_client_update,
-    validate_common_request,
-)
-from datp_core.detector.checkpoints.contracts import CheckpointProtocol
 from datp_core.protocols.training import AutoencoderProtocol, DittoProtocol
 from datp_core.runtime.compute import resolve_cuda_device
 from datp_core.runtime.determinism import configure_deterministic_execution

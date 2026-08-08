@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from datp_core.domain.enums import PublicationStatus
 from datp_core.detector.checkpoints.identities import FederatedHistoryAssetName
-from datp_core.learning.federated.common import (
+from datp_core.detector.training.common import (
     FederatedTrainingArtifacts,
     federated_training_is_reusable,
     load_reused_federated_artifacts,
@@ -12,9 +12,9 @@ from datp_core.learning.federated.common import (
     rebase_federated_training,
     validate_federated_training_inputs,
 )
-from datp_core.learning.federated.global_training import GlobalFederatedProtocol
+from datp_core.detector.training.federated import GlobalFederatedProtocol
 from datp_core.detector.training.models import CheckpointCandidate, FederatedTrainingResult
-from datp_core.learning.federated.training import FederatedTrainingRequest
+from datp_core.detector.training.engine import FederatedTrainingRequest
 from datp_core.artifacts.repositories.publication import ArtifactPublication, FunctionalArtifactCodec, publish_artifact
 
 

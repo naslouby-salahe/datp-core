@@ -1,10 +1,10 @@
 from dataclasses import dataclass, replace
 from pathlib import Path
 
-from datp_core.data.registry import resolve_population
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import ContractSubject
+from datp_core.data.registry import resolve_population
 from datp_core.detector.checkpoints.candidates import rebase_checkpoint_candidates
 from datp_core.detector.checkpoints.identities import FederatedHistoryAssetName
 from datp_core.detector.checkpoints.reuse import (
@@ -13,8 +13,9 @@ from datp_core.detector.checkpoints.reuse import (
     load_reused_ditto_training,
     load_reused_federated_training,
 )
-from datp_core.learning.federated.ditto import DittoTrainingRequest, train_ditto
-from datp_core.learning.federated.global_training import GlobalFederatedProtocol, train_global_federated
+from datp_core.detector.training.ditto import DittoTrainingRequest, train_ditto
+from datp_core.detector.training.engine import FederatedTrainingRequest, preprocessing_state_set_checksum
+from datp_core.detector.training.federated import GlobalFederatedProtocol, train_global_federated
 from datp_core.detector.training.models import (
     CheckpointCandidate,
     ClientTrainingInput,
@@ -22,7 +23,6 @@ from datp_core.detector.training.models import (
     PersonalizedCandidateSet,
     PreparedClientProvenance,
 )
-from datp_core.learning.federated.training import FederatedTrainingRequest, preprocessing_state_set_checksum
 
 
 @dataclass(frozen=True, slots=True)

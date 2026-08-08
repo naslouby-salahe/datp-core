@@ -11,21 +11,7 @@ from safetensors.torch import load_file, save_file
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
-from datp_core.data.populations.contracts import (
-    OUTCOME_LABEL_COLUMN,
-    PopulationFrameColumn,
-    PopulationOutcomeLabel,
-)
-from datp_core.core.identifiers import (
-    CentralizedModelId,
-    ContractSubject,
-    OptimizerId,
-    PopulationId,
-    PreprocessingProtocolId,
-    ProcessedDataBranch,
-    SplitProtocolId,
-    TrainingHistoryColumn,
-)
+from datp_core.artifacts.provenance import Checksum, checksum_file, checksum_text
 from datp_core.core.errors import (
     ArtifactIntegrityError,
     ExecutionStateError,
@@ -33,8 +19,20 @@ from datp_core.core.errors import (
     ScientificContractError,
     UnresolvedScientificValueError,
 )
-from datp_core.artifacts.provenance import Checksum, checksum_file, checksum_text
-from datp_core.core.identifiers import CudaDeviceName, FeatureNameSequence, OutcomeLabel, OutcomeLabelSequence
+from datp_core.core.identifiers import (
+    CentralizedModelId,
+    ContractSubject,
+    CudaDeviceName,
+    FeatureNameSequence,
+    OptimizerId,
+    OutcomeLabel,
+    OutcomeLabelSequence,
+    PopulationId,
+    PreprocessingProtocolId,
+    ProcessedDataBranch,
+    SplitProtocolId,
+    TrainingHistoryColumn,
+)
 from datp_core.core.numeric import (
     BatchSize,
     FeatureCount,
@@ -45,6 +43,11 @@ from datp_core.core.numeric import (
     Seed,
     WeightDecay,
 )
+from datp_core.data.populations.contracts import (
+    OUTCOME_LABEL_COLUMN,
+    PopulationFrameColumn,
+    PopulationOutcomeLabel,
+)
 from datp_core.detector.autoencoder import (
     LEARNING_DTYPE,
     TORCH_LEARNING_DTYPE,
@@ -54,12 +57,12 @@ from datp_core.detector.autoencoder import (
     build_optimizer,
     construct_autoencoder,
 )
+from datp_core.detector.checkpoints.contracts import CheckpointProtocol
 from datp_core.preprocessing.models import (
     CentralizedFittedPreprocessingState,
     FederatedFittedPreprocessingState,
     FittedPreprocessingState,
 )
-from datp_core.detector.checkpoints.contracts import CheckpointProtocol
 from datp_core.protocols.training import (
     BATCH_SIZE,
     CENTRALIZED_DATALOADER_WORKER_COUNT,

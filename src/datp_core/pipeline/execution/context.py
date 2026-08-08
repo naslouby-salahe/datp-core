@@ -19,7 +19,7 @@ from datp_core.detector.training.models import (
     FederatedTrainingCoordinate,
     PreparedClientProvenance,
 )
-from datp_core.learning.federated.training import preprocessing_state_set_checksum
+from datp_core.detector.training.engine import preprocessing_state_set_checksum
 from datp_core.pipeline.coordinates import ExperimentCoordinate
 from datp_core.pipeline.execution.layout import (
     ExecutionArtifactDirectory,
