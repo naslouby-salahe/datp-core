@@ -1,10 +1,11 @@
-"""One-shot temporal reference, future recalibration, and analysis execution."""
+"""One-shot temporal reference, frozen-future, recalibration, and recovery analysis."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+from shutil import rmtree
 
 from pydantic import TypeAdapter, ValidationError
 
@@ -14,6 +15,7 @@ from datp_core.analysis.temporal import (
     TemporalSeedProvenance,
     temporal_recovery,
 )
+from datp_core.app.planning import ExperimentPlan, expand_experiment_plan
 from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.datasets.registry import population_capabilities
 from datp_core.domain.enums import (
@@ -61,13 +63,12 @@ from datp_core.pipeline.execution.layout import (
 )
 from datp_core.pipeline.execution.matched_reference import matched_static_reference_inputs
 from datp_core.pipeline.execution.score_generation import score_selected_checkpoint
-from datp_core.pipeline.planning import ExperimentPlan, expand_experiment_plan
 from datp_core.pipeline.scoring.models import FederatedScoreArtifactManifest
+from datp_core.presentation.export import export_temporal_publication
 from datp_core.protocols.calibration import CANONICAL_QUANTILE
 from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration, ExternalTemporalExecutionIdentity
 from datp_core.protocols.seeds import BOUNDED_EVIDENCE_SEED_COHORT, SeedCohort
 from datp_core.protocols.temporal import TemporalDeploymentProvenance, validate_frozen_recalibrated_pair
-from datp_core.reporting.export import export_temporal_publication
 from datp_core.thresholding.dispatch import ThresholdConstructionRequest
 from datp_core.thresholding.identities import ThresholdInfeasibilityReason, ThresholdUnavailableResult
 from datp_core.thresholding.publication import threshold_result_checksum
@@ -161,7 +162,7 @@ class TemporalSeedResult:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class TemporalCampaignResult:
     seeds: tuple[TemporalSeedResult, ...]
-    analyses: tuple[TemporalMethodCampaignAnalysis, ...] = ()
+    analyses: tuple[TemporalMethodCampaignAnalysis, ...]
 
     def __post_init__(self) -> None:
         expected = BOUNDED_EVIDENCE_SEED_COHORT.values
@@ -190,31 +191,37 @@ class TemporalCoordinateSet:
                 return self.recalibrated_future
 
 
-def run_temporal_seed(partition_seed: Seed, *, output_root: Path) -> TemporalSeedResult:
+def run_temporal_seed(partition_seed: Seed, *, output_root: Path, overwrite: bool) -> TemporalSeedResult:
     declaration = _temporal_declaration()
     coordinates = _temporal_coordinates(partition_seed, declaration)
-    static, frozen, recalibrated = _execute_temporal_states(declaration, coordinates, output_root=output_root)
-    methods = _common_completed_methods(static, frozen, recalibrated)
-    recoveries = tuple(
-        TemporalMethodRecovery(
-            method=method,
-            recovery=_recovery_for_method(
-                partition_seed=partition_seed,
-                declaration=declaration,
-                method=method,
-                static=static,
-                frozen=frozen,
-                recalibrated=recalibrated,
-            ),
-        )
-        for method in methods
+    if overwrite:
+        _clear_temporal_seed_outputs(coordinates, partition_seed, output_root)
+    static, frozen, recalibrated = _execute_temporal_states(
+        declaration,
+        coordinates,
+        output_root=output_root,
+        overwrite=overwrite,
     )
+    methods = _common_completed_methods(static, frozen, recalibrated)
     result = TemporalSeedResult(
         partition_seed=partition_seed,
         static_reference=static,
         frozen_future=frozen,
         recalibrated_future=recalibrated,
-        recoveries=recoveries,
+        recoveries=tuple(
+            TemporalMethodRecovery(
+                method=method,
+                recovery=_recovery_for_method(
+                    partition_seed=partition_seed,
+                    declaration=declaration,
+                    method=method,
+                    static=static,
+                    frozen=frozen,
+                    recalibrated=recalibrated,
+                ),
+            )
+            for method in methods
+        ),
     )
     _persist_temporal_seed_evidence(result, output_root=output_root)
     return result
@@ -231,22 +238,35 @@ def analyze_temporal_campaign(
     campaign: TemporalCampaignResult,
     *,
     output_root: Path,
+    overwrite: bool,
 ) -> tuple[TemporalMethodCampaignAnalysis, ...]:
     if not campaign.seeds:
         raise ScientificContractError("temporal campaign analysis requires completed seed results")
-    methods = tuple(item.method for item in campaign.seeds[0].recoveries)
-    declaration = _temporal_declaration()
     _validate_campaign_recovery_provenance(campaign)
     _validate_campaign_shared_detector_identity(campaign)
+    declaration = _temporal_declaration()
     return tuple(
         _publish_temporal_method_campaign(
-            method=method,
+            method=item.method,
             campaign=campaign,
             declaration=declaration,
             output_root=output_root,
+            overwrite=overwrite,
         )
-        for method in methods
+        for item in campaign.seeds[0].recoveries
     )
+
+
+def _clear_temporal_seed_outputs(
+    coordinates: TemporalCoordinateSet,
+    partition_seed: Seed,
+    output_root: Path,
+) -> None:
+    for state in TemporalState:
+        coordinate = coordinates.for_state(state)
+        directory = bounded_evidence_seed_directory(_execution_identity(coordinate), partition_seed, output_root)
+        if directory.exists():
+            rmtree(directory)
 
 
 def _temporal_seed_evidence_directory(
@@ -256,12 +276,12 @@ def _temporal_seed_evidence_directory(
 ) -> Path:
     return (
         output_root
-        / ExecutionRootDirectory.BOUNDED_EVIDENCE
+        / ExecutionRootDirectory.BOUNDED_EVIDENCE.value
         / declaration.id.value
         / declaration.population.value
         / declaration.role.value
         / str(partition_seed.value)
-        / TemporalArtifactDirectory.EVIDENCE
+        / TemporalArtifactDirectory.EVIDENCE.value
     )
 
 
@@ -269,8 +289,8 @@ def _persist_temporal_seed_evidence(result: TemporalSeedResult, *, output_root: 
     declaration = _temporal_declaration()
     directory = _temporal_seed_evidence_directory(declaration, result.partition_seed, output_root)
     directory.mkdir(parents=True, exist_ok=True)
-    (directory / SeedEvidenceAssetName.DOCUMENT).write_text(canonical_json_text(result), encoding="utf-8")
-    (directory / AnalysisAssetName.COMPLETE).write_text(canonical_checksum(result).value, encoding="utf-8")
+    (directory / SeedEvidenceAssetName.DOCUMENT.value).write_text(canonical_json_text(result), encoding="utf-8")
+    (directory / AnalysisAssetName.COMPLETE.value).write_text(canonical_checksum(result).value, encoding="utf-8")
 
 
 def _load_temporal_seed_evidence(
@@ -279,8 +299,8 @@ def _load_temporal_seed_evidence(
     output_root: Path,
 ) -> TemporalSeedResult:
     directory = _temporal_seed_evidence_directory(declaration, partition_seed, output_root)
-    document = directory / SeedEvidenceAssetName.DOCUMENT
-    complete = directory / AnalysisAssetName.COMPLETE
+    document = directory / SeedEvidenceAssetName.DOCUMENT.value
+    complete = directory / AnalysisAssetName.COMPLETE.value
     if not document.is_file() or not complete.is_file():
         raise ScientificContractError(
             f"missing completed temporal seed evidence: {directory}",
@@ -373,6 +393,7 @@ def _execute_temporal_states(
     coordinates: TemporalCoordinateSet,
     *,
     output_root: Path,
+    overwrite: bool,
 ) -> tuple[TemporalStateResult, TemporalStateResult, TemporalStateResult]:
     frozen_coordinate = coordinates.frozen_future
     context = resolve_execution_context(frozen_coordinate, output_root)
@@ -385,7 +406,7 @@ def _execute_temporal_states(
         autoencoder=autoencoder,
         feature_names=feature_names,
         clients=client_scoring_inputs(context.preprocessing.client_publications, context.clients),
-        output_directory=context.training_directory / ExecutionArtifactDirectory.SCORES,
+        output_directory=context.training_directory / ExecutionArtifactDirectory.SCORES.value,
         preprocessing_state_set_checksum=context.preprocessing_state_set_checksum,
         split_manifest_checksum=context.split_manifest_checksum,
     )
@@ -399,16 +420,13 @@ def _execute_temporal_states(
         autoencoder=autoencoder,
         feature_names=feature_names,
         clients=static_inputs.clients,
-        output_directory=static_root / TemporalArtifactDirectory.SCORES,
+        output_directory=static_root / TemporalArtifactDirectory.SCORES.value,
         preprocessing_state_set_checksum=context.preprocessing_state_set_checksum,
         split_manifest_checksum=static_inputs.split_manifest_checksum,
     )
     static_provenance = TemporalDeploymentProvenance.from_score_manifest(TemporalState.STATIC_REFERENCE, static_scores)
     frozen_provenance = TemporalDeploymentProvenance.from_score_manifest(TemporalState.FROZEN_FUTURE, future_scores)
-    recalibrated_provenance = TemporalDeploymentProvenance.from_score_manifest(
-        TemporalState.RECALIBRATED_FUTURE,
-        future_scores,
-    )
+    recalibrated_provenance = TemporalDeploymentProvenance.from_score_manifest(TemporalState.RECALIBRATED_FUTURE, future_scores)
     validate_frozen_recalibrated_pair(frozen_provenance, recalibrated_provenance)
     _validate_shared_temporal_detector(static_provenance, frozen_provenance)
     static = _evaluate_state(
@@ -419,6 +437,7 @@ def _execute_temporal_states(
         threshold_methods=declaration.federated_thresholds,
         provenance=static_provenance,
         output_root=output_root,
+        overwrite=overwrite,
     )
     frozen = _evaluate_state(
         context=context,
@@ -428,6 +447,7 @@ def _execute_temporal_states(
         threshold_methods=declaration.federated_thresholds,
         provenance=frozen_provenance,
         output_root=output_root,
+        overwrite=overwrite,
     )
     recalibrated = _evaluate_state(
         context=context,
@@ -437,6 +457,7 @@ def _execute_temporal_states(
         threshold_methods=declaration.federated_thresholds,
         provenance=recalibrated_provenance,
         output_root=output_root,
+        overwrite=overwrite,
     )
     return static, frozen, recalibrated
 
@@ -450,6 +471,7 @@ def _evaluate_state(
     threshold_methods: tuple[FederatedThresholdMethod, ...],
     provenance: TemporalDeploymentProvenance,
     output_root: Path,
+    overwrite: bool,
 ) -> TemporalStateResult:
     eligible = eligible_calibration_scores(scores, calibration_role)
     capabilities = population_capabilities(context.coordinate.population)
@@ -469,21 +491,15 @@ def _evaluate_state(
                     eligible=eligible,
                     family_by_client=context.family_by_client,
                 ),
-                output_directory=state_root / TemporalArtifactDirectory.THRESHOLDS / method.value,
-                overwrite=False,
+                output_directory=state_root / TemporalArtifactDirectory.THRESHOLDS.value / method.value,
+                overwrite=overwrite,
                 temporal_provenance=provenance,
                 temporal_score_manifest=scores,
             )
         )
         threshold = threshold_publication.result
         if isinstance(threshold, ThresholdUnavailableResult):
-            unavailable.append(
-                TemporalMethodUnavailability(
-                    method=method,
-                    reason=threshold.reason,
-                    detail=threshold.detail,
-                )
-            )
+            unavailable.append(TemporalMethodUnavailability(method=method, reason=threshold.reason, detail=threshold.detail))
             continue
         evaluation_inputs = build_federated_evaluation_inputs(scores, method, calibration_role=calibration_role)
         evaluation = evaluate_federated_detector(
@@ -501,27 +517,17 @@ def _evaluate_state(
                 execution_identity=identity,
                 temporal_provenance=provenance,
                 temporal_threshold_provenance=provenance,
-                output_directory=state_root / TemporalArtifactDirectory.EVALUATIONS / method.value,
-                overwrite=False,
+                output_directory=state_root / TemporalArtifactDirectory.EVALUATIONS.value / method.value,
+                overwrite=overwrite,
             )
         )
-        result = metric_by_id(evaluation.population.metrics, MetricId.FPR_COEFFICIENT_OF_VARIATION)
-        if result.status is not MetricStatus.AVAILABLE or result.value is None:
-            raise ScientificContractError(
-                "temporal evaluation requires available population CV(FPR)",
-                subject=method,
-            )
-        mean_fpr_metric = metric_by_id(evaluation.population.metrics, MetricId.MEAN_FPR)
-        mean_fpr = (
-            mean_fpr_metric.value
-            if mean_fpr_metric.status is MetricStatus.AVAILABLE and mean_fpr_metric.value is not None
-            else None
-        )
+        cv_fpr = metric_by_id(evaluation.population.metrics, MetricId.FPR_COEFFICIENT_OF_VARIATION)
+        if cv_fpr.status is not MetricStatus.AVAILABLE or cv_fpr.value is None:
+            raise ScientificContractError("temporal evaluation requires available population CV(FPR)", subject=method)
+        mean_metric = metric_by_id(evaluation.population.metrics, MetricId.MEAN_FPR)
+        mean_fpr = mean_metric.value if mean_metric.status is MetricStatus.AVAILABLE else None
         if not evaluation.clients:
-            raise ScientificContractError(
-                "temporal evaluation requires non-empty client metrics for trajectory construction",
-                subject=method,
-            )
+            raise ScientificContractError("temporal evaluation requires non-empty client metrics", subject=method)
         if reference_evidence is None:
             reference_evidence = evaluation_inputs.fixed_score_evidence
         evidence = evaluation_inputs.fixed_score_evidence
@@ -530,7 +536,7 @@ def _evaluate_state(
         outcomes.append(
             TemporalMethodOutcome(
                 method=method,
-                fpr_coefficient_of_variation=result.value,
+                fpr_coefficient_of_variation=cv_fpr.value,
                 mean_fpr=mean_fpr,
                 threshold_checksum=threshold_result_checksum(threshold),
                 evaluation_checksum=evaluation.complete_digest,
@@ -545,10 +551,7 @@ def _evaluate_state(
             )
         )
     if not completed:
-        raise ScientificContractError(
-            "temporal execution produced no evaluable threshold method",
-            subject=identity.temporal_state,
-        )
+        raise ScientificContractError("temporal execution produced no evaluable threshold method", subject=identity.temporal_state)
     if identity.temporal_state is None:
         raise ScientificContractError("temporal result requires an explicit state")
     return TemporalStateResult(
@@ -566,10 +569,13 @@ def _publish_temporal_method_campaign(
     campaign: TemporalCampaignResult,
     declaration: ExperimentDeclaration,
     output_root: Path,
+    overwrite: bool,
 ) -> TemporalMethodCampaignAnalysis:
     records = tuple(seed.recovery_for(method) for seed in campaign.seeds)
     static_provenance, frozen_provenance, recalibrated_provenance = _document_level_deployment_provenance(records)
     output_directory = _temporal_campaign_analysis_directory(method, output_root)
+    if overwrite and output_directory.exists():
+        rmtree(output_directory)
     analysis = analyze_temporal_evidence(
         AnalyzeTemporalEvidenceRequest(
             experiment=declaration.id,
@@ -582,7 +588,7 @@ def _publish_temporal_method_campaign(
             recalibrated_provenance=recalibrated_provenance,
             records=records,
             output_directory=output_directory,
-            overwrite=False,
+            overwrite=overwrite,
         )
     )
     export_temporal_publication(analysis.document, output_directory)
@@ -593,10 +599,7 @@ def _publish_temporal_method_campaign(
     )
 
 
-def _validate_shared_temporal_detector(
-    static: TemporalDeploymentProvenance,
-    frozen: TemporalDeploymentProvenance,
-) -> None:
+def _validate_shared_temporal_detector(static: TemporalDeploymentProvenance, frozen: TemporalDeploymentProvenance) -> None:
     if (
         static.checkpoint_checksum != frozen.checkpoint_checksum
         or static.preprocessing_state_set_checksum != frozen.preprocessing_state_set_checksum
@@ -613,29 +616,13 @@ def _validate_campaign_recovery_provenance(campaign: TemporalCampaignResult) -> 
         for item in seed_result.recoveries:
             provenance = item.recovery.provenance
             if provenance.seed != seed_result.partition_seed:
-                raise ScientificContractError(
-                    "temporal provenance seed must match the recovery seed",
-                    subject=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
-                    reason=f"seed={seed_result.partition_seed.value}",
-                )
+                raise ScientificContractError("temporal provenance seed mismatch", subject=item.method)
             if provenance.experiment is not item.recovery.experiment:
-                raise ScientificContractError(
-                    "temporal provenance experiment must match the recovery experiment",
-                    subject=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
-                    reason=f"seed={seed_result.partition_seed.value}",
-                )
+                raise ScientificContractError("temporal provenance experiment mismatch", subject=item.method)
             if provenance.threshold_method is not item.method:
-                raise ScientificContractError(
-                    "temporal provenance threshold method must match the recovery method",
-                    subject=item.method,
-                    reason=f"seed={seed_result.partition_seed.value}",
-                )
+                raise ScientificContractError("temporal provenance threshold-method mismatch", subject=item.method)
             if not item.recovery.client_trajectories:
-                raise ScientificContractError(
-                    "temporal campaign recovery records require non-empty client trajectories",
-                    subject=item.method,
-                    reason=f"seed={seed_result.partition_seed.value}",
-                )
+                raise ScientificContractError("temporal recovery requires client trajectories", subject=item.method)
 
 
 def _validate_campaign_shared_detector_identity(campaign: TemporalCampaignResult) -> None:
@@ -663,12 +650,6 @@ def _validate_campaign_shared_detector_identity(campaign: TemporalCampaignResult
 def _document_level_deployment_provenance(
     records: tuple[TemporalRecoveryResult, ...],
 ) -> tuple[TemporalDeploymentProvenance, TemporalDeploymentProvenance, TemporalDeploymentProvenance]:
-    """Bind document-level detector identity after multi-seed agreement.
-
-    Score-level bindings remain authoritative only on each seed's recovery provenance.
-    Document-level fields used for detector sharing are verified equal across seeds;
-    score checksums are not taken from an arbitrary seed as campaign-wide identity.
-    """
     if not records:
         raise ScientificContractError("temporal document provenance requires recovery records")
     detector_keys = tuple(
@@ -691,18 +672,8 @@ def _document_level_deployment_provenance(
             subject=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
         )
     for record in records:
-        _validate_shared_temporal_detector(
-            record.provenance.static_reference,
-            record.provenance.frozen_future,
-        )
-        validate_frozen_recalibrated_pair(
-            record.provenance.frozen_future,
-            record.provenance.recalibrated_future,
-        )
-    # Shared detector identity is verified above. Document-level TemporalDeploymentProvenance
-    # still needs a concrete binding triple for API validation; use the verified shared
-    # detector fields with seed-invariant partition roles/protocols, and aggregate
-    # seed-varying score checksums so no single seed is silently treated as campaign identity.
+        _validate_shared_temporal_detector(record.provenance.static_reference, record.provenance.frozen_future)
+        validate_frozen_recalibrated_pair(record.provenance.frozen_future, record.provenance.recalibrated_future)
     static_template = records[0].provenance.static_reference
     frozen_template = records[0].provenance.frozen_future
     recalibrated_template = records[0].provenance.recalibrated_future
@@ -714,15 +685,9 @@ def _document_level_deployment_provenance(
         coordinate_checksum=static_template.coordinate_checksum,
         checkpoint_checksum=static_template.checkpoint_checksum,
         preprocessing_state_set_checksum=static_template.preprocessing_state_set_checksum,
-        split_manifest_checksum=_aggregate_checksums(
-            tuple(item.provenance.static_reference.split_manifest_checksum for item in records)
-        ),
-        calibration_score_set_checksum=_aggregate_checksums(
-            tuple(item.provenance.static_reference.calibration_score_set_checksum for item in records)
-        ),
-        evaluation_score_set_checksum=_aggregate_checksums(
-            tuple(item.provenance.static_reference.evaluation_score_set_checksum for item in records)
-        ),
+        split_manifest_checksum=_aggregate_checksums(tuple(item.provenance.static_reference.split_manifest_checksum for item in records)),
+        calibration_score_set_checksum=_aggregate_checksums(tuple(item.provenance.static_reference.calibration_score_set_checksum for item in records)),
+        evaluation_score_set_checksum=_aggregate_checksums(tuple(item.provenance.static_reference.evaluation_score_set_checksum for item in records)),
     )
     frozen = TemporalDeploymentProvenance(
         state=TemporalState.FROZEN_FUTURE,
@@ -732,15 +697,9 @@ def _document_level_deployment_provenance(
         coordinate_checksum=frozen_template.coordinate_checksum,
         checkpoint_checksum=frozen_template.checkpoint_checksum,
         preprocessing_state_set_checksum=frozen_template.preprocessing_state_set_checksum,
-        split_manifest_checksum=_aggregate_checksums(
-            tuple(item.provenance.frozen_future.split_manifest_checksum for item in records)
-        ),
-        calibration_score_set_checksum=_aggregate_checksums(
-            tuple(item.provenance.frozen_future.calibration_score_set_checksum for item in records)
-        ),
-        evaluation_score_set_checksum=_aggregate_checksums(
-            tuple(item.provenance.frozen_future.evaluation_score_set_checksum for item in records)
-        ),
+        split_manifest_checksum=_aggregate_checksums(tuple(item.provenance.frozen_future.split_manifest_checksum for item in records)),
+        calibration_score_set_checksum=_aggregate_checksums(tuple(item.provenance.frozen_future.calibration_score_set_checksum for item in records)),
+        evaluation_score_set_checksum=_aggregate_checksums(tuple(item.provenance.frozen_future.evaluation_score_set_checksum for item in records)),
     )
     recalibrated = TemporalDeploymentProvenance(
         state=TemporalState.RECALIBRATED_FUTURE,
@@ -751,9 +710,7 @@ def _document_level_deployment_provenance(
         checkpoint_checksum=recalibrated_template.checkpoint_checksum,
         preprocessing_state_set_checksum=recalibrated_template.preprocessing_state_set_checksum,
         split_manifest_checksum=frozen.split_manifest_checksum,
-        calibration_score_set_checksum=_aggregate_checksums(
-            tuple(item.provenance.recalibrated_future.calibration_score_set_checksum for item in records)
-        ),
+        calibration_score_set_checksum=_aggregate_checksums(tuple(item.provenance.recalibrated_future.calibration_score_set_checksum for item in records)),
         evaluation_score_set_checksum=frozen.evaluation_score_set_checksum,
     )
     validate_frozen_recalibrated_pair(frozen, recalibrated)
@@ -773,24 +730,18 @@ def _build_client_trajectories(
     frozen_outcome: TemporalMethodOutcome,
     recalibrated_outcome: TemporalMethodOutcome,
 ) -> tuple[TemporalClientTrajectory, ...]:
-    static_by_id = {client.client.client_id: client for client in static_outcome.clients}
-    frozen_by_id = {client.client.client_id: client for client in frozen_outcome.clients}
-    recalibrated_by_id = {client.client.client_id: client for client in recalibrated_outcome.clients}
-    client_ids = tuple(sorted(frozenset(static_by_id) | frozenset(frozen_by_id) | frozenset(recalibrated_by_id)))
-    if not client_ids:
-        return ()
-    exclusion_reasons = _client_exclusion_reason_map(
-        (
-            static_outcome.excluded_clients,
-            frozen_outcome.excluded_clients,
-            recalibrated_outcome.excluded_clients,
-        ),
+    client_ids = tuple(
+        sorted(
+            frozenset(item.client.client_id for item in static_outcome.clients)
+            | frozenset(item.client.client_id for item in frozen_outcome.clients)
+            | frozenset(item.client.client_id for item in recalibrated_outcome.clients)
+        )
     )
     trajectories: list[TemporalClientTrajectory] = []
     for client_id in client_ids:
-        static_client = static_by_id.get(client_id)
-        frozen_client = frozen_by_id.get(client_id)
-        recalibrated_client = recalibrated_by_id.get(client_id)
+        static_client = _client_by_id(static_outcome.clients, client_id)
+        frozen_client = _client_by_id(frozen_outcome.clients, client_id)
+        recalibrated_client = _client_by_id(recalibrated_outcome.clients, client_id)
         eligible = _client_is_eligible(static_client, frozen_client, recalibrated_client)
         trajectories.append(
             TemporalClientTrajectory(
@@ -798,7 +749,7 @@ def _build_client_trajectories(
                 client_id=client_id,
                 threshold_method=method,
                 eligible=eligible,
-                exclusion_reason=None if eligible else exclusion_reasons.get(client_id, "client_not_evaluable"),
+                exclusion_reason=None if eligible else _exclusion_reason(client_id, static_outcome, frozen_outcome, recalibrated_outcome),
                 threshold_static=_client_threshold(static_client),
                 threshold_frozen=_client_threshold(frozen_client),
                 threshold_recalibrated=_client_threshold(recalibrated_client),
@@ -819,6 +770,18 @@ def _build_client_trajectories(
     return tuple(trajectories)
 
 
+def _client_by_id(clients: tuple[ClientMetricResult, ...], client_id: str) -> ClientMetricResult | None:
+    return next((client for client in clients if client.client.client_id == client_id), None)
+
+
+def _exclusion_reason(
+    client_id: str,
+    *outcomes: TemporalMethodOutcome,
+) -> str:
+    excluded = any(client.client_id == client_id for outcome in outcomes for client in outcome.excluded_clients)
+    return "excluded_from_fpr_evaluable_cohort" if excluded else "client_not_evaluable"
+
+
 def _client_is_eligible(
     static_client: ClientMetricResult | None,
     frozen_client: ClientMetricResult | None,
@@ -826,41 +789,24 @@ def _client_is_eligible(
 ) -> bool:
     if static_client is None or frozen_client is None or recalibrated_client is None:
         return False
-    return (
-        static_client.cohort is EvaluationCohort.FPR_EVALUABLE
-        and frozen_client.cohort is EvaluationCohort.FPR_EVALUABLE
-        and recalibrated_client.cohort is EvaluationCohort.FPR_EVALUABLE
+    return all(
+        client.cohort is EvaluationCohort.FPR_EVALUABLE
+        for client in (static_client, frozen_client, recalibrated_client)
     )
 
 
 def _client_threshold(client: ClientMetricResult | None) -> MetricValue | None:
-    if client is None:
-        return None
-    return MetricValue(client.threshold.value)
+    return None if client is None else MetricValue(client.threshold.value)
 
 
 def _client_metric(client: ClientMetricResult | None, metric: MetricId) -> MetricValue | None:
     if client is None:
         return None
     result = metric_by_id(client.metrics, metric)
-    if result.status is not MetricStatus.AVAILABLE or result.value is None:
-        return None
-    return result.value
+    return result.value if result.status is MetricStatus.AVAILABLE else None
 
 
-def _client_exclusion_reason_map(
-    excluded_groups: tuple[tuple[ClientIdentity, ...], ...],
-) -> dict[str, str]:
-    reasons: dict[str, str] = {}
-    for group in excluded_groups:
-        for item in group:
-            reasons.setdefault(item.client_id, "excluded_from_fpr_evaluable_cohort")
-    return reasons
-
-
-def _cohort_exclusion_records(
-    cohort: EvaluationCohortManifest,
-) -> tuple[tuple[str, ...], tuple[str, ...]]:
+def _cohort_exclusion_records(cohort: EvaluationCohortManifest) -> tuple[tuple[str, ...], tuple[str, ...]]:
     exclusions: list[str] = []
     unavailable_reasons: list[str] = []
     for record in sorted(cohort.records, key=lambda item: item.client.client_id):
@@ -869,8 +815,7 @@ def _cohort_exclusion_records(
         client_id = record.client.client_id
         exclusions.append(client_id)
         if record.exclusion_reasons:
-            for reason in record.exclusion_reasons:
-                unavailable_reasons.append(f"{client_id}:{reason.value}")
+            unavailable_reasons.extend(f"{client_id}:{reason.value}" for reason in record.exclusion_reasons)
         else:
             unavailable_reasons.append(f"{client_id}:not_fpr_evaluable")
     return tuple(exclusions), tuple(unavailable_reasons)
@@ -881,10 +826,9 @@ def _union_text(*groups: tuple[str, ...]) -> tuple[str, ...]:
     seen: set[str] = set()
     for group in groups:
         for item in group:
-            if item in seen:
-                continue
-            seen.add(item)
-            ordered.append(item)
+            if item not in seen:
+                seen.add(item)
+                ordered.append(item)
     return tuple(ordered)
 
 
@@ -893,11 +837,7 @@ def _common_completed_methods(
     frozen: TemporalStateResult,
     recalibrated: TemporalStateResult,
 ) -> tuple[FederatedThresholdMethod, ...]:
-    if not (
-        static.completed_threshold_methods
-        == frozen.completed_threshold_methods
-        == recalibrated.completed_threshold_methods
-    ):
+    if not (static.completed_threshold_methods == frozen.completed_threshold_methods == recalibrated.completed_threshold_methods):
         raise ScientificContractError(
             "all temporal states must complete the same declared threshold methods",
             subject=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
@@ -916,10 +856,7 @@ def _execution_identity(coordinate: ExperimentCoordinate) -> ExternalTemporalExe
     )
 
 
-def _declaration_identity(
-    declaration: ExperimentDeclaration,
-    state: TemporalState,
-) -> ExternalTemporalExecutionIdentity:
+def _declaration_identity(declaration: ExperimentDeclaration, state: TemporalState) -> ExternalTemporalExecutionIdentity:
     return ExternalTemporalExecutionIdentity(
         experiment=declaration.id,
         population=declaration.population,
@@ -929,10 +866,7 @@ def _declaration_identity(
 
 
 def _temporal_coordinates(partition_seed: Seed, declaration: ExperimentDeclaration) -> TemporalCoordinateSet:
-    plan = expand_experiment_plan(
-        declarations=(declaration,),
-        seed_cohort=SeedCohort(values=(partition_seed,)),
-    )
+    plan = expand_experiment_plan(declarations=(declaration,), seed_cohort=SeedCohort(values=(partition_seed,)))
     return TemporalCoordinateSet(
         static_reference=_coordinate_for_state(plan, TemporalState.STATIC_REFERENCE),
         frozen_future=_coordinate_for_state(plan, TemporalState.FROZEN_FUTURE),
@@ -961,11 +895,11 @@ def _temporal_campaign_analysis_directory(method: FederatedThresholdMethod, outp
     declaration = _temporal_declaration()
     return (
         output_root
-        / ExecutionRootDirectory.BOUNDED_EVIDENCE
+        / ExecutionRootDirectory.BOUNDED_EVIDENCE.value
         / declaration.id.value
         / declaration.population.value
         / declaration.role.value
-        / TemporalArtifactDirectory.ANALYSIS
+        / TemporalArtifactDirectory.ANALYSIS.value
         / method.value
     )
 
