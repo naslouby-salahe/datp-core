@@ -1,5 +1,6 @@
-from datp_core.domain.enums import PopulationId, PopulationIdentityKind
 from datp_core.protocols.populations import DIRICHLET_CONCENTRATIONS, POPULATIONS
+
+from datp_core.core.identifiers import PopulationId, PopulationIdentityKind
 
 
 def test_population_capabilities_and_dirichlet_grid() -> None:

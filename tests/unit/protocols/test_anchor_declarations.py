@@ -1,5 +1,3 @@
-from datp_core.domain.enums import FederatedThresholdMethod, MetricId
-from datp_core.domain.values.ratios import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE
 from datp_core.protocols.anchor import (
     ANCHOR_DECISION_PROTOCOL,
     HISTORICAL_ANCHOR_SEED_COHORT,
@@ -7,6 +5,9 @@ from datp_core.protocols.anchor import (
     HISTORICAL_SHARED_THRESHOLD_CV_FPR,
 )
 from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL
+
+from datp_core.core.identifiers import FederatedThresholdMethod, MetricId
+from datp_core.core.numeric import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE
 
 
 def test_anchor_references_lock_each_historical_threshold_scope() -> None:

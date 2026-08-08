@@ -1,7 +1,6 @@
 from dataclasses import replace
 
 import pytest
-
 from datp_core.domain.enums import (
     EvidenceRole,
     ExperimentId,
@@ -14,8 +13,9 @@ from datp_core.domain.enums import (
 )
 from datp_core.domain.errors import ProtocolValidationError, UnresolvedScientificValueError
 from datp_core.domain.values.counts import SeedCount
-from datp_core.protocols.experiments import ExperimentDeclaration
 from datp_core.protocols.populations import POPULATIONS
+
+from datp_core.protocols.experiments import ExperimentDeclaration
 from datp_core.protocols.validation import (
     CANONICAL_PROTOCOL_GRAPH,
     CONFIRMATORY_ENDPOINT,

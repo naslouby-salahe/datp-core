@@ -2,10 +2,9 @@ import json
 
 import pytest
 
-from datp_core.domain.enums import CentralizedModelId, CentralizedThresholdMethod, OptimizerId, TrainingModelId
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.counts import FeatureCount
-from datp_core.domain.values.ratios import DittoRegularization, ModelCoefficientValue, Quantile
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import CentralizedModelId, CentralizedThresholdMethod, OptimizerId, TrainingModelId
+from datp_core.core.numeric import DittoRegularization, FeatureCount, ModelCoefficientValue, Quantile
 from datp_core.protocols.calibration import CentralizedQuantileProtocol
 from datp_core.protocols.training import (
     BATCH_SIZE,

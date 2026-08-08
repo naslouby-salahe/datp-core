@@ -1,4 +1,4 @@
-from datp_core.domain.enums import AvailabilityStatus, MetricId
+from datp_core.core.identifiers import AvailabilityStatus, MetricId
 from datp_core.protocols.metrics import (
     ATTACK_QUALITY_CONTROL_METRICS,
     CONFIRMATORY_METRICS,

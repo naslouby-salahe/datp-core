@@ -1,6 +1,7 @@
 """Programme registry, planning, feasibility, and scientific naming invariants."""
 
 import pytest
+from datp_core.protocols.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_SEED_COHORT
 
 from datp_core.app.campaign import (
     build_programme_plan,
@@ -9,11 +10,10 @@ from datp_core.app.campaign import (
     validate_programme,
 )
 from datp_core.app.research import registered_experiment_ids
-from datp_core.domain.enums import ExperimentId, ExperimentReadiness, FederatedThresholdMethod
-from datp_core.domain.errors import UnresolvedScientificValueError
+from datp_core.core.errors import UnresolvedScientificValueError
+from datp_core.core.identifiers import ExperimentId, ExperimentReadiness, FederatedThresholdMethod
 from datp_core.experiments.planning import PlanDisposition
 from datp_core.protocols.experiments import EXPERIMENTS
-from datp_core.protocols.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_SEED_COHORT
 
 
 def test_every_non_suppressed_experiment_has_exactly_one_recipe() -> None:

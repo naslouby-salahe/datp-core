@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from datp_core.domain.values.ratios import Ratio
+from datp_core.core.numeric import Ratio
 from datp_core.protocols.splits import TEMPORAL_SPLIT, FractionalSplitProtocol, TemporalSplitProtocol
 
 

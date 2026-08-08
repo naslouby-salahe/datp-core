@@ -1,6 +1,4 @@
 import pytest
-from tests.unit.anchor.helpers import make_observation, make_reference
-
 from datp_core.anchor.comparison import (
     compare_anchor_metric,
     full_precision_failure_stands_despite_rounded_equality,
@@ -15,14 +13,15 @@ from datp_core.anchor.models import (
     MetricInterval,
     RelativeToleranceRule,
 )
-from datp_core.domain.enums import (
+from tests.unit.anchor.helpers import make_observation, make_reference
+
+from datp_core.core.identifiers import (
     CheckpointStatus,
     FederatedThresholdMethod,
     PopulationId,
     TrainingModelId,
 )
-from datp_core.domain.values.counts import ClientCount
-from datp_core.domain.values.ratios import MetricValue
+from datp_core.core.numeric import ClientCount, MetricValue
 
 
 def test_exact_reproduction_passes() -> None:

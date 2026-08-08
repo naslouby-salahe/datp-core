@@ -16,7 +16,9 @@ from datp_core.anchor.reproduction import (
     ANCHOR_TRAINING_MODEL,
     references_from_protocol,
 )
-from datp_core.domain.enums import (
+
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.identifiers import (
     CheckpointStatus,
     EvidenceRole,
     FederatedThresholdMethod,
@@ -24,9 +26,7 @@ from datp_core.domain.enums import (
     PopulationId,
     TrainingModelId,
 )
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import ClientCount, Seed
-from datp_core.domain.values.ratios import MetricValue
+from datp_core.core.numeric import ClientCount, MetricValue, Seed
 
 
 def matching_anchor_observations() -> tuple[AnchorObservedMetric, ...]:
