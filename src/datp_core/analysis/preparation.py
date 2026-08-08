@@ -50,10 +50,10 @@ from datp_core.core.identifiers import (
 )
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.numeric import PairedObservationCount, Seed
-from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity, require_execution_identity
-from datp_core.protocols.seeds import BOUNDED_EVIDENCE_SEED_COHORT
-from datp_core.protocols.statistics import PairedInferenceProtocol
-from datp_core.protocols.temporal import TemporalDeploymentProvenance, validate_frozen_recalibrated_pair
+from datp_core.analysis.inference.wilcoxon import PairedInferenceProtocol
+from datp_core.experiments.common.coordinates import ExternalTemporalExecutionIdentity, require_execution_identity
+from datp_core.experiments.common.seeds import BOUNDED_EVIDENCE_SEED_COHORT
+from datp_core.experiments.temporal.spec import TemporalDeploymentProvenance, validate_frozen_recalibrated_pair
 
 
 @dataclass(frozen=True, slots=True)
