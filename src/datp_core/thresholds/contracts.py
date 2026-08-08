@@ -1,22 +1,26 @@
-"""Benign-only calibration declarations."""
+"""Benign-only calibration and threshold construction declarations."""
 
 from enum import StrEnum
 from typing import Literal
 
 from pydantic import model_validator
 
-from datp_core.domain.contracts import StrictModel
-from datp_core.domain.enums import CentralizedThresholdMethod, ContractSubject, FederatedThresholdMethod
-from datp_core.domain.errors import UnresolvedScientificValueError
-from datp_core.domain.values.counts import (
+from datp_core.core.contracts import StrictModel
+from datp_core.core.errors import UnresolvedScientificValueError
+from datp_core.core.identifiers import CentralizedThresholdMethod, ContractSubject, FederatedThresholdMethod
+from datp_core.core.numeric import (
     CalibrationSize,
+    CoverageTarget,
     GroupCount,
     KMeansInitializationCount,
     KMeansMaximumIterationCount,
+    Quantile,
+    Ratio,
     Seed,
+    ShrinkageWeight,
     SubsampleReplicateCount,
+    SummaryCoefficient,
 )
-from datp_core.domain.values.ratios import CoverageTarget, Quantile, Ratio, ShrinkageWeight, SummaryCoefficient
 
 
 class ClusterFingerprintFeature(StrEnum):
@@ -88,8 +92,7 @@ class CalibrationSizeProtocol(StrictModel):
             raise ValueError("calibration-size protocol requires at least one size")
         if len(self.sizes) != len(frozenset(self.sizes)):
             raise ValueError("calibration-size protocol sizes must be unique")
-        ordered = tuple(sorted(self.sizes, key=lambda item: item.value))
-        if self.sizes != ordered:
+        if self.sizes != tuple(sorted(self.sizes, key=lambda item: item.value)):
             raise ValueError("calibration-size protocol sizes must be ascending")
         return self
 
@@ -143,10 +146,7 @@ class ClusterThresholdProtocol(StrictModel):
                 "cluster fingerprint standardization must be StandardScaler",
             ),
             (self.assignment_algorithm is ClusterAssignmentAlgorithm.KMEANS, "cluster assignment must be k-means"),
-            (
-                self.initialization is KMeansInitialization.KMEANS_PLUS_PLUS,
-                "cluster initialization must be k-means++",
-            ),
+            (self.initialization is KMeansInitialization.KMEANS_PLUS_PLUS, "cluster initialization must be k-means++"),
             (
                 self.initialization_count == LOCKED_CLUSTER_INITIALIZATION_COUNT,
                 "cluster n_init must match the locked initialization count",
@@ -155,14 +155,8 @@ class ClusterThresholdProtocol(StrictModel):
                 self.maximum_iterations == LOCKED_CLUSTER_MAXIMUM_ITERATIONS,
                 "cluster max_iter must match the locked maximum iteration count",
             ),
-            (
-                self.random_state == LOCKED_CLUSTER_RANDOM_STATE,
-                "cluster random_state must match the locked seed",
-            ),
-            (
-                self.group_count == LOCKED_CLUSTER_GROUP_COUNT,
-                "cluster group count must match the locked group count",
-            ),
+            (self.random_state == LOCKED_CLUSTER_RANDOM_STATE, "cluster random_state must match the locked seed"),
+            (self.group_count == LOCKED_CLUSTER_GROUP_COUNT, "cluster group count must match the locked group count"),
             (
                 self.threshold_aggregation
                 in {
@@ -187,14 +181,8 @@ CONFORMAL_COVERAGE = CoverageTarget(0.95)
 SUMMARY_COEFFICIENTS = tuple(SummaryCoefficient(value) for value in (2, 2.5, 3))
 CALIBRATION_ELIGIBILITY_PROTOCOL = CalibrationEligibilityProtocol(minimum_support=MINIMUM_BENIGN_SUPPORT)
 CALIBRATION_SIZE_PROTOCOL = CalibrationSizeProtocol(sizes=CALIBRATION_SIZES)
-SHARED_THRESHOLD_PROTOCOL = QuantileProtocol(
-    method=FederatedThresholdMethod.SHARED_THRESHOLD,
-    quantile=CANONICAL_QUANTILE,
-)
-LOCAL_THRESHOLD_PROTOCOL = QuantileProtocol(
-    method=FederatedThresholdMethod.LOCAL_THRESHOLD,
-    quantile=CANONICAL_QUANTILE,
-)
+SHARED_THRESHOLD_PROTOCOL = QuantileProtocol(method=FederatedThresholdMethod.SHARED_THRESHOLD, quantile=CANONICAL_QUANTILE)
+LOCAL_THRESHOLD_PROTOCOL = QuantileProtocol(method=FederatedThresholdMethod.LOCAL_THRESHOLD, quantile=CANONICAL_QUANTILE)
 POOLED_SHARED_QUANTILE_PROTOCOL = QuantileProtocol(
     method=FederatedThresholdMethod.POOLED_SHARED_QUANTILE,
     quantile=CANONICAL_QUANTILE,
