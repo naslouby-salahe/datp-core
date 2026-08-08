@@ -24,6 +24,7 @@ from datp_core.analysis.inference.bootstrap.validation import (
 )
 from datp_core.analysis.inference.multiplicity import MultiplicityPlan, MultiplicityResult, holm_adjust
 from datp_core.analysis.inference.wilcoxon import (
+    PairedInferenceProtocol,
     RankBiserialResult,
     WilcoxonResult,
     blocked_rank_biserial,
@@ -41,6 +42,7 @@ from datp_core.analysis.temporal import (
     temporal_seed_series_intervals,
 )
 from datp_core.core.contracts import StrictModel
+from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import (
     EvidenceRole,
     ExperimentId,
@@ -48,9 +50,7 @@ from datp_core.core.identifiers import (
     PopulationId,
     TemporalState,
 )
-from datp_core.core.errors import ScientificContractError
 from datp_core.core.numeric import PairedObservationCount, Seed
-from datp_core.analysis.inference.wilcoxon import PairedInferenceProtocol
 from datp_core.experiments.common.coordinates import ExternalTemporalExecutionIdentity, require_execution_identity
 from datp_core.experiments.common.seeds import BOUNDED_EVIDENCE_SEED_COHORT
 from datp_core.protocols.temporal import TemporalDeploymentProvenance, validate_frozen_recalibrated_pair

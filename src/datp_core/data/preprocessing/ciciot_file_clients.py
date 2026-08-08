@@ -5,6 +5,17 @@ from pathlib import Path
 
 import polars as pl
 
+from datp_core.core.contracts import ClientCollection, ClientOwned
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import (
+    ClientPathToken,
+    ContractSubject,
+    DatasetId,
+    FeatureNameSequence,
+    ProcessedDataBranch,
+    PublicationStatus,
+)
+from datp_core.core.numeric import ClientPublicationCount
 from datp_core.data.populations.contracts import (
     CLIENT_ID_COLUMN,
     PARTITION_ROLE_COLUMN,
@@ -25,12 +36,6 @@ from datp_core.data.preprocessing.models import (
     FederatedPreprocessingOutcome,
     PreprocessingPublishContext,
 )
-from datp_core.domain.contracts import ClientCollection, ClientOwned
-from datp_core.domain.enums import ContractSubject, DatasetId, ProcessedDataBranch, PublicationStatus
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.counts import ClientPublicationCount
-from datp_core.domain.values.identifiers import FeatureNameSequence
-from datp_core.domain.values.paths import ClientPathToken
 from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
 
 

@@ -3,12 +3,12 @@
 from dataclasses import dataclass
 from enum import StrEnum
 
-from datp_core.data.populations.contracts import ClientIdentity
+from datp_core.analysis.metrics.models import AvailableMetric
+from datp_core.analysis.metrics.semantics import available
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import CommunicationEstimationMethod, MetricId
 from datp_core.core.numeric import ByteCount, LogicalElementCount, Seed
-from datp_core.analysis.metrics.models import AvailableMetric
-from datp_core.analysis.metrics.semantics import available
+from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 
 

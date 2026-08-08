@@ -8,11 +8,11 @@ from numpy.typing import NDArray
 from pydantic import model_validator
 from scipy.spatial.distance import jensenshannon
 
-from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.contracts import StrictModel
 from datp_core.core.identifiers import AvailabilityStatus, EvidenceRole
 from datp_core.core.numeric import MetricValue, PairedObservationCount, PositiveIntegerValue
+from datp_core.data.populations.contracts import ClientIdentity
 
 MINIMUM_DIVERGENCE_CLIENTS = PairedObservationCount(2)
 DEFAULT_BIN_COUNT = PositiveIntegerValue(32)

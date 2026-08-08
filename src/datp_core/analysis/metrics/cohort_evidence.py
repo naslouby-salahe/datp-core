@@ -1,5 +1,8 @@
 import polars as pl
 
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import ScoreFrameColumn
+from datp_core.core.numeric import RowCount
 from datp_core.data.populations.contracts import (
     ClientIdentity,
     ClientPartitionCounts,
@@ -7,9 +10,6 @@ from datp_core.data.populations.contracts import (
 )
 from datp_core.detector.scoring.contracts import ScoreArtifactManifest, ScoreRecord
 from datp_core.detector.training.models import FederatedTrainingCoordinate
-from datp_core.domain.enums import ScoreFrameColumn
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.counts import RowCount
 
 type FederatedScoreArtifactManifest = ScoreArtifactManifest[FederatedTrainingCoordinate, ClientIdentity]
 type FederatedScoreRecord = ScoreRecord[FederatedTrainingCoordinate, ClientIdentity]

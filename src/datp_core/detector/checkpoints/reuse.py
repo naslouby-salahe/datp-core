@@ -3,6 +3,16 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.errors import ArtifactIntegrityError
+from datp_core.core.identifiers import (
+    CheckpointStatus,
+    ClientPathToken,
+    ContractSubject,
+    PopulationIdentityKind,
+    TrainingModelId,
+)
+from datp_core.core.numeric import BatchSize, MetricValue, RoundNumber
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.checkpoints.candidates import (
     candidate_tensor_name,
@@ -39,17 +49,6 @@ from datp_core.detector.training.models import (
     FederatedTrainingResult,
     PersonalizedCandidateSet,
 )
-from datp_core.domain.enums import (
-    CheckpointStatus,
-    ContractSubject,
-    PopulationIdentityKind,
-    TrainingModelId,
-)
-from datp_core.domain.errors import ArtifactIntegrityError
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import BatchSize, RoundNumber
-from datp_core.domain.values.paths import ClientPathToken
-from datp_core.domain.values.ratios import MetricValue
 from datp_core.protocols.training import AutoencoderProtocol
 
 

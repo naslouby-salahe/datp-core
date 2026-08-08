@@ -18,9 +18,8 @@ from datp_core.analysis.inference.bootstrap.validation import (
     validate_confirmatory_contrasts,
     validate_supplementary_contrasts,
 )
-from datp_core.analysis.inference.wilcoxon import paired_deltas
+from datp_core.analysis.inference.wilcoxon import PairedInferenceProtocol, paired_deltas
 from datp_core.core.numeric import ConfidenceLevel, MetricValue, Seed
-from datp_core.analysis.inference.wilcoxon import PairedInferenceProtocol
 
 
 @dataclass(frozen=True, slots=True, eq=False)

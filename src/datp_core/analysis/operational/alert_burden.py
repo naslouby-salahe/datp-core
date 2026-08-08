@@ -3,13 +3,13 @@
 from dataclasses import dataclass
 from enum import StrEnum
 
-from datp_core.data.populations.contracts import ClientIdentity
-from datp_core.core.errors import ScientificContractError
-from datp_core.core.identifiers import MetricId
-from datp_core.core.numeric import Ratio, Seed
 from datp_core.analysis.metrics.models import MetricAvailability, MetricReason, MetricStatus, WarningCode
 from datp_core.analysis.metrics.semantics import available, metric_value, unavailable
 from datp_core.analysis.operational.traffic_rates import ValidatedTrafficRateEvidence, validate_traffic_rate_evidence
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import MetricId
+from datp_core.core.numeric import Ratio, Seed
+from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 
 

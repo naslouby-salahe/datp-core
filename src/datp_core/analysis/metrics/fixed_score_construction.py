@@ -23,22 +23,22 @@ from datp_core.analysis.metrics.fixed_score_checksums import (
     source_row_checksum,
 )
 from datp_core.analysis.metrics.models import ClientMetricResult, metric_by_id
-from datp_core.data.populations.contracts import ClientIdentity, PopulationOutcomeLabel
-from datp_core.data.registry import population_capabilities
-from datp_core.detector.scoring.contracts import FixedScoreInvariant, ScoreArtifactManifest, ScoreRecord
-from datp_core.detector.training.models import FederatedTrainingCoordinate
-from datp_core.domain.enums import (
+from datp_core.artifacts.serializers.json import canonical_checksum
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import (
     EvaluationCohort,
     EvidenceRole,
     FederatedThresholdMethod,
     MetricId,
     PartitionRole,
     ScoreFrameColumn,
+    StableRowId,
 )
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.provenance import canonical_checksum
-from datp_core.domain.values.identifiers import StableRowId
-from datp_core.domain.values.ratios import ScoreValue, ThresholdValue
+from datp_core.core.numeric import ScoreValue, ThresholdValue
+from datp_core.data.populations.contracts import ClientIdentity, PopulationOutcomeLabel
+from datp_core.data.registry import population_capabilities
+from datp_core.detector.scoring.contracts import FixedScoreInvariant, ScoreArtifactManifest, ScoreRecord
+from datp_core.detector.training.models import FederatedTrainingCoordinate
 
 type FederatedScoreArtifactManifest = ScoreArtifactManifest[FederatedTrainingCoordinate, ClientIdentity]
 type FederatedScoreRecord = ScoreRecord[FederatedTrainingCoordinate, ClientIdentity]

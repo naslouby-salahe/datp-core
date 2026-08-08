@@ -11,6 +11,7 @@ from datp_core.artifacts.provenance import Checksum, checksum_text
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import (
     ContractSubject,
+    FeatureNameSequence,
     PartitionRole,
     PopulationId,
     PublicationStatus,
@@ -18,9 +19,8 @@ from datp_core.core.identifiers import (
     SplitProtocolId,
 )
 from datp_core.core.numeric import BatchSize, FeatureCount, RoundNumber, RowCount
-from datp_core.core.identifiers import FeatureNameSequence
 from datp_core.data.populations.contracts import ClientIdentity
-from datp_core.detector.checkpoints.contracts import CheckpointCandidate, CentralizedCheckpointCandidate
+from datp_core.detector.checkpoints.contracts import CentralizedCheckpointCandidate, CheckpointCandidate
 from datp_core.detector.training.centralized import CentralizedTrainingCoordinate
 from datp_core.detector.training.contracts import AutoencoderProtocol, FederatedTrainingCoordinate
 

@@ -4,8 +4,6 @@ from enum import StrEnum
 from pathlib import Path
 from shutil import rmtree
 
-import polars as pl
-
 from datp_core.artifacts.provenance import Checksum, checksum_file
 from datp_core.artifacts.serializers.json import canonical_json_text
 from datp_core.artifacts.serializers.parquet import read_frame, write_frame

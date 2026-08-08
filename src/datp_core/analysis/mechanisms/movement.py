@@ -4,7 +4,6 @@ from typing import ClassVar
 
 from pydantic import model_validator
 
-from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.contracts import StrictModel
 from datp_core.core.identifiers import (
@@ -15,6 +14,7 @@ from datp_core.core.identifiers import (
     PopulationId,
 )
 from datp_core.core.numeric import MetricValue, Ratio, Seed, ThresholdValue
+from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 
 

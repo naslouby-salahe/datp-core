@@ -4,6 +4,14 @@ from datp_core.analysis.metrics.cohorts import (
     EvaluationCohortManifest,
     EvaluationCohortMembership,
 )
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import (
+    ContractSubject,
+    EvaluationCohort,
+    FederatedThresholdMethod,
+    PopulationId,
+)
+from datp_core.core.numeric import CalibrationSize, Seed
 from datp_core.data.populations.contracts import (
     CapabilityStatus,
     ClientIdentity,
@@ -11,14 +19,6 @@ from datp_core.data.populations.contracts import (
     PopulationCapabilities,
 )
 from datp_core.data.registry import population_capabilities
-from datp_core.domain.enums import (
-    ContractSubject,
-    EvaluationCohort,
-    FederatedThresholdMethod,
-    PopulationId,
-)
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.counts import CalibrationSize, Seed
 from datp_core.protocols.calibration import MINIMUM_BENIGN_SUPPORT
 
 

@@ -10,6 +10,29 @@ from safetensors.torch import save
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
+from datp_core.artifacts.provenance import Checksum, checksum_bytes, checksum_text
+from datp_core.artifacts.serializers.json import canonical_json_text
+from datp_core.core.errors import LeakageError, ScientificContractError
+from datp_core.core.identifiers import (
+    CommunicationEstimationMethod,
+    ContractSubject,
+    CudaDeviceName,
+    OutcomeLabel,
+    OutcomeLabelSequence,
+)
+from datp_core.core.numeric import (
+    BatchSize,
+    ByteCount,
+    ClientCount,
+    DittoRegularization,
+    LearningRate,
+    LogicalElementCount,
+    MetricValue,
+    ProximalCoefficient,
+    RoundNumber,
+    RowCount,
+    Seed,
+)
 from datp_core.data.populations.contracts import (
     OUTCOME_LABEL_COLUMN,
     ClientIdentity,
@@ -42,24 +65,6 @@ from datp_core.detector.training.models import (
     PreparedClientProvenance,
     RoundSnapshot,
 )
-from datp_core.domain.enums import (
-    CommunicationEstimationMethod,
-    ContractSubject,
-)
-from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.provenance import canonical_json_text
-from datp_core.domain.values.checksums import Checksum, checksum_bytes, checksum_text
-from datp_core.domain.values.counts import (
-    BatchSize,
-    ByteCount,
-    ClientCount,
-    LogicalElementCount,
-    RoundNumber,
-    RowCount,
-    Seed,
-)
-from datp_core.domain.values.identifiers import CudaDeviceName, OutcomeLabel, OutcomeLabelSequence
-from datp_core.domain.values.ratios import DittoRegularization, LearningRate, MetricValue, ProximalCoefficient
 from datp_core.protocols.training import (
     FEDERATED_DATALOADER_WORKER_COUNT,
     AutoencoderProtocol,

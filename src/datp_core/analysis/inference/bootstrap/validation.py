@@ -2,8 +2,8 @@
 
 from datp_core.analysis.contrasts import FixedScorePairProvenance, PairedContrasts, SupplementaryPairedAnalysisPlan
 from datp_core.analysis.inference.bootstrap.contracts import BcaReason
-from datp_core.core.identifiers import EvidenceRole, FederatedThresholdMethod
 from datp_core.analysis.inference.wilcoxon import PairedInferenceProtocol
+from datp_core.core.identifiers import EvidenceRole, FederatedThresholdMethod
 from datp_core.protocols.validation import CANONICAL_PROTOCOL_GRAPH
 
 

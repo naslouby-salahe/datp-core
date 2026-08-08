@@ -2,8 +2,12 @@
 
 from pydantic import model_validator
 
+from datp_core.analysis.inference.wilcoxon import PairedInferenceProtocol
+from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
+from datp_core.analysis.metrics.fixed_score_validation import validate_fixed_score_controls
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.contracts import StrictModel
+from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import (
     EvidenceRole,
     FederatedThresholdMethod,
@@ -13,20 +17,17 @@ from datp_core.core.identifiers import (
     SplitProtocolId,
     TrainingModelId,
 )
-from datp_core.core.errors import ScientificContractError
-from datp_core.core.numeric import PairedObservationCount, Seed
 from datp_core.core.numeric import (
     NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
     AbsoluteTolerance,
     DittoRegularization,
     MetricValue,
+    PairedObservationCount,
     ProximalCoefficient,
     Ratio,
+    Seed,
 )
-from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
-from datp_core.analysis.metrics.fixed_score_validation import validate_fixed_score_controls
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
-from datp_core.analysis.inference.wilcoxon import PairedInferenceProtocol
 from datp_core.experiments.common.seeds import SeedCohort
 
 type MetricSeries = tuple[MetricValue, ...]

@@ -48,6 +48,11 @@ from datp_core.data.populations.contracts import (
     PopulationFrameColumn,
     PopulationOutcomeLabel,
 )
+from datp_core.data.preprocessing.models import (
+    CentralizedFittedPreprocessingState,
+    FederatedFittedPreprocessingState,
+    FittedPreprocessingState,
+)
 from datp_core.detector.autoencoder import (
     LEARNING_DTYPE,
     TORCH_LEARNING_DTYPE,
@@ -58,11 +63,6 @@ from datp_core.detector.autoencoder import (
     construct_autoencoder,
 )
 from datp_core.detector.checkpoints.contracts import CheckpointProtocol
-from datp_core.data.preprocessing.models import (
-    CentralizedFittedPreprocessingState,
-    FederatedFittedPreprocessingState,
-    FittedPreprocessingState,
-)
 from datp_core.protocols.training import (
     BATCH_SIZE,
     CENTRALIZED_DATALOADER_WORKER_COUNT,

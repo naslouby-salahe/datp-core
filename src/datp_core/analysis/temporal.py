@@ -7,8 +7,8 @@ from pydantic import model_validator
 
 from datp_core.analysis.inference.bootstrap.contracts import BootstrapInterval
 from datp_core.analysis.inference.bootstrap.estimation import seed_level_bca_interval
+from datp_core.analysis.inference.wilcoxon import PairedInferenceProtocol
 from datp_core.analysis.scientific_decision import ScientificDecision, ScientificDecisionResult
-from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.contracts import StrictModel
 from datp_core.core.identifiers import (
@@ -20,7 +20,7 @@ from datp_core.core.identifiers import (
     TemporalState,
 )
 from datp_core.core.numeric import MetricValue, Ratio, Seed
-from datp_core.analysis.inference.wilcoxon import PairedInferenceProtocol
+from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.experiments.common.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_ANALYSIS_SEED, SeedCohort
 from datp_core.experiments.confirmatory.spec import CONFIRMATORY_INFERENCE_PROTOCOL
 from datp_core.protocols.temporal import TemporalDecisionProtocol, TemporalDeploymentProvenance

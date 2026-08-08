@@ -5,7 +5,7 @@ from datp_core.analysis.metrics.federated import (
     FederatedEvaluationArtifacts,
     FederatedEvaluationPublication,
 )
-from datp_core.domain.provenance import canonical_json_text
+from datp_core.artifacts.serializers.json import canonical_json_text
 
 
 class FederatedEvaluationAssetName(StrEnum):

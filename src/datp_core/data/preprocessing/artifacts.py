@@ -2,8 +2,9 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-from datp_core.data.populations.contracts import ControlledPartitionKind
-from datp_core.domain.enums import (
+from datp_core.core.contracts import sequence_pydantic_schema, str_subclass_schema, validate_non_empty_tuple
+from datp_core.core.identifiers import (
+    ClientPathToken,
     DatasetId,
     PartitionRole,
     PopulationId,
@@ -12,10 +13,8 @@ from datp_core.domain.enums import (
     ReusableDataCoordinateKind,
     SplitProtocolId,
 )
-from datp_core.domain.values.base import sequence_pydantic_schema, str_subclass_schema, validate_non_empty_tuple
-from datp_core.domain.values.counts import Seed
-from datp_core.domain.values.paths import ClientPathToken
-from datp_core.domain.values.ratios import DirichletConcentration
+from datp_core.core.numeric import DirichletConcentration, Seed
+from datp_core.data.populations.contracts import ControlledPartitionKind
 
 _NO_CONTROLLED_PARTITION_SEGMENT = "no_controlled_partition"
 

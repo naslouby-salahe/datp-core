@@ -8,6 +8,16 @@ from pathlib import Path
 import polars as pl
 from polars.exceptions import PolarsError
 
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.errors import ArtifactIntegrityError, ScientificContractError
+from datp_core.core.identifiers import (
+    CommunicationEstimationMethod,
+    ContractSubject,
+    CudaDeviceName,
+    PopulationIdentityKind,
+    TrainingModelId,
+)
+from datp_core.core.numeric import ByteCount, LogicalElementCount, MetricValue, RoundNumber, RowCount
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.checkpoints.contracts import CheckpointProtocol
 from datp_core.detector.checkpoints.identities import (
@@ -27,17 +37,6 @@ from datp_core.detector.training.models import (
     GlobalModelStateReference,
     PersonalizedModelStateReference,
 )
-from datp_core.domain.enums import (
-    CommunicationEstimationMethod,
-    ContractSubject,
-    PopulationIdentityKind,
-    TrainingModelId,
-)
-from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import ByteCount, LogicalElementCount, RoundNumber, RowCount
-from datp_core.domain.values.identifiers import CudaDeviceName
-from datp_core.domain.values.ratios import MetricValue
 
 
 class _ClientHistoryTable(StrEnum):

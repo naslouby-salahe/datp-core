@@ -4,6 +4,22 @@ from pathlib import Path
 import polars as pl
 import structlog
 
+from datp_core.artifacts.provenance import Checksum, checksum_text
+from datp_core.artifacts.serializers.json import canonical_json_text
+from datp_core.core.contracts import ClientCollection, ClientOwned
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import (
+    ClientPathToken,
+    DatasetId,
+    FeatureName,
+    FeatureNameSequence,
+    PopulationId,
+    ProcessedDataBranch,
+    PublicationStatus,
+    SplitProtocolId,
+    StableRowId,
+)
+from datp_core.core.numeric import ClientPublicationCount, RowCount
 from datp_core.data.edge_iiotset.schema import EDGE_NUMERIC_FEATURE_COLUMNS, EdgeAssetRole
 from datp_core.data.populations.construction import join_handoff_with_canonical_features
 from datp_core.data.populations.contracts import (
@@ -23,14 +39,6 @@ from datp_core.data.preprocessing.models import (
     PreprocessingPublishContext,
 )
 from datp_core.data.preprocessing.state import TrustedScaler
-from datp_core.domain.contracts import ClientCollection, ClientOwned
-from datp_core.domain.enums import DatasetId, PopulationId, ProcessedDataBranch, PublicationStatus, SplitProtocolId
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.provenance import canonical_json_text
-from datp_core.domain.values.checksums import Checksum, checksum_text
-from datp_core.domain.values.counts import ClientPublicationCount, RowCount
-from datp_core.domain.values.identifiers import FeatureName, FeatureNameSequence, StableRowId
-from datp_core.domain.values.paths import ClientPathToken
 from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
 from datp_core.runtime.filesystem import write_text_atomically
 

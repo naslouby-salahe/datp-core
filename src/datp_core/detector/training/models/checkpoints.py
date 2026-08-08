@@ -1,17 +1,15 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import CheckpointStatus, ContractSubject, CudaDeviceName, TrainingModelId
+from datp_core.core.numeric import BatchSize, MetricValue, RoundNumber
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.checkpoints.contracts import CheckpointProtocol
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 from datp_core.detector.training.models.records import FederatedTrainingHistory
 from datp_core.detector.training.models.snapshots import RoundSnapshot
-from datp_core.domain.enums import CheckpointStatus, ContractSubject, TrainingModelId
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import BatchSize, RoundNumber
-from datp_core.domain.values.identifiers import CudaDeviceName
-from datp_core.domain.values.ratios import MetricValue
 from datp_core.protocols.training import AutoencoderProtocol
 
 

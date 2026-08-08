@@ -2,9 +2,9 @@
 
 from pathlib import Path
 
+from datp_core.core.identifiers import PartitionRole, SplitProtocolId
 from datp_core.data.preprocessing.artifacts import asset_for_partition, client_asset_path, partition_roles
 from datp_core.data.preprocessing.models import PreprocessedPartitionPaths
-from datp_core.domain.enums import PartitionRole, SplitProtocolId
 
 
 def build_preprocessed_partition_paths(
