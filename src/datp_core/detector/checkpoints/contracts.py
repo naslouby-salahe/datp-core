@@ -1,4 +1,4 @@
-"""Layer-neutral checkpoint inventory, integrity, and selection invariants."""
+"""Checkpoint inventory, integrity, and non-test selection contracts."""
 
 from collections.abc import Callable, Sequence
 from pathlib import Path
@@ -6,11 +6,16 @@ from typing import Protocol
 
 from pydantic import model_validator
 
-from datp_core.domain.contracts import StrictModel
-from datp_core.domain.enums import CheckpointStatus, ContractSubject, SerializationFormat
-from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
-from datp_core.domain.values.checksums import Checksum, checksum_file
-from datp_core.domain.values.counts import RoundNumber
+from datp_core.artifacts.provenance import Checksum, checksum_file
+from datp_core.core.contracts import StrictModel
+from datp_core.core.errors import ArtifactIntegrityError, LeakageError, ScientificContractError
+from datp_core.core.identifiers import (
+    CheckpointSelectionRule,
+    CheckpointStatus,
+    ContractSubject,
+    SerializationFormat,
+)
+from datp_core.core.numeric import MetricValue, RoundNumber
 
 
 class CheckpointProtocol(StrictModel):
@@ -20,11 +25,50 @@ class CheckpointProtocol(StrictModel):
     @model_validator(mode="after")
     def validate_candidates(self) -> "CheckpointProtocol":
         values = tuple(candidate.value for candidate in self.candidates)
-        if not values or values != tuple(sorted(values)) or len(set(values)) != len(values):
+        if not values or values != tuple(sorted(values)) or len(frozenset(values)) != len(values):
             raise ValueError("checkpoint candidates must be unique and ordered")
         if values[-1] != self.maximum_round.value:
             raise ValueError("maximum round must be the final checkpoint candidate")
         return self
+
+
+CHECKPOINT_PROTOCOL = CheckpointProtocol(
+    candidates=tuple(RoundNumber(value) for value in (25, 50, 75, 100, 125, 150, 200)),
+    maximum_round=RoundNumber(200),
+)
+CHECKPOINT_SELECTION_RULE = CheckpointSelectionRule.FIXED_TERMINAL_MAXIMUM_ROUND
+
+
+def require_non_test_checkpoint_selection_inputs(
+    *,
+    selection_rule: CheckpointSelectionRule,
+    held_out_metrics: Sequence[MetricValue] | None,
+    attack_labels_present: bool,
+    branch_label: str,
+) -> None:
+    if held_out_metrics is not None:
+        raise LeakageError(
+            f"held-out evaluation outcomes cannot influence {branch_label} checkpoint selection",
+            subject=ContractSubject.HELD_OUT_METRICS,
+        )
+    if attack_labels_present:
+        raise LeakageError(
+            f"attack labels cannot influence {branch_label} checkpoint selection",
+            subject=ContractSubject.ATTACK_LABELS,
+        )
+    if selection_rule is not CHECKPOINT_SELECTION_RULE:
+        raise ScientificContractError(
+            f"unsupported {branch_label} checkpoint selection rule",
+            subject=ContractSubject.CHECKPOINT_SELECTION_RULE,
+        )
+
+
+def fixed_terminal_checkpoint_status(round_number: RoundNumber, maximum_round: RoundNumber) -> CheckpointStatus:
+    return (
+        CheckpointStatus.SELECTED_BY_NON_TEST_RULE
+        if round_number == maximum_round
+        else CheckpointStatus.STABILITY_EVIDENCE
+    )
 
 
 class PersistedCheckpointContract(Protocol):
@@ -104,11 +148,7 @@ def select_terminal_checkpoint[CandidateT: PersistedCheckpointContract](
     statused: list[CandidateT] = []
     selected: CandidateT | None = None
     for candidate in candidates:
-        status = (
-            CheckpointStatus.SELECTED_BY_NON_TEST_RULE
-            if candidate.round_number == maximum_round
-            else CheckpointStatus.STABILITY_EVIDENCE
-        )
+        status = fixed_terminal_checkpoint_status(candidate.round_number, maximum_round)
         rebuilt = rebuild(candidate, status)
         statused.append(rebuilt)
         if status is CheckpointStatus.SELECTED_BY_NON_TEST_RULE:
