@@ -6,6 +6,7 @@ from typing import ClassVar
 from datp_core.core.errors import ScientificContractError, require_contract
 from datp_core.core.identifiers import ContractSubject, FederatedThresholdMethod
 from datp_core.core.numeric import Quantile, ShrinkageWeight, ThresholdValue, floats_exactly_equal
+from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 from datp_core.thresholds.contracts import (
     FixedShrinkageProtocol,
@@ -21,7 +22,7 @@ from datp_core.thresholds.quantiles import ClientBenignCalibrationScores, local_
 
 @dataclass(frozen=True, slots=True)
 class ShrinkageAssignment:
-    client: object
+    client: ClientIdentity
     local_quantile: LocalQuantile
     shared_threshold: ThresholdValue
     weight: ShrinkageWeight
@@ -55,9 +56,7 @@ class ShrinkageThresholdResult:
     method: ClassVar[FederatedThresholdMethod] = FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE
 
     def __post_init__(self) -> None:
-        expected_assignments = tuple(
-            ThresholdAssignment(item.client, item.threshold) for item in self.assignments
-        )
+        expected_assignments = tuple(ThresholdAssignment(item.client, item.threshold) for item in self.assignments)
         validate_assignments(
             expected_assignments,
             tuple(
