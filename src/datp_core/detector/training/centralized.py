@@ -63,7 +63,11 @@ from datp_core.detector.autoencoder import (
     construct_autoencoder,
 )
 from datp_core.detector.checkpoints.contracts import CheckpointProtocol
-from datp_core.detector.training.contracts import AutoencoderArchitecture, AutoencoderProtocol
+from datp_core.detector.training.contracts import (
+    AutoencoderArchitecture,
+    AutoencoderProtocol,
+    CentralizedTrainingProtocol,
+)
 from datp_core.protocols.training import (
     BATCH_SIZE,
     CENTRALIZED_DATALOADER_WORKER_COUNT,
@@ -71,7 +75,6 @@ from datp_core.protocols.training import (
     LEARNING_RATE,
     NBAIOT_AUTOENCODER,
     WEIGHT_DECAY,
-    CentralizedTrainingProtocol,
 )
 from datp_core.runtime.compute import require_cuda_available, resolve_cuda_device
 from datp_core.runtime.determinism import configure_deterministic_execution

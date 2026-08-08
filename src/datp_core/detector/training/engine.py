@@ -51,7 +51,12 @@ from datp_core.detector.autoencoder import (
     clone_state,
 )
 from datp_core.detector.checkpoints.contracts import CheckpointProtocol
-from datp_core.detector.training.contracts import AutoencoderProtocol
+from datp_core.detector.training.contracts import (
+    AutoencoderProtocol,
+    FedAvgProtocol,
+    FedProxProtocol,
+    OptimizerProtocol,
+)
 from datp_core.detector.training.models import (
     ClientTrainingInput,
     ClientTrainingResult,
@@ -68,9 +73,6 @@ from datp_core.detector.training.models import (
 )
 from datp_core.protocols.training import (
     FEDERATED_DATALOADER_WORKER_COUNT,
-    FedAvgProtocol,
-    FedProxProtocol,
-    OptimizerProtocol,
 )
 from datp_core.runtime.compute import resolve_cuda_device
 from datp_core.runtime.determinism import configure_deterministic_execution, derive_worker_seed

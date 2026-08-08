@@ -17,6 +17,7 @@ from datp_core.core.identifiers import (
 )
 from datp_core.core.numeric import CalibrationSize
 from datp_core.data.populations.contracts import POPULATIONS, PopulationDeclaration
+from datp_core.detector.training.contracts import FedAvgProtocol
 from datp_core.experiments.anchor.spec import ANCHOR_DECISION_PROTOCOL, AnchorDecisionProtocol
 from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT
 from datp_core.experiments.confirmatory.spec import CONFIRMATORY_INFERENCE_PROTOCOL
@@ -39,7 +40,7 @@ from .splits import (
     TemporalSplitProtocol,
 )
 from .traffic_rates import TRAFFIC_RATE_EVIDENCE, TrafficRateEvidence
-from .training import CHECKPOINT_PROTOCOL, FEDAVG_TRAINING_PROTOCOL, CheckpointProtocol, FedAvgProtocol
+from .training import CHECKPOINT_PROTOCOL, FEDAVG_TRAINING_PROTOCOL, CheckpointProtocol
 
 CONFIRMATORY_ENDPOINT = ConfirmatoryEndpoint(
     experiment=ExperimentId.SHARED_VS_LOCAL_CONFIRMATION,

@@ -15,7 +15,7 @@ from datp_core.detector.autoencoder import (
 )
 from datp_core.detector.checkpoints.contracts import CheckpointProtocol
 from datp_core.detector.checkpoints.publication import write_ditto_training
-from datp_core.detector.training.contracts import AutoencoderProtocol
+from datp_core.detector.training.contracts import AutoencoderProtocol, DittoProtocol
 from datp_core.detector.training.engine import (
     ProximalTerm,
     TrainingStream,
@@ -45,7 +45,6 @@ from datp_core.detector.training.models import (
     PreparedClientProvenance,
     RoundSnapshot,
 )
-from datp_core.protocols.training import DittoProtocol
 from datp_core.runtime.compute import resolve_cuda_device
 from datp_core.runtime.determinism import configure_deterministic_execution
 

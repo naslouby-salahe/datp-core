@@ -45,8 +45,7 @@ from datp_core.detector.training.centralized import (
     train_centralized_autoencoder,
     training_history_frame,
 )
-from datp_core.detector.training.contracts import AutoencoderProtocol
-from datp_core.protocols.training import CentralizedTrainingProtocol
+from datp_core.detector.training.contracts import AutoencoderProtocol, CentralizedTrainingProtocol
 from datp_core.runtime.compute import resolve_cuda_device
 
 

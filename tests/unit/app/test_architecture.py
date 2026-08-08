@@ -22,7 +22,7 @@ def test_deleted_architectures_do_not_exist() -> None:
     assert not (SOURCE_ROOT / "reporting").exists()
     assert not (SOURCE_ROOT / "pipeline").exists()
     assert (SOURCE_ROOT / "app" / "campaign.py").is_file()
-    assert (SOURCE_ROOT / "app" / "planning.py").is_file()
+    assert not (SOURCE_ROOT / "app" / "planning.py").exists()
     assert (SOURCE_ROOT / "experiments" / "planning.py").is_file()
 
 

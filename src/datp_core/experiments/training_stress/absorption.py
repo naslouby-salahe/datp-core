@@ -16,10 +16,10 @@ from datp_core.core.numeric import (
     ProximalCoefficient,
     Seed,
 )
+from datp_core.detector.training.contracts import ModelAbsorptionDecisionProtocol
 from datp_core.experiments.common.seeds import CONFIRMATORY_ANALYSIS_SEED, CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.experiments.confirmatory.spec import CONFIRMATORY_INFERENCE_PROTOCOL
 from datp_core.protocols.metrics import ABSORPTION_REFERENCE_EFFECT_MATERIALITY_CUTOFF
-from datp_core.protocols.training import ModelAbsorptionDecisionProtocol
 
 
 class AbsorptionCornerEvidence(StrictModel):

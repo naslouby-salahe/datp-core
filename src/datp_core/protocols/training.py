@@ -1,11 +1,8 @@
 """Training declarations and authoritative protocol resolution."""
 
 from collections.abc import Sequence
-from typing import Annotated, Literal, Protocol
+from typing import Protocol
 
-from pydantic import Field, model_validator
-
-from datp_core.core.contracts import StrictModel
 from datp_core.core.errors import LeakageError, ScientificContractError
 from datp_core.core.identifiers import (
     CentralizedModelId,
@@ -32,53 +29,6 @@ from datp_core.core.numeric import (
 )
 from datp_core.detector.checkpoints.contracts import CheckpointProtocol
 from datp_core.detector.training import contracts as training_contracts
-
-
-class OptimizerProtocol(StrictModel):
-    identity: OptimizerId
-    weight_decay: WeightDecay
-
-
-class FedAvgProtocol(StrictModel):
-    kind: Literal[TrainingModelId.FEDAVG_AUTOENCODER]
-    local_epochs: LocalEpochCount
-    optimizer: OptimizerProtocol
-
-
-class FedProxProtocol(StrictModel):
-    kind: Literal[TrainingModelId.FEDPROX_AUTOENCODER]
-    local_epochs: LocalEpochCount
-    optimizer: OptimizerProtocol
-    coefficient: ProximalCoefficient
-
-
-class DittoProtocol(StrictModel):
-    kind: Literal[TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER]
-    local_epochs: LocalEpochCount
-    optimizer: OptimizerProtocol
-    regularization: DittoRegularization
-
-
-TrainingProtocol = Annotated[FedAvgProtocol | FedProxProtocol | DittoProtocol, Field(discriminator="kind")]
-
-
-class CentralizedTrainingProtocol(StrictModel):
-    kind: Literal[CentralizedModelId.CENTRALIZED_AUTOENCODER]
-    optimizer: OptimizerProtocol
-
-
-class ModelAbsorptionDecisionProtocol(StrictModel):
-    """Locked retention boundaries for the model-personalization absorption verdict."""
-
-    full_retention_minimum: Ratio
-    partial_retention_minimum: Ratio
-
-    @model_validator(mode="after")
-    def validate_ordering(self) -> "ModelAbsorptionDecisionProtocol":
-        if self.partial_retention_minimum.value >= self.full_retention_minimum.value:
-            raise ValueError("partial retention minimum must be below the full retention minimum")
-        return self
-
 
 CHECKPOINT_PROTOCOL = CheckpointProtocol(
     candidates=tuple(RoundNumber(value) for value in (25, 50, 75, 100, 125, 150, 200)),
@@ -184,7 +134,7 @@ def select_primary_fedprox_coefficient[CandidateT: FedProxCoefficientTrainingLos
 DITTO_RETAINED_EFFECT_MINIMUM = Ratio(0.75)
 DITTO_PARTIAL_EFFECT_MINIMUM = Ratio(0.25)
 DITTO_ALTERNATIVE_ROUTE_DIFFERENCE = MetricValue(0.05)
-MODEL_ABSORPTION_DECISION_PROTOCOL = ModelAbsorptionDecisionProtocol(
+MODEL_ABSORPTION_DECISION_PROTOCOL = training_contracts.ModelAbsorptionDecisionProtocol(
     full_retention_minimum=DITTO_RETAINED_EFFECT_MINIMUM,
     partial_retention_minimum=DITTO_PARTIAL_EFFECT_MINIMUM,
 )
@@ -204,24 +154,27 @@ CICIOT2023_AUTOENCODER = training_contracts.AutoencoderProtocol(
     )
 )
 WEIGHT_DECAY = WeightDecay(0.0)
-OPTIMIZER = OptimizerProtocol(identity=OptimizerId.ADAM, weight_decay=WEIGHT_DECAY)
+OPTIMIZER = training_contracts.OptimizerProtocol(
+    identity=OptimizerId.ADAM,
+    weight_decay=WEIGHT_DECAY,
+)
 LEARNING_RATE = LearningRate(0.001)
 BATCH_SIZE = BatchSize(256)
 CENTRALIZED_DATALOADER_WORKER_COUNT = DataLoaderWorkerCount(0)
 FEDERATED_DATALOADER_WORKER_COUNT = DataLoaderWorkerCount(0)
 DITTO_REGULARIZATION_GRID = tuple(DittoRegularization(value) for value in (0.05, 0.1, 0.2))
 DITTO_PRIMARY_REGULARIZATION = DittoRegularization(0.1)
-CENTRALIZED_TRAINING_PROTOCOL = CentralizedTrainingProtocol(
+CENTRALIZED_TRAINING_PROTOCOL = training_contracts.CentralizedTrainingProtocol(
     kind=CentralizedModelId.CENTRALIZED_AUTOENCODER,
     optimizer=OPTIMIZER,
 )
-FEDAVG_TRAINING_PROTOCOL = FedAvgProtocol(
+FEDAVG_TRAINING_PROTOCOL = training_contracts.FedAvgProtocol(
     kind=TrainingModelId.FEDAVG_AUTOENCODER,
     local_epochs=FEDAVG_LOCAL_EPOCHS,
     optimizer=OPTIMIZER,
 )
 FEDPROX_TRAINING_PROTOCOLS = tuple(
-    FedProxProtocol(
+    training_contracts.FedProxProtocol(
         kind=TrainingModelId.FEDPROX_AUTOENCODER,
         local_epochs=FEDAVG_LOCAL_EPOCHS,
         optimizer=OPTIMIZER,
@@ -230,7 +183,7 @@ FEDPROX_TRAINING_PROTOCOLS = tuple(
     for coefficient in FEDPROX_COEFFICIENTS
 )
 DITTO_TRAINING_PROTOCOLS = tuple(
-    DittoProtocol(
+    training_contracts.DittoProtocol(
         kind=TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER,
         local_epochs=FEDAVG_LOCAL_EPOCHS,
         optimizer=OPTIMIZER,
@@ -240,7 +193,9 @@ DITTO_TRAINING_PROTOCOLS = tuple(
 )
 
 
-def resolve_fedprox_protocol(coefficient: ModelCoefficientValue | ProximalCoefficient) -> FedProxProtocol:
+def resolve_fedprox_protocol(
+    coefficient: ModelCoefficientValue | ProximalCoefficient,
+) -> training_contracts.FedProxProtocol:
     matches = tuple(
         protocol for protocol in FEDPROX_TRAINING_PROTOCOLS if protocol.coefficient.value == coefficient.value
     )
@@ -252,7 +207,7 @@ def resolve_fedprox_protocol(coefficient: ModelCoefficientValue | ProximalCoeffi
     return matches[0]
 
 
-def resolve_ditto_protocol(regularization: DittoRegularization) -> DittoProtocol:
+def resolve_ditto_protocol(regularization: DittoRegularization) -> training_contracts.DittoProtocol:
     matches = tuple(
         protocol for protocol in DITTO_TRAINING_PROTOCOLS if protocol.regularization.value == regularization.value
     )
@@ -268,7 +223,7 @@ def resolve_single_model_federated_training_protocol(
     *,
     model: TrainingModelId,
     coefficient: ModelCoefficientValue | ProximalCoefficient | DittoRegularization | None,
-) -> FedAvgProtocol | FedProxProtocol:
+) -> training_contracts.FedAvgProtocol | training_contracts.FedProxProtocol:
     """Resolve the only supported single-model federated training protocol for a typed identity."""
     match model:
         case TrainingModelId.FEDAVG_AUTOENCODER:

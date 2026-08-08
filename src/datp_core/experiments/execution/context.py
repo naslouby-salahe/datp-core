@@ -35,7 +35,7 @@ from datp_core.data.preprocessing.models import (
 from datp_core.data.preprocessing.service import preprocess_federated, preprocess_published_federated
 from datp_core.data.registry import dataset_binding, population_capabilities
 from datp_core.detector.scoring.models import ClientScoringInput
-from datp_core.detector.training.contracts import AutoencoderProtocol
+from datp_core.detector.training.contracts import AutoencoderProtocol, FedAvgProtocol, FedProxProtocol
 from datp_core.detector.training.engine import preprocessing_state_set_checksum
 from datp_core.detector.training.models import (
     ClientTrainingInput,
@@ -56,8 +56,6 @@ from datp_core.protocols.training import (
     CICIOT2023_AUTOENCODER,
     EDGE_IIOTSET_NUMERIC_AUTOENCODER,
     NBAIOT_AUTOENCODER,
-    FedAvgProtocol,
-    FedProxProtocol,
     resolve_single_model_federated_training_protocol,
 )
 from datp_core.runtime.configuration import DATA_ROOT

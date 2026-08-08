@@ -23,13 +23,13 @@ from datp_core.core.identifiers import (
 from datp_core.core.numeric import Seed
 from datp_core.data.populations.contracts import PopulationDeclaration
 from datp_core.detector.checkpoints.contracts import CheckpointProtocol
+from datp_core.detector.training.contracts import FedAvgProtocol
 from datp_core.experiments.anchor.spec import AnchorDecisionProtocol
 
 from .calibration import CalibrationEligibilityProtocol, ClusterThresholdProtocol
 from .experiments import ConfirmatoryEndpoint, ExperimentDeclaration
 from .splits import FractionalSplitProtocol, StaticReferenceSplitProtocol, TemporalSplitProtocol
 from .traffic_rates import TrafficRateEvidence
-from .training import FedAvgProtocol
 
 
 class ResolvedProtocolGraph(StrictModel):
