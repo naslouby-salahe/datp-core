@@ -40,7 +40,7 @@ from datp_core.evaluation.models import HeldOutBenignScore
 from datp_core.evaluation.threshold_estimation import ThresholdEstimationProvenance
 from datp_core.evaluation.threshold_evidence import verify_held_out_benign_scores
 from datp_core.learning.federated.checkpoints.selection import CheckpointDecision
-from datp_core.learning.federated.models import CheckpointCandidate
+from datp_core.detector.training.models import CheckpointCandidate
 from datp_core.learning.federated.training import FederatedTrainingRequest
 from datp_core.pipeline.checkpoints.service import SelectFederatedCheckpointRequest, select_federated_primary_checkpoint
 from datp_core.pipeline.coordinates import ExperimentCoordinate

@@ -28,7 +28,7 @@ from datp_core.learning.federated.checkpoints.identities import (
     FederatedHistoryColumn,
     ParquetColumnSpec,
 )
-from datp_core.learning.federated.models import (
+from datp_core.detector.training.models import (
     ClientTrainingResult,
     CommunicationRecord,
     FederatedRoundResult,

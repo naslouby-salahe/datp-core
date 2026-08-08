@@ -40,7 +40,7 @@ from datp_core.learning.federated.checkpoints.publication import (
     validate_manifest,
     verify_completion,
 )
-from datp_core.learning.federated.models import (
+from datp_core.detector.training.models import (
     CheckpointCandidate,
     DittoTrainingCoordinates,
     DittoTrainingOutcome,

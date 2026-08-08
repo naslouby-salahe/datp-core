@@ -15,7 +15,7 @@ from datp_core.learning.federated.checkpoints.reuse import (
 )
 from datp_core.learning.federated.ditto import DittoTrainingRequest, train_ditto
 from datp_core.learning.federated.global_training import GlobalFederatedProtocol, train_global_federated
-from datp_core.learning.federated.models import (
+from datp_core.detector.training.models import (
     CheckpointCandidate,
     ClientTrainingInput,
     FederatedTrainingResult,

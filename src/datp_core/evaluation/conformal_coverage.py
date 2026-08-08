@@ -26,7 +26,7 @@ from datp_core.evaluation.models import (
     metric_by_id,
     validate_metric_set,
 )
-from datp_core.learning.federated.models import FederatedTrainingCoordinate
+from datp_core.detector.training.models import FederatedTrainingCoordinate
 from datp_core.thresholds.variants.conformal import ConformalAssignment
 
 _COVERAGE_METRICS = frozenset(

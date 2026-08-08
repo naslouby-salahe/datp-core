@@ -17,7 +17,7 @@ from datp_core.evaluation.models import (
     validate_metric_set,
 )
 from datp_core.evaluation.threshold_evidence import VerifiedHeldOutBenignScores
-from datp_core.learning.federated.models import FederatedTrainingCoordinate
+from datp_core.detector.training.models import FederatedTrainingCoordinate
 
 _THRESHOLD_ESTIMATION_METRICS = frozenset(
     {

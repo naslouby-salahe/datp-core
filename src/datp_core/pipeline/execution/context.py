@@ -14,7 +14,7 @@ from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.identifiers import FeatureName, FeatureNameSequence
 from datp_core.domain.values.paths import ClientIdentityToken, FamilyIdentity
 from datp_core.domain.values.ratios import ProximalCoefficient
-from datp_core.learning.federated.models import (
+from datp_core.detector.training.models import (
     ClientTrainingInput,
     FederatedTrainingCoordinate,
     PreparedClientProvenance,

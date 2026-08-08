@@ -8,7 +8,7 @@ from datp_core.datasets.partitioning.contracts import (
 from datp_core.domain.enums import ScoreFrameColumn
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.counts import RowCount
-from datp_core.learning.federated.models import FederatedTrainingCoordinate
+from datp_core.detector.training.models import FederatedTrainingCoordinate
 from datp_core.detector.scoring.contracts import ScoreArtifactManifest, ScoreRecord
 
 type FederatedScoreArtifactManifest = ScoreArtifactManifest[FederatedTrainingCoordinate, ClientIdentity]

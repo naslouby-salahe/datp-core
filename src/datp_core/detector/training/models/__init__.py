@@ -1,6 +1,7 @@
 """Typed immutable contracts for federated autoencoder training."""
 
-from datp_core.learning.federated.models.checkpoints import (
+from datp_core.detector.training.contracts import DittoTrainingCoordinates, FederatedTrainingCoordinate
+from datp_core.detector.training.models.checkpoints import (
     CheckpointCandidate,
     CheckpointDecision,
     DittoTrainingOutcome,
@@ -9,11 +10,7 @@ from datp_core.learning.federated.models.checkpoints import (
     FederatedTrainingResult,
     PersonalizedCandidateSet,
 )
-from datp_core.learning.federated.models.coordinates import (
-    DittoTrainingCoordinates,
-    FederatedTrainingCoordinate,
-)
-from datp_core.learning.federated.models.records import (
+from datp_core.detector.training.models.records import (
     ClientTrainingInput,
     ClientTrainingResult,
     ClientUpdate,
@@ -25,7 +22,7 @@ from datp_core.learning.federated.models.records import (
     PreparedClientProvenance,
     validate_client_preprocessing_match,
 )
-from datp_core.learning.federated.models.snapshots import PersonalizedSnapshotSet, RoundSnapshot
+from datp_core.detector.training.models.snapshots import PersonalizedSnapshotSet, RoundSnapshot
 
 __all__ = (
     "CheckpointCandidate",

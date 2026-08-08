@@ -15,7 +15,7 @@ from datp_core.learning.federated.common import (
     write_ditto_training,
 )
 from datp_core.learning.federated.ditto import DittoTrainingRequest
-from datp_core.learning.federated.models import CheckpointCandidate, FederatedTrainingResult
+from datp_core.detector.training.models import CheckpointCandidate, FederatedTrainingResult
 from datp_core.artifacts.repositories.publication import (
     FunctionalRelatedArtifactCodec,
     RelatedArtifactPublication,

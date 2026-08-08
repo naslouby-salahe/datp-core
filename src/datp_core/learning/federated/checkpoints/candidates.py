@@ -20,7 +20,7 @@ from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractEr
 from datp_core.domain.values.checksums import Checksum, checksum_file
 from datp_core.domain.values.counts import RoundNumber
 from datp_core.domain.values.identifiers import SafeTensorFilename
-from datp_core.learning.federated.models import (
+from datp_core.detector.training.models import (
     CheckpointCandidate,
     FederatedTrainingCoordinate,
     RoundSnapshot,

@@ -8,7 +8,7 @@ from datp_core.domain.enums import ScoreFrameColumn
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.checksums import checksum_file
 from datp_core.evaluation.models import FederatedScoreRecord, HeldOutBenignScore
-from datp_core.learning.federated.models import FederatedTrainingCoordinate
+from datp_core.detector.training.models import FederatedTrainingCoordinate
 
 
 @dataclass(frozen=True, slots=True)

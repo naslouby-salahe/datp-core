@@ -35,7 +35,7 @@ from datp_core.learning.federated.checkpoints.selection import select_checkpoint
 from datp_core.learning.federated.checkpoints.selection import (
     validate_candidate_coordinates as validate_federated_candidates,
 )
-from datp_core.learning.federated.models import (
+from datp_core.detector.training.models import (
     CheckpointCandidate,
     CheckpointDecision,
     FederatedTrainingCoordinate,

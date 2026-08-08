@@ -24,7 +24,7 @@ from datp_core.domain.errors import (
 from datp_core.domain.values.checksums import Checksum, checksum_file
 from datp_core.domain.values.counts import BatchSize, FeatureCount, RowCount
 from datp_core.domain.values.identifiers import FeatureNameSequence
-from datp_core.learning.federated.models import CheckpointCandidate
+from datp_core.detector.training.models import CheckpointCandidate
 from datp_core.pipeline.scoring.models import PersistedScoreFrame
 from datp_core.protocols.training import AutoencoderProtocol
 

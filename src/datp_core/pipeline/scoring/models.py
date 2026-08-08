@@ -19,7 +19,7 @@ from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import BatchSize, FeatureCount, RoundNumber, RowCount
 from datp_core.domain.values.identifiers import FeatureNameSequence
-from datp_core.learning.federated.models import CheckpointCandidate, FederatedTrainingCoordinate
+from datp_core.detector.training.models import CheckpointCandidate, FederatedTrainingCoordinate
 from datp_core.pipeline.checkpoints.models import CentralizedCheckpointCandidate
 from datp_core.protocols.training import AutoencoderProtocol
 

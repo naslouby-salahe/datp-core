@@ -73,7 +73,7 @@ from datp_core.experiments.planning import PlanDisposition, PlanningEvidence, ex
 from datp_core.learning.federated.checkpoints.history import history_frames
 from datp_core.learning.federated.checkpoints.identities import FederatedHistoryColumn
 from datp_core.learning.federated.ditto import DittoTrainingRequest
-from datp_core.learning.federated.models import (
+from datp_core.detector.training.models import (
     DittoTrainingCoordinates,
     FederatedTrainingCoordinate,
     PreparedClientProvenance,

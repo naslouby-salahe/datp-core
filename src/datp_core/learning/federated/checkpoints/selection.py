@@ -13,7 +13,7 @@ from datp_core.domain.enums import (
 from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.ratios import MetricValue
-from datp_core.learning.federated.models import (
+from datp_core.detector.training.models import (
     CheckpointCandidate,
     CheckpointDecision,
     FederatedTrainingCoordinate,

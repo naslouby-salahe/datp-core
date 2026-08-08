@@ -9,7 +9,7 @@ from datp_core.domain.enums import ScoreFrameColumn
 from datp_core.domain.provenance import canonical_checksum
 from datp_core.domain.values.checksums import Checksum, ordered_text_checksum
 from datp_core.evaluation.models import ClientMetricResult
-from datp_core.learning.federated.models import FederatedTrainingCoordinate
+from datp_core.detector.training.models import FederatedTrainingCoordinate
 from datp_core.detector.scoring.contracts import ScoreArtifactManifest, ScoreRecord
 
 type FederatedScoreArtifactManifest = ScoreArtifactManifest[FederatedTrainingCoordinate, ClientIdentity]

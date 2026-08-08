@@ -3,7 +3,7 @@
 from datp_core.domain.values.counts import ClientCount
 from datp_core.domain.values.identifiers import FeatureNameSequence
 from datp_core.learning.federated.checkpoints.selection import CheckpointDecision
-from datp_core.learning.federated.models import CheckpointCandidate
+from datp_core.detector.training.models import CheckpointCandidate
 from datp_core.learning.federated.training import FederatedTrainingRequest
 from datp_core.pipeline.checkpoints.service import SelectFederatedCheckpointRequest, select_federated_primary_checkpoint
 from datp_core.pipeline.execution.context import FederatedExecutionContext, client_training_inputs

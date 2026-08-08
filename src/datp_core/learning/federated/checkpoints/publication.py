@@ -26,7 +26,7 @@ from datp_core.learning.federated.checkpoints.identities import (
     CandidateManifestKind,
     FederatedHistoryAssetName,
 )
-from datp_core.learning.federated.models import (
+from datp_core.detector.training.models import (
     CheckpointCandidate,
     DittoTrainingOutcome,
     FederatedTrainingCoordinate,

@@ -52,7 +52,7 @@ from datp_core.evaluation.threshold_estimation import (
     sample_efficiency_curve,
 )
 from datp_core.evaluation.traffic_rates import ValidatedTrafficRateEvidence
-from datp_core.learning.federated.models import FederatedTrainingCoordinate
+from datp_core.detector.training.models import FederatedTrainingCoordinate
 from datp_core.protocols.experiments import require_execution_identity
 from datp_core.thresholds.contracts import ThresholdAssignment, ThresholdUnavailableResult
 from datp_core.thresholds.dispatch import ThresholdConstructionResult

@@ -13,7 +13,7 @@ from datp_core.core.identifiers import (
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import LeakageError, ScientificContractError
 from datp_core.core.numeric import MetricValue
-from datp_core.learning.federated.models import (
+from datp_core.detector.training.models import (
     CheckpointCandidate,
     CheckpointDecision,
     FederatedTrainingCoordinate,

@@ -37,7 +37,7 @@ from datp_core.evaluation.fixed_score.contracts import (
     PopulationEvidence,
 )
 from datp_core.evaluation.models import ClientMetricResult, metric_by_id
-from datp_core.learning.federated.models import FederatedTrainingCoordinate
+from datp_core.detector.training.models import FederatedTrainingCoordinate
 from datp_core.detector.scoring.contracts import FixedScoreInvariant, ScoreArtifactManifest, ScoreRecord
 
 type FederatedScoreArtifactManifest = ScoreArtifactManifest[FederatedTrainingCoordinate, ClientIdentity]
