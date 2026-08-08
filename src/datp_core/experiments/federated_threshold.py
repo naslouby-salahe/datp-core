@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, ClassVar
 
 from pydantic import TypeAdapter
 
-from datp_core.app.planning import expand_experiment_plan
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import ExperimentId, FederatedThresholdMethod, MetricId, PopulationId
 from datp_core.domain.errors import ScientificContractError
@@ -27,6 +26,7 @@ from datp_core.domain.values.ratios import (
 from datp_core.evaluation.federated.publication import FederatedEvaluationAssetName
 from datp_core.evaluation.models import MetricStatus, metric_by_id
 from datp_core.experiments.execution import execute_declared_experiment_seed
+from datp_core.experiments.planning import expand_experiment_plan
 from datp_core.pipeline.coordinates import ExperimentCoordinate
 from datp_core.pipeline.execution.evidence import load_evaluation_document
 from datp_core.pipeline.execution.layout import EvaluationRunAssetDirectory
@@ -315,7 +315,7 @@ def run_federated_benign_statistics_comparison_seed(
     training_seed: Seed,
     *,
     output_root: Path,
-    overwrite: bool = False,
+    overwrite: bool,
 ) -> FederatedEstimationSeedResult:
     return _run_estimation_seed(
         ExperimentId.FEDERATED_BENIGN_STATISTICS_COMPARISON,
@@ -365,7 +365,7 @@ def run_federated_quantile_estimation_seed(
     training_seed: Seed,
     *,
     output_root: Path,
-    overwrite: bool = False,
+    overwrite: bool,
 ) -> FederatedEstimationSeedResult:
     return _run_estimation_seed(ExperimentId.FEDERATED_QUANTILE_ESTIMATION, training_seed, output_root, overwrite)
 
@@ -410,7 +410,7 @@ def run_fixed_coefficient_statistics_sensitivity_seed(
     training_seed: Seed,
     *,
     output_root: Path,
-    overwrite: bool = False,
+    overwrite: bool,
 ) -> FederatedEstimationSeedResult:
     return _run_estimation_seed(
         ExperimentId.FIXED_COEFFICIENT_STATISTICS_SENSITIVITY,
