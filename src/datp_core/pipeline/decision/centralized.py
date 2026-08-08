@@ -30,7 +30,7 @@ from datp_core.evaluation.client_metrics import calculate_client_metrics
 from datp_core.evaluation.confusion import calculate_confusion_counts
 from datp_core.evaluation.models import ConfusionCounts, MetricAvailability
 from datp_core.learning.centralized.training import CentralizedTrainingCoordinate
-from datp_core.pipeline.publication.service import (
+from datp_core.artifacts.repositories.publication import (
     ArtifactPublication,
     FunctionalArtifactCodec,
     publish_artifact,

@@ -34,8 +34,8 @@ from datp_core.pipeline.execution.models import (
 )
 from datp_core.pipeline.execution.workspace import ExperimentWorkspace
 from datp_core.pipeline.publication.layout import experiment_output_directory
-from datp_core.pipeline.publication.models import ArtifactKind, ArtifactRecord, ArtifactState, CompletionState
-from datp_core.pipeline.publication.service import (
+from datp_core.artifacts.repositories.models import ArtifactKind, ArtifactRecord, ArtifactState, CompletionState
+from datp_core.artifacts.repositories.publication import (
     build_completion_record,
     read_completion_record,
     validate_reload,
@@ -257,7 +257,9 @@ class PipelineStageRunner:
         raise ScientificContractError(f"unsupported execution stage: {stage.value}", subject=coordinate.experiment)
 
     def _materialize_dataset(self, stage: PipelineStage, coordinate: ExperimentCoordinate) -> StageExecution:
-        result = materialize_datasets(DatasetMaterializationRequest(data_root=DATA_ROOT, datasets=(coordinate.dataset,)))
+        result = materialize_datasets(
+            DatasetMaterializationRequest(data_root=DATA_ROOT, datasets=(coordinate.dataset,))
+        )
         publication = result.publications[0]
         return StageExecution(
             stage=stage,
@@ -268,9 +270,7 @@ class PipelineStageRunner:
     def _train_detector(self, stage: PipelineStage, workspace: ExperimentWorkspace) -> StageExecution:
         result = workspace.training
         outcome = (
-            StageOutcome.COMPLETED
-            if result.publication_status is PublicationStatus.PUBLISHED
-            else StageOutcome.REUSED
+            StageOutcome.COMPLETED if result.publication_status is PublicationStatus.PUBLISHED else StageOutcome.REUSED
         )
         return StageExecution(
             stage=stage,

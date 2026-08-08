@@ -33,7 +33,7 @@ from datp_core.learning.centralized.training import (
 )
 from datp_core.pipeline.checkpoints.models import CentralizedCheckpointCandidate
 from datp_core.pipeline.checkpoints.service import candidate_tensor_name, retain_centralized_checkpoint_candidates
-from datp_core.pipeline.publication.service import ArtifactPublication, FunctionalArtifactCodec, publish_artifact
+from datp_core.artifacts.repositories.publication import ArtifactPublication, FunctionalArtifactCodec, publish_artifact
 from datp_core.preprocessing.models import CentralizedFittedPreprocessingState
 from datp_core.protocols.checkpoints import CheckpointProtocol
 from datp_core.protocols.training import AutoencoderProtocol, CentralizedTrainingProtocol

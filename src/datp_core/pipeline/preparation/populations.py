@@ -34,7 +34,7 @@ from datp_core.domain.provenance import canonical_json_text
 from datp_core.domain.values.checksums import Checksum, checksum_text
 from datp_core.domain.values.counts import Seed
 from datp_core.domain.values.identifiers import CaptureTimestampColumn
-from datp_core.pipeline.publication.service import (
+from datp_core.artifacts.repositories.publication import (
     ArtifactPublication,
     FunctionalArtifactCodec,
     publish_artifact,

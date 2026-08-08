@@ -15,7 +15,7 @@ from datp_core.learning.federated.common import (
 from datp_core.learning.federated.global_training import GlobalFederatedProtocol
 from datp_core.learning.federated.models import CheckpointCandidate, FederatedTrainingResult
 from datp_core.learning.federated.training import FederatedTrainingRequest
-from datp_core.pipeline.publication.service import ArtifactPublication, FunctionalArtifactCodec, publish_artifact
+from datp_core.artifacts.repositories.publication import ArtifactPublication, FunctionalArtifactCodec, publish_artifact
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

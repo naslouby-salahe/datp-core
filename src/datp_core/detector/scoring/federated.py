@@ -18,7 +18,7 @@ from datp_core.artifacts.provenance import checksum_file
 from datp_core.artifacts.serializers.json import canonical_checksum
 from datp_core.core.errors import ArtifactIntegrityError, ScientificContractError
 from datp_core.core.numeric import FeatureCount, RowCount
-from datp_core.pipeline.publication.service import (
+from datp_core.artifacts.repositories.publication import (
     ArtifactPublication,
     FunctionalArtifactCodec,
     artifact_completion_marker_matches,

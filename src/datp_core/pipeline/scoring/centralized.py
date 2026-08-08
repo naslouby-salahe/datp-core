@@ -14,7 +14,7 @@ from datp_core.domain.values.checksums import Checksum, checksum_file, ordered_t
 from datp_core.domain.values.counts import FeatureCount, RowCount
 from datp_core.learning.autoencoder import ReconstructionAutoencoder
 from datp_core.learning.centralized.training import load_centralized_model_tensors
-from datp_core.pipeline.publication.service import (
+from datp_core.artifacts.repositories.publication import (
     ArtifactPublication,
     FunctionalArtifactCodec,
     artifact_completion_marker_matches,

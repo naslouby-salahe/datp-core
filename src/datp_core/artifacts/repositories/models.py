@@ -8,10 +8,10 @@ from pathlib import Path
 
 from pydantic import model_validator
 
-from datp_core.domain.contracts import StrictModel
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import ByteCount
-from datp_core.pipeline.coordinates import ExperimentCoordinate
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.contracts import StrictModel
+from datp_core.core.numeric import ByteCount
+from datp_core.experiments.common.coordinates import ExperimentCoordinate
 
 
 class ArtifactKind(StrEnum):

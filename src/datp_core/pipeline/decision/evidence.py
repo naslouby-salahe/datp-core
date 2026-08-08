@@ -28,7 +28,7 @@ from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.provenance import canonical_checksum, canonical_json_text
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import Seed
-from datp_core.pipeline.publication.service import (
+from datp_core.artifacts.repositories.publication import (
     ArtifactPublication,
     ArtifactPublicationResult,
     FunctionalArtifactCodec,
