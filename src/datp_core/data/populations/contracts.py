@@ -1,4 +1,4 @@
-"""Immutable population, partition, split, feasibility, and construction contracts."""
+"""Population, capability, split, feasibility, and construction contracts."""
 
 from dataclasses import dataclass
 from enum import StrEnum
@@ -8,10 +8,11 @@ from pathlib import Path
 import polars as pl
 from pydantic import model_validator
 
-from datp_core.datasets.capabilities import CapabilityStatus, DatasetCapabilities
-from datp_core.datasets.contracts import CanonicalProvenanceColumn
-from datp_core.domain.contracts import StrictModel
-from datp_core.domain.enums import (
+from datp_core.artifacts.provenance import Checksum, checksum_text
+from datp_core.core.contracts import StrictModel
+from datp_core.core.errors import CapabilityError, ScientificContractError
+from datp_core.core.identifiers import (
+    CaptureTimestampColumn,
     ContractSubject,
     DatasetId,
     EvidenceRole,
@@ -21,21 +22,134 @@ from datp_core.domain.enums import (
     PopulationIdentityKind,
     SplitProtocolId,
 )
-from datp_core.domain.errors import CapabilityError, ScientificContractError
-from datp_core.domain.values.base import NonNegativeIntegerValue
-from datp_core.domain.values.checksums import Checksum, checksum_text
-from datp_core.domain.values.counts import ClientCount, RowCount, Seed
-from datp_core.domain.values.identifiers import CaptureTimestampColumn
-from datp_core.domain.values.ratios import DirichletConcentration
-from datp_core.protocols.populations import PopulationDeclaration
+from datp_core.core.numeric import (
+    ClientCount,
+    DirichletConcentration,
+    NonNegativeIntegerValue,
+    RowCount,
+    Seed,
+)
+
+
+class CapabilityStatus(StrEnum):
+    SUPPORTED = "supported"
+    UNSUPPORTED = "unsupported"
+    CONDITIONAL = "conditional"
+    UNAVAILABLE = "unavailable"
+    NOT_APPLICABLE = "not_applicable"
+
+
+@dataclass(frozen=True, slots=True)
+class CapabilityStatement:
+    status: CapabilityStatus
+    evidence: str
+    reason: str
+
+    def __post_init__(self) -> None:
+        if not self.evidence.strip() or not self.reason.strip():
+            raise ValueError("capability statements require evidence and a reason")
+
+
+@dataclass(frozen=True, slots=True)
+class PhysicalClientCapability(CapabilityStatement):
+    identities: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class FamilyTaxonomyCapability(CapabilityStatement):
+    families: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ChronologyCapability(CapabilityStatement):
+    temporal_group_identities: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class AttackAssignmentCapability(CapabilityStatement):
+    row_level_labels_available: bool
+    client_level_assignment_available: bool
+
+
+@dataclass(frozen=True, slots=True)
+class MetricCapability(CapabilityStatement):
+    available_metrics: tuple[MetricId, ...]
+    conditional_metrics: tuple[MetricId, ...]
+    unavailable_metrics: tuple[MetricId, ...]
+
+    def __post_init__(self) -> None:
+        CapabilityStatement.__post_init__(self)
+        groups = (self.available_metrics, self.conditional_metrics, self.unavailable_metrics)
+        declared = tuple(metric for group in groups for metric in group)
+        if not declared or len(declared) != len(frozenset(declared)):
+            raise ValueError("metric capabilities must declare non-overlapping metrics")
+        statuses = frozenset(
+            status
+            for metrics, status in (
+                (self.available_metrics, CapabilityStatus.SUPPORTED),
+                (self.conditional_metrics, CapabilityStatus.CONDITIONAL),
+                (self.unavailable_metrics, CapabilityStatus.UNAVAILABLE),
+            )
+            if metrics
+        )
+        aggregate = CapabilityStatus.SUPPORTED if statuses == {CapabilityStatus.SUPPORTED} else CapabilityStatus.UNAVAILABLE
+        if len(statuses) > 1 or CapabilityStatus.CONDITIONAL in statuses:
+            aggregate = CapabilityStatus.CONDITIONAL
+        if self.status is not aggregate:
+            raise ValueError("metric capability status must match its explicit metric declarations")
+
+    def status_for(self, metric: MetricId) -> CapabilityStatus:
+        if metric in self.available_metrics:
+            return CapabilityStatus.SUPPORTED
+        if metric in self.conditional_metrics:
+            return CapabilityStatus.CONDITIONAL
+        return CapabilityStatus.UNAVAILABLE
+
+
+@dataclass(frozen=True, slots=True)
+class TemporalCapability(CapabilityStatement):
+    supports_one_shot_recalibration: bool
+
+
+@dataclass(frozen=True, slots=True)
+class ExternalValidationCapability(CapabilityStatement):
+    roles: tuple[EvidenceRole, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ThresholdMethodCapability(CapabilityStatement):
+    method: FederatedThresholdMethod
+
+
+@dataclass(frozen=True, slots=True)
+class DatasetCapabilities:
+    physical_clients: PhysicalClientCapability
+    family_taxonomy: FamilyTaxonomyCapability
+    chronology: ChronologyCapability
+    attack_assignment: AttackAssignmentCapability
+    metrics: MetricCapability
+    temporal: TemporalCapability
+    external_validation: ExternalValidationCapability
+    valid_populations: tuple[PopulationId, ...]
+    threshold_methods: tuple[ThresholdMethodCapability, ...]
+
+    def __post_init__(self) -> None:
+        if not self.valid_populations:
+            raise ValueError("dataset capabilities require valid populations")
+        if len(self.valid_populations) != len(frozenset(self.valid_populations)):
+            raise ValueError("dataset capability populations must be unique")
+        methods = tuple(capability.method for capability in self.threshold_methods)
+        if len(methods) != len(frozenset(methods)):
+            raise ValueError("threshold method capabilities must be unique")
+
+
+class CanonicalProvenanceColumn(StrEnum):
+    SOURCE_ROW_INDEX = "source_row_index"
+    SOURCE_PATH = "source_path"
+    STABLE_ROW_ID = "stable_row_id"
 
 
 class ControlledPartitionKind(StrEnum):
-    """Construction kind for controlled synthetic client partitions.
-
-    IID is a separate typed construction condition, never an infinite Dirichlet concentration.
-    """
-
     DIRICHLET = "dirichlet"
     IID = "iid"
 
@@ -46,8 +160,6 @@ class PopulationOutcomeLabel(StrEnum):
 
 
 class PopulationFrameColumn(StrEnum):
-    """Canonical column names for population membership and split assignment frames."""
-
     CLIENT_ID = "client_id"
     OUTCOME_LABEL = "outcome_label"
     PARTITION_ROLE = "partition_role"
@@ -58,8 +170,6 @@ class PopulationFrameColumn(StrEnum):
 
 
 class PopulationManifestField(StrEnum):
-    """Manifest field identities used as validation subjects."""
-
     CANDIDATE_CLIENTS = "candidate_clients"
     ACCEPTED_CLIENTS = "accepted_clients"
     EXCLUDED_CLIENT_IDS = "excluded_client_ids"
@@ -69,8 +179,6 @@ class PopulationManifestField(StrEnum):
 
 
 class WorkingFrameColumn(StrEnum):
-    """Ephemeral Polars helper columns used only inside partitioning algorithms."""
-
     ORDER = "_order"
     PERM = "_perm"
     MAX_HISTORICAL = "max_historical_timestamp"
@@ -78,8 +186,6 @@ class WorkingFrameColumn(StrEnum):
 
 
 class CohortAggregationColumn(StrEnum):
-    """Aggregation aliases for threshold-independent cohort support counts."""
-
     BENIGN_CALIBRATION_COUNT = "benign_calibration_count"
     BENIGN_EVALUATION_COUNT = "benign_evaluation_count"
     ATTACK_EVALUATION_COUNT = "attack_evaluation_count"
@@ -114,7 +220,6 @@ def assignment_column_names() -> tuple[str, ...]:
 
 
 def select_membership_frame(frame: pl.DataFrame) -> pl.DataFrame:
-    """Select the locked membership schema from a Polars DataFrame."""
     return frame.select(membership_column_names())
 
 
@@ -133,8 +238,6 @@ class PopulationFeasibilityReason(StrEnum):
 
 
 class ChronologyExclusionReason(StrEnum):
-    """Auditable reasons a static sensor group is inadmissible for temporal execution."""
-
     CANONICAL_CHRONOLOGY_MISSING = "canonical_chronology_missing"
     CANONICAL_CHRONOLOGY_INELIGIBLE = "canonical_chronology_ineligible"
     MODBUS_ADDRESS_LITERAL = "modbus_address_literal"
@@ -159,28 +262,11 @@ class PopulationManifestDocument(StrictModel):
 
     @model_validator(mode="after")
     def validate_manifest(self) -> "PopulationManifestDocument":
-        _require_unique_ordered(
-            self.candidate_clients,
-            PopulationManifestField.CANDIDATE_CLIENTS,
-        )
-        _require_unique_ordered(
-            self.accepted_clients,
-            PopulationManifestField.ACCEPTED_CLIENTS,
-        )
-        _require_unique_ordered(
-            self.excluded_client_ids,
-            PopulationManifestField.EXCLUDED_CLIENT_IDS,
-        )
-        _require_client_set_partition(
-            self.candidate_clients,
-            self.accepted_clients,
-            self.excluded_client_ids,
-        )
-        _require_non_negative_row_counts(
-            self.total_membership_rows,
-            self.benign_row_count,
-            self.attack_row_count,
-        )
+        _require_unique_ordered(self.candidate_clients, PopulationManifestField.CANDIDATE_CLIENTS)
+        _require_unique_ordered(self.accepted_clients, PopulationManifestField.ACCEPTED_CLIENTS)
+        _require_unique_ordered(self.excluded_client_ids, PopulationManifestField.EXCLUDED_CLIENT_IDS)
+        _require_client_set_partition(self.candidate_clients, self.accepted_clients, self.excluded_client_ids)
+        _require_non_negative_row_counts(self.total_membership_rows, self.benign_row_count, self.attack_row_count)
         return self
 
 
@@ -251,15 +337,6 @@ class ChronologicalPartitionDiagnosticsDocument(StrictModel):
             raise ValueError("observed eligible count must match eligible identities")
         if len(self.excluded_group_ids) != len(self.exclusion_reasons):
             raise ValueError("each excluded group requires one typed reason")
-        if (
-            min(
-                self.duplicate_timestamp_rows.value,
-                self.total_temporal_rows.value,
-                self.observed_eligible_group_count.value,
-            )
-            < 0
-        ):
-            raise ValueError("chronology diagnostic counts must be non-negative")
         return self
 
 
@@ -288,16 +365,15 @@ class ClientIdentity:
 
 @dataclass(frozen=True, slots=True)
 class EligibleCohort:
-    """Sorted, immutable cohort of clients eligible for calibration-threshold comparison."""
-
     clients: tuple[ClientIdentity, ...]
 
     def __post_init__(self) -> None:
         if not self.clients:
-            raise ScientificContractError(
-                "eligible cohort must contain at least one client",
-                subject=ContractSubject.CALIBRATION,
-            )
+            raise ScientificContractError("eligible cohort must contain at least one client", subject=ContractSubject.CALIBRATION)
+        if tuple(sorted(self.clients)) != self.clients:
+            raise ScientificContractError("eligible cohort must preserve deterministic client ordering", subject=ContractSubject.CLIENT)
+        if len(frozenset(self.clients)) != len(self.clients):
+            raise ScientificContractError("eligible cohort clients must be unique", subject=ContractSubject.CLIENT)
 
     def __len__(self) -> int:
         return len(self.clients)
@@ -311,18 +387,12 @@ class EligibleCohort:
 
 @dataclass(frozen=True, slots=True)
 class ClientPartitionCounts:
-    """Per-client partition support counts used to construct evaluation cohorts."""
-
     client: ClientIdentity
     benign_calibration_count: RowCount
     benign_evaluation_count: RowCount
     attack_evaluation_count: RowCount
     accepted: bool
     deployment_fallback: bool
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.client, ClientIdentity):
-            raise TypeError("client partition counts require a ClientIdentity")
 
 
 @dataclass(frozen=True, slots=True)
@@ -390,8 +460,6 @@ class ControlledPartitionCondition:
 
 @dataclass(frozen=True, slots=True, eq=False)
 class SplitConstructionRequest:
-    """Typed request boundary for non-temporal, temporal, and static-reference splits."""
-
     membership: pl.DataFrame
     population: PopulationId
     dataset: DatasetId
@@ -403,16 +471,12 @@ class SplitConstructionRequest:
 
 @dataclass(frozen=True, slots=True, eq=False)
 class MatchedReferencePopulation:
-    """A secondary population constructed over the same accepted rows as a primary population."""
-
     manifest: PopulationManifest
     membership: pl.DataFrame
 
 
 @dataclass(frozen=True, slots=True, eq=False)
 class PopulationConstructionEvidence:
-    """Typed per-row and per-client evidence produced alongside a population construction."""
-
     excluded_rows: pl.DataFrame
     client_eligibility: pl.DataFrame
 
@@ -448,8 +512,6 @@ class PreprocessingHandoffRequest:
 
 @dataclass(slots=True, eq=False)
 class PreprocessingHandoff:
-    """Typed boundary from dataset partitioning into preprocessing."""
-
     population_manifest: PopulationManifest
     membership: pl.DataFrame
     assignments: pl.DataFrame
@@ -457,13 +519,20 @@ class PreprocessingHandoff:
     deployment_fallback_client_ids: frozenset[ClientIdentity] = frozenset()
 
 
-def dirichlet_condition(
-    concentration: DirichletConcentration,
-) -> ControlledPartitionCondition:
-    return ControlledPartitionCondition(
-        ControlledPartitionKind.DIRICHLET,
-        concentration,
-    )
+@dataclass(frozen=True, slots=True)
+class PopulationDeclaration:
+    id: PopulationId
+    dataset: DatasetId
+    identity_kind: PopulationIdentityKind
+    client_count: ClientCount
+    requires_family_taxonomy: bool
+    requires_verified_chronology: bool
+    requires_client_attack_assignment: bool
+    is_confirmatory_population: bool
+
+
+def dirichlet_condition(concentration: DirichletConcentration) -> ControlledPartitionCondition:
+    return ControlledPartitionCondition(ControlledPartitionKind.DIRICHLET, concentration)
 
 
 def iid_condition() -> ControlledPartitionCondition:
@@ -485,11 +554,7 @@ def build_population_manifest(
 ) -> PopulationManifest:
     return PopulationManifest(
         document,
-        client_identities(
-            document.population,
-            document.candidate_clients,
-            document.identity_kind,
-        ),
+        client_identities(document.population, document.candidate_clients, document.identity_kind),
         feasibility,
         family_by_client,
     )
@@ -500,16 +565,11 @@ def synthetic_client_ids(client_count: ClientCount) -> tuple[str, ...]:
     return tuple(f"synthetic_client_{index:0{width}d}" for index in range(client_count.value))
 
 
-def membership_checksum(
-    client_ids: tuple[str, ...],
-    stable_row_ids: tuple[str, ...],
-) -> Checksum:
-    payload = "\n".join((*client_ids, *stable_row_ids))
-    return checksum_text(payload)
+def membership_checksum(client_ids: tuple[str, ...], stable_row_ids: tuple[str, ...]) -> Checksum:
+    return checksum_text("\n".join((*client_ids, *stable_row_ids)))
 
 
 def population_evidence_role(population_id: PopulationId) -> EvidenceRole:
-    """Primary scientific role of the population (not the only permitted claim tier)."""
     match population_id:
         case PopulationId.NBAIOT_NATURAL_DEVICES:
             return EvidenceRole.CONFIRMATORY
@@ -524,12 +584,6 @@ def population_evidence_role(population_id: PopulationId) -> EvidenceRole:
 
 
 def population_allowed_evidence_roles(population_id: PopulationId) -> frozenset[EvidenceRole]:
-    """Claim tiers authorized on a population without forcing every artifact to the primary role.
-
-    N-BaIoT natural devices host confirmatory, supportive, mechanism, threshold-variant,
-    stress-test, operational, exploratory, and anchor studies. The primary role remains
-    confirmatory; evaluation must accept any authorized experiment role.
-    """
     match population_id:
         case PopulationId.NBAIOT_NATURAL_DEVICES:
             return frozenset(
@@ -559,7 +613,6 @@ def build_population_capabilities(
     evidentiary_role: EvidenceRole,
     dataset_capabilities: DatasetCapabilities,
 ) -> PopulationCapabilities:
-    """Compose a population's capability profile from its declaration and owning dataset capabilities."""
     _require_population_allowed(declaration, dataset_capabilities)
     return PopulationCapabilities(
         population=declaration.id,
@@ -592,32 +645,22 @@ def _physical_validity(declaration: PopulationDeclaration, capabilities: Dataset
     match declaration.identity_kind:
         case PopulationIdentityKind.PHYSICAL_DEVICES:
             return capabilities.physical_clients.status
-        case PopulationIdentityKind.FILE_DEFINED_PSEUDO_CLIENTS:
+        case PopulationIdentityKind.FILE_DEFINED_PSEUDO_CLIENTS | PopulationIdentityKind.SYNTHETIC_DIRICHLET_CLIENTS:
             return CapabilityStatus.NOT_APPLICABLE
-        case PopulationIdentityKind.SOURCE_DEFINED_SENSOR_GROUPS:
-            return capabilities.physical_clients.status
-        case PopulationIdentityKind.SYNTHETIC_DIRICHLET_CLIENTS:
-            return CapabilityStatus.NOT_APPLICABLE
-        case PopulationIdentityKind.VERIFIED_TEMPORAL_GROUPS:
+        case PopulationIdentityKind.SOURCE_DEFINED_SENSOR_GROUPS | PopulationIdentityKind.VERIFIED_TEMPORAL_GROUPS:
             return capabilities.physical_clients.status
 
 
 def _family_status(declaration: PopulationDeclaration, capabilities: DatasetCapabilities) -> CapabilityStatus:
-    if not declaration.requires_family_taxonomy:
-        return CapabilityStatus.UNAVAILABLE
-    return capabilities.family_taxonomy.status
+    return capabilities.family_taxonomy.status if declaration.requires_family_taxonomy else CapabilityStatus.UNAVAILABLE
 
 
 def _chronology_status(declaration: PopulationDeclaration, capabilities: DatasetCapabilities) -> CapabilityStatus:
-    if not declaration.requires_verified_chronology:
-        return CapabilityStatus.UNAVAILABLE
-    return capabilities.chronology.status
+    return capabilities.chronology.status if declaration.requires_verified_chronology else CapabilityStatus.UNAVAILABLE
 
 
 def _attack_status(declaration: PopulationDeclaration, capabilities: DatasetCapabilities) -> CapabilityStatus:
-    if not declaration.requires_client_attack_assignment:
-        return CapabilityStatus.UNAVAILABLE
-    if not capabilities.attack_assignment.client_level_assignment_available:
+    if not declaration.requires_client_attack_assignment or not capabilities.attack_assignment.client_level_assignment_available:
         return CapabilityStatus.UNAVAILABLE
     return capabilities.attack_assignment.status
 
@@ -627,9 +670,7 @@ def _fpr_status(capabilities: DatasetCapabilities) -> CapabilityStatus:
 
 
 def _attack_metric_status(declaration: PopulationDeclaration, capabilities: DatasetCapabilities) -> CapabilityStatus:
-    if not declaration.requires_client_attack_assignment:
-        return CapabilityStatus.UNAVAILABLE
-    if not capabilities.attack_assignment.client_level_assignment_available:
+    if not declaration.requires_client_attack_assignment or not capabilities.attack_assignment.client_level_assignment_available:
         return CapabilityStatus.UNAVAILABLE
     statuses = frozenset(
         capabilities.metrics.status_for(metric)
@@ -648,13 +689,12 @@ def _attack_metric_status(declaration: PopulationDeclaration, capabilities: Data
 
 
 def _temporal_status(declaration: PopulationDeclaration, capabilities: DatasetCapabilities) -> CapabilityStatus:
-    if not declaration.requires_verified_chronology:
-        return CapabilityStatus.UNAVAILABLE
-    return capabilities.temporal.status
+    return capabilities.temporal.status if declaration.requires_verified_chronology else CapabilityStatus.UNAVAILABLE
 
 
 def _threshold_methods(
-    declaration: PopulationDeclaration, capabilities: DatasetCapabilities
+    declaration: PopulationDeclaration,
+    capabilities: DatasetCapabilities,
 ) -> tuple[FederatedThresholdMethod, ...]:
     supported = tuple(
         item.method
@@ -669,18 +709,13 @@ def _threshold_methods(
     return supported
 
 
-def _require_unique_ordered(
-    values: tuple[str, ...],
-    field: PopulationManifestField,
-) -> None:
+def _require_unique_ordered(values: tuple[str, ...], field: PopulationManifestField) -> None:
     if len(values) != len(frozenset(values)):
         raise ValueError(f"{field.value} must be unique")
 
 
 def _require_client_set_partition(
-    candidates: tuple[str, ...],
-    accepted: tuple[str, ...],
-    excluded: tuple[str, ...],
+    candidates: tuple[str, ...], accepted: tuple[str, ...], excluded: tuple[str, ...]
 ) -> None:
     accepted_set = frozenset(accepted)
     if not accepted_set <= frozenset(candidates):
@@ -689,33 +724,21 @@ def _require_client_set_partition(
         raise ValueError(f"{PopulationManifestField.EXCLUDED_CLIENT_IDS.value} cannot also be accepted")
 
 
-def _require_non_negative_row_counts(
-    total: RowCount,
-    benign: RowCount,
-    attack: RowCount,
-) -> None:
+def _require_non_negative_row_counts(total: RowCount, benign: RowCount, attack: RowCount) -> None:
     if benign.plus(attack) != total:
         raise ValueError("benign and attack rows must sum to total membership rows")
 
 
-def _require_client_series_shape(
-    document: DirichletPartitionDiagnosticsDocument,
-) -> None:
+def _require_client_series_shape(document: DirichletPartitionDiagnosticsDocument) -> None:
     expected = document.client_count.value
     if len(document.client_ids) != expected:
         raise ValueError("client identity count must match declared client count")
-    for series in (
-        document.client_row_counts,
-        document.benign_row_counts,
-        document.attack_row_counts,
-    ):
+    for series in (document.client_row_counts, document.benign_row_counts, document.attack_row_counts):
         if len(series) != expected:
             raise ValueError("per-client count series must be complete")
 
 
-def _require_row_conservation(
-    document: DirichletPartitionDiagnosticsDocument,
-) -> None:
+def _require_row_conservation(document: DirichletPartitionDiagnosticsDocument) -> None:
     if reduce(RowCount.plus, document.client_row_counts, RowCount(0)) != document.total_rows:
         raise ValueError("client row counts must conserve total rows")
     benign_total = reduce(RowCount.plus, document.benign_row_counts, RowCount(0))
@@ -724,9 +747,7 @@ def _require_row_conservation(
         raise ValueError("benign and attack counts must conserve total rows")
 
 
-def _require_partition_kind_fields(
-    document: DirichletPartitionDiagnosticsDocument,
-) -> None:
+def _require_partition_kind_fields(document: DirichletPartitionDiagnosticsDocument) -> None:
     match document.partition_kind:
         case ControlledPartitionKind.DIRICHLET:
             if document.concentration is None:
@@ -734,3 +755,75 @@ def _require_partition_kind_fields(
         case ControlledPartitionKind.IID:
             if document.concentration is not None:
                 raise ValueError("IID diagnostics must not carry a Dirichlet concentration")
+
+
+DIRICHLET_CONCENTRATIONS = tuple(DirichletConcentration(value) for value in (0.1, 0.3, 0.5, 1.0, 10.0))
+NBAIOT_NATURAL_DEVICE_COUNT = ClientCount(9)
+NBAIOT_DIRICHLET_CLIENT_COUNT = ClientCount(20)
+CICIOT_FILE_CLIENT_COUNT = ClientCount(63)
+EDGE_STATIC_SENSOR_GROUP_COUNT = ClientCount(10)
+EDGE_TEMPORAL_SENSOR_GROUP_COUNT = ClientCount(9)
+
+NBAIOT_NATURAL_DEVICES = PopulationDeclaration(
+    id=PopulationId.NBAIOT_NATURAL_DEVICES,
+    dataset=DatasetId.NBAIOT,
+    identity_kind=PopulationIdentityKind.PHYSICAL_DEVICES,
+    client_count=NBAIOT_NATURAL_DEVICE_COUNT,
+    requires_family_taxonomy=True,
+    requires_verified_chronology=False,
+    requires_client_attack_assignment=True,
+    is_confirmatory_population=True,
+)
+CICIOT_FILE_CLIENTS = PopulationDeclaration(
+    id=PopulationId.CICIOT_FILE_CLIENTS,
+    dataset=DatasetId.CICIOT2023,
+    identity_kind=PopulationIdentityKind.FILE_DEFINED_PSEUDO_CLIENTS,
+    client_count=CICIOT_FILE_CLIENT_COUNT,
+    requires_family_taxonomy=False,
+    requires_verified_chronology=False,
+    requires_client_attack_assignment=False,
+    is_confirmatory_population=False,
+)
+NBAIOT_DIRICHLET_CLIENTS = PopulationDeclaration(
+    id=PopulationId.NBAIOT_DIRICHLET_CLIENTS,
+    dataset=DatasetId.NBAIOT,
+    identity_kind=PopulationIdentityKind.SYNTHETIC_DIRICHLET_CLIENTS,
+    client_count=NBAIOT_DIRICHLET_CLIENT_COUNT,
+    requires_family_taxonomy=False,
+    requires_verified_chronology=False,
+    requires_client_attack_assignment=True,
+    is_confirmatory_population=False,
+)
+EDGE_SENSOR_GROUPS = PopulationDeclaration(
+    id=PopulationId.EDGE_SENSOR_GROUPS,
+    dataset=DatasetId.EDGE_IIOTSET,
+    identity_kind=PopulationIdentityKind.SOURCE_DEFINED_SENSOR_GROUPS,
+    client_count=EDGE_STATIC_SENSOR_GROUP_COUNT,
+    requires_family_taxonomy=False,
+    requires_verified_chronology=False,
+    requires_client_attack_assignment=False,
+    is_confirmatory_population=False,
+)
+EDGE_TEMPORAL_GROUPS = PopulationDeclaration(
+    id=PopulationId.EDGE_TEMPORAL_GROUPS,
+    dataset=DatasetId.EDGE_IIOTSET,
+    identity_kind=PopulationIdentityKind.VERIFIED_TEMPORAL_GROUPS,
+    client_count=EDGE_TEMPORAL_SENSOR_GROUP_COUNT,
+    requires_family_taxonomy=False,
+    requires_verified_chronology=True,
+    requires_client_attack_assignment=False,
+    is_confirmatory_population=False,
+)
+POPULATIONS = (
+    NBAIOT_NATURAL_DEVICES,
+    CICIOT_FILE_CLIENTS,
+    NBAIOT_DIRICHLET_CLIENTS,
+    EDGE_SENSOR_GROUPS,
+    EDGE_TEMPORAL_GROUPS,
+)
+
+
+def split_protocol_for_population(population: PopulationId) -> SplitProtocolId:
+    if population is PopulationId.EDGE_TEMPORAL_GROUPS:
+        return SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE
+    return SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS
