@@ -1,4 +1,5 @@
 import pytest
+from pydantic import ValidationError
 
 from datp_core.analysis.scientific_decision import ScientificDecision
 from datp_core.analysis.temporal import (
@@ -8,12 +9,14 @@ from datp_core.analysis.temporal import (
     decide_temporal_campaign,
     temporal_recovery,
 )
+from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.enums import (
     AvailabilityStatus,
     ExperimentId,
     FederatedThresholdMethod,
     PartitionRole,
     PopulationId,
+    PopulationIdentityKind,
     SplitProtocolId,
     TemporalState,
 )
@@ -46,7 +49,6 @@ def test_material_recovery_ratio_minimum_is_half() -> None:
 
 
 def test_material_drift_with_recovery_is_supported_only_at_campaign_level() -> None:
-    # drift=0.20, recovered=0.18, ratio=0.9 >= 0.50 material recovery floor
     records = tuple(_recovery(seed.value, 0.10, 0.30, 0.12) for seed in BOUNDED_EVIDENCE_SEED_COHORT.values)
     assert all(
         record.interpretation is TemporalInterpretation.TEMPORAL_DEGRADATION_WITH_MATERIAL_RECOVERY
@@ -57,7 +59,6 @@ def test_material_drift_with_recovery_is_supported_only_at_campaign_level() -> N
 
 
 def test_tiny_positive_recovery_is_not_material_support() -> None:
-    # drift=0.20, recovered=0.001, ratio=0.005 < 0.50 material recovery floor
     records = tuple(_recovery(seed.value, 0.10, 0.30, 0.299) for seed in BOUNDED_EVIDENCE_SEED_COHORT.values)
     assert all(
         record.interpretation is TemporalInterpretation.TEMPORAL_DEGRADATION_WITH_PARTIAL_OR_WEAK_RECOVERY
@@ -67,7 +68,6 @@ def test_tiny_positive_recovery_is_not_material_support() -> None:
 
 
 def test_recovery_ratio_just_below_material_floor() -> None:
-    # drift=0.20, recovered=0.099, ratio=0.495 < 0.50
     result = _recovery(0, 0.10, 0.30, 0.201)
     assert result.recovery_ratio is not None
     assert result.recovery_ratio.value < 0.50
@@ -76,7 +76,6 @@ def test_recovery_ratio_just_below_material_floor() -> None:
 
 
 def test_recovery_ratio_exactly_at_material_floor() -> None:
-    # drift=0.4, recovered=0.2, ratio=0.50 exactly in binary float arithmetic
     result = _recovery(0, 0.10, 0.50, 0.30)
     assert result.recovery_ratio is not None
     assert result.recovery_ratio.value == pytest.approx(0.50)
@@ -84,7 +83,6 @@ def test_recovery_ratio_exactly_at_material_floor() -> None:
 
 
 def test_recovery_ratio_just_above_material_floor() -> None:
-    # drift=0.4, recovered=0.202, ratio=0.505 > 0.50
     result = _recovery(0, 0.10, 0.50, 0.298)
     assert result.recovery_ratio is not None
     assert result.recovery_ratio.value > 0.50
@@ -220,25 +218,23 @@ def test_provenance_seed_mismatch_is_rejected() -> None:
 
 
 def test_partial_provenance_is_rejected() -> None:
-    from pydantic import ValidationError
-
-    partial: dict[str, object] = {
+    partial: dict[str, Seed | ExperimentId | PopulationId | FederatedThresholdMethod] = {
         "seed": Seed(0),
         "experiment": ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
-        "population": PopulationId.EDGE_TEMPORAL_GROUPS.value,
+        "population": PopulationId.EDGE_TEMPORAL_GROUPS,
         "threshold_method": FederatedThresholdMethod.LOCAL_THRESHOLD,
     }
     with pytest.raises(ValidationError):
         TemporalSeedProvenance.model_validate(partial)
 
 
-def test_blank_population_provenance_is_rejected() -> None:
+def test_primitive_population_provenance_is_rejected() -> None:
     base = _seed_provenance(0)
-    with pytest.raises(ValueError, match="population identity"):
+    with pytest.raises(ValidationError):
         TemporalSeedProvenance(
             seed=base.seed,
             experiment=base.experiment,
-            population="   ",
+            population=PopulationId.EDGE_TEMPORAL_GROUPS.value,  # type: ignore[arg-type]
             threshold_method=base.threshold_method,
             static_reference=base.static_reference,
             frozen_future=base.frozen_future,
@@ -260,7 +256,11 @@ def test_client_trajectories_attach_to_recovery() -> None:
     trajectories = (
         TemporalClientTrajectory(
             seed=Seed(0),
-            client_id="client-a",
+            client=ClientIdentity(
+                PopulationId.EDGE_TEMPORAL_GROUPS,
+                "client-a",
+                PopulationIdentityKind.VERIFIED_TEMPORAL_GROUPS,
+            ),
             threshold_method=FederatedThresholdMethod.LOCAL_THRESHOLD,
             eligible=True,
             exclusion_reason=None,
@@ -293,6 +293,7 @@ def test_client_trajectories_attach_to_recovery() -> None:
     )
     assert len(result.client_trajectories) == 1
     trajectory = result.client_trajectories[0]
+    assert trajectory.client_id == "client-a"
     assert trajectory.threshold_movement_frozen is not None
     assert trajectory.threshold_movement_frozen.value == pytest.approx(0.1)
     assert trajectory.fpr_movement_recalibrated is not None
@@ -323,7 +324,6 @@ def _seed_provenance(
     *,
     method: FederatedThresholdMethod = FederatedThresholdMethod.LOCAL_THRESHOLD,
 ) -> TemporalSeedProvenance:
-    """Build valid TemporalSeedProvenance with seed-distinct anti-clone checksums."""
     index = seed + 1
     detector = Checksum("a" * 64)
     preprocess = Checksum("b" * 64)
@@ -369,7 +369,7 @@ def _seed_provenance(
     return TemporalSeedProvenance(
         seed=Seed(seed),
         experiment=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
-        population=PopulationId.EDGE_TEMPORAL_GROUPS.value,
+        population=PopulationId.EDGE_TEMPORAL_GROUPS,
         threshold_method=method,
         static_reference=static,
         frozen_future=frozen,
@@ -390,6 +390,5 @@ def _seed_provenance(
 
 
 def _checksum(prefix: str, index: int) -> Checksum:
-    # 64 hex chars; prefix and index make each seed's checksum distinct.
     body = f"{prefix}{index:02x}"
     return Checksum((body + "0" * 64)[:64])
