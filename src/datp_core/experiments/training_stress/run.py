@@ -85,7 +85,7 @@ from datp_core.pipeline.execution.layout import (
 )
 from datp_core.pipeline.execution.models import CampaignEntry, CampaignPlan, campaign_digest
 from datp_core.pipeline.preparation.populations import ConstructDeclaredPopulationRequest, construct_declared_population
-from datp_core.pipeline.publication.layout import evaluation_run_directory
+from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.pipeline.scoring.federated import publish_federated_scores
 from datp_core.pipeline.scoring.models import FederatedScoreArtifactManifest, GenerateFederatedScoresRequest
 from datp_core.pipeline.training.personalized import (

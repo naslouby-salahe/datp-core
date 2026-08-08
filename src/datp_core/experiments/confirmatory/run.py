@@ -52,7 +52,7 @@ from datp_core.pipeline.execution.layout import (
     ExecutionArtifactDirectory,
     federated_training_directory,
 )
-from datp_core.pipeline.publication.layout import evaluation_run_directory
+from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.pipeline.scoring.models import FederatedScoreAssetName
 from datp_core.presentation.export import export_confirmatory_publication, export_mechanism_publication
 from datp_core.presentation.figures import FigureSpec

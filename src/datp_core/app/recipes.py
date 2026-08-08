@@ -91,7 +91,7 @@ from datp_core.experiments.threshold_robustness import (
 from datp_core.pipeline.decision.evidence import AnalysisAssetName
 from datp_core.pipeline.execution.evidence import load_evaluation_document
 from datp_core.pipeline.execution.layout import EvaluationRunAssetDirectory, ExecutionRootDirectory
-from datp_core.pipeline.publication.layout import evaluation_run_directory
+from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.presentation.export import MECHANISM_REPORT_FILENAME, PUBLICATION_FILENAME
 from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.protocols.training import DITTO_PRIMARY_REGULARIZATION, FEDPROX_COEFFICIENTS

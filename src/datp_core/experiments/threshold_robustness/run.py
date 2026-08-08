@@ -30,7 +30,7 @@ from datp_core.experiments.planning import expand_experiment_plan
 from datp_core.experiments.common.coordinates import ExperimentCoordinate
 from datp_core.pipeline.execution.evidence import load_evaluation_document, population_metric
 from datp_core.pipeline.execution.layout import EvaluationRunAssetDirectory
-from datp_core.pipeline.publication.layout import evaluation_run_directory
+from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.protocols.calibration import (
     CALIBRATION_SIZES,
     QUANTILE_GRID,
