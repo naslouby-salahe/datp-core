@@ -37,7 +37,7 @@ from datp_core.learning.federated.models import (
     GlobalModelStateReference,
     PersonalizedModelStateReference,
 )
-from datp_core.protocols.checkpoints import CheckpointProtocol
+from datp_core.detector.checkpoints.contracts import CheckpointProtocol
 
 
 class _ClientHistoryTable(StrEnum):

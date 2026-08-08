@@ -11,7 +11,7 @@ from datp_core.domain.values.ratios import MetricValue
 from datp_core.learning.federated.models.coordinates import FederatedTrainingCoordinate
 from datp_core.learning.federated.models.records import FederatedTrainingHistory
 from datp_core.learning.federated.models.snapshots import RoundSnapshot
-from datp_core.protocols.checkpoints import CheckpointProtocol
+from datp_core.detector.checkpoints.contracts import CheckpointProtocol
 from datp_core.protocols.training import AutoencoderProtocol
 
 

@@ -37,7 +37,7 @@ from datp_core.learning.federated.models import (
     PersonalizedSnapshotSet,
     RoundSnapshot,
 )
-from datp_core.protocols.checkpoints import CheckpointProtocol
+from datp_core.detector.checkpoints.contracts import CheckpointProtocol
 from datp_core.protocols.training import AutoencoderProtocol
 
 _MANIFEST_SCHEMA_VERSION = ManifestSchemaVersion(1)

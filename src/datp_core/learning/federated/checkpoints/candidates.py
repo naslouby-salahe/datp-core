@@ -20,7 +20,7 @@ from datp_core.learning.federated.models import (
     FederatedTrainingCoordinate,
     RoundSnapshot,
 )
-from datp_core.protocols.checkpoints import (
+from datp_core.detector.checkpoints.contracts import (
     CheckpointProtocol,
     validate_ordered_checkpoint_inventory,
     validate_persisted_checkpoint_file,

@@ -11,7 +11,7 @@ from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import RoundNumber, Seed
 from datp_core.domain.values.ratios import MetricValue
 from datp_core.learning.centralized.training import CentralizedTrainingCoordinate
-from datp_core.protocols.checkpoints import CheckpointProtocol
+from datp_core.detector.checkpoints.contracts import CheckpointProtocol
 from datp_core.protocols.training import AutoencoderArchitecture
 
 RETAINED_CHECKPOINT_STATUSES = frozenset(

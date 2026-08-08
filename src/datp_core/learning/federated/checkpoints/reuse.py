@@ -49,7 +49,7 @@ from datp_core.learning.federated.models import (
     FederatedTrainingResult,
     PersonalizedCandidateSet,
 )
-from datp_core.protocols.checkpoints import CheckpointProtocol, validate_persisted_checkpoint_file
+from datp_core.detector.checkpoints.contracts import CheckpointProtocol, validate_persisted_checkpoint_file
 from datp_core.protocols.training import AutoencoderProtocol
 
 

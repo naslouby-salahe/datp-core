@@ -34,7 +34,7 @@ from datp_core.core.numeric import (
     WeightDecay,
 )
 
-from .checkpoints import CheckpointProtocol
+from datp_core.detector.checkpoints.contracts import CheckpointProtocol
 
 
 @dataclass(frozen=True, slots=True)

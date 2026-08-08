@@ -40,11 +40,11 @@ from datp_core.pipeline.checkpoints.models import (
     CentralizedCheckpointSetEntry,
     PersistedCheckpoint,
 )
-from datp_core.protocols.checkpoints import CheckpointProtocol, validate_persisted_checkpoint_file
-from datp_core.protocols.checkpoints import (
+from datp_core.detector.checkpoints.contracts import CheckpointProtocol, validate_persisted_checkpoint_file
+from datp_core.detector.checkpoints.contracts import (
     select_terminal_checkpoint as apply_terminal_selection,
 )
-from datp_core.protocols.checkpoints import (
+from datp_core.detector.checkpoints.contracts import (
     validate_ordered_checkpoint_inventory as validate_inventory,
 )
 from datp_core.protocols.training import (

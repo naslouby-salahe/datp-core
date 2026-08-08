@@ -59,7 +59,7 @@ from datp_core.learning.federated.models import (
     PreparedClientProvenance,
     RoundSnapshot,
 )
-from datp_core.protocols.checkpoints import CheckpointProtocol
+from datp_core.detector.checkpoints.contracts import CheckpointProtocol
 from datp_core.protocols.training import (
     FEDERATED_DATALOADER_WORKER_COUNT,
     AutoencoderProtocol,

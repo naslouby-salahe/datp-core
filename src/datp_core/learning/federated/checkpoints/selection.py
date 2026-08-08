@@ -18,7 +18,7 @@ from datp_core.learning.federated.models import (
     CheckpointDecision,
     FederatedTrainingCoordinate,
 )
-from datp_core.protocols.checkpoints import (
+from datp_core.detector.checkpoints.contracts import (
     CheckpointProtocol,
     select_terminal_checkpoint,
     validate_ordered_checkpoint_inventory,

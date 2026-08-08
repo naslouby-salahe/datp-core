@@ -45,7 +45,7 @@ from datp_core.learning.federated.training import (
     train_client_update,
     validate_common_request,
 )
-from datp_core.protocols.checkpoints import CheckpointProtocol
+from datp_core.detector.checkpoints.contracts import CheckpointProtocol
 from datp_core.protocols.training import AutoencoderProtocol, DittoProtocol
 from datp_core.runtime.compute import resolve_cuda_device
 from datp_core.runtime.determinism import configure_deterministic_execution

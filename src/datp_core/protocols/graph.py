@@ -23,7 +23,7 @@ from datp_core.domain.values.counts import Seed
 
 from .anchor import AnchorDecisionProtocol
 from .calibration import CalibrationEligibilityProtocol, ClusterThresholdProtocol
-from .checkpoints import CheckpointProtocol
+from datp_core.detector.checkpoints.contracts import CheckpointProtocol
 from .experiments import ConfirmatoryEndpoint, ExperimentDeclaration
 from .populations import PopulationDeclaration
 from .splits import FractionalSplitProtocol, StaticReferenceSplitProtocol, TemporalSplitProtocol

@@ -25,7 +25,7 @@ from datp_core.domain.values.identifiers import FeatureNameSequence
 from datp_core.learning.autoencoder import LEARNING_DTYPE, ReconstructionAutoencoder, reconstruction_errors
 from datp_core.learning.federated.models import CheckpointCandidate
 from datp_core.pipeline.scoring.models import PersistedScoreFrame
-from datp_core.protocols.checkpoints import validate_persisted_checkpoint_file
+from datp_core.detector.checkpoints.contracts import validate_persisted_checkpoint_file
 from datp_core.protocols.training import AutoencoderProtocol
 
 SCORE_FRAME_COLUMNS = (

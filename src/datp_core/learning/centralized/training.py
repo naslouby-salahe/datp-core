@@ -51,7 +51,7 @@ from datp_core.preprocessing.models import (
     FederatedFittedPreprocessingState,
     FittedPreprocessingState,
 )
-from datp_core.protocols.checkpoints import CheckpointProtocol
+from datp_core.detector.checkpoints.contracts import CheckpointProtocol
 from datp_core.protocols.training import (
     BATCH_SIZE,
     CENTRALIZED_DATALOADER_WORKER_COUNT,
