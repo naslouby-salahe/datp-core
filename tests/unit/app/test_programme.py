@@ -1,8 +1,17 @@
-"""Programme registry, planning, and scientific naming invariants."""
+"""Programme registry, planning, feasibility, and scientific naming invariants."""
 
-from datp_core.app.programme import build_programme_plan, seed_cohort_for, validate_programme
+import pytest
+
+from datp_core.app.programme import (
+    build_programme_plan,
+    require_experiment_execution_ready,
+    seed_cohort_for,
+    validate_programme,
+)
 from datp_core.app.research import registered_experiment_ids
 from datp_core.domain.enums import ExperimentId, ExperimentReadiness, FederatedThresholdMethod
+from datp_core.domain.errors import UnresolvedScientificValueError
+from datp_core.experiments.planning import PlanDisposition
 from datp_core.protocols.experiments import EXPERIMENTS
 from datp_core.protocols.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_SEED_COHORT
 
@@ -47,6 +56,17 @@ def test_full_plan_preserves_each_experiments_seed_cohort() -> None:
     )
     assert confirmatory == frozenset(CONFIRMATORY_SEED_COHORT.values)
     assert edge == frozenset(BOUNDED_EVIDENCE_SEED_COHORT.values)
+
+
+def test_calibration_size_ablation_is_blocked_until_replicate_count_is_declared() -> None:
+    presentation = build_programme_plan(ExperimentId.CALIBRATION_SIZE_ABLATION)
+    assert presentation.plan.executable == ()
+    assert presentation.plan.entries
+    assert all(entry.disposition is PlanDisposition.BLOCKED for entry in presentation.plan.entries)
+    assert all("does not declare their count" in entry.reason for entry in presentation.plan.entries)
+
+    with pytest.raises(UnresolvedScientificValueError, match="does not declare their count"):
+        require_experiment_execution_ready(ExperimentId.CALIBRATION_SIZE_ABLATION)
 
 
 def test_runtime_threshold_identifiers_are_descriptive() -> None:
