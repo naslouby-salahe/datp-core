@@ -1,16 +1,17 @@
 """Confirmatory, external, and temporal evidence analysis publication."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import TypeVar
+from typing import TYPE_CHECKING, TypeVar
 
 from pydantic import ValidationError
 
 from datp_core.analysis.contrasts import PairedContrast, SupplementaryPairedAnalysisPlan
 from datp_core.analysis.inference.contracts import PairedInferenceProtocol
 from datp_core.analysis.inference.multiplicity import MultiplicityPlan
-from datp_core.analysis.mechanisms import MechanismEvidence
 from datp_core.analysis.preparation import (
     AnalysisDocument,
     ConfirmatoryAnalysisRequest,
@@ -37,6 +38,9 @@ from datp_core.core.identifiers import ExperimentId, FederatedThresholdMethod, P
 from datp_core.core.numeric import Seed
 from datp_core.experiments.common.coordinates import ExternalTemporalExecutionIdentity
 from datp_core.protocols.temporal import TemporalDeploymentProvenance
+
+if TYPE_CHECKING:
+    from datp_core.analysis.mechanisms import MechanismEvidence
 
 AnalysisDocumentT = TypeVar("AnalysisDocumentT", bound=StrictModel)
 

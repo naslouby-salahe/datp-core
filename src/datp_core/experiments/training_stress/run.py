@@ -90,7 +90,7 @@ from datp_core.detector.training.models import (
     PreparedClientProvenance,
 )
 from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
-from datp_core.experiments.confirmatory import FedAvgCvFprEffectEvidence, absorption_corner_from_evaluation_document
+from datp_core.experiments.confirmatory.run import FedAvgCvFprEffectEvidence, absorption_corner_from_evaluation_document
 from datp_core.experiments.execution import execute_declared_campaign
 from datp_core.experiments.execution.context import (
     client_training_inputs,

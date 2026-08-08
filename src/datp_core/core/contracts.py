@@ -1,5 +1,6 @@
 """Shared immutable contracts and Pydantic integration helpers."""
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -60,13 +61,13 @@ def sequence_pydantic_schema(cls: type, _source_type: object, _handler: GetCoreS
     def validate(value: object) -> object:
         if isinstance(value, cls):
             return value
-        if isinstance(value, (list, tuple)):
+        if isinstance(value, Iterable) and not isinstance(value, (str, bytes)):
             return cls(tuple(value))
         raise ValueError(f"expected sequence, got {type(value)}")
 
     def scalar_values(instance: object) -> list[object]:
-        if not isinstance(instance, tuple):
-            raise TypeError("typed sequence serialization requires a tuple")
+        if not isinstance(instance, Iterable) or isinstance(instance, (str, bytes)):
+            raise TypeError("typed sequence serialization requires an iterable")
         return [getattr(item, "value", item) for item in instance]
 
     return core_schema.no_info_plain_validator_function(

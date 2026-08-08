@@ -2,7 +2,7 @@
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Annotated, Literal, Protocol, overload
+from typing import Annotated, Literal, Protocol, cast, overload
 
 from pydantic import Field, GetCoreSchemaHandler, model_validator
 
@@ -41,7 +41,8 @@ class AutoencoderArchitecture(Sequence[FeatureCount]):
     widths: tuple[FeatureCount, ...]
 
     def __post_init__(self) -> None:
-        normalized = self.widths
+        raw_widths = cast(tuple[FeatureCount | int, ...], self.widths)
+        normalized = tuple(width if isinstance(width, FeatureCount) else FeatureCount(width) for width in raw_widths)
         object.__setattr__(self, "widths", normalized)
         validate_non_empty_tuple(normalized, "autoencoder architecture")
         if len(normalized) < 2:

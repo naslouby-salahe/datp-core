@@ -26,7 +26,7 @@ from datp_core.core.identifiers import (
 )
 from datp_core.core.numeric import Seed
 from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
-from datp_core.experiments.confirmatory import (
+from datp_core.experiments.confirmatory.run import (
     ConfirmatoryAssetDirectory,
     analyze_confirmatory_campaign,
     load_fedavg_cv_fpr_effect,

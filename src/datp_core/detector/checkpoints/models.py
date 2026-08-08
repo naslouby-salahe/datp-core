@@ -11,7 +11,7 @@ from datp_core.core.identifiers import CheckpointSelectionRule, CheckpointStatus
 from datp_core.core.numeric import MetricValue, RoundNumber, Seed
 from datp_core.detector.checkpoints.contracts import CheckpointProtocol
 from datp_core.detector.training.centralized import CentralizedTrainingCoordinate
-from datp_core.protocols.training import AutoencoderArchitecture
+from datp_core.detector.training.contracts import AutoencoderArchitecture
 
 RETAINED_CHECKPOINT_STATUSES = frozenset(
     {

@@ -12,7 +12,7 @@ from datp_core.core.identifiers import (
 )
 from datp_core.core.numeric import BatchSize, ManifestSchemaVersion, ModelCoefficientValue, RoundNumber, Seed
 from datp_core.detector.checkpoints.identities import CandidateManifestKind
-from datp_core.protocols.training import AutoencoderArchitecture
+from datp_core.detector.training.contracts import AutoencoderArchitecture
 
 
 class CandidateManifestEntry(StrictModel):
