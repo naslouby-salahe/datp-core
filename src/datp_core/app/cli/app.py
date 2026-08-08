@@ -10,11 +10,10 @@ from typing import Annotated
 
 import typer
 
-from datp_core.cli.anchor import app as anchor_app
-from datp_core.cli.execution import app as run_app
-from datp_core.cli.validation import echo_error, echo_lines, map_exception_to_exit
-from datp_core.domain.enums import DatasetId, ExperimentId
-from datp_core.pipeline.workflows import (
+from datp_core.app.cli.anchor import app as anchor_app
+from datp_core.app.cli.execution import app as run_app
+from datp_core.app.cli.validation import echo_error, echo_lines, map_exception_to_exit
+from datp_core.app.programme import (
     build_programme_plan,
     format_plan,
     format_status,
@@ -24,6 +23,7 @@ from datp_core.pipeline.workflows import (
     run_smoke,
     validate_programme,
 )
+from datp_core.domain.enums import DatasetId, ExperimentId
 
 app = typer.Typer(
     no_args_is_help=True,
