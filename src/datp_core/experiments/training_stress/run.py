@@ -62,7 +62,7 @@ from datp_core.detector.scoring.contracts import FixedScoreInvariant
 from datp_core.evaluation.cohort.construction import assert_cohort_invariant_to_threshold_methods
 from datp_core.analysis.metrics.cohorts import EvaluationCohortManifest
 from datp_core.evaluation.cohort.evidence import client_partition_counts_from_scores
-from datp_core.evaluation.federated.publication import FederatedEvaluationAssetName
+from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
 from datp_core.analysis.metrics.models import ClientMetricResult, MetricStatus, PopulationMetricResult, metric_by_id
 from datp_core.analysis.metrics.population import calculate_population_metrics
 from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort

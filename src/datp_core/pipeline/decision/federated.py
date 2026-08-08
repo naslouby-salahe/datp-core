@@ -8,7 +8,7 @@ from datp_core.domain.enums import EvidenceRole, PublicationStatus
 from datp_core.domain.values.checksums import Checksum
 from datp_core.analysis.metrics.cohorts import EvaluationCohortManifest
 from datp_core.analysis.operational.communication import CommunicationMessageDiagnostic
-from datp_core.evaluation.federated.contracts import (
+from datp_core.analysis.metrics.federated import (
     CalibrationSizeAblationCell,
     ConformalCoverageStageInput,
     EvaluationDiagnostics,
@@ -16,8 +16,8 @@ from datp_core.evaluation.federated.contracts import (
     FederatedEvaluationRequest,
     ThresholdEstimationStageInput,
 )
-from datp_core.evaluation.federated.execution import prepare_federated_evaluation
-from datp_core.evaluation.federated.publication import (
+from datp_core.analysis.metrics.federated_execution import prepare_federated_evaluation
+from datp_core.artifacts.repositories.evaluations import (
     FederatedEvaluationAssetName,
     federated_evaluation_is_reusable,
     load_reused_federated_evaluation,

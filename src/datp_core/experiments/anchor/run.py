@@ -45,8 +45,8 @@ from datp_core.core.identifiers import (
 )
 from datp_core.core.errors import AnchorReproductionError, ScientificContractError
 from datp_core.core.numeric import NonNegativeIntegerValue
-from datp_core.evaluation.federated.contracts import FederatedEvaluationDocument
-from datp_core.evaluation.federated.publication import FederatedEvaluationAssetName
+from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
+from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
 from datp_core.pipeline.execution.evidence import load_evaluation_document, population_metric
 from datp_core.pipeline.execution.layout import EvaluationRunAssetDirectory
 from datp_core.artifacts.layout import evaluation_run_directory

@@ -1,11 +1,40 @@
 import polars as pl
 
+from datp_core.analysis.metrics.client import calculate_client_metrics
+from datp_core.analysis.metrics.cohorts import ClientEligibilityRecord
+from datp_core.analysis.metrics.conformal import evaluate_held_out_conformal_coverage
+from datp_core.analysis.metrics.confusion import calculate_confusion_counts
+from datp_core.analysis.metrics.federated import (
+    EvaluationDiagnostics,
+    FederatedEvaluationArtifacts,
+    FederatedEvaluationDocument,
+    FederatedEvaluationPublication,
+    FederatedEvaluationRequest,
+    ShrinkageLambdaEvaluation,
+    ThresholdEstimationStageInput,
+)
+from datp_core.analysis.metrics.models import (
+    ClientMetricResult,
+    FederatedScoreRecord,
+    PopulationMetricResult,
+    metric_by_id,
+)
+from datp_core.analysis.metrics.population import calculate_population_metrics
+from datp_core.analysis.metrics.threshold_estimation import (
+    ThresholdEstimationDiagnostic,
+    evaluate_threshold_estimate,
+    sample_efficiency_curve,
+)
+from datp_core.analysis.operational.alert_burden import AlertBurdenDiagnostic, calculate_alert_burden
+from datp_core.analysis.operational.communication import summarize_communication
+from datp_core.analysis.operational.traffic_rates import ValidatedTrafficRateEvidence
 from datp_core.data.registry import population_capabilities
 from datp_core.datasets.partitioning.contracts import (
     ClientIdentity,
     PopulationOutcomeLabel,
     population_allowed_evidence_roles,
 )
+from datp_core.detector.training.models import FederatedTrainingCoordinate
 from datp_core.domain.enums import (
     ContractSubject,
     EvaluationCohort,
@@ -26,38 +55,9 @@ from datp_core.domain.values.ratios import (
     ShrinkageWeight,
     ThresholdValue,
 )
-from datp_core.analysis.metrics.client import calculate_client_metrics
 from datp_core.evaluation.cohort.construction import cohort_record_for_client
-from datp_core.analysis.metrics.cohorts import ClientEligibilityRecord
-from datp_core.analysis.operational.communication import summarize_communication
-from datp_core.analysis.metrics.conformal import evaluate_held_out_conformal_coverage
-from datp_core.analysis.metrics.confusion import calculate_confusion_counts
-from datp_core.evaluation.federated.contracts import (
-    EvaluationDiagnostics,
-    FederatedEvaluationArtifacts,
-    FederatedEvaluationDocument,
-    FederatedEvaluationPublication,
-    FederatedEvaluationRequest,
-    ShrinkageLambdaEvaluation,
-    ThresholdEstimationStageInput,
-)
 from datp_core.evaluation.fixed_score.checksums import evaluation_label_checksum, source_row_checksum
 from datp_core.evaluation.fixed_score.validation import validate_evaluation_evidence, validate_fixed_score_controls
-from datp_core.analysis.metrics.models import (
-    ClientMetricResult,
-    FederatedScoreRecord,
-    PopulationMetricResult,
-    metric_by_id,
-)
-from datp_core.analysis.operational.alert_burden import AlertBurdenDiagnostic, calculate_alert_burden
-from datp_core.analysis.metrics.population import calculate_population_metrics
-from datp_core.analysis.metrics.threshold_estimation import (
-    ThresholdEstimationDiagnostic,
-    evaluate_threshold_estimate,
-    sample_efficiency_curve,
-)
-from datp_core.analysis.operational.traffic_rates import ValidatedTrafficRateEvidence
-from datp_core.detector.training.models import FederatedTrainingCoordinate
 from datp_core.protocols.experiments import require_execution_identity
 from datp_core.thresholds.contracts import ThresholdAssignment, ThresholdUnavailableResult
 from datp_core.thresholds.dispatch import ThresholdConstructionResult

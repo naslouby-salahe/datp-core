@@ -26,13 +26,13 @@ from datp_core.analysis.operational.communication import (
     SerializedPayloadEvidence,
     ThresholdPayloadKind,
 )
-from datp_core.evaluation.federated.contracts import (
+from datp_core.analysis.metrics.federated import (
     CalibrationSizeAblationCell,
     ConformalCoverageStageInput,
     FederatedEvaluationDocument,
     ThresholdEstimationStageInput,
 )
-from datp_core.evaluation.federated.publication import FederatedEvaluationAssetName
+from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
 from datp_core.evaluation.fixed_score.construction import build_federated_evaluation_inputs
 from datp_core.analysis.metrics.fixed_score import FixedScoreEvidence
 from datp_core.evaluation.fixed_score.validation import validate_fixed_score_controls

@@ -12,7 +12,7 @@ from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.provenance import canonical_checksum
 from datp_core.domain.values.checksums import Checksum, checksum_file
 from datp_core.domain.values.counts import ByteCount
-from datp_core.evaluation.federated.publication import FederatedEvaluationAssetName
+from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
 from datp_core.analysis.metrics.models import metric_by_id
 from datp_core.pipeline.coordinates import ExecutionRoute, ExperimentCoordinate, execution_route_for
 from datp_core.pipeline.execution.evidence import load_evaluation_document

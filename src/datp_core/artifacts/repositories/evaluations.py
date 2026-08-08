@@ -1,11 +1,11 @@
 from enum import StrEnum
 from pathlib import Path
 
-from datp_core.domain.provenance import canonical_json_text
-from datp_core.evaluation.federated.contracts import (
+from datp_core.analysis.metrics.federated import (
     FederatedEvaluationArtifacts,
     FederatedEvaluationPublication,
 )
+from datp_core.domain.provenance import canonical_json_text
 
 
 class FederatedEvaluationAssetName(StrEnum):

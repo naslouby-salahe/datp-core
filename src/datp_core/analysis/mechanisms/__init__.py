@@ -48,7 +48,7 @@ from datp_core.analysis.scientific_decision import ScientificDecisionResult
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.identifiers import ExperimentId, MetricId
 from datp_core.core.numeric import MetricValue, Ratio
-from datp_core.evaluation.federated.contracts import FederatedEvaluationDocument
+from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
 from datp_core.analysis.metrics.models import MetricStatus, metric_by_id
 from datp_core.thresholds.policies.cluster import GroupedThresholdResult
 

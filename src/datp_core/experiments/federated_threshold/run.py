@@ -27,7 +27,7 @@ from datp_core.core.numeric import (
     ThresholdValue,
     ThresholdVariance,
 )
-from datp_core.evaluation.federated.publication import FederatedEvaluationAssetName
+from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
 from datp_core.analysis.metrics.models import MetricStatus, metric_by_id
 from datp_core.experiments.common.coordinates import ExperimentCoordinate
 from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
@@ -39,7 +39,7 @@ from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration
 from datp_core.runtime.configuration import OUTPUTS_ROOT
 
 if TYPE_CHECKING:
-    from datp_core.evaluation.federated.contracts import FederatedEvaluationDocument
+    from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
     from datp_core.thresholds.dispatch import ThresholdConstructionResult
 
 

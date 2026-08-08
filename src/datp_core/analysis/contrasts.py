@@ -23,7 +23,7 @@ from datp_core.core.numeric import (
     ProximalCoefficient,
     Ratio,
 )
-from datp_core.evaluation.federated.contracts import FederatedEvaluationDocument
+from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
 from datp_core.evaluation.fixed_score.validation import validate_fixed_score_controls
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 from datp_core.analysis.inference.wilcoxon import PairedInferenceProtocol

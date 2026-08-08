@@ -39,8 +39,8 @@ from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.serializers.json import canonical_checksum
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.numeric import MetricValue, ModelCoefficientValue, Seed
-from datp_core.evaluation.federated.contracts import FederatedEvaluationDocument
-from datp_core.evaluation.federated.publication import FederatedEvaluationAssetName
+from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
+from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
 from datp_core.experiments.execution import execute_declared_experiment_seed
 from datp_core.experiments.planning import expand_experiment_plan
 from datp_core.detector.training.models import FederatedTrainingCoordinate

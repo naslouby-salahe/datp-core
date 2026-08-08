@@ -24,7 +24,7 @@ from datp_core.core.numeric import (
     ShrinkageWeight,
 )
 from datp_core.data.populations.contracts import ClientIdentity
-from datp_core.evaluation.federated.publication import FederatedEvaluationAssetName
+from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
 from datp_core.analysis.metrics.models import MetricStatus, metric_by_id
 from datp_core.experiments.common.coordinates import ExperimentCoordinate
 from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
@@ -42,7 +42,7 @@ from datp_core.runtime.configuration import OUTPUTS_ROOT
 from datp_core.thresholds.contracts import ThresholdInfeasibilityReason
 
 if TYPE_CHECKING:
-    from datp_core.evaluation.federated.contracts import FederatedEvaluationDocument
+    from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
     from datp_core.analysis.metrics.models import MetricAvailability
 
 
