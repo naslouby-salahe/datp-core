@@ -6,11 +6,18 @@ from typing import Annotated
 
 import typer
 
-from datp_core.app.cli.validation import echo_error, map_exception_to_exit
-from datp_core.app.programme import run_campaign, run_experiment
+from datp_core.app.cli.validation import fail
+from datp_core.app.contracts import OverwriteMode, ProgrammeExecutionMode
+from datp_core.app.research import run_campaign, run_experiment
 from datp_core.domain.enums import ExperimentId
+from datp_core.domain.errors import DatpCoreError
+
 
 app = typer.Typer(no_args_is_help=True, help="Run one experiment or the complete campaign.")
+
+
+def _overwrite_mode(overwrite: bool) -> OverwriteMode:
+    return OverwriteMode.REBUILD if overwrite else OverwriteMode.KEEP_EXISTING
 
 
 @app.command("experiment")
@@ -21,12 +28,15 @@ def experiment_command(
         typer.Option("--overwrite", help="Rebuild this experiment's owned artifacts"),
     ] = False,
 ) -> None:
-    """Run one experiment's complete declared workflow and full seed cohort."""
+    """Run one experiment's complete declared recipe and full seed cohort."""
     try:
-        result = run_experiment(experiment_id, overwrite=overwrite, smoke=False)
-    except Exception as error:
-        echo_error(error)
-        raise typer.Exit(code=map_exception_to_exit(error)) from error
+        result = run_experiment(
+            experiment_id,
+            overwrite=_overwrite_mode(overwrite),
+            mode=ProgrammeExecutionMode.FULL,
+        )
+    except (DatpCoreError, ValueError) as error:
+        fail(error)
     outcomes = ",".join(f"{item.method.value}={item.status.value}" for item in result.method_outcomes)
     typer.echo(
         f"experiment={result.experiment.value} seeds={len(result.seeds)} "
@@ -43,8 +53,7 @@ def campaign_command(
 ) -> None:
     """Run the complete scientific programme in deterministic dependency order."""
     try:
-        result = run_campaign(overwrite=overwrite)
-    except Exception as error:
-        echo_error(error)
-        raise typer.Exit(code=map_exception_to_exit(error)) from error
+        result = run_campaign(overwrite=_overwrite_mode(overwrite))
+    except (DatpCoreError, ValueError) as error:
+        fail(error)
     typer.echo(f"campaign experiments={len(result.experiments)} detail={result.detail}")
