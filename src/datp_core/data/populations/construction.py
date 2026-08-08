@@ -37,6 +37,7 @@ from .contracts import (
     PreprocessingHandoff,
     PreprocessingHandoffRequest,
     SplitConstructionRequest,
+    SplitManifestDocument,
     build_population_manifest,
     select_membership_frame,
 )
@@ -196,6 +197,12 @@ def build_preprocessing_handoff(
     )
     role_column = PopulationFrameColumn.PARTITION_ROLE
     if membership.height == 0:
+        if request.expected_split_manifest_checksum is not None:
+            raise ScientificContractError(
+                "expected split checksum cannot be validated against an empty membership",
+                subject=document.population,
+                reason="an empty population has no split assignments to check",
+            )
         assignments = membership.clear().with_columns(pl.lit(None, dtype=pl.String).alias(role_column))
         counts = tuple(
             ClientPartitionCounts(
@@ -215,7 +222,7 @@ def build_preprocessing_handoff(
             client_partition_counts=counts,
             deployment_fallback_client_ids=fallback_clients,
         )
-    assignments, _ = split_membership(
+    assignments, split_manifest = split_membership(
         SplitConstructionRequest(
             membership=membership,
             population=document.population,
@@ -225,6 +232,11 @@ def build_preprocessing_handoff(
             population_manifest_checksum=document.membership_checksum,
             capture_timestamp_column=request.capture_timestamp_column,
         )
+    )
+    _require_split_handoff_checksum(
+        split_manifest,
+        request.expected_split_manifest_checksum,
+        document.population,
     )
     return PreprocessingHandoff(
         population_manifest=construction.manifest,
@@ -237,6 +249,21 @@ def build_preprocessing_handoff(
         ),
         deployment_fallback_client_ids=fallback_clients,
     )
+
+
+def _require_split_handoff_checksum(
+    split_manifest: SplitManifestDocument,
+    expected: Checksum | None,
+    population: PopulationId,
+) -> None:
+    if expected is None:
+        return
+    if split_manifest.assignment_checksum != expected:
+        raise ScientificContractError(
+            "recomputed split handoff does not match the declared split checksum",
+            subject=population,
+            reason="execution and preprocessing must consume one identical split",
+        )
 
 
 def join_handoff_with_canonical_features(

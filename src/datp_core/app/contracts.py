@@ -22,6 +22,11 @@ class AnchorRequirement(StrEnum):
     NOT_REQUIRED = "not_required"
 
 
+class CampaignRole(StrEnum):
+    MANDATORY = "mandatory"
+    OPTIONAL = "optional"
+
+
 class RecipeRegistration(StrEnum):
     REGISTERED = "registered"
     SUPPRESSED = "suppressed"

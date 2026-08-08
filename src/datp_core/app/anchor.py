@@ -19,14 +19,6 @@ def _output_root(mode: ProgrammeExecutionMode):
     return SMOKE_OUTPUT_ROOT if mode is ProgrammeExecutionMode.SMOKE else OUTPUTS_ROOT
 
 
-def anchor_gate_permits_dependents() -> bool:
-    try:
-        decision = load_anchor_gate_decision(ANCHOR_DIAGNOSTICS_DIRECTORY)
-    except AnchorReproductionError:
-        return False
-    return decision.status in {AnchorGateStatus.PASS, AnchorGateStatus.PASS_WITH_DECLARED_DISCREPANCY}
-
-
 def reproduce_anchor(*, overwrite: OverwriteMode, mode: ProgrammeExecutionMode) -> AnchorCommandResult:
     from datp_core.app.campaign import preprocess_datasets, require_experiment_declaration
     from datp_core.experiments.anchor.run import (

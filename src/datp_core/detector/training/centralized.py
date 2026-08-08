@@ -11,7 +11,7 @@ from safetensors.torch import load_file, save_file
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
-from datp_core.artifacts.provenance import Checksum, checksum_file, checksum_text
+from datp_core.artifacts.provenance import Checksum, checksum_file
 from datp_core.core.errors import (
     ArtifactIntegrityError,
     ExecutionStateError,
@@ -353,14 +353,6 @@ def training_history_frame(result: CentralizedTrainingResult) -> pl.DataFrame:
             ),
         )
     )
-
-
-def training_result_checksum(result: CentralizedTrainingResult) -> Checksum:
-    payload = (
-        f"{result.coordinate.population.value}|{result.coordinate.training_seed.value}|"
-        f"{result.model_tensor_checksum.value}|{result.final_epoch.value}|{result.batch_size_used.value}"
-    )
-    return checksum_text(payload)
 
 
 def require_no_hidden_scientific_defaults() -> None:

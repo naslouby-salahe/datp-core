@@ -6,8 +6,9 @@ from pathlib import Path
 import polars as pl
 import torch
 
-from datp_core.artifacts.provenance import Checksum, checksum_file, checksum_text
+from datp_core.artifacts.provenance import Checksum, checksum_file
 from datp_core.artifacts.repositories.publication import ArtifactPublication, FunctionalArtifactCodec, publish_artifact
+from datp_core.artifacts.serializers.json import canonical_checksum
 from datp_core.core.errors import ArtifactIntegrityError, ScientificContractError
 from datp_core.core.identifiers import (
     CentralizedModelId,
@@ -15,6 +16,7 @@ from datp_core.core.identifiers import (
     ContractSubject,
     CudaDeviceName,
     FeatureNameSequence,
+    OptimizerId,
     PublicationStatus,
     TrainingHistoryColumn,
 )
@@ -92,6 +94,46 @@ class CentralizedTrainingPublicationRequest:
 class CentralizedTrainingArtifacts:
     training: CentralizedTrainingResult
     candidates: tuple[CentralizedCheckpointCandidate, ...]
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class CentralizedTrainingPublicationBinding:
+    """Immutable identity of one published centralized training artifact set."""
+
+    coordinate: CentralizedTrainingCoordinate
+    model_tensor_checksum: Checksum
+    final_epoch: RoundNumber
+    batch_size: BatchSize
+    preprocessing_state_checksum: Checksum
+    split_manifest_checksum: Checksum
+    feature_count: FeatureCount
+    autoencoder_widths: tuple[FeatureCount, ...]
+    train_row_count: RowCount
+    optimizer_identity: OptimizerId
+    learning_rate: LearningRate
+    weight_decay: WeightDecay
+    checkpoint_rounds: tuple[RoundNumber, ...]
+
+
+def _centralized_training_binding(
+    request: CentralizedTrainingPublicationRequest,
+    directory: Path,
+) -> CentralizedTrainingPublicationBinding:
+    return CentralizedTrainingPublicationBinding(
+        coordinate=request.coordinate,
+        model_tensor_checksum=checksum_file(directory / CentralizedArtifactName.MODEL_TENSORS),
+        final_epoch=request.checkpoint_protocol.maximum_round,
+        batch_size=request.batch_size,
+        preprocessing_state_checksum=request.preprocessing_state.estimator_checksum,
+        split_manifest_checksum=request.split_manifest_checksum,
+        feature_count=FeatureCount(len(request.feature_names)),
+        autoencoder_widths=tuple(request.autoencoder.widths),
+        train_row_count=RowCount(request.training_features.height),
+        optimizer_identity=request.training_protocol.optimizer.identity,
+        learning_rate=request.learning_rate,
+        weight_decay=request.weight_decay,
+        checkpoint_rounds=tuple(request.checkpoint_protocol.candidates),
+    )
 
 
 def train_centralized_detector(request: TrainCentralizedDetectorRequest) -> TrainCentralizedDetectorResult:
@@ -174,7 +216,7 @@ def write_centralized_training(
     candidates = retain_centralized_checkpoint_candidates(execution, request.autoencoder)
     training_history_frame(training).write_parquet(directory / CentralizedArtifactName.TRAINING_HISTORY)
     (directory / CentralizedArtifactName.COMPLETE).write_text(
-        centralized_training_complete_digest(training).value,
+        canonical_checksum(_centralized_training_binding(request, directory)).value,
         encoding="utf-8",
     )
     return CentralizedTrainingArtifacts(training, candidates)
@@ -195,9 +237,7 @@ def centralized_training_is_reusable(
     ):
         return False
     try:
-        expected = checksum_text(
-            f"{checksum_file(model).value}|{request.checkpoint_protocol.maximum_round.value}|{request.batch_size.value}"
-        )
+        expected = canonical_checksum(_centralized_training_binding(request, directory))
         return complete.read_text(encoding="utf-8").strip() == expected.value
     except (OSError, ValueError):
         return False
@@ -272,12 +312,6 @@ def rebase_centralized_training(
         for candidate in result.candidates
     )
     return CentralizedTrainingArtifacts(training, candidates)
-
-
-def centralized_training_complete_digest(training: CentralizedTrainingResult) -> Checksum:
-    return checksum_text(
-        f"{training.model_tensor_checksum.value}|{training.final_epoch.value}|{training.batch_size_used.value}"
-    )
 
 
 def _load_reused_candidate(

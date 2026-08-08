@@ -49,8 +49,7 @@ from datp_core.analysis.metrics.models import MetricStatus, metric_by_id
 from datp_core.analysis.scientific_decision import ScientificDecisionResult
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.identifiers import ExperimentId, MetricId
-from datp_core.core.numeric import MetricValue, Ratio
-from datp_core.thresholds.policies.cluster import GroupedThresholdResult
+from datp_core.core.numeric import Ratio
 
 type MechanismEvidence = (
     AbsorptionCohortResult
@@ -88,13 +87,11 @@ __all__ = (
     "ThresholdOperatingPoint",
     "blocked_jensen_shannon_divergence",
     "cluster_evidence_from_grouped_result",
-    "cluster_mechanism_bundle",
     "cluster_stability",
     "decide_absorption_cohort",
     "decide_model_absorption",
     "empty_cluster_evidence_record",
     "grouped_dispersion",
-    "heterogeneity_association_from_observations",
     "heterogeneity_benefit_association",
     "jensen_shannon_divergence",
     "jensen_shannon_from_client_scores",
@@ -165,59 +162,6 @@ def threshold_movements_from_evaluations(
             )
         )
     return summarize_threshold_movements(tuple(movements))
-
-
-def cluster_mechanism_bundle(
-    *,
-    left: GroupedThresholdResult,
-    right: GroupedThresholdResult,
-    left_checksum: Checksum,
-    right_checksum: Checksum,
-    local_dispersion: MetricValue | None,
-    group_false_positive_rates: tuple[tuple[Ratio, ...], ...] | None = None,
-    shared_cv_fpr: MetricValue | None = None,
-    local_cv_fpr: MetricValue | None = None,
-    cluster_cv_fpr: MetricValue | None = None,
-) -> tuple[ClusterEvidenceRecord, ClusterStabilityResult, GroupedDispersionResult]:
-    """Assemble cluster evidence, stability, and optional grouped dispersion from persisted results."""
-    evidence = cluster_evidence_from_grouped_result(
-        left,
-        source_threshold_checksum=left_checksum,
-        local_dispersion=local_dispersion,
-        shared_cv_fpr=shared_cv_fpr,
-        local_cv_fpr=local_cv_fpr,
-        cluster_cv_fpr=cluster_cv_fpr,
-    )
-    stability = cluster_stability(
-        left.clusters,
-        right.clusters,
-        left_source_checksum=left_checksum,
-        right_source_checksum=right_checksum,
-        left_declared_group_count=left.group_count.value,
-        right_declared_group_count=right.group_count.value,
-    )
-    if group_false_positive_rates is None or len(group_false_positive_rates) != len(left.clusters):
-        dispersion = grouped_dispersion(())
-    else:
-        observations = tuple(
-            GroupDispersionObservation(
-                group_index=membership.cluster_index,
-                thresholds=tuple(item.value for item in membership.contributing_local_quantiles),
-                false_positive_rates=group_false_positive_rates[membership.cluster_index.value],
-            )
-            for membership in left.clusters
-            if membership.contributing_local_quantiles
-            and membership.cluster_index.value < len(group_false_positive_rates)
-            and group_false_positive_rates[membership.cluster_index.value]
-        )
-        dispersion = grouped_dispersion(observations)
-    return evidence, stability, dispersion
-
-
-def heterogeneity_association_from_observations(
-    observations: tuple[AssociationObservation, ...],
-) -> AssociationResult:
-    return heterogeneity_benefit_association(observations)
 
 
 def jensen_shannon_from_client_scores(

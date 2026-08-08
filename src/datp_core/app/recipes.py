@@ -9,7 +9,7 @@ from typing import Protocol
 
 from datp_core.analysis.evidence import AnalysisAssetName
 from datp_core.analysis.metrics.models import AvailableMetric, metric_by_id
-from datp_core.app.contracts import AnchorRequirement, OverwriteMode
+from datp_core.app.contracts import AnchorRequirement, CampaignRole, OverwriteMode
 from datp_core.app.layout import ANCHOR_DIAGNOSTICS_DIRECTORY, ResearchArtifact, ResearchDirectory
 from datp_core.app.models import DetailText, DispatchOutcome, ThresholdMethodOutcome
 from datp_core.app.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
@@ -40,6 +40,7 @@ from datp_core.experiments.execution.layout import EvaluationRunAssetDirectory, 
 from datp_core.experiments.external import (
     BoundedExternalAssetDirectory,
     analyze_ciciot_boundary_campaign,
+    analyze_external_benign_statistics,
     analyze_external_validation_campaign,
     run_ciciot_boundary_seed,
     run_external_validation_seed,
@@ -144,6 +145,7 @@ class AnalysisMarker(Protocol):
 class ExperimentRecipe:
     experiment: ExperimentId
     anchor_requirement: AnchorRequirement
+    campaign_role: CampaignRole
     dispatch: DispatchHandler
     report: ReportHandler
     analysis_marker: AnalysisMarker
@@ -423,19 +425,40 @@ def _dispatch_analysis(experiment_id: ExperimentId) -> DispatchOutcome:
 
 
 def _report_confirmatory(experiment_id: ExperimentId, overwrite: OverwriteMode) -> tuple[tuple[Path, ...], DetailText]:
-    del experiment_id, overwrite
+    del experiment_id
+    from datp_core.experiments.centralized_reference import (
+        REGIME_A_CENTRALIZED_REFERENCE,
+        report_centralized_reference,
+    )
+
+    centralized = report_centralized_reference(
+        REGIME_A_CENTRALIZED_REFERENCE, output_root=OUTPUTS_ROOT, overwrite=overwrite.requested
+    )
     path = analyze_confirmatory_campaign(anchor_gate_diagnostics_directory=ANCHOR_DIAGNOSTICS_DIRECTORY)
-    return (path,), DetailText(str(path))
+    return (centralized, path), DetailText(f"centralized_reference={centralized} confirmatory={path}")
 
 
 def _report_external(experiment_id: ExperimentId, overwrite: OverwriteMode) -> tuple[tuple[Path, ...], DetailText]:
     if experiment_id is ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION:
         result = analyze_external_validation_campaign(output_root=OUTPUTS_ROOT, overwrite=overwrite.requested)
-    elif experiment_id is ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY:
+        benign = analyze_external_benign_statistics(output_root=OUTPUTS_ROOT, overwrite=overwrite.requested)
+        return (result.output_directory, benign.output_directory), DetailText(
+            f"paired={result.output_directory} benign_statistics={benign.output_directory}"
+        )
+    if experiment_id is ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY:
+        from datp_core.experiments.centralized_reference import (
+            CIC_CENTRALIZED_REFERENCE,
+            report_centralized_reference,
+        )
+
         result = analyze_ciciot_boundary_campaign(output_root=OUTPUTS_ROOT, overwrite=overwrite.requested)
-    else:
-        raise ReportEvidenceError(f"unsupported external report: {experiment_id.value}")
-    return (result.output_directory,), DetailText(str(result.output_directory))
+        centralized = report_centralized_reference(
+            CIC_CENTRALIZED_REFERENCE, output_root=OUTPUTS_ROOT, overwrite=overwrite.requested
+        )
+        return (result.output_directory, centralized), DetailText(
+            f"boundary={result.output_directory} centralized_reference={centralized}"
+        )
+    raise ReportEvidenceError(f"unsupported external report: {experiment_id.value}")
 
 
 def _report_heterogeneity(experiment_id: ExperimentId, overwrite: OverwriteMode) -> tuple[tuple[Path, ...], DetailText]:
@@ -647,13 +670,33 @@ def _confirmatory_marker(experiment_id: ExperimentId) -> bool:
 
 def _external_marker(experiment_id: ExperimentId) -> bool:
     declaration = _declaration(experiment_id)
-    return (
+    paired_complete = (
         OUTPUTS_ROOT
         / BoundedExternalAssetDirectory.ANALYSIS
         / experiment_id.value
         / declaration.population.value
         / AnalysisAssetName.COMPLETE
     ).is_file()
+    if not paired_complete:
+        return False
+    if experiment_id is ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION:
+        from datp_core.experiments.external.run import ExternalBenignStatisticsAssetName
+
+        return (
+            OUTPUTS_ROOT
+            / ExternalBenignStatisticsAssetName.ROOT
+            / experiment_id.value
+            / declaration.population.value
+            / ExternalBenignStatisticsAssetName.COMPLETE
+        ).is_file()
+    if experiment_id is ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY:
+        from datp_core.experiments.centralized_reference import (
+            CIC_CENTRALIZED_REFERENCE,
+            centralized_reference_report_complete,
+        )
+
+        return centralized_reference_report_complete(CIC_CENTRALIZED_REFERENCE).is_file()
+    raise ReportEvidenceError(f"unsupported external marker: {experiment_id.value}")
 
 
 def _fedprox_marker(experiment_id: ExperimentId) -> bool:
@@ -797,6 +840,7 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
     ExperimentRecipe(
         experiment=ExperimentId.SHARED_VS_LOCAL_CONFIRMATION,
         anchor_requirement=AnchorRequirement.REQUIRED,
+        campaign_role=CampaignRole.MANDATORY,
         dispatch=_dispatch_confirmatory,
         report=_report_confirmatory,
         analysis_marker=_confirmatory_marker,
@@ -804,6 +848,7 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
     ExperimentRecipe(
         experiment=ExperimentId.FAMILY_AND_GROUPED_GRANULARITY,
         anchor_requirement=AnchorRequirement.REQUIRED,
+        campaign_role=CampaignRole.MANDATORY,
         dispatch=_dispatch_family,
         report=_report_supplementary,
         analysis_marker=_supplementary_marker,
@@ -811,6 +856,7 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
     ExperimentRecipe(
         experiment=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST,
         anchor_requirement=AnchorRequirement.REQUIRED,
+        campaign_role=CampaignRole.MANDATORY,
         dispatch=_dispatch_fedprox,
         report=_report_fedprox,
         analysis_marker=_fedprox_marker,
@@ -818,6 +864,7 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
     ExperimentRecipe(
         experiment=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
         anchor_requirement=AnchorRequirement.REQUIRED,
+        campaign_role=CampaignRole.MANDATORY,
         dispatch=_dispatch_ditto,
         report=_report_ditto,
         analysis_marker=_ditto_marker,
@@ -825,6 +872,7 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
     ExperimentRecipe(
         experiment=ExperimentId.FEDERATED_BENIGN_STATISTICS_COMPARISON,
         anchor_requirement=AnchorRequirement.REQUIRED,
+        campaign_role=CampaignRole.MANDATORY,
         dispatch=_estimation_recipe(
             ExperimentId.FEDERATED_BENIGN_STATISTICS_COMPARISON, run_federated_benign_statistics_comparison_seed
         ),
@@ -834,6 +882,7 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
     ExperimentRecipe(
         experiment=ExperimentId.FEDERATED_QUANTILE_ESTIMATION,
         anchor_requirement=AnchorRequirement.REQUIRED,
+        campaign_role=CampaignRole.MANDATORY,
         dispatch=_estimation_recipe(ExperimentId.FEDERATED_QUANTILE_ESTIMATION, run_federated_quantile_estimation_seed),
         report=_report_estimation,
         analysis_marker=_estimation_marker,
@@ -841,6 +890,7 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
     ExperimentRecipe(
         experiment=ExperimentId.FIXED_COEFFICIENT_STATISTICS_SENSITIVITY,
         anchor_requirement=AnchorRequirement.REQUIRED,
+        campaign_role=CampaignRole.MANDATORY,
         dispatch=_estimation_recipe(
             ExperimentId.FIXED_COEFFICIENT_STATISTICS_SENSITIVITY, run_fixed_coefficient_statistics_sensitivity_seed
         ),
@@ -850,6 +900,7 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
     ExperimentRecipe(
         experiment=ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION,
         anchor_requirement=AnchorRequirement.NOT_REQUIRED,
+        campaign_role=CampaignRole.MANDATORY,
         dispatch=_external_recipe(ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION),
         report=_report_external,
         analysis_marker=_external_marker,
@@ -857,6 +908,7 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
     ExperimentRecipe(
         experiment=ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY,
         anchor_requirement=AnchorRequirement.NOT_REQUIRED,
+        campaign_role=CampaignRole.MANDATORY,
         dispatch=_external_recipe(ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY),
         report=_report_external,
         analysis_marker=_external_marker,
@@ -864,6 +916,7 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
     ExperimentRecipe(
         experiment=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
         anchor_requirement=AnchorRequirement.NOT_REQUIRED,
+        campaign_role=CampaignRole.MANDATORY,
         dispatch=_dispatch_temporal,
         report=_report_temporal,
         analysis_marker=_temporal_marker,
@@ -871,6 +924,7 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
     ExperimentRecipe(
         experiment=ExperimentId.SHARED_CONSTRUCTION_SENSITIVITY,
         anchor_requirement=AnchorRequirement.REQUIRED,
+        campaign_role=CampaignRole.MANDATORY,
         dispatch=_robustness_recipe(
             ExperimentId.SHARED_CONSTRUCTION_SENSITIVITY, run_shared_construction_sensitivity_seed
         ),
@@ -880,6 +934,7 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
     ExperimentRecipe(
         experiment=ExperimentId.QUANTILE_SENSITIVITY,
         anchor_requirement=AnchorRequirement.REQUIRED,
+        campaign_role=CampaignRole.MANDATORY,
         dispatch=_robustness_recipe(ExperimentId.QUANTILE_SENSITIVITY, run_quantile_sensitivity_seed),
         report=_report_robustness,
         analysis_marker=_robustness_marker,
@@ -887,6 +942,7 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
     ExperimentRecipe(
         experiment=ExperimentId.CALIBRATION_SIZE_ABLATION,
         anchor_requirement=AnchorRequirement.REQUIRED,
+        campaign_role=CampaignRole.MANDATORY,
         dispatch=_robustness_recipe(ExperimentId.CALIBRATION_SIZE_ABLATION, run_calibration_size_ablation_seed),
         report=_report_robustness,
         analysis_marker=_robustness_marker,
@@ -894,6 +950,7 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
     ExperimentRecipe(
         experiment=ExperimentId.FIXED_SHRINKAGE_CURVE,
         anchor_requirement=AnchorRequirement.REQUIRED,
+        campaign_role=CampaignRole.MANDATORY,
         dispatch=_robustness_recipe(ExperimentId.FIXED_SHRINKAGE_CURVE, run_fixed_shrinkage_curve_seed),
         report=_report_robustness,
         analysis_marker=_robustness_marker,
@@ -901,6 +958,7 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
     ExperimentRecipe(
         experiment=ExperimentId.SIZE_AWARE_SHRINKAGE,
         anchor_requirement=AnchorRequirement.REQUIRED,
+        campaign_role=CampaignRole.MANDATORY,
         dispatch=_robustness_recipe(ExperimentId.SIZE_AWARE_SHRINKAGE, run_size_aware_shrinkage_seed),
         report=_report_robustness,
         analysis_marker=_robustness_marker,
@@ -908,6 +966,7 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
     ExperimentRecipe(
         experiment=ExperimentId.LOCAL_CONFORMAL_COVERAGE,
         anchor_requirement=AnchorRequirement.REQUIRED,
+        campaign_role=CampaignRole.MANDATORY,
         dispatch=_robustness_recipe(ExperimentId.LOCAL_CONFORMAL_COVERAGE, run_local_conformal_coverage_seed),
         report=_report_robustness,
         analysis_marker=_robustness_marker,
@@ -915,6 +974,7 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
     ExperimentRecipe(
         experiment=ExperimentId.CONTROLLED_HETEROGENEITY_SWEEP,
         anchor_requirement=AnchorRequirement.REQUIRED,
+        campaign_role=CampaignRole.MANDATORY,
         dispatch=_dispatch_heterogeneity,
         report=_report_heterogeneity,
         analysis_marker=_heterogeneity_marker,
@@ -922,6 +982,7 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
     ExperimentRecipe(
         experiment=ExperimentId.PER_CLIENT_SCORE_GEOMETRY,
         anchor_requirement=AnchorRequirement.REQUIRED,
+        campaign_role=CampaignRole.MANDATORY,
         dispatch=_analysis_recipe(ExperimentId.PER_CLIENT_SCORE_GEOMETRY),
         report=_report_heterogeneity,
         analysis_marker=_heterogeneity_marker,
@@ -929,6 +990,7 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
     ExperimentRecipe(
         experiment=ExperimentId.HETEROGENEITY_BENEFIT_ASSOCIATION,
         anchor_requirement=AnchorRequirement.REQUIRED,
+        campaign_role=CampaignRole.MANDATORY,
         dispatch=_analysis_recipe(ExperimentId.HETEROGENEITY_BENEFIT_ASSOCIATION),
         report=_report_heterogeneity,
         analysis_marker=_heterogeneity_marker,
@@ -936,6 +998,7 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
     ExperimentRecipe(
         experiment=ExperimentId.THRESHOLD_MOVEMENT_TRADEOFF,
         anchor_requirement=AnchorRequirement.REQUIRED,
+        campaign_role=CampaignRole.MANDATORY,
         dispatch=_analysis_recipe(ExperimentId.THRESHOLD_MOVEMENT_TRADEOFF),
         report=_report_heterogeneity,
         analysis_marker=_heterogeneity_marker,
@@ -943,6 +1006,7 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
     ExperimentRecipe(
         experiment=ExperimentId.GROUP_MEDIAN_SUPPLEMENT,
         anchor_requirement=AnchorRequirement.REQUIRED,
+        campaign_role=CampaignRole.OPTIONAL,
         dispatch=_declared_recipe(ExperimentId.GROUP_MEDIAN_SUPPLEMENT),
         report=_report_supplementary,
         analysis_marker=_supplementary_marker,
@@ -950,6 +1014,7 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
     ExperimentRecipe(
         experiment=ExperimentId.OPTIONAL_EQUITY_INDICES,
         anchor_requirement=AnchorRequirement.REQUIRED,
+        campaign_role=CampaignRole.OPTIONAL,
         dispatch=_declared_recipe(ExperimentId.OPTIONAL_EQUITY_INDICES),
         report=_report_supplementary,
         analysis_marker=_supplementary_marker,
@@ -959,6 +1024,12 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
 
 def registered_experiment_ids() -> tuple[ExperimentId, ...]:
     return tuple(recipe.experiment for recipe in EXPERIMENT_RECIPES)
+
+
+def mandatory_experiment_ids() -> tuple[ExperimentId, ...]:
+    return tuple(
+        recipe.experiment for recipe in EXPERIMENT_RECIPES if recipe.campaign_role is CampaignRole.MANDATORY
+    )
 
 
 def anchor_gated_experiment_ids() -> tuple[ExperimentId, ...]:

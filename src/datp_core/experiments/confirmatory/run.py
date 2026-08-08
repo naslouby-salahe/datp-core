@@ -19,14 +19,18 @@ from datp_core.analysis.mechanisms import (
     AbsorptionCornerEvidence,
     AssociationObservation,
     ClientScoreVector,
+    GroupDispersionObservation,
+    GroupedDispersionResult,
     MechanismEvidence,
     ThresholdMovementCohort,
+    grouped_dispersion,
     heterogeneity_benefit_association,
     jensen_shannon_from_client_scores,
     summarize_threshold_movements_across_seeds,
     threshold_movements_from_evaluations,
 )
 from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
+from datp_core.analysis.metrics.models import MetricStatus, metric_by_id
 from datp_core.app.planning import expand_experiment_plan
 from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.artifacts.provenance import Checksum
@@ -42,7 +46,7 @@ from datp_core.core.identifiers import (
     ScoreFrameColumn,
     TrainingModelId,
 )
-from datp_core.core.numeric import MetricValue, ModelCoefficientValue, Seed
+from datp_core.core.numeric import MetricValue, ModelCoefficientValue, Ratio, Seed
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.scoring.models import FederatedScoreAssetName
 from datp_core.detector.training.models import FederatedTrainingCoordinate
@@ -60,6 +64,7 @@ from datp_core.presentation.export import export_confirmatory_publication, expor
 from datp_core.presentation.figures import FigureSpec
 from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration
 from datp_core.runtime.configuration import OUTPUTS_ROOT
+from datp_core.thresholds.policies.cluster import GroupedThresholdResult
 
 
 class ConfirmatoryAssetDirectory(StrEnum):
@@ -442,7 +447,6 @@ def _confirmatory_cluster_mechanisms() -> tuple[MechanismEvidence, ...]:
         federated_threshold_publication_checksum,
         threshold_result_checksum,
     )
-    from datp_core.thresholds.policies.cluster import GroupedThresholdResult
 
     adapter: TypeAdapter[GroupedThresholdResult] = TypeAdapter(GroupedThresholdResult)
     available: list[tuple[Seed, GroupedThresholdResult, Checksum]] = []
@@ -493,10 +497,8 @@ def _confirmatory_cluster_mechanisms() -> tuple[MechanismEvidence, ...]:
         )
         local_document = load_evaluation_document(_evaluation_path(seed, FederatedThresholdMethod.LOCAL_THRESHOLD))
         local_cv = population_metric(local_document, MetricId.FPR_COEFFICIENT_OF_VARIATION)
-        cluster_cv = population_metric(
-            load_evaluation_document(_evaluation_path(seed, FederatedThresholdMethod.CLUSTER_THRESHOLD)),
-            MetricId.FPR_COEFFICIENT_OF_VARIATION,
-        )
+        cluster_document = load_evaluation_document(_evaluation_path(seed, FederatedThresholdMethod.CLUSTER_THRESHOLD))
+        cluster_cv = population_metric(cluster_document, MetricId.FPR_COEFFICIENT_OF_VARIATION)
         local_thresholds = tuple(item.threshold for item in local_document.clients)
         local_dispersion = local_threshold_dispersion(local_thresholds) if local_thresholds else None
         mechanisms.append(
@@ -509,6 +511,7 @@ def _confirmatory_cluster_mechanisms() -> tuple[MechanismEvidence, ...]:
                 cluster_cv_fpr=cluster_cv,
             )
         )
+        mechanisms.append(_grouped_dispersion_evidence(result, cluster_document))
     for left, right in zip(available, available[1:], strict=False):
         mechanisms.append(
             cluster_stability(
@@ -521,6 +524,40 @@ def _confirmatory_cluster_mechanisms() -> tuple[MechanismEvidence, ...]:
             )
         )
     return tuple(mechanisms)
+
+
+def _grouped_dispersion_evidence(
+    result: GroupedThresholdResult,
+    cluster_document: FederatedEvaluationDocument,
+) -> GroupedDispersionResult:
+    """Build within/across-group threshold and FPR dispersion from B4 memberships and cluster evaluations."""
+    fpr_by_client = {
+        item.client: metric_by_id(item.metrics, MetricId.FALSE_POSITIVE_RATE)
+        for item in cluster_document.clients
+    }
+    observations: list[GroupDispersionObservation] = []
+    for membership in result.clusters:
+        if not membership.contributing_local_quantiles:
+            continue
+        thresholds = tuple(item.value for item in membership.contributing_local_quantiles)
+        false_positive_rates: list[Ratio] = []
+        complete = True
+        for member in membership.members:
+            metric = fpr_by_client.get(member)
+            if metric is None or metric.status is not MetricStatus.AVAILABLE or metric.value is None:
+                complete = False
+                break
+            false_positive_rates.append(Ratio(metric.value.value))
+        if not complete or not false_positive_rates:
+            continue
+        observations.append(
+            GroupDispersionObservation(
+                group_index=membership.cluster_index,
+                thresholds=thresholds,
+                false_positive_rates=tuple(false_positive_rates),
+            )
+        )
+    return grouped_dispersion(tuple(observations))
 
 
 def _client_score_vectors(document: FederatedEvaluationDocument) -> tuple[tuple[ClientScoreVector, ...], Checksum]:

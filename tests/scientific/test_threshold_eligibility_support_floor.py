@@ -8,7 +8,7 @@ from tests.unit.learning.federated.helpers import fedavg_coordinate
 
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import ScientificContractError
-from datp_core.core.identifiers import EvidenceRole, PartitionRole, SplitProtocolId
+from datp_core.core.identifiers import CheckpointStatus, EvidenceRole, PartitionRole, SplitProtocolId
 from datp_core.core.numeric import Seed
 from datp_core.detector.scoring.contracts import ScoreArtifactManifest
 from datp_core.experiments.execution.evidence import eligible_calibration_scores
@@ -42,6 +42,7 @@ def _manifest(tmp_path: Path, calibration_sizes: dict[str, int]) -> ScoreArtifac
         scored_split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
         checkpoint_round=calibration[0].checkpoint_round,
         checkpoint_checksum=Checksum("a" * 64),
+        checkpoint_status=CheckpointStatus.SELECTED_BY_NON_TEST_RULE,
         preprocessing_state_set_checksum=Checksum("b" * 64),
         split_manifest_checksum=Checksum("c" * 64),
         calibration_records=calibration,

@@ -93,6 +93,13 @@ def test_graph_rejects_temporal_experiment_without_verified_chronology() -> None
         validate_protocol_graph(graph)
 
 
+def test_temporal_decision_protocol_raises_until_criteria_are_predeclared() -> None:
+    from datp_core.protocols.temporal import require_temporal_decision_protocol
+
+    with pytest.raises(UnresolvedScientificValueError, match="does not declare either numeric value"):
+        require_temporal_decision_protocol()
+
+
 def test_graph_rejects_premature_executable_readiness() -> None:
     experiment = ExperimentDeclaration(
         id=ExperimentId.SHARED_VS_LOCAL_CONFIRMATION,

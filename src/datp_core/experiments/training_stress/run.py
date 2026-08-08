@@ -818,6 +818,7 @@ def _population_context(
             data_root=DATA_ROOT,
             dirichlet_condition=None,
             capture_timestamp_column=None,
+            expected_split_manifest_checksum=population_result.split_manifest.assignment_checksum,
         )
     )
     clients = population_result.construction.manifest.clients

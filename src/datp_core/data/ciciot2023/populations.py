@@ -86,22 +86,6 @@ def construct_ciciot_file_clients(
     return PopulationConstructionResult(manifest, membership, None, None, evidence)
 
 
-def reject_physical_device_interpretation() -> None:
-    raise CapabilityError(
-        "CICIoT2023 cannot be interpreted as physical devices",
-        subject=_POPULATION,
-        reason="merged artifacts preserve only file-defined pseudo-client identities",
-    )
-
-
-def reject_family_interpretation() -> None:
-    raise CapabilityError(
-        "CICIoT2023 cannot support family thresholding",
-        subject=_POPULATION,
-        reason="no physical-device family taxonomy survives in the merged files",
-    )
-
-
 def _ciciot_excluded_row_evidence(canonical_root: Path) -> pl.DataFrame:
     """Return canonical rows rejected by the immutable model-input eligibility policy."""
     csv_suffix = CICIoT2023ArtifactName.CSV_SUFFIX.value.replace(".", r"\.")

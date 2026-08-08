@@ -331,6 +331,7 @@ class FederatedPreprocessingRequest:
     data_root: Path
     dirichlet_condition: ControlledPartitionCondition | None
     capture_timestamp_column: CaptureTimestampColumn | None
+    expected_split_manifest_checksum: Checksum | None = None
 
 
 @dataclass(frozen=True, slots=True)

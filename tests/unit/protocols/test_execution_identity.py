@@ -8,7 +8,7 @@ from datp_core.core.identifiers import (
     PopulationId,
     TemporalState,
 )
-from datp_core.protocols.experiments import (
+from datp_core.experiments.common.coordinates import (
     EXECUTION_IDENTITY_DECLARATIONS,
     ExternalTemporalExecutionIdentity,
     require_execution_identity,

@@ -6,14 +6,8 @@ from pydantic import model_validator
 
 from datp_core.core.contracts import StrictModel
 from datp_core.core.identifiers import (
-    EvidenceRole,
-    ExperimentId,
-    ExperimentReadiness,
     FederatedThresholdMethod,
     MetricId,
-    PopulationId,
-    PreprocessingProtocolId,
-    TrainingModelId,
 )
 from datp_core.core.numeric import (
     NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
@@ -21,23 +15,7 @@ from datp_core.core.numeric import (
     MetricValue,
     Seed,
 )
-from datp_core.experiments.common.coordinates import ExperimentSpec
 from datp_core.experiments.common.seeds import SeedCohort
-from datp_core.protocols.metrics import OPERATING_POINT_METRICS
-
-ANCHOR_EXPERIMENT = ExperimentSpec(
-    id=ExperimentId.HISTORICAL_DATP_REPRODUCTION,
-    role=EvidenceRole.ANCHOR_REPRODUCTION,
-    population=PopulationId.NBAIOT_NATURAL_DEVICES,
-    training_model=TrainingModelId.FEDAVG_AUTOENCODER,
-    preprocessing_protocol=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
-    federated_thresholds=(
-        FederatedThresholdMethod.SHARED_THRESHOLD,
-        FederatedThresholdMethod.LOCAL_THRESHOLD,
-    ),
-    metrics=OPERATING_POINT_METRICS,
-    readiness=ExperimentReadiness.DECLARED,
-)
 
 
 class AnchorReference(StrictModel):

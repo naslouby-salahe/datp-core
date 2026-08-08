@@ -10,6 +10,7 @@ import polars as pl
 from datp_core.artifacts.provenance import Checksum, checksum_text
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import (
+    CheckpointStatus,
     ContractSubject,
     FeatureNameSequence,
     PartitionRole,
@@ -46,6 +47,13 @@ POST_TRAINING_SCORE_PARTITIONS = frozenset(
         PartitionRole.CALIBRATION,
         PartitionRole.FUTURE_RECALIBRATION,
         PartitionRole.EVALUATION,
+    }
+)
+
+_POST_SELECTION_CHECKPOINT_STATUSES = frozenset(
+    {
+        CheckpointStatus.SELECTED_BY_NON_TEST_RULE,
+        CheckpointStatus.HISTORICAL_ENDPOINT,
     }
 )
 
@@ -103,6 +111,7 @@ class ScoreArtifactManifest[
     scored_split_protocol: SplitProtocolId
     checkpoint_round: RoundNumber
     checkpoint_checksum: Checksum
+    checkpoint_status: CheckpointStatus
     preprocessing_state_set_checksum: Checksum
     split_manifest_checksum: Checksum
     calibration_records: tuple[ScoreRecord[CoordinateT, ClientT], ...]
@@ -110,6 +119,11 @@ class ScoreArtifactManifest[
     future_recalibration_records: tuple[ScoreRecord[CoordinateT, ClientT], ...] = ()
 
     def __post_init__(self) -> None:
+        if self.checkpoint_status not in _POST_SELECTION_CHECKPOINT_STATUSES:
+            raise ScientificContractError(
+                "score manifest checkpoint must carry a post-selection status",
+                subject=ContractSubject.CHECKPOINT_CANDIDATES,
+            )
         if not self.calibration_records or not self.evaluation_records:
             raise ScientificContractError(
                 "a score artifact manifest requires calibration and evaluation records",

@@ -151,22 +151,6 @@ def construct_edge_temporal_groups(
     )
 
 
-def reject_attack_sensitive_request() -> None:
-    raise CapabilityError(
-        "Edge sensor groups do not support attack-sensitive client metrics",
-        subject=_SENSOR_POPULATION,
-        reason="attack rows are unassigned to benign sensor identities",
-    )
-
-
-def reject_family_thresholding() -> None:
-    raise CapabilityError(
-        "Edge sensor groups prohibit family thresholding",
-        subject=_SENSOR_POPULATION,
-        reason="no audited Edge family taxonomy exists",
-    )
-
-
 def _finalize_temporal_manifest(
     *,
     partition_seed: Seed,

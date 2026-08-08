@@ -3,98 +3,72 @@ root_packages =
     datp_core
 include_external_packages = False
 
-[importlinter:contract:domain-independence]
-name = Domain must not depend on upper layers
+[importlinter:contract:core-foundation]
+name = Core must not depend on any upper layer
 type = forbidden
 source_modules =
-    datp_core.domain
+    datp_core.core
 forbidden_modules =
     datp_core.protocols
-    datp_core.datasets
-    datp_core.preprocessing
-    datp_core.learning
-    datp_core.calibration
-    datp_core.thresholding
-    datp_core.evaluation
+    datp_core.data
+    datp_core.detector
+    datp_core.thresholds
     datp_core.analysis
-    datp_core.pipeline
     datp_core.experiments
+    datp_core.artifacts
     datp_core.presentation
     datp_core.app
     datp_core.runtime
 
-[importlinter:contract:protocol-direction]
-name = Scientific protocols must not depend on execution or presentation
+[importlinter:contract:runtime-foundation]
+name = Runtime must not depend on scientific or application layers
+type = forbidden
+source_modules =
+    datp_core.runtime
+forbidden_modules =
+    datp_core.protocols
+    datp_core.data
+    datp_core.detector
+    datp_core.thresholds
+    datp_core.analysis
+    datp_core.experiments
+    datp_core.artifacts
+    datp_core.presentation
+    datp_core.app
+
+[importlinter:contract:protocols-no-adapters]
+name = Scientific protocols must not depend on application or presentation adapters
 type = forbidden
 source_modules =
     datp_core.protocols
 forbidden_modules =
-    datp_core.pipeline
-    datp_core.experiments
     datp_core.presentation
     datp_core.app
 
-[importlinter:contract:capability-direction]
-name = Scientific capability packages must not depend on application or presentation adapters
+[importlinter:contract:scientific-no-app]
+name = Scientific packages must not depend on application adapters
 type = forbidden
 source_modules =
-    datp_core.datasets
-    datp_core.preprocessing
-    datp_core.learning
-    datp_core.calibration
-    datp_core.thresholding
-    datp_core.evaluation
+    datp_core.data
+    datp_core.detector
+    datp_core.thresholds
     datp_core.analysis
 forbidden_modules =
-    datp_core.app
-    datp_core.presentation
-
-[importlinter:contract:pipeline-foundations]
-name = Pipeline foundations must not import experiment composition or application adapters
-type = forbidden
-source_modules =
-    datp_core.pipeline.coordinates
-    datp_core.pipeline.execution
-    datp_core.pipeline.training
-    datp_core.pipeline.scoring
-    datp_core.pipeline.decision
-    datp_core.pipeline.publication
-forbidden_modules =
-    datp_core.experiments
     datp_core.presentation
     datp_core.app
 
-[importlinter:contract:experiment-direction]
-name = Scientific experiment recipes must not depend on application composition
+[importlinter:contract:presentation-no-app]
+name = Presentation must not depend on application or command-line adapters
 type = forbidden
 source_modules =
-    datp_core.experiments
+    datp_core.presentation
 forbidden_modules =
     datp_core.app
 
-[importlinter:contract:presentation-not-cli]
-name = Presentation must not import command-line adapters
+[importlinter:contract:experiments-no-cli]
+name = Experiment recipes must not depend on command-line adapters
 type = forbidden
 source_modules =
-    datp_core.presentation
+    datp_core.experiments
 forbidden_modules =
     datp_core.app.cli
-
-[importlinter:contract:centralized-federated-isolation]
-name = Centralized learning must not import federated learning
-type = forbidden
-source_modules =
-    datp_core.learning.centralized
-forbidden_modules =
-    datp_core.learning.federated
-
-[importlinter:contract:centralized-pipeline-isolation]
-name = Centralized pipeline services must not import federated pipeline services
-type = forbidden
-source_modules =
-    datp_core.pipeline.training.centralized
-    datp_core.pipeline.scoring.centralized
-    datp_core.pipeline.decision.centralized
-forbidden_modules =
-    datp_core.pipeline.training.federated
-    datp_core.pipeline.scoring.federated

@@ -516,6 +516,7 @@ class PreprocessingHandoffRequest:
     construction: PopulationConstructionResult
     deployment_fallback_client_ids: frozenset[str]
     capture_timestamp_column: CaptureTimestampColumn | None = None
+    expected_split_manifest_checksum: Checksum | None = None
 
 
 @dataclass(slots=True, eq=False)

@@ -46,6 +46,7 @@ class ClientBenignSummary:
     mean: ScoreMoment
     variance: ScoreVariance
     benign_exceedance_count: RowCount | None
+    disclosed_bytes: ByteCount
 
     def __post_init__(self) -> None:
         require_contract(
@@ -59,6 +60,12 @@ class ClientBenignSummary:
                 "benign exceedance count cannot exceed calibration score count",
                 ContractSubject.THRESHOLD,
             )
+        disclosed_scalar_count = 4 if self.benign_exceedance_count is not None else 3
+        require_contract(
+            self.disclosed_bytes.value == disclosed_scalar_count * np.dtype(np.float64).itemsize,
+            "disclosed communication bytes must match the disclosed summary scalars",
+            ContractSubject.THRESHOLD,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -179,6 +186,10 @@ def construct_federated_benign_statistics(
             None if relative_threshold_error is None else RelativeThresholdError(relative_threshold_error)
         ),
     )
+    completed_summaries = tuple(
+        _attach_benign_exceedance(summary, client_scores, matched_threshold)
+        for summary, client_scores in zip(summaries, ordered, strict=True)
+    )
     fixed_coefficient_curve = tuple(
         FixedCoefficientResult(
             coefficient=coefficient,
@@ -193,14 +204,14 @@ def construct_federated_benign_statistics(
     return FederatedStatisticsThresholdResult(
         coordinate=ordered[0].coordinate,
         quantile=quantile,
-        client_summaries=summaries,
+        client_summaries=completed_summaries,
         decomposition=decomposition,
         matched_threshold=matched_threshold,
         centralized_attainment_diagnostic=diagnostic,
         centralized_pooled_quantile_diagnostic=pooled_quantile,
         fixed_coefficient_curve=fixed_coefficient_curve,
         assignments=tuple(ThresholdAssignment(item.client, matched_threshold) for item in ordered),
-        estimated_communication_bytes=_communication_bytes(summaries),
+        estimated_communication_bytes=_communication_bytes(completed_summaries),
     )
 
 
@@ -212,6 +223,23 @@ def _client_summary(client_scores: ClientBenignCalibrationScores) -> ClientBenig
         mean=ScoreMoment(float(np.mean(scores))),
         variance=ScoreVariance(float(np.var(scores, ddof=0))),
         benign_exceedance_count=None,
+        disclosed_bytes=ByteCount(3 * np.dtype(np.float64).itemsize),
+    )
+
+
+def _attach_benign_exceedance(
+    summary: ClientBenignSummary,
+    client_scores: ClientBenignCalibrationScores,
+    matched_threshold: ThresholdValue,
+) -> ClientBenignSummary:
+    exceedance = RowCount(int(np.sum(client_scores.as_array > matched_threshold.value)))
+    return ClientBenignSummary(
+        client=summary.client,
+        count=summary.count,
+        mean=summary.mean,
+        variance=summary.variance,
+        benign_exceedance_count=exceedance,
+        disclosed_bytes=ByteCount(4 * np.dtype(np.float64).itemsize),
     )
 
 
@@ -231,8 +259,7 @@ def _decomposition(summaries: tuple[ClientBenignSummary, ...]) -> PooledVariance
 
 
 def _communication_bytes(summaries: tuple[ClientBenignSummary, ...]) -> ByteCount:
-    scalar_count = sum(3 + (1 if item.benign_exceedance_count is not None else 0) for item in summaries)
-    return ByteCount(scalar_count * np.dtype(np.float64).itemsize)
+    return ByteCount(sum(item.disclosed_bytes.value for item in summaries))
 
 
 def _relative_threshold_error(

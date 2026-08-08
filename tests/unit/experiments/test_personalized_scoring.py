@@ -14,6 +14,7 @@ from datp_core.analysis.metrics.models import AvailableMetric, metric_by_id
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import (
+    CheckpointStatus,
     EvaluationCohort,
     FederatedThresholdMethod,
     MetricId,
@@ -137,6 +138,7 @@ def _manifest_with_scores(tmp_path: Path) -> FederatedScoreArtifactManifest:
         scored_split_protocol=coordinate.split_protocol,
         checkpoint_round=RoundNumber(2),
         checkpoint_checksum=Checksum("a" * 64),
+        checkpoint_status=CheckpointStatus.SELECTED_BY_NON_TEST_RULE,
         preprocessing_state_set_checksum=Checksum("c" * 64),
         split_manifest_checksum=Checksum("d" * 64),
         calibration_records=(

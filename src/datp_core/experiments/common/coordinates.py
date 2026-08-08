@@ -11,7 +11,6 @@ from datp_core.core.identifiers import (
     DatasetId,
     EvidenceRole,
     ExperimentId,
-    ExperimentReadiness,
     FederatedThresholdMethod,
     MetricId,
     PopulationId,
@@ -29,29 +28,6 @@ _MODEL_COEFFICIENT_TRAINING_MODELS = frozenset(
 _DITTO_TRAINING_MODELS = frozenset(
     (TrainingModelId.DITTO_GLOBAL_AUTOENCODER, TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER)
 )
-
-
-class ExperimentSpec(StrictModel):
-    id: ExperimentId
-    role: EvidenceRole
-    population: PopulationId
-    training_model: TrainingModelId
-    preprocessing_protocol: PreprocessingProtocolId
-    federated_thresholds: tuple[FederatedThresholdMethod, ...]
-    metrics: tuple[MetricId, ...]
-    readiness: ExperimentReadiness
-
-    @model_validator(mode="after")
-    def validate_contents(self) -> "ExperimentSpec":
-        if not self.federated_thresholds or not self.metrics:
-            raise ValueError("experiments require threshold methods and metrics")
-        if len(frozenset(self.federated_thresholds)) != len(self.federated_thresholds):
-            raise ValueError("experiment threshold methods must be unique")
-        if len(frozenset(self.metrics)) != len(self.metrics):
-            raise ValueError("experiment metrics must be unique")
-        if self.readiness is ExperimentReadiness.EXECUTABLE and self.role is EvidenceRole.OPERATIONAL_TRANSLATION:
-            raise ValueError("operational translation cannot be executable without rate evidence")
-        return self
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

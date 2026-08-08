@@ -99,7 +99,9 @@ def prepare_federated_evaluation(request: FederatedEvaluationRequest) -> Federat
     document = FederatedEvaluationDocument(
         stage=StageOperationId.EVALUATE_FEDERATED,
         score_coordinate=request.score_manifest.coordinate,
+        score_checkpoint_round=request.score_manifest.checkpoint_round,
         score_checkpoint_checksum=request.score_manifest.checkpoint_checksum,
+        score_checkpoint_status=request.score_manifest.checkpoint_status,
         preprocessing_state_set_checksum=request.score_manifest.preprocessing_state_set_checksum,
         split_manifest_checksum=request.score_manifest.split_manifest_checksum,
         threshold_method=_threshold_method(request.threshold_result),

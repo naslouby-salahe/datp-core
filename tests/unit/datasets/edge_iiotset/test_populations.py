@@ -2,19 +2,22 @@ from pathlib import Path
 
 import pytest
 
-from datp_core.core.errors import CapabilityError, ScientificContractError
-from datp_core.core.identifiers import SplitProtocolId
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import FederatedThresholdMethod, PopulationId, SplitProtocolId
 from datp_core.core.numeric import NonNegativeIntegerValue, Seed
+from datp_core.data.edge_iiotset.capabilities import EDGE_IIOTSET_CAPABILITIES
 from datp_core.data.edge_iiotset.populations import (
     construct_edge_sensor_groups,
     construct_edge_temporal_groups,
-    reject_attack_sensitive_request,
-    reject_family_thresholding,
 )
 from datp_core.data.edge_iiotset.schema import EDGE_BENIGN_SENSOR_GROUPS
 from datp_core.data.populations.contracts import (
+    EDGE_SENSOR_GROUPS,
+    CapabilityStatus,
     ChronologicalPartitionDiagnosticsDocument,
     PopulationFeasibilityStatus,
+    build_population_capabilities,
+    population_evidence_role,
 )
 
 
@@ -29,11 +32,16 @@ def test_edge_static_includes_ten_groups_with_modbus(edge_canonical_root: Path) 
     assert manifest.document.attack_row_count.value == 0
 
 
-def test_edge_static_rejects_attack_and_family_requests() -> None:
-    with pytest.raises(CapabilityError):
-        reject_attack_sensitive_request()
-    with pytest.raises(CapabilityError):
-        reject_family_thresholding()
+def test_edge_static_capabilities_declare_no_attack_or_family_interpretation() -> None:
+    capabilities = build_population_capabilities(
+        EDGE_SENSOR_GROUPS,
+        population_evidence_role(PopulationId.EDGE_SENSOR_GROUPS),
+        EDGE_IIOTSET_CAPABILITIES,
+    )
+    assert capabilities.client_level_attack_assignment is CapabilityStatus.UNAVAILABLE
+    assert capabilities.attack_sensitive_evaluation is CapabilityStatus.UNAVAILABLE
+    assert capabilities.family_taxonomy is CapabilityStatus.UNAVAILABLE
+    assert FederatedThresholdMethod.FAMILY_THRESHOLD not in capabilities.valid_threshold_methods
 
 
 def test_temporal_population_excludes_invalid_chronology(edge_canonical_root: Path) -> None:

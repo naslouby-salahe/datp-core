@@ -18,6 +18,8 @@ from datp_core.artifacts.serializers.json import canonical_checksum, canonical_j
 from datp_core.core.contracts import StrictModel
 from datp_core.core.errors import AnchorReproductionError, ScientificContractError
 from datp_core.core.identifiers import (
+    CheckpointStatus,
+    ContractSubject,
     ExperimentId,
     ExperimentReadiness,
     FederatedThresholdMethod,
@@ -27,6 +29,7 @@ from datp_core.core.identifiers import (
 from datp_core.core.numeric import NonNegativeIntegerValue
 from datp_core.experiments.anchor.contracts import (
     AnchorDependencyBlocker,
+    AnchorDiscrepancyReason,
     AnchorGateDecision,
     AnchorGateStatus,
     AnchorObservationSourceKind,
@@ -52,6 +55,7 @@ from datp_core.experiments.anchor.spec import HISTORICAL_ANCHOR_SEED_COHORT, Anc
 from datp_core.experiments.common.seeds import SeedCohort
 from datp_core.experiments.execution.evidence import load_evaluation_document, population_metric
 from datp_core.experiments.execution.layout import EvaluationRunAssetDirectory
+from datp_core.protocols.training import CHECKPOINT_PROTOCOL
 from datp_core.runtime.configuration import OUTPUTS_ROOT
 
 
@@ -151,6 +155,7 @@ def observation_from_evaluation_document(
             "independent anchor observation model must be FedAvg autoencoder",
             subject=coordinate.model,
         )
+    _require_historical_endpoint_checkpoint(document)
     value = population_metric(document, ANCHOR_METRIC)
     return AnchorObservedMetric(
         seed=coordinate.training_seed,
@@ -166,6 +171,27 @@ def observation_from_evaluation_document(
         model_checkpoint_identity=document.score_checkpoint_checksum,
         evidence_role=ANCHOR_EVIDENCE_ROLE,
     )
+
+
+def _require_historical_endpoint_checkpoint(document: FederatedEvaluationDocument) -> None:
+    """Validate the scored checkpoint is the terminal historical endpoint from artifact provenance.
+
+    The historical endpoint semantics are earned from the recorded selection identity and
+    status, never asserted: the scored checkpoint must be the fixed-terminal non-test round
+    selected by the declared protocol.
+    """
+    if document.score_checkpoint_round != CHECKPOINT_PROTOCOL.maximum_round:
+        raise AnchorReproductionError(
+            "independent anchor observations require the terminal-round historical endpoint checkpoint",
+            subject=ContractSubject.CHECKPOINT_CANDIDATES,
+            reason=AnchorDiscrepancyReason.WRONG_CHECKPOINT_SEMANTICS.value,
+        )
+    if document.score_checkpoint_status is not CheckpointStatus.SELECTED_BY_NON_TEST_RULE:
+        raise AnchorReproductionError(
+            "independent anchor observations require fixed-terminal non-test checkpoint selection",
+            subject=ContractSubject.CHECKPOINT_SELECTION_RULE,
+            reason=AnchorDiscrepancyReason.WRONG_CHECKPOINT_SEMANTICS.value,
+        )
 
 
 def load_independent_observations(package_directory: Path) -> tuple[AnchorObservedMetric, ...] | None:

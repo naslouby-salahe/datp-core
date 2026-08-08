@@ -6,7 +6,6 @@ from pathlib import Path
 from shutil import rmtree
 
 from datp_core.app.anchor import (
-    anchor_gate_permits_dependents,
     anchor_status,
     reproduce_anchor,
     verify_anchor_programme,
@@ -14,13 +13,15 @@ from datp_core.app.anchor import (
 from datp_core.app.contracts import (
     AnchorRequirement,
     ArtifactPresence,
+    CampaignRole,
     OverwriteMode,
     ProgrammeExecutionMode,
     RecipeRegistration,
 )
 from datp_core.app.layout import (
-    CAMPAIGN_COMPLETION_MARKER,
-    CENTRALIZED_REFERENCE_COMPLETION_MARKER,
+    ANCHOR_DIAGNOSTICS_DIRECTORY,
+    CAMPAIGN_EXECUTION_MARKER,
+    CAMPAIGN_PUBLICATION_MARKER,
     SMOKE_OUTPUT_ROOT,
     SMOKE_SUMMARY_DIRECTORY,
     ResearchArtifact,
@@ -36,6 +37,7 @@ from datp_core.app.models import (
 from datp_core.app.recipes import (
     EXPERIMENT_RECIPES,
     anchor_gated_experiment_ids,
+    mandatory_experiment_ids,
     recipe_for,
     registered_experiment_ids,
 )
@@ -51,7 +53,10 @@ from datp_core.core.numeric import Seed
 from datp_core.data.paths import canonical_root_under
 from datp_core.data.populations.declarations import POPULATIONS
 from datp_core.experiments.anchor.contracts import AnchorGateStatus
-from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT
+from datp_core.experiments.anchor.gate import (
+    load_anchor_confirmatory_handoff,
+    load_verified_anchor_gate_artifact,
+)
 from datp_core.runtime.configuration import DATA_ROOT, OUTPUTS_ROOT
 from datp_core.runtime.filesystem import write_text_atomically
 
@@ -60,6 +65,7 @@ __all__ = (
     "anchor_status",
     "format_status",
     "generate_report",
+    "mandatory_experiment_ids",
     "programme_status",
     "registered_experiment_ids",
     "reproduce_anchor",
@@ -83,12 +89,15 @@ def canonical_smoke_seed(experiment_id: ExperimentId) -> Seed:
 def _enforce_anchor_gate(experiment_id: ExperimentId, requirement: AnchorRequirement) -> None:
     if requirement is AnchorRequirement.NOT_REQUIRED:
         return
-    if not anchor_gate_permits_dependents():
+    try:
+        verified_gate = load_verified_anchor_gate_artifact(ANCHOR_DIAGNOSTICS_DIRECTORY)
+        load_anchor_confirmatory_handoff(ANCHOR_DIAGNOSTICS_DIRECTORY, verified_gate=verified_gate)
+    except AnchorReproductionError as error:
         raise MissingPrerequisiteError(
-            f"experiment {experiment_id.value} is blocked by the anchor equivalence gate",
+            f"experiment {experiment_id.value} is blocked by the anchor equivalence gate: {error}",
             subject=experiment_id,
             reason="anchor_gate",
-        )
+        ) from error
 
 
 def run_experiment(
@@ -197,22 +206,27 @@ def _publish_smoke_summary(results: tuple[ExperimentRunResult, ...]) -> None:
 
 def _run_centralized_reference(overwrite: OverwriteMode) -> None:
     from datp_core.experiments.centralized_reference import (
+        CIC_CENTRALIZED_REFERENCE,
+        REGIME_A_CENTRALIZED_REFERENCE,
+        centralized_reference_completion_marker,
         centralized_reference_directory,
         run_centralized_reference_seed,
     )
 
-    if CENTRALIZED_REFERENCE_COMPLETION_MARKER.is_file() and not overwrite.requested:
-        return
-    for seed in CONFIRMATORY_SEED_COHORT.values:
-        directory = centralized_reference_directory(seed)
-        if overwrite.requested and directory.exists():
-            rmtree(directory)
-        run_centralized_reference_seed(seed)
-    CENTRALIZED_REFERENCE_COMPLETION_MARKER.parent.mkdir(parents=True, exist_ok=True)
-    write_text_atomically(
-        CENTRALIZED_REFERENCE_COMPLETION_MARKER,
-        "\n".join(str(seed.value) for seed in CONFIRMATORY_SEED_COHORT.values) + "\n",
-    )
+    for scope in (REGIME_A_CENTRALIZED_REFERENCE, CIC_CENTRALIZED_REFERENCE):
+        marker = centralized_reference_completion_marker(scope)
+        if marker.is_file() and not overwrite.requested:
+            continue
+        for seed in scope.seed_cohort.values:
+            directory = centralized_reference_directory(scope, seed)
+            if overwrite.requested and directory.exists():
+                rmtree(directory)
+            run_centralized_reference_seed(scope, seed)
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        write_text_atomically(
+            marker,
+            "\n".join(str(seed.value) for seed in scope.seed_cohort.values) + "\n",
+        )
 
 
 def run_campaign(*, overwrite: OverwriteMode) -> CampaignRunResult:
@@ -240,12 +254,12 @@ def run_campaign(*, overwrite: OverwriteMode) -> CampaignRunResult:
         )
         for recipe in EXPERIMENT_RECIPES
     )
-    CAMPAIGN_COMPLETION_MARKER.parent.mkdir(parents=True, exist_ok=True)
-    write_text_atomically(
-        CAMPAIGN_COMPLETION_MARKER,
-        "\n".join(item.experiment.value for item in results) + "\n",
-    )
+    execution_marker_lines = "\n".join(item.experiment.value for item in results) + "\n"
+    CAMPAIGN_EXECUTION_MARKER.parent.mkdir(parents=True, exist_ok=True)
+    write_text_atomically(CAMPAIGN_EXECUTION_MARKER, execution_marker_lines)
     report = generate_report(None, overwrite=overwrite)
+    CAMPAIGN_PUBLICATION_MARKER.parent.mkdir(parents=True, exist_ok=True)
+    write_text_atomically(CAMPAIGN_PUBLICATION_MARKER, execution_marker_lines)
     return CampaignRunResult(
         experiments=results,
         detail=DetailText(f"campaign experiments={len(results)} report={report.detail}"),
@@ -261,6 +275,7 @@ def generate_report(
     if experiment_id is None:
         return _generate_campaign_report(overwrite)
     recipe = recipe_for(experiment_id)
+    _enforce_anchor_gate(experiment_id, recipe.anchor_requirement)
     paths, detail = recipe.report(experiment_id, overwrite)
     return ReportResult(experiment=experiment_id, paths=paths, detail=detail)
 
@@ -277,8 +292,10 @@ def _generate_campaign_report(overwrite: OverwriteMode) -> ReportResult:
             ReportEvidenceError,
             ScientificContractError,
         ) as error:
-            details.append(f"{recipe.experiment.value}:missing({error})")
-            continue
+            if recipe.campaign_role is CampaignRole.OPTIONAL:
+                details.append(f"{recipe.experiment.value}:optional_missing({error})")
+                continue
+            raise
         paths.extend(report.paths)
         details.append(f"{recipe.experiment.value}:ok")
     return ReportResult(
@@ -306,7 +323,7 @@ def programme_status(experiment_id: ExperimentId | None) -> ProgrammeStatusRepor
         records=tuple(_status_for_experiment(item, anchor.gate_status) for item in target_ids),
         anchor_gate=anchor.gate_status,
         campaign_completion=(
-            ArtifactPresence.PRESENT if CAMPAIGN_COMPLETION_MARKER.is_file() else ArtifactPresence.ABSENT
+            ArtifactPresence.PRESENT if CAMPAIGN_PUBLICATION_MARKER.is_file() else ArtifactPresence.ABSENT
         ),
     )
 

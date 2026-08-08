@@ -3,6 +3,7 @@
 from .run import (
     BoundedExternalAssetDirectory,
     analyze_ciciot_boundary_campaign,
+    analyze_external_benign_statistics,
     analyze_external_validation_campaign,
     run_ciciot_boundary_seed,
     run_external_validation_seed,
@@ -11,6 +12,7 @@ from .run import (
 __all__ = (
     "BoundedExternalAssetDirectory",
     "analyze_ciciot_boundary_campaign",
+    "analyze_external_benign_statistics",
     "analyze_external_validation_campaign",
     "run_ciciot_boundary_seed",
     "run_external_validation_seed",

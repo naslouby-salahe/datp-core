@@ -5,7 +5,7 @@ from tests.unit.learning.federated.helpers import client_identity, fedavg_coordi
 
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import ScientificContractError
-from datp_core.core.identifiers import PartitionRole, SerializationFormat, SplitProtocolId
+from datp_core.core.identifiers import CheckpointStatus, PartitionRole, SerializationFormat, SplitProtocolId
 from datp_core.core.numeric import FeatureCount, RoundNumber, RowCount, Seed
 from datp_core.detector.scoring.contracts import (
     FixedScoreInvariant,
@@ -46,6 +46,7 @@ def _manifest(
         scored_split_protocol=(coordinate.split_protocol if scored_split_protocol is None else scored_split_protocol),
         checkpoint_round=RoundNumber(2),
         checkpoint_checksum=Checksum("a" * 64),
+        checkpoint_status=CheckpointStatus.SELECTED_BY_NON_TEST_RULE,
         preprocessing_state_set_checksum=Checksum("c" * 64),
         split_manifest_checksum=Checksum("d" * 64),
         calibration_records=(_record(PartitionRole.CALIBRATION, "client_a", tmp_path / "cal.parquet"),)

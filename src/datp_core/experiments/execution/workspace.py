@@ -53,6 +53,7 @@ from datp_core.core.numeric import (
     Quantile,
     ReplicateIndex,
     ScoreValue,
+    ThresholdValue,
 )
 from datp_core.data.populations.contracts import ClientIdentity, PopulationOutcomeLabel
 from datp_core.data.registry import population_capabilities
@@ -100,6 +101,22 @@ from datp_core.thresholds.contracts import ThresholdUnavailableResult
 from datp_core.thresholds.dispatch import ThresholdConstructionRequest, ThresholdConstructionResult
 from datp_core.thresholds.quantiles import ClientBenignCalibrationScores, exact_empirical_quantile
 from datp_core.thresholds.variants.conformal import ConformalThresholdResult
+
+
+def _pooled_calibration_quantile(
+    calibration_by_client: dict[ClientIdentity, ClientBenignCalibrationScores],
+    quantile: Quantile,
+) -> ThresholdValue:
+    """Exact pooled benign quantile oracle from eligible calibration scores only.
+
+    The threshold-estimation oracle must never consume held-out evaluation scores;
+    calibration and evaluation evidence stay isolated.
+    """
+    pooled_values = np.asarray(
+        tuple(score.value for scores in calibration_by_client.values() for score in scores.scores),
+        dtype=np.float64,
+    )
+    return exact_empirical_quantile(pooled_values, quantile)
 
 
 @dataclass(kw_only=True)
@@ -330,13 +347,11 @@ class ExperimentWorkspace:
             return ()
         threshold_result = self.threshold
         calibration_by_client = {scores.client: scores for scores in self.eligible_calibration_scores()}
+        pooled_quantile = _pooled_calibration_quantile(calibration_by_client, self.threshold_quantile)
         client_scores: dict[ClientIdentity, list[HeldOutBenignScore]] = {}
         for record in self.scores.evaluation_records:
             scores = self._read_benign_evaluation_scores(record, record.scored_client)
             client_scores.setdefault(record.scored_client, []).extend(scores)
-        all_pooled = tuple(item for scores in client_scores.values() for item in scores)
-        pooled_values = np.array([item.score.value for item in all_pooled], dtype=np.float64)
-        pooled_quantile = exact_empirical_quantile(pooled_values, self.threshold_quantile)
         inputs: list[ThresholdEstimationStageInput] = []
         coordinate = self.scores.coordinate
         training_seed = coordinate.training_seed

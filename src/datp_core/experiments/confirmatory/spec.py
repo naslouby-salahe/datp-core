@@ -14,9 +14,7 @@ from datp_core.analysis.inference.contracts import (
 from datp_core.core.contracts import StrictModel
 from datp_core.core.identifiers import (
     EffectSizeId,
-    EvidenceRole,
     ExperimentId,
-    ExperimentReadiness,
     FederatedThresholdMethod,
     IntervalMethod,
     MetricId,
@@ -27,33 +25,17 @@ from datp_core.core.identifiers import (
     TrainingModelId,
 )
 from datp_core.core.numeric import BootstrapReplicateCount, ConfidenceLevel, Ratio
-from datp_core.experiments.common.coordinates import ExperimentSpec
 from datp_core.experiments.common.seeds import (
     CONFIRMATORY_ANALYSIS_SEED,
     CONFIRMATORY_PAIRED_SEED_COUNT,
     CONFIRMATORY_SEED_COHORT,
     SeedCohort,
 )
-from datp_core.protocols.metrics import CONFIRMATORY_METRICS
 
 
 class ConfirmatoryDeltaDirection(StrEnum):
     SHARED_MINUS_LOCAL = "shared_minus_local"
 
-
-CONFIRMATORY_EXPERIMENT = ExperimentSpec(
-    id=ExperimentId.SHARED_VS_LOCAL_CONFIRMATION,
-    role=EvidenceRole.CONFIRMATORY,
-    population=PopulationId.NBAIOT_NATURAL_DEVICES,
-    training_model=TrainingModelId.FEDAVG_AUTOENCODER,
-    preprocessing_protocol=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
-    federated_thresholds=(
-        FederatedThresholdMethod.SHARED_THRESHOLD,
-        FederatedThresholdMethod.LOCAL_THRESHOLD,
-    ),
-    metrics=CONFIRMATORY_METRICS,
-    readiness=ExperimentReadiness.DECLARED,
-)
 
 CONFIRMATORY_INFERENCE_PROTOCOL = PairedInferenceProtocol(
     confidence_level=ConfidenceLevel(0.95),

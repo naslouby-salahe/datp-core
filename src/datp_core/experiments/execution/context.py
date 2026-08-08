@@ -155,6 +155,7 @@ def resolve_execution_context(coordinate: ExperimentCoordinate, output_root: Pat
                 data_root=DATA_ROOT,
                 dirichlet_condition=controlled_condition,
                 capture_timestamp_column=None,
+                expected_split_manifest_checksum=population_result.split_manifest.assignment_checksum,
             )
         )
         clients = population_result.construction.manifest.clients

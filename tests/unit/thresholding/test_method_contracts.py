@@ -10,6 +10,7 @@ from datp_core.core.identifiers import (
 )
 from datp_core.core.numeric import (
     AbsoluteThresholdError,
+    ByteCount,
     ClusterIndex,
     ConformalRankIndex,
     CoverageTarget,
@@ -269,6 +270,7 @@ def test_federated_statistics_contracts_enforce_variance_identities() -> None:
             mean=ScoreMoment(0.0),
             variance=ScoreVariance(-1.0),
             benign_exceedance_count=None,
+            disclosed_bytes=ByteCount(24),
         )
     with pytest.raises(
         ScientificContractError,

@@ -3,12 +3,15 @@ from pathlib import Path
 import pytest
 
 from datp_core.core.errors import CapabilityError
-from datp_core.core.identifiers import SplitProtocolId
+from datp_core.core.identifiers import FederatedThresholdMethod, PopulationId, SplitProtocolId
 from datp_core.core.numeric import Seed
-from datp_core.data.ciciot2023.populations import (
-    construct_ciciot_file_clients,
-    reject_family_interpretation,
-    reject_physical_device_interpretation,
+from datp_core.data.ciciot2023.capabilities import CICIOT2023_CAPABILITIES
+from datp_core.data.ciciot2023.populations import construct_ciciot_file_clients
+from datp_core.data.populations.contracts import (
+    CICIOT_FILE_CLIENTS,
+    CapabilityStatus,
+    build_population_capabilities,
+    population_evidence_role,
 )
 
 
@@ -23,11 +26,18 @@ def test_ciciot_builds_exactly_sixty_three_file_clients(ciciot_canonical_root: P
     assert membership.height == 63 * 9 - 1
 
 
-def test_ciciot_rejects_physical_family_and_temporal_interpretation(ciciot_canonical_root: Path) -> None:
-    with pytest.raises(CapabilityError):
-        reject_physical_device_interpretation()
-    with pytest.raises(CapabilityError):
-        reject_family_interpretation()
+def test_ciciot_capabilities_declare_no_physical_or_family_interpretation() -> None:
+    capabilities = build_population_capabilities(
+        CICIOT_FILE_CLIENTS,
+        population_evidence_role(PopulationId.CICIOT_FILE_CLIENTS),
+        CICIOT2023_CAPABILITIES,
+    )
+    assert capabilities.physical_client_validity is CapabilityStatus.NOT_APPLICABLE
+    assert capabilities.family_taxonomy is CapabilityStatus.UNAVAILABLE
+    assert FederatedThresholdMethod.FAMILY_THRESHOLD not in capabilities.valid_threshold_methods
+
+
+def test_ciciot_rejects_temporal_interpretation(ciciot_canonical_root: Path) -> None:
     with pytest.raises(CapabilityError):
         construct_ciciot_file_clients(
             ciciot_canonical_root,

@@ -18,8 +18,15 @@ from datp_core.analysis.operational.traffic_rates import ValidatedTrafficRateEvi
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.contracts import StrictModel
 from datp_core.core.errors import ScientificContractError
-from datp_core.core.identifiers import EvidenceRole, FederatedThresholdMethod, StageOperationId
-from datp_core.core.numeric import CalibrationSize, CoverageTarget, ReplicateIndex, ShrinkageWeight, ThresholdValue
+from datp_core.core.identifiers import CheckpointStatus, EvidenceRole, FederatedThresholdMethod, StageOperationId
+from datp_core.core.numeric import (
+    CalibrationSize,
+    CoverageTarget,
+    ReplicateIndex,
+    RoundNumber,
+    ShrinkageWeight,
+    ThresholdValue,
+)
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.scoring.contracts import ScoreArtifactManifest
 from datp_core.detector.training.models import FederatedTrainingCoordinate
@@ -116,7 +123,9 @@ class FederatedEvaluationRequest:
 class FederatedEvaluationDocument(StrictModel):
     stage: StageOperationId
     score_coordinate: FederatedTrainingCoordinate
+    score_checkpoint_round: RoundNumber
     score_checkpoint_checksum: Checksum
+    score_checkpoint_status: CheckpointStatus
     preprocessing_state_set_checksum: Checksum
     split_manifest_checksum: Checksum
     threshold_method: FederatedThresholdMethod

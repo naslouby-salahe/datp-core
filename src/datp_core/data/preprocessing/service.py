@@ -94,6 +94,7 @@ def preprocess_federated(
             construction=construction,
             deployment_fallback_client_ids=_EMPTY_FALLBACK_CLIENT_IDS,
             capture_timestamp_column=_capture_timestamp_column(request),
+            expected_split_manifest_checksum=request.expected_split_manifest_checksum,
         )
     )
 
