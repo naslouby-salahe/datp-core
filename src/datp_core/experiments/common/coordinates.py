@@ -1,10 +1,9 @@
-"""Complete scientific coordinate identity shared by pipeline lifecycle services."""
+"""Complete scientific coordinate identity shared by experiment execution."""
 
 from dataclasses import dataclass
 from enum import StrEnum
 
-from datp_core.datasets.partitioning.contracts import ControlledPartitionKind
-from datp_core.domain.enums import (
+from datp_core.core.identifiers import (
     DatasetId,
     EvidenceRole,
     ExperimentId,
@@ -16,13 +15,12 @@ from datp_core.domain.enums import (
     TemporalState,
     TrainingModelId,
 )
-from datp_core.domain.values.counts import Seed
-from datp_core.domain.values.ratios import DirichletConcentration, ModelCoefficientValue, Quantile
+from datp_core.core.numeric import DirichletConcentration, ModelCoefficientValue, Quantile, Seed
+from datp_core.data.populations.contracts import ControlledPartitionKind
 
 _MODEL_COEFFICIENT_TRAINING_MODELS = frozenset(
     (TrainingModelId.FEDPROX_AUTOENCODER, TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER)
 )
-
 _DITTO_TRAINING_MODELS = frozenset(
     (TrainingModelId.DITTO_GLOBAL_AUTOENCODER, TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER)
 )
@@ -36,17 +34,6 @@ class CoordinateIdentitySegment(StrEnum):
 
 
 class ExecutionRoute(StrEnum):
-    """Execution mechanism required by one coordinate's scientific shape.
-
-    `SINGLE_COORDINATE` is executed by `execution.execute_experiment` and
-    `runner.StageRunner`. `TEMPORAL_PAIRED_EXECUTION` is executed by
-    `temporal_evidence.run_temporal_future_pair`, while
-    `DITTO_JOINT_PUBLICATION` is executed by
-    `ditto_stress.run_ditto_stress_test_seed`. The joint routes preserve shared
-    detector or related-model identities that cannot be represented safely by
-    independent single-coordinate recipes.
-    """
-
     SINGLE_COORDINATE = "single_coordinate"
     DITTO_JOINT_PUBLICATION = "ditto_joint_publication"
     TEMPORAL_PAIRED_EXECUTION = "temporal_paired_execution"
