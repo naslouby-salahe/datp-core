@@ -1,28 +1,17 @@
-"""Shared single-experiment campaign execution primitive.
-
-Every registered experiment entry point plans one declared experiment for a
-seed cohort, builds its executable campaign, executes it, checks for failures,
-and reports which of the experiment's declared threshold methods actually
-completed. This module owns that shape once so experiment modules keep only
-their scientific logic.
-"""
+"""Shared deterministic execution primitive for declared experiment families."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
 
-from datp_core.app.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
+from datp_core.app.planning import ExperimentPlan, PlanDisposition, PlanningEvidence, expand_experiment_plan
 from datp_core.domain.enums import FederatedThresholdMethod
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.checksums import Checksum
-from datp_core.pipeline.execution.engine import (
-    CompletionRecordOutputStore,
-    PipelineStageRunner,
-    build_campaign,
-    execute_campaign,
-)
-from datp_core.pipeline.execution.models import CampaignPlan
+from datp_core.pipeline.coordinates import ExecutionRoute, execution_route_for
+from datp_core.pipeline.execution.engine import CompletionRecordOutputStore, PipelineStageRunner, execute_campaign
+from datp_core.pipeline.execution.models import CampaignEntry, CampaignPlan, campaign_digest
 from datp_core.protocols.experiments import ExperimentDeclaration
 from datp_core.protocols.seeds import SeedCohort
 
@@ -31,6 +20,17 @@ from datp_core.protocols.seeds import SeedCohort
 class DeclaredExperimentSeedResult:
     campaign_digest: Checksum
     completed_threshold_methods: tuple[FederatedThresholdMethod, ...]
+
+
+def build_campaign(plan: ExperimentPlan) -> CampaignPlan:
+    coordinates = tuple(
+        entry.coordinate
+        for entry in plan.entries
+        if entry.disposition is PlanDisposition.EXECUTABLE
+        and execution_route_for(entry.coordinate) is ExecutionRoute.SINGLE_COORDINATE
+    )
+    entries = tuple(CampaignEntry(ordinal=index, coordinate=coordinate) for index, coordinate in enumerate(coordinates))
+    return CampaignPlan(entries=entries, digest=campaign_digest(entries), plan_digest=plan.digest)
 
 
 def execute_declared_experiment_seed(
@@ -46,9 +46,8 @@ def execute_declared_experiment_seed(
         seed_cohort=seed_cohort,
         evidence=(PlanningEvidence(experiment=declaration.id, disposition=PlanDisposition.EXECUTABLE, reason=reason),),
     )
-    campaign = build_campaign(plan)
     return execute_declared_campaign(
-        campaign=campaign,
+        campaign=build_campaign(plan),
         declaration=declaration,
         output_root=output_root,
         overwrite=overwrite,
