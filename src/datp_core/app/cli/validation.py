@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Never
+
 import typer
 
 from datp_core.domain.errors import (
@@ -16,15 +18,8 @@ from datp_core.domain.errors import (
     UnknownIdentifierError,
 )
 
-_EXIT_BY_TYPE: tuple[tuple[type[BaseException], int], ...] = (
-    (UnknownIdentifierError, CliExitCode.UNKNOWN_IDENTIFIER.value),
-    (ProtocolValidationError, CliExitCode.INVALID_DECLARATION.value),
-    (ReportEvidenceError, CliExitCode.MISSING_REPORT_EVIDENCE.value),
-    (ArtifactIntegrityError, CliExitCode.INVALID_ARTIFACT.value),
-    (AnchorReproductionError, CliExitCode.ANCHOR_GATE_FAILURE.value),
-    (ScientificContractError, CliExitCode.SCIENTIFIC_CONTRACT.value),
-    (ValueError, CliExitCode.USAGE.value),
-)
+
+type CliHandledError = DatpCoreError | ValueError
 
 
 def echo_lines(lines: tuple[str, ...]) -> None:
@@ -32,20 +27,28 @@ def echo_lines(lines: tuple[str, ...]) -> None:
         typer.echo(line)
 
 
-def echo_error(error: BaseException) -> None:
-    typer.echo(str(error), err=True)
-
-
-def map_exception_to_exit(error: BaseException) -> int:
-    if isinstance(error, typer.Exit):
-        return int(error.exit_code)
+def map_exception_to_exit(error: CliHandledError) -> int:
     if isinstance(error, MissingPrerequisiteError):
         if error.reason == "anchor_gate":
             return CliExitCode.ANCHOR_GATE_FAILURE.value
         return CliExitCode.INCOMPLETE_PREREQUISITE.value
-    for error_type, code in _EXIT_BY_TYPE:
-        if isinstance(error, error_type):
-            return code
-    if isinstance(error, DatpCoreError):
-        return CliExitCode.INTERNAL.value
+    if isinstance(error, UnknownIdentifierError):
+        return CliExitCode.UNKNOWN_IDENTIFIER.value
+    if isinstance(error, ProtocolValidationError):
+        return CliExitCode.INVALID_DECLARATION.value
+    if isinstance(error, ReportEvidenceError):
+        return CliExitCode.MISSING_REPORT_EVIDENCE.value
+    if isinstance(error, ArtifactIntegrityError):
+        return CliExitCode.INVALID_ARTIFACT.value
+    if isinstance(error, AnchorReproductionError):
+        return CliExitCode.ANCHOR_GATE_FAILURE.value
+    if isinstance(error, ScientificContractError):
+        return CliExitCode.SCIENTIFIC_CONTRACT.value
+    if isinstance(error, ValueError):
+        return CliExitCode.USAGE.value
     return CliExitCode.INTERNAL.value
+
+
+def fail(error: CliHandledError) -> Never:
+    typer.echo(str(error), err=True)
+    raise typer.Exit(code=map_exception_to_exit(error)) from error
