@@ -6,9 +6,9 @@ from typing import Annotated
 
 import typer
 
-from datp_core.cli.validation import echo_error, map_exception_to_exit
+from datp_core.app.cli.validation import echo_error, map_exception_to_exit
+from datp_core.app.programme import run_campaign, run_experiment
 from datp_core.domain.enums import ExperimentId
-from datp_core.pipeline.workflows import run_campaign, run_experiment
 
 app = typer.Typer(no_args_is_help=True, help="Run one experiment or the complete campaign.")
 
