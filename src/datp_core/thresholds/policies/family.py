@@ -1,19 +1,14 @@
-"""Family threshold construction and result contracts."""
+"""Physical-device-family threshold construction and result contracts."""
 
 from dataclasses import dataclass
 from typing import ClassVar
 
-from datp_core.datasets.partitioning.contracts import ClientIdentity
-from datp_core.domain.enums import (
-    AvailabilityStatus,
-    ContractSubject,
-    FederatedThresholdMethod,
-)
-from datp_core.domain.errors import ScientificContractError, require_contract
-from datp_core.domain.values.paths import FamilyIdentity
-from datp_core.domain.values.ratios import Quantile, ThresholdValue
-from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.thresholding.assignments import (
+from datp_core.core.errors import ScientificContractError, require_contract
+from datp_core.core.identifiers import AvailabilityStatus, ContractSubject, FamilyIdentity, FederatedThresholdMethod
+from datp_core.core.numeric import Quantile, ThresholdValue
+from datp_core.data.populations.contracts import ClientIdentity
+from datp_core.detector.training.contracts import FederatedTrainingCoordinate
+from datp_core.thresholds.contracts import (
     FamilyAssignment,
     LocalQuantile,
     ThresholdAssignment,
@@ -22,11 +17,7 @@ from datp_core.thresholding.assignments import (
     validate_assignments,
     validate_group_membership,
 )
-from datp_core.thresholding.quantiles import (
-    ClientBenignCalibrationScores,
-    local_quantile,
-    require_eligible_cohort,
-)
+from datp_core.thresholds.quantiles import ClientBenignCalibrationScores, local_quantile, require_eligible_cohort
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,8 +59,8 @@ class FamilyMembership:
             self.contributing_local_quantiles,
             self.family_threshold,
             members_label="family members",
-            match_message=("contributing local quantile clients must exactly match declared family members"),
-            threshold_message=("family_threshold must equal the unweighted mean of contributing local quantiles"),
+            match_message="contributing local quantile clients must exactly match declared family members",
+            threshold_message="family threshold must equal the unweighted mean of contributing local quantiles",
         )
 
 
@@ -88,7 +79,7 @@ class FamilyThresholdResult:
         )
         family_ids = tuple(item.family_id for item in self.families)
         require_contract(
-            len(set(family_ids)) == len(family_ids),
+            len(frozenset(family_ids)) == len(family_ids),
             "family identities must be unique",
             ContractSubject.THRESHOLD,
         )
@@ -109,7 +100,7 @@ class FamilyThresholdResult:
             self.assignments,
             expected_assignments,
             label="threshold assignments",
-            mismatch_message=("a family threshold assignment must use its family's constructed threshold"),
+            mismatch_message="a family threshold assignment must use its family's constructed threshold",
         )
 
 
@@ -125,28 +116,15 @@ def construct_family_threshold(
         )
     require_eligible_cohort(eligible, "family threshold construction")
     eligible_clients = tuple(item.client for item in eligible)
-    require_unique_clients(
-        eligible_clients,
-        "eligible clients in family threshold construction",
-    )
+    require_unique_clients(eligible_clients, "eligible clients in family threshold construction")
     for client in eligible_clients:
         matching = tuple(item.family for item in family_by_client if item.client == client)
-        if not matching:
+        if len(matching) != 1:
             raise ScientificContractError(
-                f"eligible client {client} is missing a family taxonomy entry",
+                f"eligible client {client} must have exactly one family taxonomy entry",
                 subject=ContractSubject.CLIENT_IDENTITY,
             )
-        if len(matching) > 1:
-            raise ScientificContractError(
-                f"eligible client {client} has multiple family taxonomy entries",
-                subject=ContractSubject.CLIENT_IDENTITY,
-            )
-    family_ids = tuple(
-        sorted(
-            frozenset(item.family for item in family_by_client),
-            key=lambda item: item.value,
-        )
-    )
+    family_ids = tuple(sorted(frozenset(item.family for item in family_by_client), key=lambda item: item.value))
     memberships: list[FamilyMembership] = []
     assignments: list[ThresholdAssignment] = []
     for family_id in family_ids:
