@@ -1,5 +1,6 @@
 """Strict persisted documents for federated checkpoint inventories."""
 
+from datp_core.detector.checkpoints.identities import CandidateManifestKind
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import PopulationId, PreprocessingProtocolId, SplitProtocolId, TrainingModelId
 from datp_core.domain.values.checksums import Checksum
@@ -7,7 +8,6 @@ from datp_core.domain.values.counts import BatchSize, ManifestSchemaVersion, Rou
 from datp_core.domain.values.identifiers import SafeTensorFilename
 from datp_core.domain.values.paths import ClientPathToken
 from datp_core.domain.values.ratios import ModelCoefficientValue
-from datp_core.learning.federated.checkpoints.identities import CandidateManifestKind
 from datp_core.protocols.training import AutoencoderArchitecture
 
 

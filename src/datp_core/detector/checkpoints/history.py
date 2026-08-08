@@ -9,18 +9,8 @@ import polars as pl
 from polars.exceptions import PolarsError
 
 from datp_core.datasets.partitioning.contracts import ClientIdentity
-from datp_core.domain.enums import (
-    CommunicationEstimationMethod,
-    ContractSubject,
-    PopulationIdentityKind,
-    TrainingModelId,
-)
-from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import ByteCount, LogicalElementCount, RoundNumber, RowCount
-from datp_core.domain.values.identifiers import CudaDeviceName
-from datp_core.domain.values.ratios import MetricValue
-from datp_core.learning.federated.checkpoints.identities import (
+from datp_core.detector.checkpoints.contracts import CheckpointProtocol
+from datp_core.detector.checkpoints.identities import (
     CLIENT_ROUNDS_SCHEMA,
     PERSONALIZED_ROUNDS_SCHEMA,
     ROUND_SUMMARY_SCHEMA,
@@ -37,7 +27,17 @@ from datp_core.detector.training.models import (
     GlobalModelStateReference,
     PersonalizedModelStateReference,
 )
-from datp_core.detector.checkpoints.contracts import CheckpointProtocol
+from datp_core.domain.enums import (
+    CommunicationEstimationMethod,
+    ContractSubject,
+    PopulationIdentityKind,
+    TrainingModelId,
+)
+from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import ByteCount, LogicalElementCount, RoundNumber, RowCount
+from datp_core.domain.values.identifiers import CudaDeviceName
+from datp_core.domain.values.ratios import MetricValue
 
 
 class _ClientHistoryTable(StrEnum):

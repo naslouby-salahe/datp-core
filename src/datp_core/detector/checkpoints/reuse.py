@@ -4,25 +4,15 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from datp_core.datasets.partitioning.contracts import ClientIdentity
-from datp_core.domain.enums import (
-    CheckpointStatus,
-    ContractSubject,
-    PopulationIdentityKind,
-    TrainingModelId,
-)
-from datp_core.domain.errors import ArtifactIntegrityError
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import BatchSize, RoundNumber
-from datp_core.domain.values.paths import ClientPathToken
-from datp_core.domain.values.ratios import MetricValue
-from datp_core.learning.federated.checkpoints.candidates import (
+from datp_core.detector.checkpoints.candidates import (
     candidate_tensor_name,
 )
-from datp_core.learning.federated.checkpoints.documents import (
+from datp_core.detector.checkpoints.contracts import CheckpointProtocol, validate_persisted_checkpoint_file
+from datp_core.detector.checkpoints.documents import (
     CandidateManifest,
     CandidateManifestEntry,
 )
-from datp_core.learning.federated.checkpoints.history import (
+from datp_core.detector.checkpoints.history import (
     history_frames,
     load_federated_training_history,
     load_published_device_name,
@@ -30,12 +20,12 @@ from datp_core.learning.federated.checkpoints.history import (
     validate_personalized_history,
     validate_round_summary,
 )
-from datp_core.learning.federated.checkpoints.identities import (
+from datp_core.detector.checkpoints.identities import (
     CandidateManifestKind,
     FederatedHistoryAssetName,
     FederatedHistoryColumn,
 )
-from datp_core.learning.federated.checkpoints.publication import (
+from datp_core.detector.checkpoints.publication import (
     load_manifest,
     validate_manifest,
     verify_completion,
@@ -49,7 +39,17 @@ from datp_core.detector.training.models import (
     FederatedTrainingResult,
     PersonalizedCandidateSet,
 )
-from datp_core.detector.checkpoints.contracts import CheckpointProtocol, validate_persisted_checkpoint_file
+from datp_core.domain.enums import (
+    CheckpointStatus,
+    ContractSubject,
+    PopulationIdentityKind,
+    TrainingModelId,
+)
+from datp_core.domain.errors import ArtifactIntegrityError
+from datp_core.domain.values.checksums import Checksum
+from datp_core.domain.values.counts import BatchSize, RoundNumber
+from datp_core.domain.values.paths import ClientPathToken
+from datp_core.domain.values.ratios import MetricValue
 from datp_core.protocols.training import AutoencoderProtocol
 
 

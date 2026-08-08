@@ -70,8 +70,8 @@ from datp_core.experiments.confirmatory import FedAvgCvFprEffectEvidence, absorp
 from datp_core.experiments.execution import execute_declared_campaign
 from datp_core.experiments.personalized_scoring import client_metric, client_scoring_input, score_record_for_client
 from datp_core.experiments.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
-from datp_core.learning.federated.checkpoints.history import history_frames
-from datp_core.learning.federated.checkpoints.identities import FederatedHistoryColumn
+from datp_core.detector.checkpoints.history import history_frames
+from datp_core.detector.checkpoints.identities import FederatedHistoryColumn
 from datp_core.learning.federated.ditto import DittoTrainingRequest
 from datp_core.detector.training.models import (
     DittoTrainingCoordinates,

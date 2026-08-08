@@ -4,25 +4,18 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from datp_core.domain.enums import ContractSubject, TrainingModelId
-from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
-from datp_core.domain.provenance import canonical_checksum, serialize_json_model
-from datp_core.domain.values.checksums import Checksum, checksum_file
-from datp_core.domain.values.counts import BatchSize, ManifestSchemaVersion
-from datp_core.domain.values.identifiers import SafeTensorFilename
-from datp_core.domain.values.paths import ClientPathToken
-from datp_core.domain.values.ratios import ModelCoefficientValue
-from datp_core.learning.federated.checkpoints.candidates import (
+from datp_core.detector.checkpoints.candidates import (
     retain_checkpoint_candidates,
 )
-from datp_core.learning.federated.checkpoints.documents import (
+from datp_core.detector.checkpoints.contracts import CheckpointProtocol
+from datp_core.detector.checkpoints.documents import (
     CandidateManifest,
     CandidateManifestEntry,
 )
-from datp_core.learning.federated.checkpoints.history import (
+from datp_core.detector.checkpoints.history import (
     persist_federated_training_history,
 )
-from datp_core.learning.federated.checkpoints.identities import (
+from datp_core.detector.checkpoints.identities import (
     CandidateManifestKind,
     FederatedHistoryAssetName,
 )
@@ -37,7 +30,14 @@ from datp_core.detector.training.models import (
     PersonalizedSnapshotSet,
     RoundSnapshot,
 )
-from datp_core.detector.checkpoints.contracts import CheckpointProtocol
+from datp_core.domain.enums import ContractSubject, TrainingModelId
+from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
+from datp_core.domain.provenance import canonical_checksum, serialize_json_model
+from datp_core.domain.values.checksums import Checksum, checksum_file
+from datp_core.domain.values.counts import BatchSize, ManifestSchemaVersion
+from datp_core.domain.values.identifiers import SafeTensorFilename
+from datp_core.domain.values.paths import ClientPathToken
+from datp_core.domain.values.ratios import ModelCoefficientValue
 from datp_core.protocols.training import AutoencoderProtocol
 
 _MANIFEST_SCHEMA_VERSION = ManifestSchemaVersion(1)

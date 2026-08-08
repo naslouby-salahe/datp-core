@@ -31,8 +31,8 @@ from datp_core.domain.provenance import canonical_checksum
 from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import RoundNumber, Seed
 from datp_core.domain.values.ratios import MetricValue
-from datp_core.learning.federated.checkpoints.selection import select_checkpoint
-from datp_core.learning.federated.checkpoints.selection import (
+from datp_core.detector.checkpoints.selection import select_checkpoint
+from datp_core.detector.checkpoints.selection import (
     validate_candidate_coordinates as validate_federated_candidates,
 )
 from datp_core.detector.training.models import (

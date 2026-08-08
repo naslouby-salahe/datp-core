@@ -1,6 +1,6 @@
 from datp_core.domain.enums import ContractSubject
 from datp_core.domain.errors import ScientificContractError
-from datp_core.learning.federated.checkpoints.publication import write_federated_training as persist_federated_training
+from datp_core.detector.checkpoints.publication import write_federated_training as persist_federated_training
 from datp_core.detector.training.models import FederatedTrainingOutcome
 from datp_core.learning.federated.training import FederatedTrainingRequest, run_federated_training
 from datp_core.protocols.training import FEDAVG_LOCAL_EPOCHS, FedAvgProtocol, FedProxProtocol

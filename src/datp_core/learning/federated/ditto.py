@@ -16,7 +16,7 @@ from datp_core.domain.values.checksums import Checksum
 from datp_core.domain.values.counts import BatchSize, ClientCount, RoundNumber, Seed
 from datp_core.domain.values.identifiers import CudaDeviceName
 from datp_core.domain.values.ratios import LearningRate
-from datp_core.learning.federated.checkpoints.publication import write_ditto_training
+from datp_core.detector.checkpoints.publication import write_ditto_training
 from datp_core.detector.training.models import (
     ClientTrainingInput,
     ClientTrainingResult,

@@ -3,26 +3,26 @@
 from collections.abc import Sequence
 from dataclasses import replace
 
-from datp_core.data.populations.contracts import ClientIdentity
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.errors import LeakageError, ScientificContractError
 from datp_core.core.identifiers import (
     CheckpointSelectionRule,
     CheckpointStatus,
     ContractSubject,
     ProcessedDataBranch,
 )
-from datp_core.artifacts.provenance import Checksum
-from datp_core.core.errors import LeakageError, ScientificContractError
 from datp_core.core.numeric import MetricValue
-from datp_core.detector.training.models import (
-    CheckpointCandidate,
-    CheckpointDecision,
-    FederatedTrainingCoordinate,
-)
+from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.checkpoints.contracts import (
     CheckpointProtocol,
     select_terminal_checkpoint,
     validate_ordered_checkpoint_inventory,
     validate_persisted_checkpoint_file,
+)
+from datp_core.detector.training.models import (
+    CheckpointCandidate,
+    CheckpointDecision,
+    FederatedTrainingCoordinate,
 )
 from datp_core.protocols.training import require_non_test_checkpoint_selection_inputs
 

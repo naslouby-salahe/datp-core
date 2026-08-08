@@ -13,7 +13,7 @@ from datp_core.detector.autoencoder import (
     clone_autoencoder_state,
     clone_state,
 )
-from datp_core.learning.federated.checkpoints.publication import write_ditto_training
+from datp_core.detector.checkpoints.publication import write_ditto_training
 from datp_core.detector.training.models import (
     ClientTrainingInput,
     ClientTrainingResult,

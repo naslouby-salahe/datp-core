@@ -5,9 +5,9 @@ from datp_core.data.registry import resolve_population
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import ContractSubject
-from datp_core.learning.federated.checkpoints.candidates import rebase_checkpoint_candidates
-from datp_core.learning.federated.checkpoints.identities import FederatedHistoryAssetName
-from datp_core.learning.federated.checkpoints.reuse import (
+from datp_core.detector.checkpoints.candidates import rebase_checkpoint_candidates
+from datp_core.detector.checkpoints.identities import FederatedHistoryAssetName
+from datp_core.detector.checkpoints.reuse import (
     ReusedDittoTrainingRequest,
     ReusedFederatedTrainingRequest,
     load_reused_ditto_training,

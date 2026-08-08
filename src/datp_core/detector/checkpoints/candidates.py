@@ -15,16 +15,16 @@ from datp_core.detector.checkpoints.contracts import (
     validate_ordered_checkpoint_inventory,
     validate_persisted_checkpoint_file,
 )
-from datp_core.domain.enums import CheckpointStatus, ContractSubject
-from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
-from datp_core.domain.values.checksums import Checksum, checksum_file
-from datp_core.domain.values.counts import RoundNumber
-from datp_core.domain.values.identifiers import SafeTensorFilename
 from datp_core.detector.training.models import (
     CheckpointCandidate,
     FederatedTrainingCoordinate,
     RoundSnapshot,
 )
+from datp_core.domain.enums import CheckpointStatus, ContractSubject
+from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
+from datp_core.domain.values.checksums import Checksum, checksum_file
+from datp_core.domain.values.counts import RoundNumber
+from datp_core.domain.values.identifiers import SafeTensorFilename
 from datp_core.protocols.training import AutoencoderProtocol
 
 _CANDIDATE_PREFIX = "checkpoint_round_"

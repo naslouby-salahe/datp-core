@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 
 from datp_core.domain.enums import PublicationStatus
-from datp_core.learning.federated.checkpoints.identities import FederatedHistoryAssetName
+from datp_core.detector.checkpoints.identities import FederatedHistoryAssetName
 from datp_core.learning.federated.common import (
     FederatedTrainingArtifacts,
     federated_training_is_reusable,
