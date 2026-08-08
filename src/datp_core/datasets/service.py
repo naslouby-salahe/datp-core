@@ -1,4 +1,4 @@
-"""Application service for canonical dataset publication."""
+"""Canonical dataset publication service."""
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -13,7 +13,7 @@ from datp_core.domain.enums import DatasetId
 class DatasetMaterializationRequest:
     data_root: Path
     datasets: tuple[DatasetId, ...]
-    overwrite: bool = False
+    overwrite: bool
 
     def __post_init__(self) -> None:
         if not self.datasets or len(self.datasets) != len(frozenset(self.datasets)):
