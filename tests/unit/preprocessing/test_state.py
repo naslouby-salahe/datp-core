@@ -5,10 +5,10 @@ import pytest
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 
-from datp_core.domain.errors import SerializationSafetyError
-from datp_core.domain.values.ratios import AbsoluteTolerance
-from datp_core.preprocessing.contracts import TrustedEstimatorClassName
-from datp_core.preprocessing.state import (
+from datp_core.core.errors import SerializationSafetyError
+from datp_core.core.numeric import AbsoluteTolerance
+from datp_core.data.preprocessing.artifacts import TrustedEstimatorClassName
+from datp_core.data.preprocessing.state import (
     TransformReloadCheck,
     load_estimator,
     reload_and_compare_transform,

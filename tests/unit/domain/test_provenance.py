@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from datp_core.domain.provenance import canonical_value
-from datp_core.domain.values.counts import RowCount
+from datp_core.artifacts.serializers.json import canonical_value
+from datp_core.core.numeric import RowCount
 
 
 def test_canonical_value_is_deterministic_finite_and_strict() -> None:

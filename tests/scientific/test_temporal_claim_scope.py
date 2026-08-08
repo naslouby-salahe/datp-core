@@ -1,4 +1,4 @@
-from datp_core.domain.enums import TemporalState
+from datp_core.core.identifiers import TemporalState
 
 
 def test_temporal_state_names_do_not_claim_continuous_adaptation() -> None:

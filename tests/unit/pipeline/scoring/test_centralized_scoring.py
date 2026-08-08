@@ -15,27 +15,26 @@ from tests.unit.learning.centralized.helpers import (
     training_coordinate,
 )
 
-from datp_core.domain.enums import (
+from datp_core.artifacts.provenance import Checksum, checksum_file
+from datp_core.core.errors import LeakageError
+from datp_core.core.identifiers import (
     CheckpointStatus,
     PartitionRole,
     ScoreFrameColumn,
     SerializationFormat,
     TrainingModelId,
 )
-from datp_core.domain.errors import LeakageError
-from datp_core.domain.values.checksums import Checksum, checksum_file
-from datp_core.domain.values.counts import FeatureCount, RoundNumber, RowCount, Seed
-from datp_core.domain.values.ratios import MetricValue
-from datp_core.pipeline.checkpoints.models import CentralizedCheckpointCandidate
-from datp_core.pipeline.checkpoints.service import reject_federated_checkpoint, retain_centralized_checkpoint_candidates
-from datp_core.pipeline.scoring.centralized import (
+from datp_core.core.numeric import FeatureCount, MetricValue, RoundNumber, RowCount, Seed
+from datp_core.detector.checkpoints.models import CentralizedCheckpointCandidate
+from datp_core.detector.checkpoints.service import reject_federated_checkpoint, retain_centralized_checkpoint_candidates
+from datp_core.detector.scoring.centralized import (
     centralized_scoring_is_reusable,
     load_score_frame,
     score_artifact_set_checksum,
     score_centralized_reference,
 )
-from datp_core.pipeline.scoring.frames import score_frame
-from datp_core.pipeline.scoring.models import (
+from datp_core.detector.scoring.frames import score_frame
+from datp_core.detector.scoring.models import (
     CentralizedScoreAssetName,
     CentralizedScoringRequest,
     CentralizedScoringResult,

@@ -5,16 +5,17 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.values.ratios import MetricValue
-from datp_core.learning.federated.checkpoints.history import schema_pairs
-from datp_core.learning.federated.checkpoints.identities import (
+from datp_core.core.errors import LeakageError, ScientificContractError
+from datp_core.core.numeric import MetricValue
+from datp_core.detector.checkpoints.history import schema_pairs
+from datp_core.detector.checkpoints.identities import (
     ROUND_SUMMARY_SCHEMA,
     FederatedHistoryAssetName,
     FederatedHistoryColumn,
 )
-from datp_core.pipeline.execution.layout import federated_training_directory
-from datp_core.pipeline.workflows.personalization import (
+from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT
+from datp_core.experiments.execution.layout import federated_training_directory
+from datp_core.experiments.training_stress.run import (
     collect_fedprox_coefficient_terminal_losses,
     fedprox_training_coordinate,
     load_fedprox_primary_coefficient_decision,
@@ -22,7 +23,6 @@ from datp_core.pipeline.workflows.personalization import (
     select_primary_fedprox_coefficient_from_artifacts,
     write_fedprox_primary_coefficient_decision,
 )
-from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT
 from datp_core.protocols.training import (
     CHECKPOINT_PROTOCOL,
     FEDPROX_COEFFICIENTS,
@@ -59,7 +59,7 @@ def _write_round_summary(directory: Path, *, terminal_loss: float) -> None:
             FederatedHistoryColumn.LOCAL_LOSS.value: float(terminal_loss),
         }
     ]
-    from datp_core.learning.federated.checkpoints.identities import CLIENT_ROUNDS_SCHEMA
+    from datp_core.detector.checkpoints.identities import CLIENT_ROUNDS_SCHEMA
 
     pl.DataFrame(client_rows, schema=schema_pairs(CLIENT_ROUNDS_SCHEMA), orient="row").write_parquet(
         directory / FederatedHistoryAssetName.CLIENT_ROUNDS.value
@@ -88,7 +88,10 @@ def test_read_terminal_loss_uses_locked_maximum_round(tmp_path: Path) -> None:
 
 def test_primary_coefficient_is_lowest_mean_terminal_loss(tmp_path: Path) -> None:
     _populate_grid(tmp_path, (1.0, 0.1, 0.5, 0.8))
-    decision = select_primary_fedprox_coefficient_from_artifacts(output_root=tmp_path)
+    decision = select_primary_fedprox_coefficient_from_artifacts(
+        output_root=tmp_path,
+        seed_cohort=CONFIRMATORY_SEED_COHORT,
+    )
     assert decision.primary_coefficient == FEDPROX_COEFFICIENTS[1]
     assert decision.selection_rule == "fedprox_minimum_terminal_training_loss"
     path = write_fedprox_primary_coefficient_decision(
@@ -102,13 +105,19 @@ def test_primary_coefficient_is_lowest_mean_terminal_loss(tmp_path: Path) -> Non
 
 def test_primary_selection_breaks_ties_with_smallest_coefficient(tmp_path: Path) -> None:
     _populate_grid(tmp_path, (0.2, 0.2, 0.2, 0.2))
-    decision = select_primary_fedprox_coefficient_from_artifacts(output_root=tmp_path)
+    decision = select_primary_fedprox_coefficient_from_artifacts(
+        output_root=tmp_path,
+        seed_cohort=CONFIRMATORY_SEED_COHORT,
+    )
     assert decision.primary_coefficient == FEDPROX_COEFFICIENTS[0]
 
 
 def test_missing_history_fails_closed(tmp_path: Path) -> None:
     with pytest.raises(ScientificContractError, match="terminal training loss"):
-        collect_fedprox_coefficient_terminal_losses(output_root=tmp_path)
+        collect_fedprox_coefficient_terminal_losses(
+            output_root=tmp_path,
+            seed_cohort=CONFIRMATORY_SEED_COHORT,
+        )
 
 
 def test_selection_inputs_still_reject_held_out_metrics() -> None:

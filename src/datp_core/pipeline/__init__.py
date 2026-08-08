@@ -1,1 +1,0 @@
-"""Branch-neutral pipeline infrastructure."""

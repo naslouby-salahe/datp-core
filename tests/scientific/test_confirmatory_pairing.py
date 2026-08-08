@@ -2,7 +2,8 @@ from datp_core.analysis.contrasts import FixedScorePairProvenance, PairedContras
 from datp_core.analysis.inference.bootstrap.contracts import BcaOutcome
 from datp_core.analysis.inference.bootstrap.estimation import paired_bca_interval
 from datp_core.analysis.preparation import ConfirmatoryAnalysisRequest, prepare_confirmatory_analysis
-from datp_core.domain.enums import (
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.identifiers import (
     AvailabilityStatus,
     EvidenceRole,
     FederatedThresholdMethod,
@@ -12,11 +13,9 @@ from datp_core.domain.enums import (
     SplitProtocolId,
     TrainingModelId,
 )
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import Seed
-from datp_core.domain.values.ratios import MetricValue
-from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL
+from datp_core.core.numeric import MetricValue, Seed
+from datp_core.detector.training.contracts import FederatedTrainingCoordinate
+from datp_core.experiments.confirmatory.spec import CONFIRMATORY_INFERENCE_PROTOCOL
 
 
 def test_confirmatory_bca_blocks_nine_pairs() -> None:

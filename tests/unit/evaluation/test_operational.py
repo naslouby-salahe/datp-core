@@ -1,15 +1,14 @@
 from tests.unit.learning.federated.helpers import client_identity, fedavg_coordinate
 
-from datp_core.domain.enums import PopulationId, TrafficRateEvidenceType
-from datp_core.domain.values.counts import Seed
-from datp_core.domain.values.ratios import Ratio, TrafficRatePerDay
-from datp_core.evaluation.models import MetricStatus
-from datp_core.evaluation.operational import AlertBurdenSuppressionReason, calculate_alert_burden
-from datp_core.evaluation.traffic_rates import (
+from datp_core.analysis.metrics.models import MetricStatus
+from datp_core.analysis.operational.alert_burden import AlertBurdenSuppressionReason, calculate_alert_burden
+from datp_core.analysis.operational.traffic_rates import (
     TrafficRateGranularity,
     TrafficRateUnit,
     ValidatedTrafficRateEvidence,
 )
+from datp_core.core.identifiers import PopulationId, TrafficRateEvidenceType
+from datp_core.core.numeric import Ratio, Seed, TrafficRatePerDay
 
 
 def test_alert_burden_is_suppressed_without_traffic_evidence() -> None:

@@ -1,7 +1,11 @@
 from dataclasses import replace
 from pathlib import Path
 
-from datp_core.domain.enums import (
+from datp_core.artifacts.layout import experiment_output_directory
+from datp_core.artifacts.provenance import Checksum, checksum_bytes
+from datp_core.artifacts.repositories.models import ArtifactKind, ArtifactRecord, ArtifactState
+from datp_core.artifacts.repositories.publication import build_completion_record, write_completion_record
+from datp_core.core.identifiers import (
     DatasetId,
     EvidenceRole,
     ExperimentId,
@@ -13,20 +17,15 @@ from datp_core.domain.enums import (
     TemporalState,
     TrainingModelId,
 )
-from datp_core.domain.values.checksums import Checksum, checksum_bytes
-from datp_core.domain.values.counts import ByteCount, Seed
-from datp_core.domain.values.ratios import ModelCoefficientValue
-from datp_core.pipeline.coordinates import ExperimentCoordinate
-from datp_core.pipeline.execution.engine import CompletionRecordOutputStore, PipelineStageRunner
-from datp_core.pipeline.execution.models import (
+from datp_core.core.numeric import ByteCount, ModelCoefficientValue, Seed
+from datp_core.experiments.common.coordinates import ExperimentCoordinate
+from datp_core.experiments.execution.engine import CompletionRecordOutputStore, PipelineStageRunner
+from datp_core.experiments.execution.models import (
     ExecutionProvenance,
     ExistingExperimentState,
     PipelineStage,
     StageOutcome,
 )
-from datp_core.pipeline.publication.layout import experiment_output_directory
-from datp_core.pipeline.publication.models import ArtifactKind, ArtifactRecord, ArtifactState
-from datp_core.pipeline.publication.service import build_completion_record, write_completion_record
 from datp_core.protocols.training import DITTO_TRAINING_PROTOCOLS
 
 OUTPUT_ROOT = Path("outputs")
@@ -90,27 +89,6 @@ def test_ciciot2023_dataset_is_blocked_for_undeclared_autoencoder() -> None:
     result = runner.run(PipelineStage.TRAIN_DETECTOR, cic_coordinate, provenance(), OUTPUT_ROOT)
     assert result.outcome is StageOutcome.BLOCKED
     assert "CICIOT2023" in result.evidence
-
-
-def test_verify_anchor_rejects_experiments_other_than_the_historical_reproduction() -> None:
-    runner = PipelineStageRunner()
-    result = runner.run(PipelineStage.VERIFY_ANCHOR, coordinate(), provenance(), OUTPUT_ROOT)
-    assert result.outcome is StageOutcome.BLOCKED
-    assert "historical reproduction" in result.evidence
-
-
-def test_verify_anchor_records_blocked_gate_while_cohort_is_incomplete(tmp_path: Path) -> None:
-    """Incomplete independent packages keep the stage COMPLETED so remaining seeds can finish.
-
-    Cohort-level FAIL with a full observation set still maps to StageOutcome.BLOCKED.
-    """
-    runner = PipelineStageRunner()
-    anchor_coordinate = replace(coordinate(), experiment=ExperimentId.HISTORICAL_DATP_REPRODUCTION)
-    result = runner.run(PipelineStage.VERIFY_ANCHOR, anchor_coordinate, provenance(), tmp_path)
-    assert result.outcome is StageOutcome.COMPLETED
-    assert "gate=blocked" in result.evidence
-    assert "diagnostics=" in result.evidence
-    assert "observations=0" in result.evidence
 
 
 def test_output_store_reports_absent_for_missing_directory(tmp_path: Path) -> None:

@@ -5,8 +5,12 @@ from datetime import UTC, datetime
 import polars as pl
 import pytest
 
-from datp_core.datasets.edge_iiotset.schema import EdgeCanonicalColumn
-from datp_core.datasets.partitioning.contracts import (
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import CaptureTimestampColumn, DatasetId, PopulationId, SplitProtocolId
+from datp_core.core.numeric import Seed
+from datp_core.data.edge_iiotset.schema import EdgeCanonicalColumn
+from datp_core.data.populations.contracts import (
     CLIENT_ID_COLUMN,
     OUTCOME_LABEL_COLUMN,
     SOURCE_ROW_INDEX_COLUMN,
@@ -15,13 +19,8 @@ from datp_core.datasets.partitioning.contracts import (
     SplitConstructionRequest,
     membership_column_names,
 )
-from datp_core.datasets.partitioning.splits import split_membership
-from datp_core.domain.enums import DatasetId, PopulationId, SplitProtocolId
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import Seed
-from datp_core.domain.values.identifiers import CaptureTimestampColumn
-from datp_core.pipeline.preparation.populations import _capture_timestamp_column_for_split
+from datp_core.data.populations.publication import _capture_timestamp_column_for_split
+from datp_core.data.populations.splits import split_membership
 
 
 def _temporal_membership(rows_per_client: int = 40) -> pl.DataFrame:

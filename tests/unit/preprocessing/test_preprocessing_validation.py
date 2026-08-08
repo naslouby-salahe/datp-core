@@ -3,38 +3,36 @@ import polars as pl
 import pytest
 from sklearn.preprocessing import StandardScaler
 
-from datp_core.datasets.partitioning.contracts import OUTCOME_LABEL_COLUMN, STABLE_ROW_ID_COLUMN
-from datp_core.domain.enums import (
+from datp_core.core.errors import LeakageError, ScientificContractError
+from datp_core.core.identifiers import (
     ContractSubject,
+    FeatureName,
+    FeatureNameSequence,
+    OutcomeLabel,
+    OutcomeLabelSequence,
     PartitionRole,
     PreprocessingProtocolId,
     ProcessedDataBranch,
     SerializationFormat,
     SplitProtocolId,
-)
-from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.values.identifiers import (
-    FeatureName,
-    FeatureNameSequence,
-    OutcomeLabel,
-    OutcomeLabelSequence,
     StableRowId,
     StableRowIdSequence,
 )
-from datp_core.domain.values.ratios import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE
-from datp_core.preprocessing.contracts import PartitionOrdering, PreprocessingFitScope, TrustedEstimatorClassName
-from datp_core.preprocessing.models import (
-    PreprocessingFitBatch,
-    PreprocessingPartition,
-    PreprocessingPartitions,
-    PreprocessingProtocol,
-)
-from datp_core.preprocessing.validation import (
+from datp_core.core.numeric import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE
+from datp_core.data.populations.contracts import OUTCOME_LABEL_COLUMN, STABLE_ROW_ID_COLUMN
+from datp_core.data.preprocessing.artifact_validation import (
     extract_partitions,
     fit_trusted_batch,
     require_finite_matrix,
     transform_feature_matrix,
     validate_no_partition_overlap,
+)
+from datp_core.data.preprocessing.artifacts import PartitionOrdering, PreprocessingFitScope, TrustedEstimatorClassName
+from datp_core.data.preprocessing.models import (
+    PreprocessingFitBatch,
+    PreprocessingPartition,
+    PreprocessingPartitions,
+    PreprocessingProtocol,
 )
 
 

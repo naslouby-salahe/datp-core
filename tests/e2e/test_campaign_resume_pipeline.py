@@ -1,18 +1,19 @@
 from pathlib import Path
 
-from datp_core.domain.enums import ExperimentId
-from datp_core.domain.values.counts import Seed
-from datp_core.pipeline.execution.engine import build_campaign, execute_campaign, resolve_execution_recipe
-from datp_core.pipeline.execution.models import (
+from datp_core.core.identifiers import ExperimentId
+from datp_core.core.numeric import Seed
+from datp_core.experiments.common.seeds import SeedCohort
+from datp_core.experiments.execution import build_campaign
+from datp_core.experiments.execution.engine import execute_campaign, resolve_execution_recipe
+from datp_core.experiments.execution.models import (
     CampaignPlan,
     ExistingExperimentState,
     PipelineStage,
     StageExecution,
     StageOutcome,
 )
-from datp_core.pipeline.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
+from datp_core.experiments.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
 from datp_core.protocols.experiments import EXPERIMENTS
-from datp_core.protocols.seeds import SeedCohort
 
 
 class _IncompleteStore:
@@ -79,6 +80,7 @@ def test_campaign_resume_deletes_incomplete_cells_and_restarts_in_canonical_orde
         stage_runner=runner,
         output_store=store,
         output_root=tmp_path,
+        overwrite=False,
     )
 
     assert result.campaign_digest == campaign.digest
@@ -103,12 +105,14 @@ def test_repeated_tiny_campaigns_have_identical_plan_execution_and_cleanup(tmp_p
         stage_runner=first_runner,
         output_store=first_store,
         output_root=first_root,
+        overwrite=False,
     )
     second = execute_campaign(
         campaign=campaign,
         stage_runner=second_runner,
         output_store=second_store,
         output_root=second_root,
+        overwrite=False,
     )
 
     assert campaign == _tiny_campaign()
@@ -129,6 +133,7 @@ def test_complete_campaign_cells_are_reused_without_stage_execution(tmp_path: Pa
         stage_runner=runner,
         output_store=store,
         output_root=tmp_path,
+        overwrite=False,
     )
 
     assert all(execution.successful for execution in result.experiments)

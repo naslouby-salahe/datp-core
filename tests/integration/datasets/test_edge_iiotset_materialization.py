@@ -1,10 +1,11 @@
 import struct
 from datetime import UTC, datetime
 
+import polars as pl
 import pyarrow.parquet as pq
 
-from datp_core.datasets.edge_iiotset.materialize import EdgeIIoTsetMaterializer
-from datp_core.datasets.edge_iiotset.schema import EDGE_ARROW_SCHEMA, EDGE_RAW_COLUMNS, EdgeAssetRole
+from datp_core.data.edge_iiotset.materialize import EdgeIIoTsetMaterializer
+from datp_core.data.edge_iiotset.schema import EDGE_ARROW_SCHEMA, EDGE_RAW_COLUMNS, EdgeAssetRole
 
 
 def _write_edge(path, timestamp: str, label: str, attack_type: str) -> None:
@@ -43,7 +44,7 @@ def test_edge_materialization_separates_static_temporal_and_unassigned_attack(tm
     )
     assert tuple(asset.source_identity for asset in published.assets) == ("Distance", "Distance", "Backdoor_attack")
     static_asset = next(asset for asset in published.assets if asset.role is EdgeAssetRole.STATIC_BENIGN)
-    assert pq.read_table(static_asset.path, columns=["capture_timestamp"]).column(0).to_pylist()[0] is not None
+    assert pl.read_parquet(static_asset.path, columns=["capture_timestamp"]).item(0, 0) is not None
 
 
 def test_edge_keeps_invalid_chronology_static_and_excludes_it_from_temporal(tmp_path) -> None:

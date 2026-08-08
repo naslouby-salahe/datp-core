@@ -44,13 +44,13 @@ from datp_core.analysis.mechanisms.movement import (
     summarize_threshold_movements_across_seeds,
     threshold_movement,
 )
+from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
+from datp_core.analysis.metrics.models import MetricStatus, metric_by_id
 from datp_core.analysis.scientific_decision import ScientificDecisionResult
-from datp_core.domain.enums import ExperimentId, MetricId
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.ratios import MetricValue, Ratio
-from datp_core.evaluation.federated.contracts import FederatedEvaluationDocument
-from datp_core.evaluation.models import MetricStatus, metric_by_id
-from datp_core.thresholding.methods.cluster import GroupedThresholdResult
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.identifiers import ExperimentId, MetricId
+from datp_core.core.numeric import MetricValue, Ratio
+from datp_core.thresholds.policies.cluster import GroupedThresholdResult
 
 type MechanismEvidence = (
     AbsorptionCohortResult

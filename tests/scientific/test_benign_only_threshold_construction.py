@@ -10,7 +10,38 @@ from scipy.stats import skew
 from tests.unit.calibration.helpers import attack_score_record, benign_score_record, some_client
 from tests.unit.thresholding.helpers import client_scores, identity
 
-from datp_core.calibration.eligibility import (
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.errors import CapabilityError, LeakageError, ScientificContractError
+from datp_core.core.identifiers import (
+    CentralizedThresholdMethod,
+    DatasetId,
+    EvidenceRole,
+    FamilyIdentity,
+    FederatedThresholdMethod,
+    PartitionRole,
+    PopulationId,
+    PopulationIdentityKind,
+    StableRowId,
+)
+from datp_core.core.numeric import (
+    CalibrationSize,
+    ClientCount,
+    GroupCount,
+    Quantile,
+    ScoreMoment,
+    ScoreVariance,
+    Seed,
+    ThresholdValue,
+)
+from datp_core.data.populations.contracts import CapabilityStatus, EligibleCohort, PopulationCapabilities
+from datp_core.protocols.calibration import (
+    CLUSTER_THRESHOLD_PROTOCOL,
+    FEDERATED_STATISTICS_PROTOCOL,
+    CalibrationEligibilityProtocol,
+    CalibrationSupportRule,
+    ClusterThresholdProtocol,
+)
+from datp_core.thresholds.calibration.eligibility import (
     calibration_support,
     decide_eligibility,
     eligible_clients,
@@ -20,82 +51,71 @@ from datp_core.calibration.eligibility import (
     reject_score_coordinate_mismatch,
     require_common_eligible_cohort,
 )
-from datp_core.datasets.capabilities import CapabilityStatus
-from datp_core.datasets.partitioning.contracts import EligibleCohort, PopulationCapabilities
-from datp_core.domain.enums import (
-    CentralizedThresholdMethod,
-    DatasetId,
-    EvidenceRole,
-    FederatedThresholdMethod,
-    PartitionRole,
-    PopulationId,
-    PopulationIdentityKind,
-    PublicationStatus,
-)
-from datp_core.domain.errors import CapabilityError, LeakageError, ScientificContractError
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import CalibrationSize, ClientCount, GroupCount, Seed
-from datp_core.domain.values.identifiers import StableRowId
-from datp_core.domain.values.paths import FamilyIdentity
-from datp_core.domain.values.ratios import Quantile, ScoreMoment, ScoreVariance, ThresholdValue
-from datp_core.pipeline.decision.federated import (
-    ConstructFederatedThresholdsRequest,
-    construct_federated_thresholds,
-)
-from datp_core.protocols.calibration import (
-    CLUSTER_THRESHOLD_PROTOCOL,
-    FEDERATED_STATISTICS_PROTOCOL,
-    CalibrationEligibilityProtocol,
-    ClusterThresholdProtocol,
-)
-from datp_core.thresholding.assignments import FamilyAssignment
-from datp_core.thresholding.dispatch import (
+from datp_core.thresholds.contracts import FamilyAssignment, ThresholdUnavailableResult
+from datp_core.thresholds.dispatch import (
     ThresholdConstructionRequest,
     dispatch_federated_threshold,
     reject_centralized_threshold_method,
 )
-from datp_core.thresholding.identities import ThresholdUnavailableResult
-from datp_core.thresholding.methods.cluster import construct_grouped_threshold
-from datp_core.thresholding.methods.conformal import construct_local_conformal_threshold
-from datp_core.thresholding.methods.family import construct_family_threshold
-from datp_core.thresholding.methods.federated_statistics import (
+from datp_core.thresholds.policies.cluster import construct_grouped_threshold
+from datp_core.thresholds.policies.family import construct_family_threshold
+from datp_core.thresholds.variants.conformal import construct_local_conformal_threshold
+from datp_core.thresholds.variants.federated_statistics import (
     PooledVarianceDecomposition,
     construct_federated_benign_statistics,
 )
-from datp_core.thresholding.methods.shrinkage import construct_size_aware_shrinkage
-from datp_core.thresholding.publication import FederatedThresholdAssetName
+from datp_core.thresholds.variants.shrinkage import construct_size_aware_shrinkage
 
 PROTOCOL = CalibrationEligibilityProtocol(minimum_support=CalibrationSize(100))
 QUANTILE = Quantile(0.95)
 ROOT = Path(__file__).resolve().parents[2]
-THRESHOLDING_ROOT = ROOT / "src" / "datp_core" / "thresholding"
-METHODS_ROOT = THRESHOLDING_ROOT / "methods"
-FAMILY_MODULE = METHODS_ROOT / "family.py"
-CLUSTER_MODULE = METHODS_ROOT / "cluster.py"
-FEDERATED_STATISTICS_MODULE = METHODS_ROOT / "federated_statistics.py"
-FORBIDDEN_RETRAINING_IMPORTS = (
+THRESHOLDING_ROOT = ROOT / "src" / "datp_core" / "thresholds"
+FAMILY_MODULE = THRESHOLDING_ROOT / "policies" / "family.py"
+CLUSTER_MODULE = THRESHOLDING_ROOT / "policies" / "cluster.py"
+FEDERATED_STATISTICS_MODULE = THRESHOLDING_ROOT / "variants" / "federated_statistics.py"
+FORBIDDEN_RETRAINING_MODULES = (
     "torch",
-    "datp_core.learning.autoencoder",
-    "datp_core.learning.federated.training",
-    "datp_core.learning.federated.checkpoints",
-    "datp_core.learning.federated.fedavg",
-    "datp_core.learning.federated.fedprox",
-    "datp_core.learning.federated.ditto",
-    "datp_core.pipeline.scoring.frames",
-    "datp_core.pipeline.scoring.federated",
-    "datp_core.pipeline.scoring.centralized",
+    "datp_core.detector.autoencoder",
+    "datp_core.detector.training.engine",
+    "datp_core.detector.training.federated",
+    "datp_core.detector.training.ditto",
+    "datp_core.detector.checkpoints.service",
+    "datp_core.detector.scoring.federated",
+    "datp_core.detector.scoring.frames",
 )
+FORBIDDEN_RETRAINING_SYMBOLS = {
+    "datp_core.detector.training.centralized": frozenset({"train_centralized_autoencoder"}),
+    "datp_core.detector.scoring.centralized": frozenset(
+        {
+            "generate_centralized_scores",
+            "score_centralized_reference",
+            "write_centralized_scoring",
+        }
+    ),
+}
 
 
-def _imported_modules(path: Path) -> tuple[str, ...]:
+def _forbidden_retraining_imports(path: Path) -> tuple[str, ...]:
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    modules: list[str] = []
+    violations: list[str] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            modules.extend(alias.name for alias in node.names)
+            violations.extend(
+                alias.name
+                for alias in node.names
+                if any(
+                    alias.name == module or alias.name.startswith(f"{module}.")
+                    for module in FORBIDDEN_RETRAINING_MODULES
+                )
+            )
         elif isinstance(node, ast.ImportFrom) and node.module is not None:
-            modules.append(node.module)
-    return tuple(modules)
+            if any(
+                node.module == module or node.module.startswith(f"{module}.") for module in FORBIDDEN_RETRAINING_MODULES
+            ):
+                violations.append(node.module)
+            forbidden_symbols = FORBIDDEN_RETRAINING_SYMBOLS.get(node.module, frozenset())
+            violations.extend(f"{node.module}.{alias.name}" for alias in node.names if alias.name in forbidden_symbols)
+    return tuple(violations)
 
 
 def _capabilities() -> PopulationCapabilities:
@@ -176,6 +196,8 @@ def test_family_threshold_without_taxonomy_reports_typed_unavailability_not_a_cr
             capabilities=_capabilities(),
             eligible=eligible,
             family_by_client=(),
+            support_rule=CalibrationSupportRule.CANONICAL_MINIMUM_SUPPORT,
+            cluster_threshold_aggregation=None,
         )
     )
     assert isinstance(result, ThresholdUnavailableResult)
@@ -209,8 +231,8 @@ def test_grouped_threshold_fingerprint_matches_locked_formula() -> None:
         )
         for index in range(6)
     )
-    from datp_core.domain.values.ratios import DistributionSkewness
-    from datp_core.thresholding.methods.cluster import FingerprintFeatures
+    from datp_core.core.numeric import DistributionSkewness
+    from datp_core.thresholds.policies.cluster import FingerprintFeatures
 
     result = construct_grouped_threshold(clients, CLUSTER_THRESHOLD_PROTOCOL)
     for fingerprint in result.fingerprints:
@@ -309,11 +331,7 @@ def test_centralized_threshold_method_cannot_enter_federated_dispatch() -> None:
 
 def test_thresholding_package_never_imports_training_or_scoring_generation_code() -> None:
     for path in sorted(THRESHOLDING_ROOT.rglob("*.py")):
-        modules = _imported_modules(path)
-        for forbidden in FORBIDDEN_RETRAINING_IMPORTS:
-            assert not any(module == forbidden or module.startswith(f"{forbidden}.") for module in modules), (
-                f"{path} imports {forbidden}"
-            )
+        assert not _forbidden_retraining_imports(path), f"{path} imports retraining or score-generation code"
 
 
 def test_score_coordinate_mismatch_across_calibration_records_is_rejected(tmp_path: Path) -> None:
@@ -324,27 +342,6 @@ def test_score_coordinate_mismatch_across_calibration_records_is_rejected(tmp_pa
                 benign_score_record(tmp_path, "client_b", (0.3, 0.4), seed=Seed(9)),
             )
         )
-
-
-def test_construct_federated_thresholds_rejects_partial_artifact(tmp_path: Path) -> None:
-    eligible = (client_scores("client_a", tuple(float(index) for index in range(150))),)
-    output_directory = tmp_path / "threshold_output"
-    request = ConstructFederatedThresholdsRequest(
-        request=ThresholdConstructionRequest(
-            method=FederatedThresholdMethod.SHARED_THRESHOLD,
-            coordinate=eligible[0].coordinate,
-            quantile=QUANTILE,
-            capabilities=_capabilities(),
-            eligible=eligible,
-            family_by_client=(),
-        ),
-        output_directory=output_directory,
-        overwrite=False,
-    )
-    construct_federated_thresholds(request)
-    (output_directory / FederatedThresholdAssetName.RESULT).unlink()
-    result = construct_federated_thresholds(request)
-    assert result.publication_status is PublicationStatus.PUBLISHED
 
 
 def test_dispatch_rejects_method_unsupported_by_population_capabilities() -> None:
@@ -375,6 +372,8 @@ def test_dispatch_rejects_method_unsupported_by_population_capabilities() -> Non
                 capabilities=restricted,
                 eligible=eligible,
                 family_by_client=(),
+                support_rule=CalibrationSupportRule.CANONICAL_MINIMUM_SUPPORT,
+                cluster_threshold_aggregation=None,
             )
         )
 
@@ -390,5 +389,7 @@ def test_dispatch_rejects_clients_below_minimum_benign_support() -> None:
                 capabilities=_capabilities(),
                 eligible=eligible,
                 family_by_client=(),
+                support_rule=CalibrationSupportRule.CANONICAL_MINIMUM_SUPPORT,
+                cluster_threshold_aggregation=None,
             )
         )

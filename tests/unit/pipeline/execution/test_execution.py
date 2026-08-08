@@ -3,7 +3,9 @@ from pathlib import Path
 
 import pytest
 
-from datp_core.domain.enums import (
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import (
     DatasetId,
     EvidenceRole,
     ExperimentId,
@@ -15,13 +17,10 @@ from datp_core.domain.enums import (
     TemporalState,
     TrainingModelId,
 )
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import Seed
-from datp_core.domain.values.ratios import ModelCoefficientValue
-from datp_core.pipeline.coordinates import ExperimentCoordinate
-from datp_core.pipeline.execution.engine import execute_experiment, resolve_execution_recipe
-from datp_core.pipeline.execution.models import (
+from datp_core.core.numeric import ModelCoefficientValue, Seed
+from datp_core.experiments.common.coordinates import ExperimentCoordinate
+from datp_core.experiments.execution.engine import execute_experiment, resolve_execution_recipe
+from datp_core.experiments.execution.models import (
     ANCHOR_REPRODUCTION_RECIPE,
     STANDARD_FEDERATED_RECIPE,
     ExecutionProvenance,
@@ -109,6 +108,7 @@ def test_absent_experiment_runs_every_stage_without_deletion() -> None:
         stage_runner=runner,
         output_store=output_store,
         output_root=OUTPUT_ROOT,
+        overwrite=False,
     )
     assert not output_store.deleted
     assert tuple(runner.stages) == resolve_execution_recipe(coordinate()).stages
@@ -125,6 +125,7 @@ def test_complete_valid_experiment_is_reused_without_execution() -> None:
         stage_runner=runner,
         output_store=output_store,
         output_root=OUTPUT_ROOT,
+        overwrite=False,
     )
     assert result.reused_complete_experiment
     assert result.successful
@@ -142,6 +143,7 @@ def test_incomplete_experiment_is_deleted_and_restarted() -> None:
         stage_runner=runner,
         output_store=output_store,
         output_root=OUTPUT_ROOT,
+        overwrite=False,
     )
     assert output_store.deleted
     assert tuple(runner.stages) == resolve_execution_recipe(coordinate()).stages
@@ -176,6 +178,7 @@ def test_invalid_completed_experiment_is_not_reused_or_deleted_silently() -> Non
             stage_runner=runner,
             output_store=output_store,
             output_root=OUTPUT_ROOT,
+            overwrite=False,
         )
     assert not output_store.deleted
     assert not runner.stages
@@ -184,18 +187,17 @@ def test_invalid_completed_experiment_is_not_reused_or_deleted_silently() -> Non
 
 def test_confirmatory_experiment_resolves_the_standard_federated_recipe() -> None:
     assert resolve_execution_recipe(coordinate()) == STANDARD_FEDERATED_RECIPE
-    assert PipelineStage.VERIFY_ANCHOR not in STANDARD_FEDERATED_RECIPE.stages
+    assert PipelineStage.ANALYZE_EVIDENCE in STANDARD_FEDERATED_RECIPE.stages
     assert PipelineStage.FINALIZE_PUBLICATION in STANDARD_FEDERATED_RECIPE.stages
     assert "publish_report" not in {stage.value for stage in PipelineStage}
 
 
-def test_anchor_reproduction_experiment_resolves_a_distinct_recipe_with_verify_anchor() -> None:
+def test_anchor_reproduction_experiment_resolves_its_declared_recipe() -> None:
     anchor_coordinate = replace(coordinate(), experiment=ExperimentId.HISTORICAL_DATP_REPRODUCTION)
     recipe = resolve_execution_recipe(anchor_coordinate)
     assert recipe == ANCHOR_REPRODUCTION_RECIPE
-    assert recipe != STANDARD_FEDERATED_RECIPE
-    assert PipelineStage.VERIFY_ANCHOR in recipe.stages
-    assert recipe.stages[-2:] == (PipelineStage.VERIFY_ANCHOR, PipelineStage.FINALIZE_PUBLICATION)
+    assert recipe.stages == STANDARD_FEDERATED_RECIPE.stages
+    assert recipe.stages[-1] is PipelineStage.FINALIZE_PUBLICATION
 
 
 def test_repeated_recipe_resolution_is_deterministic() -> None:
@@ -211,6 +213,7 @@ def test_completed_execution_contains_every_stage_in_its_selected_recipe() -> No
         stage_runner=runner,
         output_store=output_store,
         output_root=OUTPUT_ROOT,
+        overwrite=False,
     )
     assert result.recipe == STANDARD_FEDERATED_RECIPE
     assert tuple(item.stage for item in result.stages) == STANDARD_FEDERATED_RECIPE.stages
@@ -238,6 +241,7 @@ def test_partial_execution_is_a_valid_recipe_prefix() -> None:
         stage_runner=_BlocksAfterTraining(),
         output_store=OutputStore(ExistingExperimentState.ABSENT),
         output_root=OUTPUT_ROOT,
+        overwrite=False,
     )
     completed_stage_ids = tuple(item.stage for item in result.stages)
     assert completed_stage_ids == STANDARD_FEDERATED_RECIPE.stages[: len(completed_stage_ids)]
@@ -277,6 +281,7 @@ def test_execute_experiment_fails_fast_for_a_ditto_coordinate_instead_of_running
             stage_runner=runner,
             output_store=output_store,
             output_root=OUTPUT_ROOT,
+            overwrite=False,
         )
     assert not runner.stages
     assert not runner.output_roots

@@ -6,14 +6,13 @@ from pathlib import Path
 import pytest
 from tests.unit.learning.federated.helpers import AUTOENCODER, CHECKPOINT, fedavg_coordinate
 
-from datp_core.domain.enums import CheckpointSelectionRule, CheckpointStatus
-from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import RoundNumber, Seed
-from datp_core.domain.values.ratios import MetricValue
-from datp_core.learning.federated.checkpoints.candidates import retain_checkpoint_candidates
-from datp_core.learning.federated.checkpoints.selection import select_checkpoint
-from datp_core.learning.federated.models import RoundSnapshot
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.errors import LeakageError, ScientificContractError
+from datp_core.core.identifiers import CheckpointSelectionRule, CheckpointStatus
+from datp_core.core.numeric import MetricValue, RoundNumber, Seed
+from datp_core.detector.checkpoints.candidates import retain_checkpoint_candidates
+from datp_core.detector.checkpoints.selection import select_checkpoint
+from datp_core.detector.training.models.snapshots import RoundSnapshot
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,7 +29,7 @@ def _loss_for(entries: tuple[_CandidateLoss, ...], round_number: RoundNumber) ->
 
 
 def _candidates_with_favorable_non_terminal_loss(tmp_path: Path):
-    from datp_core.learning.autoencoder import ReconstructionAutoencoder
+    from datp_core.detector.autoencoder import ReconstructionAutoencoder
 
     coordinate = fedavg_coordinate(Seed(0))
     model = ReconstructionAutoencoder(AUTOENCODER.widths)

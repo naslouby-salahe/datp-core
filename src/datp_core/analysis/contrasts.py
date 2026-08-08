@@ -2,8 +2,13 @@
 
 from pydantic import model_validator
 
-from datp_core.domain.contracts import StrictModel
-from datp_core.domain.enums import (
+from datp_core.analysis.inference.contracts import PairedInferenceProtocol
+from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
+from datp_core.analysis.metrics.fixed_score_validation import validate_fixed_score_controls
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.contracts import StrictModel
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import (
     EvidenceRole,
     FederatedThresholdMethod,
     MetricId,
@@ -12,22 +17,18 @@ from datp_core.domain.enums import (
     SplitProtocolId,
     TrainingModelId,
 )
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import PairedObservationCount, Seed
-from datp_core.domain.values.ratios import (
+from datp_core.core.numeric import (
     NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
     AbsoluteTolerance,
     DittoRegularization,
     MetricValue,
+    PairedObservationCount,
     ProximalCoefficient,
     Ratio,
+    Seed,
 )
-from datp_core.evaluation.federated.contracts import FederatedEvaluationDocument
-from datp_core.evaluation.fixed_score.validation import validate_fixed_score_controls
-from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.protocols.seeds import SeedCohort
-from datp_core.protocols.statistics import PairedInferenceProtocol
+from datp_core.detector.training.contracts import FederatedTrainingCoordinate
+from datp_core.experiments.common.seeds import SeedCohort
 
 type MetricSeries = tuple[MetricValue, ...]
 
@@ -136,8 +137,8 @@ class SupplementaryPairedAnalysisPlan(StrictModel):
             raise ValueError("supplementary paired analysis requires non-confirmatory evidence")
         if self.left_method is self.right_method:
             raise ValueError("supplementary paired analysis requires two distinct threshold methods")
-        if self.seed_cohort != self.inference_protocol.seed_cohort:
-            raise ValueError("supplementary plan and inference protocol must share one seed cohort")
+        if self.seed_cohort.member_count != self.inference_protocol.paired_seed_count:
+            raise ValueError("supplementary plan and inference protocol must require the same seed count")
         return self
 
 

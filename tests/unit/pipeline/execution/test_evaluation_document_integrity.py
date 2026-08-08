@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from datp_core.domain.errors import ScientificContractError
-from datp_core.evaluation.federated.publication import FederatedEvaluationAssetName
-from datp_core.pipeline.execution.evidence import load_evaluation_document
+from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
+from datp_core.core.errors import ScientificContractError
+from datp_core.experiments.execution.evidence import load_evaluation_document
 
 
 def test_load_evaluation_document_requires_complete_marker(tmp_path: Path) -> None:

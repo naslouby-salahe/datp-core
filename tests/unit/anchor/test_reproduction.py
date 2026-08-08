@@ -3,8 +3,11 @@ from pathlib import Path
 import pytest
 from tests.unit.anchor.helpers import make_observation, matching_anchor_observations
 
-from datp_core.anchor.models import HistoricalMetricArtifactSource
-from datp_core.anchor.reproduction import (
+from datp_core.core.errors import AnchorReproductionError
+from datp_core.core.identifiers import CheckpointStatus, FederatedThresholdMethod, MetricId
+from datp_core.core.numeric import Seed
+from datp_core.experiments.anchor.contracts import HistoricalMetricArtifactSource
+from datp_core.experiments.anchor.reproduction import (
     ANCHOR_CHECKPOINT_STATUS,
     ANCHOR_METRIC,
     ANCHOR_POPULATION,
@@ -15,11 +18,8 @@ from datp_core.anchor.reproduction import (
     reproduce_anchor,
     validate_historical_seed_cohort,
 )
-from datp_core.domain.enums import CheckpointStatus, FederatedThresholdMethod, MetricId
-from datp_core.domain.errors import AnchorReproductionError
-from datp_core.domain.values.counts import Seed
-from datp_core.protocols.anchor import ANCHOR_DECISION_PROTOCOL, HISTORICAL_ANCHOR_SEED_COHORT
-from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
+from datp_core.experiments.anchor.spec import ANCHOR_DECISION_PROTOCOL, HISTORICAL_ANCHOR_SEED_COHORT
+from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
 
 
 def test_historical_cohort_is_exactly_five_seeds() -> None:

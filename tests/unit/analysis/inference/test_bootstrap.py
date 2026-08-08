@@ -12,8 +12,10 @@ from datp_core.analysis.inference.bootstrap.estimation import (
     paired_bca_interval,
     supplementary_paired_bca_interval,
 )
+from datp_core.analysis.inference.contracts import PairedInferenceProtocol
 from datp_core.analysis.scientific_decision import ScientificDecision, decide_confirmatory
-from datp_core.domain.enums import (
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.identifiers import (
     AvailabilityStatus,
     EvidenceRole,
     FederatedThresholdMethod,
@@ -23,12 +25,10 @@ from datp_core.domain.enums import (
     SplitProtocolId,
     TrainingModelId,
 )
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import Seed
-from datp_core.domain.values.ratios import MetricValue
-from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.protocols.seeds import SeedCohort
-from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL, PairedInferenceProtocol
+from datp_core.core.numeric import MetricValue, Seed, SeedCount
+from datp_core.detector.training.contracts import FederatedTrainingCoordinate
+from datp_core.experiments.common.seeds import SeedCohort
+from datp_core.experiments.confirmatory.spec import CONFIRMATORY_INFERENCE_PROTOCOL
 
 
 def test_paired_bca_is_deterministic_and_uses_protocol_metadata() -> None:
@@ -64,7 +64,7 @@ def test_supplementary_interval_cannot_be_promoted_to_confirmatory() -> None:
     protocol = PairedInferenceProtocol(
         **{
             **CONFIRMATORY_INFERENCE_PROTOCOL.model_dump(),
-            "seed_cohort": seed_cohort,
+            "paired_seed_count": SeedCount(4),
         }
     )
     plan = SupplementaryPairedAnalysisPlan(

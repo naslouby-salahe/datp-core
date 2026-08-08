@@ -5,12 +5,11 @@ import random
 import numpy as np
 import torch
 
-from datp_core.domain.values.counts import Seed
+from datp_core.core.numeric import Seed
 from datp_core.runtime.compute import require_cuda_available
 
 
 def configure_deterministic_execution(seed: Seed) -> None:
-    """Configure global deterministic algorithms and primary RNG streams."""
     require_cuda_available()
     seed_value = seed.value
     random.seed(seed_value)
@@ -23,7 +22,6 @@ def configure_deterministic_execution(seed: Seed) -> None:
 
 
 def derive_worker_seed(base_seed: Seed, worker_id: int) -> Seed:
-    """Derive a stable per-worker seed from a base scientific seed."""
     if worker_id < 0:
         raise ValueError("worker_id must be non-negative")
     derived = (base_seed.value * 1_000_003 + worker_id * 97 + 17) % (2**31 - 1)
@@ -31,7 +29,6 @@ def derive_worker_seed(base_seed: Seed, worker_id: int) -> Seed:
 
 
 def seed_torch_generators(seed: Seed) -> torch.Generator:
-    """Create a CUDA generator seeded for deterministic GPU work."""
     require_cuda_available()
     generator = torch.Generator(device="cuda")
     generator.manual_seed(seed.value)

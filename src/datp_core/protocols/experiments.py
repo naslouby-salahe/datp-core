@@ -6,8 +6,9 @@ from typing import Literal
 
 from pydantic import model_validator
 
-from datp_core.domain.contracts import StrictModel
-from datp_core.domain.enums import (
+from datp_core.core.contracts import StrictModel
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import (
     EvidenceRole,
     ExperimentId,
     ExperimentReadiness,
@@ -19,11 +20,10 @@ from datp_core.domain.enums import (
     TemporalState,
     TrainingModelId,
 )
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.ratios import ConfidenceLevel
+from datp_core.core.numeric import ConfidenceLevel
+from datp_core.experiments.common.seeds import CONFIRMATORY_PAIRED_SEED_COUNT, SeedCohort
 
 from .metrics import CONFIRMATORY_METRICS, OPERATING_POINT_METRICS, OPTIONAL_EQUITY_INDEX_METRICS
-from .seeds import CONFIRMATORY_PAIRED_SEED_COUNT, SeedCohort
 
 
 class ConfirmatoryDeltaDirection(StrEnum):

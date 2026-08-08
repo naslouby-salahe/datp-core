@@ -2,18 +2,18 @@
 
 from pydantic import model_validator
 
-from datp_core.domain.contracts import StrictModel
-from datp_core.domain.enums import EvidenceRole, PartitionRole, SplitProtocolId, TemporalState
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.provenance import canonical_checksum
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.ratios import MetricValue, Ratio
-from datp_core.protocols.inference import ClientIdentityContract, ScoreArtifactManifest, TrainingCoordinateContract
-from datp_core.protocols.metrics import (
-    TEMPORAL_CV_MATERIALITY_CUTOFF,
-    TEMPORAL_MATERIAL_RECOVERY_RATIO_MINIMUM,
+from datp_core.artifacts.provenance import Checksum
+from datp_core.artifacts.serializers.json import canonical_checksum
+from datp_core.core.contracts import StrictModel
+from datp_core.core.errors import ScientificContractError, UnresolvedScientificValueError
+from datp_core.core.identifiers import EvidenceRole, PartitionRole, SplitProtocolId, TemporalState
+from datp_core.core.numeric import MetricValue, Ratio
+from datp_core.detector.scoring.contracts import (
+    ClientIdentityContract,
+    ScoreArtifactManifest,
+    TrainingCoordinateContract,
 )
-from datp_core.protocols.seeds import BOUNDED_EVIDENCE_SEED_COHORT, SeedCohort
+from datp_core.experiments.common.seeds import SeedCohort
 
 
 class TemporalFutureIdentity(StrictModel):
@@ -136,15 +136,9 @@ def temporal_split_protocol(state: TemporalState) -> SplitProtocolId:
 
 
 class TemporalDecisionProtocol(StrictModel):
-    """Pre-specified temporal interpretation thresholds (roadmap §12.1 / §14).
+    """Explicit temporal interpretation thresholds and publication guards."""
 
-    Source of material recovery-ratio minimum:
-    locked temporal interpretation decision requiring recovery of at least half
-    of material drift excess (0.50). Distinct from model-absorption residual
-    bands (0.25 / 0.75).
-    """
-
-    cv_materiality_cutoff: MetricValue
+    drift_excess_materiality_threshold: MetricValue
     material_recovery_ratio_minimum: Ratio
     seed_cohort: SeedCohort
     undefined_recovery_when_drift_not_material: bool
@@ -154,8 +148,8 @@ class TemporalDecisionProtocol(StrictModel):
 
     @model_validator(mode="after")
     def validate_protocol(self) -> "TemporalDecisionProtocol":
-        if self.cv_materiality_cutoff.value < 0.0:
-            raise ValueError("temporal CV materiality cutoff must be non-negative")
+        if self.drift_excess_materiality_threshold.value <= 0.0:
+            raise ValueError("temporal drift-excess materiality threshold must be positive")
         if self.material_recovery_ratio_minimum.value <= 0.0:
             raise ValueError("temporal material recovery-ratio minimum must be positive")
         if self.seed_cohort.member_count.value < 2:
@@ -169,12 +163,9 @@ class TemporalDecisionProtocol(StrictModel):
         return self
 
 
-TEMPORAL_DECISION_PROTOCOL = TemporalDecisionProtocol(
-    cv_materiality_cutoff=TEMPORAL_CV_MATERIALITY_CUTOFF,
-    material_recovery_ratio_minimum=TEMPORAL_MATERIAL_RECOVERY_RATIO_MINIMUM,
-    seed_cohort=BOUNDED_EVIDENCE_SEED_COHORT,
-    undefined_recovery_when_drift_not_material=True,
-    mixed_seed_publication_support=False,
-    require_full_seed_provenance=True,
-    require_uncertainty_for_supported=True,
-)
+def require_temporal_decision_protocol() -> TemporalDecisionProtocol:
+    raise UnresolvedScientificValueError(
+        "the master roadmap requires a pre-specified positive drift-excess materiality threshold "
+        "and a criterion for a meaningful recovery portion, but does not declare either numeric value",
+        subject=EvidenceRole.TEMPORAL_BOUNDARY,
+    )

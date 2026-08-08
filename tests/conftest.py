@@ -6,13 +6,13 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from datp_core.datasets.edge_iiotset.schema import (
+from datp_core.artifacts.provenance import Checksum
+from datp_core.data.edge_iiotset.schema import (
     EDGE_BENIGN_SENSOR_GROUPS,
     EDGE_NUMERIC_FEATURE_COLUMNS,
     EdgeSensorGroup,
 )
-from datp_core.datasets.nbaiot.schema import NBAIOT_DEVICE_FAMILIES, NBAIOT_DEVICE_IDENTITIES, NBaIoTDeviceFamily
-from datp_core.domain.values.checksums import Checksum
+from datp_core.data.nbaiot.schema import NBAIOT_DEVICE_FAMILIES, NBAIOT_DEVICE_IDENTITIES, NBaIoTDeviceFamily
 
 
 def _family_for(device: str) -> str:

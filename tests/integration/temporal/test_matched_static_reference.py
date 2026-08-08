@@ -1,5 +1,5 @@
-from datp_core.datasets.partitioning.splits import hamilton_integer_counts, static_reference_split_protocol
-from datp_core.domain.enums import SplitProtocolId
+from datp_core.core.identifiers import SplitProtocolId
+from datp_core.data.populations.splits import hamilton_integer_counts, static_reference_split_protocol
 
 
 def test_temporal_ratio_contract_is_exact() -> None:

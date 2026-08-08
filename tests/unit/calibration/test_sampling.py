@@ -2,12 +2,11 @@ import pytest
 from tests.unit.calibration.helpers import some_client
 from tests.unit.learning.federated.helpers import fedavg_coordinate
 
-from datp_core.calibration.models import CalibrationSampleReference
-from datp_core.calibration.sampling import build_calibration_replicate, replicate_seed
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.counts import CalibrationSize, ReplicateIndex, Seed
-from datp_core.domain.values.identifiers import StableRowId
-from datp_core.domain.values.ratios import ScoreValue
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import StableRowId
+from datp_core.core.numeric import CalibrationSize, ReplicateIndex, ScoreValue, Seed
+from datp_core.thresholds.calibration.eligibility import CalibrationSampleReference
+from datp_core.thresholds.calibration.sampling import build_calibration_replicate, replicate_seed
 
 CLIENT_A = some_client("client_a")
 CLIENT_B = some_client("client_b")
@@ -116,7 +115,7 @@ def test_build_calibration_replicate_rejects_foreign_client_references() -> None
             sizes=SIZES,
         )
 
-    with pytest.raises(ScientificContractError, match="belong to the replicate's client"):
+    with pytest.raises(ScientificContractError, match="belong to the replicate client"):
         call()
 
 

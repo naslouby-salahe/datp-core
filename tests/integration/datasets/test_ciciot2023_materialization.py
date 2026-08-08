@@ -2,15 +2,15 @@ from hashlib import sha256
 
 import pyarrow.parquet as pq
 
-from datp_core.datasets.ciciot2023.materialize import CICIoT2023Materializer
-from datp_core.datasets.ciciot2023.schema import (
+from datp_core.core.identifiers import AvailabilityStatus, DatasetId, PublicationStatus
+from datp_core.core.numeric import RowCount
+from datp_core.data.ciciot2023.materialize import CICIoT2023Materializer
+from datp_core.data.ciciot2023.schema import (
     CICIOT2023_ARROW_SCHEMA,
     CICIOT2023_MODEL_INPUT_EVIDENCE_COLUMNS,
     CICIOT2023_RAW_COLUMNS,
 )
-from datp_core.datasets.contracts import ExclusionReason
-from datp_core.domain.enums import AvailabilityStatus, DatasetId, PublicationStatus
-from datp_core.domain.values.counts import RowCount
+from datp_core.data.contracts import ExclusionReason
 
 
 def _write_merged(path, rate: str, label: str) -> None:

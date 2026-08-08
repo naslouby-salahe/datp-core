@@ -12,10 +12,9 @@ from datp_core.analysis.descriptive import (
     score_geometry_from_client_vectors,
     summarize_values,
 )
-from datp_core.domain.enums import AvailabilityStatus, EvidenceRole
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import PairedObservationCount, Seed
-from datp_core.domain.values.ratios import MetricValue, Ratio
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.identifiers import AvailabilityStatus, EvidenceRole
+from datp_core.core.numeric import MetricValue, PairedObservationCount, Ratio, Seed
 
 _DEFAULT_QUANTILES = QuantileRange(lower=Ratio(0.25), upper=Ratio(0.75))
 

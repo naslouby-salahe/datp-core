@@ -4,8 +4,8 @@ from dataclasses import dataclass
 
 import pytest
 
-from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.values.ratios import MetricValue, ProximalCoefficient
+from datp_core.core.errors import LeakageError, ScientificContractError
+from datp_core.core.numeric import MetricValue, ProximalCoefficient
 from datp_core.protocols.training import (
     FEDPROX_COEFFICIENT_SELECTION_RULE,
     FEDPROX_COEFFICIENTS,

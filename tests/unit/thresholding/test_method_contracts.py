@@ -1,66 +1,62 @@
 import pytest
 from tests.unit.thresholding.helpers import COORDINATE, identity
 
-from datp_core.domain.enums import (
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import (
     AvailabilityStatus,
+    FamilyIdentity,
     FederatedThresholdMethod,
 )
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import (
+from datp_core.core.numeric import (
+    AbsoluteThresholdError,
     ClusterIndex,
     ConformalRankIndex,
+    CoverageTarget,
     GroupCount,
     KMeansInitializationCount,
     KMeansMaximumIterationCount,
-    RowCount,
-    Seed,
-)
-from datp_core.domain.values.paths import FamilyIdentity
-from datp_core.domain.values.ratios import (
-    AbsoluteThresholdError,
-    CoverageTarget,
     MetricValue,
     Quantile,
     Ratio,
+    RowCount,
     ScoreMoment,
     ScoreValue,
     ScoreVariance,
+    Seed,
     ShrinkageWeight,
     ThresholdValue,
 )
 from datp_core.protocols.calibration import KMeansInitialization
-from datp_core.thresholding.assignments import (
+from datp_core.thresholds.contracts import (
     LocalQuantile,
     ThresholdAssignment,
     ThresholdDiagnostic,
-)
-from datp_core.thresholding.identities import (
     ThresholdInfeasibilityReason,
     ThresholdUnavailableResult,
 )
-from datp_core.thresholding.methods.cluster import (
+from datp_core.thresholds.policies.cluster import (
     ClusterFingerprint,
     ClusterMembership,
     FingerprintFeatures,
     GroupedThresholdResult,
 )
-from datp_core.thresholding.methods.conformal import (
-    ConformalAssignment,
-    ConformalThresholdResult,
-)
-from datp_core.thresholding.methods.family import (
+from datp_core.thresholds.policies.family import (
     FamilyMembership,
     FamilyThresholdResult,
 )
-from datp_core.thresholding.methods.federated_statistics import (
+from datp_core.thresholds.policies.local import LocalThresholdResult
+from datp_core.thresholds.policies.shared import SharedThresholdResult
+from datp_core.thresholds.variants.conformal import (
+    ConformalAssignment,
+    ConformalThresholdResult,
+)
+from datp_core.thresholds.variants.federated_statistics import (
     CentralizedAttainmentDiagnostic,
     ClientBenignSummary,
     PooledVarianceDecomposition,
 )
-from datp_core.thresholding.methods.local import LocalThresholdResult
-from datp_core.thresholding.methods.shared import SharedThresholdResult
-from datp_core.thresholding.methods.shrinkage import (
+from datp_core.thresholds.variants.shrinkage import (
     ShrinkageAssignment,
     ShrinkageThresholdResult,
 )
@@ -162,7 +158,7 @@ def test_family_membership_enforces_the_same_group_membership_contract_as_cluste
 
 
 def test_cluster_contracts_require_four_features_and_declared_group_count() -> None:
-    from datp_core.domain.values.ratios import DistributionSkewness, ScoreMoment
+    from datp_core.core.numeric import DistributionSkewness, ScoreMoment
 
     features = FingerprintFeatures(
         mean=ScoreMoment(1.0),
@@ -202,41 +198,32 @@ def test_cluster_contracts_require_four_features_and_declared_group_count() -> N
 
 
 def test_shrinkage_contracts_enforce_formula_and_complete_curve() -> None:
-    with pytest.raises(ScientificContractError, match="lambda \\* local"):
+    local_a = _local_quantile(CLIENT_A, 2.0)
+    local_b = _local_quantile(CLIENT_B, 1.0)
+    with pytest.raises(ScientificContractError, match="convex local-shared combination"):
         ShrinkageAssignment(
             client=CLIENT_A,
-            lambda_weight=ShrinkageWeight(0.5),
-            local_threshold=ThresholdValue(2.0),
+            local_quantile=local_a,
             shared_threshold=ThresholdValue(4.0),
-            blended_threshold=ThresholdValue(999.0),
+            weight=ShrinkageWeight(0.5),
+            threshold=ThresholdValue(999.0),
         )
     assignments = (
         ShrinkageAssignment(
-            CLIENT_A,
-            ShrinkageWeight(0.0),
-            ThresholdValue(1.0),
-            ThresholdValue(2.0),
-            ThresholdValue(2.0),
-        ),
-        ShrinkageAssignment(
-            CLIENT_B,
-            ShrinkageWeight(0.0),
-            ThresholdValue(1.0),
-            ThresholdValue(2.0),
-            ThresholdValue(2.0),
-        ),
-        ShrinkageAssignment(
-            CLIENT_A,
-            ShrinkageWeight(1.0),
-            ThresholdValue(1.0),
-            ThresholdValue(2.0),
-            ThresholdValue(1.0),
+            client=CLIENT_A,
+            local_quantile=local_a,
+            shared_threshold=ThresholdValue(2.0),
+            weight=ShrinkageWeight(0.0),
+            threshold=ThresholdValue(2.0),
         ),
     )
-    with pytest.raises(ScientificContractError, match="same client set"):
+    with pytest.raises(ScientificContractError, match="exactly the contributing client set"):
         ShrinkageThresholdResult(
             coordinate=COORDINATE,
-            weights=(ShrinkageWeight(0.0), ShrinkageWeight(1.0)),
+            quantile=QUANTILE,
+            weight=ShrinkageWeight(0.0),
+            shared_threshold=ThresholdValue(2.0),
+            local_quantiles=(local_a, local_b),
             assignments=assignments,
         )
 

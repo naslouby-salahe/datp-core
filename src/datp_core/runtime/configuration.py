@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from datp_core.domain.values.base import NonNegativeIntegerValue
+from datp_core.core.numeric import NonNegativeIntegerValue
 
 
 class CudaDeviceIndex(NonNegativeIntegerValue):
@@ -20,7 +20,7 @@ class RepositoryLayout:
         roots = (self.data_root, self.outputs_root, self.results_root)
         if any(root.is_absolute() or not root.parts for root in roots):
             raise ValueError("repository roots must be non-empty project-relative paths")
-        if len(set(roots)) != len(roots):
+        if len(frozenset(roots)) != len(roots):
             raise ValueError("repository roots must be distinct")
 
 

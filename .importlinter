@@ -3,8 +3,85 @@ root_packages =
     datp_core
 include_external_packages = False
 
+[importlinter:contract:domain-independence]
+name = Domain must not depend on upper layers
+type = forbidden
+source_modules =
+    datp_core.domain
+forbidden_modules =
+    datp_core.protocols
+    datp_core.datasets
+    datp_core.preprocessing
+    datp_core.learning
+    datp_core.calibration
+    datp_core.thresholding
+    datp_core.evaluation
+    datp_core.analysis
+    datp_core.pipeline
+    datp_core.experiments
+    datp_core.presentation
+    datp_core.app
+    datp_core.runtime
+
+[importlinter:contract:protocol-direction]
+name = Scientific protocols must not depend on execution or presentation
+type = forbidden
+source_modules =
+    datp_core.protocols
+forbidden_modules =
+    datp_core.pipeline
+    datp_core.experiments
+    datp_core.presentation
+    datp_core.app
+
+[importlinter:contract:capability-direction]
+name = Scientific capability packages must not depend on application or presentation adapters
+type = forbidden
+source_modules =
+    datp_core.datasets
+    datp_core.preprocessing
+    datp_core.learning
+    datp_core.calibration
+    datp_core.thresholding
+    datp_core.evaluation
+    datp_core.analysis
+forbidden_modules =
+    datp_core.app
+    datp_core.presentation
+
+[importlinter:contract:pipeline-foundations]
+name = Pipeline foundations must not import experiment composition or application adapters
+type = forbidden
+source_modules =
+    datp_core.pipeline.coordinates
+    datp_core.pipeline.execution
+    datp_core.pipeline.training
+    datp_core.pipeline.scoring
+    datp_core.pipeline.decision
+    datp_core.pipeline.publication
+forbidden_modules =
+    datp_core.experiments
+    datp_core.presentation
+    datp_core.app
+
+[importlinter:contract:experiment-direction]
+name = Scientific experiment recipes must not depend on application composition
+type = forbidden
+source_modules =
+    datp_core.experiments
+forbidden_modules =
+    datp_core.app
+
+[importlinter:contract:presentation-not-cli]
+name = Presentation must not import command-line adapters
+type = forbidden
+source_modules =
+    datp_core.presentation
+forbidden_modules =
+    datp_core.app.cli
+
 [importlinter:contract:centralized-federated-isolation]
-name = Centralized training/thresholding must not import federated learning
+name = Centralized learning must not import federated learning
 type = forbidden
 source_modules =
     datp_core.learning.centralized
@@ -12,157 +89,12 @@ forbidden_modules =
     datp_core.learning.federated
 
 [importlinter:contract:centralized-pipeline-isolation]
-name = Centralized pipeline services must not import federated execution or workflows
+name = Centralized pipeline services must not import federated pipeline services
 type = forbidden
 source_modules =
     datp_core.pipeline.training.centralized
     datp_core.pipeline.scoring.centralized
     datp_core.pipeline.decision.centralized
 forbidden_modules =
-    datp_core.pipeline.execution
     datp_core.pipeline.training.federated
     datp_core.pipeline.scoring.federated
-    datp_core.pipeline.workflows
-
-[importlinter:contract:pipeline-neutral-submodule-isolation]
-name = Neutral pipeline infrastructure must not import branch, workflow, or application packages
-type = forbidden
-source_modules =
-    datp_core.pipeline.coordinates
-    datp_core.pipeline.checkpoints
-    datp_core.pipeline.scoring
-    datp_core.pipeline.publication
-forbidden_modules =
-    datp_core.thresholding
-    datp_core.evaluation
-    datp_core.analysis
-    datp_core.calibration
-    datp_core.reporting
-    datp_core.pipeline.workflows
-    datp_core.cli
-
-[importlinter:contract:pipeline-services-do-not-import-workflows]
-name = Pipeline services must not import workflows
-type = forbidden
-source_modules =
-    datp_core.pipeline.execution
-    datp_core.pipeline.preparation
-    datp_core.pipeline.training
-    datp_core.pipeline.checkpoints
-    datp_core.pipeline.scoring
-    datp_core.pipeline.decision
-    datp_core.pipeline.publication
-forbidden_modules =
-    datp_core.pipeline.workflows
-ignore_imports =
-    datp_core.pipeline.execution.engine -> datp_core.pipeline.workflows.anchor
-
-[importlinter:contract:workflows-do-not-import-adapters]
-name = Workflows must not import the CLI
-type = forbidden
-source_modules =
-    datp_core.pipeline.workflows
-forbidden_modules =
-    datp_core.cli
-
-[importlinter:contract:pipeline-application-boundary]
-name = Pipeline execution spine must not import its adapters
-type = forbidden
-source_modules =
-    datp_core.pipeline
-forbidden_modules =
-    datp_core.cli
-
-[importlinter:contract:learning-isolation]
-name = Learning implementations must not import application composition layers
-type = forbidden
-source_modules =
-    datp_core.learning
-forbidden_modules =
-    datp_core.pipeline.workflows
-    datp_core.reporting
-    datp_core.cli
-
-[importlinter:contract:dataset-direction]
-name = Dataset implementations must not depend on application composition
-type = forbidden
-source_modules =
-    datp_core.datasets
-forbidden_modules =
-    datp_core.pipeline.workflows
-    datp_core.reporting
-    datp_core.cli
-
-[importlinter:contract:partitioning-direction]
-name = Shared dataset partitioning must not depend on dataset-specific implementations or the registry
-type = forbidden
-source_modules =
-    datp_core.datasets.partitioning
-forbidden_modules =
-    datp_core.datasets.nbaiot
-    datp_core.datasets.ciciot2023
-    datp_core.datasets.edge_iiotset
-    datp_core.datasets.registry
-    datp_core.pipeline.workflows
-    datp_core.reporting
-    datp_core.cli
-
-[importlinter:contract:preprocessing-direction]
-name = Preprocessing implementations must not depend on application composition
-type = forbidden
-source_modules =
-    datp_core.preprocessing
-forbidden_modules =
-    datp_core.pipeline.workflows
-    datp_core.reporting
-    datp_core.cli
-
-[importlinter:contract:protocol-direction]
-name = Protocol declarations must not depend on execution or adapter packages
-type = forbidden
-source_modules =
-    datp_core.protocols
-forbidden_modules =
-    datp_core.pipeline
-    datp_core.reporting
-    datp_core.cli
-
-[importlinter:contract:domain-independence]
-name = Domain package must not import application layers
-type = forbidden
-source_modules =
-    datp_core.domain
-forbidden_modules =
-    datp_core.cli
-    datp_core.reporting
-    datp_core.analysis
-    datp_core.evaluation
-    datp_core.thresholding
-    datp_core.calibration
-    datp_core.anchor
-    datp_core.learning
-    datp_core.preprocessing
-    datp_core.datasets
-    datp_core.pipeline
-    datp_core.runtime
-    datp_core.protocols
-
-[importlinter:contract:cli-not-imported]
-name = No package may import the CLI module
-type = forbidden
-source_modules =
-    datp_core.domain
-    datp_core.protocols
-    datp_core.datasets
-    datp_core.preprocessing
-    datp_core.learning
-    datp_core.pipeline
-    datp_core.thresholding
-    datp_core.calibration
-    datp_core.evaluation
-    datp_core.analysis
-    datp_core.reporting
-    datp_core.runtime
-    datp_core.anchor
-forbidden_modules =
-    datp_core.cli

@@ -1,4 +1,4 @@
-from datp_core.domain.enums import EvidenceRole, ExperimentId
+from datp_core.core.identifiers import EvidenceRole, ExperimentId
 from datp_core.protocols.experiments import EXPERIMENTS
 
 

@@ -2,7 +2,9 @@
 
 from dataclasses import dataclass
 
-from datp_core.domain.enums import (
+from datp_core.analysis.inference.contracts import PairedInferenceProtocol
+from datp_core.core.errors import ProtocolValidationError, UnresolvedScientificValueError
+from datp_core.core.identifiers import (
     ContractSubject,
     EvidenceRole,
     ExperimentId,
@@ -13,10 +15,12 @@ from datp_core.domain.enums import (
     PopulationId,
     TrainingModelId,
 )
-from datp_core.domain.errors import ProtocolValidationError, UnresolvedScientificValueError
-from datp_core.domain.values.counts import CalibrationSize
+from datp_core.core.numeric import CalibrationSize
+from datp_core.data.populations.contracts import POPULATIONS, PopulationDeclaration
+from datp_core.experiments.anchor.spec import ANCHOR_DECISION_PROTOCOL, AnchorDecisionProtocol
+from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT
+from datp_core.experiments.confirmatory.spec import CONFIRMATORY_INFERENCE_PROTOCOL
 
-from .anchor import ANCHOR_DECISION_PROTOCOL, AnchorDecisionProtocol
 from .calibration import (
     CLUSTER_THRESHOLD_PROTOCOL,
     MINIMUM_BENIGN_SUPPORT,
@@ -26,8 +30,6 @@ from .calibration import (
 from .experiments import EXPERIMENTS, ConfirmatoryDeltaDirection, ConfirmatoryEndpoint, ExperimentDeclaration
 from .graph import ResolvedProtocolGraph
 from .metrics import ATTACK_SENSITIVE_METRICS, SUPPRESSED_OPERATIONAL_METRICS
-from .populations import POPULATIONS, PopulationDeclaration
-from .seeds import CONFIRMATORY_SEED_COHORT
 from .splits import (
     NON_TEMPORAL_SPLIT,
     STATIC_REFERENCE_SPLIT,
@@ -36,7 +38,6 @@ from .splits import (
     StaticReferenceSplitProtocol,
     TemporalSplitProtocol,
 )
-from .statistics import CONFIRMATORY_INFERENCE_PROTOCOL, StatisticalInferenceProtocol
 from .traffic_rates import TRAFFIC_RATE_EVIDENCE, TrafficRateEvidence
 from .training import CHECKPOINT_PROTOCOL, FEDAVG_TRAINING_PROTOCOL, CheckpointProtocol, FedAvgProtocol
 
@@ -65,7 +66,7 @@ class ProtocolGraphInputs:
     minimum_support: CalibrationSize
     traffic_rate_evidence: tuple[TrafficRateEvidence, ...]
     confirmatory_endpoint: ConfirmatoryEndpoint
-    confirmatory_inference: StatisticalInferenceProtocol
+    confirmatory_inference: PairedInferenceProtocol
     anchor: AnchorDecisionProtocol
     cluster_threshold: ClusterThresholdProtocol
     fedavg_training: FedAvgProtocol
@@ -149,7 +150,7 @@ def _population(
 
 def _validate_confirmatory_endpoint(
     endpoint: ConfirmatoryEndpoint,
-    inference: StatisticalInferenceProtocol,
+    inference: PairedInferenceProtocol,
     experiments: tuple[ExperimentDeclaration, ...],
     populations: tuple[PopulationDeclaration, ...],
 ) -> None:
@@ -167,10 +168,10 @@ def _validate_confirmatory_endpoint(
 
 def _require_endpoint_matches_inference(
     endpoint: ConfirmatoryEndpoint,
-    inference: StatisticalInferenceProtocol,
+    inference: PairedInferenceProtocol,
 ) -> None:
-    if endpoint.seed_cohort != inference.seed_cohort:
-        raise ProtocolValidationError("Confirmatory endpoint seed cohort must match confirmatory inference")
+    if endpoint.seed_cohort.member_count != inference.paired_seed_count:
+        raise ProtocolValidationError("Confirmatory endpoint seed cohort must match confirmatory inference pair count")
     if endpoint.confidence_level != inference.confidence_level:
         raise ProtocolValidationError("Confirmatory endpoint confidence must match confirmatory inference")
 

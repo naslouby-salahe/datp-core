@@ -8,11 +8,10 @@ from tests.unit.evaluation.test_fixed_score import _evidence
 from tests.unit.learning.federated.helpers import fedavg_coordinate
 
 from datp_core.analysis.contrasts import build_paired_contrast
-from datp_core.domain.enums import EvidenceRole, FederatedThresholdMethod, MetricId
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import Seed
-from datp_core.domain.values.ratios import MetricValue
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import EvidenceRole, FederatedThresholdMethod, MetricId
+from datp_core.core.numeric import MetricValue, Seed
 
 
 def _document(

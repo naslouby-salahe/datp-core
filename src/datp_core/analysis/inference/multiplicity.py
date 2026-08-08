@@ -5,18 +5,18 @@ from typing import ClassVar
 from pydantic import model_validator
 from statsmodels.stats.multitest import multipletests
 
+from datp_core.analysis.inference.contracts import PairedInferenceProtocol
 from datp_core.analysis.inference.wilcoxon import PValue
-from datp_core.domain.contracts import StrictModel
-from datp_core.domain.enums import (
+from datp_core.core.contracts import StrictModel
+from datp_core.core.identifiers import (
     EvidenceRole,
     ExperimentId,
     FederatedThresholdMethod,
     MetricId,
     MultiplicityCorrectionId,
+    NonEmptyString,
 )
-from datp_core.domain.values.base import NonEmptyString, PositiveIntegerValue
-from datp_core.domain.values.ratios import Ratio
-from datp_core.protocols.statistics import PairedInferenceProtocol
+from datp_core.core.numeric import PositiveIntegerValue, Ratio
 
 
 class FamilyName(NonEmptyString):
@@ -52,7 +52,7 @@ class MultiplicityHypothesis(StrictModel):
             raise ValueError("multiplicity hypothesis requires a non-empty comparison label")
         if (self.left_method is None) != (self.right_method is None):
             raise ValueError("multiplicity hypothesis threshold methods must both be present or both absent")
-        if self.left_method is not None and self.right_method is not None and self.left_method is self.right_method:
+        if self.left_method is not None and self.left_method is self.right_method:
             raise ValueError("multiplicity hypothesis requires distinct threshold methods when present")
         return self
 
@@ -65,12 +65,10 @@ class MultiplicityPlan(StrictModel):
 
     @model_validator(mode="after")
     def validate_plan(self) -> "MultiplicityPlan":
-        if not self.hypotheses:
-            raise ValueError("multiplicity requires a non-empty test family")
         if len(self.hypotheses) != self.declared_family_size.value:
             raise ValueError("multiplicity family size must equal the number of declared hypotheses")
         identifiers = tuple(item.hypothesis_id for item in self.hypotheses)
-        if len(set(identifiers)) != len(identifiers):
+        if len(frozenset(identifiers)) != len(identifiers):
             raise ValueError("multiplicity hypothesis identifiers must be unique within a family")
         return self
 
@@ -97,12 +95,10 @@ class MultiplicityResult(StrictModel):
 
     @model_validator(mode="after")
     def validate_result(self) -> "MultiplicityResult":
-        if not self.decisions:
-            raise ValueError("multiplicity result requires a non-empty decision tuple")
         if self.family_size.value != len(self.decisions):
             raise ValueError("multiplicity family size must match the decision count")
         identifiers = tuple(item.hypothesis.hypothesis_id for item in self.decisions)
-        if len(set(identifiers)) != len(identifiers):
+        if len(frozenset(identifiers)) != len(identifiers):
             raise ValueError("multiplicity decisions must remain uniquely identified")
         return self
 
@@ -119,10 +115,9 @@ class MultiplicityResult(StrictModel):
         return tuple(item.rejected for item in self.decisions)
 
 
-def holm_adjust(
-    plan: MultiplicityPlan,
-    protocol: PairedInferenceProtocol,
-) -> MultiplicityResult:
+def holm_adjust(plan: MultiplicityPlan, protocol: PairedInferenceProtocol) -> MultiplicityResult:
+    if protocol.multiplicity_correction is not MultiplicityCorrectionId.HOLM:
+        raise ValueError("DATP paired multiplicity requires the declared Holm correction")
     rejected, adjusted, _, _ = multipletests(
         tuple(value.value for value in plan.raw_p_values),
         alpha=plan.alpha.value,

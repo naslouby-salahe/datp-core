@@ -3,16 +3,16 @@ from pathlib import Path
 
 import pytest
 
-from datp_core.domain.enums import (
+from datp_core.core.identifiers import (
+    ClientPathToken,
     DatasetId,
     PopulationId,
     PreprocessingProtocolId,
     ProcessedDataBranch,
     SplitProtocolId,
 )
-from datp_core.domain.values.counts import Seed
-from datp_core.domain.values.paths import ClientPathToken
-from datp_core.preprocessing.contracts import (
+from datp_core.core.numeric import Seed
+from datp_core.data.preprocessing.artifacts import (
     PartitionOrdering,
     PreprocessingFitScope,
     ProcessedAssetName,

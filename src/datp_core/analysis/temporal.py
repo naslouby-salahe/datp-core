@@ -7,25 +7,23 @@ from pydantic import model_validator
 
 from datp_core.analysis.inference.bootstrap.contracts import BootstrapInterval
 from datp_core.analysis.inference.bootstrap.estimation import seed_level_bca_interval
+from datp_core.analysis.inference.contracts import PairedInferenceProtocol
 from datp_core.analysis.scientific_decision import ScientificDecision, ScientificDecisionResult
-from datp_core.domain.contracts import StrictModel
-from datp_core.domain.enums import (
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.contracts import StrictModel
+from datp_core.core.identifiers import (
     AvailabilityStatus,
     EvidenceRole,
     ExperimentId,
     FederatedThresholdMethod,
+    PopulationId,
     TemporalState,
 )
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import Seed
-from datp_core.domain.values.ratios import MetricValue, Ratio
-from datp_core.protocols.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_ANALYSIS_SEED, SeedCohort
-from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL, PairedInferenceProtocol
-from datp_core.protocols.temporal import (
-    TEMPORAL_DECISION_PROTOCOL,
-    TemporalDecisionProtocol,
-    TemporalDeploymentProvenance,
-)
+from datp_core.core.numeric import MetricValue, Ratio, Seed
+from datp_core.data.populations.contracts import ClientIdentity
+from datp_core.experiments.common.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_ANALYSIS_SEED, SeedCohort
+from datp_core.experiments.confirmatory.spec import CONFIRMATORY_INFERENCE_PROTOCOL
+from datp_core.protocols.temporal import TemporalDecisionProtocol, TemporalDeploymentProvenance
 
 
 class TemporalInterpretation(StrEnum):
@@ -42,7 +40,7 @@ class TemporalSeedProvenance(StrictModel):
 
     seed: Seed
     experiment: ExperimentId
-    population: str
+    population: PopulationId
     threshold_method: FederatedThresholdMethod
     static_reference: TemporalDeploymentProvenance
     frozen_future: TemporalDeploymentProvenance
@@ -57,7 +55,7 @@ class TemporalSeedProvenance(StrictModel):
     eligibility_checksum: Checksum
     source_row_checksum: Checksum
     row_order_checksum: Checksum
-    exclusions: tuple[str, ...] = ()
+    excluded_clients: tuple[ClientIdentity, ...] = ()
     unavailable_reasons: tuple[str, ...] = ()
 
     @model_validator(mode="after")
@@ -68,8 +66,6 @@ class TemporalSeedProvenance(StrictModel):
             raise ValueError("frozen_future provenance must use the frozen_future state")
         if self.recalibrated_future.state is not TemporalState.RECALIBRATED_FUTURE:
             raise ValueError("recalibrated_future provenance must use the recalibrated_future state")
-        if not self.population.strip():
-            raise ValueError("temporal provenance requires a population identity")
         if (
             self.static_reference.checkpoint_checksum != self.frozen_future.checkpoint_checksum
             or self.static_reference.preprocessing_state_set_checksum
@@ -78,6 +74,10 @@ class TemporalSeedProvenance(StrictModel):
             raise ValueError("static and frozen temporal states must share detector and preprocessing identity")
         if self.frozen_future.future_identity != self.recalibrated_future.future_identity:
             raise ValueError("frozen and recalibrated future must share detector, split, and evaluation scores")
+        if any(client.population is not self.population for client in self.excluded_clients):
+            raise ValueError("temporal exclusions must match the provenance population")
+        if len(self.excluded_clients) != len(frozenset(self.excluded_clients)):
+            raise ValueError("temporal excluded clients must be unique")
         return self
 
 
@@ -85,7 +85,7 @@ class TemporalClientTrajectory(StrictModel):
     """Per-client temporal state trajectory for one seed and threshold method."""
 
     seed: Seed
-    client_id: str
+    client: ClientIdentity
     threshold_method: FederatedThresholdMethod
     eligible: bool
     exclusion_reason: str | None
@@ -104,6 +104,10 @@ class TemporalClientTrajectory(StrictModel):
     macro_f1_static: MetricValue | None = None
     macro_f1_frozen: MetricValue | None = None
     macro_f1_recalibrated: MetricValue | None = None
+
+    @property
+    def client_id(self) -> str:
+        return self.client.client_id
 
     @property
     def threshold_movement_frozen(self) -> MetricValue | None:
@@ -154,13 +158,15 @@ class TemporalRecoveryResult(StrictModel):
             or self.provenance.threshold_method is not self.threshold_method
         ):
             raise ValueError("temporal provenance must match experiment and threshold method")
-        trajectory_clients = tuple(item.client_id for item in self.client_trajectories)
+        trajectory_clients = tuple(item.client for item in self.client_trajectories)
         if len(trajectory_clients) != len(frozenset(trajectory_clients)):
             raise ValueError("temporal client trajectories must be unique by client")
         if any(item.seed != self.seed for item in self.client_trajectories):
             raise ValueError("temporal client trajectories must match the recovery seed")
         if any(item.threshold_method is not self.threshold_method for item in self.client_trajectories):
             raise ValueError("temporal client trajectories must match the recovery threshold method")
+        if any(item.client.population is not self.provenance.population for item in self.client_trajectories):
+            raise ValueError("temporal client trajectories must match the provenance population")
         return self
 
     @property
@@ -176,8 +182,8 @@ class TemporalRecoveryResult(StrictModel):
         return MetricValue(self.frozen_future_cv.value - self.recalibrated_future_cv.value)
 
     @property
-    def materiality_cutoff(self) -> MetricValue:
-        return self.decision_protocol.cv_materiality_cutoff
+    def drift_excess_materiality_threshold(self) -> MetricValue:
+        return self.decision_protocol.drift_excess_materiality_threshold
 
     @property
     def material_recovery_ratio_minimum(self) -> Ratio:
@@ -187,7 +193,7 @@ class TemporalRecoveryResult(StrictModel):
     def recovery_ratio(self) -> MetricValue | None:
         if self.unavailable_reason is not None:
             return None
-        if self.drift_excess.value <= self.materiality_cutoff.value:
+        if self.drift_excess.value <= self.drift_excess_materiality_threshold.value:
             return None
         return MetricValue(self.recovered_amount.value / self.drift_excess.value)
 
@@ -248,7 +254,7 @@ def temporal_recovery(
     frozen_future_cv: MetricValue,
     recalibrated_future_cv: MetricValue,
     provenance: TemporalSeedProvenance,
-    decision_protocol: TemporalDecisionProtocol = TEMPORAL_DECISION_PROTOCOL,
+    decision_protocol: TemporalDecisionProtocol,
     mean_fpr_static: MetricValue | None = None,
     mean_fpr_frozen: MetricValue | None = None,
     mean_fpr_recalibrated: MetricValue | None = None,
@@ -292,7 +298,6 @@ def decide_temporal_campaign(
         return blocked
     protocol = inference_protocol or _temporal_inference_protocol(required_seed_cohort)
     defined_ratios = tuple(record.recovery_ratio for record in records if record.recovery_ratio is not None)
-    # Recovery-ratio BCa is defined only when every seed has a defined ratio (full cohort).
     recovery_interval = (
         seed_level_bca_interval(
             defined_ratios,
@@ -506,7 +511,7 @@ def _temporal_inference_protocol(seed_cohort: SeedCohort) -> PairedInferenceProt
     base = CONFIRMATORY_INFERENCE_PROTOCOL
     return PairedInferenceProtocol(
         confidence_level=base.confidence_level,
-        seed_cohort=seed_cohort,
+        paired_seed_count=seed_cohort.member_count,
         interval_method=base.interval_method,
         bootstrap_replicates=base.bootstrap_replicates,
         statistical_test=base.statistical_test,

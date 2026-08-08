@@ -1,7 +1,8 @@
 import pytest
 
-from datp_core.datasets.partitioning.contracts import ClientIdentity
-from datp_core.domain.enums import (
+from datp_core.artifacts.provenance import checksum_text
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import (
     FederatedThresholdMethod,
     PopulationId,
     PopulationIdentityKind,
@@ -9,20 +10,18 @@ from datp_core.domain.enums import (
     SplitProtocolId,
     TrainingModelId,
 )
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.checksums import checksum_text
-from datp_core.domain.values.counts import Seed
-from datp_core.domain.values.ratios import DittoRegularization, ScoreValue
-from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.pipeline.execution.engine import build_campaign
-from datp_core.pipeline.planning import expand_experiment_plan
+from datp_core.core.numeric import DittoRegularization, ScoreValue, Seed
+from datp_core.data.populations.contracts import ClientIdentity
+from datp_core.detector.training.contracts import FederatedTrainingCoordinate
+from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT
+from datp_core.experiments.execution import build_campaign
+from datp_core.experiments.planning import expand_experiment_plan
 from datp_core.protocols.calibration import CANONICAL_QUANTILE, QuantileProtocol
 from datp_core.protocols.experiments import EXPERIMENTS
-from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT
 from datp_core.protocols.training import DITTO_TRAINING_PROTOCOLS, resolve_ditto_protocol
-from datp_core.thresholding.methods.local import construct_local_threshold
-from datp_core.thresholding.methods.shared import construct_shared_threshold
-from datp_core.thresholding.quantiles import ClientBenignCalibrationScores, unweighted_mean
+from datp_core.thresholds.policies.local import construct_local_threshold
+from datp_core.thresholds.policies.shared import construct_shared_threshold
+from datp_core.thresholds.quantiles import ClientBenignCalibrationScores, unweighted_mean
 
 
 def test_campaign_contains_only_executable_plan_entries() -> None:

@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 import torch
 
-from datp_core.domain.values.counts import Seed
+from datp_core.core.numeric import Seed
 from datp_core.runtime.compute import (
     cuda_provenance,
     require_cuda_available,

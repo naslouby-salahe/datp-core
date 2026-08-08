@@ -6,8 +6,10 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Protocol
 
-from datp_core.domain.contracts import StrictModel
-from datp_core.domain.enums import (
+from datp_core.analysis.inference.contracts import PairedInferenceProtocol
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.contracts import StrictModel
+from datp_core.core.identifiers import (
     DatasetId,
     EvidenceRole,
     ExperimentId,
@@ -18,16 +20,14 @@ from datp_core.domain.enums import (
     TemporalState,
     TrainingModelId,
 )
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import Seed
+from datp_core.core.numeric import Seed
+from datp_core.data.populations.contracts import PopulationDeclaration
+from datp_core.detector.checkpoints.contracts import CheckpointProtocol
+from datp_core.experiments.anchor.spec import AnchorDecisionProtocol
 
-from .anchor import AnchorDecisionProtocol
 from .calibration import CalibrationEligibilityProtocol, ClusterThresholdProtocol
-from .checkpoints import CheckpointProtocol
 from .experiments import ConfirmatoryEndpoint, ExperimentDeclaration
-from .populations import PopulationDeclaration
 from .splits import FractionalSplitProtocol, StaticReferenceSplitProtocol, TemporalSplitProtocol
-from .statistics import StatisticalInferenceProtocol
 from .traffic_rates import TrafficRateEvidence
 from .training import FedAvgProtocol
 
@@ -42,7 +42,7 @@ class ResolvedProtocolGraph(StrictModel):
     checkpoint: CheckpointProtocol
     calibration: CalibrationEligibilityProtocol
     confirmatory_endpoint: ConfirmatoryEndpoint
-    confirmatory_inference: StatisticalInferenceProtocol
+    confirmatory_inference: PairedInferenceProtocol
     anchor: AnchorDecisionProtocol
     traffic_rate_evidence: tuple[TrafficRateEvidence, ...]
     cluster_threshold: ClusterThresholdProtocol

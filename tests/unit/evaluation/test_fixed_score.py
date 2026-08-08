@@ -1,12 +1,7 @@
 import pytest
 from tests.unit.learning.federated.helpers import client_identity, fedavg_coordinate
 
-from datp_core.domain.enums import FederatedThresholdMethod, MetricId, PartitionRole
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import Seed
-from datp_core.domain.values.ratios import AbsoluteTolerance, MetricValue
-from datp_core.evaluation.fixed_score.contracts import (
+from datp_core.analysis.metrics.fixed_score import (
     CalibrationEvidence,
     ClientAurocEvidence,
     DetectorEvidence,
@@ -14,9 +9,13 @@ from datp_core.evaluation.fixed_score.contracts import (
     HeldOutEvaluationEvidence,
     PopulationEvidence,
 )
-from datp_core.evaluation.fixed_score.validation import validate_fixed_score_controls
-from datp_core.evaluation.metric_semantics import available, unavailable
-from datp_core.evaluation.models import MetricAvailability, MetricReason, MetricStatus
+from datp_core.analysis.metrics.fixed_score_validation import validate_fixed_score_controls
+from datp_core.analysis.metrics.models import MetricAvailability, MetricReason, MetricStatus
+from datp_core.analysis.metrics.semantics import available, unavailable
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import FederatedThresholdMethod, MetricId, PartitionRole
+from datp_core.core.numeric import AbsoluteTolerance, MetricValue, Seed
 
 
 def test_fixed_score_controls_allow_only_threshold_method_to_change() -> None:

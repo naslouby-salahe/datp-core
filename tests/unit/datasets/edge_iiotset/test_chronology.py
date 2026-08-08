@@ -1,7 +1,7 @@
 import struct
 from datetime import UTC, datetime
 
-from datp_core.datasets.edge_iiotset.chronology import validate_chronology
+from datp_core.data.edge_iiotset.chronology import validate_chronology
 
 
 def _write_csv(path, clocks: tuple[str, ...]) -> None:

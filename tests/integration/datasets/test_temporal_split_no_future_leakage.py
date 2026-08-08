@@ -3,13 +3,12 @@ from pathlib import Path
 
 import polars as pl
 
-from datp_core.datasets.edge_iiotset.populations import construct_edge_temporal_groups
-from datp_core.datasets.partitioning.contracts import SplitConstructionRequest
-from datp_core.datasets.partitioning.integrity import validate_no_future_history_leakage
-from datp_core.datasets.partitioning.splits import split_membership
-from datp_core.domain.enums import DatasetId, PartitionRole, PopulationId, SplitProtocolId
-from datp_core.domain.values.counts import Seed
-from datp_core.domain.values.identifiers import CaptureTimestampColumn
+from datp_core.core.identifiers import CaptureTimestampColumn, DatasetId, PartitionRole, PopulationId, SplitProtocolId
+from datp_core.core.numeric import Seed
+from datp_core.data.edge_iiotset.populations import construct_edge_temporal_groups
+from datp_core.data.populations.contracts import SplitConstructionRequest
+from datp_core.data.populations.integrity import validate_no_future_history_leakage
+from datp_core.data.populations.splits import split_membership
 
 
 def test_temporal_split_preserves_history_before_future(edge_temporal_eligible_root: Path) -> None:

@@ -1,4 +1,4 @@
-from datp_core.datasets.edge_iiotset.schema import EDGE_BENIGN_SENSOR_GROUPS, EDGE_RAW_COLUMNS
+from datp_core.data.edge_iiotset.schema import EDGE_BENIGN_SENSOR_GROUPS, EDGE_RAW_COLUMNS
 
 
 def test_audited_edge_schema() -> None:

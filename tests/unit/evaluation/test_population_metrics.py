@@ -1,13 +1,12 @@
 from tests.unit.learning.federated.helpers import client_identity, fedavg_coordinate
 
-from datp_core.datasets.partitioning.contracts import PopulationOutcomeLabel
-from datp_core.domain.enums import EvaluationCohort, EvidenceRole, FederatedThresholdMethod, MetricId
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import RowCount, Seed
-from datp_core.domain.values.ratios import ScoreValue, ThresholdValue
-from datp_core.evaluation.client_metrics import calculate_client_metrics
-from datp_core.evaluation.models import ClientMetricResult, ConfusionCounts
-from datp_core.evaluation.population_metrics import calculate_population_metrics
+from datp_core.analysis.metrics.client import calculate_client_metrics
+from datp_core.analysis.metrics.models import ClientMetricResult, ConfusionCounts
+from datp_core.analysis.metrics.population import calculate_population_metrics
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.identifiers import EvaluationCohort, EvidenceRole, FederatedThresholdMethod, MetricId
+from datp_core.core.numeric import RowCount, ScoreValue, Seed, ThresholdValue
+from datp_core.data.populations.contracts import PopulationOutcomeLabel
 
 
 def test_population_metrics_exclude_fallback_attack_values_from_fpr_aggregate() -> None:

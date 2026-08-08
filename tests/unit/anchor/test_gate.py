@@ -4,7 +4,17 @@ import pytest
 from pydantic import ValidationError as PydanticValidationError
 from tests.unit.anchor.helpers import matching_anchor_observations
 
-from datp_core.anchor.gate import (
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.errors import AnchorReproductionError
+from datp_core.core.identifiers import EvidenceRole, ExperimentId, ExperimentReadiness, PopulationId
+from datp_core.core.numeric import MetricValue
+from datp_core.experiments.anchor.contracts import (
+    AnchorArtifactFileName,
+    AnchorGateStatus,
+    AnchorObservationSourceKind,
+    AnchorObservedMetric,
+)
+from datp_core.experiments.anchor.gate import (
     assert_gate_not_bypassable,
     decide_anchor_gate,
     dependent_readiness_from_gate,
@@ -13,20 +23,10 @@ from datp_core.anchor.gate import (
     persist_anchor_gate_diagnostics,
     validate_handoff_against_confirmatory_programme,
 )
-from datp_core.anchor.models import (
-    AnchorArtifactFileName,
-    AnchorGateStatus,
-    AnchorObservationSourceKind,
-    AnchorObservedMetric,
-)
-from datp_core.anchor.reproduction import (
+from datp_core.experiments.anchor.reproduction import (
     independent_reproduction_dependency_blocker,
     reproduce_anchor,
 )
-from datp_core.domain.enums import EvidenceRole, ExperimentId, ExperimentReadiness, PopulationId
-from datp_core.domain.errors import AnchorReproductionError
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.ratios import MetricValue
 
 
 def test_pass_when_all_mandatory_comparisons_match() -> None:

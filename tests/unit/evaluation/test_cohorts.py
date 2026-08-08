@@ -1,19 +1,19 @@
 import pytest
 
-from datp_core.datasets.partitioning.contracts import ClientIdentity, ClientPartitionCounts
-from datp_core.domain.enums import (
+from datp_core.analysis.metrics.cohort_construction import (
+    assert_cohort_invariant_to_threshold_methods,
+    build_evaluation_cohort_manifest,
+)
+from datp_core.analysis.metrics.cohorts import ClientExclusionReason
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import (
     EvaluationCohort,
     FederatedThresholdMethod,
     PopulationId,
     PopulationIdentityKind,
 )
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.counts import RowCount, Seed
-from datp_core.evaluation.cohort.construction import (
-    assert_cohort_invariant_to_threshold_methods,
-    build_evaluation_cohort_manifest,
-)
-from datp_core.evaluation.cohort.contracts import ClientExclusionReason
+from datp_core.core.numeric import RowCount, Seed
+from datp_core.data.populations.contracts import ClientIdentity, ClientPartitionCounts
 
 
 def test_fpr_eligibility_requires_support_and_benign_evaluation() -> None:

@@ -10,13 +10,21 @@ from tests.unit.learning.federated.helpers import (
     fedprox_coordinate,
 )
 
-from datp_core.domain.enums import CheckpointStatus, CommunicationEstimationMethod, TrainingModelId
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import BatchSize, ByteCount, LogicalElementCount, RoundNumber, RowCount, Seed
-from datp_core.domain.values.identifiers import CudaDeviceName
-from datp_core.domain.values.ratios import MetricValue, ProximalCoefficient
-from datp_core.learning.federated.models import (
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import CheckpointStatus, CommunicationEstimationMethod, CudaDeviceName, TrainingModelId
+from datp_core.core.numeric import (
+    BatchSize,
+    ByteCount,
+    LogicalElementCount,
+    MetricValue,
+    ProximalCoefficient,
+    RoundNumber,
+    RowCount,
+    Seed,
+)
+from datp_core.detector.checkpoints.contracts import CheckpointProtocol
+from datp_core.detector.training.models import (
     CheckpointCandidate,
     CheckpointDecision,
     ClientTrainingResult,
@@ -27,7 +35,6 @@ from datp_core.learning.federated.models import (
     GlobalModelStateReference,
     PersonalizedModelStateReference,
 )
-from datp_core.protocols.checkpoints import CheckpointProtocol
 
 SEED = Seed(0)
 
@@ -61,7 +68,7 @@ def _round_result(coordinate, round_number: RoundNumber) -> FederatedRoundResult
 
 
 def test_coordinate_rejects_coefficient_for_fedavg() -> None:
-    from datp_core.learning.federated.models import FederatedTrainingCoordinate
+    from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 
     with pytest.raises(ScientificContractError, match="no model coefficient"):
         FederatedTrainingCoordinate(

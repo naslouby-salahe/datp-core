@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from datp_core.domain.enums import SplitProtocolId
-from datp_core.preprocessing.paths import build_preprocessed_partition_paths
+from datp_core.core.identifiers import SplitProtocolId
+from datp_core.data.preprocessing.paths import build_preprocessed_partition_paths
 
 
 @pytest.mark.parametrize(

@@ -5,17 +5,22 @@ from typing import Literal
 
 from pydantic import model_validator
 
-from datp_core.domain.contracts import StrictModel
-from datp_core.domain.enums import CentralizedThresholdMethod, FederatedThresholdMethod
-from datp_core.domain.values.counts import (
+from datp_core.core.contracts import StrictModel
+from datp_core.core.errors import UnresolvedScientificValueError
+from datp_core.core.identifiers import CentralizedThresholdMethod, ContractSubject, FederatedThresholdMethod
+from datp_core.core.numeric import (
     CalibrationSize,
+    CoverageTarget,
     GroupCount,
     KMeansInitializationCount,
     KMeansMaximumIterationCount,
+    Quantile,
+    Ratio,
     Seed,
+    ShrinkageWeight,
     SubsampleReplicateCount,
+    SummaryCoefficient,
 )
-from datp_core.domain.values.ratios import CoverageTarget, Quantile, Ratio, ShrinkageWeight, SummaryCoefficient
 
 
 class ClusterFingerprintFeature(StrEnum):
@@ -40,6 +45,11 @@ class KMeansInitialization(StrEnum):
 class ClusterThresholdAggregation(StrEnum):
     ARITHMETIC_MEAN_OF_ELIGIBLE_LOCAL_THRESHOLDS = "arithmetic_mean_of_eligible_local_thresholds"
     MEDIAN_OF_ELIGIBLE_LOCAL_THRESHOLDS = "median_of_eligible_local_thresholds"
+
+
+class CalibrationSupportRule(StrEnum):
+    CANONICAL_MINIMUM_SUPPORT = "canonical_minimum_support"
+    DECLARED_SIZE_ABLATION = "declared_size_ablation"
 
 
 REQUIRED_CLUSTER_FINGERPRINT_FEATURES = (
@@ -75,10 +85,9 @@ class QuantileProtocol(StrictModel):
 
 class CalibrationSizeProtocol(StrictModel):
     sizes: tuple[CalibrationSize, ...]
-    replicate_count: SubsampleReplicateCount
 
     @model_validator(mode="after")
-    def validate_sizes_and_replicates(self) -> "CalibrationSizeProtocol":
+    def validate_sizes(self) -> "CalibrationSizeProtocol":
         if not self.sizes:
             raise ValueError("calibration-size protocol requires at least one size")
         if len(self.sizes) != len(frozenset(self.sizes)):
@@ -131,8 +140,8 @@ class ClusterThresholdProtocol(StrictModel):
         requirements = (
             (
                 self.fingerprint_features == REQUIRED_CLUSTER_FINGERPRINT_FEATURES,
-                "cluster fingerprint must contain mean, standard deviation, skewness, "
-                "and p95 exactly once in locked order",
+                "cluster fingerprint must contain mean, standard deviation, skewness, and p95 "
+                "exactly once in locked order",
             ),
             (
                 self.feature_standardization is ClusterFeatureStandardization.STANDARD_SCALER,
@@ -178,17 +187,11 @@ CANONICAL_QUANTILE = Quantile(0.95)
 QUANTILE_GRID = tuple(Quantile(value) for value in (0.90, 0.95, 0.975, 0.99))
 MINIMUM_BENIGN_SUPPORT = CalibrationSize(100)
 CALIBRATION_SIZES = tuple(CalibrationSize(value) for value in (50, 100, 250, 500, 1000, 5000))
-# Nested calibration subsampling replicates within each training seed (roadmap §8.1).
-# Count locked to the same nested-repetition scale as cluster multi-start (10).
-CALIBRATION_SUBSAMPLE_REPLICATE_COUNT = SubsampleReplicateCount(10)
 FIXED_SHRINKAGE_WEIGHTS = tuple(ShrinkageWeight(value) for value in (0, 0.25, 0.5, 0.75, 1))
 CONFORMAL_COVERAGE = CoverageTarget(0.95)
 SUMMARY_COEFFICIENTS = tuple(SummaryCoefficient(value) for value in (2, 2.5, 3))
 CALIBRATION_ELIGIBILITY_PROTOCOL = CalibrationEligibilityProtocol(minimum_support=MINIMUM_BENIGN_SUPPORT)
-CALIBRATION_SIZE_PROTOCOL = CalibrationSizeProtocol(
-    sizes=CALIBRATION_SIZES,
-    replicate_count=CALIBRATION_SUBSAMPLE_REPLICATE_COUNT,
-)
+CALIBRATION_SIZE_PROTOCOL = CalibrationSizeProtocol(sizes=CALIBRATION_SIZES)
 SHARED_THRESHOLD_PROTOCOL = QuantileProtocol(
     method=FederatedThresholdMethod.SHARED_THRESHOLD,
     quantile=CANONICAL_QUANTILE,
@@ -247,3 +250,11 @@ CLUSTER_MEDIAN_THRESHOLD_PROTOCOL = ClusterThresholdProtocol(
     group_count=LOCKED_CLUSTER_GROUP_COUNT,
     threshold_aggregation=ClusterThresholdAggregation.MEDIAN_OF_ELIGIBLE_LOCAL_THRESHOLDS,
 )
+
+
+def require_calibration_subsample_replicate_count() -> SubsampleReplicateCount:
+    raise UnresolvedScientificValueError(
+        "the master roadmap requires multiple deterministic calibration subsampling replicates "
+        "but does not declare their count",
+        subject=ContractSubject.CALIBRATION,
+    )

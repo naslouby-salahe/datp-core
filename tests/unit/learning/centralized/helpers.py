@@ -6,37 +6,51 @@ import numpy as np
 import polars as pl
 import torch
 
-from datp_core.datasets.partitioning.contracts import OUTCOME_LABEL_COLUMN, STABLE_ROW_ID_COLUMN, PopulationOutcomeLabel
-from datp_core.domain.enums import (
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.identifiers import (
     CentralizedModelId,
+    FeatureName,
+    FeatureNameSequence,
     OptimizerId,
+    OutcomeLabel,
+    OutcomeLabelSequence,
     PopulationId,
     PreprocessingProtocolId,
     SerializationFormat,
     SplitProtocolId,
 )
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import BatchSize, RoundNumber, RowCount, Seed
-from datp_core.domain.values.identifiers import FeatureName, FeatureNameSequence, OutcomeLabel, OutcomeLabelSequence
-from datp_core.domain.values.ratios import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE, LearningRate, WeightDecay
-from datp_core.learning.centralized.training import (
+from datp_core.core.numeric import (
+    NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
+    BatchSize,
+    FeatureCount,
+    LearningRate,
+    RoundNumber,
+    RowCount,
+    Seed,
+    WeightDecay,
+)
+from datp_core.data.populations.contracts import OUTCOME_LABEL_COLUMN, STABLE_ROW_ID_COLUMN, PopulationOutcomeLabel
+from datp_core.data.preprocessing.artifacts import PreprocessingFitScope, TrustedEstimatorClassName
+from datp_core.data.preprocessing.models import CentralizedFittedPreprocessingState, PreprocessingProtocol
+from datp_core.detector.checkpoints.contracts import CheckpointProtocol
+from datp_core.detector.training.centralized import (
     CentralizedTrainingCoordinate,
     CentralizedTrainingExecution,
     CentralizedTrainingRequest,
     train_centralized_autoencoder,
 )
-from datp_core.preprocessing.contracts import PreprocessingFitScope, TrustedEstimatorClassName
-from datp_core.preprocessing.models import CentralizedFittedPreprocessingState, PreprocessingProtocol
-from datp_core.protocols.checkpoints import CheckpointProtocol
+from datp_core.detector.training.contracts import AutoencoderArchitecture, AutoencoderProtocol
 from datp_core.protocols.training import (
-    AutoencoderArchitecture,
-    AutoencoderProtocol,
     CentralizedTrainingProtocol,
     OptimizerProtocol,
 )
 
 FEATURE_NAMES = FeatureNameSequence((FeatureName("f0"), FeatureName("f1"), FeatureName("f2"), FeatureName("f3")))
-AUTOENCODER = AutoencoderProtocol(widths=AutoencoderArchitecture((4, 3, 2, 3, 4)))
+AUTOENCODER = AutoencoderProtocol(
+    widths=AutoencoderArchitecture(
+        (FeatureCount(4), FeatureCount(3), FeatureCount(2), FeatureCount(3), FeatureCount(4))
+    )
+)
 CHECKPOINT = CheckpointProtocol(candidates=(RoundNumber(2),), maximum_round=RoundNumber(2))
 TRAINING_PROTOCOL = CentralizedTrainingProtocol(
     kind=CentralizedModelId.CENTRALIZED_AUTOENCODER,

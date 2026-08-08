@@ -1,56 +1,57 @@
 # DATP-Core
 
-DATP-Core is the reproducible research implementation for the journal extension of Device-Aware Threshold Personalization in federated IoT malware detection.
+DATP-Core is the reproducible research implementation of the Device-Aware Threshold Personalization journal extension for federated IoT anomaly detection.
 
 ## Scientific scope
 
-The repository separates model training from threshold calibration and evaluation. Its core comparisons use fixed model, preprocessing, checkpoint, score, label, client, cohort, and row-order evidence so threshold policy is the controlled difference.
-
-The current research surface includes:
-
-- N-BaIoT natural physical-device clients and controlled Dirichlet/IID clients;
-- CICIoT2023 file-defined pseudo-client applicability evidence;
-- Edge-IIoTset static and chronology-verified temporal groups;
-- centralized and federated autoencoder training;
-- FedAvg, FedProx, and Ditto stress-test paths;
-- shared, local, family, cluster, shrinkage, conformal, and federated-statistics thresholds;
-- confirmatory, mechanism, external-validation, temporal, and operational evidence roles.
+The study isolates threshold-calibration scope while preserving the fixed-detector contract. Within a seed and regime, compared threshold methods reuse the same selected detector, preprocessing state, client identities, predefined partitions, benign calibration evidence, held-out scores and labels, eligibility rule, and metric implementation. Calibration is benign-only and attack-labelled data remain evaluation-only.
 
 The scientific source of truth is [`docs/Journal_Extension_Master_Roadmap.md`](docs/Journal_Extension_Master_Roadmap.md).
 
+The implementation covers:
+
+- N-BaIoT natural physical-device clients and controlled Dirichlet/IID clients;
+- CICIoT2023 file-defined pseudo-client boundary evidence;
+- Edge-IIoTset static and chronology-verified temporal groups;
+- centralized and federated autoencoder training;
+- FedAvg, FedProx, and genuine Ditto training-side stress tests;
+- descriptive shared, local, family, cluster, shrinkage, conformal, and federated-statistics threshold identities;
+- confirmatory, supportive, mechanism, external-validation, stress-test, temporal, applicability-boundary, and exploratory evidence.
+
 ## Architecture
 
-The intended dependency direction is:
+The repository has one application architecture:
 
 ```text
 domain
   -> protocols
-  -> datasets / calibration / preprocessing / learning / thresholding / evaluation
-  -> analysis / reporting
-  -> pipeline
-  -> cli
+  -> datasets / preprocessing / learning / calibration / thresholding / evaluation
+  -> analysis
+  -> pipeline foundations
+  -> experiments
+  -> presentation
+  -> app programme / research services
+  -> app CLI
 ```
 
-Key boundaries:
+Responsibilities are intentionally non-overlapping:
 
-- `domain` contains stable identities, values, contracts, and errors. It must not own repository or filesystem behavior.
-- `protocols` contains frozen scientific declarations and validation.
-- `datasets` owns audited ingestion, canonical publication, populations, partitioning, and split evidence.
-- `preprocessing`, `learning`, `thresholding`, and `evaluation` own their scientific computations and contracts.
-- `analysis` consumes validated evaluation evidence.
-- `pipeline` composes application workflows without redefining lower-level contracts. Deterministic planning, stage sequencing, reuse, provenance, completion validation, and publication live under `pipeline/`.
-- `cli` is a thin research-facing adapter. It accepts only experiment IDs, dataset IDs, and `--overwrite`, and calls programme services in `pipeline/workflows/`.
+- `domain` owns stable identities, errors, provenance, and value objects.
+- `protocols` owns frozen scientific declarations and protocol validation.
+- scientific capability packages own their numerical and data-processing kernels.
+- `pipeline` owns execution coordinates, stage services, scoring, checkpoint, decision, and publication foundations.
+- `experiments` owns complete scientific experiment recipes and evidence analyses.
+- `presentation` owns tables, figures, publication exports, and presentation validation.
+- `app` owns programme planning, exact experiment registration, anchor gating, campaign lifecycle, reporting orchestration, status, and the thin CLI adapter.
 
-No external orchestration framework is required. Artifact reuse, idempotency, provenance, checksums, and completion validation are repository-owned.
-
-No backwards-compatibility shims, redirect modules, implicit CPU fallback, or alternate scientific interpretations are maintained.
+There is no legacy `datp_core.cli`, `pipeline.workflows`, `reporting`, alternate planner, compatibility import, redirect module, or dual execution registry.
 
 ## Runtime requirements
 
-- Python 3.12 (see pyproject.toml requires-python);
+- Python 3.12;
 - CUDA-capable PyTorch runtime;
-- GPU execution for training and other GPU-appropriate operations;
-- raw datasets available beneath `data/raw` using the audited directory names documented in `RAW_DATA_STRUCTURE.md`.
+- GPU execution for training and GPU-appropriate operations;
+- audited raw datasets beneath `data/raw` using the repository's declared raw-data structure.
 
 ## Installation
 
@@ -61,9 +62,9 @@ python -m pip install --upgrade pip
 python -m pip install -e '.[dev]'
 ```
 
-## Execution
+## CLI
 
-The public CLI exposes only research intentions. Scientific parameters (seeds, coefficients, populations, split protocols, threshold policies, paths, and training hyperparameters) are resolved from typed protocol declarations.
+The public CLI exposes research intentions only. Seeds, populations, split protocols, threshold identities, model coefficients, paths, and scientific hyperparameters are resolved from typed declarations.
 
 ```text
 datp-core
@@ -87,27 +88,29 @@ Examples:
 ```bash
 datp-core validate
 datp-core plan shared_vs_local_confirmation
-datp-core preprocess
 datp-core preprocess nbaiot --overwrite
 datp-core smoke shared_vs_local_confirmation
 datp-core anchor reproduce
 datp-core anchor verify
-datp-core anchor status
 datp-core run experiment shared_vs_local_confirmation
 datp-core run campaign
 datp-core report
 datp-core status
 ```
 
-Module invocation uses the same application:
+Module invocation uses the same adapter:
 
 ```bash
-python -m datp_core.cli.app --help
+python -m datp_core.app.cli.app --help
 ```
+
+## Artifact lifecycle
+
+Artifacts are deterministic, checksummed, coordinate-bound, and attributable to one scientific execution unit. Existing evidence is reused only when its request identity and completion contract validate. `--overwrite` is converted at the CLI boundary into an explicit application lifecycle mode and rebuilds only the owning scope. Smoke evidence lives under `outputs/smoke/` and is never confirmatory evidence.
 
 ## Validation
 
-Use the repository-owned checks rather than ad hoc substitutes:
+Repository checks are:
 
 ```bash
 pytest
@@ -116,21 +119,15 @@ pyright
 python -m importlinter
 ```
 
-Training and end-to-end execution additionally require the audited raw datasets and CUDA runtime.
+End-to-end training additionally requires CUDA and the audited raw datasets.
 
-## Artifact lifecycle
+## Engineering rules
 
-Artifact reuse, idempotency, provenance, checksums, and completion validation are owned by this repository (not by an external orchestrator). Published artifacts are immutable, checksummed, and coordinate-bound. A complete artifact may be reused only when its request identity and persisted evidence validate under the current contract. Incomplete outputs are not resumed; they are replaced and rebuilt. Changes to artifact layout or scientific contracts intentionally invalidate incompatible prior outputs.
-
-Smoke artifacts live under `outputs/smoke/` and must not be treated as confirmatory evidence.
-
-## Development rules
-
-- preserve fixed-score and no-leakage controls;
-- use descriptive enum-backed identities;
-- use value objects for scientifically meaningful public quantities;
-- keep primitives local to implementation details;
-- remove obsolete callers when moving code;
-- avoid forwarding wrappers and compatibility aliases;
-- keep CUDA mandatory where the operation is GPU-appropriate;
-- update impacted tests with every structural change.
+- no backward compatibility, aliases, redirects, shims, or parallel legacy APIs;
+- descriptive enum-backed closed vocabularies; no runtime B0/B1/B2/B3/B4 identifiers;
+- typed immutable scientific and application contracts;
+- no `Any`, `object`-based domain contracts, untyped dictionary I/O, hidden defaults, or silent fallbacks;
+- no hardcoded scientific values outside their validated protocol declarations;
+- no attack-label leakage into calibration, threshold selection, eligibility, or checkpoint selection;
+- capability-gated metrics and explicit unavailable/infeasible outcomes;
+- delete dead code and obsolete tests rather than preserving stale callers.

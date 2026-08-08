@@ -2,25 +2,24 @@ from pathlib import Path
 
 import pytest
 
-from datp_core.datasets.capabilities import CapabilityStatus
-from datp_core.datasets.partitioning.construction import PreprocessingHandoffRequest, build_preprocessing_handoff
-from datp_core.datasets.partitioning.contracts import PopulationConstructionRequest, iid_condition
-from datp_core.datasets.registry import (
-    construct_population,
-    dataset_binding,
-    population_capabilities,
-    population_declaration,
-    resolve_population,
-)
-from datp_core.domain.enums import (
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import (
     DatasetId,
     EvidenceRole,
     PopulationId,
     PopulationIdentityKind,
     SplitProtocolId,
 )
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.counts import Seed
+from datp_core.core.numeric import Seed
+from datp_core.data.populations.construction import PreprocessingHandoffRequest, build_preprocessing_handoff
+from datp_core.data.populations.contracts import CapabilityStatus, PopulationConstructionRequest, iid_condition
+from datp_core.data.registry import (
+    construct_population,
+    dataset_binding,
+    population_capabilities,
+    population_declaration,
+    resolve_population,
+)
 
 
 def test_catalogue_dispatches_every_dataset_id() -> None:

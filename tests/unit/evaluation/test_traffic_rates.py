@@ -1,14 +1,14 @@
 import pytest
 
-from datp_core.domain.enums import PopulationId, TrafficRateEvidenceType
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.ratios import TrafficRatePerDay
-from datp_core.evaluation.traffic_rates import (
+from datp_core.analysis.operational.traffic_rates import (
     TrafficRateGranularity,
     TrafficRateUnit,
     ValidatedTrafficRateEvidence,
     validate_traffic_rate_evidence,
 )
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import PopulationId, TrafficRateEvidenceType
+from datp_core.core.numeric import TrafficRatePerDay
 
 
 def test_traffic_rate_evidence_requires_per_client_applicability() -> None:

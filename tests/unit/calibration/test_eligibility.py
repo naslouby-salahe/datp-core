@@ -3,7 +3,16 @@ import pytest
 from tests.unit.calibration.helpers import attack_score_record, benign_score_record, some_client
 from tests.unit.learning.federated.helpers import fedavg_coordinate
 
-from datp_core.calibration.eligibility import (
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.errors import LeakageError, ScientificContractError
+from datp_core.core.identifiers import PartitionRole, StableRowId
+from datp_core.core.numeric import CalibrationSize, RowCount, Seed
+from datp_core.data.populations.contracts import EligibleCohort
+from datp_core.protocols.calibration import CalibrationEligibilityProtocol
+from datp_core.thresholds.calibration.eligibility import (
+    CalibrationSupport,
+    EligibilityDecision,
+    EligibilityStatus,
     calibration_support,
     decide_eligibility,
     eligible_clients,
@@ -13,14 +22,6 @@ from datp_core.calibration.eligibility import (
     reject_score_coordinate_mismatch,
     require_common_eligible_cohort,
 )
-from datp_core.calibration.models import CalibrationSupport, EligibilityDecision, EligibilityStatus
-from datp_core.datasets.partitioning.contracts import EligibleCohort
-from datp_core.domain.enums import PartitionRole
-from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import CalibrationSize, RowCount, Seed
-from datp_core.domain.values.identifiers import StableRowId
-from datp_core.protocols.calibration import CalibrationEligibilityProtocol
 
 PROTOCOL = CalibrationEligibilityProtocol(minimum_support=CalibrationSize(100))
 

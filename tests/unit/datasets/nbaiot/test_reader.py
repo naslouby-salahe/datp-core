@@ -1,7 +1,7 @@
 import pytest
 
-from datp_core.datasets.nbaiot.reader import NBaIoTReader
-from datp_core.datasets.nbaiot.schema import NBAIOT_FEATURE_COLUMNS, NBaIoTDevice
+from datp_core.data.nbaiot.reader import NBaIoTReader
+from datp_core.data.nbaiot.schema import NBAIOT_FEATURE_COLUMNS, NBaIoTDevice
 
 
 def test_reader_is_lazy_for_audited_source(tmp_path) -> None:

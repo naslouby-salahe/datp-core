@@ -1,7 +1,7 @@
 [project]
 name = "datp-core"
 version = "0.1.0"
-description = "DATP journal-extension scratch implementation: fixed-encoder, fixed-federated-model, threshold-calibration-scope study."
+description = "DATP journal-extension implementation: fixed-detector threshold-calibration-scope study."
 readme = "README.md"
 requires-python = "==3.12.*"
 dependencies = [
@@ -49,7 +49,7 @@ dev = [
 ]
 
 [project.scripts]
-datp-core = "datp_core.cli.app:main"
+datp-core = "datp_core.app.cli.app:main"
 
 [build-system]
 requires = ["setuptools>=75"]
@@ -72,24 +72,22 @@ src = ["src", "tests"]
 select = ["E", "F", "I", "N", "UP", "B", "ICN"]
 
 [tool.ruff.lint.per-file-ignores]
-"typings/**/*.pyi" = ["N818"]
-# __init__.py barrel re-exports are intentional public API
+"typings/**/*.pyi" = ["N803", "N818"]
 "__init__.py" = ["F401"]
 
 [tool.pyright]
 include = ["src", "tests"]
 strict = [
-    "src/datp_core/pipeline",
+    "src/datp_core/app",
+    "src/datp_core/experiments",
     "src/datp_core/analysis",
-    "src/datp_core/evaluation",
-    "src/datp_core/thresholding",
+    "src/datp_core/data",
+    "src/datp_core/detector",
+    "src/datp_core/thresholds",
     "src/datp_core/protocols",
 ]
 pythonVersion = "3.12"
 typeCheckingMode = "standard"
 venvPath = "."
 venv = ".venv"
-# Mirrors pytest's rootdir-relative "prepend" import mode (pyproject.toml [tool.pytest.ini_options]
-# pythonpath = ["src", "."]): test files import sibling helper modules via the fully qualified
-# "tests.unit...." path, which requires the repository root on the search path.
 executionEnvironments = [{ root = "tests", extraPaths = ["."] }]

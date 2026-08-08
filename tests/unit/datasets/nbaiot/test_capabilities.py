@@ -1,7 +1,7 @@
-from datp_core.datasets.capabilities import CapabilityStatus
-from datp_core.datasets.nbaiot.capabilities import NBAIOT_CAPABILITIES
-from datp_core.datasets.registry import population_capabilities
-from datp_core.domain.enums import FederatedThresholdMethod, PopulationId
+from datp_core.core.identifiers import FederatedThresholdMethod, PopulationId
+from datp_core.data.nbaiot.capabilities import NBAIOT_CAPABILITIES
+from datp_core.data.populations.contracts import CapabilityStatus
+from datp_core.data.registry import population_capabilities
 
 
 def test_nbaio_capability_boundaries() -> None:

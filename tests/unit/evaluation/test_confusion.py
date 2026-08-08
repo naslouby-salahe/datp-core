@@ -1,10 +1,10 @@
 import pytest
 
-from datp_core.datasets.partitioning.contracts import PopulationOutcomeLabel
-from datp_core.domain.enums import PartitionRole
-from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.values.ratios import ScoreValue, ThresholdValue
-from datp_core.evaluation.confusion import calculate_confusion_counts, predicted_attack
+from datp_core.analysis.metrics.confusion import calculate_confusion_counts, predicted_attack
+from datp_core.core.errors import LeakageError, ScientificContractError
+from datp_core.core.identifiers import PartitionRole, StableRowId
+from datp_core.core.numeric import ScoreValue, ThresholdValue
+from datp_core.data.populations.contracts import PopulationOutcomeLabel
 
 
 def test_prediction_boundary_is_benign_and_counts_conserve_rows() -> None:
@@ -20,7 +20,7 @@ def test_prediction_boundary_is_benign_and_counts_conserve_rows() -> None:
     result = calculate_confusion_counts(
         scores=scores,
         labels=labels,
-        source_row_ids=("a", "b", "c", "d"),
+        source_row_ids=(StableRowId("a"), StableRowId("b"), StableRowId("c"), StableRowId("d")),
         threshold=threshold,
         partition_role=PartitionRole.EVALUATION,
         attack_assignment_valid=True,
@@ -41,7 +41,7 @@ def test_confusion_rejects_calibration_and_duplicate_source_rows() -> None:
         calculate_confusion_counts(
             scores=(ScoreValue(1.0),),
             labels=(PopulationOutcomeLabel.BENIGN,),
-            source_row_ids=("a",),
+            source_row_ids=(StableRowId("a"),),
             threshold=ThresholdValue(1.0),
             partition_role=PartitionRole.CALIBRATION,
             attack_assignment_valid=True,
@@ -50,7 +50,7 @@ def test_confusion_rejects_calibration_and_duplicate_source_rows() -> None:
         calculate_confusion_counts(
             scores=(ScoreValue(1.0), ScoreValue(2.0)),
             labels=(PopulationOutcomeLabel.BENIGN, PopulationOutcomeLabel.BENIGN),
-            source_row_ids=("a", "a"),
+            source_row_ids=(StableRowId("a"), StableRowId("a")),
             threshold=ThresholdValue(1.0),
             partition_role=PartitionRole.EVALUATION,
             attack_assignment_valid=True,

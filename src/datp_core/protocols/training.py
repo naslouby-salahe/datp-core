@@ -1,13 +1,13 @@
 """Training declarations and authoritative protocol resolution."""
 
 from collections.abc import Sequence
-from dataclasses import dataclass
-from typing import Annotated, Literal, Protocol, overload
+from typing import Annotated, Literal, Protocol
 
 from pydantic import Field, model_validator
 
-from datp_core.domain.contracts import StrictModel
-from datp_core.domain.enums import (
+from datp_core.core.contracts import StrictModel
+from datp_core.core.errors import LeakageError, ScientificContractError
+from datp_core.core.identifiers import (
     CentralizedModelId,
     CheckpointSelectionRule,
     CheckpointStatus,
@@ -16,58 +16,22 @@ from datp_core.domain.enums import (
     OptimizerId,
     TrainingModelId,
 )
-from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.values.base import sequence_pydantic_schema, validate_non_empty_tuple
-from datp_core.domain.values.counts import BatchSize, DataLoaderWorkerCount, LocalEpochCount, RoundNumber
-from datp_core.domain.values.ratios import (
+from datp_core.core.numeric import (
+    BatchSize,
+    DataLoaderWorkerCount,
     DittoRegularization,
+    FeatureCount,
     LearningRate,
+    LocalEpochCount,
     MetricValue,
     ModelCoefficientValue,
     ProximalCoefficient,
     Ratio,
+    RoundNumber,
     WeightDecay,
 )
-
-from .checkpoints import CheckpointProtocol
-
-
-@dataclass(frozen=True, slots=True)
-class AutoencoderArchitecture(Sequence[int]):
-    """The one authoritative declaration of a symmetric autoencoder layer-width ladder."""
-
-    widths: tuple[int, ...]
-
-    def __post_init__(self) -> None:
-        validate_non_empty_tuple(self.widths, "autoencoder architecture")
-        if len(self.widths) < 2:
-            raise ValueError("autoencoder architecture requires at least input and output layers")
-        if any(type(width) is not int or width < 1 for width in self.widths):
-            raise ValueError("autoencoder widths must be positive integers")
-        if self.widths[0] != self.widths[-1]:
-            raise ValueError("autoencoder input and output widths must match")
-
-    def __len__(self) -> int:
-        return len(self.widths)
-
-    @overload
-    def __getitem__(self, index: int) -> int: ...
-    @overload
-    def __getitem__(self, index: slice) -> tuple[int, ...]: ...
-    def __getitem__(self, index: int | slice) -> int | tuple[int, ...]:
-        return self.widths[index]
-
-    @property
-    def input_width(self) -> int:
-        return self.widths[0]
-
-    @classmethod
-    def __get_pydantic_core_schema__(cls, source_type: object, handler: object) -> object:
-        return sequence_pydantic_schema(cls, source_type, handler)
-
-
-class AutoencoderProtocol(StrictModel):
-    widths: AutoencoderArchitecture
+from datp_core.detector.checkpoints.contracts import CheckpointProtocol
+from datp_core.detector.training import contracts as training_contracts
 
 
 class OptimizerProtocol(StrictModel):
@@ -224,11 +188,21 @@ MODEL_ABSORPTION_DECISION_PROTOCOL = ModelAbsorptionDecisionProtocol(
     full_retention_minimum=DITTO_RETAINED_EFFECT_MINIMUM,
     partial_retention_minimum=DITTO_PARTIAL_EFFECT_MINIMUM,
 )
-NBAIOT_AUTOENCODER = AutoencoderProtocol(widths=AutoencoderArchitecture((115, 86, 58, 38, 29, 38, 58, 86, 115)))
-EDGE_IIOTSET_NUMERIC_AUTOENCODER = AutoencoderProtocol(
-    widths=AutoencoderArchitecture((33, 25, 17, 11, 8, 11, 17, 25, 33))
+NBAIOT_AUTOENCODER = training_contracts.AutoencoderProtocol(
+    widths=training_contracts.AutoencoderArchitecture(
+        tuple(FeatureCount(value) for value in (115, 86, 58, 38, 29, 38, 58, 86, 115))
+    )
 )
-CICIOT2023_AUTOENCODER = AutoencoderProtocol(widths=AutoencoderArchitecture((39, 29, 20, 13, 10, 13, 20, 29, 39)))
+EDGE_IIOTSET_NUMERIC_AUTOENCODER = training_contracts.AutoencoderProtocol(
+    widths=training_contracts.AutoencoderArchitecture(
+        tuple(FeatureCount(value) for value in (33, 25, 17, 11, 8, 11, 17, 25, 33))
+    )
+)
+CICIOT2023_AUTOENCODER = training_contracts.AutoencoderProtocol(
+    widths=training_contracts.AutoencoderArchitecture(
+        tuple(FeatureCount(value) for value in (39, 29, 20, 13, 10, 13, 20, 29, 39))
+    )
+)
 WEIGHT_DECAY = WeightDecay(0.0)
 OPTIMIZER = OptimizerProtocol(identity=OptimizerId.ADAM, weight_decay=WEIGHT_DECAY)
 LEARNING_RATE = LearningRate(0.001)

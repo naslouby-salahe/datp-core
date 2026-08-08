@@ -3,10 +3,10 @@ from pathlib import Path
 import polars as pl
 import pyarrow.parquet as pq
 
-from datp_core.datasets.contracts import ExclusionReason
-from datp_core.datasets.nbaiot.materialize import NBaIoTMaterializer
-from datp_core.datasets.nbaiot.schema import NBAIOT_ARROW_SCHEMA, NBAIOT_FEATURE_COLUMNS, NBaIoTArtifactName
-from datp_core.domain.enums import DatasetId, PublicationStatus
+from datp_core.core.identifiers import DatasetId, PublicationStatus
+from datp_core.data.contracts import ExclusionReason
+from datp_core.data.nbaiot.materialize import NBaIoTMaterializer
+from datp_core.data.nbaiot.schema import NBAIOT_ARROW_SCHEMA, NBAIOT_FEATURE_COLUMNS, NBaIoTArtifactName
 
 
 def _write_source(path: Path, value: str) -> None:
@@ -38,8 +38,7 @@ def test_nbaio_materialization_streams_complete_reusable_partitions(tmp_path, mo
     assert reused.publication_status is PublicationStatus.REUSED
     assert all(pq.ParquetFile(asset.path).schema_arrow.equals(NBAIOT_ARROW_SCHEMA) for asset in published.assets)
     assert all(
-        "/tmp/" not in pq.read_table(asset.path, columns=["source_path"]).column(0).to_pylist()[0]
-        for asset in published.assets
+        "/tmp/" not in pl.read_parquet(asset.path, columns=["source_path"]).item(0, 0) for asset in published.assets
     )
 
 

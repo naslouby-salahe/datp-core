@@ -2,7 +2,8 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from datp_core.domain.enums import (
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.identifiers import (
     DatasetId,
     EvidenceRole,
     ExperimentId,
@@ -13,9 +14,8 @@ from datp_core.domain.enums import (
     SplitProtocolId,
     TrainingModelId,
 )
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import Seed
-from datp_core.pipeline.coordinates import ExperimentCoordinate
+from datp_core.core.numeric import Seed
+from datp_core.experiments.common.coordinates import ExperimentCoordinate
 from datp_core.protocols.graph import (
     IdentityObservationHook,
     ObservationBoundary,

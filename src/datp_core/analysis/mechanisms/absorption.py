@@ -4,21 +4,22 @@ from pydantic import model_validator
 
 from datp_core.analysis.inference.bootstrap.contracts import BcaOutcome, BootstrapInterval
 from datp_core.analysis.inference.bootstrap.estimation import seed_level_bca_interval
+from datp_core.analysis.inference.contracts import PairedInferenceProtocol
 from datp_core.analysis.scientific_decision import ScientificDecision, ScientificDecisionResult
-from datp_core.domain.contracts import StrictModel
-from datp_core.domain.enums import EvidenceRole, ExperimentId, FederatedThresholdMethod, TrainingModelId
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import Seed
-from datp_core.domain.values.ratios import (
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.contracts import StrictModel
+from datp_core.core.identifiers import EvidenceRole, ExperimentId, FederatedThresholdMethod, TrainingModelId
+from datp_core.core.numeric import (
     NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
     MetricValue,
     ModelCoefficientValue,
     ProximalCoefficient,
+    Seed,
 )
+from datp_core.detector.training.contracts import ModelAbsorptionDecisionProtocol
+from datp_core.experiments.common.seeds import CONFIRMATORY_ANALYSIS_SEED, CONFIRMATORY_SEED_COHORT, SeedCohort
+from datp_core.experiments.confirmatory.spec import CONFIRMATORY_INFERENCE_PROTOCOL
 from datp_core.protocols.metrics import ABSORPTION_REFERENCE_EFFECT_MATERIALITY_CUTOFF
-from datp_core.protocols.seeds import CONFIRMATORY_ANALYSIS_SEED, CONFIRMATORY_SEED_COHORT, SeedCohort
-from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL, PairedInferenceProtocol
-from datp_core.protocols.training import ModelAbsorptionDecisionProtocol
 
 
 class AbsorptionCornerEvidence(StrictModel):

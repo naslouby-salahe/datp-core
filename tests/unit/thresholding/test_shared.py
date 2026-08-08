@@ -1,12 +1,12 @@
 import pytest
 from tests.unit.thresholding.helpers import client_scores
 
-from datp_core.domain.enums import FederatedThresholdMethod
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.ratios import Quantile
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import FederatedThresholdMethod
+from datp_core.core.numeric import Quantile
 from datp_core.protocols.calibration import QuantileProtocol
-from datp_core.thresholding.methods.local import construct_local_threshold
-from datp_core.thresholding.methods.shared import (
+from datp_core.thresholds.policies.local import construct_local_threshold
+from datp_core.thresholds.policies.shared import (
     construct_pooled_shared_quantile,
     construct_sample_weighted_shared_threshold,
     construct_shared_threshold,

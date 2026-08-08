@@ -2,7 +2,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
 
-from datp_core.pipeline.publication.service import load_model_file, serialize_json_model
+from datp_core.artifacts.repositories.publication import load_model_file, serialize_json_model
 
 
 class ExampleDocument(BaseModel):

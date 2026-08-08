@@ -13,12 +13,12 @@ from tests.unit.learning.federated.helpers import (
     ditto_protocol,
 )
 
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import RowCount, Seed
-from datp_core.learning.federated.checkpoints.selection import select_checkpoint
-from datp_core.learning.federated.ditto import DittoTrainingRequest, train_ditto
-from datp_core.pipeline.scoring.federated import publish_federated_scores
-from datp_core.pipeline.scoring.models import ClientScoringInput, GenerateFederatedScoresRequest
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.numeric import RowCount, Seed
+from datp_core.detector.checkpoints.selection import select_checkpoint
+from datp_core.detector.scoring.federated import publish_federated_scores
+from datp_core.detector.scoring.models import ClientScoringInput, GenerateFederatedScoresRequest
+from datp_core.detector.training.ditto import DittoTrainingRequest, train_ditto
 from datp_core.protocols.training import CHECKPOINT_SELECTION_RULE
 
 

@@ -9,27 +9,26 @@ from tests.unit.learning.federated.helpers import (
     require_cuda,
 )
 
-from datp_core.domain.enums import CheckpointSelectionRule, CheckpointStatus
-from datp_core.domain.errors import ArtifactIntegrityError, LeakageError, ScientificContractError
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import RoundNumber, Seed
-from datp_core.domain.values.ratios import MetricValue
-from datp_core.learning.federated.checkpoints.candidates import (
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.errors import ArtifactIntegrityError, LeakageError, ScientificContractError
+from datp_core.core.identifiers import CheckpointSelectionRule, CheckpointStatus
+from datp_core.core.numeric import MetricValue, RoundNumber, Seed
+from datp_core.detector.checkpoints.candidates import (
     candidate_tensor_name,
     rebase_checkpoint_candidates,
     retain_checkpoint_candidates,
 )
-from datp_core.learning.federated.checkpoints.selection import (
+from datp_core.detector.checkpoints.selection import (
     reject_centralized_checkpoint,
     select_checkpoint,
     validate_candidate_coordinates,
 )
-from datp_core.learning.federated.models import RoundSnapshot
+from datp_core.detector.training.models.snapshots import RoundSnapshot
 
 
 def _snapshots() -> tuple[RoundSnapshot, ...]:
     device = require_cuda()
-    from datp_core.learning.autoencoder import ReconstructionAutoencoder
+    from datp_core.detector.autoencoder import ReconstructionAutoencoder
 
     model = ReconstructionAutoencoder(AUTOENCODER.widths).to(device)
     state = {name: tensor.detach().clone() for name, tensor in model.state_dict().items()}
@@ -134,7 +133,7 @@ def test_select_checkpoint_rejects_attack_labels(tmp_path: Path) -> None:
 def test_retain_checkpoint_candidates_rejects_missing_declared_round(tmp_path: Path) -> None:
     coordinate = fedavg_coordinate(Seed(0))
     device = require_cuda()
-    from datp_core.learning.autoencoder import ReconstructionAutoencoder
+    from datp_core.detector.autoencoder import ReconstructionAutoencoder
 
     model = ReconstructionAutoencoder(AUTOENCODER.widths).to(device)
     state = {name: tensor.detach().clone() for name, tensor in model.state_dict().items()}

@@ -13,20 +13,19 @@ from tests.unit.learning.centralized.helpers import (
     training_coordinate,
 )
 
-from datp_core.datasets.partitioning.contracts import PopulationOutcomeLabel
-from datp_core.domain.enums import CentralizedThresholdMethod, ScoreFrameColumn
-from datp_core.domain.errors import LeakageError
-from datp_core.domain.values.counts import RowCount, Seed
-from datp_core.domain.values.ratios import Quantile, ThresholdValue
-from datp_core.pipeline.checkpoints.service import retain_centralized_checkpoint_candidates
-from datp_core.pipeline.decision.centralized import (
+from datp_core.core.errors import LeakageError
+from datp_core.core.identifiers import CentralizedThresholdMethod, ScoreFrameColumn
+from datp_core.core.numeric import Quantile, RowCount, Seed, ThresholdValue
+from datp_core.data.populations.contracts import PopulationOutcomeLabel
+from datp_core.detector.checkpoints.service import retain_centralized_checkpoint_candidates
+from datp_core.detector.scoring.centralized import load_score_frame, score_centralized_reference
+from datp_core.detector.scoring.models import CentralizedScoringRequest
+from datp_core.thresholds.centralized import (
     CENTRALIZED_POOLED_QUANTILE_PROTOCOL,
     construct_pooled_benign_quantile,
     exact_pooled_quantile,
     reject_attack_rows_in_benign_calibration,
 )
-from datp_core.pipeline.scoring.centralized import load_score_frame, score_centralized_reference
-from datp_core.pipeline.scoring.models import CentralizedScoringRequest
 
 
 def test_pooled_benign_quantile_matches_declared_linear_quantile(tmp_path: Path) -> None:
@@ -71,7 +70,7 @@ def test_exact_pooled_quantile_unit() -> None:
 
 
 def test_rejects_attack_rows_in_calibration() -> None:
-    from datp_core.domain.values.identifiers import OutcomeLabel, OutcomeLabelSequence
+    from datp_core.core.identifiers import OutcomeLabel, OutcomeLabelSequence
 
     with pytest.raises(LeakageError, match="attack-labelled"):
         reject_attack_rows_in_benign_calibration(
@@ -80,5 +79,3 @@ def test_rejects_attack_rows_in_calibration() -> None:
             ),
             PopulationOutcomeLabel.BENIGN,
         )
-
-

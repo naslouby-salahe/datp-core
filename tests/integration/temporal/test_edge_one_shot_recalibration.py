@@ -3,9 +3,12 @@ from pathlib import Path
 
 import pytest
 
+from datp_core.analysis.evidence import AnalyzeTemporalEvidenceRequest, analyze_temporal_evidence
 from datp_core.analysis.scientific_decision import ScientificDecision
 from datp_core.analysis.temporal import TemporalSeedProvenance, temporal_recovery
-from datp_core.domain.enums import (
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import (
     EvidenceRole,
     ExperimentId,
     FederatedThresholdMethod,
@@ -14,14 +17,24 @@ from datp_core.domain.enums import (
     SplitProtocolId,
     TemporalState,
 )
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import Seed
-from datp_core.domain.values.ratios import MetricValue
-from datp_core.pipeline.decision.evidence import AnalyzeTemporalEvidenceRequest, analyze_temporal_evidence
-from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
-from datp_core.protocols.seeds import BOUNDED_EVIDENCE_SEED_COHORT
-from datp_core.protocols.temporal import TemporalDeploymentProvenance, validate_frozen_recalibrated_pair
+from datp_core.core.numeric import MetricValue, Ratio, Seed
+from datp_core.experiments.common.coordinates import ExternalTemporalExecutionIdentity
+from datp_core.experiments.common.seeds import BOUNDED_EVIDENCE_SEED_COHORT
+from datp_core.protocols.temporal import (
+    TemporalDecisionProtocol,
+    TemporalDeploymentProvenance,
+    validate_frozen_recalibrated_pair,
+)
+
+_TEST_DECISION_PROTOCOL = TemporalDecisionProtocol(
+    drift_excess_materiality_threshold=MetricValue(0.1),
+    material_recovery_ratio_minimum=Ratio(0.5),
+    seed_cohort=BOUNDED_EVIDENCE_SEED_COHORT,
+    undefined_recovery_when_drift_not_material=True,
+    mixed_seed_publication_support=False,
+    require_full_seed_provenance=True,
+    require_uncertainty_for_supported=True,
+)
 
 
 def test_recalibrated_future_can_change_only_calibration_window() -> None:
@@ -59,6 +72,7 @@ def test_temporal_analysis_publishes_campaign_decision_over_seed_cohort(tmp_path
             frozen_future_cv=MetricValue(0.5),
             recalibrated_future_cv=MetricValue(0.3),
             provenance=_seed_provenance(seed, static=static, frozen=frozen, recalibrated=recalibrated),
+            decision_protocol=_TEST_DECISION_PROTOCOL,
         )
         for seed in BOUNDED_EVIDENCE_SEED_COHORT.values
     )
@@ -108,6 +122,7 @@ def test_incomplete_temporal_cohort_cannot_publish_supported(tmp_path: Path) -> 
             frozen_future_cv=MetricValue(0.3),
             recalibrated_future_cv=MetricValue(0.2),
             provenance=_seed_provenance(Seed(0), static=static, frozen=frozen, recalibrated=recalibrated),
+            decision_protocol=_TEST_DECISION_PROTOCOL,
         ),
     )
     request = AnalyzeTemporalEvidenceRequest(
@@ -173,7 +188,7 @@ def _seed_provenance(
     return TemporalSeedProvenance(
         seed=seed,
         experiment=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
-        population=PopulationId.EDGE_TEMPORAL_GROUPS.value,
+        population=PopulationId.EDGE_TEMPORAL_GROUPS,
         threshold_method=FederatedThresholdMethod.LOCAL_THRESHOLD,
         static_reference=static,
         frozen_future=frozen,
@@ -188,6 +203,6 @@ def _seed_provenance(
         eligibility_checksum=checksum("a2"),
         source_row_checksum=checksum("a3"),
         row_order_checksum=checksum("a4"),
-        exclusions=(),
+        excluded_clients=(),
         unavailable_reasons=(),
     )

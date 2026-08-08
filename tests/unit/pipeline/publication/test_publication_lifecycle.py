@@ -2,21 +2,21 @@ from pathlib import Path
 
 import pytest
 
-from datp_core.domain.values.checksums import Checksum, checksum_bytes
-from datp_core.domain.values.counts import ByteCount
-from datp_core.pipeline.publication.models import (
+from datp_core.artifacts.provenance import Checksum, checksum_bytes
+from datp_core.artifacts.repositories.models import (
     ArtifactKind,
     ArtifactRecord,
     ArtifactState,
     CompletionRecord,
     CompletionState,
 )
-from datp_core.pipeline.publication.service import (
+from datp_core.artifacts.repositories.publication import (
     build_completion_record,
     read_completion_record,
     validate_reload,
     write_completion_record,
 )
+from datp_core.core.numeric import ByteCount
 
 
 def artifact_for(relative: Path, payload: bytes) -> ArtifactRecord:

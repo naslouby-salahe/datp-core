@@ -3,8 +3,11 @@ from pathlib import Path
 import polars as pl
 from sklearn.preprocessing import StandardScaler
 
-from datp_core.domain.enums import (
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.identifiers import (
     DatasetId,
+    FeatureName,
+    FeatureNameSequence,
     PartitionRole,
     PopulationId,
     PreprocessingProtocolId,
@@ -12,13 +15,10 @@ from datp_core.domain.enums import (
     SerializationFormat,
     SplitProtocolId,
 )
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import Seed
-from datp_core.domain.values.identifiers import FeatureName, FeatureNameSequence
-from datp_core.domain.values.ratios import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE
-from datp_core.preprocessing.centralized import PooledPublishRequest, publish_pooled_preprocessing
-from datp_core.preprocessing.contracts import PreprocessingFitScope, TrustedEstimatorClassName
-from datp_core.preprocessing.models import (
+from datp_core.core.numeric import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE, Seed
+from datp_core.data.preprocessing.artifacts import PreprocessingFitScope, TrustedEstimatorClassName
+from datp_core.data.preprocessing.centralized import PooledPublishRequest, publish_pooled_preprocessing
+from datp_core.data.preprocessing.models import (
     CentralizedFittedPreprocessingState,
     PreprocessingPartition,
     PreprocessingPartitions,

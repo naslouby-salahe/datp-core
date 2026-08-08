@@ -1,6 +1,6 @@
 from inspect import getsource
 
-from datp_core.pipeline.execution.engine import PipelineStageRunner
+from datp_core.experiments.execution.engine import PipelineStageRunner
 from datp_core.protocols.graph import ObservationBoundary
 
 

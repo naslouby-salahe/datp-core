@@ -1,4 +1,4 @@
-from datp_core.domain.enums import (
+from datp_core.core.identifiers import (
     EvidenceRole,
     ExperimentId,
     FederatedThresholdMethod,

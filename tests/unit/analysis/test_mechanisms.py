@@ -37,8 +37,8 @@ from datp_core.analysis.mechanisms.movement import (
     threshold_movement,
 )
 from datp_core.analysis.scientific_decision import ScientificDecision
-from datp_core.datasets.partitioning.contracts import ClientIdentity
-from datp_core.domain.enums import (
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.identifiers import (
     AvailabilityStatus,
     EvidenceRole,
     ExperimentId,
@@ -49,19 +49,23 @@ from datp_core.domain.enums import (
     SplitProtocolId,
     TrainingModelId,
 )
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import ClusterIndex, PairedObservationCount, Seed
-from datp_core.domain.values.ratios import (
+from datp_core.core.numeric import (
+    ClusterIndex,
     MetricValue,
     ModelCoefficientValue,
+    PairedObservationCount,
     ProximalCoefficient,
     Ratio,
+    Seed,
     ThresholdValue,
 )
-from datp_core.learning.federated.models import FederatedTrainingCoordinate
+from datp_core.data.populations.contracts import ClientIdentity
+from datp_core.detector.training.contracts import (
+    MODEL_ABSORPTION_DECISION_PROTOCOL,
+    FederatedTrainingCoordinate,
+)
+from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT
 from datp_core.protocols.metrics import ABSORPTION_REFERENCE_EFFECT_MATERIALITY_CUTOFF
-from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT
-from datp_core.protocols.training import MODEL_ABSORPTION_DECISION_PROTOCOL
 
 
 def test_association_reports_all_observations_with_typed_statistics() -> None:
@@ -156,11 +160,10 @@ def test_cluster_stability_validates_contingency_margins() -> None:
 def test_partition_summary_preserves_unsorted_memberships_and_missing_middle_indexes() -> None:
     from tests.unit.thresholding.helpers import COORDINATE
 
-    from datp_core.domain.enums import AvailabilityStatus
-    from datp_core.domain.values.counts import RowCount
-    from datp_core.domain.values.ratios import Quantile
-    from datp_core.thresholding.assignments import LocalQuantile, ThresholdDiagnostic
-    from datp_core.thresholding.methods.cluster import ClusterMembership
+    from datp_core.core.identifiers import AvailabilityStatus
+    from datp_core.core.numeric import Quantile, RowCount
+    from datp_core.thresholds.contracts import LocalQuantile, ThresholdDiagnostic
+    from datp_core.thresholds.policies.cluster import ClusterMembership
 
     client_a = _client("a")
     client_b = _client("b")
@@ -555,129 +558,6 @@ def test_absorption_cohort_uncertainty_rules_require_available_bca_bounds() -> N
     straddle_result = decide_absorption_cohort(straddling, MODEL_ABSORPTION_DECISION_PROTOCOL)
     assert straddle_result.decision.decision is ScientificDecision.DIRECTIONAL_INCONCLUSIVE
     assert "straddle" in straddle_result.decision.rationale
-
-
-def test_client_evaluation_scores_reject_silent_omission_of_missing_parquet(
-    tmp_path,
-    monkeypatch,
-) -> None:
-    from tests.unit.learning.federated.helpers import fedavg_coordinate
-
-    import datp_core.pipeline.workflows.confirmatory as confirmatory
-    from datp_core.domain.errors import ScientificContractError
-    from datp_core.pipeline.workflows.confirmatory import _client_evaluation_scores
-
-    monkeypatch.setattr(confirmatory, "OUTPUTS_ROOT", tmp_path)
-    clients = (_client("device_a"), _client("device_b"))
-    with pytest.raises(ScientificContractError, match="missing evaluation score parquet"):
-        _client_evaluation_scores(
-            score_coordinate=fedavg_coordinate(Seed(0)),
-            document_clients=clients,
-            expected_clients=clients,
-            benign_only=True,
-        )
-
-
-def test_client_evaluation_scores_include_every_expected_client(
-    tmp_path,
-    monkeypatch,
-) -> None:
-    import polars as pl
-    from tests.unit.learning.federated.helpers import fedavg_coordinate
-
-    import datp_core.pipeline.workflows.confirmatory as confirmatory
-    from datp_core.datasets.partitioning.contracts import PopulationOutcomeLabel
-    from datp_core.domain.enums import ScoreFrameColumn
-    from datp_core.pipeline.execution.layout import ExecutionArtifactDirectory, federated_training_directory
-    from datp_core.pipeline.scoring.models import FederatedScoreAssetName
-    from datp_core.pipeline.workflows.confirmatory import _client_evaluation_scores
-
-    monkeypatch.setattr(confirmatory, "OUTPUTS_ROOT", tmp_path)
-    coordinate = fedavg_coordinate(Seed(0))
-    clients = tuple(sorted((_client("device_b"), _client("device_a"))))
-    score_root = federated_training_directory(coordinate, tmp_path) / ExecutionArtifactDirectory.SCORES
-    for client, scores, labels in (
-        (
-            clients[0],
-            (0.1, 0.2, 0.9),
-            (
-                PopulationOutcomeLabel.BENIGN.value,
-                PopulationOutcomeLabel.BENIGN.value,
-                PopulationOutcomeLabel.ATTACK.value,
-            ),
-        ),
-        (
-            clients[1],
-            (0.3, 0.4),
-            (PopulationOutcomeLabel.BENIGN.value, PopulationOutcomeLabel.BENIGN.value),
-        ),
-    ):
-        path = score_root / client.client_id / FederatedScoreAssetName.EVALUATION.value
-        path.parent.mkdir(parents=True, exist_ok=True)
-        pl.DataFrame(
-            {
-                ScoreFrameColumn.STABLE_ROW_ID.value: [f"{client.client_id}-{index}" for index in range(len(scores))],
-                ScoreFrameColumn.OUTCOME_LABEL.value: list(labels),
-                ScoreFrameColumn.RECONSTRUCTION_ERROR.value: list(scores),
-            }
-        ).write_parquet(path)
-    benign = _client_evaluation_scores(
-        score_coordinate=coordinate,
-        document_clients=clients,
-        expected_clients=clients,
-        benign_only=True,
-    )
-    attack = _client_evaluation_scores(
-        score_coordinate=coordinate,
-        document_clients=clients,
-        expected_clients=clients,
-        benign_only=False,
-    )
-    assert tuple(client for client, _ in benign) == clients
-    assert tuple(client for client, _ in attack) == clients
-    assert len(benign[0][1]) == 2
-    assert len(attack[0][1]) == 1
-    assert attack[1][1] == ()
-
-
-def test_cluster_mechanisms_are_optional_when_entire_cohort_is_absent(
-    tmp_path,
-    monkeypatch,
-) -> None:
-    import datp_core.pipeline.workflows.confirmatory as confirmatory
-    from datp_core.pipeline.workflows.confirmatory import _confirmatory_cluster_mechanisms
-    from datp_core.protocols.seeds import SeedCohort
-
-    monkeypatch.setattr(confirmatory, "OUTPUTS_ROOT", tmp_path)
-    monkeypatch.setattr(confirmatory, "CONFIRMATORY_SEED_COHORT", SeedCohort(values=(Seed(0), Seed(1))))
-    assert _confirmatory_cluster_mechanisms() == ()
-
-
-def test_cluster_mechanisms_resolve_threshold_publication_layout(
-    tmp_path,
-    monkeypatch,
-) -> None:
-    import datp_core.pipeline.workflows.confirmatory as confirmatory
-    from datp_core.domain.enums import FederatedThresholdMethod
-    from datp_core.domain.errors import ScientificContractError
-    from datp_core.pipeline.execution.layout import EvaluationRunAssetDirectory
-    from datp_core.pipeline.publication.layout import evaluation_run_directory
-    from datp_core.pipeline.workflows.confirmatory import (
-        _confirmatory_cluster_mechanisms,
-        _confirmatory_coordinate,
-    )
-    from datp_core.protocols.seeds import SeedCohort
-    from datp_core.thresholding.publication import FederatedThresholdAssetName
-
-    monkeypatch.setattr(confirmatory, "OUTPUTS_ROOT", tmp_path)
-    monkeypatch.setattr(confirmatory, "CONFIRMATORY_SEED_COHORT", SeedCohort(values=(Seed(0),)))
-    coordinate = _confirmatory_coordinate(Seed(0), FederatedThresholdMethod.CLUSTER_THRESHOLD)
-    directory = evaluation_run_directory(tmp_path, coordinate) / EvaluationRunAssetDirectory.THRESHOLD
-    directory.mkdir(parents=True, exist_ok=True)
-    (directory / FederatedThresholdAssetName.RESULT).write_text("{", encoding="utf-8")
-    (directory / FederatedThresholdAssetName.COMPLETE).write_text("not-a-checksum", encoding="utf-8")
-    with pytest.raises(ScientificContractError, match="corrupt=\\[0\\]"):
-        _confirmatory_cluster_mechanisms()
 
 
 def _client(

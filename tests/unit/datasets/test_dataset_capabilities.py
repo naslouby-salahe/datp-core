@@ -1,8 +1,8 @@
-from datp_core.datasets.capabilities import CapabilityStatus
-from datp_core.datasets.ciciot2023.capabilities import CICIOT2023_CAPABILITIES
-from datp_core.datasets.edge_iiotset.capabilities import EDGE_IIOTSET_CAPABILITIES
-from datp_core.datasets.nbaiot.capabilities import NBAIOT_CAPABILITIES
-from datp_core.domain.enums import PopulationId
+from datp_core.core.identifiers import PopulationId
+from datp_core.data.ciciot2023.capabilities import CICIOT2023_CAPABILITIES
+from datp_core.data.edge_iiotset.capabilities import EDGE_IIOTSET_CAPABILITIES
+from datp_core.data.nbaiot.capabilities import NBAIOT_CAPABILITIES
+from datp_core.data.populations.contracts import CapabilityStatus
 
 
 def test_capability_status_member_set_is_exact_and_unique() -> None:

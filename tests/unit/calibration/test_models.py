@@ -2,20 +2,18 @@ import pytest
 from tests.unit.calibration.helpers import some_client
 from tests.unit.learning.federated.helpers import fedavg_coordinate
 
-from datp_core.calibration.models import (
-    CalibrationReplicateManifest,
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import StableRowId
+from datp_core.core.numeric import CalibrationSize, ReplicateIndex, RowCount, ScoreValue, Seed
+from datp_core.thresholds.calibration.eligibility import (
     CalibrationSampleReference,
-    CalibrationSubsample,
     CalibrationSupport,
     CalibrationUnavailableReason,
     EligibilityDecision,
     EligibilityStatus,
 )
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import CalibrationSize, ReplicateIndex, RowCount, Seed
-from datp_core.domain.values.identifiers import StableRowId
-from datp_core.domain.values.ratios import ScoreValue
+from datp_core.thresholds.calibration.sampling import CalibrationReplicateManifest, CalibrationSubsample
 
 CLIENT_A = some_client("client_a")
 CLIENT_B = some_client("client_b")
@@ -165,7 +163,7 @@ def test_replicate_manifest_requires_nested_subsamples() -> None:
             unavailable_reason=None,
         )
 
-    with pytest.raises(ScientificContractError, match="subset of the same replicate's larger subsample"):
+    with pytest.raises(ScientificContractError, match="nested in larger sizes within a replicate"):
         build()
 
 

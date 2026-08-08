@@ -12,12 +12,10 @@ from tests.unit.learning.federated.helpers import (
     fedprox_protocol,
 )
 
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import Seed
-from datp_core.domain.values.ratios import ProximalCoefficient
-from datp_core.learning.federated.global_training import train_global_federated
-from datp_core.learning.federated.training import FederatedTrainingRequest
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.errors import ScientificContractError
+from datp_core.core.numeric import ProximalCoefficient, Seed
+from datp_core.detector.training.federated import FederatedTrainingRequest, train_global_federated
 from datp_core.protocols.training import FEDPROX_COEFFICIENTS
 
 
@@ -98,7 +96,7 @@ def test_train_fedprox_rejects_mismatched_coordinate_and_protocol_coefficient(tm
 
 
 def test_global_training_module_owns_fedavg_and_fedprox_dispatch() -> None:
-    import datp_core.learning.federated.global_training as global_training
+    import datp_core.detector.training.federated as global_training
 
     source = Path(global_training.__file__).read_text(encoding="utf-8")
     assert "FedAvgProtocol" in source
