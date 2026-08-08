@@ -5,11 +5,11 @@ from enum import StrEnum
 from typing import ClassVar
 
 from datp_core.core.contracts import (
+    pydantic_value_schema,
     sequence_pydantic_schema,
     str_subclass_schema,
     validate_non_empty_tuple,
     validate_unique,
-    pydantic_value_schema,
 )
 
 

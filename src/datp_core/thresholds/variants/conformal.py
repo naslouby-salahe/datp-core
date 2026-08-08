@@ -6,9 +6,9 @@ from typing import ClassVar
 from datp_core.core.errors import ScientificContractError, require_contract
 from datp_core.core.identifiers import ContractSubject, FederatedThresholdMethod
 from datp_core.core.numeric import (
+    NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
     ConformalRankIndex,
     CoverageTarget,
-    NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
     Quantile,
     Ratio,
     RowCount,

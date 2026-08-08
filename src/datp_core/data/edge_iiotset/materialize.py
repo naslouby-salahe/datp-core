@@ -6,6 +6,8 @@ from shutil import rmtree
 
 import polars as pl
 
+from datp_core.core.identifiers import AvailabilityStatus, DatasetId
+from datp_core.core.numeric import RowCount, ValidationIssueCount
 from datp_core.data.canonical_cache import CanonicalAsset, CanonicalAssetLayout, canonical_directory
 from datp_core.data.contracts import (
     CanonicalProvenanceColumn,
@@ -27,8 +29,6 @@ from datp_core.data.materialization import (
     stream_parquet,
 )
 from datp_core.data.materialization_lifecycle import CanonicalMaterializationRequest, materialize_canonical
-from datp_core.core.identifiers import AvailabilityStatus, DatasetId
-from datp_core.core.numeric import RowCount, ValidationIssueCount
 
 from .chronology import PcapChronology, paired_capture_path, validate_chronology, write_capture_timeline
 from .reader import EdgeIIoTsetReader
@@ -50,7 +50,7 @@ class _EdgePublicationInputs:
     benign_frames: tuple[pl.LazyFrame, ...]
     attack_frames: tuple[pl.LazyFrame, ...]
     chronology: tuple[PcapChronology, ...]
-    expected_assets: tuple[CanonicalAssetLayout, ...]
+    expected_assets: tuple[CanonicalAssetLayout[EdgeAssetRole], ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,7 +78,7 @@ class EdgeIIoTsetMaterializer:
     def canonical_directory(self, canonical_root: Path) -> Path:
         return canonical_directory(canonical_root, EDGE_SCHEMA)
 
-    def publish(self, raw_root: Path, canonical_root: Path) -> MaterializedDataset:
+    def publish(self, raw_root: Path, canonical_root: Path) -> MaterializedDataset[EdgeAssetRole, EdgeAssetRole]:
         bundle_root = raw_root / EdgeArtifactName.DATASET_BUNDLE_DIRECTORY
         benign_paths = tuple(
             sorted((bundle_root / EdgeArtifactName.NORMAL_TRAFFIC_DIRECTORY).glob(f"*/*{EdgeArtifactSuffix.CSV}"))
@@ -97,7 +97,7 @@ class EdgeIIoTsetMaterializer:
         benign_paths: tuple[Path, ...],
         attack_paths: tuple[Path, ...],
         canonical_root: Path,
-    ) -> MaterializedDataset:
+    ) -> MaterializedDataset[EdgeAssetRole, EdgeAssetRole]:
         ordered_benign = tuple(sorted(benign_paths))
         ordered_attack = tuple(sorted(attack_paths))
         if not ordered_benign or not ordered_attack:
@@ -126,10 +126,10 @@ class EdgeIIoTsetMaterializer:
         attack_paths: tuple[Path, ...],
         canonical_root: Path,
         source_paths: tuple[Path, ...],
-    ) -> CanonicalPublication:
+    ) -> CanonicalPublication[EdgeAssetRole, EdgeAssetRole]:
         publication = self._prepare_publication(benign_paths, attack_paths)
 
-        def write_assets(output_root: Path) -> tuple[CanonicalAsset, ...]:
+        def write_assets(output_root: Path) -> tuple[CanonicalAsset[EdgeAssetRole], ...]:
             return self._write_assets(output_root, publication.inputs)
 
         return CanonicalPublication(
@@ -206,7 +206,10 @@ class EdgeIIoTsetMaterializer:
         return raw_inventory(DatasetId.EDGE_IIOTSET, benign_sources + evidence_sources + attack_sources)
 
     @staticmethod
-    def _write_assets(canonical_root: Path, inputs: _EdgePublicationInputs) -> tuple[CanonicalAsset, ...]:
+    def _write_assets(
+        canonical_root: Path,
+        inputs: _EdgePublicationInputs,
+    ) -> tuple[CanonicalAsset[EdgeAssetRole], ...]:
         timeline_root = canonical_root / ".chronology"
         try:
             static_assets = _write_static_assets(canonical_root, timeline_root, inputs)
@@ -258,7 +261,7 @@ def _expected_assets(
     benign_paths: tuple[Path, ...],
     attack_paths: tuple[Path, ...],
     validations: tuple[ChronologyValidation, ...],
-) -> tuple[CanonicalAssetLayout, ...]:
+) -> tuple[CanonicalAssetLayout[EdgeAssetRole], ...]:
     benign_identities = tuple(benign_sensor_group(path).value for path in benign_paths)
     static_assets = named_assets(_STATIC_BENIGN_BRANCH, EdgeAssetRole.STATIC_BENIGN, benign_identities)
     temporal_identities = tuple(
@@ -302,7 +305,7 @@ def _write_static_assets(
     canonical_root: Path,
     timeline_root: Path,
     inputs: _EdgePublicationInputs,
-) -> tuple[CanonicalAsset, ...]:
+) -> tuple[CanonicalAsset[EdgeAssetRole], ...]:
     enriched_benign = tuple(
         _with_capture_timeline(path, frame, timeline_root / f"{index:05d}.parquet", evidence)
         for index, (path, frame, evidence) in enumerate(
@@ -317,9 +320,9 @@ def _write_static_assets(
 
 def _write_temporal_assets(
     canonical_root: Path,
-    static_assets: tuple[CanonicalAsset, ...],
+    static_assets: tuple[CanonicalAsset[EdgeAssetRole], ...],
     inputs: _EdgePublicationInputs,
-) -> tuple[CanonicalAsset, ...]:
+) -> tuple[CanonicalAsset[EdgeAssetRole], ...]:
     temporal_count = sum(evidence.validation.temporal_eligible for evidence in inputs.chronology) or 1
     temporal_paths = inputs.expected_assets[len(static_assets) : len(static_assets) + temporal_count]
     temporal_frames = tuple(
@@ -335,10 +338,10 @@ def _write_temporal_assets(
 
 def _write_attack_assets(
     canonical_root: Path,
-    static_assets: tuple[CanonicalAsset, ...],
-    temporal_assets: tuple[CanonicalAsset, ...],
+    static_assets: tuple[CanonicalAsset[EdgeAssetRole], ...],
+    temporal_assets: tuple[CanonicalAsset[EdgeAssetRole], ...],
     inputs: _EdgePublicationInputs,
-) -> tuple[CanonicalAsset, ...]:
+) -> tuple[CanonicalAsset[EdgeAssetRole], ...]:
     attack_paths = inputs.expected_assets[len(static_assets) + len(temporal_assets) :]
     return tuple(
         stream_parquet(frame, canonical_root, asset, EDGE_ARROW_SCHEMA)

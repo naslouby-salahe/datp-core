@@ -10,6 +10,9 @@ import polars as pl
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from datp_core.artifacts.provenance import Checksum, checksum_file, checksum_text
+from datp_core.core.identifiers import DatasetId, PublicationStatus
+from datp_core.core.numeric import ByteCount, CanonicalColumnPosition, RowCount, SourceFileCount
 from datp_core.data.canonical_cache import (
     CanonicalAsset,
     CanonicalAssetLayout,
@@ -44,9 +47,6 @@ from datp_core.data.contracts import (
     schema_checksum_document_json,
     schema_content,
 )
-from datp_core.artifacts.provenance import Checksum, checksum_file, checksum_text
-from datp_core.core.identifiers import DatasetId, PublicationStatus
-from datp_core.core.numeric import ByteCount, CanonicalColumnPosition, RowCount, SourceFileCount
 from datp_core.data.publication import publish_canonical_atomically
 
 _COMPLETE_NAME, _MANIFEST_NAME, _SCHEMA_NAME, _SOURCE_STATE_NAME = publication_artifact_names()

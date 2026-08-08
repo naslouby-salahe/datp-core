@@ -5,19 +5,19 @@ from pathlib import Path
 
 import polars as pl
 
+from datp_core.artifacts.provenance import Checksum
+from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import (
     ContractSubject,
     DatasetId,
+    FeatureNameSequence,
     PartitionRole,
     PopulationId,
     PopulationIdentityKind,
     SplitProtocolId,
 )
-from datp_core.artifacts.provenance import Checksum
-from datp_core.core.errors import ScientificContractError
-from datp_core.core.identifiers import FeatureNameSequence
 from datp_core.core.numeric import ClientCount, NonNegativeIntegerValue, RowCount, Seed
-from datp_core.data.populations.declarations import PopulationDeclaration
+from datp_core.data.populations.contracts import PopulationDeclaration
 
 from .contracts import (
     CLIENT_ID_COLUMN,

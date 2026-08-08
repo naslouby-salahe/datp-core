@@ -17,6 +17,7 @@ from datp_core.data.populations.construction import (
     join_handoff_with_canonical_features,
 )
 from datp_core.data.populations.contracts import (
+    ClientIdentity,
     PopulationConstructionRequest,
     PreprocessingHandoff,
     PreprocessingHandoffRequest,
@@ -44,7 +45,7 @@ from datp_core.data.preprocessing.models import (
 )
 from datp_core.data.preprocessing.persisted_artifacts import load_published_population_split
 from datp_core.data.registry import construct_population, dataset_binding, resolve_population
-from datp_core.protocols.experiments import require_execution_identity
+from datp_core.experiments.common.coordinates import require_execution_identity
 
 _FEDERATED_METHODS = frozenset(
     {
@@ -60,7 +61,8 @@ _PROTOCOL_METHODS = {
 
 _AUDITED_TIMESTAMP_COLUMN = CaptureTimestampColumn(EdgeCanonicalColumn.CAPTURE_TIMESTAMP.value)
 
-_EMPTY_FROZENSET = frozenset()
+_EMPTY_FALLBACK_CLIENT_IDS: frozenset[str] = frozenset()
+_EMPTY_CLIENT_IDENTITIES: frozenset[ClientIdentity] = frozenset()
 
 
 def preprocess_federated(
@@ -90,7 +92,7 @@ def preprocess_federated(
     handoff = build_preprocessing_handoff(
         PreprocessingHandoffRequest(
             construction=construction,
-            deployment_fallback_client_ids=_EMPTY_FROZENSET,
+            deployment_fallback_client_ids=_EMPTY_FALLBACK_CLIENT_IDS,
             capture_timestamp_column=_capture_timestamp_column(request),
         )
     )
@@ -192,7 +194,7 @@ def preprocess_published_federated(
         population_manifest=published.population_manifest,
         membership=published.membership,
         assignments=published.assignments,
-        deployment_fallback_client_ids=_EMPTY_FROZENSET,
+        deployment_fallback_client_ids=_EMPTY_CLIENT_IDENTITIES,
         client_partition_counts=(),
     )
 

@@ -92,7 +92,11 @@ class MetricCapability(CapabilityStatement):
             )
             if metrics
         )
-        aggregate = CapabilityStatus.SUPPORTED if statuses == {CapabilityStatus.SUPPORTED} else CapabilityStatus.UNAVAILABLE
+        aggregate = (
+            CapabilityStatus.SUPPORTED
+            if statuses == frozenset({CapabilityStatus.SUPPORTED})
+            else CapabilityStatus.UNAVAILABLE
+        )
         if len(statuses) > 1 or CapabilityStatus.CONDITIONAL in statuses:
             aggregate = CapabilityStatus.CONDITIONAL
         if self.status is not aggregate:
@@ -369,9 +373,13 @@ class EligibleCohort:
 
     def __post_init__(self) -> None:
         if not self.clients:
-            raise ScientificContractError("eligible cohort must contain at least one client", subject=ContractSubject.CALIBRATION)
+            raise ScientificContractError(
+                "eligible cohort must contain at least one client", subject=ContractSubject.CALIBRATION
+            )
         if tuple(sorted(self.clients)) != self.clients:
-            raise ScientificContractError("eligible cohort must preserve deterministic client ordering", subject=ContractSubject.CLIENT)
+            raise ScientificContractError(
+                "eligible cohort must preserve deterministic client ordering", subject=ContractSubject.CLIENT
+            )
         if len(frozenset(self.clients)) != len(self.clients):
             raise ScientificContractError("eligible cohort clients must be unique", subject=ContractSubject.CLIENT)
 
@@ -660,7 +668,10 @@ def _chronology_status(declaration: PopulationDeclaration, capabilities: Dataset
 
 
 def _attack_status(declaration: PopulationDeclaration, capabilities: DatasetCapabilities) -> CapabilityStatus:
-    if not declaration.requires_client_attack_assignment or not capabilities.attack_assignment.client_level_assignment_available:
+    if (
+        not declaration.requires_client_attack_assignment
+        or not capabilities.attack_assignment.client_level_assignment_available
+    ):
         return CapabilityStatus.UNAVAILABLE
     return capabilities.attack_assignment.status
 
@@ -670,7 +681,10 @@ def _fpr_status(capabilities: DatasetCapabilities) -> CapabilityStatus:
 
 
 def _attack_metric_status(declaration: PopulationDeclaration, capabilities: DatasetCapabilities) -> CapabilityStatus:
-    if not declaration.requires_client_attack_assignment or not capabilities.attack_assignment.client_level_assignment_available:
+    if (
+        not declaration.requires_client_attack_assignment
+        or not capabilities.attack_assignment.client_level_assignment_available
+    ):
         return CapabilityStatus.UNAVAILABLE
     statuses = frozenset(
         capabilities.metrics.status_for(metric)
@@ -681,7 +695,7 @@ def _attack_metric_status(declaration: PopulationDeclaration, capabilities: Data
             MetricId.AUROC,
         )
     )
-    if statuses == {CapabilityStatus.SUPPORTED}:
+    if statuses == frozenset({CapabilityStatus.SUPPORTED}):
         return CapabilityStatus.SUPPORTED
     if CapabilityStatus.CONDITIONAL in statuses:
         return CapabilityStatus.CONDITIONAL

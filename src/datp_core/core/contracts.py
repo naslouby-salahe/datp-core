@@ -1,8 +1,10 @@
 """Shared immutable contracts and Pydantic integration helpers."""
 
 from dataclasses import dataclass
+from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, GetCoreSchemaHandler
+from pydantic_core import CoreSchema, core_schema
 
 
 class StrictModel(BaseModel):
@@ -37,11 +39,12 @@ def str_subclass_schema(cls: type, _source_type: object, _handler: object) -> ob
     )
 
 
-def str_enum_schema(cls, _source_type, _handler):
+def str_enum_schema[EnumT: StrEnum](
+    cls: type[EnumT], _source_type: object, _handler: GetCoreSchemaHandler
+) -> CoreSchema:
     """Validate a raw string into one member of a closed string enum."""
-    from pydantic_core import core_schema
 
-    def validate(value):
+    def validate(value: object) -> EnumT:
         if isinstance(value, cls):
             return value
         if not isinstance(value, str):
@@ -51,9 +54,8 @@ def str_enum_schema(cls, _source_type, _handler):
     return core_schema.no_info_plain_validator_function(validate)
 
 
-def sequence_pydantic_schema(cls: type, _source_type: object, _handler: object) -> object:
+def sequence_pydantic_schema(cls: type, _source_type: object, _handler: GetCoreSchemaHandler) -> CoreSchema:
     """Validate immutable typed sequences and serialize their scalar members."""
-    from pydantic_core import core_schema
 
     def validate(value: object) -> object:
         if isinstance(value, cls):
@@ -62,7 +64,9 @@ def sequence_pydantic_schema(cls: type, _source_type: object, _handler: object) 
             return cls(tuple(value))
         raise ValueError(f"expected sequence, got {type(value)}")
 
-    def scalar_values(instance) -> list:
+    def scalar_values(instance: object) -> list[object]:
+        if not isinstance(instance, tuple):
+            raise TypeError("typed sequence serialization requires a tuple")
         return [getattr(item, "value", item) for item in instance]
 
     return core_schema.no_info_plain_validator_function(

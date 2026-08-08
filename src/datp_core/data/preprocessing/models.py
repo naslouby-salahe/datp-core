@@ -48,7 +48,7 @@ from datp_core.data.preprocessing.artifacts import (
     TrustedEstimatorClassName,
 )
 from datp_core.data.preprocessing.state import TrustedScaler
-from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
+from datp_core.experiments.common.coordinates import ExternalTemporalExecutionIdentity
 
 
 class TransformedSchema(StrictModel):

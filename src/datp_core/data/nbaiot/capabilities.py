@@ -1,5 +1,11 @@
 """Capability declaration for the audited N-BaIoT artifact."""
 
+from datp_core.core.identifiers import (
+    EvidenceRole,
+    FederatedThresholdMethod,
+    MetricId,
+    PopulationId,
+)
 from datp_core.data.populations.contracts import (
     AttackAssignmentCapability,
     CapabilityStatus,
@@ -11,12 +17,6 @@ from datp_core.data.populations.contracts import (
     PhysicalClientCapability,
     TemporalCapability,
     ThresholdMethodCapability,
-)
-from datp_core.core.identifiers import (
-    EvidenceRole,
-    FederatedThresholdMethod,
-    MetricId,
-    PopulationId,
 )
 
 from .schema import NBAIOT_DEVICE_FAMILIES, NBAIOT_DEVICE_IDENTITIES

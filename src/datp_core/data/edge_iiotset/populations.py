@@ -4,10 +4,14 @@ from pathlib import Path
 
 import polars as pl
 
+from datp_core.core.errors import CapabilityError, DataIntegrityError, ScientificContractError
+from datp_core.core.identifiers import DatasetId, PopulationId, PopulationIdentityKind, SplitProtocolId
+from datp_core.core.numeric import NonNegativeIntegerValue, RowCount, Seed
 from datp_core.data.contracts import (
     CanonicalManifestDocument,
     CanonicalProvenanceColumn,
     CanonicalPublicationArtifact,
+    ManifestChronologyEntry,
 )
 from datp_core.data.edge_iiotset.capabilities import EDGE_IIOTSET_CAPABILITIES, EDGE_TEMPORAL_SENSOR_GROUPS
 from datp_core.data.edge_iiotset.schema import (
@@ -20,6 +24,8 @@ from datp_core.data.edge_iiotset.schema import (
 from datp_core.data.populations.construction import PopulationFinalizationRequest, finalize_population
 from datp_core.data.populations.contracts import (
     CLIENT_ID_COLUMN,
+    EDGE_SENSOR_GROUPS,
+    EDGE_TEMPORAL_GROUPS,
     OUTCOME_LABEL_COLUMN,
     SOURCE_PATH_COLUMN,
     SOURCE_ROW_INDEX_COLUMN,
@@ -35,10 +41,6 @@ from datp_core.data.populations.contracts import (
     select_membership_frame,
 )
 from datp_core.data.populations.paths import PartitioningFilePattern, canonical_branch_directory
-from datp_core.core.errors import CapabilityError, DataIntegrityError, ScientificContractError
-from datp_core.core.identifiers import DatasetId, PopulationId, PopulationIdentityKind, SplitProtocolId
-from datp_core.core.numeric import NonNegativeIntegerValue, RowCount, Seed
-from datp_core.data.populations.declarations import EDGE_SENSOR_GROUPS, EDGE_TEMPORAL_GROUPS
 
 _GROUP = EdgeCanonicalColumn.BENIGN_SENSOR_GROUP
 _CAPTURE = EdgeCanonicalColumn.CAPTURE_TIMESTAMP
@@ -233,7 +235,9 @@ def _chronology_eligibility(
     return tuple(eligible), tuple(excluded), tuple(reasons), duplicate_total
 
 
-def _chronology_for_group(group_id: str, chronology):
+def _chronology_for_group(
+    group_id: str, chronology: tuple[ManifestChronologyEntry, ...]
+) -> ManifestChronologyEntry | None:
     for item in chronology:
         if item.group_identity == group_id:
             return item

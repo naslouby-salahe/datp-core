@@ -39,7 +39,7 @@ from datp_core.data.preprocessing.models import (
     PreprocessingPublishContext,
 )
 from datp_core.data.preprocessing.state import TrustedScaler
-from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
+from datp_core.experiments.common.coordinates import ExternalTemporalExecutionIdentity
 from datp_core.runtime.filesystem import write_text_atomically
 
 CANONICAL_DATA_DIRECTORY = "data"

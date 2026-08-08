@@ -4,6 +4,9 @@ from pathlib import Path
 
 import polars as pl
 
+from datp_core.core.errors import CapabilityError, ScientificContractError
+from datp_core.core.identifiers import DatasetId, PopulationId, PopulationIdentityKind, SplitProtocolId
+from datp_core.core.numeric import Seed
 from datp_core.data.ciciot2023.capabilities import CICIOT2023_CAPABILITIES
 from datp_core.data.ciciot2023.schema import (
     CICIOT2023_SCHEMA,
@@ -15,6 +18,7 @@ from datp_core.data.ciciot2023.schema import (
 from datp_core.data.contracts import CanonicalProvenanceColumn
 from datp_core.data.populations.construction import PopulationFinalizationRequest, finalize_population
 from datp_core.data.populations.contracts import (
+    CICIOT_FILE_CLIENTS,
     CLIENT_ID_COLUMN,
     OUTCOME_LABEL_COLUMN,
     SOURCE_PATH_COLUMN,
@@ -28,10 +32,6 @@ from datp_core.data.populations.contracts import (
     select_membership_frame,
 )
 from datp_core.data.populations.paths import canonical_data_glob
-from datp_core.core.errors import CapabilityError, ScientificContractError
-from datp_core.core.identifiers import DatasetId, PopulationId, PopulationIdentityKind, SplitProtocolId
-from datp_core.core.numeric import Seed
-from datp_core.data.populations.declarations import CICIOT_FILE_CLIENTS
 
 _ELIGIBLE = CICIoT2023Column.MODEL_INPUT_ELIGIBLE
 _LABEL = CICIoT2023Column.LABEL

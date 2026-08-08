@@ -4,6 +4,8 @@ from pathlib import Path
 
 import polars as pl
 
+from datp_core.core.identifiers import AvailabilityStatus, DatasetId
+from datp_core.core.numeric import RowCount, ValidationIssueCount
 from datp_core.data.canonical_cache import CanonicalAsset, canonical_directory
 from datp_core.data.contracts import (
     CanonicalAssetRole,
@@ -25,8 +27,6 @@ from datp_core.data.materialization import (
     stream_parquet,
 )
 from datp_core.data.materialization_lifecycle import CanonicalMaterializationRequest, materialize_canonical
-from datp_core.core.identifiers import AvailabilityStatus, DatasetId
-from datp_core.core.numeric import RowCount, ValidationIssueCount
 
 from .reader import CICIoT2023AuditSummary, CICIoT2023Reader
 from .schema import (
@@ -34,6 +34,7 @@ from .schema import (
     CICIOT2023_MODEL_INPUT_ELIGIBILITY_POLICY,
     CICIOT2023_SCHEMA,
     CICIoT2023ArtifactName,
+    CICIoT2023EligibilityReason,
     excluded_source_relative_path,
     source_relative_path,
 )
@@ -47,7 +48,9 @@ class CICIoT2023Materializer:
     def canonical_directory(self, canonical_root: Path) -> Path:
         return canonical_directory(canonical_root, CICIOT2023_SCHEMA)
 
-    def publish(self, raw_root: Path, canonical_root: Path) -> MaterializedDataset:
+    def publish(
+        self, raw_root: Path, canonical_root: Path
+    ) -> MaterializedDataset[CanonicalAssetRole, CICIoT2023EligibilityReason]:
         sources = tuple(sorted(raw_root.glob(f"**/{CICIoT2023ArtifactName.MERGED_CSV_DIRECTORY}/*.csv")))
         all_csvs = tuple(sorted(raw_root.glob("**/*.csv")))
         excluded_paths = tuple(path for path in all_csvs if path not in frozenset(sources))
@@ -59,7 +62,7 @@ class CICIoT2023Materializer:
         canonical_root: Path,
         *,
         excluded_paths: tuple[Path, ...] = (),
-    ) -> MaterializedDataset:
+    ) -> MaterializedDataset[CanonicalAssetRole, CICIoT2023EligibilityReason]:
         ordered_paths = tuple(sorted(source_paths))
         return materialize_canonical(
             CanonicalMaterializationRequest(
@@ -84,14 +87,14 @@ class CICIoT2023Materializer:
         canonical_root: Path,
         *,
         excluded_paths: tuple[Path, ...] = (),
-    ) -> CanonicalPublication:
+    ) -> CanonicalPublication[CanonicalAssetRole, CICIoT2023EligibilityReason]:
         frames, inventory, report = CICIoT2023Materializer.audit(
             source_paths,
             excluded_paths=excluded_paths,
         )
         expected_assets = canonical_data_partition_assets(len(frames))
 
-        def write_assets(data_root: Path) -> tuple[CanonicalAsset, ...]:
+        def write_assets(data_root: Path) -> tuple[CanonicalAsset[CanonicalAssetRole], ...]:
             return tuple(
                 stream_parquet(frame, data_root, asset, CICIOT2023_ARROW_SCHEMA)
                 for frame, asset in zip(frames, expected_assets, strict=True)

@@ -5,6 +5,8 @@ from pathlib import Path
 
 import pyarrow as pa
 
+from datp_core.core.identifiers import DatasetId
+from datp_core.core.numeric import CanonicalColumnPosition, ClientCount
 from datp_core.data.contracts import (
     CanonicalColumn,
     CanonicalColumnRole,
@@ -18,8 +20,6 @@ from datp_core.data.materialization import (
     canonical_provenance_column,
     canonical_schema_checksum,
 )
-from datp_core.core.identifiers import DatasetId
-from datp_core.core.numeric import CanonicalColumnPosition, ClientCount
 
 
 class CICIoT2023Column(StrEnum):

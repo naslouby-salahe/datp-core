@@ -23,11 +23,11 @@ from datp_core.analysis.mechanisms.movement import (
 )
 from datp_core.analysis.preparation import AnalysisDocument, ExternalAnalysisDocument, TemporalAnalysisDocument
 from datp_core.analysis.scientific_decision import ScientificDecision, ScientificDecisionResult
-from datp_core.experiments.anchor.contracts import VerifiedAnchorGateArtifact
 from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.serializers.json import canonical_checksum
 from datp_core.core.identifiers import AvailabilityStatus, EvidenceRole, ExperimentId, MetricId, PopulationId
 from datp_core.core.numeric import MetricValue
+from datp_core.experiments.anchor.contracts import VerifiedAnchorGateArtifact
 from datp_core.presentation.figures import FigureSpec, render_markdown_figure
 from datp_core.presentation.tables import PublicationTable, TableCell, render_markdown_table
 from datp_core.presentation.validation import (

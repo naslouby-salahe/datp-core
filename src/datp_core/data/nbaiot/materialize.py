@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+from datp_core.core.identifiers import AvailabilityStatus, DatasetId
+from datp_core.core.numeric import RowCount, ValidationIssueCount
 from datp_core.data.canonical_cache import CanonicalAsset, canonical_directory
 from datp_core.data.contracts import (
     CanonicalAssetRole,
@@ -19,8 +21,6 @@ from datp_core.data.materialization import (
     stream_parquet,
 )
 from datp_core.data.materialization_lifecycle import CanonicalMaterializationRequest, materialize_canonical
-from datp_core.core.identifiers import AvailabilityStatus, DatasetId
-from datp_core.core.numeric import RowCount, ValidationIssueCount
 
 from .reader import NBaIoTReader
 from .schema import (
@@ -41,7 +41,11 @@ class NBaIoTMaterializer:
     def canonical_directory(self, canonical_root: Path) -> Path:
         return canonical_directory(canonical_root, NBAIOT_SCHEMA)
 
-    def publish(self, raw_root: Path, canonical_root: Path) -> MaterializedDataset:
+    def publish(
+        self,
+        raw_root: Path,
+        canonical_root: Path,
+    ) -> MaterializedDataset[CanonicalAssetRole, CanonicalAssetRole]:
         candidates = tuple(sorted(raw_root.glob(f"**/*{NBaIoTArtifactName.CSV_SUFFIX}")))
         demonstration_file = NBaIoTArtifactName.STRUCTURE_DEMONSTRATION_FILE
         sources = tuple(path for path in candidates if path.name != demonstration_file)
@@ -54,7 +58,7 @@ class NBaIoTMaterializer:
         canonical_root: Path,
         *,
         excluded_paths: tuple[Path, ...] = (),
-    ) -> MaterializedDataset:
+    ) -> MaterializedDataset[CanonicalAssetRole, CanonicalAssetRole]:
         ordered_paths = tuple(sorted(source_paths))
         return materialize_canonical(
             CanonicalMaterializationRequest(
@@ -78,7 +82,7 @@ class NBaIoTMaterializer:
         canonical_root: Path,
         *,
         excluded_paths: tuple[Path, ...] = (),
-    ) -> CanonicalPublication:
+    ) -> CanonicalPublication[CanonicalAssetRole, CanonicalAssetRole]:
         reader = NBaIoTReader()
         frames = tuple(reader.read(path) for path in source_paths)
         row_counts = tuple(reader.validate_finite_values(frame) for frame in frames)
@@ -118,7 +122,7 @@ class NBaIoTMaterializer:
         )
         expected_assets = canonical_data_partition_assets(len(frames))
 
-        def write_assets(data_root: Path) -> tuple[CanonicalAsset, ...]:
+        def write_assets(data_root: Path) -> tuple[CanonicalAsset[CanonicalAssetRole], ...]:
             return tuple(
                 stream_parquet(frame, data_root, asset, NBAIOT_ARROW_SCHEMA)
                 for frame, asset in zip(frames, expected_assets, strict=True)

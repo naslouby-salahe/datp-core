@@ -10,13 +10,17 @@ from datp_core.core.errors import UnresolvedScientificValueError
 from datp_core.core.identifiers import CentralizedThresholdMethod, ContractSubject, FederatedThresholdMethod
 from datp_core.core.numeric import (
     CalibrationSize,
+    CoverageTarget,
     GroupCount,
     KMeansInitializationCount,
     KMeansMaximumIterationCount,
+    Quantile,
+    Ratio,
     Seed,
+    ShrinkageWeight,
     SubsampleReplicateCount,
+    SummaryCoefficient,
 )
-from datp_core.core.numeric import CoverageTarget, Quantile, Ratio, ShrinkageWeight, SummaryCoefficient
 
 
 class ClusterFingerprintFeature(StrEnum):
@@ -136,7 +140,8 @@ class ClusterThresholdProtocol(StrictModel):
         requirements = (
             (
                 self.fingerprint_features == REQUIRED_CLUSTER_FINGERPRINT_FEATURES,
-                "cluster fingerprint must contain mean, standard deviation, skewness, and p95 exactly once in locked order",
+                "cluster fingerprint must contain mean, standard deviation, skewness, and p95 "
+                "exactly once in locked order",
             ),
             (
                 self.feature_standardization is ClusterFeatureStandardization.STANDARD_SCALER,
@@ -249,6 +254,7 @@ CLUSTER_MEDIAN_THRESHOLD_PROTOCOL = ClusterThresholdProtocol(
 
 def require_calibration_subsample_replicate_count() -> SubsampleReplicateCount:
     raise UnresolvedScientificValueError(
-        "the master roadmap requires multiple deterministic calibration subsampling replicates but does not declare their count",
+        "the master roadmap requires multiple deterministic calibration subsampling replicates "
+        "but does not declare their count",
         subject=ContractSubject.CALIBRATION,
     )

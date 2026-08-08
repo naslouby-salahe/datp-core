@@ -13,7 +13,7 @@ from datp_core.detector.scoring.contracts import (
     ScoreArtifactManifest,
     TrainingCoordinateContract,
 )
-from datp_core.experiments.common.seeds import BOUNDED_EVIDENCE_SEED_COHORT, SeedCohort
+from datp_core.experiments.common.seeds import SeedCohort
 
 
 class TemporalFutureIdentity(StrictModel):
@@ -165,6 +165,7 @@ class TemporalDecisionProtocol(StrictModel):
 
 def require_temporal_decision_protocol() -> TemporalDecisionProtocol:
     raise UnresolvedScientificValueError(
-        "the master roadmap requires a pre-specified positive drift-excess materiality threshold and a criterion for a meaningful recovery portion, but does not declare either numeric value",
+        "the master roadmap requires a pre-specified positive drift-excess materiality threshold "
+        "and a criterion for a meaningful recovery portion, but does not declare either numeric value",
         subject=EvidenceRole.TEMPORAL_BOUNDARY,
     )

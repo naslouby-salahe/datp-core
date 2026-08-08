@@ -36,7 +36,7 @@ from datp_core.data.preprocessing.models import (
     FederatedPreprocessingOutcome,
     PreprocessingPublishContext,
 )
-from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
+from datp_core.experiments.common.coordinates import ExternalTemporalExecutionIdentity
 
 
 @dataclass(frozen=True, slots=True)

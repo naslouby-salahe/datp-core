@@ -1,6 +1,10 @@
+from collections.abc import Iterator
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+
+from pydantic import GetCoreSchemaHandler
+from pydantic_core import CoreSchema
 
 from datp_core.core.contracts import sequence_pydantic_schema, str_subclass_schema, validate_non_empty_tuple
 from datp_core.core.identifiers import (
@@ -70,7 +74,9 @@ class RelativeAssetPath(str):
             raise ValueError("relative asset path must not be absolute")
         return super().__new__(cls, path_text)
 
-    __get_pydantic_core_schema__ = classmethod(str_subclass_schema)
+    @classmethod
+    def __get_pydantic_core_schema__(cls, source_type: object, handler: object) -> object:
+        return str_subclass_schema(cls, source_type, handler)
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,7 +84,7 @@ class RelativeAssetPathSequence:
     paths: tuple[RelativeAssetPath, ...]
 
     def __post_init__(self) -> None:
-        if not isinstance(self.paths, tuple):
+        if type(self.paths) is not tuple:
             raise TypeError("relative asset paths must be an immutable tuple")
         wrapped = tuple(item if type(item) is RelativeAssetPath else RelativeAssetPath(item) for item in self.paths)
         object.__setattr__(self, "paths", wrapped)
@@ -87,10 +93,12 @@ class RelativeAssetPathSequence:
     def __len__(self) -> int:
         return len(self.paths)
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[RelativeAssetPath]:
         return iter(self.paths)
 
-    __get_pydantic_core_schema__ = classmethod(sequence_pydantic_schema)
+    @classmethod
+    def __get_pydantic_core_schema__(cls, source_type: object, handler: GetCoreSchemaHandler) -> CoreSchema:
+        return sequence_pydantic_schema(cls, source_type, handler)
 
 
 class ProcessedAssetName(StrEnum):

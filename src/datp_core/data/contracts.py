@@ -102,15 +102,15 @@ class RawSourceFile:
     observed_row_count: RowCount | None
 
     def __post_init__(self) -> None:
-        if not isinstance(self.dataset, DatasetId):
+        if type(self.dataset) is not DatasetId:
             raise TypeError("raw sources require a typed dataset")
-        if not isinstance(self.size_bytes, ByteCount):
+        if type(self.size_bytes) is not ByteCount:
             raise TypeError("raw sources require a typed byte count")
-        if not isinstance(self.checksum, Checksum):
+        if type(self.checksum) is not Checksum:
             raise TypeError("raw sources require a typed checksum")
-        if not isinstance(self.role, SourceFileRole):
+        if type(self.role) is not SourceFileRole:
             raise TypeError("raw sources require a typed role")
-        if self.observed_row_count is not None and not isinstance(self.observed_row_count, RowCount):
+        if self.observed_row_count is not None and type(self.observed_row_count) is not RowCount:
             raise TypeError("raw sources require a typed observed row count")
         if self.relative_path.is_absolute():
             raise ValueError("raw source paths must be relative")
@@ -123,9 +123,9 @@ class ExcludedSourceFile:
     reason: ExclusionReason
 
     def __post_init__(self) -> None:
-        if not isinstance(self.dataset, DatasetId):
+        if type(self.dataset) is not DatasetId:
             raise TypeError("excluded sources require a typed dataset")
-        if not isinstance(self.reason, ExclusionReason):
+        if type(self.reason) is not ExclusionReason:
             raise TypeError("excluded sources require a typed exclusion reason")
         if self.relative_path.is_absolute():
             raise ValueError("excluded source paths must be relative")
@@ -159,13 +159,13 @@ class CanonicalColumn:
     def __post_init__(self) -> None:
         if not self.name or not self.source_name:
             raise ValueError("canonical columns require non-empty names")
-        if not isinstance(self.dtype, ColumnLogicalType):
+        if type(self.dtype) is not ColumnLogicalType:
             raise TypeError("canonical columns require a ColumnLogicalType dtype")
-        if not isinstance(self.role, CanonicalColumnRole):
+        if type(self.role) is not CanonicalColumnRole:
             raise TypeError("canonical columns require a typed role")
-        if not isinstance(self.nullable, bool):
+        if type(self.nullable) is not bool:
             raise TypeError("canonical column nullability must be boolean")
-        if not isinstance(self.position, CanonicalColumnPosition):
+        if type(self.position) is not CanonicalColumnPosition:
             raise TypeError("canonical columns require a typed position")
 
 
@@ -192,7 +192,7 @@ class SourceRowReference:
     zero_based_row_index: SourceRowIndex
 
     def __post_init__(self) -> None:
-        if not isinstance(self.zero_based_row_index, SourceRowIndex):
+        if type(self.zero_based_row_index) is not SourceRowIndex:
             raise TypeError("source row references require a typed zero-based index")
 
 
@@ -208,7 +208,7 @@ class DatasetExclusion:
     def __post_init__(self) -> None:
         if self.source_path is None and self.source_row is None:
             raise ValueError("an exclusion requires source context")
-        if not isinstance(self.affected_count, RowCount) or not self.evidence or self.affected_count.value < 1:
+        if type(self.affected_count) is not RowCount or not self.evidence or self.affected_count.value < 1:
             raise ValueError("exclusions require evidence and a positive affected count")
 
 
@@ -222,10 +222,10 @@ class DatasetValidationIssue:
     affected_count: RowCount
 
     def __post_init__(self) -> None:
-        if not isinstance(self.code, DatasetValidationCode):
+        if type(self.code) is not DatasetValidationCode:
             raise ValueError("validation issues require a DatasetValidationCode")
         if (
-            not isinstance(self.affected_count, RowCount)
+            type(self.affected_count) is not RowCount
             or not self.source_context
             or not self.reason
             or self.affected_count.value < 1
@@ -246,13 +246,11 @@ class DatasetValidationReport:
 
     def __post_init__(self) -> None:
         _validate_report_collections(self.issues, self.exclusions)
-        if not all(
-            isinstance(value, RowCount) for value in (self.accepted_rows, self.excluded_rows, self.invalid_rows)
-        ):
+        if not all(type(value) is RowCount for value in (self.accepted_rows, self.excluded_rows, self.invalid_rows)):
             raise TypeError("validation reports require typed row counts")
-        if not isinstance(self.status, AvailabilityStatus):
+        if type(self.status) is not AvailabilityStatus:
             raise TypeError("validation reports require a typed availability status")
-        if not isinstance(self.warning_count, ValidationIssueCount):
+        if type(self.warning_count) is not ValidationIssueCount:
             raise TypeError("validation reports require a typed warning count")
         if self.warning_count.value != _warning_count(self.issues):
             raise ValueError("warning count must match warning issues")
@@ -308,9 +306,9 @@ def _validate_declared_columns(
 
 
 def _validate_inventory_sources(sources: tuple[RawSourceFile, ...], accepted_source_count: SourceFileCount) -> None:
-    if not isinstance(sources, tuple):
+    if type(sources) is not tuple:
         raise TypeError("sources must be an immutable tuple")
-    if not isinstance(accepted_source_count, SourceFileCount):
+    if type(accepted_source_count) is not SourceFileCount:
         raise TypeError("raw inventories require a typed accepted source count")
     if accepted_source_count.value != len(sources):
         raise ValueError("accepted source count must equal source tuple length")
@@ -320,7 +318,7 @@ def _validate_inventory_sources(sources: tuple[RawSourceFile, ...], accepted_sou
 
 
 def _validate_inventory_count(excluded_source_count: SourceFileCount) -> None:
-    if not isinstance(excluded_source_count, SourceFileCount):
+    if type(excluded_source_count) is not SourceFileCount:
         raise TypeError("raw inventories require a typed excluded source count")
 
 
@@ -328,7 +326,7 @@ def _validate_excluded_sources(
     excluded_sources: tuple[ExcludedSourceFile, ...],
     excluded_source_count: SourceFileCount,
 ) -> None:
-    if not isinstance(excluded_sources, tuple):
+    if type(excluded_sources) is not tuple:
         raise TypeError("excluded sources must be an immutable tuple")
     if len(excluded_sources) != excluded_source_count.value:
         raise ValueError("excluded source count must equal excluded source tuple length")
@@ -340,9 +338,9 @@ def _validate_excluded_sources(
 def _validate_report_collections(
     issues: tuple[DatasetValidationIssue, ...], exclusions: tuple[DatasetExclusion, ...]
 ) -> None:
-    if not isinstance(issues, tuple):
+    if type(issues) is not tuple:
         raise TypeError("validation issues must be an immutable tuple")
-    if not isinstance(exclusions, tuple):
+    if type(exclusions) is not tuple:
         raise TypeError("dataset exclusions must be an immutable tuple")
 
 
@@ -382,7 +380,7 @@ class MaterializedDataset[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum]:
     eligibility_policy: ModelInputEligibilityPolicy[EligibilityReasonT] | None = None
 
     def __post_init__(self) -> None:
-        if not isinstance(self.assets, tuple) or not self.assets:
+        if type(self.assets) is not tuple or not self.assets:
             raise ValueError("materialized datasets require immutable canonical assets")
 
 
@@ -450,9 +448,9 @@ def _validate_chronology_counts(validation: ChronologyValidation) -> None:
         validation.skipped_evidence_rows,
         validation.trailing_evidence_rows,
     )
-    if not all(isinstance(value, RowCount) for value in required_counts):
+    if not all(type(value) is RowCount for value in required_counts):
         raise TypeError("chronology validation requires typed row counts")
-    if validation.evidence_row_count is not None and not isinstance(validation.evidence_row_count, RowCount):
+    if validation.evidence_row_count is not None and type(validation.evidence_row_count) is not RowCount:
         raise TypeError("chronology evidence requires a typed row count")
     if validation.parseable_rows.value + validation.invalid_rows.value != validation.total_rows.value:
         raise ValueError("parseable and invalid chronology rows must total all rows")
@@ -465,7 +463,7 @@ class SchemaChecksumDocument(StrictModel):
     physical_schema: str
 
 
-class _AssetEntry(StrictModel):
+class ManifestAssetEntry(StrictModel):
     checksum: str
     columns: tuple[str, ...]
     path: str
@@ -474,7 +472,7 @@ class _AssetEntry(StrictModel):
     source_identity: str | None = None
 
 
-class _ChronologyEntry(StrictModel):
+class ManifestChronologyEntry(StrictModel):
     group_identity: str
     status: str
     total_rows: RowCount
@@ -492,7 +490,7 @@ class _ChronologyEntry(StrictModel):
     trailing_evidence_rows: RowCount = RowCount(0)
 
 
-class _RawSourceEntry(StrictModel):
+class ManifestRawSourceEntry(StrictModel):
     dataset: str = ""
     relative_path: str
     size_bytes: ByteCount
@@ -501,37 +499,37 @@ class _RawSourceEntry(StrictModel):
     observed_row_count: RowCount | None = None
 
 
-class _ExcludedSourceEntry(StrictModel):
+class ManifestExcludedSourceEntry(StrictModel):
     dataset: str = ""
     relative_path: str
     reason: str
 
 
-class _InventoryEntry(StrictModel):
+class ManifestInventoryEntry(StrictModel):
     dataset: str = ""
-    sources: tuple[_RawSourceEntry, ...]
+    sources: tuple[ManifestRawSourceEntry, ...]
     accepted_source_count: SourceFileCount
     excluded_source_count: SourceFileCount
-    excluded_sources: tuple[_ExcludedSourceEntry, ...]
+    excluded_sources: tuple[ManifestExcludedSourceEntry, ...]
     accepted_row_count: RowCount | None = None
     checksum: str
 
 
-class _SourceRowEntry(StrictModel):
-    source: _RawSourceEntry
+class ManifestSourceRowEntry(StrictModel):
+    source: ManifestRawSourceEntry
     zero_based_row_index: SourceRowIndex
 
 
-class _ExclusionEntry(StrictModel):
+class ManifestExclusionEntry(StrictModel):
     dataset: str = ""
     source_path: str | None = None
-    source_row: _SourceRowEntry | None = None
+    source_row: ManifestSourceRowEntry | None = None
     reason: str
     evidence: str
     affected_count: RowCount
 
 
-class _ValidationIssueEntry(StrictModel):
+class ManifestValidationIssueEntry(StrictModel):
     severity: str
     code: str
     dataset: str = ""
@@ -540,10 +538,10 @@ class _ValidationIssueEntry(StrictModel):
     affected_count: RowCount
 
 
-class _ValidationReportEntry(StrictModel):
+class ManifestValidationReportEntry(StrictModel):
     dataset: str = ""
-    issues: tuple[_ValidationIssueEntry, ...]
-    exclusions: tuple[_ExclusionEntry, ...]
+    issues: tuple[ManifestValidationIssueEntry, ...]
+    exclusions: tuple[ManifestExclusionEntry, ...]
     accepted_rows: RowCount
     excluded_rows: RowCount
     invalid_rows: RowCount
@@ -551,7 +549,7 @@ class _ValidationReportEntry(StrictModel):
     status: str
 
 
-class _EligibilityPolicyEntry(StrictModel):
+class ManifestEligibilityPolicyEntry(StrictModel):
     dataset: str = ""
     label_column: str
     feature_columns: tuple[str, ...]
@@ -559,14 +557,14 @@ class _EligibilityPolicyEntry(StrictModel):
 
 
 class CanonicalManifestDocument(StrictModel):
-    assets: tuple[_AssetEntry, ...]
+    assets: tuple[ManifestAssetEntry, ...]
     canonicalization_contract: str
-    chronology: tuple[_ChronologyEntry, ...]
+    chronology: tuple[ManifestChronologyEntry, ...]
     dataset: DatasetId
-    eligibility_policy: _EligibilityPolicyEntry | None = None
-    inventory: _InventoryEntry
+    eligibility_policy: ManifestEligibilityPolicyEntry | None = None
+    inventory: ManifestInventoryEntry
     schema_checksum: str
-    validation_report: _ValidationReportEntry
+    validation_report: ManifestValidationReportEntry
 
 
 _CANONICAL_PUBLICATION_CONTRACT = "canonical_publication_contract"
@@ -616,22 +614,22 @@ class ManifestSerializationRequest[EligibilityReasonT: StrEnum]:
     eligibility_policy: ModelInputEligibilityPolicy[EligibilityReasonT] | None = None
 
 
-def _chronology_entry(value: ChronologyValidation) -> _ChronologyEntry:
-    return _ChronologyEntry.model_validate(canonical_mapping(value))
+def manifest_chronology_entry(value: ChronologyValidation) -> ManifestChronologyEntry:
+    return ManifestChronologyEntry.model_validate(canonical_mapping(value))
 
 
-def _eligibility_entry[EligibilityReasonT: StrEnum](
+def manifest_eligibility_entry[EligibilityReasonT: StrEnum](
     value: ModelInputEligibilityPolicy[EligibilityReasonT] | None,
-) -> _EligibilityPolicyEntry | None:
-    return None if value is None else _EligibilityPolicyEntry.model_validate(canonical_mapping(value))
+) -> ManifestEligibilityPolicyEntry | None:
+    return None if value is None else ManifestEligibilityPolicyEntry.model_validate(canonical_mapping(value))
 
 
-def _inventory_entry(value: RawDatasetInventory) -> _InventoryEntry:
-    return _InventoryEntry.model_validate(canonical_mapping(value))
+def manifest_inventory_entry(value: RawDatasetInventory) -> ManifestInventoryEntry:
+    return ManifestInventoryEntry.model_validate(canonical_mapping(value))
 
 
-def _validation_report_entry(value: DatasetValidationReport) -> _ValidationReportEntry:
-    return _ValidationReportEntry.model_validate(canonical_mapping(value))
+def manifest_validation_report_entry(value: DatasetValidationReport) -> ManifestValidationReportEntry:
+    return ManifestValidationReportEntry.model_validate(canonical_mapping(value))
 
 
 class SourceStateEntryDocument(StrictModel):

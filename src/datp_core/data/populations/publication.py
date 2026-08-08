@@ -46,7 +46,7 @@ from datp_core.data.populations.contracts import (
 from datp_core.data.populations.integrity import membership_frame_checksum, validate_split_manifest
 from datp_core.data.populations.splits import split_membership
 from datp_core.data.registry import construct_population
-from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity, require_execution_identity
+from datp_core.experiments.common.coordinates import ExternalTemporalExecutionIdentity, require_execution_identity
 
 
 class PopulationPublicationAsset(StrEnum):

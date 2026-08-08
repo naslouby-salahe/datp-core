@@ -1,6 +1,7 @@
 """Scientific preprocessing validation and serialization-equivalence checks."""
 
 import numpy as np
+import polars as pl
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 from datp_core.core.errors import LeakageError, ScientificContractError
@@ -40,7 +41,7 @@ def validate_transform_partition(partition: PreprocessingPartition, protocol: Pr
     validate_feature_frame(partition.frame, protocol)
 
 
-def validate_feature_frame(frame, protocol: PreprocessingProtocol) -> None:
+def validate_feature_frame(frame: pl.DataFrame, protocol: PreprocessingProtocol) -> None:
     expected = tuple(protocol.feature_names)
     observed = tuple(frame.columns)
     if observed != expected:

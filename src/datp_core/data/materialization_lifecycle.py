@@ -18,7 +18,7 @@ class CanonicalMaterializationRequest[AssetRoleT: StrEnum, EligibilityReasonT: S
     source_paths: tuple[Path, ...]
     source_path_resolver: Callable[[Path], Path]
     asset_role_type: type[AssetRoleT]
-    prepare_publication: Callable[[], CanonicalPublication]
+    prepare_publication: Callable[[], CanonicalPublication[AssetRoleT, EligibilityReasonT]]
     eligibility_policy: ModelInputEligibilityPolicy[EligibilityReasonT] | None = None
 
     def __post_init__(self) -> None:

@@ -100,7 +100,7 @@ def serialize_estimator(estimator: BaseEstimator | TrustedScaler, destination: P
 def load_estimator(path: Path, class_name: TrustedEstimatorClassName) -> TrustedScaler:
     expected_type = resolve_trusted_estimator_type(class_name)
     loaded = skops_io.loads(path.read_bytes(), trusted=_TRUSTED_TYPE_LIST)
-    if type(loaded) is not expected_type or not isinstance(loaded, (StandardScaler, MinMaxScaler)):
+    if type(loaded) is not expected_type or type(loaded) not in (StandardScaler, MinMaxScaler):
         raise SerializationSafetyError(
             "reloaded estimator class does not match the trusted estimator identity",
             subject=SerializationSubject.PREPROCESSING_ESTIMATOR,

@@ -16,8 +16,8 @@ from datp_core.data.populations.contracts import (
     PopulationManifestDocument,
     SplitManifestDocument,
     client_identities,
+    split_protocol_for_population,
 )
-from datp_core.data.populations.declarations import split_protocol_for_population
 from datp_core.data.populations.integrity import (
     membership_frame_checksum,
     validate_no_future_history_leakage,
@@ -26,7 +26,7 @@ from datp_core.data.populations.integrity import (
 )
 from datp_core.data.preprocessing.models import PublishedFederatedPreprocessingRequest
 from datp_core.data.registry import population_capabilities, population_declaration
-from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
+from datp_core.experiments.common.coordinates import ExternalTemporalExecutionIdentity
 
 EXECUTION_IDENTITY_ASSET = "execution_identity.json"
 POPULATION_MANIFEST_ASSET = "population_manifest.json"

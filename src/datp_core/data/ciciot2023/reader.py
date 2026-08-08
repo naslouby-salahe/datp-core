@@ -5,8 +5,8 @@ from pathlib import Path
 
 import polars as pl
 
-from datp_core.data.materialization import provenance_expressions
 from datp_core.core.numeric import RowCount
+from datp_core.data.materialization import provenance_expressions
 
 from .schema import (
     CICIOT2023_FEATURE_COLUMNS,
@@ -118,7 +118,6 @@ class CICIoT2023Reader:
                 )
             ).alias(CICIOT2023_MODEL_INPUT_ELIGIBLE_COLUMN),
         )
-
 
     @staticmethod
     def _missing_or_unrecognized_label_expression() -> pl.Expr:

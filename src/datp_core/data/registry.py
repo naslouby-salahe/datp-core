@@ -5,6 +5,12 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
+from datp_core.core.errors import CapabilityError, ScientificContractError
+from datp_core.core.identifiers import (
+    DatasetId,
+    EvidenceRole,
+    PopulationId,
+)
 from datp_core.data.ciciot2023.capabilities import CICIOT2023_CAPABILITIES
 from datp_core.data.ciciot2023.materialize import CICIoT2023Materializer
 from datp_core.data.ciciot2023.populations import construct_ciciot_file_clients
@@ -19,28 +25,21 @@ from datp_core.data.nbaiot.materialize import NBaIoTMaterializer
 from datp_core.data.nbaiot.populations import construct_nbaiot_dirichlet_clients, construct_nbaiot_natural_devices
 from datp_core.data.nbaiot.schema import NBAIOT_SCHEMA
 from datp_core.data.populations.contracts import (
-    ControlledPartitionKind,
-    PopulationCapabilities,
-    PopulationConstructionRequest,
-    PopulationConstructionResult,
-    build_population_capabilities,
-    population_evidence_role,
-)
-from datp_core.core.identifiers import (
-    DatasetId,
-    EvidenceRole,
-    PopulationId,
-)
-from datp_core.core.errors import CapabilityError, ScientificContractError
-from datp_core.protocols.calibration import MINIMUM_BENIGN_SUPPORT
-from datp_core.data.populations.declarations import (
     CICIOT_FILE_CLIENTS,
     EDGE_SENSOR_GROUPS,
     EDGE_TEMPORAL_GROUPS,
     NBAIOT_DIRICHLET_CLIENTS,
     NBAIOT_NATURAL_DEVICES,
+    ControlledPartitionKind,
+    DatasetCapabilities,
+    PopulationCapabilities,
+    PopulationConstructionRequest,
+    PopulationConstructionResult,
     PopulationDeclaration,
+    build_population_capabilities,
+    population_evidence_role,
 )
+from datp_core.protocols.calibration import MINIMUM_BENIGN_SUPPORT
 
 type DatasetPublication = MaterializedDataset[StrEnum, StrEnum]
 
