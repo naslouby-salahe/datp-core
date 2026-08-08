@@ -36,6 +36,24 @@ from datp_core.domain.errors import (
 )
 from datp_core.domain.values.counts import Seed
 from datp_core.pipeline.execution.layout import ExecutionRootDirectory
+from datp_core.pipeline.workflows.federated_threshold_estimation import (
+    federated_benign_statistics_comparison_analysis_marker_present as _federated_comparison_analysis_marker_present,
+)
+from datp_core.pipeline.workflows.federated_threshold_estimation import (
+    federated_quantile_estimation_analysis_marker_present as _federated_quantile_analysis_marker_present,
+)
+from datp_core.pipeline.workflows.federated_threshold_estimation import (
+    fixed_coefficient_statistics_sensitivity_analysis_marker_present as _fixed_coefficient_analysis_marker_present,
+)
+from datp_core.pipeline.workflows.federated_threshold_estimation import (
+    report_federated_benign_statistics_comparison as _report_federated_benign_comparison,
+)
+from datp_core.pipeline.workflows.federated_threshold_estimation import (
+    report_federated_quantile_estimation as _report_federated_quantile,
+)
+from datp_core.pipeline.workflows.federated_threshold_estimation import (
+    report_fixed_coefficient_statistics_sensitivity as _report_fixed_coefficient,
+)
 from datp_core.pipeline.workflows.threshold_robustness import (
     calibration_size_ablation_analysis_marker_present as _calibration_size_ablation_analysis_marker_present,
 )
@@ -119,6 +137,9 @@ _REGISTERED_WORKFLOWS: tuple[RegisteredWorkflow, ...] = (
     RegisteredWorkflow(experiment_id=ExperimentId.FAMILY_AND_GROUPED_GRANULARITY, anchor_gated=True),
     RegisteredWorkflow(experiment_id=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST, anchor_gated=True),
     RegisteredWorkflow(experiment_id=ExperimentId.DITTO_ABSORPTION_STRESS_TEST, anchor_gated=True),
+    RegisteredWorkflow(experiment_id=ExperimentId.FEDERATED_BENIGN_STATISTICS_COMPARISON, anchor_gated=True),
+    RegisteredWorkflow(experiment_id=ExperimentId.FEDERATED_QUANTILE_ESTIMATION, anchor_gated=True),
+    RegisteredWorkflow(experiment_id=ExperimentId.FIXED_COEFFICIENT_STATISTICS_SENSITIVITY, anchor_gated=True),
     RegisteredWorkflow(experiment_id=ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION, anchor_gated=False),
     RegisteredWorkflow(experiment_id=ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY, anchor_gated=False),
     RegisteredWorkflow(experiment_id=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION, anchor_gated=False),
@@ -568,6 +589,66 @@ def _dispatch_local_conformal_coverage(
         detail=f"local_conformal_coverage seeds={len(seeds)}",
         method_outcomes=_seed_completion_outcomes(
             experiment_id=ExperimentId.LOCAL_CONFORMAL_COVERAGE,
+            completed_by_seed=tuple(item.completed_threshold_methods for item in results),
+        ),
+    )
+
+
+def _dispatch_federated_benign_statistics_comparison(
+    seeds: tuple[Seed, ...], output_root: Path, overwrite: bool
+) -> DispatchOutcome:
+    from datp_core.pipeline.workflows.federated_threshold_estimation import (
+        run_federated_benign_statistics_comparison_seed,
+    )
+
+    results = tuple(
+        run_federated_benign_statistics_comparison_seed(seed, output_root=output_root, overwrite=overwrite)
+        for seed in seeds
+    )
+    return DispatchOutcome(
+        detail=f"federated_benign_statistics_comparison seeds={len(seeds)}",
+        method_outcomes=_seed_completion_outcomes(
+            experiment_id=ExperimentId.FEDERATED_BENIGN_STATISTICS_COMPARISON,
+            completed_by_seed=tuple(item.completed_threshold_methods for item in results),
+        ),
+    )
+
+
+def _dispatch_federated_quantile_estimation(
+    seeds: tuple[Seed, ...], output_root: Path, overwrite: bool
+) -> DispatchOutcome:
+    from datp_core.pipeline.workflows.federated_threshold_estimation import (
+        run_federated_quantile_estimation_seed,
+    )
+
+    results = tuple(
+        run_federated_quantile_estimation_seed(seed, output_root=output_root, overwrite=overwrite)
+        for seed in seeds
+    )
+    return DispatchOutcome(
+        detail=f"federated_quantile_estimation seeds={len(seeds)}",
+        method_outcomes=_seed_completion_outcomes(
+            experiment_id=ExperimentId.FEDERATED_QUANTILE_ESTIMATION,
+            completed_by_seed=tuple(item.completed_threshold_methods for item in results),
+        ),
+    )
+
+
+def _dispatch_fixed_coefficient_statistics_sensitivity(
+    seeds: tuple[Seed, ...], output_root: Path, overwrite: bool
+) -> DispatchOutcome:
+    from datp_core.pipeline.workflows.federated_threshold_estimation import (
+        run_fixed_coefficient_statistics_sensitivity_seed,
+    )
+
+    results = tuple(
+        run_fixed_coefficient_statistics_sensitivity_seed(seed, output_root=output_root, overwrite=overwrite)
+        for seed in seeds
+    )
+    return DispatchOutcome(
+        detail=f"fixed_coefficient_statistics_sensitivity seeds={len(seeds)}",
+        method_outcomes=_seed_completion_outcomes(
+            experiment_id=ExperimentId.FIXED_COEFFICIENT_STATISTICS_SENSITIVITY,
             completed_by_seed=tuple(item.completed_threshold_methods for item in results),
         ),
     )
@@ -1264,6 +1345,21 @@ _WORKFLOW_HANDLERS: dict[ExperimentId, WorkflowHandlers] = {
         dispatch=_dispatch_local_conformal_coverage,
         report=_report_local_conformal_coverage,
         analysis_marker=_local_conformal_coverage_analysis_marker_present,
+    ),
+    ExperimentId.FEDERATED_BENIGN_STATISTICS_COMPARISON: WorkflowHandlers(
+        dispatch=_dispatch_federated_benign_statistics_comparison,
+        report=_report_federated_benign_comparison,
+        analysis_marker=_federated_comparison_analysis_marker_present,
+    ),
+    ExperimentId.FEDERATED_QUANTILE_ESTIMATION: WorkflowHandlers(
+        dispatch=_dispatch_federated_quantile_estimation,
+        report=_report_federated_quantile,
+        analysis_marker=_federated_quantile_analysis_marker_present,
+    ),
+    ExperimentId.FIXED_COEFFICIENT_STATISTICS_SENSITIVITY: WorkflowHandlers(
+        dispatch=_dispatch_fixed_coefficient_statistics_sensitivity,
+        report=_report_fixed_coefficient,
+        analysis_marker=_fixed_coefficient_analysis_marker_present,
     ),
 }
 _require_dispatch_covers_registry(_WORKFLOW_HANDLERS, name="workflow handlers")
