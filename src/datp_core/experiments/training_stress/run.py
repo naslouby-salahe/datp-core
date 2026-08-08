@@ -16,16 +16,23 @@ from datp_core.analysis.mechanisms import (
     AbsorptionSeedObservation,
     decide_absorption_cohort,
 )
-from datp_core.data.populations.contracts import ClientIdentity
-from datp_core.data.registry import population_capabilities
+from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.artifacts.provenance import Checksum, checksum_file
+from datp_core.artifacts.repositories.thresholds import (
+    FederatedThresholdConstructionRequest,
+    construct_and_publish_federated_thresholds,
+)
 from datp_core.artifacts.serializers.json import canonical_checksum, canonical_json_text
 from datp_core.core.contracts import ClientCollection, ClientOwned
+from datp_core.core.errors import ArtifactIntegrityError, ScientificContractError
 from datp_core.core.identifiers import (
+    ClientIdentityToken,
     ContractSubject,
     DatasetId,
     EvidenceRole,
     ExperimentId,
+    FamilyIdentity,
+    FeatureNameSequence,
     FederatedThresholdMethod,
     FedProxCoefficientSelectionRule,
     FedProxRoleDirectory,
@@ -37,23 +44,28 @@ from datp_core.core.identifiers import (
     SplitProtocolId,
     TrainingModelId,
 )
-from datp_core.core.errors import ArtifactIntegrityError, ScientificContractError
-from datp_core.core.identifiers import ClientIdentityToken, FamilyIdentity, FeatureNameSequence
-from datp_core.core.numeric import ClientCount, RoundNumber, RowCount, Seed
 from datp_core.core.numeric import (
     NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
+    ClientCount,
     DittoRegularization,
     MetricValue,
     ModelCoefficientValue,
     ProximalCoefficient,
+    RoundNumber,
+    RowCount,
     ScoreValue,
+    Seed,
 )
+from datp_core.data.populations.contracts import ClientIdentity
+from datp_core.data.registry import population_capabilities
+from datp_core.detector.scoring.contracts import FixedScoreInvariant
 from datp_core.evaluation.cohort.construction import assert_cohort_invariant_to_threshold_methods
 from datp_core.evaluation.cohort.contracts import EvaluationCohortManifest
 from datp_core.evaluation.cohort.evidence import client_partition_counts_from_scores
 from datp_core.evaluation.federated.publication import FederatedEvaluationAssetName
 from datp_core.evaluation.models import ClientMetricResult, MetricStatus, PopulationMetricResult, metric_by_id
 from datp_core.evaluation.population_metrics import calculate_population_metrics
+from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.experiments.confirmatory import FedAvgCvFprEffectEvidence, absorption_corner_from_evaluation_document
 from datp_core.experiments.execution import execute_declared_campaign
 from datp_core.experiments.personalized_scoring import client_metric, client_scoring_input, score_record_for_client
@@ -69,10 +81,6 @@ from datp_core.learning.federated.models import (
 from datp_core.learning.federated.training import preprocessing_state_set_checksum
 from datp_core.pipeline.checkpoints.service import SelectFederatedCheckpointRequest, select_federated_primary_checkpoint
 from datp_core.pipeline.decision.evidence import AnalysisAssetName, SeedEvidenceAssetName
-from datp_core.artifacts.repositories.thresholds import (
-    FederatedThresholdConstructionRequest,
-    construct_and_publish_federated_thresholds,
-)
 from datp_core.pipeline.execution.context import (
     client_training_inputs,
     client_with_id,
@@ -88,7 +96,6 @@ from datp_core.pipeline.execution.layout import (
 )
 from datp_core.pipeline.execution.models import CampaignEntry, CampaignPlan, campaign_digest
 from datp_core.pipeline.preparation.populations import ConstructDeclaredPopulationRequest, construct_declared_population
-from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.pipeline.scoring.federated import publish_federated_scores
 from datp_core.pipeline.scoring.models import FederatedScoreArtifactManifest, GenerateFederatedScoresRequest
 from datp_core.pipeline.training.personalized import (
@@ -101,8 +108,6 @@ from datp_core.preprocessing.service import preprocess_federated
 from datp_core.presentation.export import export_mechanism_publication
 from datp_core.protocols.calibration import CANONICAL_QUANTILE, MINIMUM_BENIGN_SUPPORT, CalibrationSupportRule
 from datp_core.protocols.experiments import EXPERIMENTS
-from datp_core.detector.scoring.contracts import FixedScoreInvariant
-from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.protocols.training import (
     BATCH_SIZE,
     CHECKPOINT_PROTOCOL,
@@ -118,11 +123,11 @@ from datp_core.protocols.training import (
 )
 from datp_core.runtime.configuration import DATA_ROOT, OUTPUTS_ROOT
 from datp_core.runtime.filesystem import write_text_atomically
-from datp_core.thresholding.assignments import FamilyAssignment
-from datp_core.thresholding.dispatch import ThresholdConstructionRequest
-from datp_core.thresholding.methods.local import LocalThresholdResult
-from datp_core.thresholding.methods.shared import SharedThresholdResult
-from datp_core.thresholding.quantiles import ClientBenignCalibrationScores
+from datp_core.thresholds.contracts import FamilyAssignment
+from datp_core.thresholds.dispatch import ThresholdConstructionRequest
+from datp_core.thresholds.policies.local import LocalThresholdResult
+from datp_core.thresholds.policies.shared import SharedThresholdResult
+from datp_core.thresholds.quantiles import ClientBenignCalibrationScores
 
 
 class DittoArtifactBranch(StrEnum):

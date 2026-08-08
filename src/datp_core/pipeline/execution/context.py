@@ -5,9 +5,9 @@ from pathlib import Path
 
 import polars as pl
 
+from datp_core.data.registry import dataset_binding, population_capabilities
 from datp_core.datasets.edge_iiotset.schema import EDGE_NUMERIC_FEATURE_COLUMNS
 from datp_core.datasets.partitioning.contracts import ClientIdentity, ControlledPartitionCondition
-from datp_core.data.registry import dataset_binding, population_capabilities
 from datp_core.domain.enums import ContractSubject, DatasetId
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.checksums import Checksum
@@ -53,7 +53,7 @@ from datp_core.protocols.training import (
     resolve_single_model_federated_training_protocol,
 )
 from datp_core.runtime.configuration import DATA_ROOT
-from datp_core.thresholding.assignments import FamilyAssignment
+from datp_core.thresholds.contracts import FamilyAssignment
 
 EDGE_FEATURE_NAMES = FeatureNameSequence(tuple(FeatureName(name) for name in EDGE_NUMERIC_FEATURE_COLUMNS))
 

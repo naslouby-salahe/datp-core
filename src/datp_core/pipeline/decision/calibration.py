@@ -4,8 +4,8 @@ from dataclasses import dataclass
 
 from datp_core.calibration.models import CalibrationReplicateManifest, CalibrationSubsample, EligibilityDecision
 from datp_core.calibration.service import CalibrationRequest, calibrate
-from datp_core.datasets.partitioning.contracts import ClientIdentity, EligibleCohort
 from datp_core.data.registry import population_capabilities
+from datp_core.datasets.partitioning.contracts import ClientIdentity, EligibleCohort
 from datp_core.domain.enums import EvidenceRole, FederatedThresholdMethod
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.checksums import Checksum, checksum_text
@@ -25,10 +25,9 @@ from datp_core.protocols.calibration import (
     require_calibration_subsample_replicate_count,
 )
 from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
-from datp_core.thresholding.assignments import FamilyAssignment
-from datp_core.thresholding.dispatch import ThresholdConstructionRequest, dispatch_federated_threshold
-from datp_core.thresholding.identities import ThresholdUnavailableResult
-from datp_core.thresholding.quantiles import ClientBenignCalibrationScores, calibration_scores_from_references
+from datp_core.thresholds.contracts import FamilyAssignment, ThresholdUnavailableResult
+from datp_core.thresholds.dispatch import ThresholdConstructionRequest, dispatch_federated_threshold
+from datp_core.thresholds.quantiles import ClientBenignCalibrationScores, calibration_scores_from_references
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

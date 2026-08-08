@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import polars as pl
 
-from datp_core.data.populations.contracts import ClientIdentity, PopulationOutcomeLabel
+from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import (
     ContractSubject,
     EvaluationCohort,
@@ -12,10 +12,10 @@ from datp_core.core.identifiers import (
     FederatedThresholdMethod,
     PartitionRole,
     ScoreFrameColumn,
+    StableRowId,
 )
-from datp_core.core.errors import ScientificContractError
-from datp_core.core.identifiers import StableRowId
 from datp_core.core.numeric import ScoreValue
+from datp_core.data.populations.contracts import ClientIdentity, PopulationOutcomeLabel
 from datp_core.evaluation.client_metrics import calculate_client_metrics
 from datp_core.evaluation.cohort.contracts import EvaluationCohortManifest
 from datp_core.evaluation.confusion import calculate_confusion_counts
@@ -24,7 +24,7 @@ from datp_core.evaluation.models import ClientMetricResult
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.pipeline.scoring.models import ClientScoringInput, FederatedScoreArtifactManifest, FederatedScoreRecord
 from datp_core.preprocessing.models import ClientPreprocessingResult
-from datp_core.thresholding.assignments import ThresholdAssignment
+from datp_core.thresholds.contracts import ThresholdAssignment
 
 
 def client_scoring_input(

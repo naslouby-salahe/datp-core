@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+from datp_core.artifacts.repositories.publication import ArtifactPublication, FunctionalArtifactCodec, publish_artifact
 from datp_core.domain.enums import EvidenceRole, PublicationStatus
 from datp_core.domain.values.checksums import Checksum
 from datp_core.evaluation.cohort.contracts import EvaluationCohortManifest
@@ -26,11 +27,10 @@ from datp_core.evaluation.federated.publication import (
 from datp_core.evaluation.fixed_score.contracts import FixedScoreEvidence
 from datp_core.evaluation.models import ClientMetricResult, PopulationMetricResult
 from datp_core.evaluation.traffic_rates import ValidatedTrafficRateEvidence
-from datp_core.artifacts.repositories.publication import ArtifactPublication, FunctionalArtifactCodec, publish_artifact
 from datp_core.pipeline.scoring.models import FederatedScoreArtifactManifest
 from datp_core.protocols.experiments import ExternalTemporalExecutionIdentity
 from datp_core.protocols.temporal import TemporalDeploymentProvenance
-from datp_core.thresholding.models import ThresholdConstructionResult
+from datp_core.thresholds.dispatch import ThresholdConstructionResult
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

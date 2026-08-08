@@ -8,36 +8,39 @@ from typing import TYPE_CHECKING, ClassVar
 
 from pydantic import TypeAdapter
 
+from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.artifacts.provenance import Checksum
+from datp_core.artifacts.repositories.thresholds import FederatedThresholdAssetName
 from datp_core.artifacts.serializers.json import serialize_json_model
 from datp_core.core.contracts import StrictModel
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import ExperimentId, FederatedThresholdMethod, MetricId, PopulationId
-from datp_core.core.numeric import ByteCount, NonNegativeFiniteFloatValue, Seed, SeedCount
 from datp_core.core.numeric import (
     AbsoluteThresholdError,
+    ByteCount,
     MetricValue,
+    NonNegativeFiniteFloatValue,
     Ratio,
+    Seed,
+    SeedCount,
     SummaryCoefficient,
     ThresholdValue,
     ThresholdVariance,
 )
 from datp_core.evaluation.federated.publication import FederatedEvaluationAssetName
 from datp_core.evaluation.models import MetricStatus, metric_by_id
+from datp_core.experiments.common.coordinates import ExperimentCoordinate
+from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.experiments.execution import execute_declared_experiment_seed
 from datp_core.experiments.planning import expand_experiment_plan
-from datp_core.experiments.common.coordinates import ExperimentCoordinate
 from datp_core.pipeline.execution.evidence import load_evaluation_document
 from datp_core.pipeline.execution.layout import EvaluationRunAssetDirectory
-from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration
-from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.runtime.configuration import OUTPUTS_ROOT
-from datp_core.artifacts.repositories.thresholds import FederatedThresholdAssetName
 
 if TYPE_CHECKING:
     from datp_core.evaluation.federated.contracts import FederatedEvaluationDocument
-    from datp_core.thresholding.models import ThresholdConstructionResult
+    from datp_core.thresholds.dispatch import ThresholdConstructionResult
 
 
 class AverageByteCount(NonNegativeFiniteFloatValue):
@@ -135,7 +138,7 @@ def _threshold_result_path(output_root: Path, coordinate: ExperimentCoordinate) 
 
 
 def _load_threshold_result(path: Path) -> ThresholdConstructionResult:
-    from datp_core.thresholding.models import ThresholdConstructionResult
+    from datp_core.thresholds.dispatch import ThresholdConstructionResult
 
     adapter: TypeAdapter[ThresholdConstructionResult] = TypeAdapter(ThresholdConstructionResult)
     return adapter.validate_json(path.read_text(encoding="utf-8"))
@@ -447,7 +450,7 @@ def report_fixed_coefficient_statistics_sensitivity(
                 threshold_path = _threshold_result_path(OUTPUTS_ROOT, coordinate)
                 if threshold_path.is_file():
                     threshold_result = _load_threshold_result(threshold_path)
-                    from datp_core.thresholding.methods.federated_statistics import FederatedStatisticsThresholdResult
+                    from datp_core.thresholds.variants.federated_statistics import FederatedStatisticsThresholdResult
 
                     if isinstance(threshold_result, FederatedStatisticsThresholdResult):
                         rows.extend(

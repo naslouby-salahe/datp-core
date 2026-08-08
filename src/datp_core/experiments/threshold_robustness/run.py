@@ -6,7 +6,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from datp_core.data.populations.contracts import ClientIdentity
+from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.serializers.json import serialize_json_model
 from datp_core.core.contracts import StrictModel
@@ -23,23 +23,23 @@ from datp_core.core.numeric import (
     SeedCount,
     ShrinkageWeight,
 )
+from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.evaluation.federated.publication import FederatedEvaluationAssetName
 from datp_core.evaluation.models import MetricStatus, metric_by_id
+from datp_core.experiments.common.coordinates import ExperimentCoordinate
+from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.experiments.execution import execute_declared_experiment_seed
 from datp_core.experiments.planning import expand_experiment_plan
-from datp_core.experiments.common.coordinates import ExperimentCoordinate
 from datp_core.pipeline.execution.evidence import load_evaluation_document, population_metric
 from datp_core.pipeline.execution.layout import EvaluationRunAssetDirectory
-from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.protocols.calibration import (
     CALIBRATION_SIZES,
     QUANTILE_GRID,
     require_calibration_subsample_replicate_count,
 )
 from datp_core.protocols.experiments import EXPERIMENTS, ExperimentDeclaration
-from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.runtime.configuration import OUTPUTS_ROOT
-from datp_core.thresholding.identities import ThresholdInfeasibilityReason
+from datp_core.thresholds.contracts import ThresholdInfeasibilityReason
 
 if TYPE_CHECKING:
     from datp_core.evaluation.federated.contracts import FederatedEvaluationDocument

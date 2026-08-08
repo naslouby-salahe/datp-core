@@ -7,8 +7,13 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
-from datp_core.datasets.partitioning.contracts import ClientIdentity, PopulationOutcomeLabel
+from datp_core.artifacts.layout import evaluation_run_directory
+from datp_core.artifacts.repositories.thresholds import (
+    FederatedThresholdConstructionRequest,
+    construct_and_publish_federated_thresholds,
+)
 from datp_core.data.registry import population_capabilities
+from datp_core.datasets.partitioning.contracts import ClientIdentity, PopulationOutcomeLabel
 from datp_core.domain.enums import ExperimentId, FederatedThresholdMethod, PartitionRole, ScoreFrameColumn
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.checksums import checksum_file
@@ -50,10 +55,6 @@ from datp_core.pipeline.decision.federated import (
     EvaluateFederatedDetectorResult,
     evaluate_federated_detector,
 )
-from datp_core.artifacts.repositories.thresholds import (
-    FederatedThresholdConstructionRequest,
-    construct_and_publish_federated_thresholds,
-)
 from datp_core.pipeline.execution.context import (
     FederatedExecutionContext,
     client_scoring_inputs,
@@ -65,7 +66,6 @@ from datp_core.pipeline.execution.context import (
 from datp_core.pipeline.execution.evidence import eligible_calibration_scores, load_evaluation_document
 from datp_core.pipeline.execution.layout import EvaluationRunAssetDirectory, ExecutionArtifactDirectory
 from datp_core.pipeline.execution.score_generation import score_selected_checkpoint
-from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.pipeline.scoring.models import FederatedScoreArtifactManifest, FederatedScoreRecord
 from datp_core.pipeline.training.federated import (
     TrainFederatedDetectorRequest,
@@ -84,12 +84,11 @@ from datp_core.protocols.training import (
     AutoencoderProtocol,
     resolve_single_model_federated_training_protocol,
 )
-from datp_core.thresholding.dispatch import ThresholdConstructionRequest
-from datp_core.thresholding.identities import ThresholdUnavailableResult
-from datp_core.thresholding.methods.conformal import ConformalThresholdResult
-from datp_core.thresholding.methods.shrinkage import ShrinkageAssignment
-from datp_core.thresholding.models import ThresholdConstructionResult
-from datp_core.thresholding.quantiles import ClientBenignCalibrationScores, exact_empirical_quantile
+from datp_core.thresholds.contracts import ThresholdUnavailableResult
+from datp_core.thresholds.dispatch import ThresholdConstructionRequest, ThresholdConstructionResult
+from datp_core.thresholds.quantiles import ClientBenignCalibrationScores, exact_empirical_quantile
+from datp_core.thresholds.variants.conformal import ConformalThresholdResult
+from datp_core.thresholds.variants.shrinkage import ShrinkageAssignment
 
 
 @dataclass(kw_only=True)

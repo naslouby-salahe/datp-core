@@ -1,11 +1,11 @@
 import polars as pl
 
+from datp_core.data.registry import population_capabilities
 from datp_core.datasets.partitioning.contracts import (
     ClientIdentity,
     PopulationOutcomeLabel,
     population_allowed_evidence_roles,
 )
-from datp_core.data.registry import population_capabilities
 from datp_core.domain.enums import (
     ContractSubject,
     EvaluationCohort,
@@ -54,21 +54,20 @@ from datp_core.evaluation.threshold_estimation import (
 from datp_core.evaluation.traffic_rates import ValidatedTrafficRateEvidence
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.protocols.experiments import require_execution_identity
-from datp_core.thresholding.assignments import ThresholdAssignment
-from datp_core.thresholding.identities import ThresholdUnavailableResult
-from datp_core.thresholding.methods.cluster import GroupedThresholdResult
-from datp_core.thresholding.methods.conformal import ConformalThresholdResult
-from datp_core.thresholding.methods.family import FamilyThresholdResult
-from datp_core.thresholding.methods.federated_statistics import FederatedStatisticsThresholdResult
-from datp_core.thresholding.methods.local import LocalThresholdResult
-from datp_core.thresholding.methods.shared import (
+from datp_core.thresholds.contracts import ThresholdAssignment, ThresholdUnavailableResult
+from datp_core.thresholds.dispatch import ThresholdConstructionResult
+from datp_core.thresholds.policies.cluster import GroupedThresholdResult
+from datp_core.thresholds.policies.family import FamilyThresholdResult
+from datp_core.thresholds.policies.local import LocalThresholdResult
+from datp_core.thresholds.policies.shared import (
     PooledSharedQuantileResult,
     SampleWeightedSharedThresholdResult,
     SharedThresholdResult,
 )
-from datp_core.thresholding.methods.shrinkage import ShrinkageThresholdResult
-from datp_core.thresholding.models import ThresholdConstructionResult
-from datp_core.thresholding.quantiles import unweighted_mean
+from datp_core.thresholds.quantiles import unweighted_mean
+from datp_core.thresholds.variants.conformal import ConformalThresholdResult
+from datp_core.thresholds.variants.federated_statistics import FederatedStatisticsThresholdResult
+from datp_core.thresholds.variants.shrinkage import ShrinkageThresholdResult
 
 
 def prepare_federated_evaluation(request: FederatedEvaluationRequest) -> FederatedEvaluationPublication:
