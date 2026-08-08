@@ -8,12 +8,14 @@ from pydantic import model_validator
 from datp_core.analysis.inference.bootstrap.contracts import BootstrapInterval
 from datp_core.analysis.inference.bootstrap.estimation import seed_level_bca_interval
 from datp_core.analysis.scientific_decision import ScientificDecision, ScientificDecisionResult
+from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
     AvailabilityStatus,
     EvidenceRole,
     ExperimentId,
     FederatedThresholdMethod,
+    PopulationId,
     TemporalState,
 )
 from datp_core.domain.values.checksums import Checksum
@@ -38,7 +40,7 @@ class TemporalSeedProvenance(StrictModel):
 
     seed: Seed
     experiment: ExperimentId
-    population: str
+    population: PopulationId
     threshold_method: FederatedThresholdMethod
     static_reference: TemporalDeploymentProvenance
     frozen_future: TemporalDeploymentProvenance
@@ -64,8 +66,6 @@ class TemporalSeedProvenance(StrictModel):
             raise ValueError("frozen_future provenance must use the frozen_future state")
         if self.recalibrated_future.state is not TemporalState.RECALIBRATED_FUTURE:
             raise ValueError("recalibrated_future provenance must use the recalibrated_future state")
-        if not self.population.strip():
-            raise ValueError("temporal provenance requires a population identity")
         if (
             self.static_reference.checkpoint_checksum != self.frozen_future.checkpoint_checksum
             or self.static_reference.preprocessing_state_set_checksum
@@ -81,7 +81,7 @@ class TemporalClientTrajectory(StrictModel):
     """Per-client temporal state trajectory for one seed and threshold method."""
 
     seed: Seed
-    client_id: str
+    client: ClientIdentity
     threshold_method: FederatedThresholdMethod
     eligible: bool
     exclusion_reason: str | None
@@ -100,6 +100,10 @@ class TemporalClientTrajectory(StrictModel):
     macro_f1_static: MetricValue | None = None
     macro_f1_frozen: MetricValue | None = None
     macro_f1_recalibrated: MetricValue | None = None
+
+    @property
+    def client_id(self) -> str:
+        return self.client.client_id
 
     @property
     def threshold_movement_frozen(self) -> MetricValue | None:
@@ -150,13 +154,15 @@ class TemporalRecoveryResult(StrictModel):
             or self.provenance.threshold_method is not self.threshold_method
         ):
             raise ValueError("temporal provenance must match experiment and threshold method")
-        trajectory_clients = tuple(item.client_id for item in self.client_trajectories)
+        trajectory_clients = tuple(item.client for item in self.client_trajectories)
         if len(trajectory_clients) != len(frozenset(trajectory_clients)):
             raise ValueError("temporal client trajectories must be unique by client")
         if any(item.seed != self.seed for item in self.client_trajectories):
             raise ValueError("temporal client trajectories must match the recovery seed")
         if any(item.threshold_method is not self.threshold_method for item in self.client_trajectories):
             raise ValueError("temporal client trajectories must match the recovery threshold method")
+        if any(item.client.population is not self.provenance.population for item in self.client_trajectories):
+            raise ValueError("temporal client trajectories must match the provenance population")
         return self
 
     @property
