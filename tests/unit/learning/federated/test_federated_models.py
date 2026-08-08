@@ -13,7 +13,7 @@ from tests.unit.learning.federated.helpers import (
 from datp_core.domain.enums import CheckpointStatus, CommunicationEstimationMethod, TrainingModelId
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import BatchSize, ByteCount, RoundNumber, RowCount, Seed
+from datp_core.domain.values.counts import BatchSize, ByteCount, LogicalElementCount, RoundNumber, RowCount, Seed
 from datp_core.domain.values.identifiers import CudaDeviceName
 from datp_core.domain.values.ratios import MetricValue, ProximalCoefficient
 from datp_core.learning.federated.models import (
@@ -38,6 +38,8 @@ def _communication(round_number: RoundNumber) -> CommunicationRecord:
         estimated_upload_bytes=ByteCount(100),
         estimated_download_bytes=ByteCount(100),
         estimation_basis=CommunicationEstimationMethod.SERIALIZED_MESSAGE_SIZE_ESTIMATE,
+        state_bytes=ByteCount(100),
+        logical_element_count=LogicalElementCount(5),
     )
 
 
@@ -121,6 +123,8 @@ def test_communication_record_requires_serialized_message_size_basis() -> None:
             estimated_upload_bytes=ByteCount(1),
             estimated_download_bytes=ByteCount(1),
             estimation_basis=CommunicationEstimationMethod.MEASURED_NETWORK_TRAFFIC,
+            state_bytes=ByteCount(1),
+            logical_element_count=LogicalElementCount(1),
         )
 
 

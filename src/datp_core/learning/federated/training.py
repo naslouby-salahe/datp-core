@@ -22,7 +22,15 @@ from datp_core.domain.enums import (
 from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.provenance import canonical_json_text
 from datp_core.domain.values.checksums import Checksum, checksum_bytes, checksum_text
-from datp_core.domain.values.counts import BatchSize, ByteCount, ClientCount, RoundNumber, RowCount, Seed
+from datp_core.domain.values.counts import (
+    BatchSize,
+    ByteCount,
+    ClientCount,
+    LogicalElementCount,
+    RoundNumber,
+    RowCount,
+    Seed,
+)
 from datp_core.domain.values.identifiers import CudaDeviceName, OutcomeLabel, OutcomeLabelSequence
 from datp_core.domain.values.ratios import DittoRegularization, LearningRate, MetricValue, ProximalCoefficient
 from datp_core.learning.autoencoder import (
@@ -432,15 +440,16 @@ def preprocessing_state_set_checksum(
 
 def serialize_and_checksum_state_dict(
     state_dict: AutoencoderStateView,
-) -> tuple[Checksum, ByteCount]:
+) -> tuple[Checksum, ByteCount, LogicalElementCount]:
     cpu_state = {name: tensor.detach().cpu().contiguous() for name, tensor in state_dict.items()}
     payload = save(cpu_state)
-    return checksum_bytes(payload), ByteCount(len(payload))
+    return checksum_bytes(payload), ByteCount(len(payload)), LogicalElementCount(len(cpu_state))
 
 
 def create_communication_record(
     round_number: RoundNumber,
     state_bytes: ByteCount,
+    logical_element_count: LogicalElementCount,
     *,
     upload_count: ClientCount,
     download_count: ClientCount,
@@ -450,6 +459,8 @@ def create_communication_record(
         estimated_upload_bytes=ByteCount(upload_count.value * state_bytes.value),
         estimated_download_bytes=ByteCount(download_count.value * state_bytes.value),
         estimation_basis=CommunicationEstimationMethod.SERIALIZED_MESSAGE_SIZE_ESTIMATE,
+        state_bytes=state_bytes,
+        logical_element_count=logical_element_count,
     )
 
 
@@ -582,11 +593,12 @@ def run_federated_training[T: FedAvgProtocol | FedProxProtocol](
 
         aggregated = aggregate_client_updates(updates)
         aggregate_loss = compute_weighted_aggregate_loss(updates)
-        state_checksum, state_size = serialize_and_checksum_state_dict(aggregated)
+        state_checksum, state_size, logical_elements = serialize_and_checksum_state_dict(aggregated)
 
         communication = create_communication_record(
             round_number,
             state_size,
+            logical_elements,
             upload_count=request.population_client_count,
             download_count=request.population_client_count,
         )

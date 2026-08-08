@@ -17,7 +17,7 @@ from datp_core.domain.enums import (
 )
 from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
 from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import ByteCount, RoundNumber, RowCount
+from datp_core.domain.values.counts import ByteCount, LogicalElementCount, RoundNumber, RowCount
 from datp_core.domain.values.identifiers import CudaDeviceName
 from datp_core.domain.values.ratios import MetricValue
 from datp_core.learning.federated.checkpoints.identities import (
@@ -66,6 +66,8 @@ class RoundSummaryRecord:
     upload_bytes: ByteCount
     download_bytes: ByteCount
     global_state_checksum: Checksum
+    state_bytes: ByteCount
+    logical_element_count: LogicalElementCount
 
 
 def read_parquet(path: Path) -> pl.DataFrame:
@@ -196,7 +198,7 @@ def persist_federated_training_history(
             subject=ContractSubject.CUDA,
         )
 
-    r_nums, a_losses, u_bytes, d_bytes, g_sums = [], [], [], [], []
+    r_nums, a_losses, u_bytes, d_bytes, s_bytes, l_counts, g_sums = [], [], [], [], [], [], []
     c_rounds, c_ids, c_samples, c_losses = [], [], [], []
     p_rounds, p_ids, p_losses, p_sums = [], [], [], []
 
@@ -205,6 +207,8 @@ def persist_federated_training_history(
         a_losses.append(item.aggregate_loss.value)
         u_bytes.append(item.communication.estimated_upload_bytes.value)
         d_bytes.append(item.communication.estimated_download_bytes.value)
+        s_bytes.append(item.communication.state_bytes.value)
+        l_counts.append(item.communication.logical_element_count.value)
         g_sums.append(item.global_state_reference.state_checksum.value)
 
         for result in item.client_results:
@@ -228,6 +232,8 @@ def persist_federated_training_history(
             FederatedHistoryColumn.UPLOAD_BYTES.value: u_bytes,
             FederatedHistoryColumn.DOWNLOAD_BYTES.value: d_bytes,
             FederatedHistoryColumn.GLOBAL_STATE_CHECKSUM.value: g_sums,
+            FederatedHistoryColumn.STATE_BYTES.value: s_bytes,
+            FederatedHistoryColumn.LOGICAL_ELEMENT_COUNT.value: l_counts,
         },
         schema=schema_pairs(ROUND_SUMMARY_SCHEMA),
     ).write_parquet(directory / FederatedHistoryAssetName.ROUND_SUMMARY.value)
@@ -369,14 +375,26 @@ def _round_summaries(frame: pl.DataFrame) -> tuple[RoundSummaryRecord, ...]:
             upload_bytes=ByteCount(int(upload_bytes)),
             download_bytes=ByteCount(int(download_bytes)),
             global_state_checksum=Checksum(str(global_state_checksum)),
+            state_bytes=ByteCount(int(state_bytes)),
+            logical_element_count=LogicalElementCount(int(logical_element_count)),
         )
-        for round_number, aggregate_loss, upload_bytes, download_bytes, global_state_checksum in frame.select(
+        for (
+            round_number,
+            aggregate_loss,
+            upload_bytes,
+            download_bytes,
+            global_state_checksum,
+            state_bytes,
+            logical_element_count,
+        ) in frame.select(
             (
                 column.ROUND_NUMBER.value,
                 column.AGGREGATE_LOSS.value,
                 column.UPLOAD_BYTES.value,
                 column.DOWNLOAD_BYTES.value,
                 column.GLOBAL_STATE_CHECKSUM.value,
+                column.STATE_BYTES.value,
+                column.LOGICAL_ELEMENT_COUNT.value,
             )
         ).iter_rows()
     )
@@ -412,6 +430,8 @@ def _round_result(
             estimated_upload_bytes=summary.upload_bytes,
             estimated_download_bytes=summary.download_bytes,
             estimation_basis=CommunicationEstimationMethod.SERIALIZED_MESSAGE_SIZE_ESTIMATE,
+            state_bytes=summary.state_bytes,
+            logical_element_count=summary.logical_element_count,
         ),
         global_state_reference=GlobalModelStateReference(
             coordinate=coordinate,

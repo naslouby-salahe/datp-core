@@ -7,7 +7,7 @@ from datp_core.datasets.partitioning.contracts import ClientIdentity
 from datp_core.domain.enums import CommunicationEstimationMethod, ContractSubject, TrainingModelId
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values.checksums import Checksum
-from datp_core.domain.values.counts import ByteCount, RoundNumber, RowCount
+from datp_core.domain.values.counts import ByteCount, LogicalElementCount, RoundNumber, RowCount
 from datp_core.domain.values.identifiers import FeatureNameSequence
 from datp_core.domain.values.ratios import MetricValue
 from datp_core.learning.autoencoder import AutoencoderState
@@ -95,6 +95,8 @@ class CommunicationRecord:
     estimated_upload_bytes: ByteCount
     estimated_download_bytes: ByteCount
     estimation_basis: CommunicationEstimationMethod
+    state_bytes: ByteCount
+    logical_element_count: LogicalElementCount
 
     def __post_init__(self) -> None:
         if self.estimation_basis is not CommunicationEstimationMethod.SERIALIZED_MESSAGE_SIZE_ESTIMATE:

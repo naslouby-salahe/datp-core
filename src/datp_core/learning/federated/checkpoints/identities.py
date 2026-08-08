@@ -21,6 +21,8 @@ class FederatedHistoryColumn(StrEnum):
     UPLOAD_BYTES = "upload_bytes"
     DOWNLOAD_BYTES = "download_bytes"
     GLOBAL_STATE_CHECKSUM = "global_state_checksum"
+    STATE_BYTES = "state_bytes"
+    LOGICAL_ELEMENT_COUNT = "logical_element_count"
     CLIENT_ID = "client_id"
     SAMPLE_COUNT = "sample_count"
     LOCAL_LOSS = "local_loss"
@@ -44,6 +46,8 @@ ROUND_SUMMARY_SCHEMA = (
     ParquetColumnSpec(identity=FederatedHistoryColumn.UPLOAD_BYTES, dtype=pl.Int64),
     ParquetColumnSpec(identity=FederatedHistoryColumn.DOWNLOAD_BYTES, dtype=pl.Int64),
     ParquetColumnSpec(identity=FederatedHistoryColumn.GLOBAL_STATE_CHECKSUM, dtype=pl.String),
+    ParquetColumnSpec(identity=FederatedHistoryColumn.STATE_BYTES, dtype=pl.Int64),
+    ParquetColumnSpec(identity=FederatedHistoryColumn.LOGICAL_ELEMENT_COUNT, dtype=pl.Int64),
 )
 CLIENT_ROUNDS_SCHEMA = (
     ParquetColumnSpec(identity=FederatedHistoryColumn.ROUND_NUMBER, dtype=pl.Int64),

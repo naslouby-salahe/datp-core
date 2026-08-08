@@ -40,6 +40,8 @@ def _write_round_summary(directory: Path, *, terminal_loss: float) -> None:
             FederatedHistoryColumn.UPLOAD_BYTES.value: 1,
             FederatedHistoryColumn.DOWNLOAD_BYTES.value: 1,
             FederatedHistoryColumn.GLOBAL_STATE_CHECKSUM.value: "a" * 64,
+            FederatedHistoryColumn.STATE_BYTES.value: 1,
+            FederatedHistoryColumn.LOGICAL_ELEMENT_COUNT.value: 5,
         }
         for round_number in range(1, maximum + 1)
     ]

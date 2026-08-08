@@ -155,8 +155,8 @@ def test_aggregate_client_updates_requires_at_least_one_update() -> None:
 def test_serialize_and_checksum_state_dict_is_deterministic() -> None:
     first_state = {"w": torch.arange(4, dtype=torch.float32)}
     second_state = {"w": torch.arange(4, dtype=torch.float32)}
-    first_checksum, _first_bytes = serialize_and_checksum_state_dict(first_state)
-    second_checksum, _second_bytes = serialize_and_checksum_state_dict(second_state)
+    first_checksum, _first_bytes, _first_elements = serialize_and_checksum_state_dict(first_state)
+    second_checksum, _second_bytes, _second_elements = serialize_and_checksum_state_dict(second_state)
     assert first_checksum == second_checksum
 
 

@@ -187,7 +187,7 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
             global_updates.append(global_update)
             personalized_states[client_id] = personalized_update.state_dict
 
-            personalized_checksum, _ = serialize_and_checksum_state_dict(personalized_update.state_dict)
+            personalized_checksum, _, _ = serialize_and_checksum_state_dict(personalized_update.state_dict)
             personalized_references.append(
                 PersonalizedModelStateReference(
                     coordinate=request.coordinates.personalized_coordinate,
@@ -210,7 +210,7 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
 
         aggregated = aggregate_client_updates(global_updates)
         aggregate_loss = compute_weighted_aggregate_loss(global_updates)
-        global_checksum, state_size = serialize_and_checksum_state_dict(aggregated)
+        global_checksum, state_size, logical_elements = serialize_and_checksum_state_dict(aggregated)
 
         rounds.append(
             FederatedRoundResult(
@@ -220,6 +220,7 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
                 communication=create_communication_record(
                     round_number,
                     state_size,
+                    logical_elements,
                     upload_count=request.population_client_count,
                     download_count=request.population_client_count,
                 ),
