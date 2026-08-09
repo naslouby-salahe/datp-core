@@ -77,17 +77,24 @@ def test_score_record_rejects_non_calibration_evaluation_partition_role(tmp_path
 
 
 def test_score_record_rejects_non_parquet_serialization(tmp_path: Path) -> None:
+    coordinate = fedavg_coordinate(Seed(0))
+    scored_client = client_identity("client_a")
+    checkpoint_round = RoundNumber(2)
+    checkpoint_checksum = Checksum("a" * 64)
+    checksum = Checksum("b" * 64)
+    row_count = RowCount(4)
+    feature_count = FeatureCount(4)
     with pytest.raises(ScientificContractError, match="Parquet"):
         ScoreRecord(
-            coordinate=fedavg_coordinate(Seed(0)),
-            scored_client=client_identity("client_a"),
+            coordinate=coordinate,
+            scored_client=scored_client,
             partition_role=PartitionRole.CALIBRATION,
-            checkpoint_round=RoundNumber(2),
-            checkpoint_checksum=Checksum("a" * 64),
+            checkpoint_round=checkpoint_round,
+            checkpoint_checksum=checkpoint_checksum,
             path=tmp_path / "cal.json",
-            checksum=Checksum("b" * 64),
-            row_count=RowCount(4),
-            feature_count=FeatureCount(4),
+            checksum=checksum,
+            row_count=row_count,
+            feature_count=feature_count,
             serialization_format=SerializationFormat.PYDANTIC_JSON,
         )
 
@@ -138,25 +145,19 @@ def test_manifest_rejects_inconsistent_feature_count(tmp_path: Path) -> None:
 
 
 def test_manifest_rejects_missing_client_in_evaluation(tmp_path: Path) -> None:
+    missing_client = _record(PartitionRole.EVALUATION, "client_b", tmp_path / "eval.parquet")
     with pytest.raises(ScientificContractError, match="same client inventory"):
-        _manifest(
-            tmp_path,
-            evaluation_records=(_record(PartitionRole.EVALUATION, "client_b", tmp_path / "eval.parquet"),),
-        )
+        _manifest(tmp_path, evaluation_records=(missing_client,))
 
 
 def test_non_temporal_manifest_rejects_future_recalibration_records(tmp_path: Path) -> None:
+    future_recalibration = _record(
+        PartitionRole.FUTURE_RECALIBRATION,
+        "client_a",
+        tmp_path / "future.parquet",
+    )
     with pytest.raises(ScientificContractError, match="future-recalibration inventory"):
-        _manifest(
-            tmp_path,
-            future_recalibration_records=(
-                _record(
-                    PartitionRole.FUTURE_RECALIBRATION,
-                    "client_a",
-                    tmp_path / "future.parquet",
-                ),
-            ),
-        )
+        _manifest(tmp_path, future_recalibration_records=(future_recalibration,))
 
 
 def test_temporal_manifest_requires_future_recalibration_records(tmp_path: Path) -> None:

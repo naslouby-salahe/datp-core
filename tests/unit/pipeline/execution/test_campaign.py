@@ -38,8 +38,9 @@ def test_ditto_training_protocol_resolves_every_declared_regularization() -> Non
 
 
 def test_ditto_training_protocol_rejects_an_undeclared_regularization() -> None:
+    undeclared_regularization = DittoRegularization(999.0)
     with pytest.raises(ScientificContractError, match="regularization"):
-        resolve_ditto_protocol(DittoRegularization(999.0))
+        resolve_ditto_protocol(undeclared_regularization)
 
 
 def _ditto_personalized_coordinate() -> FederatedTrainingCoordinate:

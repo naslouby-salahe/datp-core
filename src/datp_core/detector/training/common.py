@@ -177,13 +177,11 @@ def rebase_ditto_training(
         global_training=result.global_training,
         global_candidates=rebase_checkpoint_candidates(result.global_candidates, global_directory),
         personalized_candidates=tuple(
-            [
-                PersonalizedCandidateSet(
-                    client=item.client,
-                    candidates=rebase_checkpoint_candidates(item.candidates, personalized_directory),
-                )
-                for item in result.personalized_candidates
-            ]
+            PersonalizedCandidateSet(
+                client=item.client,
+                candidates=rebase_checkpoint_candidates(item.candidates, personalized_directory),
+            )
+            for item in result.personalized_candidates
         ),
     )
 
@@ -197,12 +195,10 @@ def ditto_directories(directories: tuple[Path, ...]) -> tuple[Path, Path]:
 def training_preprocessing_checksum(clients: tuple[ClientTrainingInput, ...]) -> Checksum:
     return preprocessing_state_set_checksum(
         tuple(
-            [
-                PreparedClientProvenance(
-                    client=client.client,
-                    preprocessing_checksum=client.preprocessing_state.estimator_checksum,
-                )
-                for client in clients
-            ]
+            PreparedClientProvenance(
+                client=client.client,
+                preprocessing_checksum=client.preprocessing_state.estimator_checksum,
+            )
+            for client in clients
         )
     )

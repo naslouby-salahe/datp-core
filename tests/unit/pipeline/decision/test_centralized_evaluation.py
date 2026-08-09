@@ -41,6 +41,7 @@ def test_centralized_evaluation_rejects_invalid_attack_assignment(tmp_path: Path
         false_negative=RowCount(0),
         attack_assignment_valid=False,
     )
+    threshold_checksum = threshold_result_checksum(threshold)
     with pytest.raises(ScientificContractError, match="valid attack assignment"):
         CentralizedEvaluationResult(
             coordinate=evaluation.coordinate,
@@ -52,7 +53,7 @@ def test_centralized_evaluation_rejects_invalid_attack_assignment(tmp_path: Path
             evaluation_row_count=invalid_confusion.evaluation_row_count,
             evidence_role=EvidenceRole.SUPPORTIVE,
             score_artifact_checksum=evaluation.score_artifact_checksum,
-            threshold_checksum=threshold_result_checksum(threshold),
+            threshold_checksum=threshold_checksum,
         )
 
 
@@ -96,9 +97,11 @@ def test_pooled_evaluation_metrics_and_confusion(tmp_path: Path) -> None:
     assert evaluation.evidence_role is EvidenceRole.SUPPORTIVE
     assert evaluation.evaluation_row_count.value == 40
     assert MetricId.AUROC in {item.metric for item in evaluation.metrics}
+    coordinate = training_coordinate()
+    evaluation_scores = replace(scoring.evaluation_scores, checkpoint_checksum=Checksum("f" * 64))
     with pytest.raises(ScientificContractError, match="frozen checkpoint"):
         evaluate_centralized_reference(
-            coordinate=training_coordinate(),
-            evaluation_scores=replace(scoring.evaluation_scores, checkpoint_checksum=Checksum("f" * 64)),
+            coordinate=coordinate,
+            evaluation_scores=evaluation_scores,
             threshold_result=threshold,
         )

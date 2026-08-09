@@ -94,16 +94,14 @@ def test_fit_estimators_pooled_returns_scaler_directly() -> None:
 
 def test_fit_trusted_batch_rejects_attack_labels() -> None:
     matrix = np.asarray([[0.0, 1.0], [1.0, 2.0]], dtype=float)
+    protocol = _protocol()
+    batch = PreprocessingFitBatch(
+        training_matrix=matrix,
+        training_row_ids=StableRowIdSequence((StableRowId("r0"), StableRowId("r1"))),
+        training_labels=OutcomeLabelSequence((OutcomeLabel("benign"), OutcomeLabel("attack"))),
+    )
     with pytest.raises(LeakageError):
-        fit_trusted_batch(
-            _protocol(),
-            PreprocessingFitBatch(
-                training_matrix=matrix,
-                training_row_ids=StableRowIdSequence((StableRowId("r0"), StableRowId("r1"))),
-                training_labels=OutcomeLabelSequence((OutcomeLabel("benign"), OutcomeLabel("attack"))),
-            ),
-            subject=PreprocessingFitScope.CLIENT_LOCAL_TRAINING,
-        )
+        fit_trusted_batch(protocol, batch, subject=PreprocessingFitScope.CLIENT_LOCAL_TRAINING)
 
 
 def test_fitted_state_types_keep_scientific_boundary() -> None:

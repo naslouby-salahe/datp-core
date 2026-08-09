@@ -218,14 +218,18 @@ def test_cloned_provenance_across_seeds_is_blocked() -> None:
 
 def test_provenance_seed_mismatch_is_rejected() -> None:
     provenance = _seed_provenance(99)
+    declared_seed = Seed(0)
+    static_reference_cv = MetricValue(0.10)
+    frozen_future_cv = MetricValue(0.30)
+    recalibrated_future_cv = MetricValue(0.12)
     with pytest.raises(ValueError, match="provenance seed must match"):
         temporal_recovery(
-            seed=Seed(0),
+            seed=declared_seed,
             experiment=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
             threshold_method=FederatedThresholdMethod.LOCAL_THRESHOLD,
-            static_reference_cv=MetricValue(0.10),
-            frozen_future_cv=MetricValue(0.30),
-            recalibrated_future_cv=MetricValue(0.12),
+            static_reference_cv=static_reference_cv,
+            frozen_future_cv=frozen_future_cv,
+            recalibrated_future_cv=recalibrated_future_cv,
             provenance=provenance,
             decision_protocol=_TEST_TEMPORAL_DECISION_PROTOCOL,
         )

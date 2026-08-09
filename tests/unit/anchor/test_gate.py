@@ -77,8 +77,9 @@ def test_diagnostics_remain_available_when_blocked() -> None:
 
 def test_caller_cannot_force_executable_dependent_readiness() -> None:
     decision = decide_anchor_gate(reproduce_anchor(observations=matching_anchor_observations()))
+    decision_cls = type(decision)
     with pytest.raises(ValueError, match="declared dependent readiness"):
-        type(decision)(
+        decision_cls(
             status=AnchorGateStatus.PASS,
             dependent_readiness=ExperimentReadiness.EXECUTABLE,
             reproduction=decision.reproduction,
@@ -89,8 +90,9 @@ def test_caller_cannot_force_executable_dependent_readiness() -> None:
 
 def test_assert_gate_rejects_blocked_without_diagnostics() -> None:
     decision = decide_anchor_gate(reproduce_anchor(observations=matching_anchor_observations()))
+    decision_cls = type(decision)
     with pytest.raises(ValueError):
-        type(decision)(
+        decision_cls(
             status=AnchorGateStatus.ANCHOR_REPRODUCTION_FAILED,
             dependent_readiness=ExperimentReadiness.BLOCKED,
             reproduction=decision.reproduction,

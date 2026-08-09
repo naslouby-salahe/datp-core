@@ -60,8 +60,9 @@ def test_score_record_for_client_returns_the_single_match(tmp_path: Path) -> Non
 
 def test_score_record_for_client_raises_when_client_is_absent(tmp_path: Path) -> None:
     record = _score_record(PartitionRole.EVALUATION, "client_a", tmp_path / "eval.parquet")
+    absent_client = client_identity("client_b")
     with pytest.raises(ScientificContractError):
-        score_record_for_client((record,), client_identity("client_b"), PartitionRole.EVALUATION)
+        score_record_for_client((record,), absent_client, PartitionRole.EVALUATION)
 
 
 def _client_preprocessing_result(client_id: str, tmp_path: Path) -> ClientPreprocessingResult:
@@ -99,8 +100,9 @@ def test_client_scoring_input_reads_the_matching_client_publication(tmp_path: Pa
 
 def test_client_scoring_input_raises_when_publication_is_ambiguous(tmp_path: Path) -> None:
     publication = _client_preprocessing_result("client_a", tmp_path)
+    target_client = client_identity("client_a")
     with pytest.raises(ScientificContractError):
-        client_scoring_input((publication, publication), client_identity("client_a"))
+        client_scoring_input((publication, publication), target_client)
 
 
 def _evaluation_frame(*, benign_count: int, attack_count: int) -> pl.DataFrame:

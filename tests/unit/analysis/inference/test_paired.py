@@ -37,7 +37,8 @@ def test_paired_inference_uses_the_declared_protocol() -> None:
     assert wilcoxon.computation_method is WilcoxonComputationMethod.EXACT
     assert wilcoxon.fallback_reason is None
     assert effect.availability is AvailabilityStatus.AVAILABLE
-    assert effect.value is not None and -1.0 <= effect.value.value <= 1.0
+    assert effect.value is not None
+    assert -1.0 <= effect.value.value <= 1.0
 
 
 def test_wilcoxon_falls_back_when_exact_is_unavailable() -> None:

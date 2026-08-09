@@ -91,6 +91,9 @@ def test_select_checkpoint_rejects_held_out_metrics(tmp_path: Path) -> None:
         split_manifest_checksum=Checksum("b" * 64),
         client=None,
     )
+    held_out_metrics = (MetricValue(0.9),)
+    preprocessing_state_set_checksum = Checksum("a" * 64)
+    split_manifest_checksum = Checksum("b" * 64)
     with pytest.raises(LeakageError, match="held-out evaluation outcomes"):
         select_checkpoint(
             candidates,
@@ -98,9 +101,9 @@ def test_select_checkpoint_rejects_held_out_metrics(tmp_path: Path) -> None:
             coordinate=coordinate,
             client=None,
             selection_rule=CheckpointSelectionRule.FIXED_TERMINAL_MAXIMUM_ROUND,
-            held_out_metrics=(MetricValue(0.9),),
-            preprocessing_state_set_checksum=Checksum("a" * 64),
-            split_manifest_checksum=Checksum("b" * 64),
+            held_out_metrics=held_out_metrics,
+            preprocessing_state_set_checksum=preprocessing_state_set_checksum,
+            split_manifest_checksum=split_manifest_checksum,
         )
 
 
@@ -116,6 +119,8 @@ def test_select_checkpoint_rejects_attack_labels(tmp_path: Path) -> None:
         split_manifest_checksum=Checksum("b" * 64),
         client=None,
     )
+    preprocessing_state_set_checksum = Checksum("a" * 64)
+    split_manifest_checksum = Checksum("b" * 64)
     with pytest.raises(LeakageError, match="attack labels"):
         select_checkpoint(
             candidates,
@@ -124,8 +129,8 @@ def test_select_checkpoint_rejects_attack_labels(tmp_path: Path) -> None:
             client=None,
             selection_rule=CheckpointSelectionRule.FIXED_TERMINAL_MAXIMUM_ROUND,
             attack_labels_present=True,
-            preprocessing_state_set_checksum=Checksum("a" * 64),
-            split_manifest_checksum=Checksum("b" * 64),
+            preprocessing_state_set_checksum=preprocessing_state_set_checksum,
+            split_manifest_checksum=split_manifest_checksum,
         )
 
 
@@ -137,6 +142,8 @@ def test_retain_checkpoint_candidates_rejects_missing_declared_round(tmp_path: P
     model = ReconstructionAutoencoder(AUTOENCODER.widths).to(device)
     state = {name: tensor.detach().clone() for name, tensor in model.state_dict().items()}
     only_one_snapshot = (RoundSnapshot(CHECKPOINT.candidates[0], state, MetricValue(0.1)),)
+    preprocessing_state_set_checksum = Checksum("a" * 64)
+    split_manifest_checksum = Checksum("b" * 64)
     with pytest.raises(
         ScientificContractError, match="checkpoint snapshots must equal the exact ordered protocol candidates"
     ):
@@ -146,8 +153,8 @@ def test_retain_checkpoint_candidates_rejects_missing_declared_round(tmp_path: P
             checkpoint_protocol=CHECKPOINT,
             autoencoder=AUTOENCODER,
             output_directory=tmp_path,
-            preprocessing_state_set_checksum=Checksum("a" * 64),
-            split_manifest_checksum=Checksum("b" * 64),
+            preprocessing_state_set_checksum=preprocessing_state_set_checksum,
+            split_manifest_checksum=split_manifest_checksum,
             client=None,
         )
 
@@ -165,6 +172,8 @@ def test_select_checkpoint_rejects_missing_tensor_file(tmp_path: Path) -> None:
         client=None,
     )
     candidates[0].tensor_path.unlink()
+    preprocessing_state_set_checksum = Checksum("a" * 64)
+    split_manifest_checksum = Checksum("b" * 64)
     with pytest.raises(ArtifactIntegrityError, match="checkpoint candidate tensor file is missing"):
         select_checkpoint(
             candidates,
@@ -172,8 +181,8 @@ def test_select_checkpoint_rejects_missing_tensor_file(tmp_path: Path) -> None:
             coordinate=coordinate,
             client=None,
             selection_rule=CheckpointSelectionRule.FIXED_TERMINAL_MAXIMUM_ROUND,
-            preprocessing_state_set_checksum=Checksum("a" * 64),
-            split_manifest_checksum=Checksum("b" * 64),
+            preprocessing_state_set_checksum=preprocessing_state_set_checksum,
+            split_manifest_checksum=split_manifest_checksum,
         )
 
 
@@ -189,13 +198,16 @@ def test_validate_candidate_coordinates_rejects_mismatched_client(tmp_path: Path
         split_manifest_checksum=Checksum("b" * 64),
         client=None,
     )
+    client = client_identity("client_a")
+    preprocessing_state_set_checksum = Checksum("a" * 64)
+    split_manifest_checksum = Checksum("b" * 64)
     with pytest.raises(ScientificContractError, match="checkpoint candidate client mismatch"):
         validate_candidate_coordinates(
             candidates,
             coordinate,
-            client=client_identity("client_a"),
-            preprocessing_state_set_checksum=Checksum("a" * 64),
-            split_manifest_checksum=Checksum("b" * 64),
+            client=client,
+            preprocessing_state_set_checksum=preprocessing_state_set_checksum,
+            split_manifest_checksum=split_manifest_checksum,
         )
 
 

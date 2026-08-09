@@ -230,30 +230,38 @@ def _require_auroc_invariance(
         )
 
     for left, right in zip(first, second, strict=True):
-        if left.client != right.client:
+        _require_auroc_pair_invariance(left, right, tolerance)
+
+
+def _require_auroc_pair_invariance(
+    left: ClientAurocEvidence,
+    right: ClientAurocEvidence,
+    tolerance: AbsoluteTolerance,
+) -> None:
+    if left.client != right.client:
+        raise ScientificContractError(
+            ErrorMessage("fixed-score control failed: AUROC clients differ"),
+            subject=ContractSubject.CLIENT_IDENTITY,
+        )
+    if left.outcome.status is not right.outcome.status:
+        raise ScientificContractError(
+            ErrorMessage("fixed-score control failed: AUROC availability differs"),
+            subject=ContractSubject.HELD_OUT_METRICS,
+        )
+    if left.outcome.status is not MetricStatus.AVAILABLE:
+        if left.outcome != right.outcome:
             raise ScientificContractError(
-                ErrorMessage("fixed-score control failed: AUROC clients differ"),
-                subject=ContractSubject.CLIENT_IDENTITY,
-            )
-        if left.outcome.status is not right.outcome.status:
-            raise ScientificContractError(
-                ErrorMessage("fixed-score control failed: AUROC availability differs"),
+                ErrorMessage("fixed-score control failed: AUROC unavailable outcome differs"),
                 subject=ContractSubject.HELD_OUT_METRICS,
             )
-        if left.outcome.status is not MetricStatus.AVAILABLE:
-            if left.outcome != right.outcome:
-                raise ScientificContractError(
-                    ErrorMessage("fixed-score control failed: AUROC unavailable outcome differs"),
-                    subject=ContractSubject.HELD_OUT_METRICS,
-                )
-            continue
-        if left.outcome.value is None or right.outcome.value is None:
-            raise RuntimeError("available AUROC evidence must contain values")
-        if not floats_absolutely_close(left.outcome.value.value, right.outcome.value.value, tolerance.value):
-            raise ScientificContractError(
-                ErrorMessage("fixed-score control failed: AUROC differs"),
-                subject=ContractSubject.HELD_OUT_METRICS,
-            )
+        return
+    if left.outcome.value is None or right.outcome.value is None:
+        raise RuntimeError("available AUROC evidence must contain values")
+    if not floats_absolutely_close(left.outcome.value.value, right.outcome.value.value, tolerance.value):
+        raise ScientificContractError(
+            ErrorMessage("fixed-score control failed: AUROC differs"),
+            subject=ContractSubject.HELD_OUT_METRICS,
+        )
 
 
 def _require_matching_auroc(expected: MetricAvailability, observed: MetricAvailability) -> None:

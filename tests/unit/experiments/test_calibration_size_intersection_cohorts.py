@@ -73,19 +73,21 @@ def test_intersection_cohort_with_no_overlap() -> None:
 def test_intersection_cohort_validates_unique_sizes() -> None:
     size100 = CalibrationSize(100)
     clients = frozenset([_client("c1")])
+    intersection_count = NonNegativeIntegerValue(1)
+    per_size_coverage = (
+        CalibrationSizeCohortCoverage(
+            size=size100,
+            feasible_clients=clients,
+            client_count=ClientCount(1),
+            coverage=Ratio(1.0),
+        ),
+    )
     with pytest.raises(ValueError, match="sizes must be unique"):
         CalibrationSizeIntersectionCohort(
             compared_sizes=(size100, size100),
             intersection_clients=clients,
-            intersection_count=NonNegativeIntegerValue(1),
-            per_size_coverage=(
-                CalibrationSizeCohortCoverage(
-                    size=size100,
-                    feasible_clients=clients,
-                    client_count=ClientCount(1),
-                    coverage=Ratio(1.0),
-                ),
-            ),
+            intersection_count=intersection_count,
+            per_size_coverage=per_size_coverage,
         )
 
 
@@ -93,19 +95,21 @@ def test_intersection_cohort_validates_coverage_size_membership() -> None:
     size100 = CalibrationSize(100)
     size250 = CalibrationSize(250)
     clients = frozenset([_client("c1")])
+    intersection_count = NonNegativeIntegerValue(1)
+    per_size_coverage = (
+        CalibrationSizeCohortCoverage(
+            size=size250,
+            feasible_clients=clients,
+            client_count=ClientCount(1),
+            coverage=Ratio(1.0),
+        ),
+    )
     with pytest.raises(ValueError, match="coverage size must be in compared sizes"):
         CalibrationSizeIntersectionCohort(
             compared_sizes=(size100,),
             intersection_clients=clients,
-            intersection_count=NonNegativeIntegerValue(1),
-            per_size_coverage=(
-                CalibrationSizeCohortCoverage(
-                    size=size250,
-                    feasible_clients=clients,
-                    client_count=ClientCount(1),
-                    coverage=Ratio(1.0),
-                ),
-            ),
+            intersection_count=intersection_count,
+            per_size_coverage=per_size_coverage,
         )
 
 
@@ -113,17 +117,21 @@ def test_intersection_cohort_validates_intersection_subset() -> None:
     size100 = CalibrationSize(100)
     c1 = _client("c1")
     c2 = _client("c2")
+    intersection_clients = frozenset([c1, c2])
+    intersection_count = NonNegativeIntegerValue(2)
+    feasible_clients = frozenset([c1])
+    per_size_coverage = (
+        CalibrationSizeCohortCoverage(
+            size=size100,
+            feasible_clients=feasible_clients,
+            client_count=ClientCount(1),
+            coverage=Ratio(1.0),
+        ),
+    )
     with pytest.raises(ValueError, match="intersection must be subset"):
         CalibrationSizeIntersectionCohort(
             compared_sizes=(size100,),
-            intersection_clients=frozenset([c1, c2]),
-            intersection_count=NonNegativeIntegerValue(2),
-            per_size_coverage=(
-                CalibrationSizeCohortCoverage(
-                    size=size100,
-                    feasible_clients=frozenset([c1]),
-                    client_count=ClientCount(1),
-                    coverage=Ratio(1.0),
-                ),
-            ),
+            intersection_clients=intersection_clients,
+            intersection_count=intersection_count,
+            per_size_coverage=per_size_coverage,
         )

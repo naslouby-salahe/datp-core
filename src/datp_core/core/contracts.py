@@ -11,7 +11,7 @@ from pydantic_core import CoreSchema, core_schema
 class StrictModel(BaseModel):
     """Immutable strict model for serialized scientific boundaries."""
 
-    model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
+    model_config = ConfigDict(frozen=True, extra="forbid", strict=True, revalidate_instances="never")
 
 
 def pydantic_value_schema(cls, _source_type, _handler):

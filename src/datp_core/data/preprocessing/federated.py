@@ -81,7 +81,7 @@ def _fit_client_local_estimators(
         )
         for item in client_partitions.items
     )
-    if len(set(id(item.value) for item in fitted)) != len(fitted):
+    if len({id(item.value) for item in fitted}) != len(fitted):
         raise ScientificContractError(
             ErrorMessage("client-local estimators must be distinct objects"),
             subject=ContractSubject.CLIENT_IDENTITY,

@@ -176,10 +176,12 @@ def test_overwrite_deletes_complete_coordinate_before_execution() -> None:
 def test_invalid_completed_experiment_is_not_reused_or_deleted_silently() -> None:
     runner = Runner()
     output_store = OutputStore(ExistingExperimentState.COMPLETE_INVALID)
+    experiment_coordinate = coordinate()
+    execution_provenance = provenance()
     with pytest.raises(ValueError, match="failed publication validation"):
         execute_experiment(
-            coordinate=coordinate(),
-            provenance=provenance(),
+            coordinate=experiment_coordinate,
+            provenance=execution_provenance,
             stage_runner=runner,
             output_store=output_store,
             output_root=OUTPUT_ROOT,
@@ -287,10 +289,11 @@ def test_execute_experiment_fails_fast_for_a_ditto_coordinate_instead_of_running
     )
     runner = Runner()
     output_store = OutputStore(ExistingExperimentState.ABSENT)
+    execution_provenance = provenance()
     with pytest.raises(ScientificContractError):
         execute_experiment(
             coordinate=ditto_coordinate,
-            provenance=provenance(),
+            provenance=execution_provenance,
             stage_runner=runner,
             output_store=output_store,
             output_root=OUTPUT_ROOT,

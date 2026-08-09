@@ -21,13 +21,16 @@ from datp_core.core.numeric import TrafficRatePerDay
 
 
 def test_traffic_rate_evidence_requires_per_client_applicability() -> None:
+    rate_per_day = TrafficRatePerDay(10)
+    source_locator = TrafficRateLocatorText("source")
+    provenance = TrafficRateProvenanceText("audit")
     with pytest.raises(ScientificContractError, match="applicable"):
         ValidatedTrafficRateEvidence(
             TrafficRateEvidenceType.MEASURED,
             PopulationId.NBAIOT_NATURAL_DEVICES,
-            TrafficRatePerDay(10),
-            TrafficRateLocatorText("source"),
-            TrafficRateProvenanceText("audit"),
+            rate_per_day,
+            source_locator,
+            provenance,
             TrafficRateUnit.BENIGN_DECISIONS_PER_CLIENT_PER_DAY,
             TrafficRateGranularity.PER_CLIENT,
             False,
@@ -50,16 +53,19 @@ def test_dataset_derived_traffic_rate_is_accepted() -> None:
 
 
 def test_declared_traffic_rate_evidence_rejects_unavailable_kind() -> None:
+    rate_per_day = TrafficRatePerDay(10)
+    source_locator = TrafficRateSourceLocator(
+        scheme=TrafficRateLocatorScheme.DATASET_PATH,
+        reference=TrafficRateReference("data/canonical/nbaiot"),
+    )
+    provenance = TrafficRateProvenanceText("audit")
     with pytest.raises(ValueError, match="unavailable"):
         TrafficRateEvidence(
             population=PopulationId.NBAIOT_NATURAL_DEVICES,
-            rate_per_day=TrafficRatePerDay(10),
+            rate_per_day=rate_per_day,
             evidence_kind=TrafficRateEvidenceType.UNAVAILABLE,
-            source_locator=TrafficRateSourceLocator(
-                scheme=TrafficRateLocatorScheme.DATASET_PATH,
-                reference=TrafficRateReference("data/canonical/nbaiot"),
-            ),
-            provenance=TrafficRateProvenanceText("audit"),
+            source_locator=source_locator,
+            provenance=provenance,
             unit=TrafficRateUnit.BENIGN_DECISIONS_PER_CLIENT_PER_DAY,
             granularity=TrafficRateGranularity.PER_CLIENT,
             applicable_to_each_client=True,

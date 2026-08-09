@@ -92,18 +92,20 @@ def test_centralized_declarations_are_distinct_from_federated_ones() -> None:
 
 
 def test_single_model_federated_protocol_resolution_rejects_invalid_shapes() -> None:
+    coefficient = ModelCoefficientValue(0.1)
+    ditto_regularization = DittoRegularization(0.1)
     with pytest.raises(ScientificContractError, match="must not declare"):
         resolve_single_model_federated_training_protocol(
             model=TrainingModelId.FEDAVG_AUTOENCODER,
-            coefficient=ModelCoefficientValue(0.1),
+            coefficient=coefficient,
         )
     with pytest.raises(ScientificContractError, match="proximal coefficient"):
         resolve_single_model_federated_training_protocol(
             model=TrainingModelId.FEDPROX_AUTOENCODER,
-            coefficient=DittoRegularization(0.1),
+            coefficient=ditto_regularization,
         )
     with pytest.raises(ScientificContractError, match="global and personalized"):
         resolve_single_model_federated_training_protocol(
             model=TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER,
-            coefficient=DittoRegularization(0.1),
+            coefficient=ditto_regularization,
         )

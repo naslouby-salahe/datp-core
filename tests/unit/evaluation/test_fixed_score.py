@@ -26,12 +26,11 @@ def test_fixed_score_controls_allow_only_threshold_method_to_change() -> None:
 
 
 def test_fixed_score_controls_reject_changed_auroc() -> None:
+    first = _evidence(FederatedThresholdMethod.SHARED_THRESHOLD, MetricValue(0.8))
+    second = _evidence(FederatedThresholdMethod.LOCAL_THRESHOLD, MetricValue(0.7))
+    tolerance = AbsoluteTolerance(1e-12)
     with pytest.raises(ScientificContractError, match="AUROC differs"):
-        validate_fixed_score_controls(
-            _evidence(FederatedThresholdMethod.SHARED_THRESHOLD, MetricValue(0.8)),
-            _evidence(FederatedThresholdMethod.LOCAL_THRESHOLD, MetricValue(0.7)),
-            auroc_absolute_tolerance=AbsoluteTolerance(1e-12),
-        )
+        validate_fixed_score_controls(first, second, auroc_absolute_tolerance=tolerance)
 
 
 def test_fixed_score_controls_allow_matched_unavailable_auroc() -> None:
@@ -44,31 +43,35 @@ def test_fixed_score_controls_allow_matched_unavailable_auroc() -> None:
 
 
 def test_fixed_score_controls_reject_changed_calibration_partition() -> None:
+    first = _evidence(FederatedThresholdMethod.SHARED_THRESHOLD, MetricValue(0.8))
+    second = _evidence(
+        FederatedThresholdMethod.LOCAL_THRESHOLD,
+        MetricValue(0.8),
+        calibration_role=PartitionRole.FUTURE_RECALIBRATION,
+    )
+    tolerance = AbsoluteTolerance(1e-12)
     with pytest.raises(ScientificContractError, match="calibration partition role differs"):
-        validate_fixed_score_controls(
-            _evidence(FederatedThresholdMethod.SHARED_THRESHOLD, MetricValue(0.8)),
-            _evidence(
-                FederatedThresholdMethod.LOCAL_THRESHOLD,
-                MetricValue(0.8),
-                calibration_role=PartitionRole.FUTURE_RECALIBRATION,
-            ),
-            auroc_absolute_tolerance=AbsoluteTolerance(1e-12),
-        )
+        validate_fixed_score_controls(first, second, auroc_absolute_tolerance=tolerance)
 
 
 def test_calibration_evidence_rejects_non_calibration_role() -> None:
+    checksum = Checksum("a" * 64)
     with pytest.raises(ValueError, match="calibration partition role"):
-        CalibrationEvidence(role=PartitionRole.EVALUATION, score_checksum=Checksum("a" * 64))
+        CalibrationEvidence(role=PartitionRole.EVALUATION, score_checksum=checksum)
 
 
 def test_held_out_evidence_rejects_duplicate_auroc_clients() -> None:
     item = ClientAurocEvidence(client_identity("client_a"), available(MetricId.AUROC, 0.8))
+    score_checksum = Checksum("a" * 64)
+    label_checksum = Checksum("b" * 64)
+    source_row_checksum = Checksum("c" * 64)
+    score_order_checksum = Checksum("d" * 64)
     with pytest.raises(ValueError, match="unique by client"):
         HeldOutEvaluationEvidence(
-            score_checksum=Checksum("a" * 64),
-            label_checksum=Checksum("b" * 64),
-            source_row_checksum=Checksum("c" * 64),
-            score_order_checksum=Checksum("d" * 64),
+            score_checksum=score_checksum,
+            label_checksum=label_checksum,
+            source_row_checksum=source_row_checksum,
+            score_order_checksum=score_order_checksum,
             aurocs=(item, item),
         )
 

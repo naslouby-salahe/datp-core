@@ -79,8 +79,9 @@ def test_generate_federated_scores_rejects_a_raw_candidate_checkpoint(tmp_path: 
         preprocessing_state_set_checksum=checkpoint.preprocessing_state_set_checksum,
         split_manifest_checksum=checkpoint.split_manifest_checksum,
     )
+    request = _request(tmp_path, raw_candidate)
     with pytest.raises(ScientificContractError, match="non-test-selected checkpoint"):
-        publish_federated_scores(_request(tmp_path, raw_candidate))
+        publish_federated_scores(request)
 
 
 def test_generate_federated_scores_rejects_preprocessing_checksum_mismatch(tmp_path: Path) -> None:
@@ -97,8 +98,9 @@ def test_generate_federated_scores_rejects_preprocessing_checksum_mismatch(tmp_p
 def test_generate_federated_scores_rejects_duplicate_clients(tmp_path: Path) -> None:
     checkpoint = selected_checkpoint(tmp_path / "checkpoint")
     duplicated = (_clients()[0], _clients()[0])
+    request = _request(tmp_path, checkpoint, clients=duplicated)
     with pytest.raises(ScientificContractError, match="duplicate client identities"):
-        publish_federated_scores(_request(tmp_path, checkpoint, clients=duplicated))
+        publish_federated_scores(request)
 
 
 def test_score_reload_equality_detects_a_corrupted_file(tmp_path: Path) -> None:
@@ -131,8 +133,9 @@ def test_scoring_rejects_attack_labelled_calibration_rows(tmp_path: Path) -> Non
         calibration_features=attack_frame,
         evaluation_features=benign_frame(RowCount(6), seed=Seed(2)),
     )
+    request = _request(tmp_path, checkpoint, clients=(attack_client,))
     with pytest.raises(LeakageError, match="benign calibration"):
-        publish_federated_scores(_request(tmp_path, checkpoint, clients=(attack_client,)))
+        publish_federated_scores(request)
 
 
 def test_federated_scoring_has_single_publication_entry_point() -> None:

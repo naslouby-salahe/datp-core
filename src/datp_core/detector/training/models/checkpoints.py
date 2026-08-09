@@ -55,6 +55,48 @@ class CheckpointCandidate:
             )
 
 
+def _validate_decision_candidate(
+    candidate: CheckpointCandidate,
+    coordinate: FederatedTrainingCoordinate,
+    client: ClientIdentity | None,
+    reference: CheckpointCandidate,
+    selected: CheckpointCandidate,
+) -> bool:
+    if candidate.coordinate != coordinate:
+        raise ScientificContractError(
+            ErrorMessage("every decision candidate must match the decision coordinate"),
+            subject=ContractSubject.COORDINATE,
+        )
+    if candidate.client != client:
+        raise ScientificContractError(
+            ErrorMessage("every decision candidate must match the decision client"),
+            subject=ContractSubject.CLIENT_IDENTITY,
+        )
+    if candidate.preprocessing_state_set_checksum != reference.preprocessing_state_set_checksum:
+        raise ScientificContractError(
+            ErrorMessage("decision candidates must share preprocessing provenance"),
+            subject=ContractSubject.PREPROCESSING,
+        )
+    if candidate.split_manifest_checksum != reference.split_manifest_checksum:
+        raise ScientificContractError(
+            ErrorMessage("decision candidates must share split provenance"),
+            subject=ContractSubject.SPLIT,
+        )
+    if candidate == selected:
+        if candidate.status is not CheckpointStatus.SELECTED_BY_NON_TEST_RULE:
+            raise ScientificContractError(
+                ErrorMessage("checkpoint decision candidates have inconsistent terminal statuses"),
+                subject=ContractSubject.CHECKPOINT_CANDIDATES,
+            )
+        return True
+    if candidate.status is not CheckpointStatus.STABILITY_EVIDENCE:
+        raise ScientificContractError(
+            ErrorMessage("checkpoint decision candidates have inconsistent terminal statuses"),
+            subject=ContractSubject.CHECKPOINT_CANDIDATES,
+        )
+    return False
+
+
 @dataclass(frozen=True, slots=True)
 class CheckpointDecision:
     coordinate: FederatedTrainingCoordinate
@@ -87,42 +129,11 @@ class CheckpointDecision:
             )
 
         reference = self.candidates[0]
-        selected_count = 0
-
-        for candidate in self.candidates:
-            if candidate.coordinate != self.coordinate:
-                raise ScientificContractError(
-                    ErrorMessage("every decision candidate must match the decision coordinate"),
-                    subject=ContractSubject.COORDINATE,
-                )
-            if candidate.client != self.client:
-                raise ScientificContractError(
-                    ErrorMessage("every decision candidate must match the decision client"),
-                    subject=ContractSubject.CLIENT_IDENTITY,
-                )
-            if candidate.preprocessing_state_set_checksum != reference.preprocessing_state_set_checksum:
-                raise ScientificContractError(
-                    ErrorMessage("decision candidates must share preprocessing provenance"),
-                    subject=ContractSubject.PREPROCESSING,
-                )
-            if candidate.split_manifest_checksum != reference.split_manifest_checksum:
-                raise ScientificContractError(
-                    ErrorMessage("decision candidates must share split provenance"),
-                    subject=ContractSubject.SPLIT,
-                )
-
-            if candidate == self.selected:
-                if candidate.status is not CheckpointStatus.SELECTED_BY_NON_TEST_RULE:
-                    raise ScientificContractError(
-                        ErrorMessage("checkpoint decision candidates have inconsistent terminal statuses"),
-                        subject=ContractSubject.CHECKPOINT_CANDIDATES,
-                    )
-                selected_count += 1
-            elif candidate.status is not CheckpointStatus.STABILITY_EVIDENCE:
-                raise ScientificContractError(
-                    ErrorMessage("checkpoint decision candidates have inconsistent terminal statuses"),
-                    subject=ContractSubject.CHECKPOINT_CANDIDATES,
-                )
+        selected_count = sum(
+            1
+            for candidate in self.candidates
+            if _validate_decision_candidate(candidate, self.coordinate, self.client, reference, self.selected)
+        )
 
         if selected_count != 1:
             raise ScientificContractError(

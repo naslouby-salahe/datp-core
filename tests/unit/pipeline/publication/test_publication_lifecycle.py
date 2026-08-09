@@ -83,11 +83,14 @@ def test_artifact_paths_cannot_escape_publication_root() -> None:
 
 
 def test_complete_record_requires_an_artifact_inventory() -> None:
+    plan_digest = Checksum("plan")
+    campaign_digest = Checksum("campaign")
+    protocol_digest = Checksum("protocol")
     with pytest.raises(ValueError, match="at least one"):
         CompletionRecord(
-            plan_digest=Checksum("plan"),
-            campaign_digest=Checksum("campaign"),
-            protocol_digest=Checksum("protocol"),
+            plan_digest=plan_digest,
+            campaign_digest=campaign_digest,
+            protocol_digest=protocol_digest,
             artifacts=(),
             state=CompletionState.COMPLETE,
         )

@@ -138,28 +138,32 @@ def test_grouped_dispersion_has_one_typed_result_per_group() -> None:
 def test_cluster_stability_validates_contingency_margins() -> None:
     client_a = _client("a")
     client_b = _client("b")
+    adjusted_rand_index = CorrelationCoefficient(1.0)
+    left_partition = ClusterPartitionSummary(
+        group_sizes=(
+            PairedObservationCount(1),
+            PairedObservationCount(1),
+        )
+    )
+    right_partition = ClusterPartitionSummary(
+        group_sizes=(
+            PairedObservationCount(1),
+            PairedObservationCount(1),
+        )
+    )
+    contingency = ClusterContingencyMatrix(
+        rows=(
+            (PairedObservationCount(0), PairedObservationCount(0)),
+            (PairedObservationCount(1), PairedObservationCount(1)),
+        )
+    )
     with pytest.raises(ValueError, match="row totals"):
         ClusterStabilityResult(
-            adjusted_rand_index=CorrelationCoefficient(1.0),
+            adjusted_rand_index=adjusted_rand_index,
             compared_clients=(client_a, client_b),
-            left_partition=ClusterPartitionSummary(
-                group_sizes=(
-                    PairedObservationCount(1),
-                    PairedObservationCount(1),
-                )
-            ),
-            right_partition=ClusterPartitionSummary(
-                group_sizes=(
-                    PairedObservationCount(1),
-                    PairedObservationCount(1),
-                )
-            ),
-            contingency=ClusterContingencyMatrix(
-                rows=(
-                    (PairedObservationCount(0), PairedObservationCount(0)),
-                    (PairedObservationCount(1), PairedObservationCount(1)),
-                )
-            ),
+            left_partition=left_partition,
+            right_partition=right_partition,
+            contingency=contingency,
         )
 
 
@@ -492,9 +496,10 @@ def test_absorption_corners_reject_cloned_artifact_identities() -> None:
         tag="pers-local",
         coefficient=ModelCoefficientValue(0.1),
     )
+    declared_seed = Seed(seed)
     with pytest.raises(ValueError, match="must not clone identical artifact identities"):
         AbsorptionFourCornerEvidence(
-            seed=Seed(seed),
+            seed=declared_seed,
             experiment=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST,
             reference_model=TrainingModelId.FEDAVG_AUTOENCODER,
             personalized_model=TrainingModelId.FEDPROX_AUTOENCODER,

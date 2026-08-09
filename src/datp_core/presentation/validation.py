@@ -121,33 +121,101 @@ class ClaimDecision:
 
 def validate_claim(request: ClaimRequest) -> ClaimDecision:
     normalized_wording = request.wording.casefold()
-    if request.availability is not AvailabilityStatus.AVAILABLE:
-        return _blocked(ClaimReason(f"claim evidence is {request.availability.value}"))
-    if request.evidence_decision is EvidenceDecision.SUPPRESSED:
-        return _blocked(ClaimReason("suppressed experiments cannot be exported as executed evidence"))
+    availability_failure = _availability_failure(request)
+    if availability_failure is not None:
+        return availability_failure
+    suppressed_failure = _suppressed_failure(request)
+    if suppressed_failure is not None:
+        return suppressed_failure
     kind_role_failure = _kind_role_mismatch(request)
     if kind_role_failure is not None:
         return kind_role_failure
+    anchor_gate_failure = _confirmatory_anchor_gate_failure(request)
+    if anchor_gate_failure is not None:
+        return anchor_gate_failure
+    unsupported_kind = _deployment_privacy_suppression(request)
+    if unsupported_kind is not None:
+        return unsupported_kind
+    operational_failure = _operational_alert_burden_failure(request)
+    if operational_failure is not None:
+        return operational_failure
+    external_failure = _external_assignment_failure(request)
+    if external_failure is not None:
+        return external_failure
+    temporal_result = _temporal_guard_result(request, normalized_wording)
+    if temporal_result is not None:
+        return temporal_result
+    privacy_suppression = _privacy_guard_suppression(normalized_wording)
+    if privacy_suppression is not None:
+        return privacy_suppression
+    deployment_suppression = _deployment_guard_suppression(normalized_wording)
+    if deployment_suppression is not None:
+        return deployment_suppression
+    boundary_failure = _applicability_boundary_failure(request, normalized_wording)
+    if boundary_failure is not None:
+        return boundary_failure
+    if request.kind is ClaimKind.CONFIRMATORY:
+        return _confirmatory_result(request)
+    supportive_result = _supportive_result(request)
+    if supportive_result is not None:
+        return supportive_result
+    return ClaimDecision(
+        status=ClaimStatus.PERMITTED,
+        wording=request.wording,
+        reason=ClaimReason("claim matches evidence scope"),
+    )
+
+
+def _availability_failure(request: ClaimRequest) -> ClaimDecision | None:
+    if request.availability is not AvailabilityStatus.AVAILABLE:
+        return _blocked(ClaimReason(f"claim evidence is {request.availability.value}"))
+    return None
+
+
+def _suppressed_failure(request: ClaimRequest) -> ClaimDecision | None:
+    if request.evidence_decision is EvidenceDecision.SUPPRESSED:
+        return _blocked(ClaimReason("suppressed experiments cannot be exported as executed evidence"))
+    return None
+
+
+def _confirmatory_anchor_gate_failure(request: ClaimRequest) -> ClaimDecision | None:
     if request.kind is ClaimKind.CONFIRMATORY:
         if request.verified_anchor_gate is None:
             return _blocked(ClaimReason("confirmatory claims require a checksum-verified anchor-gate artifact"))
         if not request.verified_anchor_gate.permits_confirmatory_claims:
             return _blocked(ClaimReason("the anchor gate blocks dependent journal claims"))
+    return None
+
+
+def _deployment_privacy_suppression(request: ClaimRequest) -> ClaimDecision | None:
     if request.kind in {ClaimKind.DEPLOYMENT, ClaimKind.PRIVACY}:
         return _suppressed(
             ClaimReason("DATP-Core provides neither deployment validation nor formal privacy guarantees")
         )
-    if request.kind is ClaimKind.OPERATIONAL and request.metric is MetricId.ALERTS_PER_DAY:
-        if not request.traffic_rate_available:
-            return _blocked(ClaimReason("traffic-rate evidence is required for alert-burden translation"))
-    if request.kind is ClaimKind.EXTERNAL:
-        if request.metric in {
-            MetricId.TRUE_POSITIVE_RATE,
-            MetricId.BALANCED_ACCURACY,
-            MetricId.BINARY_MACRO_F1,
-            MetricId.AUROC,
-        }:
-            return _blocked(ClaimReason("Edge external evidence has no valid client-level attack assignment"))
+    return None
+
+
+def _operational_alert_burden_failure(request: ClaimRequest) -> ClaimDecision | None:
+    if (
+        request.kind is ClaimKind.OPERATIONAL
+        and request.metric is MetricId.ALERTS_PER_DAY
+        and not request.traffic_rate_available
+    ):
+        return _blocked(ClaimReason("traffic-rate evidence is required for alert-burden translation"))
+    return None
+
+
+def _external_assignment_failure(request: ClaimRequest) -> ClaimDecision | None:
+    if (
+        request.kind is ClaimKind.EXTERNAL
+        and request.metric
+        in {MetricId.TRUE_POSITIVE_RATE, MetricId.BALANCED_ACCURACY, MetricId.BINARY_MACRO_F1, MetricId.AUROC}
+    ):
+        return _blocked(ClaimReason("Edge external evidence has no valid client-level attack assignment"))
+    return None
+
+
+def _temporal_guard_result(request: ClaimRequest, normalized_wording: str) -> ClaimDecision | None:
     if request.kind is ClaimKind.TEMPORAL:
         if any(phrase.value in normalized_wording for phrase in _TEMPORAL_GUARD_PHRASES):
             return _blocked(ClaimReason("one-shot recalibration cannot be represented as general drift handling"))
@@ -160,50 +228,68 @@ def validate_claim(request: ClaimRequest) -> ClaimDecision:
                 ),
                 reason=ClaimReason(f"temporal evidence is {request.evidence_decision.value}"),
             )
+    return None
+
+
+def _privacy_guard_suppression(normalized_wording: str) -> ClaimDecision | None:
     if any(phrase.value in normalized_wording for phrase in _PRIVACY_GUARD_PHRASES):
         return _suppressed(ClaimReason("data locality is not a formal privacy guarantee"))
+    return None
+
+
+def _deployment_guard_suppression(normalized_wording: str) -> ClaimDecision | None:
     if any(phrase.value in normalized_wording for phrase in _DEPLOYMENT_GUARD_PHRASES):
         return _suppressed(ClaimReason("message-size estimates are not deployment measurements"))
+    return None
+
+
+def _applicability_boundary_failure(request: ClaimRequest, normalized_wording: str) -> ClaimDecision | None:
     if request.evidence_role is EvidenceRole.APPLICABILITY_BOUNDARY and (
         _cites_file_defined_pseudo_clients(request.population)
         or ClaimGuardPhrase.PHYSICAL_DEVICE.value in normalized_wording
     ):
         return _blocked(ClaimReason("CIC file clients cannot be described as verified physical devices"))
-    if request.kind is ClaimKind.CONFIRMATORY:
-        if request.metric is not MetricId.FPR_COEFFICIENT_OF_VARIATION:
-            return ClaimDecision(
-                status=ClaimStatus.NARROWED,
-                wording=(
-                    f"[NARROWED:control] Metric `{request.metric.value}` is a control or trade-off measure, "
-                    "not the confirmatory FPR equity endpoint."
-                ),
-                reason=ClaimReason("non-primary metrics are controls or trade-off evidence"),
-                anchor_gate_checksum=(
-                    None if request.verified_anchor_gate is None else request.verified_anchor_gate.artifact_checksum
-                ),
-            )
-        if request.evidence_decision is not EvidenceDecision.SUPPORTED:
-            return ClaimDecision(
-                status=ClaimStatus.NARROWED,
-                wording=(
-                    f"[NARROWED:{request.evidence_decision.value}] Confirmatory evidence is "
-                    f"{request.evidence_decision.value} and cannot support a positive claim."
-                ),
-                reason=ClaimReason(
-                    f"confirmatory evidence is {request.evidence_decision.value} and cannot support a positive claim"
-                ),
-                anchor_gate_checksum=(
-                    None if request.verified_anchor_gate is None else request.verified_anchor_gate.artifact_checksum
-                ),
-            )
+    return None
+
+
+def _confirmatory_result(request: ClaimRequest) -> ClaimDecision:
+    if request.metric is not MetricId.FPR_COEFFICIENT_OF_VARIATION:
         return ClaimDecision(
-            status=ClaimStatus.PERMITTED,
-            wording=request.wording,
-            reason=ClaimReason("claim matches evidence scope"),
-            anchor_gate_checksum=request.verified_anchor_gate.artifact_checksum
-            if request.verified_anchor_gate is not None
-            else None,
+            status=ClaimStatus.NARROWED,
+            wording=(
+                f"[NARROWED:control] Metric `{request.metric.value}` is a control or trade-off measure, "
+                "not the confirmatory FPR equity endpoint."
+            ),
+            reason=ClaimReason("non-primary metrics are controls or trade-off evidence"),
+            anchor_gate_checksum=(
+                None if request.verified_anchor_gate is None else request.verified_anchor_gate.artifact_checksum
+            ),
         )
+    if request.evidence_decision is not EvidenceDecision.SUPPORTED:
+        return ClaimDecision(
+            status=ClaimStatus.NARROWED,
+            wording=(
+                f"[NARROWED:{request.evidence_decision.value}] Confirmatory evidence is "
+                f"{request.evidence_decision.value} and cannot support a positive claim."
+            ),
+            reason=ClaimReason(
+                f"confirmatory evidence is {request.evidence_decision.value} and cannot support a positive claim"
+            ),
+            anchor_gate_checksum=(
+                None if request.verified_anchor_gate is None else request.verified_anchor_gate.artifact_checksum
+            ),
+        )
+    return ClaimDecision(
+        status=ClaimStatus.PERMITTED,
+        wording=request.wording,
+        reason=ClaimReason("claim matches evidence scope"),
+        anchor_gate_checksum=request.verified_anchor_gate.artifact_checksum
+        if request.verified_anchor_gate is not None
+        else None,
+    )
+
+
+def _supportive_result(request: ClaimRequest) -> ClaimDecision | None:
     if request.kind is ClaimKind.SUPPORTIVE and request.evidence_decision is not EvidenceDecision.SUPPORTED:
         return ClaimDecision(
             status=ClaimStatus.NARROWED,
@@ -213,11 +299,7 @@ def validate_claim(request: ClaimRequest) -> ClaimDecision:
             ),
             reason=ClaimReason(f"supportive evidence is {request.evidence_decision.value}"),
         )
-    return ClaimDecision(
-        status=ClaimStatus.PERMITTED,
-        wording=request.wording,
-        reason=ClaimReason("claim matches evidence scope"),
-    )
+    return None
 
 
 def _kind_role_mismatch(request: ClaimRequest) -> ClaimDecision | None:

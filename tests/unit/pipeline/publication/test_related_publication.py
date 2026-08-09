@@ -122,10 +122,14 @@ def test_related_publication_rolls_back_every_target_when_a_later_replace_fails(
 
     monkeypatch.setattr(Path, "replace", _flaky_replace)
     overwrite_request = _Request("new-global", "new-personalized")
+    publication = RelatedArtifactPublication(
+        request=overwrite_request,
+        members=members,
+        codec=_Codec(),
+        overwrite=True,
+    )
     with pytest.raises(OSError, match="simulated failure"):
-        publish_related_artifacts(
-            RelatedArtifactPublication(request=overwrite_request, members=members, codec=_Codec(), overwrite=True)
-        )
+        publish_related_artifacts(publication)
     monkeypatch.undo()
 
     assert (tmp_path / "global" / "global.txt").read_text(encoding="utf-8") == "original-global"

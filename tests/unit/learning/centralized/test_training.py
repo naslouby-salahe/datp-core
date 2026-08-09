@@ -47,11 +47,12 @@ def test_rejects_federated_preprocessing_state(tmp_path: Path) -> None:
 
 
 def test_rejects_attack_rows_in_training() -> None:
+    outcome_labels = OutcomeLabelSequence(
+        (OutcomeLabel(PopulationOutcomeLabel.BENIGN.value), OutcomeLabel(PopulationOutcomeLabel.ATTACK.value))
+    )
     with pytest.raises(LeakageError, match="attack-labelled"):
         reject_attack_rows_in_centralized_training(
-            OutcomeLabelSequence(
-                (OutcomeLabel(PopulationOutcomeLabel.BENIGN.value), OutcomeLabel(PopulationOutcomeLabel.ATTACK.value))
-            ),
+            outcome_labels,
             PopulationOutcomeLabel.BENIGN,
         )
 
@@ -80,24 +81,23 @@ def test_deterministic_cuda_training_and_safetensors_reload(tmp_path: Path) -> N
 def test_training_rejects_undersized_batch(tmp_path: Path) -> None:
     require_cuda()
     state = fitted_state(tmp_path / "state.skops")
+    training_request = CentralizedTrainingRequest(
+        coordinate=training_coordinate(),
+        training_features=benign_frame(RowCount(8), seed=Seed(0)),
+        feature_names=FEATURE_NAMES,
+        preprocessing_state=state,
+        split_manifest_checksum=Checksum("d" * 64),
+        output_directory=tmp_path / "out",
+        training_seed=SEED,
+        autoencoder=AUTOENCODER,
+        training_protocol=TRAINING_PROTOCOL,
+        checkpoint_protocol=CHECKPOINT,
+        learning_rate=LEARNING_RATE,
+        batch_size=BATCH_SIZE,
+        benign_label=PopulationOutcomeLabel.BENIGN,
+    )
     with pytest.raises(ScientificContractError, match="full declared batch"):
-        train_centralized_autoencoder(
-            CentralizedTrainingRequest(
-                coordinate=training_coordinate(),
-                training_features=benign_frame(RowCount(8), seed=Seed(0)),
-                feature_names=FEATURE_NAMES,
-                preprocessing_state=state,
-                split_manifest_checksum=Checksum("d" * 64),
-                output_directory=tmp_path / "out",
-                training_seed=SEED,
-                autoencoder=AUTOENCODER,
-                training_protocol=TRAINING_PROTOCOL,
-                checkpoint_protocol=CHECKPOINT,
-                learning_rate=LEARNING_RATE,
-                batch_size=BATCH_SIZE,
-                benign_label=PopulationOutcomeLabel.BENIGN,
-            )
-        )
+        train_centralized_autoencoder(training_request)
 
 
 def test_autoencoder_round_trip_shape() -> None:

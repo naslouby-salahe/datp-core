@@ -259,10 +259,8 @@ def _reference_parameters(
     reference = proximal_term.reference_state
     try:
         return tuple(
-            [
-                reference[name].detach().to(device=device, dtype=parameter.dtype)
-                for name, parameter in model.named_parameters()
-            ]
+            reference[name].detach().to(device=device, dtype=parameter.dtype)
+            for name, parameter in model.named_parameters()
         )
     except KeyError as exc:
         raise ScientificContractError(
@@ -540,6 +538,68 @@ def _proximal_coefficient(
             )
 
 
+def _run_training_round[T: FedAvgProtocol | FedProxProtocol](
+    *,
+    round_number: RoundNumber,
+    request: FederatedTrainingRequest[T],
+    prepared: tuple[PreparedFederatedClientData, ...],
+    global_state: dict[str, torch.Tensor],
+    device: torch.device,
+    proximal_coefficient: ProximalCoefficient | None,
+) -> tuple[FederatedRoundResult, dict[str, torch.Tensor]]:
+    updates: list[ClientUpdate] = []
+    for client_data in prepared:
+        seed = derive_client_stream_seed(
+            request.training_seed,
+            round_number,
+            client_data.client,
+            TrainingStream.GLOBAL_CLIENT_UPDATE,
+        )
+        proximal_term = (
+            ProximalTerm(global_state, proximal_coefficient) if proximal_coefficient is not None else None
+        )
+        updates.append(
+            train_client_update(
+                client_data=client_data,
+                initial_state=global_state,
+                autoencoder=request.autoencoder,
+                optimizer_protocol=request.training_protocol.optimizer,
+                learning_rate=request.learning_rate,
+                batch_size=request.batch_size,
+                seed=seed,
+                device=device,
+                proximal_term=proximal_term,
+            )
+        )
+
+    aggregated = aggregate_client_updates(updates)
+    aggregate_loss = compute_weighted_aggregate_loss(updates)
+    state_checksum, state_size, logical_elements = serialize_and_checksum_state_dict(aggregated)
+
+    communication = create_communication_record(
+        round_number,
+        state_size,
+        logical_elements,
+        upload_count=request.population_client_count,
+        download_count=request.population_client_count,
+    )
+
+    round_result = FederatedRoundResult(
+        round_number=round_number,
+        client_results=tuple(ClientTrainingResult.from_update(update) for update in updates),
+        aggregate_loss=aggregate_loss,
+        communication=communication,
+        global_state_reference=GlobalModelStateReference(
+            coordinate=request.coordinate,
+            round_number=round_number,
+            state_checksum=state_checksum,
+            tensor_path=None,
+        ),
+        personalized_state_references=(),
+    )
+    return round_result, aggregated
+
+
 def run_federated_training[T: FedAvgProtocol | FedProxProtocol](
     request: FederatedTrainingRequest[T],
 ) -> FederatedTrainingExecution:
@@ -556,13 +616,11 @@ def run_federated_training[T: FedAvgProtocol | FedProxProtocol](
     prepared = tuple(prepare_federated_client_data(item, request.autoencoder) for item in ordered_inputs)
 
     provenance = tuple(
-        [
-            PreparedClientProvenance(
-                client=item.client,
-                preprocessing_checksum=item.preprocessing_checksum,
-            )
-            for item in prepared
-        ]
+        PreparedClientProvenance(
+            client=item.client,
+            preprocessing_checksum=item.preprocessing_checksum,
+        )
+        for item in prepared
     )
 
     initial_model = build_reconstruction_autoencoder(
@@ -578,67 +636,22 @@ def run_federated_training[T: FedAvgProtocol | FedProxProtocol](
 
     for round_value in range(1, request.checkpoint_protocol.maximum_round.value + 1):
         round_number = RoundNumber(round_value)
-        updates: list[ClientUpdate] = []
-
-        for client_data in prepared:
-            seed = derive_client_stream_seed(
-                request.training_seed,
-                round_number,
-                client_data.client,
-                TrainingStream.GLOBAL_CLIENT_UPDATE,
-            )
-            proximal_term = (
-                ProximalTerm(global_state, proximal_coefficient) if proximal_coefficient is not None else None
-            )
-            updates.append(
-                train_client_update(
-                    client_data=client_data,
-                    initial_state=global_state,
-                    autoencoder=request.autoencoder,
-                    optimizer_protocol=request.training_protocol.optimizer,
-                    learning_rate=request.learning_rate,
-                    batch_size=request.batch_size,
-                    seed=seed,
-                    device=device,
-                    proximal_term=proximal_term,
-                )
-            )
-
-        aggregated = aggregate_client_updates(updates)
-        aggregate_loss = compute_weighted_aggregate_loss(updates)
-        state_checksum, state_size, logical_elements = serialize_and_checksum_state_dict(aggregated)
-
-        communication = create_communication_record(
-            round_number,
-            state_size,
-            logical_elements,
-            upload_count=request.population_client_count,
-            download_count=request.population_client_count,
+        round_result, global_state = _run_training_round(
+            round_number=round_number,
+            request=request,
+            prepared=prepared,
+            global_state=global_state,
+            device=device,
+            proximal_coefficient=proximal_coefficient,
         )
-
-        rounds.append(
-            FederatedRoundResult(
-                round_number=round_number,
-                client_results=tuple(ClientTrainingResult.from_update(update) for update in updates),
-                aggregate_loss=aggregate_loss,
-                communication=communication,
-                global_state_reference=GlobalModelStateReference(
-                    coordinate=request.coordinate,
-                    round_number=round_number,
-                    state_checksum=state_checksum,
-                    tensor_path=None,
-                ),
-                personalized_state_references=(),
-            )
-        )
-        global_state = aggregated
+        rounds.append(round_result)
 
         if round_number in candidate_rounds:
             snapshots.append(
                 create_round_snapshot(
                     round_number,
                     global_state,
-                    aggregate_loss,
+                    round_result.aggregate_loss,
                 )
             )
 

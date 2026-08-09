@@ -109,13 +109,11 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
     prepared = tuple(prepare_federated_client_data(item, request.autoencoder) for item in ordered_inputs)
 
     provenance = tuple(
-        [
-            PreparedClientProvenance(
-                client=item.client,
-                preprocessing_checksum=item.preprocessing_checksum,
-            )
-            for item in prepared
-        ]
+        PreparedClientProvenance(
+            client=item.client,
+            preprocessing_checksum=item.preprocessing_checksum,
+        )
+        for item in prepared
     )
     preprocessing_checksum = preprocessing_state_set_checksum(provenance)
 
@@ -259,10 +257,8 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
         global_snapshots=tuple(global_snapshots),
         personalized_coordinate=request.coordinates.personalized_coordinate,
         personalized_snapshot_sets=tuple(
-            [
-                PersonalizedSnapshotSet(client=client, snapshots=tuple(snapshots))
-                for client, snapshots in personalized_snapshots.items()
-            ]
+            PersonalizedSnapshotSet(client=client, snapshots=tuple(snapshots))
+            for client, snapshots in personalized_snapshots.items()
         ),
         global_output_directory=request.global_output_directory,
         personalized_output_directory=request.personalized_output_directory,

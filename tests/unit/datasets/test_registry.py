@@ -67,16 +67,15 @@ def test_registry_constructs_and_hands_off(nbaiot_canonical_root: Path) -> None:
 
 
 def test_dirichlet_construction_requires_explicit_condition(nbaiot_canonical_root: Path) -> None:
+    request = PopulationConstructionRequest(
+        PopulationId.NBAIOT_DIRICHLET_CLIENTS,
+        nbaiot_canonical_root,
+        Seed(0),
+        SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
+        None,
+    )
     with pytest.raises(ScientificContractError):
-        construct_population(
-            PopulationConstructionRequest(
-                PopulationId.NBAIOT_DIRICHLET_CLIENTS,
-                nbaiot_canonical_root,
-                Seed(0),
-                SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
-                None,
-            )
-        )
+        construct_population(request)
     construction = construct_population(
         PopulationConstructionRequest(
             PopulationId.NBAIOT_DIRICHLET_CLIENTS,

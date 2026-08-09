@@ -536,11 +536,6 @@ class ClientIdentityToken:
         if not isinstance(self.value, str) or not self.value:
             raise ValueError("client identity token must be non-empty")
 
-    def __lt__(self, other: "ClientIdentityToken") -> bool:
-        if type(other) is not ClientIdentityToken:
-            return NotImplemented
-        return self.value < other.value
-
     __get_pydantic_core_schema__ = classmethod(pydantic_value_schema)
 
 

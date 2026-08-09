@@ -62,29 +62,41 @@ class EmpiricalCdfFigureSeries:
             object.__setattr__(self, "label", FigureLabel(self.label))
         if self.unavailable_reason is not None and not isinstance(self.unavailable_reason, AnalysisReasonText):
             object.__setattr__(self, "unavailable_reason", AnalysisReasonText(self.unavailable_reason))
-        if self.x_metric is not MetricId.RECONSTRUCTION_ERROR and self.availability is AvailabilityStatus.AVAILABLE:
-            raise ValueError("empirical reconstruction CDF series must use reconstruction-error x metric")
-        if (
-            self.y_metric is not MetricId.EMPIRICAL_CUMULATIVE_PROBABILITY
-            and self.availability is AvailabilityStatus.AVAILABLE
-        ):
-            raise ValueError("empirical CDF series must use cumulative-probability y metric")
+        _validate_empirical_cdf_axes(self)
         if self.availability is AvailabilityStatus.AVAILABLE:
-            if not self.x_values or not self.y_values:
-                raise ValueError("available empirical CDF series require x and y values")
-            if len(self.x_values) != len(self.y_values):
-                raise ValueError("empirical CDF x and y values must have equal length")
-            if any(not (0.0 < y <= 1.0) for y in self.y_values):
-                raise ValueError("empirical CDF y values must lie in (0, 1]")
-            if any(left > right for left, right in zip(self.y_values, self.y_values[1:], strict=False)):
-                raise ValueError("empirical CDF y values must be nondecreasing")
-            if self.unavailable_reason is not None:
-                raise ValueError("available empirical CDF series cannot carry an unavailable reason")
+            _validate_available_empirical_cdf(self)
         else:
-            if self.x_values or self.y_values:
-                raise ValueError("unavailable empirical CDF series cannot contain values")
-            if self.unavailable_reason is None:
-                raise ValueError("unavailable empirical CDF series require an explicit reason")
+            _validate_unavailable_empirical_cdf(self)
+
+
+def _validate_empirical_cdf_axes(series: EmpiricalCdfFigureSeries) -> None:
+    if series.x_metric is not MetricId.RECONSTRUCTION_ERROR and series.availability is AvailabilityStatus.AVAILABLE:
+        raise ValueError("empirical reconstruction CDF series must use reconstruction-error x metric")
+    if (
+        series.y_metric is not MetricId.EMPIRICAL_CUMULATIVE_PROBABILITY
+        and series.availability is AvailabilityStatus.AVAILABLE
+    ):
+        raise ValueError("empirical CDF series must use cumulative-probability y metric")
+
+
+def _validate_available_empirical_cdf(series: EmpiricalCdfFigureSeries) -> None:
+    if not series.x_values or not series.y_values:
+        raise ValueError("available empirical CDF series require x and y values")
+    if len(series.x_values) != len(series.y_values):
+        raise ValueError("empirical CDF x and y values must have equal length")
+    if any(not (0.0 < y <= 1.0) for y in series.y_values):
+        raise ValueError("empirical CDF y values must lie in (0, 1]")
+    if any(left > right for left, right in zip(series.y_values, series.y_values[1:], strict=False)):
+        raise ValueError("empirical CDF y values must be nondecreasing")
+    if series.unavailable_reason is not None:
+        raise ValueError("available empirical CDF series cannot carry an unavailable reason")
+
+
+def _validate_unavailable_empirical_cdf(series: EmpiricalCdfFigureSeries) -> None:
+    if series.x_values or series.y_values:
+        raise ValueError("unavailable empirical CDF series cannot contain values")
+    if series.unavailable_reason is None:
+        raise ValueError("unavailable empirical CDF series require an explicit reason")
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

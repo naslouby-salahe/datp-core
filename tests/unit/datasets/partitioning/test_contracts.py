@@ -27,8 +27,9 @@ def test_controlled_partition_conditions_separate_iid_from_dirichlet() -> None:
     assert dirichlet.concentration == DirichletConcentration(0.5)
     with pytest.raises(ValueError):
         ControlledPartitionCondition(ControlledPartitionKind.DIRICHLET, None)
+    concentration = DirichletConcentration(1.0)
     with pytest.raises(ValueError):
-        ControlledPartitionCondition(ControlledPartitionKind.IID, DirichletConcentration(1.0))
+        ControlledPartitionCondition(ControlledPartitionKind.IID, concentration)
 
 
 def test_synthetic_client_ids_are_stable_and_count_locked() -> None:

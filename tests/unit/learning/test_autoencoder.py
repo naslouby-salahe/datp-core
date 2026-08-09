@@ -23,12 +23,12 @@ def test_forward_output_shape_equals_input_shape() -> None:
 
 def test_rejects_mismatched_input_and_output_widths() -> None:
     with pytest.raises(ScientificContractError, match="input and output widths"):
-        ReconstructionAutoencoder(AutoencoderArchitecture((FeatureCount(4), FeatureCount(3), FeatureCount(2))))
+        AutoencoderArchitecture((FeatureCount(4), FeatureCount(3), FeatureCount(2)))
 
 
 def test_rejects_widths_shorter_than_two_layers() -> None:
     with pytest.raises(ScientificContractError, match="at least input and output"):
-        ReconstructionAutoencoder(AutoencoderArchitecture((FeatureCount(4),)))
+        AutoencoderArchitecture((FeatureCount(4),))
 
 
 def test_no_batchnorm_or_dropout_layers_are_introduced() -> None:

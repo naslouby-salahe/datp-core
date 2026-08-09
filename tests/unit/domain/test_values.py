@@ -56,8 +56,10 @@ def test_seed_count_values_and_types_are_distinct() -> None:
 
 
 def test_unrelated_integer_value_objects_cannot_be_ordered() -> None:
+    left = Seed(1)
+    right = RowCount(2)
     with pytest.raises(TypeError):
-        _ = Seed(1) < RowCount(2)
+        _ = left < right
 
 
 def test_same_integer_value_type_supports_explicit_addition() -> None:

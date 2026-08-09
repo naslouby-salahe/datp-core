@@ -265,7 +265,7 @@ def _analysis_publication_is_reusable[AnalysisDocumentT: StrictModel](
         if not _analysis_identity_matches(publication.document, loaded):
             return False
         return True
-    except (OSError, UnicodeError, ValidationError, ValueError, TypeError):
+    except (OSError, ValidationError, ValueError, TypeError):
         return False
 
 
@@ -276,7 +276,7 @@ def _load_reused_analysis_publication[AnalysisDocumentT: StrictModel](
     document_path = directory / publication.asset_name
     try:
         loaded = publication.document_type.model_validate_json(document_path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, ValidationError, ValueError) as error:
+    except (OSError, ValidationError, ValueError) as error:
         raise ScientificContractError(
             ErrorMessage(f"completed analysis document is unreadable or invalid: {document_path}")
         ) from error

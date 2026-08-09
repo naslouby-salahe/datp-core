@@ -59,8 +59,10 @@ def test_empty_summary_is_explicitly_unavailable() -> None:
 
 
 def test_quantile_range_rejects_reversed_bounds() -> None:
+    higher = Ratio(0.75)
+    lower = Ratio(0.25)
     with pytest.raises(ValueError, match="lower quantile"):
-        QuantileRange(lower=Ratio(0.75), upper=Ratio(0.25))
+        QuantileRange(lower=higher, upper=lower)
 
 
 def test_sign_counts_preserve_zeroes_with_semantic_counts() -> None:

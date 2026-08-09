@@ -82,6 +82,8 @@ def test_selection_rejects_every_shape_of_held_out_metrics(
     held_out_metrics: tuple[MetricValue, ...],
 ) -> None:
     coordinate, candidates = _candidates_with_favorable_non_terminal_loss(tmp_path)
+    state_checksum = Checksum("a" * 64)
+    split_checksum = Checksum("b" * 64)
     with pytest.raises(LeakageError, match="held-out evaluation outcomes"):
         select_checkpoint(
             candidates,
@@ -90,13 +92,15 @@ def test_selection_rejects_every_shape_of_held_out_metrics(
             client=None,
             selection_rule=CheckpointSelectionRule.FIXED_TERMINAL_MAXIMUM_ROUND,
             held_out_metrics=held_out_metrics,
-            preprocessing_state_set_checksum=Checksum("a" * 64),
-            split_manifest_checksum=Checksum("b" * 64),
+            preprocessing_state_set_checksum=state_checksum,
+            split_manifest_checksum=split_checksum,
         )
 
 
 def test_selection_rejects_attack_label_presence_regardless_of_other_arguments(tmp_path: Path) -> None:
     coordinate, candidates = _candidates_with_favorable_non_terminal_loss(tmp_path)
+    state_checksum = Checksum("a" * 64)
+    split_checksum = Checksum("b" * 64)
     with pytest.raises(LeakageError, match="attack labels"):
         select_checkpoint(
             candidates,
@@ -105,8 +109,8 @@ def test_selection_rejects_attack_label_presence_regardless_of_other_arguments(t
             client=None,
             selection_rule=CheckpointSelectionRule.FIXED_TERMINAL_MAXIMUM_ROUND,
             attack_labels_present=True,
-            preprocessing_state_set_checksum=Checksum("a" * 64),
-            split_manifest_checksum=Checksum("b" * 64),
+            preprocessing_state_set_checksum=state_checksum,
+            split_manifest_checksum=split_checksum,
         )
 
 

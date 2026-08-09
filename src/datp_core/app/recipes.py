@@ -155,6 +155,9 @@ class ExperimentRecipe:
     analysis_marker: AnalysisMarker
 
 
+_METHOD_NOT_COMPLETED_DETAIL = "declared but not completed in this execution"
+
+
 def _declaration(experiment_id: ExperimentId):
     from datp_core.app.campaign import require_experiment_declaration
 
@@ -184,7 +187,7 @@ def _method_outcomes(
             detail=DetailText(
                 f"executed across all {len(completed_by_run)} runs"
                 if method in completed
-                else "declared but not completed in this execution"
+                else _METHOD_NOT_COMPLETED_DETAIL
             ),
         )
         for method in declared
@@ -316,7 +319,7 @@ def _dispatch_temporal(seeds: tuple[Seed, ...], output_root: Path, overwrite: Ov
             detail = unavailable
         else:
             status = ThresholdMethodExecutionStatus.INFEASIBLE
-            detail = DetailText("declared but not completed in this execution")
+            detail = DetailText(_METHOD_NOT_COMPLETED_DETAIL)
         outcomes.append(ThresholdMethodOutcome(method=method, status=status, detail=detail))
     return DispatchOutcome(detail=DetailText(f"temporal seeds={len(seeds)}"), method_outcomes=tuple(outcomes))
 
@@ -352,7 +355,7 @@ def _dispatch_robustness(
                     else (
                         f"executed across all {len(results)} runs"
                         if method in completed
-                        else "declared but not completed in this execution"
+                        else _METHOD_NOT_COMPLETED_DETAIL
                     )
                 ),
             )

@@ -92,22 +92,21 @@ def test_train_fedavg_rejects_a_fedprox_coordinate(tmp_path: Path) -> None:
 
     request = _request(tmp_path)
     wrong_coordinate = fedprox_coordinate(Seed(0), ProximalCoefficient(0.1))
+    wrong_request = FederatedTrainingRequest(
+        coordinate=wrong_coordinate,
+        clients=request.clients,
+        population_client_count=request.population_client_count,
+        autoencoder=request.autoencoder,
+        training_protocol=request.training_protocol,
+        checkpoint_protocol=request.checkpoint_protocol,
+        training_seed=request.training_seed,
+        batch_size=request.batch_size,
+        learning_rate=request.learning_rate,
+        split_manifest_checksum=request.split_manifest_checksum,
+        output_directory=request.output_directory,
+    )
     with pytest.raises(ScientificContractError, match="coordinate model must match"):
-        train_global_federated(
-            FederatedTrainingRequest(
-                coordinate=wrong_coordinate,
-                clients=request.clients,
-                population_client_count=request.population_client_count,
-                autoencoder=request.autoencoder,
-                training_protocol=request.training_protocol,
-                checkpoint_protocol=request.checkpoint_protocol,
-                training_seed=request.training_seed,
-                batch_size=request.batch_size,
-                learning_rate=request.learning_rate,
-                split_manifest_checksum=request.split_manifest_checksum,
-                output_directory=request.output_directory,
-            )
-        )
+        train_global_federated(wrong_request)
 
 
 def test_train_fedavg_never_trains_on_attack_labelled_rows(tmp_path: Path) -> None:

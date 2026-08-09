@@ -27,10 +27,11 @@ def test_hamilton_allocation_conserves_rows_and_is_deterministic() -> None:
 
 
 def test_hamilton_rejects_invalid_ratios() -> None:
+    row_count = RowCount(10)
     with pytest.raises(ValueError):
-        hamilton_integer_counts(RowCount(10), (0.5, 0.5, 0.5))
+        hamilton_integer_counts(row_count, (0.5, 0.5, 0.5))
     with pytest.raises(ValueError):
-        hamilton_integer_counts(RowCount(-1), (1.0,))
+        hamilton_integer_counts(row_count, (1.5,))
 
 
 def test_non_temporal_equal_thirds_are_disjoint_and_benign_only_for_train_cal(

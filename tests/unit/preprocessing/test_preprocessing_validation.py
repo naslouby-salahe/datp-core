@@ -117,42 +117,38 @@ def test_fit_trusted_batch_validation_rules() -> None:
         with pytest.raises(ScientificContractError, match="non-empty and two-dimensional"):
             fit_trusted_batch(protocol, batch, subject=PreprocessingFitScope.CLIENT_LOCAL_TRAINING)
 
+    width_mismatch_batch = PreprocessingFitBatch(
+        training_matrix=np.array([[1.0, 2.0, 3.0]]),
+        training_row_ids=StableRowIdSequence((StableRowId("r0"),)),
+        training_labels=OutcomeLabelSequence((OutcomeLabel("benign"),)),
+    )
     with pytest.raises(ScientificContractError, match="width must match"):
-        fit_trusted_batch(
-            protocol,
-            PreprocessingFitBatch(
-                training_matrix=np.array([[1.0, 2.0, 3.0]]),
-                training_row_ids=StableRowIdSequence((StableRowId("r0"),)),
-                training_labels=OutcomeLabelSequence((OutcomeLabel("benign"),)),
-            ),
-            subject=PreprocessingFitScope.CLIENT_LOCAL_TRAINING,
-        )
+        fit_trusted_batch(protocol, width_mismatch_batch, subject=PreprocessingFitScope.CLIENT_LOCAL_TRAINING)
 
+    non_finite_batch = PreprocessingFitBatch(
+        training_matrix=np.array([[1.0, np.nan]]),
+        training_row_ids=StableRowIdSequence((StableRowId("r0"),)),
+        training_labels=OutcomeLabelSequence((OutcomeLabel("benign"),)),
+    )
     with pytest.raises(ScientificContractError, match="training matrix must be finite"):
-        fit_trusted_batch(
-            protocol,
-            PreprocessingFitBatch(
-                training_matrix=np.array([[1.0, np.nan]]),
-                training_row_ids=StableRowIdSequence((StableRowId("r0"),)),
-                training_labels=OutcomeLabelSequence((OutcomeLabel("benign"),)),
-            ),
-            subject=PreprocessingFitScope.CLIENT_LOCAL_TRAINING,
-        )
+        fit_trusted_batch(protocol, non_finite_batch, subject=PreprocessingFitScope.CLIENT_LOCAL_TRAINING)
 
 
 def test_transform_feature_matrix_validations() -> None:
     protocol = _protocol()
     fitted = StandardScaler().fit(np.array([[1.0, 2.0], [3.0, 4.0]]))
 
+    vector = np.array([1.0, 2.0])
     with pytest.raises(ScientificContractError, match="two-dimensional"):
         transform_feature_matrix(
             fitted,
-            np.array([1.0, 2.0]),
+            vector,
             protocol.input_feature_names,
             PartitionRole.TRAIN,
             description="transformed evaluation matrix",
         )
 
     require_finite_matrix(np.asarray([[1.0, 2.0]]), subject=ContractSubject.FEATURES, description="test matrix")
+    non_finite_matrix = np.asarray([[1.0, np.nan]])
     with pytest.raises(ScientificContractError):
-        require_finite_matrix(np.asarray([[1.0, np.nan]]), subject=ContractSubject.FEATURES, description="test matrix")
+        require_finite_matrix(non_finite_matrix, subject=ContractSubject.FEATURES, description="test matrix")

@@ -234,7 +234,7 @@ def exclude_nonfinite_model_input_rows(
     excluded = annotated.filter(~pl.col(_FINITE_ELIGIBLE_COLUMN)).drop(_FINITE_ELIGIBLE_COLUMN)
 
     excluded_ids_col = excluded.get_column(STABLE_ROW_ID_COLUMN).sort()
-    excluded_ids = tuple(map(lambda x: StableRowId(str(x)), excluded_ids_col.to_list()))
+    excluded_ids = tuple(StableRowId(str(x)) for x in excluded_ids_col.to_list())
 
     evidence = ModelInputExclusionEvidence(
         dataset=dataset,

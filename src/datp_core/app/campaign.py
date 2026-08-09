@@ -67,23 +67,25 @@ def executable_planning_evidence(experiment_id: ExperimentId) -> PlanningEvidenc
 
 
 def _planning_evidence(declaration: ExperimentDeclaration) -> tuple[PlanningEvidence, ...]:
-    if declaration.readiness is ExperimentReadiness.SUPPRESSED:
-        return ()
-    if declaration.readiness is ExperimentReadiness.INFEASIBLE:
-        return ()
-    if declaration.readiness is ExperimentReadiness.BLOCKED:
-        return ()
-    try:
-        require_experiment_execution_ready(declaration.id)
-    except UnresolvedScientificValueError as error:
-        return (
-            PlanningEvidence(
-                experiment=declaration.id,
-                disposition=PlanDisposition.BLOCKED,
-                reason=PlanReason(str(error)),
-            ),
-        )
-    return (executable_planning_evidence(declaration.id),)
+    evidence: list[PlanningEvidence] = []
+    if declaration.readiness not in {
+        ExperimentReadiness.SUPPRESSED,
+        ExperimentReadiness.INFEASIBLE,
+        ExperimentReadiness.BLOCKED,
+    }:
+        try:
+            require_experiment_execution_ready(declaration.id)
+        except UnresolvedScientificValueError as error:
+            evidence.append(
+                PlanningEvidence(
+                    experiment=declaration.id,
+                    disposition=PlanDisposition.BLOCKED,
+                    reason=PlanReason(str(error)),
+                )
+            )
+        else:
+            evidence.append(executable_planning_evidence(declaration.id))
+    return tuple(evidence)
 
 
 def _plan_for_declaration(declaration: ExperimentDeclaration) -> ExperimentPlan:

@@ -117,7 +117,7 @@ def _is_reusable[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseModel](
         schema = publication.schema_type.model_validate_json(schema_text)
         _read_model(directory, ProcessedAssetName.VALIDATION_REPORT, publication.report_type)
 
-    except (OSError, UnicodeError, ValidationError, ArtifactIntegrityError, ValueError):
+    except (OSError, ValidationError, ArtifactIntegrityError, ValueError):
         return False
 
     return (
@@ -147,7 +147,7 @@ def _read_model[ModelT: BaseModel](
         )
     try:
         return model_type.model_validate_json(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, ValidationError, ValueError) as error:
+    except (OSError, ValidationError, ValueError) as error:
         raise ArtifactIntegrityError(
             ErrorMessage(f"invalid {asset.value}"),
             subject=ContractSubject.ARTIFACT_PATH,

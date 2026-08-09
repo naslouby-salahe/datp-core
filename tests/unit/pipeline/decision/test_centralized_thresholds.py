@@ -72,10 +72,11 @@ def test_exact_pooled_quantile_unit() -> None:
 def test_rejects_attack_rows_in_calibration() -> None:
     from datp_core.core.identifiers import OutcomeLabel, OutcomeLabelSequence
 
+    labels = OutcomeLabelSequence(
+        (OutcomeLabel(PopulationOutcomeLabel.BENIGN.value), OutcomeLabel(PopulationOutcomeLabel.ATTACK.value))
+    )
     with pytest.raises(LeakageError, match="attack-labelled"):
         reject_attack_rows_in_benign_calibration(
-            OutcomeLabelSequence(
-                (OutcomeLabel(PopulationOutcomeLabel.BENIGN.value), OutcomeLabel(PopulationOutcomeLabel.ATTACK.value))
-            ),
+            labels,
             PopulationOutcomeLabel.BENIGN,
         )

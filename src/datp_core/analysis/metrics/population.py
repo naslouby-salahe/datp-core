@@ -46,31 +46,14 @@ def calculate_population_metrics(
             ErrorMessage("population results require one fixed coordinate, threshold method, and evidence role")
         )
 
-    fpr_evaluable: list[ClientMetricResult] = []
-    fpr_values: list[MetricValue] = []
-    excluded_clients: list[ClientIdentity] = []
-    attack_evaluable_count = 0
-    fallback_count = 0
-    unavailable_count = 0
-
-    for result in results:
-        if result.cohort is EvaluationCohort.FPR_EVALUABLE:
-            fpr_evaluable.append(result)
-            if result.attack_evaluable:
-                attack_evaluable_count += 1
-
-            fpr_record = next((m for m in result.metrics if m.metric is MetricId.FALSE_POSITIVE_RATE), None)
-            if not fpr_record:
-                msg = f"client result lacks required metric {MetricId.FALSE_POSITIVE_RATE.value}"
-                raise ScientificContractError(ErrorMessage(msg))
-            if fpr_record.value is not None:
-                fpr_values.append(fpr_record.value)
-        else:
-            excluded_clients.append(result.client)
-            if result.cohort is EvaluationCohort.DEPLOYMENT_FALLBACK:
-                fallback_count += 1
-            elif result.cohort is EvaluationCohort.UNAVAILABLE:
-                unavailable_count += 1
+    (
+        fpr_evaluable,
+        fpr_values,
+        excluded_clients,
+        attack_evaluable_count,
+        fallback_count,
+        unavailable_count,
+    ) = _classify_population_results(results)
 
     fpr_evaluable_tuple = tuple(fpr_evaluable)
     fpr_values_tuple = tuple(fpr_values)
@@ -97,6 +80,50 @@ def calculate_population_metrics(
         warnings=aggregates.warnings,
         evidence_role=first.evidence_role,
     )
+
+
+def _classify_population_results(
+    results: tuple[ClientMetricResult, ...],
+) -> tuple[list[ClientMetricResult], list[MetricValue], list[ClientIdentity], int, int, int]:
+    fpr_evaluable: list[ClientMetricResult] = []
+    fpr_values: list[MetricValue] = []
+    excluded_clients: list[ClientIdentity] = []
+    attack_evaluable_count = 0
+    fallback_count = 0
+    unavailable_count = 0
+
+    for result in results:
+        if result.cohort is EvaluationCohort.FPR_EVALUABLE:
+            fpr_evaluable.append(result)
+            if result.attack_evaluable:
+                attack_evaluable_count += 1
+            fpr_values.extend(_fpr_evaluable_values(result))
+        else:
+            excluded_clients.append(result.client)
+            if result.cohort is EvaluationCohort.DEPLOYMENT_FALLBACK:
+                fallback_count += 1
+            elif result.cohort is EvaluationCohort.UNAVAILABLE:
+                unavailable_count += 1
+
+    return (
+        fpr_evaluable,
+        fpr_values,
+        excluded_clients,
+        attack_evaluable_count,
+        fallback_count,
+        unavailable_count,
+    )
+
+
+def _fpr_evaluable_values(result: ClientMetricResult) -> tuple[MetricValue, ...]:
+    fpr_record = next((m for m in result.metrics if m.metric is MetricId.FALSE_POSITIVE_RATE), None)
+    if not fpr_record:
+        msg = f"client result lacks required metric {MetricId.FALSE_POSITIVE_RATE.value}"
+        raise ScientificContractError(ErrorMessage(msg))
+    values: list[MetricValue] = []
+    if fpr_record.value is not None:
+        values.append(fpr_record.value)
+    return tuple(values)
 
 
 def _population_metric_records(

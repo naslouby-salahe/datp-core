@@ -460,42 +460,13 @@ def _client_evaluation_scores(
 
 
 def _confirmatory_cluster_mechanisms() -> tuple[MechanismEvidence, ...]:
-    from pydantic import TypeAdapter, ValidationError
-
     from datp_core.analysis.mechanisms import (
         cluster_evidence_from_grouped_result,
         cluster_stability,
         local_threshold_dispersion,
     )
-    from datp_core.artifacts.repositories.thresholds import (
-        FederatedThresholdAssetName,
-        federated_threshold_publication_checksum,
-        threshold_result_checksum,
-    )
 
-    adapter: TypeAdapter[GroupedThresholdResult] = TypeAdapter(GroupedThresholdResult)
-    available: list[tuple[Seed, GroupedThresholdResult, Checksum]] = []
-    unavailable: list[Seed] = []
-    corrupt: list[Seed] = []
-    for seed in CONFIRMATORY_SEED_COHORT.values:
-        coordinate = _confirmatory_coordinate(seed, FederatedThresholdMethod.CLUSTER_THRESHOLD)
-        directory = evaluation_run_directory(OUTPUTS_ROOT, coordinate) / EvaluationRunAssetDirectory.THRESHOLD
-        result_path = directory / FederatedThresholdAssetName.RESULT
-        complete_path = directory / FederatedThresholdAssetName.COMPLETE
-        if not result_path.is_file() or not complete_path.is_file():
-            unavailable.append(seed)
-            continue
-        try:
-            result = adapter.validate_json(result_path.read_text(encoding="utf-8"))
-            complete_marker = complete_path.read_text(encoding="utf-8").strip()
-            expected_marker = federated_threshold_publication_checksum(result, None).value
-            if complete_marker != expected_marker:
-                corrupt.append(seed)
-                continue
-        except (OSError, ValueError, TypeError, ValidationError):
-            corrupt.append(seed)
-            continue
-        available.append((seed, result, threshold_result_checksum(result)))
+    available, unavailable, corrupt = _load_cluster_threshold_results()
 
     if corrupt:
         raise ScientificContractError(
@@ -553,6 +524,45 @@ def _confirmatory_cluster_mechanisms() -> tuple[MechanismEvidence, ...]:
             )
         )
     return tuple(mechanisms)
+
+
+def _load_cluster_threshold_results() -> tuple[
+    list[tuple[Seed, GroupedThresholdResult, Checksum]],
+    list[Seed],
+    list[Seed],
+]:
+    from pydantic import TypeAdapter, ValidationError
+
+    from datp_core.artifacts.repositories.thresholds import (
+        FederatedThresholdAssetName,
+        federated_threshold_publication_checksum,
+        threshold_result_checksum,
+    )
+
+    adapter: TypeAdapter[GroupedThresholdResult] = TypeAdapter(GroupedThresholdResult)
+    available: list[tuple[Seed, GroupedThresholdResult, Checksum]] = []
+    unavailable: list[Seed] = []
+    corrupt: list[Seed] = []
+    for seed in CONFIRMATORY_SEED_COHORT.values:
+        coordinate = _confirmatory_coordinate(seed, FederatedThresholdMethod.CLUSTER_THRESHOLD)
+        directory = evaluation_run_directory(OUTPUTS_ROOT, coordinate) / EvaluationRunAssetDirectory.THRESHOLD
+        result_path = directory / FederatedThresholdAssetName.RESULT
+        complete_path = directory / FederatedThresholdAssetName.COMPLETE
+        if not result_path.is_file() or not complete_path.is_file():
+            unavailable.append(seed)
+            continue
+        try:
+            result = adapter.validate_json(result_path.read_text(encoding="utf-8"))
+            complete_marker = complete_path.read_text(encoding="utf-8").strip()
+            expected_marker = federated_threshold_publication_checksum(result, None).value
+            if complete_marker != expected_marker:
+                corrupt.append(seed)
+                continue
+        except (OSError, ValueError, TypeError, ValidationError):
+            corrupt.append(seed)
+            continue
+        available.append((seed, result, threshold_result_checksum(result)))
+    return available, unavailable, corrupt
 
 
 def _grouped_dispersion_evidence(

@@ -149,20 +149,19 @@ def test_evaluation_partition_cannot_enter_calibration_eligibility() -> None:
 
 
 def test_calibration_evaluation_row_overlap_is_rejected() -> None:
+    calibration_rows = frozenset({StableRowId("row-1"), StableRowId("row-2")})
+    evaluation_rows = frozenset({StableRowId("row-2")})
     with pytest.raises(LeakageError, match="must not share source rows"):
-        reject_calibration_evaluation_overlap(
-            frozenset({StableRowId("row-1"), StableRowId("row-2")}), frozenset({StableRowId("row-2")})
-        )
+        reject_calibration_evaluation_overlap(calibration_rows, evaluation_rows)
 
 
 def test_methods_compared_within_one_cell_must_share_the_eligible_cohort() -> None:
+    cohorts = (
+        EligibleCohort(clients=(some_client("client_a"), some_client("client_b"))),
+        EligibleCohort(clients=(some_client("client_a"),)),
+    )
     with pytest.raises(ScientificContractError, match="same eligible cohort"):
-        require_common_eligible_cohort(
-            (
-                EligibleCohort(clients=(some_client("client_a"), some_client("client_b"))),
-                EligibleCohort(clients=(some_client("client_a"),)),
-            )
-        )
+        require_common_eligible_cohort(cohorts)
 
 
 def test_eligibility_covers_every_candidate_client_never_silently_drops_one(tmp_path: Path) -> None:
@@ -247,6 +246,7 @@ def test_grouped_threshold_fingerprint_matches_locked_formula() -> None:
 
 
 def test_cluster_threshold_protocol_locks_reject_non_canonical_hyperparameters() -> None:
+    group_count = GroupCount(9)
     with pytest.raises(ValueError, match="locked group count"):
         ClusterThresholdProtocol(
             method=CLUSTER_THRESHOLD_PROTOCOL.method,
@@ -258,7 +258,7 @@ def test_cluster_threshold_protocol_locks_reject_non_canonical_hyperparameters()
             initialization_count=CLUSTER_THRESHOLD_PROTOCOL.initialization_count,
             maximum_iterations=CLUSTER_THRESHOLD_PROTOCOL.maximum_iterations,
             random_state=CLUSTER_THRESHOLD_PROTOCOL.random_state,
-            group_count=GroupCount(9),
+            group_count=group_count,
             threshold_aggregation=CLUSTER_THRESHOLD_PROTOCOL.threshold_aggregation,
         )
 
@@ -294,11 +294,14 @@ def test_conformal_threshold_never_silently_falls_back_for_insufficient_support(
 
 
 def test_pooled_variance_decomposition_requires_between_client_term() -> None:
+    global_mean = ScoreMoment(0.0)
+    within_client_variance = ScoreVariance(1.0)
+    full_pooled_variance = ScoreVariance(1.0)
     with pytest.raises(TypeError):
         PooledVarianceDecomposition(  # type: ignore[call-arg]
-            global_mean=ScoreMoment(0.0),
-            within_client_variance=ScoreVariance(1.0),
-            full_pooled_variance=ScoreVariance(1.0),
+            global_mean=global_mean,
+            within_client_variance=within_client_variance,
+            full_pooled_variance=full_pooled_variance,
             between_ratio=None,
         )
 
@@ -335,13 +338,12 @@ def test_thresholding_package_never_imports_training_or_scoring_generation_code(
 
 
 def test_score_coordinate_mismatch_across_calibration_records_is_rejected(tmp_path: Path) -> None:
+    records = (
+        benign_score_record(tmp_path, "client_a", (0.1, 0.2)),
+        benign_score_record(tmp_path, "client_b", (0.3, 0.4), seed=Seed(9)),
+    )
     with pytest.raises(ScientificContractError, match="share one coordinate"):
-        reject_score_coordinate_mismatch(
-            (
-                benign_score_record(tmp_path, "client_a", (0.1, 0.2)),
-                benign_score_record(tmp_path, "client_b", (0.3, 0.4), seed=Seed(9)),
-            )
-        )
+        reject_score_coordinate_mismatch(records)
 
 
 def test_dispatch_rejects_method_unsupported_by_population_capabilities() -> None:
@@ -363,33 +365,31 @@ def test_dispatch_rejects_method_unsupported_by_population_capabilities() -> Non
         evidentiary_role=capabilities.evidentiary_role,
         confirmatory_eligible=capabilities.confirmatory_eligible,
     )
+    request = ThresholdConstructionRequest(
+        method=FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD,
+        coordinate=eligible[0].coordinate,
+        quantile=QUANTILE,
+        capabilities=restricted,
+        eligible=eligible,
+        family_by_client=(),
+        support_rule=CalibrationSupportRule.CANONICAL_MINIMUM_SUPPORT,
+        cluster_threshold_aggregation=None,
+    )
     with pytest.raises(CapabilityError):
-        dispatch_federated_threshold(
-            ThresholdConstructionRequest(
-                method=FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD,
-                coordinate=eligible[0].coordinate,
-                quantile=QUANTILE,
-                capabilities=restricted,
-                eligible=eligible,
-                family_by_client=(),
-                support_rule=CalibrationSupportRule.CANONICAL_MINIMUM_SUPPORT,
-                cluster_threshold_aggregation=None,
-            )
-        )
+        dispatch_federated_threshold(request)
 
 
 def test_dispatch_rejects_clients_below_minimum_benign_support() -> None:
     eligible = (client_scores("client_a", (1.0, 2.0, 3.0)),)
+    request = ThresholdConstructionRequest(
+        method=FederatedThresholdMethod.SHARED_THRESHOLD,
+        coordinate=eligible[0].coordinate,
+        quantile=QUANTILE,
+        capabilities=_capabilities(),
+        eligible=eligible,
+        family_by_client=(),
+        support_rule=CalibrationSupportRule.CANONICAL_MINIMUM_SUPPORT,
+        cluster_threshold_aggregation=None,
+    )
     with pytest.raises(ScientificContractError, match="minimum benign calibration support"):
-        dispatch_federated_threshold(
-            ThresholdConstructionRequest(
-                method=FederatedThresholdMethod.SHARED_THRESHOLD,
-                coordinate=eligible[0].coordinate,
-                quantile=QUANTILE,
-                capabilities=_capabilities(),
-                eligible=eligible,
-                family_by_client=(),
-                support_rule=CalibrationSupportRule.CANONICAL_MINIMUM_SUPPORT,
-                cluster_threshold_aggregation=None,
-            )
-        )
+        dispatch_federated_threshold(request)

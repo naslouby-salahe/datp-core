@@ -121,12 +121,14 @@ def test_missing_history_fails_closed(tmp_path: Path) -> None:
 
 
 def test_selection_inputs_still_reject_held_out_metrics() -> None:
+    selection_rule = __import__(
+        "datp_core.detector.training.protocols",
+        fromlist=["FEDPROX_COEFFICIENT_SELECTION_RULE"],
+    ).FEDPROX_COEFFICIENT_SELECTION_RULE
+    held_out_metrics = (MetricValue(0.1),)
     with pytest.raises(LeakageError, match="held-out evaluation outcomes"):
         require_non_test_fedprox_coefficient_selection_inputs(
-            selection_rule=__import__(
-                "datp_core.detector.training.protocols",
-                fromlist=["FEDPROX_COEFFICIENT_SELECTION_RULE"],
-            ).FEDPROX_COEFFICIENT_SELECTION_RULE,
-            held_out_metrics=(MetricValue(0.1),),
+            selection_rule=selection_rule,
+            held_out_metrics=held_out_metrics,
             attack_labels_present=False,
         )

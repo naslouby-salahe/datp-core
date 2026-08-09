@@ -86,9 +86,10 @@ def test_temporal_population_accepts_only_verified_groups(edge_temporal_eligible
 
 
 def test_temporal_rejects_non_temporal_primary_protocol(edge_temporal_eligible_root: Path) -> None:
+    seed = Seed(0)
     with pytest.raises(ScientificContractError):
         construct_edge_temporal_groups(
             edge_temporal_eligible_root,
-            partition_seed=Seed(0),
+            partition_seed=seed,
             split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
         )

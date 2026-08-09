@@ -60,5 +60,6 @@ def test_prepared_publication_cannot_change_the_requested_root(monkeypatch: pyte
         canonicalization_contract=CanonicalizationContractName("test-contract"),
         source_paths=(Path("a.csv"), Path("b.csv")),
     )
+    request = _request(prepare_publication=lambda: publication)
     with pytest.raises(ValueError, match="changed its requested root"):
-        materialize_canonical(_request(prepare_publication=lambda: publication))
+        materialize_canonical(request)

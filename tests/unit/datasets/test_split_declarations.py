@@ -36,9 +36,8 @@ def test_split_protocols_are_frozen_and_reject_extra_fields() -> None:
 
 
 def test_fractional_split_rejects_totals_outside_the_shared_tolerance() -> None:
+    training = Ratio(0.5)
+    calibration = Ratio(0.3)
+    evaluation = Ratio(0.1)
     with pytest.raises(ValidationError):
-        FractionalSplitProtocol(
-            training=Ratio(0.5),
-            calibration=Ratio(0.3),
-            evaluation=Ratio(0.1),
-        )
+        FractionalSplitProtocol(training=training, calibration=calibration, evaluation=evaluation)

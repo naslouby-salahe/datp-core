@@ -54,11 +54,13 @@ def test_execute_declared_experiment_seed_raises_on_empty_campaign(tmp_path: Pat
     """DITTO uses joint publication, so the single-coordinate campaign is intentionally empty."""
     declaration = _declaration(ExperimentId.DITTO_ABSORPTION_STRESS_TEST)
 
+    seed_cohort = SeedCohort(values=(Seed(0),))
+    reason = PlanReason("unit test exercises the empty-campaign failure path")
     with pytest.raises(ScientificContractError):
         execute_declared_experiment_seed(
             declaration=declaration,
-            seed_cohort=SeedCohort(values=(Seed(0),)),
-            reason=PlanReason("unit test exercises the empty-campaign failure path"),
+            seed_cohort=seed_cohort,
+            reason=reason,
             output_root=tmp_path,
             overwrite=False,
         )

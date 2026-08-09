@@ -97,10 +97,11 @@ def test_cohort_membership_is_invariant_to_threshold_method() -> None:
 
 
 def test_cohort_invariance_requires_methods() -> None:
+    partition_seed = Seed(0)
     with pytest.raises(ScientificContractError):
         assert_cohort_invariant_to_threshold_methods(
             population=PopulationId.NBAIOT_NATURAL_DEVICES,
-            partition_seed=Seed(0),
+            partition_seed=partition_seed,
             client_counts=(),
             methods=(),
         )
@@ -116,10 +117,11 @@ def test_cohort_rejects_identity_kind_drift() -> None:
             identity_kind=PopulationIdentityKind.SYNTHETIC_DIRICHLET_CLIENTS,
         ),
     )
+    partition_seed = Seed(0)
     with pytest.raises(ScientificContractError, match="identity contract"):
         build_evaluation_cohort_manifest(
             population=PopulationId.NBAIOT_NATURAL_DEVICES,
-            partition_seed=Seed(0),
+            partition_seed=partition_seed,
             client_counts=counts,
         )
 

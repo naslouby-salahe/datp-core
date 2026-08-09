@@ -33,5 +33,7 @@ def test_skops_round_trip_and_untrusted_rejection(tmp_path: Path) -> None:
         )
     )
     assert np.allclose(reloaded.transform(matrix), expected)
+    untrusted_estimator = PCA(n_components=1).fit(matrix)
+    bad_state_path = tmp_path / "bad.skops"
     with pytest.raises(SerializationSafetyError):
-        serialize_estimator(PCA(n_components=1).fit(matrix), tmp_path / "bad.skops")
+        serialize_estimator(untrusted_estimator, bad_state_path)

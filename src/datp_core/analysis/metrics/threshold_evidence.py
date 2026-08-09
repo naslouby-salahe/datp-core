@@ -63,44 +63,53 @@ def _verify_score_rows(scores: tuple[HeldOutBenignScore, ...]) -> None:
         ScoreFrameColumn.OUTCOME_LABEL.value,
         ScoreFrameColumn.RECONSTRUCTION_ERROR.value,
     )
-    required_set = set(required)
+    required_set: set[str] = set(required)
 
     for record, supplied_rows in by_record.items():
-        if not record.path.is_file() or Checksum.from_file(record.path) != record.checksum:
+        _verify_score_record(record, supplied_rows, required_set, required)
+
+
+def _verify_score_record(
+    record: FederatedScoreRecord,
+    supplied_rows: list[HeldOutBenignScore],
+    required_set: set[str],
+    required: tuple[str, str, str],
+) -> None:
+    if not record.path.is_file() or Checksum.from_file(record.path) != record.checksum:
+        raise ScientificContractError(
+            ErrorMessage("threshold diagnostics score provenance is unavailable or changed")
+        )
+
+    frame = pl.read_parquet(record.path)
+    if not required_set.issubset(frame.columns) or frame.height != record.row_count.value:
+        raise ScientificContractError(
+            ErrorMessage("threshold diagnostics score provenance has an invalid schema or row count")
+        )
+
+    stable_row_ids = [item.stable_row_id for item in supplied_rows]
+    observed_rows = frame.filter(pl.col(ScoreFrameColumn.STABLE_ROW_ID.value).is_in(stable_row_ids))
+
+    if observed_rows.height != len(supplied_rows):
+        raise ScientificContractError(
+            ErrorMessage("threshold diagnostics score rows are not uniquely proven by their score artifact")
+        )
+
+    observed = {
+        str(row[0]): (
+            PopulationOutcomeLabel(str(row[1])),
+            float(row[2]),
+        )
+        for row in observed_rows.select(required).iter_rows()
+    }
+
+    if len(observed) != len(supplied_rows):
+        raise ScientificContractError(
+            ErrorMessage("threshold diagnostics score rows are not uniquely proven by their score artifact")
+        )
+
+    for item in supplied_rows:
+        provenance = observed.get(item.stable_row_id)
+        if provenance != (item.outcome_label, item.score.value):
             raise ScientificContractError(
-                ErrorMessage("threshold diagnostics score provenance is unavailable or changed")
+                ErrorMessage("threshold diagnostics score row is not proven by its score artifact")
             )
-
-        frame = pl.read_parquet(record.path)
-        if not required_set.issubset(frame.columns) or frame.height != record.row_count.value:
-            raise ScientificContractError(
-                ErrorMessage("threshold diagnostics score provenance has an invalid schema or row count")
-            )
-
-        stable_row_ids = [item.stable_row_id for item in supplied_rows]
-        observed_rows = frame.filter(pl.col(ScoreFrameColumn.STABLE_ROW_ID.value).is_in(stable_row_ids))
-
-        if observed_rows.height != len(supplied_rows):
-            raise ScientificContractError(
-                ErrorMessage("threshold diagnostics score rows are not uniquely proven by their score artifact")
-            )
-
-        observed = {
-            str(row[0]): (
-                PopulationOutcomeLabel(str(row[1])),
-                float(row[2]),
-            )
-            for row in observed_rows.select(required).iter_rows()
-        }
-
-        if len(observed) != len(supplied_rows):
-            raise ScientificContractError(
-                ErrorMessage("threshold diagnostics score rows are not uniquely proven by their score artifact")
-            )
-
-        for item in supplied_rows:
-            provenance = observed.get(item.stable_row_id)
-            if provenance != (item.outcome_label, item.score.value):
-                raise ScientificContractError(
-                    ErrorMessage("threshold diagnostics score row is not proven by its score artifact")
-                )

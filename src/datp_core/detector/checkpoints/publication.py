@@ -117,7 +117,7 @@ def load_manifest(directory: Path) -> CandidateManifest:
         )
     try:
         manifest = CandidateManifest.model_validate_json(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, ValidationError, ValueError) as error:
+    except (OSError, ValidationError, ValueError) as error:
         raise ArtifactIntegrityError(
             ErrorMessage("candidate manifest is unreadable or invalid"),
             subject=ContractSubject.ARTIFACT_PATH,
@@ -211,7 +211,7 @@ def verify_completion(
     complete = directory / FederatedHistoryAssetName.COMPLETE.value
     try:
         stored = Checksum(complete.read_text(encoding="utf-8").strip())
-    except (OSError, UnicodeError, ValueError) as error:
+    except (OSError, ValueError) as error:
         raise ArtifactIntegrityError(
             ErrorMessage("completion marker is unreadable or invalid"),
             subject=ContractSubject.ARTIFACT_PATH,

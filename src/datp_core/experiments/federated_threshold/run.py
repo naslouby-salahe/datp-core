@@ -272,6 +272,47 @@ def _run_estimation_seed(
     )
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class _EstimationDiagnostics:
+    threshold_errors: list[AbsoluteThresholdError]
+    attainment_errors: list[MetricValue]
+    exceedances: list[float]
+    variances: list[float]
+    communication: list[ByteCount]
+
+
+def _collect_estimation_diagnostics(
+    documents: tuple[FederatedEvaluationDocument, ...],
+    *,
+    include_threshold_error: bool,
+    include_exceedance_and_variance: bool,
+) -> _EstimationDiagnostics:
+    threshold_errors: list[AbsoluteThresholdError] = []
+    attainment_errors: list[MetricValue] = []
+    exceedances: list[float] = []
+    variances: list[float] = []
+    communication: list[ByteCount] = []
+    for document in documents:
+        if include_threshold_error:
+            for diagnostic in document.diagnostics.threshold_estimation:
+                threshold_errors.append(diagnostic.absolute_threshold_error)
+                attainment_errors.append(diagnostic.absolute_attainment_error)
+        if include_exceedance_and_variance:
+            for diagnostic in document.diagnostics.threshold_estimation:
+                exceedances.append(diagnostic.achieved_benign_exceedance.value)
+            for point in document.diagnostics.sample_efficiency:
+                variances.append(point.threshold_variance_across_nested_replicates.value)
+        if document.diagnostics.communication is not None:
+            communication.append(document.diagnostics.communication.total_estimated_serialized_bytes)
+    return _EstimationDiagnostics(
+        threshold_errors=threshold_errors,
+        attainment_errors=attainment_errors,
+        exceedances=exceedances,
+        variances=variances,
+        communication=communication,
+    )
+
+
 def _estimation_summary(
     *,
     experiment_id: ExperimentId,
@@ -295,23 +336,11 @@ def _estimation_summary(
     worst_values = [
         value for document in documents if (value := _try_metric_value(document, MetricId.WORST_CLIENT_FPR))
     ]
-    threshold_errors: list[AbsoluteThresholdError] = []
-    attainment_errors: list[MetricValue] = []
-    exceedances: list[float] = []
-    variances: list[float] = []
-    communication: list[ByteCount] = []
-    for document in documents:
-        if include_threshold_error:
-            for diagnostic in document.diagnostics.threshold_estimation:
-                threshold_errors.append(diagnostic.absolute_threshold_error)
-                attainment_errors.append(diagnostic.absolute_attainment_error)
-        if include_exceedance_and_variance:
-            for diagnostic in document.diagnostics.threshold_estimation:
-                exceedances.append(diagnostic.achieved_benign_exceedance.value)
-            for point in document.diagnostics.sample_efficiency:
-                variances.append(point.threshold_variance_across_nested_replicates.value)
-        if document.diagnostics.communication is not None:
-            communication.append(document.diagnostics.communication.total_estimated_serialized_bytes)
+    diagnostics = _collect_estimation_diagnostics(
+        tuple(documents),
+        include_threshold_error=include_threshold_error,
+        include_exceedance_and_variance=include_exceedance_and_variance,
+    )
 
     return EstimationSummaryLoad(
         summary=EstimationSummary(
@@ -320,15 +349,17 @@ def _estimation_summary(
             mean_cv_fpr=_mean_metric(cv_values),
             mean_worst_client_fpr=_mean_metric(worst_values),
             cv_fpr_across_seeds=_cv(cv_values),
-            mean_absolute_threshold_error=_mean_absolute_threshold_error(threshold_errors),
+            mean_absolute_threshold_error=_mean_absolute_threshold_error(diagnostics.threshold_errors),
             mean_absolute_attainment_error=(
-                MetricValue(sum(item.value for item in attainment_errors) / len(attainment_errors))
-                if attainment_errors
+                MetricValue(
+                    sum(item.value for item in diagnostics.attainment_errors) / len(diagnostics.attainment_errors)
+                )
+                if diagnostics.attainment_errors
                 else None
             ),
-            mean_achieved_exceedance=_mean_ratio(exceedances),
-            mean_threshold_variance=_mean_threshold_variance(variances),
-            mean_estimated_communication_bytes=_mean_bytes(communication),
+            mean_achieved_exceedance=_mean_ratio(diagnostics.exceedances),
+            mean_threshold_variance=_mean_threshold_variance(diagnostics.variances),
+            mean_estimated_communication_bytes=_mean_bytes(diagnostics.communication),
         ),
         missing_count=SeedObservationCount(missing),
     )
@@ -447,6 +478,49 @@ def run_fixed_coefficient_statistics_sensitivity_seed(
     )
 
 
+def _fixed_coefficient_rows_for_seed(
+    *,
+    seed: Seed,
+    method: FederatedThresholdMethod,
+    experiment_id: ExperimentId,
+) -> tuple[FixedCoefficientSummary, ...]:
+    rows: list[FixedCoefficientSummary] = []
+    document = _evaluation_document_for_seed(seed, method, experiment_id, OUTPUTS_ROOT)
+    cv_fpr = _try_metric_value(document, MetricId.FPR_COEFFICIENT_OF_VARIATION)
+    worst_fpr = _try_metric_value(document, MetricId.WORST_CLIENT_FPR)
+    if method is FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS:
+        coordinate = _threshold_coordinate_for_seed(seed, method, experiment_id)
+        threshold_path = _threshold_result_path(OUTPUTS_ROOT, coordinate)
+        if threshold_path.is_file():
+            threshold_result = _load_threshold_result(threshold_path)
+            from datp_core.thresholds.variants.federated_statistics import FederatedStatisticsThresholdResult
+
+            if isinstance(threshold_result, FederatedStatisticsThresholdResult):
+                rows.extend(
+                    FixedCoefficientSummary(
+                        seed=seed,
+                        coefficient=entry.coefficient,
+                        method=method,
+                        threshold_value=entry.threshold,
+                        cv_fpr=cv_fpr,
+                        worst_client_fpr=worst_fpr,
+                    )
+                    for entry in threshold_result.fixed_coefficient_curve
+                )
+                return tuple(rows)
+    rows.append(
+        FixedCoefficientSummary(
+            seed=seed,
+            coefficient=None,
+            method=method,
+            threshold_value=None,
+            cv_fpr=cv_fpr,
+            worst_client_fpr=worst_fpr,
+        )
+    )
+    return tuple(rows)
+
+
 def report_fixed_coefficient_statistics_sensitivity(
     experiment_id: ExperimentId,
     overwrite: bool,
@@ -460,42 +534,9 @@ def report_fixed_coefficient_statistics_sensitivity(
     for method in declaration.federated_thresholds:
         for seed in CONFIRMATORY_SEED_COHORT.values:
             try:
-                document = _evaluation_document_for_seed(seed, method, experiment_id, OUTPUTS_ROOT)
+                rows.extend(_fixed_coefficient_rows_for_seed(seed=seed, method=method, experiment_id=experiment_id))
             except ScientificContractError:
                 missing += 1
-                continue
-            cv_fpr = _try_metric_value(document, MetricId.FPR_COEFFICIENT_OF_VARIATION)
-            worst_fpr = _try_metric_value(document, MetricId.WORST_CLIENT_FPR)
-            if method is FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS:
-                coordinate = _threshold_coordinate_for_seed(seed, method, experiment_id)
-                threshold_path = _threshold_result_path(OUTPUTS_ROOT, coordinate)
-                if threshold_path.is_file():
-                    threshold_result = _load_threshold_result(threshold_path)
-                    from datp_core.thresholds.variants.federated_statistics import FederatedStatisticsThresholdResult
-
-                    if isinstance(threshold_result, FederatedStatisticsThresholdResult):
-                        rows.extend(
-                            FixedCoefficientSummary(
-                                seed=seed,
-                                coefficient=entry.coefficient,
-                                method=method,
-                                threshold_value=entry.threshold,
-                                cv_fpr=cv_fpr,
-                                worst_client_fpr=worst_fpr,
-                            )
-                            for entry in threshold_result.fixed_coefficient_curve
-                        )
-                        continue
-            rows.append(
-                FixedCoefficientSummary(
-                    seed=seed,
-                    coefficient=None,
-                    method=method,
-                    threshold_value=None,
-                    cv_fpr=cv_fpr,
-                    worst_client_fpr=worst_fpr,
-                )
-            )
     serialize_json_model(
         FixedCoefficientSummaryReport(experiment=experiment_id, rows=tuple(rows)),
         _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),

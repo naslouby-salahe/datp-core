@@ -675,6 +675,14 @@ def run_local_conformal_coverage_seed(
     return _run_robustness_seed(ExperimentId.LOCAL_CONFORMAL_COVERAGE, training_seed, output_root, overwrite)
 
 
+def _client_fpr_for(document: FederatedEvaluationDocument, client: ClientIdentity) -> MetricValue | None:
+    for client_result in document.clients:
+        if client_result.client == client:
+            metric = metric_by_id(client_result.metrics, MetricId.FALSE_POSITIVE_RATE)
+            return metric.value if metric.status is MetricStatus.AVAILABLE else None
+    return None
+
+
 def report_local_conformal_coverage(
     experiment_id: ExperimentId,
     overwrite: bool,
@@ -696,13 +704,6 @@ def report_local_conformal_coverage(
             missing += 1
             continue
         for diagnostic in document.diagnostics.conformal_coverage:
-            client_fpr: MetricValue | None = None
-            for client_result in document.clients:
-                if client_result.client == diagnostic.client:
-                    metric = metric_by_id(client_result.metrics, MetricId.FALSE_POSITIVE_RATE)
-                    if metric.status is MetricStatus.AVAILABLE:
-                        client_fpr = metric.value
-                    break
             rows.append(
                 ConformalCoverageRow(
                     seed=seed,
@@ -719,7 +720,7 @@ def report_local_conformal_coverage(
                         else MetricDelta(diagnostic.signed_coverage_error.value)
                     ),
                     absolute_coverage_error=diagnostic.absolute_coverage_error,
-                    client_fpr=client_fpr,
+                    client_fpr=_client_fpr_for(document, diagnostic.client),
                 )
             )
     serialize_json_model(

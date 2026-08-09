@@ -101,19 +101,7 @@ def run_controlled_heterogeneity_sweep_seed(
     )
 
 
-def analyze_controlled_heterogeneity_sweep(*, overwrite: bool) -> Path:
-    output = (
-        OUTPUTS_ROOT
-        / MechanismAnalysisDirectory.ROOT
-        / ExperimentId.CONTROLLED_HETEROGENEITY_SWEEP.value
-        / PopulationId.NBAIOT_DIRICHLET_CLIENTS.value
-        / MechanismAnalysisDirectory.ANALYSIS
-    )
-    if overwrite and output.exists():
-        from shutil import rmtree
-
-        rmtree(output)
-
+def _collect_heterogeneity_mechanisms() -> tuple[MechanismEvidence, ...]:
     mechanisms: list[MechanismEvidence] = []
     for seed in CONFIRMATORY_SEED_COHORT.values:
         for concentration in DIRICHLET_CONCENTRATIONS:
@@ -158,7 +146,10 @@ def analyze_controlled_heterogeneity_sweep(*, overwrite: bool) -> Path:
         )
         iid_vectors, iid_score_checksum = _client_score_vectors(iid_shared)
         mechanisms.append(jensen_shannon_from_client_scores(iid_vectors, source_score_checksum=iid_score_checksum))
+    return tuple(mechanisms)
 
+
+def _collect_heterogeneity_associations() -> tuple[AssociationObservation, ...]:
     association_observations: list[AssociationObservation] = []
     for seed in CONFIRMATORY_SEED_COHORT.values:
         for concentration in DIRICHLET_CONCENTRATIONS:
@@ -217,10 +208,10 @@ def analyze_controlled_heterogeneity_sweep(*, overwrite: bool) -> Path:
                     ),
                 )
             )
+    return tuple(association_observations)
 
-    if association_observations:
-        mechanisms.append(heterogeneity_benefit_association(tuple(association_observations)))
 
+def _collect_heterogeneity_movement_cohorts() -> tuple[ThresholdMovementCohort, ...]:
     movement_cohorts: list[ThresholdMovementCohort] = []
     for seed in CONFIRMATORY_SEED_COHORT.values:
         for concentration in DIRICHLET_CONCENTRATIONS:
@@ -241,10 +232,33 @@ def analyze_controlled_heterogeneity_sweep(*, overwrite: bool) -> Path:
                     experiment=ExperimentId.CONTROLLED_HETEROGENEITY_SWEEP,
                 )
             )
-    if movement_cohorts:
+    return tuple(movement_cohorts)
+
+
+def analyze_controlled_heterogeneity_sweep(*, overwrite: bool) -> Path:
+    output = (
+        OUTPUTS_ROOT
+        / MechanismAnalysisDirectory.ROOT
+        / ExperimentId.CONTROLLED_HETEROGENEITY_SWEEP.value
+        / PopulationId.NBAIOT_DIRICHLET_CLIENTS.value
+        / MechanismAnalysisDirectory.ANALYSIS
+    )
+    if overwrite and output.exists():
+        from shutil import rmtree
+
+        rmtree(output)
+
+    mechanisms = list(_collect_heterogeneity_mechanisms())
+
+    associations = _collect_heterogeneity_associations()
+    if associations:
+        mechanisms.append(heterogeneity_benefit_association(associations))
+
+    movements = _collect_heterogeneity_movement_cohorts()
+    if movements:
         mechanisms.append(
             summarize_threshold_movements_across_seeds(
-                tuple(movement_cohorts),
+                movements,
                 required_seed_count=CONFIRMATORY_SEED_COHORT.member_count,
             )
         )

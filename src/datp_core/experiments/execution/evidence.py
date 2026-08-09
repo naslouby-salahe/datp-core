@@ -96,7 +96,7 @@ def load_evaluation_document(path: Path) -> FederatedEvaluationDocument:
         return document
     except ScientificContractError:
         raise
-    except (OSError, UnicodeError, ValidationError, ValueError) as error:
+    except (OSError, ValidationError, ValueError) as error:
         raise ScientificContractError(
             ErrorMessage(f"completed evaluation document is unreadable or invalid: {path}"),
             subject=ContractSubject.ARTIFACT_PATH,

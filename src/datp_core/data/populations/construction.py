@@ -156,9 +156,9 @@ def finalize_population(request: PopulationFinalizationRequest) -> PopulationMan
 def feasibility_from_candidates(request: FeasibilityAssessmentRequest) -> PopulationFeasibility:
     expected = request.expected_count
     accepted_n = len(request.accepted_ids)
-    identity_mismatch = request.expected_identities is not None and tuple(sorted(request.candidate_ids)) != tuple(
-        sorted(request.expected_identities)
-    )
+    identity_mismatch = request.expected_identities is not None and tuple(
+        sorted(request.candidate_ids, key=lambda item: item.value)
+    ) != tuple(sorted(request.expected_identities, key=lambda item: item.value))
     if identity_mismatch:
         return _infeasible(
             PopulationFeasibilityReason.IDENTITY_SET_MISMATCH,
@@ -387,17 +387,20 @@ def _client_partition_counts(
         )
     )
     accepted = frozenset(str(value) for value in assignments.get_column(client_column).unique().to_list())
-    return tuple(
-        ClientPartitionCounts(
-            client=(client := _client_identity(candidate_clients, ClientIdentityToken(str(row[0])))),
-            benign_calibration_count=RowCount(int(row[1])),
-            benign_evaluation_count=RowCount(int(row[2])),
-            attack_evaluation_count=RowCount(int(row[3])),
-            accepted=str(row[0]) in accepted,
-            deployment_fallback=client in deployment_fallback_clients,
+    counts: list[ClientPartitionCounts] = []
+    for row in joined.iter_rows():
+        client = _client_identity(candidate_clients, ClientIdentityToken(str(row[0])))
+        counts.append(
+            ClientPartitionCounts(
+                client=client,
+                benign_calibration_count=RowCount(int(row[1])),
+                benign_evaluation_count=RowCount(int(row[2])),
+                attack_evaluation_count=RowCount(int(row[3])),
+                accepted=str(row[0]) in accepted,
+                deployment_fallback=client in deployment_fallback_clients,
+            )
         )
-        for row in joined.iter_rows()
-    )
+    return tuple(counts)
 
 
 def _client_identity(

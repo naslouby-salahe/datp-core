@@ -158,6 +158,57 @@ class PersonalizedModelStateReference:
             )
 
 
+def _validate_personalized_references(
+    coordinate: FederatedTrainingCoordinate,
+    personalized: tuple[PersonalizedModelStateReference, ...],
+    client_set: set[ClientIdentity],
+    round_number: RoundNumber,
+) -> None:
+    if len({reference.client for reference in personalized}) != len(personalized):
+        raise ScientificContractError(
+            ErrorMessage("a federated round cannot contain duplicate personalized references"),
+            subject=ContractSubject.CLIENT_IDENTITY,
+        )
+    match coordinate.model:
+        case TrainingModelId.DITTO_GLOBAL_AUTOENCODER:
+            _validate_ditto_personalized_references(coordinate, personalized, client_set, round_number)
+        case TrainingModelId.FEDAVG_AUTOENCODER | TrainingModelId.FEDPROX_AUTOENCODER:
+            if personalized:
+                raise ScientificContractError(
+                    ErrorMessage("FedAvg and FedProx rounds cannot carry personalized references"),
+                    subject=ContractSubject.COORDINATE,
+                )
+        case _:
+            raise ScientificContractError(
+                ErrorMessage("unsupported global model in a federated round"),
+                subject=ContractSubject.COORDINATE,
+            )
+
+
+def _validate_ditto_personalized_references(
+    coordinate: FederatedTrainingCoordinate,
+    personalized: tuple[PersonalizedModelStateReference, ...],
+    client_set: set[ClientIdentity],
+    round_number: RoundNumber,
+) -> None:
+    if {reference.client for reference in personalized} != client_set:
+        raise ScientificContractError(
+            ErrorMessage("every Ditto global round requires exactly one personalized reference per client"),
+            subject=ContractSubject.CLIENT,
+        )
+    for reference in personalized:
+        if reference.round_number != round_number:
+            raise ScientificContractError(
+                ErrorMessage("personalized state round must match the containing training round"),
+                subject=ContractSubject.COORDINATE,
+            )
+        if not coordinate.matches_ditto_peer(reference.coordinate):
+            raise ScientificContractError(
+                ErrorMessage("Ditto global and personalized references must share one experiment identity"),
+                subject=ContractSubject.COORDINATE,
+            )
+
+
 @dataclass(frozen=True, slots=True)
 class FederatedRoundResult:
     round_number: RoundNumber
@@ -194,50 +245,12 @@ class FederatedRoundResult:
                 subject=ContractSubject.COORDINATE,
             )
 
-        coordinate = self.global_state_reference.coordinate
-        personalized = self.personalized_state_references
-
-        if personalized:
-            personalized_count = len(personalized)
-            personalized_client_set: set[ClientIdentity] = {reference.client for reference in personalized}
-
-            if len(personalized_client_set) != personalized_count:
-                raise ScientificContractError(
-                    ErrorMessage("a federated round cannot contain duplicate personalized references"),
-                    subject=ContractSubject.CLIENT_IDENTITY,
-                )
-        else:
-            personalized_client_set: set[ClientIdentity] = set()
-
-        match coordinate.model:
-            case TrainingModelId.DITTO_GLOBAL_AUTOENCODER:
-                if personalized_client_set != client_set:
-                    raise ScientificContractError(
-                        ErrorMessage("every Ditto global round requires exactly one personalized reference per client"),
-                        subject=ContractSubject.CLIENT,
-                    )
-                for reference in personalized:
-                    if reference.round_number != self.round_number:
-                        raise ScientificContractError(
-                            ErrorMessage("personalized state round must match the containing training round"),
-                            subject=ContractSubject.COORDINATE,
-                        )
-                    if not coordinate.matches_ditto_peer(reference.coordinate):
-                        raise ScientificContractError(
-                            ErrorMessage("Ditto global and personalized references must share one experiment identity"),
-                            subject=ContractSubject.COORDINATE,
-                        )
-            case TrainingModelId.FEDAVG_AUTOENCODER | TrainingModelId.FEDPROX_AUTOENCODER:
-                if personalized:
-                    raise ScientificContractError(
-                        ErrorMessage("FedAvg and FedProx rounds cannot carry personalized references"),
-                        subject=ContractSubject.COORDINATE,
-                    )
-            case _:
-                raise ScientificContractError(
-                    ErrorMessage("unsupported global model in a federated round"),
-                    subject=ContractSubject.COORDINATE,
-                )
+        _validate_personalized_references(
+            self.global_state_reference.coordinate,
+            self.personalized_state_references,
+            client_set,
+            self.round_number,
+        )
 
 
 @dataclass(frozen=True, slots=True)

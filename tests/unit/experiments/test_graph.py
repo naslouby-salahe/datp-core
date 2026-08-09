@@ -67,10 +67,13 @@ def test_hook_context_is_immutable() -> None:
 
 
 def test_observation_result_rejects_changed_checksum() -> None:
+    coordinate_value = coordinate()
+    input_checksum = Checksum("a" * 64)
+    output_checksum = Checksum("b" * 64)
     with pytest.raises(ValueError, match="cannot alter"):
         ObservationResult(
             boundary=ObservationBoundary.AFTER_SCORE_GENERATION_BEFORE_CALIBRATION,
-            coordinate=coordinate(),
-            input_checksum=Checksum("a" * 64),
-            output_checksum=Checksum("b" * 64),
+            coordinate=coordinate_value,
+            input_checksum=input_checksum,
+            output_checksum=output_checksum,
         )

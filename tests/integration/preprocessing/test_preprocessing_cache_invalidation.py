@@ -84,6 +84,7 @@ def test_changed_seed_or_protocol_creates_distinct_asset(tmp_path: Path) -> None
     second = _publish(tmp_path, seed=Seed(1), identity=PreprocessingProtocolId.TEST_COLUMN_ORDER_PROJECTION)
 
     assert first != second
-    assert first.is_file() and second.is_file()
+    assert first.is_file()
+    assert second.is_file()
     assert str(Seed(0).value) in first.parts
     assert str(Seed(1).value) in second.parts

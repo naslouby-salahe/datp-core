@@ -220,7 +220,7 @@ def load_independent_observations(package_directory: Path) -> tuple[AnchorObserv
             )
     except AnchorReproductionError:
         raise
-    except (OSError, UnicodeError, ValueError, TypeError, ValidationError) as error:
+    except (OSError, ValueError, TypeError, ValidationError) as error:
         raise AnchorReproductionError(
             ErrorMessage("independent observation package is unreadable or invalid"),
             reason=AnchorDiscrepancyReason.STALE_OR_MISMATCHED_ARTIFACT,
@@ -320,13 +320,19 @@ def _resolve_observations(
     if request.historical_sources is not None:
         return load_historical_observations(request.historical_sources), None
     if request.request_independent_reproduction:
-        package_directory = request.independent_package_directory
-        if package_directory is None and request.diagnostics_directory is not None:
-            package_directory = request.diagnostics_directory.parent / IndependentAnchorAssetName.ROOT.value
-        if package_directory is None:
-            package_directory = independent_package_directory()
-        loaded = load_independent_observations(package_directory)
-        if loaded is None or not loaded:
-            return (), independent_reproduction_dependency_blocker()
-        return loaded, None
+        return _resolve_independent_observations(request)
     return (), independent_reproduction_dependency_blocker()
+
+
+def _resolve_independent_observations(
+    request: VerifyAnchorStageRequest,
+) -> tuple[tuple[AnchorObservedMetric, ...], AnchorDependencyBlocker | None]:
+    package_directory = request.independent_package_directory
+    if package_directory is None and request.diagnostics_directory is not None:
+        package_directory = request.diagnostics_directory.parent / IndependentAnchorAssetName.ROOT.value
+    if package_directory is None:
+        package_directory = independent_package_directory()
+    loaded = load_independent_observations(package_directory)
+    if loaded is None or not loaded:
+        return (), independent_reproduction_dependency_blocker()
+    return loaded, None

@@ -73,14 +73,13 @@ def test_preprocessing_handoff_requires_declared_split_checksum(nbaiot_canonical
     )
     assert handoff.assignments.height == construction.membership.height
 
+    mismatched_request = PreprocessingHandoffRequest(
+        construction=construction,
+        deployment_fallback_client_ids=frozenset(),
+        expected_split_manifest_checksum=Checksum.from_text("not the declared split"),
+    )
     with pytest.raises(ScientificContractError, match="does not match the declared split checksum"):
-        build_preprocessing_handoff(
-            PreprocessingHandoffRequest(
-                construction=construction,
-                deployment_fallback_client_ids=frozenset(),
-                expected_split_manifest_checksum=Checksum.from_text("not the declared split"),
-            )
-        )
+        build_preprocessing_handoff(mismatched_request)
 
 
 def test_edge_static_manifest(edge_canonical_root: Path) -> None:

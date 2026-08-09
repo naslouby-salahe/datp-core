@@ -665,9 +665,10 @@ def _mechanism_tables(mechanisms: tuple[MechanismEvidence, ...]) -> tuple[Public
                 )
             case _:
                 continue
-    if not cells:
-        return ()
-    return (PublicationTable(title=TableTitle("Mechanism scientific values"), cells=tuple(cells)),)
+    tables: list[PublicationTable] = []
+    if cells:
+        tables.append(PublicationTable(title=TableTitle("Mechanism scientific values"), cells=tuple(cells)))
+    return tuple(tables)
 
 
 def _render_one_mechanism(
@@ -675,172 +676,212 @@ def _render_one_mechanism(
 ) -> list[str]:
     match mechanism:
         case AssociationResult():
-            lines = [
-                f"Observations: {mechanism.observation_count.value}",
-                f"Availability: `{mechanism.availability.value}`",
-            ]
-            if mechanism.statistics is not None:
-                stats = mechanism.statistics
-                lower, upper = stats.regression_slope_confidence_interval
-                lines.extend(
-                    [
-                        f"Spearman rho: {stats.spearman_rho.value:.6g}",
-                        f"Spearman p: {stats.spearman_p_value.value:.6g}",
-                        f"Intercept: {stats.regression_intercept.value:.6g}",
-                        f"Slope: {stats.regression_slope.value:.6g} "
-                        f"(SE {stats.regression_slope_standard_error.value:.6g})",
-                        f"Slope CI: [{lower.value:.6g}, {upper.value:.6g}]",
-                        f"R²: {stats.r_squared.value:.6g}",
-                        f"Leverage: {', '.join(f'{value.value:.6g}' for value in stats.leverage)}",
-                        f"Influence: {', '.join(f'{value.value:.6g}' for value in stats.influence)}",
-                        f"Evidentiary sufficient: {stats.evidentiary_sufficient}",
-                    ]
-                )
-            if mechanism.reason:
-                lines.append(f"Reason: {mechanism.reason}")
-            return lines
+            return _render_association_result(mechanism)
         case DivergenceResult():
-            lines = [
-                f"Clients: {len(mechanism.clients)}",
-                f"Availability: `{mechanism.availability.value}`",
-                f"Score source: `{mechanism.protocol.score_source.value}`",
-                f"Shared support: `{mechanism.protocol.shared_support.value}`",
-                f"Binning: `{mechanism.protocol.binning.value}` bins={mechanism.protocol.bin_count.value}",
-                f"Smoothing: {mechanism.protocol.smoothing_constant.value:.6g}",
-                f"Log base: `{mechanism.protocol.logarithm_base.value}`",
-                f"Aggregation: `{mechanism.protocol.aggregation.value}`",
-            ]
-            if mechanism.source_score_checksum is not None:
-                lines.append(f"Source score checksum: `{mechanism.source_score_checksum.value}`")
-            if mechanism.aggregate is not None:
-                lines.append(f"Aggregate JS distance: {mechanism.aggregate.value:.6g}")
-                lines.append(
-                    f"Pairwise values: {', '.join(f'{value.value:.6g}' for value in mechanism.pairwise_values)}"
-                )
-            if mechanism.reason:
-                lines.append(f"Reason: {mechanism.reason}")
-            return lines
+            return _render_divergence_result(mechanism)
         case ClusterStabilityResult():
-            return [
-                f"ARI: {mechanism.adjusted_rand_index.value:.6g}",
-                f"Clients: {len(mechanism.compared_clients)}",
-                f"Left singletons: {len(mechanism.left_partition.singleton_groups)}",
-                f"Right empty groups: {len(mechanism.right_partition.empty_groups)}",
-            ]
+            return _render_cluster_stability_result(mechanism)
         case ClusterEvidenceRecord():
-            equity = (
-                f"{mechanism.cv_fpr_equity_recovery_fraction.value:.6g}"
-                if mechanism.cv_fpr_equity_recovery_fraction is not None
-                else mechanism.cv_fpr_equity_recovery_reason
-            )
-            threshold_recovery = (
-                f"{mechanism.threshold_dispersion_recovery_fraction.value:.6g}"
-                if mechanism.threshold_dispersion_recovery_fraction is not None
-                else mechanism.threshold_dispersion_recovery_reason
-            )
-            contributing = (
-                f"{mechanism.contributing_quantile_dispersion.value:.6g}"
-                if mechanism.contributing_quantile_dispersion is not None
-                else (mechanism.dispersion_unavailable_reason or "unavailable")
-            )
-            effective = (
-                f"{mechanism.effective_threshold_dispersion.value:.6g}"
-                if mechanism.effective_threshold_dispersion is not None
-                else (mechanism.dispersion_unavailable_reason or "unavailable")
-            )
-            return [
-                f"Seed: {mechanism.seed.value}",
-                f"Memberships: {len(mechanism.memberships)}",
-                f"Contributing quantile dispersion: {contributing}",
-                f"Effective threshold dispersion: {effective}",
-                f"CV(FPR) equity recovery: {equity}",
-                f"Threshold-dispersion recovery: {threshold_recovery}",
-                f"Empty clusters: {len(mechanism.partition.empty_groups)}",
-                f"Evidence availability: `{mechanism.evidence_availability.value}`",
-            ]
+            return _render_cluster_evidence_record(mechanism)
         case GroupedDispersionResult():
-            return [
-                f"Availability: `{mechanism.availability.value}`",
-                f"Groups: {len(mechanism.group_sizes)}",
-                f"Singletons: {len(mechanism.singleton_groups)}",
-                f"Empty: {len(mechanism.empty_groups)}",
-                (
-                    f"Across-group threshold spread: {mechanism.across_group_threshold_spread.value:.6g}"
-                    if mechanism.across_group_threshold_spread is not None
-                    else f"Reason: {mechanism.reason}"
-                ),
-            ]
+            return _render_grouped_dispersion_result(mechanism)
         case ThresholdMovement():
-            delta_tpr = f"{mechanism.delta_tpr.value:.6g}" if mechanism.delta_tpr is not None else "unavailable"
-            return [
-                f"Client: `{mechanism.client.client_id.value}`",
-                f"Seed: {mechanism.seed.value}",
-                f"Δ threshold: {mechanism.delta_threshold.value:.6g}",
-                f"Δ FPR: {mechanism.delta_fpr.value:.6g}",
-                f"Δ TPR: {delta_tpr}",
-            ]
+            return _render_threshold_movement(mechanism)
         case ThresholdMovementCohort():
-            dispersion = (
-                f"{mechanism.client_dispersion_delta_fpr.value:.6g}"
-                if mechanism.client_dispersion_delta_fpr is not None
-                else "unavailable"
-            )
-            return [
-                f"Movements: {len(mechanism.movements)}",
-                f"Availability: `{mechanism.availability.value}`",
-                (
-                    f"Mean Δ FPR: {mechanism.mean_delta_fpr.value:.6g}"
-                    if mechanism.mean_delta_fpr is not None
-                    else f"Reason: {mechanism.reason}"
-                ),
-                f"Client dispersion of Δ FPR: {dispersion}",
-            ]
+            return _render_threshold_movement_cohort(mechanism)
         case ThresholdMovementMultiSeedUncertainty():
-            across = (
-                f"{mechanism.across_seed_dispersion_delta_fpr.value:.6g}"
-                if mechanism.across_seed_dispersion_delta_fpr is not None
-                else "unavailable"
-            )
-            mean = (
-                f"{mechanism.mean_of_seed_mean_delta_fpr.value:.6g}"
-                if mechanism.mean_of_seed_mean_delta_fpr is not None
-                else "unavailable"
-            )
-            return [
-                f"Seed summaries: {len(mechanism.seed_summaries)}",
-                f"Availability: `{mechanism.availability.value}`",
-                f"Mean of seed-mean Δ FPR: {mean}",
-                f"Across-seed dispersion of mean Δ FPR: {across}",
-            ]
+            return _render_threshold_movement_uncertainty(mechanism)
         case AbsorptionCohortResult():
-            retention_interval = mechanism.retention_interval
-            retention_bca = (
-                f"BCa[{retention_interval.lower_bound.value:.6g}, {retention_interval.upper_bound.value:.6g}]"
-                if retention_interval is not None
-                and retention_interval.lower_bound is not None
-                and retention_interval.upper_bound is not None
-                else "BCa unavailable"
-            )
-            return [
-                f"Seeds: {len(mechanism.observations)}",
-                f"Decision: `{mechanism.decision.decision.value}`",
-                f"Rationale: {mechanism.decision.rationale}",
-                (
-                    f"Mean retention: {mechanism.mean_retention.value:.6g}"
-                    if mechanism.mean_retention is not None
-                    else "Mean retention: unavailable"
-                ),
-                f"Retention BCa interval across seeds: {retention_bca}",
-                f"Alternative-route seeds: {mechanism.alternative_route_seed_count.value}",
-            ]
+            return _render_absorption_cohort_result(mechanism)
         case ScientificDecisionResult():
-            return [
-                f"Decision: `{mechanism.decision.value}`",
-                f"Evidence role: `{mechanism.evidence_role.value}`",
-                f"Rationale: {mechanism.rationale}",
-            ]
+            return _render_scientific_decision_result(mechanism)
         case _:
             return ["Unhandled mechanism evidence kind"]
+
+
+def _render_association_result(mechanism: AssociationResult) -> list[str]:
+    lines = [
+        f"Observations: {mechanism.observation_count.value}",
+        f"Availability: `{mechanism.availability.value}`",
+    ]
+    if mechanism.statistics is not None:
+        stats = mechanism.statistics
+        lower, upper = stats.regression_slope_confidence_interval
+        lines.extend(
+            [
+                f"Spearman rho: {stats.spearman_rho.value:.6g}",
+                f"Spearman p: {stats.spearman_p_value.value:.6g}",
+                f"Intercept: {stats.regression_intercept.value:.6g}",
+                f"Slope: {stats.regression_slope.value:.6g} "
+                f"(SE {stats.regression_slope_standard_error.value:.6g})",
+                f"Slope CI: [{lower.value:.6g}, {upper.value:.6g}]",
+                f"R²: {stats.r_squared.value:.6g}",
+                f"Leverage: {', '.join(f'{value.value:.6g}' for value in stats.leverage)}",
+                f"Influence: {', '.join(f'{value.value:.6g}' for value in stats.influence)}",
+                f"Evidentiary sufficient: {stats.evidentiary_sufficient}",
+            ]
+        )
+    if mechanism.reason:
+        lines.append(f"Reason: {mechanism.reason}")
+    return lines
+
+
+def _render_divergence_result(mechanism: DivergenceResult) -> list[str]:
+    lines = [
+        f"Clients: {len(mechanism.clients)}",
+        f"Availability: `{mechanism.availability.value}`",
+        f"Score source: `{mechanism.protocol.score_source.value}`",
+        f"Shared support: `{mechanism.protocol.shared_support.value}`",
+        f"Binning: `{mechanism.protocol.binning.value}` bins={mechanism.protocol.bin_count.value}",
+        f"Smoothing: {mechanism.protocol.smoothing_constant.value:.6g}",
+        f"Log base: `{mechanism.protocol.logarithm_base.value}`",
+        f"Aggregation: `{mechanism.protocol.aggregation.value}`",
+    ]
+    if mechanism.source_score_checksum is not None:
+        lines.append(f"Source score checksum: `{mechanism.source_score_checksum.value}`")
+    if mechanism.aggregate is not None:
+        lines.append(f"Aggregate JS distance: {mechanism.aggregate.value:.6g}")
+        lines.append(
+            f"Pairwise values: {', '.join(f'{value.value:.6g}' for value in mechanism.pairwise_values)}"
+        )
+    if mechanism.reason:
+        lines.append(f"Reason: {mechanism.reason}")
+    return lines
+
+
+def _render_cluster_stability_result(mechanism: ClusterStabilityResult) -> list[str]:
+    return [
+        f"ARI: {mechanism.adjusted_rand_index.value:.6g}",
+        f"Clients: {len(mechanism.compared_clients)}",
+        f"Left singletons: {len(mechanism.left_partition.singleton_groups)}",
+        f"Right empty groups: {len(mechanism.right_partition.empty_groups)}",
+    ]
+
+
+def _render_cluster_evidence_record(mechanism: ClusterEvidenceRecord) -> list[str]:
+    equity = (
+        f"{mechanism.cv_fpr_equity_recovery_fraction.value:.6g}"
+        if mechanism.cv_fpr_equity_recovery_fraction is not None
+        else mechanism.cv_fpr_equity_recovery_reason
+    )
+    threshold_recovery = (
+        f"{mechanism.threshold_dispersion_recovery_fraction.value:.6g}"
+        if mechanism.threshold_dispersion_recovery_fraction is not None
+        else mechanism.threshold_dispersion_recovery_reason
+    )
+    contributing = (
+        f"{mechanism.contributing_quantile_dispersion.value:.6g}"
+        if mechanism.contributing_quantile_dispersion is not None
+        else (mechanism.dispersion_unavailable_reason or "unavailable")
+    )
+    effective = (
+        f"{mechanism.effective_threshold_dispersion.value:.6g}"
+        if mechanism.effective_threshold_dispersion is not None
+        else (mechanism.dispersion_unavailable_reason or "unavailable")
+    )
+    return [
+        f"Seed: {mechanism.seed.value}",
+        f"Memberships: {len(mechanism.memberships)}",
+        f"Contributing quantile dispersion: {contributing}",
+        f"Effective threshold dispersion: {effective}",
+        f"CV(FPR) equity recovery: {equity}",
+        f"Threshold-dispersion recovery: {threshold_recovery}",
+        f"Empty clusters: {len(mechanism.partition.empty_groups)}",
+        f"Evidence availability: `{mechanism.evidence_availability.value}`",
+    ]
+
+
+def _render_grouped_dispersion_result(mechanism: GroupedDispersionResult) -> list[str]:
+    return [
+        f"Availability: `{mechanism.availability.value}`",
+        f"Groups: {len(mechanism.group_sizes)}",
+        f"Singletons: {len(mechanism.singleton_groups)}",
+        f"Empty: {len(mechanism.empty_groups)}",
+        (
+            f"Across-group threshold spread: {mechanism.across_group_threshold_spread.value:.6g}"
+            if mechanism.across_group_threshold_spread is not None
+            else f"Reason: {mechanism.reason}"
+        ),
+    ]
+
+
+def _render_threshold_movement(mechanism: ThresholdMovement) -> list[str]:
+    delta_tpr = f"{mechanism.delta_tpr.value:.6g}" if mechanism.delta_tpr is not None else "unavailable"
+    return [
+        f"Client: `{mechanism.client.client_id.value}`",
+        f"Seed: {mechanism.seed.value}",
+        f"Δ threshold: {mechanism.delta_threshold.value:.6g}",
+        f"Δ FPR: {mechanism.delta_fpr.value:.6g}",
+        f"Δ TPR: {delta_tpr}",
+    ]
+
+
+def _render_threshold_movement_cohort(mechanism: ThresholdMovementCohort) -> list[str]:
+    dispersion = (
+        f"{mechanism.client_dispersion_delta_fpr.value:.6g}"
+        if mechanism.client_dispersion_delta_fpr is not None
+        else "unavailable"
+    )
+    return [
+        f"Movements: {len(mechanism.movements)}",
+        f"Availability: `{mechanism.availability.value}`",
+        (
+            f"Mean Δ FPR: {mechanism.mean_delta_fpr.value:.6g}"
+            if mechanism.mean_delta_fpr is not None
+            else f"Reason: {mechanism.reason}"
+        ),
+        f"Client dispersion of Δ FPR: {dispersion}",
+    ]
+
+
+def _render_threshold_movement_uncertainty(mechanism: ThresholdMovementMultiSeedUncertainty) -> list[str]:
+    across = (
+        f"{mechanism.across_seed_dispersion_delta_fpr.value:.6g}"
+        if mechanism.across_seed_dispersion_delta_fpr is not None
+        else "unavailable"
+    )
+    mean = (
+        f"{mechanism.mean_of_seed_mean_delta_fpr.value:.6g}"
+        if mechanism.mean_of_seed_mean_delta_fpr is not None
+        else "unavailable"
+    )
+    return [
+        f"Seed summaries: {len(mechanism.seed_summaries)}",
+        f"Availability: `{mechanism.availability.value}`",
+        f"Mean of seed-mean Δ FPR: {mean}",
+        f"Across-seed dispersion of mean Δ FPR: {across}",
+    ]
+
+
+def _render_absorption_cohort_result(mechanism: AbsorptionCohortResult) -> list[str]:
+    retention_interval = mechanism.retention_interval
+    retention_bca = (
+        f"BCa[{retention_interval.lower_bound.value:.6g}, {retention_interval.upper_bound.value:.6g}]"
+        if retention_interval is not None
+        and retention_interval.lower_bound is not None
+        and retention_interval.upper_bound is not None
+        else "BCa unavailable"
+    )
+    return [
+        f"Seeds: {len(mechanism.observations)}",
+        f"Decision: `{mechanism.decision.decision.value}`",
+        f"Rationale: {mechanism.decision.rationale}",
+        (
+            f"Mean retention: {mechanism.mean_retention.value:.6g}"
+            if mechanism.mean_retention is not None
+            else "Mean retention: unavailable"
+        ),
+        f"Retention BCa interval across seeds: {retention_bca}",
+        f"Alternative-route seeds: {mechanism.alternative_route_seed_count.value}",
+    ]
+
+
+def _render_scientific_decision_result(mechanism: ScientificDecisionResult) -> list[str]:
+    return [
+        f"Decision: `{mechanism.decision.value}`",
+        f"Evidence role: `{mechanism.evidence_role.value}`",
+        f"Rationale: {mechanism.rationale}",
+    ]
 
 
 def _interval_table(interval: BootstrapInterval) -> PublicationTable:

@@ -67,13 +67,15 @@ def test_build_paired_contrast_rejects_score_checksum_mismatch() -> None:
         FederatedThresholdMethod.LOCAL_THRESHOLD,
         score_checksum=Checksum("e" * 64),
     )
+    left_value = MetricValue(0.4)
+    right_value = MetricValue(0.2)
     with pytest.raises(ScientificContractError):
         build_paired_contrast(
             left=left,  # type: ignore[arg-type]
             right=right,  # type: ignore[arg-type]
             metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
-            left_value=MetricValue(0.4),
-            right_value=MetricValue(0.2),
+            left_value=left_value,
+            right_value=right_value,
             evidence_role=EvidenceRole.CONFIRMATORY,
         )
 
@@ -84,13 +86,15 @@ def test_build_paired_contrast_rejects_checkpoint_mismatch() -> None:
         FederatedThresholdMethod.LOCAL_THRESHOLD,
         checkpoint_checksum=Checksum("f" * 64),
     )
+    left_value = MetricValue(0.4)
+    right_value = MetricValue(0.2)
     with pytest.raises(ScientificContractError):
         build_paired_contrast(
             left=left,  # type: ignore[arg-type]
             right=right,  # type: ignore[arg-type]
             metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
-            left_value=MetricValue(0.4),
-            right_value=MetricValue(0.2),
+            left_value=left_value,
+            right_value=right_value,
             evidence_role=EvidenceRole.CONFIRMATORY,
         )
 
@@ -101,12 +105,14 @@ def test_build_paired_contrast_rejects_split_manifest_mismatch() -> None:
         FederatedThresholdMethod.LOCAL_THRESHOLD,
         split_checksum=Checksum("c" * 64),
     )
+    left_value = MetricValue(0.4)
+    right_value = MetricValue(0.2)
     with pytest.raises(ScientificContractError, match="split-manifest"):
         build_paired_contrast(
             left=left,  # type: ignore[arg-type]
             right=right,  # type: ignore[arg-type]
             metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
-            left_value=MetricValue(0.4),
-            right_value=MetricValue(0.2),
+            left_value=left_value,
+            right_value=right_value,
             evidence_role=EvidenceRole.CONFIRMATORY,
         )

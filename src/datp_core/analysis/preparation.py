@@ -344,8 +344,8 @@ def prepare_temporal_analysis(request: TemporalAnalysisRequest) -> TemporalAnaly
     observed = frozenset(item.seed for item in ordered)
     declared = frozenset(BOUNDED_EVIDENCE_SEED_COHORT.values)
     if observed != declared:
-        missing = tuple(sorted((seed for seed in declared - observed), key=lambda item: item.value))
-        extra = tuple(sorted((seed for seed in observed - declared), key=lambda item: item.value))
+        missing = tuple(sorted(declared - observed, key=lambda item: item.value))
+        extra = tuple(sorted(observed - declared, key=lambda item: item.value))
         raise ScientificContractError(
             ErrorMessage(
                 "temporal analysis requires exact declared seed-cohort equality "

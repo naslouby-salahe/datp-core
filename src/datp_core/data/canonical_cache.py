@@ -571,6 +571,6 @@ def require_canonical_publication_complete(
 ) -> None:
     if not (canonical_root / CanonicalPublicationArtifact.COMPLETE).is_file():
         raise ScientificContractError(
-            ErrorMessage("canonical COMPLETE marker is required"),
+            ErrorMessage(f"canonical COMPLETE marker is required for {dataset.value}"),
             subject=subject,
         )

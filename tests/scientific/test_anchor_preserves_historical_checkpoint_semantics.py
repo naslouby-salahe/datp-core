@@ -28,9 +28,10 @@ def test_historical_and_confirmatory_seed_cohorts_remain_structurally_distinct()
 
 
 def test_selected_checkpoint_status_cannot_replace_historical_endpoint() -> None:
+    rule = ExactEqualityRule()
     with pytest.raises(ScientificContractError, match="historical endpoint"):
         make_reference(
-            rule=ExactEqualityRule(),
+            rule=rule,
             checkpoint_status=CheckpointStatus.SELECTED_BY_NON_TEST_RULE,
         )
 

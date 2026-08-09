@@ -34,8 +34,9 @@ def test_confirmatory_ten_seed_cohort_is_rejected() -> None:
 
 
 def test_duplicate_seed_cohort_is_rejected() -> None:
+    values = (Seed(0), Seed(0), Seed(1), Seed(2), Seed(3))
     with pytest.raises(ValueError, match="unique"):
-        SeedCohort(values=(Seed(0), Seed(0), Seed(1), Seed(2), Seed(3)))
+        SeedCohort(values=values)
 
 
 def test_exact_reproduction_has_no_discrepancies() -> None:
@@ -71,8 +72,9 @@ def test_wrong_seed_subset_blocks() -> None:
 
 
 def test_confirmatory_only_seeds_raise() -> None:
+    observation = make_observation(seed=Seed(9))
     with pytest.raises(AnchorReproductionError, match="confirmatory-only"):
-        reproduce_anchor(observations=(make_observation(seed=Seed(9)),))
+        reproduce_anchor(observations=(observation,))
 
 
 def test_non_historical_checkpoint_semantics_cannot_enter_reproduction() -> None:

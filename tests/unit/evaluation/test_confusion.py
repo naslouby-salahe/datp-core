@@ -37,21 +37,26 @@ def test_prediction_boundary_is_benign_and_counts_conserve_rows() -> None:
 
 
 def test_confusion_rejects_calibration_and_duplicate_source_rows() -> None:
+    calibration_scores = (ScoreValue(1.0),)
+    calibration_source_row_ids = (StableRowId("a"),)
+    threshold = ThresholdValue(1.0)
     with pytest.raises(LeakageError):
         calculate_confusion_counts(
-            scores=(ScoreValue(1.0),),
+            scores=calibration_scores,
             labels=(PopulationOutcomeLabel.BENIGN,),
-            source_row_ids=(StableRowId("a"),),
-            threshold=ThresholdValue(1.0),
+            source_row_ids=calibration_source_row_ids,
+            threshold=threshold,
             partition_role=PartitionRole.CALIBRATION,
             attack_assignment_valid=True,
         )
+    duplicate_scores = (ScoreValue(1.0), ScoreValue(2.0))
+    duplicate_source_row_ids = (StableRowId("a"), StableRowId("a"))
     with pytest.raises(ScientificContractError):
         calculate_confusion_counts(
-            scores=(ScoreValue(1.0), ScoreValue(2.0)),
+            scores=duplicate_scores,
             labels=(PopulationOutcomeLabel.BENIGN, PopulationOutcomeLabel.BENIGN),
-            source_row_ids=(StableRowId("a"), StableRowId("a")),
-            threshold=ThresholdValue(1.0),
+            source_row_ids=duplicate_source_row_ids,
+            threshold=threshold,
             partition_role=PartitionRole.EVALUATION,
             attack_assignment_valid=True,
         )

@@ -75,21 +75,23 @@ def test_shared_input_contract_accepts_benign_calibration() -> None:
 
 
 def test_shared_input_contract_rejects_attack_calibration() -> None:
+    frame = _input_frame(("benign", "attack"))
     with pytest.raises(LeakageError, match="attack-labelled"):
         validate_score_input_frame(
-            _input_frame(("benign", "attack")),
+            frame,
             PartitionRole.CALIBRATION,
             FEATURE_NAMES,
         )
 
 
 def test_shared_input_contract_rejects_duplicate_row_identity() -> None:
+    frame = _input_frame(
+        ("benign", "benign"),
+        row_ids=("row", "row"),
+    )
     with pytest.raises(ScientificContractError, match="unique"):
         validate_score_input_frame(
-            _input_frame(
-                ("benign", "benign"),
-                row_ids=("row", "row"),
-            ),
+            frame,
             PartitionRole.CALIBRATION,
             FEATURE_NAMES,
         )
@@ -125,16 +127,17 @@ def test_score_frame_persists_exact_schema(tmp_path: Path) -> None:
 def test_shared_score_artifact_rejects_training_partition(
     tmp_path: Path,
 ) -> None:
+    coordinate = FederatedTrainingCoordinate(
+        population=PopulationId.NBAIOT_NATURAL_DEVICES,
+        training_seed=Seed(0),
+        split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
+        preprocessing_identity=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
+        model=TrainingModelId.FEDAVG_AUTOENCODER,
+        model_coefficient=None,
+    )
     with pytest.raises(ScientificContractError, match="post-training"):
         ScoreArtifact(
-            coordinate=FederatedTrainingCoordinate(
-                population=PopulationId.NBAIOT_NATURAL_DEVICES,
-                training_seed=Seed(0),
-                split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
-                preprocessing_identity=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
-                model=TrainingModelId.FEDAVG_AUTOENCODER,
-                model_coefficient=None,
-            ),
+            coordinate=coordinate,
             partition_role=PartitionRole.TRAIN,
             checkpoint_round=RoundNumber(1),
             checkpoint_checksum=Checksum("a" * 64),

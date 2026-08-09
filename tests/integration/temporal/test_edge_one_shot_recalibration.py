@@ -42,11 +42,9 @@ def test_recalibrated_future_can_change_only_calibration_window() -> None:
     frozen = _future_provenance(TemporalState.FROZEN_FUTURE, "a" * 64, "b" * 64)
     recalibrated = _future_provenance(TemporalState.RECALIBRATED_FUTURE, "c" * 64, "b" * 64)
     validate_frozen_recalibrated_pair(frozen, recalibrated)
+    mismatched_recalibrated = _future_provenance(TemporalState.RECALIBRATED_FUTURE, "c" * 64, "d" * 64)
     with pytest.raises(ScientificContractError, match="evaluation scores"):
-        validate_frozen_recalibrated_pair(
-            frozen,
-            _future_provenance(TemporalState.RECALIBRATED_FUTURE, "c" * 64, "d" * 64),
-        )
+        validate_frozen_recalibrated_pair(frozen, mismatched_recalibrated)
 
 
 def test_temporal_analysis_publishes_campaign_decision_over_seed_cohort(tmp_path: Path) -> None:

@@ -81,15 +81,16 @@ def test_build_preprocessing_protocol_binds_feature_order() -> None:
     assert protocol.input_feature_names.names == ("f0", "f1")
     assert protocol.identity is PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD
     with pytest.raises(ValueError, match="non-empty"):
-        build_preprocessing_protocol(SCIENTIFIC_FEDERATED_PREPROCESSING_METHOD, FeatureNameSequence(()))
+        FeatureNameSequence(())
 
 
 def test_stable_row_id_sequence_rejects_empty_and_duplicates() -> None:
     assert len(StableRowIdSequence((StableRowId("r1"), StableRowId("r2")))) == 2
     with pytest.raises(ValueError, match="requires a non-empty tuple"):
         StableRowIdSequence(())
+    duplicate_row_id = StableRowId("r1")
     with pytest.raises(ValueError, match="must be unique"):
-        StableRowIdSequence((StableRowId("r1"), StableRowId("r1")))
+        StableRowIdSequence((duplicate_row_id, duplicate_row_id))
 
 
 def test_client_collection_rejects_duplicate_clients() -> None:
@@ -97,8 +98,9 @@ def test_client_collection_rejects_duplicate_clients() -> None:
     client = ClientPathToken("client_a")
     estimators = ClientCollection((ClientOwned(client, estimator),))
     assert estimators.require(client) is estimator
+    duplicate_owned = ClientOwned(client, estimator)
     with pytest.raises(ValueError, match="duplicate owners"):
-        ClientCollection((ClientOwned(client, estimator), ClientOwned(client, estimator)))
+        ClientCollection((duplicate_owned, duplicate_owned))
 
 
 def test_fitted_state_publish_spec_has_one_authoritative_owner() -> None:
@@ -125,14 +127,11 @@ def test_validation_report_rejects_mismatched_counts_and_duplicate_roles() -> No
     report = PreprocessingValidationReport(partition_evidence=evidence)
     assert len(report.partition_evidence) == 1
 
+    mismatched_evidence = PartitionTransformationEvidence(
+        role=PartitionRole.TRAIN, source_row_count=RowCount(10), output_row_count=RowCount(5)
+    )
     with pytest.raises(ValidationError):
-        PreprocessingValidationReport(
-            partition_evidence=(
-                PartitionTransformationEvidence(
-                    role=PartitionRole.TRAIN, source_row_count=RowCount(10), output_row_count=RowCount(5)
-                ),
-            ),
-        )
+        PreprocessingValidationReport(partition_evidence=(mismatched_evidence,))
 
     with pytest.raises(ValidationError):
         PreprocessingValidationReport(partition_evidence=())

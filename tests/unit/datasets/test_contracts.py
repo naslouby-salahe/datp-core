@@ -42,10 +42,12 @@ def test_raw_source_is_immutable_and_relative() -> None:
     )
     with pytest.raises(FrozenInstanceError):
         source.__setattr__("relative_path", Path("other.csv"))
+    absolute_path = Path("/absolute.csv")
+    size_bytes = ByteCount(1)
+    checksum = Checksum("a")
+    observed_row_count = RowCount(1)
     with pytest.raises(ValueError):
-        RawSourceFile(
-            DatasetId.NBAIOT, Path("/absolute.csv"), ByteCount(1), Checksum("a"), SourceFileRole.BENIGN, RowCount(1)
-        )
+        RawSourceFile(DatasetId.NBAIOT, absolute_path, size_bytes, checksum, SourceFileRole.BENIGN, observed_row_count)
 
 
 def test_chronology_preserves_static_and_temporal_status() -> None:
@@ -65,16 +67,21 @@ def test_chronology_preserves_static_and_temporal_status() -> None:
 
 
 def test_chronology_rejects_raw_duplicate_timestamp_count() -> None:
+    group_identity = ChronologyGroupIdentity("Modbus")
+    total_rows = RowCount(1)
+    parseable_rows = RowCount(0)
+    invalid_rows = RowCount(1)
+    reason = NonEmptyString("address literal")
     with pytest.raises(TypeError, match="typed row counts"):
         ChronologyValidation(
-            ChronologyGroupIdentity("Modbus"),
+            group_identity,
             AvailabilityStatus.UNAVAILABLE,
-            RowCount(1),
-            RowCount(0),
-            RowCount(1),
+            total_rows,
+            parseable_rows,
+            invalid_rows,
             0,  # type: ignore[arg-type]
             True,
-            NonEmptyString("address literal"),
+            reason,
             False,
         )
 

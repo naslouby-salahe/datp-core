@@ -38,10 +38,11 @@ def test_ciciot_capabilities_declare_no_physical_or_family_interpretation() -> N
 
 
 def test_ciciot_rejects_temporal_interpretation(ciciot_canonical_root: Path) -> None:
+    seed = Seed(0)
     with pytest.raises(CapabilityError):
         construct_ciciot_file_clients(
             ciciot_canonical_root,
-            partition_seed=Seed(0),
+            partition_seed=seed,
             split_protocol=SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE,
         )
 

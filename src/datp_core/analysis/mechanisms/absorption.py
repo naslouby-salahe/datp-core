@@ -444,6 +444,33 @@ def _blocked_cohort(
     return None
 
 
+def _cohort_interval_text(interval: BootstrapInterval | None) -> str:
+    if (
+        interval is not None
+        and interval.outcome is BcaOutcome.AVAILABLE
+        and interval.lower_bound is not None
+        and interval.upper_bound is not None
+    ):
+        return f"BCa=[{interval.lower_bound.value:.4g}, {interval.upper_bound.value:.4g}]"
+    return "BCa=unavailable"
+
+
+def _stress_decision_result(
+    *,
+    decision: ScientificDecision,
+    mean_retention: MetricValue,
+    interval: BootstrapInterval | None,
+    rationale: str,
+) -> ScientificDecisionResult:
+    return ScientificDecisionResult(
+        evidence_role=EvidenceRole.TRAINING_STRESS_TEST,
+        decision=decision,
+        point_estimate=mean_retention,
+        interval=interval,
+        rationale=DecisionRationale(rationale),
+    )
+
+
 def _classify_cohort(
     *,
     observations: tuple[AbsorptionSeedObservation, ...],
@@ -454,62 +481,60 @@ def _classify_cohort(
 ) -> ScientificDecisionResult:
     total = len(observations)
     interval = retention_interval
-    bounds_available = (
+    if (
         interval is not None
         and interval.outcome is BcaOutcome.AVAILABLE
         and interval.lower_bound is not None
         and interval.upper_bound is not None
+    ):
+        bounded_interval = interval
+    else:
+        bounded_interval = None
+    range_text = (
+        f"(mean={mean_retention.value:.4g}, {_cohort_interval_text(interval)}, "
+        f"opposite_seeds={opposite_count.value}/{total})"
     )
-    interval_text = (
-        f"BCa=[{interval.lower_bound.value:.4g}, {interval.upper_bound.value:.4g}]"
-        if bounds_available
-        and interval is not None
-        and interval.lower_bound is not None
-        and interval.upper_bound is not None
-        else "BCa=unavailable"
-    )
-    range_text = f"(mean={mean_retention.value:.4g}, {interval_text}, opposite_seeds={opposite_count.value}/{total})"
     if opposite_count.value == total:
-        return ScientificDecisionResult(
-            evidence_role=EvidenceRole.TRAINING_STRESS_TEST,
+        return _stress_decision_result(
             decision=ScientificDecision.OPPOSITE_DIRECTION,
-            point_estimate=mean_retention,
+            mean_retention=mean_retention,
             interval=interval,
-            rationale=DecisionRationale(
+            rationale=(
                 "every seed reversed the reference CV(FPR) threshold-scope direction under personalization"
             ),
         )
     if opposite_count.value > 0:
-        return ScientificDecisionResult(
-            evidence_role=EvidenceRole.TRAINING_STRESS_TEST,
+        return _stress_decision_result(
             decision=ScientificDecision.OPPOSITE_DIRECTION,
-            point_estimate=mean_retention,
+            mean_retention=mean_retention,
             interval=interval,
-            rationale=DecisionRationale(
+            rationale=(
                 "absorption cohort contains opposite-direction CV(FPR) effects and cannot be classified "
                 f"as retained or absorbed {range_text}"
             ),
         )
-    if not bounds_available or interval is None or interval.lower_bound is None or interval.upper_bound is None:
-        return ScientificDecisionResult(
-            evidence_role=EvidenceRole.TRAINING_STRESS_TEST,
+    if (
+        bounded_interval is None
+        or bounded_interval.lower_bound is None
+        or bounded_interval.upper_bound is None
+    ):
+        return _stress_decision_result(
             decision=ScientificDecision.DIRECTIONAL_INCONCLUSIVE,
-            point_estimate=mean_retention,
+            mean_retention=mean_retention,
             interval=interval,
-            rationale=DecisionRationale(
+            rationale=(
                 "absorption retention classification requires an available BCa interval with finite bounds "
                 f"{range_text}"
             ),
         )
-    lower = interval.lower_bound.value
-    upper = interval.upper_bound.value
+    lower = bounded_interval.lower_bound.value
+    upper = bounded_interval.upper_bound.value
     if mean_retention.value >= protocol.full_retention_minimum.value and lower >= protocol.full_retention_minimum.value:
-        return ScientificDecisionResult(
-            evidence_role=EvidenceRole.TRAINING_STRESS_TEST,
+        return _stress_decision_result(
             decision=ScientificDecision.SUPPORTED,
-            point_estimate=mean_retention,
+            mean_retention=mean_retention,
             interval=interval,
-            rationale=DecisionRationale(
+            rationale=(
                 f"paired seed-level CV(FPR) retention remains at or above the full-retention threshold {range_text}"
             ),
         )
@@ -517,12 +542,11 @@ def _classify_cohort(
         mean_retention.value < protocol.partial_retention_minimum.value
         and upper < protocol.partial_retention_minimum.value
     ):
-        return ScientificDecisionResult(
-            evidence_role=EvidenceRole.TRAINING_STRESS_TEST,
+        return _stress_decision_result(
             decision=ScientificDecision.FULL_ABSORPTION,
-            point_estimate=mean_retention,
+            mean_retention=mean_retention,
             interval=interval,
-            rationale=DecisionRationale(
+            rationale=(
                 f"paired seed-level CV(FPR) retention lies below the partial-retention threshold {range_text}"
             ),
         )
@@ -531,21 +555,19 @@ def _classify_cohort(
         and lower >= protocol.partial_retention_minimum.value
         and upper < protocol.full_retention_minimum.value
     ):
-        return ScientificDecisionResult(
-            evidence_role=EvidenceRole.TRAINING_STRESS_TEST,
+        return _stress_decision_result(
             decision=ScientificDecision.PARTIAL_ABSORPTION,
-            point_estimate=mean_retention,
+            mean_retention=mean_retention,
             interval=interval,
-            rationale=DecisionRationale(
+            rationale=(
                 f"paired seed-level CV(FPR) retention is partially absorbed with residual effect {range_text}"
             ),
         )
-    return ScientificDecisionResult(
-        evidence_role=EvidenceRole.TRAINING_STRESS_TEST,
+    return _stress_decision_result(
         decision=ScientificDecision.DIRECTIONAL_INCONCLUSIVE,
-        point_estimate=mean_retention,
+        mean_retention=mean_retention,
         interval=interval,
-        rationale=DecisionRationale(
+        rationale=(
             "absorption retention interval straddles declared retention boundaries and cannot support "
             f"a unique classification {range_text}"
         ),

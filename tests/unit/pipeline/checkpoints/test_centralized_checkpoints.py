@@ -38,12 +38,13 @@ def test_selection_uses_fixed_terminal_maximum_round(tmp_path: Path) -> None:
 def test_selection_rejects_held_out_metrics(tmp_path: Path) -> None:
     require_cuda()
     candidates = retain_centralized_checkpoint_candidates(run_miniature_training(tmp_path / "train"), AUTOENCODER)
+    held_out_metrics = (MetricValue(0.1),)
     with pytest.raises(LeakageError, match="held-out"):
         select_centralized_checkpoint(
             candidates,
             CHECKPOINT,
             selection_rule=CHECKPOINT_SELECTION_RULE,
-            held_out_metrics=(MetricValue(0.1),),
+            held_out_metrics=held_out_metrics,
         )
 
 
