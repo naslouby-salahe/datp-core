@@ -17,6 +17,7 @@ from datp_core.core.identifiers import (
     PartitionRole,
     SplitProtocolId,
     TemporalState,
+    ValidationReasonText,
 )
 from datp_core.data.edge_iiotset.schema import EdgeAssetRole
 from datp_core.data.populations.contracts import (
@@ -175,7 +176,7 @@ def _transform_matched_static_partition(
         source.select(feature_names.as_list()).to_numpy(),
         feature_names,
         role,
-        description=f"matched static {role.value} matrix",
+        description=ValidationReasonText(f"matched static {role.value} matrix"),
     )
     return source.select((STABLE_ROW_ID_COLUMN, OUTCOME_LABEL_COLUMN)).hstack(
         pl.from_numpy(transformed, schema=feature_names.as_list())

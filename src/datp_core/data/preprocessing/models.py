@@ -31,6 +31,7 @@ from datp_core.core.identifiers import (
     SplitProtocolId,
     StableRowId,
     StableRowIdSequence,
+    ValidationSubject,
 )
 from datp_core.core.numeric import (
     NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
@@ -70,7 +71,7 @@ class PreprocessingProtocol(StrictModel):
 
     @model_validator(mode="after")
     def validate_protocol(self) -> "PreprocessingProtocol":
-        _require_skops(self.serialization_format, "fitted preprocessing state")
+        _require_skops(self.serialization_format, ValidationSubject("fitted preprocessing state"))
         forbidden = {STABLE_ROW_ID_COLUMN, OUTCOME_LABEL_COLUMN, PARTITION_ROLE_COLUMN}
         if any(name in forbidden for name in self.input_feature_names.names):
             raise ValueError("input_feature_names cannot contain structural columns")
@@ -247,12 +248,12 @@ class PreprocessingValidationReport(StrictModel):
         return self
 
 
-def _require_train_partition(partition: PartitionRole, subject: str) -> None:
+def _require_train_partition(partition: PartitionRole, subject: ValidationSubject) -> None:
     if partition is not PartitionRole.TRAIN:
         raise ValueError(f"{subject} may fit only on the train partition")
 
 
-def _require_skops(serialization_format: SerializationFormat, subject: str) -> None:
+def _require_skops(serialization_format: SerializationFormat, subject: ValidationSubject) -> None:
     if serialization_format is not SerializationFormat.SKOPS:
         raise ValueError(f"{subject} fitted state must use skops")
 
@@ -307,8 +308,8 @@ class ScientificPreprocessingMethod:
     numerical_equivalence_absolute_tolerance: AbsoluteTolerance
 
     def __post_init__(self) -> None:
-        _require_train_partition(self.fit_partition, "scientific preprocessing")
-        _require_skops(self.serialization_format, "scientific preprocessing")
+        _require_train_partition(self.fit_partition, ValidationSubject("scientific preprocessing"))
+        _require_skops(self.serialization_format, ValidationSubject("scientific preprocessing"))
 
 
 SCIENTIFIC_FEDERATED_PREPROCESSING_METHOD = ScientificPreprocessingMethod(

@@ -16,11 +16,13 @@ from datp_core.core.errors import (
 )
 from datp_core.core.identifiers import (
     ClientPathToken,
+    ColumnName,
     ContractSubject,
     FeatureNameSequence,
     PartitionRole,
     ProcessedDataBranch,
     SplitProtocolId,
+    ValidationReasonText,
 )
 from datp_core.core.numeric import RowCount
 from datp_core.data.populations.contracts import (
@@ -69,7 +71,7 @@ from datp_core.data.preprocessing.state import (
 
 def require_columns(
     frame: pl.DataFrame,
-    columns: Iterable[str],
+    columns: Iterable[ColumnName],
     *,
     subject: ContractSubject | PartitionRole | PreprocessingFitScope | SplitProtocolId,
 ) -> None:
@@ -105,7 +107,12 @@ def extract_partitions(
     feat_cols = feature_names.as_list()
     require_columns(
         frame,
-        (PARTITION_ROLE_COLUMN, STABLE_ROW_ID_COLUMN, OUTCOME_LABEL_COLUMN, *feat_cols),
+        (
+            ColumnName(PARTITION_ROLE_COLUMN),
+            ColumnName(STABLE_ROW_ID_COLUMN),
+            ColumnName(OUTCOME_LABEL_COLUMN),
+            *(ColumnName(name) for name in feat_cols),
+        ),
         subject=ContractSubject.SCHEMA,
     )
     normalized = frame.with_columns(pl.col(PARTITION_ROLE_COLUMN).cast(pl.String))
@@ -156,7 +163,7 @@ def require_finite_matrix(
     matrix: np.ndarray,
     *,
     subject: PartitionRole | PreprocessingFitScope | ContractSubject,
-    description: str,
+    description: ValidationReasonText,
 ) -> None:
     if not np.isfinite(matrix).all():
         raise ScientificContractError(ErrorMessage(f"{description} must be finite"), subject=subject)
@@ -168,7 +175,7 @@ def transform_feature_matrix(
     feature_names: FeatureNameSequence,
     subject: PartitionRole | PreprocessingFitScope,
     *,
-    description: str,
+    description: ValidationReasonText,
 ) -> np.ndarray:
     if matrix.ndim != 2:
         raise ScientificContractError(ErrorMessage("source matrix must be two-dimensional"), subject=subject)
@@ -269,7 +276,7 @@ def fit_trusted_batch(
         raise ScientificContractError(
             ErrorMessage("training width must match protocol features"), subject=ContractSubject.FEATURES
         )
-    require_finite_matrix(matrix, subject=subject, description="training matrix")
+    require_finite_matrix(matrix, subject=subject, description=ValidationReasonText("training matrix"))
     benign_value = PopulationOutcomeLabel.BENIGN.value
     if any(label != benign_value for label in batch.training_labels.labels):
         raise LeakageError(
@@ -283,7 +290,7 @@ def fit_trusted_batch(
             matrix,
             protocol.input_feature_names,
             subject,
-            description=f"{subject.value} training round-trip",
+            description=ValidationReasonText(f"{subject.value} training round-trip"),
         )
         return fitted
     except (LeakageError, ScientificContractError):
@@ -343,14 +350,16 @@ def write_fitted_transformed_partitions(
     feature_names = protocol.input_feature_names
     feat_cols = feature_names.as_list()
     train = partitions.require(PartitionRole.TRAIN)
-    require_columns(train.frame, feature_names.names, subject=ContractSubject.SCHEMA)
+    require_columns(
+        train.frame, tuple(ColumnName(name) for name in feature_names.names), subject=ContractSubject.SCHEMA
+    )
     train_matrix = train.frame.select(feat_cols).to_numpy()
     train_transformed = transform_feature_matrix(
         fitted_estimator,
         train_matrix,
         feature_names,
         PartitionRole.TRAIN,
-        description="transformed training matrix",
+        description=ValidationReasonText("transformed training matrix"),
     )
     state_path = temporary / ProcessedAssetName.STATE
     serialize_estimator(fitted_estimator, state_path)
@@ -366,7 +375,9 @@ def write_fitted_transformed_partitions(
     evidence: list[PartitionTransformationEvidence] = []
     for role in partition_roles(split_protocol):
         partition = partitions.require(role)
-        require_columns(partition.frame, feature_names.names, subject=ContractSubject.SCHEMA)
+        require_columns(
+            partition.frame, tuple(ColumnName(name) for name in feature_names.names), subject=ContractSubject.SCHEMA
+        )
         transformed = (
             train_transformed
             if role is PartitionRole.TRAIN
@@ -375,7 +386,7 @@ def write_fitted_transformed_partitions(
                 partition.frame.select(feat_cols).to_numpy(),
                 feature_names,
                 role,
-                description=f"transformed {role.value} matrix",
+                description=ValidationReasonText(f"transformed {role.value} matrix"),
             )
         )
         retained = partition.frame.drop(feat_cols)

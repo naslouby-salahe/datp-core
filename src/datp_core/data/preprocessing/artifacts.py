@@ -9,6 +9,7 @@ from pydantic_core import CoreSchema
 from datp_core.core.contracts import sequence_pydantic_schema, str_subclass_schema, validate_non_empty_tuple
 from datp_core.core.identifiers import (
     ClientPathToken,
+    ControlledPartitionPathSegment,
     DatasetId,
     PartitionRole,
     PopulationId,
@@ -20,7 +21,7 @@ from datp_core.core.identifiers import (
 from datp_core.core.numeric import DirichletConcentration, Seed
 from datp_core.data.populations.contracts import ControlledPartitionKind
 
-_NO_CONTROLLED_PARTITION_SEGMENT = "no_controlled_partition"
+_NO_CONTROLLED_PARTITION_SEGMENT = ControlledPartitionPathSegment("no_controlled_partition")
 
 
 class PreprocessingFitScope(StrEnum):
@@ -118,12 +119,12 @@ class ProcessedAssetName(StrEnum):
 def controlled_partition_path_segment(
     kind: ControlledPartitionKind | None,
     concentration: DirichletConcentration | None,
-) -> str:
+) -> ControlledPartitionPathSegment:
     if kind is None:
         return _NO_CONTROLLED_PARTITION_SEGMENT
     if concentration is not None:
-        return f"{kind.value}:{concentration.value}"
-    return kind.value
+        return ControlledPartitionPathSegment(f"{kind.value}:{concentration.value}")
+    return ControlledPartitionPathSegment(kind.value)
 
 
 def processed_root_under(data_root: Path, coordinate: ReusableDataCoordinate) -> Path:

@@ -9,7 +9,9 @@ from datp_core.core.errors import (
 )
 from datp_core.core.identifiers import (
     ClientPathToken,
+    ColumnName,
     ContractSubject,
+    FeatureName,
     FeatureNameSequence,
     OutcomeLabelSequence,
     PartitionRole,
@@ -98,7 +100,9 @@ def _fit_pooled_estimator(
     training = tuple(item.value.require(PartitionRole.TRAIN) for item in client_partitions.items)
 
     for partition in training:
-        require_columns(partition.frame, feature_names.names, subject=ContractSubject.SCHEMA)
+        require_columns(
+            partition.frame, tuple(ColumnName(name) for name in feature_names.names), subject=ContractSubject.SCHEMA
+        )
 
     return fit_trusted_batch(
         protocol,
@@ -118,9 +122,13 @@ def _fit_pooled_estimator(
 
 
 def _fit_batch(
-    partition: PreprocessingPartition, feature_names: FeatureNameSequence, feature_names_list: list[str] | None = None
+    partition: PreprocessingPartition,
+    feature_names: FeatureNameSequence,
+    feature_names_list: list[FeatureName] | None = None,
 ) -> PreprocessingFitBatch:
-    require_columns(partition.frame, feature_names.names, subject=ContractSubject.SCHEMA)
+    require_columns(
+        partition.frame, tuple(ColumnName(name) for name in feature_names.names), subject=ContractSubject.SCHEMA
+    )
     cols = feature_names_list if feature_names_list is not None else feature_names.as_list()
     return PreprocessingFitBatch(
         training_matrix=partition.frame.select(cols).to_numpy(),
