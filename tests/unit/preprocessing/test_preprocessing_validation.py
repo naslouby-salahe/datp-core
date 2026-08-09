@@ -17,6 +17,7 @@ from datp_core.core.identifiers import (
     SplitProtocolId,
     StableRowId,
     StableRowIdSequence,
+    ValidationReasonText,
 )
 from datp_core.core.numeric import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE
 from datp_core.data.populations.contracts import OUTCOME_LABEL_COLUMN, STABLE_ROW_ID_COLUMN
@@ -145,10 +146,14 @@ def test_transform_feature_matrix_validations() -> None:
             vector,
             protocol.input_feature_names,
             PartitionRole.TRAIN,
-            description="transformed evaluation matrix",
+            description=ValidationReasonText("transformed evaluation matrix"),
         )
 
-    require_finite_matrix(np.asarray([[1.0, 2.0]]), subject=ContractSubject.FEATURES, description="test matrix")
+    require_finite_matrix(
+        np.asarray([[1.0, 2.0]]), subject=ContractSubject.FEATURES, description=ValidationReasonText("test matrix")
+    )
     non_finite_matrix = np.asarray([[1.0, np.nan]])
     with pytest.raises(ScientificContractError):
-        require_finite_matrix(non_finite_matrix, subject=ContractSubject.FEATURES, description="test matrix")
+        require_finite_matrix(
+            non_finite_matrix, subject=ContractSubject.FEATURES, description=ValidationReasonText("test matrix")
+        )

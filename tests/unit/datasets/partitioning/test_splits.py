@@ -4,24 +4,26 @@ import polars as pl
 import pytest
 
 from datp_core.core.identifiers import DatasetId, PartitionRole, PopulationId, SplitProtocolId
-from datp_core.core.numeric import RowCount, Seed
+from datp_core.core.numeric import Ratio, RowCount, Seed
 from datp_core.data.nbaiot.populations import construct_nbaiot_natural_devices
 from datp_core.data.populations.contracts import SplitConstructionRequest
 from datp_core.data.populations.splits import hamilton_integer_counts, split_membership
 
 
 def test_hamilton_allocation_conserves_rows_and_is_deterministic() -> None:
-    assert hamilton_integer_counts(RowCount(10), (1 / 3, 1 / 3, 1 / 3)) == (
+    assert hamilton_integer_counts(RowCount(10), (Ratio(1 / 3), Ratio(1 / 3), Ratio(1 / 3))) == (
         RowCount(4),
         RowCount(3),
         RowCount(3),
     )
-    assert hamilton_integer_counts(RowCount(11), (1 / 3, 1 / 3, 1 / 3)) == (
+    assert hamilton_integer_counts(RowCount(11), (Ratio(1 / 3), Ratio(1 / 3), Ratio(1 / 3))) == (
         RowCount(4),
         RowCount(4),
         RowCount(3),
     )
-    temporal = hamilton_integer_counts(RowCount(100), (0.55, 0.15, 0.10, 0.20))
+    temporal = hamilton_integer_counts(
+        RowCount(100), (Ratio(0.55), Ratio(0.15), Ratio(0.10), Ratio(0.20))
+    )
     assert sum(count.value for count in temporal) == 100
     assert temporal == (RowCount(55), RowCount(15), RowCount(10), RowCount(20))
 
@@ -29,9 +31,9 @@ def test_hamilton_allocation_conserves_rows_and_is_deterministic() -> None:
 def test_hamilton_rejects_invalid_ratios() -> None:
     row_count = RowCount(10)
     with pytest.raises(ValueError):
-        hamilton_integer_counts(row_count, (0.5, 0.5, 0.5))
+        hamilton_integer_counts(row_count, (Ratio(0.5), Ratio(0.5), Ratio(0.5)))
     with pytest.raises(ValueError):
-        hamilton_integer_counts(row_count, (1.5,))
+        hamilton_integer_counts(row_count, (Ratio(1.5),))
 
 
 def test_non_temporal_equal_thirds_are_disjoint_and_benign_only_for_train_cal(
