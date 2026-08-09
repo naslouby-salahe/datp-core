@@ -24,7 +24,7 @@ from .schema import EDGE_BENIGN_SENSOR_GROUPS, EdgeSensorGroup
 EDGE_TEMPORAL_SENSOR_GROUPS = frozenset(EDGE_BENIGN_SENSOR_GROUPS) - frozenset((EdgeSensorGroup.MODBUS,))
 _STATIC_SENSOR_GROUP_COUNT = len(EDGE_BENIGN_SENSOR_GROUPS)
 _TEMPORAL_SENSOR_GROUP_COUNT = len(EDGE_TEMPORAL_SENSOR_GROUPS)
-_TEMPORAL_EXCLUDED_SENSOR_GROUP = EdgeSensorGroup.MODBUS.value
+_TEMPORAL_EXCLUDED_SENSOR_GROUP = EdgeSensorGroup.MODBUS
 
 EDGE_IIOTSET_CAPABILITIES = DatasetCapabilities(
     physical_clients=PhysicalClientCapability(
@@ -32,7 +32,7 @@ EDGE_IIOTSET_CAPABILITIES = DatasetCapabilities(
         f"{_STATIC_SENSOR_GROUP_COUNT} audited normal-traffic sensor folders provide "
         "static benign sensor-group identities.",
         "Identities apply only to benign source folders.",
-        tuple(group.value for group in EDGE_BENIGN_SENSOR_GROUPS),
+        EDGE_BENIGN_SENSOR_GROUPS,
     ),
     family_taxonomy=FamilyTaxonomyCapability(
         CapabilityStatus.UNAVAILABLE,
@@ -45,7 +45,7 @@ EDGE_IIOTSET_CAPABILITIES = DatasetCapabilities(
         f"{_TEMPORAL_SENSOR_GROUP_COUNT} normal-traffic CSVs align one-to-one with their paired PCAP capture records.",
         "PCAP calendar timestamps are admitted only after a complete per-row alignment check; "
         f"{_TEMPORAL_EXCLUDED_SENSOR_GROUP} remains excluded.",
-        tuple(group.value for group in sorted(EDGE_TEMPORAL_SENSOR_GROUPS)),
+        tuple(sorted(EDGE_TEMPORAL_SENSOR_GROUPS)),
     ),
     attack_assignment=AttackAssignmentCapability(
         CapabilityStatus.UNAVAILABLE,

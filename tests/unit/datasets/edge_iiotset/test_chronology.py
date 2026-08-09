@@ -1,7 +1,8 @@
 import struct
 from datetime import UTC, datetime
 
-from datp_core.data.edge_iiotset.chronology import validate_chronology
+from datp_core.core.identifiers import ChronologyGroupIdentity
+from datp_core.data.edge_iiotset.chronology import PcapChronology
 
 
 def _write_csv(path, clocks: tuple[str, ...]) -> None:
@@ -23,7 +24,7 @@ def test_paired_pcap_supplies_genuine_chronology(tmp_path) -> None:
     _write_csv(csv_path, ("2021 23:58:21.314757000", "2021 23:58:21.314758000"))
     _write_pcap(pcap_path, (first, second))
 
-    chronology = validate_chronology("Distance", csv_path, pcap_path)
+    chronology = PcapChronology.validate(ChronologyGroupIdentity("Distance"), csv_path, pcap_path)
 
     assert chronology.validation.temporal_eligible is True
     assert chronology.validation.alignment_verified is True
@@ -38,7 +39,7 @@ def test_unmatched_pcap_is_not_chronology(tmp_path) -> None:
     _write_csv(csv_path, ("2021 23:58:21.000000000", "2021 23:58:22.000000000"))
     _write_pcap(pcap_path, (timestamp, timestamp))
 
-    chronology = validate_chronology("Distance", csv_path, pcap_path)
+    chronology = PcapChronology.validate(ChronologyGroupIdentity("Distance"), csv_path, pcap_path)
 
     assert chronology.validation.temporal_eligible is False
     assert chronology.validation.alignment_verified is False
@@ -57,7 +58,7 @@ def test_nonmonotonic_source_order_remains_temporal_eligible_after_alignment(tmp
     _write_csv(csv_path, ("2021 23:58:21.000000000", "2021 23:58:20.000000000"))
     _write_pcap(pcap_path, (later, earlier))
 
-    chronology = validate_chronology("Distance", csv_path, pcap_path)
+    chronology = PcapChronology.validate(ChronologyGroupIdentity("Distance"), csv_path, pcap_path)
 
     assert chronology.validation.alignment_verified is True
     assert chronology.validation.is_monotonic is False
@@ -69,6 +70,6 @@ def test_missing_pcap_keeps_modbus_out_of_temporal_population(tmp_path) -> None:
     csv_path = tmp_path / "Modbus.csv"
     _write_csv(csv_path, ("192.168.0.128",))
 
-    chronology = validate_chronology("Modbus", csv_path, tmp_path / "Modbus.pcap")
+    chronology = PcapChronology.validate(ChronologyGroupIdentity("Modbus"), csv_path, tmp_path / "Modbus.pcap")
 
     assert chronology.validation.temporal_eligible is False

@@ -5,7 +5,7 @@ import pyarrow as pa
 import pytest
 
 from datp_core.artifacts.provenance import Checksum
-from datp_core.core.identifiers import AvailabilityStatus, DatasetId
+from datp_core.core.identifiers import AvailabilityStatus, ChronologyGroupIdentity, DatasetId
 from datp_core.core.numeric import (
     ByteCount,
     CanonicalColumnPosition,
@@ -50,7 +50,7 @@ def test_raw_source_is_immutable_and_relative() -> None:
 
 def test_chronology_preserves_static_and_temporal_status() -> None:
     result = ChronologyValidation(
-        "Modbus",
+        ChronologyGroupIdentity("Modbus"),
         AvailabilityStatus.UNAVAILABLE,
         RowCount(1),
         RowCount(0),
@@ -67,7 +67,7 @@ def test_chronology_preserves_static_and_temporal_status() -> None:
 def test_chronology_rejects_raw_duplicate_timestamp_count() -> None:
     with pytest.raises(TypeError, match="typed row counts"):
         ChronologyValidation(
-            "Modbus",
+            ChronologyGroupIdentity("Modbus"),
             AvailabilityStatus.UNAVAILABLE,
             RowCount(1),
             RowCount(0),

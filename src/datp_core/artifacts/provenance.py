@@ -12,7 +12,7 @@ _ORDERED_TEXT_LENGTH_PREFIX_BYTES = 8
 
 @dataclass(frozen=True, slots=True)
 class Checksum:
-    value: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    value: str
 
     def __post_init__(self) -> None:
         if not isinstance(self.value, str) or not self.value.strip():
@@ -22,9 +22,7 @@ class Checksum:
     __get_pydantic_core_schema__ = classmethod(pydantic_value_schema)
 
 
-def checksum_text(
-    payload: str,
-) -> Checksum:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+def checksum_text(payload: str) -> Checksum:
     return Checksum(sha256(payload.encode()).hexdigest())
 
 

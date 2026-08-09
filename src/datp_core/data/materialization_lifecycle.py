@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
+from datp_core.core.identifiers import CanonicalizationContractName
 from datp_core.data.canonical_cache import CanonicalReuseRequest, reuse_published_canonical
 from datp_core.data.contracts import CanonicalSchema, MaterializedDataset, ModelInputEligibilityPolicy
 from datp_core.data.materialization import CanonicalPublication, publish_canonical
@@ -14,7 +15,7 @@ from datp_core.data.materialization import CanonicalPublication, publish_canonic
 class CanonicalMaterializationRequest[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum]:
     canonical_root: Path
     schema: CanonicalSchema
-    canonicalization_contract: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    canonicalization_contract: CanonicalizationContractName
     source_paths: tuple[Path, ...]
     source_path_resolver: Callable[[Path], Path]
     asset_role_type: type[AssetRoleT]
@@ -22,8 +23,6 @@ class CanonicalMaterializationRequest[AssetRoleT: StrEnum, EligibilityReasonT: S
     eligibility_policy: ModelInputEligibilityPolicy[EligibilityReasonT] | None = None
 
     def __post_init__(self) -> None:
-        if not self.canonicalization_contract.strip():
-            raise ValueError("canonical materialization requires a named canonicalization contract")
         if not self.source_paths:
             raise ValueError("canonical materialization requires accepted source paths")
         if self.source_paths != tuple(sorted(self.source_paths)):

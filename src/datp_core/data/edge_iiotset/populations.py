@@ -79,10 +79,9 @@ def construct_edge_sensor_groups(
             subject=_SENSOR_POPULATION,
             reason=EdgeIIoTPopulationViolation.STATIC_GROUPS_FORBID_CHRONOLOGICAL_SPLITS,
         )
-    candidates = tuple(group.value for group in EDGE_BENIGN_SENSOR_GROUPS)
     membership = _load_static_membership(canonical_root)
     observed = tuple(membership.get_column(CLIENT_ID_COLUMN).unique().sort().to_list())
-    expected = tuple(sorted(candidates))
+    expected = tuple(sorted(EDGE_BENIGN_SENSOR_GROUPS))
     if observed != expected:
         raise DataIntegrityError(
             ErrorMessage("Edge static sensor-group identities disagree with the audited set"),
@@ -134,7 +133,7 @@ def construct_edge_temporal_groups(
             reason=EdgeIIoTPopulationViolation.TEMPORAL_REQUIRES_CHRONOLOGICAL_SPLIT_PROTOCOL,
         )
     eligible_ids, excluded_ids, exclusion_reasons, duplicate_timestamps = _chronology_eligibility(canonical_root)
-    programme_candidates = tuple(group.value for group in sorted(EDGE_TEMPORAL_SENSOR_GROUPS))
+    programme_candidates = tuple(sorted(EDGE_TEMPORAL_SENSOR_GROUPS))
     membership = _load_temporal_membership(canonical_root, eligible_ids) if eligible_ids else _empty_membership()
     diagnostics = ChronologicalPartitionDiagnosticsDocument(
         population=_TEMPORAL_POPULATION,
@@ -172,9 +171,9 @@ def _finalize_temporal_manifest(
     *,
     partition_seed: Seed,
     split_protocol: SplitProtocolId,
-    programme_candidates: tuple[str, ...],
-    accepted_ids: tuple[str, ...],  # TODO: should be tuple[EdgeSensorGroup] and adapt all callers and usage
-    excluded_ids: tuple[str, ...],  # TODO: should be tuple[EdgeSensorGroup] and adapt all callers and usage
+    programme_candidates: tuple[EdgeSensorGroup, ...],
+    accepted_ids: tuple[EdgeSensorGroup, ...],
+    excluded_ids: tuple[EdgeSensorGroup, ...],
     membership: pl.DataFrame,
 ) -> PopulationManifest:
     return finalize_population(
@@ -203,9 +202,7 @@ def _finalize_temporal_manifest(
 
 def _chronology_eligibility(
     canonical_root: Path,
-) -> tuple[
-    tuple[str, ...], tuple[str, ...], tuple[ChronologyExclusionReason, ...], int
-]:  # TODO: should be tuple[EdgeSensorGroup] or something and adapt all callers and usage
+) -> tuple[tuple[EdgeSensorGroup, ...], tuple[EdgeSensorGroup, ...], tuple[ChronologyExclusionReason, ...], int]:
     manifest_path = Path(canonical_root) / CanonicalPublicationArtifact.MANIFEST
     if not manifest_path.is_file():
         raise DataIntegrityError(
@@ -214,38 +211,34 @@ def _chronology_eligibility(
             reason=EdgeIIoTPopulationViolation.MISSING_CANONICAL_MANIFEST,
         )
     document = CanonicalManifestDocument.model_validate_json(manifest_path.read_text(encoding="utf-8"))
-    eligible: list[str] = []
-    excluded: list[str] = []
+    eligible: list[EdgeSensorGroup] = []
+    excluded: list[EdgeSensorGroup] = []
     reasons: list[ChronologyExclusionReason] = []
     duplicate_total = 0
     for group in sorted(EDGE_BENIGN_SENSOR_GROUPS):
-        group_id = group.value
         if group is EdgeSensorGroup.MODBUS:
-            excluded.append(group_id)
+            excluded.append(group)
             reasons.append(ChronologyExclusionReason.MODBUS_ADDRESS_LITERAL)
             continue
-        evidence = _chronology_for_group(group_id, document.chronology)
+        evidence = _chronology_for_group(group, document.chronology)
         if evidence is None:
-            excluded.append(group_id)
+            excluded.append(group)
             reasons.append(ChronologyExclusionReason.CANONICAL_CHRONOLOGY_MISSING)
             continue
         duplicate_total += evidence.duplicate_timestamp_count.value
         if evidence.temporal_eligible:
-            eligible.append(group_id)
+            eligible.append(group)
         else:
-            excluded.append(group_id)
+            excluded.append(group)
             reasons.append(ChronologyExclusionReason.CANONICAL_CHRONOLOGY_INELIGIBLE)
     return tuple(eligible), tuple(excluded), tuple(reasons), duplicate_total
 
 
 def _chronology_for_group(
-    group_id: str,
-    chronology: tuple[
-        ManifestChronologyEntry, ...
-    ],  # TODO: should be EdgeSensorGroup or something and adapt all callers and usage. Do not use primitives for this, use something else instead of str.
+    group: EdgeSensorGroup, chronology: tuple[ManifestChronologyEntry, ...]
 ) -> ManifestChronologyEntry | None:
     for item in chronology:
-        if item.group_identity == group_id:
+        if item.group_identity == group:
             return item
     return None
 
@@ -275,9 +268,7 @@ def _load_static_membership(canonical_root: Path) -> pl.DataFrame:
     return select_membership_frame(frame)
 
 
-def _load_temporal_membership(
-    canonical_root: Path, eligible_ids: tuple[str, ...]
-) -> pl.DataFrame:  # TODO: should be tuple[EdgeSensorGroup] and adapt all callers and usage
+def _load_temporal_membership(canonical_root: Path, eligible_ids: tuple[EdgeSensorGroup, ...]) -> pl.DataFrame:
     temporal_root = canonical_branch_directory(canonical_root, EdgeAssetRole.TEMPORAL_BENIGN)
     paths = tuple(temporal_root / f"{group_id}.parquet" for group_id in eligible_ids)
     missing = tuple(path.name for path in paths if not path.is_file())
@@ -326,8 +317,8 @@ def _matched_static_reference(
     temporal_membership: pl.DataFrame,
     *,
     partition_seed: Seed,
-    eligible_ids: tuple[str, ...],  # TODO: should be tuple[EdgeSensorGroup] and adapt all callers and usage
-    programme_candidates: tuple[str, ...],  # TODO: should be tuple[EdgeSensorGroup] and adapt all callers and usage
+    eligible_ids: tuple[EdgeSensorGroup, ...],
+    programme_candidates: tuple[EdgeSensorGroup, ...],
 ) -> tuple[PopulationManifest, pl.DataFrame]:
     membership = select_membership_frame(temporal_membership)
     accepted = frozenset(eligible_ids)

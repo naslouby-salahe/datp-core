@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pyarrow as pa
 
-from datp_core.core.identifiers import DatasetId
+from datp_core.core.identifiers import ColumnName, DatasetId, PhysicalSchemaText
 from datp_core.core.numeric import CanonicalColumnPosition, ClientCount
 from datp_core.data.contracts import (
     CanonicalColumn,
@@ -30,6 +30,47 @@ class CICIoT2023Column(StrEnum):
 
 
 class CICIoT2023RawColumn(StrEnum):
+    """Audited raw merged-file header, in on-disk column order."""
+
+    HEADER_LENGTH = "Header_Length"
+    PROTOCOL_TYPE = "Protocol Type"
+    TIME_TO_LIVE = "Time_To_Live"
+    RATE = "Rate"
+    FIN_FLAG_NUMBER = "fin_flag_number"
+    SYN_FLAG_NUMBER = "syn_flag_number"
+    RST_FLAG_NUMBER = "rst_flag_number"
+    PSH_FLAG_NUMBER = "psh_flag_number"
+    ACK_FLAG_NUMBER = "ack_flag_number"
+    ECE_FLAG_NUMBER = "ece_flag_number"
+    CWR_FLAG_NUMBER = "cwr_flag_number"
+    ACK_COUNT = "ack_count"
+    SYN_COUNT = "syn_count"
+    FIN_COUNT = "fin_count"
+    RST_COUNT = "rst_count"
+    HTTP = "HTTP"
+    HTTPS = "HTTPS"
+    DNS = "DNS"
+    TELNET = "Telnet"
+    SMTP = "SMTP"
+    SSH = "SSH"
+    IRC = "IRC"
+    TCP = "TCP"
+    UDP = "UDP"
+    DHCP = "DHCP"
+    ARP = "ARP"
+    ICMP = "ICMP"
+    IGMP = "IGMP"
+    IPV = "IPv"
+    LLC = "LLC"
+    TOT_SUM = "Tot sum"
+    MIN = "Min"
+    MAX = "Max"
+    AVG = "AVG"
+    STD = "Std"
+    TOT_SIZE = "Tot size"
+    IAT = "IAT"
+    NUMBER = "Number"
+    VARIANCE = "Variance"
     LABEL = "Label"
 
 
@@ -95,37 +136,22 @@ class CICIoT2023ArtifactName(StrEnum):
 CICIOT2023_AUDITED_FILE_CLIENT_COUNT = ClientCount(63)
 
 
-CICIOT2023_RAW_COLUMNS: tuple[str, ...] = (
-    tuple(  # TODO: should be tuple[CICIoT2023RawColumn] and adapt all callers and usage and create CICIoT2023RawColumn enum
-        (
-            "Header_Length,Protocol Type,Time_To_Live,Rate,fin_flag_number,syn_flag_number,rst_flag_number,"
-            "psh_flag_number,ack_flag_number,ece_flag_number,cwr_flag_number,ack_count,syn_count,fin_count,"
-            "rst_count,HTTP,HTTPS,DNS,Telnet,SMTP,SSH,IRC,TCP,UDP,DHCP,ARP,ICMP,IGMP,IPv,LLC,Tot sum,"
-            "Min,Max,AVG,Std,Tot size,IAT,Number,Variance,Label"
-        ).split(",")
-    )
-)
-CICIOT2023_FEATURE_COLUMNS: tuple[str, ...] = CICIOT2023_RAW_COLUMNS[
-    :-1
-]  # TODO: should be tuple[NBaIoTFeatureColumn] and adapt all callers and usage and create NBaIoTFeatureColumn enum
+CICIOT2023_RAW_COLUMNS: tuple[CICIoT2023RawColumn, ...] = tuple(CICIoT2023RawColumn)
+CICIOT2023_FEATURE_COLUMNS: tuple[CICIoT2023RawColumn, ...] = CICIOT2023_RAW_COLUMNS[:-1]
 CICIOT2023_LABEL_COLUMN = CICIoT2023RawColumn.LABEL
 CICIOT2023_LABELS: frozenset[str] = frozenset(label.value for label in CICIoT2023NormalizedLabel)
 
 
-def canonical_name(
-    raw_name: str,
-) -> str:  # TODO: should be NBaIoTFeatureColumn and adapt all callers and usage and create NBaIoTFeatureColumn enum or maybe even deleted if no longer needed. Might be better to just use NBaIoTFeatureColumn(raw_name) directly in the callers and usage instead of this function.
-    return raw_name.lower().replace(" ", "_").replace("-", "_")
+def canonical_name(raw_name: CICIoT2023RawColumn) -> ColumnName:
+    return ColumnName(raw_name.value.lower().replace(" ", "_").replace("-", "_"))
 
 
-CICIOT2023_CANONICAL_FEATURE_COLUMNS: tuple[str, ...] = (
-    tuple(  # TODO: should be tuple[NBaIoTFeatureColumn] and adapt all callers and usage and create NBaIoTFeatureColumn enum
-        canonical_name(column) for column in CICIOT2023_FEATURE_COLUMNS
-    )
+CICIOT2023_CANONICAL_FEATURE_COLUMNS: tuple[ColumnName, ...] = tuple(
+    canonical_name(column) for column in CICIOT2023_FEATURE_COLUMNS
 )
 CICIOT2023_MODEL_INPUT_ELIGIBILITY_POLICY = ModelInputEligibilityPolicy(
     dataset=DatasetId.CICIOT2023,
-    label_column=CICIoT2023Column.LABEL,
+    label_column=ColumnName(CICIoT2023Column.LABEL),
     feature_columns=CICIOT2023_CANONICAL_FEATURE_COLUMNS,
     exclusion_reasons=(
         CICIoT2023EligibilityReason.MISSING_OR_UNRECOGNIZED_LABEL,
@@ -133,22 +159,17 @@ CICIOT2023_MODEL_INPUT_ELIGIBILITY_POLICY = ModelInputEligibilityPolicy(
     ),
 )
 CICIOT2023_MODEL_INPUT_ELIGIBLE_COLUMN = CICIoT2023Column.MODEL_INPUT_ELIGIBLE
-CICIOT2023_MODEL_INPUT_EVIDENCE_COLUMNS: tuple[
-    str, ...
-] = (  # TODO: should be tuple[CICIoT2023EligibilityReason] and adapt all callers and usage and create CICIoT2023EligibilityReason enum
-    *(reason.value for reason in CICIOT2023_MODEL_INPUT_ELIGIBILITY_POLICY.exclusion_reasons),
-    CICIOT2023_MODEL_INPUT_ELIGIBLE_COLUMN,
+CICIOT2023_MODEL_INPUT_EVIDENCE_COLUMNS: tuple[ColumnName, ...] = (
+    *(ColumnName(reason) for reason in CICIOT2023_MODEL_INPUT_ELIGIBILITY_POLICY.exclusion_reasons),
+    ColumnName(CICIOT2023_MODEL_INPUT_ELIGIBLE_COLUMN),
 )
-CICIOT2023_PROVENANCE_COLUMNS: tuple[str, ...] = tuple(
-    CanonicalProvenanceColumn
-)  # TODO: should be tuple[CanonicalProvenanceColumn] and adapt all callers and usage. Meaning no need for this variable, just use tuple(CanonicalProvenanceColumn) directly in the CanonicalSchema constructor.
 
 
 def _canonical_columns() -> tuple[CanonicalColumn, ...]:
     feature_columns = tuple(
         CanonicalColumn(
             canonical_name(column),
-            column,
+            ColumnName(column),
             ColumnLogicalType.FLOAT64,
             CanonicalColumnRole.FEATURE,
             True,
@@ -159,16 +180,16 @@ def _canonical_columns() -> tuple[CanonicalColumn, ...]:
     label_position = len(feature_columns)
     label_columns = (
         CanonicalColumn(
-            CICIoT2023Column.RAW_LABEL,
-            CICIOT2023_LABEL_COLUMN,
+            ColumnName(CICIoT2023Column.RAW_LABEL),
+            ColumnName(CICIOT2023_LABEL_COLUMN),
             ColumnLogicalType.STRING,
             CanonicalColumnRole.LABEL,
             True,
             CanonicalColumnPosition(label_position),
         ),
         CanonicalColumn(
-            CICIoT2023Column.LABEL,
-            CICIOT2023_LABEL_COLUMN,
+            ColumnName(CICIoT2023Column.LABEL),
+            ColumnName(CICIOT2023_LABEL_COLUMN),
             ColumnLogicalType.STRING,
             CanonicalColumnRole.LABEL,
             True,
@@ -179,7 +200,7 @@ def _canonical_columns() -> tuple[CanonicalColumn, ...]:
     evidence_columns = tuple(
         CanonicalColumn(
             column,
-            "declared model-input eligibility policy",
+            ColumnName("declared model-input eligibility policy"),
             ColumnLogicalType.BOOL,
             CanonicalColumnRole.RAW_EVIDENCE,
             True,
@@ -209,18 +230,16 @@ CICIOT2023_SCHEMA = CanonicalSchema(
     dataset=DatasetId.CICIOT2023,
     columns=CICIOT2023_CANONICAL_COLUMNS,
     feature_columns=CICIOT2023_CANONICAL_FEATURE_COLUMNS,
-    label_columns=(CICIoT2023Column.RAW_LABEL, CICIoT2023Column.LABEL),
-    provenance_columns=CICIOT2023_PROVENANCE_COLUMNS,
-    physical_schema=CICIOT2023_ARROW_SCHEMA.to_string(show_field_metadata=True, show_schema_metadata=True),
+    label_columns=(ColumnName(CICIoT2023Column.RAW_LABEL), ColumnName(CICIoT2023Column.LABEL)),
+    provenance_columns=tuple(ColumnName(column) for column in CanonicalProvenanceColumn),
+    physical_schema=PhysicalSchemaText(
+        CICIOT2023_ARROW_SCHEMA.to_string(show_field_metadata=True, show_schema_metadata=True)
+    ),
     checksum=canonical_schema_checksum(DatasetId.CICIOT2023, CICIOT2023_CANONICAL_COLUMNS, CICIOT2023_ARROW_SCHEMA),
 )
 
 
-def is_accepted_merged_source(
-    path_name: str,
-) -> (
-    bool
-):  # TODO: should be bool[CICIoT2023FileClient] and adapt all callers and usage and create CICIoT2023FileClient enum
+def is_accepted_merged_source(path_name: str) -> bool: 
     prefix = CICIoT2023ArtifactName.MERGED_FILE_PREFIX
     suffix = CICIoT2023ArtifactName.CSV_SUFFIX
     numeric_identifier = path_name[len(prefix) : -len(suffix)]

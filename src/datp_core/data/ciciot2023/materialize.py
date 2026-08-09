@@ -4,8 +4,13 @@ from pathlib import Path
 
 import polars as pl
 
-from datp_core.core.identifiers import AvailabilityStatus, DatasetId
-from datp_core.core.numeric import RowCount, ValidationIssueCount
+from datp_core.core.identifiers import (
+    AvailabilityStatus,
+    CanonicalizationContractName,
+    DatasetId,
+    ValidationSourceContext,
+)
+from datp_core.core.numeric import LogicalElementCount, RowCount, ValidationIssueCount
 from datp_core.data.canonical_cache import CanonicalAsset, canonical_directory
 from datp_core.data.contracts import (
     CanonicalAssetRole,
@@ -39,7 +44,7 @@ from .schema import (
     source_relative_path,
 )
 
-_CICIOT2023_CANONICALIZATION_CONTRACT = "lossless_model_input_eligibility_evidence"
+_CICIOT2023_CANONICALIZATION_CONTRACT = CanonicalizationContractName("lossless_model_input_eligibility_evidence")
 
 
 class CICIoT2023Materializer:
@@ -92,7 +97,7 @@ class CICIoT2023Materializer:
             source_paths,
             excluded_paths=excluded_paths,
         )
-        expected_assets = canonical_data_partition_assets(len(frames))
+        expected_assets = canonical_data_partition_assets(LogicalElementCount(len(frames)))
 
         def write_assets(data_root: Path) -> tuple[CanonicalAsset[CanonicalAssetRole], ...]:
             return tuple(
@@ -242,7 +247,7 @@ def _validation_issue(
         ValidationSeverity.ERROR,
         code,
         DatasetId.CICIOT2023,
-        CICIoT2023ArtifactName.MERGED_CSV_DIRECTORY,
+        ValidationSourceContext(CICIoT2023ArtifactName.MERGED_CSV_DIRECTORY),
         reason,
         affected_count,
     )

@@ -35,9 +35,7 @@ class NBaIoTReader:
             .with_columns(
                 pl.col(CanonicalProvenanceColumn.SOURCE_ROW_INDEX).cast(pl.UInt64),
                 pl.lit(device, dtype=pl.String).alias(NBaIoTCanonicalColumn.PHYSICAL_CLIENT_ID),
-                pl.lit(device_family(device).value, dtype=pl.String).alias(
-                    NBaIoTCanonicalColumn.PHYSICAL_DEVICE_FAMILY
-                ),
+                pl.lit(device_family(device), dtype=pl.String).alias(NBaIoTCanonicalColumn.PHYSICAL_DEVICE_FAMILY),
                 pl.lit(label, dtype=pl.String).alias(NBaIoTCanonicalColumn.RAW_LABEL),
                 pl.lit(family, dtype=pl.String).alias(NBaIoTCanonicalColumn.ATTACK_FAMILY),
                 pl.lit(subtype, dtype=pl.String).alias(NBaIoTCanonicalColumn.ATTACK_SUBTYPE),
@@ -46,7 +44,7 @@ class NBaIoTReader:
             .select(tuple(column.name for column in NBAIOT_SCHEMA.columns))
         )
 
-    def finite_value_summary(self, frame: pl.LazyFrame) -> tuple[int, int]:
+    def finite_value_summary(self, frame: pl.LazyFrame) -> tuple[int, int]: #TODO: should be LogicalElementCount and ValidationIssueCount instead of int, adapt all callers and usage. Might be better to just use LogicalElementCount(value) and ValidationIssueCount(value) directly in the callers and usage instead of this function.
         summary = (
             frame.select(NBAIOT_FEATURE_COLUMNS)
             .select(
@@ -65,7 +63,7 @@ class NBaIoTReader:
             summary.item(0, AggregateCountColumn.INVALID_ROWS)
         )
 
-    def validate_finite_values(self, frame: pl.LazyFrame) -> int:
+    def validate_finite_values(self, frame: pl.LazyFrame) -> int: #TODO: should be LogicalElementCount instead of int, adapt all callers and usage. Might be better to just use LogicalElementCount(value) directly in the callers and usage instead of this function.
         total_rows, invalid = self.finite_value_summary(frame)
         if invalid:
             raise ValueError("N-BaIoT contains non-finite feature values")

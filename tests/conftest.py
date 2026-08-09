@@ -146,6 +146,7 @@ def edge_canonical_root(tmp_path: Path) -> Path:
             "accepted_row_count": 0,
             "accepted_source_count": 0,
             "checksum": "0" * 64,
+            "dataset": "edge_iiotset",
             "excluded_source_count": 0,
             "excluded_sources": [],
             "sources": [],
@@ -153,6 +154,7 @@ def edge_canonical_root(tmp_path: Path) -> Path:
         "schema_checksum": EDGE_SCHEMA_CHECKSUM.value,
         "validation_report": {
             "accepted_rows": 0,
+            "dataset": "edge_iiotset",
             "excluded_rows": 0,
             "exclusions": [],
             "invalid_rows": 0,
@@ -231,6 +233,7 @@ def edge_temporal_eligible_root(tmp_path: Path) -> Path:
             "accepted_row_count": 0,
             "accepted_source_count": 0,
             "checksum": "0" * 64,
+            "dataset": "edge_iiotset",
             "excluded_source_count": 0,
             "excluded_sources": [],
             "sources": [],
@@ -238,6 +241,7 @@ def edge_temporal_eligible_root(tmp_path: Path) -> Path:
         "schema_checksum": EDGE_SCHEMA_CHECKSUM.value,
         "validation_report": {
             "accepted_rows": 0,
+            "dataset": "edge_iiotset",
             "excluded_rows": 0,
             "exclusions": [],
             "invalid_rows": 0,

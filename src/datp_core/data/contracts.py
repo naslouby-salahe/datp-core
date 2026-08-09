@@ -10,7 +10,16 @@ import datp_core.core.identifiers as domain_enums
 from datp_core.artifacts.provenance import Checksum, checksum_text
 from datp_core.artifacts.serializers.json import canonical_json_text, canonical_mapping
 from datp_core.core.contracts import StrictModel
-from datp_core.core.identifiers import AvailabilityStatus, DatasetId
+from datp_core.core.identifiers import (
+    AvailabilityStatus,
+    CanonicalizationContractName,
+    ChronologyGroupIdentity,
+    ColumnName,
+    DatasetId,
+    PhysicalSchemaText,
+    SourceIdentity,
+    ValidationSourceContext,
+)
 from datp_core.core.numeric import (
     ByteCount,
     CanonicalColumnPosition,
@@ -149,16 +158,14 @@ class RawDatasetInventory:
 
 @dataclass(frozen=True, slots=True)
 class CanonicalColumn:
-    name: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    source_name: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    name: ColumnName
+    source_name: ColumnName
     dtype: ColumnLogicalType
     role: CanonicalColumnRole
     nullable: bool
     position: CanonicalColumnPosition
 
     def __post_init__(self) -> None:
-        if not self.name or not self.source_name:
-            raise ValueError("canonical columns require non-empty names")
         if type(self.dtype) is not ColumnLogicalType:
             raise TypeError("canonical columns require a ColumnLogicalType dtype")
         if type(self.role) is not CanonicalColumnRole:
@@ -173,16 +180,10 @@ class CanonicalColumn:
 class CanonicalSchema:
     dataset: DatasetId
     columns: tuple[CanonicalColumn, ...]
-    feature_columns: tuple[
-        str, ...
-    ]  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    label_columns: tuple[
-        str, ...
-    ]  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    provenance_columns: tuple[
-        str, ...
-    ]  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    physical_schema: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    feature_columns: tuple[ColumnName, ...]
+    label_columns: tuple[ColumnName, ...]
+    provenance_columns: tuple[ColumnName, ...]
+    physical_schema: PhysicalSchemaText
     checksum: Checksum
 
     def __post_init__(self) -> None:
@@ -223,19 +224,14 @@ class DatasetValidationIssue:
     severity: ValidationSeverity
     code: DatasetValidationCode
     dataset: DatasetId
-    source_context: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    reason: str
+    source_context: ValidationSourceContext
+    reason: str # TODO: should be NBaIoTDevice and adapt all callers and usage. Might be better to just use NBaIoTDevice(value) directly in the callers and usage instead of this function.
     affected_count: RowCount
 
     def __post_init__(self) -> None:
         if type(self.code) is not DatasetValidationCode:
             raise ValueError("validation issues require a DatasetValidationCode")
-        if (
-            type(self.affected_count) is not RowCount
-            or not self.source_context
-            or not self.reason
-            or self.affected_count.value < 1
-        ):
+        if type(self.affected_count) is not RowCount or not self.reason or self.affected_count.value < 1:
             raise ValueError("validation issues require complete source evidence")
 
 
@@ -267,27 +263,25 @@ class DatasetValidationReport:
 @dataclass(frozen=True, slots=True)
 class ModelInputEligibilityPolicy[EligibilityReasonT: StrEnum]:
     dataset: DatasetId
-    label_column: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    feature_columns: tuple[
-        str, ...
-    ]  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    label_column: ColumnName
+    feature_columns: tuple[ColumnName, ...]
     exclusion_reasons: tuple[EligibilityReasonT, ...]
 
     def __post_init__(self) -> None:
-        if not self.label_column or not self.feature_columns:
-            raise ValueError("model-input eligibility policies require label and feature columns")
+        if not self.feature_columns:
+            raise ValueError("model-input eligibility policies require feature columns")
         if len(self.feature_columns) != len(frozenset(self.feature_columns)):
             raise ValueError("model-input eligibility feature columns must be unique")
         if len(self.exclusion_reasons) != len(frozenset(self.exclusion_reasons)):
             raise ValueError("model-input eligibility reasons must be unique")
 
 
-def _validate_canonical_columns(columns: tuple[CanonicalColumn, ...], physical_schema: str) -> None:
+def _validate_canonical_columns(columns: tuple[CanonicalColumn, ...], physical_schema: PhysicalSchemaText) -> None:
     _require_schema_content(columns, physical_schema)
     _validate_column_order_and_names(columns)
 
 
-def _require_schema_content(columns: tuple[CanonicalColumn, ...], physical_schema: str) -> None:
+def _require_schema_content(columns: tuple[CanonicalColumn, ...], physical_schema: PhysicalSchemaText) -> None:
     if not columns:
         raise ValueError("canonical schemas require columns")
     if not physical_schema:
@@ -304,9 +298,7 @@ def _validate_column_order_and_names(columns: tuple[CanonicalColumn, ...]) -> No
 
 def _validate_declared_columns(
     columns: tuple[CanonicalColumn, ...],
-    declared: tuple[
-        str, ...
-    ],  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    declared: tuple[ColumnName, ...],
     role: CanonicalColumnRole,
     subject: str,
 ) -> None:
@@ -367,9 +359,7 @@ class MaterializedCanonicalAsset[AssetRoleT: StrEnum]:
     path: Path
     role: AssetRoleT
     row_count: RowCount
-    source_identity: str | None = (
-        None  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    )
+    source_identity: SourceIdentity | None = None
 
     def __post_init__(self) -> None:
         if not self.path.is_absolute():
@@ -398,7 +388,7 @@ class MaterializedDataset[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum]:
 
 @dataclass(frozen=True, slots=True)
 class ChronologyValidation:
-    group_identity: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    group_identity: ChronologyGroupIdentity
     status: AvailabilityStatus
     total_rows: RowCount
     parseable_rows: RowCount
@@ -421,8 +411,8 @@ class ChronologyValidation:
 
 
 def _validate_chronology_identity(validation: ChronologyValidation) -> None:
-    if not validation.group_identity or not validation.reason:
-        raise ValueError("chronology validations require identity and reason")
+    if not validation.reason:
+        raise ValueError("chronology validations require a reason")
 
 
 def _validate_chronology_evidence(validation: ChronologyValidation) -> None:
@@ -469,28 +459,24 @@ def _validate_chronology_counts(validation: ChronologyValidation) -> None:
 
 
 class SchemaChecksumDocument(StrictModel):
-    canonicalization_contract: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    canonicalization_contract: CanonicalizationContractName
     columns: tuple[CanonicalColumn, ...]
     dataset: DatasetId
-    physical_schema: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    physical_schema: PhysicalSchemaText
 
 
 class ManifestAssetEntry(StrictModel):
-    checksum: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    columns: tuple[
-        str, ...
-    ]  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    path: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    checksum: Checksum
+    columns: tuple[ColumnName, ...]
+    path: str
     row_count: RowCount
-    role: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    source_identity: str | None = (
-        None  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    )
+    role: str
+    source_identity: SourceIdentity | None = None
 
 
 class ManifestChronologyEntry(StrictModel):
-    group_identity: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    status: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    group_identity: ChronologyGroupIdentity
+    status: AvailabilityStatus
     total_rows: RowCount
     parseable_rows: RowCount
     invalid_rows: RowCount
@@ -498,9 +484,7 @@ class ManifestChronologyEntry(StrictModel):
     is_monotonic: bool
     reason: str
     temporal_eligible: bool
-    evidence_source_path: str | None = (
-        None  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    )
+    evidence_source_path: str | None = None
     evidence_row_count: RowCount | None = None
     alignment_verified: bool = False
     alignment_offset_microseconds: int | None = None
@@ -509,28 +493,28 @@ class ManifestChronologyEntry(StrictModel):
 
 
 class ManifestRawSourceEntry(StrictModel):
-    dataset: str = ""  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    relative_path: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    dataset: DatasetId
+    relative_path: str
     size_bytes: ByteCount
-    checksum: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    role: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    checksum: Checksum
+    role: SourceFileRole
     observed_row_count: RowCount | None = None
 
 
 class ManifestExcludedSourceEntry(StrictModel):
-    dataset: str = ""  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    relative_path: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    reason: str
+    dataset: DatasetId
+    relative_path: str
+    reason: ExclusionReason
 
 
 class ManifestInventoryEntry(StrictModel):
-    dataset: str = ""  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    dataset: DatasetId
     sources: tuple[ManifestRawSourceEntry, ...]
     accepted_source_count: SourceFileCount
     excluded_source_count: SourceFileCount
     excluded_sources: tuple[ManifestExcludedSourceEntry, ...]
     accepted_row_count: RowCount | None = None
-    checksum: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    checksum: Checksum
 
 
 class ManifestSourceRowEntry(StrictModel):
@@ -539,72 +523,64 @@ class ManifestSourceRowEntry(StrictModel):
 
 
 class ManifestExclusionEntry(StrictModel):
-    dataset: str = ""  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    source_path: str | None = (
-        None  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    )
+    dataset: DatasetId
+    source_path: str | None = None
     source_row: ManifestSourceRowEntry | None = None
-    reason: str
-    evidence: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    reason: ExclusionReason
+    evidence: str
     affected_count: RowCount
 
 
 class ManifestValidationIssueEntry(StrictModel):
-    severity: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    code: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    dataset: str = ""  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    source_context: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    severity: ValidationSeverity
+    code: DatasetValidationCode
+    dataset: DatasetId
+    source_context: ValidationSourceContext
     reason: str
     affected_count: RowCount
 
 
 class ManifestValidationReportEntry(StrictModel):
-    dataset: str = ""  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    dataset: DatasetId
     issues: tuple[ManifestValidationIssueEntry, ...]
     exclusions: tuple[ManifestExclusionEntry, ...]
     accepted_rows: RowCount
     excluded_rows: RowCount
     invalid_rows: RowCount
     warning_count: ValidationIssueCount
-    status: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    status: AvailabilityStatus
 
 
 class ManifestEligibilityPolicyEntry(StrictModel):
-    dataset: str = ""  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    label_column: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    feature_columns: tuple[
-        str, ...
-    ]  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    dataset: DatasetId
+    label_column: ColumnName
+    feature_columns: tuple[ColumnName, ...]
     exclusion_reasons: tuple[str, ...]
 
 
 class CanonicalManifestDocument(StrictModel):
     assets: tuple[ManifestAssetEntry, ...]
-    canonicalization_contract: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    canonicalization_contract: CanonicalizationContractName
     chronology: tuple[ManifestChronologyEntry, ...]
     dataset: DatasetId
     eligibility_policy: ManifestEligibilityPolicyEntry | None = None
     inventory: ManifestInventoryEntry
-    schema_checksum: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    schema_checksum: Checksum
     validation_report: ManifestValidationReportEntry
 
 
-_CANONICAL_PUBLICATION_CONTRACT = "canonical_publication_contract"
+_CANONICAL_PUBLICATION_CONTRACT = CanonicalizationContractName("canonical_publication_contract")
 _COMPLETE_NAME = CanonicalPublicationArtifact.COMPLETE
 _MANIFEST_NAME = CanonicalPublicationArtifact.MANIFEST
 _SCHEMA_NAME = CanonicalPublicationArtifact.SCHEMA
 _SOURCE_STATE_NAME = CanonicalPublicationArtifact.SOURCE_STATE
 
 
-def complete_digest(
-    manifest_payload: str, schema_payload: str
-) -> Checksum:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+def complete_digest(manifest_payload: str, schema_payload: str) -> Checksum:
     return checksum_text(f"{manifest_payload}\n{schema_payload}")
 
 
-def schema_content(
-    schema: CanonicalSchema,
-) -> str:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+def schema_content(schema: CanonicalSchema) -> str:
     return canonical_json_text(schema)
 
 
@@ -616,25 +592,26 @@ def schema_checksum_document_json(
             canonicalization_contract=_CANONICAL_PUBLICATION_CONTRACT,
             columns=columns,
             dataset=dataset,
-            physical_schema=physical_schema.to_string(show_field_metadata=True, show_schema_metadata=True),
+            physical_schema=PhysicalSchemaText(
+                physical_schema.to_string(show_field_metadata=True, show_schema_metadata=True)
+            ),
         )
     )
 
 
-def canonical_publication_contract() -> str:  # TODO: this doesn't even seem used
-    return _CANONICAL_PUBLICATION_CONTRACT
-
-
-def publication_artifact_names() -> (
-    tuple[str, str, str, str]
-):  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+def publication_artifact_names() -> tuple[
+    CanonicalPublicationArtifact,
+    CanonicalPublicationArtifact,
+    CanonicalPublicationArtifact,
+    CanonicalPublicationArtifact,
+]:
     return _COMPLETE_NAME, _MANIFEST_NAME, _SCHEMA_NAME, _SOURCE_STATE_NAME
 
 
 @dataclass(frozen=True, slots=True)
 class ManifestSerializationRequest[EligibilityReasonT: StrEnum]:
     dataset: DatasetId
-    canonicalization_contract: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    canonicalization_contract: CanonicalizationContractName
     schema_checksum: Checksum
     inventory: RawDatasetInventory
     validation_report: DatasetValidationReport
@@ -662,12 +639,12 @@ def manifest_validation_report_entry(value: DatasetValidationReport) -> Manifest
 
 class SourceStateEntryDocument(StrictModel):
     modified_time_nanoseconds: int
-    path: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    path: str
     size_bytes: ByteCount
 
 
 class SourceStateDocument(StrictModel):
     content_checksum_verified: bool = False
     dataset: DatasetId
-    manifest_checksum: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    manifest_checksum: Checksum
     sources: tuple[SourceStateEntryDocument, ...]

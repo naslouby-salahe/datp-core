@@ -59,6 +59,32 @@ control-flow bug fixed (`"anchor_gate"` string comparison), 20 `.value`-leak sit
 hardcoded-string/enum-duplicate sites fixed, 1 companion non-core TODO fixed in the same file/
 statement (`map_exception_to_exit` return type).
 
+## 2026-08-09 — after batch 2 (data foundation + nbaiot + ciciot2023 + edge_iiotset)
+
+- `python3 -m py_compile` whole tree: clean.
+- `pyright` (whole repo): 5 errors, identical to baseline, all in
+  `tests/unit/preprocessing/test_manifest_severity.py` (`data/preprocessing` remainder).
+- `ruff check .`: 251 errors (down from 368 baseline), all pre-existing TODO-comment
+  `E501`s in packages not yet touched by this batch.
+- `ruff format .`: clean, no reformatting needed after the final pass.
+- `pytest -m "not scientific and not integration and not e2e"`: **870 passed, 0 failed**.
+  This included catching and fixing a real regression mid-batch: 15 integration tests
+  (`test_nbaiot_materialization.py`, `test_ciciot2023_materialization.py`,
+  `test_edge_iiotset_materialization.py`, `test_canonical_data_reuse.py`) failed with
+  `pydantic_core.ValidationError: ... relative_path: Input should be an instance of Path`
+  after an initial (wrong) choice to type JSON-manifest Pydantic fields as `Path` instead
+  of `str` — see STATUS.md "Batch 2" for the full root-cause explanation (Pydantic strict
+  mode + `canonical_mapping()`'s necessary `Path→str` JSON-boundary conversion). Fixed by
+  reverting those 6 fields to `str`; full suite confirmed green afterward.
+- TODO/FIXME/XXX count: 267 (was 388 at end of batch 1: −2 core in batch 1, −121 in batch 2
+  so far: 51 `data/contracts.py` + 5 `canonical_cache.py` + 4 `materialization.py` +
+  1 `materialization_lifecycle.py` + 19 nbaiot + 8 ciciot2023 + 30 edge_iiotset − 3 TODOs
+  that were companion/duplicate mentions already counted elsewhere).
+
+**Batch 2 (partial — foundation + 3/5 data sub-packages) verdict: clean.** Remaining in
+`data`: `data/populations/*` (45 TODOs) and `data/preprocessing/*` (7 TODOs) — not yet
+started, tracked as the next action in STATUS.md.
+
 ## Outstanding at end of batch 1 (not blockers for batch 1, tracked for later batches)
 
 - 5 pre-existing pyright errors → `data` batch.

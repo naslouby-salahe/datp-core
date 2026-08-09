@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 import datp_core.data.materialization_lifecycle as lifecycle
+from datp_core.core.identifiers import CanonicalizationContractName
 from datp_core.data.contracts import CanonicalAssetRole
 from datp_core.data.materialization_lifecycle import CanonicalMaterializationRequest, materialize_canonical
 from datp_core.data.nbaiot.schema import NBAIOT_SCHEMA, source_relative_path
@@ -22,7 +23,7 @@ def _request(
     return CanonicalMaterializationRequest(
         canonical_root=Path("canonical"),
         schema=NBAIOT_SCHEMA,
-        canonicalization_contract="test-contract",
+        canonicalization_contract=CanonicalizationContractName("test-contract"),
         source_paths=source_paths,
         source_path_resolver=source_relative_path,
         asset_role_type=CanonicalAssetRole,
@@ -56,7 +57,7 @@ def test_prepared_publication_cannot_change_the_requested_root(monkeypatch: pyte
     publication = SimpleNamespace(
         canonical_root=Path("other"),
         schema=NBAIOT_SCHEMA,
-        canonicalization_contract="test-contract",
+        canonicalization_contract=CanonicalizationContractName("test-contract"),
         source_paths=(Path("a.csv"), Path("b.csv")),
     )
     with pytest.raises(ValueError, match="changed its requested root"):

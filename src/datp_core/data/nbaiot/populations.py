@@ -9,7 +9,13 @@ from datp_core.core.errors import (
     DataIntegrityError,
     ErrorMessage,
 )
-from datp_core.core.identifiers import DatasetId, PopulationId, PopulationIdentityKind, SplitProtocolId
+from datp_core.core.identifiers import (
+    ClientIdentityToken,
+    DatasetId,
+    PopulationId,
+    PopulationIdentityKind,
+    SplitProtocolId,
+)
 from datp_core.core.numeric import CalibrationSize, ClientCount, RowCount, Seed
 from datp_core.data.contracts import CanonicalProvenanceColumn
 from datp_core.data.nbaiot.capabilities import NBAIOT_CAPABILITIES
@@ -123,6 +129,7 @@ def construct_nbaiot_dirichlet_clients(
 ) -> PopulationConstructionResult:
     source = _load_source_rows(canonical_root)
     client_ids = synthetic_client_ids(NBAIOT_DIRICHLET_CLIENTS.client_count)
+    client_identities = tuple(ClientIdentityToken(client_id) for client_id in client_ids)
     allocator = ControlledPartitionAllocator(
         population=_DIRICHLET_POPULATION,
         client_count=NBAIOT_DIRICHLET_CLIENTS.client_count,
@@ -131,12 +138,12 @@ def construct_nbaiot_dirichlet_clients(
     )
     membership, benign_counts, attack_counts = _partition_source(
         source,
-        client_ids=client_ids,
+        client_ids=client_identities,
         allocator=allocator,
     )
     validate_dirichlet_conservation(membership, RowCount(source.height), NBAIOT_DIRICHLET_CLIENTS.client_count)
     diagnostics = _build_diagnostics(
-        client_ids=client_ids,
+        client_ids=client_identities,
         client_count=NBAIOT_DIRICHLET_CLIENTS.client_count,
         membership_height=RowCount(source.height),
         benign_counts=benign_counts,
@@ -203,9 +210,7 @@ def _load_identity_frame(canonical_root: Path) -> pl.DataFrame:
 def _partition_source(
     source: pl.DataFrame,
     *,
-    client_ids: tuple[
-        str, ...
-    ],  # TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
+    client_ids: tuple[ClientIdentityToken, ...],
     allocator: ControlledPartitionAllocator,
 ) -> tuple[pl.DataFrame, tuple[RowCount, ...], tuple[RowCount, ...]]:
     membership_parts: list[pl.DataFrame] = []
@@ -222,7 +227,7 @@ def _partition_source(
             _assign_stratum(
                 stratum,
                 client_ids,
-                tuple(count.value for count in counts),
+                counts,
                 outcome,
             )
         )
@@ -235,9 +240,7 @@ def _partition_source(
 
 def _build_diagnostics(
     *,
-    client_ids: tuple[
-        str, ...
-    ],  # TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
+    client_ids: tuple[ClientIdentityToken, ...],
     client_count: ClientCount,
     membership_height: RowCount,
     benign_counts: tuple[RowCount, ...],
@@ -248,20 +251,21 @@ def _build_diagnostics(
 ) -> DirichletPartitionDiagnosticsDocument:
     client_row_counts = tuple(benign.plus(attack) for benign, attack in zip(benign_counts, attack_counts, strict=True))
     empty_ids = tuple(
-        client_id for client_id, count in zip(client_ids, client_row_counts, strict=True) if count.value == 0
+        client_id.value for client_id, count in zip(client_ids, client_row_counts, strict=True) if count.value == 0
     )
     insufficient = tuple(
-        client_id
+        client_id.value
         for client_id, benign in zip(client_ids, benign_counts, strict=True)
         if not minimum_benign_support.fits_within(benign)
     )
+    string_client_ids = tuple(client_id.value for client_id in client_ids)
     return DirichletPartitionDiagnosticsDocument(
         population=_DIRICHLET_POPULATION,
         partition_seed=partition_seed,
         partition_kind=condition.kind,
         concentration=condition.concentration,
         client_count=client_count,
-        client_ids=client_ids,
+        client_ids=string_client_ids,
         total_rows=membership_height,
         client_row_counts=client_row_counts,
         benign_row_counts=benign_counts,
@@ -269,7 +273,7 @@ def _build_diagnostics(
         empty_client_ids=empty_ids,
         insufficient_benign_client_ids=insufficient,
         allocation_checksum=controlled_allocation_checksum(
-            client_ids,
+            string_client_ids,
             client_row_counts,
             condition,
             partition_seed,
@@ -291,12 +295,8 @@ def _permute_stratum(stratum: pl.DataFrame, allocator: ControlledPartitionAlloca
 
 def _assign_stratum(
     stratum: pl.DataFrame,
-    client_ids: tuple[
-        str, ...
-    ],  # TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
-    counts: tuple[
-        int, ...
-    ],  # TODO: should be tuple[RowCount] and adapt all callers and usage. Do not use primitives for this, use something else instead of int. Check what already exists
+    client_ids: tuple[ClientIdentityToken, ...],
+    counts: tuple[RowCount, ...],
     outcome_label: PopulationOutcomeLabel,
 ) -> pl.DataFrame:
     if stratum.height == 0:
@@ -306,7 +306,7 @@ def _assign_stratum(
         )
     client_column: list[str] = []
     for client_id, count in zip(client_ids, counts, strict=True):
-        client_column.extend([client_id] * count)
+        client_column.extend([client_id.value] * count.value)
     if len(client_column) != stratum.height:
         raise DataIntegrityError(
             ErrorMessage("stratum assignment length mismatch"),

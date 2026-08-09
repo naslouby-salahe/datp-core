@@ -2,8 +2,8 @@
 
 from pathlib import Path
 
-from datp_core.core.identifiers import AvailabilityStatus, DatasetId
-from datp_core.core.numeric import RowCount, ValidationIssueCount
+from datp_core.core.identifiers import AvailabilityStatus, CanonicalizationContractName, DatasetId
+from datp_core.core.numeric import LogicalElementCount, RowCount, ValidationIssueCount
 from datp_core.data.canonical_cache import CanonicalAsset, canonical_directory
 from datp_core.data.contracts import (
     CanonicalAssetRole,
@@ -32,7 +32,7 @@ from .schema import (
     source_relative_path,
 )
 
-_NBAIOT_CANONICALIZATION_CONTRACT = "normalized_physical_client_identity"
+_NBAIOT_CANONICALIZATION_CONTRACT = CanonicalizationContractName("normalized_physical_client_identity")
 
 
 class NBaIoTMaterializer:
@@ -120,7 +120,7 @@ class NBaIoTMaterializer:
             ValidationIssueCount(0),
             AvailabilityStatus.AVAILABLE,
         )
-        expected_assets = canonical_data_partition_assets(len(frames))
+        expected_assets = canonical_data_partition_assets(LogicalElementCount(len(frames)))
 
         def write_assets(data_root: Path) -> tuple[CanonicalAsset[CanonicalAssetRole], ...]:
             return tuple(

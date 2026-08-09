@@ -12,8 +12,15 @@ import pyarrow.parquet as pq
 
 from datp_core.artifacts.provenance import Checksum, checksum_file, checksum_text
 from datp_core.artifacts.repositories.publication import publish_atomically
-from datp_core.core.identifiers import DatasetId, PublicationStatus
-from datp_core.core.numeric import ByteCount, CanonicalColumnPosition, RowCount, SourceFileCount
+from datp_core.core.identifiers import (
+    CanonicalizationContractName,
+    ColumnName,
+    DatasetId,
+    PhysicalSchemaText,
+    PublicationStatus,
+    SourceIdentity,
+)
+from datp_core.core.numeric import ByteCount, CanonicalColumnPosition, LogicalElementCount, RowCount, SourceFileCount
 from datp_core.data.canonical_cache import (
     CanonicalAsset,
     CanonicalAssetLayout,
@@ -55,7 +62,7 @@ _COMPLETE_NAME, _MANIFEST_NAME, _SCHEMA_NAME, _SOURCE_STATE_NAME = publication_a
 @dataclass(frozen=True, slots=True)
 class CanonicalManifest[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum]:
     dataset: DatasetId
-    canonicalization_contract: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    canonicalization_contract: CanonicalizationContractName
     schema_checksum: Checksum
     inventory: RawDatasetInventory
     validation_report: DatasetValidationReport
@@ -81,7 +88,7 @@ class CanonicalManifest[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum]:
 @dataclass(frozen=True, slots=True)
 class CanonicalPublication[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum]:
     canonical_root: Path
-    canonicalization_contract: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    canonicalization_contract: CanonicalizationContractName
     schema: CanonicalSchema
     inventory: RawDatasetInventory
     validation_report: DatasetValidationReport
@@ -248,7 +255,7 @@ def canonical_schema_checksum(
 def canonical_provenance_column(column: CanonicalProvenanceColumn, position: int) -> CanonicalColumn:
     source_name, dtype = _provenance_column_details(column)
     return CanonicalColumn(
-        column,
+        ColumnName(column),
         source_name,
         dtype,
         CanonicalColumnRole.PROVENANCE,
@@ -265,33 +272,35 @@ def canonical_provenance_arrow_field(column: CanonicalProvenanceColumn) -> pa.Fi
             return pa.field(column, pa.large_string())
 
 
-def _provenance_column_details(column: CanonicalProvenanceColumn) -> tuple[str, ColumnLogicalType]:
+def _provenance_column_details(column: CanonicalProvenanceColumn) -> tuple[ColumnName, ColumnLogicalType]:
     match column:
         case CanonicalProvenanceColumn.SOURCE_ROW_INDEX:
-            return "source row index", ColumnLogicalType.UINT64
+            return ColumnName("source row index"), ColumnLogicalType.UINT64
         case CanonicalProvenanceColumn.SOURCE_PATH:
-            return "raw-root-relative source path", ColumnLogicalType.STRING
+            return ColumnName("raw-root-relative source path"), ColumnLogicalType.STRING
         case CanonicalProvenanceColumn.STABLE_ROW_ID:
-            return "source path and zero-based row index", ColumnLogicalType.STRING
+            return ColumnName("source path and zero-based row index"), ColumnLogicalType.STRING
 
 
 def partition_assets[AssetRoleT: StrEnum](
-    partition_count: int,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    partition_count: LogicalElementCount,
     branch: Path,
     role: AssetRoleT,
 ) -> tuple[CanonicalAssetLayout[AssetRoleT], ...]:
-    if partition_count < 1:
-        raise ValueError("canonical partition publication requires at least one partition")
-    return tuple(CanonicalAssetLayout(branch / f"part-{index:05d}.parquet", role) for index in range(partition_count))
+    return tuple(
+        CanonicalAssetLayout(branch / f"part-{index:05d}.parquet", role) for index in range(partition_count.value)
+    )
 
 
-def canonical_data_partition_assets(partition_count: int) -> tuple[CanonicalAssetLayout[CanonicalAssetRole], ...]:
+def canonical_data_partition_assets(
+    partition_count: LogicalElementCount,
+) -> tuple[CanonicalAssetLayout[CanonicalAssetRole], ...]:
     """Layout partitions under the canonical ``data/`` branch consumed by population construction."""
     return partition_assets(partition_count, Path("data"), CanonicalAssetRole.CANONICAL_DATA)
 
 
 def named_assets[AssetRoleT: StrEnum](
-    branch: Path, role: AssetRoleT, source_identities: tuple[str, ...]
+    branch: Path, role: AssetRoleT, source_identities: tuple[SourceIdentity, ...]
 ) -> tuple[CanonicalAssetLayout[AssetRoleT], ...]:
     if not source_identities or len(source_identities) != len(frozenset(source_identities)):
         raise ValueError("named canonical assets require unique source identities")
@@ -322,7 +331,7 @@ def stream_parquet[AssetRoleT: StrEnum](
         relative_path=layout.relative_path,
         checksum=checksum_file(destination),
         row_count=RowCount(parquet.metadata.num_rows),
-        columns=tuple(actual_schema.names),
+        columns=tuple(ColumnName(name) for name in actual_schema.names),
         role=layout.role,
         source_identity=layout.source_identity,
     )
@@ -392,7 +401,7 @@ def _validate_written_assets[AssetRoleT: StrEnum](
     temporary: Path,
     assets: tuple[CanonicalAsset[AssetRoleT], ...],
     expected_assets: tuple[CanonicalAssetLayout[AssetRoleT], ...],
-    expected_physical_schema: str,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    expected_physical_schema: PhysicalSchemaText,
 ) -> None:
     if not _asset_paths_match(assets, expected_assets):
         raise ValueError("canonical writer returned unexpected assets")

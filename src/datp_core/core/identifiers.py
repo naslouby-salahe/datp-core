@@ -407,6 +407,30 @@ class CudaDeviceName(NonEmptyString):
     validation_name: ClassVar[str] = "CUDA device name"
 
 
+class ColumnName(NonEmptyString):
+    validation_name: ClassVar[str] = "column name"
+
+
+class PhysicalSchemaText(NonEmptyString):
+    validation_name: ClassVar[str] = "physical schema text"
+
+
+class SourceIdentity(NonEmptyString):
+    validation_name: ClassVar[str] = "source identity"
+
+
+class ChronologyGroupIdentity(NonEmptyString):
+    validation_name: ClassVar[str] = "chronology group identity"
+
+
+class ValidationSourceContext(NonEmptyString):
+    validation_name: ClassVar[str] = "validation source context"
+
+
+class CanonicalizationContractName(NonEmptyString):
+    validation_name: ClassVar[str] = "canonicalization contract name"
+
+
 @dataclass(frozen=True, slots=True)
 class ClientPathToken:
     value: str

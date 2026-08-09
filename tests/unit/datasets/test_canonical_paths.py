@@ -2,6 +2,8 @@ from pathlib import Path
 
 import pytest
 
+from datp_core.core.identifiers import SourceIdentity
+from datp_core.core.numeric import LogicalElementCount
 from datp_core.data.canonical_cache import CanonicalAssetLayout, canonical_asset_path
 from datp_core.data.contracts import CanonicalAssetRole
 from datp_core.data.materialization import (
@@ -13,16 +15,20 @@ from datp_core.data.materialization import (
 
 
 def test_canonical_asset_layouts_are_publication_root_relative() -> None:
-    partitions = canonical_data_partition_assets(2)
+    partitions = canonical_data_partition_assets(LogicalElementCount(2))
     assert tuple(asset.relative_path for asset in partitions) == (
         Path("data/part-00000.parquet"),
         Path("data/part-00001.parquet"),
     )
 
-    nested = partition_assets(1, Path("training"), CanonicalAssetRole.CANONICAL_DATA)
+    nested = partition_assets(LogicalElementCount(1), Path("training"), CanonicalAssetRole.CANONICAL_DATA)
     assert nested[0].relative_path == Path("training/part-00000.parquet")
 
-    named = named_assets(Path("clients"), CanonicalAssetRole.CANONICAL_DATA, ("client-a", "client-b"))
+    named = named_assets(
+        Path("clients"),
+        CanonicalAssetRole.CANONICAL_DATA,
+        (SourceIdentity("client-a"), SourceIdentity("client-b")),
+    )
     assert tuple(asset.relative_path for asset in named) == (
         Path("clients/client-a.parquet"),
         Path("clients/client-b.parquet"),

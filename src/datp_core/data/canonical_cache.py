@@ -15,7 +15,15 @@ from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
 )
-from datp_core.core.identifiers import AvailabilityStatus, ContractSubject, DatasetId, PublicationStatus
+from datp_core.core.identifiers import (
+    CanonicalizationContractName,
+    ColumnName,
+    ContractSubject,
+    DatasetId,
+    PhysicalSchemaText,
+    PublicationStatus,
+    SourceIdentity,
+)
 from datp_core.core.numeric import ByteCount, RowCount
 from datp_core.data.contracts import (
     CanonicalManifestDocument,
@@ -23,11 +31,9 @@ from datp_core.data.contracts import (
     CanonicalSchema,
     ChronologyValidation,
     DatasetExclusion,
-    DatasetValidationCode,
     DatasetValidationIssue,
     DatasetValidationReport,
     ExcludedSourceFile,
-    ExclusionReason,
     ManifestAssetEntry,
     ManifestChronologyEntry,
     ManifestExclusionEntry,
@@ -39,11 +45,9 @@ from datp_core.data.contracts import (
     ModelInputEligibilityPolicy,
     RawDatasetInventory,
     RawSourceFile,
-    SourceFileRole,
     SourceRowReference,
     SourceStateDocument,
     SourceStateEntryDocument,
-    ValidationSeverity,
     complete_digest,
     manifest_chronology_entry,
     manifest_eligibility_entry,
@@ -59,9 +63,7 @@ SourcePathResolver = Callable[[Path], Path]
 class CanonicalAssetLayout[AssetRoleT: StrEnum]:
     relative_path: Path
     role: AssetRoleT
-    source_identity: str | None = (
-        None  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    )
+    source_identity: SourceIdentity | None = None
 
     def __post_init__(self) -> None:
         if not _is_canonical_relative_path(self.relative_path):
@@ -73,11 +75,9 @@ class CanonicalAsset[AssetRoleT: StrEnum]:
     relative_path: Path
     checksum: Checksum
     row_count: RowCount
-    columns: tuple[
-        str, ...
-    ]  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    columns: tuple[ColumnName, ...]
     role: AssetRoleT
-    source_identity: str | None = None
+    source_identity: SourceIdentity | None = None
 
     def __post_init__(self) -> None:
         if not _is_canonical_relative_path(self.relative_path):
@@ -107,7 +107,7 @@ def canonical_directory(canonical_root: Path, schema: CanonicalSchema) -> Path:
 class CanonicalReuseRequest[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum]:
     canonical_root: Path
     schema: CanonicalSchema
-    canonicalization_contract: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    canonicalization_contract: CanonicalizationContractName
     source_paths: tuple[Path, ...]
     source_path_resolver: SourcePathResolver
     asset_role_type: type[AssetRoleT]
@@ -117,7 +117,7 @@ class CanonicalReuseRequest[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum]:
 @dataclass(frozen=True, slots=True)
 class PublicationMatchRequest[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum]:
     schema: CanonicalSchema
-    canonicalization_contract: str
+    canonicalization_contract: CanonicalizationContractName
     inventory: RawDatasetInventory
     validation_report: DatasetValidationReport
     expected_assets: tuple[CanonicalAssetLayout[AssetRoleT], ...]
@@ -177,9 +177,7 @@ def reuse_published_canonical[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
 
 def _fast_reusable_manifest[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
     target: Path, request: CanonicalReuseRequest[AssetRoleT, EligibilityReasonT]
-) -> (
-    tuple[CanonicalManifestDocument, str] | None
-):  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> tuple[CanonicalManifestDocument, str] | None:
     schema = request.schema
     schema_file = target / CanonicalPublicationArtifact.SCHEMA
     manifest_file = target / CanonicalPublicationArtifact.MANIFEST
@@ -191,7 +189,7 @@ def _fast_reusable_manifest[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
     compatible = (
         _documents_match_publication(schema_file, complete_file, serialized_manifest, schema),
         manifest.dataset is schema.dataset,
-        manifest.schema_checksum == schema.checksum.value,
+        manifest.schema_checksum == schema.checksum,
         manifest.canonicalization_contract == request.canonicalization_contract,
         canonical_value(manifest.eligibility_policy) == canonical_value(request.eligibility_policy),
         _assets_have_declared_metadata(target, manifest.assets, schema.physical_schema),
@@ -252,8 +250,8 @@ def _reused_validation_report(
 ) -> DatasetValidationReport:
     issues = tuple(
         DatasetValidationIssue(
-            ValidationSeverity(issue.severity),
-            DatasetValidationCode(issue.code),
+            issue.severity,
+            issue.code,
             dataset,
             issue.source_context,
             issue.reason,
@@ -270,7 +268,7 @@ def _reused_validation_report(
         report.excluded_rows,
         report.invalid_rows,
         report.warning_count,
-        AvailabilityStatus(report.status),
+        report.status,
     )
 
 
@@ -290,7 +288,7 @@ def _reused_exclusion(
         dataset,
         source_path,
         source_row_reference,
-        ExclusionReason(exclusion.reason),
+        exclusion.reason,
         exclusion.evidence,
         exclusion.affected_count,
     )
@@ -311,8 +309,8 @@ def _inventory_from_serialized(dataset: DatasetId, inventory: ManifestInventoryE
             dataset,
             Path(source.relative_path),
             source.size_bytes,
-            Checksum(source.checksum),
-            SourceFileRole(source.role),
+            source.checksum,
+            source.role,
             source.observed_row_count,
         )
         for source in inventory.sources
@@ -321,7 +319,7 @@ def _inventory_from_serialized(dataset: DatasetId, inventory: ManifestInventoryE
         ExcludedSourceFile(
             dataset,
             Path(excluded.relative_path),
-            ExclusionReason(excluded.reason),
+            excluded.reason,
         )
         for excluded in inventory.excluded_sources
     )
@@ -332,14 +330,14 @@ def _inventory_from_serialized(dataset: DatasetId, inventory: ManifestInventoryE
         inventory.excluded_source_count,
         excluded_sources,
         inventory.accepted_row_count,
-        Checksum(inventory.checksum),
+        inventory.checksum,
     )
 
 
 def _chronology_from_serialized(document: ManifestChronologyEntry) -> ChronologyValidation:
     return ChronologyValidation(
         document.group_identity,
-        AvailabilityStatus(document.status),
+        document.status,
         document.total_rows,
         document.parseable_rows,
         document.invalid_rows,
@@ -399,7 +397,7 @@ def _source_state(
     return SourceStateDocument(
         content_checksum_verified=True,
         dataset=dataset,
-        manifest_checksum=checksum_text(manifest).value,
+        manifest_checksum=checksum_text(manifest),
         sources=sources,
     )
 
@@ -429,9 +427,7 @@ def _reusable_manifest[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
 
 def _read_manifest(
     target: Path, schema_file: Path, manifest_file: Path, complete_file: Path
-) -> (
-    tuple[CanonicalManifestDocument, str] | None
-):  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> tuple[CanonicalManifestDocument, str] | None:
     if not _publication_files_exist(target, schema_file, manifest_file, complete_file):
         return None
     try:
@@ -457,7 +453,7 @@ def _documents_match_publication(
 
 def _asset_entry[AssetRoleT: StrEnum](asset: CanonicalAsset[AssetRoleT]) -> ManifestAssetEntry:
     return ManifestAssetEntry(
-        checksum=asset.checksum.value,
+        checksum=asset.checksum,
         columns=asset.columns,
         path=asset.relative_path.as_posix(),
         row_count=asset.row_count,
@@ -476,7 +472,7 @@ def _manifest_matches_publication[AssetRoleT: StrEnum, EligibilityReasonT: StrEn
         dataset=publication.schema.dataset,
         eligibility_policy=manifest_eligibility_entry(publication.eligibility_policy),
         inventory=manifest_inventory_entry(publication.inventory),
-        schema_checksum=publication.schema.checksum.value,
+        schema_checksum=publication.schema.checksum,
         validation_report=manifest_validation_report_entry(publication.validation_report),
     )
     return (
@@ -498,12 +494,12 @@ def _manifest_matches_publication[AssetRoleT: StrEnum, EligibilityReasonT: StrEn
     )
 
 
-def asset_is_valid(root: Path, asset: ManifestAssetEntry, expected_physical_schema: str) -> bool:
+def asset_is_valid(root: Path, asset: ManifestAssetEntry, expected_physical_schema: PhysicalSchemaText) -> bool:
     try:
         path = canonical_asset_path(root, Path(asset.path))
     except ValueError:
         return False
-    if not path.is_file() or checksum_file(path).value != asset.checksum:
+    if not path.is_file() or checksum_file(path) != asset.checksum:
         return False
     try:
         parquet = pq.ParquetFile(path)
@@ -520,12 +516,14 @@ def asset_is_valid(root: Path, asset: ManifestAssetEntry, expected_physical_sche
 def _assets_have_declared_metadata(
     root: Path,
     assets: tuple[ManifestAssetEntry, ...],
-    expected_physical_schema: str,
+    expected_physical_schema: PhysicalSchemaText,
 ) -> bool:
     return all(_asset_has_declared_metadata(root, asset, expected_physical_schema) for asset in assets)
 
 
-def _asset_has_declared_metadata(root: Path, asset: ManifestAssetEntry, expected_physical_schema: str) -> bool:
+def _asset_has_declared_metadata(
+    root: Path, asset: ManifestAssetEntry, expected_physical_schema: PhysicalSchemaText
+) -> bool:
     try:
         path = canonical_asset_path(root, Path(asset.path))
     except ValueError:
@@ -560,7 +558,7 @@ def serialized_manifest_json[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
             dataset=request.dataset,
             eligibility_policy=manifest_eligibility_entry(request.eligibility_policy),
             inventory=manifest_inventory_entry(request.inventory),
-            schema_checksum=request.schema_checksum.value,
+            schema_checksum=request.schema_checksum,
             validation_report=manifest_validation_report_entry(request.validation_report),
         )
     )

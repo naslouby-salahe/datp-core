@@ -6,7 +6,14 @@ from shutil import rmtree
 
 import polars as pl
 
-from datp_core.core.identifiers import AvailabilityStatus, DatasetId
+from datp_core.core.identifiers import (
+    AvailabilityStatus,
+    CanonicalizationContractName,
+    ChronologyGroupIdentity,
+    DatasetId,
+    SourceIdentity,
+    ValidationSourceContext,
+)
 from datp_core.core.numeric import RowCount, ValidationIssueCount
 from datp_core.data.canonical_cache import CanonicalAsset, CanonicalAssetLayout, canonical_directory
 from datp_core.data.contracts import (
@@ -30,7 +37,7 @@ from datp_core.data.materialization import (
 )
 from datp_core.data.materialization_lifecycle import CanonicalMaterializationRequest, materialize_canonical
 
-from .chronology import PcapChronology, paired_capture_path, validate_chronology, write_capture_timeline
+from .chronology import PcapChronology, paired_capture_path, write_capture_timeline
 from .reader import EdgeIIoTsetReader
 from .schema import (
     EDGE_ARROW_SCHEMA,
@@ -61,10 +68,10 @@ class _EdgePublication:
     validations: tuple[ChronologyValidation, ...]
 
 
-_STATIC_BENIGN_BRANCH = Path(EdgeAssetRole.STATIC_BENIGN.value)
-_TEMPORAL_BENIGN_BRANCH = Path(EdgeAssetRole.TEMPORAL_BENIGN.value)
-_UNASSIGNED_ATTACK_BRANCH = Path(EdgeAssetRole.UNASSIGNED_ATTACK.value)
-_EDGE_CANONICALIZATION_CONTRACT = "pcap_verified_source_order_and_typed_asset_roles"
+_STATIC_BENIGN_BRANCH = Path(EdgeAssetRole.STATIC_BENIGN)
+_TEMPORAL_BENIGN_BRANCH = Path(EdgeAssetRole.TEMPORAL_BENIGN)
+_UNASSIGNED_ATTACK_BRANCH = Path(EdgeAssetRole.UNASSIGNED_ATTACK)
+_EDGE_CANONICALIZATION_CONTRACT = CanonicalizationContractName("pcap_verified_source_order_and_typed_asset_roles")
 
 
 def _source_paths(benign_paths: tuple[Path, ...], attack_paths: tuple[Path, ...]) -> tuple[Path, ...]:
@@ -150,8 +157,8 @@ class EdgeIIoTsetMaterializer:
         benign_frames = tuple(reader.read_benign(path) for path in benign_paths)
         attack_frames = tuple(reader.read_attack(path) for path in attack_paths)
         chronology = tuple(
-            validate_chronology(
-                benign_sensor_group(path).value,
+            PcapChronology.validate(
+                ChronologyGroupIdentity(benign_sensor_group(path)),
                 path,
                 paired_capture_path(path),
             )
@@ -170,7 +177,7 @@ class EdgeIIoTsetMaterializer:
         benign_paths: tuple[Path, ...],
         chronology: tuple[PcapChronology, ...],
         attack_paths: tuple[Path, ...],
-        attack_counts: tuple[int, ...],  # TODO: should be RowCount instead of int and adapt all callers and usage
+        attack_counts: tuple[RowCount, ...],
     ) -> RawDatasetInventory:
         benign_sources = tuple(
             raw_source_file(
@@ -198,7 +205,7 @@ class EdgeIIoTsetMaterializer:
                 DatasetId.EDGE_IIOTSET,
                 path,
                 SourceFileRole.ATTACK,
-                RowCount(row_count),
+                row_count,
                 source_relative_path,
             )
             for path, row_count in zip(attack_paths, attack_counts, strict=True)
@@ -220,16 +227,14 @@ class EdgeIIoTsetMaterializer:
             rmtree(timeline_root, ignore_errors=True)
 
     @staticmethod
-    def _row_count(
-        frame: pl.LazyFrame,
-    ) -> int:  # TODO: should be RowCount instead of int and adapt all callers and usage
-        return int(frame.select(pl.len()).collect(engine="streaming").item())
+    def _row_count(frame: pl.LazyFrame) -> RowCount:
+        return RowCount(int(frame.select(pl.len()).collect(engine="streaming").item()))
 
     @staticmethod
     def _validation_report(
         benign_paths: tuple[Path, ...],
         validations: tuple[ChronologyValidation, ...],
-        attack_counts: tuple[int, ...],  # TODO: should be RowCount instead of int and adapt all callers and usage
+        attack_counts: tuple[RowCount, ...],
     ) -> DatasetValidationReport:
         invalid = tuple(
             (path, validation)
@@ -241,9 +246,9 @@ class EdgeIIoTsetMaterializer:
                 ValidationSeverity.WARNING,
                 DatasetValidationCode.TEMPORAL_CHRONOLOGY_UNAVAILABLE,
                 DatasetId.EDGE_IIOTSET,
-                source_relative_path(path).as_posix(),
+                ValidationSourceContext(source_relative_path(path).as_posix()),
                 validation.reason,
-                RowCount(validation.total_rows.value),
+                validation.total_rows,
             )
             for path, validation in invalid
         )
@@ -251,7 +256,10 @@ class EdgeIIoTsetMaterializer:
             DatasetId.EDGE_IIOTSET,
             issues,
             (),
-            RowCount(sum(validation.total_rows.value for validation in validations) + sum(attack_counts)),
+            RowCount(
+                sum(validation.total_rows.value for validation in validations)
+                + sum(count.value for count in attack_counts)
+            ),
             RowCount(0),
             RowCount(0),
             ValidationIssueCount(len(issues)),
@@ -264,7 +272,7 @@ def _expected_assets(
     attack_paths: tuple[Path, ...],
     validations: tuple[ChronologyValidation, ...],
 ) -> tuple[CanonicalAssetLayout[EdgeAssetRole], ...]:
-    benign_identities = tuple(benign_sensor_group(path).value for path in benign_paths)
+    benign_identities = tuple(SourceIdentity(benign_sensor_group(path)) for path in benign_paths)
     static_assets = named_assets(_STATIC_BENIGN_BRANCH, EdgeAssetRole.STATIC_BENIGN, benign_identities)
     temporal_identities = tuple(
         identity
@@ -279,7 +287,7 @@ def _expected_assets(
     attack_assets = named_assets(
         _UNASSIGNED_ATTACK_BRANCH,
         EdgeAssetRole.UNASSIGNED_ATTACK,
-        tuple(path.stem for path in attack_paths),
+        tuple(SourceIdentity(path.stem) for path in attack_paths),
     )
     return static_assets + temporal_assets + attack_assets
 

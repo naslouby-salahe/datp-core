@@ -5,10 +5,112 @@ batch and waits for "continue".
 
 ## Current batch
 
-None in progress. Batch 1 (`core`) is complete, including a user-directed correction
+Batch 2 (`data`) is **partially complete**: the shared foundation
+(`data/contracts.py`, `data/canonical_cache.py`, `data/materialization.py`,
+`data/materialization_lifecycle.py`, `data/registry.py`, `core/identifiers.py` additions)
+and 3 of 5 dataset-specific sub-packages (`nbaiot`, `ciciot2023`, `edge_iiotset`) are
+done — 0 TODOs, pyright-clean, full test suite passing (870/870). **Remaining in `data`:
+`data/populations/*` (45 TODOs) and `data/preprocessing/*` (7 TODOs).** These were
+deliberately not assigned to the 3 parallel dataset subagents (see "Batch 2" below for
+why) and are the next action.
+
+Batch 1 (`core`) is complete, including a user-directed correction
 (see "Batch 1 correction" below) that cascaded into every package with a `DatpCoreError`
-raise site. Awaiting instruction to start batch 2 (`data`, already touched by the
-cascade but not yet fully audited as its own batch).
+raise site.
+
+## Batch 2 — `data` package (2026-08-09)
+
+Executed as: foundation fixed directly (not delegated — too central/high-risk to
+parallelize safely), then 3 parallel subagents dispatched for the independent
+dataset-specific sub-packages once the foundation was stable and pyright-clean.
+
+### Foundation (done directly, not delegated)
+
+`data/contracts.py` (51 TODOs → 0) is the root of the package's type hierarchy — every
+dataset module imports from it. Added 6 new value objects to `core/identifiers.py`
+(reusing the established `NonEmptyString` pattern, same family as `FeatureName`/
+`OutcomeLabel`/`StableRowId`):
+- `ColumnName` — canonical/source column name identity (`CanonicalColumn.name`/
+  `.source_name`, `CanonicalSchema.feature_columns`/`.label_columns`/
+  `.provenance_columns`, `ModelInputEligibilityPolicy.label_column`/`.feature_columns`)
+- `PhysicalSchemaText` — rendered pyarrow schema string (`CanonicalSchema.physical_schema`)
+- `SourceIdentity` — `MaterializedCanonicalAsset.source_identity`,
+  `CanonicalAssetLayout.source_identity`
+- `ChronologyGroupIdentity` — `ChronologyValidation.group_identity`
+- `ValidationSourceContext` — `DatasetValidationIssue.source_context` (confirmed
+  genuinely heterogeneous free-form content by tracing all 3 call sites — an artifact-name
+  enum member in one, a relative path string in another — so a `NonEmptyString` wrapper is
+  correct, not a closed enum)
+- `CanonicalizationContractName` — the various `canonicalization_contract` fields
+
+Also: every `checksum: str`/`path: str` field on the **domain** dataclasses
+(`RawSourceFile`, `MaterializedCanonicalAsset`, etc.) now uses the already-existing
+`Checksum`/`Path` types directly. Deleted one confirmed-dead function
+(`canonical_publication_contract()`, zero callers). Reused existing
+`LogicalElementCount` (`core/numeric.py`) for partition counts instead of raw `int`.
+
+**Real bug found and fixed twice during this pass** (both caught by re-running pyright/
+pytest after each change, not left in):
+1. `checksum_file(path).value != asset.checksum` — after typing `asset.checksum` as
+   `Checksum`, comparing `.value` (str) to `Checksum` would have always evaluated `True`
+   (dataclass equality never matches across types) — `asset_is_valid` would have silently
+   always failed the checksum check. Fixed by removing the stray `.value`.
+2. **Larger one, found via full test suite, not just pyright**: initially typed the
+   JSON-manifest Pydantic models' `path`/`relative_path`/`source_path` fields as `Path`
+   (to mirror the domain dataclasses) instead of `str`. This broke the actual JSON
+   round-trip: `StrictModel` sets `strict=True`, and Pydantic's *native* `Path` field
+   validation does not coerce from `str` in strict mode (unlike `Checksum`/enum fields,
+   which use custom validators — `pydantic_value_schema`/native StrEnum handling — that
+   bypass strict-mode coercion rules). `canonical_mapping()` legitimately stringifies
+   `Path` before reaching Pydantic (JSON has no native Path type), so strict validation
+   rejected it. 15 integration tests failed with
+   `ManifestInventoryEntry.sources.0.relative_path: Input should be an instance of Path`.
+   **Fix: reverted those 6 fields to `str`** on `ManifestAssetEntry.path`,
+   `ManifestChronologyEntry.evidence_source_path`, `ManifestRawSourceEntry.relative_path`,
+   `ManifestExcludedSourceEntry.relative_path`, `ManifestExclusionEntry.source_path`,
+   `SourceStateEntryDocument.path` — these are the genuine JSON serialization boundary,
+   and CLAUDE.md explicitly permits primitives there; my initial "mirror the domain type
+   everywhere for consistency" instinct was wrong for this one boundary. Re-added the
+   `Path(...)`/`.as_posix()` conversions at the read/write boundary functions in
+   `canonical_cache.py` that I'd removed as "redundant" before discovering they weren't.
+   All 3 subagents independently hit this same failure while testing their own packages
+   and correctly identified it as **not** their bug (concurrent-edit artifact at the
+   time) — confirmed and fixed after all agents landed; full suite now 870/870 passing.
+
+### Parallel subagents (nbaiot, ciciot2023, edge_iiotset)
+
+Dispatched 3 in the same message once the foundation was stable — disjoint file sets
+(each dataset package only imports from the shared foundation + its own files, never
+from a sibling dataset package), so no coordination risk. Each was briefed with: current
+value-object catalogue (reuse first), the "TODO comment on a wrapped multi-line return
+type may actually be about an input parameter, not the return type" formatting trap
+(caught live in `ciciot2023/schema.py`'s `is_accepted_merged_source` before dispatch —
+included as a worked example), and an explicit scope boundary (no editing shared files).
+
+Combined result: **57 TODOs resolved** (19 nbaiot + 8 ciciot2023 + 30 edge_iiotset), all
+3 packages pyright-clean, ruff-clean, and passing their own test suites. Highlights:
+- **Correctly rejected 3 literal-but-wrong TODO suggestions** for combinatorially-generated
+  name sets (NBaIoT's ~115 feature columns, CICIoT2023's evidence columns) — used
+  `ColumnName` instead of inventing an enum, per the "not every closed-looking TODO means
+  create an enum" guidance.
+- **Correctly created 8 new small-fixed-vocabulary enums** where genuinely warranted:
+  `NBaIoTAttackFamily` (2), `NBaIoTAttackSubtype` (8), `NBaIoTWindow` (5),
+  `NBaIoTBasicStatistic` (3), `NBaIoTChannelStatistic` (7), `CICIoT2023RawColumn` (40,
+  the full audited CSV header), plus expanded `EdgeRawColumn` from 3 to all 63 raw columns
+  and reused several already-existing Edge enums (`EdgeSensorGroup`, `EdgeCanonicalColumn`)
+  that TODOs had pointed at but callers weren't yet using.
+- **Reused `ClientIdentityToken`** (a core type that predates this session) instead of
+  inventing dataset-specific client-ID types, in both nbaiot and ciciot2023 — this was
+  flagged as a likely reuse target in the ciciot2023 brief and confirmed correct.
+- ciciot2023 agent deduplicated 3 independent copies of the same Polars source-path→
+  client-ID extraction expression into one shared helper.
+- edge_iiotset agent moved `validate_chronology` into a `PcapChronology.validate()`
+  classmethod (a TODO-driven relocation that made sense — pure function operating only on
+  that type's own fields) and fixed 2 stale integration-test fixtures
+  (`tests/conftest.py`) that predated `dataset` becoming a required field.
+
+Validation: see VALIDATION.md "2026-08-09 — after batch 2 (data foundation + 3 dataset
+packages)".
 
 ## IMPORTANT: read before resuming
 
@@ -189,16 +291,27 @@ None currently open.
 
 ## Next action
 
-Start **Batch 2 — `data` package** (largest: 170 TODOs, 11116 LOC). Given its size, plan to
-split into dependency-ordered sub-batches while working it (see INVENTORY.md "Suggested batch
-order" for the full package list and sizes). Do not start until the user says "continue".
+Finish **Batch 2 — `data` package**: `data/populations/*` (45 TODOs, 9 files) and
+`data/preprocessing/*` (7 TODOs, 12 files) remain. Both depend on the now-stable
+foundation (`data/contracts.py`, `canonical_cache.py`, `materialization.py`) and the
+3 completed dataset packages, so they can proceed safely now. `data/populations/*` is
+large enough to consider splitting across 2+ parallel subagents by file group (e.g.
+`contracts.py`+`construction.py`+`declarations.py` vs `integrity.py`+`splits.py`+
+`controlled.py`+`publication.py`+`protocols.py`) — check actual cross-file coupling
+before splitting, several of these files import from each other within the package.
+After `data` is fully done, move to batch 3 (`artifacts`, small, 4 TODOs) — see
+INVENTORY.md "Suggested batch order" for the rest of the plan.
 
 ## Current validation state
 
-- Ruff (whole repo): 368 pre-existing errors (baseline, not caused by batch 1).
-- Pyright (whole repo): 5 pre-existing errors (baseline, not caused by batch 1; unrelated file).
-- Pytest (`-m "not scientific and not integration and not e2e"`): 870 passed, 0 failed (baseline
-  + batch 1 changes).
-- Scoped to batch-1-touched files: ruff clean (only pre-existing unrelated TODO-comment E501s in
-  a file batch 1 didn't modify), pyright 0 errors, all directly relevant tests pass (76/76:
-  `tests/unit/domain/test_errors.py`, `tests/unit/anchor/`, `tests/unit/presentation/test_claim_validation.py`).
+- Ruff (whole repo): 251 pre-existing errors (down from 368 baseline; all TODO-comment
+  `E501`s in not-yet-touched packages — `data/populations`, `data/preprocessing`,
+  `analysis`, `thresholds`, `experiments`, `presentation`, `detector`, `app`).
+- Pyright (whole repo): 5 pre-existing errors (baseline, unchanged — unrelated file,
+  `tests/unit/preprocessing/test_manifest_severity.py`, belongs to the
+  `data/preprocessing` remainder of this same batch).
+- Pytest (`-m "not scientific and not integration and not e2e"`, confirmed to be the
+  entire suite — nothing is actually collected under those markers): **870 passed, 0
+  failed**.
+- TODO/FIXME/XXX count: 267 (390 baseline − 2 core − 121 data-foundation/nbaiot/
+  ciciot2023/edge_iiotset).
