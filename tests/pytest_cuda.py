@@ -69,6 +69,7 @@ _CUDA_ONLY_TESTS = frozenset().union(
         "test_train_ditto_personalized_states_differ_by_client",
         "test_train_ditto_personalized_states_persist_across_rounds",
         "test_train_ditto_records_personalized_state_references_every_round",
+        "test_ditto_markers_without_valid_artifacts_are_not_reusable",
     ),
     _tests(
         "tests/unit/learning/federated/test_fedavg.py",
