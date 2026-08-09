@@ -61,7 +61,7 @@ def test_calibration_evidence_rejects_non_calibration_role() -> None:
 
 
 def test_held_out_evidence_rejects_duplicate_auroc_clients() -> None:
-    item = ClientAurocEvidence(client_identity("client_a"), available(MetricId.AUROC, 0.8))
+    item = ClientAurocEvidence(client_identity("client_a"), available(MetricId.AUROC, MetricValue(0.8)))
     score_checksum = Checksum("a" * 64)
     label_checksum = Checksum("b" * 64)
     source_row_checksum = Checksum("c" * 64)
@@ -100,7 +100,7 @@ def _evidence(
             aurocs=(
                 ClientAurocEvidence(
                     client_identity("client_a"),
-                    available(MetricId.AUROC, auroc.value) if isinstance(auroc, MetricValue) else auroc,
+                    available(MetricId.AUROC, MetricValue(auroc.value)) if isinstance(auroc, MetricValue) else auroc,
                 ),
             ),
         ),

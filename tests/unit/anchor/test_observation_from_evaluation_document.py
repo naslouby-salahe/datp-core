@@ -35,7 +35,7 @@ from datp_core.core.identifiers import (
     PopulationId,
     StageOperationId,
 )
-from datp_core.core.numeric import RoundNumber, RowCount, ScoreValue, Seed, ThresholdValue
+from datp_core.core.numeric import MetricValue, RoundNumber, RowCount, ScoreValue, Seed, ThresholdValue
 from datp_core.data.populations.contracts import PopulationOutcomeLabel
 from datp_core.detector.checkpoints.protocols import CHECKPOINT_PROTOCOL
 from datp_core.experiments.anchor.contracts import (
@@ -119,7 +119,7 @@ def _fixed_score_evidence() -> FixedScoreEvidence:
             label_checksum=checksum,
             source_row_checksum=checksum,
             score_order_checksum=checksum,
-            aurocs=(ClientAurocEvidence(client_identity("device_a"), available(MetricId.AUROC, 0.8)),),
+            aurocs=(ClientAurocEvidence(client_identity("device_a"), available(MetricId.AUROC, MetricValue(0.8))),),
         ),
         population=PopulationEvidence(
             client_inventory_checksum=checksum,
