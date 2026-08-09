@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import ClassVar
@@ -124,41 +125,34 @@ class ClaimDecision:
 
 def validate_claim(request: ClaimRequest) -> ClaimDecision:
     normalized_wording = NormalizedClaimWording(request.wording.casefold())
-    availability_failure = _availability_failure(request)
-    if availability_failure is not None:
-        return availability_failure
-    suppressed_failure = _suppressed_failure(request)
-    if suppressed_failure is not None:
-        return suppressed_failure
-    kind_role_failure = _kind_role_mismatch(request)
-    if kind_role_failure is not None:
-        return kind_role_failure
-    anchor_gate_failure = _confirmatory_anchor_gate_failure(request)
-    if anchor_gate_failure is not None:
-        return anchor_gate_failure
-    unsupported_kind = _deployment_privacy_suppression(request)
-    if unsupported_kind is not None:
-        return unsupported_kind
-    operational_failure = _operational_alert_burden_failure(request)
-    if operational_failure is not None:
-        return operational_failure
-    external_failure = _external_assignment_failure(request)
-    if external_failure is not None:
-        return external_failure
-    temporal_result = _temporal_guard_result(request, normalized_wording)
-    if temporal_result is not None:
-        return temporal_result
-    privacy_suppression = _privacy_guard_suppression(normalized_wording)
-    if privacy_suppression is not None:
-        return privacy_suppression
-    deployment_suppression = _deployment_guard_suppression(normalized_wording)
-    if deployment_suppression is not None:
-        return deployment_suppression
-    boundary_failure = _applicability_boundary_failure(request, normalized_wording)
-    if boundary_failure is not None:
-        return boundary_failure
-    if request.kind is ClaimKind.CONFIRMATORY:
-        return _confirmatory_result(request)
+    failure = next((result for result in _claim_failures(request, normalized_wording) if result is not None), None)
+    if failure is not None:
+        return failure
+    return (
+        _confirmatory_result(request)
+        if request.kind is ClaimKind.CONFIRMATORY
+        else _final_nonconfirmatory_result(request)
+    )
+
+
+def _claim_failures(
+    request: ClaimRequest, normalized_wording: NormalizedClaimWording
+) -> Iterator[ClaimDecision | None]:
+    """Yield claim guards in publication order, stopping at the first failure."""
+    yield _availability_failure(request)
+    yield _suppressed_failure(request)
+    yield _kind_role_mismatch(request)
+    yield _confirmatory_anchor_gate_failure(request)
+    yield _deployment_privacy_suppression(request)
+    yield _operational_alert_burden_failure(request)
+    yield _external_assignment_failure(request)
+    yield _temporal_guard_result(request, normalized_wording)
+    yield _privacy_guard_suppression(normalized_wording)
+    yield _deployment_guard_suppression(normalized_wording)
+    yield _applicability_boundary_failure(request, normalized_wording)
+
+
+def _final_nonconfirmatory_result(request: ClaimRequest) -> ClaimDecision:
     supportive_result = _supportive_result(request)
     if supportive_result is not None:
         return supportive_result
@@ -308,36 +302,44 @@ def _supportive_result(request: ClaimRequest) -> ClaimDecision | None:
     return None
 
 
+_KIND_ROLE_BLOCKED_ROLES: dict[ClaimKind, frozenset[EvidenceRole]] = {
+    ClaimKind.CONFIRMATORY: frozenset(role for role in EvidenceRole if role is not EvidenceRole.CONFIRMATORY),
+    ClaimKind.EXTERNAL: frozenset(
+        role
+        for role in EvidenceRole
+        if role not in {EvidenceRole.EXTERNAL_VALIDATION, EvidenceRole.APPLICABILITY_BOUNDARY}
+    ),
+    ClaimKind.TEMPORAL: frozenset(role for role in EvidenceRole if role is not EvidenceRole.TEMPORAL_BOUNDARY),
+    ClaimKind.SUPPORTIVE: frozenset({EvidenceRole.CONFIRMATORY}),
+    ClaimKind.OPERATIONAL: frozenset({EvidenceRole.CONFIRMATORY}),
+}
+
+_KIND_ROLE_MISMATCH_REASONS: dict[tuple[ClaimKind, EvidenceRole | None], ClaimReason] = {
+    (ClaimKind.CONFIRMATORY, None): ClaimReason("only confirmatory evidence may support the sole confirmatory claim"),
+    (ClaimKind.EXTERNAL, EvidenceRole.CONFIRMATORY): ClaimReason(
+        "external evidence cannot be promoted to confirmatory evidence"
+    ),
+    (ClaimKind.EXTERNAL, None): ClaimReason(
+        "external claims require external-validation or applicability-boundary evidence"
+    ),
+    (ClaimKind.TEMPORAL, EvidenceRole.CONFIRMATORY): ClaimReason(
+        "temporal evidence cannot be promoted to confirmatory evidence"
+    ),
+    (ClaimKind.TEMPORAL, None): ClaimReason("temporal claims require temporal-boundary evidence"),
+    (ClaimKind.SUPPORTIVE, None): ClaimReason("supportive claims cannot reuse confirmatory evidence role labeling"),
+    (ClaimKind.OPERATIONAL, None): ClaimReason("operational claims cannot reuse confirmatory evidence role labeling"),
+}
+
+
 def _kind_role_mismatch(request: ClaimRequest) -> ClaimDecision | None:
     """Reject claim kinds that do not match the evidence role they cite."""
-    match request.kind:
-        case ClaimKind.CONFIRMATORY:
-            if request.evidence_role is not EvidenceRole.CONFIRMATORY:
-                return _blocked(ClaimReason("only confirmatory evidence may support the sole confirmatory claim"))
-        case ClaimKind.EXTERNAL:
-            if request.evidence_role is EvidenceRole.CONFIRMATORY:
-                return _blocked(ClaimReason("external evidence cannot be promoted to confirmatory evidence"))
-            if request.evidence_role not in {
-                EvidenceRole.EXTERNAL_VALIDATION,
-                EvidenceRole.APPLICABILITY_BOUNDARY,
-            }:
-                return _blocked(
-                    ClaimReason("external claims require external-validation or applicability-boundary evidence")
-                )
-        case ClaimKind.TEMPORAL:
-            if request.evidence_role is EvidenceRole.CONFIRMATORY:
-                return _blocked(ClaimReason("temporal evidence cannot be promoted to confirmatory evidence"))
-            if request.evidence_role is not EvidenceRole.TEMPORAL_BOUNDARY:
-                return _blocked(ClaimReason("temporal claims require temporal-boundary evidence"))
-        case ClaimKind.SUPPORTIVE:
-            if request.evidence_role is EvidenceRole.CONFIRMATORY:
-                return _blocked(ClaimReason("supportive claims cannot reuse confirmatory evidence role labeling"))
-        case ClaimKind.OPERATIONAL:
-            if request.evidence_role is EvidenceRole.CONFIRMATORY:
-                return _blocked(ClaimReason("operational claims cannot reuse confirmatory evidence role labeling"))
-        case ClaimKind.DEPLOYMENT | ClaimKind.PRIVACY:
-            return None
-    return None
+    blocked_roles = _KIND_ROLE_BLOCKED_ROLES.get(request.kind, frozenset())
+    if request.evidence_role not in blocked_roles:
+        return None
+    reason = _KIND_ROLE_MISMATCH_REASONS.get(
+        (request.kind, request.evidence_role), _KIND_ROLE_MISMATCH_REASONS[(request.kind, None)]
+    )
+    return _blocked(reason)
 
 
 def _blocked(reason: ClaimReason) -> ClaimDecision:

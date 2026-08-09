@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import singledispatch
 from itertools import chain
 from pathlib import Path
 
@@ -588,32 +589,25 @@ def _render_mechanisms(
     return [ReportLine(line) for line in lines]
 
 
-def _mechanism_title(
-    mechanism: MechanismEvidence,
-) -> ReportLine:
-    match mechanism:
-        case AssociationResult():
-            return ReportLine("heterogeneity_benefit_association")
-        case DivergenceResult():
-            return ReportLine("jensen_shannon_score_divergence")
-        case ClusterStabilityResult():
-            return ReportLine("cluster_stability")
-        case ClusterEvidenceRecord():
-            return ReportLine("cluster_evidence")
-        case GroupedDispersionResult():
-            return ReportLine("grouped_dispersion")
-        case ThresholdMovement():
-            return ReportLine("threshold_movement")
-        case ThresholdMovementCohort():
-            return ReportLine("threshold_movement_cohort")
-        case ThresholdMovementMultiSeedUncertainty():
-            return ReportLine("threshold_movement_across_seed_uncertainty")
-        case AbsorptionCohortResult():
-            return ReportLine("model_personalization_absorption")
-        case ScientificDecisionResult():
-            return ReportLine("scientific_decision")
-        case _:
-            return ReportLine("mechanism_evidence")
+_MECHANISM_TITLES: dict[type[object], ReportLine] = {
+    AssociationResult: ReportLine("heterogeneity_benefit_association"),
+    DivergenceResult: ReportLine("jensen_shannon_score_divergence"),
+    ClusterStabilityResult: ReportLine("cluster_stability"),
+    ClusterEvidenceRecord: ReportLine("cluster_evidence"),
+    GroupedDispersionResult: ReportLine("grouped_dispersion"),
+    ThresholdMovement: ReportLine("threshold_movement"),
+    ThresholdMovementCohort: ReportLine("threshold_movement_cohort"),
+    ThresholdMovementMultiSeedUncertainty: ReportLine("threshold_movement_across_seed_uncertainty"),
+    AbsorptionCohortResult: ReportLine("model_personalization_absorption"),
+    ScientificDecisionResult: ReportLine("scientific_decision"),
+}
+
+
+def _mechanism_title(mechanism: MechanismEvidence) -> ReportLine:
+    return next(
+        (title for mechanism_type, title in _MECHANISM_TITLES.items() if isinstance(mechanism, mechanism_type)),
+        ReportLine("mechanism_evidence"),
+    )
 
 
 def _mechanism_tables(mechanisms: tuple[MechanismEvidence, ...]) -> tuple[PublicationTable, ...]:
@@ -695,34 +689,12 @@ def _mechanism_tables(mechanisms: tuple[MechanismEvidence, ...]) -> tuple[Public
     return tuple(tables)
 
 
-def _render_one_mechanism(
-    mechanism: MechanismEvidence,
-) -> list[ReportLine]:
-    match mechanism:
-        case AssociationResult():
-            return _render_association_result(mechanism)
-        case DivergenceResult():
-            return _render_divergence_result(mechanism)
-        case ClusterStabilityResult():
-            return _render_cluster_stability_result(mechanism)
-        case ClusterEvidenceRecord():
-            return _render_cluster_evidence_record(mechanism)
-        case GroupedDispersionResult():
-            return _render_grouped_dispersion_result(mechanism)
-        case ThresholdMovement():
-            return _render_threshold_movement(mechanism)
-        case ThresholdMovementCohort():
-            return _render_threshold_movement_cohort(mechanism)
-        case ThresholdMovementMultiSeedUncertainty():
-            return _render_threshold_movement_uncertainty(mechanism)
-        case AbsorptionCohortResult():
-            return _render_absorption_cohort_result(mechanism)
-        case ScientificDecisionResult():
-            return _render_scientific_decision_result(mechanism)
-        case _:
-            return [ReportLine("Unhandled mechanism evidence kind")]
+@singledispatch
+def _render_one_mechanism(_mechanism: MechanismEvidence) -> list[ReportLine]:
+    return [ReportLine("Unhandled mechanism evidence kind")]
 
 
+@_render_one_mechanism.register
 def _render_association_result(mechanism: AssociationResult) -> list[ReportLine]:
     lines = [
         f"Observations: {mechanism.observation_count.value}",
@@ -749,6 +721,7 @@ def _render_association_result(mechanism: AssociationResult) -> list[ReportLine]
     return [ReportLine(line) for line in lines]
 
 
+@_render_one_mechanism.register
 def _render_divergence_result(mechanism: DivergenceResult) -> list[ReportLine]:
     lines = [
         f"Clients: {len(mechanism.clients)}",
@@ -777,6 +750,7 @@ def _render_divergence_result(mechanism: DivergenceResult) -> list[ReportLine]:
     return [ReportLine(line) for line in lines]
 
 
+@_render_one_mechanism.register
 def _render_cluster_stability_result(mechanism: ClusterStabilityResult) -> list[ReportLine]:
     return [
         ReportLine(line)
@@ -789,6 +763,7 @@ def _render_cluster_stability_result(mechanism: ClusterStabilityResult) -> list[
     ]
 
 
+@_render_one_mechanism.register
 def _render_cluster_evidence_record(mechanism: ClusterEvidenceRecord) -> list[ReportLine]:
     equity = (
         f"{mechanism.cv_fpr_equity_recovery.fraction.value:.6g}"
@@ -825,6 +800,7 @@ def _render_cluster_evidence_record(mechanism: ClusterEvidenceRecord) -> list[Re
     ]
 
 
+@_render_one_mechanism.register
 def _render_grouped_dispersion_result(mechanism: GroupedDispersionResult) -> list[ReportLine]:
     return [
         ReportLine(line)
@@ -842,6 +818,7 @@ def _render_grouped_dispersion_result(mechanism: GroupedDispersionResult) -> lis
     ]
 
 
+@_render_one_mechanism.register
 def _render_threshold_movement(mechanism: ThresholdMovement) -> list[ReportLine]:
     delta_tpr = f"{mechanism.delta_tpr.value:.6g}" if mechanism.delta_tpr is not None else "unavailable"
     return [
@@ -856,6 +833,7 @@ def _render_threshold_movement(mechanism: ThresholdMovement) -> list[ReportLine]
     ]
 
 
+@_render_one_mechanism.register
 def _render_threshold_movement_cohort(mechanism: ThresholdMovementCohort) -> list[ReportLine]:
     dispersion = (
         f"{mechanism.client_dispersion_delta_fpr.value:.6g}"
@@ -877,6 +855,7 @@ def _render_threshold_movement_cohort(mechanism: ThresholdMovementCohort) -> lis
     ]
 
 
+@_render_one_mechanism.register
 def _render_threshold_movement_uncertainty(mechanism: ThresholdMovementMultiSeedUncertainty) -> list[ReportLine]:
     across = (
         f"{mechanism.across_seed_dispersion_delta_fpr.value:.6g}"
@@ -899,6 +878,7 @@ def _render_threshold_movement_uncertainty(mechanism: ThresholdMovementMultiSeed
     ]
 
 
+@_render_one_mechanism.register
 def _render_absorption_cohort_result(mechanism: AbsorptionCohortResult) -> list[ReportLine]:
     retention_interval = mechanism.retention_interval
     retention_bca = (
@@ -925,6 +905,7 @@ def _render_absorption_cohort_result(mechanism: AbsorptionCohortResult) -> list[
     ]
 
 
+@_render_one_mechanism.register
 def _render_scientific_decision_result(mechanism: ScientificDecisionResult) -> list[ReportLine]:
     return [
         ReportLine(line)
@@ -1024,19 +1005,15 @@ def _optional_metric(
     return ReportLine("—" if value is None else f"{value.value:.6g}")
 
 
+_SCIENTIFIC_DECISION_EVIDENCE_DECISIONS: dict[ScientificDecision, EvidenceDecision] = {
+    ScientificDecision.SUPPORTED: EvidenceDecision.SUPPORTED,
+    ScientificDecision.DIRECTIONAL_INCONCLUSIVE: EvidenceDecision.DIRECTIONAL_INCONCLUSIVE,
+    ScientificDecision.OPPOSITE_DIRECTION: EvidenceDecision.REVERSED,
+    ScientificDecision.NO_OBSERVED_ADVANTAGE: EvidenceDecision.NULL,
+    ScientificDecision.BOUNDARY_RESULT: EvidenceDecision.BOUNDARY,
+    ScientificDecision.NOT_ESTABLISHED: EvidenceDecision.NOT_ESTABLISHED,
+}
+
+
 def _map_decision(decision: ScientificDecision) -> EvidenceDecision:
-    match decision:
-        case ScientificDecision.SUPPORTED:
-            return EvidenceDecision.SUPPORTED
-        case ScientificDecision.DIRECTIONAL_INCONCLUSIVE:
-            return EvidenceDecision.DIRECTIONAL_INCONCLUSIVE
-        case ScientificDecision.OPPOSITE_DIRECTION:
-            return EvidenceDecision.REVERSED
-        case ScientificDecision.NO_OBSERVED_ADVANTAGE:
-            return EvidenceDecision.NULL
-        case ScientificDecision.BOUNDARY_RESULT:
-            return EvidenceDecision.BOUNDARY
-        case ScientificDecision.NOT_ESTABLISHED:
-            return EvidenceDecision.NOT_ESTABLISHED
-        case _:
-            return EvidenceDecision.UNSTABLE
+    return _SCIENTIFIC_DECISION_EVIDENCE_DECISIONS.get(decision, EvidenceDecision.UNSTABLE)
