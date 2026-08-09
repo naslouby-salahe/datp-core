@@ -10,6 +10,7 @@ from datp_core.artifacts.provenance import Checksum
 from datp_core.core.identifiers import (
     AnalysisReasonText,
     AvailabilityStatus,
+    ClaimWording,
     ClientIdentityToken,
     DecisionRationale,
     EvidenceRole,
@@ -36,7 +37,13 @@ from datp_core.presentation.figures import (
     empirical_cdf_series_from_points,
     render_markdown_figure,
 )
-from datp_core.presentation.tables import EvidenceText, PublicationTable, TableCell, TableTitle
+from datp_core.presentation.tables import (
+    EvidenceText,
+    PublicationTable,
+    TableCell,
+    TableCellRenderedValue,
+    TableTitle,
+)
 from datp_core.presentation.validation import ClaimDecision, ClaimReason, ClaimStatus
 
 
@@ -98,12 +105,12 @@ def test_blocked_claims_are_separated_from_permitted_wording_by_status(tmp_path:
     destination = tmp_path / "report.md"
     permitted = ClaimDecision(
         status=ClaimStatus.PERMITTED,
-        wording="Local thresholding reduces FPR dispersion under the confirmatory ladder.",
+        wording=ClaimWording("Local thresholding reduces FPR dispersion under the confirmatory ladder."),
         reason=ClaimReason("claim matches evidence scope"),
     )
     blocked = ClaimDecision(
         status=ClaimStatus.BLOCKED,
-        wording="",
+        wording=None,
         reason=ClaimReason("the anchor gate blocks dependent journal claims"),
     )
     export_markdown(
@@ -120,7 +127,7 @@ def test_all_blocked_claims_suppress_tables_and_figures(tmp_path: Path) -> None:
     destination = tmp_path / "report.md"
     blocked = ClaimDecision(
         status=ClaimStatus.BLOCKED,
-        wording="",
+        wording=None,
         reason=ClaimReason("confirmatory BCa interval is unavailable"),
     )
     table = PublicationTable(
@@ -129,7 +136,7 @@ def test_all_blocked_claims_suppress_tables_and_figures(tmp_path: Path) -> None:
             TableCell(
                 metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
                 availability=AvailabilityStatus.AVAILABLE,
-                rendered_value="0.12",
+                rendered_value=TableCellRenderedValue("0.12"),
                 evidence=EvidenceText("should not appear when every claim is blocked"),
             ),
         ),
@@ -237,8 +244,8 @@ def test_empirical_cdf_figure_series_uses_reconstruction_and_cumulative_metrics(
     assert isinstance(series, EmpiricalCdfFigureSeries)
     assert series.x_metric is MetricId.RECONSTRUCTION_ERROR
     assert series.y_metric is MetricId.EMPIRICAL_CUMULATIVE_PROBABILITY
-    assert series.x_values == (0.1, 0.3)
-    assert series.y_values == (0.5, 1.0)
+    assert tuple(item.value for item in series.x_values) == (0.1, 0.3)
+    assert tuple(item.value for item in series.y_values) == (0.5, 1.0)
     assert series.threshold_overlays[0] == ThresholdOverlay(
         method=FederatedThresholdMethod.SHARED_THRESHOLD,
         value=ThresholdValue(0.2),
@@ -280,8 +287,8 @@ def test_empirical_cdf_rejects_fpr_as_score_metric() -> None:
             x_metric=MetricId.FALSE_POSITIVE_RATE,
             y_metric=MetricId.EMPIRICAL_CUMULATIVE_PROBABILITY,
             availability=AvailabilityStatus.AVAILABLE,
-            x_values=(0.1,),
-            y_values=(1.0,),
+            x_values=(MetricValue(0.1),),
+            y_values=(MetricValue(1.0),),
             client_id=client_id,
             seed=seed,
             score_role=ScoreRole.BENIGN_EVALUATION,

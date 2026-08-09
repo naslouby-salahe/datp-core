@@ -60,7 +60,13 @@ from datp_core.experiments.common.seeds import (
 from datp_core.experiments.execution.context import training_feature_names
 from datp_core.experiments.execution.layout import ExecutionArtifactDirectory
 from datp_core.presentation.export import PUBLICATION_FILENAME, PublicationBundle, ReportProvenance, export_markdown
-from datp_core.presentation.tables import EvidenceText, PublicationTable, TableCell, TableTitle
+from datp_core.presentation.tables import (
+    EvidenceText,
+    PublicationTable,
+    TableCell,
+    TableCellRenderedValue,
+    TableTitle,
+)
 from datp_core.presentation.validation import ClaimKind, ClaimRequest, EvidenceDecision, validate_claim
 from datp_core.runtime.configuration import DATA_ROOT, OUTPUTS_ROOT
 from datp_core.runtime.filesystem import write_text_atomically
@@ -368,7 +374,7 @@ def _centralized_reference_table(evaluation: CentralizedEvaluationDocument) -> P
                 TableCell(
                     metric=metric_id,
                     availability=AvailabilityStatus.AVAILABLE,
-                    rendered_value=f"{metric.value.value:.6g}",
+                    rendered_value=TableCellRenderedValue(f"{metric.value.value:.6g}"),
                     evidence=EvidenceText(
                         f"pooled centralized held-out metric; seed={evaluation.coordinate.training_seed.value}"
                     ),
@@ -379,7 +385,7 @@ def _centralized_reference_table(evaluation: CentralizedEvaluationDocument) -> P
                 TableCell(
                     metric=metric_id,
                     availability=_metric_availability(metric.status),
-                    rendered_value="",
+                    rendered_value=TableCellRenderedValue(""),
                     evidence=EvidenceText(f"unavailable: {metric.reason.value}"),
                 )
             )

@@ -10,7 +10,13 @@ from datp_core.core.identifiers import (
     PopulationId,
 )
 from datp_core.presentation.export import PublicationBundle, ReportProvenance, export_markdown
-from datp_core.presentation.tables import EvidenceText, PublicationTable, TableCell, TableTitle
+from datp_core.presentation.tables import (
+    EvidenceText,
+    PublicationTable,
+    TableCell,
+    TableCellRenderedValue,
+    TableTitle,
+)
 from datp_core.presentation.validation import (
     ClaimKind,
     ClaimRequest,
@@ -65,13 +71,13 @@ def test_presentation_export_is_deterministic_and_preserves_provenance_and_unava
             TableCell(
                 metric=MetricId.FALSE_POSITIVE_RATE,
                 availability=AvailabilityStatus.AVAILABLE,
-                rendered_value="0.125",
+                rendered_value=TableCellRenderedValue("0.125"),
                 evidence=EvidenceText("held-out benign evaluation"),
             ),
             TableCell(
                 metric=MetricId.TRUE_POSITIVE_RATE,
                 availability=AvailabilityStatus.UNAVAILABLE,
-                rendered_value="",
+                rendered_value=TableCellRenderedValue(""),
                 evidence=EvidenceText("client-level attack assignment is unavailable"),
             ),
         ),
@@ -100,6 +106,7 @@ def test_presentation_export_is_deterministic_and_preserves_provenance_and_unava
     assert provenance.analysis_checksum.value in first
     assert provenance.experiment.value in first
     assert provenance.evidence_role.value in first
+    assert permitted.wording is not None
     assert permitted.wording in first
     assert blocked.reason in first
     assert "anchor-gate artifact" in blocked_confirmatory.reason
