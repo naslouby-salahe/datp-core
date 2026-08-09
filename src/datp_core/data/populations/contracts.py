@@ -30,6 +30,7 @@ from datp_core.core.identifiers import (
     PopulationIdentityKind,
     SplitProtocolId,
     StableRowId,
+    ValidationReasonText,
 )
 from datp_core.core.numeric import (
     ClientCount,
@@ -51,8 +52,8 @@ class CapabilityStatus(StrEnum):
 @dataclass(frozen=True, slots=True)
 class CapabilityStatement:
     status: CapabilityStatus
-    evidence: str
-    reason: str
+    evidence: ValidationReasonText
+    reason: ValidationReasonText
 
     def __post_init__(self) -> None:
         if not self.evidence.strip() or not self.reason.strip():
@@ -443,7 +444,7 @@ class PopulationFeasibility:
     reason: PopulationFeasibilityReason
     expected_client_count: ClientCount
     observed_client_count: NonNegativeIntegerValue
-    evidence: str
+    evidence: ValidationReasonText
 
     def __post_init__(self) -> None:
         if not self.evidence:

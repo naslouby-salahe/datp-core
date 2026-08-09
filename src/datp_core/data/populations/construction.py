@@ -193,7 +193,7 @@ def feasibility_from_candidates(request: FeasibilityAssessmentRequest) -> Popula
         PopulationFeasibilityReason.CANDIDATE_SET_MATCHES_DECLARATION,
         expected,
         NonNegativeIntegerValue(accepted_n),
-        "candidate and accepted client sets match the locked construction contract",
+        ValidationReasonText("candidate and accepted client sets match the locked construction contract"),
     )
 
 

@@ -16,7 +16,9 @@ from datp_core.core.errors import (
     ScientificContractError,
 )
 from datp_core.core.identifiers import (
+    CanonicalAssetRoleToken,
     CanonicalizationContractName,
+    CanonicalSourcePath,
     ColumnName,
     ContractSubject,
     DatasetId,
@@ -25,7 +27,7 @@ from datp_core.core.identifiers import (
     SerializedDocumentText,
     SourceIdentity,
 )
-from datp_core.core.numeric import ByteCount, RowCount
+from datp_core.core.numeric import ByteCount, NanosecondTimestamp, RowCount
 from datp_core.data.contracts import (
     CanonicalManifestDocument,
     CanonicalPublicationArtifact,
@@ -406,8 +408,8 @@ def _source_state(
 def _source_state_entry(path: Path, source_path_resolver: SourcePathResolver) -> SourceStateEntryDocument:
     state = path.stat()
     return SourceStateEntryDocument(
-        modified_time_nanoseconds=state.st_mtime_ns,
-        path=source_path_resolver(path).as_posix(),
+        modified_time_nanoseconds=NanosecondTimestamp(state.st_mtime_ns),
+        path=CanonicalSourcePath(source_path_resolver(path).as_posix()),
         size_bytes=ByteCount(state.st_size),
     )
 
@@ -456,9 +458,9 @@ def _asset_entry[AssetRoleT: StrEnum](asset: CanonicalAsset[AssetRoleT]) -> Mani
     return ManifestAssetEntry(
         checksum=asset.checksum,
         columns=asset.columns,
-        path=asset.relative_path.as_posix(),
+        path=CanonicalSourcePath(asset.relative_path.as_posix()),
         row_count=asset.row_count,
-        role=asset.role.value,
+        role=CanonicalAssetRoleToken(asset.role.value),
         source_identity=asset.source_identity,
     )
 

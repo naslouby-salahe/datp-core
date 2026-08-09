@@ -9,7 +9,13 @@ from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
 )
-from datp_core.core.identifiers import CaptureTimestampColumn, PopulationId, SplitProtocolId, TemporalState
+from datp_core.core.identifiers import (
+    CaptureTimestampColumn,
+    PopulationId,
+    SplitProtocolId,
+    TemporalState,
+    ValidationReasonText,
+)
 from datp_core.core.numeric import ClientCount, NonNegativeIntegerValue
 from datp_core.data.edge_iiotset.schema import EdgeCanonicalColumn
 from datp_core.data.populations.contracts import (
@@ -42,7 +48,7 @@ MATCHED_STATIC_SPLIT_MANIFEST_ASSET = "matched_static_reference_split_manifest.j
 MATCHED_STATIC_SPLIT_ASSIGNMENTS_ASSET = "matched_static_reference_assignments.parquet"
 CHRONOLOGY_ASSET = "chronology.json"
 COMPLETE_ASSET = "COMPLETE"
-PERSISTED_MANIFEST_EVIDENCE = "persisted population manifest"
+PERSISTED_MANIFEST_EVIDENCE = ValidationReasonText("persisted population manifest")
 
 
 @dataclass(slots=True, eq=False)

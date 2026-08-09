@@ -12,7 +12,9 @@ from datp_core.artifacts.serializers.json import canonical_json_text, canonical_
 from datp_core.core.contracts import StrictModel
 from datp_core.core.identifiers import (
     AvailabilityStatus,
+    CanonicalAssetRoleToken,
     CanonicalizationContractName,
+    CanonicalSourcePath,
     ChronologyGroupIdentity,
     ColumnName,
     DatasetId,
@@ -20,6 +22,7 @@ from datp_core.core.identifiers import (
     PhysicalSchemaText,
     SerializedDocumentText,
     SourceIdentity,
+    ValidationReasonText,
     ValidationSourceContext,
     ValidationSubject,
 )
@@ -27,6 +30,7 @@ from datp_core.core.numeric import (
     ByteCount,
     CanonicalColumnPosition,
     MicrosecondOffset,
+    NanosecondTimestamp,
     RowCount,
     SourceFileCount,
     SourceRowIndex,
@@ -219,7 +223,7 @@ class DatasetExclusion:
     source_path: Path | None
     source_row: SourceRowReference | None
     reason: ExclusionReason
-    evidence: str
+    evidence: ValidationReasonText
     affected_count: RowCount
 
     def __post_init__(self) -> None:
@@ -480,9 +484,9 @@ class SchemaChecksumDocument(StrictModel):
 class ManifestAssetEntry(StrictModel):
     checksum: Checksum
     columns: tuple[ColumnName, ...]
-    path: str
+    path: CanonicalSourcePath
     row_count: RowCount
-    role: str
+    role: CanonicalAssetRoleToken
     source_identity: SourceIdentity | None = None
 
 
@@ -496,7 +500,7 @@ class ManifestChronologyEntry(StrictModel):
     is_monotonic: bool
     reason: NonEmptyString
     temporal_eligible: bool
-    evidence_source_path: str | None = None
+    evidence_source_path: CanonicalSourcePath | None = None
     evidence_row_count: RowCount | None = None
     alignment_verified: bool = False
     alignment_offset_microseconds: MicrosecondOffset | None = None
@@ -506,7 +510,7 @@ class ManifestChronologyEntry(StrictModel):
 
 class ManifestRawSourceEntry(StrictModel):
     dataset: DatasetId
-    relative_path: str
+    relative_path: CanonicalSourcePath
     size_bytes: ByteCount
     checksum: Checksum
     role: SourceFileRole
@@ -515,7 +519,7 @@ class ManifestRawSourceEntry(StrictModel):
 
 class ManifestExcludedSourceEntry(StrictModel):
     dataset: DatasetId
-    relative_path: str
+    relative_path: CanonicalSourcePath
     reason: ExclusionReason
 
 
@@ -536,10 +540,10 @@ class ManifestSourceRowEntry(StrictModel):
 
 class ManifestExclusionEntry(StrictModel):
     dataset: DatasetId
-    source_path: str | None = None
+    source_path: CanonicalSourcePath | None = None
     source_row: ManifestSourceRowEntry | None = None
     reason: ExclusionReason
-    evidence: str
+    evidence: ValidationReasonText
     affected_count: RowCount
 
 
@@ -650,8 +654,8 @@ def manifest_validation_report_entry(value: DatasetValidationReport) -> Manifest
 
 
 class SourceStateEntryDocument(StrictModel):
-    modified_time_nanoseconds: int
-    path: str
+    modified_time_nanoseconds: NanosecondTimestamp
+    path: CanonicalSourcePath
     size_bytes: ByteCount
 
 

@@ -495,6 +495,10 @@ class CanonicalSourcePath(NonEmptyString):
     validation_name: ClassVar[str] = "canonical source path"
 
 
+class CanonicalAssetRoleToken(NonEmptyString):
+    validation_name: ClassVar[str] = "canonical asset role token"
+
+
 class DecisionRationale(NonEmptyString):
     validation_name: ClassVar[str] = "decision rationale"
 
