@@ -8,7 +8,7 @@ from pathlib import Path
 
 import polars as pl
 
-from datp_core.analysis.contrasts import PairedContrast, build_paired_contrast
+from datp_core.analysis.contrasts import PairedContrast, PairedContrasts, build_paired_contrast
 from datp_core.analysis.descriptive import (
     ClientEvaluationScoreSeries,
     ScoreGeometryResult,
@@ -190,7 +190,9 @@ def analyze_confirmatory_campaign(*, anchor_gate_diagnostics_directory: Path | N
     all_mechanisms = mechanisms + cluster_mechanisms
     result = analyze_confirmatory_evidence(
         AnalyzeConfirmatoryEvidenceRequest(
-            contrasts=tuple(_confirmatory_contrast(seed) for seed in CONFIRMATORY_SEED_COHORT.values),
+            contrasts=PairedContrasts(
+                values=tuple(_confirmatory_contrast(seed) for seed in CONFIRMATORY_SEED_COHORT.values)
+            ),
             inference_protocol=CONFIRMATORY_INFERENCE_PROTOCOL,
             analysis_seed=CONFIRMATORY_ANALYSIS_SEED,
             output_directory=output,

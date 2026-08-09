@@ -239,7 +239,9 @@ class PipelineStageRunner:
                 return StageExecution(
                     stage=stage,
                     outcome=StageOutcome.COMPLETED,
-                    evidence=StageExecutionEvidence(f"state_set={workspace.context.preprocessing_state_set_checksum.value}"),
+                    evidence=StageExecutionEvidence(
+                        f"state_set={workspace.context.preprocessing_state_set_checksum.value}"
+                    ),
                 )
             case PipelineStage.TRAIN_DETECTOR:
                 return self._train_detector(stage, workspace)
@@ -247,7 +249,9 @@ class PipelineStageRunner:
                 return StageExecution(
                     stage=stage,
                     outcome=StageOutcome.COMPLETED,
-                    evidence=StageExecutionEvidence(f"selected_round={workspace.selected_checkpoint.round_number.value}"),
+                    evidence=StageExecutionEvidence(
+                        f"selected_round={workspace.selected_checkpoint.round_number.value}"
+                    ),
                 )
             case PipelineStage.GENERATE_SCORES:
                 return self._generate_scores(stage, coordinate, workspace)

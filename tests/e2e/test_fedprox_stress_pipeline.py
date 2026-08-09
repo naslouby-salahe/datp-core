@@ -29,8 +29,7 @@ def test_fedprox_stress_entry_point_marks_experiment_executable_with_standard_ro
                 experiment=declaration.id,
                 disposition=PlanDisposition.EXECUTABLE,
                 reason=PlanReason(
-                    "the FedProx stress-test entry point supplies the locked natural-device "
-                    "execution prerequisites"
+                    "the FedProx stress-test entry point supplies the locked natural-device execution prerequisites"
                 ),
             ),
         ),

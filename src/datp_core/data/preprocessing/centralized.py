@@ -282,6 +282,3 @@ def preprocess_centralized_population(
             partitions=partitions,
         )
     )
-
-
-

@@ -50,6 +50,8 @@ from datp_core.runtime.filesystem import write_text_atomically
 CANONICAL_DATA_DIRECTORY = "data"
 PARQUET_PATTERN = "*.parquet"
 MODEL_INPUT_EXCLUSION_ASSET = "model_input_exclusions.json"
+
+
 class ModelInputExclusionReason(StrEnum):
     NONFINITE_OR_NULL_NUMERIC_MODEL_INPUT_FEATURE = "nonfinite_or_null_numeric_model_input_feature"
 

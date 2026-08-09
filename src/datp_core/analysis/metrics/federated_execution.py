@@ -84,7 +84,7 @@ from datp_core.thresholds.policies.shared import (
 from datp_core.thresholds.quantiles import unweighted_mean
 from datp_core.thresholds.variants.conformal import ConformalThresholdResult
 from datp_core.thresholds.variants.federated_statistics import FederatedStatisticsThresholdResult
-from datp_core.thresholds.variants.shrinkage import ShrinkageThresholdResult
+from datp_core.thresholds.variants.shrinkage import FixedShrinkageCurveResult
 
 
 @dataclass(frozen=True, slots=True)
@@ -173,7 +173,7 @@ def _evaluate(
     request: FederatedEvaluationRequest,
 ) -> FederatedEvaluationMetrics:
     _validate_evaluation_request(request)
-    if isinstance(request.threshold_result, tuple):
+    if isinstance(request.threshold_result, FixedShrinkageCurveResult):
         return _evaluate_shrinkage_curve(request)
     assignments = _assignments(request.threshold_result)
 
@@ -305,7 +305,7 @@ def _evaluate_diagnostics(
         else summarize_communication(coordinate.training_seed, coordinate, request.communication_messages)
     )
     shrinkage_curve = (
-        _shrinkage_curve_evaluations(request) if isinstance(request.threshold_result, ShrinkageThresholdResult) else ()
+        _shrinkage_curve_evaluations(request) if isinstance(request.threshold_result, FixedShrinkageCurveResult) else ()
     )
     return EvaluationDiagnostics(
         conformal_coverage=conformal_coverage,
@@ -375,12 +375,12 @@ def _evaluate_shrinkage_curve(
 
 
 def _shrinkage_curve_evaluations(request: FederatedEvaluationRequest) -> tuple[ShrinkageLambdaEvaluation, ...]:
-    results = request.threshold_result
-    if not isinstance(results, tuple) or not results:
+    curve_result = request.threshold_result
+    if not isinstance(curve_result, FixedShrinkageCurveResult):
         raise ScientificContractError(ErrorMessage("shrinkage curve evaluation requires a shrinkage result"))
 
     evaluations: list[ShrinkageLambdaEvaluation] = []
-    for result in results:
+    for result in curve_result.points:
         assignments = tuple(ThresholdAssignment(item.client, item.threshold) for item in result.assignments)
 
         assignment_map: dict[ClientIdentity, ThresholdValue] = {}
@@ -419,7 +419,7 @@ def _assignments(result: ThresholdConstructionResult) -> tuple[ThresholdAssignme
             | FederatedStatisticsThresholdResult()
         ):
             return result.assignments
-        case tuple():
+        case FixedShrinkageCurveResult():
             raise ScientificContractError(
                 ErrorMessage("multi-lambda shrinkage cannot flatten to one assignment set; use curve evaluation")
             )
@@ -442,27 +442,16 @@ def _deployment_fallback_threshold(
             return unweighted_mean(tuple(item.threshold for item in assignments))
         case ThresholdUnavailableResult():
             return None
-        case tuple():
+        case FixedShrinkageCurveResult():
             raise ScientificContractError(ErrorMessage("multi-lambda shrinkage requires per-weight evaluation"))
 
 
 def _threshold_method(result: ThresholdConstructionResult) -> FederatedThresholdMethod:
-    if isinstance(result, tuple):
-        if not result:
-            raise ScientificContractError(ErrorMessage("shrinkage threshold construction cannot be empty"))
-        return FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE
     return result.method
 
 
 def _threshold_coordinate(result: ThresholdConstructionResult) -> FederatedTrainingCoordinate:
-    if not isinstance(result, tuple):
-        return result.coordinate
-    if not result:
-        raise ScientificContractError(ErrorMessage("shrinkage threshold construction cannot be empty"))
-    coordinates = frozenset(item.coordinate for item in result)
-    if len(coordinates) != 1:
-        raise ScientificContractError(ErrorMessage("every shrinkage weight must share one training coordinate"))
-    return result[0].coordinate
+    return result.coordinate
 
 
 def _score_arrays(

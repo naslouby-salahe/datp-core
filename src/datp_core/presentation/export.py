@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from itertools import chain
 from pathlib import Path
 
+from datp_core.analysis.contrasts import PairedContrasts
 from datp_core.analysis.descriptive import DescriptiveSummary, PairedDifferenceCounts
 from datp_core.analysis.inference.bootstrap.contracts import BootstrapInterval
 from datp_core.analysis.inference.multiplicity import MultiplicityResult
@@ -535,16 +536,14 @@ def _render_sign_consistency(
     ]
 
 
-def _render_paired_contrasts(
-    contrasts: tuple,
-) -> list[ReportLine]:
+def _render_paired_contrasts(contrasts: PairedContrasts) -> list[ReportLine]:
     lines = [
         "## Paired Seed Values",
         "",
         "| Seed | Shared | Local | Delta | Model checksum | Checkpoint |",
         "|---|---:|---:|---:|---|---|",
     ]
-    for contrast in contrasts:
+    for contrast in contrasts.values:
         lines.append(
             f"| {contrast.seed.value} | {contrast.left_value.value:.6g} | "
             f"{contrast.right_value.value:.6g} | {contrast.delta.value:.6g} | "
@@ -676,12 +675,12 @@ def _mechanism_tables(mechanisms: tuple[MechanismEvidence, ...]) -> tuple[Public
                         ),
                     )
                 )
-            case ClusterEvidenceRecord() if mechanism.cv_fpr_equity_recovery_fraction is not None:
+            case ClusterEvidenceRecord() if mechanism.cv_fpr_equity_recovery.fraction is not None:
                 cells.append(
                     TableCell(
                         metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
                         availability=mechanism.availability,
-                        rendered_value=TableCellRenderedValue(f"{mechanism.cv_fpr_equity_recovery_fraction.value:.6g}"),
+                        rendered_value=TableCellRenderedValue(f"{mechanism.cv_fpr_equity_recovery.fraction.value:.6g}"),
                         evidence=EvidenceText(
                             f"CV(FPR) equity recovery; empty_clusters={len(mechanism.partition.empty_groups)}; "
                             f"seed={mechanism.seed.value}"
@@ -731,17 +730,17 @@ def _render_association_result(mechanism: AssociationResult) -> list[ReportLine]
     ]
     if mechanism.statistics is not None:
         stats = mechanism.statistics
-        lower, upper = stats.regression_slope_confidence_interval
+        interval = stats.regression_slope_confidence_interval
         lines.extend(
             [
                 f"Spearman rho: {stats.spearman_rho.value:.6g}",
                 f"Spearman p: {stats.spearman_p_value.value:.6g}",
                 f"Intercept: {stats.regression_intercept.value:.6g}",
                 f"Slope: {stats.regression_slope.value:.6g} (SE {stats.regression_slope_standard_error.value:.6g})",
-                f"Slope CI: [{lower.value:.6g}, {upper.value:.6g}]",
+                f"Slope CI: [{interval.lower_bound.value:.6g}, {interval.upper_bound.value:.6g}]",
                 f"R²: {stats.r_squared.value:.6g}",
                 f"Leverage: {', '.join(f'{value.value:.6g}' for value in stats.leverage)}",
-                f"Influence: {', '.join(f'{value.value:.6g}' for value in stats.influence)}",
+                "Influence: " + ", ".join(f"{value.value:.6g}" for value in stats.leave_one_out_diagnostics.influences),
                 f"Evidentiary sufficient: {stats.evidentiary_sufficient}",
             ]
         )
@@ -765,7 +764,14 @@ def _render_divergence_result(mechanism: DivergenceResult) -> list[ReportLine]:
         lines.append(f"Source score checksum: `{mechanism.source_score_checksum.value}`")
     if mechanism.aggregate is not None:
         lines.append(f"Aggregate JS distance: {mechanism.aggregate.value:.6g}")
-        lines.append(f"Pairwise values: {', '.join(f'{value.value:.6g}' for value in mechanism.pairwise_values)}")
+        lines.append(
+            "Pairwise values: "
+            + ", ".join(
+                f"{distance.left_client.client_id.value}/{distance.right_client.client_id.value}="
+                f"{distance.value.value:.6g}"
+                for distance in mechanism.pairwise_distances
+            )
+        )
     if mechanism.reason:
         lines.append(f"Reason: {mechanism.reason}")
     return [ReportLine(line) for line in lines]
@@ -785,14 +791,14 @@ def _render_cluster_stability_result(mechanism: ClusterStabilityResult) -> list[
 
 def _render_cluster_evidence_record(mechanism: ClusterEvidenceRecord) -> list[ReportLine]:
     equity = (
-        f"{mechanism.cv_fpr_equity_recovery_fraction.value:.6g}"
-        if mechanism.cv_fpr_equity_recovery_fraction is not None
-        else mechanism.cv_fpr_equity_recovery_reason
+        f"{mechanism.cv_fpr_equity_recovery.fraction.value:.6g}"
+        if mechanism.cv_fpr_equity_recovery.fraction is not None
+        else mechanism.cv_fpr_equity_recovery.reason
     )
     threshold_recovery = (
-        f"{mechanism.threshold_dispersion_recovery_fraction.value:.6g}"
-        if mechanism.threshold_dispersion_recovery_fraction is not None
-        else mechanism.threshold_dispersion_recovery_reason
+        f"{mechanism.threshold_dispersion_recovery.fraction.value:.6g}"
+        if mechanism.threshold_dispersion_recovery.fraction is not None
+        else mechanism.threshold_dispersion_recovery.reason
     )
     contributing = (
         f"{mechanism.contributing_quantile_dispersion.value:.6g}"
@@ -824,9 +830,9 @@ def _render_grouped_dispersion_result(mechanism: GroupedDispersionResult) -> lis
         ReportLine(line)
         for line in [
             f"Availability: `{mechanism.availability.value}`",
-            f"Groups: {len(mechanism.group_sizes)}",
-            f"Singletons: {len(mechanism.singleton_groups)}",
-            f"Empty: {len(mechanism.empty_groups)}",
+            f"Groups: {len(mechanism.groups)}",
+            f"Singletons: {sum(group.size.value == 1 for group in mechanism.groups)}",
+            f"Empty: {sum(group.size.value == 0 for group in mechanism.groups)}",
             (
                 f"Across-group threshold spread: {mechanism.across_group_threshold_spread.value:.6g}"
                 if mechanism.across_group_threshold_spread is not None

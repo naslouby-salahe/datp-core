@@ -259,9 +259,8 @@ def _clock_matches(
     offset_microseconds: MicrosecondOffset,
 ) -> bool:
     return (
-        (pcap_clock_microseconds.value + offset_microseconds.value) % _MICROSECONDS_PER_DAY
-        == csv_clock_microseconds.value
-    )
+        pcap_clock_microseconds.value + offset_microseconds.value
+    ) % _MICROSECONDS_PER_DAY == csv_clock_microseconds.value
 
 
 def _pcap_records(path: Path) -> Iterator[_PcapRecord]:
@@ -281,9 +280,7 @@ def _pcap_records(path: Path) -> Iterator[_PcapRecord]:
                 timestamp_nanoseconds=NanosecondTimestamp(
                     seconds * _NANOSECONDS_PER_SECOND + microseconds * _NANOSECONDS_PER_MICROSECOND
                 ),
-                utc_clock_microseconds=MicrosecondClock(
-                    (seconds % 86_400) * _MICROSECONDS_PER_SECOND + microseconds
-                ),
+                utc_clock_microseconds=MicrosecondClock((seconds % 86_400) * _MICROSECONDS_PER_SECOND + microseconds),
             )
 
 

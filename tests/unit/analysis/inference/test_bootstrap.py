@@ -2,7 +2,12 @@ import numpy as np
 import pytest
 from scipy import stats
 
-from datp_core.analysis.contrasts import FixedScorePairProvenance, PairedContrast, SupplementaryPairedAnalysisPlan
+from datp_core.analysis.contrasts import (
+    FixedScorePairProvenance,
+    PairedContrast,
+    PairedContrasts,
+    SupplementaryPairedAnalysisPlan,
+)
 from datp_core.analysis.inference.bootstrap.contracts import (
     BcaAdjustment,
     BcaOutcome,
@@ -53,12 +58,18 @@ def test_paired_bca_is_deterministic_and_uses_protocol_metadata() -> None:
 
 def test_empty_pairs_are_blocked_without_a_fabricated_point_estimate() -> None:
     result = paired_bca_interval(
-        (),
+        PairedContrasts(values=()),
         protocol=CONFIRMATORY_INFERENCE_PROTOCOL,
         analysis_seed=Seed(73),
     )
     assert result.outcome is BcaOutcome.BLOCKED
     assert result.point_estimate is None
+
+
+def test_paired_contrasts_reject_duplicate_seed_observations() -> None:
+    duplicate = _contrast(0, PopulationId.NBAIOT_NATURAL_DEVICES, EvidenceRole.CONFIRMATORY)
+    with pytest.raises(ValueError, match="one observation per seed"):
+        PairedContrasts(values=(duplicate, duplicate))
 
 
 def test_supplementary_interval_cannot_be_promoted_to_confirmatory() -> None:
@@ -79,13 +90,15 @@ def test_supplementary_interval_cannot_be_promoted_to_confirmatory() -> None:
         inference_protocol=protocol,
     )
     result = supplementary_paired_bca_interval(
-        tuple(
-            _contrast(
-                seed,
-                PopulationId.EDGE_SENSOR_GROUPS,
-                EvidenceRole.EXTERNAL_VALIDATION,
+        PairedContrasts(
+            values=tuple(
+                _contrast(
+                    seed,
+                    PopulationId.EDGE_SENSOR_GROUPS,
+                    EvidenceRole.EXTERNAL_VALIDATION,
+                )
+                for seed in range(1, 5)
             )
-            for seed in range(1, 5)
         ),
         plan=plan,
         analysis_seed=Seed(73),
@@ -124,15 +137,17 @@ def test_confirmatory_decision_is_not_established_when_bca_is_unavailable() -> N
 
 
 def test_bca_handles_ties_with_identical_deltas_as_degenerate() -> None:
-    values = tuple(
-        _contrast(
-            seed,
-            PopulationId.NBAIOT_NATURAL_DEVICES,
-            EvidenceRole.CONFIRMATORY,
-            shared=MetricValue(0.05),
-            local=MetricValue(0.02),
+    values = PairedContrasts(
+        values=tuple(
+            _contrast(
+                seed,
+                PopulationId.NBAIOT_NATURAL_DEVICES,
+                EvidenceRole.CONFIRMATORY,
+                shared=MetricValue(0.05),
+                local=MetricValue(0.02),
+            )
+            for seed in range(10)
         )
-        for seed in range(10)
     )
     result = paired_bca_interval(
         values,
@@ -158,14 +173,16 @@ def test_distribution_bca_computation_preserves_its_degenerate_reason() -> None:
     assert result.reason is BcaReason.INFINITE_BIAS_CORRECTION
 
 
-def contrasts() -> tuple[PairedContrast, ...]:
-    return tuple(
-        _contrast(
-            seed,
-            PopulationId.NBAIOT_NATURAL_DEVICES,
-            EvidenceRole.CONFIRMATORY,
+def contrasts() -> PairedContrasts:
+    return PairedContrasts(
+        values=tuple(
+            _contrast(
+                seed,
+                PopulationId.NBAIOT_NATURAL_DEVICES,
+                EvidenceRole.CONFIRMATORY,
+            )
+            for seed in range(10)
         )
-        for seed in range(10)
     )
 
 
@@ -219,15 +236,17 @@ _ORACLE_DELTAS = (0.10, 0.12, 0.08, 0.15, 0.05, 0.11, 0.09, 0.13, 0.07, 0.14)
 
 
 def test_bca_interval_matches_an_independently_computed_efron_bca_oracle() -> None:
-    values = tuple(
-        _contrast(
-            seed,
-            PopulationId.NBAIOT_NATURAL_DEVICES,
-            EvidenceRole.CONFIRMATORY,
-            local=MetricValue(0.0),
-            shared=MetricValue(delta),
+    values = PairedContrasts(
+        values=tuple(
+            _contrast(
+                seed,
+                PopulationId.NBAIOT_NATURAL_DEVICES,
+                EvidenceRole.CONFIRMATORY,
+                local=MetricValue(0.0),
+                shared=MetricValue(delta),
+            )
+            for seed, delta in enumerate(_ORACLE_DELTAS)
         )
-        for seed, delta in enumerate(_ORACLE_DELTAS)
     )
     analysis_seed = Seed(11)
     result = paired_bca_interval(
@@ -274,15 +293,17 @@ def test_bca_interval_matches_an_independently_computed_efron_bca_oracle() -> No
 
 
 def test_bca_interval_agrees_with_an_independent_scipy_bca_implementation() -> None:
-    values = tuple(
-        _contrast(
-            seed,
-            PopulationId.NBAIOT_NATURAL_DEVICES,
-            EvidenceRole.CONFIRMATORY,
-            local=MetricValue(0.0),
-            shared=MetricValue(delta),
+    values = PairedContrasts(
+        values=tuple(
+            _contrast(
+                seed,
+                PopulationId.NBAIOT_NATURAL_DEVICES,
+                EvidenceRole.CONFIRMATORY,
+                local=MetricValue(0.0),
+                shared=MetricValue(delta),
+            )
+            for seed, delta in enumerate(_ORACLE_DELTAS)
         )
-        for seed, delta in enumerate(_ORACLE_DELTAS)
     )
     result = paired_bca_interval(
         values,

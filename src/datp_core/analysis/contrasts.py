@@ -1,5 +1,7 @@
 """Typed paired-contrast identities and supplementary analysis plans."""
 
+from typing import overload
+
 from pydantic import model_validator
 
 from datp_core.analysis.inference.contracts import PairedInferenceProtocol
@@ -118,7 +120,38 @@ class PairedContrast(StrictModel):
         return MetricValue(self.left_value.value - self.right_value.value)
 
 
-type PairedContrasts = tuple[PairedContrast, ...]
+class PairedContrasts(StrictModel):
+    """Immutable, seed-unique observations for one paired analysis."""
+
+    values: tuple[PairedContrast, ...]
+
+    @model_validator(mode="after")
+    def validate_unique_seeds(self) -> "PairedContrasts":
+        if len({contrast.seed for contrast in self.values}) != len(self.values):
+            raise ValueError("paired contrasts require one observation per seed")
+        return self
+
+    def __bool__(self) -> bool:
+        return bool(self.values)
+
+    def __len__(self) -> int:
+        return len(self.values)
+
+    @overload
+    def __getitem__(self, index: int) -> PairedContrast: ...
+
+    @overload
+    def __getitem__(self, index: slice) -> tuple[PairedContrast, ...]: ...
+
+    def __getitem__(self, index: int | slice) -> PairedContrast | tuple[PairedContrast, ...]:
+        return self.values[index]
+
+    @property
+    def deltas(self) -> tuple[MetricValue, ...]:
+        return tuple(contrast.delta for contrast in self.values)
+
+    def ordered_by_seed(self) -> "PairedContrasts":
+        return PairedContrasts(values=tuple(sorted(self.values, key=lambda contrast: contrast.seed.value)))
 
 
 class SupplementaryPairedAnalysisPlan(StrictModel):

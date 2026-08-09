@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, TypeVar
 
 from pydantic import ValidationError
 
-from datp_core.analysis.contrasts import PairedContrast, SupplementaryPairedAnalysisPlan
+from datp_core.analysis.contrasts import PairedContrasts, SupplementaryPairedAnalysisPlan
 from datp_core.analysis.inference.contracts import PairedInferenceProtocol
 from datp_core.analysis.inference.multiplicity import MultiplicityPlan
 from datp_core.analysis.preparation import (
@@ -73,7 +73,7 @@ class AnalysisPublication[AnalysisDocumentT: StrictModel]:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class AnalyzeConfirmatoryEvidenceRequest:
-    contrasts: tuple[PairedContrast, ...]
+    contrasts: PairedContrasts
     inference_protocol: PairedInferenceProtocol
     analysis_seed: Seed
     output_directory: Path
@@ -85,7 +85,7 @@ class AnalyzeConfirmatoryEvidenceRequest:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class AnalyzeExternalEvidenceRequest:
     execution_identity: ExternalTemporalExecutionIdentity
-    contrasts: tuple[PairedContrast, ...]
+    contrasts: PairedContrasts
     plan: SupplementaryPairedAnalysisPlan
     analysis_seed: Seed
     output_directory: Path
@@ -315,11 +315,11 @@ def _analysis_identity_matches(requested: object, loaded: object) -> bool:
         return False
     if isinstance(requested, AnalysisDocument) and isinstance(loaded, AnalysisDocument):
         return requested.inference_protocol == loaded.inference_protocol and tuple(
-            item.seed for item in requested.contrasts
-        ) == tuple(item.seed for item in loaded.contrasts)
+            item.seed for item in requested.contrasts.values
+        ) == tuple(item.seed for item in loaded.contrasts.values)
     if isinstance(requested, ExternalAnalysisDocument) and isinstance(loaded, ExternalAnalysisDocument):
-        return requested.plan == loaded.plan and tuple(item.seed for item in requested.contrasts) == tuple(
-            item.seed for item in loaded.contrasts
+        return requested.plan == loaded.plan and tuple(item.seed for item in requested.contrasts.values) == tuple(
+            item.seed for item in loaded.contrasts.values
         )
     if isinstance(requested, TemporalAnalysisDocument) and isinstance(loaded, TemporalAnalysisDocument):
         return (

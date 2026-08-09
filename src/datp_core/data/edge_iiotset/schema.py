@@ -249,9 +249,7 @@ def _canonical_columns() -> tuple[CanonicalColumn, ...]:
             True,
             CanonicalColumnPosition(trailing_start + 5),
         ),
-        canonical_provenance_column(
-            CanonicalProvenanceColumn.SOURCE_PATH, CanonicalColumnPosition(trailing_start + 6)
-        ),
+        canonical_provenance_column(CanonicalProvenanceColumn.SOURCE_PATH, CanonicalColumnPosition(trailing_start + 6)),
         canonical_provenance_column(
             CanonicalProvenanceColumn.STABLE_ROW_ID, CanonicalColumnPosition(trailing_start + 7)
         ),

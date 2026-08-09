@@ -270,9 +270,7 @@ def _build_records(
 
 def _rebased_record(record: FederatedScoreRecord, output_directory: Path) -> FederatedScoreRecord:
     path = (
-        output_directory
-        / record.scored_client.client_id.value
-        / _asset_name_for_partition(record.partition_role).value
+        output_directory / record.scored_client.client_id.value / _asset_name_for_partition(record.partition_role).value
     )
     if not path.is_file():
         raise ArtifactIntegrityError(

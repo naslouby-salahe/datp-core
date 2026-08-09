@@ -47,7 +47,7 @@ from datp_core.thresholds.variants.federated_statistics import (
     construct_federated_benign_statistics,
 )
 from datp_core.thresholds.variants.shrinkage import (
-    ShrinkageThresholdResult,
+    FixedShrinkageCurveResult,
     construct_fixed_shrinkage,
     construct_size_aware_shrinkage,
 )
@@ -59,7 +59,7 @@ type ThresholdConstructionResult = (
     | LocalThresholdResult
     | FamilyThresholdResult
     | GroupedThresholdResult
-    | tuple[ShrinkageThresholdResult, ...]
+    | FixedShrinkageCurveResult
     | ConformalThresholdResult
     | FederatedStatisticsThresholdResult
     | ThresholdUnavailableResult

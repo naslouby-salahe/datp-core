@@ -98,11 +98,23 @@ class ClientScoreVector(StrictModel):
         return self
 
 
+class PairwiseJensenShannonDistance(StrictModel):
+    left_client: ClientIdentity
+    right_client: ClientIdentity
+    value: MetricValue
+
+    @model_validator(mode="after")
+    def validate_pair(self) -> "PairwiseJensenShannonDistance":
+        if self.left_client >= self.right_client:
+            raise ValueError("Jensen-Shannon client pairs must be distinct and sorted")
+        return self
+
+
 class DivergenceResult(StrictModel):
     clients: tuple[ClientIdentity, ...]
     protocol: JensenShannonProtocol
     source_score_checksum: Checksum | None
-    pairwise_values: tuple[MetricValue, ...]
+    pairwise_distances: tuple[PairwiseJensenShannonDistance, ...]
     aggregate: MetricValue | None
     blocker: DivergenceBlocker | None
 
@@ -117,11 +129,21 @@ class DivergenceResult(StrictModel):
         expected_pairs = len(self.clients) * (len(self.clients) - 1) // 2
         available = self.blocker is None
         if available:
-            if len(self.pairwise_values) != expected_pairs or self.aggregate is None:
-                raise ValueError("available divergence requires complete pairwise values and an aggregate")
+            if len(self.pairwise_distances) != expected_pairs or self.aggregate is None:
+                raise ValueError("available divergence requires complete pairwise distances and an aggregate")
             if self.source_score_checksum is None:
                 raise ValueError("available divergence requires a source-score checksum")
-        elif self.pairwise_values or self.aggregate is not None:
+            expected_client_pairs = tuple(
+                (left_client, right_client)
+                for left_index, left_client in enumerate(self.clients)
+                for right_client in self.clients[left_index + 1 :]
+            )
+            actual_client_pairs = tuple(
+                (distance.left_client, distance.right_client) for distance in self.pairwise_distances
+            )
+            if actual_client_pairs != expected_client_pairs:
+                raise ValueError("divergence distances must cover each ordered client pair exactly once")
+        elif self.pairwise_distances or self.aggregate is not None:
             raise ValueError("blocked divergence cannot contain calculated values")
         return self
 
@@ -148,7 +170,7 @@ def blocked_jensen_shannon_divergence(
         clients=ordered,
         protocol=protocol,
         source_score_checksum=source_score_checksum,
-        pairwise_values=(),
+        pairwise_distances=(),
         aggregate=None,
         blocker=blocker,
     )
@@ -195,9 +217,9 @@ def jensen_shannon_divergence(
         )
         for array in arrays
     )
-    pairwise: list[MetricValue] = []
+    pairwise: list[PairwiseJensenShannonDistance] = []
     for left_index, left in enumerate(histograms):
-        for right in histograms[left_index + 1 :]:
+        for right_index, right in enumerate(histograms[left_index + 1 :], start=left_index + 1):
             distance = float(jensenshannon(left, right, base=2.0))
             if not np.isfinite(distance):
                 return blocked_jensen_shannon_divergence(
@@ -206,7 +228,13 @@ def jensen_shannon_divergence(
                     protocol=protocol,
                     source_score_checksum=source_score_checksum,
                 )
-            pairwise.append(MetricValue(distance))
+            pairwise.append(
+                PairwiseJensenShannonDistance(
+                    left_client=clients[left_index],
+                    right_client=clients[right_index],
+                    value=MetricValue(distance),
+                )
+            )
     if not pairwise:
         return blocked_jensen_shannon_divergence(
             clients,
@@ -214,12 +242,12 @@ def jensen_shannon_divergence(
             protocol=protocol,
             source_score_checksum=source_score_checksum,
         )
-    aggregate = MetricValue(float(np.mean([value.value for value in pairwise])))
+    aggregate = MetricValue(float(np.mean([distance.value.value for distance in pairwise])))
     return DivergenceResult(
         clients=clients,
         protocol=protocol,
         source_score_checksum=source_score_checksum,
-        pairwise_values=tuple(pairwise),
+        pairwise_distances=tuple(pairwise),
         aggregate=aggregate,
         blocker=None,
     )

@@ -37,9 +37,7 @@ def test_fpr_eligibility_requires_support_and_benign_evaluation() -> None:
         ClientExclusionReason.INSUFFICIENT_BENIGN_CALIBRATION
         in by_id[ClientIdentityToken("device_b")].exclusion_reasons
     )
-    assert (
-        ClientExclusionReason.EMPTY_BENIGN_EVALUATION in by_id[ClientIdentityToken("device_c")].exclusion_reasons
-    )
+    assert ClientExclusionReason.EMPTY_BENIGN_EVALUATION in by_id[ClientIdentityToken("device_c")].exclusion_reasons
 
 
 def test_fallback_cannot_enter_fpr_cohort() -> None:
@@ -50,9 +48,7 @@ def test_fallback_cannot_enter_fpr_cohort() -> None:
         client_counts=counts,
     )
     cohorts = {
-        item.cohort
-        for item in manifest.memberships
-        if item.client.client_id == ClientIdentityToken("fallback_client")
+        item.cohort for item in manifest.memberships if item.client.client_id == ClientIdentityToken("fallback_client")
     }
     assert EvaluationCohort.DEPLOYMENT_FALLBACK in cohorts
     assert EvaluationCohort.FPR_EVALUABLE not in cohorts

@@ -76,9 +76,7 @@ def _verify_score_record(
     required: tuple[ColumnName, ColumnName, ColumnName],
 ) -> None:
     if not record.path.is_file() or Checksum.from_file(record.path) != record.checksum:
-        raise ScientificContractError(
-            ErrorMessage("threshold diagnostics score provenance is unavailable or changed")
-        )
+        raise ScientificContractError(ErrorMessage("threshold diagnostics score provenance is unavailable or changed"))
 
     frame = pl.read_parquet(record.path)
     if not required_set.issubset(frame.columns) or frame.height != record.row_count.value:

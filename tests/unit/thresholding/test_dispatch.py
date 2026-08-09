@@ -36,7 +36,7 @@ from datp_core.thresholds.protocols import (
 from datp_core.thresholds.quantiles import ClientBenignCalibrationScores
 from datp_core.thresholds.variants.conformal import ConformalThresholdResult
 from datp_core.thresholds.variants.federated_statistics import FederatedStatisticsThresholdResult
-from datp_core.thresholds.variants.shrinkage import ShrinkageThresholdResult
+from datp_core.thresholds.variants.shrinkage import FixedShrinkageCurveResult, ShrinkageThresholdResult
 
 QUANTILE = Quantile(0.5)
 ELIGIBLE = tuple(
@@ -109,7 +109,7 @@ def _request(
         (FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD, SampleWeightedSharedThresholdResult),
         (FederatedThresholdMethod.FAMILY_THRESHOLD, FamilyThresholdResult),
         (FederatedThresholdMethod.CLUSTER_THRESHOLD, GroupedThresholdResult),
-        (FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE, tuple),
+        (FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE, FixedShrinkageCurveResult),
         (FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE, ThresholdUnavailableResult),
         (FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD, ConformalThresholdResult),
         (FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS, FederatedStatisticsThresholdResult),
@@ -122,10 +122,10 @@ def test_dispatch_returns_the_correct_result_type_for_every_method(method, expec
 def test_dispatch_returns_the_complete_declared_shrinkage_curve() -> None:
     result = dispatch_federated_threshold(_request(FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE))
 
-    assert isinstance(result, tuple)
-    assert result
-    assert all(isinstance(item, ShrinkageThresholdResult) for item in result)
-    assert tuple(item.weight for item in result) == FIXED_SHRINKAGE_PROTOCOL.weights
+    assert isinstance(result, FixedShrinkageCurveResult)
+    assert result.points
+    assert all(isinstance(item, ShrinkageThresholdResult) for item in result.points)
+    assert tuple(item.weight for item in result.points) == FIXED_SHRINKAGE_PROTOCOL.weights
 
 
 def test_dispatch_family_threshold_without_taxonomy_is_unavailable() -> None:

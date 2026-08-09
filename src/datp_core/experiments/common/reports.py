@@ -30,7 +30,5 @@ def finalize_analysis_report(request: AnalysisReportFinalizationInput) -> Analys
         )
     return AnalysisReportPublication(
         directories=(request.directory,),
-        detail=AnalysisReasonText(
-            f"{request.marker_text} ({request.missing_count.value} seed(s) missing)"
-        ),
+        detail=AnalysisReasonText(f"{request.marker_text} ({request.missing_count.value} seed(s) missing)"),
     )

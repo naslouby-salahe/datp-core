@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from datp_core.analysis.contrasts import FixedScorePairProvenance, PairedContrast
+from datp_core.analysis.contrasts import FixedScorePairProvenance, PairedContrast, PairedContrasts
 from datp_core.analysis.evidence import (
     AnalyzeConfirmatoryEvidenceRequest,
     analyze_confirmatory_evidence,
@@ -23,7 +23,7 @@ from datp_core.experiments.confirmatory.spec import CONFIRMATORY_INFERENCE_PROTO
 
 def test_analysis_reuse_loads_and_validates_persisted_json(tmp_path: Path) -> None:
     request = AnalyzeConfirmatoryEvidenceRequest(
-        contrasts=tuple(_contrast(seed) for seed in range(10)),
+        contrasts=PairedContrasts(values=tuple(_contrast(seed) for seed in range(10))),
         inference_protocol=CONFIRMATORY_INFERENCE_PROTOCOL,
         analysis_seed=Seed(31),
         output_directory=tmp_path / "analysis",
@@ -39,7 +39,7 @@ def test_analysis_reuse_loads_and_validates_persisted_json(tmp_path: Path) -> No
 
 def test_corrupted_analysis_json_prevents_reuse(tmp_path: Path) -> None:
     request = AnalyzeConfirmatoryEvidenceRequest(
-        contrasts=tuple(_contrast(seed) for seed in range(10)),
+        contrasts=PairedContrasts(values=tuple(_contrast(seed) for seed in range(10))),
         inference_protocol=CONFIRMATORY_INFERENCE_PROTOCOL,
         analysis_seed=Seed(31),
         output_directory=tmp_path / "analysis",

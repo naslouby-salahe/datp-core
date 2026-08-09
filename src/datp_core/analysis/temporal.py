@@ -373,13 +373,9 @@ def _temporal_interpretation_counts(
         partial_or_weak_recovery=_count_interpretation(
             records, TemporalInterpretation.TEMPORAL_DEGRADATION_WITH_PARTIAL_OR_WEAK_RECOVERY
         ),
-        without_recovery=_count_interpretation(
-            records, TemporalInterpretation.TEMPORAL_DEGRADATION_WITHOUT_RECOVERY
-        ),
+        without_recovery=_count_interpretation(records, TemporalInterpretation.TEMPORAL_DEGRADATION_WITHOUT_RECOVERY),
         opposite=_count_interpretation(records, TemporalInterpretation.OPPOSITE_TEMPORAL_MOVEMENT),
-        no_degradation=_count_interpretation(
-            records, TemporalInterpretation.NO_DETECTABLE_TEMPORAL_DEGRADATION
-        ),
+        no_degradation=_count_interpretation(records, TemporalInterpretation.NO_DETECTABLE_TEMPORAL_DEGRADATION),
         blocked=_count_interpretation(records, TemporalInterpretation.BLOCKED_OR_UNAVAILABLE),
     )
 
@@ -413,16 +409,12 @@ def _campaign_decision_from_counts(
     if counts.opposite == total:
         return (
             ScientificDecision.OPPOSITE_DIRECTION,
-            DecisionRationale(
-                "campaign-level temporal evidence moved opposite to the declared degradation direction"
-            ),
+            DecisionRationale("campaign-level temporal evidence moved opposite to the declared degradation direction"),
         )
     if counts.no_degradation == total:
         return (
             ScientificDecision.BOUNDARY_RESULT,
-            DecisionRationale(
-                "campaign-level temporal evidence shows no material degradation across the seed cohort"
-            ),
+            DecisionRationale("campaign-level temporal evidence shows no material degradation across the seed cohort"),
         )
     if counts.without_recovery == total:
         return (
@@ -473,9 +465,7 @@ def _blocked_temporal_campaign(
         )
     seeds = tuple(record.seed for record in records)
     if len(seeds) != len(frozenset(seeds)):
-        return _blocked_temporal_decision(
-            DecisionRationale("temporal campaign records must be unique by seed")
-        )
+        return _blocked_temporal_decision(DecisionRationale("temporal campaign records must be unique by seed"))
     if frozenset(seeds) != frozenset(required_seed_cohort.values):
         return _blocked_temporal_decision(
             DecisionRationale("temporal campaign records must equal the complete declared seed cohort")
@@ -513,9 +503,7 @@ def _blocked_temporal_campaign(
         for item in provenances
     )
     if len(frozenset(checksum_keys)) != len(checksum_keys):
-        return _blocked_temporal_decision(
-            DecisionRationale("temporal provenance must not be cloned across seeds")
-        )
+        return _blocked_temporal_decision(DecisionRationale("temporal provenance must not be cloned across seeds"))
     return None
 
 

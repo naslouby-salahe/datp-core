@@ -120,7 +120,7 @@ class RankBiserialResult(StrictModel):
 
 def paired_deltas(contrasts: PairedContrasts) -> NDArray[np.float64]:
     values = np.fromiter(
-        (contrast.delta.value for contrast in contrasts),
+        (contrast.delta.value for contrast in contrasts.values),
         dtype=np.float64,
         count=len(contrasts),
     )
@@ -271,9 +271,7 @@ def _select_wilcoxon_method(
     if absolute.size != len({float(value) for value in absolute}):
         return WilcoxonMethodSelection(
             method=WilcoxonComputationMethod.ASYMPTOTIC,
-            fallback_reason=AnalysisReasonText(
-                "exact Wilcoxon unavailable: absolute paired differences contain ties"
-            ),
+            fallback_reason=AnalysisReasonText("exact Wilcoxon unavailable: absolute paired differences contain ties"),
         )
     zero_count = int(deltas.size - nonzero.size)
     if zero_count > 0:

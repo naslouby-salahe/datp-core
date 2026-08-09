@@ -150,7 +150,7 @@ def _centralized_training_binding(
 
 def train_centralized_detector(request: TrainCentralizedDetectorRequest) -> TrainCentralizedDetectorResult:
     require_no_hidden_scientific_defaults()
-    training_protocol, _, learning_rate, batch_size, weight_decay = declared_centralized_training_values()
+    defaults = declared_centralized_training_values()
     publication_request = CentralizedTrainingPublicationRequest(
         coordinate=request.coordinate,
         training_features=request.training_features,
@@ -161,10 +161,10 @@ def train_centralized_detector(request: TrainCentralizedDetectorRequest) -> Trai
         training_seed=request.training_seed,
         autoencoder=request.autoencoder,
         checkpoint_protocol=request.checkpoint_protocol,
-        training_protocol=training_protocol,
-        learning_rate=learning_rate,
-        batch_size=batch_size,
-        weight_decay=weight_decay,
+        training_protocol=defaults.training_protocol,
+        learning_rate=defaults.learning_rate,
+        batch_size=defaults.batch_size,
+        weight_decay=defaults.weight_decay,
     )
     validate_centralized_training_request(publication_request)
     publication = publish_artifact(

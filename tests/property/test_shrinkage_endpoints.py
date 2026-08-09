@@ -21,7 +21,7 @@ def test_fixed_weight_zero_reproduces_the_shared_threshold() -> None:
         Quantile(0.95),
     )
 
-    shared, local = results
+    shared, local = results.points
     assert all(assignment.threshold == shared.shared_threshold for assignment in shared.assignments)
     assert all(assignment.threshold == assignment.local_quantile.value for assignment in local.assignments)
 
@@ -37,7 +37,7 @@ def test_fixed_shrinkage_assignments_follow_the_declared_convex_combination() ->
             weights=(ShrinkageWeight(0.25),),
         ),
         Quantile(0.95),
-    )[0]
+    ).points[0]
 
     for assignment in result.assignments:
         expected = (

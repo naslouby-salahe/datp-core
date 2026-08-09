@@ -358,9 +358,7 @@ def validate_reload(
         evidence.append(ReloadValidationEvidence("completion marker is not complete"))
     if expected_paths != observed_paths:
         evidence.append(
-            ReloadValidationEvidence(
-                "observed artifact ordering or membership differs from the completion record"
-            )
+            ReloadValidationEvidence("observed artifact ordering or membership differs from the completion record")
         )
     expected_by_path = tuple((item.relative_path, item.checksum, item.byte_count) for item in completion.artifacts)
     observed_by_path = tuple((item.relative_path, item.checksum, item.byte_count) for item in observed)
@@ -373,9 +371,7 @@ def validate_reload(
         artifact_path = root / artifact.relative_path
         if not artifact_path.is_file():
             evidence.append(
-                ReloadValidationEvidence(
-                    f"completed artifact is absent: {artifact.relative_path.as_posix()}"
-                )
+                ReloadValidationEvidence(f"completed artifact is absent: {artifact.relative_path.as_posix()}")
             )
             continue
         actual_checksum = Checksum.from_file(artifact_path)
@@ -385,9 +381,7 @@ def validate_reload(
             )
         if artifact_path.stat().st_size != artifact.byte_count.value:
             evidence.append(
-                ReloadValidationEvidence(
-                    f"artifact byte-count mismatch: {artifact.relative_path.as_posix()}"
-                )
+                ReloadValidationEvidence(f"artifact byte-count mismatch: {artifact.relative_path.as_posix()}")
             )
 
     return ReloadValidation(valid=not evidence, evidence=tuple(evidence))

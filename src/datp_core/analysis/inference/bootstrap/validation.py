@@ -27,7 +27,7 @@ def validate_confirmatory_contrasts(
         endpoint.seed_cohort,
         BcaReason.SEED_COHORT_MISMATCH,
     )
-    for contrast in contrasts:
+    for contrast in contrasts.values:
         if (
             contrast.evidence_role is not EvidenceRole.CONFIRMATORY
             or contrast.coordinate.population is not endpoint.population
@@ -41,7 +41,7 @@ def validate_confirmatory_contrasts(
             raise PairedAnalysisContractError(BcaReason.CONFIRMATORY_ENDPOINT_MISMATCH)
     _require_fixed_design(contrasts)
     _require_fixed_score_identity(contrasts)
-    return tuple(sorted(contrasts, key=lambda contrast: contrast.seed.value))
+    return contrasts.ordered_by_seed()
 
 
 def validate_supplementary_contrasts(
@@ -53,7 +53,7 @@ def validate_supplementary_contrasts(
         plan.seed_cohort,
         BcaReason.SUPPLEMENTARY_SEED_COHORT_MISMATCH,
     )
-    for contrast in contrasts:
+    for contrast in contrasts.values:
         if (
             contrast.coordinate.population is not plan.population
             or contrast.evidence_role is not plan.evidence_role
@@ -64,7 +64,7 @@ def validate_supplementary_contrasts(
             raise PairedAnalysisContractError(BcaReason.SUPPLEMENTARY_ANALYSIS_PLAN_MISMATCH)
     _require_fixed_design(contrasts)
     _require_fixed_score_identity(contrasts)
-    return tuple(sorted(contrasts, key=lambda contrast: contrast.seed.value))
+    return contrasts.ordered_by_seed()
 
 
 def _require_complete_seed_cohort(
@@ -72,9 +72,7 @@ def _require_complete_seed_cohort(
     declared_cohort: SeedCohort,
     mismatch_reason: BcaReason,
 ) -> None:
-    observed_seeds = frozenset(contrast.seed for contrast in contrasts)
-    if len(observed_seeds) != len(contrasts):
-        raise PairedAnalysisContractError(BcaReason.DUPLICATE_SEED)
+    observed_seeds = frozenset(contrast.seed for contrast in contrasts.values)
     if observed_seeds != frozenset(declared_cohort.values):
         raise PairedAnalysisContractError(mismatch_reason)
 
@@ -91,7 +89,7 @@ def _require_fixed_score_identity(contrasts: PairedContrasts) -> None:
     """Reject pairs that only share a training coordinate without fixed-score provenance."""
     if not contrasts:
         raise PairedAnalysisContractError(BcaReason.SEED_COHORT_MISMATCH)
-    for contrast in contrasts:
+    for contrast in contrasts.values:
         _require_complete_provenance(contrast.fixed_score)
     methods = (contrasts[0].left_method, contrasts[0].right_method)
     if any((contrast.left_method, contrast.right_method) != methods for contrast in contrasts[1:]):

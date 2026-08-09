@@ -1,4 +1,4 @@
-from datp_core.analysis.contrasts import FixedScorePairProvenance, PairedContrast
+from datp_core.analysis.contrasts import FixedScorePairProvenance, PairedContrast, PairedContrasts
 from datp_core.analysis.inference.bootstrap.contracts import BcaOutcome
 from datp_core.analysis.inference.bootstrap.estimation import paired_bca_interval
 from datp_core.analysis.preparation import ConfirmatoryAnalysisRequest, prepare_confirmatory_analysis
@@ -20,7 +20,7 @@ from datp_core.experiments.confirmatory.spec import CONFIRMATORY_INFERENCE_PROTO
 
 def test_confirmatory_bca_blocks_nine_pairs() -> None:
     result = paired_bca_interval(
-        tuple(_contrast(seed) for seed in range(9)),
+        PairedContrasts(values=tuple(_contrast(seed) for seed in range(9))),
         protocol=CONFIRMATORY_INFERENCE_PROTOCOL,
         analysis_seed=Seed(17),
     )
@@ -44,7 +44,7 @@ def test_pairing_rejects_a_seed_independent_design_change() -> None:
         }
     )
     result = paired_bca_interval(
-        tuple(values),
+        PairedContrasts(values=tuple(values)),
         protocol=CONFIRMATORY_INFERENCE_PROTOCOL,
         analysis_seed=Seed(17),
     )
@@ -54,7 +54,7 @@ def test_pairing_rejects_a_seed_independent_design_change() -> None:
 def test_invalid_contrasts_block_all_dependent_statistics() -> None:
     document = prepare_confirmatory_analysis(
         ConfirmatoryAnalysisRequest(
-            contrasts=tuple(_contrast(seed) for seed in range(9)),
+            contrasts=PairedContrasts(values=tuple(_contrast(seed) for seed in range(9))),
             inference_protocol=CONFIRMATORY_INFERENCE_PROTOCOL,
             analysis_seed=Seed(17),
         )

@@ -68,9 +68,7 @@ def test_conformal_rank_index_matches_classical_split_conformal_formula() -> Non
 
 def test_finite_sample_conformal_threshold_selects_the_expected_order_statistic() -> None:
     scores = np.arange(1.0, 101.0)
-    result = finite_sample_conformal_threshold(
-        scores, CoverageTarget(0.95)
-    )
+    result = finite_sample_conformal_threshold(scores, CoverageTarget(0.95))
     assert result.rank_index == ConformalRankIndex(96)
     assert result.threshold.value == 96.0
     assert result.effective_quantile.value == 96 / 100

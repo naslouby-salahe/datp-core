@@ -111,6 +111,17 @@ class CentralizedOptimizerSummary:
 
 
 @dataclass(frozen=True, slots=True)
+class CentralizedTrainingDefaults:
+    """Declared scientific values used by centralized detector training."""
+
+    training_protocol: CentralizedTrainingProtocol
+    autoencoder: AutoencoderProtocol
+    learning_rate: LearningRate
+    batch_size: BatchSize
+    weight_decay: WeightDecay
+
+
+@dataclass(frozen=True, slots=True)
 class CentralizedEpochLoss:
     epoch: RoundNumber
     mean_training_loss: MetricValue
@@ -315,14 +326,14 @@ def model_from_in_memory_snapshot(
     return model
 
 
-def declared_centralized_training_values() -> tuple[
-    CentralizedTrainingProtocol,
-    AutoencoderProtocol,
-    LearningRate,
-    BatchSize,
-    WeightDecay,
-]:
-    return CENTRALIZED_TRAINING_PROTOCOL, NBAIOT_AUTOENCODER, LEARNING_RATE, BATCH_SIZE, WEIGHT_DECAY
+def declared_centralized_training_values() -> CentralizedTrainingDefaults:
+    return CentralizedTrainingDefaults(
+        training_protocol=CENTRALIZED_TRAINING_PROTOCOL,
+        autoencoder=NBAIOT_AUTOENCODER,
+        learning_rate=LEARNING_RATE,
+        batch_size=BATCH_SIZE,
+        weight_decay=WEIGHT_DECAY,
+    )
 
 
 def assert_safetensors_reload(

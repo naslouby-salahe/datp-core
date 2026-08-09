@@ -305,8 +305,7 @@ def decide_absorption_cohort(
     if any(ratio is None for ratio in ratios):
         reasons = sorted(
             {
-                item.ratio_unavailable_reason
-                or AbsorptionRatioUnavailableReason.REFERENCE_EFFECT_NON_POSITIVE
+                item.ratio_unavailable_reason or AbsorptionRatioUnavailableReason.REFERENCE_EFFECT_NON_POSITIVE
                 for item in observations
                 if item.retention_ratio is None
             }
@@ -452,9 +451,7 @@ def _cohort_interval_text(interval: BootstrapInterval | None) -> IntervalDescrip
         and interval.lower_bound is not None
         and interval.upper_bound is not None
     ):
-        return IntervalDescriptionText(
-            f"BCa=[{interval.lower_bound.value:.4g}, {interval.upper_bound.value:.4g}]"
-        )
+        return IntervalDescriptionText(f"BCa=[{interval.lower_bound.value:.4g}, {interval.upper_bound.value:.4g}]")
     return IntervalDescriptionText("BCa=unavailable")
 
 
@@ -516,11 +513,7 @@ def _classify_cohort(
                 f"as retained or absorbed {range_text}"
             ),
         )
-    if (
-        bounded_interval is None
-        or bounded_interval.lower_bound is None
-        or bounded_interval.upper_bound is None
-    ):
+    if bounded_interval is None or bounded_interval.lower_bound is None or bounded_interval.upper_bound is None:
         return _stress_decision_result(
             decision=ScientificDecision.DIRECTIONAL_INCONCLUSIVE,
             mean_retention=mean_retention,

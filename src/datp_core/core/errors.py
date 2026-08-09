@@ -16,13 +16,6 @@ class MissingPrerequisiteReason(StrEnum):
     ANCHOR_GATE = "anchor_gate"
 
 
-def _subject_token(subject: Enum | None) -> str | None:
-    if subject is None:
-        return None
-    value = subject.value
-    return value if isinstance(value, str) else str(value)
-
-
 class DatpCoreError(Exception):
     def __init__(
         self,
@@ -33,7 +26,7 @@ class DatpCoreError(Exception):
     ) -> None:
         super().__init__(str(message))
         self.message = message
-        self.subject = _subject_token(subject)
+        self.subject = subject
         self.reason = reason
 
 

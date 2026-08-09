@@ -73,4 +73,3 @@ class CompletionRecord(StrictModel):
     @property
     def complete(self) -> bool:
         return self.state is CompletionState.COMPLETE
-

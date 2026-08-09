@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from datp_core.analysis.contrasts import FixedScorePairProvenance, PairedContrast
+from datp_core.analysis.contrasts import FixedScorePairProvenance, PairedContrast, PairedContrasts
 from datp_core.analysis.mechanisms.divergence import ClientScoreVector, jensen_shannon_divergence
 from datp_core.analysis.preparation import ConfirmatoryAnalysisRequest, prepare_confirmatory_analysis
 from datp_core.artifacts.provenance import Checksum
@@ -44,7 +44,7 @@ def test_analysis_report_contains_actual_mechanism_values(tmp_path: Path) -> Non
     )
     document = prepare_confirmatory_analysis(
         ConfirmatoryAnalysisRequest(
-            contrasts=tuple(_contrast(seed) for seed in range(10)),
+            contrasts=PairedContrasts(values=tuple(_contrast(seed) for seed in range(10))),
             inference_protocol=CONFIRMATORY_INFERENCE_PROTOCOL,
             analysis_seed=Seed(31),
             mechanisms=(divergence,),

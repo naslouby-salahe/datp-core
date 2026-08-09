@@ -78,6 +78,17 @@ class ClusterEvidenceAvailability(StrEnum):
     FAILED = "failed"
 
 
+class RecoveryAssessment(StrictModel):
+    fraction: MetricValue | None
+    reason: AnalysisReasonText | None
+
+    @model_validator(mode="after")
+    def validate_assessment(self) -> "RecoveryAssessment":
+        if (self.fraction is None) == (self.reason is None):
+            raise ValueError("recovery assessment requires either a fraction or an explicit reason")
+        return self
+
+
 class ClusterEvidenceRecord(StrictModel):
     """Full cluster evidence derived from a persisted grouped-threshold result."""
 
@@ -89,10 +100,8 @@ class ClusterEvidenceRecord(StrictModel):
     partition: ClusterPartitionSummary
     contributing_quantile_dispersion: MetricValue | None
     effective_threshold_dispersion: MetricValue | None
-    threshold_dispersion_recovery_fraction: MetricValue | None
-    threshold_dispersion_recovery_reason: AnalysisReasonText | None
-    cv_fpr_equity_recovery_fraction: MetricValue | None
-    cv_fpr_equity_recovery_reason: AnalysisReasonText | None
+    threshold_dispersion_recovery: RecoveryAssessment
+    cv_fpr_equity_recovery: RecoveryAssessment
     evidence_availability: ClusterEvidenceAvailability = ClusterEvidenceAvailability.AVAILABLE
     dispersion_unavailable_reason: AnalysisReasonText | None = None
 
@@ -102,10 +111,6 @@ class ClusterEvidenceRecord(StrictModel):
     def validate_record(self) -> "ClusterEvidenceRecord":
         if self.method is not FederatedThresholdMethod.CLUSTER_THRESHOLD:
             raise ValueError("cluster evidence requires the cluster threshold method")
-        if (self.threshold_dispersion_recovery_fraction is None) == (self.threshold_dispersion_recovery_reason is None):
-            raise ValueError("threshold-dispersion recovery requires either a value or an explicit reason")
-        if (self.cv_fpr_equity_recovery_fraction is None) == (self.cv_fpr_equity_recovery_reason is None):
-            raise ValueError("CV(FPR) equity recovery requires either a value or an explicit reason")
         if (
             self.contributing_quantile_dispersion is None or self.effective_threshold_dispersion is None
         ) and self.dispersion_unavailable_reason is None:
@@ -121,23 +126,27 @@ class ClusterEvidenceRecord(StrictModel):
             return AvailabilityStatus.AVAILABLE
         return AvailabilityStatus.UNAVAILABLE
 
-    @property
-    def recovery_fraction(self) -> MetricValue | None:
-        """Primary recovery claim uses the CV(FPR) equity estimand when available."""
-        return self.cv_fpr_equity_recovery_fraction
 
-    @property
-    def recovery_fraction_reason(self) -> AnalysisReasonText | None:
-        return self.cv_fpr_equity_recovery_reason
+class ClusterContingencyRow(StrictModel):
+    left_cluster_index: ClusterIndex
+    counts_by_right_cluster: tuple[PairedObservationCount, ...]
 
 
 class ClusterContingencyMatrix(StrictModel):
-    rows: tuple[tuple[PairedObservationCount, ...], ...]
+    rows: tuple[ClusterContingencyRow, ...]
+
+    @model_validator(mode="after")
+    def validate_matrix(self) -> "ClusterContingencyMatrix":
+        expected_indexes = tuple(ClusterIndex(index) for index in range(len(self.rows)))
+        actual_indexes = tuple(row.left_cluster_index for row in self.rows)
+        if actual_indexes != expected_indexes:
+            raise ValueError("cluster contingency rows must use consecutive left-cluster indexes")
+        return self
 
     def row_count(self) -> RowCount:
         return RowCount(len(self.rows))
 
-    def row_at(self, index: MatrixRowIndex) -> tuple[PairedObservationCount, ...]:
+    def row_at(self, index: MatrixRowIndex) -> ClusterContingencyRow:
         return self.rows[index.value]
 
 
@@ -160,13 +169,15 @@ class ClusterStabilityResult(StrictModel):
             raise ValueError("cluster stability requires unique compared clients")
         if self.contingency.row_count().value != len(self.left_partition.group_sizes):
             raise ValueError("cluster contingency row count must match the left partition")
-        if any(len(row) != len(self.right_partition.group_sizes) for row in self.contingency.rows):
+        if any(
+            len(row.counts_by_right_cluster) != len(self.right_partition.group_sizes) for row in self.contingency.rows
+        ):
             raise ValueError("cluster contingency column count must match the right partition")
-        row_totals = tuple(sum(value.value for value in row) for row in self.contingency.rows)
+        row_totals = tuple(sum(value.value for value in row.counts_by_right_cluster) for row in self.contingency.rows)
         if row_totals != tuple(value.value for value in self.left_partition.group_sizes):
             raise ValueError("cluster contingency row totals must match the left partition")
         column_totals = tuple(
-            sum(row[column].value for row in self.contingency.rows)
+            sum(row.counts_by_right_cluster[column].value for row in self.contingency.rows)
             for column in range(len(self.right_partition.group_sizes))
         )
         if column_totals != tuple(value.value for value in self.right_partition.group_sizes):
@@ -210,7 +221,7 @@ def cluster_evidence_from_grouped_result(
     else:
         threshold_recovery = MetricValue(1.0 - (effective_dispersion.value / local_dispersion.value))
         threshold_reason = None
-    equity_recovery, equity_reason = _cv_fpr_equity_recovery(
+    equity_recovery = _cv_fpr_equity_recovery(
         shared_cv_fpr=shared_cv_fpr,
         local_cv_fpr=local_cv_fpr,
         cluster_cv_fpr=cluster_cv_fpr,
@@ -230,10 +241,11 @@ def cluster_evidence_from_grouped_result(
         partition=partition,
         contributing_quantile_dispersion=contributing_dispersion,
         effective_threshold_dispersion=effective_dispersion,
-        threshold_dispersion_recovery_fraction=threshold_recovery,
-        threshold_dispersion_recovery_reason=threshold_reason,
-        cv_fpr_equity_recovery_fraction=equity_recovery,
-        cv_fpr_equity_recovery_reason=equity_reason,
+        threshold_dispersion_recovery=RecoveryAssessment(
+            fraction=threshold_recovery,
+            reason=threshold_reason,
+        ),
+        cv_fpr_equity_recovery=equity_recovery,
         evidence_availability=evidence_availability,
         dispersion_unavailable_reason=dispersion_reason,
     )
@@ -285,10 +297,8 @@ def empty_cluster_evidence_record(
         partition=partition,
         contributing_quantile_dispersion=contributing_dispersion,
         effective_threshold_dispersion=effective_dispersion,
-        threshold_dispersion_recovery_fraction=None,
-        threshold_dispersion_recovery_reason=reason,
-        cv_fpr_equity_recovery_fraction=None,
-        cv_fpr_equity_recovery_reason=reason,
+        threshold_dispersion_recovery=RecoveryAssessment(fraction=None, reason=reason),
+        cv_fpr_equity_recovery=RecoveryAssessment(fraction=None, reason=reason),
         evidence_availability=ClusterEvidenceAvailability.AVAILABLE_WITH_EMPTY_GROUP_EVIDENCE,
         dispersion_unavailable_reason=dispersion_reason,
     )
@@ -299,18 +309,22 @@ def _cv_fpr_equity_recovery(
     shared_cv_fpr: MetricValue | None,
     local_cv_fpr: MetricValue | None,
     cluster_cv_fpr: MetricValue | None,
-) -> tuple[MetricValue | None, AnalysisReasonText | None]:
+) -> RecoveryAssessment:
     if shared_cv_fpr is None or local_cv_fpr is None or cluster_cv_fpr is None:
-        return None, AnalysisReasonText(
-            "CV(FPR) equity recovery requires shared, local, and cluster population CV(FPR)"
+        return RecoveryAssessment(
+            fraction=None,
+            reason=AnalysisReasonText("CV(FPR) equity recovery requires shared, local, and cluster population CV(FPR)"),
         )
     gap = shared_cv_fpr.value - local_cv_fpr.value
     if gap <= 0.0:
-        return None, AnalysisReasonText(
-            "CV(FPR) equity recovery is undefined when the SHARED_THRESHOLD–LOCAL_THRESHOLD gap is non-positive"
+        return RecoveryAssessment(
+            fraction=None,
+            reason=AnalysisReasonText(
+                "CV(FPR) equity recovery is undefined when the SHARED_THRESHOLD–LOCAL_THRESHOLD gap is non-positive"
+            ),
         )
     recovered = shared_cv_fpr.value - cluster_cv_fpr.value
-    return MetricValue(recovered / gap), None
+    return RecoveryAssessment(fraction=MetricValue(recovered / gap), reason=None)
 
 
 def cluster_stability(
@@ -389,18 +403,21 @@ def _contingency(
 ) -> ClusterContingencyMatrix:
     return ClusterContingencyMatrix(
         rows=tuple(
-            tuple(
-                PairedObservationCount(
-                    sum(
-                        left_label.value == left_index and right_label.value == right_index
-                        for left_label, right_label in zip(
-                            left_labels,
-                            right_labels,
-                            strict=True,
+            ClusterContingencyRow(
+                left_cluster_index=ClusterIndex(left_index),
+                counts_by_right_cluster=tuple(
+                    PairedObservationCount(
+                        sum(
+                            left_label.value == left_index and right_label.value == right_index
+                            for left_label, right_label in zip(
+                                left_labels,
+                                right_labels,
+                                strict=True,
+                            )
                         )
                     )
-                )
-                for right_index in range(right_group_count.value)
+                    for right_index in range(right_group_count.value)
+                ),
             )
             for left_index in range(left_group_count.value)
         )

@@ -83,4 +83,3 @@ class CentralizedCheckpointDecision:
                 ErrorMessage("selected candidate status must be SELECTED_BY_NON_TEST_RULE"),
                 subject=self.selected.status,
             )
-

@@ -106,6 +106,7 @@ from datp_core.thresholds.protocols import (
 )
 from datp_core.thresholds.quantiles import ClientBenignCalibrationScores, exact_empirical_quantile
 from datp_core.thresholds.variants.conformal import ConformalThresholdResult
+from datp_core.thresholds.variants.shrinkage import FixedShrinkageCurveResult
 
 
 def _pooled_calibration_quantile(
@@ -348,7 +349,10 @@ class ExperimentWorkspace:
         return tuple(inputs)
 
     def _threshold_estimation_inputs(self) -> tuple[ThresholdEstimationStageInput, ...]:
-        if isinstance(self.threshold, (tuple, ConformalThresholdResult, ThresholdUnavailableResult)):
+        if isinstance(
+            self.threshold,
+            (FixedShrinkageCurveResult, ConformalThresholdResult, ThresholdUnavailableResult),
+        ):
             return ()
         threshold_result = self.threshold
         calibration_by_client = {scores.client: scores for scores in self.eligible_calibration_scores()}

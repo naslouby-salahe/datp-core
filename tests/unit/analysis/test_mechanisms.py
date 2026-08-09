@@ -19,6 +19,7 @@ from datp_core.analysis.mechanisms.association import (
 )
 from datp_core.analysis.mechanisms.clustering import (
     ClusterContingencyMatrix,
+    ClusterContingencyRow,
     ClusterPartitionSummary,
     ClusterStabilityResult,
     cluster_stability,
@@ -106,7 +107,7 @@ def test_association_reports_all_observations_with_typed_statistics() -> None:
     assert result.statistics is not None
     assert isinstance(result.statistics.spearman_rho, CorrelationCoefficient)
     assert result.statistics.evidentiary_sufficient is False
-    assert len(result.statistics.leave_one_out_slopes) == 3
+    assert len(result.statistics.leave_one_out_diagnostics.slopes) == 3
 
 
 def test_grouped_dispersion_has_one_typed_result_per_group() -> None:
@@ -126,11 +127,8 @@ def test_grouped_dispersion_has_one_typed_result_per_group() -> None:
     )
     assert result.evidence_role is EvidenceRole.MECHANISM
     assert result.availability is AvailabilityStatus.AVAILABLE
-    assert result.group_sizes == (
-        PairedObservationCount(2),
-        PairedObservationCount(1),
-    )
-    assert result.singleton_groups == (ClusterIndex(1),)
+    assert tuple(group.size for group in result.groups) == (PairedObservationCount(2), PairedObservationCount(1))
+    assert result.groups[1].group_index == ClusterIndex(1)
     assert result.across_group_threshold_spread is not None
     assert isclose(result.across_group_threshold_spread.value, 0.3)
 
@@ -153,8 +151,14 @@ def test_cluster_stability_validates_contingency_margins() -> None:
     )
     contingency = ClusterContingencyMatrix(
         rows=(
-            (PairedObservationCount(0), PairedObservationCount(0)),
-            (PairedObservationCount(1), PairedObservationCount(1)),
+            ClusterContingencyRow(
+                left_cluster_index=ClusterIndex(0),
+                counts_by_right_cluster=(PairedObservationCount(0), PairedObservationCount(0)),
+            ),
+            ClusterContingencyRow(
+                left_cluster_index=ClusterIndex(1),
+                counts_by_right_cluster=(PairedObservationCount(1), PairedObservationCount(1)),
+            ),
         )
     )
     with pytest.raises(ValueError, match="row totals"):
@@ -279,7 +283,7 @@ def test_jensen_shannon_is_deterministic_and_available() -> None:
     assert first == second
     assert first.availability is AvailabilityStatus.AVAILABLE
     assert first.aggregate is not None
-    assert len(first.pairwise_values) == 3
+    assert len(first.pairwise_distances) == 3
 
 
 def test_unresolved_jsd_and_absorption_remain_typed() -> None:

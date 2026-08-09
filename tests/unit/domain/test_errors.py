@@ -54,7 +54,7 @@ def test_errors_preserve_stable_message_and_named_context() -> None:
     )
     assert str(error) == "missing quantile"
     assert error.message == "missing quantile"
-    assert error.subject == ContractSubject.QUANTILE.value
+    assert error.subject is ContractSubject.QUANTILE
     assert error.reason is _UnresolvedValueReason.NOT_SOURCE_BACKED
     assert not isinstance(error.subject, Mapping)
 

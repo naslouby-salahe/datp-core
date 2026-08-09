@@ -154,14 +154,15 @@ def sample_weighted_mean(
             ErrorMessage("a sample-weighted mean requires one weight per contributing value"),
             subject=ContractSubject.THRESHOLD,
         )
-    if weights.total <= 0:
+    total_weight = weights.total
+    if total_weight.value == 0:
         raise ScientificContractError(
             ErrorMessage("sample-weighted mean requires positive total support"),
             subject=ContractSubject.THRESHOLD,
         )
     return ThresholdValue(
         sum(item.value * float(weight.value) for item, weight in zip(values, weights.weights, strict=True))
-        / weights.total
+        / total_weight.value
     )
 
 

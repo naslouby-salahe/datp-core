@@ -77,11 +77,45 @@ class ShrinkageThresholdResult:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class FixedShrinkageCurveResult:
+    """The complete set of predeclared fixed-shrinkage threshold points."""
+
+    coordinate: FederatedTrainingCoordinate
+    quantile: Quantile
+    points: tuple[ShrinkageThresholdResult, ...]
+    method: ClassVar[FederatedThresholdMethod] = FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE
+
+    def __post_init__(self) -> None:
+        require_contract(
+            bool(self.points),
+            ErrorMessage("fixed shrinkage requires at least one predeclared weight point"),
+            ContractSubject.THRESHOLD,
+        )
+        weights = tuple(point.weight for point in self.points)
+        require_contract(
+            len(frozenset(weights)) == len(weights),
+            ErrorMessage("fixed shrinkage curve weights must be unique"),
+            ContractSubject.THRESHOLD,
+        )
+        for point in self.points:
+            require_contract(
+                point.coordinate == self.coordinate,
+                ErrorMessage("every fixed shrinkage point must carry the curve coordinate"),
+                ContractSubject.COORDINATE,
+            )
+            require_contract(
+                point.quantile == self.quantile,
+                ErrorMessage("every fixed shrinkage point must carry the curve quantile"),
+                ContractSubject.THRESHOLD,
+            )
+
+
 def construct_fixed_shrinkage(
     eligible: tuple[ClientBenignCalibrationScores, ...],
     protocol: FixedShrinkageProtocol,
     quantile: Quantile,
-) -> tuple[ShrinkageThresholdResult, ...]:
+) -> FixedShrinkageCurveResult:
     if protocol.method is not FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE:
         raise ScientificContractError(
             ErrorMessage("fixed shrinkage requires the local-global shrinkage protocol"), subject=protocol.method
@@ -89,25 +123,31 @@ def construct_fixed_shrinkage(
     require_eligible_cohort(eligible, ValidationLabel("fixed shrinkage construction"))
     local_quantiles = tuple(local_quantile(item, quantile) for item in eligible)
     shared = mean_local_threshold(local_quantiles)
-    return tuple(
-        ShrinkageThresholdResult(
-            coordinate=eligible[0].coordinate,
-            quantile=quantile,
-            weight=weight,
-            shared_threshold=shared,
-            local_quantiles=local_quantiles,
-            assignments=tuple(
-                ShrinkageAssignment(
-                    client=local.client,
-                    local_quantile=local,
-                    shared_threshold=shared,
-                    weight=weight,
-                    threshold=ThresholdValue(weight.value * local.value.value + (1.0 - weight.value) * shared.value),
-                )
-                for local in local_quantiles
-            ),
-        )
-        for weight in protocol.weights
+    return FixedShrinkageCurveResult(
+        coordinate=eligible[0].coordinate,
+        quantile=quantile,
+        points=tuple(
+            ShrinkageThresholdResult(
+                coordinate=eligible[0].coordinate,
+                quantile=quantile,
+                weight=weight,
+                shared_threshold=shared,
+                local_quantiles=local_quantiles,
+                assignments=tuple(
+                    ShrinkageAssignment(
+                        client=local.client,
+                        local_quantile=local,
+                        shared_threshold=shared,
+                        weight=weight,
+                        threshold=ThresholdValue(
+                            weight.value * local.value.value + (1.0 - weight.value) * shared.value
+                        ),
+                    )
+                    for local in local_quantiles
+                ),
+            )
+            for weight in protocol.weights
+        ),
     )
 
 

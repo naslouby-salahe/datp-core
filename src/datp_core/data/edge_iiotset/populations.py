@@ -286,9 +286,7 @@ def _load_static_membership(canonical_root: Path) -> pl.DataFrame:
     return select_membership_frame(frame)
 
 
-def _load_temporal_membership(
-    canonical_root: Path, eligible_ids: tuple[ChronologyGroupIdentity, ...]
-) -> pl.DataFrame:
+def _load_temporal_membership(canonical_root: Path, eligible_ids: tuple[ChronologyGroupIdentity, ...]) -> pl.DataFrame:
     temporal_root = canonical_branch_directory(canonical_root, EdgeAssetRole.TEMPORAL_BENIGN)
     paths = tuple(temporal_root / f"{group_id}.parquet" for group_id in eligible_ids)
     missing = tuple(path.name for path in paths if not path.is_file())

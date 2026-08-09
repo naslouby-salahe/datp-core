@@ -27,14 +27,30 @@ class ThresholdOperatingPoint(StrictModel):
     macro_f1: Ratio | None = None
 
 
+class ThresholdMethodComparison(StrictModel):
+    left: FederatedThresholdMethod
+    right: FederatedThresholdMethod
+
+    @model_validator(mode="after")
+    def validate_methods(self) -> "ThresholdMethodComparison":
+        if self.left is self.right:
+            raise ValueError("threshold movement requires distinct threshold methods")
+        return self
+
+
+DEFAULT_THRESHOLD_METHOD_COMPARISON = ThresholdMethodComparison(
+    left=FederatedThresholdMethod.SHARED_THRESHOLD,
+    right=FederatedThresholdMethod.LOCAL_THRESHOLD,
+)
+
+
 class ThresholdMovement(StrictModel):
     client: ClientIdentity
     population: PopulationId
     seed: Seed
     experiment: ExperimentId
     coordinate: FederatedTrainingCoordinate
-    left_method: FederatedThresholdMethod
-    right_method: FederatedThresholdMethod
+    method_comparison: ThresholdMethodComparison
     shared: ThresholdOperatingPoint
     local: ThresholdOperatingPoint
     delta_threshold: MetricValue
@@ -49,8 +65,6 @@ class ThresholdMovement(StrictModel):
 
     @model_validator(mode="after")
     def validate_movement(self) -> "ThresholdMovement":
-        if self.left_method is self.right_method:
-            raise ValueError("threshold movement requires distinct threshold methods")
         if self.population is not self.coordinate.population:
             raise ValueError("threshold movement population must match the training coordinate")
         if self.seed != self.coordinate.training_seed:
@@ -118,10 +132,7 @@ def threshold_movement(
     local: ThresholdOperatingPoint,
     experiment: ExperimentId,
     coordinate: FederatedTrainingCoordinate,
-    methods: tuple[FederatedThresholdMethod, FederatedThresholdMethod] = (
-        FederatedThresholdMethod.SHARED_THRESHOLD,
-        FederatedThresholdMethod.LOCAL_THRESHOLD,
-    ),
+    method_comparison: ThresholdMethodComparison = DEFAULT_THRESHOLD_METHOD_COMPARISON,
     score_checksum: Checksum | None = None,
     evaluation_checksum: Checksum | None = None,
 ) -> ThresholdMovement:
@@ -142,15 +153,13 @@ def threshold_movement(
         if shared.macro_f1 is None or local.macro_f1 is None
         else MetricValue(local.macro_f1.value - shared.macro_f1.value)
     )
-    left_method, right_method = methods
     return ThresholdMovement(
         client=client,
         population=coordinate.population,
         seed=coordinate.training_seed,
         experiment=experiment,
         coordinate=coordinate,
-        left_method=left_method,
-        right_method=right_method,
+        method_comparison=method_comparison,
         shared=shared,
         local=local,
         delta_threshold=MetricValue(local.threshold.value - shared.threshold.value),

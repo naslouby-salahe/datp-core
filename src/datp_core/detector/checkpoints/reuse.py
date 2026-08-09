@@ -138,7 +138,7 @@ def load_reused_global_candidates(
     request: ReusedGlobalCandidatesRequest,
 ) -> tuple[CheckpointCandidate, ...]:
     manifest = validated_global_manifest(request)
-    round_frame, _, _ = history_frames(request.directory)
+    round_frame = history_frames(request.directory).round_summary
     expected_rounds = tuple(
         RoundNumber(value)
         for value in range(

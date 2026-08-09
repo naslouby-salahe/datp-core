@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from pydantic import model_validator
 
-from datp_core.analysis.contrasts import PairedContrast, PairedDifferenceCounts, SupplementaryPairedAnalysisPlan
+from datp_core.analysis.contrasts import PairedContrasts, PairedDifferenceCounts, SupplementaryPairedAnalysisPlan
 from datp_core.analysis.descriptive import (
     DescriptiveSummary,
     ObservationCounts,
@@ -64,7 +64,7 @@ from datp_core.experiments.common.seeds import BOUNDED_EVIDENCE_SEED_COHORT
 
 @dataclass(frozen=True, slots=True)
 class ConfirmatoryAnalysisRequest:
-    contrasts: tuple[PairedContrast, ...]
+    contrasts: PairedContrasts
     inference_protocol: PairedInferenceProtocol
     analysis_seed: Seed
     multiplicity_plan: MultiplicityPlan | None = None
@@ -74,7 +74,7 @@ class ConfirmatoryAnalysisRequest:
 
 
 class AnalysisDocument(StrictModel):
-    contrasts: tuple[PairedContrast, ...]
+    contrasts: PairedContrasts
     inference_protocol: PairedInferenceProtocol
     interval: BootstrapInterval
     decision: ScientificDecisionResult
@@ -98,7 +98,7 @@ class AnalysisDocument(StrictModel):
 @dataclass(frozen=True, slots=True)
 class ExternalAnalysisRequest:
     execution_identity: ExternalTemporalExecutionIdentity
-    contrasts: tuple[PairedContrast, ...]
+    contrasts: PairedContrasts
     plan: SupplementaryPairedAnalysisPlan
     analysis_seed: Seed
     mechanisms: tuple[MechanismEvidence, ...] = ()
@@ -108,7 +108,7 @@ class ExternalAnalysisRequest:
 
 class ExternalAnalysisDocument(StrictModel):
     plan: SupplementaryPairedAnalysisPlan
-    contrasts: tuple[PairedContrast, ...]
+    contrasts: PairedContrasts
     interval: BootstrapInterval
     descriptive: DescriptiveSummary
     sign_consistency: PairedDifferenceCounts
@@ -202,7 +202,7 @@ def prepare_confirmatory_analysis(request: ConfirmatoryAnalysisRequest) -> Analy
             if interval.reason is not None
             else AnalysisReasonText("confirmatory BCa interval is blocked")
         )
-        deltas = tuple(contrast.delta for contrast in contrasts)
+        deltas = contrasts.deltas
         return AnalysisDocument(
             contrasts=contrasts,
             inference_protocol=protocol,
@@ -223,7 +223,7 @@ def prepare_confirmatory_analysis(request: ConfirmatoryAnalysisRequest) -> Analy
             excluded_seeds=request.excluded_seeds,
             unavailable_reason=reason_text,
         )
-    deltas = tuple(contrast.delta for contrast in contrasts)
+    deltas = contrasts.deltas
     multiplicity = None if request.multiplicity_plan is None else holm_adjust(request.multiplicity_plan, protocol)
     return AnalysisDocument(
         contrasts=contrasts,
@@ -272,7 +272,7 @@ def prepare_external_analysis(request: ExternalAnalysisRequest) -> ExternalAnaly
         plan=request.plan,
         analysis_seed=request.analysis_seed,
     )
-    deltas = tuple(contrast.delta for contrast in contrasts)
+    deltas = contrasts.deltas
     if interval.outcome.value != "available":
         reason_text = (
             AnalysisReasonText(interval.reason.value)

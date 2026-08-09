@@ -51,11 +51,7 @@ def execute_declared_experiment_seed(
     plan = expand_experiment_plan(
         declarations=(declaration,),
         seed_cohort=seed_cohort,
-        evidence=(
-            PlanningEvidence(
-                experiment=declaration.id, disposition=PlanDisposition.EXECUTABLE, reason=reason
-            ),
-        ),
+        evidence=(PlanningEvidence(experiment=declaration.id, disposition=PlanDisposition.EXECUTABLE, reason=reason),),
     )
     return execute_declared_campaign(
         campaign=build_campaign(plan),

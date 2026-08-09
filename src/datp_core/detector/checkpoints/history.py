@@ -75,6 +75,15 @@ class RoundSummaryRecord:
     logical_element_count: LogicalElementCount
 
 
+@dataclass(frozen=True, slots=True)
+class FederatedHistoryFrames:
+    """Persisted federated-history frames grouped by their artifact roles."""
+
+    round_summary: pl.DataFrame
+    client_rounds: pl.DataFrame
+    personalized_rounds: pl.DataFrame | None
+
+
 def read_parquet(path: Path) -> pl.DataFrame:
     if not path.is_file():
         raise ArtifactIntegrityError(
@@ -282,12 +291,16 @@ def persist_federated_training_history(
     )
 
 
-def history_frames(directory: Path) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame | None]:
+def history_frames(directory: Path) -> FederatedHistoryFrames:
     round_frame = read_parquet(directory / FederatedHistoryAssetName.ROUND_SUMMARY.value)
     client_frame = read_parquet(directory / FederatedHistoryAssetName.CLIENT_ROUNDS.value)
     personalized_path = directory / FederatedHistoryAssetName.PERSONALIZED_ROUNDS.value
     personalized_frame = read_parquet(personalized_path) if personalized_path.is_file() else None
-    return round_frame, client_frame, personalized_frame
+    return FederatedHistoryFrames(
+        round_summary=round_frame,
+        client_rounds=client_frame,
+        personalized_rounds=personalized_frame,
+    )
 
 
 def load_published_device_name(directory: Path) -> CudaDeviceName:
@@ -313,7 +326,10 @@ def load_federated_training_history(
     checkpoint_protocol: CheckpointProtocol,
     personalized_coordinate: FederatedTrainingCoordinate | None = None,
 ) -> FederatedTrainingHistory:
-    round_frame, client_frame, personalized_frame = history_frames(directory)
+    frames = history_frames(directory)
+    round_frame = frames.round_summary
+    client_frame = frames.client_rounds
+    personalized_frame = frames.personalized_rounds
     training_rounds = tuple(RoundNumber(value) for value in range(1, checkpoint_protocol.maximum_round.value + 1))
     validate_round_summary(round_frame, training_rounds)
     validate_client_history(client_frame, expected_rounds=training_rounds, expected_clients=clients)

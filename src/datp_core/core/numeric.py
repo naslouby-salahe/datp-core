@@ -191,7 +191,6 @@ class SeedCount(PositiveIntegerValue):
     validation_name: ClassVar[str] = "seed count"
 
 
-
 class RoundNumber(PositiveIntegerValue):
     validation_name: ClassVar[str] = "round number"
 
@@ -445,17 +444,15 @@ class CalibrationSampleWeights:
         validate_non_empty_tuple(self.weights, "calibration sample weights")
 
     @property
-    def as_floats(self) -> tuple[float, ...]:
-        return tuple(float(weight.value) for weight in self.weights)
-
-    @property
-    def total(self) -> float:
-        return float(sum(weight.value for weight in self.weights))
+    def total(self) -> RowCount:
+        return RowCount(sum(weight.value for weight in self.weights))
 
     @property
     def normalized(self) -> tuple[NormalizedWeight, ...]:
         total = self.total
-        return tuple(NormalizedWeight(weight.value / total) for weight in self.weights)
+        if total.value == 0:
+            raise ValueError("calibration sample weights require positive total support")
+        return tuple(NormalizedWeight(weight.value / total.value) for weight in self.weights)
 
     def __len__(self) -> int:
         return len(self.weights)

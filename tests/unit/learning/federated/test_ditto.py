@@ -135,10 +135,13 @@ def test_ditto_markers_without_valid_artifacts_are_not_reusable(tmp_path: Path) 
         directory.mkdir(parents=True)
         (directory / "COMPLETE").write_text("stale completion marker", encoding="utf-8")
 
-    assert ditto_training_is_reusable(
-        request,
-        (request.global_output_directory, request.personalized_output_directory),
-    ) is False
+    assert (
+        ditto_training_is_reusable(
+            request,
+            (request.global_output_directory, request.personalized_output_directory),
+        )
+        is False
+    )
 
     rebuilt = train_ditto_detector(TrainDittoDetectorRequest(request=request, overwrite=False))
     assert rebuilt.publication_status is PublicationStatus.PUBLISHED

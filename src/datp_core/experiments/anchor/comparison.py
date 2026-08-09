@@ -228,7 +228,8 @@ def _pass(
         observation,
         rule,
         decision=AnchorComparisonDecision.EQUIVALENT,
-        signed=MetricDelta(delta.signed), relative=None if delta.relative is None else MetricDelta(delta.relative),
+        signed=MetricDelta(delta.signed),
+        relative=None if delta.relative is None else MetricDelta(delta.relative),
     )
 
 
@@ -245,7 +246,8 @@ def _fail(
         rule,
         decision=AnchorComparisonDecision.MATERIAL_DISCREPANCY,
         reason=reason,
-        signed=MetricDelta(delta.signed), relative=None if delta.relative is None else MetricDelta(delta.relative),
+        signed=MetricDelta(delta.signed),
+        relative=None if delta.relative is None else MetricDelta(delta.relative),
     )
 
 

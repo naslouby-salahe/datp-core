@@ -7,7 +7,12 @@ from shutil import rmtree
 
 from pydantic import TypeAdapter
 
-from datp_core.analysis.contrasts import PairedContrast, SupplementaryPairedAnalysisPlan, build_paired_contrast
+from datp_core.analysis.contrasts import (
+    PairedContrast,
+    PairedContrasts,
+    SupplementaryPairedAnalysisPlan,
+    build_paired_contrast,
+)
 from datp_core.analysis.evidence import AnalyzeExternalEvidenceRequest, analyze_external_evidence
 from datp_core.analysis.inference.contracts import PairedInferenceProtocol
 from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
@@ -170,7 +175,9 @@ def _analyze(experiment: ExperimentId, output_root: Path, overwrite: bool) -> Bo
         seed_cohort=BOUNDED_EVIDENCE_SEED_COHORT,
         inference_protocol=protocol,
     )
-    contrasts = tuple(_contrast(declaration, seed, output_root) for seed in BOUNDED_EVIDENCE_SEED_COHORT.values)
+    contrasts = PairedContrasts(
+        values=tuple(_contrast(declaration, seed, output_root) for seed in BOUNDED_EVIDENCE_SEED_COHORT.values)
+    )
     output = (
         output_root / BoundedExternalAssetDirectory.ANALYSIS.value / declaration.id.value / declaration.population.value
     )

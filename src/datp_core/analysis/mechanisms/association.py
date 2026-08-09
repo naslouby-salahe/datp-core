@@ -59,24 +59,13 @@ class AssociationObservation(StrictModel):
     benefit: MetricValue
 
 
-class AssociationStatistics(StrictModel):
-    spearman_rho: CorrelationCoefficient
-    spearman_p_value: PValue
-    regression_intercept: MetricValue
-    regression_slope: MetricValue
-    regression_slope_standard_error: MetricValue
-    regression_slope_confidence_interval: tuple[MetricValue, MetricValue]
-    r_squared: Ratio
-    leverage: tuple[Ratio, ...]
-    leave_one_out_slopes: tuple[MetricValue, ...]
-    leave_one_out_r_squared: tuple[Ratio, ...]
-    influence: tuple[MetricValue, ...]
-    evidentiary_sufficient: bool
+class RegressionSlopeConfidenceInterval(StrictModel):
+    lower_bound: MetricValue
+    upper_bound: MetricValue
 
     @model_validator(mode="after")
-    def validate_statistics(self) -> "AssociationStatistics":
-        lower, upper = self.regression_slope_confidence_interval
-        if lower.value > upper.value:
+    def validate_interval(self) -> "RegressionSlopeConfidenceInterval":
+        if self.lower_bound.value > self.upper_bound.value:
             raise ValueError("regression slope confidence interval bounds are inverted")
         return self
 
@@ -85,6 +74,19 @@ class LeaveOneOutAssociationDiagnostics(StrictModel):
     slopes: tuple[MetricValue, ...]
     r_squared: tuple[Ratio, ...]
     influences: tuple[MetricValue, ...]
+
+
+class AssociationStatistics(StrictModel):
+    spearman_rho: CorrelationCoefficient
+    spearman_p_value: PValue
+    regression_intercept: MetricValue
+    regression_slope: MetricValue
+    regression_slope_standard_error: MetricValue
+    regression_slope_confidence_interval: RegressionSlopeConfidenceInterval
+    r_squared: Ratio
+    leverage: tuple[Ratio, ...]
+    leave_one_out_diagnostics: LeaveOneOutAssociationDiagnostics
+    evidentiary_sufficient: bool
 
 
 class AssociationResult(StrictModel):
@@ -103,11 +105,11 @@ class AssociationResult(StrictModel):
             count = len(self.observations)
             if len(self.statistics.leverage) != count:
                 raise ValueError("association leverage must cover every observation")
-            if len(self.statistics.leave_one_out_slopes) != count:
+            if len(self.statistics.leave_one_out_diagnostics.slopes) != count:
                 raise ValueError("association leave-one-out slopes must cover every observation")
-            if len(self.statistics.leave_one_out_r_squared) != count:
+            if len(self.statistics.leave_one_out_diagnostics.r_squared) != count:
                 raise ValueError("association leave-one-out R² must cover every observation")
-            if len(self.statistics.influence) != count:
+            if len(self.statistics.leave_one_out_diagnostics.influences) != count:
                 raise ValueError("association influence must cover every observation")
         return self
 
@@ -192,15 +194,13 @@ def heterogeneity_benefit_association(
         regression_intercept=regression.intercept,
         regression_slope=regression.slope,
         regression_slope_standard_error=regression.stderr,
-        regression_slope_confidence_interval=(
-            MetricValue(slope - t_critical * slope_se),
-            MetricValue(slope + t_critical * slope_se),
+        regression_slope_confidence_interval=RegressionSlopeConfidenceInterval(
+            lower_bound=MetricValue(slope - t_critical * slope_se),
+            upper_bound=MetricValue(slope + t_critical * slope_se),
         ),
         r_squared=Ratio(regression.rvalue.value**2),
         leverage=tuple(Ratio(float(value)) for value in leverage),
-        leave_one_out_slopes=loo.slopes,
-        leave_one_out_r_squared=loo.r_squared,
-        influence=loo.influences,
+        leave_one_out_diagnostics=loo,
         evidentiary_sufficient=sufficient,
     )
     return AssociationResult(

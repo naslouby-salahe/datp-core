@@ -628,7 +628,7 @@ def read_terminal_aggregate_training_loss(
     maximum_round: RoundNumber,
 ) -> MetricValue:
     try:
-        round_frame, _client_frame, _personalized = history_frames(training_directory)
+        round_frame = history_frames(training_directory).round_summary
     except ArtifactIntegrityError as error:
         raise ScientificContractError(
             ErrorMessage(f"FedProx terminal training loss unavailable under {training_directory}: {error}"),
