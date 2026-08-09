@@ -37,7 +37,12 @@ from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
 )
-from datp_core.core.identifiers import ExperimentId, FederatedThresholdMethod, PublicationStatus
+from datp_core.core.identifiers import (
+    ArtifactFileName,
+    ExperimentId,
+    FederatedThresholdMethod,
+    PublicationStatus,
+)
 from datp_core.core.numeric import Seed
 from datp_core.experiments.common.coordinates import ExternalTemporalExecutionIdentity
 
@@ -229,7 +234,7 @@ def _publish[AnalysisDocumentT: StrictModel](
                 rebaser=_rebase_analysis_publication,
             ),
             overwrite=overwrite,
-            complete_marker=AnalysisAssetName.COMPLETE,
+            complete_marker=ArtifactFileName(AnalysisAssetName.COMPLETE),
         )
     )
 

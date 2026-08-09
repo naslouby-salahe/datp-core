@@ -28,6 +28,7 @@ from datp_core.core.identifiers import (
     EvidenceRole,
     ExperimentId,
     FederatedThresholdMethod,
+    MarkdownText,
     MetricId,
     PopulationId,
 )
@@ -328,7 +329,7 @@ def _load_threshold_result(path: Path) -> ThresholdConstructionResult:
     return adapter.validate_json(path.read_text(encoding="utf-8"))
 
 
-def _external_benign_statistics_markdown(manifest: ExternalBenignStatisticsReport) -> str:
+def _external_benign_statistics_markdown(manifest: ExternalBenignStatisticsReport) -> MarkdownText:
     lines = [
         "# DATP-Core External Benign Statistics",
         "",
@@ -385,7 +386,7 @@ def _external_benign_statistics_markdown(manifest: ExternalBenignStatisticsRepor
             for client in row.clients
         )
         lines.extend(("",))
-    return "\n".join(lines)
+    return MarkdownText("\n".join(lines))
 
 
 def _contrast(declaration: ExperimentDeclaration, seed: Seed, output_root: Path) -> PairedContrast:

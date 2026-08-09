@@ -255,6 +255,18 @@ class SourceRowIndex(NonNegativeIntegerValue):
     validation_name: ClassVar[str] = "source row index"
 
 
+class NanosecondTimestamp(NonNegativeIntegerValue):
+    validation_name: ClassVar[str] = "nanosecond timestamp"
+
+
+class MicrosecondClock(NonNegativeIntegerValue):
+    validation_name: ClassVar[str] = "microsecond clock"
+
+
+class MicrosecondOffset(NonNegativeIntegerValue):
+    validation_name: ClassVar[str] = "microsecond offset"
+
+
 class ValidationIssueCount(NonNegativeIntegerValue):
     validation_name: ClassVar[str] = "validation issue count"
 

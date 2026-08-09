@@ -407,6 +407,50 @@ class ArtifactFileName(NonEmptyString):
     validation_name: ClassVar[str] = "artifact filename"
 
 
+class SerializedDocumentText(NonEmptyString):
+    validation_name: ClassVar[str] = "serialized document text"
+
+
+class ValidationSubject(NonEmptyString):
+    validation_name: ClassVar[str] = "validation subject"
+
+
+class ValidationReasonText(NonEmptyString):
+    validation_name: ClassVar[str] = "validation reason text"
+
+
+class FeatureNamePrefix(NonEmptyString):
+    validation_name: ClassVar[str] = "feature name prefix"
+
+
+class SourcePathPart(NonEmptyString):
+    validation_name: ClassVar[str] = "source path part"
+
+
+class AttackSubtypeToken(NonEmptyString):
+    validation_name: ClassVar[str] = "attack subtype token"
+
+
+class RawSourceFilename(NonEmptyString):
+    validation_name: ClassVar[str] = "raw source filename"
+
+
+class GlobPattern(NonEmptyString):
+    validation_name: ClassVar[str] = "glob pattern"
+
+
+class ControlledPartitionPathSegment(NonEmptyString):
+    validation_name: ClassVar[str] = "controlled partition path segment"
+
+
+class RelatedPublicationMemberIdentity(NonEmptyString):
+    validation_name: ClassVar[str] = "related publication member identity"
+
+
+class ReloadValidationEvidence(NonEmptyString):
+    validation_name: ClassVar[str] = "reload validation evidence"
+
+
 class CudaDeviceName(NonEmptyString):
     validation_name: ClassVar[str] = "CUDA device name"
 
@@ -471,6 +515,14 @@ class ClaimWording(NonEmptyString):
     validation_name: ClassVar[str] = "claim wording"
 
 
+class NormalizedClaimWording(NonEmptyString):
+    validation_name: ClassVar[str] = "normalized claim wording"
+
+
+class ReportLine(str):
+    """One rendered line of report output; may be blank for paragraph separation."""
+
+
 class MessageEndpoint(NonEmptyString):
     validation_name: ClassVar[str] = "message endpoint"
 
@@ -513,6 +565,14 @@ class AnalysisMarkerText(NonEmptyString):
 
 class SourceRuleDescription(NonEmptyString):
     validation_name: ClassVar[str] = "source-defined rule description"
+
+
+class IntervalDescriptionText(NonEmptyString):
+    validation_name: ClassVar[str] = "interval description text"
+
+
+class ScoreArtifactPathText(NonEmptyString):
+    validation_name: ClassVar[str] = "score artifact path text"
 
 
 @dataclass(frozen=True, slots=True)
@@ -566,7 +626,7 @@ class FeatureNameSequence:
     def __iter__(self):
         return iter(self.names)
 
-    def as_list(self) -> list[str]:
+    def as_list(self) -> list[FeatureName]:
         return list(self.names)
 
     __get_pydantic_core_schema__ = classmethod(sequence_pydantic_schema)
@@ -611,3 +671,11 @@ class StableRowIdSequence:
         return iter(self.row_ids)
 
     __get_pydantic_core_schema__ = classmethod(sequence_pydantic_schema)
+
+
+class CoordinateStableKey(NonEmptyString):
+    validation_name: ClassVar[str] = "coordinate stable key"
+
+
+class MarkdownText(NonEmptyString):
+    validation_name: ClassVar[str] = "markdown text"

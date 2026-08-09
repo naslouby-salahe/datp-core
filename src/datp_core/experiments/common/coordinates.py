@@ -11,6 +11,7 @@ from datp_core.core.errors import (
     ScientificContractError,
 )
 from datp_core.core.identifiers import (
+    CoordinateStableKey,
     DatasetId,
     EvidenceRole,
     ExperimentId,
@@ -174,7 +175,7 @@ class ExperimentCoordinate:
             raise ValueError("Dirichlet-client populations require an explicit controlled partition condition")
 
     @property
-    def stable_key(self) -> str:
+    def stable_key(self) -> CoordinateStableKey:
         temporal = (
             self.temporal_state.value
             if self.temporal_state is not None
@@ -199,22 +200,24 @@ class ExperimentCoordinate:
             if concentration is None:
                 raise ValueError("Dirichlet stable keys require a concentration")
             partition = f"{ControlledPartitionKind.DIRICHLET.value}:{concentration.value}"
-        return "/".join(
-            (
-                self.experiment.value,
-                self.evidence_role.value,
-                self.dataset.value,
-                self.population.value,
-                self.training_model.value,
-                str(self.training_seed.value),
-                self.split_protocol.value,
-                self.preprocessing_protocol.value,
-                coefficient,
-                self.threshold_method.value,
-                self.metric.value,
-                temporal,
-                quantile,
-                partition,
+        return CoordinateStableKey(
+            "/".join(
+                (
+                    self.experiment.value,
+                    self.evidence_role.value,
+                    self.dataset.value,
+                    self.population.value,
+                    self.training_model.value,
+                    str(self.training_seed.value),
+                    self.split_protocol.value,
+                    self.preprocessing_protocol.value,
+                    coefficient,
+                    self.threshold_method.value,
+                    self.metric.value,
+                    temporal,
+                    quantile,
+                    partition,
+                )
             )
         )
 

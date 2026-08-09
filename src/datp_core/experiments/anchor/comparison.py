@@ -25,11 +25,11 @@ from datp_core.experiments.anchor.contracts import (
 class _NumericDelta:
     __slots__ = ("expected", "observed", "signed", "relative")
 
-    def __init__(self, expected: float, observed: float):
-        self.expected = expected
-        self.observed = observed
-        self.signed = observed - expected
-        self.relative = None if is_numeric_zero(expected) else (self.signed / abs(expected))
+    def __init__(self, expected: MetricValue, observed: MetricValue):
+        self.expected = expected.value
+        self.observed = observed.value
+        self.signed = self.observed - self.expected
+        self.relative = None if is_numeric_zero(self.expected) else (self.signed / abs(self.expected))
 
 
 def compare_anchor_metric(
@@ -48,7 +48,7 @@ def compare_anchor_metric(
         )
 
     coordinate_failure = _coordinate_mismatch_reason(reference, observation)
-    delta = _NumericDelta(reference.value.value, observation.value.value)
+    delta = _NumericDelta(reference.value, observation.value)
 
     if coordinate_failure is not None:
         return _build(

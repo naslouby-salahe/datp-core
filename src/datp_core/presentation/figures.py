@@ -14,6 +14,7 @@ from datp_core.core.identifiers import (
     FigureLabel,
     FigureTitle,
     MetricId,
+    ReportLine,
 )
 from datp_core.core.numeric import MetricValue, Seed, ThresholdValue
 
@@ -48,8 +49,8 @@ class EmpiricalCdfFigureSeries:
     x_metric: MetricId
     y_metric: MetricId
     availability: AvailabilityStatus
-    x_values: tuple[float, ...]
-    y_values: tuple[float, ...]
+    x_values: tuple[MetricValue, ...]
+    y_values: tuple[MetricValue, ...]
     client_id: ClientIdentityToken | None
     seed: Seed | None
     score_role: ScoreRole | None
@@ -84,9 +85,11 @@ def _validate_available_empirical_cdf(series: EmpiricalCdfFigureSeries) -> None:
         raise ValueError("available empirical CDF series require x and y values")
     if len(series.x_values) != len(series.y_values):
         raise ValueError("empirical CDF x and y values must have equal length")
-    if any(not (0.0 < y <= 1.0) for y in series.y_values):
+    if any(not (0.0 < y.value <= 1.0) for y in series.y_values):
         raise ValueError("empirical CDF y values must lie in (0, 1]")
-    if any(left > right for left, right in zip(series.y_values, series.y_values[1:], strict=False)):
+    if any(
+        left.value > right.value for left, right in zip(series.y_values, series.y_values[1:], strict=False)
+    ):
         raise ValueError("empirical CDF y values must be nondecreasing")
     if series.unavailable_reason is not None:
         raise ValueError("available empirical CDF series cannot carry an unavailable reason")

@@ -39,8 +39,7 @@ from datp_core.experiments.common.seeds import SeedCohort
 
 
 class AnchorDetail(NonEmptyString):
-    def __new__(cls, value: str) -> AnchorDetail:
-        return super().__new__(cls, value)
+    """Human-readable detail text for an anchor comparison outcome."""
 
 
 class AnchorComparisonStrategy(StrEnum):

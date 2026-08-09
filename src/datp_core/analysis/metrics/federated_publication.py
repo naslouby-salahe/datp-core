@@ -27,7 +27,7 @@ from datp_core.artifacts.repositories.evaluations import (
     write_federated_evaluation,
 )
 from datp_core.artifacts.repositories.publication import ArtifactPublication, FunctionalArtifactCodec, publish_artifact
-from datp_core.core.identifiers import EvidenceRole, PublicationStatus
+from datp_core.core.identifiers import ArtifactFileName, EvidenceRole, PublicationStatus
 from datp_core.detector.scoring.models import FederatedScoreArtifactManifest
 from datp_core.experiments.common.coordinates import ExternalTemporalExecutionIdentity
 from datp_core.thresholds.dispatch import ThresholdConstructionResult
@@ -92,7 +92,7 @@ def evaluate_federated_detector(request: EvaluateFederatedDetectorRequest) -> Ev
                 rebaser=rebase_federated_evaluation,
             ),
             overwrite=request.overwrite,
-            complete_marker=FederatedEvaluationAssetName.COMPLETE,
+            complete_marker=ArtifactFileName(FederatedEvaluationAssetName.COMPLETE),
         )
     )
     artifacts: FederatedEvaluationArtifacts = publication.value

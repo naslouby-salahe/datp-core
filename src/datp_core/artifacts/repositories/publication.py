@@ -19,7 +19,13 @@ from datp_core.artifacts.repositories.models import (
     CompletionState,
 )
 from datp_core.artifacts.serializers.json import canonical_json_text
-from datp_core.core.identifiers import PublicationStatus
+from datp_core.core.identifiers import (
+    ArtifactFileName,
+    PublicationStatus,
+    RelatedPublicationMemberIdentity,
+    ReloadValidationEvidence,
+    SerializedDocumentText,
+)
 from datp_core.runtime.filesystem import (
     cleanup_staging_on_failure,
     create_staging_directory,
@@ -53,7 +59,7 @@ def publish_atomically[ValueT](
     write: Callable[[Path], ValueT],
     reusable_value: Callable[[Path], ValueT],
     remove_target: Callable[[Path], None] = rmtree,
-    complete_marker: str | Path,
+    complete_marker: ArtifactFileName | Path,
 ) -> ArtifactPublicationResult[ValueT]:
     """Publish one typed value under a lock and return its definitive state."""
     with FileLock(f"{target}.lock"):
@@ -191,17 +197,13 @@ class ArtifactPublication[RequestT, ResultT]:
     request: RequestT
     codec: ArtifactCodec[RequestT, ResultT]
     overwrite: bool
-    complete_marker: str | Path
+    complete_marker: ArtifactFileName | Path
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class RelatedPublicationMember:
-    identity: str
+    identity: RelatedPublicationMemberIdentity
     target: Path
-
-    def __post_init__(self) -> None:
-        if not self.identity:
-            raise ValueError("related publication member identity must be non-empty")
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -263,7 +265,10 @@ def publish_related_artifacts[RequestT, ResultT](
     )
 
 
-def complete_digest(manifest_payload: str, schema_payload: str) -> Checksum:
+def complete_digest(
+    manifest_payload: SerializedDocumentText,
+    schema_payload: SerializedDocumentText,
+) -> Checksum:
     """Bind a manifest and schema payload into one deterministic completion digest."""
     return Checksum.from_text(f"{manifest_payload}\n{schema_payload}")
 
@@ -332,7 +337,7 @@ def read_completion_record(directory: Path) -> CompletionRecord | None:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ReloadValidation:
     valid: bool
-    evidence: tuple[str, ...]
+    evidence: tuple[ReloadValidationEvidence, ...]
 
 
 def validate_reload(
@@ -341,30 +346,44 @@ def validate_reload(
     completion: CompletionRecord,
     observed: tuple[ArtifactRecord, ...],
 ) -> ReloadValidation:
-    evidence: list[str] = []
+    evidence: list[ReloadValidationEvidence] = []
     expected_paths = tuple(item.relative_path for item in completion.artifacts)
     observed_paths = tuple(item.relative_path for item in observed)
     if not completion.complete:
-        evidence.append("completion marker is not complete")
+        evidence.append(ReloadValidationEvidence("completion marker is not complete"))
     if expected_paths != observed_paths:
-        evidence.append("observed artifact ordering or membership differs from the completion record")
+        evidence.append(
+            ReloadValidationEvidence(
+                "observed artifact ordering or membership differs from the completion record"
+            )
+        )
     expected_by_path = tuple((item.relative_path, item.checksum, item.byte_count) for item in completion.artifacts)
     observed_by_path = tuple((item.relative_path, item.checksum, item.byte_count) for item in observed)
     if expected_by_path != observed_by_path:
-        evidence.append("artifact checksum or byte-count metadata mismatch")
+        evidence.append(ReloadValidationEvidence("artifact checksum or byte-count metadata mismatch"))
     if any(item.state is not ArtifactState.PUBLISHED for item in observed):
-        evidence.append("observed publication contains a non-published artifact")
+        evidence.append(ReloadValidationEvidence("observed publication contains a non-published artifact"))
 
     for artifact in completion.artifacts:
         artifact_path = root / artifact.relative_path
         if not artifact_path.is_file():
-            evidence.append(f"completed artifact is absent: {artifact.relative_path.as_posix()}")
+            evidence.append(
+                ReloadValidationEvidence(
+                    f"completed artifact is absent: {artifact.relative_path.as_posix()}"
+                )
+            )
             continue
         actual_checksum = Checksum.from_file(artifact_path)
         if actual_checksum != artifact.checksum:
-            evidence.append(f"artifact checksum mismatch: {artifact.relative_path.as_posix()}")
+            evidence.append(
+                ReloadValidationEvidence(f"artifact checksum mismatch: {artifact.relative_path.as_posix()}")
+            )
         if artifact_path.stat().st_size != artifact.byte_count.value:
-            evidence.append(f"artifact byte-count mismatch: {artifact.relative_path.as_posix()}")
+            evidence.append(
+                ReloadValidationEvidence(
+                    f"artifact byte-count mismatch: {artifact.relative_path.as_posix()}"
+                )
+            )
 
     return ReloadValidation(valid=not evidence, evidence=tuple(evidence))
 
@@ -375,9 +394,9 @@ def serialize_json_model(model: BaseModel, destination: Path) -> Checksum:
     return Checksum.from_text(payload)
 
 
-def load_model_json[ModelT: BaseModel](model_type: type[ModelT], text: str) -> ModelT:
+def load_model_json[ModelT: BaseModel](model_type: type[ModelT], text: SerializedDocumentText) -> ModelT:
     return model_type.model_validate_json(text)
 
 
 def load_model_file[ModelT: BaseModel](model_type: type[ModelT], path: Path) -> ModelT:
-    return load_model_json(model_type, path.read_text(encoding="utf-8"))
+    return load_model_json(model_type, SerializedDocumentText(path.read_text(encoding="utf-8")))

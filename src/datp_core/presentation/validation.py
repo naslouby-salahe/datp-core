@@ -13,6 +13,7 @@ from datp_core.core.identifiers import (
     EvidenceRole,
     MetricId,
     NonEmptyString,
+    NormalizedClaimWording,
     PopulationId,
     PopulationIdentityKind,
 )

@@ -12,7 +12,7 @@ from datp_core.analysis.temporal import TemporalDeploymentProvenance
 from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.repositories.publication import ArtifactPublication, FunctionalArtifactCodec, publish_artifact
 from datp_core.artifacts.serializers.json import canonical_json_text
-from datp_core.core.identifiers import PublicationStatus
+from datp_core.core.identifiers import ArtifactFileName, PublicationStatus
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.scoring.contracts import ScoreArtifactManifest
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
@@ -105,7 +105,7 @@ def construct_and_publish_federated_thresholds(
                 rebaser=rebase_federated_threshold,
             ),
             overwrite=request.overwrite,
-            complete_marker=FederatedThresholdAssetName.COMPLETE,
+            complete_marker=ArtifactFileName(FederatedThresholdAssetName.COMPLETE),
         )
     )
     return FederatedThresholdConstructionResult(

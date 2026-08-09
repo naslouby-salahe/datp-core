@@ -11,8 +11,20 @@ from pathlib import Path
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from datp_core.core.identifiers import AvailabilityStatus, ChronologyGroupIdentity, NonEmptyString
-from datp_core.core.numeric import RowCount
+from datp_core.core.identifiers import (
+    AvailabilityStatus,
+    ChronologyGroupIdentity,
+    NonEmptyString,
+    UtcInstantText,
+    ValidationReasonText,
+)
+from datp_core.core.numeric import (
+    MicrosecondClock,
+    MicrosecondOffset,
+    NanosecondTimestamp,
+    RowCount,
+    SourceRowIndex,
+)
 from datp_core.data.contracts import CanonicalProvenanceColumn, ChronologyValidation
 from datp_core.data.materialization import canonical_provenance_arrow_field
 
@@ -61,23 +73,25 @@ class PcapChronology:
 
 @dataclass(frozen=True, slots=True)
 class _PcapRecord:
-    timestamp_nanoseconds: int
-    utc_clock_microseconds: int
+    timestamp_nanoseconds: NanosecondTimestamp
+    utc_clock_microseconds: MicrosecondClock
 
 
 class _PcapAligner:
-    def __init__(self, csv_path: Path, pcap_path: Path, expected_offset_microseconds: int | None = None) -> None:
+    def __init__(
+        self, csv_path: Path, pcap_path: Path, expected_offset_microseconds: MicrosecondOffset | None = None
+    ) -> None:
         self.csv_path = csv_path
         self.pcap_path = pcap_path
         self.expected_offset_microseconds = expected_offset_microseconds
-        self.alignment_offset_microseconds: int | None = None
+        self.alignment_offset_microseconds: MicrosecondOffset | None = None
         self.total_rows = 0
         self.duplicate_timestamp_count = 0
         self.out_of_order_rows = 0
         self.skipped_evidence_rows = 0
         self.trailing_evidence_rows = 0
 
-    def matches(self) -> Iterator[int]:
+    def matches(self) -> Iterator[NanosecondTimestamp]:
         clocks = _csv_capture_clocks(self.csv_path)
         records = _pcap_records(self.pcap_path)
         first_record = self._first_match(clocks, records)

@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, TypeAdapter
 
 from datp_core.artifacts.provenance import Checksum
+from datp_core.core.identifiers import SerializedDocumentText
 
 if TYPE_CHECKING:
     from _typeshed import DataclassInstance
@@ -62,13 +63,15 @@ def canonical_mapping(value: object) -> dict[str, CanonicalValue]:
     return document
 
 
-def canonical_json_text(value: object) -> str:
-    return json.dumps(
-        canonical_value(value),
-        sort_keys=True,
-        separators=JSON_SEPARATORS,
-        ensure_ascii=True,
-        allow_nan=False,
+def canonical_json_text(value: object) -> SerializedDocumentText:
+    return SerializedDocumentText(
+        json.dumps(
+            canonical_value(value),
+            sort_keys=True,
+            separators=JSON_SEPARATORS,
+            ensure_ascii=True,
+            allow_nan=False,
+        )
     )
 
 

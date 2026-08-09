@@ -239,12 +239,12 @@ def _mean_absolute_threshold_error(values: list[AbsoluteThresholdError]) -> Abso
     return AbsoluteThresholdError(sum(item.value for item in values) / len(values)) if values else None
 
 
-def _mean_ratio(values: list[float]) -> Ratio | None:
-    return Ratio(sum(values) / len(values)) if values else None
+def _mean_ratio(values: list[Ratio]) -> Ratio | None:
+    return Ratio(sum(value.value for value in values) / len(values)) if values else None
 
 
-def _mean_threshold_variance(values: list[float]) -> ThresholdVariance | None:
-    return ThresholdVariance(sum(values) / len(values)) if values else None
+def _mean_threshold_variance(values: list[ThresholdVariance]) -> ThresholdVariance | None:
+    return ThresholdVariance(sum(value.value for value in values) / len(values)) if values else None
 
 
 def _mean_bytes(values: list[ByteCount]) -> AverageByteCount | None:
@@ -272,44 +272,74 @@ def _run_estimation_seed(
     )
 
 
+class EstimationDiagnosticFamily(StrEnum):
+    THRESHOLD_ERROR = "threshold_error"
+    EXCEEDANCE_AND_VARIANCE = "exceedance_and_variance"
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class _EstimationDiagnostics:
     threshold_errors: list[AbsoluteThresholdError]
     attainment_errors: list[MetricValue]
-    exceedances: list[float]
-    variances: list[float]
+    exceedances: list[Ratio]
+    variances: list[ThresholdVariance]
     communication: list[ByteCount]
+
+
+def _collect_threshold_error_diagnostics(
+    documents: tuple[FederatedEvaluationDocument, ...],
+) -> tuple[list[AbsoluteThresholdError], list[MetricValue]]:
+    threshold_errors: list[AbsoluteThresholdError] = []
+    attainment_errors: list[MetricValue] = []
+    for document in documents:
+        for diagnostic in document.diagnostics.threshold_estimation:
+            threshold_errors.append(diagnostic.absolute_threshold_error)
+            attainment_errors.append(diagnostic.absolute_attainment_error)
+    return threshold_errors, attainment_errors
+
+
+def _collect_exceedance_and_variance_diagnostics(
+    documents: tuple[FederatedEvaluationDocument, ...],
+) -> tuple[list[Ratio], list[ThresholdVariance]]:
+    exceedances: list[Ratio] = []
+    variances: list[ThresholdVariance] = []
+    for document in documents:
+        for diagnostic in document.diagnostics.threshold_estimation:
+            exceedances.append(diagnostic.achieved_benign_exceedance)
+        for point in document.diagnostics.sample_efficiency:
+            variances.append(point.threshold_variance_across_nested_replicates)
+    return exceedances, variances
+
+
+def _collect_communication_diagnostics(
+    documents: tuple[FederatedEvaluationDocument, ...],
+) -> list[ByteCount]:
+    communication: list[ByteCount] = []
+    for document in documents:
+        if document.diagnostics.communication is not None:
+            communication.append(document.diagnostics.communication.total_estimated_serialized_bytes)
+    return communication
 
 
 def _collect_estimation_diagnostics(
     documents: tuple[FederatedEvaluationDocument, ...],
     *,
-    include_threshold_error: bool,
-    include_exceedance_and_variance: bool,
+    families: frozenset[EstimationDiagnosticFamily],
 ) -> _EstimationDiagnostics:
     threshold_errors: list[AbsoluteThresholdError] = []
     attainment_errors: list[MetricValue] = []
-    exceedances: list[float] = []
-    variances: list[float] = []
-    communication: list[ByteCount] = []
-    for document in documents:
-        if include_threshold_error:
-            for diagnostic in document.diagnostics.threshold_estimation:
-                threshold_errors.append(diagnostic.absolute_threshold_error)
-                attainment_errors.append(diagnostic.absolute_attainment_error)
-        if include_exceedance_and_variance:
-            for diagnostic in document.diagnostics.threshold_estimation:
-                exceedances.append(diagnostic.achieved_benign_exceedance.value)
-            for point in document.diagnostics.sample_efficiency:
-                variances.append(point.threshold_variance_across_nested_replicates.value)
-        if document.diagnostics.communication is not None:
-            communication.append(document.diagnostics.communication.total_estimated_serialized_bytes)
+    exceedances: list[Ratio] = []
+    variances: list[ThresholdVariance] = []
+    if EstimationDiagnosticFamily.THRESHOLD_ERROR in families:
+        threshold_errors, attainment_errors = _collect_threshold_error_diagnostics(documents)
+    if EstimationDiagnosticFamily.EXCEEDANCE_AND_VARIANCE in families:
+        exceedances, variances = _collect_exceedance_and_variance_diagnostics(documents)
     return _EstimationDiagnostics(
         threshold_errors=threshold_errors,
         attainment_errors=attainment_errors,
         exceedances=exceedances,
         variances=variances,
-        communication=communication,
+        communication=_collect_communication_diagnostics(documents),
     )
 
 
@@ -317,8 +347,7 @@ def _estimation_summary(
     *,
     experiment_id: ExperimentId,
     method: FederatedThresholdMethod,
-    include_threshold_error: bool,
-    include_exceedance_and_variance: bool,
+    families: frozenset[EstimationDiagnosticFamily],
 ) -> EstimationSummaryLoad:
     documents: list[FederatedEvaluationDocument] = []
     missing = 0
@@ -338,8 +367,7 @@ def _estimation_summary(
     ]
     diagnostics = _collect_estimation_diagnostics(
         tuple(documents),
-        include_threshold_error=include_threshold_error,
-        include_exceedance_and_variance=include_exceedance_and_variance,
+        families=families,
     )
 
     return EstimationSummaryLoad(
@@ -393,8 +421,7 @@ def report_federated_benign_statistics_comparison(
         loaded = _estimation_summary(
             experiment_id=experiment_id,
             method=method,
-            include_threshold_error=True,
-            include_exceedance_and_variance=False,
+            families=frozenset((EstimationDiagnosticFamily.THRESHOLD_ERROR,)),
         )
         missing += loaded.missing_count.value
         if loaded.summary is not None:
@@ -440,8 +467,7 @@ def report_federated_quantile_estimation(
         loaded = _estimation_summary(
             experiment_id=experiment_id,
             method=method,
-            include_threshold_error=False,
-            include_exceedance_and_variance=True,
+            families=frozenset((EstimationDiagnosticFamily.EXCEEDANCE_AND_VARIANCE,)),
         )
         missing += loaded.missing_count.value
         if loaded.summary is not None:

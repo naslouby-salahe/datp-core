@@ -24,6 +24,7 @@ from datp_core.core.errors import (
     ScientificContractError,
 )
 from datp_core.core.identifiers import (
+    ArtifactFileName,
     CentralizedThresholdMethod,
     ContractSubject,
     EvidenceRole,
@@ -259,7 +260,7 @@ def construct_centralized_threshold(
                 rebaser=rebase_centralized_threshold,
             ),
             overwrite=request.overwrite,
-            complete_marker=CentralizedThresholdAssetName.COMPLETE,
+            complete_marker=ArtifactFileName(CentralizedThresholdAssetName.COMPLETE),
         )
     )
     return ConstructCentralizedThresholdResult(
@@ -410,7 +411,7 @@ def evaluate_centralized_detector(request: EvaluateCentralizedDetectorRequest) -
                 rebaser=rebase_centralized_evaluation,
             ),
             overwrite=request.overwrite,
-            complete_marker=CentralizedEvaluationPublicationAsset.COMPLETE,
+            complete_marker=ArtifactFileName(CentralizedEvaluationPublicationAsset.COMPLETE),
         )
     )
     return EvaluateCentralizedDetectorResult(
