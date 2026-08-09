@@ -26,7 +26,7 @@ class ClusterPartitionSummary(StrictModel):
         cls,
         memberships: tuple[ClusterMembership, ...],
         *,
-        declared_group_count: int | None = None,
+        declared_group_count: int | None = None,#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
         observed_empty_cluster_indexes: tuple[ClusterIndex, ...] = (),
     ) -> "ClusterPartitionSummary":
         """Build partition sizes preserving actual observed cluster indexes.
@@ -81,11 +81,11 @@ class ClusterEvidenceRecord(StrictModel):
     contributing_quantile_dispersion: MetricValue | None
     effective_threshold_dispersion: MetricValue | None
     threshold_dispersion_recovery_fraction: MetricValue | None
-    threshold_dispersion_recovery_reason: str | None
+    threshold_dispersion_recovery_reason: str | None#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
     cv_fpr_equity_recovery_fraction: MetricValue | None
-    cv_fpr_equity_recovery_reason: str | None
+    cv_fpr_equity_recovery_reason: str | None#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
     evidence_availability: ClusterEvidenceAvailability = ClusterEvidenceAvailability.AVAILABLE
-    dispersion_unavailable_reason: str | None = None
+    dispersion_unavailable_reason: str | None = None#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
 
     evidence_role: ClassVar[EvidenceRole] = EvidenceRole.MECHANISM
 
@@ -118,7 +118,7 @@ class ClusterEvidenceRecord(StrictModel):
         return self.cv_fpr_equity_recovery_fraction
 
     @property
-    def recovery_fraction_reason(self) -> str | None:
+    def recovery_fraction_reason(self) -> str | None:#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
         return self.cv_fpr_equity_recovery_reason
 
 
@@ -220,10 +220,10 @@ def empty_cluster_evidence_record(
     *,
     seed: Seed,
     source_threshold_checksum: Checksum,
-    declared_group_count: int,
+    declared_group_count: int,#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
     filled_memberships: tuple[ClusterMembership, ...],
     fingerprints: tuple[ClusterFingerprint, ...] = (),
-    reason: str,
+    reason: str,#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
     observed_empty_cluster_indexes: tuple[ClusterIndex, ...] = (),
 ) -> ClusterEvidenceRecord:
     """Preserve empty-cluster negative evidence without fabricating memberships or zero metrics.
@@ -294,8 +294,8 @@ def cluster_stability(
     *,
     left_source_checksum: Checksum | None = None,
     right_source_checksum: Checksum | None = None,
-    left_declared_group_count: int | None = None,
-    right_declared_group_count: int | None = None,
+    left_declared_group_count: int | None = None,#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    right_declared_group_count: int | None = None,#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
 ) -> ClusterStabilityResult:
     left_assignments = _cluster_assignments(left)
     right_assignments = _cluster_assignments(right)
@@ -352,11 +352,11 @@ def _cluster_assignments(
 
 
 def _contingency(
-    left_labels: tuple[int, ...],
-    right_labels: tuple[int, ...],
-    left_group_count: int,
-    right_group_count: int,
-) -> tuple[tuple[PairedObservationCount, ...], ...]:
+    left_labels: tuple[int, ...],#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    right_labels: tuple[int, ...],#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    left_group_count: int,#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    right_group_count: int,#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+) -> tuple[tuple[PairedObservationCount, ...], ...]: #TODO: should be better than tuple of tuple
     return tuple(
         tuple(
             PairedObservationCount(

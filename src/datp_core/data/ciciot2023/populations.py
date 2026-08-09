@@ -174,7 +174,7 @@ def _load_eligible_membership(canonical_root: Path) -> pl.DataFrame:
     return frame
 
 
-def _candidate_ids(canonical_root: Path) -> tuple[str, ...]:
+def _candidate_ids(canonical_root: Path) -> tuple[str, ...]: #TODO: should be tuple[CICIoT2023FileClient] and adapt all callers and usage and create CICIoT2023FileClient enum
     csv_suffix = CICIoT2023ArtifactName.CSV_SUFFIX.value.replace(".", r"\.")
     candidates = tuple(
         pl.scan_parquet(canonical_data_glob(canonical_root))

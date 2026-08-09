@@ -47,7 +47,7 @@ class AssociationObservation(StrictModel):
     seed: Seed
     experiment: ExperimentId
     population: PopulationId
-    regime_label: str
+    regime_label: str #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Maybe it's enum
     heterogeneity: MetricValue
     benefit: MetricValue
 
@@ -114,7 +114,7 @@ class AssociationResult(StrictModel):
         return self.issue.availability
 
     @property
-    def reason(self) -> str | None:
+    def reason(self) -> str | None:#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
         return None if self.issue is None else self.issue.value
 
     @property
@@ -209,7 +209,7 @@ def _leave_one_out(
     x_values: np.ndarray,
     y_values: np.ndarray,
     full_slope: float,
-) -> tuple[tuple[MetricValue, ...], tuple[Ratio, ...], tuple[MetricValue, ...]]:
+) -> tuple[tuple[MetricValue, ...], tuple[Ratio, ...], tuple[MetricValue, ...]]: #TODO: should be better than tuple of tuple...
     slopes: list[MetricValue] = []
     r_squared_values: list[Ratio] = []
     influences: list[MetricValue] = []

@@ -34,7 +34,7 @@ class StatisticPValueResult(Protocol):
     pvalue: SupportsFloat
 
 
-def statistic_p_value(result: StatisticPValueResult) -> tuple[float, float] | None:
+def statistic_p_value(result: StatisticPValueResult) -> tuple[float, float] | None: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
     statistic, pvalue = float(result.statistic), float(result.pvalue)
     if not all(isfinite(value) for value in (statistic, pvalue)):
         return None
@@ -68,8 +68,8 @@ class WilcoxonResult(StrictModel):
     computation_method: WilcoxonComputationMethod | None
     zero_method: WilcoxonZeroMethod | None
     availability: AvailabilityStatus
-    reason: str | None
-    fallback_reason: str | None
+    reason: str | None#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    fallback_reason: str | None#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
 
     @model_validator(mode="after")
     def validate_result(self) -> "WilcoxonResult":
@@ -106,7 +106,7 @@ class RankBiserialResult(StrictModel):
     negative_rank_sum: RankSum | None
     nonzero_pair_count: PairedObservationCount
     availability: AvailabilityStatus
-    reason: str | None
+    reason: str | None#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
 
     @model_validator(mode="after")
     def validate_result(self) -> "RankBiserialResult":
@@ -228,7 +228,7 @@ def matched_pairs_rank_biserial(
     )
 
 
-def blocked_wilcoxon(reason: str) -> WilcoxonResult:
+def blocked_wilcoxon(reason: str) -> WilcoxonResult:#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
     return WilcoxonResult(
         statistic=None,
         p_value=None,
@@ -243,7 +243,7 @@ def blocked_wilcoxon(reason: str) -> WilcoxonResult:
     )
 
 
-def blocked_rank_biserial(reason: str) -> RankBiserialResult:
+def blocked_rank_biserial(reason: str) -> RankBiserialResult:#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
     return RankBiserialResult(
         value=None,
         positive_rank_sum=None,
@@ -257,7 +257,7 @@ def blocked_rank_biserial(reason: str) -> RankBiserialResult:
 def _select_wilcoxon_method(
     deltas: NDArray[np.float64],
     protocol: PairedInferenceProtocol,
-) -> tuple[WilcoxonComputationMethod, str | None]:
+) -> tuple[WilcoxonComputationMethod, str | None]:#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
     zero_method = protocol.wilcoxon_zero_method.value
     alternative = protocol.wilcoxon_alternative.value
     nonzero = deltas[deltas != 0.0]

@@ -23,7 +23,7 @@ def require_non_test_checkpoint_selection_inputs(
     selection_rule: CheckpointSelectionRule,
     held_out_metrics: Sequence[MetricValue] | None,
     attack_labels_present: bool,
-    branch_label: str,
+    branch_label: str, #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
 ) -> None:
     """Reject test leakage and unsupported selection rules before branch-specific selection."""
     if held_out_metrics is not None:

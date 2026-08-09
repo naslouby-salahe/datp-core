@@ -1,5 +1,1 @@
-"""FedProx training-side absorption stress-test specification.
-
-The canonical experiment catalogue lives in
-``datp_core.experiments.common.coordinates.EXPERIMENTS``.
-"""
+#TODO: check if this is used anywhere. If not, then check why, also if something should be moved or should be deleted. 

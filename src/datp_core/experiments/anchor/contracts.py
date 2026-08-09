@@ -121,7 +121,7 @@ class ExactCountRule(StrictModel):
 
 
 class SourceDefinedRule(StrictModel):
-    description: str
+    description: str #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     strategy: Literal[AnchorComparisonStrategy.SOURCE_DEFINED] = AnchorComparisonStrategy.SOURCE_DEFINED
 
     @field_validator("description")
@@ -435,7 +435,7 @@ class VerifiedAnchorGateArtifact(StrictModel):
 
     decision: AnchorGateDecision
     artifact_checksum: Checksum
-    diagnostics_directory: str
+    diagnostics_directory: str #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
 
     @model_validator(mode="after")
     def validate_passed_gate(self) -> VerifiedAnchorGateArtifact:
@@ -474,7 +474,7 @@ class AnchorConfirmatoryHandoff(StrictModel):
     complete_artifact_inventory_checksum: Checksum
     verified_gate_status: AnchorGateStatus
     verified_gate_artifact_checksum: Checksum
-    diagnostics_directory: str
+    diagnostics_directory: str #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
 
     @model_validator(mode="after")
     def validate_handoff_integrity(self) -> AnchorConfirmatoryHandoff:
@@ -565,7 +565,7 @@ class HistoricalArtifactProvenanceDocument(HistoricalBoundaryModel):
     metric_code_version: Checksum
     threshold_code_version: Checksum
     package_version: Checksum
-    generated_at_utc: str
+    generated_at_utc: str #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
 
 
 class HistoricalMetricsDocument(HistoricalBoundaryModel):

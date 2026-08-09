@@ -49,9 +49,9 @@ from .splits import split_membership
 @dataclass(frozen=True, slots=True)
 class FeasibilityAssessmentRequest:
     expected_count: ClientCount
-    candidate_ids: tuple[str, ...]
-    accepted_ids: tuple[str, ...]
-    expected_identities: tuple[str, ...] | None
+    candidate_ids: tuple[str, ...] #TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
+    accepted_ids: tuple[str, ...] #TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
+    expected_identities: tuple[str, ...] | None #TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
     chronology_required: bool
 
 
@@ -64,22 +64,22 @@ class PopulationFinalizationRequest:
     capabilities: PopulationCapabilities
     partition_seed: Seed
     split_protocol: SplitProtocolId
-    candidate_ids: tuple[str, ...]
-    accepted_ids: tuple[str, ...]
-    excluded_ids: tuple[str, ...]
-    expected_identities: tuple[str, ...] | None
+    candidate_ids: tuple[str, ...] #TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
+    accepted_ids: tuple[str, ...]#TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
+    excluded_ids: tuple[str, ...]#TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
+    expected_identities: tuple[str, ...] | None #TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
     chronology_required: bool
     membership: pl.DataFrame
     canonical_schema_checksum: Checksum
-    family_by_client: tuple[tuple[str, str], ...] = ()
+    family_by_client: tuple[tuple[str, str], ...] = () #TODO: should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
 
 
 def assess_declared_feasibility(
     *,
     expected_count: ClientCount,
-    candidate_ids: tuple[str, ...],
-    accepted_ids: tuple[str, ...],
-    expected_identities: tuple[str, ...] | None,
+    candidate_ids: tuple[str, ...], #TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
+    accepted_ids: tuple[str, ...], #TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
+    expected_identities: tuple[str, ...] | None,#TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
     chronology_required: bool,
 ) -> PopulationFeasibility:
     """Shared feasibility gate used by every population builder."""
@@ -301,7 +301,7 @@ def join_handoff_with_canonical_features(
 def _infeasible(
     reason: PopulationFeasibilityReason,
     expected: ClientCount,
-    observed: int,
+    observed: int, #TODO: should be NonNegativeIntegerValue and adapt all callers and usage. Do not use primitives for this, use something else instead of int. Check what already exists
     evidence: str,
 ) -> PopulationFeasibility:
     return PopulationFeasibility(
@@ -311,7 +311,7 @@ def _infeasible(
 
 def _deployment_fallback_clients(
     candidate_clients: tuple[ClientIdentity, ...],
-    fallback_client_ids: frozenset[str],
+    fallback_client_ids: frozenset[str], #TODO: should be frozenset[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
 ) -> frozenset[ClientIdentity]:
     matches = frozenset(client for client in candidate_clients if client.client_id in fallback_client_ids)
     if frozenset(client.client_id for client in matches) != fallback_client_ids:
@@ -390,7 +390,7 @@ def _client_partition_counts(
 
 def _client_identity(
     clients: tuple[ClientIdentity, ...],
-    client_id: str,
+    client_id: str, #TODO: should be ClientId and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
 ) -> ClientIdentity:
     matches = tuple(client for client in clients if client.client_id == client_id)
     if len(matches) != 1:

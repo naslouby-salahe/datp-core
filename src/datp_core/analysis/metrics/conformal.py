@@ -78,15 +78,15 @@ class ConformalCoverageDiagnostic:
             raise ScientificContractError("coverage outcome metrics must share one availability state")
 
     @property
-    def achieved_held_out_benign_coverage(self) -> float | None:
+    def achieved_held_out_benign_coverage(self) -> float | None:#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
         return metric_value(metric_by_id(self.metrics, MetricId.ACHIEVED_COVERAGE))
 
     @property
-    def signed_coverage_error(self) -> float | None:
+    def signed_coverage_error(self) -> float | None: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
         return metric_value(metric_by_id(self.metrics, MetricId.SIGNED_COVERAGE_ERROR))
 
     @property
-    def absolute_coverage_error(self) -> float | None:
+    def absolute_coverage_error(self) -> float | None:#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
         return metric_value(metric_by_id(self.metrics, MetricId.ABSOLUTE_COVERAGE_ERROR))
 
     @property

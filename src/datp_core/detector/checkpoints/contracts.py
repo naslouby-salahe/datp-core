@@ -41,12 +41,12 @@ class CheckpointProtocol(StrictModel):
         return self
 
 
-CHECKPOINT_PROTOCOL = CheckpointProtocol(
+CHECKPOINT_PROTOCOL = CheckpointProtocol( # TODO: this seems duplicated and out of place. Should use what's in protocols
     candidates=tuple(RoundNumber(value) for value in (25, 50, 75, 100, 125, 150, 200)),
     maximum_round=RoundNumber(200),
 )
 CHECKPOINT_SELECTION_RULE = CheckpointSelectionRule.FIXED_TERMINAL_MAXIMUM_ROUND
-RETAINED_CHECKPOINT_STATUSES = frozenset(
+RETAINED_CHECKPOINT_STATUSES = frozenset( #TODO: should be moved to protocols.py
     {
         CheckpointStatus.CANDIDATE,
         CheckpointStatus.STABILITY_EVIDENCE,
@@ -60,7 +60,7 @@ def require_non_test_checkpoint_selection_inputs(
     selection_rule: CheckpointSelectionRule,
     held_out_metrics: Sequence[MetricValue] | None,
     attack_labels_present: bool,
-    branch_label: str,
+    branch_label: str, #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
 ) -> None:
     if held_out_metrics is not None:
         raise LeakageError(

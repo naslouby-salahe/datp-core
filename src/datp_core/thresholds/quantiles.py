@@ -72,7 +72,7 @@ def calibration_scores_from_references(
 
 def require_eligible_cohort(
     eligible: tuple[ClientBenignCalibrationScores, ...],
-    policy_label: str,
+    policy_label: str, #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
 ) -> None:
     if not eligible:
         raise ScientificContractError(
@@ -99,7 +99,7 @@ def local_quantile(client_scores: ClientBenignCalibrationScores, quantile: Quant
     )
 
 
-def _numpy_interpolation_method(semantics: QuantileInterpolationSemantics) -> Literal["linear"]:
+def _numpy_interpolation_method(semantics: QuantileInterpolationSemantics) -> Literal["linear"]: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     match semantics:
         case QuantileInterpolationSemantics.NUMPY_QUANTILE_LINEAR:
             return "linear"

@@ -201,7 +201,7 @@ def _bca_interval_from_distribution(
     )
 
 
-def _jackknife_acceleration(deltas: NDArray[np.float64]) -> float | None:
+def _jackknife_acceleration(deltas: NDArray[np.float64]) -> float | None: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
     if deltas.size < 2:
         return None
     jackknife = (float(np.sum(deltas)) - deltas) / (deltas.size - 1)

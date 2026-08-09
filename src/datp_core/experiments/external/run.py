@@ -194,7 +194,7 @@ class ExternalBenignStatisticsAssetName(StrEnum):
 
 
 class ExternalBenignStatisticsClient(StrictModel):
-    client_id: str
+    client_id: str #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     count: RowCount
     mean: ScoreMoment
     variance: ScoreVariance

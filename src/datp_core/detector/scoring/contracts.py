@@ -37,7 +37,7 @@ class TrainingCoordinateContract(Protocol):
 
 class ClientIdentityContract(Protocol):
     @property
-    def client_id(self) -> str: ...
+    def client_id(self) -> str: ... #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
 
     @property
     def population(self) -> PopulationId: ...
@@ -115,9 +115,9 @@ class ScoreArtifactManifest[
     checkpoint_status: CheckpointStatus
     preprocessing_state_set_checksum: Checksum
     split_manifest_checksum: Checksum
-    calibration_records: tuple[ScoreRecord[CoordinateT, ClientT], ...]
-    evaluation_records: tuple[ScoreRecord[CoordinateT, ClientT], ...]
-    future_recalibration_records: tuple[ScoreRecord[CoordinateT, ClientT], ...] = ()
+    calibration_records: tuple[ScoreRecord[CoordinateT, ClientT], ...] #TODO: should be handled better than so much nested 
+    evaluation_records: tuple[ScoreRecord[CoordinateT, ClientT], ...] #TODO: should be handled better than so much nested code
+    future_recalibration_records: tuple[ScoreRecord[CoordinateT, ClientT], ...] = () #TODO: should be handled better than so much nested code
 
     def __post_init__(self) -> None:
         if self.checkpoint_status not in _POST_SELECTION_CHECKPOINT_STATUSES:
@@ -270,7 +270,7 @@ def _require_matching_client_inventory[
     ClientT: ClientIdentityContract,
 ](
     left: tuple[ScoreRecord[CoordinateT, ClientT], ...],
-    right: tuple[ScoreRecord[CoordinateT, ClientT], ...],
+    right: tuple[ScoreRecord[CoordinateT, ClientT], ...], #TODO: i noticed a pattern of having tuple of records. This should be handled better than so much nested code. Check what already exists and use that instead of primitives
 ) -> None:
     left_clients = frozenset(record.scored_client for record in left)
     right_clients = frozenset(record.scored_client for record in right)

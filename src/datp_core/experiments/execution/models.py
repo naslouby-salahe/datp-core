@@ -99,7 +99,7 @@ class ExecutionProvenance:
 class StageExecution:
     stage: PipelineStage
     outcome: StageOutcome
-    evidence: str
+    evidence: str #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
 
     def __post_init__(self) -> None:
         if not self.evidence.strip():
@@ -155,7 +155,7 @@ class ExperimentOutputStore(Protocol):
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CampaignEntry:
-    ordinal: int
+    ordinal: int #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     coordinate: ExperimentCoordinate
 
     def __post_init__(self) -> None:

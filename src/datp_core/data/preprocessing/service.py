@@ -61,7 +61,7 @@ _PROTOCOL_METHODS = {
 
 _AUDITED_TIMESTAMP_COLUMN = CaptureTimestampColumn(EdgeCanonicalColumn.CAPTURE_TIMESTAMP.value)
 
-_EMPTY_FALLBACK_CLIENT_IDS: frozenset[str] = frozenset()
+_EMPTY_FALLBACK_CLIENT_IDS: frozenset[str] = frozenset() #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Or even removed since we won't use str
 _EMPTY_CLIENT_IDENTITIES: frozenset[ClientIdentity] = frozenset()
 
 

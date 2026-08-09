@@ -56,7 +56,7 @@ SourcePathResolver = Callable[[Path], Path]
 class CanonicalAssetLayout[AssetRoleT: StrEnum]:
     relative_path: Path
     role: AssetRoleT
-    source_identity: str | None = None
+    source_identity: str | None = None #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
 
     def __post_init__(self) -> None:
         if not _is_canonical_relative_path(self.relative_path):
@@ -68,7 +68,7 @@ class CanonicalAsset[AssetRoleT: StrEnum]:
     relative_path: Path
     checksum: Checksum
     row_count: RowCount
-    columns: tuple[str, ...]
+    columns: tuple[str, ...] #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     role: AssetRoleT
     source_identity: str | None = None
 
@@ -100,7 +100,7 @@ def canonical_directory(canonical_root: Path, schema: CanonicalSchema) -> Path:
 class CanonicalReuseRequest[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum]:
     canonical_root: Path
     schema: CanonicalSchema
-    canonicalization_contract: str
+    canonicalization_contract: str #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     source_paths: tuple[Path, ...]
     source_path_resolver: SourcePathResolver
     asset_role_type: type[AssetRoleT]
@@ -170,7 +170,7 @@ def reuse_published_canonical[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
 
 def _fast_reusable_manifest[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
     target: Path, request: CanonicalReuseRequest[AssetRoleT, EligibilityReasonT]
-) -> tuple[CanonicalManifestDocument, str] | None:
+) -> tuple[CanonicalManifestDocument, str] | None: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     schema = request.schema
     schema_file = target / CanonicalPublicationArtifact.SCHEMA
     manifest_file = target / CanonicalPublicationArtifact.MANIFEST
@@ -420,7 +420,7 @@ def _reusable_manifest[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
 
 def _read_manifest(
     target: Path, schema_file: Path, manifest_file: Path, complete_file: Path
-) -> tuple[CanonicalManifestDocument, str] | None:
+) -> tuple[CanonicalManifestDocument, str] | None: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     if not _publication_files_exist(target, schema_file, manifest_file, complete_file):
         return None
     try:

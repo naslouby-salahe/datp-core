@@ -64,7 +64,7 @@ class ConfirmatoryAnalysisRequest:
     analysis_seed: Seed
     multiplicity_plan: MultiplicityPlan | None = None
     mechanisms: tuple[MechanismEvidence, ...] = ()
-    unavailable_reason: str | None = None
+    unavailable_reason: str | None = None #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
     excluded_seeds: tuple[Seed, ...] = ()
 
 
@@ -81,7 +81,7 @@ class AnalysisDocument(StrictModel):
     multiplicity_result: MultiplicityResult | None
     mechanisms: tuple[MechanismEvidence, ...]
     excluded_seeds: tuple[Seed, ...]
-    unavailable_reason: str | None
+    unavailable_reason: str | None #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
 
     @model_validator(mode="after")
     def validate_multiplicity(self) -> "AnalysisDocument":
@@ -97,7 +97,7 @@ class ExternalAnalysisRequest:
     plan: SupplementaryPairedAnalysisPlan
     analysis_seed: Seed
     mechanisms: tuple[MechanismEvidence, ...] = ()
-    unavailable_reason: str | None = None
+    unavailable_reason: str | None = None #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
     excluded_seeds: tuple[Seed, ...] = ()
 
 
@@ -111,7 +111,7 @@ class ExternalAnalysisDocument(StrictModel):
     rank_biserial: RankBiserialResult
     mechanisms: tuple[MechanismEvidence, ...]
     excluded_seeds: tuple[Seed, ...]
-    unavailable_reason: str | None
+    unavailable_reason: str | None #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
 
 
 @dataclass(frozen=True, slots=True)
@@ -138,7 +138,7 @@ class TemporalAnalysisDocument(StrictModel):
     campaign_decision: ScientificDecisionResult
     paired_seed_identities: tuple[Seed, ...]
     excluded_seeds: tuple[Seed, ...] = ()
-    unavailable_reason: str | None = None
+    unavailable_reason: str | None = None #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
     drift_excess_interval: BootstrapInterval | None = None
     recovered_amount_interval: BootstrapInterval | None = None
     recovery_ratio_interval: BootstrapInterval | None = None
@@ -335,7 +335,7 @@ def prepare_temporal_analysis(request: TemporalAnalysisRequest) -> TemporalAnaly
 
 def _blocked_confirmatory_document(
     request: ConfirmatoryAnalysisRequest,
-    reason: str,
+    reason: str, #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
 ) -> AnalysisDocument:
     protocol = request.inference_protocol
     interval = BootstrapInterval.blocked(
@@ -374,7 +374,7 @@ def _blocked_confirmatory_document(
 
 def _blocked_external_document(
     request: ExternalAnalysisRequest,
-    reason: str,
+    reason: str, #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
 ) -> ExternalAnalysisDocument:
     protocol = request.plan.inference_protocol
     interval = BootstrapInterval.blocked(
@@ -402,7 +402,7 @@ def _blocked_external_document(
     )
 
 
-def _bca_reason_or_fixed(reason: str) -> BcaReason:
+def _bca_reason_or_fixed(reason: str) -> BcaReason: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
     for item in BcaReason:
         if item.value == reason:
             return item

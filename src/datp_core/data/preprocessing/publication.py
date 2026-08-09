@@ -124,7 +124,7 @@ def _is_reusable[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseModel](
     )
 
 
-def _write_model(model: BaseModel, destination: Path) -> str:
+def _write_model(model: BaseModel, destination: Path) -> str: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     payload = canonical_json_text(model)
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(payload, encoding="utf-8")

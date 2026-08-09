@@ -184,7 +184,7 @@ def _validate_aurocs(evidence: FixedScoreEvidence, clients: tuple[ClientMetricRe
         _require_matching_auroc(expected_item.outcome, observed_outcome)
 
 
-def _require_equal[ValueT](left: ValueT, right: ValueT, subject: ContractSubject, name: str) -> None:
+def _require_equal[ValueT](left: ValueT, right: ValueT, subject: ContractSubject, name: str) -> None: #TODO:should be a class. Check what already exists for name. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
     if left != right:
         raise ScientificContractError(f"fixed-score control failed: {name} differs", subject=subject)
 

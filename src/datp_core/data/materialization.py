@@ -55,7 +55,7 @@ _COMPLETE_NAME, _MANIFEST_NAME, _SCHEMA_NAME, _SOURCE_STATE_NAME = publication_a
 @dataclass(frozen=True, slots=True)
 class CanonicalManifest[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum]:
     dataset: DatasetId
-    canonicalization_contract: str
+    canonicalization_contract: str #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     schema_checksum: Checksum
     inventory: RawDatasetInventory
     validation_report: DatasetValidationReport
@@ -81,7 +81,7 @@ class CanonicalManifest[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum]:
 @dataclass(frozen=True, slots=True)
 class CanonicalPublication[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum]:
     canonical_root: Path
-    canonicalization_contract: str
+    canonicalization_contract: str #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     schema: CanonicalSchema
     inventory: RawDatasetInventory
     validation_report: DatasetValidationReport
@@ -276,7 +276,7 @@ def _provenance_column_details(column: CanonicalProvenanceColumn) -> tuple[str, 
 
 
 def partition_assets[AssetRoleT: StrEnum](
-    partition_count: int,
+    partition_count: int, #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     branch: Path,
     role: AssetRoleT,
 ) -> tuple[CanonicalAssetLayout[AssetRoleT], ...]:
@@ -392,7 +392,7 @@ def _validate_written_assets[AssetRoleT: StrEnum](
     temporary: Path,
     assets: tuple[CanonicalAsset[AssetRoleT], ...],
     expected_assets: tuple[CanonicalAssetLayout[AssetRoleT], ...],
-    expected_physical_schema: str,
+    expected_physical_schema: str, #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
 ) -> None:
     if not _asset_paths_match(assets, expected_assets):
         raise ValueError("canonical writer returned unexpected assets")

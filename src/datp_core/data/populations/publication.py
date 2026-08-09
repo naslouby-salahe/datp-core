@@ -365,7 +365,7 @@ def construct_published_split(request: ConstructPublishedSplitRequest) -> Constr
 
 
 def _require_matching_reference_rows(temporal: pl.DataFrame, static: pl.DataFrame) -> None:
-    row_columns = ("client_id", "stable_row_id")
+    row_columns = ("client_id", "stable_row_id") #TODO: should already be in enum or already exists. Do not use hard-coded strings. Check what already exists. Use that instead of hard-coded strings.
     temporal_rows = temporal.select(row_columns).sort(row_columns)
     static_rows = static.select(row_columns).sort(row_columns)
     if not temporal_rows.equals(static_rows):

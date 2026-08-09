@@ -170,7 +170,7 @@ def analyze_confirmatory_campaign(*, anchor_gate_diagnostics_directory: Path | N
         / PopulationId.NBAIOT_NATURAL_DEVICES.value
         / ConfirmatoryAssetDirectory.ANALYSIS
     )
-    gate_directory = anchor_gate_diagnostics_directory or (OUTPUTS_ROOT / "anchor" / "diagnostics")
+    gate_directory = anchor_gate_diagnostics_directory or (OUTPUTS_ROOT / "anchor" / "diagnostics") #TODO: no hardcoded values. Should use what already exists. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     verified_gate = load_verified_anchor_gate_artifact(gate_directory)
     load_anchor_confirmatory_handoff(gate_directory, verified_gate=verified_gate)
     mechanisms = _confirmatory_mechanisms()
@@ -187,7 +187,7 @@ def analyze_confirmatory_campaign(*, anchor_gate_diagnostics_directory: Path | N
         )
     )
     geometries, figures = _confirmatory_score_geometry()
-    _persist_score_geometry(geometries, output / "score_geometry")
+    _persist_score_geometry(geometries, output / "score_geometry") #TODO: no hardcoded values. Should use what already exists. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     export_confirmatory_publication(
         result.document,
         output,
@@ -199,7 +199,7 @@ def analyze_confirmatory_campaign(*, anchor_gate_diagnostics_directory: Path | N
             all_mechanisms,
             experiment=ExperimentId.SHARED_VS_LOCAL_CONFIRMATION,
             population=PopulationId.NBAIOT_NATURAL_DEVICES,
-            output_directory=output / "mechanisms",
+            output_directory=output / "mechanisms", #TODO: no hardcoded values. Should use what already exists. Check what already exists. Do not use primitives for this, use something else. Check what already exists
             evidence_role=EvidenceRole.MECHANISM,
         )
     return output
@@ -380,7 +380,7 @@ def _client_evaluation_scores(
     document_clients: tuple[ClientIdentity, ...],
     expected_clients: tuple[ClientIdentity, ...],
     benign_only: bool,
-) -> tuple[tuple[ClientIdentity, tuple[MetricValue, ...]], ...]:
+) -> tuple[tuple[ClientIdentity, tuple[MetricValue, ...]], ...]: #TODO: should be a class or something handled better than tuple of tuples...
     from datp_core.data.populations.contracts import PopulationOutcomeLabel
 
     ordered_document_clients = tuple(sorted(document_clients))
@@ -676,7 +676,7 @@ def absorption_corner_from_evaluation_document(
     )
 
 
-def _required_metric(document: FederatedEvaluationDocument, metric: MetricId) -> MetricValue:
+def _required_metric(document: FederatedEvaluationDocument, metric: MetricId) -> MetricValue: #TODO: could just be inlined though
     return population_metric(document, metric)
 
 

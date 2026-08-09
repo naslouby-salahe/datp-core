@@ -275,7 +275,7 @@ def preprocess_centralized_population(
     )
 
 
-def build_centralized_preprocessing_protocol(
+def build_centralized_preprocessing_protocol( #TODO: should be inlined in preprocess_centralized_population. It is not used anywhere else. Remove this function and inline it in preprocess_centralized_population.
     feature_names: FeatureNameSequence,
 ) -> PreprocessingProtocol:
     return build_preprocessing_protocol(

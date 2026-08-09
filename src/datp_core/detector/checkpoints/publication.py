@@ -42,7 +42,7 @@ _MANIFEST_SCHEMA_VERSION = ManifestSchemaVersion(2)
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PublicationFileChecksum:
-    name: str
+    name: str #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     checksum: Checksum
 
 
@@ -124,7 +124,7 @@ def expected_publication_files(
     manifest: CandidateManifest,
     *,
     include_history: bool,
-) -> tuple[str, ...]:
+) -> tuple[str, ...]:#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     names = [FederatedHistoryAssetName.CANDIDATE_MANIFEST.value]
     names.extend(entry.tensor_name for entry in manifest.entries)
 
@@ -149,7 +149,7 @@ def expected_publication_files(
 
 def publication_digest(
     directory: Path,
-    expected_files: Sequence[str],
+    expected_files: Sequence[str], #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
 ) -> Checksum:
     projection = tuple(
         PublicationFileChecksum(

@@ -162,7 +162,7 @@ def construct_calibration_size_ablation(
 
 def _eligible_scores_for_size(
     eligible_clients: EligibleCohort,
-    by_client_replicate: dict[tuple[ClientIdentity, ReplicateIndex], CalibrationReplicateManifest],
+    by_client_replicate: dict[tuple[ClientIdentity, ReplicateIndex], CalibrationReplicateManifest], #TODO: should be handled better. Not just a dict of tuples and such.
     size: CalibrationSize,
     replicate_index: ReplicateIndex,
 ) -> tuple[ClientBenignCalibrationScores, ...]:

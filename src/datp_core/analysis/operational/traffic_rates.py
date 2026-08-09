@@ -32,8 +32,8 @@ class ValidatedTrafficRateEvidence:
     evidence_kind: TrafficRateEvidenceType
     population: PopulationId
     rate_per_day: TrafficRatePerDay
-    source_locator: str
-    provenance: str
+    source_locator: str #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    provenance: str#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
     unit: TrafficRateUnit
     granularity: TrafficRateGranularity
     applicable_to_each_client: bool
@@ -66,7 +66,7 @@ class TrafficRateSourceLocator(StrictModel):
     """A structured reference to one traffic-rate evidence source."""
 
     scheme: TrafficRateLocatorScheme
-    reference: str
+    reference: str#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
 
     @model_validator(mode="after")
     def validate_reference(self) -> "TrafficRateSourceLocator":
@@ -83,7 +83,7 @@ class TrafficRateEvidence(StrictModel):
     rate_per_day: TrafficRatePerDay
     evidence_kind: TrafficRateEvidenceType
     source_locator: TrafficRateSourceLocator
-    provenance: str
+    provenance: str#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
     unit: TrafficRateUnit
     granularity: TrafficRateGranularity
     applicable_to_each_client: bool

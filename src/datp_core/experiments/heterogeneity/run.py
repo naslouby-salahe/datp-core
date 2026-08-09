@@ -203,7 +203,7 @@ def analyze_controlled_heterogeneity_sweep(*, overwrite: bool) -> Path:
                     seed=seed,
                     experiment=ExperimentId.CONTROLLED_HETEROGENEITY_SWEEP,
                     population=PopulationId.NBAIOT_DIRICHLET_CLIENTS,
-                    regime_label="IID",
+                    regime_label="IID", #TODO: should not be hardcoded. Check what already exists. Do not use primitives for this, use something else. Check what already exists
                     heterogeneity=iid_divergence.aggregate,
                     benefit=MetricValue(
                         population_metric(iid_shared, MetricId.FPR_COEFFICIENT_OF_VARIATION).value
@@ -525,7 +525,7 @@ def _client_evaluation_scores(
     document_clients: tuple[ClientIdentity, ...],
     expected_clients: tuple[ClientIdentity, ...],
     benign_only: bool,
-) -> tuple[tuple[ClientIdentity, tuple[MetricValue, ...]], ...]:
+) -> tuple[tuple[ClientIdentity, tuple[MetricValue, ...]], ...]: #TODO: should be handled better rather than tuple of tuples. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     from datp_core.data.populations.contracts import PopulationOutcomeLabel
 
     ordered_document_clients = tuple(sorted(document_clients))

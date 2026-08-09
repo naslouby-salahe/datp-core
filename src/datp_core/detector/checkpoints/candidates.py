@@ -60,7 +60,7 @@ def persist_checkpoint_tensor(
 
 
 def _assert_checkpoint_reload_equality(
-    cpu_state_dict: dict[str, torch.Tensor],
+    cpu_state_dict: dict[str, torch.Tensor], #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Also i prefer something other than dict
     path: Path,
     autoencoder: AutoencoderProtocol,
 ) -> None:

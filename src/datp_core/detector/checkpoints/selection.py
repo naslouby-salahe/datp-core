@@ -107,7 +107,7 @@ def select_checkpoint(
     )
 
 
-def reject_centralized_checkpoint(
+def reject_centralized_checkpoint( #TODO this seems like dead code and not used. CHeck if it should be wired or deleted.
     marker_identity: FederatedTrainingCoordinate,
 ) -> None:
     raise LeakageError(

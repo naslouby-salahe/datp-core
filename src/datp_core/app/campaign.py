@@ -144,7 +144,7 @@ def preprocess_datasets(
     return PreprocessResult(datasets=datasets, publications=result.publications)
 
 
-def format_plan(presentation: PlanPresentation) -> str:
+def format_plan(presentation: PlanPresentation) -> str: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
     lines = [
         f"plan_digest={presentation.plan.digest.value}",
         f"entries={len(presentation.plan.entries)}",

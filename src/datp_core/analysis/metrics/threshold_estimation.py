@@ -84,7 +84,7 @@ class ThresholdEstimationDiagnostic:
             raise ScientificContractError("signed attainment error must match achieved minus target exceedance")
 
     @property
-    def absolute_threshold_error(self) -> float:
+    def absolute_threshold_error(self) -> float: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
         result = metric_value(metric_by_id(self.metrics, MetricId.ABSOLUTE_THRESHOLD_ERROR))
         assert result is not None
         return result
@@ -94,17 +94,17 @@ class ThresholdEstimationDiagnostic:
         return metric_by_id(self.metrics, MetricId.RELATIVE_THRESHOLD_ERROR).status
 
     @property
-    def relative_threshold_error(self) -> float | None:
+    def relative_threshold_error(self) -> float | None: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
         return metric_value(metric_by_id(self.metrics, MetricId.RELATIVE_THRESHOLD_ERROR))
 
     @property
-    def signed_attainment_error(self) -> float:
+    def signed_attainment_error(self) -> float: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
         result = metric_value(metric_by_id(self.metrics, MetricId.SIGNED_ATTAINMENT_ERROR))
         assert result is not None
         return result
 
     @property
-    def absolute_attainment_error(self) -> float:
+    def absolute_attainment_error(self) -> float: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
         result = metric_value(metric_by_id(self.metrics, MetricId.ABSOLUTE_ATTAINMENT_ERROR))
         assert result is not None
         return result

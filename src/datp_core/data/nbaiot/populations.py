@@ -193,7 +193,7 @@ def _load_identity_frame(canonical_root: Path) -> pl.DataFrame:
 def _partition_source(
     source: pl.DataFrame,
     *,
-    client_ids: tuple[str, ...],
+    client_ids: tuple[str, ...], #TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
     allocator: ControlledPartitionAllocator,
 ) -> tuple[pl.DataFrame, tuple[RowCount, ...], tuple[RowCount, ...]]:
     membership_parts: list[pl.DataFrame] = []
@@ -223,7 +223,7 @@ def _partition_source(
 
 def _build_diagnostics(
     *,
-    client_ids: tuple[str, ...],
+    client_ids: tuple[str, ...], #TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
     client_count: ClientCount,
     membership_height: RowCount,
     benign_counts: tuple[RowCount, ...],
@@ -277,8 +277,8 @@ def _permute_stratum(stratum: pl.DataFrame, allocator: ControlledPartitionAlloca
 
 def _assign_stratum(
     stratum: pl.DataFrame,
-    client_ids: tuple[str, ...],
-    counts: tuple[int, ...],
+    client_ids: tuple[str, ...], #TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
+    counts: tuple[int, ...],#TODO: should be tuple[RowCount] and adapt all callers and usage. Do not use primitives for this, use something else instead of int. Check what already exists
     outcome_label: PopulationOutcomeLabel,
 ) -> pl.DataFrame:
     if stratum.height == 0:

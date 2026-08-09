@@ -82,7 +82,7 @@ def _feature_columns() -> tuple[str, ...]: #TODO: should be tuple of NBaIoTFeatu
     )
 
 
-def _feature_group(prefix: str, statistics: tuple[str, ...]) -> tuple[str, ...]:
+def _feature_group(prefix: str, statistics: tuple[str, ...]) -> tuple[str, ...]: #TODO: should be tuple of NBaIoTFeatureColumn and adapt all callers and usage and create NBaIoTFeatureColumn enum
     return tuple(f"{prefix}_{window}_{statistic}" for window in _WINDOWS for statistic in statistics)
 
 
@@ -93,7 +93,7 @@ NBAIOT_ATTACK_FAMILIES: tuple[str, ...] = ("gafgyt", "mirai") #TODO: should be t
 NBAIOT_ATTACK_SUBTYPES: tuple[str, ...] = ("ack", "combo", "junk", "scan", "syn", "tcp", "udp", "udpplain") #TODO: should be tuple of NBaIoTAttackSubtype and adapt all callers and usage and create NBaIoTAttackSubtype enum
 
 
-NBAIOT_PROVENANCE_COLUMNS: tuple[str, ...] = tuple(CanonicalProvenanceColumn)
+NBAIOT_PROVENANCE_COLUMNS: tuple[str, ...] = tuple(CanonicalProvenanceColumn) #TODO: should be tuple of CanonicalProvenanceColumn and adapt all callers and usage. Meaning no need for this variable, just use tuple(CanonicalProvenanceColumn) directly in the CanonicalSchema constructor.
 
 
 def _canonical_columns() -> tuple[CanonicalColumn, ...]:
@@ -191,7 +191,7 @@ NBAIOT_SCHEMA = CanonicalSchema(
 )
 
 
-def parse_source_identity(path: Path) -> tuple[str, str, str | None, str | None]:
+def parse_source_identity(path: Path) -> tuple[str, str, str | None, str | None]: #TODO: should be tuple[NBaIoTDevice, NBaIoTSourceLabel, NBaIoTAttackFamily | None, NBaIoTAttackSubtype | None] and adapt all callers and usage and create NBaIoTAttackFamily and NBaIoTAttackSubtype enums
     parts = path.parts
     if path.suffix != NBaIoTArtifactName.CSV_SUFFIX or len(parts) < 2:
         raise ValueError("N-BaIoT sources must be extracted CSV files")
@@ -206,12 +206,12 @@ def source_relative_path(path: Path) -> Path:
     return Path(path.parent.parent.name, path.parent.name, path.name)
 
 
-def _benign_source_identity(parts: tuple[str, ...]) -> tuple[str, str, None, None]:
+def _benign_source_identity(parts: tuple[str, ...]) -> tuple[str, str, None, None]: #TODO: should be tuple[NBaIoTDevice, NBaIoTSourceLabel, None, None] and adapt all callers and usage
     device = _device(parts[-2]).value
     return device, NBaIoTSourceLabel.BENIGN.value, None, None
 
 
-def _attack_source_identity(parts: tuple[str, ...], subtype: str) -> tuple[str, str, str, str]:
+def _attack_source_identity(parts: tuple[str, ...], subtype: str) -> tuple[str, str, str, str]: #TODO: should be tuple[NBaIoTDevice, NBaIoTSourceLabel, NBaIoTAttackFamily, NBaIoTAttackSubtype] and adapt all callers and usage and create NBaIoTAttackFamily and NBaIoTAttackSubtype enums
     device = _device(parts[-3]).value
     attack_directory = parts[-2]
     if not attack_directory.endswith(NBaIoTArtifactName.ATTACK_DIRECTORY_SUFFIX):
@@ -222,7 +222,7 @@ def _attack_source_identity(parts: tuple[str, ...], subtype: str) -> tuple[str, 
     return device, NBaIoTSourceLabel.ATTACK.value, family, subtype
 
 
-def device_family(device_identity: str) -> NBaIoTDeviceFamily:
+def device_family(device_identity: str) -> NBaIoTDeviceFamily: #TODO: should be NBaIoTDeviceFamily and adapt all callers and usage. Might be better to just use NBaIoTDeviceFamily(device_identity) directly in the callers and usage instead of this function.
     device = _device(device_identity)
     match device:
         case NBaIoTDevice.DANMINI_DOORBELL | NBaIoTDevice.ENNIO_DOORBELL:
@@ -242,7 +242,7 @@ def device_family(device_identity: str) -> NBaIoTDeviceFamily:
             return NBaIoTDeviceFamily.WEBCAM
 
 
-def _device(value: str) -> NBaIoTDevice:
+def _device(value: str) -> NBaIoTDevice: #TODO: should be NBaIoTDevice and adapt all callers and usage. Might be better to just use NBaIoTDevice(value) directly in the callers and usage instead of this function.
     try:
         return NBaIoTDevice(value.lower())
     except ValueError as error:

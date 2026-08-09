@@ -67,7 +67,7 @@ class EdgeRawColumn(StrEnum):
     ATTACK_TYPE = "Attack_type"
 
 
-EDGE_RAW_COLUMNS: tuple[str, ...] = tuple(
+EDGE_RAW_COLUMNS: tuple[str, ...] = tuple( #TODO: should be tuple[EdgeRawColumn] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. use enum
     (
         "frame.time,ip.src_host,ip.dst_host,arp.dst.proto_ipv4,arp.opcode,arp.hw.size,arp.src.proto_ipv4,"
         "icmp.checksum,icmp.seq_le,icmp.transmit_timestamp,icmp.unused,http.file_data,http.content_length,"
@@ -81,7 +81,7 @@ EDGE_RAW_COLUMNS: tuple[str, ...] = tuple(
         "mbtcp.trans_id,mbtcp.unit_id,Attack_label,Attack_type"
     ).split(",")
 )
-EDGE_FEATURE_COLUMNS: tuple[str, ...] = EDGE_RAW_COLUMNS[:-2]
+EDGE_FEATURE_COLUMNS: tuple[str, ...] = EDGE_RAW_COLUMNS[:-2] #TODO: should be tuple[EdgeRawColumn] and adapt all callers and usage. Do not use primitives for this, use something else instead of str.
 EDGE_BENIGN_SENSOR_GROUPS: tuple[EdgeSensorGroup, ...] = (
     EdgeSensorGroup.DISTANCE,
     EdgeSensorGroup.FLAME_SENSOR,
@@ -95,8 +95,8 @@ EDGE_BENIGN_SENSOR_GROUPS: tuple[EdgeSensorGroup, ...] = (
     EdgeSensorGroup.PH_VALUE,
 )
 
-EDGE_CANONICAL_FEATURE_COLUMNS: tuple[str, ...] = (EdgeCanonicalColumn.RAW_TIMESTAMP,) + EDGE_FEATURE_COLUMNS[1:]
-EDGE_NUMERIC_FEATURE_COLUMNS: tuple[str, ...] = (
+EDGE_CANONICAL_FEATURE_COLUMNS: tuple[str, ...] = (EdgeCanonicalColumn.RAW_TIMESTAMP,) + EDGE_FEATURE_COLUMNS[1:] #TODO: should be tuple[EdgeCanonicalColumn] and adapt all callers and usage. Do not use primitives for this, use something else instead of str.
+EDGE_NUMERIC_FEATURE_COLUMNS: tuple[str, ...] = (#TODO: should be tuple[EdgeCanonicalColumn] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. and use enum
     "icmp.seq_le",
     "icmp.unused",
     "http.file_data",
@@ -131,7 +131,7 @@ EDGE_NUMERIC_FEATURE_COLUMNS: tuple[str, ...] = (
     "mbtcp.trans_id",
     "mbtcp.unit_id",
 )
-EDGE_PROVENANCE_COLUMNS: tuple[str, ...] = (
+EDGE_PROVENANCE_COLUMNS: tuple[str, ...] = ( #TODO: should be tuple[CanonicalProvenanceColumn] and adapt all callers and usage. Use enum instead of str
     CanonicalProvenanceColumn.SOURCE_ROW_INDEX,
     EdgeCanonicalColumn.CAPTURE_TIMESTAMP,
     CanonicalProvenanceColumn.SOURCE_PATH,

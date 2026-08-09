@@ -16,8 +16,8 @@ class CudaProvenance:
     device_count: CudaDeviceCount
     device_index: CudaDeviceIndex | None
     device_name: CudaDeviceName | None
-    cuda_version: str | None
-    torch_version: str
+    cuda_version: str | None #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    torch_version: str#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
 
     def __post_init__(self) -> None:
         selected = self.device_index is not None and self.device_name is not None

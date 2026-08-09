@@ -68,7 +68,7 @@ class ControlledPartitionAllocator:
 
 
 def controlled_allocation_checksum(
-    client_ids: tuple[str, ...],
+    client_ids: tuple[str, ...], #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
     counts: tuple[RowCount, ...],
     condition: ControlledPartitionCondition,
     seed: Seed,

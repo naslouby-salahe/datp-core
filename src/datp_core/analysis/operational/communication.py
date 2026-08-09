@@ -43,13 +43,13 @@ class CommunicationMessageDiagnostic:
 
     training_seed: Seed
     coordinate: FederatedTrainingCoordinate
-    sender: str
-    receiver: str
+    sender: str#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    receiver: str#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
     direction: MessageDirection
     payload_kind: ThresholdPayloadKind
     payload: SerializedPayloadEvidence
     client: ClientIdentity | None
-    group_identity: str | None
+    group_identity: str | None#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
     estimation_basis: CommunicationEstimationMethod
 
     def __post_init__(self) -> None:

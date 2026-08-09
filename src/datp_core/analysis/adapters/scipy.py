@@ -25,7 +25,7 @@ def statistic_p_value(result: StatisticPValueResult) -> tuple[float, float] | No
 
 def linear_regression_values(
     result: LinearRegressionResult,
-) -> tuple[float, float, float, float] | None:
+) -> tuple[float, float, float, float] | None: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
     intercept, slope, stderr, rvalue = (
         float(result.intercept),
         float(result.slope),

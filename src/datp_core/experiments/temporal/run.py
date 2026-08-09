@@ -93,7 +93,7 @@ class TemporalArtifactDirectory(StrEnum):
 class TemporalMethodUnavailability:
     method: FederatedThresholdMethod
     reason: ThresholdInfeasibilityReason
-    detail: str
+    detail: str #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -109,7 +109,7 @@ class TemporalMethodOutcome:
     row_order_checksum: Checksum
     clients: tuple[ClientMetricResult, ...]
     excluded_clients: tuple[ClientIdentity, ...]
-    unavailable_reasons: tuple[str, ...]
+    unavailable_reasons: tuple[str, ...] #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -821,7 +821,7 @@ def _exclusion_reason(
     *outcomes: TemporalMethodOutcome,
 ) -> str:
     excluded = any(excluded_client == client for outcome in outcomes for excluded_client in outcome.excluded_clients)
-    return "excluded_from_fpr_evaluable_cohort" if excluded else "client_not_evaluable"
+    return "excluded_from_fpr_evaluable_cohort" if excluded else "client_not_evaluable" #TODO: should not use hardcoded values. CHeck if exists in enum or create enum
 
 
 def _client_is_eligible(
@@ -865,7 +865,7 @@ def _union_clients(*groups: tuple[ClientIdentity, ...]) -> tuple[ClientIdentity,
     return tuple(sorted(frozenset(client for group in groups for client in group)))
 
 
-def _union_text(*groups: tuple[str, ...]) -> tuple[str, ...]:
+def _union_text(*groups: tuple[str, ...]) -> tuple[str, ...]: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     ordered: list[str] = []
     seen: set[str] = set()
     for group in groups:

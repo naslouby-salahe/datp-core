@@ -348,8 +348,8 @@ def export_mechanism_publication(
     )
 
 
-def _render_analysis_sections(document: AnalysisDocument) -> str:
-    sections: list[str] = []
+def _render_analysis_sections(document: AnalysisDocument) -> str: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    sections: list[str] = [] #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     sections.extend(_render_decision(document.decision))
     sections.extend(_render_interval(document.interval))
     sections.extend(_render_descriptive(document.descriptive))
@@ -369,7 +369,7 @@ def _render_analysis_sections(document: AnalysisDocument) -> str:
     return "\n".join(sections).rstrip() + "\n"
 
 
-def _render_decision(decision: ScientificDecisionResult) -> list[str]:
+def _render_decision(decision: ScientificDecisionResult) -> list[str]: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     point = f"{decision.point_estimate.value:.6g}" if decision.point_estimate else "unavailable"
     return [
         "# Confirmatory Analysis",
@@ -384,7 +384,7 @@ def _render_decision(decision: ScientificDecisionResult) -> list[str]:
     ]
 
 
-def _render_interval(interval: BootstrapInterval) -> list[str]:
+def _render_interval(interval: BootstrapInterval) -> list[str]: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     lower = f"{interval.lower_bound.value:.6g}" if interval.lower_bound else "unavailable"
     point = f"{interval.point_estimate.value:.6g}" if interval.point_estimate else "unavailable"
     upper = f"{interval.upper_bound.value:.6g}" if interval.upper_bound else "unavailable"
@@ -407,7 +407,7 @@ def _render_interval(interval: BootstrapInterval) -> list[str]:
     return [*lines, ""]
 
 
-def _render_descriptive(descriptive: DescriptiveSummary) -> list[str]:
+def _render_descriptive(descriptive: DescriptiveSummary) -> list[str]: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     lines = [
         "## Descriptive Summary",
         "",
@@ -429,7 +429,7 @@ def _render_descriptive(descriptive: DescriptiveSummary) -> list[str]:
     return [*lines, ""]
 
 
-def _render_wilcoxon(wilcoxon: WilcoxonResult) -> list[str]:
+def _render_wilcoxon(wilcoxon: WilcoxonResult) -> list[str]:#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     lines = [
         "## Wilcoxon Signed-Rank",
         "",
@@ -454,7 +454,7 @@ def _render_wilcoxon(wilcoxon: WilcoxonResult) -> list[str]:
     return [*lines, ""]
 
 
-def _render_rank_biserial(rb: RankBiserialResult) -> list[str]:
+def _render_rank_biserial(rb: RankBiserialResult) -> list[str]:#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     lines = [
         "## Matched-Pairs Rank-Biserial Correlation",
         "",
@@ -472,7 +472,7 @@ def _render_rank_biserial(rb: RankBiserialResult) -> list[str]:
     return [*lines, ""]
 
 
-def _render_sign_consistency(sc: PairedDifferenceCounts) -> list[str]:
+def _render_sign_consistency(sc: PairedDifferenceCounts) -> list[str]:#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     total = sc.positive.value + sc.zero.value + sc.negative.value
     return [
         "## Sign Consistency",
@@ -484,7 +484,7 @@ def _render_sign_consistency(sc: PairedDifferenceCounts) -> list[str]:
     ]
 
 
-def _render_paired_contrasts(contrasts: tuple) -> list[str]:
+def _render_paired_contrasts(contrasts: tuple) -> list[str]:#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     lines = [
         "## Paired Seed Values",
         "",
@@ -501,7 +501,7 @@ def _render_paired_contrasts(contrasts: tuple) -> list[str]:
     return [*lines, ""]
 
 
-def _render_multiplicity(result: MultiplicityResult) -> list[str]:
+def _render_multiplicity(result: MultiplicityResult) -> list[str]:#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     lines = [
         "## Multiplicity Correction",
         "",
@@ -523,7 +523,7 @@ def _render_multiplicity(result: MultiplicityResult) -> list[str]:
     return [*lines, ""]
 
 
-def _render_mechanisms(mechanisms: tuple[MechanismEvidence, ...]) -> list[str]:
+def _render_mechanisms(mechanisms: tuple[MechanismEvidence, ...]) -> list[str]:#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     lines = ["## Mechanism Evidence", ""]
     for index, mechanism in enumerate(mechanisms, start=1):
         lines.append(f"### Mechanism record {index}: {_mechanism_title(mechanism)}")
@@ -532,7 +532,7 @@ def _render_mechanisms(mechanisms: tuple[MechanismEvidence, ...]) -> list[str]:
     return lines
 
 
-def _mechanism_title(mechanism: MechanismEvidence) -> str:
+def _mechanism_title(mechanism: MechanismEvidence) -> str:#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     match mechanism:
         case AssociationResult():
             return "heterogeneity_benefit_association"
@@ -634,7 +634,7 @@ def _mechanism_tables(mechanisms: tuple[MechanismEvidence, ...]) -> tuple[Public
     return (PublicationTable(title="Mechanism scientific values", cells=tuple(cells)),)
 
 
-def _render_one_mechanism(mechanism: MechanismEvidence) -> list[str]:
+def _render_one_mechanism(mechanism: MechanismEvidence) -> list[str]:#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     match mechanism:
         case AssociationResult():
             lines = [
@@ -887,7 +887,7 @@ def _paired_values_table(document: AnalysisDocument) -> PublicationTable:
     )
 
 
-def _optional_metric(value: MetricValue | None) -> str:
+def _optional_metric(value: MetricValue | None) -> str: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     return "—" if value is None else f"{value.value:.6g}"
 
 

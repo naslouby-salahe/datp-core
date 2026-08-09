@@ -64,9 +64,9 @@ def static_reference_split_protocol() -> StaticReferenceSplitProtocol:
 
 
 def hamilton_integer_counts(
-    total: int,
-    ratios: tuple[float, ...],
-) -> tuple[int, ...]:
+    total: int, #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    ratios: tuple[float, ...],#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> tuple[int, ...]:#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     """Largest-remainder (Hamilton) integer allocation.
 
     For non-negative integer ``total`` and ratios that sum to one:
@@ -312,7 +312,7 @@ def _require_sorted_client_rows(
 
 def _fractional_role_frame(
     frame: pl.DataFrame,
-    ratios: tuple[float, ...],
+    ratios: tuple[float, ...], #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     roles: tuple[PartitionRole, ...],
     partition_seed: Seed,
     client_id: str,
@@ -355,7 +355,7 @@ def _sequential_role_frame(
 def _client_permutation(
     size: RowCount,
     partition_seed: Seed,
-    client_id: str,
+    client_id: str, #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
 ) -> np.ndarray:
     material = f"{partition_seed.value}:{client_id}".encode()
     digest = sha256(material).digest()
@@ -414,7 +414,7 @@ def _split_manifest(
     assignments: pl.DataFrame,
     request: SplitConstructionRequest,
 ) -> SplitManifestDocument:
-    def count(role: PartitionRole) -> int:
+    def count(role: PartitionRole) -> int: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
         return int(assignments.filter(pl.col(PARTITION_ROLE_COLUMN) == role).height)
 
     ordered = assignments.sort([CLIENT_ID_COLUMN, STABLE_ROW_ID_COLUMN])
@@ -456,8 +456,8 @@ def _require_membership_schema(membership: pl.DataFrame) -> None:
 
 
 def _require_hamilton_inputs(
-    total: int,
-    ratios: tuple[float, ...],
+    total: int,#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    ratios: tuple[float, ...],#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
 ) -> None:
     if total < 0:
         raise ValueError("Hamilton allocation requires a non-negative total")

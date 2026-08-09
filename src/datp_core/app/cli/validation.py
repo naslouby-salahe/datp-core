@@ -21,7 +21,7 @@ from datp_core.core.errors import (
 type CliHandledError = DatpCoreError | ValueError
 
 
-def map_exception_to_exit(error: CliHandledError) -> int:
+def map_exception_to_exit(error: CliHandledError) -> int: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
     if isinstance(error, MissingPrerequisiteError):
         if error.reason == "anchor_gate":
             return CliExitCode.ANCHOR_GATE_FAILURE.value

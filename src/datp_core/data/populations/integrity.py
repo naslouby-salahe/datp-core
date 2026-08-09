@@ -38,11 +38,11 @@ _MIN_FUT = WorkingFrameColumn.MIN_FUTURE
 
 
 def reject_non_benign_labels(
-    labels: Iterable[str],
+    labels: Iterable[str], #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
     *,
     message: str,
     subject: ContractSubject,
-    benign_label: str = PopulationOutcomeLabel.BENIGN.value,
+    benign_label: str = PopulationOutcomeLabel.BENIGN.value,#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
 ) -> None:
     if any(label != benign_label for label in labels):
         raise LeakageError(message, subject=subject)
@@ -166,7 +166,7 @@ def _require_membership_row_contract(
 
 def _require_membership_client_subset(
     membership: pl.DataFrame,
-    accepted_clients: tuple[str, ...],
+    accepted_clients: tuple[str, ...], #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
     population: PopulationId,
 ) -> None:
     observed_clients = frozenset(membership.get_column(CLIENT_ID_COLUMN).unique().to_list())
@@ -186,7 +186,7 @@ def _require_membership_client_subset(
 
 
 def _require_candidate_count(
-    candidates: tuple[str, ...],
+    candidates: tuple[str, ...], #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
     expected: ClientCount,
     population: PopulationId,
 ) -> None:
@@ -257,7 +257,7 @@ def _reject_client_future_history_leakage(
     historical: pl.DataFrame,
     future: pl.DataFrame,
     capture_timestamp_column: CaptureTimestampColumn,
-    client_id: str,
+    client_id: str,#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
 ) -> None:
     if historical.height == 0 or future.height == 0:
         return
@@ -289,7 +289,7 @@ def _validate_label_counts(
 
 def _require_columns(
     frame: pl.DataFrame,
-    columns: tuple[str, ...],
+    columns: tuple[str, ...],#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
     subject: StageOperationId,
 ) -> None:
     missing = tuple(column for column in columns if column not in frame.columns)

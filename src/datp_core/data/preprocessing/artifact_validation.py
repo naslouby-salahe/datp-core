@@ -65,7 +65,7 @@ from datp_core.data.preprocessing.state import (
 
 def require_columns(
     frame: pl.DataFrame,
-    columns: Iterable[str],
+    columns: Iterable[str],#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     *,
     subject: ContractSubject | PartitionRole | PreprocessingFitScope | SplitProtocolId,
 ) -> None:

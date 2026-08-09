@@ -87,7 +87,7 @@ class VerifyAnchorStageStatus:
     discrepancy_count: NonNegativeIntegerValue
     observation_count: NonNegativeIntegerValue
     reference_count: NonNegativeIntegerValue
-    dependency_blocker: str | None
+    dependency_blocker: str | None #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     diagnostics_checksum: Checksum
 
 
@@ -98,11 +98,11 @@ class VerifyAnchorStageResult:
 
 
 def independent_package_directory(output_root: Path = OUTPUTS_ROOT) -> Path:
-    return output_root / "anchor" / IndependentAnchorAssetName.ROOT.value
+    return output_root / "anchor" / IndependentAnchorAssetName.ROOT.value #TODO no hardcoded values. Should use what already exists. Check what already exists. Do not use primitives for this, use something else. Check what already exists
 
 
 def default_anchor_diagnostics_directory(output_root: Path = OUTPUTS_ROOT) -> Path:
-    return output_root / "anchor" / "diagnostics"
+    return output_root / "anchor" / "diagnostics" #TODO no hardcoded values. Should use what already exists. Check what already exists. Do not use primitives for this, use something else. Check what already exists
 
 
 def verify_anchor(request: VerifyAnchorStageRequest) -> VerifyAnchorStageResult:

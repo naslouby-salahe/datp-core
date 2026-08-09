@@ -462,7 +462,7 @@ def _run_training_epochs(
     loader: DataLoader[tuple[torch.Tensor, ...]],
     checkpoint_protocol: CheckpointProtocol,
     device: torch.device,
-) -> tuple[
+) -> tuple[ #TODO: should be handled better instead of tuple of tuple and tuple
     tuple[CentralizedEpochLoss, ...],
     tuple[InMemoryCentralizedModelSnapshot, ...],
 ]:

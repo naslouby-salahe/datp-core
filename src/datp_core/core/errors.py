@@ -13,10 +13,10 @@ def _subject_token(subject: Enum | None) -> str | None:
 class DatpCoreError(Exception):
     def __init__(
         self,
-        message: str,
+        message: str, #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
         *,
         subject: Enum | None = None,
-        reason: str | None = None,
+        reason: str | None = None, #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
     ) -> None:
         super().__init__(message)
         self.message = message

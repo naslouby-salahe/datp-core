@@ -100,7 +100,7 @@ class CentralizedReferenceScope:
     autoencoder: AutoencoderProtocol
     seed_cohort: SeedCohort
     provenance_experiment: ExperimentId
-    claim_wording: str
+    claim_wording: str #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
 
 
 NBAIOT_CENTRALIZED_REFERENCE = CentralizedReferenceScope(

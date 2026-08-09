@@ -232,10 +232,10 @@ def _score_array(scores: tuple[MetricValue, ...]) -> NDArray[np.float64]:
 def _smoothed_histogram(
     scores: NDArray[np.float64],
     *,
-    support_min: float,
-    support_max: float,
-    bin_count: int,
-    smoothing: float,
+    support_min: float,#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    support_max: float,#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    bin_count: int,#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    smoothing: float,#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
 ) -> NDArray[np.float64]:
     counts, _ = np.histogram(scores, bins=bin_count, range=(support_min, support_max))
     density = counts.astype(np.float64) + smoothing

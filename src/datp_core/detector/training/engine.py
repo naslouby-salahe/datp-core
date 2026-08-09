@@ -180,13 +180,13 @@ def prepare_federated_client_data(
         features_cpu=torch.as_tensor(
             matrix,
             dtype=TORCH_LEARNING_DTYPE,
-            device="cpu",
+            device="cpu", #TODO:should be using enum. identify what already exists. Do not use primitives for this, use something else. Check what already exists. And search whole cosebase to fix that
         ),
         preprocessing_checksum=client_input.preprocessing_state.estimator_checksum,
     )
 
 
-def _client_seed_component(client: ClientIdentity) -> int:
+def _client_seed_component(client: ClientIdentity) -> int: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     payload = canonical_json_text(
         {
             "population": client.population.value,

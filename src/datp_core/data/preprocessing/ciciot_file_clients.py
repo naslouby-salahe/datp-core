@@ -41,7 +41,7 @@ from datp_core.experiments.common.coordinates import ExternalTemporalExecutionId
 
 @dataclass(frozen=True, slots=True)
 class _CanonicalSourceFile:
-    source_path: str
+    source_path: str #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     parquet_path: Path
 
 
@@ -77,7 +77,7 @@ def ciciot_source_files(
 
 def canonical_source_file(
     source_files: tuple[_CanonicalSourceFile, ...],
-    source_path: str,
+    source_path: str, #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
 ) -> _CanonicalSourceFile:
     for source in source_files:
         if source.source_path == source_path:
@@ -88,7 +88,7 @@ def canonical_source_file(
     )
 
 
-def single_client_source_path(assignments: pl.DataFrame) -> str:
+def single_client_source_path(assignments: pl.DataFrame) -> str: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     sources = assignments.get_column(SOURCE_PATH_COLUMN).unique().to_list()
     if len(sources) != 1:
         raise ScientificContractError(

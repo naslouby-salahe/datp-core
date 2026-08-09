@@ -52,17 +52,17 @@ class CapabilityStatement:
 
 @dataclass(frozen=True, slots=True)
 class PhysicalClientCapability(CapabilityStatement):
-    identities: tuple[str, ...]
+    identities: tuple[str, ...]#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
 
 
 @dataclass(frozen=True, slots=True)
 class FamilyTaxonomyCapability(CapabilityStatement):
-    families: tuple[str, ...]
+    families: tuple[str, ...]#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
 
 
 @dataclass(frozen=True, slots=True)
 class ChronologyCapability(CapabilityStatement):
-    temporal_group_identities: tuple[str, ...]
+    temporal_group_identities: tuple[str, ...] #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
 
 
 @dataclass(frozen=True, slots=True)
@@ -253,9 +253,9 @@ class PopulationManifestDocument(StrictModel):
     identity_kind: PopulationIdentityKind
     partition_seed: Seed
     split_protocol: SplitProtocolId
-    candidate_clients: tuple[str, ...]
-    accepted_clients: tuple[str, ...]
-    excluded_client_ids: tuple[str, ...]
+    candidate_clients: tuple[str, ...] #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
+    accepted_clients: tuple[str, ...]#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
+    excluded_client_ids: tuple[str, ...]#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
     total_membership_rows: RowCount
     benign_row_count: RowCount
     attack_row_count: RowCount
@@ -308,13 +308,13 @@ class DirichletPartitionDiagnosticsDocument(StrictModel):
     partition_kind: ControlledPartitionKind
     concentration: DirichletConcentration | None
     client_count: ClientCount
-    client_ids: tuple[str, ...]
+    client_ids: tuple[str, ...]#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
     total_rows: RowCount
     client_row_counts: tuple[RowCount, ...]
     benign_row_counts: tuple[RowCount, ...]
     attack_row_counts: tuple[RowCount, ...]
-    empty_client_ids: tuple[str, ...]
-    insufficient_benign_client_ids: tuple[str, ...]
+    empty_client_ids: tuple[str, ...]#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
+    insufficient_benign_client_ids: tuple[str, ...]#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
     allocation_checksum: Checksum
 
     @model_validator(mode="after")
@@ -329,8 +329,8 @@ class ChronologicalPartitionDiagnosticsDocument(StrictModel):
     population: PopulationId
     expected_group_count: ClientCount
     observed_eligible_group_count: NonNegativeIntegerValue
-    eligible_group_ids: tuple[str, ...]
-    excluded_group_ids: tuple[str, ...]
+    eligible_group_ids: tuple[str, ...]#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
+    excluded_group_ids: tuple[str, ...]#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
     exclusion_reasons: tuple[ChronologyExclusionReason, ...]
     duplicate_timestamp_rows: RowCount
     total_temporal_rows: RowCount
@@ -348,7 +348,7 @@ class ChronologicalPartitionDiagnosticsDocument(StrictModel):
 @dataclass(frozen=True, slots=True)
 class ClientIdentity:
     population: PopulationId
-    client_id: str
+    client_id: str#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
     identity_kind: PopulationIdentityKind
 
     def __post_init__(self) -> None:
@@ -550,7 +550,7 @@ def iid_condition() -> ControlledPartitionCondition:
 
 def client_identities(
     population: PopulationId,
-    client_ids: tuple[str, ...],
+    client_ids: tuple[str, ...],#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
     identity_kind: PopulationIdentityKind,
 ) -> tuple[ClientIdentity, ...]:
     return tuple(ClientIdentity(population, client_id, identity_kind) for client_id in client_ids)
@@ -559,7 +559,7 @@ def client_identities(
 def build_population_manifest(
     document: PopulationManifestDocument,
     feasibility: PopulationFeasibility,
-    family_by_client: tuple[tuple[str, str], ...] = (),
+    family_by_client: tuple[tuple[str, str], ...] = (),#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
 ) -> PopulationManifest:
     return PopulationManifest(
         document,
@@ -730,7 +730,7 @@ def _require_unique_ordered(values: tuple[str, ...], field: PopulationManifestFi
 
 
 def _require_client_set_partition(
-    candidates: tuple[str, ...], accepted: tuple[str, ...], excluded: tuple[str, ...]
+    candidates: tuple[str, ...], accepted: tuple[str, ...], excluded: tuple[str, ...]#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
 ) -> None:
     accepted_set = frozenset(accepted)
     if not accepted_set <= frozenset(candidates):

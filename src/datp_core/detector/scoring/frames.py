@@ -62,7 +62,7 @@ def validate_score_input_frame(
 def extract_score_arrays(
     frame: pl.DataFrame,
     feature_names: FeatureNameSequence,
-) -> tuple[npt.NDArray[np.float32], tuple[str, ...], tuple[str, ...]]:
+) -> tuple[npt.NDArray[np.float32], tuple[str, ...], tuple[str, ...]]:  #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     matrix = frame.select(feature_names.as_list()).to_numpy().astype(LEARNING_DTYPE, copy=False)
     labels = tuple(str(value) for value in frame.get_column(OUTCOME_LABEL_COLUMN).to_list())
     row_ids = tuple(str(value) for value in frame.get_column(STABLE_ROW_ID_COLUMN).to_list())
@@ -70,8 +70,8 @@ def extract_score_arrays(
 
 
 def score_frame(
-    row_ids: tuple[str, ...],
-    labels: tuple[str, ...],
+    row_ids: tuple[str, ...], #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    labels: tuple[str, ...], #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     scores: npt.NDArray[np.float64],
 ) -> pl.DataFrame:
     if len(row_ids) != len(labels) or len(row_ids) != scores.shape[0]:

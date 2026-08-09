@@ -156,8 +156,8 @@ def _finalize_temporal_manifest(
     partition_seed: Seed,
     split_protocol: SplitProtocolId,
     programme_candidates: tuple[str, ...],
-    accepted_ids: tuple[str, ...],
-    excluded_ids: tuple[str, ...],
+    accepted_ids: tuple[str, ...], #TODO: should be tuple[EdgeSensorGroup] and adapt all callers and usage
+    excluded_ids: tuple[str, ...], #TODO: should be tuple[EdgeSensorGroup] and adapt all callers and usage
     membership: pl.DataFrame,
 ) -> PopulationManifest:
     return finalize_population(
@@ -186,7 +186,7 @@ def _finalize_temporal_manifest(
 
 def _chronology_eligibility(
     canonical_root: Path,
-) -> tuple[tuple[str, ...], tuple[str, ...], tuple[ChronologyExclusionReason, ...], int]:
+) -> tuple[tuple[str, ...], tuple[str, ...], tuple[ChronologyExclusionReason, ...], int]: #TODO: should be tuple[EdgeSensorGroup] or something and adapt all callers and usage
     manifest_path = Path(canonical_root) / CanonicalPublicationArtifact.MANIFEST
     if not manifest_path.is_file():
         raise DataIntegrityError(
@@ -220,7 +220,7 @@ def _chronology_eligibility(
 
 
 def _chronology_for_group(
-    group_id: str, chronology: tuple[ManifestChronologyEntry, ...]
+    group_id: str, chronology: tuple[ManifestChronologyEntry, ...] #TODO: should be EdgeSensorGroup or something and adapt all callers and usage. Do not use primitives for this, use something else instead of str.
 ) -> ManifestChronologyEntry | None:
     for item in chronology:
         if item.group_identity == group_id:
@@ -253,7 +253,7 @@ def _load_static_membership(canonical_root: Path) -> pl.DataFrame:
     return select_membership_frame(frame)
 
 
-def _load_temporal_membership(canonical_root: Path, eligible_ids: tuple[str, ...]) -> pl.DataFrame:
+def _load_temporal_membership(canonical_root: Path, eligible_ids: tuple[str, ...]) -> pl.DataFrame: #TODO: should be tuple[EdgeSensorGroup] and adapt all callers and usage
     temporal_root = canonical_branch_directory(canonical_root, EdgeAssetRole.TEMPORAL_BENIGN)
     paths = tuple(temporal_root / f"{group_id}.parquet" for group_id in eligible_ids)
     missing = tuple(path.name for path in paths if not path.is_file())
@@ -302,8 +302,8 @@ def _matched_static_reference(
     temporal_membership: pl.DataFrame,
     *,
     partition_seed: Seed,
-    eligible_ids: tuple[str, ...],
-    programme_candidates: tuple[str, ...],
+    eligible_ids: tuple[str, ...], #TODO: should be tuple[EdgeSensorGroup] and adapt all callers and usage
+    programme_candidates: tuple[str, ...],#TODO: should be tuple[EdgeSensorGroup] and adapt all callers and usage
 ) -> tuple[PopulationManifest, pl.DataFrame]:
     membership = select_membership_frame(temporal_membership)
     accepted = frozenset(eligible_ids)
