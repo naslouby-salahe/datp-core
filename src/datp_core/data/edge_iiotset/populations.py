@@ -54,9 +54,9 @@ from datp_core.data.populations.contracts import (
     PopulationManifest,
     PopulationOutcomeLabel,
     build_population_capabilities,
+    model_input_exclusion_checksum,
     population_evidence_role,
     select_membership_frame,
-    model_input_exclusion_checksum,
 )
 from datp_core.data.populations.paths import PartitioningFilePattern, canonical_branch_directory
 
@@ -287,8 +287,7 @@ def _load_static_membership(canonical_root: Path) -> tuple[pl.DataFrame, ModelIn
             reason=EdgeIIoTPopulationViolation.MISSING_STATIC_BENIGN_ASSETS,
         )
     return _model_input_eligible_membership(
-        pl.scan_parquet([str(path) for path in paths])
-        .select(
+        pl.scan_parquet([str(path) for path in paths]).select(
             pl.col(_GROUP).alias(CLIENT_ID_COLUMN),
             pl.col(CanonicalProvenanceColumn.STABLE_ROW_ID).alias(STABLE_ROW_ID_COLUMN),
             pl.col(CanonicalProvenanceColumn.SOURCE_PATH).alias(SOURCE_PATH_COLUMN),
@@ -315,8 +314,7 @@ def _load_temporal_membership(
             reason=EdgeIIoTPopulationViolation.MISSING_TEMPORAL_BENIGN_ASSETS,
         )
     frame, evidence = _model_input_eligible_membership(
-        pl.scan_parquet([str(path) for path in paths])
-        .select(
+        pl.scan_parquet([str(path) for path in paths]).select(
             pl.col(_GROUP).alias(CLIENT_ID_COLUMN),
             pl.col(CanonicalProvenanceColumn.STABLE_ROW_ID).alias(STABLE_ROW_ID_COLUMN),
             pl.col(CanonicalProvenanceColumn.SOURCE_PATH).alias(SOURCE_PATH_COLUMN),
@@ -349,7 +347,7 @@ def _model_input_eligible_membership(
     candidate_rows: pl.LazyFrame,
     *,
     population: PopulationId,
-    sort_columns: tuple[object, ...],
+    sort_columns: tuple[str, ...],
     membership_only: bool,
 ) -> tuple[pl.DataFrame, ModelInputExclusionEvidence]:
     """Apply the immutable feature gate before a row can enter membership or a split."""

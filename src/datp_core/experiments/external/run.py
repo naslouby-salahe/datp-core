@@ -358,20 +358,36 @@ def _external_benign_statistics_markdown(manifest: ExternalBenignStatisticsRepor
                 "| Quantity | Value |",
                 "|---|---:|",
                 f"| Matched threshold (estimator) | {format_publication_metric(row.matched_threshold.value)} |",
-                f"| Pooled benign quantile threshold | {format_publication_metric(row.pooled_quantile_threshold.value)} |",
+                (
+                    "| Pooled benign quantile threshold | "
+                    f"{format_publication_metric(row.pooled_quantile_threshold.value)} |"
+                ),
                 f"| Global mean | {format_publication_metric(row.global_mean.value)} |",
                 f"| Within-client variance | {format_publication_metric(row.within_client_variance.value)} |",
                 f"| Between-client variance | {format_publication_metric(row.between_client_variance.value)} |",
                 f"| Full pooled variance | {format_publication_metric(row.full_pooled_variance.value)} |",
                 "| Between-client variance ratio | "
-                + (format_publication_metric(row.between_ratio.value) if row.between_ratio is not None else "unavailable")
+                + (
+                    format_publication_metric(row.between_ratio.value)
+                    if row.between_ratio is not None
+                    else "unavailable"
+                )
                 + " |",
                 f"| Absolute threshold error | {format_publication_metric(row.absolute_threshold_error.value)} |",
                 f"| Achieved benign exceedance | {format_publication_metric(row.achieved_benign_exceedance.value)} |",
-                f"| Estimated communication bytes | {format_publication_metric(row.estimated_communication_bytes.value)} |",
-                "| CV(FPR) | " + (format_publication_metric(row.cv_fpr.value) if row.cv_fpr is not None else "unavailable") + " |",
+                (
+                    "| Estimated communication bytes | "
+                    f"{format_publication_metric(row.estimated_communication_bytes.value)} |"
+                ),
+                "| CV(FPR) | "
+                + (format_publication_metric(row.cv_fpr.value) if row.cv_fpr is not None else "unavailable")
+                + " |",
                 "| Worst-client FPR | "
-                + (format_publication_metric(row.worst_client_fpr.value) if row.worst_client_fpr is not None else "unavailable")
+                + (
+                    format_publication_metric(row.worst_client_fpr.value)
+                    if row.worst_client_fpr is not None
+                    else "unavailable"
+                )
                 + " |",
                 "",
                 "### Disclosed per-client benign summary",

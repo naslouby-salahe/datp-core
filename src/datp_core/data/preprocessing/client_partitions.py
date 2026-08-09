@@ -28,10 +28,10 @@ from datp_core.data.edge_iiotset.schema import EDGE_NUMERIC_FEATURE_COLUMNS, Edg
 from datp_core.data.populations.construction import join_handoff_with_canonical_features
 from datp_core.data.populations.contracts import (
     CLIENT_ID_COLUMN,
-    ModelInputExclusionEvidence,
-    ModelInputExclusionReason,
     PARTITION_ROLE_COLUMN,
     STABLE_ROW_ID_COLUMN,
+    ModelInputExclusionEvidence,
+    ModelInputExclusionReason,
     PreprocessingHandoff,
     model_input_exclusion_checksum,
 )

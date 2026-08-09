@@ -533,7 +533,12 @@ def _require_matching_temporal_evaluation_cohorts(
             tuple(client.client for client in outcome.clients if client.cohort is EvaluationCohort.FPR_EVALUABLE)
             for outcome in outcomes
         )
-        if inventories[0] != inventories[1] or inventories[1] != inventories[2] or cohorts[0] != cohorts[1] or cohorts[1] != cohorts[2]:
+        if (
+            inventories[0] != inventories[1]
+            or inventories[1] != inventories[2]
+            or cohorts[0] != cohorts[1]
+            or cohorts[1] != cohorts[2]
+        ):
             raise ScientificContractError(
                 ErrorMessage("temporal recovery requires identical FPR-evaluable client cohorts across all states"),
                 subject=method,

@@ -77,7 +77,7 @@ def test_external_benign_statistics_markdown_publishes_estimator_variance_and_co
 def test_external_benign_statistics_markdown_types_unavailable_attack_outcome() -> None:
     markdown = _external_benign_statistics_markdown(_report())
 
-    assert "| 0.25 |" in markdown  # available CV(FPR) rendered for seed 0
+    assert "| 0.250 |" in markdown  # available CV(FPR) rendered for seed 0
     assert "unavailable" in markdown  # seed 1 CV(FPR) is a typed unavailable attack outcome
     assert "Attack outcomes are typed unavailable" in markdown
 

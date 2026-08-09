@@ -95,6 +95,7 @@ def edge_canonical_root(tmp_path: Path) -> Path:
     static.mkdir(parents=True)
     temporal.mkdir(parents=True)
     chronology = []
+    _feature_defaults: dict[str, float] = {col.value: 0.0 for col in EDGE_NUMERIC_FEATURE_COLUMNS}
     for group in EDGE_BENIGN_SENSOR_GROUPS:
         rows = []
         for local in range(12):
@@ -109,6 +110,7 @@ def edge_canonical_root(tmp_path: Path) -> Path:
                     "raw_timestamp": f"2021 00:00:{local:02d}.000000000",
                     "attack_label": "0",
                     "attack_type": "Normal",
+                    **_feature_defaults,
                 }
             )
         pl.DataFrame(rows).write_parquet(static / f"{group}.parquet")

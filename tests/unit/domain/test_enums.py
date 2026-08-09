@@ -212,6 +212,7 @@ EXPECTED_MEMBERS = (
                 "ALERTS_PER_DAY",
                 "COMMUNICATION_BYTES",
                 "RECONSTRUCTION_ERROR",
+                "THRESHOLD_VALUE",
                 "EMPIRICAL_CUMULATIVE_PROBABILITY",
                 "JAIN_FAIRNESS_INDEX",
                 "GINI_COEFFICIENT",

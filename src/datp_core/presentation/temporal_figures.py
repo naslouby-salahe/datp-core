@@ -14,9 +14,9 @@ from datp_core.core.identifiers import (
     AnalysisReasonText,
     AvailabilityStatus,
     EvidenceRole,
-    FileContentText,
     FigureLabel,
     FigureTitle,
+    FileContentText,
     MetricId,
     PopulationId,
     TemporalState,
@@ -27,8 +27,11 @@ from datp_core.runtime.filesystem import write_text_atomically
 
 if TYPE_CHECKING:
     from datp_core.analysis.preparation import TemporalAnalysisDocument
-    from datp_core.analysis.temporal import TemporalClientTrajectory, TemporalRecoveryResult
-    from datp_core.analysis.temporal import TemporalDeploymentProvenance
+    from datp_core.analysis.temporal import (
+        TemporalClientTrajectory,
+        TemporalDeploymentProvenance,
+        TemporalRecoveryResult,
+    )
 
 
 FIGURE_011_SOURCE_FILENAME = "figure_011_temporal_fpr_trajectories.csv"
@@ -188,7 +191,9 @@ def _threshold_source_rows(document: TemporalAnalysisDocument, analysis_checksum
     for recovery in _ordered_recoveries(document):
         for trajectory in _ordered_trajectories(recovery):
             for window_order, (state, value) in enumerate(_threshold_values(trajectory), start=1):
-                movement = trajectory.threshold_movement_recalibrated if state is TemporalState.RECALIBRATED_FUTURE else None
+                movement = (
+                    trajectory.threshold_movement_recalibrated if state is TemporalState.RECALIBRATED_FUTURE else None
+                )
                 rows.append(
                     _source_row(
                         document=document,
@@ -228,9 +233,7 @@ def _source_row(
         "evidence_role": document.evidence_role.value,
         "threshold_method": document.threshold_method.value,
         "policy": document.threshold_method.value,
-        "metric": (
-            MetricId.FALSE_POSITIVE_RATE.value if figure_id == "FIGURE-011" else MetricId.THRESHOLD_VALUE.value
-        ),
+        "metric": (MetricId.FALSE_POSITIVE_RATE.value if figure_id == "FIGURE-011" else MetricId.THRESHOLD_VALUE.value),
         "seed": str(trajectory.seed.value),
         "client_id": trajectory.client_id.value,
         "temporal_state": state.value,
@@ -317,13 +320,13 @@ def _metric_series(
 
 
 def _unavailable_series(label: str, metric: MetricId) -> FigureSeries:
-    return FigureSeries(
-        label=FigureLabel(label), metric=metric, availability=AvailabilityStatus.UNAVAILABLE, values=()
-    )
+    return FigureSeries(label=FigureLabel(label), metric=metric, availability=AvailabilityStatus.UNAVAILABLE, values=())
 
 
 def _trajectory_reason(trajectory: TemporalClientTrajectory) -> str:
-    return str(trajectory.exclusion_reason or AnalysisReasonText("metric unavailable for temporal client-state trajectory"))
+    return str(
+        trajectory.exclusion_reason or AnalysisReasonText("metric unavailable for temporal client-state trajectory")
+    )
 
 
 def _metric_text(value: MetricValue | None) -> str:

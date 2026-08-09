@@ -40,7 +40,6 @@ from datp_core.core.identifiers import (
 from datp_core.core.numeric import MetricValue
 from datp_core.experiments.anchor.contracts import VerifiedAnchorGateArtifact
 from datp_core.presentation.figures import FigureSpec, render_markdown_figure
-from datp_core.presentation.temporal_figures import export_temporal_figure_sources, temporal_publication_figures
 from datp_core.presentation.tables import (
     EvidenceText,
     PublicationTable,
@@ -49,6 +48,7 @@ from datp_core.presentation.tables import (
     TableTitle,
     render_markdown_table,
 )
+from datp_core.presentation.temporal_figures import export_temporal_figure_sources, temporal_publication_figures
 from datp_core.presentation.validation import (
     ClaimDecision,
     ClaimKind,
@@ -271,15 +271,29 @@ def export_temporal_publication(document: TemporalAnalysisDocument, output_direc
     ]
     for record in document.records:
         recovery = record.recovery
-        ratio = "undefined" if recovery.recovery_ratio is None else _format_publication_metric(recovery.recovery_ratio.value)
-        mean_static = "—" if recovery.mean_fpr_static is None else _format_publication_metric(recovery.mean_fpr_static.value)
-        mean_frozen = "—" if recovery.mean_fpr_frozen is None else _format_publication_metric(recovery.mean_fpr_frozen.value)
-        mean_recal = "—" if recovery.mean_fpr_recalibrated is None else _format_publication_metric(recovery.mean_fpr_recalibrated.value)
+        ratio = (
+            "undefined"
+            if recovery.recovery_ratio is None
+            else _format_publication_metric(recovery.recovery_ratio.value)
+        )
+        mean_static = (
+            "—" if recovery.mean_fpr_static is None else _format_publication_metric(recovery.mean_fpr_static.value)
+        )
+        mean_frozen = (
+            "—" if recovery.mean_fpr_frozen is None else _format_publication_metric(recovery.mean_fpr_frozen.value)
+        )
+        mean_recal = (
+            "—"
+            if recovery.mean_fpr_recalibrated is None
+            else _format_publication_metric(recovery.mean_fpr_recalibrated.value)
+        )
         lines.append(
             f"| {recovery.seed.value} | {_format_publication_metric(recovery.static_reference_cv.value)} | "
-            f"{_format_publication_metric(recovery.frozen_future_cv.value)} | {_format_publication_metric(recovery.recalibrated_future_cv.value)} | "
+            f"{_format_publication_metric(recovery.frozen_future_cv.value)} | "
+            f"{_format_publication_metric(recovery.recalibrated_future_cv.value)} | "
             f"{mean_static} | {mean_frozen} | {mean_recal} | "
-            f"{_format_publication_metric(recovery.drift_excess.value)} | {_format_publication_metric(recovery.recovered_amount.value)} | "
+            f"{_format_publication_metric(recovery.drift_excess.value)} | "
+            f"{_format_publication_metric(recovery.recovered_amount.value)} | "
             f"{ratio} | `{record.interpretation.value}` |"
         )
     lines.extend(["", "## Per-seed provenance", ""])
@@ -583,7 +597,8 @@ def _render_paired_contrasts(contrasts: PairedContrasts) -> list[ReportLine]:
     for contrast in contrasts.values:
         lines.append(
             f"| {contrast.seed.value} | {_format_publication_metric(contrast.left_value.value)} | "
-            f"{_format_publication_metric(contrast.right_value.value)} | {_format_publication_metric(contrast.delta.value)} | "
+            f"{_format_publication_metric(contrast.right_value.value)} | "
+            f"{_format_publication_metric(contrast.delta.value)} | "
             f"`{contrast.fixed_score.model_checksum.value[:12]}` | "
             f"`{contrast.fixed_score.selected_checkpoint_checksum.value[:12]}` |"
         )
@@ -688,7 +703,9 @@ def _mechanism_tables(mechanisms: tuple[MechanismEvidence, ...]) -> tuple[Public
                     TableCell(
                         metric=MetricId.MEAN_FPR,
                         availability=mechanism.availability,
-                        rendered_value=TableCellRenderedValue(_format_publication_metric(mechanism.mean_delta_fpr.value)),
+                        rendered_value=TableCellRenderedValue(
+                            _format_publication_metric(mechanism.mean_delta_fpr.value)
+                        ),
                         evidence=EvidenceText(
                             f"mean ΔFPR; client_dispersion={dispersion}; n={len(mechanism.movements)}"
                         ),
@@ -699,7 +716,9 @@ def _mechanism_tables(mechanisms: tuple[MechanismEvidence, ...]) -> tuple[Public
                     TableCell(
                         metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
                         availability=AvailabilityStatus.AVAILABLE,
-                        rendered_value=TableCellRenderedValue(_format_publication_metric(mechanism.mean_retention.value)),
+                        rendered_value=TableCellRenderedValue(
+                            _format_publication_metric(mechanism.mean_retention.value)
+                        ),
                         evidence=EvidenceText(
                             f"mean CV(FPR) retention; decision={mechanism.decision.decision.value}; "
                             f"seeds={len(mechanism.observations)}; "
@@ -756,8 +775,7 @@ def _render_association_result(mechanism: AssociationResult) -> list[ReportLine]
                 f"Leverage: {', '.join(_format_publication_metric(value.value) for value in stats.leverage)}",
                 "Influence: "
                 + ", ".join(
-                    _format_publication_metric(value.value)
-                    for value in stats.leave_one_out_diagnostics.influences
+                    _format_publication_metric(value.value) for value in stats.leave_one_out_diagnostics.influences
                 ),
                 f"Evidentiary sufficient: {stats.evidentiary_sufficient}",
             ]
@@ -867,7 +885,9 @@ def _render_grouped_dispersion_result(mechanism: GroupedDispersionResult) -> lis
 
 @_render_one_mechanism.register
 def _render_threshold_movement(mechanism: ThresholdMovement) -> list[ReportLine]:
-    delta_tpr = _format_publication_metric(mechanism.delta_tpr.value) if mechanism.delta_tpr is not None else "unavailable"
+    delta_tpr = (
+        _format_publication_metric(mechanism.delta_tpr.value) if mechanism.delta_tpr is not None else "unavailable"
+    )
     return [
         ReportLine(line)
         for line in [

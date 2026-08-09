@@ -40,10 +40,10 @@ from datp_core.data.edge_iiotset.schema import EdgeCanonicalColumn
 from datp_core.data.populations.contracts import (
     ChronologicalPartitionDiagnosticsDocument,
     ControlledPartitionCondition,
+    ModelInputExclusionEvidence,
     PopulationConstructionRequest,
     PopulationConstructionResult,
     PopulationFrameColumn,
-    ModelInputExclusionEvidence,
     PopulationManifest,
     PopulationManifestDocument,
     SplitConstructionRequest,
