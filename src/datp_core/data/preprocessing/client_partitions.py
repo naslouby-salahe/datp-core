@@ -17,6 +17,7 @@ from datp_core.core.identifiers import (
     DatasetId,
     FeatureName,
     FeatureNameSequence,
+    FileContentText,
     PopulationId,
     ProcessedDataBranch,
     PublicationStatus,
@@ -265,7 +266,7 @@ def write_model_input_exclusion_evidence(destination: Path, evidence: ModelInput
         "excluded_stable_row_ids": tuple(map(str, evidence.excluded_stable_row_ids)),
         "evidence_checksum": evidence.evidence_checksum.value,
     }
-    write_text_atomically(destination, canonical_json_text(payload))
+    write_text_atomically(destination, FileContentText(canonical_json_text(payload)))
     return evidence.evidence_checksum
 
 

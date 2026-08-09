@@ -6,8 +6,10 @@ from pathlib import Path
 from shutil import rmtree
 from tempfile import NamedTemporaryFile, mkdtemp
 
+from datp_core.core.identifiers import FileContentText
 
-def write_text_atomically(path: Path, content: str, *, encoding: str = "utf-8") -> Path:
+
+def write_text_atomically(path: Path, content: FileContentText, *, encoding: str = "utf-8") -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     with NamedTemporaryFile(
         mode="w",

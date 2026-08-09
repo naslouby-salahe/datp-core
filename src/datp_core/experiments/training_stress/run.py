@@ -47,6 +47,7 @@ from datp_core.core.identifiers import (
     FederatedThresholdMethod,
     FedProxCoefficientSelectionRule,
     FedProxRoleDirectory,
+    FileContentText,
     MetricId,
     PartitionRole,
     PopulationId,
@@ -666,7 +667,7 @@ def select_primary_fedprox_coefficient_from_artifacts(
 
 
 def write_fedprox_primary_coefficient_decision(decision: FedProxPrimaryCoefficientDecision, destination: Path) -> Path:
-    write_text_atomically(destination, canonical_json_text(decision))
+    write_text_atomically(destination, FileContentText(canonical_json_text(decision)))
     return destination
 
 

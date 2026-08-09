@@ -21,6 +21,7 @@ from datp_core.artifacts.repositories.models import (
 from datp_core.artifacts.serializers.json import canonical_json_text
 from datp_core.core.identifiers import (
     ArtifactFileName,
+    FileContentText,
     PublicationStatus,
     RelatedPublicationMemberIdentity,
     ReloadValidationEvidence,
@@ -390,7 +391,7 @@ def validate_reload(
 
 def serialize_json_model(model: BaseModel, destination: Path) -> Checksum:
     payload = canonical_json_text(model)
-    write_text_atomically(destination, payload)
+    write_text_atomically(destination, FileContentText(payload))
     return Checksum.from_text(payload)
 
 

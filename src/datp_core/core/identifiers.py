@@ -531,6 +531,10 @@ class ReportLine(str):
     """One rendered line of report output; may be blank for paragraph separation."""
 
 
+class FileContentText(str):
+    """Textual body of a file written to the artifact tree; allows empty content."""
+
+
 class MessageEndpoint(NonEmptyString):
     validation_name: ClassVar[str] = "message endpoint"
 

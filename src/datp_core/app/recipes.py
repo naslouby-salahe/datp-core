@@ -26,6 +26,7 @@ from datp_core.core.identifiers import (
     ExperimentReadiness,
     FederatedThresholdMethod,
     FedProxRoleDirectory,
+    FileContentText,
     PopulationId,
     ThresholdMethodExecutionStatus,
 )
@@ -662,7 +663,7 @@ def _report_supplementary(experiment_id: ExperimentId, overwrite: OverwriteMode)
             f"{coordinate.metric.value} | {metric.status.value} | {value} | {canonical_checksum(document).value} |"
         )
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    write_text_atomically(report_path, "\n".join(lines) + "\n")
+    write_text_atomically(report_path, FileContentText("\n".join(lines) + "\n"))
     return (report_path,), DetailText(f"generated {report_path}")
 
 

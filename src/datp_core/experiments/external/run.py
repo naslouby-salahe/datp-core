@@ -28,6 +28,7 @@ from datp_core.core.identifiers import (
     EvidenceRole,
     ExperimentId,
     FederatedThresholdMethod,
+    FileContentText,
     MarkdownText,
     MetricId,
     PopulationId,
@@ -262,10 +263,10 @@ def analyze_external_benign_statistics(*, output_root: Path, overwrite: bool) ->
     serialize_json_model(manifest, output / ExternalBenignStatisticsAssetName.SUMMARY)
     write_text_atomically(
         output / ExternalBenignStatisticsAssetName.PUBLICATION,
-        _external_benign_statistics_markdown(manifest),
+        FileContentText(_external_benign_statistics_markdown(manifest)),
     )
     digest = canonical_checksum(manifest)
-    write_text_atomically(output / ExternalBenignStatisticsAssetName.COMPLETE, digest.value + "\n")
+    write_text_atomically(output / ExternalBenignStatisticsAssetName.COMPLETE, FileContentText(digest.value + "\n"))
     return ExternalBenignStatisticsReportResult(output_directory=output, complete_digest=digest)
 
 

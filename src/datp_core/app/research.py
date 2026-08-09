@@ -50,7 +50,7 @@ from datp_core.core.errors import (
     ScientificContractError,
     UnresolvedScientificValueError,
 )
-from datp_core.core.identifiers import ExperimentId, ExperimentReadiness, ProgrammeStatus
+from datp_core.core.identifiers import ExperimentId, ExperimentReadiness, FileContentText, ProgrammeStatus
 from datp_core.core.numeric import Seed
 from datp_core.data.paths import canonical_root_under
 from datp_core.data.populations.declarations import POPULATIONS
@@ -202,7 +202,7 @@ def _publish_smoke_summary(results: tuple[ExperimentRunResult, ...]) -> None:
     )
     write_text_atomically(
         SMOKE_SUMMARY_DIRECTORY / ResearchArtifact.COMPLETE,
-        "\n".join(lines) + "\n",
+        FileContentText("\n".join(lines) + "\n"),
     )
 
 
@@ -227,7 +227,7 @@ def _run_centralized_reference(overwrite: OverwriteMode) -> None:
         marker.parent.mkdir(parents=True, exist_ok=True)
         write_text_atomically(
             marker,
-            "\n".join(str(seed.value) for seed in scope.seed_cohort.values) + "\n",
+            FileContentText("\n".join(str(seed.value) for seed in scope.seed_cohort.values) + "\n"),
         )
 
 
@@ -259,10 +259,10 @@ def run_campaign(*, overwrite: OverwriteMode) -> CampaignRunResult:
     )
     execution_marker_lines = "\n".join(item.experiment.value for item in results) + "\n"
     CAMPAIGN_EXECUTION_MARKER.parent.mkdir(parents=True, exist_ok=True)
-    write_text_atomically(CAMPAIGN_EXECUTION_MARKER, execution_marker_lines)
+    write_text_atomically(CAMPAIGN_EXECUTION_MARKER, FileContentText(execution_marker_lines))
     report = generate_report(None, overwrite=overwrite)
     CAMPAIGN_PUBLICATION_MARKER.parent.mkdir(parents=True, exist_ok=True)
-    write_text_atomically(CAMPAIGN_PUBLICATION_MARKER, execution_marker_lines)
+    write_text_atomically(CAMPAIGN_PUBLICATION_MARKER, FileContentText(execution_marker_lines))
     return CampaignRunResult(
         experiments=results,
         detail=DetailText(f"campaign experiments={len(results)} report={report.detail}"),

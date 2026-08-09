@@ -30,6 +30,7 @@ from datp_core.core.identifiers import (
     ClaimWording,
     EvidenceRole,
     ExperimentId,
+    FileContentText,
     MetricId,
     PopulationId,
     ReportLine,
@@ -123,12 +124,12 @@ def export_markdown(bundle: PublicationBundle, destination: Path) -> Path:
     )
     sections = header + permitted + blocked_section + table_section + figure_section
     payload = "\n".join(sections).rstrip() + "\n"
-    return write_text_atomically(destination, payload)
+    return write_text_atomically(destination, FileContentText(payload))
 
 
 def export_analysis_report(document: AnalysisDocument, destination: Path) -> Path:
     payload = _render_analysis_sections(document)
-    return write_text_atomically(destination, payload)
+    return write_text_atomically(destination, FileContentText(payload))
 
 
 def export_confirmatory_publication(
@@ -197,7 +198,7 @@ def export_external_publication(document: ExternalAnalysisDocument, output_direc
             "",
         ]
     )
-    write_text_atomically(output_directory / "external_analysis_report.md", payload)
+    write_text_atomically(output_directory / "external_analysis_report.md", FileContentText(payload))
     return export_markdown(
         PublicationBundle(
             provenance=ReportProvenance(
@@ -288,7 +289,7 @@ def export_temporal_publication(document: TemporalAnalysisDocument, output_direc
                 f"fpr_recal={_optional_metric(trajectory.fpr_recalibrated)}"
             )
     lines.append("")
-    write_text_atomically(output_directory / "temporal_analysis_report.md", "\n".join(lines))
+    write_text_atomically(output_directory / "temporal_analysis_report.md", FileContentText("\n".join(lines)))
     return export_markdown(
         PublicationBundle(
             provenance=ReportProvenance(
@@ -330,7 +331,7 @@ def export_mechanism_publication(
     evidence_role: EvidenceRole,
 ) -> Path:
     payload = "\n".join(_render_mechanisms(mechanisms))
-    write_text_atomically(output_directory / MECHANISM_REPORT_FILENAME, payload)
+    write_text_atomically(output_directory / MECHANISM_REPORT_FILENAME, FileContentText(payload))
     tables = _mechanism_tables(mechanisms)
     return export_markdown(
         PublicationBundle(

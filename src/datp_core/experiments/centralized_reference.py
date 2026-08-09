@@ -27,6 +27,7 @@ from datp_core.core.identifiers import (
     DatasetId,
     EvidenceRole,
     ExperimentId,
+    FileContentText,
     MetricId,
     PopulationId,
     PreprocessingProtocolId,
@@ -299,7 +300,7 @@ def report_centralized_reference(
     report_directory.mkdir(parents=True, exist_ok=True)
     write_text_atomically(
         report_directory / CentralizedReferenceReportAsset.MANIFEST,
-        canonical_json_text(manifest),
+        FileContentText(canonical_json_text(manifest)),
     )
     export_markdown(
         _centralized_reference_publication(scope, manifest),
@@ -307,7 +308,7 @@ def report_centralized_reference(
     )
     write_text_atomically(
         report_directory / CentralizedReferenceReportAsset.COMPLETE,
-        canonical_checksum(manifest).value + "\n",
+        FileContentText(canonical_checksum(manifest).value + "\n"),
     )
     return report_directory
 

@@ -19,6 +19,7 @@ from datp_core.core.identifiers import (
     CommunicationEstimationMethod,
     ContractSubject,
     CudaDeviceName,
+    NonEmptyString,
     PopulationIdentityKind,
     TrainingModelId,
 )
@@ -182,7 +183,7 @@ def validate_personalized_history(
     )
 
 
-def atomic_write_text(path: Path, text: str) -> None:
+def atomic_write_text(path: Path, text: NonEmptyString) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     staging = path.with_name(f".{path.name}.tmp")
     staging.write_text(text, encoding="utf-8")
@@ -275,7 +276,10 @@ def persist_federated_training_history(
             schema=schema_pairs(PERSONALIZED_ROUNDS_SCHEMA),
         ).write_parquet(directory / FederatedHistoryAssetName.PERSONALIZED_ROUNDS.value)
 
-    atomic_write_text(directory / FederatedHistoryAssetName.DEVICE_NAME.value, normalized_device)
+    atomic_write_text(
+        directory / FederatedHistoryAssetName.DEVICE_NAME.value,
+        NonEmptyString(normalized_device),
+    )
 
 
 def history_frames(directory: Path) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame | None]:
