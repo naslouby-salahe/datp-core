@@ -32,7 +32,12 @@ from datp_core.data.populations.contracts import (
     STABLE_ROW_ID_COLUMN,
     PopulationOutcomeLabel,
 )
-from datp_core.detector.autoencoder import LEARNING_DTYPE, ReconstructionAutoencoder, reconstruction_errors
+from datp_core.detector.autoencoder import (
+    LEARNING_DTYPE,
+    AutoencoderModelState,
+    ReconstructionAutoencoder,
+    reconstruction_errors,
+)
 from datp_core.detector.checkpoints.contracts import validate_persisted_checkpoint_file
 from datp_core.detector.scoring.models import PersistedScoreFrame
 from datp_core.detector.training.contracts import AutoencoderProtocol
@@ -211,8 +216,8 @@ def load_checkpoint_model(
         )
     validate_persisted_checkpoint_file(checkpoint.tensor_path, checkpoint.tensor_checksum)
     model = ReconstructionAutoencoder(autoencoder.widths).to(device)
-    state = load_state_dict_tensors(checkpoint.tensor_path, device)
-    model.load_state_dict(state, strict=True)
+    model_state = AutoencoderModelState.from_torch_state_dict(load_state_dict_tensors(checkpoint.tensor_path, device))
+    model_state.apply_to(model)
     model.eval()
     return model
 

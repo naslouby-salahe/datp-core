@@ -29,17 +29,17 @@ def _loss_for(entries: tuple[_CandidateLoss, ...], round_number: RoundNumber) ->
 
 
 def _candidates_with_favorable_non_terminal_loss(tmp_path: Path):
-    from datp_core.detector.autoencoder import ReconstructionAutoencoder
+    from datp_core.detector.autoencoder import AutoencoderModelState, ReconstructionAutoencoder
 
     coordinate = fedavg_coordinate(Seed(0))
     model = ReconstructionAutoencoder(AUTOENCODER.widths)
-    state = {name: tensor.detach().clone() for name, tensor in model.state_dict().items()}
+    model_state = AutoencoderModelState.from_model(model)
     losses = (
         _CandidateLoss(CHECKPOINT.candidates[0], MetricValue(0.0001)),
         _CandidateLoss(CHECKPOINT.candidates[-1], MetricValue(99.0)),
     )
     snapshots = tuple(
-        RoundSnapshot(candidate, state, _loss_for(losses, candidate)) for candidate in CHECKPOINT.candidates
+        RoundSnapshot(candidate, model_state, _loss_for(losses, candidate)) for candidate in CHECKPOINT.candidates
     )
     candidates = retain_checkpoint_candidates(
         coordinate,

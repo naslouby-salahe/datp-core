@@ -12,7 +12,6 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.serializers.json import canonical_json_text
-from datp_core.artifacts.serializers.safetensors import to_cpu_contiguous_state
 from datp_core.core.errors import (
     ErrorMessage,
     LeakageError,
@@ -47,8 +46,7 @@ from datp_core.data.populations.contracts import (
 from datp_core.detector.autoencoder import (
     LEARNING_DTYPE,
     TORCH_LEARNING_DTYPE,
-    AutoencoderState,
-    AutoencoderStateView,
+    AutoencoderModelState,
     ReconstructionAutoencoder,
     build_autoencoder_for_state,
     build_optimizer,
@@ -133,13 +131,13 @@ class FederatedTrainingRequest[T: FedAvgProtocol | FedProxProtocol]:
 
 @dataclass(frozen=True, slots=True)
 class ProximalTerm:
-    reference_state: AutoencoderStateView
+    reference_model_state: AutoencoderModelState
     coefficient: ProximalCoefficient | DittoRegularization
 
 
 @dataclass(frozen=True, slots=True)
 class LocalEpochResult:
-    state_dict: AutoencoderState
+    model_state: AutoencoderModelState
     mean_reconstruction_loss: MetricValue
     sample_count: RowCount
 
@@ -270,7 +268,7 @@ def _reference_parameters(
 ) -> tuple[torch.Tensor, ...] | None:
     if proximal_term is None:
         return None
-    reference = proximal_term.reference_state
+    reference = proximal_term.reference_model_state.to_torch_state_dict()
     try:
         return tuple(
             reference[name].detach().to(device=device, dtype=parameter.dtype)
@@ -344,7 +342,7 @@ def run_local_epoch(
             subject=ContractSubject.BATCH_SIZE,
         )
     return LocalEpochResult(
-        state_dict={name: tensor.detach().clone() for name, tensor in model.state_dict().items()},
+        model_state=AutoencoderModelState.from_model(model),
         mean_reconstruction_loss=MetricValue(float(weighted_reconstruction_loss.item()) / total_samples),
         sample_count=RowCount(total_samples),
     )
@@ -353,7 +351,7 @@ def run_local_epoch(
 def train_client_update(
     *,
     client_data: PreparedFederatedClientData,
-    initial_state: AutoencoderStateView,
+    initial_model_state: AutoencoderModelState,
     autoencoder: AutoencoderProtocol,
     optimizer_protocol: OptimizerProtocol,
     learning_rate: LearningRate,
@@ -364,7 +362,7 @@ def train_client_update(
 ) -> ClientUpdate:
     model = build_autoencoder_for_state(
         autoencoder,
-        initial_state,
+        initial_model_state,
         device=device,
     )
     optimizer = build_optimizer(model, optimizer_protocol, learning_rate)
@@ -382,53 +380,14 @@ def train_client_update(
     )
     return ClientUpdate(
         client=client_data.client,
-        state_dict=local_epoch.state_dict,
+        model_state=local_epoch.model_state,
         sample_count=local_epoch.sample_count,
         local_loss=local_epoch.mean_reconstruction_loss,
     )
 
 
-def aggregate_client_updates(updates: Sequence[ClientUpdate]) -> AutoencoderState:
-    if not updates:
-        raise ScientificContractError(
-            ErrorMessage("aggregation requires at least one client update"),
-            subject=ContractSubject.CLIENT,
-        )
-    total_samples = sum([update.sample_count.value for update in updates])
-    if total_samples < 1:
-        raise ScientificContractError(
-            ErrorMessage("aggregation requires a positive total sample count"),
-            subject=ContractSubject.ROWS,
-        )
-
-    reference_state = updates[0].state_dict
-    reference_keys = tuple(reference_state.keys())
-
-    for update in updates[1:]:
-        if tuple(update.state_dict.keys()) != reference_keys:
-            raise ScientificContractError(
-                ErrorMessage("client update parameter keys do not match"),
-                subject=ContractSubject.TRAINING,
-            )
-        for name in reference_keys:
-            expected = reference_state[name]
-            observed = update.state_dict[name]
-            if expected.shape != observed.shape or expected.dtype != observed.dtype:
-                raise ScientificContractError(
-                    ErrorMessage("client update parameter shapes or dtypes do not match"),
-                    subject=ContractSubject.TRAINING,
-                )
-
-    weights = [update.sample_count.value / total_samples for update in updates]
-    aggregated: AutoencoderState = {}
-
-    for name in reference_keys:
-        weighted_sum = torch.zeros_like(reference_state[name], dtype=torch.float64)
-        for update, weight in zip(updates, weights, strict=True):
-            weighted_sum.add_(update.state_dict[name].to(torch.float64), alpha=weight)
-        aggregated[name] = weighted_sum.to(reference_state[name].dtype)
-
-    return aggregated
+def aggregate_client_updates(updates: Sequence[ClientUpdate]) -> AutoencoderModelState:
+    return AutoencoderModelState.sample_weighted_average(updates)
 
 
 def compute_weighted_aggregate_loss(updates: Sequence[ClientUpdate]) -> MetricValue:
@@ -463,10 +422,10 @@ def preprocessing_state_set_checksum(
     return Checksum.from_text(payload)
 
 
-def serialize_and_checksum_state_dict(
-    state_dict: AutoencoderStateView,
+def serialize_and_checksum_model_state(
+    model_state: AutoencoderModelState,
 ) -> SerializedStateEvidence:
-    cpu_state = to_cpu_contiguous_state(state_dict)
+    cpu_state = model_state.on_cpu_with_contiguous_tensors().to_torch_state_dict()
     payload = save(cpu_state)
     return SerializedStateEvidence(
         checksum=Checksum.from_bytes(payload),
@@ -495,12 +454,12 @@ def create_communication_record(
 
 def create_round_snapshot(
     round_number: RoundNumber,
-    state: AutoencoderStateView,
+    model_state: AutoencoderModelState,
     loss: MetricValue,
 ) -> RoundSnapshot:
     return RoundSnapshot(
         round_number=round_number,
-        state_dict={name: tensor.detach().clone() for name, tensor in state.items()},
+        model_state=model_state,
         mean_training_loss=loss,
     )
 
@@ -561,10 +520,10 @@ def _run_training_round[T: FedAvgProtocol | FedProxProtocol](
     round_number: RoundNumber,
     request: FederatedTrainingRequest[T],
     prepared: tuple[PreparedFederatedClientData, ...],
-    global_state: dict[str, torch.Tensor],
+    global_model_state: AutoencoderModelState,
     device: torch.device,
     proximal_coefficient: ProximalCoefficient | None,
-) -> tuple[FederatedRoundResult, dict[str, torch.Tensor]]:
+) -> tuple[FederatedRoundResult, AutoencoderModelState]:
     updates: list[ClientUpdate] = []
     for client_data in prepared:
         seed = derive_client_stream_seed(
@@ -573,11 +532,15 @@ def _run_training_round[T: FedAvgProtocol | FedProxProtocol](
             client_data.client,
             TrainingStream.GLOBAL_CLIENT_UPDATE,
         )
-        proximal_term = ProximalTerm(global_state, proximal_coefficient) if proximal_coefficient is not None else None
+        proximal_term = (
+            ProximalTerm(reference_model_state=global_model_state, coefficient=proximal_coefficient)
+            if proximal_coefficient is not None
+            else None
+        )
         updates.append(
             train_client_update(
                 client_data=client_data,
-                initial_state=global_state,
+                initial_model_state=global_model_state,
                 autoencoder=request.autoencoder,
                 optimizer_protocol=request.training_protocol.optimizer,
                 learning_rate=request.learning_rate,
@@ -590,7 +553,7 @@ def _run_training_round[T: FedAvgProtocol | FedProxProtocol](
 
     aggregated = aggregate_client_updates(updates)
     aggregate_loss = compute_weighted_aggregate_loss(updates)
-    serialized_state = serialize_and_checksum_state_dict(aggregated)
+    serialized_state = serialize_and_checksum_model_state(aggregated)
 
     communication = create_communication_record(
         round_number,
@@ -643,7 +606,7 @@ def run_federated_training[T: FedAvgProtocol | FedProxProtocol](
         request.autoencoder,
         initialization_seed=request.training_seed,
     )
-    global_state = {name: tensor.detach().clone() for name, tensor in initial_model.state_dict().items()}
+    global_model_state = AutoencoderModelState.from_model(initial_model)
 
     candidate_rounds = frozenset(request.checkpoint_protocol.candidates)
     proximal_coefficient = _proximal_coefficient(request.training_protocol)
@@ -652,11 +615,11 @@ def run_federated_training[T: FedAvgProtocol | FedProxProtocol](
 
     for round_value in range(1, request.checkpoint_protocol.maximum_round.value + 1):
         round_number = RoundNumber(round_value)
-        round_result, global_state = _run_training_round(
+        round_result, global_model_state = _run_training_round(
             round_number=round_number,
             request=request,
             prepared=prepared,
-            global_state=global_state,
+            global_model_state=global_model_state,
             device=device,
             proximal_coefficient=proximal_coefficient,
         )
@@ -666,7 +629,7 @@ def run_federated_training[T: FedAvgProtocol | FedProxProtocol](
             snapshots.append(
                 create_round_snapshot(
                     round_number,
-                    global_state,
+                    global_model_state,
                     round_result.aggregate_loss,
                 )
             )

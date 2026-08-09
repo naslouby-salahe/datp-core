@@ -57,7 +57,7 @@ from datp_core.data.preprocessing.models import (
 from datp_core.detector.autoencoder import (
     LEARNING_DTYPE,
     TORCH_LEARNING_DTYPE,
-    AutoencoderState,
+    AutoencoderModelState,
     ReconstructionAutoencoder,
     build_optimizer,
     construct_autoencoder,
@@ -132,7 +132,7 @@ class InMemoryCentralizedModelSnapshot:
     """Transient model state captured only during one training execution."""
 
     round_number: RoundNumber
-    state_dict: AutoencoderState
+    model_state: AutoencoderModelState
     mean_training_loss: MetricValue
 
 
@@ -268,7 +268,8 @@ def train_centralized_autoencoder(request: CentralizedTrainingRequest) -> Centra
     )
     request.output_directory.mkdir(parents=True, exist_ok=True)
     tensor_path = request.output_directory / CentralizedArtifactName.MODEL_TENSORS
-    tensor_checksum = save_state_dict_tensors(model.state_dict(), tensor_path)
+    model_state = AutoencoderModelState.from_model(model)
+    tensor_checksum = save_state_dict_tensors(model_state.to_torch_state_dict(), tensor_path)
     assert_safetensors_reload(model, tensor_path, device)
     result = CentralizedTrainingResult(
         coordinate=request.coordinate,
@@ -307,8 +308,8 @@ def load_centralized_model_tensors(
     if resolved.type != "cuda":
         raise ExecutionStateError(ErrorMessage("centralized model reload requires CUDA"), subject=ContractSubject.CUDA)
     model = construct_autoencoder(autoencoder).to(resolved)
-    state = load_state_dict_tensors(path, resolved)
-    model.load_state_dict(state, strict=True)
+    model_state = AutoencoderModelState.from_torch_state_dict(load_state_dict_tensors(path, resolved))
+    model_state.apply_to(model)
     model.eval()
     return model
 
@@ -321,7 +322,7 @@ def model_from_in_memory_snapshot(
     require_cuda_available()
     resolved = resolve_cuda_device() if device is None else device
     model = construct_autoencoder(autoencoder).to(resolved)
-    model.load_state_dict(snapshot.state_dict, strict=True)
+    snapshot.model_state.apply_to(model)
     model.eval()
     return model
 
@@ -342,14 +343,13 @@ def assert_safetensors_reload(
     device: torch.device,
 ) -> None:
     reloaded = construct_autoencoder(AutoencoderProtocol(widths=model.widths)).to(device)
-    state = load_state_dict_tensors(path, device)
-    reloaded.load_state_dict(state, strict=True)
-    for left, right in zip(model.state_dict().values(), reloaded.state_dict().values(), strict=True):
-        if not torch.equal(left, right):
-            raise ArtifactIntegrityError(
-                ErrorMessage("SafeTensors reload does not match saved centralized weights"),
-                subject=ContractSubject.ARTIFACT_PATH,
-            )
+    loaded_state = AutoencoderModelState.from_torch_state_dict(load_state_dict_tensors(path, device))
+    loaded_state.apply_to(reloaded)
+    if not AutoencoderModelState.from_model(model).is_equivalent_to(loaded_state):
+        raise ArtifactIntegrityError(
+            ErrorMessage("SafeTensors reload does not match saved centralized weights"),
+            subject=ContractSubject.ARTIFACT_PATH,
+        )
 
 
 def training_history_frame(result: CentralizedTrainingResult) -> pl.DataFrame:
@@ -516,7 +516,7 @@ def _run_training_epochs(
             snapshots.append(
                 InMemoryCentralizedModelSnapshot(
                     round_number=epoch,
-                    state_dict={name: tensor.detach().cpu().clone() for name, tensor in model.state_dict().items()},
+                    model_state=AutoencoderModelState.from_model(model).on_cpu_with_contiguous_tensors(),
                     mean_training_loss=mean_loss,
                 )
             )

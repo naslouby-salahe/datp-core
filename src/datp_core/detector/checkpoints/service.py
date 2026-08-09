@@ -96,7 +96,7 @@ def retain_centralized_checkpoint_candidates(
     candidates: list[CentralizedCheckpointCandidate] = []
     for snapshot in snapshots:
         path = training_result.model_directory / candidate_tensor_name(snapshot.round_number)
-        checksum = save_state_dict_tensors(snapshot.state_dict, path)
+        checksum = save_state_dict_tensors(snapshot.model_state.to_torch_state_dict(), path)
         _verify_candidate_reload(snapshot, path, autoencoder)
         candidates.append(
             CentralizedCheckpointCandidate(

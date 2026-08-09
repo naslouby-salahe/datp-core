@@ -15,13 +15,13 @@ from datp_core.detector.training.models.snapshots import RoundSnapshot
 
 def selected_checkpoint(output_directory: Path, seed: Seed | None = None) -> CheckpointCandidate:
     from datp_core.core.numeric import MetricValue
-    from datp_core.detector.autoencoder import ReconstructionAutoencoder
+    from datp_core.detector.autoencoder import AutoencoderModelState, ReconstructionAutoencoder
 
     resolved_seed = Seed(0) if seed is None else seed
     coordinate = fedavg_coordinate(resolved_seed)
     model = ReconstructionAutoencoder(AUTOENCODER.widths)
-    state = {name: tensor.detach().clone() for name, tensor in model.state_dict().items()}
-    snapshots = tuple(RoundSnapshot(candidate, state, MetricValue(0.1)) for candidate in CHECKPOINT.candidates)
+    model_state = AutoencoderModelState.from_model(model)
+    snapshots = tuple(RoundSnapshot(candidate, model_state, MetricValue(0.1)) for candidate in CHECKPOINT.candidates)
     candidates = retain_checkpoint_candidates(
         coordinate,
         snapshots,

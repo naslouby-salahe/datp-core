@@ -13,6 +13,7 @@ from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import ArtifactIntegrityError, LeakageError, ScientificContractError
 from datp_core.core.identifiers import CheckpointSelectionRule, CheckpointStatus
 from datp_core.core.numeric import MetricValue, RoundNumber, Seed
+from datp_core.detector.autoencoder import AutoencoderModelState
 from datp_core.detector.checkpoints.candidates import (
     candidate_tensor_name,
     rebase_checkpoint_candidates,
@@ -30,8 +31,8 @@ def _snapshots() -> tuple[RoundSnapshot, ...]:
     from datp_core.detector.autoencoder import ReconstructionAutoencoder
 
     model = ReconstructionAutoencoder(AUTOENCODER.widths).to(device)
-    state = {name: tensor.detach().clone() for name, tensor in model.state_dict().items()}
-    return tuple(RoundSnapshot(candidate, state, MetricValue(0.1)) for candidate in CHECKPOINT.candidates)
+    model_state = AutoencoderModelState.from_model(model)
+    return tuple(RoundSnapshot(candidate, model_state, MetricValue(0.1)) for candidate in CHECKPOINT.candidates)
 
 
 def test_retain_checkpoint_candidates_persists_and_reloads(tmp_path: Path) -> None:
@@ -140,8 +141,8 @@ def test_retain_checkpoint_candidates_rejects_missing_declared_round(tmp_path: P
     from datp_core.detector.autoencoder import ReconstructionAutoencoder
 
     model = ReconstructionAutoencoder(AUTOENCODER.widths).to(device)
-    state = {name: tensor.detach().clone() for name, tensor in model.state_dict().items()}
-    only_one_snapshot = (RoundSnapshot(CHECKPOINT.candidates[0], state, MetricValue(0.1)),)
+    model_state = AutoencoderModelState.from_model(model)
+    only_one_snapshot = (RoundSnapshot(CHECKPOINT.candidates[0], model_state, MetricValue(0.1)),)
     preprocessing_state_set_checksum = Checksum("a" * 64)
     split_manifest_checksum = Checksum("b" * 64)
     with pytest.raises(

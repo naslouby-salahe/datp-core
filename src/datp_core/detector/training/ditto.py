@@ -12,6 +12,7 @@ from datp_core.core.identifiers import ContractSubject, CudaDeviceName, Training
 from datp_core.core.numeric import BatchSize, ClientCount, LearningRate, RoundNumber, Seed
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.autoencoder import (
+    AutoencoderModelState,
     build_reconstruction_autoencoder,
 )
 from datp_core.detector.checkpoints.contracts import CheckpointProtocol
@@ -27,7 +28,7 @@ from datp_core.detector.training.engine import (
     derive_client_stream_seed,
     prepare_federated_client_data,
     preprocessing_state_set_checksum,
-    serialize_and_checksum_state_dict,
+    serialize_and_checksum_model_state,
     train_client_update,
     validate_common_request,
 )
@@ -121,11 +122,9 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
         request.autoencoder,
         initialization_seed=request.training_seed,
     )
-    global_state = {name: tensor.detach().clone() for name, tensor in initial_model.state_dict().items()}
+    global_model_state = AutoencoderModelState.from_model(initial_model)
 
-    personalized_states = {
-        item.client: {name: tensor.detach().clone() for name, tensor in global_state.items()} for item in prepared
-    }
+    personalized_model_states = {item.client: global_model_state for item in prepared}
     personalized_snapshots: dict[ClientIdentity, list[RoundSnapshot]] = {item.client: [] for item in prepared}
 
     candidate_rounds = frozenset(request.checkpoint_protocol.candidates)
@@ -139,11 +138,11 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
 
         for client_data in prepared:
             client_id = client_data.client
-            p_state = _require_client_entry(personalized_states, client_id)
+            personalized_model_state = _require_client_entry(personalized_model_states, client_id)
 
             global_update = train_client_update(
                 client_data=client_data,
-                initial_state=global_state,
+                initial_model_state=global_model_state,
                 autoencoder=request.autoencoder,
                 optimizer_protocol=request.training_protocol.optimizer,
                 learning_rate=request.learning_rate,
@@ -159,7 +158,7 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
 
             personalized_update = train_client_update(
                 client_data=client_data,
-                initial_state=p_state,
+                initial_model_state=personalized_model_state,
                 autoencoder=request.autoencoder,
                 optimizer_protocol=request.training_protocol.optimizer,
                 learning_rate=request.learning_rate,
@@ -172,7 +171,7 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
                 ),
                 device=device,
                 proximal_term=ProximalTerm(
-                    reference_state=global_state,
+                    reference_model_state=global_model_state,
                     coefficient=request.training_protocol.regularization,
                 ),
             )
@@ -184,9 +183,9 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
                 )
 
             global_updates.append(global_update)
-            personalized_states[client_id] = personalized_update.state_dict
+            personalized_model_states[client_id] = personalized_update.model_state
 
-            personalized_state = serialize_and_checksum_state_dict(personalized_update.state_dict)
+            personalized_state = serialize_and_checksum_model_state(personalized_update.model_state)
             personalized_references.append(
                 PersonalizedModelStateReference(
                     coordinate=request.coordinates.personalized_coordinate,
@@ -202,14 +201,14 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
                 _require_client_entry(personalized_snapshots, client_id).append(
                     create_round_snapshot(
                         round_number,
-                        personalized_update.state_dict,
+                        personalized_update.model_state,
                         personalized_update.local_loss,
                     )
                 )
 
         aggregated = aggregate_client_updates(global_updates)
         aggregate_loss = compute_weighted_aggregate_loss(global_updates)
-        serialized_global_state = serialize_and_checksum_state_dict(aggregated)
+        serialized_global_state = serialize_and_checksum_model_state(aggregated)
 
         rounds.append(
             FederatedRoundResult(
@@ -232,10 +231,10 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
                 personalized_state_references=tuple(personalized_references),
             )
         )
-        global_state = aggregated
+        global_model_state = aggregated
 
         if round_number in candidate_rounds:
-            global_snapshots.append(create_round_snapshot(round_number, global_state, aggregate_loss))
+            global_snapshots.append(create_round_snapshot(round_number, global_model_state, aggregate_loss))
 
     global_result = FederatedTrainingResult(
         coordinate=request.coordinates.global_coordinate,

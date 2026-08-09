@@ -11,7 +11,6 @@ from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.serializers.safetensors import (
     load_state_dict_tensors,
     save_state_dict_tensors,
-    to_cpu_contiguous_state,
 )
 from datp_core.core.errors import (
     ArtifactIntegrityError,
@@ -21,7 +20,7 @@ from datp_core.core.errors import (
 from datp_core.core.identifiers import CheckpointStatus, ContractSubject, SafeTensorFilename
 from datp_core.core.numeric import RoundNumber
 from datp_core.data.populations.contracts import ClientIdentity
-from datp_core.detector.autoencoder import AutoencoderStateView, build_autoencoder_for_state
+from datp_core.detector.autoencoder import AutoencoderModelState, build_autoencoder_for_state
 from datp_core.detector.checkpoints.contracts import (
     CheckpointProtocol,
     validate_ordered_checkpoint_inventory,
@@ -51,44 +50,32 @@ def candidate_tensor_name(
 
 
 def persist_checkpoint_tensor(
-    state_dict: AutoencoderStateView,
+    model_state: AutoencoderModelState,
     path: Path,
     autoencoder: AutoencoderProtocol,
 ) -> Checksum:
     staging = path.with_name(f".{path.name}.tmp")
-    cpu_state = to_cpu_contiguous_state(state_dict)
-    checksum = save_state_dict_tensors(cpu_state, staging)
-    _assert_checkpoint_reload_equality(cpu_state, staging, autoencoder)
+    cpu_model_state = model_state.on_cpu_with_contiguous_tensors()
+    checksum = save_state_dict_tensors(cpu_model_state.to_torch_state_dict(), staging)
+    _assert_checkpoint_reload_equality(cpu_model_state, staging, autoencoder)
     atomic_replace(staging, path)
     return checksum
 
 
 def _assert_checkpoint_reload_equality(
-    cpu_state_dict: AutoencoderStateView,
+    expected_model_state: AutoencoderModelState,
     path: Path,
     autoencoder: AutoencoderProtocol,
 ) -> None:
-    loaded = load_state_dict_tensors(path, torch.device("cpu"))
-    if loaded.keys() != cpu_state_dict.keys():
+    loaded_model_state = AutoencoderModelState.from_torch_state_dict(load_state_dict_tensors(path, torch.device("cpu")))
+    if not loaded_model_state.is_equivalent_to(expected_model_state):
         raise ArtifactIntegrityError(
-            ErrorMessage("checkpoint tensor names do not match the expected model state"),
+            ErrorMessage("checkpoint tensor values differ from the expected model state"),
             subject=ContractSubject.ARTIFACT_PATH,
         )
-    for name, reference in cpu_state_dict.items():
-        observed = loaded[name]
-        if observed.shape != reference.shape or observed.dtype != reference.dtype:
-            raise ArtifactIntegrityError(
-                ErrorMessage("checkpoint tensor shape or dtype differs from the expected model state"),
-                subject=ContractSubject.ARTIFACT_PATH,
-            )
-        if not torch.equal(observed, reference):
-            raise ArtifactIntegrityError(
-                ErrorMessage("checkpoint tensor values differ from the expected model state"),
-                subject=ContractSubject.ARTIFACT_PATH,
-            )
     build_autoencoder_for_state(
         autoencoder,
-        loaded,
+        loaded_model_state,
         device=torch.device("cpu"),
     )
 
@@ -148,7 +135,7 @@ def _persist_candidate(
         client=client,
         tensor_path=path,
         tensor_checksum=persist_checkpoint_tensor(
-            snapshot.state_dict,
+            snapshot.model_state,
             path,
             autoencoder,
         ),

@@ -17,7 +17,7 @@ from datp_core.core.identifiers import (
 from datp_core.core.numeric import ByteCount, LogicalElementCount, MetricValue, RoundNumber, RowCount
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.data.preprocessing.models import FederatedFittedPreprocessingState
-from datp_core.detector.autoencoder import AutoencoderState
+from datp_core.detector.autoencoder import AutoencoderModelState
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 
 
@@ -68,7 +68,7 @@ class PreparedClientProvenance:
 @dataclass(frozen=True, slots=True)
 class ClientUpdate:
     client: ClientIdentity
-    state_dict: AutoencoderState
+    model_state: AutoencoderModelState
     sample_count: RowCount
     local_loss: MetricValue
 

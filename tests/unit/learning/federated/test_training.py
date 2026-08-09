@@ -12,7 +12,7 @@ from datp_core.core.errors import LeakageError, ScientificContractError
 from datp_core.core.identifiers import OutcomeLabel, OutcomeLabelSequence
 from datp_core.core.numeric import BatchSize, MetricValue, ProximalCoefficient, RoundNumber, RowCount, Seed
 from datp_core.data.populations.contracts import PopulationOutcomeLabel
-from datp_core.detector.autoencoder import ReconstructionAutoencoder
+from datp_core.detector.autoencoder import AutoencoderModelState, ReconstructionAutoencoder
 from datp_core.detector.training.engine import (
     ProximalTerm,
     TrainingStream,
@@ -24,7 +24,7 @@ from datp_core.detector.training.engine import (
     proximal_penalty,
     reject_attack_rows_in_federated_training,
     run_local_epoch,
-    serialize_and_checksum_state_dict,
+    serialize_and_checksum_model_state,
 )
 from datp_core.detector.training.models import ClientUpdate
 
@@ -80,7 +80,7 @@ def test_run_local_epoch_returns_full_state_and_positive_sample_count(tmp_path) 
     prepared = prepare_federated_client_data(client_input, AUTOENCODER)
     loader = build_client_loader(prepared, batch_size=BatchSize(4), seed=Seed(1))
     result = run_local_epoch(model, optimizer, loader, device)
-    assert set(result.state_dict.keys()) == set(model.state_dict().keys())
+    assert set(result.model_state.to_torch_state_dict()) == set(model.state_dict())
     assert result.sample_count.value == 16
     assert result.mean_reconstruction_loss.value >= 0.0
 
@@ -90,11 +90,11 @@ def test_run_local_epoch_with_larger_proximal_coefficient_stays_closer_to_refere
     client_input = build_client_input("client_a", tmp_path, row_count=RowCount(64))
     prepared = prepare_federated_client_data(client_input, AUTOENCODER)
     seed_model = ReconstructionAutoencoder(AUTOENCODER.widths).to(device)
-    reference_state = {name: tensor.detach().clone() for name, tensor in seed_model.state_dict().items()}
+    reference_model_state = AutoencoderModelState.from_model(seed_model)
 
     def run_with_coefficient(coefficient: float) -> dict[str, torch.Tensor]:
         model = ReconstructionAutoencoder(AUTOENCODER.widths).to(device)
-        model.load_state_dict({name: tensor.clone() for name, tensor in reference_state.items()})
+        reference_model_state.apply_to(model)
         optimizer = torch.optim.SGD(model.parameters(), lr=0.001)
         loader = build_client_loader(prepared, batch_size=BatchSize(4), seed=Seed(1))
         result = run_local_epoch(
@@ -102,11 +102,14 @@ def test_run_local_epoch_with_larger_proximal_coefficient_stays_closer_to_refere
             optimizer,
             loader,
             device,
-            proximal_term=ProximalTerm(reference_state=reference_state, coefficient=ProximalCoefficient(coefficient)),
+            proximal_term=ProximalTerm(
+                reference_model_state=reference_model_state,
+                coefficient=ProximalCoefficient(coefficient),
+            ),
         )
         return {
-            name: torch.sum((tensor.cpu() - reference_state[name].cpu()) ** 2)
-            for name, tensor in result.state_dict.items()
+            name: torch.sum((tensor.cpu() - reference_model_state.to_torch_state_dict()[name].cpu()) ** 2)
+            for name, tensor in result.model_state.to_torch_state_dict().items()
         }
 
     small_coefficient_drift = run_with_coefficient(1e-6)
@@ -135,18 +138,18 @@ def test_proximal_penalty_scales_with_coefficient() -> None:
 def test_aggregate_client_updates_is_sample_count_weighted() -> None:
     heavy = ClientUpdate(
         client=client_identity("client_a"),
-        state_dict={"w": torch.zeros(2)},
+        model_state=AutoencoderModelState.from_torch_state_dict({"w": torch.zeros(2)}),
         sample_count=RowCount(9),
         local_loss=MetricValue(0.0),
     )
     light = ClientUpdate(
         client=client_identity("client_b"),
-        state_dict={"w": torch.ones(2)},
+        model_state=AutoencoderModelState.from_torch_state_dict({"w": torch.ones(2)}),
         sample_count=RowCount(1),
         local_loss=MetricValue(0.0),
     )
     aggregated = aggregate_client_updates([heavy, light])
-    assert torch.allclose(aggregated["w"], torch.tensor([0.1, 0.1]))
+    assert torch.allclose(aggregated.to_torch_state_dict()["w"], torch.tensor([0.1, 0.1]))
 
 
 def test_aggregate_client_updates_requires_at_least_one_update() -> None:
@@ -154,11 +157,11 @@ def test_aggregate_client_updates_requires_at_least_one_update() -> None:
         aggregate_client_updates([])
 
 
-def test_serialize_and_checksum_state_dict_is_deterministic() -> None:
-    first_state = {"w": torch.arange(4, dtype=torch.float32)}
-    second_state = {"w": torch.arange(4, dtype=torch.float32)}
-    first_evidence = serialize_and_checksum_state_dict(first_state)
-    second_evidence = serialize_and_checksum_state_dict(second_state)
+def test_serialize_and_checksum_model_state_is_deterministic() -> None:
+    first_model_state = AutoencoderModelState.from_torch_state_dict({"w": torch.arange(4, dtype=torch.float32)})
+    second_model_state = AutoencoderModelState.from_torch_state_dict({"w": torch.arange(4, dtype=torch.float32)})
+    first_evidence = serialize_and_checksum_model_state(first_model_state)
+    second_evidence = serialize_and_checksum_model_state(second_model_state)
     assert first_evidence.checksum == second_evidence.checksum
 
 

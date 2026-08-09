@@ -4,6 +4,7 @@ import torch
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.numeric import FeatureCount, Seed
 from datp_core.detector.autoencoder import (
+    AutoencoderModelState,
     ReconstructionAutoencoder,
     build_reconstruction_autoencoder,
 )
@@ -65,6 +66,20 @@ def test_clone_and_load_state_round_trips_exactly() -> None:
     other.load_state_dict(cloned, strict=True)
     for left, right in zip(model.state_dict().values(), other.state_dict().values(), strict=True):
         assert torch.equal(left, right)
+
+
+def test_model_state_owns_captured_and_exported_tensors() -> None:
+    protocol = AutoencoderProtocol(widths=_ARCHITECTURE)
+    model = build_reconstruction_autoencoder(protocol, initialization_seed=Seed(3))
+    model_state = AutoencoderModelState.from_model(model)
+    expected = model_state.to_torch_state_dict()
+
+    with torch.no_grad():
+        next(model.parameters()).zero_()
+    exported = model_state.to_torch_state_dict()
+    next(iter(exported.values())).zero_()
+
+    assert model_state.is_equivalent_to(AutoencoderModelState.from_torch_state_dict(expected))
 
 
 def test_model_has_no_threshold_or_metric_attributes() -> None:
