@@ -18,7 +18,7 @@ _CUDA_ONLY_MODULES = frozenset(
         "tests/integration/learning/test_fedavg_training.py",
         "tests/integration/learning/test_fedprox_training.py",
         "tests/integration/scoring/test_score_reuse_across_thresholds.py",
-        "tests/unit/pipeline/test_centralized_evaluation.py",
+        "tests/unit/pipeline/decision/test_centralized_evaluation.py",
         "tests/unit/scoring/test_generation.py",
     }
 )
@@ -27,22 +27,22 @@ _CUDA_ONLY_TESTS = frozenset().union(
     _tests(
         "tests/scientific/test_fixed_detector_contract.py",
         "test_every_threshold_method_receives_identical_detector_provenance",
-        "test_auroc_is_identical_for_every_threshold_method",
-        "test_score_artifact_bytes_are_stable_across_repeated_reads",
+        "test_auroc_is_identical_across_independently_generated_score_artifacts",
+        "test_rescoring_the_same_frozen_checkpoint_reproduces_byte_identical_score_artifacts",
     ),
     _tests(
-        "tests/unit/pipeline/test_centralized_checkpoints.py",
+        "tests/unit/pipeline/checkpoints/test_centralized_checkpoints.py",
         "test_retains_declared_checkpoint_candidates",
         "test_selection_uses_fixed_terminal_maximum_round",
         "test_selection_rejects_held_out_metrics",
     ),
     _tests(
-        "tests/unit/pipeline/test_centralized_scoring.py",
+        "tests/unit/pipeline/scoring/test_centralized_scoring.py",
         "test_deterministic_scoring_and_reload",
         "test_score_polarity_higher_is_more_anomalous",
     ),
     _tests(
-        "tests/unit/pipeline/test_centralized_thresholds.py",
+        "tests/unit/pipeline/decision/test_centralized_thresholds.py",
         "test_pooled_benign_quantile_matches_declared_linear_quantile",
     ),
     _tests(
