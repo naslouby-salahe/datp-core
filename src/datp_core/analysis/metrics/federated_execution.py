@@ -36,7 +36,11 @@ from datp_core.analysis.operational.communication import summarize_communication
 from datp_core.analysis.operational.traffic_rates import ValidatedTrafficRateEvidence
 from datp_core.artifacts.provenance import checksum_file
 from datp_core.artifacts.serializers.json import canonical_checksum
-from datp_core.core.errors import ArtifactIntegrityError, ScientificContractError
+from datp_core.core.errors import (
+    ArtifactIntegrityError,
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import (
     ContractSubject,
     EvaluationCohort,
@@ -125,26 +129,26 @@ def _validate_temporal_provenance(request: FederatedEvaluationRequest) -> None:
     temporal = request.evidence_role is EvidenceRole.TEMPORAL_BOUNDARY
     if not temporal and (provenance is not None or request.temporal_threshold_provenance is not None):
         raise ScientificContractError(
-            "temporal provenance is valid only for temporal-boundary evaluation",
+            ErrorMessage("temporal provenance is valid only for temporal-boundary evaluation"),
             subject=request.evidence_role,
         )
     if not temporal:
         return
     if provenance is None or request.temporal_threshold_provenance is None:
         raise ScientificContractError(
-            "temporal evaluation requires score and threshold provenance",
+            ErrorMessage("temporal evaluation requires score and threshold provenance"),
             subject=request.evidence_role,
         )
     if provenance != request.temporal_threshold_provenance:
         raise ScientificContractError(
-            "temporal threshold provenance must bind the evaluated score state",
+            ErrorMessage("temporal threshold provenance must bind the evaluated score state"),
             subject=request.evidence_role,
         )
     provenance.validate_score_manifest(request.score_manifest)
     identity = require_execution_identity(request.execution_identity, request.score_manifest.coordinate.population)
     if identity is None or identity.temporal_state is not provenance.state:
         raise ScientificContractError(
-            "temporal evaluation provenance must match the execution identity state",
+            ErrorMessage("temporal evaluation provenance must match the execution identity state"),
             subject=request.score_manifest.coordinate.population,
         )
 
@@ -160,7 +164,7 @@ def _evaluate(
     assignment_map: dict[ClientIdentity, ThresholdValue] = {}
     for item in assignments:
         if item.client in assignment_map:
-            raise ScientificContractError("threshold assignments cannot repeat a client")
+            raise ScientificContractError(ErrorMessage("threshold assignments cannot repeat a client"))
         assignment_map[item.client] = item.threshold
 
     fallback_threshold = _deployment_fallback_threshold(assignments, request.threshold_result)
@@ -174,23 +178,23 @@ def _evaluate(
 
 def _validate_evaluation_request(request: FederatedEvaluationRequest) -> None:
     if isinstance(request.threshold_result, ThresholdUnavailableResult):
-        raise ScientificContractError("unavailable threshold cannot be evaluated")
+        raise ScientificContractError(ErrorMessage("unavailable threshold cannot be evaluated"))
     if _threshold_coordinate(request.threshold_result) != request.score_manifest.coordinate:
-        raise ScientificContractError("threshold and score coordinates must match")
+        raise ScientificContractError(ErrorMessage("threshold and score coordinates must match"))
     if request.cohort.population is not request.score_manifest.coordinate.population:
-        raise ScientificContractError("evaluation cohort must match score population")
+        raise ScientificContractError(ErrorMessage("evaluation cohort must match score population"))
     population = request.score_manifest.coordinate.population
     allowed = population_allowed_evidence_roles(population)
     if request.evidence_role not in allowed:
         raise ScientificContractError(
-            "evaluation evidence role is not authorized for this population",
+            ErrorMessage("evaluation evidence role is not authorized for this population"),
             subject=request.evidence_role,
         )
     if request.evidence_role is EvidenceRole.CONFIRMATORY:
         capabilities = population_capabilities(population)
         if not capabilities.confirmatory_eligible:
             raise ScientificContractError(
-                "confirmatory evidence role requires a confirmatory-eligible population",
+                ErrorMessage("confirmatory evidence role requires a confirmatory-eligible population"),
                 subject=request.evidence_role,
             )
     identity = require_execution_identity(request.execution_identity, population)
@@ -208,21 +212,21 @@ def _evaluate_score_record(
     threshold = assignment_map.get(record.scored_client)
 
     if eligibility is None:
-        raise ScientificContractError("cohort must cover every evaluated client")
+        raise ScientificContractError(ErrorMessage("cohort must cover every evaluated client"))
     if threshold is None:
         if eligibility.calibration_eligible:
             raise ScientificContractError(
-                "calibration-eligible clients require a threshold assignment",
+                ErrorMessage("calibration-eligible clients require a threshold assignment"),
                 subject=ContractSubject.THRESHOLD,
             )
         threshold = fallback_threshold
         if threshold is None:
             raise ScientificContractError(
-                "threshold assignment missing for evaluation client without a deployment fallback",
+                ErrorMessage("threshold assignment missing for evaluation client without a deployment fallback"),
                 subject=ContractSubject.THRESHOLD,
             )
     if not record.path.is_file() or checksum_file(record.path) != record.checksum:
-        raise ArtifactIntegrityError("evaluation score artifact is incomplete or changed")
+        raise ArtifactIntegrityError(ErrorMessage("evaluation score artifact is incomplete or changed"))
 
     scores, labels, rows = _score_arrays(str(record.path))
     confusion = calculate_confusion_counts(
@@ -300,7 +304,9 @@ def _evaluate_threshold_estimation_input(
     coordinate: FederatedTrainingCoordinate,
 ) -> ThresholdEstimationDiagnostic:
     if diagnostic.provenance.coordinate != coordinate:
-        raise ScientificContractError("threshold-estimation diagnostics must use the evaluated score coordinate")
+        raise ScientificContractError(
+            ErrorMessage("threshold-estimation diagnostics must use the evaluated score coordinate")
+        )
     return evaluate_threshold_estimate(
         provenance=diagnostic.provenance,
         estimated_threshold=diagnostic.estimated_threshold,
@@ -340,7 +346,7 @@ def _evaluate_shrinkage_curve(
     matches = tuple(item for item in curve if item.lambda_weight == local_endpoint)
     if len(matches) != 1:
         raise ScientificContractError(
-            "fixed shrinkage evaluation requires the predeclared local endpoint lambda=1",
+            ErrorMessage("fixed shrinkage evaluation requires the predeclared local endpoint lambda=1"),
             subject=FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE,
         )
     return matches[0].clients, matches[0].population
@@ -349,7 +355,7 @@ def _evaluate_shrinkage_curve(
 def _shrinkage_curve_evaluations(request: FederatedEvaluationRequest) -> tuple[ShrinkageLambdaEvaluation, ...]:
     results = request.threshold_result
     if not isinstance(results, tuple) or not results:
-        raise ScientificContractError("shrinkage curve evaluation requires a shrinkage result")
+        raise ScientificContractError(ErrorMessage("shrinkage curve evaluation requires a shrinkage result"))
 
     evaluations: list[ShrinkageLambdaEvaluation] = []
     for result in results:
@@ -358,7 +364,7 @@ def _shrinkage_curve_evaluations(request: FederatedEvaluationRequest) -> tuple[S
         assignment_map: dict[ClientIdentity, ThresholdValue] = {}
         for item in assignments:
             if item.client in assignment_map:
-                raise ScientificContractError("threshold assignments cannot repeat a client")
+                raise ScientificContractError(ErrorMessage("threshold assignments cannot repeat a client"))
             assignment_map[item.client] = item.threshold
 
         fallback_threshold = unweighted_mean(tuple(item.threshold for item in assignments))
@@ -393,7 +399,7 @@ def _assignments(result: ThresholdConstructionResult) -> tuple[ThresholdAssignme
             return result.assignments
         case tuple():
             raise ScientificContractError(
-                "multi-lambda shrinkage cannot flatten to one assignment set; use curve evaluation"
+                ErrorMessage("multi-lambda shrinkage cannot flatten to one assignment set; use curve evaluation")
             )
         case ConformalThresholdResult():
             return tuple(ThresholdAssignment(item.client, item.threshold) for item in result.assignments)
@@ -415,13 +421,13 @@ def _deployment_fallback_threshold(
         case ThresholdUnavailableResult():
             return None
         case tuple():
-            raise ScientificContractError("multi-lambda shrinkage requires per-weight evaluation")
+            raise ScientificContractError(ErrorMessage("multi-lambda shrinkage requires per-weight evaluation"))
 
 
 def _threshold_method(result: ThresholdConstructionResult) -> FederatedThresholdMethod:
     if isinstance(result, tuple):
         if not result:
-            raise ScientificContractError("shrinkage threshold construction cannot be empty")
+            raise ScientificContractError(ErrorMessage("shrinkage threshold construction cannot be empty"))
         return FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE
     return result.method
 
@@ -430,10 +436,10 @@ def _threshold_coordinate(result: ThresholdConstructionResult) -> FederatedTrain
     if not isinstance(result, tuple):
         return result.coordinate
     if not result:
-        raise ScientificContractError("shrinkage threshold construction cannot be empty")
+        raise ScientificContractError(ErrorMessage("shrinkage threshold construction cannot be empty"))
     coordinates = frozenset(item.coordinate for item in result)
     if len(coordinates) != 1:
-        raise ScientificContractError("every shrinkage weight must share one training coordinate")
+        raise ScientificContractError(ErrorMessage("every shrinkage weight must share one training coordinate"))
     return result[0].coordinate
 
 
@@ -448,7 +454,7 @@ def _score_arrays(
     try:
         frame = pl.read_parquet(path, columns=required)
     except pl.exceptions.ColumnNotFoundError as err:
-        raise ArtifactIntegrityError("evaluation score artifact has an invalid schema") from err
+        raise ArtifactIntegrityError(ErrorMessage("evaluation score artifact has an invalid schema")) from err
 
     data = frame.to_dict(as_series=False)
     return (

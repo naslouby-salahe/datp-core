@@ -11,8 +11,8 @@ from datp_core.core.identifiers import AvailabilityStatus, MetricId
 class TableCell:
     metric: MetricId
     availability: AvailabilityStatus
-    rendered_value: str #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    evidence: str#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    rendered_value: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    evidence: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
 
     def __post_init__(self) -> None:
         if not self.evidence.strip():
@@ -23,7 +23,7 @@ class TableCell:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PublicationTable:
-    title: str#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    title: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     cells: tuple[TableCell, ...]
 
     def __post_init__(self) -> None:
@@ -34,7 +34,9 @@ class PublicationTable:
             raise ValueError("publication table metrics must be unique")
 
 
-def render_markdown_table(table: PublicationTable) -> str:#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+def render_markdown_table(
+    table: PublicationTable,
+) -> str:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     rows = ["| Metric | Value | Evidence |", "|---|---:|---|"]
     rows.extend(
         f"| {cell.metric.value} | {cell.rendered_value if cell.rendered_value else cell.availability.value} | "

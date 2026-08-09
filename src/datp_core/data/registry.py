@@ -5,7 +5,11 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-from datp_core.core.errors import CapabilityError, ScientificContractError
+from datp_core.core.errors import (
+    CapabilityError,
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import (
     DatasetId,
     EvidenceRole,
@@ -44,6 +48,13 @@ from datp_core.thresholds.protocols import MINIMUM_BENIGN_SUPPORT
 type DatasetPublication = MaterializedDataset[StrEnum, StrEnum]
 
 
+class PopulationRegistryViolation(StrEnum):
+    UNCATALOGUED_POPULATION = "uncatalogued_population"
+    PARTITION_CONDITION_NOT_ACCEPTED = "partition_condition_not_accepted"
+    PARTITION_CONDITION_REQUIRED = "partition_condition_required"
+    UNSUPPORTED_PARTITION_KIND = "unsupported_partition_kind"
+
+
 @dataclass(frozen=True, slots=True)
 class DatasetBinding:
     capabilities: DatasetCapabilities
@@ -72,9 +83,9 @@ def resolve_population(population_id: PopulationId) -> PopulationBinding:
     matches = tuple(binding for binding in _POPULATION_BINDINGS if binding.population is population_id)
     if len(matches) != 1:
         raise CapabilityError(
-            "unsupported population identity",
+            ErrorMessage("unsupported population identity"),
             subject=population_id,
-            reason="population is outside the locked five-population catalogue",
+            reason=PopulationRegistryViolation.UNCATALOGUED_POPULATION,
         )
     return matches[0]
 
@@ -103,22 +114,22 @@ def _require_partition_condition(
     if not binding.supported_partition_kinds:
         if condition is not None:
             raise ScientificContractError(
-                "population construction does not accept a controlled partition condition",
+                ErrorMessage("population construction does not accept a controlled partition condition"),
                 subject=request.population_id,
-                reason=("only populations with declared controlled partition capability accept one"),
+                reason=PopulationRegistryViolation.PARTITION_CONDITION_NOT_ACCEPTED,
             )
         return
     if condition is None:
         raise ScientificContractError(
-            "controlled population construction requires an explicit partition condition",
+            ErrorMessage("controlled population construction requires an explicit partition condition"),
             subject=request.population_id,
-            reason="a controlled partition is never defaulted",
+            reason=PopulationRegistryViolation.PARTITION_CONDITION_REQUIRED,
         )
     if condition.kind not in binding.supported_partition_kinds:
         raise ScientificContractError(
-            "population construction received an unsupported controlled partition kind",
+            ErrorMessage("population construction received an unsupported controlled partition kind"),
             subject=request.population_id,
-            reason="the partition kind is absent from the population binding",
+            reason=PopulationRegistryViolation.UNSUPPORTED_PARTITION_KIND,
         )
 
 

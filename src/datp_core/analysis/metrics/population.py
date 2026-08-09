@@ -15,7 +15,10 @@ from datp_core.analysis.metrics.models import (
 )
 from datp_core.analysis.metrics.protocols import NEAR_ZERO_MEAN_FPR_WARNING_CUTOFF
 from datp_core.analysis.metrics.semantics import available, unavailable
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import EvaluationCohort, MetricId
 from datp_core.core.numeric import MetricValue, Quantile, RowCount
 from datp_core.data.populations.contracts import ClientIdentity
@@ -27,11 +30,11 @@ def calculate_population_metrics(
     cohort: EvaluationCohortManifest | None = None,
 ) -> PopulationMetricResult:
     if not results:
-        raise ScientificContractError("population evaluation requires client results")
+        raise ScientificContractError(ErrorMessage("population evaluation requires client results"))
     first = results[0]
 
     if len({result.client for result in results}) != len(results):
-        raise ScientificContractError("population results must have one record per client")
+        raise ScientificContractError(ErrorMessage("population results must have one record per client"))
 
     if any(
         result.coordinate != first.coordinate
@@ -40,7 +43,7 @@ def calculate_population_metrics(
         for result in results
     ):
         raise ScientificContractError(
-            "population results require one fixed coordinate, threshold method, and evidence role"
+            ErrorMessage("population results require one fixed coordinate, threshold method, and evidence role")
         )
 
     fpr_evaluable: list[ClientMetricResult] = []
@@ -59,7 +62,7 @@ def calculate_population_metrics(
             fpr_record = next((m for m in result.metrics if m.metric is MetricId.FALSE_POSITIVE_RATE), None)
             if not fpr_record:
                 msg = f"client result lacks required metric {MetricId.FALSE_POSITIVE_RATE.value}"
-                raise ScientificContractError(msg)
+                raise ScientificContractError(ErrorMessage(msg))
             if fpr_record.value is not None:
                 fpr_values.append(fpr_record.value)
         else:
@@ -177,7 +180,7 @@ def _attack_aggregates(results: tuple[ClientMetricResult, ...]) -> tuple[MetricA
         ):
             record = metric_map.get(metric_id)
             if not record:
-                raise ScientificContractError(f"client result lacks required metric {metric_id.value}")
+                raise ScientificContractError(ErrorMessage(f"client result lacks required metric {metric_id.value}"))
             if record.value is not None:
                 val_list.append(record.value)
 

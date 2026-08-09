@@ -13,7 +13,10 @@ from datp_core.analysis.inference.bootstrap.contracts import BootstrapInterval
 from datp_core.artifacts.provenance import Checksum, checksum_text
 from datp_core.artifacts.serializers.json import canonical_checksum, canonical_json_text
 from datp_core.core.contracts import StrictModel, str_enum_schema
-from datp_core.core.errors import require_contract
+from datp_core.core.errors import (
+    ErrorMessage,
+    require_contract,
+)
 from datp_core.core.identifiers import (
     CheckpointStatus,
     ContractSubject,
@@ -121,7 +124,7 @@ class ExactCountRule(StrictModel):
 
 
 class SourceDefinedRule(StrictModel):
-    description: str #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    description: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     strategy: Literal[AnchorComparisonStrategy.SOURCE_DEFINED] = AnchorComparisonStrategy.SOURCE_DEFINED
 
     @field_validator("description")
@@ -174,27 +177,27 @@ _HISTORICAL_THRESHOLDS = frozenset(
 def _require_anchor_coordinates(coordinates: AnchorScientificCoordinates) -> None:
     require_contract(
         coordinates.population is PopulationId.NBAIOT_NATURAL_DEVICES,
-        "historical anchor coordinates require N-BaIoT natural devices",
+        ErrorMessage("historical anchor coordinates require N-BaIoT natural devices"),
         ContractSubject.COORDINATE,
     )
     require_contract(
         coordinates.training_model is TrainingModelId.FEDAVG_AUTOENCODER,
-        "historical anchor coordinates require FedAvg autoencoder",
+        ErrorMessage("historical anchor coordinates require FedAvg autoencoder"),
         ContractSubject.COORDINATE,
     )
     require_contract(
         coordinates.threshold_method in _HISTORICAL_THRESHOLDS,
-        "historical anchor coordinates support only shared and local thresholds",
+        ErrorMessage("historical anchor coordinates support only shared and local thresholds"),
         ContractSubject.COORDINATE,
     )
     require_contract(
         coordinates.metric is MetricId.FPR_COEFFICIENT_OF_VARIATION,
-        "historical anchor coordinates require CV(FPR)",
+        ErrorMessage("historical anchor coordinates require CV(FPR)"),
         ContractSubject.COORDINATE,
     )
     require_contract(
         coordinates.checkpoint_status is CheckpointStatus.HISTORICAL_ENDPOINT,
-        "historical anchor coordinates require historical endpoint checkpoint semantics",
+        ErrorMessage("historical anchor coordinates require historical endpoint checkpoint semantics"),
         ContractSubject.COORDINATE,
     )
 
@@ -435,7 +438,7 @@ class VerifiedAnchorGateArtifact(StrictModel):
 
     decision: AnchorGateDecision
     artifact_checksum: Checksum
-    diagnostics_directory: str #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    diagnostics_directory: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
 
     @model_validator(mode="after")
     def validate_passed_gate(self) -> VerifiedAnchorGateArtifact:
@@ -474,7 +477,7 @@ class AnchorConfirmatoryHandoff(StrictModel):
     complete_artifact_inventory_checksum: Checksum
     verified_gate_status: AnchorGateStatus
     verified_gate_artifact_checksum: Checksum
-    diagnostics_directory: str #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    diagnostics_directory: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
 
     @model_validator(mode="after")
     def validate_handoff_integrity(self) -> AnchorConfirmatoryHandoff:
@@ -565,7 +568,7 @@ class HistoricalArtifactProvenanceDocument(HistoricalBoundaryModel):
     metric_code_version: Checksum
     threshold_code_version: Checksum
     package_version: Checksum
-    generated_at_utc: str #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    generated_at_utc: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
 
 
 class HistoricalMetricsDocument(HistoricalBoundaryModel):

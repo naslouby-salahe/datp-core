@@ -1,12 +1,16 @@
 """Dataset-independent population feasibility, finalization, and handoff construction."""
 
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 
 import polars as pl
 
 from datp_core.artifacts.provenance import Checksum
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import (
     ContractSubject,
     DatasetId,
@@ -46,12 +50,24 @@ from .paths import canonical_data_glob
 from .splits import split_membership
 
 
+class PopulationConstructionViolation(StrEnum):
+    DECLARATION_MISMATCH = "declaration_mismatch"
+    EMPTY_MEMBERSHIP_WITH_EXPECTED_CHECKSUM = "empty_membership_with_expected_checksum"
+    SPLIT_HANDOFF_CHECKSUM_MISMATCH = "split_handoff_checksum_mismatch"
+
+
 @dataclass(frozen=True, slots=True)
 class FeasibilityAssessmentRequest:
     expected_count: ClientCount
-    candidate_ids: tuple[str, ...] #TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
-    accepted_ids: tuple[str, ...] #TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
-    expected_identities: tuple[str, ...] | None #TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
+    candidate_ids: tuple[
+        str, ...
+    ]  # TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
+    accepted_ids: tuple[
+        str, ...
+    ]  # TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
+    expected_identities: (
+        tuple[str, ...] | None
+    )  # TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
     chronology_required: bool
 
 
@@ -64,22 +80,37 @@ class PopulationFinalizationRequest:
     capabilities: PopulationCapabilities
     partition_seed: Seed
     split_protocol: SplitProtocolId
-    candidate_ids: tuple[str, ...] #TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
-    accepted_ids: tuple[str, ...]#TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
-    excluded_ids: tuple[str, ...]#TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
-    expected_identities: tuple[str, ...] | None #TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
+    candidate_ids: tuple[
+        str, ...
+    ]  # TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
+    accepted_ids: tuple[
+        str, ...
+    ]  # TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
+    excluded_ids: tuple[
+        str, ...
+    ]  # TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
+    expected_identities: (
+        tuple[str, ...] | None
+    )  # TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
     chronology_required: bool
     membership: pl.DataFrame
     canonical_schema_checksum: Checksum
-    family_by_client: tuple[tuple[str, str], ...] = () #TODO: should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
+    family_by_client: tuple[
+        tuple[str, str], ...
+    ] = ()  # TODO: should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
 
 
 def assess_declared_feasibility(
     *,
     expected_count: ClientCount,
-    candidate_ids: tuple[str, ...], #TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
-    accepted_ids: tuple[str, ...], #TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
-    expected_identities: tuple[str, ...] | None,#TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
+    candidate_ids: tuple[
+        str, ...
+    ],  # TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
+    accepted_ids: tuple[
+        str, ...
+    ],  # TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
+    expected_identities: tuple[str, ...]
+    | None,  # TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
     chronology_required: bool,
 ) -> PopulationFeasibility:
     """Shared feasibility gate used by every population builder."""
@@ -103,9 +134,9 @@ def finalize_population(request: PopulationFinalizationRequest) -> PopulationMan
         or declaration.identity_kind is not request.identity_kind
     ):
         raise ScientificContractError(
-            "population finalization disagrees with its declaration",
+            ErrorMessage("population finalization disagrees with its declaration"),
             subject=request.population,
-            reason="dataset and identity kind must come from the authoritative population binding",
+            reason=PopulationConstructionViolation.DECLARATION_MISMATCH,
         )
     membership = select_membership_frame(request.membership)
     benign, attack = outcome_row_counts(membership)
@@ -199,9 +230,9 @@ def build_preprocessing_handoff(
     if membership.height == 0:
         if request.expected_split_manifest_checksum is not None:
             raise ScientificContractError(
-                "expected split checksum cannot be validated against an empty membership",
+                ErrorMessage("expected split checksum cannot be validated against an empty membership"),
                 subject=document.population,
-                reason="an empty population has no split assignments to check",
+                reason=PopulationConstructionViolation.EMPTY_MEMBERSHIP_WITH_EXPECTED_CHECKSUM,
             )
         assignments = membership.clear().with_columns(pl.lit(None, dtype=pl.String).alias(role_column))
         counts = tuple(
@@ -260,9 +291,9 @@ def _require_split_handoff_checksum(
         return
     if split_manifest.assignment_checksum != expected:
         raise ScientificContractError(
-            "recomputed split handoff does not match the declared split checksum",
+            ErrorMessage("recomputed split handoff does not match the declared split checksum"),
             subject=population,
-            reason="execution and preprocessing must consume one identical split",
+            reason=PopulationConstructionViolation.SPLIT_HANDOFF_CHECKSUM_MISMATCH,
         )
 
 
@@ -274,7 +305,7 @@ def join_handoff_with_canonical_features(
     assignments = handoff.assignments
     if assignments.height == 0:
         raise ScientificContractError(
-            "preprocessing handoff produced empty split assignments",
+            ErrorMessage("preprocessing handoff produced empty split assignments"),
             subject=handoff.population_manifest.document.population,
         )
     feature_scan = pl.scan_parquet(canonical_data_glob(canonical_root)).select([STABLE_ROW_ID_COLUMN, *feature_names])
@@ -292,7 +323,7 @@ def join_handoff_with_canonical_features(
     )
     if joined.height != assignments.height:
         raise ScientificContractError(
-            "canonical feature join lost assignment rows",
+            ErrorMessage("canonical feature join lost assignment rows"),
             subject=handoff.population_manifest.document.dataset,
         )
     return joined
@@ -301,7 +332,7 @@ def join_handoff_with_canonical_features(
 def _infeasible(
     reason: PopulationFeasibilityReason,
     expected: ClientCount,
-    observed: int, #TODO: should be NonNegativeIntegerValue and adapt all callers and usage. Do not use primitives for this, use something else instead of int. Check what already exists
+    observed: int,  # TODO: should be NonNegativeIntegerValue and adapt all callers and usage. Do not use primitives for this, use something else instead of int. Check what already exists
     evidence: str,
 ) -> PopulationFeasibility:
     return PopulationFeasibility(
@@ -311,12 +342,14 @@ def _infeasible(
 
 def _deployment_fallback_clients(
     candidate_clients: tuple[ClientIdentity, ...],
-    fallback_client_ids: frozenset[str], #TODO: should be frozenset[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
+    fallback_client_ids: frozenset[
+        str
+    ],  # TODO: should be frozenset[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
 ) -> frozenset[ClientIdentity]:
     matches = frozenset(client for client in candidate_clients if client.client_id in fallback_client_ids)
     if frozenset(client.client_id for client in matches) != fallback_client_ids:
         raise ScientificContractError(
-            "deployment-fallback client ids must be subset of population candidate clients",
+            ErrorMessage("deployment-fallback client ids must be subset of population candidate clients"),
             subject=ContractSubject.CLIENT_IDENTITY,
         )
     return matches
@@ -390,12 +423,12 @@ def _client_partition_counts(
 
 def _client_identity(
     clients: tuple[ClientIdentity, ...],
-    client_id: str, #TODO: should be ClientId and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
+    client_id: str,  # TODO: should be ClientId and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
 ) -> ClientIdentity:
     matches = tuple(client for client in clients if client.client_id == client_id)
     if len(matches) != 1:
         raise ScientificContractError(
-            "population manifest client identity lookup failed",
+            ErrorMessage("population manifest client identity lookup failed"),
             subject=ContractSubject.CLIENT_IDENTITY,
         )
     return matches[0]

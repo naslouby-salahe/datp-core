@@ -7,7 +7,10 @@ import numpy as np
 
 from datp_core.analysis.metrics.models import ConfusionCounts, MetricAvailability, MetricReason, MetricStatus
 from datp_core.analysis.metrics.semantics import available, unavailable
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import ContractSubject, MetricId
 from datp_core.core.numeric import RowCount, ScoreValue
 from datp_core.data.populations.contracts import PopulationOutcomeLabel
@@ -30,13 +33,15 @@ def calculate_client_metrics(
     """Evaluate one client; AUROC uses continuous scores, never threshold predictions."""
     if len(scores) != len(labels) or len(scores) != confusion.evaluation_row_count.value:
         raise ScientificContractError(
-            "client scores, labels, and confusion counts must align", subject=ContractSubject.ROWS
+            ErrorMessage("client scores, labels, and confusion counts must align"), subject=ContractSubject.ROWS
         )
 
     score_values = np.fromiter((score.value for score in scores), dtype=np.float64, count=len(scores))
 
     if not np.isfinite(score_values).all():
-        raise ScientificContractError("client evaluation scores must be finite", subject=ContractSubject.SCORES)
+        raise ScientificContractError(
+            ErrorMessage("client evaluation scores must be finite"), subject=ContractSubject.SCORES
+        )
 
     fpr = _rate(MetricId.FALSE_POSITIVE_RATE, confusion.false_positive, confusion.benign_denominator)
     tpr = _attack_rate(confusion)

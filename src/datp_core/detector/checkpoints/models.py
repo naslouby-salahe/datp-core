@@ -6,7 +6,10 @@ from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 from datp_core.artifacts.provenance import Checksum
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import CheckpointSelectionRule, CheckpointStatus, ContractSubject
 from datp_core.core.numeric import MetricValue, RoundNumber, Seed
 from datp_core.detector.checkpoints.contracts import CheckpointProtocol
@@ -66,7 +69,7 @@ class CentralizedCheckpointCandidate:
     def __post_init__(self) -> None:
         if self.status not in RETAINED_CHECKPOINT_STATUSES:
             raise ScientificContractError(
-                "centralized checkpoint candidate has an invalid status",
+                ErrorMessage("centralized checkpoint candidate has an invalid status"),
                 subject=self.status,
             )
 
@@ -85,27 +88,27 @@ class CentralizedCheckpointDecision:
             raise ValueError("checkpoint decision requires retained candidates")
         if self.selected not in self.candidates:
             raise ScientificContractError(
-                "selected checkpoint must be one of the retained candidates",
+                ErrorMessage("selected checkpoint must be one of the retained candidates"),
                 subject=ContractSubject.CHECKPOINT_CANDIDATES,
             )
         if self.status is not CheckpointStatus.SELECTED_BY_NON_TEST_RULE:
             raise ScientificContractError(
-                "centralized checkpoint decision status must be SELECTED_BY_NON_TEST_RULE",
+                ErrorMessage("centralized checkpoint decision status must be SELECTED_BY_NON_TEST_RULE"),
                 subject=self.status,
             )
         if self.selection_rule is not CheckpointSelectionRule.FIXED_TERMINAL_MAXIMUM_ROUND:
             raise ScientificContractError(
-                "centralized checkpoint decision must use FIXED_TERMINAL_MAXIMUM_ROUND",
+                ErrorMessage("centralized checkpoint decision must use FIXED_TERMINAL_MAXIMUM_ROUND"),
                 subject=ContractSubject.CHECKPOINT_SELECTION_RULE,
             )
         if self.selected.round_number != self.checkpoint_protocol.maximum_round:
             raise ScientificContractError(
-                "selected checkpoint must equal the declared maximum round",
+                ErrorMessage("selected checkpoint must equal the declared maximum round"),
                 subject=ContractSubject.CHECKPOINT_SELECTION_RULE,
             )
         if self.selected.status is not CheckpointStatus.SELECTED_BY_NON_TEST_RULE:
             raise ScientificContractError(
-                "selected candidate status must be SELECTED_BY_NON_TEST_RULE",
+                ErrorMessage("selected candidate status must be SELECTED_BY_NON_TEST_RULE"),
                 subject=self.selected.status,
             )
 

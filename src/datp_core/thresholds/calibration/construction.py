@@ -7,7 +7,10 @@ from datp_core.analysis.metrics.federated import CalibrationSizeAblationCell, Fe
 from datp_core.analysis.metrics.federated_execution import prepare_federated_evaluation
 from datp_core.analysis.metrics.fixed_score import FixedScoreEvidence
 from datp_core.artifacts.provenance import Checksum, checksum_text
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import EvidenceRole, FederatedThresholdMethod
 from datp_core.core.numeric import CalibrationSize, Quantile, ReplicateIndex, SubsampleReplicateCount
 from datp_core.data.populations.contracts import ClientIdentity, EligibleCohort
@@ -154,7 +157,7 @@ def construct_calibration_size_ablation(
             )
     if not cells:
         raise ScientificContractError(
-            "calibration-size ablation produced no evaluable size/replicate cells",
+            ErrorMessage("calibration-size ablation produced no evaluable size/replicate cells"),
             subject=request.method,
         )
     return tuple(cells)
@@ -162,7 +165,9 @@ def construct_calibration_size_ablation(
 
 def _eligible_scores_for_size(
     eligible_clients: EligibleCohort,
-    by_client_replicate: dict[tuple[ClientIdentity, ReplicateIndex], CalibrationReplicateManifest], #TODO: should be handled better. Not just a dict of tuples and such.
+    by_client_replicate: dict[
+        tuple[ClientIdentity, ReplicateIndex], CalibrationReplicateManifest
+    ],  # TODO: should be handled better. Not just a dict of tuples and such.
     size: CalibrationSize,
     replicate_index: ReplicateIndex,
 ) -> tuple[ClientBenignCalibrationScores, ...]:

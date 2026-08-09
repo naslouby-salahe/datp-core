@@ -6,13 +6,18 @@ import numpy as np
 import torch
 from torch import nn
 
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import ContractSubject, OptimizerId
 from datp_core.core.numeric import BatchSize, FeatureCount, LearningRate, Seed
 from datp_core.detector.training.contracts import AutoencoderArchitecture, AutoencoderProtocol, OptimizerProtocol
 from datp_core.runtime.compute import require_cuda_available
 
-type AutoencoderState = dict[str, torch.Tensor] #TODO should use a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Also i don't like using dict
+type AutoencoderState = dict[
+    str, torch.Tensor
+]  # TODO should use a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Also i don't like using dict
 type AutoencoderStateView = Mapping[str, torch.Tensor]
 
 LEARNING_DTYPE = np.float32
@@ -63,7 +68,7 @@ def build_optimizer(
             )
         case _:
             raise ScientificContractError(
-                f"unsupported optimizer {optimizer_protocol.identity}",
+                ErrorMessage(f"unsupported optimizer {optimizer_protocol.identity}"),
                 subject=ContractSubject.OPTIMIZER,
             )
 
@@ -99,48 +104,54 @@ def build_autoencoder_for_state(
     return model
 
 
-def clone_state(state: AutoencoderStateView) -> AutoencoderState: #TODO: i believe this is duplcated and probably should be either inlined or reused everywhere
+def clone_state(
+    state: AutoencoderStateView,
+) -> AutoencoderState:  # TODO: i believe this is duplcated and probably should be either inlined or reused everywhere
     return {name: tensor.detach().clone() for name, tensor in state.items()}
 
 
-def clone_autoencoder_state(model: ReconstructionAutoencoder) -> AutoencoderState: #TODO: i believe this is duplcated and probably should be either inlined or reused everywhere
+def clone_autoencoder_state(
+    model: ReconstructionAutoencoder,
+) -> AutoencoderState:  # TODO: i believe this is duplcated and probably should be either inlined or reused everywhere
     return clone_state(model.state_dict())
 
 
-def load_autoencoder_state(model: ReconstructionAutoencoder, state: AutoencoderStateView) -> None: #TODO: i believe this is duplcated and probably should be either inlined or reused everywhere
+def load_autoencoder_state(
+    model: ReconstructionAutoencoder, state: AutoencoderStateView
+) -> None:  # TODO: i believe this is duplcated and probably should be either inlined or reused everywhere
     model.load_state_dict(state, strict=True)
 
 
 def _require_scoreable_feature_matrix(model: ReconstructionAutoencoder, features: np.ndarray) -> None:
     if features.ndim != 2:
         raise ScientificContractError(
-            "reconstruction scoring requires a two-dimensional feature matrix",
+            ErrorMessage("reconstruction scoring requires a two-dimensional feature matrix"),
             subject=ContractSubject.FEATURES,
         )
     if features.shape[1] != model.input_width.value:
         raise ScientificContractError(
-            "feature width mismatch during scoring",
+            ErrorMessage("feature width mismatch during scoring"),
             subject=ContractSubject.FEATURES,
         )
     if not np.isfinite(features).all():
-        raise ScientificContractError("scoring features must be finite", subject=ContractSubject.FEATURES)
+        raise ScientificContractError(ErrorMessage("scoring features must be finite"), subject=ContractSubject.FEATURES)
 
 
 def _require_model_on_device(model: ReconstructionAutoencoder, device: torch.device) -> None:
     parameters = tuple(model.parameters())
     if not parameters:
         raise ScientificContractError(
-            "reconstruction autoencoder has no parameters",
+            ErrorMessage("reconstruction autoencoder has no parameters"),
             subject=ContractSubject.TRAINING,
         )
     if any(parameter.device != device for parameter in parameters):
         raise ScientificContractError(
-            "autoencoder parameters must all reside on the declared scoring device",
+            ErrorMessage("autoencoder parameters must all reside on the declared scoring device"),
             subject=ContractSubject.CUDA,
         )
     if any(parameter.dtype != TORCH_LEARNING_DTYPE for parameter in parameters):
         raise ScientificContractError(
-            "autoencoder parameters must use the canonical learning dtype",
+            ErrorMessage("autoencoder parameters must use the canonical learning dtype"),
             subject=ContractSubject.TRAINING,
         )
 
@@ -154,7 +165,9 @@ def reconstruction_errors(
 ) -> np.ndarray:
     require_cuda_available()
     if device.type != "cuda":
-        raise ScientificContractError("reconstruction scoring requires a CUDA device", subject=ContractSubject.CUDA)
+        raise ScientificContractError(
+            ErrorMessage("reconstruction scoring requires a CUDA device"), subject=ContractSubject.CUDA
+        )
     _require_scoreable_feature_matrix(model, features)
     _require_model_on_device(model, device)
 

@@ -15,7 +15,11 @@ from datp_core.artifacts.repositories.publication import (
     write_artifact_completion_marker,
 )
 from datp_core.artifacts.serializers.json import canonical_checksum
-from datp_core.core.errors import ArtifactIntegrityError, ScientificContractError
+from datp_core.core.errors import (
+    ArtifactIntegrityError,
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import (
     CheckpointStatus,
     ContractSubject,
@@ -68,9 +72,11 @@ class _ScoreRecordInventory:
             case PartitionRole.FUTURE_RECALIBRATION:
                 return self.future_recalibration
             case PartitionRole.TRAIN:
-                raise ScientificContractError("training rows are never score artifacts", subject=role)
+                raise ScientificContractError(ErrorMessage("training rows are never score artifacts"), subject=role)
             case PartitionRole.STATIC_REFERENCE_RESERVE:
-                raise ScientificContractError("static-reference reserve rows are never score artifacts", subject=role)
+                raise ScientificContractError(
+                    ErrorMessage("static-reference reserve rows are never score artifacts"), subject=role
+                )
 
     def append(self, role: PartitionRole, record: FederatedScoreRecord) -> None:
         self.records_for(role).append(record)
@@ -240,7 +246,7 @@ def _build_records(
         path = output_directory / client_input.client.client_id / _asset_name_for_partition(partition_role).value
         if not path.is_file():
             raise ArtifactIntegrityError(
-                f"expected federated score partition is missing: {path}",
+                ErrorMessage(f"expected federated score partition is missing: {path}"),
                 subject=ContractSubject.ARTIFACT_PATH,
             )
         frame = pl.read_parquet(path)
@@ -265,7 +271,7 @@ def _rebased_record(record: FederatedScoreRecord, output_directory: Path) -> Fed
     path = output_directory / record.scored_client.client_id / _asset_name_for_partition(record.partition_role).value
     if not path.is_file():
         raise ArtifactIntegrityError(
-            "published score partition missing after atomic replace",
+            ErrorMessage("published score partition missing after atomic replace"),
             subject=ContractSubject.SCORES,
         )
     return ScoreRecord(
@@ -317,28 +323,30 @@ def _invariant_from_manifest(manifest: FederatedScoreArtifactManifest) -> FixedS
 def _validate_request(request: ScoreGenerationRequest) -> None:
     if request.checkpoint.status is not CheckpointStatus.SELECTED_BY_NON_TEST_RULE:
         raise ScientificContractError(
-            "scoring requires the non-test-selected checkpoint, never a raw candidate",
+            ErrorMessage("scoring requires the non-test-selected checkpoint, never a raw candidate"),
             subject=ContractSubject.CHECKPOINT_CANDIDATES,
         )
     if request.checkpoint.preprocessing_state_set_checksum != request.preprocessing_state_set_checksum:
         raise ScientificContractError(
-            "checkpoint preprocessing checksum mismatch during scoring",
+            ErrorMessage("checkpoint preprocessing checksum mismatch during scoring"),
             subject=ContractSubject.PREPROCESSING,
         )
     if not _split_binding_is_valid(request):
         raise ScientificContractError(
-            "scored split must match checkpoint training split except for the matched Edge temporal static reference",
+            ErrorMessage(
+                "scored split must match checkpoint training split except for the matched Edge temporal static reference"
+            ),
             subject=ContractSubject.SPLIT,
         )
     if not request.clients:
         raise ScientificContractError(
-            "score generation requires at least one client scoring input",
+            ErrorMessage("score generation requires at least one client scoring input"),
             subject=ContractSubject.CLIENT,
         )
     client_ids = tuple(item.client.client_id for item in request.clients)
     if len(frozenset(client_ids)) != len(client_ids):
         raise ScientificContractError(
-            "score generation cannot receive duplicate client identities",
+            ErrorMessage("score generation cannot receive duplicate client identities"),
             subject=ContractSubject.CLIENT_IDENTITY,
         )
     expected_roles = scored_partition_roles(request.scored_split_protocol)
@@ -368,6 +376,6 @@ def _asset_name_for_partition(role: PartitionRole) -> FederatedScoreAssetName:
         case PartitionRole.EVALUATION:
             return FederatedScoreAssetName.EVALUATION
         case PartitionRole.TRAIN:
-            raise ScientificContractError("training rows are never scored", subject=role)
+            raise ScientificContractError(ErrorMessage("training rows are never scored"), subject=role)
         case PartitionRole.STATIC_REFERENCE_RESERVE:
-            raise ScientificContractError("static-reference reserve rows are never scored", subject=role)
+            raise ScientificContractError(ErrorMessage("static-reference reserve rows are never scored"), subject=role)

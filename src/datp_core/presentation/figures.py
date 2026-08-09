@@ -11,10 +11,12 @@ from datp_core.core.numeric import MetricValue, Seed
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class FigureSeries:
-    label: str #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    label: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     metric: MetricId
     availability: AvailabilityStatus
-    values: tuple[float, ...] #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    values: tuple[
+        float, ...
+    ]  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
 
     def __post_init__(self) -> None:
         if not self.label.strip():
@@ -29,18 +31,24 @@ class FigureSeries:
 class EmpiricalCdfFigureSeries:
     """Typed empirical CDF series: x = reconstruction score, y = cumulative probability."""
 
-    label: str #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    label: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     x_metric: MetricId
     y_metric: MetricId
     availability: AvailabilityStatus
     x_values: tuple[float, ...]
     y_values: tuple[float, ...]
-    client_id: str | None #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    client_id: (
+        str | None
+    )  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     seed: Seed | None
     score_role: str | None
-    threshold_overlays: tuple[tuple[str, float], ...] #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    threshold_overlays: tuple[
+        tuple[str, float], ...
+    ]  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     source_checksum: Checksum | None
-    unavailable_reason: str | None = None #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    unavailable_reason: str | None = (
+        None  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    )
 
     def __post_init__(self) -> None:
         if not self.label.strip():
@@ -72,7 +80,7 @@ class EmpiricalCdfFigureSeries:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class FigureSpec:
-    title: str #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    title: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     series: tuple[FigureSeries, ...] = ()
     empirical_cdf_series: tuple[EmpiricalCdfFigureSeries, ...] = ()
 
@@ -85,14 +93,19 @@ class FigureSpec:
 
 def empirical_cdf_series_from_points(
     *,
-    label: str,#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    label: str,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     points: tuple[tuple[MetricValue, MetricValue], ...],
-    client_id: str | None,#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    client_id: str
+    | None,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     seed: Seed | None,
-    score_role: str | None,#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    threshold_overlays: tuple[tuple[str, float], ...] = (),#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    score_role: str
+    | None,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    threshold_overlays: tuple[
+        tuple[str, float], ...
+    ] = (),  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     source_checksum: Checksum | None,
-    unavailable_reason: str | None = None,#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    unavailable_reason: str
+    | None = None,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
 ) -> EmpiricalCdfFigureSeries:
     if unavailable_reason is not None:
         return EmpiricalCdfFigureSeries(
@@ -125,7 +138,9 @@ def empirical_cdf_series_from_points(
     )
 
 
-def render_markdown_figure(figure: FigureSpec) -> str: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+def render_markdown_figure(
+    figure: FigureSpec,
+) -> str:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     """Render every validated figure series as explicit publication evidence."""
     rows = [
         f"### {figure.title}",
@@ -154,12 +169,16 @@ def render_markdown_figure(figure: FigureSpec) -> str: #TODO:should be a class. 
     return "\n".join(rows).rstrip()
 
 
-def _render_series(series: FigureSeries) -> str:#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+def _render_series(
+    series: FigureSeries,
+) -> str:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     values = ", ".join(format(value, ".17g") for value in series.values) if series.values else "—"
     return f"| {series.label} | `{series.metric.value}` | `{series.availability.value}` | {values} |"
 
 
-def _render_empirical_series(series: EmpiricalCdfFigureSeries) -> str:#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+def _render_empirical_series(
+    series: EmpiricalCdfFigureSeries,
+) -> str:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     x_values = ", ".join(format(value, ".17g") for value in series.x_values) if series.x_values else "—"
     y_values = ", ".join(format(value, ".17g") for value in series.y_values) if series.y_values else "—"
     overlays = (

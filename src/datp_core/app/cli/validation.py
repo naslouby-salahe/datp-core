@@ -12,6 +12,7 @@ from datp_core.core.errors import (
     CliExitCode,
     DatpCoreError,
     MissingPrerequisiteError,
+    MissingPrerequisiteReason,
     ProtocolValidationError,
     ReportEvidenceError,
     ScientificContractError,
@@ -21,28 +22,31 @@ from datp_core.core.errors import (
 type CliHandledError = DatpCoreError | ValueError
 
 
-def map_exception_to_exit(error: CliHandledError) -> int: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+def map_exception_to_exit(error: CliHandledError) -> CliExitCode:
     if isinstance(error, MissingPrerequisiteError):
-        if error.reason == "anchor_gate":
-            return CliExitCode.ANCHOR_GATE_FAILURE.value
-        return CliExitCode.INCOMPLETE_PREREQUISITE.value
+        if (
+            isinstance(error.reason, MissingPrerequisiteReason)
+            and error.reason is MissingPrerequisiteReason.ANCHOR_GATE
+        ):
+            return CliExitCode.ANCHOR_GATE_FAILURE
+        return CliExitCode.INCOMPLETE_PREREQUISITE
     if isinstance(error, UnknownIdentifierError):
-        return CliExitCode.UNKNOWN_IDENTIFIER.value
+        return CliExitCode.UNKNOWN_IDENTIFIER
     if isinstance(error, ProtocolValidationError):
-        return CliExitCode.INVALID_DECLARATION.value
+        return CliExitCode.INVALID_DECLARATION
     if isinstance(error, ReportEvidenceError):
-        return CliExitCode.MISSING_REPORT_EVIDENCE.value
+        return CliExitCode.MISSING_REPORT_EVIDENCE
     if isinstance(error, ArtifactIntegrityError):
-        return CliExitCode.INVALID_ARTIFACT.value
+        return CliExitCode.INVALID_ARTIFACT
     if isinstance(error, AnchorReproductionError):
-        return CliExitCode.ANCHOR_GATE_FAILURE.value
+        return CliExitCode.ANCHOR_GATE_FAILURE
     if isinstance(error, ScientificContractError):
-        return CliExitCode.SCIENTIFIC_CONTRACT.value
+        return CliExitCode.SCIENTIFIC_CONTRACT
     if isinstance(error, ValueError):
-        return CliExitCode.USAGE.value
-    return CliExitCode.INTERNAL.value
+        return CliExitCode.USAGE
+    return CliExitCode.INTERNAL
 
 
 def fail(error: CliHandledError) -> Never:
     typer.echo(str(error), err=True)
-    raise typer.Exit(code=map_exception_to_exit(error)) from error
+    raise typer.Exit(code=map_exception_to_exit(error).value) from error

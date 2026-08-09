@@ -6,7 +6,10 @@ from pathlib import Path
 import polars as pl
 
 from datp_core.artifacts.provenance import Checksum
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import (
     ClientIdentityToken,
     ContractSubject,
@@ -119,8 +122,10 @@ def resolve_execution_context(coordinate: ExperimentCoordinate, output_root: Pat
     declared_dataset = population_capabilities(coordinate.population).dataset
     if coordinate.dataset is not declared_dataset:
         raise ScientificContractError(
-            f"coordinate dataset {coordinate.dataset.name} does not match the population's "
-            f"declared dataset {declared_dataset.name}",
+            ErrorMessage(
+                f"coordinate dataset {coordinate.dataset.name} does not match the population's "
+                f"declared dataset {declared_dataset.name}"
+            ),
             subject=ContractSubject.COORDINATE,
         )
     training_coordinate = FederatedTrainingCoordinate(
@@ -278,7 +283,9 @@ def family_identities(
 def client_with_id(clients: tuple[ClientIdentity, ...], client_id: ClientIdentityToken) -> ClientIdentity:
     matches = tuple(candidate for candidate in clients if candidate.client_id == client_id.value)
     if len(matches) != 1:
-        raise ScientificContractError(f"population manifest must contain exactly one client {client_id.value}")
+        raise ScientificContractError(
+            ErrorMessage(f"population manifest must contain exactly one client {client_id.value}")
+        )
     return matches[0]
 
 

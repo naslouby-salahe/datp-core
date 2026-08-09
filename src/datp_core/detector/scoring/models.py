@@ -7,7 +7,10 @@ from pathlib import Path
 import polars as pl
 
 from datp_core.artifacts.provenance import Checksum
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import FeatureNameSequence, PartitionRole, PublicationStatus, SplitProtocolId
 from datp_core.core.numeric import BatchSize, FeatureCount, RoundNumber, RowCount
 from datp_core.data.populations.contracts import ClientIdentity
@@ -63,16 +66,18 @@ class ClientScoringInput:
             case PartitionRole.FUTURE_RECALIBRATION:
                 if self.future_recalibration_features is None:
                     raise ScientificContractError(
-                        "temporal score input is missing future recalibration features",
+                        ErrorMessage("temporal score input is missing future recalibration features"),
                         subject=role,
                     )
                 return self.future_recalibration_features
             case PartitionRole.EVALUATION:
                 return self.evaluation_features
             case PartitionRole.TRAIN:
-                raise ScientificContractError("training rows are never scored", subject=role)
+                raise ScientificContractError(ErrorMessage("training rows are never scored"), subject=role)
             case PartitionRole.STATIC_REFERENCE_RESERVE:
-                raise ScientificContractError("static-reference reserve rows are never scored", subject=role)
+                raise ScientificContractError(
+                    ErrorMessage("static-reference reserve rows are never scored"), subject=role
+                )
 
 
 @dataclass(frozen=True, slots=True)

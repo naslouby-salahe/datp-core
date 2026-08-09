@@ -9,7 +9,10 @@ import polars as pl
 
 from datp_core.artifacts.provenance import Checksum, checksum_text
 from datp_core.artifacts.serializers.json import canonical_checksum
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import (
     CheckpointStatus,
     ContractSubject,
@@ -37,7 +40,9 @@ class TrainingCoordinateContract(Protocol):
 
 class ClientIdentityContract(Protocol):
     @property
-    def client_id(self) -> str: ... #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    def client_id(
+        self,
+    ) -> str: ...  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
 
     @property
     def population(self) -> PopulationId: ...
@@ -86,7 +91,7 @@ class ScoreRecord[
         _validate_score_artifact(self)
         if self.scored_client.population is not self.coordinate.population:
             raise ScientificContractError(
-                "scored client population must match the training coordinate",
+                ErrorMessage("scored client population must match the training coordinate"),
                 subject=ContractSubject.CLIENT_IDENTITY,
             )
 
@@ -96,11 +101,13 @@ def _validate_score_artifact[CoordinateT: TrainingCoordinateContract](
 ) -> None:
     if artifact.partition_role not in POST_TRAINING_SCORE_PARTITIONS:
         raise ScientificContractError(
-            "score artifacts are only defined for post-training partitions",
+            ErrorMessage("score artifacts are only defined for post-training partitions"),
             subject=artifact.partition_role,
         )
     if artifact.serialization_format is not SerializationFormat.PARQUET:
-        raise ScientificContractError("score artifacts must use Parquet serialization", subject=ContractSubject.SCHEMA)
+        raise ScientificContractError(
+            ErrorMessage("score artifacts must use Parquet serialization"), subject=ContractSubject.SCHEMA
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,19 +122,25 @@ class ScoreArtifactManifest[
     checkpoint_status: CheckpointStatus
     preprocessing_state_set_checksum: Checksum
     split_manifest_checksum: Checksum
-    calibration_records: tuple[ScoreRecord[CoordinateT, ClientT], ...] #TODO: should be handled better than so much nested 
-    evaluation_records: tuple[ScoreRecord[CoordinateT, ClientT], ...] #TODO: should be handled better than so much nested code
-    future_recalibration_records: tuple[ScoreRecord[CoordinateT, ClientT], ...] = () #TODO: should be handled better than so much nested code
+    calibration_records: tuple[
+        ScoreRecord[CoordinateT, ClientT], ...
+    ]  # TODO: should be handled better than so much nested
+    evaluation_records: tuple[
+        ScoreRecord[CoordinateT, ClientT], ...
+    ]  # TODO: should be handled better than so much nested code
+    future_recalibration_records: tuple[
+        ScoreRecord[CoordinateT, ClientT], ...
+    ] = ()  # TODO: should be handled better than so much nested code
 
     def __post_init__(self) -> None:
         if self.checkpoint_status not in _POST_SELECTION_CHECKPOINT_STATUSES:
             raise ScientificContractError(
-                "score manifest checkpoint must carry a post-selection status",
+                ErrorMessage("score manifest checkpoint must carry a post-selection status"),
                 subject=ContractSubject.CHECKPOINT_CANDIDATES,
             )
         if not self.calibration_records or not self.evaluation_records:
             raise ScientificContractError(
-                "a score artifact manifest requires calibration and evaluation records",
+                ErrorMessage("a score artifact manifest requires calibration and evaluation records"),
                 subject=ContractSubject.SCORES,
             )
         _require_consistent_partition_records(self, self.calibration_records, PartitionRole.CALIBRATION)
@@ -135,7 +148,7 @@ class ScoreArtifactManifest[
         expected_future = self.scored_split_protocol is SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE
         if expected_future != bool(self.future_recalibration_records):
             raise ScientificContractError(
-                "score manifest future-recalibration inventory must match its scored split protocol",
+                ErrorMessage("score manifest future-recalibration inventory must match its scored split protocol"),
                 subject=ContractSubject.SCORES,
             )
         if expected_future:
@@ -157,9 +170,11 @@ class ScoreArtifactManifest[
             case PartitionRole.EVALUATION:
                 return self.evaluation_records
             case PartitionRole.TRAIN:
-                raise ScientificContractError("training records are not score artifacts", subject=role)
+                raise ScientificContractError(ErrorMessage("training records are not score artifacts"), subject=role)
             case PartitionRole.STATIC_REFERENCE_RESERVE:
-                raise ScientificContractError("static-reference reserve is not a score artifact", subject=role)
+                raise ScientificContractError(
+                    ErrorMessage("static-reference reserve is not a score artifact"), subject=role
+                )
 
     def score_set_checksum(self, role: PartitionRole) -> Checksum:
         return record_set_checksum(self.records_for(role))
@@ -231,14 +246,16 @@ def _require_consistent_partition_records[
     clients = tuple(record.scored_client for record in records)
     if len(frozenset(clients)) != len(clients):
         raise ScientificContractError(
-            f"duplicate scored-client records in {role.value} partition",
+            ErrorMessage(f"duplicate scored-client records in {role.value} partition"),
             subject=ContractSubject.CLIENT_IDENTITY,
         )
     for record in records:
         if record.partition_role is not role:
             raise ScientificContractError(
-                f"score record partition role {record.partition_role.value} does not match "
-                f"expected collection role {role.value}",
+                ErrorMessage(
+                    f"score record partition role {record.partition_role.value} does not match "
+                    f"expected collection role {role.value}"
+                ),
                 subject=ContractSubject.SCORES,
             )
         _require_record_matches_manifest(manifest, record)
@@ -253,14 +270,15 @@ def _require_record_matches_manifest[
 ) -> None:
     if record.coordinate != manifest.coordinate:
         raise ScientificContractError(
-            "score record coordinate must match the manifest coordinate", subject=ContractSubject.COORDINATE
+            ErrorMessage("score record coordinate must match the manifest coordinate"),
+            subject=ContractSubject.COORDINATE,
         )
     if (
         record.checkpoint_checksum != manifest.checkpoint_checksum
         or record.checkpoint_round != manifest.checkpoint_round
     ):
         raise ScientificContractError(
-            "score record checkpoint identity must match the manifest checkpoint",
+            ErrorMessage("score record checkpoint identity must match the manifest checkpoint"),
             subject=ContractSubject.CHECKPOINT_CANDIDATES,
         )
 
@@ -270,13 +288,15 @@ def _require_matching_client_inventory[
     ClientT: ClientIdentityContract,
 ](
     left: tuple[ScoreRecord[CoordinateT, ClientT], ...],
-    right: tuple[ScoreRecord[CoordinateT, ClientT], ...], #TODO: i noticed a pattern of having tuple of records. This should be handled better than so much nested code. Check what already exists and use that instead of primitives
+    right: tuple[
+        ScoreRecord[CoordinateT, ClientT], ...
+    ],  # TODO: i noticed a pattern of having tuple of records. This should be handled better than so much nested code. Check what already exists and use that instead of primitives
 ) -> None:
     left_clients = frozenset(record.scored_client for record in left)
     right_clients = frozenset(record.scored_client for record in right)
     if left_clients != right_clients:
         raise ScientificContractError(
-            "every scored partition must cover the same client inventory",
+            ErrorMessage("every scored partition must cover the same client inventory"),
             subject=ContractSubject.CLIENT_IDENTITY,
         )
 
@@ -288,7 +308,7 @@ def _require_consistent_feature_count[
     records = (*manifest.calibration_records, *manifest.evaluation_records, *manifest.future_recalibration_records)
     if len(frozenset(record.feature_count for record in records)) != 1:
         raise ScientificContractError(
-            "all score records must share the same feature count", subject=ContractSubject.FEATURES
+            ErrorMessage("all score records must share the same feature count"), subject=ContractSubject.FEATURES
         )
 
 
@@ -333,15 +353,17 @@ class ClientScoringInput:
             case PartitionRole.FUTURE_RECALIBRATION:
                 if self.future_recalibration_features is None:
                     raise ScientificContractError(
-                        "temporal score input is missing future recalibration features", subject=role
+                        ErrorMessage("temporal score input is missing future recalibration features"), subject=role
                     )
                 return self.future_recalibration_features
             case PartitionRole.EVALUATION:
                 return self.evaluation_features
             case PartitionRole.TRAIN:
-                raise ScientificContractError("training rows are never scored", subject=role)
+                raise ScientificContractError(ErrorMessage("training rows are never scored"), subject=role)
             case PartitionRole.STATIC_REFERENCE_RESERVE:
-                raise ScientificContractError("static-reference reserve rows are never scored", subject=role)
+                raise ScientificContractError(
+                    ErrorMessage("static-reference reserve rows are never scored"), subject=role
+                )
 
 
 @dataclass(frozen=True, slots=True)

@@ -3,7 +3,11 @@
 from dataclasses import dataclass
 from typing import ClassVar
 
-from datp_core.core.errors import ScientificContractError, require_contract
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+    require_contract,
+)
 from datp_core.core.identifiers import ContractSubject, FederatedThresholdMethod
 from datp_core.core.numeric import (
     NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
@@ -40,12 +44,12 @@ class ConformalAssignment:
     def __post_init__(self) -> None:
         require_contract(
             self.rank_index.value <= self.calibration_count.value,
-            "conformal rank index must fall within the calibration sample",
+            ErrorMessage("conformal rank index must fall within the calibration sample"),
             ContractSubject.THRESHOLD,
         )
         require_contract(
             floats_exactly_equal(self.threshold.value, self.selected_score.value),
-            "conformal threshold value must equal the selected score",
+            ErrorMessage("conformal threshold value must equal the selected score"),
             ContractSubject.THRESHOLD,
         )
         require_contract(
@@ -54,7 +58,7 @@ class ConformalAssignment:
                 self.rank_index.value / self.calibration_count.value,
                 NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE.value,
             ),
-            "conformal effective quantile must equal rank_index divided by calibration_count",
+            ErrorMessage("conformal effective quantile must equal rank_index divided by calibration_count"),
             ContractSubject.THRESHOLD,
         )
 
@@ -71,7 +75,7 @@ class ConformalThresholdResult:
     def __post_init__(self) -> None:
         require_contract(
             bool(self.assignments),
-            "a conformal threshold result requires at least one assigned client",
+            ErrorMessage("a conformal threshold result requires at least one assigned client"),
             ContractSubject.THRESHOLD,
         )
         validate_client_partition(
@@ -91,7 +95,7 @@ def construct_local_conformal_threshold(
 ) -> ConformalThresholdResult:
     if not eligible:
         raise ScientificContractError(
-            "local conformal construction requires at least one eligible client",
+            ErrorMessage("local conformal construction requires at least one eligible client"),
             subject=ContractSubject.THRESHOLD,
         )
     coverage = CoverageTarget(quantile.value)
@@ -120,7 +124,7 @@ def construct_local_conformal_threshold(
         )
     if not assignments:
         raise ScientificContractError(
-            "no eligible client has sufficient support for the finite-sample conformal rule",
+            ErrorMessage("no eligible client has sufficient support for the finite-sample conformal rule"),
             subject=ContractSubject.CALIBRATION,
         )
     return ConformalThresholdResult(

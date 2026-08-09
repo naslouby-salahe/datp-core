@@ -7,7 +7,10 @@ import structlog
 from datp_core.artifacts.provenance import Checksum, checksum_text
 from datp_core.artifacts.serializers.json import canonical_json_text
 from datp_core.core.contracts import ClientCollection, ClientOwned
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import (
     ClientPathToken,
     DatasetId,
@@ -194,7 +197,7 @@ def join_published_handoff(
     )
     if joined.height != assignments.height:
         raise ScientificContractError(
-            "canonical feature join lost assignment rows",
+            ErrorMessage("canonical feature join lost assignment rows"),
             subject=handoff.population_manifest.document.dataset,
         )
     return exclude_nonfinite_model_input_rows(
@@ -214,7 +217,7 @@ def exclude_nonfinite_model_input_rows(
 ) -> tuple[pl.DataFrame, ModelInputExclusionEvidence]:
     if STABLE_ROW_ID_COLUMN not in joined.columns:
         raise ScientificContractError(
-            "model-input finite gate requires stable row identities",
+            ErrorMessage("model-input finite gate requires stable row identities"),
             subject=dataset,
         )
 
@@ -268,5 +271,7 @@ def model_feature_names(
     if dataset is not DatasetId.EDGE_IIOTSET:
         return feature_names
     if frozenset(EDGE_NUMERIC_FEATURE_COLUMNS) - frozenset(feature_names.names):
-        raise ScientificContractError("Edge numeric feature declaration must be a canonical feature subset")
+        raise ScientificContractError(
+            ErrorMessage("Edge numeric feature declaration must be a canonical feature subset")
+        )
     return FeatureNameSequence(tuple(map(FeatureName, EDGE_NUMERIC_FEATURE_COLUMNS)))

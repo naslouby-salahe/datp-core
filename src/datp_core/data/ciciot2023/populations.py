@@ -1,10 +1,15 @@
 """CICIoT2023 file-defined pseudo-client population construction."""
 
+from enum import StrEnum
 from pathlib import Path
 
 import polars as pl
 
-from datp_core.core.errors import CapabilityError, ScientificContractError
+from datp_core.core.errors import (
+    CapabilityError,
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import DatasetId, PopulationId, PopulationIdentityKind, SplitProtocolId
 from datp_core.core.numeric import Seed
 from datp_core.data.ciciot2023.capabilities import CICIOT2023_CAPABILITIES
@@ -39,6 +44,12 @@ _POPULATION = PopulationId.CICIOT_FILE_CLIENTS
 _IDENTITY = PopulationIdentityKind.FILE_DEFINED_PSEUDO_CLIENTS
 
 
+class CICIoT2023PopulationViolation(StrEnum):
+    TEMPORAL_INTERPRETATION_UNSUPPORTED = "temporal_interpretation_unsupported"
+    NO_ELIGIBLE_ROWS_REMAIN = "no_eligible_rows_remain"
+    CANDIDATE_COUNT_MISMATCH = "candidate_count_mismatch"
+
+
 def construct_ciciot_file_clients(
     canonical_root: Path,
     *,
@@ -47,9 +58,9 @@ def construct_ciciot_file_clients(
 ) -> PopulationConstructionResult:
     if split_protocol is SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE:
         raise CapabilityError(
-            "CICIoT2023 file clients prohibit temporal interpretation",
+            ErrorMessage("CICIoT2023 file clients prohibit temporal interpretation"),
             subject=_POPULATION,
-            reason="merged files retain no audited capture chronology",
+            reason=CICIoT2023PopulationViolation.TEMPORAL_INTERPRETATION_UNSUPPORTED,
         )
     candidates = _candidate_ids(canonical_root)
     eligible = _load_eligible_membership(canonical_root)
@@ -167,14 +178,18 @@ def _load_eligible_membership(canonical_root: Path) -> pl.DataFrame:
     )
     if frame.height == 0:
         raise ScientificContractError(
-            "no CICIoT2023 rows remain after the model-input eligibility gate",
+            ErrorMessage("no CICIoT2023 rows remain after the model-input eligibility gate"),
             subject=_POPULATION,
-            reason="eligibility exclusions must leave at least one admissible model-input row",
+            reason=CICIoT2023PopulationViolation.NO_ELIGIBLE_ROWS_REMAIN,
         )
     return frame
 
 
-def _candidate_ids(canonical_root: Path) -> tuple[str, ...]: #TODO: should be tuple[CICIoT2023FileClient] and adapt all callers and usage and create CICIoT2023FileClient enum
+def _candidate_ids(
+    canonical_root: Path,
+) -> tuple[
+    str, ...
+]:  # TODO: should be tuple[CICIoT2023FileClient] and adapt all callers and usage and create CICIoT2023FileClient enum
     csv_suffix = CICIoT2023ArtifactName.CSV_SUFFIX.value.replace(".", r"\.")
     candidates = tuple(
         pl.scan_parquet(canonical_data_glob(canonical_root))
@@ -195,8 +210,8 @@ def _candidate_ids(canonical_root: Path) -> tuple[str, ...]: #TODO: should be tu
     )
     if len(candidates) != CICIOT_FILE_CLIENTS.client_count.value:
         raise ScientificContractError(
-            "CICIoT2023 source-file candidate count disagrees with the audited population",
+            ErrorMessage("CICIoT2023 source-file candidate count disagrees with the audited population"),
             subject=_POPULATION,
-            reason="file identity must remain the exact audited pseudo-client boundary",
+            reason=CICIoT2023PopulationViolation.CANDIDATE_COUNT_MISMATCH,
         )
     return candidates

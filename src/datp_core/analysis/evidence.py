@@ -33,7 +33,10 @@ from datp_core.artifacts.repositories.publication import (
 )
 from datp_core.artifacts.serializers.json import canonical_checksum, canonical_json_text
 from datp_core.core.contracts import StrictModel
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import ExperimentId, FederatedThresholdMethod, PublicationStatus
 from datp_core.core.numeric import Seed
 from datp_core.experiments.common.coordinates import ExternalTemporalExecutionIdentity
@@ -275,18 +278,22 @@ def _load_reused_analysis_publication[AnalysisDocumentT: StrictModel](
         loaded = publication.document_type.model_validate_json(document_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, ValidationError, ValueError) as error:
         raise ScientificContractError(
-            f"completed analysis document is unreadable or invalid: {document_path}"
+            ErrorMessage(f"completed analysis document is unreadable or invalid: {document_path}")
         ) from error
     recalculated = canonical_checksum(loaded)
     marker = (directory / AnalysisAssetName.COMPLETE).read_text(encoding="utf-8").strip()
     if recalculated.value != marker:
-        raise ScientificContractError(f"analysis document checksum does not match completion marker: {document_path}")
+        raise ScientificContractError(
+            ErrorMessage(f"analysis document checksum does not match completion marker: {document_path}")
+        )
     if recalculated != publication.digest:
         raise ScientificContractError(
-            f"analysis document identity does not match the requested analysis: {document_path}"
+            ErrorMessage(f"analysis document identity does not match the requested analysis: {document_path}")
         )
     if not _analysis_identity_matches(publication.document, loaded):
-        raise ScientificContractError(f"persisted analysis identity does not match the requested run: {document_path}")
+        raise ScientificContractError(
+            ErrorMessage(f"persisted analysis identity does not match the requested run: {document_path}")
+        )
     return loaded
 
 

@@ -7,7 +7,10 @@ from typing import Annotated, Literal, cast, overload
 from pydantic import Field, GetCoreSchemaHandler, model_validator
 
 from datp_core.core.contracts import StrictModel, sequence_pydantic_schema, validate_non_empty_tuple
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import (
     CentralizedModelId,
     ContractSubject,
@@ -40,9 +43,11 @@ class AutoencoderArchitecture(Sequence[FeatureCount]):
         object.__setattr__(self, "widths", normalized)
         validate_non_empty_tuple(normalized, "autoencoder architecture")
         if len(normalized) < 2:
-            raise ScientificContractError("autoencoder architecture requires at least input and output layers")
+            raise ScientificContractError(
+                ErrorMessage("autoencoder architecture requires at least input and output layers")
+            )
         if normalized[0] != normalized[-1]:
-            raise ScientificContractError("autoencoder input and output widths must match")
+            raise ScientificContractError(ErrorMessage("autoencoder input and output widths must match"))
 
     def __len__(self) -> int:
         return len(self.widths)
@@ -131,21 +136,22 @@ def _require_model_coefficient(
         case TrainingModelId.FEDAVG_AUTOENCODER:
             if coefficient is not None:
                 raise ScientificContractError(
-                    "FedAvg coordinates carry no model coefficient", subject=ContractSubject.TRAINING
+                    ErrorMessage("FedAvg coordinates carry no model coefficient"), subject=ContractSubject.TRAINING
                 )
         case TrainingModelId.FEDPROX_AUTOENCODER:
             if not isinstance(coefficient, ProximalCoefficient):
                 raise ScientificContractError(
-                    "FedProx coordinates require a proximal coefficient", subject=ContractSubject.TRAINING
+                    ErrorMessage("FedProx coordinates require a proximal coefficient"), subject=ContractSubject.TRAINING
                 )
         case TrainingModelId.DITTO_GLOBAL_AUTOENCODER | TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER:
             if not isinstance(coefficient, DittoRegularization):
                 raise ScientificContractError(
-                    "Ditto coordinates require a personalization regularization value", subject=ContractSubject.TRAINING
+                    ErrorMessage("Ditto coordinates require a personalization regularization value"),
+                    subject=ContractSubject.TRAINING,
                 )
         case _:
             raise ScientificContractError(
-                f"unsupported federated training model {model}", subject=ContractSubject.TRAINING
+                ErrorMessage(f"unsupported federated training model {model}"), subject=ContractSubject.TRAINING
             )
 
 
@@ -165,22 +171,22 @@ class FederatedTrainingCoordinate:
         if self.dirichlet_concentration is not None:
             if self.controlled_partition_kind is None:
                 raise ScientificContractError(
-                    "a Dirichlet concentration requires a controlled partition kind",
+                    ErrorMessage("a Dirichlet concentration requires a controlled partition kind"),
                     subject=ContractSubject.COORDINATE,
                 )
             if self.controlled_partition_kind is ControlledPartitionKind.IID:
                 raise ScientificContractError(
-                    "IID controlled partitions must not carry a concentration",
+                    ErrorMessage("IID controlled partitions must not carry a concentration"),
                     subject=ContractSubject.COORDINATE,
                 )
         elif self.controlled_partition_kind is ControlledPartitionKind.DIRICHLET:
             raise ScientificContractError(
-                "Dirichlet controlled partitions require a concentration",
+                ErrorMessage("Dirichlet controlled partitions require a concentration"),
                 subject=ContractSubject.COORDINATE,
             )
         if self.population is PopulationId.NBAIOT_DIRICHLET_CLIENTS and self.controlled_partition_kind is None:
             raise ScientificContractError(
-                "Dirichlet-client populations require an explicit controlled partition condition",
+                ErrorMessage("Dirichlet-client populations require an explicit controlled partition condition"),
                 subject=ContractSubject.COORDINATE,
             )
 
@@ -210,17 +216,17 @@ class DittoTrainingCoordinates:
     def __post_init__(self) -> None:
         if self.global_coordinate.model is not TrainingModelId.DITTO_GLOBAL_AUTOENCODER:
             raise ScientificContractError(
-                "Ditto training coordinates require the global Ditto coordinate",
+                ErrorMessage("Ditto training coordinates require the global Ditto coordinate"),
                 subject=ContractSubject.COORDINATE,
             )
         if self.personalized_coordinate.model is not TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER:
             raise ScientificContractError(
-                "Ditto training coordinates require the personalized Ditto coordinate",
+                ErrorMessage("Ditto training coordinates require the personalized Ditto coordinate"),
                 subject=ContractSubject.COORDINATE,
             )
         if not self.global_coordinate.matches_ditto_peer(self.personalized_coordinate):
             raise ScientificContractError(
-                "Ditto global and personalized coordinates must share one experiment identity",
+                ErrorMessage("Ditto global and personalized coordinates must share one experiment identity"),
                 subject=ContractSubject.COORDINATE,
             )
 

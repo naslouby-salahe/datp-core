@@ -7,7 +7,10 @@ from datp_core.analysis.metrics.fixed_score_checksums import (
 )
 from datp_core.analysis.metrics.models import ClientMetricResult, MetricAvailability, MetricStatus, metric_by_id
 from datp_core.artifacts.serializers.json import canonical_checksum
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import ContractSubject, MetricId
 from datp_core.core.numeric import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE, AbsoluteTolerance, floats_absolutely_close
 from datp_core.data.populations.contracts import ClientIdentity
@@ -39,7 +42,7 @@ def validate_fixed_score_controls(
     """Reject every changed fixed input; threshold policy is the sole difference."""
     if first.threshold_method is second.threshold_method:
         raise ScientificContractError(
-            "fixed-score comparison requires distinct threshold methods",
+            ErrorMessage("fixed-score comparison requires distinct threshold methods"),
             subject=ContractSubject.THRESHOLD_METHOD,
         )
     _require_equal(
@@ -125,9 +128,11 @@ def _validate_manifest_binding(
     invariant: FixedScoreInvariant,
 ) -> None:
     if evidence.detector.coordinate != manifest.coordinate:
-        raise ScientificContractError("fixed-score evidence must match the score coordinate")
+        raise ScientificContractError(ErrorMessage("fixed-score evidence must match the score coordinate"))
     if not manifest.records_for(evidence.calibration.role):
-        raise ScientificContractError("fixed-score evidence calibration partition is unavailable in the score manifest")
+        raise ScientificContractError(
+            ErrorMessage("fixed-score evidence calibration partition is unavailable in the score manifest")
+        )
     bindings = (
         ("model", evidence.detector.model_checksum, invariant.model_checksum),
         ("preprocessing", evidence.detector.preprocessing_checksum, invariant.preprocessing_state_set_checksum),
@@ -141,7 +146,9 @@ def _validate_manifest_binding(
     )
     for name, observed, expected in bindings:
         if observed != expected:
-            raise ScientificContractError(f"fixed-score evidence {name} checksum does not match the score manifest")
+            raise ScientificContractError(
+                ErrorMessage(f"fixed-score evidence {name} checksum does not match the score manifest")
+            )
 
 
 def _validate_population_binding(
@@ -151,9 +158,13 @@ def _validate_population_binding(
 ) -> None:
     expected_population = canonical_checksum(tuple(sorted([client.client for client in clients])))
     if evidence.population.client_inventory_checksum != expected_population:
-        raise ScientificContractError("fixed-score evidence client population checksum does not match evaluation")
+        raise ScientificContractError(
+            ErrorMessage("fixed-score evidence client population checksum does not match evaluation")
+        )
     if evidence.population.eligibility_cohort_checksum != canonical_checksum(cohort):
-        raise ScientificContractError("fixed-score evidence eligibility cohort checksum does not match evaluation")
+        raise ScientificContractError(
+            ErrorMessage("fixed-score evidence eligibility cohort checksum does not match evaluation")
+        )
 
 
 def _validate_held_out_rows(
@@ -162,31 +173,41 @@ def _validate_held_out_rows(
     clients: tuple[ClientMetricResult, ...],
 ) -> None:
     if evidence.evaluation.score_order_checksum != evaluation_score_order_checksum(manifest):
-        raise ScientificContractError("fixed-score evidence score ordering checksum does not match evaluation")
+        raise ScientificContractError(
+            ErrorMessage("fixed-score evidence score ordering checksum does not match evaluation")
+        )
 
     expected_labels = aggregate_client_checksum(clients, ClientChecksumField.EVALUATION_LABEL)
     if evidence.evaluation.label_checksum != expected_labels:
-        raise ScientificContractError("fixed-score evidence label or source-row checksum does not match evaluation")
+        raise ScientificContractError(
+            ErrorMessage("fixed-score evidence label or source-row checksum does not match evaluation")
+        )
 
     expected_rows = aggregate_client_checksum(clients, ClientChecksumField.SOURCE_ROW)
     if evidence.evaluation.source_row_checksum != expected_rows:
-        raise ScientificContractError("fixed-score evidence label or source-row checksum does not match evaluation")
+        raise ScientificContractError(
+            ErrorMessage("fixed-score evidence label or source-row checksum does not match evaluation")
+        )
 
 
 def _validate_aurocs(evidence: FixedScoreEvidence, clients: tuple[ClientMetricResult, ...]) -> None:
     if len(evidence.evaluation.aurocs) != len(clients):
-        raise ScientificContractError("fixed-score AUROC evidence client order does not match evaluation")
+        raise ScientificContractError(ErrorMessage("fixed-score AUROC evidence client order does not match evaluation"))
 
     for expected_item, client in zip(evidence.evaluation.aurocs, clients, strict=True):
         if expected_item.client != client.client:
-            raise ScientificContractError("fixed-score AUROC evidence client order does not match evaluation")
+            raise ScientificContractError(
+                ErrorMessage("fixed-score AUROC evidence client order does not match evaluation")
+            )
         observed_outcome = metric_by_id(client.metrics, MetricId.AUROC)
         _require_matching_auroc(expected_item.outcome, observed_outcome)
 
 
-def _require_equal[ValueT](left: ValueT, right: ValueT, subject: ContractSubject, name: str) -> None: #TODO:should be a class. Check what already exists for name. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+def _require_equal[ValueT](
+    left: ValueT, right: ValueT, subject: ContractSubject, name: str
+) -> None:  # TODO:should be a class. Check what already exists for name. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
     if left != right:
-        raise ScientificContractError(f"fixed-score control failed: {name} differs", subject=subject)
+        raise ScientificContractError(ErrorMessage(f"fixed-score control failed: {name} differs"), subject=subject)
 
 
 def _require_auroc_invariance(
@@ -196,25 +217,25 @@ def _require_auroc_invariance(
 ) -> None:
     if len(first) != len(second):
         raise ScientificContractError(
-            "fixed-score control failed: AUROC clients differ",
+            ErrorMessage("fixed-score control failed: AUROC clients differ"),
             subject=ContractSubject.CLIENT_IDENTITY,
         )
 
     for left, right in zip(first, second, strict=True):
         if left.client != right.client:
             raise ScientificContractError(
-                "fixed-score control failed: AUROC clients differ",
+                ErrorMessage("fixed-score control failed: AUROC clients differ"),
                 subject=ContractSubject.CLIENT_IDENTITY,
             )
         if left.outcome.status is not right.outcome.status:
             raise ScientificContractError(
-                "fixed-score control failed: AUROC availability differs",
+                ErrorMessage("fixed-score control failed: AUROC availability differs"),
                 subject=ContractSubject.HELD_OUT_METRICS,
             )
         if left.outcome.status is not MetricStatus.AVAILABLE:
             if left.outcome != right.outcome:
                 raise ScientificContractError(
-                    "fixed-score control failed: AUROC unavailable outcome differs",
+                    ErrorMessage("fixed-score control failed: AUROC unavailable outcome differs"),
                     subject=ContractSubject.HELD_OUT_METRICS,
                 )
             continue
@@ -222,14 +243,14 @@ def _require_auroc_invariance(
             raise RuntimeError("available AUROC evidence must contain values")
         if not floats_absolutely_close(left.outcome.value.value, right.outcome.value.value, tolerance.value):
             raise ScientificContractError(
-                "fixed-score control failed: AUROC differs",
+                ErrorMessage("fixed-score control failed: AUROC differs"),
                 subject=ContractSubject.HELD_OUT_METRICS,
             )
 
 
 def _require_matching_auroc(expected: MetricAvailability, observed: MetricAvailability) -> None:
     if expected.status is not observed.status:
-        raise ScientificContractError("fixed-score AUROC availability does not match held-out evaluation")
+        raise ScientificContractError(ErrorMessage("fixed-score AUROC availability does not match held-out evaluation"))
     if expected.status is MetricStatus.AVAILABLE:
         if expected.value is None or observed.value is None:
             raise RuntimeError("available AUROC evidence must contain values")
@@ -238,6 +259,8 @@ def _require_matching_auroc(expected: MetricAvailability, observed: MetricAvaila
             observed.value.value,
             NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE.value,
         ):
-            raise ScientificContractError("fixed-score AUROC evidence does not match held-out evaluation")
+            raise ScientificContractError(ErrorMessage("fixed-score AUROC evidence does not match held-out evaluation"))
     elif expected != observed:
-        raise ScientificContractError("fixed-score AUROC unavailable outcome does not match held-out evaluation")
+        raise ScientificContractError(
+            ErrorMessage("fixed-score AUROC unavailable outcome does not match held-out evaluation")
+        )

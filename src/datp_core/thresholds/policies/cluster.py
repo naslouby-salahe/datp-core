@@ -8,7 +8,11 @@ from scipy.stats import skew
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 
-from datp_core.core.errors import ScientificContractError, require_contract
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+    require_contract,
+)
 from datp_core.core.identifiers import ContractSubject, FederatedThresholdMethod
 from datp_core.core.numeric import (
     ClusterIndex,
@@ -69,13 +73,13 @@ class ClusterMembership:
         if not self.members:
             require_contract(
                 self.cluster_threshold is None and not self.contributing_local_quantiles,
-                "empty cluster memberships cannot carry thresholds or quantiles",
+                ErrorMessage("empty cluster memberships cannot carry thresholds or quantiles"),
                 ContractSubject.THRESHOLD,
             )
             return
         if self.cluster_threshold is None:
             raise ScientificContractError(
-                "non-empty cluster membership requires a cluster threshold",
+                ErrorMessage("non-empty cluster membership requires a cluster threshold"),
                 subject=ContractSubject.THRESHOLD,
             )
         validate_group_membership(
@@ -108,7 +112,7 @@ class GroupedThresholdResult:
     def __post_init__(self) -> None:
         require_contract(
             len(self.clusters) == self.group_count.value,
-            "the number of clusters must equal the declared group count",
+            ErrorMessage("the number of clusters must equal the declared group count"),
             ContractSubject.THRESHOLD,
         )
         require_unique_clients(tuple(item.client for item in self.fingerprints), "fingerprint")
@@ -116,25 +120,25 @@ class GroupedThresholdResult:
         expected_indices = frozenset(range(self.group_count.value))
         require_contract(
             frozenset(cluster_indices) == expected_indices and len(cluster_indices) == len(expected_indices),
-            "cluster indices must equal exactly 0 through group_count minus one",
+            ErrorMessage("cluster indices must equal exactly 0 through group_count minus one"),
             ContractSubject.THRESHOLD,
         )
         for cluster in self.clusters:
             for item in cluster.contributing_local_quantiles:
                 require_contract(
                     item.coordinate == self.coordinate,
-                    "every nested quantile must carry the containing result coordinate",
+                    ErrorMessage("every nested quantile must carry the containing result coordinate"),
                     ContractSubject.COORDINATE,
                 )
         all_members = tuple(client for cluster in self.clusters for client in cluster.members)
         require_contract(
             len(frozenset(all_members)) == len(all_members),
-            "a client cannot belong to more than one cluster",
+            ErrorMessage("a client cannot belong to more than one cluster"),
             ContractSubject.CLIENT_IDENTITY,
         )
         require_contract(
             frozenset(all_members) == frozenset(item.client for item in self.fingerprints),
-            "cluster membership must cover exactly the fingerprinted client set",
+            ErrorMessage("cluster membership must cover exactly the fingerprinted client set"),
             ContractSubject.CLIENT_IDENTITY,
         )
         expected_assignments = tuple(
@@ -151,7 +155,7 @@ class GroupedThresholdResult:
         )
         require_contract(
             all((not cluster.members) == (cluster.cluster_threshold is None) for cluster in self.clusters),
-            "empty clusters must omit thresholds and non-empty clusters must declare them",
+            ErrorMessage("empty clusters must omit thresholds and non-empty clusters must declare them"),
             ContractSubject.THRESHOLD,
         )
 
@@ -168,7 +172,7 @@ def construct_grouped_threshold(
 ) -> GroupedThresholdResult:
     if len(eligible) <= protocol.group_count.value:
         raise ScientificContractError(
-            "grouped thresholding requires more eligible clients than the declared group count",
+            ErrorMessage("grouped thresholding requires more eligible clients than the declared group count"),
             subject=ContractSubject.THRESHOLD,
         )
     ordered = tuple(sorted(eligible, key=lambda item: item.client))
@@ -182,7 +186,7 @@ def construct_grouped_threshold(
     )
     if not np.isfinite(matrix).all():
         raise ScientificContractError(
-            "fingerprint matrix must be finite before scaling and clustering",
+            ErrorMessage("fingerprint matrix must be finite before scaling and clustering"),
             subject=ContractSubject.THRESHOLD,
         )
     standardized_matrix = StandardScaler().fit_transform(matrix)
@@ -240,7 +244,7 @@ def _raw_fingerprint(scores: np.ndarray) -> FingerprintFeatures:
         skewness_value = float(skew(scores, bias=True))
         if not np.isfinite(skewness_value):
             raise ScientificContractError(
-                "fingerprint skewness must be finite",
+                ErrorMessage("fingerprint skewness must be finite"),
                 subject=ContractSubject.THRESHOLD,
             )
     return FingerprintFeatures(
@@ -300,7 +304,7 @@ def _aggregate_local_thresholds(
             return median_local_threshold(contributing)
         case _:
             raise ScientificContractError(
-                f"unsupported cluster threshold aggregation {aggregation}",
+                ErrorMessage(f"unsupported cluster threshold aggregation {aggregation}"),
                 subject=ContractSubject.THRESHOLD,
             )
 
@@ -320,7 +324,7 @@ def _local_quantile(
     matches = tuple(item for item in quantiles if item.client == client)
     if len(matches) != 1:
         raise ScientificContractError(
-            "cluster member must resolve exactly once in local quantiles",
+            ErrorMessage("cluster member must resolve exactly once in local quantiles"),
             subject=ContractSubject.CLIENT_IDENTITY,
         )
     return matches[0]

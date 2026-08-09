@@ -1,4 +1,7 @@
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import (
     CaptureTimestampColumn,
     ContractSubject,
@@ -61,7 +64,9 @@ _PROTOCOL_METHODS = {
 
 _AUDITED_TIMESTAMP_COLUMN = CaptureTimestampColumn(EdgeCanonicalColumn.CAPTURE_TIMESTAMP.value)
 
-_EMPTY_FALLBACK_CLIENT_IDS: frozenset[str] = frozenset() #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Or even removed since we won't use str
+_EMPTY_FALLBACK_CLIENT_IDS: frozenset[str] = (
+    frozenset()
+)  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Or even removed since we won't use str
 _EMPTY_CLIENT_IDENTITIES: frozenset[ClientIdentity] = frozenset()
 
 
@@ -242,7 +247,7 @@ def _validate_federated_request(
 ) -> None:
     if request.preprocessing_identity not in _FEDERATED_METHODS:
         raise ScientificContractError(
-            "federated preprocessing requires a federated preprocessing identity",
+            ErrorMessage("federated preprocessing requires a federated preprocessing identity"),
             subject=request.preprocessing_identity,
         )
     if (
@@ -250,7 +255,7 @@ def _validate_federated_request(
         and request.population is not PopulationId.EDGE_TEMPORAL_GROUPS
     ):
         raise ScientificContractError(
-            "chronological preprocessing is defined only for Edge temporal groups",
+            ErrorMessage("chronological preprocessing is defined only for Edge temporal groups"),
             subject=request.population,
         )
 
@@ -260,7 +265,7 @@ def _validate_artifact_request(
 ) -> None:
     if request.preprocessing_identity not in _FEDERATED_METHODS:
         raise ScientificContractError(
-            "federated preprocessing requires a federated preprocessing identity",
+            ErrorMessage("federated preprocessing requires a federated preprocessing identity"),
             subject=request.preprocessing_identity,
         )
     if request.execution_identity.population is PopulationId.EDGE_TEMPORAL_GROUPS:
@@ -271,7 +276,7 @@ def _validate_artifact_request(
         )
     elif request.capture_timestamp_column is not None:
         raise ScientificContractError(
-            "non-temporal preprocessing cannot declare a capture timestamp column",
+            ErrorMessage("non-temporal preprocessing cannot declare a capture timestamp column"),
             subject=request.execution_identity.population,
         )
 
@@ -294,7 +299,7 @@ def _capture_timestamp_column_for(
     if split_protocol is SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE:
         if capture_timestamp_column not in {None, _AUDITED_TIMESTAMP_COLUMN}:
             raise ScientificContractError(
-                "temporal preprocessing must use the audited Edge capture timestamp column",
+                ErrorMessage("temporal preprocessing must use the audited Edge capture timestamp column"),
                 subject=population,
             )
         return _AUDITED_TIMESTAMP_COLUMN
@@ -309,7 +314,7 @@ def _federated_protocol(
         method = _PROTOCOL_METHODS[identity]
     except KeyError as err:
         raise ScientificContractError(
-            "unsupported federated preprocessing identity",
+            ErrorMessage("unsupported federated preprocessing identity"),
             subject=identity,
         ) from err
     return build_preprocessing_protocol(method, feature_names)

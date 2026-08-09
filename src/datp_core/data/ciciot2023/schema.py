@@ -95,25 +95,33 @@ class CICIoT2023ArtifactName(StrEnum):
 CICIOT2023_AUDITED_FILE_CLIENT_COUNT = ClientCount(63)
 
 
-CICIOT2023_RAW_COLUMNS: tuple[str, ...] = tuple( #TODO: should be tuple[CICIoT2023RawColumn] and adapt all callers and usage and create CICIoT2023RawColumn enum
-    (
-        "Header_Length,Protocol Type,Time_To_Live,Rate,fin_flag_number,syn_flag_number,rst_flag_number,"
-        "psh_flag_number,ack_flag_number,ece_flag_number,cwr_flag_number,ack_count,syn_count,fin_count,"
-        "rst_count,HTTP,HTTPS,DNS,Telnet,SMTP,SSH,IRC,TCP,UDP,DHCP,ARP,ICMP,IGMP,IPv,LLC,Tot sum,"
-        "Min,Max,AVG,Std,Tot size,IAT,Number,Variance,Label"
-    ).split(",")
+CICIOT2023_RAW_COLUMNS: tuple[str, ...] = (
+    tuple(  # TODO: should be tuple[CICIoT2023RawColumn] and adapt all callers and usage and create CICIoT2023RawColumn enum
+        (
+            "Header_Length,Protocol Type,Time_To_Live,Rate,fin_flag_number,syn_flag_number,rst_flag_number,"
+            "psh_flag_number,ack_flag_number,ece_flag_number,cwr_flag_number,ack_count,syn_count,fin_count,"
+            "rst_count,HTTP,HTTPS,DNS,Telnet,SMTP,SSH,IRC,TCP,UDP,DHCP,ARP,ICMP,IGMP,IPv,LLC,Tot sum,"
+            "Min,Max,AVG,Std,Tot size,IAT,Number,Variance,Label"
+        ).split(",")
+    )
 )
-CICIOT2023_FEATURE_COLUMNS: tuple[str, ...] = CICIOT2023_RAW_COLUMNS[:-1] #TODO: should be tuple[NBaIoTFeatureColumn] and adapt all callers and usage and create NBaIoTFeatureColumn enum
+CICIOT2023_FEATURE_COLUMNS: tuple[str, ...] = CICIOT2023_RAW_COLUMNS[
+    :-1
+]  # TODO: should be tuple[NBaIoTFeatureColumn] and adapt all callers and usage and create NBaIoTFeatureColumn enum
 CICIOT2023_LABEL_COLUMN = CICIoT2023RawColumn.LABEL
 CICIOT2023_LABELS: frozenset[str] = frozenset(label.value for label in CICIoT2023NormalizedLabel)
 
 
-def canonical_name(raw_name: str) -> str: #TODO: should be NBaIoTFeatureColumn and adapt all callers and usage and create NBaIoTFeatureColumn enum or maybe even deleted if no longer needed. Might be better to just use NBaIoTFeatureColumn(raw_name) directly in the callers and usage instead of this function.
+def canonical_name(
+    raw_name: str,
+) -> str:  # TODO: should be NBaIoTFeatureColumn and adapt all callers and usage and create NBaIoTFeatureColumn enum or maybe even deleted if no longer needed. Might be better to just use NBaIoTFeatureColumn(raw_name) directly in the callers and usage instead of this function.
     return raw_name.lower().replace(" ", "_").replace("-", "_")
 
 
-CICIOT2023_CANONICAL_FEATURE_COLUMNS: tuple[str, ...] = tuple( #TODO: should be tuple[NBaIoTFeatureColumn] and adapt all callers and usage and create NBaIoTFeatureColumn enum
-    canonical_name(column) for column in CICIOT2023_FEATURE_COLUMNS
+CICIOT2023_CANONICAL_FEATURE_COLUMNS: tuple[str, ...] = (
+    tuple(  # TODO: should be tuple[NBaIoTFeatureColumn] and adapt all callers and usage and create NBaIoTFeatureColumn enum
+        canonical_name(column) for column in CICIOT2023_FEATURE_COLUMNS
+    )
 )
 CICIOT2023_MODEL_INPUT_ELIGIBILITY_POLICY = ModelInputEligibilityPolicy(
     dataset=DatasetId.CICIOT2023,
@@ -125,11 +133,15 @@ CICIOT2023_MODEL_INPUT_ELIGIBILITY_POLICY = ModelInputEligibilityPolicy(
     ),
 )
 CICIOT2023_MODEL_INPUT_ELIGIBLE_COLUMN = CICIoT2023Column.MODEL_INPUT_ELIGIBLE
-CICIOT2023_MODEL_INPUT_EVIDENCE_COLUMNS: tuple[str, ...] = ( #TODO: should be tuple[CICIoT2023EligibilityReason] and adapt all callers and usage and create CICIoT2023EligibilityReason enum
+CICIOT2023_MODEL_INPUT_EVIDENCE_COLUMNS: tuple[
+    str, ...
+] = (  # TODO: should be tuple[CICIoT2023EligibilityReason] and adapt all callers and usage and create CICIoT2023EligibilityReason enum
     *(reason.value for reason in CICIOT2023_MODEL_INPUT_ELIGIBILITY_POLICY.exclusion_reasons),
     CICIOT2023_MODEL_INPUT_ELIGIBLE_COLUMN,
 )
-CICIOT2023_PROVENANCE_COLUMNS: tuple[str, ...] = tuple(CanonicalProvenanceColumn) #TODO: should be tuple[CanonicalProvenanceColumn] and adapt all callers and usage. Meaning no need for this variable, just use tuple(CanonicalProvenanceColumn) directly in the CanonicalSchema constructor.
+CICIOT2023_PROVENANCE_COLUMNS: tuple[str, ...] = tuple(
+    CanonicalProvenanceColumn
+)  # TODO: should be tuple[CanonicalProvenanceColumn] and adapt all callers and usage. Meaning no need for this variable, just use tuple(CanonicalProvenanceColumn) directly in the CanonicalSchema constructor.
 
 
 def _canonical_columns() -> tuple[CanonicalColumn, ...]:
@@ -204,7 +216,11 @@ CICIOT2023_SCHEMA = CanonicalSchema(
 )
 
 
-def is_accepted_merged_source(path_name: str) -> bool: #TODO: should be bool[CICIoT2023FileClient] and adapt all callers and usage and create CICIoT2023FileClient enum
+def is_accepted_merged_source(
+    path_name: str,
+) -> (
+    bool
+):  # TODO: should be bool[CICIoT2023FileClient] and adapt all callers and usage and create CICIoT2023FileClient enum
     prefix = CICIoT2023ArtifactName.MERGED_FILE_PREFIX
     suffix = CICIoT2023ArtifactName.CSV_SUFFIX
     numeric_identifier = path_name[len(prefix) : -len(suffix)]

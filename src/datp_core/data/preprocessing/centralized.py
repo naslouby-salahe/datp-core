@@ -3,7 +3,11 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from datp_core.core.errors import LeakageError, ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    LeakageError,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import (
     CaptureTimestampColumn,
     ContractSubject,
@@ -159,7 +163,7 @@ def publish_pooled_preprocessing(request: PooledPublishRequest) -> PooledPreproc
 def reject_federated_state_for_pooled(state: FittedPreprocessingState) -> None:
     if isinstance(state, FederatedFittedPreprocessingState):
         raise LeakageError(
-            "federated client fitted state cannot be reused by the centralized reference",
+            ErrorMessage("federated client fitted state cannot be reused by the centralized reference"),
             subject=ProcessedDataBranch.FEDERATED,
         )
 
@@ -170,7 +174,7 @@ def preprocess_centralized(
     context = request.dataset_context
     if context.protocol.identity is not PreprocessingProtocolId.CENTRALIZED_POOLED_MIN_MAX:
         raise ScientificContractError(
-            "centralized preprocessing requires CENTRALIZED_POOLED_MIN_MAX",
+            ErrorMessage("centralized preprocessing requires CENTRALIZED_POOLED_MIN_MAX"),
             subject=context.protocol.identity,
         )
 
@@ -209,7 +213,9 @@ def preprocess_centralized_population(
 ) -> CentralizedPreprocessingOutcome:
     if request.split_protocol is SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE:
         raise ScientificContractError(
-            "temporal split preprocessing requires future_recalibration assets not yet in the core publish set",
+            ErrorMessage(
+                "temporal split preprocessing requires future_recalibration assets not yet in the core publish set"
+            ),
             subject=request.split_protocol,
         )
 
@@ -275,7 +281,7 @@ def preprocess_centralized_population(
     )
 
 
-def build_centralized_preprocessing_protocol( #TODO: should be inlined in preprocess_centralized_population. It is not used anywhere else. Remove this function and inline it in preprocess_centralized_population.
+def build_centralized_preprocessing_protocol(  # TODO: should be inlined in preprocess_centralized_population. It is not used anywhere else. Remove this function and inline it in preprocess_centralized_population.
     feature_names: FeatureNameSequence,
 ) -> PreprocessingProtocol:
     return build_preprocessing_protocol(

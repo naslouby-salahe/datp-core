@@ -4,7 +4,10 @@ from enum import StrEnum
 from pydantic import model_validator
 
 from datp_core.core.contracts import StrictModel
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import PopulationId, TrafficRateEvidenceType
 from datp_core.core.numeric import TrafficRatePerDay
 
@@ -32,24 +35,28 @@ class ValidatedTrafficRateEvidence:
     evidence_kind: TrafficRateEvidenceType
     population: PopulationId
     rate_per_day: TrafficRatePerDay
-    source_locator: str #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-    provenance: str#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    source_locator: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    provenance: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
     unit: TrafficRateUnit
     granularity: TrafficRateGranularity
     applicable_to_each_client: bool
 
     def __post_init__(self) -> None:
         if self.evidence_kind is TrafficRateEvidenceType.UNAVAILABLE:
-            raise ScientificContractError("unavailable traffic-rate evidence cannot support operational calculation")
+            raise ScientificContractError(
+                ErrorMessage("unavailable traffic-rate evidence cannot support operational calculation")
+            )
         if not self.source_locator or self.source_locator.isspace() or not self.provenance or self.provenance.isspace():
-            raise ScientificContractError("traffic-rate evidence requires source and provenance")
+            raise ScientificContractError(ErrorMessage("traffic-rate evidence requires source and provenance"))
         if self.granularity is TrafficRateGranularity.PER_CLIENT and not self.applicable_to_each_client:
-            raise ScientificContractError("per-client traffic-rate evidence must be applicable to each client")
+            raise ScientificContractError(
+                ErrorMessage("per-client traffic-rate evidence must be applicable to each client")
+            )
 
 
 def validate_traffic_rate_evidence(evidence: ValidatedTrafficRateEvidence) -> ValidatedTrafficRateEvidence:
     if evidence.evidence_kind not in _VALID_EVIDENCE_KINDS:
-        raise ScientificContractError("traffic-rate evidence kind is not operationally valid")
+        raise ScientificContractError(ErrorMessage("traffic-rate evidence kind is not operationally valid"))
     return evidence
 
 
@@ -66,7 +73,7 @@ class TrafficRateSourceLocator(StrictModel):
     """A structured reference to one traffic-rate evidence source."""
 
     scheme: TrafficRateLocatorScheme
-    reference: str#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    reference: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
 
     @model_validator(mode="after")
     def validate_reference(self) -> "TrafficRateSourceLocator":
@@ -83,7 +90,7 @@ class TrafficRateEvidence(StrictModel):
     rate_per_day: TrafficRatePerDay
     evidence_kind: TrafficRateEvidenceType
     source_locator: TrafficRateSourceLocator
-    provenance: str#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    provenance: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
     unit: TrafficRateUnit
     granularity: TrafficRateGranularity
     applicable_to_each_client: bool

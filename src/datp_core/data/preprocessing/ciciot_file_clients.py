@@ -6,7 +6,10 @@ from pathlib import Path
 import polars as pl
 
 from datp_core.core.contracts import ClientCollection, ClientOwned
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import (
     ClientPathToken,
     ContractSubject,
@@ -41,7 +44,7 @@ from datp_core.experiments.common.coordinates import ExternalTemporalExecutionId
 
 @dataclass(frozen=True, slots=True)
 class _CanonicalSourceFile:
-    source_path: str #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    source_path: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     parquet_path: Path
 
 
@@ -63,13 +66,13 @@ def ciciot_source_files(
     )
     if not sources:
         raise ScientificContractError(
-            "CIC canonical files are unavailable",
+            ErrorMessage("CIC canonical files are unavailable"),
             subject=DatasetId.CICIOT2023,
         )
     source_paths = tuple(source.source_path for source in sources)
     if len(set(source_paths)) != len(source_paths):
         raise ScientificContractError(
-            "CIC canonical source paths must be unique",
+            ErrorMessage("CIC canonical source paths must be unique"),
             subject=DatasetId.CICIOT2023,
         )
     return sources
@@ -77,22 +80,24 @@ def ciciot_source_files(
 
 def canonical_source_file(
     source_files: tuple[_CanonicalSourceFile, ...],
-    source_path: str, #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    source_path: str,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
 ) -> _CanonicalSourceFile:
     for source in source_files:
         if source.source_path == source_path:
             return source
     raise ScientificContractError(
-        "file-defined client source must resolve exactly once",
+        ErrorMessage("file-defined client source must resolve exactly once"),
         subject=ContractSubject.CLIENT_IDENTITY,
     )
 
 
-def single_client_source_path(assignments: pl.DataFrame) -> str: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+def single_client_source_path(
+    assignments: pl.DataFrame,
+) -> str:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     sources = assignments.get_column(SOURCE_PATH_COLUMN).unique().to_list()
     if len(sources) != 1:
         raise ScientificContractError(
-            "file-defined client assignments must originate from exactly one source file",
+            ErrorMessage("file-defined client assignments must originate from exactly one source file"),
             subject=ContractSubject.CLIENT_IDENTITY,
         )
     return str(sources[0])
@@ -138,7 +143,7 @@ def preprocess_ciciot_client_local(
 
         if joined.height != client_assignments.height:
             raise ScientificContractError(
-                "canonical feature join lost file-client assignment rows",
+                ErrorMessage("canonical feature join lost file-client assignment rows"),
                 subject=identity.population,
             )
 

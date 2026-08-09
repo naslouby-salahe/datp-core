@@ -3,7 +3,12 @@
 from dataclasses import dataclass
 from typing import assert_never
 
-from datp_core.core.errors import CapabilityError, LeakageError, ScientificContractError
+from datp_core.core.errors import (
+    CapabilityError,
+    ErrorMessage,
+    LeakageError,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import CentralizedThresholdMethod, ContractSubject, FederatedThresholdMethod
 from datp_core.core.numeric import Quantile, RowCount
 from datp_core.data.populations.contracts import PopulationCapabilities
@@ -63,7 +68,7 @@ type ThresholdConstructionResult = (
 def reject_centralized_threshold_method(method: FederatedThresholdMethod | CentralizedThresholdMethod) -> None:
     if isinstance(method, CentralizedThresholdMethod):
         raise LeakageError(
-            "centralized threshold methods cannot enter federated dispatch",
+            ErrorMessage("centralized threshold methods cannot enter federated dispatch"),
             subject=method,
         )
 
@@ -71,7 +76,7 @@ def reject_centralized_threshold_method(method: FederatedThresholdMethod | Centr
 def validate_population_capability(capabilities: PopulationCapabilities, method: FederatedThresholdMethod) -> None:
     if method not in capabilities.valid_threshold_methods:
         raise CapabilityError(
-            f"{method.value} is not a valid threshold method for this population",
+            ErrorMessage(f"{method.value} is not a valid threshold method for this population"),
             subject=method,
         )
 
@@ -90,36 +95,36 @@ class ThresholdConstructionRequest:
     def __post_init__(self) -> None:
         if not self.eligible:
             raise ScientificContractError(
-                "threshold construction requires at least one eligible client",
+                ErrorMessage("threshold construction requires at least one eligible client"),
                 subject=ContractSubject.THRESHOLD,
             )
         eligible_clients = tuple(item.client for item in self.eligible)
         if len(set(eligible_clients)) != len(eligible_clients):
             raise ScientificContractError(
-                "eligible clients must have unique identities",
+                ErrorMessage("eligible clients must have unique identities"),
                 subject=ContractSubject.CLIENT_IDENTITY,
             )
         for item in self.eligible:
             if item.coordinate != self.coordinate:
                 raise ScientificContractError(
-                    "every eligible entry must carry the request coordinate",
+                    ErrorMessage("every eligible entry must carry the request coordinate"),
                     subject=ContractSubject.COORDINATE,
                 )
         family_clients = tuple(item.client for item in self.family_by_client)
         if len(set(family_clients)) != len(family_clients):
             raise ScientificContractError(
-                "family-by-client entries must have unique client identities",
+                ErrorMessage("family-by-client entries must have unique client identities"),
                 subject=ContractSubject.CLIENT_IDENTITY,
             )
         if self.method is FederatedThresholdMethod.CLUSTER_THRESHOLD:
             if self.cluster_threshold_aggregation is None:
                 raise ScientificContractError(
-                    "cluster threshold construction requires an explicit threshold aggregation",
+                    ErrorMessage("cluster threshold construction requires an explicit threshold aggregation"),
                     subject=ContractSubject.THRESHOLD,
                 )
         elif self.cluster_threshold_aggregation is not None:
             raise ScientificContractError(
-                "cluster threshold aggregation is valid only for CLUSTER_THRESHOLD",
+                ErrorMessage("cluster threshold aggregation is valid only for CLUSTER_THRESHOLD"),
                 subject=ContractSubject.THRESHOLD,
             )
 
@@ -178,7 +183,9 @@ def _validate_support(request: ThresholdConstructionRequest) -> None:
             for item in request.eligible:
                 if not MINIMUM_BENIGN_SUPPORT.fits_within(RowCount(len(item.scores))):
                     raise ScientificContractError(
-                        "threshold construction rejects clients below the minimum benign calibration support",
+                        ErrorMessage(
+                            "threshold construction rejects clients below the minimum benign calibration support"
+                        ),
                         subject=ContractSubject.CALIBRATION,
                     )
         case CalibrationSupportRule.DECLARED_SIZE_ABLATION:
@@ -213,7 +220,7 @@ def _cluster_threshold_or_unavailable(request: ThresholdConstructionRequest) -> 
             base_protocol = CLUSTER_MEDIAN_THRESHOLD_PROTOCOL
         case None:
             raise ScientificContractError(
-                "cluster threshold construction requires an explicit aggregation",
+                ErrorMessage("cluster threshold construction requires an explicit aggregation"),
                 subject=ContractSubject.THRESHOLD,
             )
         case _:

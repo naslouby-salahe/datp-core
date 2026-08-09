@@ -3,7 +3,10 @@ import itertools
 import numpy as np
 
 from datp_core.core.contracts import ClientCollection, ClientOwned
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import (
     ClientPathToken,
     ContractSubject,
@@ -56,7 +59,7 @@ def fit_estimators_for_federated_clients(
             return _fit_pooled_estimator(protocol, client_partitions)
         case _:
             raise ScientificContractError(
-                "unsupported federated preprocessing fit scope",
+                ErrorMessage("unsupported federated preprocessing fit scope"),
                 subject=protocol.fit_scope,
             )
 
@@ -80,7 +83,7 @@ def _fit_client_local_estimators(
     )
     if len(set(id(item.value) for item in fitted)) != len(fitted):
         raise ScientificContractError(
-            "client-local estimators must be distinct objects",
+            ErrorMessage("client-local estimators must be distinct objects"),
             subject=ContractSubject.CLIENT_IDENTITY,
         )
     return ClientCollection(fitted)

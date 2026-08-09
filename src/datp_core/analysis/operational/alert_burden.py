@@ -6,7 +6,10 @@ from enum import StrEnum
 from datp_core.analysis.metrics.models import MetricAvailability, MetricReason, MetricStatus, WarningCode
 from datp_core.analysis.metrics.semantics import available, metric_value, unavailable
 from datp_core.analysis.operational.traffic_rates import ValidatedTrafficRateEvidence, validate_traffic_rate_evidence
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import MetricId
 from datp_core.core.numeric import Ratio, Seed
 from datp_core.data.populations.contracts import ClientIdentity
@@ -34,14 +37,16 @@ class AlertBurdenDiagnostic:
             self.coordinate.population is not self.client.population
             or self.coordinate.training_seed != self.training_seed
         ):
-            raise ScientificContractError("alert-burden coordinate must match client and training seed")
+            raise ScientificContractError(ErrorMessage("alert-burden coordinate must match client and training seed"))
         if self.metric.metric is not MetricId.ALERTS_PER_DAY:
-            raise ScientificContractError("alert-burden diagnostics require the alerts-per-day metric")
+            raise ScientificContractError(ErrorMessage("alert-burden diagnostics require the alerts-per-day metric"))
         is_available = self.metric.status is MetricStatus.AVAILABLE
         if is_available == (self.suppression_reason is not None):
-            raise ScientificContractError("alert burden must carry exactly one of a value or suppression reason")
+            raise ScientificContractError(
+                ErrorMessage("alert burden must carry exactly one of a value or suppression reason")
+            )
         if is_available != (self.warning is None):
-            raise ScientificContractError("suppressed alert burden requires an explicit warning")
+            raise ScientificContractError(ErrorMessage("suppressed alert burden requires an explicit warning"))
 
     @property
     def alerts_per_client_per_day(self) -> float | None:

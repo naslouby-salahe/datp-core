@@ -28,7 +28,7 @@ class ScientificDecisionResult(StrictModel):
     decision: ScientificDecision
     point_estimate: MetricValue | None
     interval: BootstrapInterval | None
-    rationale: str #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    rationale: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
 
     @model_validator(mode="after")
     def validate_decision(self) -> "ScientificDecisionResult":

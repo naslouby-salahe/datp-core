@@ -2,7 +2,10 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 from datp_core.artifacts.provenance import Checksum
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import ContractSubject
 from datp_core.data.registry import resolve_population
 from datp_core.detector.checkpoints.candidates import rebase_checkpoint_candidates
@@ -44,19 +47,19 @@ def validate_federated_training_inputs(
 ) -> None:
     if not clients:
         raise ScientificContractError(
-            "federated training requires client inputs",
+            ErrorMessage("federated training requires client inputs"),
             subject=ContractSubject.TRAINING,
         )
     feature_names = clients[0].feature_names
     if autoencoder_width != len(feature_names):
         raise ScientificContractError(
-            "autoencoder input width must match the transformed feature schema",
+            ErrorMessage("autoencoder input width must match the transformed feature schema"),
             subject=ContractSubject.WIDTHS,
         )
     for client in clients[1:]:
         if client.feature_names != feature_names:
             raise ScientificContractError(
-                "federated clients must share one transformed feature schema",
+                ErrorMessage("federated clients must share one transformed feature schema"),
                 subject=ContractSubject.SCHEMA,
             )
 

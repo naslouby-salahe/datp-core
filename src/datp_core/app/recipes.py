@@ -16,7 +16,11 @@ from datp_core.app.planning import PlanDisposition, PlanningEvidence, expand_exp
 from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
 from datp_core.artifacts.serializers.json import canonical_checksum
-from datp_core.core.errors import ReportEvidenceError, ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ReportEvidenceError,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import (
     ExperimentId,
     ExperimentReadiness,
@@ -229,7 +233,7 @@ def _dispatch_external(
             run_ciciot_boundary_seed(seed, output_root=output_root, overwrite=overwrite.requested) for seed in seeds
         )
     else:
-        raise ScientificContractError(f"unsupported external experiment: {experiment_id.value}")
+        raise ScientificContractError(ErrorMessage(f"unsupported external experiment: {experiment_id.value}"))
     return DispatchOutcome(
         detail=DetailText(f"{experiment_id.value} seeds={len(seeds)}"),
         method_outcomes=_method_outcomes(experiment_id, tuple(item.completed_threshold_methods for item in results)),
@@ -458,7 +462,7 @@ def _report_external(experiment_id: ExperimentId, overwrite: OverwriteMode) -> t
         return (result.output_directory, centralized), DetailText(
             f"boundary={result.output_directory} centralized_reference={centralized}"
         )
-    raise ReportEvidenceError(f"unsupported external report: {experiment_id.value}")
+    raise ReportEvidenceError(ErrorMessage(f"unsupported external report: {experiment_id.value}"))
 
 
 def _report_heterogeneity(experiment_id: ExperimentId, overwrite: OverwriteMode) -> tuple[tuple[Path, ...], DetailText]:
@@ -471,7 +475,7 @@ def _report_heterogeneity(experiment_id: ExperimentId, overwrite: OverwriteMode)
     elif experiment_id is ExperimentId.THRESHOLD_MOVEMENT_TRADEOFF:
         path = analyze_threshold_movement_tradeoff(overwrite=overwrite.requested)
     else:
-        raise ReportEvidenceError(f"unsupported heterogeneity report: {experiment_id.value}")
+        raise ReportEvidenceError(ErrorMessage(f"unsupported heterogeneity report: {experiment_id.value}"))
     return (path,), DetailText(str(path))
 
 
@@ -523,7 +527,9 @@ def _report_fedprox(experiment_id: ExperimentId, overwrite: OverwriteMode) -> tu
             analyze_fedprox_absorption(observations, output_directory=output)
             paths.append(output)
     except ScientificContractError as error:
-        raise ReportEvidenceError(str(error), subject=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST) from error
+        raise ReportEvidenceError(
+            ErrorMessage(str(error)), subject=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST
+        ) from error
     return tuple(paths), DetailText(f"coefficients={len(paths) - 1}")
 
 
@@ -580,7 +586,7 @@ def _report_robustness(experiment_id: ExperimentId, overwrite: OverwriteMode) ->
     elif experiment_id is ExperimentId.LOCAL_CONFORMAL_COVERAGE:
         paths, detail = report_local_conformal_coverage(experiment_id, overwrite.requested)
     else:
-        raise ReportEvidenceError(f"unsupported threshold robustness report: {experiment_id.value}")
+        raise ReportEvidenceError(ErrorMessage(f"unsupported threshold robustness report: {experiment_id.value}"))
     return paths, DetailText(detail)
 
 
@@ -592,7 +598,7 @@ def _report_estimation(experiment_id: ExperimentId, overwrite: OverwriteMode) ->
     elif experiment_id is ExperimentId.FIXED_COEFFICIENT_STATISTICS_SENSITIVITY:
         paths, detail = report_fixed_coefficient_statistics_sensitivity(experiment_id, overwrite.requested)
     else:
-        raise ReportEvidenceError(f"unsupported federated estimation report: {experiment_id.value}")
+        raise ReportEvidenceError(ErrorMessage(f"unsupported federated estimation report: {experiment_id.value}"))
     return paths, DetailText(detail)
 
 
@@ -642,7 +648,7 @@ def _report_supplementary(experiment_id: ExperimentId, overwrite: OverwriteMode)
         )
         if not document_path.is_file():
             raise ReportEvidenceError(
-                f"missing evaluation evidence for {coordinate.stable_key}: {document_path}",
+                ErrorMessage(f"missing evaluation evidence for {coordinate.stable_key}: {document_path}"),
                 subject=experiment_id,
             )
         document = load_evaluation_document(document_path)
@@ -696,7 +702,7 @@ def _external_marker(experiment_id: ExperimentId) -> bool:
         )
 
         return centralized_reference_report_complete(CIC_CENTRALIZED_REFERENCE).is_file()
-    raise ReportEvidenceError(f"unsupported external marker: {experiment_id.value}")
+    raise ReportEvidenceError(ErrorMessage(f"unsupported external marker: {experiment_id.value}"))
 
 
 def _fedprox_marker(experiment_id: ExperimentId) -> bool:
@@ -783,7 +789,7 @@ def _robustness_marker(experiment_id: ExperimentId) -> bool:
         return size_aware_shrinkage_analysis_marker_present(experiment_id)
     if experiment_id is ExperimentId.LOCAL_CONFORMAL_COVERAGE:
         return local_conformal_coverage_analysis_marker_present(experiment_id)
-    raise ScientificContractError(f"unknown threshold-robustness experiment: {experiment_id.value}")
+    raise ScientificContractError(ErrorMessage(f"unknown threshold-robustness experiment: {experiment_id.value}"))
 
 
 def _estimation_marker(experiment_id: ExperimentId) -> bool:
@@ -793,7 +799,9 @@ def _estimation_marker(experiment_id: ExperimentId) -> bool:
         return federated_quantile_estimation_analysis_marker_present(experiment_id)
     if experiment_id is ExperimentId.FIXED_COEFFICIENT_STATISTICS_SENSITIVITY:
         return fixed_coefficient_statistics_sensitivity_analysis_marker_present(experiment_id)
-    raise ScientificContractError(f"unknown federated threshold-estimation experiment: {experiment_id.value}")
+    raise ScientificContractError(
+        ErrorMessage(f"unknown federated threshold-estimation experiment: {experiment_id.value}")
+    )
 
 
 def _supplementary_marker(experiment_id: ExperimentId) -> bool:
@@ -1027,9 +1035,7 @@ def registered_experiment_ids() -> tuple[ExperimentId, ...]:
 
 
 def mandatory_experiment_ids() -> tuple[ExperimentId, ...]:
-    return tuple(
-        recipe.experiment for recipe in EXPERIMENT_RECIPES if recipe.campaign_role is CampaignRole.MANDATORY
-    )
+    return tuple(recipe.experiment for recipe in EXPERIMENT_RECIPES if recipe.campaign_role is CampaignRole.MANDATORY)
 
 
 def anchor_gated_experiment_ids() -> tuple[ExperimentId, ...]:
@@ -1042,11 +1048,11 @@ def recipe_for(experiment_id: ExperimentId) -> ExperimentRecipe:
     declaration = _declaration(experiment_id)
     if declaration.readiness is ExperimentReadiness.SUPPRESSED:
         raise ScientificContractError(
-            f"experiment is intentionally suppressed: {experiment_id.value}", subject=experiment_id
+            ErrorMessage(f"experiment is intentionally suppressed: {experiment_id.value}"), subject=experiment_id
         )
     matches = tuple(recipe for recipe in EXPERIMENT_RECIPES if recipe.experiment is experiment_id)
     if len(matches) != 1:
         raise ScientificContractError(
-            f"experiment recipe must resolve exactly once: {experiment_id.value}", subject=experiment_id
+            ErrorMessage(f"experiment recipe must resolve exactly once: {experiment_id.value}"), subject=experiment_id
         )
     return matches[0]

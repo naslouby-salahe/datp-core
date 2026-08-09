@@ -6,7 +6,11 @@ from typing import ClassVar
 import numpy as np
 
 from datp_core.artifacts.provenance import Checksum, checksum_text
-from datp_core.core.errors import ScientificContractError, require_contract
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+    require_contract,
+)
 from datp_core.core.identifiers import AvailabilityStatus, ContractSubject, FederatedThresholdMethod
 from datp_core.core.numeric import (
     CalibrationSampleWeights,
@@ -66,7 +70,7 @@ class SharedThresholdResult:
                 self.shared_threshold.value,
                 mean_local_threshold(self.contributing_local_quantiles).value,
             ),
-            "shared_threshold must equal the unweighted mean of contributing local quantiles",
+            ErrorMessage("shared_threshold must equal the unweighted mean of contributing local quantiles"),
             ContractSubject.THRESHOLD,
         )
 
@@ -84,18 +88,18 @@ class PooledSharedQuantileResult:
     def __post_init__(self) -> None:
         require_contract(
             self.pooled_benign_score_count.value >= 1,
-            "pooled shared quantile requires at least one pooled benign score",
+            ErrorMessage("pooled shared quantile requires at least one pooled benign score"),
             ContractSubject.CALIBRATION,
         )
         require_unique_clients(tuple(item.client for item in self.assignments), "pooled shared quantile assignments")
         require_contract(
             bool(self.assignments),
-            "a shared threshold result requires at least one client assignment",
+            ErrorMessage("a shared threshold result requires at least one client assignment"),
             ContractSubject.THRESHOLD,
         )
         require_contract(
             all(floats_exactly_equal(item.threshold.value, self.shared_threshold.value) for item in self.assignments),
-            "every pooled shared assignment must carry the identical shared value",
+            ErrorMessage("every pooled shared assignment must carry the identical shared value"),
             ContractSubject.THRESHOLD,
         )
 
@@ -131,7 +135,7 @@ class SampleWeightedSharedThresholdResult:
         )
         require_contract(
             floats_exactly_equal(self.shared_threshold.value, expected),
-            "shared_threshold must equal the declared normalized weighted mean",
+            ErrorMessage("shared_threshold must equal the declared normalized weighted mean"),
             ContractSubject.THRESHOLD,
         )
 
@@ -142,7 +146,7 @@ def construct_shared_threshold(
 ) -> SharedThresholdResult:
     if protocol.method is not FederatedThresholdMethod.SHARED_THRESHOLD:
         raise ScientificContractError(
-            "shared threshold construction requires the SHARED_THRESHOLD protocol",
+            ErrorMessage("shared threshold construction requires the SHARED_THRESHOLD protocol"),
             subject=protocol.method,
         )
     require_eligible_cohort(eligible, "shared threshold construction")
@@ -163,7 +167,7 @@ def construct_pooled_shared_quantile(
 ) -> PooledSharedQuantileResult:
     if protocol.method is not FederatedThresholdMethod.POOLED_SHARED_QUANTILE:
         raise ScientificContractError(
-            "pooled shared quantile construction requires the POOLED_SHARED_QUANTILE protocol",
+            ErrorMessage("pooled shared quantile construction requires the POOLED_SHARED_QUANTILE protocol"),
             subject=protocol.method,
         )
     require_eligible_cohort(eligible, "pooled shared quantile construction")
@@ -195,7 +199,7 @@ def construct_sample_weighted_shared_threshold(
 ) -> SampleWeightedSharedThresholdResult:
     if protocol.method is not FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD:
         raise ScientificContractError(
-            "sample-weighted construction requires the SAMPLE_WEIGHTED_SHARED_THRESHOLD protocol",
+            ErrorMessage("sample-weighted construction requires the SAMPLE_WEIGHTED_SHARED_THRESHOLD protocol"),
             subject=protocol.method,
         )
     require_eligible_cohort(eligible, "sample-weighted shared threshold construction")
@@ -216,7 +220,7 @@ def _require_common_score_set_checksum(eligible: tuple[ClientBenignCalibrationSc
     checksums = frozenset(item.score_set_checksum for item in eligible)
     if len(checksums) != 1:
         raise ScientificContractError(
-            "pooled shared quantile construction requires one common score-set checksum",
+            ErrorMessage("pooled shared quantile construction requires one common score-set checksum"),
             subject=ContractSubject.SCORES,
         )
     return next(iter(checksums))

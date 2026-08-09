@@ -170,7 +170,7 @@ class EdgeIIoTsetMaterializer:
         benign_paths: tuple[Path, ...],
         chronology: tuple[PcapChronology, ...],
         attack_paths: tuple[Path, ...],
-        attack_counts: tuple[int, ...], #TODO: should be RowCount instead of int and adapt all callers and usage
+        attack_counts: tuple[int, ...],  # TODO: should be RowCount instead of int and adapt all callers and usage
     ) -> RawDatasetInventory:
         benign_sources = tuple(
             raw_source_file(
@@ -220,14 +220,16 @@ class EdgeIIoTsetMaterializer:
             rmtree(timeline_root, ignore_errors=True)
 
     @staticmethod
-    def _row_count(frame: pl.LazyFrame) -> int: #TODO: should be RowCount instead of int and adapt all callers and usage
+    def _row_count(
+        frame: pl.LazyFrame,
+    ) -> int:  # TODO: should be RowCount instead of int and adapt all callers and usage
         return int(frame.select(pl.len()).collect(engine="streaming").item())
 
     @staticmethod
     def _validation_report(
         benign_paths: tuple[Path, ...],
         validations: tuple[ChronologyValidation, ...],
-        attack_counts: tuple[int, ...], #TODO: should be RowCount instead of int and adapt all callers and usage
+        attack_counts: tuple[int, ...],  # TODO: should be RowCount instead of int and adapt all callers and usage
     ) -> DatasetValidationReport:
         invalid = tuple(
             (path, validation)

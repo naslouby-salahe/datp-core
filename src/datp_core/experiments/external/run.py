@@ -19,7 +19,10 @@ from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAsse
 from datp_core.artifacts.repositories.thresholds import FederatedThresholdAssetName
 from datp_core.artifacts.serializers.json import canonical_checksum, serialize_json_model
 from datp_core.core.contracts import StrictModel
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import EvidenceRole, ExperimentId, FederatedThresholdMethod, MetricId, PopulationId
 from datp_core.core.numeric import (
     AbsoluteThresholdError,
@@ -194,7 +197,7 @@ class ExternalBenignStatisticsAssetName(StrEnum):
 
 
 class ExternalBenignStatisticsClient(StrictModel):
-    client_id: str #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    client_id: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     count: RowCount
     mean: ScoreMoment
     variance: ScoreVariance
@@ -232,22 +235,14 @@ class ExternalBenignStatisticsReportResult:
     complete_digest: Checksum
 
 
-def analyze_external_benign_statistics(
-    *, output_root: Path, overwrite: bool
-) -> ExternalBenignStatisticsReportResult:
+def analyze_external_benign_statistics(*, output_root: Path, overwrite: bool) -> ExternalBenignStatisticsReportResult:
     """Publish the Edge benign-only federated-statistics comparator evidence."""
     declaration = _declaration(ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION)
-    output = (
-        output_root
-        / ExternalBenignStatisticsAssetName.ROOT
-        / declaration.id.value
-        / declaration.population.value
-    )
+    output = output_root / ExternalBenignStatisticsAssetName.ROOT / declaration.id.value / declaration.population.value
     if overwrite and output.exists():
         rmtree(output)
     rows = tuple(
-        _benign_statistics_summary(declaration, seed, output_root)
-        for seed in BOUNDED_EVIDENCE_SEED_COHORT.values
+        _benign_statistics_summary(declaration, seed, output_root) for seed in BOUNDED_EVIDENCE_SEED_COHORT.values
     )
     manifest = ExternalBenignStatisticsReport(
         experiment=declaration.id,
@@ -276,10 +271,14 @@ def _benign_statistics_summary(
         / FederatedThresholdAssetName.RESULT
     )
     if not threshold_path.is_file():
-        raise ScientificContractError(f"missing FedStats threshold result for Edge seed {seed.value}: {threshold_path}")
+        raise ScientificContractError(
+            ErrorMessage(f"missing FedStats threshold result for Edge seed {seed.value}: {threshold_path}")
+        )
     threshold_result = _load_threshold_result(threshold_path)
     if not isinstance(threshold_result, FederatedStatisticsThresholdResult):
-        raise ScientificContractError(f"FedStats threshold result has the wrong type for Edge seed {seed.value}")
+        raise ScientificContractError(
+            ErrorMessage(f"FedStats threshold result has the wrong type for Edge seed {seed.value}")
+        )
     evaluation = load_evaluation_document(
         _evaluation_path(declaration, seed, FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS, output_root)
     )
@@ -417,7 +416,7 @@ def _evaluation_path(
         / FederatedEvaluationAssetName.DOCUMENT
     )
     if not path.is_file():
-        raise ScientificContractError(f"missing completed evaluation document: {path}")
+        raise ScientificContractError(ErrorMessage(f"missing completed evaluation document: {path}"))
     return path
 
 
@@ -432,15 +431,17 @@ def _coordinate(
         and entry.coordinate.metric is MetricId.FPR_COEFFICIENT_OF_VARIATION
     )
     if len(matches) != 1:
-        raise ScientificContractError("external evaluation coordinate must resolve exactly once")
+        raise ScientificContractError(ErrorMessage("external evaluation coordinate must resolve exactly once"))
     return matches[0]
 
 
 def _declaration(experiment: ExperimentId) -> ExperimentDeclaration:
     matches = tuple(item for item in EXPERIMENTS if item.id is experiment)
     if len(matches) != 1:
-        raise ScientificContractError("bounded external experiment must be declared exactly once", subject=experiment)
+        raise ScientificContractError(
+            ErrorMessage("bounded external experiment must be declared exactly once"), subject=experiment
+        )
     declaration = matches[0]
     if declaration.role not in (EvidenceRole.EXTERNAL_VALIDATION, EvidenceRole.APPLICABILITY_BOUNDARY):
-        raise ScientificContractError("invalid bounded external evidence role", subject=declaration.role)
+        raise ScientificContractError(ErrorMessage("invalid bounded external evidence role"), subject=declaration.role)
     return declaration

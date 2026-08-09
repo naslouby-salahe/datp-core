@@ -14,7 +14,10 @@ from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
 from datp_core.artifacts.serializers.json import serialize_json_model
 from datp_core.core.contracts import StrictModel
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import ExperimentId, FederatedThresholdMethod, MetricId, PopulationId
 from datp_core.core.numeric import (
     CalibrationSize,
@@ -182,10 +185,12 @@ def _summary_path(experiment_id: ExperimentId, population: PopulationId) -> Path
 def _finalize_report(
     directory: Path,
     marker: Path,
-    missing_count: int, #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    missing_count: int,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     *,
-    marker_text: str, #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-) -> tuple[tuple[Path, ...], str]: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    marker_text: str,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> tuple[
+    tuple[Path, ...], str
+]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     if missing_count == 0:
         marker.write_text(marker_text, encoding="utf-8")
         return (directory,), marker_text.strip().split("\n", 1)[0]
@@ -196,7 +201,7 @@ def _declaration_for(experiment_id: ExperimentId) -> ExperimentDeclaration:
     matches = tuple(item for item in EXPERIMENTS if item.id is experiment_id)
     if len(matches) != 1:
         raise ScientificContractError(
-            f"experiment must be declared exactly once: {experiment_id.value}",
+            ErrorMessage(f"experiment must be declared exactly once: {experiment_id.value}"),
             subject=experiment_id,
         )
     return matches[0]
@@ -230,11 +235,11 @@ def _evaluation_document_for_seed(
     if len(matches) != 1:
         quantile_suffix = f" q={quantile.value}" if quantile is not None else ""
         raise ScientificContractError(
-            f"evaluation coordinate for {method.value}{quantile_suffix} must resolve exactly once"
+            ErrorMessage(f"evaluation coordinate for {method.value}{quantile_suffix} must resolve exactly once")
         )
     path = _evaluation_document_path(output_root, matches[0])
     if not path.is_file():
-        raise ScientificContractError(f"missing evaluation document: {path}")
+        raise ScientificContractError(ErrorMessage(f"missing evaluation document: {path}"))
     return load_evaluation_document(path)
 
 
@@ -309,7 +314,9 @@ def run_shared_construction_sensitivity_seed(
 def report_shared_construction_sensitivity(
     experiment_id: ExperimentId,
     overwrite: bool,
-) -> tuple[tuple[Path, ...], str]: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> tuple[
+    tuple[Path, ...], str
+]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     del overwrite
     declaration = _declaration_for(experiment_id)
     directory = _analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
@@ -353,7 +360,9 @@ def run_quantile_sensitivity_seed(
 def report_quantile_sensitivity(
     experiment_id: ExperimentId,
     overwrite: bool,
-) -> tuple[tuple[Path, ...], str]: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> tuple[
+    tuple[Path, ...], str
+]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     del overwrite
     declaration = _declaration_for(experiment_id)
     directory = _analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
@@ -413,7 +422,9 @@ def run_calibration_size_ablation_seed(
 def report_calibration_size_ablation(
     experiment_id: ExperimentId,
     overwrite: bool,
-) -> tuple[tuple[Path, ...], str]: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> tuple[
+    tuple[Path, ...], str
+]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     del overwrite
     replicate_count = require_calibration_subsample_replicate_count()
     declaration = _declaration_for(experiment_id)
@@ -520,7 +531,9 @@ def run_fixed_shrinkage_curve_seed(
 def report_fixed_shrinkage_curve(
     experiment_id: ExperimentId,
     overwrite: bool,
-) -> tuple[tuple[Path, ...], str]: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> tuple[
+    tuple[Path, ...], str
+]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     del overwrite
     directory = _analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
     directory.mkdir(parents=True, exist_ok=True)
@@ -603,7 +616,9 @@ def run_size_aware_shrinkage_seed(
 def report_size_aware_shrinkage(
     experiment_id: ExperimentId,
     overwrite: bool,
-) -> tuple[tuple[Path, ...], str]: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> tuple[
+    tuple[Path, ...], str
+]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     del overwrite
     directory = _analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
     directory.mkdir(parents=True, exist_ok=True)
@@ -623,7 +638,9 @@ def report_size_aware_shrinkage(
         FederatedThresholdMethod.SHARED_THRESHOLD,
         FederatedThresholdMethod.LOCAL_THRESHOLD,
     }:
-        raise ScientificContractError("size-aware shrinkage report requires both executable reference corners")
+        raise ScientificContractError(
+            ErrorMessage("size-aware shrinkage report requires both executable reference corners")
+        )
     serialize_json_model(
         SizeAwareShrinkageReport(
             experiment=experiment_id,
@@ -657,7 +674,9 @@ def run_local_conformal_coverage_seed(
 def report_local_conformal_coverage(
     experiment_id: ExperimentId,
     overwrite: bool,
-) -> tuple[tuple[Path, ...], str]: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> tuple[
+    tuple[Path, ...], str
+]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     del overwrite
     directory = _analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
     directory.mkdir(parents=True, exist_ok=True)

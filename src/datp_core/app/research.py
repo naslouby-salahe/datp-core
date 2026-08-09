@@ -43,7 +43,9 @@ from datp_core.app.recipes import (
 )
 from datp_core.core.errors import (
     AnchorReproductionError,
+    ErrorMessage,
     MissingPrerequisiteError,
+    MissingPrerequisiteReason,
     ReportEvidenceError,
     ScientificContractError,
     UnresolvedScientificValueError,
@@ -94,9 +96,9 @@ def _enforce_anchor_gate(experiment_id: ExperimentId, requirement: AnchorRequire
         load_anchor_confirmatory_handoff(ANCHOR_DIAGNOSTICS_DIRECTORY, verified_gate=verified_gate)
     except AnchorReproductionError as error:
         raise MissingPrerequisiteError(
-            f"experiment {experiment_id.value} is blocked by the anchor equivalence gate: {error}",
+            ErrorMessage(f"experiment {experiment_id.value} is blocked by the anchor equivalence gate: {error}"),
             subject=experiment_id,
-            reason="anchor_gate",
+            reason=MissingPrerequisiteReason.ANCHOR_GATE,
         ) from error
 
 
@@ -242,9 +244,9 @@ def run_campaign(*, overwrite: OverwriteMode) -> CampaignRunResult:
     for result in (reproduced, verified):
         if result.gate_status not in {AnchorGateStatus.PASS, AnchorGateStatus.PASS_WITH_DECLARED_DISCREPANCY}:
             raise MissingPrerequisiteError(
-                f"campaign blocked by anchor gate: {result.gate_status.value}",
+                ErrorMessage(f"campaign blocked by anchor gate: {result.gate_status.value}"),
                 subject=ExperimentId.HISTORICAL_DATP_REPRODUCTION,
-                reason="anchor_gate",
+                reason=MissingPrerequisiteReason.ANCHOR_GATE,
             )
     _run_centralized_reference(overwrite)
     results = tuple(

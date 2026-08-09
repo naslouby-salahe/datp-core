@@ -22,7 +22,10 @@ from datp_core.artifacts.repositories.publication import (
     serialize_json_model,
 )
 from datp_core.artifacts.serializers.json import canonical_json_text
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import (
     CaptureTimestampColumn,
     ContractSubject,
@@ -42,6 +45,7 @@ from datp_core.data.populations.contracts import (
     PopulationManifestDocument,
     SplitConstructionRequest,
     SplitManifestDocument,
+    TemporalSplitViolation,
 )
 from datp_core.data.populations.integrity import membership_frame_checksum, validate_split_manifest
 from datp_core.data.populations.splits import split_membership
@@ -285,13 +289,13 @@ def construct_published_split(request: ConstructPublishedSplitRequest) -> Constr
     document = request.population_manifest.document
     if document.population is not request.population:
         raise ScientificContractError(
-            "split request population must match its manifest",
+            ErrorMessage("split request population must match its manifest"),
             subject=request.population,
         )
     has_matched_reference = request.matched_static_reference_manifest is not None
     if has_matched_reference and request.matched_static_reference_membership is None:
         raise ScientificContractError(
-            "a matched reference manifest requires its matched reference membership",
+            ErrorMessage("a matched reference manifest requires its matched reference membership"),
             subject=request.population,
         )
     assignments, manifest = split_membership(
@@ -365,12 +369,15 @@ def construct_published_split(request: ConstructPublishedSplitRequest) -> Constr
 
 
 def _require_matching_reference_rows(temporal: pl.DataFrame, static: pl.DataFrame) -> None:
-    row_columns = ("client_id", "stable_row_id") #TODO: should already be in enum or already exists. Do not use hard-coded strings. Check what already exists. Use that instead of hard-coded strings.
+    row_columns = (
+        "client_id",
+        "stable_row_id",
+    )  # TODO: should already be in enum or already exists. Do not use hard-coded strings. Check what already exists. Use that instead of hard-coded strings.
     temporal_rows = temporal.select(row_columns).sort(row_columns)
     static_rows = static.select(row_columns).sort(row_columns)
     if not temporal_rows.equals(static_rows):
         raise ScientificContractError(
-            "matched static reference must use the same client rows",
+            ErrorMessage("matched static reference must use the same client rows"),
             subject=PopulationId.EDGE_TEMPORAL_GROUPS,
         )
 
@@ -602,9 +609,9 @@ def _capture_timestamp_column_for_split(
     column = CaptureTimestampColumn(EdgeCanonicalColumn.CAPTURE_TIMESTAMP.value)
     if column not in membership.columns:
         raise ScientificContractError(
-            "temporal splits require a capture-timestamp column in membership",
+            ErrorMessage("temporal splits require a capture-timestamp column in membership"),
             subject=ContractSubject.SPLIT,
-            reason="chronological partitioning cannot invent time",
+            reason=TemporalSplitViolation.CAPTURE_TIMESTAMP_UNAVAILABLE,
         )
     return column
 

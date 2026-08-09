@@ -38,7 +38,7 @@ class PlanDisposition(StrEnum):
 class PlanningEvidence:
     experiment: ExperimentId
     disposition: PlanDisposition
-    reason: str #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    reason: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
 
     def __post_init__(self) -> None:
         if not self.reason.strip():
@@ -49,7 +49,7 @@ class PlanningEvidence:
 class PlannedExperiment:
     coordinate: ExperimentCoordinate
     disposition: PlanDisposition
-    reason: str #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    reason: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
 
     def __post_init__(self) -> None:
         if not self.reason.strip():
@@ -229,7 +229,9 @@ def _temporal_states(experiment: ExperimentId) -> tuple[TemporalState | None, ..
 def _resolve_disposition(
     declaration: ExperimentDeclaration,
     evidence: tuple[PlanningEvidence, ...],
-) -> tuple[PlanDisposition, str]: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+) -> tuple[
+    PlanDisposition, str
+]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
     explicit = tuple(item for item in evidence if item.experiment is declaration.id)
     if explicit:
         item = explicit[0]

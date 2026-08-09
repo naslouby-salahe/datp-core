@@ -8,7 +8,10 @@ from numpy.random import default_rng
 from numpy.typing import NDArray
 
 from datp_core.artifacts.provenance import checksum_text
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import ContractSubject, StableRowId
 from datp_core.core.numeric import CalibrationSize, ReplicateIndex, RowCount, Seed
 from datp_core.data.populations.contracts import ClientIdentity
@@ -28,7 +31,7 @@ class CalibrationSubsample:
     def __post_init__(self) -> None:
         if len(self.references) != self.size.value:
             raise ScientificContractError(
-                "subsample reference count must equal the declared calibration size",
+                ErrorMessage("subsample reference count must equal the declared calibration size"),
                 subject=ContractSubject.CALIBRATION,
             )
         if not self.references:
@@ -37,12 +40,12 @@ class CalibrationSubsample:
         stable_row_ids = tuple(reference.stable_row_id for reference in self.references)
         if any(reference.client != client for reference in self.references):
             raise ScientificContractError(
-                "subsample references must belong to exactly one client",
+                ErrorMessage("subsample references must belong to exactly one client"),
                 subject=ContractSubject.CALIBRATION,
             )
         if len(frozenset(stable_row_ids)) != len(stable_row_ids):
             raise ScientificContractError(
-                "subsample references must be drawn without replacement",
+                ErrorMessage("subsample references must be drawn without replacement"),
                 subject=ContractSubject.CALIBRATION,
             )
 
@@ -50,7 +53,7 @@ class CalibrationSubsample:
     def client(self) -> ClientIdentity:
         if not self.references:
             raise ScientificContractError(
-                "empty calibration subsamples have no client identity",
+                ErrorMessage("empty calibration subsamples have no client identity"),
                 subject=ContractSubject.CALIBRATION,
             )
         return self.references[0].client
@@ -74,24 +77,24 @@ class CalibrationReplicateManifest:
     def __post_init__(self) -> None:
         if bool(self.unavailable_sizes) != (self.unavailable_reason is not None):
             raise ScientificContractError(
-                "unavailable sizes require exactly one typed reason, and vice versa",
+                ErrorMessage("unavailable sizes require exactly one typed reason, and vice versa"),
                 subject=ContractSubject.CALIBRATION,
             )
         sizes = tuple(subsample.size.value for subsample in self.subsamples)
         if sizes != tuple(sorted(sizes)):
             raise ScientificContractError(
-                "subsamples must be ordered by ascending calibration size",
+                ErrorMessage("subsamples must be ordered by ascending calibration size"),
                 subject=ContractSubject.CALIBRATION,
             )
         if any(subsample.client != self.client for subsample in self.subsamples):
             raise ScientificContractError(
-                "subsample references must belong to the manifest client",
+                ErrorMessage("subsample references must belong to the manifest client"),
                 subject=ContractSubject.CALIBRATION,
             )
         for smaller, larger in zip(self.subsamples, self.subsamples[1:], strict=False):
             if not smaller.stable_row_id_set.issubset(larger.stable_row_id_set):
                 raise ScientificContractError(
-                    "smaller calibration subsamples must be nested in larger sizes within a replicate",
+                    ErrorMessage("smaller calibration subsamples must be nested in larger sizes within a replicate"),
                     subject=ContractSubject.CALIBRATION,
                 )
 
@@ -112,12 +115,12 @@ def build_calibration_replicate(
 ) -> CalibrationReplicateManifest:
     if any(reference.client != client for reference in references):
         raise ScientificContractError(
-            "calibration references must belong to the replicate client",
+            ErrorMessage("calibration references must belong to the replicate client"),
             subject=ContractSubject.CALIBRATION,
         )
     if len(frozenset(reference.stable_row_id for reference in references)) != len(references):
         raise ScientificContractError(
-            "full calibration references must be unique by stable source-row identity",
+            ErrorMessage("full calibration references must be unique by stable source-row identity"),
             subject=ContractSubject.CALIBRATION,
         )
     ordered = tuple(sorted(references, key=lambda reference: reference.stable_row_id))
@@ -129,7 +132,7 @@ def build_calibration_replicate(
     sorted_sizes = tuple(sorted(sizes, key=lambda item: item.value))
     if len(frozenset(sorted_sizes)) != len(sorted_sizes):
         raise ScientificContractError(
-            "calibration subsampling sizes must be unique",
+            ErrorMessage("calibration subsampling sizes must be unique"),
             subject=ContractSubject.CALIBRATION,
         )
     feasible = tuple(size for size in sorted_sizes if size.value <= len(permuted))

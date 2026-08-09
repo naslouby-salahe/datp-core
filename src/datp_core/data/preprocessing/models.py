@@ -10,7 +10,10 @@ from pydantic import model_validator
 
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.contracts import ClientCollection, StrictModel
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import (
     CaptureTimestampColumn,
     ClientPathToken,
@@ -84,7 +87,9 @@ class PreprocessingPartition:
             raise ValueError(f"preprocessing partition {self.role.value} cannot be empty")
         for column in (STABLE_ROW_ID_COLUMN, OUTCOME_LABEL_COLUMN):
             if column not in self.frame.columns:
-                raise ScientificContractError(f"missing structural column {column}", subject=ContractSubject.SCHEMA)
+                raise ScientificContractError(
+                    ErrorMessage(f"missing structural column {column}"), subject=ContractSubject.SCHEMA
+                )
             if self.frame.get_column(column).null_count() > 0:
                 raise ValueError(f"{column} cannot contain null values")
         _ = self.row_ids
@@ -117,7 +122,7 @@ class PreprocessingPartitions:
     def require(self, role: PartitionRole) -> PreprocessingPartition:
         matches = tuple(partition for partition in self.partitions if partition.role is role)
         if len(matches) != 1:
-            raise ScientificContractError(f"missing preprocessing partition {role.value}", subject=role)
+            raise ScientificContractError(ErrorMessage(f"missing preprocessing partition {role.value}"), subject=role)
         return matches[0]
 
     def roles(self) -> tuple[PartitionRole, ...]:

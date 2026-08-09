@@ -32,7 +32,9 @@ class GroupedDispersionResult(StrictModel):
     singleton_groups: tuple[ClusterIndex, ...]
     empty_groups: tuple[ClusterIndex, ...]
     availability: AvailabilityStatus
-    reason: str | None#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    reason: (
+        str | None
+    )  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
 
     @model_validator(mode="after")
     def validate_result(self) -> "GroupedDispersionResult":

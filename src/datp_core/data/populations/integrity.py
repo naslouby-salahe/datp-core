@@ -1,11 +1,17 @@
 """Population, split, cohort, and chronology integrity invariants."""
 
 from collections.abc import Iterable
+from enum import StrEnum
 
 import polars as pl
 
 from datp_core.artifacts.provenance import Checksum
-from datp_core.core.errors import DataIntegrityError, LeakageError, ScientificContractError
+from datp_core.core.errors import (
+    DataIntegrityError,
+    ErrorMessage,
+    LeakageError,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import (
     CaptureTimestampColumn,
     ContractSubject,
@@ -37,15 +43,38 @@ _MAX_HIST = WorkingFrameColumn.MAX_HISTORICAL
 _MIN_FUT = WorkingFrameColumn.MIN_FUTURE
 
 
+class PopulationIntegrityViolation(StrEnum):
+    CAPABILITY_POPULATION_MISMATCH = "capability_population_mismatch"
+    MISSING_CAPTURE_TIMESTAMPS = "missing_capture_timestamps"
+    DIRICHLET_SOURCE_ROWS_NOT_CONSERVED = "dirichlet_source_rows_not_conserved"
+    DIRICHLET_DUPLICATE_STABLE_ROW_IDENTITIES = "dirichlet_duplicate_stable_row_identities"
+    DIRICHLET_CLIENT_COUNT_EXCEEDED = "dirichlet_client_count_exceeded"
+    MEMBERSHIP_ROW_COUNT_MISMATCH = "membership_row_count_mismatch"
+    MEMBERSHIP_DUPLICATE_STABLE_ROW_IDENTITIES = "membership_duplicate_stable_row_identities"
+    MEMBERSHIP_CLIENTS_NOT_ACCEPTED = "membership_clients_not_accepted"
+    MEMBERSHIP_EMPTY_WITH_NONZERO_MANIFEST = "membership_empty_with_nonzero_manifest"
+    CANDIDATE_CLIENT_COUNT_MISMATCH = "candidate_client_count_mismatch"
+    ASSIGNMENT_ROW_COUNT_MISMATCH = "assignment_row_count_mismatch"
+    ASSIGNMENT_ROWS_NOT_CONSERVED = "assignment_rows_not_conserved"
+    ASSIGNMENT_DUPLICATE_STABLE_ROW_IDENTITIES = "assignment_duplicate_stable_row_identities"
+    ROLE_COUNT_MISMATCH = "role_count_mismatch"
+    ATTACK_ROWS_IN_FIT_ROLES = "attack_rows_in_fit_roles"
+    FUTURE_PRECEDES_HISTORICAL = "future_precedes_historical"
+    OUTCOME_COUNT_MISMATCH = "outcome_count_mismatch"
+    MISSING_REQUIRED_COLUMNS = "missing_required_columns"
+
+
 def reject_non_benign_labels(
-    labels: Iterable[str], #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
+    labels: Iterable[
+        str
+    ],  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
     *,
     message: str,
     subject: ContractSubject,
-    benign_label: str = PopulationOutcomeLabel.BENIGN.value,#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
+    benign_label: str = PopulationOutcomeLabel.BENIGN.value,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
 ) -> None:
     if any(label != benign_label for label in labels):
-        raise LeakageError(message, subject=subject)
+        raise LeakageError(ErrorMessage(message), subject=subject)
 
 
 def membership_frame_checksum(membership: pl.DataFrame) -> Checksum:
@@ -73,9 +102,9 @@ def validate_population_manifest(
     _require_candidate_count(document.candidate_clients, declaration.client_count, document.population)
     if capabilities.population is not document.population:
         raise ScientificContractError(
-            "capability profile population mismatch",
+            ErrorMessage("capability profile population mismatch"),
             subject=document.population,
-            reason="capabilities must be derived for the same population",
+            reason=PopulationIntegrityViolation.CAPABILITY_POPULATION_MISMATCH,
         )
     _validate_label_counts(membership, document.benign_row_count, document.attack_row_count)
 
@@ -98,9 +127,9 @@ def validate_no_future_history_leakage(
 ) -> None:
     if capture_timestamp_column not in assignments.columns:
         raise ScientificContractError(
-            "chronological leakage check requires capture timestamps",
+            ErrorMessage("chronological leakage check requires capture timestamps"),
             subject=StageOperationId.SPLIT,
-            reason="temporal diagnostics cannot run without verified timestamps",
+            reason=PopulationIntegrityViolation.MISSING_CAPTURE_TIMESTAMPS,
         )
     historical = assignments.filter(
         pl.col(PARTITION_ROLE_COLUMN).is_in([PartitionRole.TRAIN, PartitionRole.CALIBRATION])
@@ -127,21 +156,21 @@ def validate_dirichlet_conservation(
     population = PopulationId.NBAIOT_DIRICHLET_CLIENTS
     if membership.height != source_row_count.value:
         raise DataIntegrityError(
-            "Dirichlet partition does not conserve source rows",
+            ErrorMessage("Dirichlet partition does not conserve source rows"),
             subject=population,
-            reason="every eligible source row must appear exactly once",
+            reason=PopulationIntegrityViolation.DIRICHLET_SOURCE_ROWS_NOT_CONSERVED,
         )
     if membership.get_column(STABLE_ROW_ID_COLUMN).n_unique() != membership.height:
         raise DataIntegrityError(
-            "Dirichlet partition duplicated stable row identities",
+            ErrorMessage("Dirichlet partition duplicated stable row identities"),
             subject=population,
-            reason="synthetic partitions must never duplicate rows",
+            reason=PopulationIntegrityViolation.DIRICHLET_DUPLICATE_STABLE_ROW_IDENTITIES,
         )
     if membership.get_column(CLIENT_ID_COLUMN).n_unique() > client_count.value:
         raise DataIntegrityError(
-            "Dirichlet partition created more clients than declared",
+            ErrorMessage("Dirichlet partition created more clients than declared"),
             subject=population,
-            reason="controlled partitions lock the client count at twenty",
+            reason=PopulationIntegrityViolation.DIRICHLET_CLIENT_COUNT_EXCEEDED,
         )
 
 
@@ -152,49 +181,53 @@ def _require_membership_row_contract(
 ) -> None:
     if membership.height != expected_rows.value:
         raise DataIntegrityError(
-            "membership row count disagrees with the population manifest",
+            ErrorMessage("membership row count disagrees with the population manifest"),
             subject=population,
-            reason="manifests must match their membership frames",
+            reason=PopulationIntegrityViolation.MEMBERSHIP_ROW_COUNT_MISMATCH,
         )
     if membership.get_column(STABLE_ROW_ID_COLUMN).n_unique() != membership.height:
         raise DataIntegrityError(
-            "membership contains duplicated stable row identities",
+            ErrorMessage("membership contains duplicated stable row identities"),
             subject=population,
-            reason="each source row may belong to at most one client",
+            reason=PopulationIntegrityViolation.MEMBERSHIP_DUPLICATE_STABLE_ROW_IDENTITIES,
         )
 
 
 def _require_membership_client_subset(
     membership: pl.DataFrame,
-    accepted_clients: tuple[str, ...], #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
+    accepted_clients: tuple[
+        str, ...
+    ],  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
     population: PopulationId,
 ) -> None:
     observed_clients = frozenset(membership.get_column(CLIENT_ID_COLUMN).unique().to_list())
     accepted = frozenset(accepted_clients)
     if not observed_clients <= accepted:
         raise DataIntegrityError(
-            "membership clients disagree with accepted client identities",
+            ErrorMessage("membership clients disagree with accepted client identities"),
             subject=population,
-            reason="membership may only contain accepted clients; empty accepted clients may lack rows",
+            reason=PopulationIntegrityViolation.MEMBERSHIP_CLIENTS_NOT_ACCEPTED,
         )
     if accepted_clients and not observed_clients and membership.height > 0:
         raise DataIntegrityError(
-            "membership is empty while the manifest records rows",
+            ErrorMessage("membership is empty while the manifest records rows"),
             subject=population,
-            reason="non-empty membership row counts require client identities",
+            reason=PopulationIntegrityViolation.MEMBERSHIP_EMPTY_WITH_NONZERO_MANIFEST,
         )
 
 
 def _require_candidate_count(
-    candidates: tuple[str, ...], #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
+    candidates: tuple[
+        str, ...
+    ],  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
     expected: ClientCount,
     population: PopulationId,
 ) -> None:
     if len(candidates) != expected.value:
         raise DataIntegrityError(
-            "candidate client count disagrees with the population declaration",
+            ErrorMessage("candidate client count disagrees with the population declaration"),
             subject=population,
-            reason="candidate visibility must match the locked client count",
+            reason=PopulationIntegrityViolation.CANDIDATE_CLIENT_COUNT_MISMATCH,
         )
 
 
@@ -206,21 +239,21 @@ def _require_assignment_row_contract(
 ) -> None:
     if assignments.height != expected_rows.value:
         raise DataIntegrityError(
-            "assignment row count disagrees with the split manifest",
+            ErrorMessage("assignment row count disagrees with the split manifest"),
             subject=population,
-            reason="split manifests must match their assignment frames",
+            reason=PopulationIntegrityViolation.ASSIGNMENT_ROW_COUNT_MISMATCH,
         )
     if assignments.height != membership.height:
         raise DataIntegrityError(
-            "split assignments do not conserve membership rows",
+            ErrorMessage("split assignments do not conserve membership rows"),
             subject=population,
-            reason="every membership row requires exactly one split assignment",
+            reason=PopulationIntegrityViolation.ASSIGNMENT_ROWS_NOT_CONSERVED,
         )
     if assignments.get_column(STABLE_ROW_ID_COLUMN).n_unique() != assignments.height:
         raise DataIntegrityError(
-            "split assignments contain duplicated stable row identities",
+            ErrorMessage("split assignments contain duplicated stable row identities"),
             subject=population,
-            reason="train, calibration, recalibration, and evaluation must be disjoint",
+            reason=PopulationIntegrityViolation.ASSIGNMENT_DUPLICATE_STABLE_ROW_IDENTITIES,
         )
 
 
@@ -235,9 +268,9 @@ def _require_role_counts(assignments: pl.DataFrame, document: SplitManifestDocum
         observed = int(assignments.filter(pl.col(PARTITION_ROLE_COLUMN) == role).height)
         if observed != expected.value:
             raise DataIntegrityError(
-                f"split role count mismatch for {role.value}",
+                ErrorMessage(f"split role count mismatch for {role.value}"),
                 subject=document.population,
-                reason="manifest partition counts must match assignment rows",
+                reason=PopulationIntegrityViolation.ROLE_COUNT_MISMATCH,
             )
 
 
@@ -247,9 +280,9 @@ def _require_benign_only_fit_roles(assignments: pl.DataFrame, population: Popula
     )
     if train_calibration.filter(pl.col(OUTCOME_LABEL_COLUMN) == _ATTACK).height > 0:
         raise LeakageError(
-            "attack rows entered training or calibration",
+            ErrorMessage("attack rows entered training or calibration"),
             subject=population,
-            reason="training and calibration are benign-only",
+            reason=PopulationIntegrityViolation.ATTACK_ROWS_IN_FIT_ROLES,
         )
 
 
@@ -257,7 +290,7 @@ def _reject_client_future_history_leakage(
     historical: pl.DataFrame,
     future: pl.DataFrame,
     capture_timestamp_column: CaptureTimestampColumn,
-    client_id: str,#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
+    client_id: str,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
 ) -> None:
     if historical.height == 0 or future.height == 0:
         return
@@ -267,9 +300,9 @@ def _reject_client_future_history_leakage(
     )
     if boundary.filter(pl.col(_MAX_HIST) > pl.col(_MIN_FUT)).height > 0:
         raise LeakageError(
-            f"future rows precede historical rows for client {client_id!r}",
+            ErrorMessage(f"future rows precede historical rows for client {client_id!r}"),
             subject=StageOperationId.SPLIT,
-            reason="chronological splits forbid future-to-history leakage",
+            reason=PopulationIntegrityViolation.FUTURE_PRECEDES_HISTORICAL,
         )
 
 
@@ -281,21 +314,23 @@ def _validate_label_counts(
     observed_benign, observed_attack = outcome_row_counts(membership)
     if observed_benign != benign_count or observed_attack != attack_count:
         raise DataIntegrityError(
-            "membership outcome counts disagree with the population manifest",
+            ErrorMessage("membership outcome counts disagree with the population manifest"),
             subject=PopulationFrameColumn.OUTCOME_LABEL,
-            reason="benign and attack tallies must be exact",
+            reason=PopulationIntegrityViolation.OUTCOME_COUNT_MISMATCH,
         )
 
 
 def _require_columns(
     frame: pl.DataFrame,
-    columns: tuple[str, ...],#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
+    columns: tuple[
+        str, ...
+    ],  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
     subject: StageOperationId,
 ) -> None:
     missing = tuple(column for column in columns if column not in frame.columns)
     if missing:
         raise DataIntegrityError(
-            f"{subject.value} is missing required columns",
+            ErrorMessage(f"{subject.value} is missing required columns"),
             subject=subject,
-            reason="integrity validation requires the locked frame schema",
+            reason=PopulationIntegrityViolation.MISSING_REQUIRED_COLUMNS,
         )

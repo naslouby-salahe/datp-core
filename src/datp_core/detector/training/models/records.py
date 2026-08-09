@@ -4,7 +4,10 @@ from pathlib import Path
 import polars as pl
 
 from datp_core.artifacts.provenance import Checksum
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import (
     CommunicationEstimationMethod,
     ContractSubject,
@@ -26,12 +29,12 @@ def validate_client_preprocessing_match(
     state_identity = preprocessing_state.client_identity
     if state_identity.value != client.client_id:
         raise ScientificContractError(
-            "preprocessing state client identity token must match the client training input",
+            ErrorMessage("preprocessing state client identity token must match the client training input"),
             subject=ContractSubject.CLIENT_IDENTITY,
         )
     if preprocessing_state.protocol.input_feature_names != feature_names:
         raise ScientificContractError(
-            "preprocessing transformed feature schema must match the declared training feature names",
+            ErrorMessage("preprocessing transformed feature schema must match the declared training feature names"),
             subject=ContractSubject.SCHEMA,
         )
 
@@ -46,7 +49,7 @@ class ClientTrainingInput:
     def __post_init__(self) -> None:
         if self.training_features.height < 1:
             raise ScientificContractError(
-                "client training input requires at least one benign training row",
+                ErrorMessage("client training input requires at least one benign training row"),
                 subject=ContractSubject.ROWS,
             )
         validate_client_preprocessing_match(
@@ -72,7 +75,7 @@ class ClientUpdate:
     def __post_init__(self) -> None:
         if self.sample_count.value < 1:
             raise ScientificContractError(
-                "a client update requires at least one training sample",
+                ErrorMessage("a client update requires at least one training sample"),
                 subject=ContractSubject.ROWS,
             )
 
@@ -104,7 +107,7 @@ class CommunicationRecord:
     def __post_init__(self) -> None:
         if self.estimation_basis is not CommunicationEstimationMethod.SERIALIZED_MESSAGE_SIZE_ESTIMATE:
             raise ScientificContractError(
-                "communication bytes must remain tagged as serialized-message-size estimates",
+                ErrorMessage("communication bytes must remain tagged as serialized-message-size estimates"),
                 subject=ContractSubject.RUNTIME,
             )
 
@@ -128,7 +131,7 @@ class GlobalModelStateReference:
     def __post_init__(self) -> None:
         if self.coordinate.model not in _GLOBAL_MODELS:
             raise ScientificContractError(
-                "a global state reference requires a global federated model coordinate",
+                ErrorMessage("a global state reference requires a global federated model coordinate"),
                 subject=ContractSubject.COORDINATE,
             )
 
@@ -145,12 +148,12 @@ class PersonalizedModelStateReference:
     def __post_init__(self) -> None:
         if self.coordinate.model is not TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER:
             raise ScientificContractError(
-                "personalized state references require the Ditto personalized coordinate",
+                ErrorMessage("personalized state references require the Ditto personalized coordinate"),
                 subject=ContractSubject.COORDINATE,
             )
         if self.client.population != self.coordinate.population:
             raise ScientificContractError(
-                "personalized state client population must match its coordinate",
+                ErrorMessage("personalized state client population must match its coordinate"),
                 subject=ContractSubject.CLIENT_IDENTITY,
             )
 
@@ -167,7 +170,7 @@ class FederatedRoundResult:
     def __post_init__(self) -> None:
         if not self.client_results:
             raise ScientificContractError(
-                "a federated round requires at least one client result",
+                ErrorMessage("a federated round requires at least one client result"),
                 subject=ContractSubject.CLIENT,
             )
 
@@ -176,18 +179,18 @@ class FederatedRoundResult:
 
         if len(client_set) != client_count:
             raise ScientificContractError(
-                "a federated round cannot contain duplicate client results",
+                ErrorMessage("a federated round cannot contain duplicate client results"),
                 subject=ContractSubject.CLIENT_IDENTITY,
             )
 
         if self.communication.round_number != self.round_number:
             raise ScientificContractError(
-                "communication round must match the training round",
+                ErrorMessage("communication round must match the training round"),
                 subject=ContractSubject.COORDINATE,
             )
         if self.global_state_reference.round_number != self.round_number:
             raise ScientificContractError(
-                "global state round must match the training round",
+                ErrorMessage("global state round must match the training round"),
                 subject=ContractSubject.COORDINATE,
             )
 
@@ -200,7 +203,7 @@ class FederatedRoundResult:
 
             if len(personalized_client_set) != personalized_count:
                 raise ScientificContractError(
-                    "a federated round cannot contain duplicate personalized references",
+                    ErrorMessage("a federated round cannot contain duplicate personalized references"),
                     subject=ContractSubject.CLIENT_IDENTITY,
                 )
         else:
@@ -210,29 +213,29 @@ class FederatedRoundResult:
             case TrainingModelId.DITTO_GLOBAL_AUTOENCODER:
                 if personalized_client_set != client_set:
                     raise ScientificContractError(
-                        "every Ditto global round requires exactly one personalized reference per client",
+                        ErrorMessage("every Ditto global round requires exactly one personalized reference per client"),
                         subject=ContractSubject.CLIENT,
                     )
                 for reference in personalized:
                     if reference.round_number != self.round_number:
                         raise ScientificContractError(
-                            "personalized state round must match the containing training round",
+                            ErrorMessage("personalized state round must match the containing training round"),
                             subject=ContractSubject.COORDINATE,
                         )
                     if not coordinate.matches_ditto_peer(reference.coordinate):
                         raise ScientificContractError(
-                            "Ditto global and personalized references must share one experiment identity",
+                            ErrorMessage("Ditto global and personalized references must share one experiment identity"),
                             subject=ContractSubject.COORDINATE,
                         )
             case TrainingModelId.FEDAVG_AUTOENCODER | TrainingModelId.FEDPROX_AUTOENCODER:
                 if personalized:
                     raise ScientificContractError(
-                        "FedAvg and FedProx rounds cannot carry personalized references",
+                        ErrorMessage("FedAvg and FedProx rounds cannot carry personalized references"),
                         subject=ContractSubject.COORDINATE,
                     )
             case _:
                 raise ScientificContractError(
-                    "unsupported global model in a federated round",
+                    ErrorMessage("unsupported global model in a federated round"),
                     subject=ContractSubject.COORDINATE,
                 )
 
@@ -245,7 +248,7 @@ class FederatedTrainingHistory:
     def __post_init__(self) -> None:
         if not self.rounds:
             raise ScientificContractError(
-                "federated training history must contain at least one round",
+                ErrorMessage("federated training history must contain at least one round"),
                 subject=ContractSubject.TRAINING,
             )
 
@@ -254,16 +257,16 @@ class FederatedTrainingHistory:
         for expected_val, item in enumerate(self.rounds, start=1):
             if item.round_number.value != expected_val:
                 raise ScientificContractError(
-                    "federated history rounds must be consecutive from one",
+                    ErrorMessage("federated history rounds must be consecutive from one"),
                     subject=ContractSubject.CHECKPOINT_CANDIDATES,
                 )
             if item.global_state_reference.coordinate != self.coordinate:
                 raise ScientificContractError(
-                    "every training-history round must use the history coordinate",
+                    ErrorMessage("every training-history round must use the history coordinate"),
                     subject=ContractSubject.COORDINATE,
                 )
             if tuple(result.client for result in item.client_results) != reference_clients:
                 raise ScientificContractError(
-                    "every training-history round must preserve deterministic client ordering",
+                    ErrorMessage("every training-history round must preserve deterministic client ordering"),
                     subject=ContractSubject.CLIENT,
                 )

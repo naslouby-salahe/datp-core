@@ -24,7 +24,10 @@ from datp_core.analysis.metrics.fixed_score_checksums import (
 )
 from datp_core.analysis.metrics.models import ClientMetricResult, metric_by_id
 from datp_core.artifacts.serializers.json import canonical_checksum
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import (
     EvaluationCohort,
     EvidenceRole,
@@ -54,12 +57,12 @@ def build_federated_evaluation_inputs(
 ) -> FederatedEvaluationInputs:
     if calibration_role not in _CALIBRATION_ROLES:
         raise ScientificContractError(
-            "evaluation inputs require a calibration partition role",
+            ErrorMessage("evaluation inputs require a calibration partition role"),
             subject=calibration_role,
         )
     if not score_manifest.records_for(calibration_role):
         raise ScientificContractError(
-            "evaluation inputs require the declared calibration score set",
+            ErrorMessage("evaluation inputs require the declared calibration score set"),
             subject=calibration_role,
         )
 
@@ -105,14 +108,16 @@ def _client_aurocs(
     records = sorted(manifest.evaluation_records, key=lambda record: record.scored_client)
 
     if len(eligibility) != len(records):
-        raise ScientificContractError("evaluation inputs require cohort coverage for every score client")
+        raise ScientificContractError(ErrorMessage("evaluation inputs require cohort coverage for every score client"))
 
     evidence_role = population_capabilities(manifest.coordinate.population).evidentiary_role
 
     evidences: list[ClientAurocEvidence] = []
     for score_record, eligibility_record in zip(records, eligibility, strict=True):
         if score_record.scored_client != eligibility_record.client:
-            raise ScientificContractError("evaluation inputs require cohort coverage for every score client")
+            raise ScientificContractError(
+                ErrorMessage("evaluation inputs require cohort coverage for every score client")
+            )
 
         evidences.append(
             _client_auroc_evidence(

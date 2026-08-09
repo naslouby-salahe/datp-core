@@ -8,7 +8,10 @@ import numpy as np
 from scipy.stats import norm
 
 from datp_core.artifacts.provenance import Checksum, checksum_text
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import AvailabilityStatus, ContractSubject, QuantileInterpolationSemantics
 from datp_core.core.numeric import (
     CalibrationSampleWeights,
@@ -40,7 +43,7 @@ class ClientBenignCalibrationScores:
     def __post_init__(self) -> None:
         if not self.scores:
             raise ScientificContractError(
-                "eligible client calibration scores must be non-empty",
+                ErrorMessage("eligible client calibration scores must be non-empty"),
                 subject=ContractSubject.CALIBRATION,
             )
 
@@ -57,7 +60,7 @@ def calibration_scores_from_references(
 ) -> ClientBenignCalibrationScores:
     if any(reference.client != client for reference in references):
         raise ScientificContractError(
-            "calibration score references must belong to one declared client",
+            ErrorMessage("calibration score references must belong to one declared client"),
             subject=ContractSubject.CLIENT_IDENTITY,
         )
     manifest_checksum = checksum_text("|".join(sorted(reference.stable_row_id for reference in references)))
@@ -72,11 +75,11 @@ def calibration_scores_from_references(
 
 def require_eligible_cohort(
     eligible: tuple[ClientBenignCalibrationScores, ...],
-    policy_label: str, #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    policy_label: str,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
 ) -> None:
     if not eligible:
         raise ScientificContractError(
-            f"{policy_label} requires at least one eligible client",
+            ErrorMessage(f"{policy_label} requires at least one eligible client"),
             subject=ContractSubject.THRESHOLD,
         )
 
@@ -99,7 +102,11 @@ def local_quantile(client_scores: ClientBenignCalibrationScores, quantile: Quant
     )
 
 
-def _numpy_interpolation_method(semantics: QuantileInterpolationSemantics) -> Literal["linear"]: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+def _numpy_interpolation_method(
+    semantics: QuantileInterpolationSemantics,
+) -> Literal[
+    "linear"
+]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     match semantics:
         case QuantileInterpolationSemantics.NUMPY_QUANTILE_LINEAR:
             return "linear"
@@ -110,7 +117,7 @@ def exact_empirical_quantile(scores: np.ndarray, quantile: Quantile) -> Threshol
     method = _numpy_interpolation_method(quantile_interpolation_semantics())
     value = float(np.quantile(scores, quantile.value, method=method))
     if not np.isfinite(value):
-        raise ScientificContractError("quantile result must be finite", subject=ContractSubject.THRESHOLD)
+        raise ScientificContractError(ErrorMessage("quantile result must be finite"), subject=ContractSubject.THRESHOLD)
     return ThresholdValue(value)
 
 
@@ -121,7 +128,7 @@ def quantile_interpolation_semantics() -> QuantileInterpolationSemantics:
 def unweighted_mean(values: tuple[ThresholdValue, ...]) -> ThresholdValue:
     if not values:
         raise ScientificContractError(
-            "an unweighted mean requires at least one contributing value",
+            ErrorMessage("an unweighted mean requires at least one contributing value"),
             subject=ContractSubject.THRESHOLD,
         )
     return ThresholdValue(sum(item.value for item in values) / len(values))
@@ -133,12 +140,12 @@ def sample_weighted_mean(
 ) -> ThresholdValue:
     if not values or len(values) != len(weights.weights):
         raise ScientificContractError(
-            "a sample-weighted mean requires one weight per contributing value",
+            ErrorMessage("a sample-weighted mean requires one weight per contributing value"),
             subject=ContractSubject.THRESHOLD,
         )
     if weights.total <= 0:
         raise ScientificContractError(
-            "sample-weighted mean requires positive total support",
+            ErrorMessage("sample-weighted mean requires positive total support"),
             subject=ContractSubject.THRESHOLD,
         )
     return ThresholdValue(
@@ -150,7 +157,7 @@ def sample_weighted_mean(
 def conformal_rank_index(calibration_count: RowCount, coverage: CoverageTarget) -> ConformalRankIndex:
     if calibration_count.value < 1:
         raise ScientificContractError(
-            "conformal rank requires at least one calibration score",
+            ErrorMessage("conformal rank requires at least one calibration score"),
             subject=ContractSubject.CALIBRATION,
         )
     return ConformalRankIndex(ceil((calibration_count.value + 1) * coverage.value))
@@ -165,7 +172,7 @@ def finite_sample_conformal_threshold(
     rank_index = conformal_rank_index(calibration_count, coverage)
     if rank_index.value > calibration_count.value:
         raise ScientificContractError(
-            "finite-sample conformal rank exceeds the available calibration count",
+            ErrorMessage("finite-sample conformal rank exceeds the available calibration count"),
             subject=ContractSubject.CALIBRATION,
         )
     ordered = np.sort(scores)
@@ -187,7 +194,7 @@ def gaussian_matched_exceedance_threshold(
     value = mean.value + float(norm.ppf(quantile.value)) * sqrt(variance.value)
     if not np.isfinite(value):
         raise ScientificContractError(
-            "matched-exceedance threshold must be finite",
+            ErrorMessage("matched-exceedance threshold must be finite"),
             subject=ContractSubject.THRESHOLD,
         )
     return ThresholdValue(value)
@@ -204,8 +211,8 @@ def fixed_coefficient_threshold(
 def _require_score_vector(scores: np.ndarray) -> None:
     if scores.ndim != 1 or scores.size == 0:
         raise ScientificContractError(
-            "quantile and rank computations require a non-empty one-dimensional score array",
+            ErrorMessage("quantile and rank computations require a non-empty one-dimensional score array"),
             subject=ContractSubject.SCORES,
         )
     if not np.isfinite(scores).all():
-        raise ScientificContractError("scores must be finite", subject=ContractSubject.SCORES)
+        raise ScientificContractError(ErrorMessage("scores must be finite"), subject=ContractSubject.SCORES)

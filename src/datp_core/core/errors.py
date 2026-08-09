@@ -1,6 +1,19 @@
 """DATP-Core typed errors."""
 
-from enum import Enum
+from enum import Enum, StrEnum
+from typing import ClassVar
+
+from datp_core.core.identifiers import NonEmptyString
+
+
+class ErrorMessage(NonEmptyString):
+    validation_name: ClassVar[str] = "error message"
+
+
+class MissingPrerequisiteReason(StrEnum):
+    """Controlled discriminants for :class:`MissingPrerequisiteError` callers that branch on cause."""
+
+    ANCHOR_GATE = "anchor_gate"
 
 
 def _subject_token(subject: Enum | None) -> str | None:
@@ -13,12 +26,12 @@ def _subject_token(subject: Enum | None) -> str | None:
 class DatpCoreError(Exception):
     def __init__(
         self,
-        message: str, #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+        message: ErrorMessage,
         *,
         subject: Enum | None = None,
-        reason: str | None = None, #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+        reason: Enum | None = None,
     ) -> None:
-        super().__init__(message)
+        super().__init__(str(message))
         self.message = message
         self.subject = _subject_token(subject)
         self.reason = reason
@@ -28,7 +41,7 @@ class ScientificContractError(DatpCoreError):
     pass
 
 
-def require_contract(condition: bool, message: str, subject: Enum | None = None) -> None:
+def require_contract(condition: bool, message: ErrorMessage, subject: Enum | None = None) -> None:
     if not condition:
         raise ScientificContractError(message, subject=subject)
 

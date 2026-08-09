@@ -5,7 +5,10 @@ from pathlib import Path
 import polars as pl
 
 from datp_core.artifacts.provenance import Checksum, checksum_file
-from datp_core.core.errors import ArtifactIntegrityError
+from datp_core.core.errors import (
+    ArtifactIntegrityError,
+    ErrorMessage,
+)
 from datp_core.core.numeric import RowCount
 
 
@@ -22,10 +25,10 @@ def read_frame(
     expected_row_count: RowCount | None = None,
 ) -> pl.DataFrame:
     if not path.is_file():
-        raise ArtifactIntegrityError(f"Parquet artifact is missing: {path}")
+        raise ArtifactIntegrityError(ErrorMessage(f"Parquet artifact is missing: {path}"))
     if expected_checksum is not None and checksum_file(path) != expected_checksum:
-        raise ArtifactIntegrityError(f"Parquet artifact checksum mismatch: {path}")
+        raise ArtifactIntegrityError(ErrorMessage(f"Parquet artifact checksum mismatch: {path}"))
     frame = pl.read_parquet(path)
     if expected_row_count is not None and frame.height != expected_row_count.value:
-        raise ArtifactIntegrityError(f"Parquet artifact row count mismatch: {path}")
+        raise ArtifactIntegrityError(ErrorMessage(f"Parquet artifact row count mismatch: {path}"))
     return frame

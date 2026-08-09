@@ -4,7 +4,10 @@ from pathlib import Path
 import torch
 
 from datp_core.artifacts.provenance import Checksum
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import ContractSubject, CudaDeviceName, TrainingModelId
 from datp_core.core.numeric import BatchSize, ClientCount, LearningRate, RoundNumber, Seed
 from datp_core.data.populations.contracts import ClientIdentity
@@ -70,7 +73,7 @@ def _require_client_entry[T](mapping: dict[ClientIdentity, T], client: ClientIde
         return mapping[client]
     except KeyError as err:
         raise ScientificContractError(
-            "Ditto personalized state must resolve exactly once per client",
+            ErrorMessage("Ditto personalized state must resolve exactly once per client"),
             subject=ContractSubject.CLIENT_IDENTITY,
         ) from err
 
@@ -78,17 +81,17 @@ def _require_client_entry[T](mapping: dict[ClientIdentity, T], client: ClientIde
 def _validate_request(request: DittoTrainingRequest) -> None:
     if request.training_protocol.kind is not TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER:
         raise ScientificContractError(
-            "Ditto protocol kind must be DITTO_PERSONALIZED_AUTOENCODER",
+            ErrorMessage("Ditto protocol kind must be DITTO_PERSONALIZED_AUTOENCODER"),
             subject=request.training_protocol.kind,
         )
     if request.coordinates.global_coordinate.model_coefficient != request.training_protocol.regularization:
         raise ScientificContractError(
-            "Ditto coordinate regularization must match the protocol",
+            ErrorMessage("Ditto coordinate regularization must match the protocol"),
             subject=ContractSubject.COORDINATE,
         )
     if request.training_protocol.local_epochs.value != 1:
         raise ScientificContractError(
-            "Ditto requires exactly one local epoch",
+            ErrorMessage("Ditto requires exactly one local epoch"),
             subject=ContractSubject.TRAINING,
         )
     validate_common_request(
@@ -178,7 +181,7 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
 
             if personalized_update.sample_count != global_update.sample_count:
                 raise ScientificContractError(
-                    "Ditto global and personalized updates must process the same client rows",
+                    ErrorMessage("Ditto global and personalized updates must process the same client rows"),
                     subject=ContractSubject.ROWS,
                 )
 

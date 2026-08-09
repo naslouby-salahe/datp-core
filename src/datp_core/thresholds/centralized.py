@@ -19,7 +19,10 @@ from datp_core.artifacts.repositories.publication import (
 )
 from datp_core.artifacts.serializers.json import canonical_checksum, canonical_json_text
 from datp_core.core.contracts import StrictModel
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import (
     CentralizedThresholdMethod,
     ContractSubject,
@@ -96,7 +99,7 @@ class PooledThresholdResult:
     def __post_init__(self) -> None:
         if self.method is not CentralizedThresholdMethod.POOLED_BENIGN_QUANTILE:
             raise ScientificContractError(
-                "centralized threshold method must be POOLED_BENIGN_QUANTILE",
+                ErrorMessage("centralized threshold method must be POOLED_BENIGN_QUANTILE"),
                 subject=self.method,
             )
         if self.calibration_score_count.value < 1:
@@ -166,22 +169,22 @@ class CentralizedEvaluationResult:
     def __post_init__(self) -> None:
         if self.threshold_method is not CentralizedThresholdMethod.POOLED_BENIGN_QUANTILE:
             raise ScientificContractError(
-                "centralized evaluation requires the pooled benign quantile threshold",
+                ErrorMessage("centralized evaluation requires the pooled benign quantile threshold"),
                 subject=self.threshold_method,
             )
         if self.evidence_role is EvidenceRole.CONFIRMATORY:
             raise ScientificContractError(
-                "centralized evaluation cannot claim confirmatory evidence role",
+                ErrorMessage("centralized evaluation cannot claim confirmatory evidence role"),
                 subject=self.evidence_role,
             )
         if not self.confusion.attack_assignment_valid:
             raise ScientificContractError(
-                "centralized pooled evaluation always carries a valid attack assignment",
+                ErrorMessage("centralized pooled evaluation always carries a valid attack assignment"),
                 subject=ContractSubject.ATTACK_LABELS,
             )
         if tuple(record.metric for record in self.metrics) != CENTRALIZED_POOLED_METRICS:
             raise ScientificContractError(
-                "centralized evaluation metrics must follow the declared pooled metric order",
+                ErrorMessage("centralized evaluation metrics must follow the declared pooled metric order"),
                 subject=ContractSubject.METRICS,
             )
 
@@ -355,13 +358,13 @@ def construct_centralized_threshold_value(
 def exact_pooled_quantile(scores: np.ndarray, quantile: Quantile) -> ThresholdValue:
     if scores.ndim != 1 or scores.size == 0:
         raise ScientificContractError(
-            "quantile requires a non-empty one-dimensional score array",
+            ErrorMessage("quantile requires a non-empty one-dimensional score array"),
             subject=ContractSubject.SCORES,
         )
     value = float(np.quantile(scores, quantile.value, method="linear"))
     if not np.isfinite(value):
         raise ScientificContractError(
-            "quantile result must be finite",
+            ErrorMessage("quantile result must be finite"),
             subject=ContractSubject.THRESHOLD,
         )
     return ThresholdValue(value)
@@ -520,17 +523,17 @@ def _validate_threshold_inputs(
 ) -> None:
     if protocol.method is not CentralizedThresholdMethod.POOLED_BENIGN_QUANTILE:
         raise ScientificContractError(
-            "centralized threshold protocol must declare POOLED_BENIGN_QUANTILE",
+            ErrorMessage("centralized threshold protocol must declare POOLED_BENIGN_QUANTILE"),
             subject=protocol.method,
         )
     if calibration_scores.coordinate != coordinate:
         raise ScientificContractError(
-            "score coordinate mismatch during threshold construction",
+            ErrorMessage("score coordinate mismatch during threshold construction"),
             subject=ContractSubject.COORDINATE,
         )
     if calibration_scores.partition_role is not PartitionRole.CALIBRATION:
         raise ScientificContractError(
-            "centralized threshold construction requires calibration scores",
+            ErrorMessage("centralized threshold construction requires calibration scores"),
             subject=calibration_scores.partition_role,
         )
 
@@ -547,7 +550,7 @@ def _benign_calibration_scores(calibration_scores: PooledScoreArtifact) -> np.nd
     )
     if scores.size == 0:
         raise ScientificContractError(
-            "benign calibration score set is empty",
+            ErrorMessage("benign calibration score set is empty"),
             subject=ContractSubject.CALIBRATION,
         )
     reject_non_finite_scores(
@@ -564,15 +567,17 @@ def _validate_evaluation_inputs(
     threshold_result: PooledThresholdResult,
 ) -> None:
     if evaluation_scores.coordinate != coordinate or threshold_result.coordinate != coordinate:
-        raise ScientificContractError("evaluation coordinate mismatch", subject=ContractSubject.COORDINATE)
+        raise ScientificContractError(
+            ErrorMessage("evaluation coordinate mismatch"), subject=ContractSubject.COORDINATE
+        )
     if evaluation_scores.partition_role is not PartitionRole.EVALUATION:
         raise ScientificContractError(
-            "centralized evaluation requires evaluation scores",
+            ErrorMessage("centralized evaluation requires evaluation scores"),
             subject=evaluation_scores.partition_role,
         )
     if threshold_result.method is not CentralizedThresholdMethod.POOLED_BENIGN_QUANTILE:
         raise ScientificContractError(
-            "centralized evaluation requires the pooled benign quantile",
+            ErrorMessage("centralized evaluation requires the pooled benign quantile"),
             subject=threshold_result.method,
         )
     if (
@@ -580,7 +585,7 @@ def _validate_evaluation_inputs(
         or evaluation_scores.checkpoint_checksum != threshold_result.checkpoint_checksum
     ):
         raise ScientificContractError(
-            "centralized threshold and evaluation scores must share one frozen checkpoint",
+            ErrorMessage("centralized threshold and evaluation scores must share one frozen checkpoint"),
             subject=ContractSubject.CHECKPOINT_CANDIDATES,
         )
 
@@ -599,7 +604,9 @@ def _evaluation_arrays(
         ScoreValue(float(value)) for value in frame.get_column(ScoreFrameColumn.RECONSTRUCTION_ERROR.value).to_list()
     )
     if len(scores) != len(labels) or len(scores) != len(row_ids):
-        raise ScientificContractError("evaluation scores and labels must align", subject=ContractSubject.ROWS)
+        raise ScientificContractError(
+            ErrorMessage("evaluation scores and labels must align"), subject=ContractSubject.ROWS
+        )
     return row_ids, labels, scores
 
 

@@ -49,7 +49,7 @@ class ClaimRequest:
     evidence_decision: EvidenceDecision
     verified_anchor_gate: VerifiedAnchorGateArtifact | None
     traffic_rate_available: bool
-    wording: str #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    wording: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     population: PopulationId | None = None
 
     def __post_init__(self) -> None:
@@ -63,8 +63,8 @@ class ClaimRequest:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ClaimDecision:
     status: ClaimStatus
-    wording: str#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    reason: str#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    wording: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    reason: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     anchor_gate_checksum: Checksum | None = None
 
 
@@ -110,7 +110,9 @@ def validate_claim(request: ClaimRequest) -> ClaimDecision:
                 ),
                 reason=f"temporal evidence is {request.evidence_decision.value}",
             )
-    if "formal privacy" in normalized_wording or "privacy guarantee" in normalized_wording: #TODO: use enum and also make sure to check and adapt the whole package
+    if (
+        "formal privacy" in normalized_wording or "privacy guarantee" in normalized_wording
+    ):  # TODO: use enum and also make sure to check and adapt the whole package
         return _suppressed("data locality is not a formal privacy guarantee")
     if "deployment measurement" in normalized_wording or "measured deployment" in normalized_wording:
         return _suppressed("message-size estimates are not deployment measurements")
@@ -195,11 +197,15 @@ def _kind_role_mismatch(request: ClaimRequest) -> ClaimDecision | None:
     return None
 
 
-def _blocked(reason: str) -> ClaimDecision: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+def _blocked(
+    reason: str,
+) -> ClaimDecision:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     return ClaimDecision(status=ClaimStatus.BLOCKED, wording="", reason=reason)
 
 
-def _suppressed(reason: str) -> ClaimDecision: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+def _suppressed(
+    reason: str,
+) -> ClaimDecision:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     return ClaimDecision(status=ClaimStatus.SUPPRESSED, wording="", reason=reason)
 
 

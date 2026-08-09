@@ -1,4 +1,7 @@
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import ContractSubject
 from datp_core.detector.checkpoints.publication import write_federated_training as persist_federated_training
 from datp_core.detector.training.contracts import FedAvgProtocol, FedProxProtocol
@@ -22,13 +25,13 @@ def _validate_protocol_binding(request: FederatedTrainingRequest[GlobalFederated
 
     if request.coordinate.model is not protocol.kind:
         raise ScientificContractError(
-            "global federated coordinate model must match its training protocol",
+            ErrorMessage("global federated coordinate model must match its training protocol"),
             subject=request.coordinate.model,
         )
 
     if protocol.local_epochs != FEDAVG_LOCAL_EPOCHS:
         raise ScientificContractError(
-            "global federated training requires the locked single local epoch",
+            ErrorMessage("global federated training requires the locked single local epoch"),
             subject=ContractSubject.TRAINING,
         )
 
@@ -36,12 +39,12 @@ def _validate_protocol_binding(request: FederatedTrainingRequest[GlobalFederated
         case FedAvgProtocol():
             if request.coordinate.model_coefficient is not None:
                 raise ScientificContractError(
-                    "FedAvg coordinates must not carry a model coefficient",
+                    ErrorMessage("FedAvg coordinates must not carry a model coefficient"),
                     subject=ContractSubject.COORDINATE,
                 )
         case FedProxProtocol():
             if request.coordinate.model_coefficient != protocol.coefficient:
                 raise ScientificContractError(
-                    "FedProx coordinate coefficient must match the protocol coefficient",
+                    ErrorMessage("FedProx coordinate coefficient must match the protocol coefficient"),
                     subject=ContractSubject.COORDINATE,
                 )

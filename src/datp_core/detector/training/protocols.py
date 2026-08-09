@@ -3,7 +3,11 @@
 from collections.abc import Sequence
 from typing import Protocol
 
-from datp_core.core.errors import LeakageError, ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    LeakageError,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import (
     CentralizedModelId,
     ContractSubject,
@@ -40,17 +44,17 @@ def require_non_test_fedprox_coefficient_selection_inputs(
     """Reject test leakage and unsupported selection rules before FedProx coefficient selection."""
     if held_out_metrics is not None:
         raise LeakageError(
-            "held-out evaluation outcomes cannot influence FedProx coefficient selection",
+            ErrorMessage("held-out evaluation outcomes cannot influence FedProx coefficient selection"),
             subject=ContractSubject.HELD_OUT_METRICS,
         )
     if attack_labels_present:
         raise LeakageError(
-            "attack labels cannot influence FedProx coefficient selection",
+            ErrorMessage("attack labels cannot influence FedProx coefficient selection"),
             subject=ContractSubject.ATTACK_LABELS,
         )
     if selection_rule is not FEDPROX_COEFFICIENT_SELECTION_RULE:
         raise ScientificContractError(
-            "unsupported FedProx coefficient selection rule",
+            ErrorMessage("unsupported FedProx coefficient selection rule"),
             subject=ContractSubject.FEDPROX_COEFFICIENT_SELECTION_RULE,
         )
 
@@ -76,7 +80,7 @@ def select_primary_fedprox_coefficient[CandidateT: FedProxCoefficientTrainingLos
     observed = tuple(candidate.coefficient for candidate in candidates)
     if observed != FEDPROX_COEFFICIENTS:
         raise ScientificContractError(
-            "FedProx coefficient candidates must equal the declared frozen grid",
+            ErrorMessage("FedProx coefficient candidates must equal the declared frozen grid"),
             subject=ContractSubject.FEDPROX_COEFFICIENT_SELECTION_RULE,
         )
     return min(
@@ -155,7 +159,7 @@ def resolve_fedprox_protocol(
     )
     if len(matches) != 1:
         raise ScientificContractError(
-            "a FedProx coefficient must resolve to exactly one declared training protocol",
+            ErrorMessage("a FedProx coefficient must resolve to exactly one declared training protocol"),
             subject=TrainingModelId.FEDPROX_AUTOENCODER,
         )
     return matches[0]
@@ -167,7 +171,7 @@ def resolve_ditto_protocol(regularization: DittoRegularization) -> training_cont
     )
     if len(matches) != 1:
         raise ScientificContractError(
-            "a Ditto regularization value must resolve to exactly one declared training protocol",
+            ErrorMessage("a Ditto regularization value must resolve to exactly one declared training protocol"),
             subject=TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER,
         )
     return matches[0]
@@ -183,19 +187,19 @@ def resolve_single_model_federated_training_protocol(
         case TrainingModelId.FEDAVG_AUTOENCODER:
             if coefficient is not None:
                 raise ScientificContractError(
-                    "FedAvg must not declare a model coefficient",
+                    ErrorMessage("FedAvg must not declare a model coefficient"),
                     subject=model,
                 )
             return FEDAVG_TRAINING_PROTOCOL
         case TrainingModelId.FEDPROX_AUTOENCODER:
             if coefficient is None or isinstance(coefficient, DittoRegularization):
                 raise ScientificContractError(
-                    "FedProx requires a declared proximal coefficient",
+                    ErrorMessage("FedProx requires a declared proximal coefficient"),
                     subject=model,
                 )
             return resolve_fedprox_protocol(coefficient)
         case TrainingModelId.DITTO_GLOBAL_AUTOENCODER | TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER:
             raise ScientificContractError(
-                "Ditto requires its related global and personalized execution route",
+                ErrorMessage("Ditto requires its related global and personalized execution route"),
                 subject=model,
             )

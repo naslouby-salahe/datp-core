@@ -4,7 +4,11 @@ from collections.abc import Sequence
 from dataclasses import replace
 
 from datp_core.artifacts.provenance import Checksum
-from datp_core.core.errors import LeakageError, ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    LeakageError,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import (
     CheckpointSelectionRule,
     CheckpointStatus,
@@ -38,22 +42,22 @@ def validate_candidate_coordinates(
     for candidate in candidates:
         if candidate.coordinate != coordinate:
             raise ScientificContractError(
-                "checkpoint candidate coordinate mismatch",
+                ErrorMessage("checkpoint candidate coordinate mismatch"),
                 subject=ContractSubject.COORDINATE,
             )
         if candidate.client != client:
             raise ScientificContractError(
-                "checkpoint candidate client mismatch",
+                ErrorMessage("checkpoint candidate client mismatch"),
                 subject=ContractSubject.CLIENT_IDENTITY,
             )
         if candidate.preprocessing_state_set_checksum != preprocessing_state_set_checksum:
             raise ScientificContractError(
-                "checkpoint candidate preprocessing checksum mismatch",
+                ErrorMessage("checkpoint candidate preprocessing checksum mismatch"),
                 subject=ContractSubject.PREPROCESSING,
             )
         if candidate.split_manifest_checksum != split_manifest_checksum:
             raise ScientificContractError(
-                "checkpoint candidate split checksum mismatch",
+                ErrorMessage("checkpoint candidate split checksum mismatch"),
                 subject=ContractSubject.SPLIT,
             )
 
@@ -107,10 +111,10 @@ def select_checkpoint(
     )
 
 
-def reject_centralized_checkpoint( #TODO this seems like dead code and not used. CHeck if it should be wired or deleted.
+def reject_centralized_checkpoint(  # TODO this seems like dead code and not used. CHeck if it should be wired or deleted.
     marker_identity: FederatedTrainingCoordinate,
 ) -> None:
     raise LeakageError(
-        f"centralized checkpoint cannot enter federated selection ({marker_identity})",
+        ErrorMessage(f"centralized checkpoint cannot enter federated selection ({marker_identity})"),
         subject=ContractSubject.CHECKPOINT_CANDIDATES,
     )

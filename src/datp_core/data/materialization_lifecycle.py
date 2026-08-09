@@ -14,7 +14,7 @@ from datp_core.data.materialization import CanonicalPublication, publish_canonic
 class CanonicalMaterializationRequest[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum]:
     canonical_root: Path
     schema: CanonicalSchema
-    canonicalization_contract: str #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    canonicalization_contract: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     source_paths: tuple[Path, ...]
     source_path_resolver: Callable[[Path], Path]
     asset_role_type: type[AssetRoleT]

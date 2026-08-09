@@ -1,10 +1,15 @@
+from enum import StrEnum
+
 from datp_core.analysis.metrics.cohorts import (
     ClientEligibilityRecord,
     ClientExclusionReason,
     EvaluationCohortManifest,
     EvaluationCohortMembership,
 )
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import (
     ContractSubject,
     EvaluationCohort,
@@ -37,7 +42,7 @@ def build_evaluation_cohort_manifest(
         client = counts.client
         if client.population is not population or client.identity_kind is not capabilities.identity_kind:
             raise ScientificContractError(
-                "client support counts must match the cohort population identity contract",
+                ErrorMessage("client support counts must match the cohort population identity contract"),
                 subject=ContractSubject.CLIENT_IDENTITY,
             )
         record, client_memberships = _classify_client(client, support, counts, capabilities)
@@ -53,6 +58,10 @@ def build_evaluation_cohort_manifest(
     )
 
 
+class CohortConstructionViolation(StrEnum):
+    EMPTY_METHOD_SET = "empty_method_set"
+
+
 def assert_cohort_invariant_to_threshold_methods(
     *,
     population: PopulationId,
@@ -62,9 +71,9 @@ def assert_cohort_invariant_to_threshold_methods(
 ) -> EvaluationCohortManifest:
     if not methods:
         raise ScientificContractError(
-            "cohort invariance requires at least one threshold method identity",
+            ErrorMessage("cohort invariance requires at least one threshold method identity"),
             subject=population,
-            reason="invariance cannot be demonstrated over an empty method set",
+            reason=CohortConstructionViolation.EMPTY_METHOD_SET,
         )
     return build_evaluation_cohort_manifest(
         population=population,
@@ -81,7 +90,7 @@ def cohort_record_for_client(
     for record in cohort.records:
         if record.client == client:
             if match is not None:
-                raise ScientificContractError("evaluation cohort cannot repeat a client")
+                raise ScientificContractError(ErrorMessage("evaluation cohort cannot repeat a client"))
             match = record
     return match
 
@@ -222,7 +231,7 @@ def _cohort_memberships(
     return tuple(memberships)
 
 
-def _unique_reasons( #TODO: should inlined
+def _unique_reasons(  # TODO: should inlined
     reasons: tuple[ClientExclusionReason, ...],
 ) -> tuple[ClientExclusionReason, ...]:
     return tuple(dict.fromkeys(reasons))

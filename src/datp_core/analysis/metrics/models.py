@@ -4,7 +4,10 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 
 from datp_core.artifacts.provenance import Checksum
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import (
     EvaluationCohort,
     EvidenceRole,
@@ -41,13 +44,17 @@ class HeldOutBenignScore:
 
     def __post_init__(self) -> None:
         if self.partition_role is not PartitionRole.EVALUATION:
-            raise ScientificContractError("held-out score evidence rejects non-evaluation score rows")
+            raise ScientificContractError(ErrorMessage("held-out score evidence rejects non-evaluation score rows"))
         if self.outcome_label is not PopulationOutcomeLabel.BENIGN:
-            raise ScientificContractError("held-out score evidence rejects attack-labelled score rows")
+            raise ScientificContractError(ErrorMessage("held-out score evidence rejects attack-labelled score rows"))
         if self.score_record.partition_role is not self.partition_role:
-            raise ScientificContractError("held-out score evidence score provenance has a partition-role mismatch")
+            raise ScientificContractError(
+                ErrorMessage("held-out score evidence score provenance has a partition-role mismatch")
+            )
         if self.score_record.scored_client != self.client:
-            raise ScientificContractError("held-out score evidence score provenance has a client mismatch")
+            raise ScientificContractError(
+                ErrorMessage("held-out score evidence score provenance has a client mismatch")
+            )
 
 
 class MetricStatus(StrEnum):

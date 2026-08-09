@@ -1,5 +1,6 @@
 """Deterministic non-temporal, temporal, and static-reference splits on stable row identities."""
 
+from enum import StrEnum
 from hashlib import sha256
 from math import floor, fsum
 
@@ -9,6 +10,7 @@ import polars as pl
 from datp_core.artifacts.provenance import checksum_text
 from datp_core.core.errors import (
     DataIntegrityError,
+    ErrorMessage,
     LeakageError,
     ScientificContractError,
 )
@@ -42,10 +44,25 @@ from .contracts import (
     PopulationOutcomeLabel,
     SplitConstructionRequest,
     SplitManifestDocument,
+    TemporalSplitViolation,
     assignment_column_names,
     membership_column_names,
 )
 from .integrity import validate_no_future_history_leakage
+
+
+class SplitConstructionViolation(StrEnum):
+    UNSUPPORTED_SPLIT_PROTOCOL = "unsupported_split_protocol"
+    MISSING_MEMBERSHIP_CAPTURE_TIMESTAMPS = "missing_membership_capture_timestamps"
+    TEMPORAL_ATTACK_ROWS_PRESENT = "temporal_attack_rows_present"
+    NULL_CAPTURE_TIMESTAMPS = "null_capture_timestamps"
+    HAMILTON_ROWS_NOT_CONSERVED = "hamilton_rows_not_conserved"
+    ATTACK_ROWS_IN_FIT_ROLES = "attack_rows_in_fit_roles"
+    ASSIGNMENT_ROWS_NOT_CONSERVED = "assignment_rows_not_conserved"
+    ASSIGNMENT_DUPLICATE_STABLE_ROW_IDENTITIES = "assignment_duplicate_stable_row_identities"
+    ASSIGNMENT_IDENTITY_ALTERED = "assignment_identity_altered"
+    MISSING_REQUIRED_COLUMNS = "missing_required_columns"
+
 
 _BENIGN = PopulationOutcomeLabel.BENIGN
 _ATTACK = PopulationOutcomeLabel.ATTACK
@@ -64,9 +81,13 @@ def static_reference_split_protocol() -> StaticReferenceSplitProtocol:
 
 
 def hamilton_integer_counts(
-    total: int, #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    ratios: tuple[float, ...],#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-) -> tuple[int, ...]:#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    total: int,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    ratios: tuple[
+        float, ...
+    ],  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> tuple[
+    int, ...
+]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     """Largest-remainder (Hamilton) integer allocation.
 
     For non-negative integer ``total`` and ratios that sum to one:
@@ -115,9 +136,9 @@ def _assignments_for_protocol(
         case SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE:
             if request.capture_timestamp_column is None:
                 raise ScientificContractError(
-                    "temporal splits require a capture-timestamp column",
+                    ErrorMessage("temporal splits require a capture-timestamp column"),
                     subject=request.population,
-                    reason="chronological partitioning cannot invent time",
+                    reason=TemporalSplitViolation.CAPTURE_TIMESTAMP_UNAVAILABLE,
                 )
             return _temporal_assignments(
                 membership,
@@ -130,9 +151,9 @@ def _assignments_for_protocol(
             )
         case _:
             raise ScientificContractError(
-                "unsupported split protocol",
+                ErrorMessage("unsupported split protocol"),
                 subject=request.split_protocol,
-                reason="split protocol is outside the locked catalogue",
+                reason=SplitConstructionViolation.UNSUPPORTED_SPLIT_PROTOCOL,
             )
 
 
@@ -188,9 +209,9 @@ def _temporal_assignments(
 ) -> pl.DataFrame:
     if capture_timestamp_column not in membership.columns:
         raise ScientificContractError(
-            "membership lacks capture timestamps for chronological split",
+            ErrorMessage("membership lacks capture timestamps for chronological split"),
             subject=SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE,
-            reason="temporal populations require verified capture timestamps",
+            reason=SplitConstructionViolation.MISSING_MEMBERSHIP_CAPTURE_TIMESTAMPS,
         )
     protocol = temporal_split_protocol()
     ratios = (
@@ -207,9 +228,9 @@ def _temporal_assignments(
     )
     if membership.filter(pl.col(OUTCOME_LABEL_COLUMN) == _ATTACK).height > 0:
         raise LeakageError(
-            "temporal populations cannot carry client-assigned attack rows",
+            ErrorMessage("temporal populations cannot carry client-assigned attack rows"),
             subject=SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE,
-            reason="temporal evidence is benign-only",
+            reason=SplitConstructionViolation.TEMPORAL_ATTACK_ROWS_PRESENT,
         )
     pieces = [
         _sequential_role_frame(
@@ -248,7 +269,7 @@ def _static_reference_assignments(
     """Randomize the same temporal inventory without temporal ordering."""
     if membership.filter(pl.col(OUTCOME_LABEL_COLUMN) == _ATTACK).height > 0:
         raise LeakageError(
-            "the matched static reference is benign-only",
+            ErrorMessage("the matched static reference is benign-only"),
             subject=SplitProtocolId.RANDOM_FRACTIONAL_STATIC_REFERENCE,
         )
     protocol = static_reference_split_protocol()
@@ -303,16 +324,18 @@ def _require_sorted_client_rows(
     )
     if client_rows.get_column(capture_timestamp_column).null_count() > 0:
         raise ScientificContractError(
-            f"temporal split encountered null capture timestamps for client {client_id}",
+            ErrorMessage(f"temporal split encountered null capture timestamps for client {client_id}"),
             subject=ContractSubject.CLIENT_IDENTITY,
-            reason="chronology-eligible groups must retain verified timestamps",
+            reason=SplitConstructionViolation.NULL_CAPTURE_TIMESTAMPS,
         )
     return client_rows
 
 
 def _fractional_role_frame(
     frame: pl.DataFrame,
-    ratios: tuple[float, ...], #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    ratios: tuple[
+        float, ...
+    ],  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     roles: tuple[PartitionRole, ...],
     partition_seed: Seed,
     client_id: str,
@@ -342,9 +365,9 @@ def _sequential_role_frame(
     counts = hamilton_integer_counts(ordered.height, ratios)
     if sum(counts) != ordered.height:
         raise DataIntegrityError(
-            "Hamilton allocation failed to conserve rows",
+            ErrorMessage("Hamilton allocation failed to conserve rows"),
             subject=StageOperationId.SPLIT,
-            reason="integer residual allocation must preserve every row",
+            reason=SplitConstructionViolation.HAMILTON_ROWS_NOT_CONSERVED,
         )
     role_values: list[str] = []
     for role, count in zip(roles, counts, strict=True):
@@ -355,7 +378,7 @@ def _sequential_role_frame(
 def _client_permutation(
     size: RowCount,
     partition_seed: Seed,
-    client_id: str, #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    client_id: str,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
 ) -> np.ndarray:
     material = f"{partition_seed.value}:{client_id}".encode()
     digest = sha256(material).digest()
@@ -378,9 +401,9 @@ def _assert_split_invariants(
     )
     if train_or_cal.filter(pl.col(OUTCOME_LABEL_COLUMN) == _ATTACK).height > 0:
         raise LeakageError(
-            "attack rows entered training or calibration",
+            ErrorMessage("attack rows entered training or calibration"),
             subject=StageOperationId.SPLIT,
-            reason="calibration and training are benign-only",
+            reason=SplitConstructionViolation.ATTACK_ROWS_IN_FIT_ROLES,
         )
 
 
@@ -390,23 +413,23 @@ def _require_conserved_identities(
 ) -> None:
     if assignments.height != membership.height:
         raise DataIntegrityError(
-            "split assignments must conserve membership rows",
+            ErrorMessage("split assignments must conserve membership rows"),
             subject=StageOperationId.SPLIT,
-            reason="every membership row requires exactly one partition role",
+            reason=SplitConstructionViolation.ASSIGNMENT_ROWS_NOT_CONSERVED,
         )
     if assignments.get_column(STABLE_ROW_ID_COLUMN).n_unique() != assignments.height:
         raise DataIntegrityError(
-            "split assignments contain duplicated stable row identities",
+            ErrorMessage("split assignments contain duplicated stable row identities"),
             subject=StageOperationId.SPLIT,
-            reason="each row may appear in only one partition",
+            reason=SplitConstructionViolation.ASSIGNMENT_DUPLICATE_STABLE_ROW_IDENTITIES,
         )
     membership_ids = membership.get_column(STABLE_ROW_ID_COLUMN).sort()
     assignment_ids = assignments.get_column(STABLE_ROW_ID_COLUMN).sort()
     if not membership_ids.equals(assignment_ids):
         raise DataIntegrityError(
-            "split assignments alter membership row identities",
+            ErrorMessage("split assignments alter membership row identities"),
             subject=StageOperationId.SPLIT,
-            reason="splits must reuse source-row identities exactly",
+            reason=SplitConstructionViolation.ASSIGNMENT_IDENTITY_ALTERED,
         )
 
 
@@ -414,7 +437,9 @@ def _split_manifest(
     assignments: pl.DataFrame,
     request: SplitConstructionRequest,
 ) -> SplitManifestDocument:
-    def count(role: PartitionRole) -> int: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    def count(
+        role: PartitionRole,
+    ) -> int:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
         return int(assignments.filter(pl.col(PARTITION_ROLE_COLUMN) == role).height)
 
     ordered = assignments.sort([CLIENT_ID_COLUMN, STABLE_ROW_ID_COLUMN])
@@ -449,15 +474,17 @@ def _require_membership_schema(membership: pl.DataFrame) -> None:
     missing = [column for column in names if column not in membership.columns]
     if missing:
         raise DataIntegrityError(
-            "membership frame is missing required columns",
+            ErrorMessage("membership frame is missing required columns"),
             subject=StageOperationId.SPLIT,
-            reason="population builders must emit the locked membership schema",
+            reason=SplitConstructionViolation.MISSING_REQUIRED_COLUMNS,
         )
 
 
 def _require_hamilton_inputs(
-    total: int,#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    ratios: tuple[float, ...],#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    total: int,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    ratios: tuple[
+        float, ...
+    ],  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
 ) -> None:
     if total < 0:
         raise ValueError("Hamilton allocation requires a non-negative total")

@@ -27,7 +27,7 @@ class AbsorptionCornerEvidence(StrictModel):
 
     seed: Seed
     experiment: ExperimentId
-    population: str#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    population: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
     model: TrainingModelId
     threshold_method: FederatedThresholdMethod
     coefficient: ModelCoefficientValue | None
@@ -141,7 +141,9 @@ class AbsorptionSeedObservation(StrictModel):
     personalized_local_cv: MetricValue
     corners: AbsorptionFourCornerEvidence | None = None
     model_coefficient: ProximalCoefficient | ModelCoefficientValue | None = None
-    ratio_unavailable_reason: str | None = None #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    ratio_unavailable_reason: str | None = (
+        None  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    )
 
     @model_validator(mode="after")
     def validate_observation(self) -> "AbsorptionSeedObservation":
@@ -215,7 +217,7 @@ class AbsorptionCohortResult(StrictModel):
     reference_effect_interval: BootstrapInterval | None = None
     personalized_effect_interval: BootstrapInterval | None = None
     paired_absorption_change_interval: BootstrapInterval | None = None
-    alternative_route_seed_count: int = 0 #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    alternative_route_seed_count: int = 0  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
 
     @model_validator(mode="after")
     def validate_result(self) -> "AbsorptionCohortResult":
@@ -272,7 +274,7 @@ def decide_absorption_cohort(
     protocol: ModelAbsorptionDecisionProtocol,
     *,
     required_seed_cohort: SeedCohort = CONFIRMATORY_SEED_COHORT,
-    alternative_route_seed_count: int = 0, #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    alternative_route_seed_count: int = 0,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
     inference_protocol: PairedInferenceProtocol | None = None,
     analysis_seed: Seed = CONFIRMATORY_ANALYSIS_SEED,
 ) -> AbsorptionCohortResult:

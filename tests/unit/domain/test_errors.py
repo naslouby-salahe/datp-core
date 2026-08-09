@@ -1,6 +1,7 @@
 import ast
 import inspect
 from collections.abc import Mapping
+from enum import StrEnum
 from pathlib import Path
 
 from datp_core.core.errors import (
@@ -9,6 +10,7 @@ from datp_core.core.errors import (
     CapabilityError,
     DataIntegrityError,
     DatpCoreError,
+    ErrorMessage,
     ExecutionStateError,
     InfeasibleExperimentError,
     LeakageError,
@@ -18,6 +20,11 @@ from datp_core.core.errors import (
     UnresolvedScientificValueError,
 )
 from datp_core.core.identifiers import ContractSubject
+
+
+class _UnresolvedValueReason(StrEnum):
+    NOT_SOURCE_BACKED = "not_source_backed"
+
 
 DIRECT_ERRORS = (
     ScientificContractError,
@@ -41,14 +48,14 @@ def test_error_hierarchy_is_shallow_and_explicit() -> None:
 
 def test_errors_preserve_stable_message_and_named_context() -> None:
     error = UnresolvedScientificValueError(
-        "missing quantile",
+        ErrorMessage("missing quantile"),
         subject=ContractSubject.QUANTILE,
-        reason="not source-backed",
+        reason=_UnresolvedValueReason.NOT_SOURCE_BACKED,
     )
     assert str(error) == "missing quantile"
     assert error.message == "missing quantile"
     assert error.subject == ContractSubject.QUANTILE.value
-    assert error.reason == "not source-backed"
+    assert error.reason is _UnresolvedValueReason.NOT_SOURCE_BACKED
     assert not isinstance(error.subject, Mapping)
 
 

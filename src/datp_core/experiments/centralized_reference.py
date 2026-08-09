@@ -16,7 +16,10 @@ import polars as pl
 from datp_core.analysis.metrics.models import AvailableMetric, MetricStatus, metric_by_id
 from datp_core.artifacts.serializers.json import canonical_checksum, canonical_json_text
 from datp_core.core.contracts import StrictModel
-from datp_core.core.errors import ReportEvidenceError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ReportEvidenceError,
+)
 from datp_core.core.identifiers import (
     AvailabilityStatus,
     CentralizedModelId,
@@ -100,7 +103,7 @@ class CentralizedReferenceScope:
     autoencoder: AutoencoderProtocol
     seed_cohort: SeedCohort
     provenance_experiment: ExperimentId
-    claim_wording: str #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    claim_wording: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
 
 
 NBAIOT_CENTRALIZED_REFERENCE = CentralizedReferenceScope(
@@ -228,9 +231,7 @@ def run_centralized_reference_seed(
 
 
 def centralized_reference_directory(scope: CentralizedReferenceScope, training_seed: Seed) -> Path:
-    return OUTPUTS_ROOT / CentralizedReferenceArtifactDirectory.ROOT / scope.population.value / str(
-        training_seed.value
-    )
+    return OUTPUTS_ROOT / CentralizedReferenceArtifactDirectory.ROOT / scope.population.value / str(training_seed.value)
 
 
 def centralized_reference_completion_marker(scope: CentralizedReferenceScope) -> Path:
@@ -262,20 +263,20 @@ def report_centralized_reference(
     root = output_root / CentralizedReferenceArtifactDirectory.ROOT / scope.population.value
     if not (root / CentralizedReferenceReportAsset.COMPLETE).is_file():
         raise ReportEvidenceError(
-            "centralized reference completion marker is missing; "
-            "centralized-reference seed artifacts are not all present",
+            ErrorMessage(
+                "centralized reference completion marker is missing; "
+                "centralized-reference seed artifacts are not all present"
+            ),
             subject=scope.population,
         )
     evaluations: list[CentralizedEvaluationDocument] = []
     for seed in scope.seed_cohort.values:
-        evaluation_directory = (
-            root / str(seed.value) / CentralizedReferenceArtifactDirectory.EVALUATION
-        )
+        evaluation_directory = root / str(seed.value) / CentralizedReferenceArtifactDirectory.EVALUATION
         document_path = evaluation_directory / CentralizedEvaluationPublicationAsset.EVALUATION
         complete = evaluation_directory / CentralizedEvaluationPublicationAsset.COMPLETE
         if not document_path.is_file() or not complete.is_file():
             raise ReportEvidenceError(
-                f"centralized reference evaluation is incomplete for seed {seed.value}",
+                ErrorMessage(f"centralized reference evaluation is incomplete for seed {seed.value}"),
                 subject=scope.population,
             )
         document = CentralizedEvaluationDocument.model_validate_json(document_path.read_text(encoding="utf-8"))
@@ -318,7 +319,7 @@ def _validate_centralized_reference_coordinate(
     )
     if coordinate != expected:
         raise ReportEvidenceError(
-            f"centralized reference coordinate does not match the locked programme for seed {seed.value}",
+            ErrorMessage(f"centralized reference coordinate does not match the locked programme for seed {seed.value}"),
             subject=scope.population,
         )
 

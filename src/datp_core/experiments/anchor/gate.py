@@ -1,3 +1,4 @@
+from enum import StrEnum
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -5,7 +6,10 @@ from pydantic import ValidationError
 from datp_core.analysis.metrics.protocols import CONFIRMATORY_METRICS
 from datp_core.artifacts.provenance import Checksum, checksum_text
 from datp_core.artifacts.serializers.json import canonical_checksum, canonical_json_text
-from datp_core.core.errors import AnchorReproductionError
+from datp_core.core.errors import (
+    AnchorReproductionError,
+    ErrorMessage,
+)
 from datp_core.core.identifiers import ExperimentReadiness, PreprocessingProtocolId, ScoreFrameColumn
 from datp_core.data.populations.declarations import split_protocol_for_population
 from datp_core.detector.checkpoints.protocols import CHECKPOINT_PROTOCOL, CHECKPOINT_SELECTION_RULE
@@ -30,6 +34,15 @@ from datp_core.experiments.confirmatory.spec import CONFIRMATORY_INFERENCE_PROTO
 from datp_core.experiments.graph import CONFIRMATORY_ENDPOINT
 
 _DECLARED_REASONS_SET = frozenset(DECLARED_NON_BLOCKING_DISCREPANCY_REASONS)
+
+
+class AnchorArtifactValidationFailure(StrEnum):
+    MISSING = "missing"
+    CORRUPTED_OR_INVALID = "corrupted_or_invalid"
+    CHECKSUM_MISMATCH = "checksum_mismatch"
+    STATUS_MISMATCH = "status_mismatch"
+    DIRECTORY_MISMATCH = "directory_mismatch"
+    STALE_OR_MISMATCHED = "stale_or_mismatched"
 
 
 def decide_anchor_gate(reproduction: AnchorReproductionResult) -> AnchorGateDecision:
@@ -71,7 +84,7 @@ def dependent_readiness_from_gate(decision: AnchorGateDecision) -> ExperimentRea
     if decision.status in {AnchorGateStatus.PASS, AnchorGateStatus.PASS_WITH_DECLARED_DISCREPANCY}:
         return ExperimentReadiness.DECLARED
     raise AnchorReproductionError(
-        "unknown anchor gate status",
+        ErrorMessage("unknown anchor gate status"),
         subject=decision.status,
     )
 
@@ -80,7 +93,7 @@ def assert_gate_not_bypassable(decision: AnchorGateDecision) -> AnchorGateDecisi
     """Structural guard: blocked gates never expose claim-permitted dependent readiness."""
     if decision.dependent_readiness is ExperimentReadiness.EXECUTABLE:
         raise AnchorReproductionError(
-            "anchor gate cannot mark dependent experiments executable",
+            ErrorMessage("anchor gate cannot mark dependent experiments executable"),
             subject=decision.dependent_readiness,
         )
     if decision.status is AnchorGateStatus.ANCHOR_REPRODUCTION_FAILED:
@@ -91,13 +104,13 @@ def assert_gate_not_bypassable(decision: AnchorGateDecision) -> AnchorGateDecisi
 def _assert_blocked_gate_integrity(decision: AnchorGateDecision) -> None:
     if decision.dependent_readiness is not ExperimentReadiness.BLOCKED:
         raise AnchorReproductionError(
-            "blocked anchor gate cannot permit dependent readiness",
+            ErrorMessage("blocked anchor gate cannot permit dependent readiness"),
             subject=decision.status,
         )
     has_diagnostics = bool(decision.reproduction.discrepancies) or decision.reproduction.dependency_blocker is not None
     if not has_diagnostics:
         raise AnchorReproductionError(
-            "blocked anchor gate erased diagnostic state",
+            ErrorMessage("blocked anchor gate erased diagnostic state"),
             subject=decision.status,
         )
 
@@ -182,7 +195,7 @@ def build_anchor_confirmatory_handoff(
     """Construct the typed programme-binding handoff for a permitting gate decision."""
     if decision.status is AnchorGateStatus.ANCHOR_REPRODUCTION_FAILED:
         raise AnchorReproductionError(
-            "blocked anchor gate cannot produce a confirmatory handoff",
+            ErrorMessage("blocked anchor gate cannot produce a confirmatory handoff"),
             subject=decision.status,
         )
 
@@ -265,7 +278,7 @@ def load_verified_anchor_gate_artifact(diagnostics_directory: Path) -> VerifiedA
 
     if decision.status is AnchorGateStatus.ANCHOR_REPRODUCTION_FAILED:
         raise AnchorReproductionError(
-            "anchor gate is blocked and cannot permit confirmatory claims",
+            ErrorMessage("anchor gate is blocked and cannot permit confirmatory claims"),
             subject=decision.status,
         )
 
@@ -290,42 +303,42 @@ def load_anchor_confirmatory_handoff(
     """Load and validate the typed confirmatory handoff bound to a verified gate."""
     if not diagnostics_directory.is_dir():
         raise AnchorReproductionError(
-            "anchor-gate diagnostics directory is missing",
-            reason=str(diagnostics_directory),
+            ErrorMessage(f"anchor-gate diagnostics directory is missing: {diagnostics_directory}"),
+            reason=AnchorArtifactValidationFailure.MISSING,
         )
 
     handoff_path = diagnostics_directory / AnchorArtifactFileName.CONFIRMATORY_HANDOFF.value
 
     if not handoff_path.is_file():
         raise AnchorReproductionError(
-            "anchor confirmatory handoff artifact is missing",
-            reason=str(handoff_path),
+            ErrorMessage(f"anchor confirmatory handoff artifact is missing: {handoff_path}"),
+            reason=AnchorArtifactValidationFailure.MISSING,
         )
 
     try:
         handoff = AnchorConfirmatoryHandoff.model_validate_json(handoff_path.read_text(encoding="utf-8"))
     except (ValidationError, ValueError, TypeError, OSError) as error:
         raise AnchorReproductionError(
-            "anchor confirmatory handoff is corrupted or schema-invalid",
-            reason=str(handoff_path),
+            ErrorMessage(f"anchor confirmatory handoff is corrupted or schema-invalid: {handoff_path}"),
+            reason=AnchorArtifactValidationFailure.CORRUPTED_OR_INVALID,
         ) from error
 
     if handoff.verified_gate_artifact_checksum != verified_gate.artifact_checksum:
         raise AnchorReproductionError(
-            "anchor confirmatory handoff does not match the verified gate checksum",
-            reason=str(handoff_path),
+            ErrorMessage(f"anchor confirmatory handoff does not match the verified gate checksum: {handoff_path}"),
+            reason=AnchorArtifactValidationFailure.CHECKSUM_MISMATCH,
         )
 
     if handoff.verified_gate_status is not verified_gate.decision.status:
         raise AnchorReproductionError(
-            "anchor confirmatory handoff gate status does not match the verified gate",
-            reason=str(handoff_path),
+            ErrorMessage(f"anchor confirmatory handoff gate status does not match the verified gate: {handoff_path}"),
+            reason=AnchorArtifactValidationFailure.STATUS_MISMATCH,
         )
 
     if handoff.diagnostics_directory != str(diagnostics_directory.resolve()):
         raise AnchorReproductionError(
-            "anchor confirmatory handoff diagnostics directory is mismatched",
-            reason=str(handoff_path),
+            ErrorMessage(f"anchor confirmatory handoff diagnostics directory is mismatched: {handoff_path}"),
+            reason=AnchorArtifactValidationFailure.DIRECTORY_MISMATCH,
         )
 
     return validate_handoff_against_confirmatory_programme(handoff)
@@ -366,8 +379,11 @@ def validate_handoff_against_confirmatory_programme(
 
     if mismatches:
         raise AnchorReproductionError(
-            "anchor confirmatory handoff is stale relative to the locked confirmatory programme",
-            reason=",".join(mismatches),
+            ErrorMessage(
+                "anchor confirmatory handoff is stale relative to the locked confirmatory programme: "
+                + ",".join(mismatches)
+            ),
+            reason=AnchorArtifactValidationFailure.STALE_OR_MISMATCHED,
         )
 
     return handoff
@@ -376,23 +392,23 @@ def validate_handoff_against_confirmatory_programme(
 def _load_gate_decision_and_checksum(diagnostics_directory: Path) -> tuple[AnchorGateDecision, Checksum]:
     if not diagnostics_directory.is_dir():
         raise AnchorReproductionError(
-            "anchor-gate diagnostics directory is missing",
-            reason=str(diagnostics_directory),
+            ErrorMessage(f"anchor-gate diagnostics directory is missing: {diagnostics_directory}"),
+            reason=AnchorArtifactValidationFailure.MISSING,
         )
 
     gate_path = diagnostics_directory / AnchorArtifactFileName.GATE_DECISION.value
     if not gate_path.is_file():
         raise AnchorReproductionError(
-            "anchor-gate decision artifact is missing",
-            reason=str(gate_path),
+            ErrorMessage(f"anchor-gate decision artifact is missing: {gate_path}"),
+            reason=AnchorArtifactValidationFailure.MISSING,
         )
 
     try:
         decision = AnchorGateDecision.model_validate_json(gate_path.read_text(encoding="utf-8"))
     except (ValidationError, ValueError, TypeError, OSError) as error:
         raise AnchorReproductionError(
-            "anchor-gate decision artifact is corrupted or schema-invalid",
-            reason=str(gate_path),
+            ErrorMessage(f"anchor-gate decision artifact is corrupted or schema-invalid: {gate_path}"),
+            reason=AnchorArtifactValidationFailure.CORRUPTED_OR_INVALID,
         ) from error
 
     artifact_checksum = checksum_text(canonical_json_text(decision))
@@ -400,22 +416,22 @@ def _load_gate_decision_and_checksum(diagnostics_directory: Path) -> tuple[Ancho
     marker_path = diagnostics_directory / AnchorArtifactFileName.GATE_COMPLETION.value
     if not marker_path.is_file():
         raise AnchorReproductionError(
-            "anchor-gate completion marker is missing",
-            reason=str(marker_path),
+            ErrorMessage(f"anchor-gate completion marker is missing: {marker_path}"),
+            reason=AnchorArtifactValidationFailure.MISSING,
         )
 
     try:
         marker = AnchorGateCompletionMarker.model_validate_json(marker_path.read_text(encoding="utf-8"))
     except (ValidationError, ValueError, TypeError, OSError) as error:
         raise AnchorReproductionError(
-            "anchor-gate completion marker is corrupted or schema-invalid",
-            reason=str(marker_path),
+            ErrorMessage(f"anchor-gate completion marker is corrupted or schema-invalid: {marker_path}"),
+            reason=AnchorArtifactValidationFailure.CORRUPTED_OR_INVALID,
         ) from error
 
     if marker.artifact_checksum != artifact_checksum or marker.status is not decision.status:
         raise AnchorReproductionError(
-            "anchor-gate completion marker is stale or mismatched",
-            reason=str(marker_path),
+            ErrorMessage(f"anchor-gate completion marker is stale or mismatched: {marker_path}"),
+            reason=AnchorArtifactValidationFailure.STALE_OR_MISMATCHED,
         )
 
     return decision, artifact_checksum

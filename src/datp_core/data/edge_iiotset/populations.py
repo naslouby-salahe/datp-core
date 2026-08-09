@@ -1,10 +1,16 @@
 """Edge-IIoTset static sensor-group and chronology-verified temporal-group population construction."""
 
+from enum import StrEnum
 from pathlib import Path
 
 import polars as pl
 
-from datp_core.core.errors import CapabilityError, DataIntegrityError, ScientificContractError
+from datp_core.core.errors import (
+    CapabilityError,
+    DataIntegrityError,
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import DatasetId, PopulationId, PopulationIdentityKind, SplitProtocolId
 from datp_core.core.numeric import NonNegativeIntegerValue, RowCount, Seed
 from datp_core.data.contracts import (
@@ -50,6 +56,17 @@ _TEMPORAL_POPULATION = PopulationId.EDGE_TEMPORAL_GROUPS
 _TEMPORAL_IDENTITY = PopulationIdentityKind.VERIFIED_TEMPORAL_GROUPS
 
 
+class EdgeIIoTPopulationViolation(StrEnum):
+    STATIC_GROUPS_FORBID_CHRONOLOGICAL_SPLITS = "static_groups_forbid_chronological_splits"
+    UNEXPECTED_SENSOR_GROUP_IDENTITIES = "unexpected_sensor_group_identities"
+    STATIC_GROUPS_CONTAIN_ATTACK_ROWS = "static_groups_contain_attack_rows"
+    TEMPORAL_REQUIRES_CHRONOLOGICAL_SPLIT_PROTOCOL = "temporal_requires_chronological_split_protocol"
+    MISSING_CANONICAL_MANIFEST = "missing_canonical_manifest"
+    MISSING_STATIC_BENIGN_ASSETS = "missing_static_benign_assets"
+    MISSING_TEMPORAL_BENIGN_ASSETS = "missing_temporal_benign_assets"
+    NULL_TEMPORAL_CAPTURE_TIMESTAMPS = "null_temporal_capture_timestamps"
+
+
 def construct_edge_sensor_groups(
     canonical_root: Path,
     *,
@@ -58,9 +75,9 @@ def construct_edge_sensor_groups(
 ) -> PopulationConstructionResult:
     if split_protocol is SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE:
         raise CapabilityError(
-            "static Edge sensor groups do not use chronological splits",
+            ErrorMessage("static Edge sensor groups do not use chronological splits"),
             subject=_SENSOR_POPULATION,
-            reason="temporal analysis uses EDGE_TEMPORAL_GROUPS exclusively",
+            reason=EdgeIIoTPopulationViolation.STATIC_GROUPS_FORBID_CHRONOLOGICAL_SPLITS,
         )
     candidates = tuple(group.value for group in EDGE_BENIGN_SENSOR_GROUPS)
     membership = _load_static_membership(canonical_root)
@@ -68,15 +85,15 @@ def construct_edge_sensor_groups(
     expected = tuple(sorted(candidates))
     if observed != expected:
         raise DataIntegrityError(
-            "Edge static sensor-group identities disagree with the audited set",
+            ErrorMessage("Edge static sensor-group identities disagree with the audited set"),
             subject=_SENSOR_POPULATION,
-            reason="static construction requires exactly the ten audited benign folders",
+            reason=EdgeIIoTPopulationViolation.UNEXPECTED_SENSOR_GROUP_IDENTITIES,
         )
     if membership.filter(pl.col(OUTCOME_LABEL_COLUMN) != PopulationOutcomeLabel.BENIGN).height > 0:
         raise DataIntegrityError(
-            "Edge static sensor groups cannot carry attack rows",
+            ErrorMessage("Edge static sensor groups cannot carry attack rows"),
             subject=_SENSOR_POPULATION,
-            reason="attack traffic remains unassigned to sensor identities",
+            reason=EdgeIIoTPopulationViolation.STATIC_GROUPS_CONTAIN_ATTACK_ROWS,
         )
     manifest = finalize_population(
         PopulationFinalizationRequest(
@@ -112,9 +129,9 @@ def construct_edge_temporal_groups(
     """Return the temporal population plus its matched random-fractional static reference."""
     if split_protocol is not SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE:
         raise ScientificContractError(
-            "Edge temporal groups require the locked chronological split protocol",
+            ErrorMessage("Edge temporal groups require the locked chronological split protocol"),
             subject=_TEMPORAL_POPULATION,
-            reason="temporal populations cannot use non-temporal fractional splits as primary construction",
+            reason=EdgeIIoTPopulationViolation.TEMPORAL_REQUIRES_CHRONOLOGICAL_SPLIT_PROTOCOL,
         )
     eligible_ids, excluded_ids, exclusion_reasons, duplicate_timestamps = _chronology_eligibility(canonical_root)
     programme_candidates = tuple(group.value for group in sorted(EDGE_TEMPORAL_SENSOR_GROUPS))
@@ -156,8 +173,8 @@ def _finalize_temporal_manifest(
     partition_seed: Seed,
     split_protocol: SplitProtocolId,
     programme_candidates: tuple[str, ...],
-    accepted_ids: tuple[str, ...], #TODO: should be tuple[EdgeSensorGroup] and adapt all callers and usage
-    excluded_ids: tuple[str, ...], #TODO: should be tuple[EdgeSensorGroup] and adapt all callers and usage
+    accepted_ids: tuple[str, ...],  # TODO: should be tuple[EdgeSensorGroup] and adapt all callers and usage
+    excluded_ids: tuple[str, ...],  # TODO: should be tuple[EdgeSensorGroup] and adapt all callers and usage
     membership: pl.DataFrame,
 ) -> PopulationManifest:
     return finalize_population(
@@ -186,13 +203,15 @@ def _finalize_temporal_manifest(
 
 def _chronology_eligibility(
     canonical_root: Path,
-) -> tuple[tuple[str, ...], tuple[str, ...], tuple[ChronologyExclusionReason, ...], int]: #TODO: should be tuple[EdgeSensorGroup] or something and adapt all callers and usage
+) -> tuple[
+    tuple[str, ...], tuple[str, ...], tuple[ChronologyExclusionReason, ...], int
+]:  # TODO: should be tuple[EdgeSensorGroup] or something and adapt all callers and usage
     manifest_path = Path(canonical_root) / CanonicalPublicationArtifact.MANIFEST
     if not manifest_path.is_file():
         raise DataIntegrityError(
-            "Edge canonical manifest is required for temporal eligibility",
+            ErrorMessage("Edge canonical manifest is required for temporal eligibility"),
             subject=_TEMPORAL_POPULATION,
-            reason="chronology must be read from persisted evidence",
+            reason=EdgeIIoTPopulationViolation.MISSING_CANONICAL_MANIFEST,
         )
     document = CanonicalManifestDocument.model_validate_json(manifest_path.read_text(encoding="utf-8"))
     eligible: list[str] = []
@@ -220,7 +239,10 @@ def _chronology_eligibility(
 
 
 def _chronology_for_group(
-    group_id: str, chronology: tuple[ManifestChronologyEntry, ...] #TODO: should be EdgeSensorGroup or something and adapt all callers and usage. Do not use primitives for this, use something else instead of str.
+    group_id: str,
+    chronology: tuple[
+        ManifestChronologyEntry, ...
+    ],  # TODO: should be EdgeSensorGroup or something and adapt all callers and usage. Do not use primitives for this, use something else instead of str.
 ) -> ManifestChronologyEntry | None:
     for item in chronology:
         if item.group_identity == group_id:
@@ -234,9 +256,9 @@ def _load_static_membership(canonical_root: Path) -> pl.DataFrame:
     )
     if not paths:
         raise DataIntegrityError(
-            "Edge static benign assets are missing",
+            ErrorMessage("Edge static benign assets are missing"),
             subject=_SENSOR_POPULATION,
-            reason="static population construction requires published static_benign parquet assets",
+            reason=EdgeIIoTPopulationViolation.MISSING_STATIC_BENIGN_ASSETS,
         )
     frame = (
         pl.scan_parquet([str(path) for path in paths])
@@ -253,15 +275,17 @@ def _load_static_membership(canonical_root: Path) -> pl.DataFrame:
     return select_membership_frame(frame)
 
 
-def _load_temporal_membership(canonical_root: Path, eligible_ids: tuple[str, ...]) -> pl.DataFrame: #TODO: should be tuple[EdgeSensorGroup] and adapt all callers and usage
+def _load_temporal_membership(
+    canonical_root: Path, eligible_ids: tuple[str, ...]
+) -> pl.DataFrame:  # TODO: should be tuple[EdgeSensorGroup] and adapt all callers and usage
     temporal_root = canonical_branch_directory(canonical_root, EdgeAssetRole.TEMPORAL_BENIGN)
     paths = tuple(temporal_root / f"{group_id}.parquet" for group_id in eligible_ids)
     missing = tuple(path.name for path in paths if not path.is_file())
     if missing:
         raise DataIntegrityError(
-            "temporal assets are missing for chronology-eligible groups",
+            ErrorMessage("temporal assets are missing for chronology-eligible groups"),
             subject=_TEMPORAL_POPULATION,
-            reason="eligible temporal groups require published temporal_benign parquet assets",
+            reason=EdgeIIoTPopulationViolation.MISSING_TEMPORAL_BENIGN_ASSETS,
         )
     frame = (
         pl.scan_parquet([str(path) for path in paths])
@@ -278,9 +302,9 @@ def _load_temporal_membership(canonical_root: Path, eligible_ids: tuple[str, ...
     )
     if frame.get_column(_CAPTURE).null_count() > 0:
         raise ScientificContractError(
-            "temporal membership contains null capture timestamps",
+            ErrorMessage("temporal membership contains null capture timestamps"),
             subject=_TEMPORAL_POPULATION,
-            reason="chronology-eligible assets must retain verified capture timestamps",
+            reason=EdgeIIoTPopulationViolation.NULL_TEMPORAL_CAPTURE_TIMESTAMPS,
         )
     return frame
 
@@ -302,8 +326,8 @@ def _matched_static_reference(
     temporal_membership: pl.DataFrame,
     *,
     partition_seed: Seed,
-    eligible_ids: tuple[str, ...], #TODO: should be tuple[EdgeSensorGroup] and adapt all callers and usage
-    programme_candidates: tuple[str, ...],#TODO: should be tuple[EdgeSensorGroup] and adapt all callers and usage
+    eligible_ids: tuple[str, ...],  # TODO: should be tuple[EdgeSensorGroup] and adapt all callers and usage
+    programme_candidates: tuple[str, ...],  # TODO: should be tuple[EdgeSensorGroup] and adapt all callers and usage
 ) -> tuple[PopulationManifest, pl.DataFrame]:
     membership = select_membership_frame(temporal_membership)
     accepted = frozenset(eligible_ids)

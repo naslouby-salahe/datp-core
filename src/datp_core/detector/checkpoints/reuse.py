@@ -4,7 +4,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from datp_core.artifacts.provenance import Checksum
-from datp_core.core.errors import ArtifactIntegrityError
+from datp_core.core.errors import (
+    ArtifactIntegrityError,
+    ErrorMessage,
+)
 from datp_core.core.identifiers import (
     CheckpointStatus,
     ClientPathToken,
@@ -125,7 +128,7 @@ def validated_global_manifest(
     observed_entries = tuple((entry.round_number, entry.client_id, entry.tensor_name) for entry in manifest.entries)
     if observed_entries != expected_entries:
         raise ArtifactIntegrityError(
-            "global candidate manifest entries are incomplete, duplicated, or out of order",
+            ErrorMessage("global candidate manifest entries are incomplete, duplicated, or out of order"),
             subject=ContractSubject.CHECKPOINT_CANDIDATES,
         )
     return manifest
@@ -166,7 +169,7 @@ def _global_candidate(
 
     if entry.round_number not in losses_by_round:
         raise ArtifactIntegrityError(
-            "global checkpoint requires exactly one matching round loss",
+            ErrorMessage("global checkpoint requires exactly one matching round loss"),
             subject=ContractSubject.CHECKPOINT_CANDIDATES,
         )
 
@@ -214,7 +217,7 @@ def validated_personalized_manifest(
     observed_entries = tuple((entry.round_number, entry.client_id, entry.tensor_name) for entry in manifest.entries)
     if observed_entries != expected_entries:
         raise ArtifactIntegrityError(
-            "personalized candidate manifest entries do not match the expected clients and rounds",
+            ErrorMessage("personalized candidate manifest entries do not match the expected clients and rounds"),
             subject=ContractSubject.CHECKPOINT_CANDIDATES,
         )
     return manifest
@@ -280,7 +283,7 @@ def _personalized_candidate(
     key = (client.client_id, entry.round_number)
     if key not in losses_by_client_round:
         raise ArtifactIntegrityError(
-            "personalized checkpoint requires exactly one matching client-round loss",
+            ErrorMessage("personalized checkpoint requires exactly one matching client-round loss"),
             subject=ContractSubject.CHECKPOINT_CANDIDATES,
         )
 
@@ -305,7 +308,7 @@ def load_reused_federated_training(
         TrainingModelId.FEDPROX_AUTOENCODER,
     }:
         raise ArtifactIntegrityError(
-            "Ditto reuse requires the typed Ditto reuse request",
+            ErrorMessage("Ditto reuse requires the typed Ditto reuse request"),
             subject=ContractSubject.COORDINATE,
         )
     candidates = load_reused_global_candidates(
@@ -373,7 +376,7 @@ def load_reused_ditto_training(
     )
     if global_manifest.linked_personalized_digest != personalized_digest:
         raise ArtifactIntegrityError(
-            "Ditto global publication is linked to a different personalized publication",
+            ErrorMessage("Ditto global publication is linked to a different personalized publication"),
             subject=ContractSubject.ARTIFACT_PATH,
         )
     global_candidates = load_reused_global_candidates(global_request)

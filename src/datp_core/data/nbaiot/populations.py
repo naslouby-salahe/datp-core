@@ -1,10 +1,14 @@
 """N-BaIoT natural physical-device and controlled Dirichlet/IID population construction."""
 
+from enum import StrEnum
 from pathlib import Path
 
 import polars as pl
 
-from datp_core.core.errors import DataIntegrityError
+from datp_core.core.errors import (
+    DataIntegrityError,
+    ErrorMessage,
+)
 from datp_core.core.identifiers import DatasetId, PopulationId, PopulationIdentityKind, SplitProtocolId
 from datp_core.core.numeric import CalibrationSize, ClientCount, RowCount, Seed
 from datp_core.data.contracts import CanonicalProvenanceColumn
@@ -54,6 +58,12 @@ _DIRICHLET_POPULATION = PopulationId.NBAIOT_DIRICHLET_CLIENTS
 _DIRICHLET_IDENTITY = PopulationIdentityKind.SYNTHETIC_DIRICHLET_CLIENTS
 
 
+class NBaIoTPopulationViolation(StrEnum):
+    UNEXPECTED_PHYSICAL_CLIENT_IDENTITIES = "unexpected_physical_client_identities"
+    UNRECOGNIZED_OUTCOME_LABELS = "unrecognized_outcome_labels"
+    STRATUM_ASSIGNMENT_LENGTH_MISMATCH = "stratum_assignment_length_mismatch"
+
+
 def construct_nbaiot_natural_devices(
     canonical_root: Path,
     *,
@@ -65,9 +75,9 @@ def construct_nbaiot_natural_devices(
     observed = tuple(frame.get_column(CLIENT_ID_COLUMN).unique().sort().to_list())
     if observed != candidates:
         raise DataIntegrityError(
-            "N-BaIoT physical-client identities disagree with the audited set",
+            ErrorMessage("N-BaIoT physical-client identities disagree with the audited set"),
             subject=_NATURAL_POPULATION,
-            reason="natural-device construction requires exactly the nine audited devices",
+            reason=NBaIoTPopulationViolation.UNEXPECTED_PHYSICAL_CLIENT_IDENTITIES,
         )
     membership = select_membership_frame(frame).sort([CLIENT_ID_COLUMN, STABLE_ROW_ID_COLUMN])
     family_by_client = tuple(
@@ -183,9 +193,9 @@ def _load_identity_frame(canonical_root: Path) -> pl.DataFrame:
     )
     if frame.get_column(OUTCOME_LABEL_COLUMN).null_count() > 0:
         raise DataIntegrityError(
-            "N-BaIoT rows with unrecognized labels cannot enter the natural population",
+            ErrorMessage("N-BaIoT rows with unrecognized labels cannot enter the natural population"),
             subject=_NATURAL_POPULATION,
-            reason="only audited benign and attack labels are admissible",
+            reason=NBaIoTPopulationViolation.UNRECOGNIZED_OUTCOME_LABELS,
         )
     return frame
 
@@ -193,7 +203,9 @@ def _load_identity_frame(canonical_root: Path) -> pl.DataFrame:
 def _partition_source(
     source: pl.DataFrame,
     *,
-    client_ids: tuple[str, ...], #TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
+    client_ids: tuple[
+        str, ...
+    ],  # TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
     allocator: ControlledPartitionAllocator,
 ) -> tuple[pl.DataFrame, tuple[RowCount, ...], tuple[RowCount, ...]]:
     membership_parts: list[pl.DataFrame] = []
@@ -223,7 +235,9 @@ def _partition_source(
 
 def _build_diagnostics(
     *,
-    client_ids: tuple[str, ...], #TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
+    client_ids: tuple[
+        str, ...
+    ],  # TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
     client_count: ClientCount,
     membership_height: RowCount,
     benign_counts: tuple[RowCount, ...],
@@ -277,8 +291,12 @@ def _permute_stratum(stratum: pl.DataFrame, allocator: ControlledPartitionAlloca
 
 def _assign_stratum(
     stratum: pl.DataFrame,
-    client_ids: tuple[str, ...], #TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
-    counts: tuple[int, ...],#TODO: should be tuple[RowCount] and adapt all callers and usage. Do not use primitives for this, use something else instead of int. Check what already exists
+    client_ids: tuple[
+        str, ...
+    ],  # TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
+    counts: tuple[
+        int, ...
+    ],  # TODO: should be tuple[RowCount] and adapt all callers and usage. Do not use primitives for this, use something else instead of int. Check what already exists
     outcome_label: PopulationOutcomeLabel,
 ) -> pl.DataFrame:
     if stratum.height == 0:
@@ -291,9 +309,9 @@ def _assign_stratum(
         client_column.extend([client_id] * count)
     if len(client_column) != stratum.height:
         raise DataIntegrityError(
-            "stratum assignment length mismatch",
+            ErrorMessage("stratum assignment length mismatch"),
             subject=_DIRICHLET_POPULATION,
-            reason="allocation counts must cover the stratum exactly once",
+            reason=NBaIoTPopulationViolation.STRATUM_ASSIGNMENT_LENGTH_MISMATCH,
         )
     return stratum.with_columns(
         pl.Series(CLIENT_ID_COLUMN, client_column),

@@ -89,8 +89,4 @@ def _canonical_dataclass_value(value: "DataclassInstance") -> CanonicalValue:
     own_fields = fields(value)
     if len(own_fields) == 1 and own_fields[0].name == "value":
         return canonical_value(getattr(value, own_fields[0].name))
-    return {
-        field.name: canonical_value(getattr(value, field.name))
-        for field in own_fields
-        if field.init
-    }
+    return {field.name: canonical_value(getattr(value, field.name)) for field in own_fields if field.init}

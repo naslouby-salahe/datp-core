@@ -13,7 +13,11 @@ from datp_core.artifacts.serializers.safetensors import (
     save_state_dict_tensors,
     to_cpu_contiguous_state,
 )
-from datp_core.core.errors import ArtifactIntegrityError, ScientificContractError
+from datp_core.core.errors import (
+    ArtifactIntegrityError,
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import CheckpointStatus, ContractSubject, SafeTensorFilename
 from datp_core.core.numeric import RoundNumber
 from datp_core.data.populations.contracts import ClientIdentity
@@ -60,26 +64,28 @@ def persist_checkpoint_tensor(
 
 
 def _assert_checkpoint_reload_equality(
-    cpu_state_dict: dict[str, torch.Tensor], #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Also i prefer something other than dict
+    cpu_state_dict: dict[
+        str, torch.Tensor
+    ],  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Also i prefer something other than dict
     path: Path,
     autoencoder: AutoencoderProtocol,
 ) -> None:
     loaded = load_state_dict_tensors(path, torch.device("cpu"))
     if loaded.keys() != cpu_state_dict.keys():
         raise ArtifactIntegrityError(
-            "checkpoint tensor names do not match the expected model state",
+            ErrorMessage("checkpoint tensor names do not match the expected model state"),
             subject=ContractSubject.ARTIFACT_PATH,
         )
     for name, reference in cpu_state_dict.items():
         observed = loaded[name]
         if observed.shape != reference.shape or observed.dtype != reference.dtype:
             raise ArtifactIntegrityError(
-                "checkpoint tensor shape or dtype differs from the expected model state",
+                ErrorMessage("checkpoint tensor shape or dtype differs from the expected model state"),
                 subject=ContractSubject.ARTIFACT_PATH,
             )
         if not torch.equal(observed, reference):
             raise ArtifactIntegrityError(
-                "checkpoint tensor values differ from the expected model state",
+                ErrorMessage("checkpoint tensor values differ from the expected model state"),
                 subject=ContractSubject.ARTIFACT_PATH,
             )
     build_autoencoder_for_state(
@@ -103,7 +109,7 @@ def retain_checkpoint_candidates(
     observed = tuple(snapshot.round_number for snapshot in snapshots)
     if observed != checkpoint_protocol.candidates:
         raise ScientificContractError(
-            "checkpoint snapshots must equal the exact ordered protocol candidates",
+            ErrorMessage("checkpoint snapshots must equal the exact ordered protocol candidates"),
             subject=ContractSubject.CHECKPOINT_CANDIDATES,
         )
     candidates = tuple(

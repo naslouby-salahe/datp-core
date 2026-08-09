@@ -6,7 +6,10 @@ from pathlib import Path
 import polars as pl
 
 from datp_core.artifacts.provenance import Checksum
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import (
     ContractSubject,
     DatasetId,
@@ -56,7 +59,7 @@ def matched_static_reference_inputs(
         or context.coordinate.split_protocol is not SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE
     ):
         raise ScientificContractError(
-            "matched static scoring requires a temporal historical execution context",
+            ErrorMessage("matched static scoring requires a temporal historical execution context"),
             subject=context.coordinate.population,
         )
     root = bounded_evidence_seed_directory(identity, context.coordinate.training_seed, output_root)
@@ -68,12 +71,12 @@ def matched_static_reference_inputs(
         assignments = pl.read_parquet(split_directory / MATCHED_STATIC_SPLIT_ASSIGNMENTS_ASSET)
     except (OSError, ValueError, pl.exceptions.PolarsError) as error:
         raise ScientificContractError(
-            "matched static split artifacts are missing or invalid",
+            ErrorMessage("matched static split artifacts are missing or invalid"),
             subject=context.coordinate.population,
         ) from error
     if split_manifest.split_protocol is not SplitProtocolId.RANDOM_FRACTIONAL_STATIC_REFERENCE:
         raise ScientificContractError(
-            "matched static scoring requires the random-fractional static split",
+            ErrorMessage("matched static scoring requires the random-fractional static split"),
             subject=split_manifest.split_protocol,
         )
     feature_names = training_feature_names(DatasetId.EDGE_IIOTSET)
@@ -94,14 +97,14 @@ def matched_static_reference_inputs(
     )
     if joined.height != assignments.height:
         raise ScientificContractError(
-            "matched static canonical feature join lost assignment rows",
+            ErrorMessage("matched static canonical feature join lost assignment rows"),
             subject=context.coordinate.population,
         )
     observed_clients = frozenset(str(value) for value in joined.get_column(CLIENT_ID_COLUMN).unique().to_list())
     expected_clients = frozenset(client.client_id for client in context.clients)
     if observed_clients != expected_clients:
         raise ScientificContractError(
-            "matched static and temporal client inventories must be identical",
+            ErrorMessage("matched static and temporal client inventories must be identical"),
             subject=context.coordinate.population,
         )
     return MatchedStaticReferenceInputs(
@@ -128,7 +131,7 @@ def _matched_static_client_input(
     state = publication.fitted_state
     if state.protocol.input_feature_names != feature_names:
         raise ScientificContractError(
-            "historical preprocessing schema does not match the static scoring schema",
+            ErrorMessage("historical preprocessing schema does not match the static scoring schema"),
             subject=ContractSubject.CLIENT_IDENTITY,
         )
     estimator = load_estimator(state.estimator_path, state.protocol.estimator_class_name)
@@ -163,7 +166,7 @@ def _transform_matched_static_partition(
     ).select((STABLE_ROW_ID_COLUMN, OUTCOME_LABEL_COLUMN, *feature_names.names))
     if source.is_empty():
         raise ScientificContractError(
-            f"matched static {role.value} partition is empty for {client.client_id}",
+            ErrorMessage(f"matched static {role.value} partition is empty for {client.client_id}"),
             subject=role,
         )
     transformed = transform_feature_matrix(
@@ -185,7 +188,7 @@ def _client_publication(
     matches = tuple(item for item in publications if item.client_identity.value == client.client_id)
     if len(matches) != 1:
         raise ScientificContractError(
-            f"expected one historical preprocessing state for {client.client_id}",
+            ErrorMessage(f"expected one historical preprocessing state for {client.client_id}"),
             subject=ContractSubject.CLIENT_IDENTITY,
         )
     return matches[0]

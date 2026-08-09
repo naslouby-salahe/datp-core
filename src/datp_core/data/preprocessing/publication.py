@@ -12,7 +12,10 @@ from datp_core.artifacts.repositories.publication import (
     publish_artifact,
 )
 from datp_core.artifacts.serializers.json import canonical_json_text
-from datp_core.core.errors import ArtifactIntegrityError
+from datp_core.core.errors import (
+    ArtifactIntegrityError,
+    ErrorMessage,
+)
 from datp_core.core.identifiers import ContractSubject, PublicationStatus
 from datp_core.data.preprocessing.artifacts import ProcessedAssetName
 
@@ -76,7 +79,7 @@ def _write_processed[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseMode
     _assert_required_assets(directory, publication.required_assets)
     if not _is_reusable(publication, directory):
         raise ArtifactIntegrityError(
-            "processed publication failed complete-asset validation",
+            ErrorMessage("processed publication failed complete-asset validation"),
             subject=ContractSubject.ARTIFACT_PATH,
         )
     return publication.manifest
@@ -124,7 +127,9 @@ def _is_reusable[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseModel](
     )
 
 
-def _write_model(model: BaseModel, destination: Path) -> str: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+def _write_model(
+    model: BaseModel, destination: Path
+) -> str:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     payload = canonical_json_text(model)
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(payload, encoding="utf-8")
@@ -139,14 +144,14 @@ def _read_model[ModelT: BaseModel](
     path = directory.joinpath(asset)
     if not path.is_file():
         raise ArtifactIntegrityError(
-            f"missing {asset.value}",
+            ErrorMessage(f"missing {asset.value}"),
             subject=ContractSubject.ARTIFACT_PATH,
         )
     try:
         return model_type.model_validate_json(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, ValidationError, ValueError) as error:
         raise ArtifactIntegrityError(
-            f"invalid {asset.value}",
+            ErrorMessage(f"invalid {asset.value}"),
             subject=ContractSubject.ARTIFACT_PATH,
         ) from error
 
@@ -159,6 +164,6 @@ def _assert_required_assets(directory: Path, required_assets: tuple[ProcessedAss
     missing = tuple(asset for asset in required_assets if not directory.joinpath(asset).is_file())
     if missing:
         raise ArtifactIntegrityError(
-            f"processed publication missing assets: {', '.join(asset.value for asset in missing)}",
+            ErrorMessage(f"processed publication missing assets: {', '.join(asset.value for asset in missing)}"),
             subject=ContractSubject.ARTIFACT_PATH,
         )

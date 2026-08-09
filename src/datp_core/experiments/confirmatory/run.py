@@ -36,7 +36,10 @@ from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
 from datp_core.artifacts.serializers.json import canonical_checksum
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import (
     EvidenceRole,
     ExperimentId,
@@ -142,7 +145,7 @@ def run_family_grouped_mechanism_seed(
     """Execute the family/grouped mechanism ladder for one seed under the fixed FedAvg detector."""
     matches = tuple(item for item in EXPERIMENTS if item.id is ExperimentId.FAMILY_AND_GROUPED_GRANULARITY)
     if len(matches) != 1:
-        raise ScientificContractError("family/grouped mechanism experiment must be declared exactly once")
+        raise ScientificContractError(ErrorMessage("family/grouped mechanism experiment must be declared exactly once"))
     declaration = matches[0]
     result = execute_declared_experiment_seed(
         declaration=declaration,
@@ -170,7 +173,9 @@ def analyze_confirmatory_campaign(*, anchor_gate_diagnostics_directory: Path | N
         / PopulationId.NBAIOT_NATURAL_DEVICES.value
         / ConfirmatoryAssetDirectory.ANALYSIS
     )
-    gate_directory = anchor_gate_diagnostics_directory or (OUTPUTS_ROOT / "anchor" / "diagnostics") #TODO: no hardcoded values. Should use what already exists. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    gate_directory = (
+        anchor_gate_diagnostics_directory or (OUTPUTS_ROOT / "anchor" / "diagnostics")
+    )  # TODO: no hardcoded values. Should use what already exists. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     verified_gate = load_verified_anchor_gate_artifact(gate_directory)
     load_anchor_confirmatory_handoff(gate_directory, verified_gate=verified_gate)
     mechanisms = _confirmatory_mechanisms()
@@ -187,7 +192,9 @@ def analyze_confirmatory_campaign(*, anchor_gate_diagnostics_directory: Path | N
         )
     )
     geometries, figures = _confirmatory_score_geometry()
-    _persist_score_geometry(geometries, output / "score_geometry") #TODO: no hardcoded values. Should use what already exists. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    _persist_score_geometry(
+        geometries, output / "score_geometry"
+    )  # TODO: no hardcoded values. Should use what already exists. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     export_confirmatory_publication(
         result.document,
         output,
@@ -199,7 +206,8 @@ def analyze_confirmatory_campaign(*, anchor_gate_diagnostics_directory: Path | N
             all_mechanisms,
             experiment=ExperimentId.SHARED_VS_LOCAL_CONFIRMATION,
             population=PopulationId.NBAIOT_NATURAL_DEVICES,
-            output_directory=output / "mechanisms", #TODO: no hardcoded values. Should use what already exists. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+            output_directory=output
+            / "mechanisms",  # TODO: no hardcoded values. Should use what already exists. Check what already exists. Do not use primitives for this, use something else. Check what already exists
             evidence_role=EvidenceRole.MECHANISM,
         )
     return output
@@ -255,7 +263,7 @@ def _confirmatory_score_geometry() -> tuple[tuple[ScoreGeometryResult, ...], tup
         expected_clients = tuple(sorted(item.client for item in shared.clients))
         if not expected_clients:
             raise ScientificContractError(
-                f"confirmatory score geometry requires evaluation clients for seed {seed.value}"
+                ErrorMessage(f"confirmatory score geometry requires evaluation clients for seed {seed.value}")
             )
         benign_eval = _client_evaluation_scores(
             score_coordinate=shared.score_coordinate,
@@ -329,7 +337,7 @@ def _empirical_cdf_figure_from_geometry(geometry: ScoreGeometryResult) -> Figure
         )
     if not series:
         raise ScientificContractError(
-            f"confirmatory score geometry produced no client series for seed {geometry.seed.value}"
+            ErrorMessage(f"confirmatory score geometry produced no client series for seed {geometry.seed.value}")
         )
     return FigureSpec(
         title=f"Per-client empirical score CDF (seed {geometry.seed.value})",
@@ -380,7 +388,9 @@ def _client_evaluation_scores(
     document_clients: tuple[ClientIdentity, ...],
     expected_clients: tuple[ClientIdentity, ...],
     benign_only: bool,
-) -> tuple[tuple[ClientIdentity, tuple[MetricValue, ...]], ...]: #TODO: should be a class or something handled better than tuple of tuples...
+) -> tuple[
+    tuple[ClientIdentity, tuple[MetricValue, ...]], ...
+]:  # TODO: should be a class or something handled better than tuple of tuples...
     from datp_core.data.populations.contracts import PopulationOutcomeLabel
 
     ordered_document_clients = tuple(sorted(document_clients))
@@ -392,11 +402,13 @@ def _client_evaluation_scores(
             client.client_id for client in ordered_document_clients if client not in frozenset(expected_clients)
         )
         raise ScientificContractError(
-            "evaluation document clients do not match the expected score-geometry client set"
-            f" missing={missing} extra={extra}"
+            ErrorMessage(
+                "evaluation document clients do not match the expected score-geometry client set"
+                f" missing={missing} extra={extra}"
+            )
         )
     if len(ordered_document_clients) != len(frozenset(ordered_document_clients)):
-        raise ScientificContractError("evaluation document clients must be unique for score geometry")
+        raise ScientificContractError(ErrorMessage("evaluation document clients must be unique for score geometry"))
 
     score_root = federated_training_directory(score_coordinate, OUTPUTS_ROOT) / ExecutionArtifactDirectory.SCORES
     pairs: list[tuple[ClientIdentity, tuple[MetricValue, ...]]] = []
@@ -404,19 +416,25 @@ def _client_evaluation_scores(
     for client in expected_clients:
         path = score_root / client.client_id / FederatedScoreAssetName.EVALUATION.value
         if not path.is_file():
-            raise ScientificContractError(f"missing evaluation score parquet for client {client.client_id}: {path}")
+            raise ScientificContractError(
+                ErrorMessage(f"missing evaluation score parquet for client {client.client_id}: {path}")
+            )
         frame = pl.read_parquet(path)
         score_column = ScoreFrameColumn.RECONSTRUCTION_ERROR.value
         label_column = ScoreFrameColumn.OUTCOME_LABEL.value
         if score_column not in frame.columns:
-            raise ScientificContractError(f"missing reconstruction_error column for client {client.client_id}: {path}")
+            raise ScientificContractError(
+                ErrorMessage(f"missing reconstruction_error column for client {client.client_id}: {path}")
+            )
         if label_column not in frame.columns:
-            raise ScientificContractError(f"missing outcome_label column for client {client.client_id}: {path}")
+            raise ScientificContractError(
+                ErrorMessage(f"missing outcome_label column for client {client.client_id}: {path}")
+            )
         scores_raw = frame.get_column(score_column).to_list()
         labels = frame.get_column(label_column).to_list()
         if len(scores_raw) != len(labels):
             raise ScientificContractError(
-                f"score and label columns are misaligned for client {client.client_id}: {path}"
+                ErrorMessage(f"score and label columns are misaligned for client {client.client_id}: {path}")
             )
         if benign_only:
             scores = tuple(
@@ -474,19 +492,23 @@ def _confirmatory_cluster_mechanisms() -> tuple[MechanismEvidence, ...]:
 
     if corrupt:
         raise ScientificContractError(
-            "cluster threshold cohort has corrupt publications; "
-            f"available={[seed.value for seed, _, _ in available]} "
-            f"unavailable={[seed.value for seed in unavailable]} "
-            f"corrupt={[seed.value for seed in corrupt]}"
+            ErrorMessage(
+                "cluster threshold cohort has corrupt publications; "
+                f"available={[seed.value for seed, _, _ in available]} "
+                f"unavailable={[seed.value for seed in unavailable]} "
+                f"corrupt={[seed.value for seed in corrupt]}"
+            )
         )
     if not available:
         return ()
     if unavailable or len(available) != CONFIRMATORY_SEED_COHORT.member_count.value:
         raise ScientificContractError(
-            "cluster threshold cohort is partial and must cover every confirmatory seed or none; "
-            f"available={[seed.value for seed, _, _ in available]} "
-            f"unavailable={[seed.value for seed in unavailable]} "
-            f"corrupt={[seed.value for seed in corrupt]}"
+            ErrorMessage(
+                "cluster threshold cohort is partial and must cover every confirmatory seed or none; "
+                f"available={[seed.value for seed, _, _ in available]} "
+                f"unavailable={[seed.value for seed in unavailable]} "
+                f"corrupt={[seed.value for seed in corrupt]}"
+            )
         )
 
     mechanisms: list[MechanismEvidence] = []
@@ -532,8 +554,7 @@ def _grouped_dispersion_evidence(
 ) -> GroupedDispersionResult:
     """Build within/across-group threshold and FPR dispersion from group memberships and cluster evaluations."""
     fpr_by_client = {
-        item.client: metric_by_id(item.metrics, MetricId.FALSE_POSITIVE_RATE)
-        for item in cluster_document.clients
+        item.client: metric_by_id(item.metrics, MetricId.FALSE_POSITIVE_RATE) for item in cluster_document.clients
     }
     observations: list[GroupDispersionObservation] = []
     for membership in result.clusters:
@@ -569,7 +590,7 @@ def _client_score_vectors(document: FederatedEvaluationDocument) -> tuple[tuple[
         path = score_root / client_result.client.client_id / FederatedScoreAssetName.CALIBRATION.value
         if not path.is_file():
             raise ScientificContractError(
-                f"missing persisted benign calibration scores for JS divergence: {path}",
+                ErrorMessage(f"missing persisted benign calibration scores for JS divergence: {path}"),
                 subject=ExperimentId.HETEROGENEITY_BENEFIT_ASSOCIATION,
             )
         scores = tuple(
@@ -578,19 +599,21 @@ def _client_score_vectors(document: FederatedEvaluationDocument) -> tuple[tuple[
         )
         if not scores:
             raise ScientificContractError(
-                f"empty calibration score vector for client {client_result.client.client_id}",
+                ErrorMessage(f"empty calibration score vector for client {client_result.client.client_id}"),
                 subject=ExperimentId.HETEROGENEITY_BENEFIT_ASSOCIATION,
             )
         vectors.append(ClientScoreVector(client=client_result.client, scores=scores))
     if len(vectors) < 2:
-        raise ScientificContractError("Jensen-Shannon construction requires at least two client score vectors")
+        raise ScientificContractError(
+            ErrorMessage("Jensen-Shannon construction requires at least two client score vectors")
+        )
     return tuple(vectors), document.fixed_score_evidence.calibration.score_checksum
 
 
 def _confirmatory_declaration() -> ExperimentDeclaration:
     matches = tuple(item for item in EXPERIMENTS if item.id is ExperimentId.SHARED_VS_LOCAL_CONFIRMATION)
     if len(matches) != 1:
-        raise ScientificContractError("the confirmatory experiment must be declared exactly once")
+        raise ScientificContractError(ErrorMessage("the confirmatory experiment must be declared exactly once"))
     return matches[0]
 
 
@@ -600,9 +623,13 @@ def _declaration_for_threshold_method(method: FederatedThresholdMethod) -> Exper
     if method is FederatedThresholdMethod.CLUSTER_THRESHOLD:
         matches = tuple(item for item in EXPERIMENTS if item.id is ExperimentId.FAMILY_AND_GROUPED_GRANULARITY)
         if len(matches) != 1:
-            raise ScientificContractError("family/grouped mechanism experiment must be declared exactly once")
+            raise ScientificContractError(
+                ErrorMessage("family/grouped mechanism experiment must be declared exactly once")
+            )
         return matches[0]
-    raise ScientificContractError(f"confirmatory experiment cannot resolve a publication coordinate for {method.value}")
+    raise ScientificContractError(
+        ErrorMessage(f"confirmatory experiment cannot resolve a publication coordinate for {method.value}")
+    )
 
 
 def _confirmatory_coordinate(training_seed: Seed, method: FederatedThresholdMethod) -> ExperimentCoordinate:
@@ -616,7 +643,9 @@ def _confirmatory_coordinate(training_seed: Seed, method: FederatedThresholdMeth
     )
     if len(matches) != 1:
         raise ScientificContractError(
-            f"evaluation coordinate for {method.value} must resolve exactly once under {declaration.id.value}"
+            ErrorMessage(
+                f"evaluation coordinate for {method.value} must resolve exactly once under {declaration.id.value}"
+            )
         )
     return matches[0]
 
@@ -676,7 +705,9 @@ def absorption_corner_from_evaluation_document(
     )
 
 
-def _required_metric(document: FederatedEvaluationDocument, metric: MetricId) -> MetricValue: #TODO: could just be inlined though
+def _required_metric(
+    document: FederatedEvaluationDocument, metric: MetricId
+) -> MetricValue:  # TODO: could just be inlined though
     return population_metric(document, metric)
 
 
@@ -688,5 +719,5 @@ def _evaluation_path(training_seed: Seed, method: FederatedThresholdMethod) -> P
         / FederatedEvaluationAssetName.DOCUMENT
     )
     if not path.is_file():
-        raise ScientificContractError(f"missing completed evaluation document: {path}")
+        raise ScientificContractError(ErrorMessage(f"missing completed evaluation document: {path}"))
     return path

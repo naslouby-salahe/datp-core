@@ -61,7 +61,11 @@ class ThresholdMovement(StrictModel):
         return AvailabilityStatus.AVAILABLE if self.delta_tpr is not None else AvailabilityStatus.UNAVAILABLE
 
     @property
-    def reason(self) -> str | None: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    def reason(
+        self,
+    ) -> (
+        str | None
+    ):  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
         return None if self.delta_tpr is not None else "attack-sensitive movement unavailable"
 
 
@@ -73,7 +77,9 @@ class ThresholdMovementCohort(StrictModel):
     mean_delta_fpr: MetricValue | None
     client_dispersion_delta_fpr: MetricValue | None
     availability: AvailabilityStatus
-    reason: str | None #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    reason: (
+        str | None
+    )  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
 
     evidence_role: ClassVar[EvidenceRole] = EvidenceRole.MECHANISM
 
@@ -95,7 +101,7 @@ class ThresholdMovementSeedSummary(StrictModel):
     mean_delta_threshold: MetricValue
     mean_delta_fpr: MetricValue
     client_dispersion_delta_fpr: MetricValue
-    client_count: int #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    client_count: int  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
 
 
 class ThresholdMovementMultiSeedUncertainty(StrictModel):
@@ -105,7 +111,9 @@ class ThresholdMovementMultiSeedUncertainty(StrictModel):
     mean_of_seed_mean_delta_fpr: MetricValue | None
     across_seed_dispersion_delta_fpr: MetricValue | None
     availability: AvailabilityStatus
-    reason: str | None #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    reason: (
+        str | None
+    )  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
 
     evidence_role: ClassVar[EvidenceRole] = EvidenceRole.MECHANISM
 
@@ -191,7 +199,8 @@ def summarize_threshold_movements(
 def summarize_threshold_movements_across_seeds(
     cohorts: tuple[ThresholdMovementCohort, ...],
     *,
-    required_seed_count: int | None = None, #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    required_seed_count: int
+    | None = None,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
 ) -> ThresholdMovementMultiSeedUncertainty:
     """Aggregate per-seed movement summaries; dispersion is across seeds, not clients."""
     summaries: list[ThresholdMovementSeedSummary] = []

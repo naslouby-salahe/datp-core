@@ -6,7 +6,11 @@ from pydantic import ValidationError
 
 from datp_core.artifacts.provenance import Checksum, checksum_file
 from datp_core.artifacts.serializers.json import canonical_checksum, serialize_json_model
-from datp_core.core.errors import ArtifactIntegrityError, ScientificContractError
+from datp_core.core.errors import (
+    ArtifactIntegrityError,
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import ClientPathToken, ContractSubject, SafeTensorFilename, TrainingModelId
 from datp_core.core.numeric import BatchSize, ManifestSchemaVersion, ModelCoefficientValue
 from datp_core.detector.checkpoints.candidates import (
@@ -42,7 +46,7 @@ _MANIFEST_SCHEMA_VERSION = ManifestSchemaVersion(2)
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PublicationFileChecksum:
-    name: str #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    name: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     checksum: Checksum
 
 
@@ -102,19 +106,19 @@ def load_manifest(directory: Path) -> CandidateManifest:
     path = directory / FederatedHistoryAssetName.CANDIDATE_MANIFEST.value
     if not path.is_file():
         raise ArtifactIntegrityError(
-            "candidate manifest is missing",
+            ErrorMessage("candidate manifest is missing"),
             subject=ContractSubject.ARTIFACT_PATH,
         )
     try:
         manifest = CandidateManifest.model_validate_json(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, ValidationError, ValueError) as error:
         raise ArtifactIntegrityError(
-            "candidate manifest is unreadable or invalid",
+            ErrorMessage("candidate manifest is unreadable or invalid"),
             subject=ContractSubject.ARTIFACT_PATH,
         ) from error
     if manifest.schema_version != _MANIFEST_SCHEMA_VERSION:
         raise ArtifactIntegrityError(
-            "candidate manifest schema version is unsupported",
+            ErrorMessage("candidate manifest schema version is unsupported"),
             subject=ContractSubject.SCHEMA,
         )
     return manifest
@@ -124,7 +128,9 @@ def expected_publication_files(
     manifest: CandidateManifest,
     *,
     include_history: bool,
-) -> tuple[str, ...]:#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> tuple[
+    str, ...
+]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     names = [FederatedHistoryAssetName.CANDIDATE_MANIFEST.value]
     names.extend(entry.tensor_name for entry in manifest.entries)
 
@@ -149,7 +155,9 @@ def expected_publication_files(
 
 def publication_digest(
     directory: Path,
-    expected_files: Sequence[str], #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    expected_files: Sequence[
+        str
+    ],  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
 ) -> Checksum:
     projection = tuple(
         PublicationFileChecksum(
@@ -195,7 +203,7 @@ def verify_completion(
     actual_files = frozenset(path.name for path in directory.iterdir() if path.is_file())
     if actual_files != expected_all:
         raise ArtifactIntegrityError(
-            "publication files do not match the exact declared artifact set",
+            ErrorMessage("publication files do not match the exact declared artifact set"),
             subject=ContractSubject.ARTIFACT_PATH,
         )
     complete = directory / FederatedHistoryAssetName.COMPLETE.value
@@ -203,13 +211,13 @@ def verify_completion(
         stored = Checksum(complete.read_text(encoding="utf-8").strip())
     except (OSError, UnicodeError, ValueError) as error:
         raise ArtifactIntegrityError(
-            "completion marker is unreadable or invalid",
+            ErrorMessage("completion marker is unreadable or invalid"),
             subject=ContractSubject.ARTIFACT_PATH,
         ) from error
     recomputed = publication_digest(directory, expected_without_complete)
     if stored != recomputed:
         raise ArtifactIntegrityError(
-            "completion marker does not match the current publication",
+            ErrorMessage("completion marker does not match the current publication"),
             subject=ContractSubject.ARTIFACT_PATH,
         )
     return recomputed
@@ -241,34 +249,40 @@ def validate_manifest(
     )
     if not coordinate_matches:
         raise ArtifactIntegrityError(
-            "candidate manifest coordinate does not match the requested experiment",
+            ErrorMessage("candidate manifest coordinate does not match the requested experiment"),
             subject=ContractSubject.COORDINATE,
         )
 
     if manifest.kind is not kind:
-        raise ArtifactIntegrityError("candidate manifest kind mismatch", subject=ContractSubject.ARTIFACT_PATH)
+        raise ArtifactIntegrityError(
+            ErrorMessage("candidate manifest kind mismatch"), subject=ContractSubject.ARTIFACT_PATH
+        )
 
     if manifest.preprocessing_state_set_checksum != preprocessing_state_set_checksum:
         raise ArtifactIntegrityError(
-            "candidate manifest preprocessing checksum mismatch", subject=ContractSubject.PREPROCESSING
+            ErrorMessage("candidate manifest preprocessing checksum mismatch"), subject=ContractSubject.PREPROCESSING
         )
 
     if manifest.split_manifest_checksum != split_manifest_checksum:
-        raise ArtifactIntegrityError("candidate manifest split checksum mismatch", subject=ContractSubject.SPLIT)
+        raise ArtifactIntegrityError(
+            ErrorMessage("candidate manifest split checksum mismatch"), subject=ContractSubject.SPLIT
+        )
 
     if manifest.checkpoint_rounds != checkpoint_protocol.candidates:
         raise ArtifactIntegrityError(
-            "candidate manifest rounds do not match the checkpoint protocol",
+            ErrorMessage("candidate manifest rounds do not match the checkpoint protocol"),
             subject=ContractSubject.CHECKPOINT_CANDIDATES,
         )
 
     if manifest.autoencoder_widths != autoencoder.widths:
         raise ArtifactIntegrityError(
-            "candidate manifest autoencoder architecture mismatch", subject=ContractSubject.WIDTHS
+            ErrorMessage("candidate manifest autoencoder architecture mismatch"), subject=ContractSubject.WIDTHS
         )
 
     if manifest.batch_size != batch_size:
-        raise ArtifactIntegrityError("candidate manifest batch size mismatch", subject=ContractSubject.BATCH_SIZE)
+        raise ArtifactIntegrityError(
+            ErrorMessage("candidate manifest batch size mismatch"), subject=ContractSubject.BATCH_SIZE
+        )
 
 
 def stage_personalized_candidates(
@@ -423,7 +437,7 @@ def require_empty_directory(directory: Path) -> None:
     directory.mkdir(parents=True, exist_ok=True)
     if next(directory.iterdir(), None) is not None:
         raise ArtifactIntegrityError(
-            "checkpoint publication directory must be empty",
+            ErrorMessage("checkpoint publication directory must be empty"),
             subject=ContractSubject.ARTIFACT_PATH,
         )
 
@@ -440,6 +454,6 @@ def require_separate_directories(
         or personalized_resolved.is_relative_to(global_resolved)
     ):
         raise ScientificContractError(
-            "Ditto global and personalized output directories must be disjoint",
+            ErrorMessage("Ditto global and personalized output directories must be disjoint"),
             subject=ContractSubject.ARTIFACT_PATH,
         )

@@ -9,7 +9,11 @@ import torch
 from datp_core.artifacts.provenance import Checksum, checksum_file
 from datp_core.artifacts.repositories.publication import ArtifactPublication, FunctionalArtifactCodec, publish_artifact
 from datp_core.artifacts.serializers.json import canonical_checksum
-from datp_core.core.errors import ArtifactIntegrityError, ScientificContractError
+from datp_core.core.errors import (
+    ArtifactIntegrityError,
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import (
     CentralizedModelId,
     CheckpointStatus,
@@ -181,12 +185,12 @@ def train_centralized_detector(request: TrainCentralizedDetectorRequest) -> Trai
 def validate_centralized_training_request(request: CentralizedTrainingPublicationRequest) -> None:
     if request.autoencoder.widths[0].value != len(request.feature_names):
         raise ScientificContractError(
-            "autoencoder input width must match the feature schema",
+            ErrorMessage("autoencoder input width must match the feature schema"),
             subject=ContractSubject.AUTOENCODER,
         )
     if request.coordinate.model is not CentralizedModelId.CENTRALIZED_AUTOENCODER:
         raise ScientificContractError(
-            "train stage requires CENTRALIZED_AUTOENCODER",
+            ErrorMessage("train stage requires CENTRALIZED_AUTOENCODER"),
             subject=request.coordinate.model,
         )
 
@@ -323,13 +327,13 @@ def _load_reused_candidate(
     path = directory / candidate_tensor_name(candidate_round)
     if not path.is_file():
         raise ArtifactIntegrityError(
-            "reused checkpoint candidate missing",
+            ErrorMessage("reused checkpoint candidate missing"),
             subject=ContractSubject.ARTIFACT_PATH,
         )
     matching_losses = tuple(item.mean_training_loss for item in epoch_losses if item.epoch == candidate_round)
     if len(matching_losses) != 1:
         raise ArtifactIntegrityError(
-            "reused checkpoint candidate requires exactly one matching training loss",
+            ErrorMessage("reused checkpoint candidate requires exactly one matching training loss"),
             subject=ContractSubject.CHECKPOINT_CANDIDATES,
         )
     return CentralizedCheckpointCandidate(

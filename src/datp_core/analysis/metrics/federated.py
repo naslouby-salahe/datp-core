@@ -18,7 +18,10 @@ from datp_core.analysis.operational.traffic_rates import ValidatedTrafficRateEvi
 from datp_core.analysis.temporal import TemporalDeploymentProvenance
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.contracts import StrictModel
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import CheckpointStatus, EvidenceRole, FederatedThresholdMethod, StageOperationId
 from datp_core.core.numeric import (
     CalibrationSize,
@@ -48,9 +51,9 @@ class ShrinkageLambdaEvaluation:
 
     def __post_init__(self) -> None:
         if not self.clients:
-            raise ScientificContractError("shrinkage lambda evaluation requires client metrics")
+            raise ScientificContractError(ErrorMessage("shrinkage lambda evaluation requires client metrics"))
         if len({item.client for item in self.clients}) != len(self.clients):
-            raise ScientificContractError("shrinkage lambda evaluation cannot repeat clients")
+            raise ScientificContractError(ErrorMessage("shrinkage lambda evaluation cannot repeat clients"))
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,9 +68,9 @@ class CalibrationSizeAblationCell:
 
     def __post_init__(self) -> None:
         if not self.clients:
-            raise ScientificContractError("calibration-size ablation cell requires client metrics")
+            raise ScientificContractError(ErrorMessage("calibration-size ablation cell requires client metrics"))
         if len({item.client for item in self.clients}) != len(self.clients):
-            raise ScientificContractError("calibration-size ablation cannot repeat clients")
+            raise ScientificContractError(ErrorMessage("calibration-size ablation cannot repeat clients"))
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,9 +89,11 @@ class ThresholdEstimationStageInput:
 
     def __post_init__(self) -> None:
         if self.verified_benign_scores.client != self.provenance.client:
-            raise ScientificContractError("threshold-estimation evidence must match the evaluated client")
+            raise ScientificContractError(ErrorMessage("threshold-estimation evidence must match the evaluated client"))
         if self.verified_benign_scores.coordinate != self.provenance.coordinate:
-            raise ScientificContractError("threshold-estimation evidence must match the evaluated coordinate")
+            raise ScientificContractError(
+                ErrorMessage("threshold-estimation evidence must match the evaluated coordinate")
+            )
 
 
 @dataclass(frozen=True, slots=True)

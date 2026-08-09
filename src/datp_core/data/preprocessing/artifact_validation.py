@@ -9,7 +9,11 @@ import polars as pl
 
 from datp_core.artifacts.provenance import Checksum, checksum_file
 from datp_core.artifacts.serializers.json import canonical_checksum
-from datp_core.core.errors import LeakageError, ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    LeakageError,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import (
     ClientPathToken,
     ContractSubject,
@@ -65,14 +69,18 @@ from datp_core.data.preprocessing.state import (
 
 def require_columns(
     frame: pl.DataFrame,
-    columns: Iterable[str],#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    columns: Iterable[
+        str
+    ],  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     *,
     subject: ContractSubject | PartitionRole | PreprocessingFitScope | SplitProtocolId,
 ) -> None:
     frame_cols = set(frame.columns)
     missing = tuple(column for column in columns if column not in frame_cols)
     if missing:
-        raise ScientificContractError(f"missing required column(s): {', '.join(missing)}", subject=subject)
+        raise ScientificContractError(
+            ErrorMessage(f"missing required column(s): {', '.join(missing)}"), subject=subject
+        )
 
 
 def require_partitions(
@@ -83,7 +91,7 @@ def require_partitions(
 ) -> None:
     if partitions.roles() != partition_roles(split_protocol):
         raise ScientificContractError(
-            f"{subject.value} partition inventory does not match {split_protocol.value}",
+            ErrorMessage(f"{subject.value} partition inventory does not match {split_protocol.value}"),
             subject=split_protocol,
         )
 
@@ -105,11 +113,13 @@ def extract_partitions(
     normalized = frame.with_columns(pl.col(PARTITION_ROLE_COLUMN).cast(pl.String))
     role_series = normalized.get_column(PARTITION_ROLE_COLUMN)
     if role_series.null_count():
-        raise ScientificContractError("partition role column contains null values", subject=ContractSubject.SCHEMA)
+        raise ScientificContractError(
+            ErrorMessage("partition role column contains null values"), subject=ContractSubject.SCHEMA
+        )
     expected_roles = partition_roles(split_protocol)
     if set(role_series.unique()) != {role.value for role in expected_roles}:
         raise ScientificContractError(
-            f"extracted roles do not match {split_protocol.value}",
+            ErrorMessage(f"extracted roles do not match {split_protocol.value}"),
             subject=ContractSubject.SCHEMA,
         )
     keep = (STABLE_ROW_ID_COLUMN, OUTCOME_LABEL_COLUMN, *feat_cols)
@@ -122,12 +132,12 @@ def extract_partitions(
             role_frame = role_frame.sort(STABLE_ROW_ID_COLUMN)
         height = role_frame.height
         if not height:
-            raise ScientificContractError(f"{branch.value} partition {role.value} is empty", subject=role)
+            raise ScientificContractError(ErrorMessage(f"{branch.value} partition {role.value} is empty"), subject=role)
         extracted.append(PreprocessingPartition(role, role_frame))
         total_extracted_rows += height
     partitions = PreprocessingPartitions(tuple(extracted))
     if total_extracted_rows != normalized.height:
-        raise ScientificContractError("partition extraction lost rows", subject=ContractSubject.ROWS)
+        raise ScientificContractError(ErrorMessage("partition extraction lost rows"), subject=ContractSubject.ROWS)
     return partitions
 
 
@@ -137,7 +147,9 @@ def validate_no_partition_overlap(partitions: PreprocessingPartitions, *, split_
         overlap = left_ids & right_ids
         if overlap:
             raise LeakageError(
-                f"source-row overlap between {left_role.value} and {right_role.value}: {min(map(str, overlap))}",
+                ErrorMessage(
+                    f"source-row overlap between {left_role.value} and {right_role.value}: {min(map(str, overlap))}"
+                ),
                 subject=left_role,
             )
 
@@ -149,7 +161,7 @@ def require_finite_matrix(
     description: str,
 ) -> None:
     if not np.isfinite(matrix).all():
-        raise ScientificContractError(f"{description} must be finite", subject=subject)
+        raise ScientificContractError(ErrorMessage(f"{description} must be finite"), subject=subject)
 
 
 def transform_feature_matrix(
@@ -161,13 +173,15 @@ def transform_feature_matrix(
     description: str,
 ) -> np.ndarray:
     if matrix.ndim != 2:
-        raise ScientificContractError("source matrix must be two-dimensional", subject=subject)
+        raise ScientificContractError(ErrorMessage("source matrix must be two-dimensional"), subject=subject)
     try:
         transformed = np.asarray(fitted_estimator.transform(matrix), dtype=float)
     except Exception as error:
-        raise ScientificContractError(f"estimator transform failed: {error}", subject=subject) from error
+        raise ScientificContractError(ErrorMessage(f"estimator transform failed: {error}"), subject=subject) from error
     if transformed.shape != (matrix.shape[0], len(feature_names)):
-        raise ScientificContractError("transformed matrix shape must match rows and schema", subject=subject)
+        raise ScientificContractError(
+            ErrorMessage("transformed matrix shape must match rows and schema"), subject=subject
+        )
     require_finite_matrix(transformed, subject=subject, description=description)
     return transformed
 
@@ -238,21 +252,31 @@ def fit_trusted_batch(
     subject: PreprocessingFitScope,
 ) -> TrustedScaler:
     if subject is not protocol.fit_scope:
-        raise ScientificContractError("fit subject does not match protocol scope", subject=subject)
+        raise ScientificContractError(ErrorMessage("fit subject does not match protocol scope"), subject=subject)
     try:
         matrix = np.asarray(batch.training_matrix, dtype=float)
     except Exception as error:
-        raise ScientificContractError("training matrix must contain numeric values", subject=subject) from error
+        raise ScientificContractError(
+            ErrorMessage("training matrix must contain numeric values"), subject=subject
+        ) from error
     if matrix.ndim != 2 or not matrix.shape[0]:
-        raise ScientificContractError("training matrix must be non-empty and two-dimensional", subject=subject)
+        raise ScientificContractError(
+            ErrorMessage("training matrix must be non-empty and two-dimensional"), subject=subject
+        )
     if matrix.shape[0] != len(batch.training_row_ids) or matrix.shape[0] != len(batch.training_labels):
-        raise ScientificContractError("training matrix, rows, and labels must align", subject=PartitionRole.TRAIN)
+        raise ScientificContractError(
+            ErrorMessage("training matrix, rows, and labels must align"), subject=PartitionRole.TRAIN
+        )
     if matrix.shape[1] != len(protocol.input_feature_names):
-        raise ScientificContractError("training width must match protocol features", subject=ContractSubject.FEATURES)
+        raise ScientificContractError(
+            ErrorMessage("training width must match protocol features"), subject=ContractSubject.FEATURES
+        )
     require_finite_matrix(matrix, subject=subject, description="training matrix")
     benign_value = PopulationOutcomeLabel.BENIGN.value
     if any(label != benign_value for label in batch.training_labels.labels):
-        raise LeakageError("attack-labelled rows cannot enter benign preprocessing fit", subject=ContractSubject.LABEL)
+        raise LeakageError(
+            ErrorMessage("attack-labelled rows cannot enter benign preprocessing fit"), subject=ContractSubject.LABEL
+        )
     try:
         fitted = resolve_trusted_estimator_type(protocol.estimator_class_name)()
         fitted.fit(matrix)
@@ -267,7 +291,7 @@ def fit_trusted_batch(
     except (LeakageError, ScientificContractError):
         raise
     except Exception as error:
-        raise ScientificContractError("estimator fitting failed", subject=subject) from error
+        raise ScientificContractError(ErrorMessage("estimator fitting failed"), subject=subject) from error
 
 
 def publish_preprocessed_partitions(
@@ -315,7 +339,9 @@ def write_fitted_transformed_partitions(
     split_protocol: SplitProtocolId,
 ) -> PreprocessingValidationReport:
     if type(fitted_estimator) is not resolve_trusted_estimator_type(protocol.estimator_class_name):
-        raise ScientificContractError("estimator type does not match protocol", subject=ContractSubject.FEATURES)
+        raise ScientificContractError(
+            ErrorMessage("estimator type does not match protocol"), subject=ContractSubject.FEATURES
+        )
     feature_names = protocol.input_feature_names
     feat_cols = feature_names.as_list()
     train = partitions.require(PartitionRole.TRAIN)
@@ -360,7 +386,9 @@ def write_fitted_transformed_partitions(
         out_cols = output.columns
         expected_columns = (*retained.columns, *feature_names.names)
         if tuple(out_cols) != expected_columns or len(out_cols) != len(set(out_cols)):
-            raise ScientificContractError("invalid output column ordering", subject=ContractSubject.SCHEMA)
+            raise ScientificContractError(
+                ErrorMessage("invalid output column ordering"), subject=ContractSubject.SCHEMA
+            )
         output.write_parquet(temporary / asset_for_partition(role))
         evidence.append(
             PartitionTransformationEvidence(

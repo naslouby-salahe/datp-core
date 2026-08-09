@@ -39,6 +39,4 @@ def test_threshold_estimation_oracle_pools_only_eligible_calibration_scores() ->
     assert oracle == exact_empirical_quantile(pooled_calibration, quantile)
     # Held-out evaluation scores must never shape the estimator oracle (II-02);
     # the helper only ever consumes eligible benign calibration evidence.
-    assert oracle.value != exact_empirical_quantile(
-        np.asarray((99.0, 98.0), dtype=np.float64), quantile
-    ).value
+    assert oracle.value != exact_empirical_quantile(np.asarray((99.0, 98.0), dtype=np.float64), quantile).value

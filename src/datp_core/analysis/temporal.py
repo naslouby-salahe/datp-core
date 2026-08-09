@@ -13,7 +13,10 @@ from datp_core.analysis.scientific_decision import ScientificDecision, Scientifi
 from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.serializers.json import canonical_checksum
 from datp_core.core.contracts import StrictModel
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import (
     AvailabilityStatus,
     EvidenceRole,
@@ -33,6 +36,10 @@ from datp_core.detector.scoring.contracts import (
 )
 from datp_core.experiments.common.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_ANALYSIS_SEED, SeedCohort
 from datp_core.experiments.confirmatory.spec import CONFIRMATORY_INFERENCE_PROTOCOL
+
+
+class TemporalProvenanceViolation(StrEnum):
+    SCORE_EVIDENCE_CHANGED = "score_evidence_changed"
 
 
 class TemporalInterpretation(StrEnum):
@@ -65,7 +72,9 @@ class TemporalSeedProvenance(StrictModel):
     source_row_checksum: Checksum
     row_order_checksum: Checksum
     excluded_clients: tuple[ClientIdentity, ...] = ()
-    unavailable_reasons: tuple[str, ...] = () #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    unavailable_reasons: tuple[
+        str, ...
+    ] = ()  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
 
     @model_validator(mode="after")
     def validate_bindings(self) -> TemporalSeedProvenance:
@@ -97,7 +106,9 @@ class TemporalClientTrajectory(StrictModel):
     client: ClientIdentity
     threshold_method: FederatedThresholdMethod
     eligible: bool
-    exclusion_reason: str | None #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    exclusion_reason: (
+        str | None
+    )  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
     threshold_static: MetricValue | None
     threshold_frozen: MetricValue | None
     threshold_recalibrated: MetricValue | None
@@ -115,7 +126,9 @@ class TemporalClientTrajectory(StrictModel):
     macro_f1_recalibrated: MetricValue | None = None
 
     @property
-    def client_id(self) -> str: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    def client_id(
+        self,
+    ) -> str:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
         return self.client.client_id
 
     @property
@@ -156,7 +169,9 @@ class TemporalRecoveryResult(StrictModel):
     mean_fpr_frozen: MetricValue | None = None
     mean_fpr_recalibrated: MetricValue | None = None
     client_trajectories: tuple[TemporalClientTrajectory, ...] = ()
-    unavailable_reason: str | None = None #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    unavailable_reason: str | None = (
+        None  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    )
 
     @model_validator(mode="after")
     def validate_recovery(self) -> TemporalRecoveryResult:
@@ -228,7 +243,11 @@ class TemporalRecoveryResult(StrictModel):
         return TemporalInterpretation.TEMPORAL_DEGRADATION_WITHOUT_RECOVERY
 
     @property
-    def reason(self) -> str | None: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    def reason(
+        self,
+    ) -> (
+        str | None
+    ):  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
         if self.unavailable_reason is not None:
             return self.unavailable_reason
         if self.recovery_ratio is None:
@@ -338,12 +357,12 @@ def decide_temporal_campaign(
 
 @dataclass(frozen=True, slots=True)
 class _TemporalInterpretationCounts:
-    material_recovery: int #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-    partial_or_weak_recovery: int#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-    without_recovery: int #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-    opposite: int #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-    no_degradation: int #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-    blocked: int #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    material_recovery: int  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    partial_or_weak_recovery: int  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    without_recovery: int  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    opposite: int  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    no_degradation: int  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    blocked: int  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
 
 
 def _temporal_interpretation_counts(
@@ -372,10 +391,12 @@ def _temporal_interpretation_counts(
 def _campaign_decision_from_counts(
     counts: _TemporalInterpretationCounts,
     *,
-    total: int,#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-    defined_recovery_count: int,#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-    cohort_size: int,#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-) -> tuple[ScientificDecision, str]:#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    total: int,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    defined_recovery_count: int,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    cohort_size: int,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+) -> tuple[
+    ScientificDecision, str
+]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
     if total < cohort_size or total < 2:
         return (
             ScientificDecision.BLOCKED,
@@ -618,7 +639,7 @@ class TemporalDeploymentProvenance(StrictModel):
         calibration_role, evaluation_role = temporal_partition_roles(state)
         if not manifest.records_for(calibration_role) or not manifest.records_for(evaluation_role):
             raise ScientificContractError(
-                "temporal provenance requires non-empty calibration and evaluation score sets",
+                ErrorMessage("temporal provenance requires non-empty calibration and evaluation score sets"),
                 subject=state,
             )
         return cls(
@@ -643,9 +664,9 @@ class TemporalDeploymentProvenance(StrictModel):
     ) -> None:
         if TemporalDeploymentProvenance.from_score_manifest(self.state, manifest) != self:
             raise ScientificContractError(
-                "temporal deployment provenance does not match immutable score artifacts",
+                ErrorMessage("temporal deployment provenance does not match immutable score artifacts"),
                 subject=self.state,
-                reason="calibration, evaluation, model, preprocessing, or split evidence changed",
+                reason=TemporalProvenanceViolation.SCORE_EVIDENCE_CHANGED,
             )
 
 
@@ -656,12 +677,12 @@ def validate_frozen_recalibrated_pair(
     """Require identical future detector and evaluation evidence across recalibration states."""
     if frozen.state is not TemporalState.FROZEN_FUTURE or recalibrated.state is not TemporalState.RECALIBRATED_FUTURE:
         raise ScientificContractError(
-            "temporal comparison requires frozen and recalibrated future states",
+            ErrorMessage("temporal comparison requires frozen and recalibrated future states"),
             subject=EvidenceRole.TEMPORAL_BOUNDARY,
         )
     if frozen.future_identity != recalibrated.future_identity:
         raise ScientificContractError(
-            "frozen and recalibrated future must share detector, split, and evaluation scores",
+            ErrorMessage("frozen and recalibrated future must share detector, split, and evaluation scores"),
             subject=EvidenceRole.TEMPORAL_BOUNDARY,
         )
 

@@ -11,6 +11,7 @@ from datp_core.artifacts.provenance import Checksum, checksum_file
 from datp_core.artifacts.serializers.safetensors import load_state_dict_tensors
 from datp_core.core.errors import (
     ArtifactIntegrityError,
+    ErrorMessage,
     LeakageError,
     ScientificContractError,
 )
@@ -49,7 +50,7 @@ def validate_score_input_frame(
     """Validate score inputs without materializing complete columns in Python."""
     if frame.height == 0 and partition_role in CALIBRATION_PARTITIONS:
         raise ScientificContractError(
-            f"{partition_role.value} partition must not be empty",
+            ErrorMessage(f"{partition_role.value} partition must not be empty"),
             subject=ContractSubject.ROWS,
         )
     _require_columns(frame, partition_role, feature_names)
@@ -62,7 +63,9 @@ def validate_score_input_frame(
 def extract_score_arrays(
     frame: pl.DataFrame,
     feature_names: FeatureNameSequence,
-) -> tuple[npt.NDArray[np.float32], tuple[str, ...], tuple[str, ...]]:  #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> tuple[
+    npt.NDArray[np.float32], tuple[str, ...], tuple[str, ...]
+]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     matrix = frame.select(feature_names.as_list()).to_numpy().astype(LEARNING_DTYPE, copy=False)
     labels = tuple(str(value) for value in frame.get_column(OUTCOME_LABEL_COLUMN).to_list())
     row_ids = tuple(str(value) for value in frame.get_column(STABLE_ROW_ID_COLUMN).to_list())
@@ -70,13 +73,17 @@ def extract_score_arrays(
 
 
 def score_frame(
-    row_ids: tuple[str, ...], #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    labels: tuple[str, ...], #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    row_ids: tuple[
+        str, ...
+    ],  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    labels: tuple[
+        str, ...
+    ],  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     scores: npt.NDArray[np.float64],
 ) -> pl.DataFrame:
     if len(row_ids) != len(labels) or len(row_ids) != scores.shape[0]:
         raise ScientificContractError(
-            "score output columns must preserve one-to-one row alignment",
+            ErrorMessage("score output columns must preserve one-to-one row alignment"),
             subject=ContractSubject.SCORES,
         )
     return pl.DataFrame(
@@ -99,29 +106,29 @@ def validate_persisted_score_frame(
 ) -> pl.DataFrame:
     if not path.is_file():
         raise ArtifactIntegrityError(
-            "score artifact is missing",
+            ErrorMessage("score artifact is missing"),
             subject=ContractSubject.ARTIFACT_PATH,
         )
     if checksum_file(path) != checksum:
         raise ArtifactIntegrityError(
-            "score checksum changed after write",
+            ErrorMessage("score checksum changed after write"),
             subject=ContractSubject.ARTIFACT_PATH,
         )
     frame = pl.read_parquet(path)
     if frame.height != row_count.value:
         raise ArtifactIntegrityError(
-            "score artifact row count mismatch",
+            ErrorMessage("score artifact row count mismatch"),
             subject=ContractSubject.ARTIFACT_PATH,
         )
     if tuple(frame.columns) != SCORE_FRAME_COLUMNS:
         raise ArtifactIntegrityError(
-            "score artifact schema mismatch",
+            ErrorMessage("score artifact schema mismatch"),
             subject=ContractSubject.SCHEMA,
         )
     observed_dtypes = tuple(frame.schema[column] for column in SCORE_FRAME_COLUMNS)
     if observed_dtypes != SCORE_FRAME_DTYPES:
         raise ArtifactIntegrityError(
-            "score artifact column dtype mismatch",
+            ErrorMessage("score artifact column dtype mismatch"),
             subject=ContractSubject.SCHEMA,
         )
     return frame
@@ -142,12 +149,12 @@ def score_and_persist_autoencoder_frame(
     scores = reconstruction_errors(model, matrix, batch_size=batch_size, device=device)
     if scores.shape[0] != matrix.shape[0]:
         raise ScientificContractError(
-            "score count must equal partition row count",
+            ErrorMessage("score count must equal partition row count"),
             subject=partition_role,
         )
     if not np.isfinite(scores).all():
         raise ScientificContractError(
-            f"generated scores must be finite in {partition_role.value} partition",
+            ErrorMessage(f"generated scores must be finite in {partition_role.value} partition"),
             subject=ContractSubject.SCORES,
         )
     output = score_frame(row_ids, labels, scores)
@@ -166,12 +173,12 @@ def score_and_persist_autoencoder_frame(
     )
     if output.shape != reloaded.shape:
         raise ArtifactIntegrityError(
-            "score reload shape mismatch",
+            ErrorMessage("score reload shape mismatch"),
             subject=ContractSubject.ARTIFACT_PATH,
         )
     if not output.equals(reloaded):
         raise ArtifactIntegrityError(
-            "score reload equality failed",
+            ErrorMessage("score reload equality failed"),
             subject=ContractSubject.ARTIFACT_PATH,
         )
     return persisted
@@ -184,7 +191,7 @@ def load_checkpoint_model(
 ) -> ReconstructionAutoencoder:
     if device.type != "cuda":
         raise ScientificContractError(
-            "scoring requires a CUDA device",
+            ErrorMessage("scoring requires a CUDA device"),
             subject=ContractSubject.CUDA,
         )
     validate_persisted_checkpoint_file(checkpoint.tensor_path, checkpoint.tensor_checksum)
@@ -204,7 +211,7 @@ def _require_columns(
     missing = tuple(name for name in required if name not in frame.columns)
     if missing:
         raise ScientificContractError(
-            f"{partition_role.value} frame missing declared columns: {', '.join(missing)}",
+            ErrorMessage(f"{partition_role.value} frame missing declared columns: {', '.join(missing)}"),
             subject=ContractSubject.SCHEMA,
         )
 
@@ -216,17 +223,17 @@ def _require_identity_columns(
     row_ids = frame.get_column(STABLE_ROW_ID_COLUMN)
     if row_ids.null_count() > 0:
         raise ScientificContractError(
-            f"stable row IDs must not be null in {partition_role.value} partition",
+            ErrorMessage(f"stable row IDs must not be null in {partition_role.value} partition"),
             subject=ContractSubject.ROWS,
         )
     if row_ids.n_unique() != frame.height:
         raise ScientificContractError(
-            f"stable row IDs must be unique within {partition_role.value} partition",
+            ErrorMessage(f"stable row IDs must be unique within {partition_role.value} partition"),
             subject=ContractSubject.ROWS,
         )
     if frame.get_column(OUTCOME_LABEL_COLUMN).null_count() > 0:
         raise ScientificContractError(
-            f"outcome labels must not be null in {partition_role.value} partition",
+            ErrorMessage(f"outcome labels must not be null in {partition_role.value} partition"),
             subject=ContractSubject.LABEL,
         )
 
@@ -241,18 +248,20 @@ def _require_feature_columns(
         dtype = column.dtype
         if not dtype.is_numeric():
             raise ScientificContractError(
-                f"feature column '{name}' in {partition_role.value} partition must be numeric, got {dtype}",
+                ErrorMessage(
+                    f"feature column '{name}' in {partition_role.value} partition must be numeric, got {dtype}"
+                ),
                 subject=ContractSubject.FEATURES,
             )
         if column.null_count() > 0:
             raise ScientificContractError(
-                f"feature column '{name}' in {partition_role.value} partition contains null values",
+                ErrorMessage(f"feature column '{name}' in {partition_role.value} partition contains null values"),
                 subject=ContractSubject.FEATURES,
             )
         has_non_finite = frame.select((~pl.col(name).is_finite()).any()).item()
         if has_non_finite:
             raise ScientificContractError(
-                f"feature column '{name}' in {partition_role.value} partition contains non-finite values",
+                ErrorMessage(f"feature column '{name}' in {partition_role.value} partition contains non-finite values"),
                 subject=ContractSubject.FEATURES,
             )
 
@@ -261,6 +270,6 @@ def _require_benign_calibration(frame: pl.DataFrame) -> None:
     attack_rows = frame.filter(pl.col(OUTCOME_LABEL_COLUMN) != PopulationOutcomeLabel.BENIGN.value).height
     if attack_rows:
         raise LeakageError(
-            "attack-labelled rows cannot enter benign calibration construction",
+            ErrorMessage("attack-labelled rows cannot enter benign calibration construction"),
             subject=ContractSubject.CALIBRATION,
         )

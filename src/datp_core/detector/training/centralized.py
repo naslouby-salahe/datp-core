@@ -14,6 +14,7 @@ from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.serializers.safetensors import load_state_dict_tensors, save_state_dict_tensors
 from datp_core.core.errors import (
     ArtifactIntegrityError,
+    ErrorMessage,
     ExecutionStateError,
     LeakageError,
     ScientificContractError,
@@ -96,7 +97,7 @@ class CentralizedTrainingCoordinate:
     def __post_init__(self) -> None:
         if self.model is not CentralizedModelId.CENTRALIZED_AUTOENCODER:
             raise ScientificContractError(
-                "centralized training requires CENTRALIZED_AUTOENCODER",
+                ErrorMessage("centralized training requires CENTRALIZED_AUTOENCODER"),
                 subject=self.model,
             )
 
@@ -151,12 +152,12 @@ class CentralizedTrainingResult:
             raise ValueError("centralized training requires at least one benign training row")
         if self.batch_size_used != self.optimizer.batch_size:
             raise ScientificContractError(
-                "recorded batch size must equal the declared optimizer batch size",
+                ErrorMessage("recorded batch size must equal the declared optimizer batch size"),
                 subject=ContractSubject.BATCH_SIZE,
             )
         if self.final_epoch != self.checkpoint_protocol.maximum_round:
             raise ScientificContractError(
-                "centralized training terminal epoch must equal the declared maximum round",
+                ErrorMessage("centralized training terminal epoch must equal the declared maximum round"),
                 subject=ContractSubject.CHECKPOINT_CANDIDATES,
             )
 
@@ -172,7 +173,7 @@ class CentralizedTrainingExecution:
         observed = tuple(snapshot.round_number for snapshot in self.candidate_snapshots)
         if observed != self.result.checkpoint_protocol.candidates:
             raise ScientificContractError(
-                "in-memory checkpoint snapshots must match the declared candidate rounds",
+                ErrorMessage("in-memory checkpoint snapshots must match the declared candidate rounds"),
                 subject=ContractSubject.CHECKPOINT_CANDIDATES,
             )
 
@@ -197,7 +198,7 @@ class CentralizedTrainingRequest:
 def reject_federated_preprocessing_for_training(state: FittedPreprocessingState) -> None:
     if isinstance(state, FederatedFittedPreprocessingState):
         raise LeakageError(
-            "federated preprocessing state cannot enter centralized training",
+            ErrorMessage("federated preprocessing state cannot enter centralized training"),
             subject=ProcessedDataBranch.FEDERATED,
         )
 
@@ -208,7 +209,7 @@ def reject_attack_rows_in_centralized_training(
 ) -> None:
     if any(label != benign_label for label in labels):
         raise LeakageError(
-            "attack-labelled rows cannot enter centralized benign training",
+            ErrorMessage("attack-labelled rows cannot enter centralized benign training"),
             subject=ContractSubject.LABEL,
         )
 
@@ -223,12 +224,12 @@ def train_centralized_autoencoder(request: CentralizedTrainingRequest) -> Centra
     reject_attack_rows_in_centralized_training(extracted.labels, request.benign_label)
     if extracted.feature_matrix.shape[1] != request.autoencoder.widths[0].value:
         raise ScientificContractError(
-            "feature width must match the declared autoencoder input width",
+            ErrorMessage("feature width must match the declared autoencoder input width"),
             subject=ContractSubject.FEATURES,
         )
     if extracted.feature_matrix.shape[0] < request.batch_size.value:
         raise ScientificContractError(
-            "centralized training requires at least one full declared batch",
+            ErrorMessage("centralized training requires at least one full declared batch"),
             subject=ContractSubject.BATCH_SIZE,
         )
 
@@ -285,7 +286,7 @@ def load_centralized_model_tensors(
     require_cuda_available()
     resolved = resolve_cuda_device() if device is None else device
     if resolved.type != "cuda":
-        raise ExecutionStateError("centralized model reload requires CUDA", subject=ContractSubject.CUDA)
+        raise ExecutionStateError(ErrorMessage("centralized model reload requires CUDA"), subject=ContractSubject.CUDA)
     model = construct_autoencoder(autoencoder).to(resolved)
     state = load_state_dict_tensors(path, resolved)
     model.load_state_dict(state, strict=True)
@@ -327,7 +328,7 @@ def assert_safetensors_reload(
     for left, right in zip(model.state_dict().values(), reloaded.state_dict().values(), strict=True):
         if not torch.equal(left, right):
             raise ArtifactIntegrityError(
-                "SafeTensors reload does not match saved centralized weights",
+                ErrorMessage("SafeTensors reload does not match saved centralized weights"),
                 subject=ContractSubject.ARTIFACT_PATH,
             )
 
@@ -351,22 +352,22 @@ def require_no_hidden_scientific_defaults() -> None:
     """Fail if mandatory centralized training values are absent from declarations."""
     if CENTRALIZED_TRAINING_PROTOCOL.optimizer.identity is not OptimizerId.ADAM:
         raise UnresolvedScientificValueError(
-            "centralized optimizer identity is not the declared Adam protocol",
+            ErrorMessage("centralized optimizer identity is not the declared Adam protocol"),
             subject=ContractSubject.OPTIMIZER,
         )
     if LEARNING_RATE.value <= 0 or BATCH_SIZE.value <= 0:
         raise UnresolvedScientificValueError(
-            "centralized learning rate or batch size is unresolved",
+            ErrorMessage("centralized learning rate or batch size is unresolved"),
             subject=ContractSubject.TRAINING_HYPERPARAMETERS,
         )
     if WEIGHT_DECAY.value < 0:
         raise UnresolvedScientificValueError(
-            "centralized Adam weight decay is unresolved",
+            ErrorMessage("centralized Adam weight decay is unresolved"),
             subject=ContractSubject.TRAINING_HYPERPARAMETERS,
         )
     if not NBAIOT_AUTOENCODER.widths:
         raise UnresolvedScientificValueError(
-            "centralized autoencoder widths are unresolved",
+            ErrorMessage("centralized autoencoder widths are unresolved"),
             subject=ContractSubject.AUTOENCODER,
         )
 
@@ -379,17 +380,17 @@ def _validate_training_request(request: CentralizedTrainingRequest) -> None:
 def _require_centralized_model_identities(request: CentralizedTrainingRequest) -> None:
     if request.training_protocol.kind is not CentralizedModelId.CENTRALIZED_AUTOENCODER:
         raise ScientificContractError(
-            "training protocol must declare CENTRALIZED_AUTOENCODER",
+            ErrorMessage("training protocol must declare CENTRALIZED_AUTOENCODER"),
             subject=request.training_protocol.kind,
         )
     if request.coordinate.model is not CentralizedModelId.CENTRALIZED_AUTOENCODER:
         raise ScientificContractError(
-            "training coordinate model identity is invalid",
+            ErrorMessage("training coordinate model identity is invalid"),
             subject=request.coordinate.model,
         )
     if request.preprocessing_state.protocol.identity is not request.coordinate.preprocessing_identity:
         raise ScientificContractError(
-            "preprocessing identity mismatch between coordinate and fitted state",
+            ErrorMessage("preprocessing identity mismatch between coordinate and fitted state"),
             subject=ContractSubject.PREPROCESSING,
         )
 
@@ -398,13 +399,13 @@ def _require_training_frame_schema(request: CentralizedTrainingRequest) -> None:
     missing = tuple(name for name in request.feature_names if name not in request.training_features.columns)
     if missing:
         raise ScientificContractError(
-            f"training frame missing declared features: {', '.join(missing)}",
+            ErrorMessage(f"training frame missing declared features: {', '.join(missing)}"),
             subject=ContractSubject.FEATURES,
         )
     for column in (PopulationFrameColumn.STABLE_ROW_ID, PopulationFrameColumn.OUTCOME_LABEL):
         if column.value not in request.training_features.columns:
             raise ScientificContractError(
-                f"training frame missing required column {column.value}",
+                ErrorMessage(f"training frame missing required column {column.value}"),
                 subject=column,
             )
 
@@ -425,11 +426,11 @@ def _extract_training_arrays(
     matrix = frame.select(request.feature_names.as_list()).to_numpy().astype(LEARNING_DTYPE, copy=False)
     if not np.isfinite(matrix).all():
         raise ScientificContractError(
-            "centralized training features must be finite",
+            ErrorMessage("centralized training features must be finite"),
             subject=ContractSubject.FEATURES,
         )
     if len(labels) != matrix.shape[0]:
-        raise ScientificContractError("training arrays must align by row", subject=ContractSubject.ROWS)
+        raise ScientificContractError(ErrorMessage("training arrays must align by row"), subject=ContractSubject.ROWS)
     return _ExtractedTrainingArrays(feature_matrix=matrix, labels=labels)
 
 
@@ -462,7 +463,7 @@ def _run_training_epochs(
     loader: DataLoader[tuple[torch.Tensor, ...]],
     checkpoint_protocol: CheckpointProtocol,
     device: torch.device,
-) -> tuple[ #TODO: should be handled better instead of tuple of tuple and tuple
+) -> tuple[  # TODO: should be handled better instead of tuple of tuple and tuple
     tuple[CentralizedEpochLoss, ...],
     tuple[InMemoryCentralizedModelSnapshot, ...],
 ]:
@@ -487,7 +488,7 @@ def _run_training_epochs(
 
         if batch_count == 0:
             raise ScientificContractError(
-                "centralized training produced no batches; declared batch size cannot be relaxed",
+                ErrorMessage("centralized training produced no batches; declared batch size cannot be relaxed"),
                 subject=ContractSubject.BATCH_SIZE,
             )
 
@@ -508,7 +509,7 @@ def _run_training_epochs(
     observed = tuple(item.round_number.value for item in snapshots)
     if observed != expected:
         raise ScientificContractError(
-            "training failed to capture every declared checkpoint candidate",
+            ErrorMessage("training failed to capture every declared checkpoint candidate"),
             subject=ContractSubject.CHECKPOINT_CANDIDATES,
         )
     return tuple(losses), tuple(snapshots)

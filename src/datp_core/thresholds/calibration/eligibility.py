@@ -6,7 +6,12 @@ from enum import StrEnum
 import polars as pl
 
 from datp_core.artifacts.provenance import Checksum
-from datp_core.core.errors import LeakageError, ScientificContractError, require_contract
+from datp_core.core.errors import (
+    ErrorMessage,
+    LeakageError,
+    ScientificContractError,
+    require_contract,
+)
 from datp_core.core.identifiers import ContractSubject, PartitionRole, ScoreFrameColumn, StableRowId
 from datp_core.core.numeric import CalibrationSize, RowCount, ScoreValue
 from datp_core.data.populations.contracts import ClientIdentity, EligibleCohort, PopulationOutcomeLabel
@@ -46,18 +51,18 @@ class EligibilityDecision:
         if self.status is EligibilityStatus.ELIGIBLE:
             require_contract(
                 self.minimum_support.fits_within(self.support.benign_calibration_count),
-                "eligible status requires benign calibration count to meet the minimum support",
+                ErrorMessage("eligible status requires benign calibration count to meet the minimum support"),
                 ContractSubject.CALIBRATION,
             )
             require_contract(
                 self.reason is None,
-                "eligible clients cannot carry an unavailability reason",
+                ErrorMessage("eligible clients cannot carry an unavailability reason"),
                 ContractSubject.CALIBRATION,
             )
         elif self.status is EligibilityStatus.EXCLUDED:
             require_contract(
                 self.reason is not None,
-                "excluded clients require a typed unavailability reason",
+                ErrorMessage("excluded clients require a typed unavailability reason"),
                 ContractSubject.CALIBRATION,
             )
 
@@ -76,7 +81,7 @@ class CalibrationSampleReference:
 def reject_evaluation_partition_in_eligibility(partition_role: PartitionRole) -> None:
     if partition_role is not PartitionRole.CALIBRATION:
         raise LeakageError(
-            "calibration eligibility must be decided from calibration-partition scores only",
+            ErrorMessage("calibration eligibility must be decided from calibration-partition scores only"),
             subject=partition_role,
         )
 
@@ -87,7 +92,7 @@ def reject_calibration_evaluation_overlap(
 ) -> None:
     if not calibration_stable_row_ids.isdisjoint(evaluation_stable_row_ids):
         raise LeakageError(
-            "calibration and evaluation partitions must not share source rows",
+            ErrorMessage("calibration and evaluation partitions must not share source rows"),
             subject=ContractSubject.CALIBRATION,
         )
 
@@ -98,7 +103,7 @@ def reject_score_coordinate_mismatch(records: tuple[FederatedScoreRecord, ...]) 
     reference = records[0].coordinate
     if any(record.coordinate != reference for record in records[1:]):
         raise ScientificContractError(
-            "calibration eligibility requires every score record to share one coordinate",
+            ErrorMessage("calibration eligibility requires every score record to share one coordinate"),
             subject=ContractSubject.COORDINATE,
         )
 
@@ -120,7 +125,7 @@ def load_benign_calibration_references(
     id_column = frame.get_column(ScoreFrameColumn.STABLE_ROW_ID.value)
     if id_column.n_unique() != len(id_column):
         raise ScientificContractError(
-            "calibration score rows must have unique stable source-row identities",
+            ErrorMessage("calibration score rows must have unique stable source-row identities"),
             subject=ContractSubject.CALIBRATION,
         )
     label_column = frame.get_column(ScoreFrameColumn.OUTCOME_LABEL.value)
@@ -177,13 +182,13 @@ def eligible_clients(decisions: tuple[EligibilityDecision, ...]) -> EligibleCoho
 def require_common_eligible_cohort(cohorts: tuple[EligibleCohort, ...]) -> EligibleCohort:
     if not cohorts:
         raise ScientificContractError(
-            "at least one eligible cohort is required for comparison",
+            ErrorMessage("at least one eligible cohort is required for comparison"),
             subject=ContractSubject.CALIBRATION,
         )
     reference = cohorts[0]
     if any(cohort != reference for cohort in cohorts[1:]):
         raise ScientificContractError(
-            "threshold methods compared within one score coordinate must share the same eligible cohort",
+            ErrorMessage("threshold methods compared within one score coordinate must share the same eligible cohort"),
             subject=ContractSubject.CALIBRATION,
         )
     return reference

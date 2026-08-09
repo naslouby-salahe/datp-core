@@ -9,7 +9,11 @@ from sklearn.base import BaseEstimator
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 from datp_core.artifacts.provenance import Checksum, checksum_file
-from datp_core.core.errors import ArtifactIntegrityError, SerializationSafetyError
+from datp_core.core.errors import (
+    ArtifactIntegrityError,
+    ErrorMessage,
+    SerializationSafetyError,
+)
 from datp_core.core.identifiers import ContractSubject
 from datp_core.core.numeric import AbsoluteTolerance
 from datp_core.data.preprocessing.artifacts import ProcessedAssetName, TrustedEstimatorClassName
@@ -76,7 +80,7 @@ def _definition_for(identity: TrustedEstimatorClassName) -> TrustedEstimatorDefi
         return _ESTIMATOR_MAP[identity]
     except KeyError as err:
         raise SerializationSafetyError(
-            "trusted estimator identity must resolve exactly once",
+            ErrorMessage("trusted estimator identity must resolve exactly once"),
             subject=SerializationSubject.ESTIMATOR,
         ) from err
 
@@ -89,7 +93,9 @@ def serialize_estimator(estimator: BaseEstimator | TrustedScaler, destination: P
     estimator_type = type(estimator)
     if estimator_type not in _TRUSTED_TYPES:
         raise SerializationSafetyError(
-            f"untrusted preprocessing estimator type {estimator_type.__module__}.{estimator_type.__name__}",
+            ErrorMessage(
+                f"untrusted preprocessing estimator type {estimator_type.__module__}.{estimator_type.__name__}"
+            ),
             subject=SerializationSubject.PREPROCESSING_ESTIMATOR,
         )
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -102,7 +108,7 @@ def load_estimator(path: Path, class_name: TrustedEstimatorClassName) -> Trusted
     loaded = skops_io.loads(path.read_bytes(), trusted=_TRUSTED_TYPE_LIST)
     if type(loaded) is not expected_type or type(loaded) not in (StandardScaler, MinMaxScaler):
         raise SerializationSafetyError(
-            "reloaded estimator class does not match the trusted estimator identity",
+            ErrorMessage("reloaded estimator class does not match the trusted estimator identity"),
             subject=SerializationSubject.PREPROCESSING_ESTIMATOR,
         )
     return loaded
@@ -129,7 +135,7 @@ def transforms_are_equivalent(
 def reload_and_compare_transform(check: TransformReloadCheck) -> TrustedScaler:
     if check.state_path.name != ProcessedAssetName.STATE.value:
         raise ArtifactIntegrityError(
-            "fitted state path must use the skops state asset name",
+            ErrorMessage("fitted state path must use the skops state asset name"),
             subject=ContractSubject.ARTIFACT_PATH,
         )
     estimator = load_estimator(check.state_path, check.class_name)
@@ -140,7 +146,7 @@ def reload_and_compare_transform(check: TransformReloadCheck) -> TrustedScaler:
         check.absolute_tolerance,
     ):
         raise ArtifactIntegrityError(
-            "transform-after-reload is not numerically equivalent to transform-before-save",
+            ErrorMessage("transform-after-reload is not numerically equivalent to transform-before-save"),
             subject=ContractSubject.ARTIFACT_PATH,
         )
     return estimator

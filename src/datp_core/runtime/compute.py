@@ -4,7 +4,10 @@ from dataclasses import dataclass
 
 import torch
 
-from datp_core.core.errors import ExecutionStateError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ExecutionStateError,
+)
 from datp_core.core.identifiers import ContractSubject, CudaDeviceName
 from datp_core.core.numeric import CudaDeviceCount
 from datp_core.runtime.configuration import CANONICAL_RUNTIME, CudaDeviceIndex
@@ -16,8 +19,10 @@ class CudaProvenance:
     device_count: CudaDeviceCount
     device_index: CudaDeviceIndex | None
     device_name: CudaDeviceName | None
-    cuda_version: str | None #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    torch_version: str#TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    cuda_version: (
+        str | None
+    )  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    torch_version: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
 
     def __post_init__(self) -> None:
         selected = self.device_index is not None and self.device_name is not None
@@ -32,7 +37,7 @@ class CudaProvenance:
 def require_cuda_available() -> None:
     if not torch.cuda.is_available():
         raise ExecutionStateError(
-            "CUDA is mandatory for GPU-appropriate operations and is unavailable",
+            ErrorMessage("CUDA is mandatory for GPU-appropriate operations and is unavailable"),
             subject=ContractSubject.CUDA,
         )
     configured_cuda_device_index()
@@ -43,7 +48,7 @@ def configured_cuda_device_index() -> CudaDeviceIndex:
     count = torch.cuda.device_count()
     if index.value >= count:
         raise ExecutionStateError(
-            f"configured CUDA device index {index.value} is unavailable; detected {count} devices",
+            ErrorMessage(f"configured CUDA device index {index.value} is unavailable; detected {count} devices"),
             subject=ContractSubject.CUDA,
         )
     return index

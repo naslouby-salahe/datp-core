@@ -64,9 +64,9 @@ def reject_global_floating_point_tolerance() -> None:
 def full_precision_failure_stands_despite_rounded_equality(
     *,
     full_precision_decision: AnchorComparisonDecision,
-    presentation_decimals: int, #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    expected: float, #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    observed: float, #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    presentation_decimals: int,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    expected: float,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    observed: float,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
 ) -> bool:
     """Return True when rounded presentation equality must not rescue a full-precision failure."""
     if presentation_decimals < 0:
@@ -250,8 +250,10 @@ def _build(
     *,
     decision: AnchorComparisonDecision,
     reason: AnchorDiscrepancyReason | None = None,
-    signed: float | None = None, #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    relative: float | None = None, #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    signed: float
+    | None = None,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    relative: float
+    | None = None,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
 ) -> AnchorMetricComparison:
     return AnchorMetricComparison(
         reference=reference,

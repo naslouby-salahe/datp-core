@@ -16,7 +16,10 @@ from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAsse
 from datp_core.artifacts.repositories.thresholds import FederatedThresholdAssetName
 from datp_core.artifacts.serializers.json import serialize_json_model
 from datp_core.core.contracts import StrictModel
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import ExperimentId, FederatedThresholdMethod, MetricId, PopulationId
 from datp_core.core.numeric import (
     AbsoluteThresholdError,
@@ -115,7 +118,7 @@ def _declaration_for(experiment_id: ExperimentId) -> ExperimentDeclaration:
     matches = tuple(item for item in EXPERIMENTS if item.id is experiment_id)
     if len(matches) != 1:
         raise ScientificContractError(
-            f"experiment must be declared exactly once: {experiment_id.value}",
+            ErrorMessage(f"experiment must be declared exactly once: {experiment_id.value}"),
             subject=experiment_id,
         )
     return matches[0]
@@ -160,11 +163,11 @@ def _evaluation_document_for_seed(
     )
     if len(matches) != 1:
         raise ScientificContractError(
-            f"evaluation coordinate for {method.value} must resolve exactly once in {experiment_id.value}"
+            ErrorMessage(f"evaluation coordinate for {method.value} must resolve exactly once in {experiment_id.value}")
         )
     path = _evaluation_document_path(output_root, matches[0])
     if not path.is_file():
-        raise ScientificContractError(f"missing evaluation document: {path}")
+        raise ScientificContractError(ErrorMessage(f"missing evaluation document: {path}"))
     return load_evaluation_document(path)
 
 
@@ -183,7 +186,7 @@ def _threshold_coordinate_for_seed(
     )
     if len(matches) != 1:
         raise ScientificContractError(
-            f"threshold coordinate for {method.value} must resolve exactly once in {experiment_id.value}"
+            ErrorMessage(f"threshold coordinate for {method.value} must resolve exactly once in {experiment_id.value}")
         )
     return matches[0]
 
@@ -226,10 +229,12 @@ def _mean_bytes(values: list[ByteCount]) -> AverageByteCount | None:
 def _finalize_report(
     directory: Path,
     marker: Path,
-    missing_count: int, #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    missing_count: int,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     *,
-    marker_text: str, #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-) -> tuple[tuple[Path, ...], str]: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    marker_text: str,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> tuple[
+    tuple[Path, ...], str
+]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     if missing_count == 0:
         marker.write_text(marker_text, encoding="utf-8")
         return (directory,), marker_text.strip().split("\n", 1)[0]
@@ -263,7 +268,9 @@ def _estimation_summary(
     method: FederatedThresholdMethod,
     include_threshold_error: bool,
     include_exceedance_and_variance: bool,
-) -> tuple[EstimationSummary | None, int]: #TODO Should not retun int. Either it's the class or None. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> tuple[
+    EstimationSummary | None, int
+]:  # TODO Should not retun int. Either it's the class or None. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     documents: list[FederatedEvaluationDocument] = []
     missing = 0
     for seed in CONFIRMATORY_SEED_COHORT.values:
@@ -334,7 +341,9 @@ def run_federated_benign_statistics_comparison_seed(
 def report_federated_benign_statistics_comparison(
     experiment_id: ExperimentId,
     overwrite: bool,
-) -> tuple[tuple[Path, ...], str]: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> tuple[
+    tuple[Path, ...], str
+]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     del overwrite
     declaration = _declaration_for(experiment_id)
     directory = _analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
@@ -379,7 +388,9 @@ def run_federated_quantile_estimation_seed(
 def report_federated_quantile_estimation(
     experiment_id: ExperimentId,
     overwrite: bool,
-) -> tuple[tuple[Path, ...], str]: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> tuple[
+    tuple[Path, ...], str
+]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     del overwrite
     declaration = _declaration_for(experiment_id)
     directory = _analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
@@ -429,7 +440,9 @@ def run_fixed_coefficient_statistics_sensitivity_seed(
 def report_fixed_coefficient_statistics_sensitivity(
     experiment_id: ExperimentId,
     overwrite: bool,
-) -> tuple[tuple[Path, ...], str]: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> tuple[
+    tuple[Path, ...], str
+]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     del overwrite
     declaration = _declaration_for(experiment_id)
     directory = _analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)

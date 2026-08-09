@@ -6,7 +6,11 @@ from pathlib import Path
 
 from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.serializers.safetensors import save_state_dict_tensors
-from datp_core.core.errors import LeakageError, ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    LeakageError,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import (
     CheckpointSelectionRule,
     CheckpointStatus,
@@ -111,7 +115,7 @@ def retain_centralized_checkpoint_candidates(
     observed = tuple(snapshot.round_number.value for snapshot in snapshots)
     if observed != declared:
         raise ScientificContractError(
-            "checkpoint snapshots must match the declared candidate rounds exactly and in order",
+            ErrorMessage("checkpoint snapshots must match the declared candidate rounds exactly and in order"),
             subject=ContractSubject.CHECKPOINT_CANDIDATES,
         )
     candidates: list[CentralizedCheckpointCandidate] = []
@@ -154,7 +158,7 @@ def select_centralized_checkpoint(
     for candidate in ordered:
         if candidate.status is CheckpointStatus.HISTORICAL_ENDPOINT:
             raise ScientificContractError(
-                "historical federated endpoint status is incompatible with centralized candidates",
+                ErrorMessage("historical federated endpoint status is incompatible with centralized candidates"),
                 subject=candidate.status,
             )
         validate_persisted_checkpoint_file(candidate.tensor_path, candidate.tensor_checksum)
@@ -175,7 +179,7 @@ def select_centralized_checkpoint(
 
 def reject_federated_checkpoint(identity: TrainingModelId) -> None:
     raise LeakageError(
-        f"federated checkpoint cannot enter centralized scoring or selection ({identity.value})",
+        ErrorMessage(f"federated checkpoint cannot enter centralized scoring or selection ({identity.value})"),
         subject=ContractSubject.CHECKPOINT_CANDIDATES,
     )
 
@@ -191,22 +195,22 @@ def validate_centralized_candidate_coordinates(
     for candidate in candidates:
         if candidate.coordinate != coordinate:
             raise ScientificContractError(
-                "checkpoint candidate coordinate mismatch",
+                ErrorMessage("checkpoint candidate coordinate mismatch"),
                 subject=ContractSubject.COORDINATE,
             )
         if candidate.preprocessing_state_checksum != preprocessing_checksum:
             raise ScientificContractError(
-                "checkpoint candidate preprocessing checksum mismatch",
+                ErrorMessage("checkpoint candidate preprocessing checksum mismatch"),
                 subject=ContractSubject.PREPROCESSING,
             )
         if candidate.split_manifest_checksum != split_checksum:
             raise ScientificContractError(
-                "checkpoint candidate split checksum mismatch",
+                ErrorMessage("checkpoint candidate split checksum mismatch"),
                 subject=ContractSubject.SPLIT,
             )
         if candidate.training_seed != training_seed:
             raise ScientificContractError(
-                "checkpoint candidate training seed mismatch",
+                ErrorMessage("checkpoint candidate training seed mismatch"),
                 subject=ContractSubject.SEED,
             )
 

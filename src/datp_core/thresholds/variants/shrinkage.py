@@ -3,7 +3,11 @@
 from dataclasses import dataclass
 from typing import ClassVar
 
-from datp_core.core.errors import ScientificContractError, require_contract
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+    require_contract,
+)
 from datp_core.core.identifiers import ContractSubject, FederatedThresholdMethod
 from datp_core.core.numeric import Quantile, ShrinkageWeight, ThresholdValue, floats_exactly_equal
 from datp_core.data.populations.contracts import ClientIdentity
@@ -31,7 +35,7 @@ class ShrinkageAssignment:
     def __post_init__(self) -> None:
         require_contract(
             self.client == self.local_quantile.client,
-            "shrinkage assignment client must match the local quantile client",
+            ErrorMessage("shrinkage assignment client must match the local quantile client"),
             ContractSubject.CLIENT_IDENTITY,
         )
         expected = (
@@ -40,7 +44,7 @@ class ShrinkageAssignment:
         )
         require_contract(
             floats_exactly_equal(self.threshold.value, expected),
-            "shrinkage threshold must equal the declared convex local-shared combination",
+            ErrorMessage("shrinkage threshold must equal the declared convex local-shared combination"),
             ContractSubject.THRESHOLD,
         )
 
@@ -80,7 +84,7 @@ def construct_fixed_shrinkage(
 ) -> tuple[ShrinkageThresholdResult, ...]:
     if protocol.method is not FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE:
         raise ScientificContractError(
-            "fixed shrinkage requires the local-global shrinkage protocol", subject=protocol.method
+            ErrorMessage("fixed shrinkage requires the local-global shrinkage protocol"), subject=protocol.method
         )
     require_eligible_cohort(eligible, "fixed shrinkage construction")
     local_quantiles = tuple(local_quantile(item, quantile) for item in eligible)
@@ -112,7 +116,5 @@ def construct_size_aware_shrinkage(coordinate: FederatedTrainingCoordinate) -> T
         method=FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE,
         coordinate=coordinate,
         reason=ThresholdInfeasibilityReason.SIZE_AWARE_SHRINKAGE_FUNCTION_UNRESOLVED,
-        detail=(
-            "Lambda(n_k) must be predeclared, but no size-aware function is scientifically locked."
-        ),
+        detail=("Lambda(n_k) must be predeclared, but no size-aware function is scientifically locked."),
     )

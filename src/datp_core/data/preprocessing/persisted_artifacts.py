@@ -5,7 +5,10 @@ import polars as pl
 
 from datp_core.artifacts.provenance import Checksum, checksum_text
 from datp_core.artifacts.serializers.json import canonical_json_text
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import CaptureTimestampColumn, PopulationId, SplitProtocolId, TemporalState
 from datp_core.core.numeric import ClientCount, NonNegativeIntegerValue
 from datp_core.data.edge_iiotset.schema import EdgeCanonicalColumn
@@ -104,14 +107,14 @@ def _read_population_document(path: Path) -> PopulationManifestDocument:
     try:
         return PopulationManifestDocument.model_validate_json(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as error:
-        raise ScientificContractError("published population manifest is missing or invalid") from error
+        raise ScientificContractError(ErrorMessage("published population manifest is missing or invalid")) from error
 
 
 def _read_split_document(path: Path) -> SplitManifestDocument:
     try:
         return SplitManifestDocument.model_validate_json(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as error:
-        raise ScientificContractError("published split manifest is missing or invalid") from error
+        raise ScientificContractError(ErrorMessage("published split manifest is missing or invalid")) from error
 
 
 def _read_parquet(path: Path, population: PopulationId) -> pl.DataFrame:
@@ -119,7 +122,7 @@ def _read_parquet(path: Path, population: PopulationId) -> pl.DataFrame:
         return pl.read_parquet(path)
     except (OSError, pl.exceptions.PolarsError) as error:
         raise ScientificContractError(
-            "published parquet artifact is missing or invalid",
+            ErrorMessage("published parquet artifact is missing or invalid"),
             subject=population,
         ) from error
 
@@ -149,7 +152,7 @@ def _validate_population_publication(
 
     if complete != checksum_text("\n".join(sections)):
         raise ScientificContractError(
-            "published population COMPLETE digest does not match its manifests",
+            ErrorMessage("published population COMPLETE digest does not match its manifests"),
             subject=identity.population,
         )
 
@@ -176,7 +179,7 @@ def _validate_split_publication(
 
     if complete != checksum_text("\n".join(sections)):
         raise ScientificContractError(
-            "published split COMPLETE digest does not match its manifests",
+            ErrorMessage("published split COMPLETE digest does not match its manifests"),
             subject=identity.population,
         )
 
@@ -191,13 +194,13 @@ def _validate_persisted_execution_identity(
         )
     except (OSError, ValueError) as error:
         raise ScientificContractError(
-            "published artifact lacks a valid execution identity",
+            ErrorMessage("published artifact lacks a valid execution identity"),
             subject=identity.population,
         ) from error
 
     if persisted != identity:
         raise ScientificContractError(
-            "published artifact execution identity does not match the request",
+            ErrorMessage("published artifact execution identity does not match the request"),
             subject=identity.population,
         )
 
@@ -210,7 +213,7 @@ def _read_complete_digest(
         return Checksum(directory.joinpath(COMPLETE_ASSET).read_text(encoding="utf-8").strip())
     except (OSError, ValueError) as error:
         raise ScientificContractError(
-            "published artifact COMPLETE marker is missing or invalid",
+            ErrorMessage("published artifact COMPLETE marker is missing or invalid"),
             subject=population,
         ) from error
 
@@ -222,7 +225,7 @@ def _read_chronology_document(
         return ChronologicalPartitionDiagnosticsDocument.model_validate_json(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as error:
         raise ScientificContractError(
-            "temporal population lacks valid chronology evidence",
+            ErrorMessage("temporal population lacks valid chronology evidence"),
             subject=PopulationId.EDGE_TEMPORAL_GROUPS,
         ) from error
 
@@ -260,27 +263,27 @@ def _validate_published_pair(
 
     if document.population is not identity.population or split_manifest.population is not identity.population:
         raise ScientificContractError(
-            "published coordinates do not match execution identity",
+            ErrorMessage("published coordinates do not match execution identity"),
             subject=identity.population,
         )
     if document.dataset is not split_manifest.dataset or document.partition_seed != split_manifest.partition_seed:
         raise ScientificContractError(
-            "published population and split coordinates disagree",
+            ErrorMessage("published population and split coordinates disagree"),
             subject=identity.population,
         )
     if membership_frame_checksum(membership) != document.membership_checksum:
         raise ScientificContractError(
-            "published membership checksum mismatch",
+            ErrorMessage("published membership checksum mismatch"),
             subject=identity.population,
         )
     if split_manifest.population_manifest_checksum != document.membership_checksum:
         raise ScientificContractError(
-            "split manifest is not bound to its population",
+            ErrorMessage("split manifest is not bound to its population"),
             subject=identity.population,
         )
     if split_manifest.split_protocol is not _expected_split_protocol(identity, use_static_reference):
         raise ScientificContractError(
-            "published split protocol is incompatible",
+            ErrorMessage("published split protocol is incompatible"),
             subject=identity.population,
         )
 

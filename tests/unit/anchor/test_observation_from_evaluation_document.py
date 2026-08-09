@@ -189,7 +189,7 @@ def test_non_terminal_checkpoint_round_is_rejected(tmp_path: Path) -> None:
 
     with pytest.raises(AnchorReproductionError, match="checkpoint") as exc:
         observation_from_evaluation_document(document, document_path=path)
-    assert exc.value.reason == AnchorDiscrepancyReason.WRONG_CHECKPOINT_SEMANTICS.value
+    assert exc.value.reason is AnchorDiscrepancyReason.WRONG_CHECKPOINT_SEMANTICS
 
 
 def test_stability_evidence_checkpoint_status_is_rejected(tmp_path: Path) -> None:
@@ -201,4 +201,4 @@ def test_stability_evidence_checkpoint_status_is_rejected(tmp_path: Path) -> Non
 
     with pytest.raises(AnchorReproductionError, match="checkpoint") as exc:
         observation_from_evaluation_document(document, document_path=path)
-    assert exc.value.reason == AnchorDiscrepancyReason.WRONG_CHECKPOINT_SEMANTICS.value
+    assert exc.value.reason is AnchorDiscrepancyReason.WRONG_CHECKPOINT_SEMANTICS

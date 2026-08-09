@@ -12,7 +12,10 @@ from datp_core.analysis.metrics.models import (
 )
 from datp_core.analysis.metrics.semantics import available, metric_value, unavailable
 from datp_core.analysis.metrics.threshold_evidence import VerifiedHeldOutBenignScores
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import MetricId
 from datp_core.core.numeric import (
     CalibrationSize,
@@ -51,7 +54,9 @@ class ThresholdEstimationProvenance:
             self.coordinate.population is not self.client.population
             or self.coordinate.training_seed != self.training_seed
         ):
-            raise ScientificContractError("threshold-estimation coordinate must match client and training seed")
+            raise ScientificContractError(
+                ErrorMessage("threshold-estimation coordinate must match client and training seed")
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,18 +78,26 @@ class ThresholdEstimationDiagnostic:
         absolute_attainment = metrics_dict[MetricId.ABSOLUTE_ATTAINMENT_ERROR]
 
         if absolute_threshold.value is None or signed_attainment.value is None or absolute_attainment.value is None:
-            raise ScientificContractError("absolute and attainment threshold diagnostics must be available")
+            raise ScientificContractError(
+                ErrorMessage("absolute and attainment threshold diagnostics must be available")
+            )
         if absolute_threshold.value.value < 0 or absolute_attainment.value.value < 0:
-            raise ScientificContractError("absolute threshold diagnostics must be non-negative")
+            raise ScientificContractError(ErrorMessage("absolute threshold diagnostics must be non-negative"))
         if relative_threshold.value is None and relative_threshold.reason is not MetricReason.ZERO_MEAN:
-            raise ScientificContractError("undefined relative threshold error requires a zero-reference reason")
+            raise ScientificContractError(
+                ErrorMessage("undefined relative threshold error requires a zero-reference reason")
+            )
 
         expected_signed = self.achieved_benign_exceedance.value - self.target_exceedance.value
         if signed_attainment.value.value != expected_signed:
-            raise ScientificContractError("signed attainment error must match achieved minus target exceedance")
+            raise ScientificContractError(
+                ErrorMessage("signed attainment error must match achieved minus target exceedance")
+            )
 
     @property
-    def absolute_threshold_error(self) -> float: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    def absolute_threshold_error(
+        self,
+    ) -> float:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
         result = metric_value(metric_by_id(self.metrics, MetricId.ABSOLUTE_THRESHOLD_ERROR))
         assert result is not None
         return result
@@ -94,17 +107,25 @@ class ThresholdEstimationDiagnostic:
         return metric_by_id(self.metrics, MetricId.RELATIVE_THRESHOLD_ERROR).status
 
     @property
-    def relative_threshold_error(self) -> float | None: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    def relative_threshold_error(
+        self,
+    ) -> (
+        float | None
+    ):  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
         return metric_value(metric_by_id(self.metrics, MetricId.RELATIVE_THRESHOLD_ERROR))
 
     @property
-    def signed_attainment_error(self) -> float: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    def signed_attainment_error(
+        self,
+    ) -> float:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
         result = metric_value(metric_by_id(self.metrics, MetricId.SIGNED_ATTAINMENT_ERROR))
         assert result is not None
         return result
 
     @property
-    def absolute_attainment_error(self) -> float: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    def absolute_attainment_error(
+        self,
+    ) -> float:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
         result = metric_value(metric_by_id(self.metrics, MetricId.ABSOLUTE_ATTAINMENT_ERROR))
         assert result is not None
         return result
@@ -129,7 +150,9 @@ class SampleEfficiencyPoint:
             self.coordinate.population is not self.client.population
             or self.coordinate.training_seed != self.training_seed
         ):
-            raise ScientificContractError("sample-efficiency coordinate must match client and training seed")
+            raise ScientificContractError(
+                ErrorMessage("sample-efficiency coordinate must match client and training seed")
+            )
 
 
 def evaluate_threshold_estimate(
@@ -140,10 +163,10 @@ def evaluate_threshold_estimate(
     verified_benign_scores: VerifiedHeldOutBenignScores,
 ) -> ThresholdEstimationDiagnostic:
     if verified_benign_scores.client != provenance.client:
-        raise ScientificContractError("threshold diagnostics require scores from the evaluated client")
+        raise ScientificContractError(ErrorMessage("threshold diagnostics require scores from the evaluated client"))
     if verified_benign_scores.coordinate != provenance.coordinate:
         raise ScientificContractError(
-            "threshold diagnostics require score provenance matching the evaluation coordinate"
+            ErrorMessage("threshold diagnostics require score provenance matching the evaluation coordinate")
         )
 
     scores = verified_benign_scores.scores
@@ -208,7 +231,7 @@ def sample_efficiency_curve(
         indexes = tuple(item.provenance.replicate_index.value for item in replicate_group)
 
         if len(indexes) != len(set(indexes)):
-            raise ScientificContractError("nested threshold replicates must be unique within a size cell")
+            raise ScientificContractError(ErrorMessage("nested threshold replicates must be unique within a size cell"))
 
         values = np.fromiter((item.estimated_threshold.value for item in replicate_group), dtype=np.float64)
 

@@ -9,7 +9,10 @@ from datp_core.analysis.metrics.cohorts import EvaluationCohortManifest
 from datp_core.analysis.metrics.confusion import calculate_confusion_counts
 from datp_core.analysis.metrics.fixed_score_checksums import evaluation_label_checksum, source_row_checksum
 from datp_core.analysis.metrics.models import ClientMetricResult
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import (
     ContractSubject,
     EvaluationCohort,
@@ -33,7 +36,7 @@ def client_scoring_input(
 ) -> ClientScoringInput:
     matches = tuple(item for item in publications if item.client_identity.value == client.client_id)
     if len(matches) != 1:
-        raise ScientificContractError(f"expected one preprocessing publication for {client.client_id}")
+        raise ScientificContractError(ErrorMessage(f"expected one preprocessing publication for {client.client_id}"))
     publication = matches[0]
     return ClientScoringInput(
         client=client,
@@ -59,7 +62,7 @@ def client_metric(
     eligibility_matches = tuple(item for item in cohort_manifest.records if item.client == assignment.client)
     if len(eligibility_matches) != 1:
         raise ScientificContractError(
-            f"expected one evaluation-cohort record for {assignment.client.client_id}",
+            ErrorMessage(f"expected one evaluation-cohort record for {assignment.client.client_id}"),
             subject=ContractSubject.CLIENT_IDENTITY,
         )
     eligibility = eligibility_matches[0]
@@ -101,7 +104,7 @@ def score_record_for_client(
     matches = tuple(item for item in records if item.scored_client == client)
     if len(matches) != 1:
         raise ScientificContractError(
-            f"expected one {role.value} score record for {client.client_id}",
+            ErrorMessage(f"expected one {role.value} score record for {client.client_id}"),
             subject=ContractSubject.CLIENT_IDENTITY,
         )
     return matches[0]

@@ -39,8 +39,8 @@ class PcapChronology:
 
 @dataclass(frozen=True, slots=True)
 class _PcapRecord:
-    timestamp_nanoseconds: int #TODO: should probably an existing class. Check if already exists 
-    utc_clock_microseconds: int #TODO: should probably an existing class. Check if already exists
+    timestamp_nanoseconds: int  # TODO: should probably an existing class. Check if already exists
+    utc_clock_microseconds: int  # TODO: should probably an existing class. Check if already exists
 
 
 class _PcapAligner:
@@ -55,7 +55,7 @@ class _PcapAligner:
         self.skipped_evidence_rows = 0
         self.trailing_evidence_rows = 0
 
-    def matches(self) -> Iterator[int]: #TODO: should probably be an existing class. Check if already exists
+    def matches(self) -> Iterator[int]:  # TODO: should probably be an existing class. Check if already exists
         clocks = _csv_capture_clocks(self.csv_path)
         records = _pcap_records(self.pcap_path)
         first_record = self._first_match(clocks, records)
@@ -64,11 +64,13 @@ class _PcapAligner:
         yield from self._remaining_matches(clocks, records, previous_timestamp)
         self.trailing_evidence_rows = sum(1 for _ in records)
 
-    def align_all(self) -> int: #TODO: should probably be an existing class. Check if already exists
+    def align_all(self) -> int:  # TODO: should probably be an existing class. Check if already exists
         """Exhaust the verified CSV↔PCAP alignment and return the matched row count."""
         return sum(1 for _ in self.matches())
 
-    def validation(self, group_identity: str) -> ChronologyValidation: #TODO: should probably be a method of PcapChronology instead of _PcapAligner. Check if it can be moved to PcapChronology and if it makes sense to do so.
+    def validation(
+        self, group_identity: str
+    ) -> ChronologyValidation:  # TODO: should probably be a method of PcapChronology instead of _PcapAligner. Check if it can be moved to PcapChronology and if it makes sense to do so.
         if self.alignment_offset_microseconds is None:
             raise ValueError("verified chronology must retain its PCAP display offset")
         is_monotonic = self.out_of_order_rows == 0
@@ -99,7 +101,9 @@ class _PcapAligner:
             trailing_evidence_rows=RowCount(self.trailing_evidence_rows),
         )
 
-    def _first_match(self, clocks: Iterator[int], records: Iterator[_PcapRecord]) -> _PcapRecord: #TODO: should probably be an existing class. Check if already exists
+    def _first_match(
+        self, clocks: Iterator[int], records: Iterator[_PcapRecord]
+    ) -> _PcapRecord:  # TODO: should probably be an existing class. Check if already exists
         first_clock = next(clocks, None)
         first_record = next(records, None)
         if first_clock is None or first_record is None:
@@ -110,7 +114,10 @@ class _PcapAligner:
         return first_record
 
     def _remaining_matches(
-        self, clocks: Iterator[int], records: Iterator[_PcapRecord], previous_timestamp: int #TODO: should probably be an existing class. Check if already exists and adapt usage accordingly. Maybe use RowCount or something else instead of int.
+        self,
+        clocks: Iterator[int],
+        records: Iterator[_PcapRecord],
+        previous_timestamp: int,  # TODO: should probably be an existing class. Check if already exists and adapt usage accordingly. Maybe use RowCount or something else instead of int.
     ) -> Iterator[int]:
         offset = self.alignment_offset_microseconds
         if offset is None:
@@ -120,7 +127,9 @@ class _PcapAligner:
             yield self._record_match(record, previous_timestamp)
             previous_timestamp = record.timestamp_nanoseconds
 
-    def _next_matching_record(self, clock: int, records: Iterator[_PcapRecord], offset: int) -> _PcapRecord: #TODO: should probably be an existing class. Check if already exists
+    def _next_matching_record(
+        self, clock: int, records: Iterator[_PcapRecord], offset: int
+    ) -> _PcapRecord:  # TODO: should probably be an existing class. Check if already exists
         record = next(records, None)
         while record is not None and not _clock_matches(clock, record.utc_clock_microseconds, offset):
             self.skipped_evidence_rows += 1
@@ -129,7 +138,9 @@ class _PcapAligner:
             raise ValueError("PCAP does not cover every CSV record")
         return record
 
-    def _record_match(self, record: _PcapRecord, previous_timestamp: int | None) -> int: #TODO: should probably be an existing class. Check if already exists
+    def _record_match(
+        self, record: _PcapRecord, previous_timestamp: int | None
+    ) -> int:  # TODO: should probably be an existing class. Check if already exists
         self.total_rows += 1
         if previous_timestamp == record.timestamp_nanoseconds:
             self.duplicate_timestamp_count += 1
@@ -142,7 +153,9 @@ def paired_capture_path(csv_path: Path) -> Path:
     return csv_path.with_suffix(EdgeArtifactSuffix.PCAP)
 
 
-def validate_chronology(group_identity: str, csv_path: Path, pcap_path: Path) -> PcapChronology: #TODO: should probably be a method of PcapChronology instead of a standalone function. Check if it can be moved to PcapChronology and if it makes sense to do so.
+def validate_chronology(
+    group_identity: str, csv_path: Path, pcap_path: Path
+) -> PcapChronology:  # TODO: should probably be a method of PcapChronology instead of a standalone function. Check if it can be moved to PcapChronology and if it makes sense to do so.
     if not pcap_path.is_file():
         return PcapChronology(pcap_path, _unavailable_validation(group_identity, csv_path, "Paired PCAP is missing."))
     try:
@@ -188,7 +201,9 @@ def _unavailable_validation(group_identity: str, csv_path: Path, reason: str) ->
     )
 
 
-def _csv_capture_clocks(path: Path) -> Iterator[int]: #TODO: should probably be an existing class. Check if already exists
+def _csv_capture_clocks(
+    path: Path,
+) -> Iterator[int]:  # TODO: should probably be an existing class. Check if already exists
     with path.open("r", encoding="utf-8", newline="") as source:
         reader = csv.reader(source)
         header = next(reader, None)
@@ -204,7 +219,9 @@ def _csv_capture_clocks(path: Path) -> Iterator[int]: #TODO: should probably be 
             yield _capture_clock_microseconds(row[timestamp_column])
 
 
-def _capture_clock_microseconds(value: str) -> int: #TODO: should probably be an existing class. Check if already exists. No primitive type for this, use something else instead of int.
+def _capture_clock_microseconds(
+    value: str,
+) -> int:  # TODO: should probably be an existing class. Check if already exists. No primitive type for this, use something else instead of int.
     match = _CLOCK_PATTERN.fullmatch(value)
     if match is None:
         raise ValueError("Edge CSV frame.time is not a capture-clock value")
@@ -215,7 +232,9 @@ def _capture_clock_microseconds(value: str) -> int: #TODO: should probably be an
     return ((hours * 3_600 + minutes * 60 + seconds) * _MICROSECONDS_PER_SECOND) + microseconds
 
 
-def _clock_matches(csv_clock_microseconds: int, pcap_clock_microseconds: int, offset_microseconds: int) -> bool: #TODO: should probably be an existing class. Check if already exists. No primitive type for this, use something else instead of int.
+def _clock_matches(
+    csv_clock_microseconds: int, pcap_clock_microseconds: int, offset_microseconds: int
+) -> bool:  # TODO: should probably be an existing class. Check if already exists. No primitive type for this, use something else instead of int.
     return (pcap_clock_microseconds + offset_microseconds) % _MICROSECONDS_PER_DAY == csv_clock_microseconds
 
 
@@ -238,7 +257,11 @@ def _pcap_records(path: Path) -> Iterator[_PcapRecord]:
             )
 
 
-def _pcap_format(global_header: bytes) -> tuple[str, bool]: #TODO: should probably be an existing class. Check if already exists. No primitive type for this, use something else instead of str and bool.
+def _pcap_format(
+    global_header: bytes,
+) -> tuple[
+    str, bool
+]:  # TODO: should probably be an existing class. Check if already exists. No primitive type for this, use something else instead of str and bool.
     if len(global_header) != 24:
         raise ValueError("PCAP global header is truncated")
     match global_header[:4]:
@@ -266,7 +289,9 @@ def _write_timeline_batch(writer: pq.ParquetWriter, indexes: list[int], timestam
     )
 
 
-def _csv_row_count(path: Path) -> int: #TODO: should probably be an existing class. Check if already exists. No primitive type for this, use something else instead of int.
+def _csv_row_count(
+    path: Path,
+) -> int:  # TODO: should probably be an existing class. Check if already exists. No primitive type for this, use something else instead of int.
     with path.open("r", encoding="utf-8", newline="") as source:
         reader = csv.reader(source)
         next(reader, None)

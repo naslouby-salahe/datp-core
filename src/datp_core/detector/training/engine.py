@@ -13,7 +13,11 @@ from torch.utils.data import DataLoader, TensorDataset
 from datp_core.artifacts.provenance import Checksum, checksum_bytes, checksum_text
 from datp_core.artifacts.serializers.json import canonical_json_text
 from datp_core.artifacts.serializers.safetensors import to_cpu_contiguous_state
-from datp_core.core.errors import LeakageError, ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    LeakageError,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import (
     CommunicationEstimationMethod,
     ContractSubject,
@@ -93,22 +97,22 @@ class PreparedFederatedClientData:
     def __post_init__(self) -> None:
         if self.features_cpu.ndim != 2:
             raise ScientificContractError(
-                "prepared features must be a two-dimensional tensor",
+                ErrorMessage("prepared features must be a two-dimensional tensor"),
                 subject=ContractSubject.FEATURES,
             )
         if self.features_cpu.device.type != "cpu":
             raise ScientificContractError(
-                "prepared features must remain on CPU",
+                ErrorMessage("prepared features must remain on CPU"),
                 subject=ContractSubject.RUNTIME,
             )
         if self.features_cpu.dtype != TORCH_LEARNING_DTYPE:
             raise ScientificContractError(
-                "prepared features must use the canonical learning dtype",
+                ErrorMessage("prepared features must use the canonical learning dtype"),
                 subject=ContractSubject.FEATURES,
             )
         if self.features_cpu.shape[0] < 1:
             raise ScientificContractError(
-                "prepared client data requires at least one row",
+                ErrorMessage("prepared client data requires at least one row"),
                 subject=ContractSubject.ROWS,
             )
 
@@ -137,7 +141,7 @@ class ProximalTerm:
 def reject_attack_rows_in_federated_training(labels: OutcomeLabelSequence) -> None:
     if any(label != PopulationOutcomeLabel.BENIGN.value for label in labels):
         raise LeakageError(
-            "attack-labelled rows cannot enter federated benign training",
+            ErrorMessage("attack-labelled rows cannot enter federated benign training"),
             subject=ContractSubject.LABEL,
         )
 
@@ -154,24 +158,24 @@ def prepare_federated_client_data(
         matrix = frame.select(client_input.feature_names.as_list()).to_numpy().astype(LEARNING_DTYPE, copy=False)
     except (pl.exceptions.ColumnNotFoundError, pl.exceptions.SchemaError) as exc:
         raise ScientificContractError(
-            "federated training input is missing its declared label or feature schema",
+            ErrorMessage("federated training input is missing its declared label or feature schema"),
             subject=ContractSubject.SCHEMA,
         ) from exc
 
     reject_attack_rows_in_federated_training(labels)
     if len(labels) != matrix.shape[0]:
         raise ScientificContractError(
-            "federated labels and features must align by row",
+            ErrorMessage("federated labels and features must align by row"),
             subject=ContractSubject.ROWS,
         )
     if matrix.shape[1] != autoencoder.widths[0].value:
         raise ScientificContractError(
-            "feature width does not match the autoencoder input width",
+            ErrorMessage("feature width does not match the autoencoder input width"),
             subject=ContractSubject.FEATURES,
         )
     if not np.isfinite(matrix).all():
         raise ScientificContractError(
-            "federated training features must be finite",
+            ErrorMessage("federated training features must be finite"),
             subject=ContractSubject.FEATURES,
         )
 
@@ -180,13 +184,15 @@ def prepare_federated_client_data(
         features_cpu=torch.as_tensor(
             matrix,
             dtype=TORCH_LEARNING_DTYPE,
-            device="cpu", #TODO:should be using enum. identify what already exists. Do not use primitives for this, use something else. Check what already exists. And search whole cosebase to fix that
+            device="cpu",  # TODO:should be using enum. identify what already exists. Do not use primitives for this, use something else. Check what already exists. And search whole cosebase to fix that
         ),
         preprocessing_checksum=client_input.preprocessing_state.estimator_checksum,
     )
 
 
-def _client_seed_component(client: ClientIdentity) -> int: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+def _client_seed_component(
+    client: ClientIdentity,
+) -> int:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     payload = canonical_json_text(
         {
             "population": client.population.value,
@@ -234,7 +240,7 @@ def proximal_penalty(
 ) -> torch.Tensor:
     if not local_parameters:
         raise ScientificContractError(
-            "proximal regularization requires model parameters",
+            ErrorMessage("proximal regularization requires model parameters"),
             subject=ContractSubject.TRAINING,
         )
     squared_diffs = [
@@ -261,7 +267,7 @@ def _reference_parameters(
         )
     except KeyError as exc:
         raise ScientificContractError(
-            "proximal reference state does not match model parameters",
+            ErrorMessage("proximal reference state does not match model parameters"),
             subject=ContractSubject.TRAINING,
         ) from exc
 
@@ -323,7 +329,7 @@ def run_local_epoch(
 
     if total_samples < 1:
         raise ScientificContractError(
-            "local training produced no samples",
+            ErrorMessage("local training produced no samples"),
             subject=ContractSubject.BATCH_SIZE,
         )
     return (
@@ -374,13 +380,13 @@ def train_client_update(
 def aggregate_client_updates(updates: Sequence[ClientUpdate]) -> AutoencoderState:
     if not updates:
         raise ScientificContractError(
-            "aggregation requires at least one client update",
+            ErrorMessage("aggregation requires at least one client update"),
             subject=ContractSubject.CLIENT,
         )
     total_samples = sum([update.sample_count.value for update in updates])
     if total_samples < 1:
         raise ScientificContractError(
-            "aggregation requires a positive total sample count",
+            ErrorMessage("aggregation requires a positive total sample count"),
             subject=ContractSubject.ROWS,
         )
 
@@ -390,7 +396,7 @@ def aggregate_client_updates(updates: Sequence[ClientUpdate]) -> AutoencoderStat
     for update in updates[1:]:
         if tuple(update.state_dict.keys()) != reference_keys:
             raise ScientificContractError(
-                "client update parameter keys do not match",
+                ErrorMessage("client update parameter keys do not match"),
                 subject=ContractSubject.TRAINING,
             )
         for name in reference_keys:
@@ -398,7 +404,7 @@ def aggregate_client_updates(updates: Sequence[ClientUpdate]) -> AutoencoderStat
             observed = update.state_dict[name]
             if expected.shape != observed.shape or expected.dtype != observed.dtype:
                 raise ScientificContractError(
-                    "client update parameter shapes or dtypes do not match",
+                    ErrorMessage("client update parameter shapes or dtypes do not match"),
                     subject=ContractSubject.TRAINING,
                 )
 
@@ -417,13 +423,13 @@ def aggregate_client_updates(updates: Sequence[ClientUpdate]) -> AutoencoderStat
 def compute_weighted_aggregate_loss(updates: Sequence[ClientUpdate]) -> MetricValue:
     if not updates:
         raise ScientificContractError(
-            "aggregate loss requires at least one client update",
+            ErrorMessage("aggregate loss requires at least one client update"),
             subject=ContractSubject.CLIENT,
         )
     total_samples = sum([update.sample_count.value for update in updates])
     if total_samples < 1:
         raise ScientificContractError(
-            "aggregate loss requires a positive total sample count",
+            ErrorMessage("aggregate loss requires a positive total sample count"),
             subject=ContractSubject.ROWS,
         )
     return MetricValue(sum([update.local_loss.value * update.sample_count.value for update in updates]) / total_samples)
@@ -492,7 +498,7 @@ def validate_common_request(
 ) -> None:
     if not clients:
         raise ScientificContractError(
-            "federated training requires at least one client",
+            ErrorMessage("federated training requires at least one client"),
             subject=ContractSubject.CLIENT,
         )
     identities = tuple(item.client for item in clients)
@@ -500,22 +506,22 @@ def validate_common_request(
 
     if len(identity_set) != len(identities):
         raise ScientificContractError(
-            "federated training cannot receive duplicate clients",
+            ErrorMessage("federated training cannot receive duplicate clients"),
             subject=ContractSubject.CLIENT_IDENTITY,
         )
     if len(clients) != population_client_count.value:
         raise ScientificContractError(
-            "federated training client count does not match the declared population count",
+            ErrorMessage("federated training client count does not match the declared population count"),
             subject=ContractSubject.CLIENT,
         )
     if training_seed != coordinate.training_seed:
         raise ScientificContractError(
-            "request and coordinate training seeds must match",
+            ErrorMessage("request and coordinate training seeds must match"),
             subject=ContractSubject.COORDINATE,
         )
     if any(client.population != coordinate.population for client in identity_set):
         raise ScientificContractError(
-            "every client must belong to the training coordinate population",
+            ErrorMessage("every client must belong to the training coordinate population"),
             subject=ContractSubject.CLIENT_IDENTITY,
         )
 
@@ -530,7 +536,7 @@ def _proximal_coefficient(
             return coefficient
         case _:
             raise ScientificContractError(
-                f"unsupported training protocol {type(protocol).__name__}",
+                ErrorMessage(f"unsupported training protocol {type(protocol).__name__}"),
                 subject=ContractSubject.TRAINING,
             )
 

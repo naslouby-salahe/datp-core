@@ -7,7 +7,10 @@ from pathlib import Path
 
 from datp_core.app.planning import ExperimentPlan, PlanDisposition, PlanningEvidence, expand_experiment_plan
 from datp_core.artifacts.provenance import Checksum
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import FederatedThresholdMethod
 from datp_core.experiments.common.coordinates import ExecutionRoute, execution_route_for
 from datp_core.experiments.common.seeds import SeedCohort
@@ -63,7 +66,7 @@ def execute_declared_campaign(
 ) -> DeclaredExperimentSeedResult:
     if not campaign.entries:
         raise ScientificContractError(
-            f"{declaration.id.value} planning produced no executable coordinates",
+            ErrorMessage(f"{declaration.id.value} planning produced no executable coordinates"),
             subject=declaration.id,
         )
     execution = execute_campaign(
@@ -77,7 +80,7 @@ def execute_declared_campaign(
     if failed:
         blocked = ", ".join(result.coordinate.stable_key for result in failed)
         raise ScientificContractError(
-            f"{declaration.id.value} execution did not complete: {blocked}",
+            ErrorMessage(f"{declaration.id.value} execution did not complete: {blocked}"),
             subject=declaration.id,
         )
     available_methods = frozenset(entry.coordinate.threshold_method for entry in campaign.entries)

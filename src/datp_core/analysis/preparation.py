@@ -44,7 +44,10 @@ from datp_core.analysis.temporal import (
     validate_frozen_recalibrated_pair,
 )
 from datp_core.core.contracts import StrictModel
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import (
     EvidenceRole,
     ExperimentId,
@@ -64,7 +67,9 @@ class ConfirmatoryAnalysisRequest:
     analysis_seed: Seed
     multiplicity_plan: MultiplicityPlan | None = None
     mechanisms: tuple[MechanismEvidence, ...] = ()
-    unavailable_reason: str | None = None #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    unavailable_reason: str | None = (
+        None  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    )
     excluded_seeds: tuple[Seed, ...] = ()
 
 
@@ -81,7 +86,9 @@ class AnalysisDocument(StrictModel):
     multiplicity_result: MultiplicityResult | None
     mechanisms: tuple[MechanismEvidence, ...]
     excluded_seeds: tuple[Seed, ...]
-    unavailable_reason: str | None #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    unavailable_reason: (
+        str | None
+    )  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
 
     @model_validator(mode="after")
     def validate_multiplicity(self) -> "AnalysisDocument":
@@ -97,7 +104,9 @@ class ExternalAnalysisRequest:
     plan: SupplementaryPairedAnalysisPlan
     analysis_seed: Seed
     mechanisms: tuple[MechanismEvidence, ...] = ()
-    unavailable_reason: str | None = None #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    unavailable_reason: str | None = (
+        None  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    )
     excluded_seeds: tuple[Seed, ...] = ()
 
 
@@ -111,7 +120,9 @@ class ExternalAnalysisDocument(StrictModel):
     rank_biserial: RankBiserialResult
     mechanisms: tuple[MechanismEvidence, ...]
     excluded_seeds: tuple[Seed, ...]
-    unavailable_reason: str | None #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    unavailable_reason: (
+        str | None
+    )  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
 
 
 @dataclass(frozen=True, slots=True)
@@ -138,7 +149,9 @@ class TemporalAnalysisDocument(StrictModel):
     campaign_decision: ScientificDecisionResult
     paired_seed_identities: tuple[Seed, ...]
     excluded_seeds: tuple[Seed, ...] = ()
-    unavailable_reason: str | None = None #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    unavailable_reason: str | None = (
+        None  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    )
     drift_excess_interval: BootstrapInterval | None = None
     recovered_amount_interval: BootstrapInterval | None = None
     recovery_ratio_interval: BootstrapInterval | None = None
@@ -292,26 +305,36 @@ def prepare_temporal_analysis(request: TemporalAnalysisRequest) -> TemporalAnaly
     ordered = tuple(sorted(request.records, key=lambda item: item.seed.value))
     for record in ordered:
         if record.experiment is not request.experiment:
-            raise ScientificContractError("temporal recovery experiment must match the analysis request")
+            raise ScientificContractError(ErrorMessage("temporal recovery experiment must match the analysis request"))
         if record.threshold_method is not request.threshold_method:
-            raise ScientificContractError("temporal recovery threshold method must match the analysis request")
+            raise ScientificContractError(
+                ErrorMessage("temporal recovery threshold method must match the analysis request")
+            )
         provenance = record.provenance
         if provenance.seed != record.seed:
-            raise ScientificContractError("temporal recovery provenance seed must match the recovery seed")
+            raise ScientificContractError(
+                ErrorMessage("temporal recovery provenance seed must match the recovery seed")
+            )
         if provenance.experiment is not record.experiment:
-            raise ScientificContractError("temporal recovery provenance experiment must match the recovery")
+            raise ScientificContractError(
+                ErrorMessage("temporal recovery provenance experiment must match the recovery")
+            )
         if provenance.threshold_method is not record.threshold_method:
-            raise ScientificContractError("temporal recovery provenance threshold method must match the recovery")
+            raise ScientificContractError(
+                ErrorMessage("temporal recovery provenance threshold method must match the recovery")
+            )
         if not provenance.population.strip():
-            raise ScientificContractError("temporal recovery provenance requires a population identity")
+            raise ScientificContractError(ErrorMessage("temporal recovery provenance requires a population identity"))
     observed = frozenset(item.seed for item in ordered)
     declared = frozenset(BOUNDED_EVIDENCE_SEED_COHORT.values)
     if observed != declared:
         missing = tuple(sorted((seed for seed in declared - observed), key=lambda item: item.value))
         extra = tuple(sorted((seed for seed in observed - declared), key=lambda item: item.value))
         raise ScientificContractError(
-            "temporal analysis requires exact declared seed-cohort equality "
-            f"(missing={tuple(seed.value for seed in missing)}, extra={tuple(seed.value for seed in extra)})"
+            ErrorMessage(
+                "temporal analysis requires exact declared seed-cohort equality "
+                f"(missing={tuple(seed.value for seed in missing)}, extra={tuple(seed.value for seed in extra)})"
+            )
         )
     records = tuple(temporal_analysis_record(item) for item in ordered)
     drift_interval, recovered_interval, ratio_interval = temporal_seed_series_intervals(ordered)
@@ -335,7 +358,7 @@ def prepare_temporal_analysis(request: TemporalAnalysisRequest) -> TemporalAnaly
 
 def _blocked_confirmatory_document(
     request: ConfirmatoryAnalysisRequest,
-    reason: str, #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    reason: str,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
 ) -> AnalysisDocument:
     protocol = request.inference_protocol
     interval = BootstrapInterval.blocked(
@@ -374,7 +397,7 @@ def _blocked_confirmatory_document(
 
 def _blocked_external_document(
     request: ExternalAnalysisRequest,
-    reason: str, #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    reason: str,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
 ) -> ExternalAnalysisDocument:
     protocol = request.plan.inference_protocol
     interval = BootstrapInterval.blocked(
@@ -402,7 +425,9 @@ def _blocked_external_document(
     )
 
 
-def _bca_reason_or_fixed(reason: str) -> BcaReason: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+def _bca_reason_or_fixed(
+    reason: str,
+) -> BcaReason:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
     for item in BcaReason:
         if item.value == reason:
             return item
@@ -460,6 +485,6 @@ def _validate_temporal_identities(request: TemporalAnalysisRequest) -> None:
     for identity, expected_state in bindings:
         bound = require_execution_identity(identity, PopulationId.EDGE_TEMPORAL_GROUPS)
         if bound is None or bound.temporal_state is not expected_state:
-            raise ScientificContractError("temporal analysis identity must match its deployment state")
+            raise ScientificContractError(ErrorMessage("temporal analysis identity must match its deployment state"))
         if bound.experiment is not request.experiment:
-            raise ScientificContractError("temporal analysis identity must match the declared experiment")
+            raise ScientificContractError(ErrorMessage("temporal analysis identity must match the declared experiment"))

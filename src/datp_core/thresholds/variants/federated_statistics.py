@@ -6,7 +6,11 @@ from typing import ClassVar
 
 import numpy as np
 
-from datp_core.core.errors import ScientificContractError, require_contract
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+    require_contract,
+)
 from datp_core.core.identifiers import ContractSubject, FederatedThresholdMethod
 from datp_core.core.numeric import (
     AbsoluteThresholdError,
@@ -51,19 +55,19 @@ class ClientBenignSummary:
     def __post_init__(self) -> None:
         require_contract(
             self.count.value >= 1,
-            "a benign summary requires at least one calibration score",
+            ErrorMessage("a benign summary requires at least one calibration score"),
             ContractSubject.CALIBRATION,
         )
         if self.benign_exceedance_count is not None:
             require_contract(
                 self.benign_exceedance_count.value <= self.count.value,
-                "benign exceedance count cannot exceed calibration score count",
+                ErrorMessage("benign exceedance count cannot exceed calibration score count"),
                 ContractSubject.THRESHOLD,
             )
         disclosed_scalar_count = 4 if self.benign_exceedance_count is not None else 3
         require_contract(
             self.disclosed_bytes.value == disclosed_scalar_count * np.dtype(np.float64).itemsize,
-            "disclosed communication bytes must match the disclosed summary scalars",
+            ErrorMessage("disclosed communication bytes must match the disclosed summary scalars"),
             ContractSubject.THRESHOLD,
         )
 
@@ -82,7 +86,7 @@ class PooledVarianceDecomposition:
                 self.full_pooled_variance.value,
                 self.within_client_variance.value + self.between_client_variance.value,
             ),
-            "the full pooled variance must equal within-client plus between-client variance",
+            ErrorMessage("the full pooled variance must equal within-client plus between-client variance"),
             ContractSubject.THRESHOLD,
         )
 
@@ -102,7 +106,7 @@ class CentralizedAttainmentDiagnostic:
                 self.signed_attainment_error.value,
                 self.achieved_exceedance.value - self.target_exceedance.value,
             ),
-            "signed attainment error must equal achieved_exceedance minus target_exceedance",
+            ErrorMessage("signed attainment error must equal achieved_exceedance minus target_exceedance"),
             ContractSubject.THRESHOLD,
         )
         require_contract(
@@ -110,7 +114,7 @@ class CentralizedAttainmentDiagnostic:
                 self.absolute_attainment_error.value,
                 abs(self.signed_attainment_error.value),
             ),
-            "absolute attainment error must equal abs(signed_attainment_error)",
+            ErrorMessage("absolute attainment error must equal abs(signed_attainment_error)"),
             ContractSubject.THRESHOLD,
         )
 
@@ -138,7 +142,7 @@ class FederatedStatisticsThresholdResult:
     def __post_init__(self) -> None:
         require_contract(
             bool(self.client_summaries),
-            "the federated benign-statistics comparator requires at least one client summary",
+            ErrorMessage("the federated benign-statistics comparator requires at least one client summary"),
             ContractSubject.THRESHOLD,
         )
         summary_clients = tuple(item.client for item in self.client_summaries)
@@ -158,7 +162,7 @@ def construct_federated_benign_statistics(
 ) -> FederatedStatisticsThresholdResult:
     if not eligible:
         raise ScientificContractError(
-            "the federated benign-statistics comparator requires at least one eligible client",
+            ErrorMessage("the federated benign-statistics comparator requires at least one eligible client"),
             subject=ContractSubject.THRESHOLD,
         )
     ordered = tuple(sorted(eligible, key=lambda item: item.client))

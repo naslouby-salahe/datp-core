@@ -62,7 +62,9 @@ class DescriptiveSummary(StrictModel):
     counts: ObservationCounts
     quantiles: QuantileRange
     statistics: DescriptiveStatistics | None
-    reason: str | None #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    reason: (
+        str | None
+    )  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
 
     @model_validator(mode="after")
     def validate_summary(self) -> "DescriptiveSummary":
@@ -172,7 +174,9 @@ class ClientScoreGeometry(StrictModel):
     standard_deviation: MetricValue | None
     minimum: MetricValue | None
     maximum: MetricValue | None
-    unavailable_reason: str | None = None #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    unavailable_reason: str | None = (
+        None  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    )
 
     @model_validator(mode="after")
     def validate_geometry(self) -> "ClientScoreGeometry":
@@ -201,7 +205,9 @@ class ScoreGeometryResult(StrictModel):
     clients: tuple[ClientScoreGeometry, ...]
     threshold_overlays: tuple[ScoreGeometryThresholdOverlay, ...]
     attack_geometry_available: bool
-    attack_geometry_reason: str | None = None #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    attack_geometry_reason: str | None = (
+        None  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    )
 
     evidence_role: ClassVar[EvidenceRole] = EvidenceRole.MECHANISM
 
@@ -210,7 +216,13 @@ class ScoreGeometryResult(StrictModel):
         return AvailabilityStatus.AVAILABLE if self.clients else AvailabilityStatus.UNAVAILABLE
 
 
-_DEFAULT_CDF_QUANTILES = (0.05, 0.25, 0.5, 0.75, 0.95) #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity. ANd even checki if needs to be moved
+_DEFAULT_CDF_QUANTILES = (
+    0.05,
+    0.25,
+    0.5,
+    0.75,
+    0.95,
+)  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity. ANd even checki if needs to be moved
 
 
 def empirical_cdf_points(scores: tuple[MetricValue, ...]) -> tuple[EmpiricalCdfPoint, ...]:
@@ -232,7 +244,9 @@ def client_score_geometry(
     client: ClientIdentity,
     score_role: ScoreRole,
     scores: tuple[MetricValue, ...],
-    quantiles: tuple[float, ...] = _DEFAULT_CDF_QUANTILES, #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    quantiles: tuple[
+        float, ...
+    ] = _DEFAULT_CDF_QUANTILES,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
 ) -> ClientScoreGeometry:
     if not scores:
         return ClientScoreGeometry(
@@ -270,7 +284,8 @@ def score_geometry_from_client_vectors(
     attack_evaluation: tuple[tuple[ClientIdentity, tuple[MetricValue, ...]], ...] | None,
     threshold_overlays: tuple[ScoreGeometryThresholdOverlay, ...],
     attack_geometry_available: bool,
-    attack_geometry_reason: str | None = None, #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    attack_geometry_reason: str
+    | None = None,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
 ) -> ScoreGeometryResult:
     clients = tuple(
         client_score_geometry(client=client, score_role=ScoreRole.BENIGN_EVALUATION, scores=scores)

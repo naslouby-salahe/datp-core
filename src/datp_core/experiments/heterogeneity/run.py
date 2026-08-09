@@ -34,7 +34,10 @@ from datp_core.app.planning import expand_experiment_plan
 from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import (
     EvidenceRole,
     ExperimentId,
@@ -203,7 +206,7 @@ def analyze_controlled_heterogeneity_sweep(*, overwrite: bool) -> Path:
                     seed=seed,
                     experiment=ExperimentId.CONTROLLED_HETEROGENEITY_SWEEP,
                     population=PopulationId.NBAIOT_DIRICHLET_CLIENTS,
-                    regime_label="IID", #TODO: should not be hardcoded. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+                    regime_label="IID",  # TODO: should not be hardcoded. Check what already exists. Do not use primitives for this, use something else. Check what already exists
                     heterogeneity=iid_divergence.aggregate,
                     benefit=MetricValue(
                         population_metric(iid_shared, MetricId.FPR_COEFFICIENT_OF_VARIATION).value
@@ -273,7 +276,7 @@ def analyze_per_client_score_geometry(*, overwrite: bool) -> Path:
         expected_clients = tuple(sorted(item.client for item in shared.clients))
         if not expected_clients:
             raise ScientificContractError(
-                f"per-client score geometry requires evaluation clients for seed {seed.value}"
+                ErrorMessage(f"per-client score geometry requires evaluation clients for seed {seed.value}")
             )
         benign_eval = _client_evaluation_scores(
             score_coordinate=shared.score_coordinate,
@@ -413,8 +416,10 @@ def _verify_auroc_invariance(
     difference = abs(shared_auroc.value - local_auroc.value)
     if difference > FIXED_SCORE_AUROC_INVARIANCE_TOLERANCE.value:
         raise ScientificContractError(
-            "AUROC must be invariant across threshold-only policies; "
-            f"shared={shared_auroc.value} local={local_auroc.value} difference={difference}",
+            ErrorMessage(
+                "AUROC must be invariant across threshold-only policies; "
+                f"shared={shared_auroc.value} local={local_auroc.value} difference={difference}"
+            ),
             subject=ExperimentId.THRESHOLD_MOVEMENT_TRADEOFF,
         )
 
@@ -422,7 +427,7 @@ def _verify_auroc_invariance(
 def _require_declaration(experiment_id: ExperimentId) -> ExperimentDeclaration:
     matches = tuple(item for item in EXPERIMENTS if item.id is experiment_id)
     if len(matches) != 1:
-        raise ScientificContractError(f"experiment must be declared exactly once: {experiment_id.value}")
+        raise ScientificContractError(ErrorMessage(f"experiment must be declared exactly once: {experiment_id.value}"))
     return matches[0]
 
 
@@ -432,7 +437,7 @@ def _confirmatory_coordinate(training_seed: Seed, method: FederatedThresholdMeth
     elif method is FederatedThresholdMethod.CLUSTER_THRESHOLD:
         declaration = _require_declaration(ExperimentId.FAMILY_AND_GROUPED_GRANULARITY)
     else:
-        raise ScientificContractError(f"cannot resolve confirmatory coordinate for {method.value}")
+        raise ScientificContractError(ErrorMessage(f"cannot resolve confirmatory coordinate for {method.value}"))
     plan = expand_experiment_plan(declarations=(declaration,), seed_cohort=SeedCohort(values=(training_seed,)))
     matches = tuple(
         entry.coordinate
@@ -441,7 +446,9 @@ def _confirmatory_coordinate(training_seed: Seed, method: FederatedThresholdMeth
         and entry.coordinate.metric is MetricId.FPR_COEFFICIENT_OF_VARIATION
     )
     if len(matches) != 1:
-        raise ScientificContractError(f"evaluation coordinate for {method.value} must resolve exactly once")
+        raise ScientificContractError(
+            ErrorMessage(f"evaluation coordinate for {method.value} must resolve exactly once")
+        )
     return matches[0]
 
 
@@ -482,8 +489,10 @@ def _load_heterogeneity_evaluation(
     if len(matches) != 1:
         alpha = concentration.value if concentration is not None else None
         raise ScientificContractError(
-            f"heterogeneity evaluation coordinate for {method.value} partition={partition_kind.value} "
-            f"alpha={alpha} must resolve exactly once"
+            ErrorMessage(
+                f"heterogeneity evaluation coordinate for {method.value} partition={partition_kind.value} "
+                f"alpha={alpha} must resolve exactly once"
+            )
         )
     eval_path = (
         evaluation_run_directory(OUTPUTS_ROOT, matches[0])
@@ -504,7 +513,7 @@ def _client_score_vectors(
         path = score_root / client_result.client.client_id / FederatedScoreAssetName.CALIBRATION.value
         if not path.is_file():
             raise ScientificContractError(
-                f"missing persisted benign calibration scores for JS divergence: {path}",
+                ErrorMessage(f"missing persisted benign calibration scores for JS divergence: {path}"),
                 subject=ExperimentId.HETEROGENEITY_BENEFIT_ASSOCIATION,
             )
         scores = tuple(
@@ -512,10 +521,14 @@ def _client_score_vectors(
             for value in pl.read_parquet(path)[ScoreFrameColumn.RECONSTRUCTION_ERROR.value].to_list()
         )
         if not scores:
-            raise ScientificContractError(f"empty calibration score vector for client {client_result.client.client_id}")
+            raise ScientificContractError(
+                ErrorMessage(f"empty calibration score vector for client {client_result.client.client_id}")
+            )
         vectors.append(ClientScoreVector(client=client_result.client, scores=scores))
     if len(vectors) < 2:
-        raise ScientificContractError("Jensen-Shannon construction requires at least two client score vectors")
+        raise ScientificContractError(
+            ErrorMessage("Jensen-Shannon construction requires at least two client score vectors")
+        )
     return tuple(vectors), document.fixed_score_evidence.calibration.score_checksum
 
 
@@ -525,7 +538,9 @@ def _client_evaluation_scores(
     document_clients: tuple[ClientIdentity, ...],
     expected_clients: tuple[ClientIdentity, ...],
     benign_only: bool,
-) -> tuple[tuple[ClientIdentity, tuple[MetricValue, ...]], ...]: #TODO: should be handled better rather than tuple of tuples. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> tuple[
+    tuple[ClientIdentity, tuple[MetricValue, ...]], ...
+]:  # TODO: should be handled better rather than tuple of tuples. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     from datp_core.data.populations.contracts import PopulationOutcomeLabel
 
     ordered_document_clients = tuple(sorted(document_clients))
@@ -537,11 +552,13 @@ def _client_evaluation_scores(
             client.client_id for client in ordered_document_clients if client not in frozenset(expected_clients)
         )
         raise ScientificContractError(
-            "evaluation document clients do not match the expected score-geometry client set"
-            f" missing={missing} extra={extra}"
+            ErrorMessage(
+                "evaluation document clients do not match the expected score-geometry client set"
+                f" missing={missing} extra={extra}"
+            )
         )
     if len(ordered_document_clients) != len(frozenset(ordered_document_clients)):
-        raise ScientificContractError("evaluation document clients must be unique for score geometry")
+        raise ScientificContractError(ErrorMessage("evaluation document clients must be unique for score geometry"))
 
     score_root = federated_training_directory(score_coordinate, OUTPUTS_ROOT) / ExecutionArtifactDirectory.SCORES
     pairs: list[tuple[ClientIdentity, tuple[MetricValue, ...]]] = []
@@ -549,19 +566,25 @@ def _client_evaluation_scores(
     for client in expected_clients:
         path = score_root / client.client_id / FederatedScoreAssetName.EVALUATION.value
         if not path.is_file():
-            raise ScientificContractError(f"missing evaluation score parquet for client {client.client_id}: {path}")
+            raise ScientificContractError(
+                ErrorMessage(f"missing evaluation score parquet for client {client.client_id}: {path}")
+            )
         frame = pl.read_parquet(path)
         score_column = ScoreFrameColumn.RECONSTRUCTION_ERROR.value
         label_column = ScoreFrameColumn.OUTCOME_LABEL.value
         if score_column not in frame.columns:
-            raise ScientificContractError(f"missing reconstruction_error column for client {client.client_id}: {path}")
+            raise ScientificContractError(
+                ErrorMessage(f"missing reconstruction_error column for client {client.client_id}: {path}")
+            )
         if label_column not in frame.columns:
-            raise ScientificContractError(f"missing outcome_label column for client {client.client_id}: {path}")
+            raise ScientificContractError(
+                ErrorMessage(f"missing outcome_label column for client {client.client_id}: {path}")
+            )
         scores_raw = frame.get_column(score_column).to_list()
         labels = frame.get_column(label_column).to_list()
         if len(scores_raw) != len(labels):
             raise ScientificContractError(
-                f"score and label columns are misaligned for client {client.client_id}: {path}"
+                ErrorMessage(f"score and label columns are misaligned for client {client.client_id}: {path}")
             )
         scores = tuple(
             MetricValue(float(score))

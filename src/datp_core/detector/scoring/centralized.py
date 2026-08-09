@@ -16,7 +16,11 @@ from datp_core.artifacts.repositories.publication import (
     write_artifact_completion_marker,
 )
 from datp_core.artifacts.serializers.json import canonical_checksum
-from datp_core.core.errors import ArtifactIntegrityError, ScientificContractError
+from datp_core.core.errors import (
+    ArtifactIntegrityError,
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import ContractSubject, PartitionRole, ScoreFrameColumn, SerializationFormat
 from datp_core.core.numeric import FeatureCount, RowCount
 from datp_core.detector.autoencoder import ReconstructionAutoencoder
@@ -42,7 +46,7 @@ from datp_core.runtime.compute import resolve_cuda_device
 def generate_centralized_scores(request: GenerateCentralizedScoresRequest) -> GenerateCentralizedScoresResult:
     if request.checkpoint.coordinate != request.coordinate:
         raise ScientificContractError(
-            "score stage checkpoint coordinate mismatch",
+            ErrorMessage("score stage checkpoint coordinate mismatch"),
             subject=ContractSubject.COORDINATE,
         )
     publication = publish_artifact(
@@ -174,7 +178,7 @@ def rebase_centralized_scoring(
     evaluation_path = directory / CentralizedScoreAssetName.EVALUATION_SCORES
     if not calibration_path.is_file() or not evaluation_path.is_file():
         raise ArtifactIntegrityError(
-            "published score partitions missing after atomic replace",
+            ErrorMessage("published score partitions missing after atomic replace"),
             subject=ContractSubject.SCORES,
         )
     return CentralizedScoringResult(
@@ -196,7 +200,7 @@ def reject_non_finite_scores(
     subject: ContractSubject,
 ) -> None:
     if not np.isfinite(scores).all():
-        raise ScientificContractError(message, subject=subject)
+        raise ScientificContractError(ErrorMessage(message), subject=subject)
 
 
 def score_artifact_set_checksum(
@@ -237,12 +241,12 @@ def _centralized_request(request: GenerateCentralizedScoresRequest, directory: P
 def _validate_scoring_request(request: CentralizedScoringRequest) -> None:
     if request.checkpoint.coordinate != request.coordinate:
         raise ScientificContractError(
-            "checkpoint coordinate mismatch during scoring",
+            ErrorMessage("checkpoint coordinate mismatch during scoring"),
             subject=ContractSubject.COORDINATE,
         )
     if request.checkpoint.preprocessing_state_checksum != request.preprocessing_state_checksum:
         raise ScientificContractError(
-            "checkpoint preprocessing checksum mismatch during scoring",
+            ErrorMessage("checkpoint preprocessing checksum mismatch during scoring"),
             subject=ContractSubject.PREPROCESSING,
         )
     validate_score_input_frame(request.calibration_features, PartitionRole.CALIBRATION, request.feature_names)
@@ -346,7 +350,7 @@ def _validated_reused_score_frame(
     validated = validate_persisted_score_frame(score_path, score_checksum, RowCount(score.height))
     if _score_partition_binding(validated, partition_role) != _score_partition_binding(source, partition_role):
         raise ArtifactIntegrityError(
-            "persisted score row identities or labels do not match the current partition",
+            ErrorMessage("persisted score row identities or labels do not match the current partition"),
             subject=ContractSubject.ROWS,
         )
     return validated

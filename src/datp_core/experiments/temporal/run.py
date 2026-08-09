@@ -39,7 +39,10 @@ from datp_core.artifacts.repositories.thresholds import (
     threshold_result_checksum,
 )
 from datp_core.artifacts.serializers.json import canonical_checksum, canonical_json_text
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import (
     EvaluationCohort,
     ExperimentId,
@@ -93,7 +96,7 @@ class TemporalArtifactDirectory(StrEnum):
 class TemporalMethodUnavailability:
     method: FederatedThresholdMethod
     reason: ThresholdInfeasibilityReason
-    detail: str #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    detail: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -109,7 +112,9 @@ class TemporalMethodOutcome:
     row_order_checksum: Checksum
     clients: tuple[ClientMetricResult, ...]
     excluded_clients: tuple[ClientIdentity, ...]
-    unavailable_reasons: tuple[str, ...] #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    unavailable_reasons: tuple[
+        str, ...
+    ]  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -124,7 +129,7 @@ class TemporalStateResult:
         matches = tuple(outcome for outcome in self.outcomes if outcome.method is method)
         if len(matches) != 1:
             raise ScientificContractError(
-                "temporal state must contain exactly one outcome for each completed method",
+                ErrorMessage("temporal state must contain exactly one outcome for each completed method"),
                 subject=method,
             )
         return matches[0]
@@ -161,7 +166,9 @@ class TemporalSeedResult:
     def recovery_for(self, method: FederatedThresholdMethod) -> TemporalRecoveryResult:
         matches = tuple(item.recovery for item in self.recoveries if item.method is method)
         if len(matches) != 1:
-            raise ScientificContractError("temporal seed must contain exactly one recovery per method", subject=method)
+            raise ScientificContractError(
+                ErrorMessage("temporal seed must contain exactly one recovery per method"), subject=method
+            )
         return matches[0]
 
 
@@ -247,7 +254,7 @@ def analyze_temporal_campaign(
     overwrite: bool,
 ) -> tuple[TemporalMethodCampaignAnalysis, ...]:
     if not campaign.seeds:
-        raise ScientificContractError("temporal campaign analysis requires completed seed results")
+        raise ScientificContractError(ErrorMessage("temporal campaign analysis requires completed seed results"))
     _validate_campaign_recovery_provenance(campaign)
     _validate_campaign_shared_detector_identity(campaign)
     declaration = _temporal_declaration()
@@ -309,21 +316,20 @@ def _load_temporal_seed_evidence(
     complete = directory / AnalysisAssetName.COMPLETE.value
     if not document.is_file() or not complete.is_file():
         raise ScientificContractError(
-            f"missing completed temporal seed evidence: {directory}",
+            ErrorMessage(f"missing completed temporal seed evidence: {directory} (seed={partition_seed.value})"),
             subject=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
-            reason=f"seed={partition_seed.value}",
         )
     adapter: TypeAdapter[TemporalSeedResult] = TypeAdapter(TemporalSeedResult)
     try:
         result = adapter.validate_json(document.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, ValidationError) as error:
         raise ScientificContractError(
-            f"temporal seed evidence is unreadable or invalid: {document}",
+            ErrorMessage(f"temporal seed evidence is unreadable or invalid: {document}"),
             subject=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
         ) from error
     if complete.read_text(encoding="utf-8").strip() != canonical_checksum(result).value:
         raise ScientificContractError(
-            f"temporal seed evidence checksum does not match its completion marker: {document}",
+            ErrorMessage(f"temporal seed evidence checksum does not match its completion marker: {document}"),
             subject=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
         )
     return result
@@ -350,9 +356,10 @@ def _recovery_for_method(
     )
     if not trajectories:
         raise ScientificContractError(
-            "temporal recovery requires non-empty client trajectories when evaluations exist",
+            ErrorMessage(
+                f"temporal recovery requires non-empty client trajectories when evaluations exist (seed={partition_seed.value})"
+            ),
             subject=method,
-            reason=f"seed={partition_seed.value}",
         )
     provenance = TemporalSeedProvenance(
         seed=partition_seed,
@@ -546,11 +553,15 @@ def _evaluate_state(
         )
         cv_fpr = metric_by_id(evaluation.population.metrics, MetricId.FPR_COEFFICIENT_OF_VARIATION)
         if cv_fpr.status is not MetricStatus.AVAILABLE or cv_fpr.value is None:
-            raise ScientificContractError("temporal evaluation requires available population CV(FPR)", subject=method)
+            raise ScientificContractError(
+                ErrorMessage("temporal evaluation requires available population CV(FPR)"), subject=method
+            )
         mean_metric = metric_by_id(evaluation.population.metrics, MetricId.MEAN_FPR)
         mean_fpr = mean_metric.value if mean_metric.status is MetricStatus.AVAILABLE else None
         if not evaluation.clients:
-            raise ScientificContractError("temporal evaluation requires non-empty client metrics", subject=method)
+            raise ScientificContractError(
+                ErrorMessage("temporal evaluation requires non-empty client metrics"), subject=method
+            )
         if reference_evidence is None:
             reference_evidence = evaluation_inputs.fixed_score_evidence
         evidence = evaluation_inputs.fixed_score_evidence
@@ -574,10 +585,10 @@ def _evaluate_state(
         )
     if not completed:
         raise ScientificContractError(
-            "temporal execution produced no evaluable threshold method", subject=identity.temporal_state
+            ErrorMessage("temporal execution produced no evaluable threshold method"), subject=identity.temporal_state
         )
     if identity.temporal_state is None:
-        raise ScientificContractError("temporal result requires an explicit state")
+        raise ScientificContractError(ErrorMessage("temporal result requires an explicit state"))
     return TemporalStateResult(
         state=identity.temporal_state,
         completed_threshold_methods=tuple(completed),
@@ -632,7 +643,9 @@ def _validate_shared_temporal_detector(
         or static.coordinate_checksum != frozen.coordinate_checksum
     ):
         raise ScientificContractError(
-            "static reference and future states must share one historical detector and preprocessing state",
+            ErrorMessage(
+                "static reference and future states must share one historical detector and preprocessing state"
+            ),
             subject=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
         )
 
@@ -642,13 +655,19 @@ def _validate_campaign_recovery_provenance(campaign: TemporalCampaignResult) -> 
         for item in seed_result.recoveries:
             provenance = item.recovery.provenance
             if provenance.seed != seed_result.partition_seed:
-                raise ScientificContractError("temporal provenance seed mismatch", subject=item.method)
+                raise ScientificContractError(ErrorMessage("temporal provenance seed mismatch"), subject=item.method)
             if provenance.experiment is not item.recovery.experiment:
-                raise ScientificContractError("temporal provenance experiment mismatch", subject=item.method)
+                raise ScientificContractError(
+                    ErrorMessage("temporal provenance experiment mismatch"), subject=item.method
+                )
             if provenance.threshold_method is not item.method:
-                raise ScientificContractError("temporal provenance threshold-method mismatch", subject=item.method)
+                raise ScientificContractError(
+                    ErrorMessage("temporal provenance threshold-method mismatch"), subject=item.method
+                )
             if not item.recovery.client_trajectories:
-                raise ScientificContractError("temporal recovery requires client trajectories", subject=item.method)
+                raise ScientificContractError(
+                    ErrorMessage("temporal recovery requires client trajectories"), subject=item.method
+                )
 
 
 def _validate_campaign_shared_detector_identity(campaign: TemporalCampaignResult) -> None:
@@ -665,7 +684,7 @@ def _validate_campaign_shared_detector_identity(campaign: TemporalCampaignResult
     )
     if len(frozenset(detector_keys)) != 1:
         raise ScientificContractError(
-            "temporal campaign seeds must share one fitted detector and preprocessing identity",
+            ErrorMessage("temporal campaign seeds must share one fitted detector and preprocessing identity"),
             subject=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
         )
     for seed in campaign.seeds:
@@ -677,7 +696,7 @@ def _document_level_deployment_provenance(
     records: tuple[TemporalRecoveryResult, ...],
 ) -> tuple[TemporalDeploymentProvenance, TemporalDeploymentProvenance, TemporalDeploymentProvenance]:
     if not records:
-        raise ScientificContractError("temporal document provenance requires recovery records")
+        raise ScientificContractError(ErrorMessage("temporal document provenance requires recovery records"))
     detector_keys = tuple(
         (
             record.provenance.static_reference.checkpoint_checksum,
@@ -694,7 +713,7 @@ def _document_level_deployment_provenance(
     )
     if len(frozenset(detector_keys)) != 1:
         raise ScientificContractError(
-            "temporal document provenance requires shared detector identity across seeds",
+            ErrorMessage("temporal document provenance requires shared detector identity across seeds"),
             subject=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
         )
     for record in records:
@@ -821,7 +840,9 @@ def _exclusion_reason(
     *outcomes: TemporalMethodOutcome,
 ) -> str:
     excluded = any(excluded_client == client for outcome in outcomes for excluded_client in outcome.excluded_clients)
-    return "excluded_from_fpr_evaluable_cohort" if excluded else "client_not_evaluable" #TODO: should not use hardcoded values. CHeck if exists in enum or create enum
+    return (
+        "excluded_from_fpr_evaluable_cohort" if excluded else "client_not_evaluable"
+    )  # TODO: should not use hardcoded values. CHeck if exists in enum or create enum
 
 
 def _client_is_eligible(
@@ -865,7 +886,11 @@ def _union_clients(*groups: tuple[ClientIdentity, ...]) -> tuple[ClientIdentity,
     return tuple(sorted(frozenset(client for group in groups for client in group)))
 
 
-def _union_text(*groups: tuple[str, ...]) -> tuple[str, ...]: #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+def _union_text(
+    *groups: tuple[str, ...],
+) -> tuple[
+    str, ...
+]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     ordered: list[str] = []
     seen: set[str] = set()
     for group in groups:
@@ -887,7 +912,7 @@ def _common_completed_methods(
         == recalibrated.completed_threshold_methods
     ):
         raise ScientificContractError(
-            "all temporal states must complete the same declared threshold methods",
+            ErrorMessage("all temporal states must complete the same declared threshold methods"),
             subject=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
         )
     return static.completed_threshold_methods
@@ -895,7 +920,7 @@ def _common_completed_methods(
 
 def _execution_identity(coordinate: ExperimentCoordinate) -> ExternalTemporalExecutionIdentity:
     if coordinate.temporal_state is None:
-        raise ScientificContractError("temporal execution requires a temporal state")
+        raise ScientificContractError(ErrorMessage("temporal execution requires a temporal state"))
     return ExternalTemporalExecutionIdentity(
         experiment=coordinate.experiment,
         population=coordinate.population,
@@ -927,7 +952,7 @@ def _temporal_coordinates(partition_seed: Seed, declaration: ExperimentDeclarati
 def _coordinate_for_state(plan: ExperimentPlan, state: TemporalState) -> ExperimentCoordinate:
     matches = tuple(entry.coordinate for entry in plan.entries if entry.coordinate.temporal_state is state)
     if not matches:
-        raise ScientificContractError(f"no temporal coordinate is declared for {state.value}")
+        raise ScientificContractError(ErrorMessage(f"no temporal coordinate is declared for {state.value}"))
     first = matches[0]
     if any(
         candidate.dataset is not first.dataset
@@ -937,7 +962,9 @@ def _coordinate_for_state(plan: ExperimentPlan, state: TemporalState) -> Experim
         or candidate.training_model is not first.training_model
         for candidate in matches[1:]
     ):
-        raise ScientificContractError(f"temporal coordinates disagree on detector identity for {state.value}")
+        raise ScientificContractError(
+            ErrorMessage(f"temporal coordinates disagree on detector identity for {state.value}")
+        )
     return first
 
 
@@ -957,5 +984,5 @@ def _temporal_campaign_analysis_directory(method: FederatedThresholdMethod, outp
 def _temporal_declaration() -> ExperimentDeclaration:
     matches = tuple(item for item in EXPERIMENTS if item.id is ExperimentId.EDGE_ONE_SHOT_RECALIBRATION)
     if len(matches) != 1:
-        raise ScientificContractError("the temporal experiment must be declared exactly once")
+        raise ScientificContractError(ErrorMessage("the temporal experiment must be declared exactly once"))
     return matches[0]

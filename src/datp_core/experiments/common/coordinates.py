@@ -6,7 +6,10 @@ from enum import StrEnum
 from pydantic import model_validator
 
 from datp_core.core.contracts import StrictModel
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import (
     DatasetId,
     EvidenceRole,
@@ -90,18 +93,20 @@ class ExternalTemporalExecutionIdentity(StrictModel):
         matches = tuple(declaration for declaration in EXECUTION_IDENTITY_DECLARATIONS if declaration.matches(self))
         if len(matches) != 1:
             raise ScientificContractError(
-                "execution identity must be declared exactly once",
+                ErrorMessage("execution identity must be declared exactly once"),
                 subject=self.experiment,
             )
         return self
 
     def require_population(self, population: PopulationId) -> None:
         if self.population is not population:
-            raise ScientificContractError("execution identity population must match", subject=population)
+            raise ScientificContractError(ErrorMessage("execution identity population must match"), subject=population)
 
     def require_evidence_role(self, evidence_role: EvidenceRole) -> None:
         if self.evidence_role is not evidence_role:
-            raise ScientificContractError("execution identity evidence role must match", subject=evidence_role)
+            raise ScientificContractError(
+                ErrorMessage("execution identity evidence role must match"), subject=evidence_role
+            )
 
 
 def require_execution_identity(
@@ -110,10 +115,14 @@ def require_execution_identity(
 ) -> ExternalTemporalExecutionIdentity | None:
     if population not in BOUNDED_EVIDENCE_POPULATIONS:
         if identity is not None:
-            raise ScientificContractError("execution identity is reserved for bounded evidence", subject=population)
+            raise ScientificContractError(
+                ErrorMessage("execution identity is reserved for bounded evidence"), subject=population
+            )
         return None
     if identity is None:
-        raise ScientificContractError("bounded evidence requires an execution identity", subject=population)
+        raise ScientificContractError(
+            ErrorMessage("bounded evidence requires an execution identity"), subject=population
+        )
     identity.require_population(population)
     return identity
 

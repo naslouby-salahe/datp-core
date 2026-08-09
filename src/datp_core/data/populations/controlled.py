@@ -1,17 +1,28 @@
 """Reusable deterministic allocation for controlled Dirichlet and IID populations."""
 
 from dataclasses import dataclass, field
+from enum import StrEnum
 
 import numpy as np
 
 from datp_core.artifacts.provenance import Checksum, checksum_text
-from datp_core.core.errors import DataIntegrityError, ScientificContractError
+from datp_core.core.errors import (
+    DataIntegrityError,
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import PopulationId
 from datp_core.core.numeric import ClientCount, RowCount, Seed
 from datp_core.data.populations.contracts import ControlledPartitionKind
 
 from .contracts import ControlledPartitionCondition
 from .splits import hamilton_integer_counts
+
+
+class ControlledAllocationViolation(StrEnum):
+    STRATUM_ROWS_NOT_CONSERVED = "stratum_rows_not_conserved"
+    DIRICHLET_CONCENTRATION_MISSING = "dirichlet_concentration_missing"
+    UNSUPPORTED_PARTITION_KIND = "unsupported_partition_kind"
 
 
 @dataclass(slots=True)
@@ -35,9 +46,9 @@ class ControlledPartitionAllocator:
         counts = tuple(RowCount(value) for value in hamilton_integer_counts(row_count.value, proportions))
         if sum(count.value for count in counts) != row_count.value:
             raise DataIntegrityError(
-                "controlled partition allocation failed to conserve stratum rows",
+                ErrorMessage("controlled partition allocation failed to conserve stratum rows"),
                 subject=self.population,
-                reason="Hamilton residual allocation must preserve every row",
+                reason=ControlledAllocationViolation.STRATUM_ROWS_NOT_CONSERVED,
             )
         return counts
 
@@ -54,21 +65,23 @@ class ControlledPartitionAllocator:
                 concentration = self.condition.concentration
                 if concentration is None:
                     raise ScientificContractError(
-                        "Dirichlet construction requires a concentration",
+                        ErrorMessage("Dirichlet construction requires a concentration"),
                         subject=self.population,
-                        reason="concentration cannot be invented",
+                        reason=ControlledAllocationViolation.DIRICHLET_CONCENTRATION_MISSING,
                     )
                 alpha = np.full(self.client_count.value, concentration.value, dtype=np.float64)
                 return tuple(float(value) for value in self._generator.dirichlet(alpha))
         raise ScientificContractError(
-            "unsupported controlled partition kind",
+            ErrorMessage("unsupported controlled partition kind"),
             subject=self.condition.kind,
-            reason="only Dirichlet and IID constructions are authorized",
+            reason=ControlledAllocationViolation.UNSUPPORTED_PARTITION_KIND,
         )
 
 
 def controlled_allocation_checksum(
-    client_ids: tuple[str, ...], #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
+    client_ids: tuple[
+        str, ...
+    ],  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
     counts: tuple[RowCount, ...],
     condition: ControlledPartitionCondition,
     seed: Seed,

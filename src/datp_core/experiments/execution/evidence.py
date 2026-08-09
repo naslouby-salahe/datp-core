@@ -8,7 +8,10 @@ from pydantic import ValidationError
 from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
 from datp_core.analysis.metrics.models import MetricStatus, metric_by_id
 from datp_core.artifacts.provenance import checksum_file
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import ContractSubject, MetricId, PartitionRole, ScoreFrameColumn
 from datp_core.core.numeric import MetricValue, RowCount, ScoreValue
 from datp_core.detector.scoring.contracts import FixedScoreInvariant
@@ -35,11 +38,11 @@ def eligible_calibration_scores(
         score_set_checksum = invariant.future_recalibration_score_set_checksum
     else:
         raise ScientificContractError(
-            "threshold calibration scores require a calibration partition role",
+            ErrorMessage("threshold calibration scores require a calibration partition role"),
             subject=role,
         )
     if score_set_checksum is None:
-        raise ScientificContractError("the requested calibration score set is unavailable", subject=role)
+        raise ScientificContractError(ErrorMessage("the requested calibration score set is unavailable"), subject=role)
     candidates = tuple(
         ClientBenignCalibrationScores(
             record.scored_client,
@@ -56,7 +59,7 @@ def eligible_calibration_scores(
     eligible = tuple(item for item in candidates if MINIMUM_BENIGN_SUPPORT.fits_within(RowCount(len(item.scores))))
     if not eligible:
         raise ScientificContractError(
-            "no client meets the minimum benign calibration support for threshold construction",
+            ErrorMessage("no client meets the minimum benign calibration support for threshold construction"),
             subject=ContractSubject.CALIBRATION,
         )
     return eligible
@@ -75,19 +78,19 @@ def load_evaluation_document(path: Path) -> FederatedEvaluationDocument:
     try:
         if not path.is_file():
             raise ScientificContractError(
-                f"completed evaluation document is missing: {path}",
+                ErrorMessage(f"completed evaluation document is missing: {path}"),
                 subject=ContractSubject.ARTIFACT_PATH,
             )
         if not complete_path.is_file():
             raise ScientificContractError(
-                f"evaluation COMPLETE marker is missing for document: {path}",
+                ErrorMessage(f"evaluation COMPLETE marker is missing for document: {path}"),
                 subject=ContractSubject.ARTIFACT_PATH,
             )
         document = FederatedEvaluationDocument.model_validate_json(path.read_text(encoding="utf-8"))
         marker = complete_path.read_text(encoding="utf-8").strip()
         if marker != canonical_checksum(document).value:
             raise ScientificContractError(
-                f"evaluation COMPLETE digest does not match document identity: {path}",
+                ErrorMessage(f"evaluation COMPLETE digest does not match document identity: {path}"),
                 subject=ContractSubject.ARTIFACT_PATH,
             )
         return document
@@ -95,7 +98,7 @@ def load_evaluation_document(path: Path) -> FederatedEvaluationDocument:
         raise
     except (OSError, UnicodeError, ValidationError, ValueError) as error:
         raise ScientificContractError(
-            f"completed evaluation document is unreadable or invalid: {path}",
+            ErrorMessage(f"completed evaluation document is unreadable or invalid: {path}"),
             subject=ContractSubject.ARTIFACT_PATH,
         ) from error
 
@@ -103,5 +106,5 @@ def load_evaluation_document(path: Path) -> FederatedEvaluationDocument:
 def population_metric(document: FederatedEvaluationDocument, metric: MetricId) -> MetricValue:
     result = metric_by_id(document.population.metrics, metric)
     if result.status is not MetricStatus.AVAILABLE or result.value is None:
-        raise ScientificContractError(f"required metric is unavailable: {metric.value}")
+        raise ScientificContractError(ErrorMessage(f"required metric is unavailable: {metric.value}"))
     return result.value

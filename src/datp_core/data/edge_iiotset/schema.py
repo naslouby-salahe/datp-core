@@ -67,21 +67,25 @@ class EdgeRawColumn(StrEnum):
     ATTACK_TYPE = "Attack_type"
 
 
-EDGE_RAW_COLUMNS: tuple[str, ...] = tuple( #TODO: should be tuple[EdgeRawColumn] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. use enum
-    (
-        "frame.time,ip.src_host,ip.dst_host,arp.dst.proto_ipv4,arp.opcode,arp.hw.size,arp.src.proto_ipv4,"
-        "icmp.checksum,icmp.seq_le,icmp.transmit_timestamp,icmp.unused,http.file_data,http.content_length,"
-        "http.request.uri.query,http.request.method,http.referer,http.request.full_uri,http.request.version,"
-        "http.response,http.tls_port,tcp.ack,tcp.ack_raw,tcp.checksum,tcp.connection.fin,tcp.connection.rst,"
-        "tcp.connection.syn,tcp.connection.synack,tcp.dstport,tcp.flags,tcp.flags.ack,tcp.len,tcp.options,"
-        "tcp.payload,tcp.seq,tcp.srcport,udp.port,udp.stream,udp.time_delta,dns.qry.name,dns.qry.name.len,"
-        "dns.qry.qu,dns.qry.type,dns.retransmission,dns.retransmit_request,dns.retransmit_request_in,"
-        "mqtt.conack.flags,mqtt.conflag.cleansess,mqtt.conflags,mqtt.hdrflags,mqtt.len,mqtt.msg_decoded_as,"
-        "mqtt.msg,mqtt.msgtype,mqtt.proto_len,mqtt.protoname,mqtt.topic,mqtt.topic_len,mqtt.ver,mbtcp.len,"
-        "mbtcp.trans_id,mbtcp.unit_id,Attack_label,Attack_type"
-    ).split(",")
+EDGE_RAW_COLUMNS: tuple[str, ...] = (
+    tuple(  # TODO: should be tuple[EdgeRawColumn] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. use enum
+        (
+            "frame.time,ip.src_host,ip.dst_host,arp.dst.proto_ipv4,arp.opcode,arp.hw.size,arp.src.proto_ipv4,"
+            "icmp.checksum,icmp.seq_le,icmp.transmit_timestamp,icmp.unused,http.file_data,http.content_length,"
+            "http.request.uri.query,http.request.method,http.referer,http.request.full_uri,http.request.version,"
+            "http.response,http.tls_port,tcp.ack,tcp.ack_raw,tcp.checksum,tcp.connection.fin,tcp.connection.rst,"
+            "tcp.connection.syn,tcp.connection.synack,tcp.dstport,tcp.flags,tcp.flags.ack,tcp.len,tcp.options,"
+            "tcp.payload,tcp.seq,tcp.srcport,udp.port,udp.stream,udp.time_delta,dns.qry.name,dns.qry.name.len,"
+            "dns.qry.qu,dns.qry.type,dns.retransmission,dns.retransmit_request,dns.retransmit_request_in,"
+            "mqtt.conack.flags,mqtt.conflag.cleansess,mqtt.conflags,mqtt.hdrflags,mqtt.len,mqtt.msg_decoded_as,"
+            "mqtt.msg,mqtt.msgtype,mqtt.proto_len,mqtt.protoname,mqtt.topic,mqtt.topic_len,mqtt.ver,mbtcp.len,"
+            "mbtcp.trans_id,mbtcp.unit_id,Attack_label,Attack_type"
+        ).split(",")
+    )
 )
-EDGE_FEATURE_COLUMNS: tuple[str, ...] = EDGE_RAW_COLUMNS[:-2] #TODO: should be tuple[EdgeRawColumn] and adapt all callers and usage. Do not use primitives for this, use something else instead of str.
+EDGE_FEATURE_COLUMNS: tuple[str, ...] = EDGE_RAW_COLUMNS[
+    :-2
+]  # TODO: should be tuple[EdgeRawColumn] and adapt all callers and usage. Do not use primitives for this, use something else instead of str.
 EDGE_BENIGN_SENSOR_GROUPS: tuple[EdgeSensorGroup, ...] = (
     EdgeSensorGroup.DISTANCE,
     EdgeSensorGroup.FLAME_SENSOR,
@@ -95,8 +99,12 @@ EDGE_BENIGN_SENSOR_GROUPS: tuple[EdgeSensorGroup, ...] = (
     EdgeSensorGroup.PH_VALUE,
 )
 
-EDGE_CANONICAL_FEATURE_COLUMNS: tuple[str, ...] = (EdgeCanonicalColumn.RAW_TIMESTAMP,) + EDGE_FEATURE_COLUMNS[1:] #TODO: should be tuple[EdgeCanonicalColumn] and adapt all callers and usage. Do not use primitives for this, use something else instead of str.
-EDGE_NUMERIC_FEATURE_COLUMNS: tuple[str, ...] = (#TODO: should be tuple[EdgeCanonicalColumn] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. and use enum
+EDGE_CANONICAL_FEATURE_COLUMNS: tuple[str, ...] = (
+    (EdgeCanonicalColumn.RAW_TIMESTAMP,) + EDGE_FEATURE_COLUMNS[1:]
+)  # TODO: should be tuple[EdgeCanonicalColumn] and adapt all callers and usage. Do not use primitives for this, use something else instead of str.
+EDGE_NUMERIC_FEATURE_COLUMNS: tuple[
+    str, ...
+] = (  # TODO: should be tuple[EdgeCanonicalColumn] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. and use enum
     "icmp.seq_le",
     "icmp.unused",
     "http.file_data",
@@ -131,7 +139,9 @@ EDGE_NUMERIC_FEATURE_COLUMNS: tuple[str, ...] = (#TODO: should be tuple[EdgeCano
     "mbtcp.trans_id",
     "mbtcp.unit_id",
 )
-EDGE_PROVENANCE_COLUMNS: tuple[str, ...] = ( #TODO: should be tuple[CanonicalProvenanceColumn] and adapt all callers and usage. Use enum instead of str
+EDGE_PROVENANCE_COLUMNS: tuple[
+    str, ...
+] = (  # TODO: should be tuple[CanonicalProvenanceColumn] and adapt all callers and usage. Use enum instead of str
     CanonicalProvenanceColumn.SOURCE_ROW_INDEX,
     EdgeCanonicalColumn.CAPTURE_TIMESTAMP,
     CanonicalProvenanceColumn.SOURCE_PATH,

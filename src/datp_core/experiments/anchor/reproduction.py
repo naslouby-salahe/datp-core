@@ -8,7 +8,10 @@ from pydantic import ValidationError
 from datp_core.analysis.inference.bootstrap.contracts import BcaOutcome, BcaReason, BootstrapInterval
 from datp_core.analysis.inference.bootstrap.estimation import seed_level_bca_interval
 from datp_core.artifacts.provenance import checksum_file
-from datp_core.core.errors import AnchorReproductionError
+from datp_core.core.errors import (
+    AnchorReproductionError,
+    ErrorMessage,
+)
 from datp_core.core.identifiers import (
     CheckpointStatus,
     ContractSubject,
@@ -82,9 +85,9 @@ def references_from_protocol(
         for item in protocol.references:
             if item.metric is not MetricId.FPR_COEFFICIENT_OF_VARIATION:
                 raise AnchorReproductionError(
-                    "anchor protocol reference metric is not CV(FPR)",
+                    ErrorMessage("anchor protocol reference metric is not CV(FPR)"),
                     subject=item.metric,
-                    reason=AnchorDiscrepancyReason.WRONG_METRIC.value,
+                    reason=AnchorDiscrepancyReason.WRONG_METRIC,
                 )
             yield AnchorMetricReference(
                 seed=item.seed,
@@ -110,29 +113,29 @@ def validate_historical_seed_cohort(seed_cohort: SeedCohort) -> SeedCohort:
     member_count = seed_cohort.member_count
     if member_count == CONFIRMATORY_PAIRED_SEED_COUNT or seed_cohort == CONFIRMATORY_SEED_COHORT:
         raise AnchorReproductionError(
-            "confirmatory ten-seed paired cohort cannot enter anchor reproduction",
+            ErrorMessage("confirmatory ten-seed paired cohort cannot enter anchor reproduction"),
             subject=ContractSubject.SEED,
-            reason=AnchorDiscrepancyReason.CONFIRMATORY_TEN_SEED_COHORT_REJECTED.value,
+            reason=AnchorDiscrepancyReason.CONFIRMATORY_TEN_SEED_COHORT_REJECTED,
         )
     if member_count != ANCHOR_HISTORICAL_SEED_COUNT:
         raise AnchorReproductionError(
-            "anchor reproduction requires exactly the historical five-seed cohort",
+            ErrorMessage("anchor reproduction requires exactly the historical five-seed cohort"),
             subject=ContractSubject.SEED,
-            reason=AnchorDiscrepancyReason.WRONG_SEED_SUBSET.value,
+            reason=AnchorDiscrepancyReason.WRONG_SEED_SUBSET,
         )
 
     values = seed_cohort.values
     if len(set(values)) != len(values):
         raise AnchorReproductionError(
-            "anchor seed cohort contains duplicate seeds",
+            ErrorMessage("anchor seed cohort contains duplicate seeds"),
             subject=ContractSubject.SEED,
-            reason=AnchorDiscrepancyReason.DUPLICATE_SEED.value,
+            reason=AnchorDiscrepancyReason.DUPLICATE_SEED,
         )
     if seed_cohort != HISTORICAL_ANCHOR_SEED_COHORT:
         raise AnchorReproductionError(
-            "anchor seed cohort must match the declared historical five-seed cohort",
+            ErrorMessage("anchor seed cohort must match the declared historical five-seed cohort"),
             subject=ContractSubject.SEED,
-            reason=AnchorDiscrepancyReason.WRONG_SEED_SUBSET.value,
+            reason=AnchorDiscrepancyReason.WRONG_SEED_SUBSET,
         )
     return seed_cohort
 
@@ -171,17 +174,17 @@ def load_historical_observation(source: HistoricalMetricArtifactSource) -> Ancho
 def _read_historical_metrics_document(path: Path) -> HistoricalMetricsDocument:
     if not path.is_file():
         raise AnchorReproductionError(
-            "historical metrics artifact is missing",
+            ErrorMessage("historical metrics artifact is missing"),
             subject=ContractSubject.ARTIFACT_PATH,
-            reason=AnchorDiscrepancyReason.MISSING_MANDATORY_OBSERVATION.value,
+            reason=AnchorDiscrepancyReason.MISSING_MANDATORY_OBSERVATION,
         )
     try:
         return HistoricalMetricsDocument.model_validate(loads(path.read_text(encoding="utf-8")))
     except (OSError, ValueError, ValidationError, TypeError) as error:
         raise AnchorReproductionError(
-            "historical metrics artifact failed schema validation",
+            ErrorMessage("historical metrics artifact failed schema validation"),
             subject=ContractSubject.ARTIFACT_PATH,
-            reason=AnchorDiscrepancyReason.STALE_OR_MISMATCHED_ARTIFACT.value,
+            reason=AnchorDiscrepancyReason.STALE_OR_MISMATCHED_ARTIFACT,
         ) from error
 
 
@@ -191,39 +194,39 @@ def _validate_historical_document(
 ) -> None:
     if document.seed != source.seed:
         raise AnchorReproductionError(
-            "historical metrics seed does not match the artifact coordinate",
+            ErrorMessage("historical metrics seed does not match the artifact coordinate"),
             subject=ContractSubject.ARTIFACT_PATH,
-            reason=AnchorDiscrepancyReason.WRONG_SEED_SUBSET.value,
+            reason=AnchorDiscrepancyReason.WRONG_SEED_SUBSET,
         )
     if document.dataset is not HistoricalDatasetToken.NBAIOT:
         raise AnchorReproductionError(
-            "historical metrics artifact is not N-BaIoT",
+            ErrorMessage("historical metrics artifact is not N-BaIoT"),
             subject=ContractSubject.ARTIFACT_PATH,
-            reason=AnchorDiscrepancyReason.WRONG_POPULATION.value,
+            reason=AnchorDiscrepancyReason.WRONG_POPULATION,
         )
     if document.regime is not HistoricalRegimeToken.PHYSICAL_DEVICE_ANCHOR:
         raise AnchorReproductionError(
-            "historical metrics artifact is not the physical-device anchor regime",
+            ErrorMessage("historical metrics artifact is not the physical-device anchor regime"),
             subject=ContractSubject.ARTIFACT_PATH,
-            reason=AnchorDiscrepancyReason.STALE_OR_MISMATCHED_ARTIFACT.value,
+            reason=AnchorDiscrepancyReason.STALE_OR_MISMATCHED_ARTIFACT,
         )
     if document.client_count != HISTORICAL_ELIGIBLE_CLIENT_COUNT:
         raise AnchorReproductionError(
-            "historical metrics artifact client count is not the locked nine-device population",
+            ErrorMessage("historical metrics artifact client count is not the locked nine-device population"),
             subject=ContractSubject.ARTIFACT_PATH,
-            reason=AnchorDiscrepancyReason.WRONG_POPULATION.value,
+            reason=AnchorDiscrepancyReason.WRONG_POPULATION,
         )
     if document.eligible_count != HISTORICAL_ELIGIBLE_CLIENT_COUNT:
         raise AnchorReproductionError(
-            "historical metrics artifact eligible count is not the locked nine-device population",
+            ErrorMessage("historical metrics artifact eligible count is not the locked nine-device population"),
             subject=ContractSubject.ARTIFACT_PATH,
-            reason=AnchorDiscrepancyReason.WRONG_POPULATION.value,
+            reason=AnchorDiscrepancyReason.WRONG_POPULATION,
         )
     if document.threshold_scope.to_threshold_method() is not source.threshold_method:
         raise AnchorReproductionError(
-            "historical threshold scope does not match the artifact coordinate",
+            ErrorMessage("historical threshold scope does not match the artifact coordinate"),
             subject=ContractSubject.ARTIFACT_PATH,
-            reason=AnchorDiscrepancyReason.WRONG_THRESHOLD_METHOD.value,
+            reason=AnchorDiscrepancyReason.WRONG_THRESHOLD_METHOD,
         )
 
 
@@ -232,15 +235,15 @@ def load_historical_observations(
 ) -> tuple[AnchorObservedMetric, ...]:
     if not sources:
         raise AnchorReproductionError(
-            "historical observation sources are required",
-            reason=AnchorDiscrepancyReason.MISSING_MANDATORY_OBSERVATION.value,
+            ErrorMessage("historical observation sources are required"),
+            reason=AnchorDiscrepancyReason.MISSING_MANDATORY_OBSERVATION,
         )
 
     coordinates = tuple((source.seed, source.threshold_method) for source in sources)
     if len(set(coordinates)) != len(coordinates):
         raise AnchorReproductionError(
-            "duplicate historical observation coordinates",
-            reason=AnchorDiscrepancyReason.DUPLICATE_SEED.value,
+            ErrorMessage("duplicate historical observation coordinates"),
+            reason=AnchorDiscrepancyReason.DUPLICATE_SEED,
         )
 
     return tuple(load_historical_observation(source) for source in sources)
@@ -364,13 +367,13 @@ def _reject_confirmatory_only_artifacts(observations: tuple[AnchorObservedMetric
     seeds = {item.seed for item in observations}
     if len(seeds) >= CONFIRMATORY_PAIRED_SEED_COUNT.value:
         raise AnchorReproductionError(
-            "confirmatory ten-seed cohort cannot supply anchor observations",
-            reason=AnchorDiscrepancyReason.CONFIRMATORY_TEN_SEED_COHORT_REJECTED.value,
+            ErrorMessage("confirmatory ten-seed cohort cannot supply anchor observations"),
+            reason=AnchorDiscrepancyReason.CONFIRMATORY_TEN_SEED_COHORT_REJECTED,
         )
     if seeds & _CONFIRMATORY_ONLY_SEEDS:
         raise AnchorReproductionError(
-            "observations include confirmatory-only seeds outside the historical five-seed cohort",
-            reason=AnchorDiscrepancyReason.CONFIRMATORY_TEN_SEED_COHORT_REJECTED.value,
+            ErrorMessage("observations include confirmatory-only seeds outside the historical five-seed cohort"),
+            reason=AnchorDiscrepancyReason.CONFIRMATORY_TEN_SEED_COHORT_REJECTED,
         )
 
 
@@ -378,9 +381,9 @@ def _reject_non_historical_checkpoint(observations: tuple[AnchorObservedMetric, 
     """Reject non-historical checkpoint candidates as a cohort-level structural failure."""
     if any(item.checkpoint_status is not ANCHOR_CHECKPOINT_STATUS for item in observations):
         raise AnchorReproductionError(
-            "non-historical checkpoint selection cannot enter historical anchor reproduction",
+            ErrorMessage("non-historical checkpoint selection cannot enter historical anchor reproduction"),
             subject=ANCHOR_CHECKPOINT_STATUS,
-            reason=AnchorDiscrepancyReason.WRONG_CHECKPOINT_SEMANTICS.value,
+            reason=AnchorDiscrepancyReason.WRONG_CHECKPOINT_SEMANTICS,
         )
 
 

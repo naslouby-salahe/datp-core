@@ -11,7 +11,11 @@ from datp_core.analysis.metrics.protocols import ATTACK_SENSITIVE_METRICS, SUPPR
 from datp_core.analysis.operational.traffic_rates import TRAFFIC_RATE_EVIDENCE, TrafficRateEvidence
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.contracts import StrictModel
-from datp_core.core.errors import ProtocolValidationError, UnresolvedScientificValueError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ProtocolValidationError,
+    UnresolvedScientificValueError,
+)
 from datp_core.core.identifiers import (
     ContractSubject,
     DatasetId,
@@ -239,7 +243,7 @@ def _require_unique_declaration_ids(
     population_ids = tuple(population.id for population in populations)
     experiment_ids = tuple(experiment.id for experiment in experiments)
     if len(set(population_ids)) != len(population_ids) or len(set(experiment_ids)) != len(experiment_ids):
-        raise ProtocolValidationError("Protocol declaration identifiers must be unique")
+        raise ProtocolValidationError(ErrorMessage("Protocol declaration identifiers must be unique"))
 
 
 def _population(
@@ -248,7 +252,7 @@ def _population(
     population_ids: tuple[PopulationId, ...],
 ) -> PopulationDeclaration:
     if population_id not in population_ids:
-        raise ProtocolValidationError("Experiment references an unknown population")
+        raise ProtocolValidationError(ErrorMessage("Experiment references an unknown population"))
     return next(population for population in populations if population.id is population_id)
 
 
@@ -263,11 +267,11 @@ def _validate_confirmatory_endpoint(
     if not confirmatory:
         return
     if len(confirmatory) != 1:
-        raise ProtocolValidationError("Exactly one confirmatory experiment must be declared")
+        raise ProtocolValidationError(ErrorMessage("Exactly one confirmatory experiment must be declared"))
     _require_endpoint_matches_experiment(endpoint, confirmatory[0])
     population = next(item for item in populations if item.id is endpoint.population)
     if not population.is_confirmatory_population:
-        raise ProtocolValidationError("Confirmatory endpoint requires a confirmatory-eligible population")
+        raise ProtocolValidationError(ErrorMessage("Confirmatory endpoint requires a confirmatory-eligible population"))
 
 
 def _require_endpoint_matches_inference(
@@ -275,7 +279,7 @@ def _require_endpoint_matches_inference(
     inference: PairedInferenceProtocol,
 ) -> None:
     if endpoint.inference_protocol != inference:
-        raise ProtocolValidationError("Confirmatory endpoint inference must match confirmatory inference")
+        raise ProtocolValidationError(ErrorMessage("Confirmatory endpoint inference must match confirmatory inference"))
 
 
 def _require_endpoint_matches_experiment(
@@ -283,17 +287,17 @@ def _require_endpoint_matches_experiment(
     experiment: ExperimentDeclaration,
 ) -> None:
     if experiment.id is not endpoint.experiment:
-        raise ProtocolValidationError("Confirmatory experiment identity must match the locked endpoint")
+        raise ProtocolValidationError(ErrorMessage("Confirmatory experiment identity must match the locked endpoint"))
     if experiment.population is not endpoint.population:
-        raise ProtocolValidationError("Confirmatory experiment requires NBAIOT_NATURAL_DEVICES")
+        raise ProtocolValidationError(ErrorMessage("Confirmatory experiment requires NBAIOT_NATURAL_DEVICES"))
     if experiment.training_model is not endpoint.training_model:
-        raise ProtocolValidationError("Confirmatory experiment requires FEDAVG_AUTOENCODER")
+        raise ProtocolValidationError(ErrorMessage("Confirmatory experiment requires FEDAVG_AUTOENCODER"))
     if endpoint.shared_threshold not in experiment.federated_thresholds:
-        raise ProtocolValidationError("Confirmatory experiment requires SHARED_THRESHOLD")
+        raise ProtocolValidationError(ErrorMessage("Confirmatory experiment requires SHARED_THRESHOLD"))
     if endpoint.local_threshold not in experiment.federated_thresholds:
-        raise ProtocolValidationError("Confirmatory experiment requires LOCAL_THRESHOLD")
+        raise ProtocolValidationError(ErrorMessage("Confirmatory experiment requires LOCAL_THRESHOLD"))
     if endpoint.metric not in experiment.metrics:
-        raise ProtocolValidationError("Confirmatory experiment requires FPR_COEFFICIENT_OF_VARIATION")
+        raise ProtocolValidationError(ErrorMessage("Confirmatory experiment requires FPR_COEFFICIENT_OF_VARIATION"))
 
 
 def _validate_experiment_population_pair(
@@ -301,19 +305,21 @@ def _validate_experiment_population_pair(
     population: PopulationDeclaration,
 ) -> None:
     if experiment.role is EvidenceRole.CONFIRMATORY and not population.is_confirmatory_population:
-        raise ProtocolValidationError("Confirmatory experiments require confirmatory-eligible populations")
+        raise ProtocolValidationError(
+            ErrorMessage("Confirmatory experiments require confirmatory-eligible populations")
+        )
     if experiment.role is EvidenceRole.TEMPORAL_BOUNDARY and not population.requires_verified_chronology:
-        raise ProtocolValidationError("Temporal experiments require populations with verified chronology")
+        raise ProtocolValidationError(ErrorMessage("Temporal experiments require populations with verified chronology"))
     if (
         experiment.role is EvidenceRole.CONFIRMATORY
         and experiment.population is not PopulationId.NBAIOT_NATURAL_DEVICES
     ):
-        raise ProtocolValidationError("Confirmatory experiments require NBAIOT_NATURAL_DEVICES")
+        raise ProtocolValidationError(ErrorMessage("Confirmatory experiments require NBAIOT_NATURAL_DEVICES"))
     if (
         experiment.role is EvidenceRole.CONFIRMATORY
         and experiment.training_model is not TrainingModelId.FEDAVG_AUTOENCODER
     ):
-        raise ProtocolValidationError("Confirmatory experiments require FEDAVG_AUTOENCODER")
+        raise ProtocolValidationError(ErrorMessage("Confirmatory experiments require FEDAVG_AUTOENCODER"))
 
 
 def _validate_experiment_thresholds(
@@ -325,10 +331,12 @@ def _validate_experiment_thresholds(
         FederatedThresholdMethod.FAMILY_THRESHOLD in experiment.federated_thresholds
         and not population.requires_family_taxonomy
     ):
-        raise ProtocolValidationError("Family thresholding requires a family taxonomy")
+        raise ProtocolValidationError(ErrorMessage("Family thresholding requires a family taxonomy"))
     if FederatedThresholdMethod.CLUSTER_THRESHOLD in experiment.federated_thresholds:
         if not cluster_threshold.group_count.fits_within(population.client_count):
-            raise ProtocolValidationError("Grouped thresholding requires more eligible clients than canonical groups")
+            raise ProtocolValidationError(
+                ErrorMessage("Grouped thresholding requires more eligible clients than canonical groups")
+            )
 
 
 def _validate_experiment_metrics(
@@ -339,7 +347,7 @@ def _validate_experiment_metrics(
 ) -> None:
     uses_attack_metric = any(metric in experiment.metrics for metric in ATTACK_SENSITIVE_METRICS)
     if uses_attack_metric and not population.requires_client_attack_assignment:
-        raise ProtocolValidationError("Attack-sensitive metrics require attack assignment")
+        raise ProtocolValidationError(ErrorMessage("Attack-sensitive metrics require attack assignment"))
     if not any(metric in experiment.metrics for metric in SUPPRESSED_OPERATIONAL_METRICS):
         return
     has_rate_evidence = any(evidence.population is experiment.population for evidence in traffic_rate_evidence)
@@ -347,7 +355,7 @@ def _validate_experiment_metrics(
         return
     if experiment.role is not EvidenceRole.OPERATIONAL_TRANSLATION:
         raise UnresolvedScientificValueError(
-            "Alert burden requires population-specific traffic-rate evidence",
+            ErrorMessage("Alert burden requires population-specific traffic-rate evidence"),
             subject=ContractSubject.TRAFFIC_RATE,
         )
     suppressed_experiment_ids.append(experiment.id)
@@ -358,11 +366,13 @@ def _validate_experiment_readiness(
     suppressed_experiment_ids: list[ExperimentId],
 ) -> None:
     if experiment.id in suppressed_experiment_ids and experiment.readiness is not ExperimentReadiness.SUPPRESSED:
-        raise ProtocolValidationError("Suppressed experiments must declare SUPPRESSED readiness")
+        raise ProtocolValidationError(ErrorMessage("Suppressed experiments must declare SUPPRESSED readiness"))
     if experiment.readiness is ExperimentReadiness.EXECUTABLE:
         raise ProtocolValidationError(
-            "Future experiments cannot be marked executable before their implementation is complete"
+            ErrorMessage("Future experiments cannot be marked executable before their implementation is complete")
         )
     if experiment.readiness is ExperimentReadiness.SUPPRESSED and experiment.id not in suppressed_experiment_ids:
         if experiment.role is not EvidenceRole.OPERATIONAL_TRANSLATION:
-            raise ProtocolValidationError("Only operational-suppression experiments may declare SUPPRESSED readiness")
+            raise ProtocolValidationError(
+                ErrorMessage("Only operational-suppression experiments may declare SUPPRESSED readiness")
+            )

@@ -1,6 +1,9 @@
 import polars as pl
 
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import ScoreFrameColumn
 from datp_core.core.numeric import RowCount
 from datp_core.data.populations.contracts import (
@@ -22,12 +25,16 @@ def client_partition_counts_from_scores(
     evaluation = sorted(manifest.evaluation_records, key=lambda record: record.scored_client)
 
     if len(calibration) != len(evaluation):
-        raise ScientificContractError("evaluation inputs require matching calibration and evaluation score clients")
+        raise ScientificContractError(
+            ErrorMessage("evaluation inputs require matching calibration and evaluation score clients")
+        )
 
     counts: list[ClientPartitionCounts] = []
     for calibration_record, evaluation_record in zip(calibration, evaluation, strict=True):
         if calibration_record.scored_client != evaluation_record.scored_client:
-            raise ScientificContractError("evaluation inputs require matching calibration and evaluation score clients")
+            raise ScientificContractError(
+                ErrorMessage("evaluation inputs require matching calibration and evaluation score clients")
+            )
 
         (benign_cal,) = _extract_label_counts(calibration_record, (PopulationOutcomeLabel.BENIGN,))
         benign_eval, attack_eval = _extract_label_counts(

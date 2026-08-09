@@ -7,7 +7,10 @@ from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
 from datp_core.analysis.metrics.fixed_score_validation import validate_fixed_score_controls
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.contracts import StrictModel
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import (
     EvidenceRole,
     FederatedThresholdMethod,
@@ -154,18 +157,24 @@ def build_paired_contrast(
 ) -> PairedContrast:
     """Build a typed paired contrast only after full fixed-score control validation."""
     if left.score_coordinate != right.score_coordinate:
-        raise ScientificContractError("paired evaluation documents use different training coordinates")
+        raise ScientificContractError(ErrorMessage("paired evaluation documents use different training coordinates"))
     if left.threshold_method is right.threshold_method:
-        raise ScientificContractError("paired evaluation documents require distinct threshold methods")
+        raise ScientificContractError(ErrorMessage("paired evaluation documents require distinct threshold methods"))
     if left.evidence_role is not evidence_role or right.evidence_role is not evidence_role:
-        raise ScientificContractError("paired evaluation documents must share the requested evidence role")
+        raise ScientificContractError(
+            ErrorMessage("paired evaluation documents must share the requested evidence role")
+        )
     if left.split_manifest_checksum != right.split_manifest_checksum:
-        raise ScientificContractError("paired evaluation documents use different split-manifest checksums")
+        raise ScientificContractError(
+            ErrorMessage("paired evaluation documents use different split-manifest checksums")
+        )
     if (
         left.score_checkpoint_checksum != right.score_checkpoint_checksum
         or left.preprocessing_state_set_checksum != right.preprocessing_state_set_checksum
     ):
-        raise ScientificContractError("paired evaluation documents use different detector or preprocessing state")
+        raise ScientificContractError(
+            ErrorMessage("paired evaluation documents use different detector or preprocessing state")
+        )
     validate_fixed_score_controls(
         left.fixed_score_evidence,
         right.fixed_score_evidence,

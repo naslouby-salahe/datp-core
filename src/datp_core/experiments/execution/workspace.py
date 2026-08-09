@@ -38,7 +38,10 @@ from datp_core.artifacts.repositories.thresholds import (
     FederatedThresholdConstructionRequest,
     construct_and_publish_federated_thresholds,
 )
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import (
     ExperimentId,
     FeatureNameSequence,
@@ -245,7 +248,7 @@ class ExperimentWorkspace:
         ).result
         if isinstance(result, ThresholdUnavailableResult):
             raise ScientificContractError(
-                f"threshold unavailable: {result.reason.value}",
+                ErrorMessage(f"threshold unavailable: {result.reason.value}"),
                 subject=self.coordinate.threshold_method,
             )
         return result
@@ -279,7 +282,7 @@ class ExperimentWorkspace:
         if self.coordinate.experiment is not ExperimentId.CALIBRATION_SIZE_ABLATION:
             return ()
         if self.calibration is None:
-            raise ScientificContractError("calibration-size ablation requires a calibration lattice")
+            raise ScientificContractError(ErrorMessage("calibration-size ablation requires a calibration lattice"))
         inputs = build_federated_evaluation_inputs(self.scores, self.coordinate.threshold_method)
         return construct_calibration_size_ablation(
             ConstructCalibrationSizeAblationRequest(
@@ -301,7 +304,7 @@ class ExperimentWorkspace:
         client: ClientIdentity,
     ) -> tuple[HeldOutBenignScore, ...]:
         if not record.path.is_file() or checksum_file(record.path) != record.checksum:
-            raise ScientificContractError("evaluation score provenance is unavailable or changed")
+            raise ScientificContractError(ErrorMessage("evaluation score provenance is unavailable or changed"))
         frame = pl.read_parquet(record.path).filter(
             pl.col(ScoreFrameColumn.OUTCOME_LABEL.value) == PopulationOutcomeLabel.BENIGN.value
         )
@@ -361,7 +364,9 @@ class ExperimentWorkspace:
             estimated = assignment.threshold
             calibration_scores = calibration_by_client.get(client)
             if calibration_scores is None:
-                raise ScientificContractError("threshold assignment client has no eligible benign calibration evidence")
+                raise ScientificContractError(
+                    ErrorMessage("threshold assignment client has no eligible benign calibration evidence")
+                )
             provenance = ThresholdEstimationProvenance(
                 client=client,
                 coordinate=coordinate,

@@ -18,7 +18,10 @@ from datp_core.artifacts.repositories.publication import (
     write_completion_record,
 )
 from datp_core.artifacts.serializers.json import canonical_checksum
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import ExperimentId, PublicationStatus
 from datp_core.core.numeric import ByteCount
 from datp_core.data.service import DatasetMaterializationRequest, materialize_datasets
@@ -51,7 +54,7 @@ def resolve_execution_recipe(coordinate: ExperimentCoordinate) -> ExecutionRecip
     route = execution_route_for(coordinate)
     if route is not ExecutionRoute.SINGLE_COORDINATE:
         raise ScientificContractError(
-            f"{route.value} coordinates require their dedicated joint experiment execution route",
+            ErrorMessage(f"{route.value} coordinates require their dedicated joint experiment execution route"),
             subject=coordinate.experiment,
         )
     if coordinate.experiment is ExperimentId.HISTORICAL_DATP_REPRODUCTION:
@@ -206,7 +209,7 @@ class PipelineStageRunner:
     ) -> StageExecution:
         if coordinate.temporal_state is not None:
             raise ScientificContractError(
-                "temporal coordinates require the paired temporal execution route",
+                ErrorMessage("temporal coordinates require the paired temporal execution route"),
                 subject=coordinate.temporal_state,
             )
         workspace = self._workspace_for(coordinate, output_root)
@@ -254,7 +257,9 @@ class PipelineStageRunner:
                 return self._analyze_evidence(stage, coordinate, workspace)
             case PipelineStage.FINALIZE_PUBLICATION:
                 return self._finalize_publication(stage, coordinate, provenance, output_root, workspace)
-        raise ScientificContractError(f"unsupported execution stage: {stage.value}", subject=coordinate.experiment)
+        raise ScientificContractError(
+            ErrorMessage(f"unsupported execution stage: {stage.value}"), subject=coordinate.experiment
+        )
 
     def _materialize_dataset(self, stage: PipelineStage, coordinate: ExperimentCoordinate) -> StageExecution:
         result = materialize_datasets(

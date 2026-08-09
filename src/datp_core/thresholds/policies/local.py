@@ -3,7 +3,10 @@
 from dataclasses import dataclass
 from typing import ClassVar
 
-from datp_core.core.errors import ScientificContractError
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import FederatedThresholdMethod
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 from datp_core.thresholds.contracts import (
@@ -43,7 +46,7 @@ def construct_local_threshold(
 ) -> LocalThresholdResult:
     if protocol.method is not FederatedThresholdMethod.LOCAL_THRESHOLD:
         raise ScientificContractError(
-            "local threshold construction requires the LOCAL_THRESHOLD protocol",
+            ErrorMessage("local threshold construction requires the LOCAL_THRESHOLD protocol"),
             subject=protocol.method,
         )
     require_eligible_cohort(eligible, "local threshold construction")

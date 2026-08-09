@@ -75,9 +75,7 @@ def _write_independent_reference(
         evaluation_directory = root / str(seed_value) / CentralizedReferenceArtifactDirectory.EVALUATION
         document = _evaluation_document(seed_value, population)
         serialize_json_model(document, evaluation_directory / CentralizedEvaluationPublicationAsset.EVALUATION)
-        (evaluation_directory / CentralizedEvaluationPublicationAsset.COMPLETE).write_text(
-            "complete", encoding="utf-8"
-        )
+        (evaluation_directory / CentralizedEvaluationPublicationAsset.COMPLETE).write_text("complete", encoding="utf-8")
     (root / CentralizedReferenceReportAsset.COMPLETE).write_text("complete", encoding="utf-8")
 
 
@@ -105,9 +103,7 @@ def test_report_centralized_reference_publishes_validated_b0_evidence(tmp_path: 
 def test_report_centralized_reference_publishes_ciciot_b0_evidence(tmp_path: Path) -> None:
     output_root = tmp_path / "outputs"
     _write_independent_reference(output_root, PopulationId.CICIOT_FILE_CLIENTS)
-    report_directory = report_centralized_reference(
-        CIC_CENTRALIZED_REFERENCE, output_root=output_root, overwrite=False
-    )
+    report_directory = report_centralized_reference(CIC_CENTRALIZED_REFERENCE, output_root=output_root, overwrite=False)
 
     assert (report_directory / CentralizedReferenceReportAsset.MANIFEST).is_file()
     assert (report_directory / CentralizedReferenceReportAsset.PUBLICATION).is_file()
@@ -129,9 +125,7 @@ def test_report_centralized_reference_fails_closed_without_root_completion(tmp_p
             _evaluation_document(seed_value),
             evaluation_directory / CentralizedEvaluationPublicationAsset.EVALUATION,
         )
-        (evaluation_directory / CentralizedEvaluationPublicationAsset.COMPLETE).write_text(
-            "complete", encoding="utf-8"
-        )
+        (evaluation_directory / CentralizedEvaluationPublicationAsset.COMPLETE).write_text("complete", encoding="utf-8")
     with pytest.raises(ReportEvidenceError, match="completion marker is missing"):
         report_centralized_reference(NBAIOT_CENTRALIZED_REFERENCE, output_root=output_root, overwrite=False)
 

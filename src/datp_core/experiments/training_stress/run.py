@@ -32,7 +32,11 @@ from datp_core.artifacts.repositories.thresholds import (
 )
 from datp_core.artifacts.serializers.json import canonical_checksum, canonical_json_text
 from datp_core.core.contracts import ClientCollection, ClientOwned
-from datp_core.core.errors import ArtifactIntegrityError, ScientificContractError
+from datp_core.core.errors import (
+    ArtifactIntegrityError,
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import (
     ClientIdentityToken,
     ContractSubject,
@@ -195,21 +199,23 @@ def load_ditto_stress_test_evidence(
     complete = directory / AnalysisAssetName.COMPLETE
     if not document.is_file() or not complete.is_file():
         raise ScientificContractError(
-            f"missing completed Ditto stress-test evidence: {directory}",
+            ErrorMessage(
+                f"missing completed Ditto stress-test evidence: {directory} "
+                f"(seed={training_seed.value} regularization={regularization.value})"
+            ),
             subject=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
-            reason=f"seed={training_seed.value} regularization={regularization.value}",
         )
     adapter: TypeAdapter[DittoStressTestEvidence] = TypeAdapter(DittoStressTestEvidence)
     try:
         evidence = adapter.validate_json(document.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, ValidationError) as error:
         raise ScientificContractError(
-            f"Ditto stress-test evidence is unreadable or invalid: {document}",
+            ErrorMessage(f"Ditto stress-test evidence is unreadable or invalid: {document}"),
             subject=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
         ) from error
     if complete.read_text(encoding="utf-8").strip() != canonical_checksum(evidence).value:
         raise ScientificContractError(
-            f"Ditto stress-test evidence checksum does not match its completion marker: {document}",
+            ErrorMessage(f"Ditto stress-test evidence checksum does not match its completion marker: {document}"),
             subject=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
         )
     return evidence
@@ -378,12 +384,12 @@ def run_ditto_stress_test_seed(
     ).result
     if not isinstance(shared, SharedThresholdResult):
         raise ScientificContractError(
-            "Ditto shared-threshold construction must produce a shared result",
+            ErrorMessage("Ditto shared-threshold construction must produce a shared result"),
             subject=personalized_coordinate.model,
         )
     if not isinstance(local, LocalThresholdResult):
         raise ScientificContractError(
-            "Ditto local-threshold construction must produce a local result",
+            ErrorMessage("Ditto local-threshold construction must produce a local result"),
             subject=personalized_coordinate.model,
         )
     reference_manifest = scores.manifests.require(shared.assignments[0].client)
@@ -441,7 +447,7 @@ def analyze_ditto_absorption(
 ) -> AbsorptionCohortResult:
     if len(results) != len(reference_evidence):
         raise ScientificContractError(
-            "absorption analysis requires one FedAvg corner-evidence record per Ditto seed result",
+            ErrorMessage("absorption analysis requires one FedAvg corner-evidence record per Ditto seed result"),
             subject=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
         )
     observations: list[AbsorptionSeedObservation] = []
@@ -450,7 +456,7 @@ def analyze_ditto_absorption(
         seed = result.personalized_coordinate.training_seed
         if reference.seed != seed:
             raise ScientificContractError(
-                "Ditto absorption reference evidence must align seed-for-seed with stress results",
+                ErrorMessage("Ditto absorption reference evidence must align seed-for-seed with stress results"),
                 subject=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
             )
         shared_cv, local_cv, effect = _population_cv_fpr_effect(result)
@@ -516,7 +522,7 @@ def run_fedprox_stress_test_seed(
     )
     if not coordinates:
         raise ScientificContractError(
-            f"FedProx planning produced no executable coordinates for coefficient={coefficient.value}",
+            ErrorMessage(f"FedProx planning produced no executable coordinates for coefficient={coefficient.value}"),
             subject=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST,
         )
     campaign_entries = tuple(
@@ -550,13 +556,13 @@ class FedProxCoefficientTerminalLoss:
     def __post_init__(self) -> None:
         if len(self.per_seed_terminal_losses) != CONFIRMATORY_SEED_COHORT.member_count.value:
             raise ScientificContractError(
-                "FedProx terminal-loss candidates require the full confirmatory seed cohort",
+                ErrorMessage("FedProx terminal-loss candidates require the full confirmatory seed cohort"),
                 subject=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST,
             )
         seeds = tuple(seed for seed, _loss in self.per_seed_terminal_losses)
         if seeds != CONFIRMATORY_SEED_COHORT.values:
             raise ScientificContractError(
-                "FedProx terminal-loss candidates must use the locked confirmatory seed order",
+                ErrorMessage("FedProx terminal-loss candidates must use the locked confirmatory seed order"),
                 subject=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST,
             )
 
@@ -589,13 +595,15 @@ def read_terminal_aggregate_training_loss(
         round_frame, _client_frame, _personalized = history_frames(training_directory)
     except ArtifactIntegrityError as error:
         raise ScientificContractError(
-            f"FedProx terminal training loss unavailable under {training_directory}: {error}",
+            ErrorMessage(f"FedProx terminal training loss unavailable under {training_directory}: {error}"),
             subject=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST,
         ) from error
     matching = round_frame.filter(pl.col(FederatedHistoryColumn.ROUND_NUMBER.value) == maximum_round.value)
     if matching.height != 1:
         raise ScientificContractError(
-            f"FedProx training history must contain exactly one row for terminal round {maximum_round.value}",
+            ErrorMessage(
+                f"FedProx training history must contain exactly one row for terminal round {maximum_round.value}"
+            ),
             subject=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST,
         )
     return MetricValue(float(matching.get_column(FederatedHistoryColumn.AGGREGATE_LOSS.value).item()))
@@ -664,7 +672,7 @@ def load_fedprox_primary_coefficient_decision(destination: Path) -> FedProxPrima
         return adapter.validate_json(destination.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, ValidationError) as error:
         raise ScientificContractError(
-            f"FedProx primary-coefficient decision is unreadable or invalid: {destination}",
+            ErrorMessage(f"FedProx primary-coefficient decision is unreadable or invalid: {destination}"),
             subject=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST,
         ) from error
 
@@ -698,7 +706,7 @@ def build_fedprox_absorption_observation(
     experiment = ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST
     if reference.seed != training_seed:
         raise ScientificContractError(
-            "FedProx absorption reference evidence must match the observation seed",
+            ErrorMessage("FedProx absorption reference evidence must match the observation seed"),
             subject=experiment,
         )
     personalized = load_fedprox_cv_fpr_corners(training_seed, coefficient)
@@ -724,14 +732,16 @@ def analyze_fedprox_absorption(
     if observations and any(
         item.experiment is not ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST for item in observations
     ):
-        raise ScientificContractError("FedProx absorption requires FEDPROX_ABSORPTION_STRESS_TEST observations")
+        raise ScientificContractError(
+            ErrorMessage("FedProx absorption requires FEDPROX_ABSORPTION_STRESS_TEST observations")
+        )
     if observations and any(
         item.personalized_model is not TrainingModelId.FEDPROX_AUTOENCODER for item in observations
     ):
-        raise ScientificContractError("FedProx absorption requires FEDPROX personalized model identity")
+        raise ScientificContractError(ErrorMessage("FedProx absorption requires FEDPROX personalized model identity"))
     if observations and any(item.corners is None for item in observations):
         raise ScientificContractError(
-            "FedProx absorption requires four-corner provenance on every seed observation",
+            ErrorMessage("FedProx absorption requires four-corner provenance on every seed observation"),
             subject=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST,
         )
     cohort = decide_absorption_cohort(observations, _MODEL_ABSORPTION_DECISION_PROTOCOL)
@@ -763,8 +773,10 @@ def _fedprox_evaluation_path(
     )
     if len(matches) != 1:
         raise ScientificContractError(
-            "FedProx evaluation coordinate unresolved for "
-            f"seed={training_seed.value} coefficient={coefficient.value} method={method.value}",
+            ErrorMessage(
+                "FedProx evaluation coordinate unresolved for "
+                f"seed={training_seed.value} coefficient={coefficient.value} method={method.value}"
+            ),
             subject=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST,
         )
     path = (
@@ -773,7 +785,7 @@ def _fedprox_evaluation_path(
         / FederatedEvaluationAssetName.DOCUMENT
     )
     if not path.is_file():
-        raise ScientificContractError(f"missing FedProx evaluation document: {path}")
+        raise ScientificContractError(ErrorMessage(f"missing FedProx evaluation document: {path}"))
     return path
 
 
@@ -788,7 +800,9 @@ def _population_cv_fpr_effect(result: DittoStressTestEvidence) -> tuple[MetricVa
 def _required_population_cv(population: PopulationMetricResult) -> MetricValue:
     outcome = metric_by_id(population.metrics, MetricId.FPR_COEFFICIENT_OF_VARIATION)
     if outcome.status is not MetricStatus.AVAILABLE or outcome.value is None:
-        raise ScientificContractError("absorption requires available population CV(FPR) under both threshold methods")
+        raise ScientificContractError(
+            ErrorMessage("absorption requires available population CV(FPR) under both threshold methods")
+        )
     return outcome.value
 
 
@@ -913,7 +927,7 @@ def _personalized_scores(
         )
     if not eligible:
         raise ScientificContractError(
-            "no client meets the minimum benign calibration support for threshold construction",
+            ErrorMessage("no client meets the minimum benign calibration support for threshold construction"),
             subject=ContractSubject.CALIBRATION,
         )
     return PersonalizedScoreCollection(

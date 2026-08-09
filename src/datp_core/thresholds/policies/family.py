@@ -3,7 +3,11 @@
 from dataclasses import dataclass
 from typing import ClassVar
 
-from datp_core.core.errors import ScientificContractError, require_contract
+from datp_core.core.errors import (
+    ErrorMessage,
+    ScientificContractError,
+    require_contract,
+)
 from datp_core.core.identifiers import AvailabilityStatus, ContractSubject, FamilyIdentity, FederatedThresholdMethod
 from datp_core.core.numeric import Quantile, ThresholdValue
 from datp_core.data.populations.contracts import ClientIdentity
@@ -34,24 +38,24 @@ class FamilyMembership:
         has_leftover = bool(self.members) or self.family_threshold is not None
         require_contract(
             not available or has_support,
-            "an available family requires eligible members and a constructed threshold",
+            ErrorMessage("an available family requires eligible members and a constructed threshold"),
             ContractSubject.THRESHOLD,
         )
         require_contract(
             available or not has_leftover,
-            "an unavailable family must carry no members and no threshold",
+            ErrorMessage("an unavailable family must carry no members and no threshold"),
             ContractSubject.THRESHOLD,
         )
         if not self.members:
             require_contract(
                 not self.contributing_local_quantiles,
-                "an empty family membership cannot carry contributing local quantiles",
+                ErrorMessage("an empty family membership cannot carry contributing local quantiles"),
                 ContractSubject.CLIENT_IDENTITY,
             )
             return
         if self.family_threshold is None:
             raise ScientificContractError(
-                "non-empty family membership requires a constructed threshold",
+                ErrorMessage("non-empty family membership requires a constructed threshold"),
                 subject=ContractSubject.THRESHOLD,
             )
         validate_group_membership(
@@ -74,20 +78,20 @@ class FamilyThresholdResult:
     def __post_init__(self) -> None:
         require_contract(
             bool(self.families),
-            "family threshold construction requires at least one declared family",
+            ErrorMessage("family threshold construction requires at least one declared family"),
             ContractSubject.THRESHOLD,
         )
         family_ids = tuple(item.family_id for item in self.families)
         require_contract(
             len(frozenset(family_ids)) == len(family_ids),
-            "family identities must be unique",
+            ErrorMessage("family identities must be unique"),
             ContractSubject.THRESHOLD,
         )
         for family in self.families:
             for item in family.contributing_local_quantiles:
                 require_contract(
                     item.coordinate == self.coordinate,
-                    "every nested quantile must carry the containing result coordinate",
+                    ErrorMessage("every nested quantile must carry the containing result coordinate"),
                     ContractSubject.COORDINATE,
                 )
         expected_assignments = tuple(
@@ -111,7 +115,7 @@ def construct_family_threshold(
 ) -> FamilyThresholdResult:
     if not family_by_client:
         raise ScientificContractError(
-            "family threshold construction requires a non-empty family taxonomy",
+            ErrorMessage("family threshold construction requires a non-empty family taxonomy"),
             subject=ContractSubject.THRESHOLD,
         )
     require_eligible_cohort(eligible, "family threshold construction")
@@ -121,7 +125,7 @@ def construct_family_threshold(
         matching = tuple(item.family for item in family_by_client if item.client == client)
         if len(matching) != 1:
             raise ScientificContractError(
-                f"eligible client {client} must have exactly one family taxonomy entry",
+                ErrorMessage(f"eligible client {client} must have exactly one family taxonomy entry"),
                 subject=ContractSubject.CLIENT_IDENTITY,
             )
     family_ids = tuple(sorted(frozenset(item.family for item in family_by_client), key=lambda item: item.value))
@@ -183,7 +187,7 @@ def _eligible_scores(
     matches = tuple(item for item in eligible if item.client == client)
     if len(matches) != 1:
         raise ScientificContractError(
-            "family threshold client must resolve exactly once in eligible scores",
+            ErrorMessage("family threshold client must resolve exactly once in eligible scores"),
             subject=ContractSubject.CLIENT_IDENTITY,
         )
     return matches[0]

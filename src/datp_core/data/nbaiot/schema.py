@@ -67,12 +67,32 @@ class NBaIoTColumnSource(StrEnum):
     AUDITED_SOURCE_PATH = "audited source path"
 
 
-_WINDOWS: tuple[str, ...] = ("L5", "L3", "L1", "L0.1", "L0.01") #TODO: should be tuple of NBaIoTWindow and adapt all callers and usage and create NBaIoTWindow enum
-_BASIC_STATISTICS: tuple[str, ...] = ("weight", "mean", "variance") #TODO: should be tuple of NBaIoTBasicStatistic and adapt all callers and usage and create NBaIoTBasicStatistic enum
-_CHANNEL_STATISTICS: tuple[str, ...] = ("weight", "mean", "std", "magnitude", "radius", "covariance", "pcc") #TODO: should be tuple of NBaIoTChannelStatistic and adapt all callers and usage and create NBaIoTChannelStatistic enum
+_WINDOWS: tuple[str, ...] = (
+    "L5",
+    "L3",
+    "L1",
+    "L0.1",
+    "L0.01",
+)  # TODO: should be tuple of NBaIoTWindow and adapt all callers and usage and create NBaIoTWindow enum
+_BASIC_STATISTICS: tuple[str, ...] = (
+    "weight",
+    "mean",
+    "variance",
+)  # TODO: should be tuple of NBaIoTBasicStatistic and adapt all callers and usage and create NBaIoTBasicStatistic enum
+_CHANNEL_STATISTICS: tuple[str, ...] = (
+    "weight",
+    "mean",
+    "std",
+    "magnitude",
+    "radius",
+    "covariance",
+    "pcc",
+)  # TODO: should be tuple of NBaIoTChannelStatistic and adapt all callers and usage and create NBaIoTChannelStatistic enum
 
 
-def _feature_columns() -> tuple[str, ...]: #TODO: should be tuple of NBaIoTFeatureColumn and adapt all callers and usage and create NBaIoTFeatureColumn enum
+def _feature_columns() -> tuple[
+    str, ...
+]:  # TODO: should be tuple of NBaIoTFeatureColumn and adapt all callers and usage and create NBaIoTFeatureColumn enum
     return (
         _feature_group("MI_dir", _BASIC_STATISTICS)
         + _feature_group("H", _BASIC_STATISTICS)
@@ -82,18 +102,40 @@ def _feature_columns() -> tuple[str, ...]: #TODO: should be tuple of NBaIoTFeatu
     )
 
 
-def _feature_group(prefix: str, statistics: tuple[str, ...]) -> tuple[str, ...]: #TODO: should be tuple of NBaIoTFeatureColumn and adapt all callers and usage and create NBaIoTFeatureColumn enum
+def _feature_group(
+    prefix: str, statistics: tuple[str, ...]
+) -> tuple[
+    str, ...
+]:  # TODO: should be tuple of NBaIoTFeatureColumn and adapt all callers and usage and create NBaIoTFeatureColumn enum
     return tuple(f"{prefix}_{window}_{statistic}" for window in _WINDOWS for statistic in statistics)
 
 
 NBAIOT_FEATURE_COLUMNS = _feature_columns()
-NBAIOT_DEVICE_IDENTITIES: tuple[str, ...] = tuple(device.value for device in NBaIoTDevice) #TODO: should be tuple of NBaIoTDevice and adapt all callers and usage
-NBAIOT_DEVICE_FAMILIES: tuple[str, ...] = tuple(family.value for family in NBaIoTDeviceFamily) #TODO: should be tuple of NBaIoTDeviceFamily and adapt all callers and usage
-NBAIOT_ATTACK_FAMILIES: tuple[str, ...] = ("gafgyt", "mirai") #TODO: should be tuple of NBaIoTAttackFamily and adapt all callers and usage and create NBaIoTAttackFamily enum
-NBAIOT_ATTACK_SUBTYPES: tuple[str, ...] = ("ack", "combo", "junk", "scan", "syn", "tcp", "udp", "udpplain") #TODO: should be tuple of NBaIoTAttackSubtype and adapt all callers and usage and create NBaIoTAttackSubtype enum
+NBAIOT_DEVICE_IDENTITIES: tuple[str, ...] = tuple(
+    device.value for device in NBaIoTDevice
+)  # TODO: should be tuple of NBaIoTDevice and adapt all callers and usage
+NBAIOT_DEVICE_FAMILIES: tuple[str, ...] = tuple(
+    family.value for family in NBaIoTDeviceFamily
+)  # TODO: should be tuple of NBaIoTDeviceFamily and adapt all callers and usage
+NBAIOT_ATTACK_FAMILIES: tuple[str, ...] = (
+    "gafgyt",
+    "mirai",
+)  # TODO: should be tuple of NBaIoTAttackFamily and adapt all callers and usage and create NBaIoTAttackFamily enum
+NBAIOT_ATTACK_SUBTYPES: tuple[str, ...] = (
+    "ack",
+    "combo",
+    "junk",
+    "scan",
+    "syn",
+    "tcp",
+    "udp",
+    "udpplain",
+)  # TODO: should be tuple of NBaIoTAttackSubtype and adapt all callers and usage and create NBaIoTAttackSubtype enum
 
 
-NBAIOT_PROVENANCE_COLUMNS: tuple[str, ...] = tuple(CanonicalProvenanceColumn) #TODO: should be tuple of CanonicalProvenanceColumn and adapt all callers and usage. Meaning no need for this variable, just use tuple(CanonicalProvenanceColumn) directly in the CanonicalSchema constructor.
+NBAIOT_PROVENANCE_COLUMNS: tuple[str, ...] = tuple(
+    CanonicalProvenanceColumn
+)  # TODO: should be tuple of CanonicalProvenanceColumn and adapt all callers and usage. Meaning no need for this variable, just use tuple(CanonicalProvenanceColumn) directly in the CanonicalSchema constructor.
 
 
 def _canonical_columns() -> tuple[CanonicalColumn, ...]:
@@ -191,7 +233,11 @@ NBAIOT_SCHEMA = CanonicalSchema(
 )
 
 
-def parse_source_identity(path: Path) -> tuple[str, str, str | None, str | None]: #TODO: should be tuple[NBaIoTDevice, NBaIoTSourceLabel, NBaIoTAttackFamily | None, NBaIoTAttackSubtype | None] and adapt all callers and usage and create NBaIoTAttackFamily and NBaIoTAttackSubtype enums
+def parse_source_identity(
+    path: Path,
+) -> tuple[
+    str, str, str | None, str | None
+]:  # TODO: should be tuple[NBaIoTDevice, NBaIoTSourceLabel, NBaIoTAttackFamily | None, NBaIoTAttackSubtype | None] and adapt all callers and usage and create NBaIoTAttackFamily and NBaIoTAttackSubtype enums
     parts = path.parts
     if path.suffix != NBaIoTArtifactName.CSV_SUFFIX or len(parts) < 2:
         raise ValueError("N-BaIoT sources must be extracted CSV files")
@@ -206,12 +252,20 @@ def source_relative_path(path: Path) -> Path:
     return Path(path.parent.parent.name, path.parent.name, path.name)
 
 
-def _benign_source_identity(parts: tuple[str, ...]) -> tuple[str, str, None, None]: #TODO: should be tuple[NBaIoTDevice, NBaIoTSourceLabel, None, None] and adapt all callers and usage
+def _benign_source_identity(
+    parts: tuple[str, ...],
+) -> tuple[
+    str, str, None, None
+]:  # TODO: should be tuple[NBaIoTDevice, NBaIoTSourceLabel, None, None] and adapt all callers and usage
     device = _device(parts[-2]).value
     return device, NBaIoTSourceLabel.BENIGN.value, None, None
 
 
-def _attack_source_identity(parts: tuple[str, ...], subtype: str) -> tuple[str, str, str, str]: #TODO: should be tuple[NBaIoTDevice, NBaIoTSourceLabel, NBaIoTAttackFamily, NBaIoTAttackSubtype] and adapt all callers and usage and create NBaIoTAttackFamily and NBaIoTAttackSubtype enums
+def _attack_source_identity(
+    parts: tuple[str, ...], subtype: str
+) -> tuple[
+    str, str, str, str
+]:  # TODO: should be tuple[NBaIoTDevice, NBaIoTSourceLabel, NBaIoTAttackFamily, NBaIoTAttackSubtype] and adapt all callers and usage and create NBaIoTAttackFamily and NBaIoTAttackSubtype enums
     device = _device(parts[-3]).value
     attack_directory = parts[-2]
     if not attack_directory.endswith(NBaIoTArtifactName.ATTACK_DIRECTORY_SUFFIX):
@@ -222,7 +276,9 @@ def _attack_source_identity(parts: tuple[str, ...], subtype: str) -> tuple[str, 
     return device, NBaIoTSourceLabel.ATTACK.value, family, subtype
 
 
-def device_family(device_identity: str) -> NBaIoTDeviceFamily: #TODO: should be NBaIoTDeviceFamily and adapt all callers and usage. Might be better to just use NBaIoTDeviceFamily(device_identity) directly in the callers and usage instead of this function.
+def device_family(
+    device_identity: str,
+) -> NBaIoTDeviceFamily:  # TODO: should be NBaIoTDeviceFamily and adapt all callers and usage. Might be better to just use NBaIoTDeviceFamily(device_identity) directly in the callers and usage instead of this function.
     device = _device(device_identity)
     match device:
         case NBaIoTDevice.DANMINI_DOORBELL | NBaIoTDevice.ENNIO_DOORBELL:
@@ -242,7 +298,9 @@ def device_family(device_identity: str) -> NBaIoTDeviceFamily: #TODO: should be 
             return NBaIoTDeviceFamily.WEBCAM
 
 
-def _device(value: str) -> NBaIoTDevice: #TODO: should be NBaIoTDevice and adapt all callers and usage. Might be better to just use NBaIoTDevice(value) directly in the callers and usage instead of this function.
+def _device(
+    value: str,
+) -> NBaIoTDevice:  # TODO: should be NBaIoTDevice and adapt all callers and usage. Might be better to just use NBaIoTDevice(value) directly in the callers and usage instead of this function.
     try:
         return NBaIoTDevice(value.lower())
     except ValueError as error:

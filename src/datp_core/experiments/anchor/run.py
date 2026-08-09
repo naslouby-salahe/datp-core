@@ -16,7 +16,11 @@ from datp_core.artifacts.provenance import Checksum, checksum_file
 from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
 from datp_core.artifacts.serializers.json import canonical_checksum, canonical_json_text
 from datp_core.core.contracts import StrictModel
-from datp_core.core.errors import AnchorReproductionError, ScientificContractError
+from datp_core.core.errors import (
+    AnchorReproductionError,
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import (
     CheckpointStatus,
     ContractSubject,
@@ -87,7 +91,9 @@ class VerifyAnchorStageStatus:
     discrepancy_count: NonNegativeIntegerValue
     observation_count: NonNegativeIntegerValue
     reference_count: NonNegativeIntegerValue
-    dependency_blocker: str | None #TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    dependency_blocker: (
+        str | None
+    )  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
     diagnostics_checksum: Checksum
 
 
@@ -98,11 +104,15 @@ class VerifyAnchorStageResult:
 
 
 def independent_package_directory(output_root: Path = OUTPUTS_ROOT) -> Path:
-    return output_root / "anchor" / IndependentAnchorAssetName.ROOT.value #TODO no hardcoded values. Should use what already exists. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    return (
+        output_root / "anchor" / IndependentAnchorAssetName.ROOT.value
+    )  # TODO no hardcoded values. Should use what already exists. Check what already exists. Do not use primitives for this, use something else. Check what already exists
 
 
 def default_anchor_diagnostics_directory(output_root: Path = OUTPUTS_ROOT) -> Path:
-    return output_root / "anchor" / "diagnostics" #TODO no hardcoded values. Should use what already exists. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    return (
+        output_root / "anchor" / "diagnostics"
+    )  # TODO no hardcoded values. Should use what already exists. Check what already exists. Do not use primitives for this, use something else. Check what already exists
 
 
 def verify_anchor(request: VerifyAnchorStageRequest) -> VerifyAnchorStageResult:
@@ -141,18 +151,18 @@ def observation_from_evaluation_document(
         FederatedThresholdMethod.LOCAL_THRESHOLD,
     }:
         raise ScientificContractError(
-            "independent anchor observations support only shared and local thresholds",
+            ErrorMessage("independent anchor observations support only shared and local thresholds"),
             subject=document.threshold_method,
         )
     coordinate = document.score_coordinate
     if coordinate.population is not ANCHOR_POPULATION:
         raise ScientificContractError(
-            "independent anchor observation population must match the locked historical population",
+            ErrorMessage("independent anchor observation population must match the locked historical population"),
             subject=coordinate.population,
         )
     if coordinate.model is not ANCHOR_TRAINING_MODEL:
         raise ScientificContractError(
-            "independent anchor observation model must be FedAvg autoencoder",
+            ErrorMessage("independent anchor observation model must be FedAvg autoencoder"),
             subject=coordinate.model,
         )
     _require_historical_endpoint_checkpoint(document)
@@ -182,15 +192,15 @@ def _require_historical_endpoint_checkpoint(document: FederatedEvaluationDocumen
     """
     if document.score_checkpoint_round != CHECKPOINT_PROTOCOL.maximum_round:
         raise AnchorReproductionError(
-            "independent anchor observations require the terminal-round historical endpoint checkpoint",
+            ErrorMessage("independent anchor observations require the terminal-round historical endpoint checkpoint"),
             subject=ContractSubject.CHECKPOINT_CANDIDATES,
-            reason=AnchorDiscrepancyReason.WRONG_CHECKPOINT_SEMANTICS.value,
+            reason=AnchorDiscrepancyReason.WRONG_CHECKPOINT_SEMANTICS,
         )
     if document.score_checkpoint_status is not CheckpointStatus.SELECTED_BY_NON_TEST_RULE:
         raise AnchorReproductionError(
-            "independent anchor observations require fixed-terminal non-test checkpoint selection",
+            ErrorMessage("independent anchor observations require fixed-terminal non-test checkpoint selection"),
             subject=ContractSubject.CHECKPOINT_SELECTION_RULE,
-            reason=AnchorDiscrepancyReason.WRONG_CHECKPOINT_SEMANTICS.value,
+            reason=AnchorDiscrepancyReason.WRONG_CHECKPOINT_SEMANTICS,
         )
 
 
@@ -205,15 +215,15 @@ def load_independent_observations(package_directory: Path) -> tuple[AnchorObserv
         marker = complete_path.read_text(encoding="utf-8").strip()
         if marker != canonical_checksum(package).value:
             raise AnchorReproductionError(
-                "independent observation package COMPLETE digest does not match payload",
-                reason="stale_or_mismatched_artifact",
+                ErrorMessage("independent observation package COMPLETE digest does not match payload"),
+                reason=AnchorDiscrepancyReason.STALE_OR_MISMATCHED_ARTIFACT,
             )
     except AnchorReproductionError:
         raise
     except (OSError, UnicodeError, ValueError, TypeError, ValidationError) as error:
         raise AnchorReproductionError(
-            "independent observation package is unreadable or invalid",
-            reason="stale_or_mismatched_artifact",
+            ErrorMessage("independent observation package is unreadable or invalid"),
+            reason=AnchorDiscrepancyReason.STALE_OR_MISMATCHED_ARTIFACT,
         ) from error
     return package.observations
 
@@ -225,8 +235,8 @@ def publish_independent_observations(
     """Atomically publish the independent observation package with a COMPLETE digest."""
     if not observations:
         raise AnchorReproductionError(
-            "independent observation package requires at least one observation",
-            reason="missing_mandatory_observation",
+            ErrorMessage("independent observation package requires at least one observation"),
+            reason=AnchorDiscrepancyReason.MISSING_MANDATORY_OBSERVATION,
         )
     package = IndependentObservationPackage(observations=observations)
     package_directory.mkdir(parents=True, exist_ok=True)
@@ -301,10 +311,10 @@ def _resolve_observations(
         request.observations is not None or request.historical_sources is not None
     ):
         raise AnchorReproductionError(
-            "independent reproduction cannot be combined with historical sources or direct observations",
+            ErrorMessage("independent reproduction cannot be combined with historical sources or direct observations"),
         )
     if request.observations is not None and request.historical_sources is not None:
-        raise AnchorReproductionError("supply either typed observations or historical sources, not both")
+        raise AnchorReproductionError(ErrorMessage("supply either typed observations or historical sources, not both"))
     if request.observations is not None:
         return request.observations, None
     if request.historical_sources is not None:

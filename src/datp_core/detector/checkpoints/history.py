@@ -9,7 +9,11 @@ import polars as pl
 from polars.exceptions import PolarsError
 
 from datp_core.artifacts.provenance import Checksum
-from datp_core.core.errors import ArtifactIntegrityError, ScientificContractError
+from datp_core.core.errors import (
+    ArtifactIntegrityError,
+    ErrorMessage,
+    ScientificContractError,
+)
 from datp_core.core.identifiers import (
     CommunicationEstimationMethod,
     ContractSubject,
@@ -72,14 +76,14 @@ class RoundSummaryRecord:
 def read_parquet(path: Path) -> pl.DataFrame:
     if not path.is_file():
         raise ArtifactIntegrityError(
-            f"required Parquet artifact is missing: {path.name}",
+            ErrorMessage(f"required Parquet artifact is missing: {path.name}"),
             subject=ContractSubject.ARTIFACT_PATH,
         )
     try:
         return pl.read_parquet(path)
     except (OSError, PolarsError) as error:
         raise ArtifactIntegrityError(
-            f"Parquet artifact is unreadable or invalid: {path.name}",
+            ErrorMessage(f"Parquet artifact is unreadable or invalid: {path.name}"),
             subject=ContractSubject.ARTIFACT_PATH,
         ) from error
 
@@ -92,14 +96,14 @@ def validate_parquet_schema(frame: pl.DataFrame, expected_schema: tuple[ParquetC
     expected_columns = tuple(column.identity.value for column in expected_schema)
     if tuple(frame.columns) != expected_columns:
         raise ArtifactIntegrityError(
-            "Parquet columns do not match the exact declared schema order",
+            ErrorMessage("Parquet columns do not match the exact declared schema order"),
             subject=ContractSubject.SCHEMA,
         )
     for column in expected_schema:
         observed = frame.schema[column.identity.value]
         if observed != column.dtype:
             raise ArtifactIntegrityError(
-                f"Parquet column {column.identity.value!r} has type {observed}, expected {column.dtype}",
+                ErrorMessage(f"Parquet column {column.identity.value!r} has type {observed}, expected {column.dtype}"),
                 subject=ContractSubject.SCHEMA,
             )
 
@@ -111,7 +115,7 @@ def validate_round_summary(frame: pl.DataFrame, expected_rounds: tuple[RoundNumb
     )
     if observed != expected_rounds:
         raise ArtifactIntegrityError(
-            "round summary rows must equal the exact ordered training rounds",
+            ErrorMessage("round summary rows must equal the exact ordered training rounds"),
             subject=ContractSubject.SCHEMA,
         )
 
@@ -126,7 +130,7 @@ def _validate_client_rows(
 ) -> None:
     validate_parquet_schema(frame, schema)
     if frame.height < 1:
-        raise ArtifactIntegrityError(f"{table_name} must contain rows", subject=ContractSubject.SCHEMA)
+        raise ArtifactIntegrityError(ErrorMessage(f"{table_name} must contain rows"), subject=ContractSubject.SCHEMA)
 
     round_column = FederatedHistoryColumn.ROUND_NUMBER.value
     client_column = FederatedHistoryColumn.CLIENT_ID.value
@@ -142,7 +146,7 @@ def _validate_client_rows(
     )
     if observed_pairs != expected_pairs:
         raise ArtifactIntegrityError(
-            f"{table_name} must contain one ordered row for every declared round and client",
+            ErrorMessage(f"{table_name} must contain one ordered row for every declared round and client"),
             subject=ContractSubject.SCHEMA,
         )
 
@@ -193,7 +197,7 @@ def persist_federated_training_history(
     normalized_device = device_name.strip()
     if not normalized_device:
         raise ScientificContractError(
-            "training publication requires a non-empty CUDA device name",
+            ErrorMessage("training publication requires a non-empty CUDA device name"),
             subject=ContractSubject.CUDA,
         )
 
@@ -287,11 +291,11 @@ def load_published_device_name(directory: Path) -> CudaDeviceName:
         value = path.read_text(encoding="utf-8").strip()
     except (OSError, UnicodeError) as error:
         raise ArtifactIntegrityError(
-            "published CUDA device name is unreadable",
+            ErrorMessage("published CUDA device name is unreadable"),
             subject=ContractSubject.CUDA,
         ) from error
     if not value:
-        raise ArtifactIntegrityError("published CUDA device name is empty", subject=ContractSubject.CUDA)
+        raise ArtifactIntegrityError(ErrorMessage("published CUDA device name is empty"), subject=ContractSubject.CUDA)
     return CudaDeviceName(value)
 
 
@@ -313,12 +317,12 @@ def load_federated_training_history(
         case TrainingModelId.DITTO_GLOBAL_AUTOENCODER:
             if personalized_coordinate is None or personalized_frame is None:
                 raise ArtifactIntegrityError(
-                    "Ditto global history requires its personalized coordinate and history",
+                    ErrorMessage("Ditto global history requires its personalized coordinate and history"),
                     subject=ContractSubject.COORDINATE,
                 )
             if not coordinate.matches_ditto_peer(personalized_coordinate):
                 raise ArtifactIntegrityError(
-                    "Ditto global and personalized coordinates do not match",
+                    ErrorMessage("Ditto global and personalized coordinates do not match"),
                     subject=ContractSubject.COORDINATE,
                 )
             validate_personalized_history(
@@ -329,12 +333,12 @@ def load_federated_training_history(
         case TrainingModelId.FEDAVG_AUTOENCODER | TrainingModelId.FEDPROX_AUTOENCODER:
             if personalized_coordinate is not None or personalized_frame is not None:
                 raise ArtifactIntegrityError(
-                    "FedAvg and FedProx publications cannot contain personalized history",
+                    ErrorMessage("FedAvg and FedProx publications cannot contain personalized history"),
                     subject=ContractSubject.ARTIFACT_PATH,
                 )
         case _:
             raise ArtifactIntegrityError(
-                "unsupported model in federated history publication",
+                ErrorMessage("unsupported model in federated history publication"),
                 subject=ContractSubject.COORDINATE,
             )
 
@@ -464,7 +468,7 @@ def _personalized_references(
         return ()
     if not personalized_data:
         raise ArtifactIntegrityError(
-            "personalized coordinate requires personalized history",
+            ErrorMessage("personalized coordinate requires personalized history"),
             subject=ContractSubject.ARTIFACT_PATH,
         )
     return tuple(
