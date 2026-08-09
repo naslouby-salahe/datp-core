@@ -210,7 +210,7 @@ def write_capture_timeline(
 
 
 def _unavailable_validation(
-    group_identity: ChronologyGroupIdentity, csv_path: Path, reason: str
+    group_identity: ChronologyGroupIdentity, csv_path: Path, reason: ValidationReasonText
 ) -> ChronologyValidation:
     total_rows = _csv_row_count(csv_path)
     return ChronologyValidation(
@@ -221,7 +221,7 @@ def _unavailable_validation(
         invalid_rows=total_rows,
         duplicate_timestamp_count=RowCount(0),
         is_monotonic=False,
-        reason=NonEmptyString(reason),
+        reason=reason,
         temporal_eligible=False,
     )
 

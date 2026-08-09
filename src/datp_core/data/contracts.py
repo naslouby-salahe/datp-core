@@ -18,6 +18,7 @@ from datp_core.core.identifiers import (
     ChronologyGroupIdentity,
     ColumnName,
     DatasetId,
+    EligibilityReasonToken,
     NonEmptyString,
     PhysicalSchemaText,
     SerializedDocumentText,
@@ -571,7 +572,7 @@ class ManifestEligibilityPolicyEntry(StrictModel):
     dataset: DatasetId
     label_column: ColumnName
     feature_columns: tuple[ColumnName, ...]
-    exclusion_reasons: tuple[str, ...]
+    exclusion_reasons: tuple[EligibilityReasonToken, ...]
 
 
 class CanonicalManifestDocument(StrictModel):

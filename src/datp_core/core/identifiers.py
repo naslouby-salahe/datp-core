@@ -499,6 +499,10 @@ class CanonicalAssetRoleToken(NonEmptyString):
     validation_name: ClassVar[str] = "canonical asset role token"
 
 
+class EligibilityReasonToken(NonEmptyString):
+    validation_name: ClassVar[str] = "eligibility reason token"
+
+
 class DecisionRationale(NonEmptyString):
     validation_name: ClassVar[str] = "decision rationale"
 
