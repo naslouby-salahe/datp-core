@@ -90,8 +90,10 @@ def test_inconclusive_confirmatory_result_cannot_render_as_positive_support() ->
             wording="Local calibration improves cross-client FPR equity",
         )
     )
-    assert decision.status is ClaimStatus.BLOCKED or "[NARROWED:" in decision.wording or not decision.wording
+    if decision.wording is not None:
+        assert decision.status is ClaimStatus.BLOCKED or "[NARROWED:" in decision.wording
     if decision.status is ClaimStatus.NARROWED:
+        assert decision.wording is not None
         assert decision.wording.startswith("[NARROWED:")
         assert "cannot support a positive claim" in decision.reason
 
@@ -156,6 +158,7 @@ def test_supportive_null_evidence_cannot_render_as_positive_support() -> None:
         )
     )
     assert decision.status is ClaimStatus.NARROWED
+    assert decision.wording is not None
     assert decision.wording.startswith("[NARROWED:")
 
 
