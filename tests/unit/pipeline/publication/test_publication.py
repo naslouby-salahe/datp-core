@@ -8,7 +8,7 @@ from datp_core.artifacts.repositories.publication import (
     ArtifactPublication,
     publish_artifact,
 )
-from datp_core.core.identifiers import PublicationStatus
+from datp_core.core.identifiers import ArtifactFileName, PublicationStatus
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,7 +70,7 @@ def test_interrupted_write_leaves_no_target_and_no_staging_directory(tmp_path: P
         request=_Request(payload="stable"),
         codec=_FailingCodec(),
         overwrite=False,
-        complete_marker="COMPLETE",
+        complete_marker=ArtifactFileName("COMPLETE"),
     )
     with pytest.raises(RuntimeError, match="interrupted write"):
         publish_artifact(publication)
@@ -87,7 +87,7 @@ def test_artifact_codec_publishes_reuses_rebases_and_returns_completion_digest(
         request=_Request(payload="stable"),
         codec=_Codec(),
         overwrite=False,
-        complete_marker="COMPLETE",
+        complete_marker=ArtifactFileName("COMPLETE"),
     )
     first = publish_artifact(publication)
     second = publish_artifact(publication)

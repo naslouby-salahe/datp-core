@@ -8,7 +8,7 @@ from datp_core.artifacts.repositories.publication import (
     RelatedPublicationMember,
     publish_related_artifacts,
 )
-from datp_core.core.identifiers import PublicationStatus
+from datp_core.core.identifiers import PublicationStatus, RelatedPublicationMemberIdentity
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,8 +50,11 @@ class _Codec:
 
 def test_related_publication_commits_and_reuses_all_members(tmp_path: Path) -> None:
     members = (
-        RelatedPublicationMember(identity="global", target=tmp_path / "global"),
-        RelatedPublicationMember(identity="personalized", target=tmp_path / "personalized"),
+        RelatedPublicationMember(identity=RelatedPublicationMemberIdentity("global"), target=tmp_path / "global"),
+        RelatedPublicationMember(
+            identity=RelatedPublicationMemberIdentity("personalized"),
+            target=tmp_path / "personalized",
+        ),
     )
     request = _Request("global", "personalized")
     publication = RelatedArtifactPublication(request=request, members=members, codec=_Codec(), overwrite=False)
@@ -79,8 +82,11 @@ def test_related_publication_interrupted_write_leaves_no_staging_or_target(tmp_p
             raise AssertionError("rebase must not run when the write failed")
 
     members = (
-        RelatedPublicationMember(identity="global", target=tmp_path / "global"),
-        RelatedPublicationMember(identity="personalized", target=tmp_path / "personalized"),
+        RelatedPublicationMember(identity=RelatedPublicationMemberIdentity("global"), target=tmp_path / "global"),
+        RelatedPublicationMember(
+            identity=RelatedPublicationMemberIdentity("personalized"),
+            target=tmp_path / "personalized",
+        ),
     )
     publication = RelatedArtifactPublication(
         request=_Request("global", "personalized"),
@@ -100,8 +106,11 @@ def test_related_publication_rolls_back_every_target_when_a_later_replace_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     members = (
-        RelatedPublicationMember(identity="global", target=tmp_path / "global"),
-        RelatedPublicationMember(identity="personalized", target=tmp_path / "personalized"),
+        RelatedPublicationMember(identity=RelatedPublicationMemberIdentity("global"), target=tmp_path / "global"),
+        RelatedPublicationMember(
+            identity=RelatedPublicationMemberIdentity("personalized"),
+            target=tmp_path / "personalized",
+        ),
     )
     original_request = _Request("original-global", "original-personalized")
     publish_related_artifacts(
