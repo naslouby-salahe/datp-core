@@ -1,6 +1,8 @@
+from dataclasses import dataclass
+
 import polars as pl
 
-from datp_core.analysis.metrics.client import calculate_client_metrics
+from datp_core.analysis.metrics.client import calculate_metrics_for_evaluation_score_arrays
 from datp_core.analysis.metrics.cohort_construction import cohort_record_for_client
 from datp_core.analysis.metrics.cohorts import ClientEligibilityRecord
 from datp_core.analysis.metrics.conformal import evaluate_held_out_conformal_coverage
@@ -14,6 +16,7 @@ from datp_core.analysis.metrics.federated import (
     ShrinkageLambdaEvaluation,
     ThresholdEstimationStageInput,
 )
+from datp_core.analysis.metrics.fixed_score import FederatedEvaluationScoreArrays
 from datp_core.analysis.metrics.fixed_score_checksums import evaluation_label_checksum, source_row_checksum
 from datp_core.analysis.metrics.fixed_score_validation import (
     validate_evaluation_evidence,
@@ -84,15 +87,23 @@ from datp_core.thresholds.variants.federated_statistics import FederatedStatisti
 from datp_core.thresholds.variants.shrinkage import ShrinkageThresholdResult
 
 
+@dataclass(frozen=True, slots=True)
+class FederatedEvaluationMetrics:
+    """Client and population metrics produced from one federated evaluation."""
+
+    clients: tuple[ClientMetricResult, ...]
+    population: PopulationMetricResult
+
+
 def prepare_federated_evaluation(request: FederatedEvaluationRequest) -> FederatedEvaluationPublication:
     _validate_temporal_provenance(request)
-    clients, population = _evaluate(request)
-    diagnostics = _evaluate_diagnostics(request, clients)
+    metrics = _evaluate(request)
+    diagnostics = _evaluate_diagnostics(request, metrics.clients)
     validate_evaluation_evidence(
         request.fixed_score_evidence,
         request.score_manifest,
         request.cohort,
-        clients,
+        metrics.clients,
     )
     if request.comparison_fixed_score_evidence is not None:
         validate_fixed_score_controls(
@@ -100,7 +111,11 @@ def prepare_federated_evaluation(request: FederatedEvaluationRequest) -> Federat
             request.comparison_fixed_score_evidence,
             auroc_absolute_tolerance=NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
         )
-    artifacts = FederatedEvaluationArtifacts(clients=clients, population=population, diagnostics=diagnostics)
+    artifacts = FederatedEvaluationArtifacts(
+        clients=metrics.clients,
+        population=metrics.population,
+        diagnostics=diagnostics,
+    )
     document = FederatedEvaluationDocument(
         stage=StageOperationId.EVALUATE_FEDERATED,
         score_coordinate=request.score_manifest.coordinate,
@@ -113,8 +128,8 @@ def prepare_federated_evaluation(request: FederatedEvaluationRequest) -> Federat
         evidence_role=request.evidence_role,
         fixed_score_evidence=request.fixed_score_evidence,
         cohort=request.cohort,
-        clients=clients,
-        population=population,
+        clients=metrics.clients,
+        population=metrics.population,
         diagnostics=diagnostics,
         temporal_provenance=request.temporal_provenance,
     )
@@ -156,7 +171,7 @@ def _validate_temporal_provenance(request: FederatedEvaluationRequest) -> None:
 
 def _evaluate(
     request: FederatedEvaluationRequest,
-) -> tuple[tuple[ClientMetricResult, ...], PopulationMetricResult]:
+) -> FederatedEvaluationMetrics:
     _validate_evaluation_request(request)
     if isinstance(request.threshold_result, tuple):
         return _evaluate_shrinkage_curve(request)
@@ -174,7 +189,10 @@ def _evaluate(
         _evaluate_score_record(request, assignment_map, fallback_threshold, record)
         for record in sorted(request.score_manifest.evaluation_records, key=lambda item: item.scored_client)
     )
-    return clients, calculate_population_metrics(clients, cohort=request.cohort)
+    return FederatedEvaluationMetrics(
+        clients=clients,
+        population=calculate_population_metrics(clients, cohort=request.cohort),
+    )
 
 
 def _validate_evaluation_request(request: FederatedEvaluationRequest) -> None:
@@ -229,11 +247,11 @@ def _evaluate_score_record(
     if not record.path.is_file() or Checksum.from_file(record.path) != record.checksum:
         raise ArtifactIntegrityError(ErrorMessage("evaluation score artifact is incomplete or changed"))
 
-    scores, labels, rows = _score_arrays(ScoreArtifactPathText(str(record.path)))
+    score_arrays = _score_arrays(ScoreArtifactPathText(str(record.path)))
     confusion = calculate_confusion_counts(
-        scores=scores,
-        labels=labels,
-        source_row_ids=rows,
+        scores=score_arrays.scores,
+        labels=score_arrays.labels,
+        source_row_ids=score_arrays.row_ids,
         threshold=threshold,
         partition_role=PartitionRole.EVALUATION,
         attack_assignment_valid=eligibility.attack_evaluable,
@@ -245,12 +263,12 @@ def _evaluate_score_record(
         cohort=_evaluation_cohort(eligibility),
         threshold=threshold,
         confusion=confusion,
-        metrics=calculate_client_metrics(confusion=confusion, scores=scores, labels=labels),
+        metrics=calculate_metrics_for_evaluation_score_arrays(confusion=confusion, score_arrays=score_arrays),
         warnings=(),
         evidence_role=request.evidence_role,
         evaluation_score_checksum=record.checksum,
-        evaluation_label_checksum=evaluation_label_checksum(labels),
-        source_row_checksum=source_row_checksum(rows),
+        evaluation_label_checksum=evaluation_label_checksum(score_arrays.labels),
+        source_row_checksum=source_row_checksum(score_arrays.row_ids),
     )
 
 
@@ -341,7 +359,7 @@ def _evaluate_alert_burden(
 
 def _evaluate_shrinkage_curve(
     request: FederatedEvaluationRequest,
-) -> tuple[tuple[ClientMetricResult, ...], PopulationMetricResult]:
+) -> FederatedEvaluationMetrics:
     curve = _shrinkage_curve_evaluations(request)
     local_endpoint = ShrinkageWeight(1.0)
     matches = tuple(item for item in curve if item.lambda_weight == local_endpoint)
@@ -350,7 +368,10 @@ def _evaluate_shrinkage_curve(
             ErrorMessage("fixed shrinkage evaluation requires the predeclared local endpoint lambda=1"),
             subject=FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE,
         )
-    return matches[0].clients, matches[0].population
+    return FederatedEvaluationMetrics(
+        clients=matches[0].clients,
+        population=matches[0].population,
+    )
 
 
 def _shrinkage_curve_evaluations(request: FederatedEvaluationRequest) -> tuple[ShrinkageLambdaEvaluation, ...]:
@@ -446,7 +467,7 @@ def _threshold_coordinate(result: ThresholdConstructionResult) -> FederatedTrain
 
 def _score_arrays(
     path: ScoreArtifactPathText,
-) -> tuple[tuple[ScoreValue, ...], tuple[PopulationOutcomeLabel, ...], tuple[StableRowId, ...]]:
+) -> FederatedEvaluationScoreArrays:
     required = [
         ScoreFrameColumn.STABLE_ROW_ID.value,
         ScoreFrameColumn.OUTCOME_LABEL.value,
@@ -458,8 +479,8 @@ def _score_arrays(
         raise ArtifactIntegrityError(ErrorMessage("evaluation score artifact has an invalid schema")) from err
 
     data = frame.to_dict(as_series=False)
-    return (
-        tuple(ScoreValue(float(value)) for value in data[required[2]]),
-        tuple(PopulationOutcomeLabel(str(value)) for value in data[required[1]]),
-        tuple(StableRowId(str(value)) for value in data[required[0]]),
+    return FederatedEvaluationScoreArrays(
+        scores=tuple(ScoreValue(float(value)) for value in data[required[2]]),
+        labels=tuple(PopulationOutcomeLabel(str(value)) for value in data[required[1]]),
+        row_ids=tuple(StableRowId(str(value)) for value in data[required[0]]),
     )

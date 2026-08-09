@@ -93,6 +93,22 @@ class ModelInputExclusionEvidence:
         )
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ModelInputEligibilityResult:
+    """Rows eligible for model input and evidence for the rejected rows."""
+
+    eligible_rows: pl.DataFrame
+    exclusion_evidence: ModelInputExclusionEvidence
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PublishedHandoffJoin:
+    """Canonical feature join with any model-input exclusion evidence."""
+
+    joined_rows: pl.DataFrame
+    exclusion_evidence: ModelInputExclusionEvidence | None
+
+
 def client_partitions(
     joined: pl.DataFrame,
     feature_names: FeatureNameSequence,
@@ -167,15 +183,15 @@ def join_published_handoff(
     handoff: PreprocessingHandoff,
     feature_names: FeatureNameSequence,
     identity: ExternalTemporalExecutionIdentity,
-) -> tuple[pl.DataFrame, ModelInputExclusionEvidence | None]:
+) -> PublishedHandoffJoin:
     if identity.population not in _EDGE_PUBLISHED_POPULATIONS:
-        return (
-            join_handoff_with_canonical_features(
+        return PublishedHandoffJoin(
+            joined_rows=join_handoff_with_canonical_features(
                 canonical_root,
                 handoff,
                 feature_names,
             ),
-            None,
+            exclusion_evidence=None,
         )
     asset_role = (
         EdgeAssetRole.TEMPORAL_BENIGN
@@ -206,11 +222,15 @@ def join_published_handoff(
             ErrorMessage("canonical feature join lost assignment rows"),
             subject=handoff.population_manifest.document.dataset,
         )
-    return exclude_nonfinite_model_input_rows(
+    eligibility = exclude_nonfinite_model_input_rows(
         joined,
         feature_names,
         dataset=handoff.population_manifest.document.dataset,
         population=handoff.population_manifest.document.population,
+    )
+    return PublishedHandoffJoin(
+        joined_rows=eligibility.eligible_rows,
+        exclusion_evidence=eligibility.exclusion_evidence,
     )
 
 
@@ -220,7 +240,7 @@ def exclude_nonfinite_model_input_rows(
     *,
     dataset: DatasetId,
     population: PopulationId,
-) -> tuple[pl.DataFrame, ModelInputExclusionEvidence]:
+) -> ModelInputEligibilityResult:
     if STABLE_ROW_ID_COLUMN not in joined.columns:
         raise ScientificContractError(
             ErrorMessage("model-input finite gate requires stable row identities"),
@@ -253,7 +273,10 @@ def exclude_nonfinite_model_input_rows(
             total_row_count=joined.height,
             exclusion_evidence_checksum=evidence.evidence_checksum.value,
         )
-    return eligible, evidence
+    return ModelInputEligibilityResult(
+        eligible_rows=eligible,
+        exclusion_evidence=evidence,
+    )
 
 
 def write_model_input_exclusion_evidence(destination: Path, evidence: ModelInputExclusionEvidence) -> Checksum:

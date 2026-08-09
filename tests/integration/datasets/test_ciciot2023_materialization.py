@@ -44,7 +44,7 @@ def test_ciciot_rate_anomalies_are_preserved_with_an_unavailable_report(tmp_path
     source = tmp_path / "MERGED_CSV" / "Merged01.csv"
     _write_merged(source, "inf", "BENIGN")
     materializer = CICIoT2023Materializer()
-    _, _, report = materializer.audit((source,))
+    report = materializer.audit((source,)).validation_report
 
     assert report.status is AvailabilityStatus.UNAVAILABLE
     assert report.invalid_rows == RowCount(1)

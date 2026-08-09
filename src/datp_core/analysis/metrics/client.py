@@ -5,6 +5,7 @@ from math import isfinite
 
 import numpy as np
 
+from datp_core.analysis.metrics.fixed_score import FederatedEvaluationScoreArrays
 from datp_core.analysis.metrics.models import ConfusionCounts, MetricAvailability, MetricReason, MetricStatus
 from datp_core.analysis.metrics.semantics import available, unavailable
 from datp_core.core.errors import (
@@ -52,6 +53,19 @@ def calculate_client_metrics(
         _balanced_accuracy(fpr, tpr),
         _binary_macro_f1(confusion),
         _auroc(score_values, labels, confusion.attack_assignment_valid),
+    )
+
+
+def calculate_metrics_for_evaluation_score_arrays(
+    *,
+    confusion: ConfusionCounts,
+    score_arrays: FederatedEvaluationScoreArrays,
+) -> tuple[MetricAvailability, ...]:
+    """Evaluate client metrics from one validated federated score artifact."""
+    return calculate_client_metrics(
+        confusion=confusion,
+        scores=score_arrays.scores,
+        labels=score_arrays.labels,
     )
 
 

@@ -201,21 +201,21 @@ def preprocess_published_federated(
         client_partition_counts=(),
     )
 
-    joined, exclusion_evidence = join_published_handoff(
+    handoff_join = join_published_handoff(
         canonical_root,
         handoff,
         feature_names,
         identity,
     )
 
-    if exclusion_evidence is not None and exclusion_evidence.excluded_row_count.value:
+    if handoff_join.exclusion_evidence is not None and handoff_join.exclusion_evidence.excluded_row_count.value:
         write_model_input_exclusion_evidence(
             request.split_directory.parent.joinpath(MODEL_INPUT_EXCLUSION_ASSET),
-            exclusion_evidence,
+            handoff_join.exclusion_evidence,
         )
 
     partitions = client_partitions(
-        joined,
+        handoff_join.joined_rows,
         feature_names,
         published.split_manifest.split_protocol,
     )

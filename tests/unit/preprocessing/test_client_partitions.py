@@ -22,17 +22,17 @@ def test_excludes_row_with_null_numeric_model_input_feature() -> None:
         }
     )
 
-    eligible, evidence = exclude_nonfinite_model_input_rows(
+    result = exclude_nonfinite_model_input_rows(
         joined,
         _feature_names("feature_one", "feature_two"),
         dataset=DatasetId.EDGE_IIOTSET,
         population=PopulationId.EDGE_SENSOR_GROUPS,
     )
 
-    assert eligible.get_column("stable_row_id").to_list() == ["a", "c"]
-    assert evidence.excluded_stable_row_ids == (StableRowId("b"),)
-    assert evidence.excluded_row_count.value == 1
-    assert evidence.evidence_checksum.value
+    assert result.eligible_rows.get_column("stable_row_id").to_list() == ["a", "c"]
+    assert result.exclusion_evidence.excluded_stable_row_ids == (StableRowId("b"),)
+    assert result.exclusion_evidence.excluded_row_count.value == 1
+    assert result.exclusion_evidence.evidence_checksum.value
 
 
 def test_excludes_row_with_non_finite_numeric_model_input_feature() -> None:
@@ -43,15 +43,15 @@ def test_excludes_row_with_non_finite_numeric_model_input_feature() -> None:
         }
     )
 
-    eligible, evidence = exclude_nonfinite_model_input_rows(
+    result = exclude_nonfinite_model_input_rows(
         joined,
         _feature_names("feature_one"),
         dataset=DatasetId.EDGE_IIOTSET,
         population=PopulationId.EDGE_SENSOR_GROUPS,
     )
 
-    assert eligible.get_column("stable_row_id").to_list() == ["a"]
-    assert evidence.excluded_stable_row_ids == (StableRowId("b"),)
+    assert result.eligible_rows.get_column("stable_row_id").to_list() == ["a"]
+    assert result.exclusion_evidence.excluded_stable_row_ids == (StableRowId("b"),)
 
 
 def test_never_fills_or_fabricates_a_replacement_value() -> None:
@@ -62,15 +62,15 @@ def test_never_fills_or_fabricates_a_replacement_value() -> None:
         }
     )
 
-    eligible, _evidence = exclude_nonfinite_model_input_rows(
+    result = exclude_nonfinite_model_input_rows(
         joined,
         _feature_names("feature_one"),
         dataset=DatasetId.EDGE_IIOTSET,
         population=PopulationId.EDGE_SENSOR_GROUPS,
     )
 
-    assert eligible.get_column("feature_one").null_count() == 0
-    assert eligible.height == 1
+    assert result.eligible_rows.get_column("feature_one").null_count() == 0
+    assert result.eligible_rows.height == 1
 
 
 def test_all_rows_retained_when_every_feature_is_finite() -> None:
@@ -81,15 +81,15 @@ def test_all_rows_retained_when_every_feature_is_finite() -> None:
         }
     )
 
-    eligible, evidence = exclude_nonfinite_model_input_rows(
+    result = exclude_nonfinite_model_input_rows(
         joined,
         _feature_names("feature_one"),
         dataset=DatasetId.EDGE_IIOTSET,
         population=PopulationId.EDGE_SENSOR_GROUPS,
     )
 
-    assert eligible.height == joined.height
-    assert evidence.excluded_row_count.value == 0
+    assert result.eligible_rows.height == joined.height
+    assert result.exclusion_evidence.excluded_row_count.value == 0
 
 
 def test_exclusion_evidence_is_persisted_with_stable_row_identities(tmp_path: Path) -> None:
@@ -99,15 +99,15 @@ def test_exclusion_evidence_is_persisted_with_stable_row_identities(tmp_path: Pa
             "feature_one": [1.0, None],
         }
     )
-    _eligible, evidence = exclude_nonfinite_model_input_rows(
+    result = exclude_nonfinite_model_input_rows(
         joined,
         _feature_names("feature_one"),
         dataset=DatasetId.EDGE_IIOTSET,
         population=PopulationId.EDGE_SENSOR_GROUPS,
     )
     destination = tmp_path / "model_input_exclusions.json"
-    checksum = write_model_input_exclusion_evidence(destination, evidence)
+    checksum = write_model_input_exclusion_evidence(destination, result.exclusion_evidence)
     payload = destination.read_text(encoding="utf-8")
     assert "row_b" in payload
-    assert checksum == evidence.evidence_checksum
+    assert checksum == result.exclusion_evidence.evidence_checksum
     assert "nonfinite_or_null_numeric_model_input_feature" in payload

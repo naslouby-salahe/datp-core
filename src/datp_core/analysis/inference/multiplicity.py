@@ -1,5 +1,6 @@
 """Typed multiplicity plans and Holm-adjusted decisions."""
 
+from collections.abc import Iterable
 from typing import ClassVar
 
 from pydantic import model_validator
@@ -8,6 +9,7 @@ from statsmodels.stats.multitest import multipletests
 from datp_core.analysis.inference.contracts import PairedInferenceProtocol
 from datp_core.analysis.inference.wilcoxon import PValue
 from datp_core.core.contracts import StrictModel
+from datp_core.core.errors import ErrorMessage
 from datp_core.core.identifiers import (
     EvidenceRole,
     ExperimentId,
@@ -69,9 +71,10 @@ class MultiplicityPlan(StrictModel):
     def validate_plan(self) -> "MultiplicityPlan":
         if len(self.hypotheses) != self.declared_family_size.value:
             raise ValueError("multiplicity family size must equal the number of declared hypotheses")
-        identifiers = tuple(item.hypothesis_id for item in self.hypotheses)
-        if len(frozenset(identifiers)) != len(identifiers):
-            raise ValueError("multiplicity hypothesis identifiers must be unique within a family")
+        _require_unique_hypothesis_identifiers(
+            (item.hypothesis_id for item in self.hypotheses),
+            ErrorMessage("multiplicity hypothesis identifiers must be unique within a family"),
+        )
         return self
 
     @property
@@ -99,9 +102,10 @@ class MultiplicityResult(StrictModel):
     def validate_result(self) -> "MultiplicityResult":
         if self.family_size.value != len(self.decisions):
             raise ValueError("multiplicity family size must match the decision count")
-        identifiers = tuple(item.hypothesis.hypothesis_id for item in self.decisions)
-        if len(frozenset(identifiers)) != len(identifiers):
-            raise ValueError("multiplicity decisions must remain uniquely identified")
+        _require_unique_hypothesis_identifiers(
+            (item.hypothesis.hypothesis_id for item in self.decisions),
+            ErrorMessage("multiplicity decisions must remain uniquely identified"),
+        )
         return self
 
     @property
@@ -115,6 +119,15 @@ class MultiplicityResult(StrictModel):
     @property
     def rejected(self) -> tuple[bool, ...]:
         return tuple(item.rejected for item in self.decisions)
+
+
+def _require_unique_hypothesis_identifiers(
+    identifiers: Iterable[HypothesisIdentifier],
+    error_message: ErrorMessage,
+) -> None:
+    values = tuple(identifiers)
+    if len(frozenset(values)) != len(values):
+        raise ValueError(str(error_message))
 
 
 def holm_adjust(plan: MultiplicityPlan, protocol: PairedInferenceProtocol) -> MultiplicityResult:

@@ -5,11 +5,25 @@ from dataclasses import dataclass
 from datp_core.analysis.metrics.cohorts import EvaluationCohortManifest
 from datp_core.analysis.metrics.models import MetricAvailability
 from datp_core.artifacts.provenance import Checksum
-from datp_core.core.identifiers import FederatedThresholdMethod, MetricId, PartitionRole
-from datp_core.data.populations.contracts import ClientIdentity
+from datp_core.core.identifiers import FederatedThresholdMethod, MetricId, PartitionRole, StableRowId
+from datp_core.core.numeric import ScoreValue
+from datp_core.data.populations.contracts import ClientIdentity, PopulationOutcomeLabel
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 
 _CALIBRATION_ROLES = frozenset((PartitionRole.CALIBRATION, PartitionRole.FUTURE_RECALIBRATION))
+
+
+@dataclass(frozen=True, slots=True)
+class FederatedEvaluationScoreArrays:
+    """Typed score evidence loaded from one federated evaluation artifact."""
+
+    scores: tuple[ScoreValue, ...]
+    labels: tuple[PopulationOutcomeLabel, ...]
+    row_ids: tuple[StableRowId, ...]
+
+    def __post_init__(self) -> None:
+        if len(self.scores) != len(self.labels) or len(self.scores) != len(self.row_ids):
+            raise ValueError("federated evaluation score arrays must have equal lengths")
 
 
 @dataclass(frozen=True, slots=True)

@@ -1,6 +1,6 @@
 import polars as pl
 
-from datp_core.analysis.metrics.client import calculate_client_metrics
+from datp_core.analysis.metrics.client import calculate_metrics_for_evaluation_score_arrays
 from datp_core.analysis.metrics.cohort_construction import assert_cohort_invariant_to_threshold_methods
 from datp_core.analysis.metrics.cohort_evidence import client_partition_counts_from_scores
 from datp_core.analysis.metrics.cohorts import ClientEligibilityRecord, EvaluationCohortManifest
@@ -10,6 +10,7 @@ from datp_core.analysis.metrics.fixed_score import (
     ClientAurocEvidence,
     DetectorEvidence,
     FederatedEvaluationInputs,
+    FederatedEvaluationScoreArrays,
     FixedScoreEvidence,
     HeldOutEvaluationEvidence,
     PopulationEvidence,
@@ -144,14 +145,16 @@ def _client_auroc_evidence(
     ]
     frame_dict = pl.read_parquet(record.path, columns=required_cols).to_dict(as_series=False)
 
-    scores = tuple(ScoreValue(float(value)) for value in frame_dict[required_cols[0]])
-    labels = tuple(PopulationOutcomeLabel(str(value)) for value in frame_dict[required_cols[1]])
-    rows = tuple(StableRowId(str(value)) for value in frame_dict[required_cols[2]])
+    score_arrays = FederatedEvaluationScoreArrays(
+        scores=tuple(ScoreValue(float(value)) for value in frame_dict[required_cols[0]]),
+        labels=tuple(PopulationOutcomeLabel(str(value)) for value in frame_dict[required_cols[1]]),
+        row_ids=tuple(StableRowId(str(value)) for value in frame_dict[required_cols[2]]),
+    )
 
     confusion = calculate_confusion_counts(
-        scores=scores,
-        labels=labels,
-        source_row_ids=rows,
+        scores=score_arrays.scores,
+        labels=score_arrays.labels,
+        source_row_ids=score_arrays.row_ids,
         threshold=ThresholdValue(0.0),
         partition_role=PartitionRole.EVALUATION,
         attack_assignment_valid=eligibility.attack_evaluable,
@@ -163,12 +166,12 @@ def _client_auroc_evidence(
         cohort=EvaluationCohort.FPR_EVALUABLE,
         threshold=ThresholdValue(0.0),
         confusion=confusion,
-        metrics=calculate_client_metrics(confusion=confusion, scores=scores, labels=labels),
+        metrics=calculate_metrics_for_evaluation_score_arrays(confusion=confusion, score_arrays=score_arrays),
         warnings=(),
         evidence_role=evidence_role,
         evaluation_score_checksum=record.checksum,
-        evaluation_label_checksum=evaluation_label_checksum(labels),
-        source_row_checksum=source_row_checksum(rows),
+        evaluation_label_checksum=evaluation_label_checksum(score_arrays.labels),
+        source_row_checksum=source_row_checksum(score_arrays.row_ids),
     )
     return ClientAurocEvidence(
         record.scored_client,

@@ -1,5 +1,6 @@
 """Canonical materialization for audited CICIoT2023 merged sources."""
 
+from dataclasses import dataclass
 from pathlib import Path
 
 import polars as pl
@@ -48,6 +49,24 @@ from .schema import (
 _CICIOT2023_CANONICALIZATION_CONTRACT = CanonicalizationContractName("lossless_model_input_eligibility_evidence")
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class CICIoT2023AuditResult:
+    """Canonical frames and their source-level validation evidence."""
+
+    frames: tuple[pl.LazyFrame, ...]
+    inventory: RawDatasetInventory
+    validation_report: DatasetValidationReport
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class _AuditedCICIoT2023Sources:
+    """Ordered source paths paired with their frames and audit summaries."""
+
+    paths: tuple[Path, ...]
+    frames: tuple[pl.LazyFrame, ...]
+    summaries: tuple[CICIoT2023AuditSummary, ...]
+
+
 class CICIoT2023Materializer:
     """Publish lossless merged-file partitions with their eligibility audit."""
 
@@ -94,24 +113,24 @@ class CICIoT2023Materializer:
         *,
         excluded_paths: tuple[Path, ...] = (),
     ) -> CanonicalPublication[CanonicalAssetRole, CICIoT2023EligibilityReason]:
-        frames, inventory, report = CICIoT2023Materializer.audit(
+        audit = CICIoT2023Materializer.audit(
             source_paths,
             excluded_paths=excluded_paths,
         )
-        expected_assets = canonical_data_partition_assets(LogicalElementCount(len(frames)))
+        expected_assets = canonical_data_partition_assets(LogicalElementCount(len(audit.frames)))
 
         def write_assets(data_root: Path) -> tuple[CanonicalAsset[CanonicalAssetRole], ...]:
             return tuple(
                 stream_parquet(frame, data_root, asset, CICIOT2023_ARROW_SCHEMA)
-                for frame, asset in zip(frames, expected_assets, strict=True)
+                for frame, asset in zip(audit.frames, expected_assets, strict=True)
             )
 
         return CanonicalPublication(
             canonical_root=canonical_root,
             canonicalization_contract=_CICIOT2023_CANONICALIZATION_CONTRACT,
             schema=CICIOT2023_SCHEMA,
-            inventory=inventory,
-            validation_report=report,
+            inventory=audit.inventory,
+            validation_report=audit.validation_report,
             expected_assets=expected_assets,
             writer=write_assets,
             source_paths=source_paths,
@@ -124,23 +143,31 @@ class CICIoT2023Materializer:
         source_paths: tuple[Path, ...],
         *,
         excluded_paths: tuple[Path, ...] = (),
-    ) -> tuple[tuple[pl.LazyFrame, ...], RawDatasetInventory, DatasetValidationReport]:
-        ordered_paths, frames, summaries = _audited_sources(source_paths)
-        return (
-            frames,
-            _source_inventory(ordered_paths, summaries, excluded_paths=excluded_paths),
-            _validation_report(summaries),
+    ) -> CICIoT2023AuditResult:
+        audited_sources = _audited_sources(source_paths)
+        return CICIoT2023AuditResult(
+            frames=audited_sources.frames,
+            inventory=_source_inventory(
+                audited_sources.paths,
+                audited_sources.summaries,
+                excluded_paths=excluded_paths,
+            ),
+            validation_report=_validation_report(audited_sources.summaries),
         )
 
 
 def _audited_sources(
     source_paths: tuple[Path, ...],
-) -> tuple[tuple[Path, ...], tuple[pl.LazyFrame, ...], tuple[CICIoT2023AuditSummary, ...]]:
+) -> _AuditedCICIoT2023Sources:
     reader = CICIoT2023Reader()
     ordered_paths = tuple(sorted(source_paths))
     frames = tuple(reader.read(path) for path in ordered_paths)
     summaries = tuple(reader.audit_summary(frame) for frame in frames)
-    return ordered_paths, frames, summaries
+    return _AuditedCICIoT2023Sources(
+        paths=ordered_paths,
+        frames=frames,
+        summaries=summaries,
+    )
 
 
 def _source_inventory(

@@ -4,6 +4,7 @@ from datp_core.analysis.contrasts import FixedScorePairProvenance, PairedContras
 from datp_core.analysis.inference.bootstrap.contracts import BcaReason
 from datp_core.analysis.inference.contracts import PairedInferenceProtocol
 from datp_core.core.identifiers import EvidenceRole, FederatedThresholdMethod
+from datp_core.experiments.common.seeds import SeedCohort
 from datp_core.experiments.graph import CANONICAL_PROTOCOL_GRAPH
 
 
@@ -21,11 +22,11 @@ def validate_confirmatory_contrasts(
     if protocol != canonical.confirmatory_inference:
         raise PairedAnalysisContractError(BcaReason.CANONICAL_PROTOCOL_MISMATCH)
     endpoint = canonical.confirmatory_endpoint
-    observed_seeds = {contrast.seed for contrast in contrasts}
-    if len(observed_seeds) != len(contrasts):
-        raise PairedAnalysisContractError(BcaReason.DUPLICATE_SEED)
-    if observed_seeds != set(endpoint.seed_cohort.values):
-        raise PairedAnalysisContractError(BcaReason.SEED_COHORT_MISMATCH)
+    _require_complete_seed_cohort(
+        contrasts,
+        endpoint.seed_cohort,
+        BcaReason.SEED_COHORT_MISMATCH,
+    )
     for contrast in contrasts:
         if (
             contrast.evidence_role is not EvidenceRole.CONFIRMATORY
@@ -47,11 +48,11 @@ def validate_supplementary_contrasts(
     contrasts: PairedContrasts,
     plan: SupplementaryPairedAnalysisPlan,
 ) -> PairedContrasts:
-    observed_seeds = {contrast.seed for contrast in contrasts}
-    if len(observed_seeds) != len(contrasts):
-        raise PairedAnalysisContractError(BcaReason.DUPLICATE_SEED)
-    if observed_seeds != set(plan.seed_cohort.values):
-        raise PairedAnalysisContractError(BcaReason.SUPPLEMENTARY_SEED_COHORT_MISMATCH)
+    _require_complete_seed_cohort(
+        contrasts,
+        plan.seed_cohort,
+        BcaReason.SUPPLEMENTARY_SEED_COHORT_MISMATCH,
+    )
     for contrast in contrasts:
         if (
             contrast.coordinate.population is not plan.population
@@ -64,6 +65,18 @@ def validate_supplementary_contrasts(
     _require_fixed_design(contrasts)
     _require_fixed_score_identity(contrasts)
     return tuple(sorted(contrasts, key=lambda contrast: contrast.seed.value))
+
+
+def _require_complete_seed_cohort(
+    contrasts: PairedContrasts,
+    declared_cohort: SeedCohort,
+    mismatch_reason: BcaReason,
+) -> None:
+    observed_seeds = frozenset(contrast.seed for contrast in contrasts)
+    if len(observed_seeds) != len(contrasts):
+        raise PairedAnalysisContractError(BcaReason.DUPLICATE_SEED)
+    if observed_seeds != frozenset(declared_cohort.values):
+        raise PairedAnalysisContractError(mismatch_reason)
 
 
 def _require_fixed_design(contrasts: PairedContrasts) -> None:
