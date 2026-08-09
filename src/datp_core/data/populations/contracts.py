@@ -19,6 +19,7 @@ from datp_core.core.identifiers import (
     CaptureTimestampColumn,
     ChronologyGroupIdentity,
     ClientIdentityToken,
+    ColumnName,
     ContractSubject,
     DatasetId,
     EvidenceRole,
@@ -28,6 +29,7 @@ from datp_core.core.identifiers import (
     PopulationId,
     PopulationIdentityKind,
     SplitProtocolId,
+    StableRowId,
 )
 from datp_core.core.numeric import (
     ClientCount,
@@ -222,12 +224,12 @@ MEMBERSHIP_COLUMNS: tuple[PopulationFrameColumn, ...] = (
 ASSIGNMENT_COLUMNS: tuple[PopulationFrameColumn, ...] = MEMBERSHIP_COLUMNS + (PopulationFrameColumn.PARTITION_ROLE,)
 
 
-def membership_column_names() -> tuple[str, ...]:
-    return tuple(column.value for column in MEMBERSHIP_COLUMNS)
+def membership_column_names() -> tuple[ColumnName, ...]:
+    return tuple(ColumnName(column.value) for column in MEMBERSHIP_COLUMNS)
 
 
-def assignment_column_names() -> tuple[str, ...]:
-    return tuple(column.value for column in ASSIGNMENT_COLUMNS)
+def assignment_column_names() -> tuple[ColumnName, ...]:
+    return tuple(ColumnName(column.value) for column in ASSIGNMENT_COLUMNS)
 
 
 def select_membership_frame(frame: pl.DataFrame) -> pl.DataFrame:
@@ -584,7 +586,9 @@ def synthetic_client_ids(client_count: ClientCount) -> tuple[ClientIdentityToken
     return tuple(ClientIdentityToken(f"synthetic_client_{index:0{width}d}") for index in range(client_count.value))
 
 
-def membership_checksum(client_ids: tuple[ClientIdentityToken, ...], stable_row_ids: tuple[str, ...]) -> Checksum:
+def membership_checksum(
+    client_ids: tuple[ClientIdentityToken, ...], stable_row_ids: tuple[StableRowId, ...]
+) -> Checksum:
     return Checksum.from_text("\n".join((*(c.value for c in client_ids), *stable_row_ids)))
 
 

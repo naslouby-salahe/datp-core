@@ -22,7 +22,7 @@ from datp_core.core.identifiers import (
     SplitProtocolId,
     StageOperationId,
 )
-from datp_core.core.numeric import RowCount, Seed, floats_absolutely_close
+from datp_core.core.numeric import Ratio, RowCount, Seed, floats_absolutely_close
 from datp_core.data.populations.protocols import (
     FRACTION_TOTAL_ABSOLUTE_TOLERANCE,
     NON_TEMPORAL_SPLIT,
@@ -83,7 +83,7 @@ def static_reference_split_protocol() -> StaticReferenceSplitProtocol:
 
 def hamilton_integer_counts(
     total: RowCount,
-    ratios: tuple[float, ...],
+    ratios: tuple[Ratio, ...],
 ) -> tuple[RowCount, ...]:
     """Largest-remainder (Hamilton) integer allocation.
 
@@ -98,7 +98,7 @@ def hamilton_integer_counts(
     """
     _require_hamilton_inputs(total, ratios)
     total_value = total.value
-    raw = tuple(total_value * ratio for ratio in ratios)
+    raw = tuple(total_value * ratio.value for ratio in ratios)
     floors = tuple(floor(value) for value in raw)
     residual = total_value - sum(floors)
     order = sorted(
@@ -161,9 +161,9 @@ def _non_temporal_assignments(
 ) -> pl.DataFrame:
     protocol = non_temporal_split_protocol()
     ratios = (
-        protocol.training.value,
-        protocol.calibration.value,
-        protocol.evaluation.value,
+        protocol.training,
+        protocol.calibration,
+        protocol.evaluation,
     )
     roles = (
         PartitionRole.TRAIN,
@@ -213,10 +213,10 @@ def _temporal_assignments(
         )
     protocol = temporal_split_protocol()
     ratios = (
-        protocol.historical_training.value,
-        protocol.historical_calibration.value,
-        protocol.future_recalibration.value,
-        protocol.future_evaluation.value,
+        protocol.historical_training,
+        protocol.historical_calibration,
+        protocol.future_recalibration,
+        protocol.future_evaluation,
     )
     roles = (
         PartitionRole.TRAIN,
@@ -272,10 +272,10 @@ def _static_reference_assignments(
         )
     protocol = static_reference_split_protocol()
     ratios = (
-        protocol.training.value,
-        protocol.calibration.value,
-        protocol.reserve.value,
-        protocol.evaluation.value,
+        protocol.training,
+        protocol.calibration,
+        protocol.reserve,
+        protocol.evaluation,
     )
     roles = (
         PartitionRole.TRAIN,
@@ -331,7 +331,7 @@ def _require_sorted_client_rows(
 
 def _fractional_role_frame(
     frame: pl.DataFrame,
-    ratios: tuple[float, ...],
+    ratios: tuple[Ratio, ...],
     roles: tuple[PartitionRole, ...],
     partition_seed: Seed,
     client_id: ClientIdentityToken,
@@ -355,7 +355,7 @@ def _fractional_role_frame(
 
 def _sequential_role_frame(
     ordered: pl.DataFrame,
-    ratios: tuple[float, ...],
+    ratios: tuple[Ratio, ...],
     roles: tuple[PartitionRole, ...],
 ) -> pl.DataFrame:
     counts = hamilton_integer_counts(RowCount(ordered.height), ratios)
@@ -476,14 +476,14 @@ def _require_membership_schema(membership: pl.DataFrame) -> None:
 
 def _require_hamilton_inputs(
     total: RowCount,
-    ratios: tuple[float, ...],
+    ratios: tuple[Ratio, ...],
 ) -> None:
     if total.value < 0:
         raise ValueError("Hamilton allocation requires a non-negative total")
-    if not ratios or any(ratio < 0 for ratio in ratios):
+    if not ratios or any(ratio.value < 0 for ratio in ratios):
         raise ValueError("Hamilton allocation requires non-negative ratios that sum to one")
     if not floats_absolutely_close(
-        fsum(ratios),
+        fsum(ratio.value for ratio in ratios),
         UNIT_FRACTION_TOTAL,
         FRACTION_TOTAL_ABSOLUTE_TOLERANCE,
     ):

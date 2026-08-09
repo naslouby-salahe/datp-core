@@ -15,10 +15,13 @@ from datp_core.core.errors import (
 from datp_core.core.identifiers import (
     CaptureTimestampColumn,
     ClientIdentityToken,
+    ColumnName,
     ContractSubject,
     PartitionRole,
     PopulationId,
+    StableRowId,
     StageOperationId,
+    ValidationReasonText,
 )
 from datp_core.core.numeric import ClientCount, RowCount
 from datp_core.data.populations.contracts import (
@@ -68,7 +71,7 @@ class PopulationIntegrityViolation(StrEnum):
 def reject_non_benign_labels(
     labels: Iterable[PopulationOutcomeLabel],
     *,
-    message: str,
+    message: ValidationReasonText,
     subject: ContractSubject,
     benign_label: PopulationOutcomeLabel = PopulationOutcomeLabel.BENIGN,
 ) -> None:
@@ -79,7 +82,7 @@ def reject_non_benign_labels(
 def membership_frame_checksum(membership: pl.DataFrame) -> Checksum:
     return membership_checksum(
         tuple(ClientIdentityToken(c) for c in membership.get_column(CLIENT_ID_COLUMN).to_list()),
-        tuple(membership.get_column(STABLE_ROW_ID_COLUMN).to_list()),
+        tuple(StableRowId(row) for row in membership.get_column(STABLE_ROW_ID_COLUMN).to_list()),
     )
 
 
@@ -317,7 +320,7 @@ def _validate_label_counts(
 
 def _require_columns(
     frame: pl.DataFrame,
-    columns: tuple[str, ...],
+    columns: tuple[ColumnName, ...],
     subject: StageOperationId,
 ) -> None:
     missing = tuple(column for column in columns if column not in frame.columns)

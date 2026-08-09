@@ -12,7 +12,7 @@ from datp_core.core.errors import (
     ScientificContractError,
 )
 from datp_core.core.identifiers import ClientIdentityToken, PopulationId
-from datp_core.core.numeric import ClientCount, RowCount, Seed
+from datp_core.core.numeric import ClientCount, Ratio, RowCount, Seed
 from datp_core.data.populations.contracts import ControlledPartitionKind
 
 from .contracts import ControlledPartitionCondition
@@ -56,11 +56,11 @@ class ControlledPartitionAllocator:
         """Return a deterministic permutation for one ordered source stratum."""
         return self._generator.permutation(row_count.value)
 
-    def _proportions(self) -> tuple[float, ...]:
+    def _proportions(self) -> tuple[Ratio, ...]:
         match self.condition.kind:
             case ControlledPartitionKind.IID:
                 share = 1.0 / self.client_count.value
-                return tuple(share for _ in range(self.client_count.value))
+                return tuple(Ratio(share) for _ in range(self.client_count.value))
             case ControlledPartitionKind.DIRICHLET:
                 concentration = self.condition.concentration
                 if concentration is None:
@@ -70,7 +70,7 @@ class ControlledPartitionAllocator:
                         reason=ControlledAllocationViolation.DIRICHLET_CONCENTRATION_MISSING,
                     )
                 alpha = np.full(self.client_count.value, concentration.value, dtype=np.float64)
-                return tuple(float(value) for value in self._generator.dirichlet(alpha))
+                return tuple(Ratio(value) for value in self._generator.dirichlet(alpha))
         raise ScientificContractError(
             ErrorMessage("unsupported controlled partition kind"),
             subject=self.condition.kind,

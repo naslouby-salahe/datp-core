@@ -21,6 +21,7 @@ from datp_core.core.identifiers import (
     PopulationId,
     PopulationIdentityKind,
     SplitProtocolId,
+    ValidationReasonText,
 )
 from datp_core.core.numeric import ClientCount, NonNegativeIntegerValue, RowCount, Seed
 from datp_core.data.populations.contracts import PopulationDeclaration
@@ -164,28 +165,28 @@ def feasibility_from_candidates(request: FeasibilityAssessmentRequest) -> Popula
             PopulationFeasibilityReason.IDENTITY_SET_MISMATCH,
             expected,
             NonNegativeIntegerValue(accepted_n),
-            "observed candidate identities disagree with the audited identity set",
+            ValidationReasonText("observed candidate identities disagree with the audited identity set"),
         )
     if not request.chronology_required and len(request.candidate_ids) != request.expected_count.value:
         return _infeasible(
             PopulationFeasibilityReason.CANDIDATE_COUNT_MISMATCH,
             expected,
             NonNegativeIntegerValue(accepted_n),
-            "candidate client count disagrees with the population declaration",
+            ValidationReasonText("candidate client count disagrees with the population declaration"),
         )
     if request.chronology_required and not request.accepted_ids:
         return _infeasible(
             PopulationFeasibilityReason.CHRONOLOGY_EVIDENCE_INSUFFICIENT,
             expected,
             NonNegativeIntegerValue(0),
-            "no groups remain after chronology eligibility validation",
+            ValidationReasonText("no groups remain after chronology eligibility validation"),
         )
     if not request.accepted_ids:
         return _infeasible(
             PopulationFeasibilityReason.EMPTY_ACCEPTED_CLIENTS,
             expected,
             NonNegativeIntegerValue(0),
-            "population construction accepted no clients",
+            ValidationReasonText("population construction accepted no clients"),
         )
     return PopulationFeasibility(
         PopulationFeasibilityStatus.FEASIBLE,
@@ -314,7 +315,7 @@ def _infeasible(
     reason: PopulationFeasibilityReason,
     expected: ClientCount,
     observed: NonNegativeIntegerValue,
-    evidence: str,
+    evidence: ValidationReasonText,
 ) -> PopulationFeasibility:
     return PopulationFeasibility(
         PopulationFeasibilityStatus.INFEASIBLE, reason, expected, observed, evidence

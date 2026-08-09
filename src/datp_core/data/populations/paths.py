@@ -3,6 +3,8 @@
 from enum import StrEnum
 from pathlib import Path
 
+from datp_core.core.identifiers import GlobPattern
+
 
 class PartitioningArtifactDirectory(StrEnum):
     CANONICAL_DATA = "data"
@@ -17,9 +19,9 @@ def canonical_data_directory(canonical_root: Path) -> Path:
     return canonical_root / PartitioningArtifactDirectory.CANONICAL_DATA
 
 
-def canonical_data_glob(canonical_root: Path) -> str:
+def canonical_data_glob(canonical_root: Path) -> GlobPattern:
     """Return the Parquet glob for one canonical dataset publication."""
-    return str(canonical_data_directory(canonical_root) / PartitioningFilePattern.PARQUET)
+    return GlobPattern(str(canonical_data_directory(canonical_root) / PartitioningFilePattern.PARQUET))
 
 
 def canonical_branch_directory(canonical_root: Path, branch: StrEnum) -> Path:
