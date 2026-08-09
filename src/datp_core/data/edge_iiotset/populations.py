@@ -19,7 +19,7 @@ from datp_core.core.identifiers import (
     PopulationIdentityKind,
     SplitProtocolId,
 )
-from datp_core.core.numeric import NonNegativeIntegerValue, RowCount, Seed
+from datp_core.core.numeric import NonNegativeIntegerValue, RowCount, Seed, ValidationIssueCount
 from datp_core.data.contracts import (
     CanonicalManifestDocument,
     CanonicalProvenanceColumn,
@@ -151,7 +151,7 @@ def construct_edge_temporal_groups(
         eligible_group_ids=eligible_ids,
         excluded_group_ids=excluded_ids,
         exclusion_reasons=exclusion_reasons,
-        duplicate_timestamp_rows=RowCount(duplicate_timestamps),
+        duplicate_timestamp_rows=RowCount(duplicate_timestamps.value),
         total_temporal_rows=RowCount(membership.height),
     )
     temporal_manifest = _finalize_temporal_manifest(
@@ -219,7 +219,7 @@ def _chronology_eligibility(
     tuple[ChronologyGroupIdentity, ...],
     tuple[ChronologyGroupIdentity, ...],
     tuple[ChronologyExclusionReason, ...],
-    int,
+    ValidationIssueCount,
 ]:
     manifest_path = Path(canonical_root) / CanonicalPublicationArtifact.MANIFEST
     if not manifest_path.is_file():
@@ -249,7 +249,7 @@ def _chronology_eligibility(
         else:
             excluded.append(ChronologyGroupIdentity(str(group)))
             reasons.append(ChronologyExclusionReason.CANONICAL_CHRONOLOGY_INELIGIBLE)
-    return tuple(eligible), tuple(excluded), tuple(reasons), duplicate_total
+    return tuple(eligible), tuple(excluded), tuple(reasons), ValidationIssueCount(duplicate_total)
 
 
 def _chronology_for_group(
