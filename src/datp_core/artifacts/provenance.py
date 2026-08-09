@@ -21,34 +21,30 @@ class Checksum:
 
     __get_pydantic_core_schema__ = classmethod(pydantic_value_schema)
 
+    @classmethod
+    def from_text(cls, payload: str) -> "Checksum":
+        return cls(sha256(payload.encode()).hexdigest())
 
-def checksum_text(payload: str) -> Checksum:
-    return Checksum(sha256(payload.encode()).hexdigest())
+    @classmethod
+    def from_bytes(cls, payload: bytes) -> "Checksum":
+        return cls(sha256(payload).hexdigest())
 
+    @classmethod
+    def from_file(cls, path: Path) -> "Checksum":
+        with path.open("rb") as source:
+            return cls(file_digest(source, "sha256").hexdigest())
 
-def checksum_bytes(
-    payload: bytes,
-) -> Checksum:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-    return Checksum(sha256(payload).hexdigest())
-
-
-def checksum_file(path: Path) -> Checksum:
-    with path.open("rb") as source:
-        return Checksum(file_digest(source, "sha256").hexdigest())
-
-
-def ordered_text_checksum(
-    values: Sequence[str],
-) -> Checksum:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-    digest = sha256()
-    for value in values:
-        encoded = value.encode("utf-8")
-        digest.update(
-            len(encoded).to_bytes(
-                _ORDERED_TEXT_LENGTH_PREFIX_BYTES,
-                byteorder="big",
-                signed=False,
+    @classmethod
+    def from_ordered_texts(cls, values: Sequence[str]) -> "Checksum":
+        digest = sha256()
+        for value in values:
+            encoded = value.encode("utf-8")
+            digest.update(
+                len(encoded).to_bytes(
+                    _ORDERED_TEXT_LENGTH_PREFIX_BYTES,
+                    byteorder="big",
+                    signed=False,
+                )
             )
-        )
-        digest.update(encoded)
-    return Checksum(digest.hexdigest())
+            digest.update(encoded)
+        return cls(digest.hexdigest())

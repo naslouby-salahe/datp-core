@@ -6,7 +6,7 @@ from datp_core.analysis.metrics.cohorts import EvaluationCohortManifest
 from datp_core.analysis.metrics.federated import CalibrationSizeAblationCell, FederatedEvaluationRequest
 from datp_core.analysis.metrics.federated_execution import prepare_federated_evaluation
 from datp_core.analysis.metrics.fixed_score import FixedScoreEvidence
-from datp_core.artifacts.provenance import Checksum, checksum_text
+from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
@@ -31,6 +31,27 @@ from datp_core.thresholds.protocols import (
     require_calibration_subsample_replicate_count,
 )
 from datp_core.thresholds.quantiles import ClientBenignCalibrationScores, calibration_scores_from_references
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class CalibrationReplicateLookup:
+    """Typed lookup for calibration replicate manifests by (client, replicate_index) coordinate."""
+
+    manifests: tuple[CalibrationReplicateManifest, ...]
+
+    def __post_init__(self) -> None:
+        keys = tuple((manifest.client, manifest.replicate_index) for manifest in self.manifests)
+        if len(frozenset(keys)) != len(keys):
+            raise ScientificContractError(
+                ErrorMessage("calibration replicate manifests must have unique (client, replicate_index) keys"),
+                subject=None,
+            )
+
+    def get(self, client: ClientIdentity, replicate_index: ReplicateIndex) -> CalibrationReplicateManifest | None:
+        for manifest in self.manifests:
+            if manifest.client == client and manifest.replicate_index == replicate_index:
+                return manifest
+        return None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -96,9 +117,7 @@ def construct_calibration_size_ablation(
     cells: list[CalibrationSizeAblationCell] = []
     capabilities = population_capabilities(request.score_manifest.coordinate.population)
     replicate_count = require_calibration_subsample_replicate_count()
-    by_client_replicate = {
-        (manifest.client, manifest.replicate_index): manifest for manifest in request.calibration.replicate_manifests
-    }
+    by_client_replicate = CalibrationReplicateLookup(manifests=request.calibration.replicate_manifests)
     for size in CALIBRATION_SIZE_PROTOCOL.sizes:
         for replicate_value in range(replicate_count.value):
             replicate_index = ReplicateIndex(replicate_value)
@@ -165,15 +184,13 @@ def construct_calibration_size_ablation(
 
 def _eligible_scores_for_size(
     eligible_clients: EligibleCohort,
-    by_client_replicate: dict[
-        tuple[ClientIdentity, ReplicateIndex], CalibrationReplicateManifest
-    ],  # TODO: should be handled better. Not just a dict of tuples and such.
+    by_client_replicate: CalibrationReplicateLookup,
     size: CalibrationSize,
     replicate_index: ReplicateIndex,
 ) -> tuple[ClientBenignCalibrationScores, ...]:
     scores: list[ClientBenignCalibrationScores] = []
     for client in eligible_clients:
-        manifest = by_client_replicate.get((client, replicate_index))
+        manifest = by_client_replicate.get(client, replicate_index)
         if manifest is None:
             continue
         matches = tuple(item for item in manifest.subsamples if item.size == size)
@@ -194,10 +211,10 @@ def _eligible_scores_for_size(
 def _subsample_checksum(manifest: CalibrationReplicateManifest, subsample: CalibrationSubsample) -> Checksum:
     payload = "|".join(
         (
-            manifest.client.client_id,
+            manifest.client.client_id.value,
             str(manifest.replicate_index.value),
             str(subsample.size.value),
             *sorted(str(item.stable_row_id) for item in subsample.references),
         )
     )
-    return checksum_text(payload)
+    return Checksum.from_text(payload)

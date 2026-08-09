@@ -11,7 +11,7 @@ from typing import Protocol
 from filelock import FileLock
 from pydantic import BaseModel, ValidationError
 
-from datp_core.artifacts.provenance import Checksum, checksum_file, checksum_text
+from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.repositories.models import (
     ArtifactRecord,
     ArtifactState,
@@ -62,7 +62,7 @@ def publish_atomically[ValueT](
             return ArtifactPublicationResult(
                 status=PublicationStatus.REUSED,
                 value=reusable_value(target),
-                complete_digest=checksum_file(target / complete_marker),
+                complete_digest=Checksum.from_file(target / complete_marker),
             )
         if target.exists():
             remove_target(target)
@@ -73,7 +73,7 @@ def publish_atomically[ValueT](
     return ArtifactPublicationResult(
         status=PublicationStatus.PUBLISHED,
         value=value,
-        complete_digest=checksum_file(target / complete_marker),
+        complete_digest=Checksum.from_file(target / complete_marker),
     )
 
 
@@ -265,7 +265,7 @@ def publish_related_artifacts[RequestT, ResultT](
 
 def complete_digest(manifest_payload: str, schema_payload: str) -> Checksum:
     """Bind a manifest and schema payload into one deterministic completion digest."""
-    return checksum_text(f"{manifest_payload}\n{schema_payload}")
+    return Checksum.from_text(f"{manifest_payload}\n{schema_payload}")
 
 
 def write_artifact_completion_marker(marker: Path, digest: Checksum) -> None:
@@ -360,7 +360,7 @@ def validate_reload(
         if not artifact_path.is_file():
             evidence.append(f"completed artifact is absent: {artifact.relative_path.as_posix()}")
             continue
-        actual_checksum = checksum_file(artifact_path)
+        actual_checksum = Checksum.from_file(artifact_path)
         if actual_checksum != artifact.checksum:
             evidence.append(f"artifact checksum mismatch: {artifact.relative_path.as_posix()}")
         if artifact_path.stat().st_size != artifact.byte_count.value:
@@ -372,7 +372,7 @@ def validate_reload(
 def serialize_json_model(model: BaseModel, destination: Path) -> Checksum:
     payload = canonical_json_text(model)
     write_text_atomically(destination, payload)
-    return checksum_text(payload)
+    return Checksum.from_text(payload)
 
 
 def load_model_json[ModelT: BaseModel](model_type: type[ModelT], text: str) -> ModelT:

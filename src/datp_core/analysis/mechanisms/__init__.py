@@ -126,7 +126,7 @@ def threshold_movements_from_evaluations(
             or shared_fpr.value is None
             or local_fpr.value is None
         ):
-            raise ValueError(f"threshold movement requires available FPR for client {shared_client.client.client_id}")
+            raise ValueError(f"threshold movement requires available FPR for client {shared_client.client.client_id.value}")
         shared_tpr = metric_by_id(shared_client.metrics, MetricId.TRUE_POSITIVE_RATE)
         local_tpr = metric_by_id(local_client.metrics, MetricId.TRUE_POSITIVE_RATE)
         tpr_shared = (

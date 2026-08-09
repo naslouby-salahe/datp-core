@@ -6,7 +6,7 @@ from pathlib import Path
 import polars as pl
 import torch
 
-from datp_core.artifacts.provenance import checksum_file
+from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.repositories.publication import (
     ArtifactPublication,
     FunctionalArtifactCodec,
@@ -94,7 +94,7 @@ def _generate_federated_scores(request: ScoreGenerationRequest, device: torch.de
     scored_roles = scored_partition_roles(request.scored_split_protocol)
     records = _ScoreRecordInventory.empty()
     for client_input in sorted(request.clients, key=lambda item: item.client):
-        client_directory = request.output_directory / client_input.client.client_id
+        client_directory = request.output_directory / client_input.client.client_id.value
         for role in scored_roles:
             persisted = score_and_persist_autoencoder_frame(
                 frame=client_input.features_for(role),
@@ -230,7 +230,7 @@ def _result_from_inventory(
 
 def _client_paths(output_directory: Path, request: ScoreGenerationRequest) -> tuple[Path, ...]:
     return tuple(
-        output_directory / client_input.client.client_id / _asset_name_for_partition(role).value
+        output_directory / client_input.client.client_id.value / _asset_name_for_partition(role).value
         for client_input in sorted(request.clients, key=lambda item: item.client)
         for role in scored_partition_roles(request.scored_split_protocol)
     )
@@ -243,7 +243,7 @@ def _build_records(
 ) -> tuple[FederatedScoreRecord, ...]:
     records: list[FederatedScoreRecord] = []
     for client_input in sorted(request.clients, key=lambda item: item.client):
-        path = output_directory / client_input.client.client_id / _asset_name_for_partition(partition_role).value
+        path = output_directory / client_input.client.client_id.value / _asset_name_for_partition(partition_role).value
         if not path.is_file():
             raise ArtifactIntegrityError(
                 ErrorMessage(f"expected federated score partition is missing: {path}"),
@@ -257,7 +257,7 @@ def _build_records(
             checkpoint_round=request.checkpoint.round_number,
             checkpoint_checksum=request.checkpoint.tensor_checksum,
             path=path,
-            checksum=checksum_file(path),
+            checksum=Checksum.from_file(path),
             row_count=RowCount(frame.height),
             feature_count=FeatureCount(len(request.feature_names)),
             serialization_format=SerializationFormat.PARQUET,
@@ -268,7 +268,7 @@ def _build_records(
 
 
 def _rebased_record(record: FederatedScoreRecord, output_directory: Path) -> FederatedScoreRecord:
-    path = output_directory / record.scored_client.client_id / _asset_name_for_partition(record.partition_role).value
+    path = output_directory / record.scored_client.client_id.value / _asset_name_for_partition(record.partition_role).value
     if not path.is_file():
         raise ArtifactIntegrityError(
             ErrorMessage("published score partition missing after atomic replace"),
@@ -281,7 +281,7 @@ def _rebased_record(record: FederatedScoreRecord, output_directory: Path) -> Fed
         checkpoint_round=record.checkpoint_round,
         checkpoint_checksum=record.checkpoint_checksum,
         path=path,
-        checksum=checksum_file(path),
+        checksum=Checksum.from_file(path),
         row_count=record.row_count,
         feature_count=record.feature_count,
         serialization_format=record.serialization_format,

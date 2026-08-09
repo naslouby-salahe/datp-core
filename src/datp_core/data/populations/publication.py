@@ -14,7 +14,7 @@ from pathlib import Path
 
 import polars as pl
 
-from datp_core.artifacts.provenance import Checksum, checksum_text
+from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.repositories.publication import (
     ArtifactPublication,
     FunctionalArtifactCodec,
@@ -41,6 +41,7 @@ from datp_core.data.populations.contracts import (
     ControlledPartitionCondition,
     PopulationConstructionRequest,
     PopulationConstructionResult,
+    PopulationFrameColumn,
     PopulationManifest,
     PopulationManifestDocument,
     SplitConstructionRequest,
@@ -51,6 +52,11 @@ from datp_core.data.populations.integrity import membership_frame_checksum, vali
 from datp_core.data.populations.splits import split_membership
 from datp_core.data.registry import construct_population
 from datp_core.experiments.common.coordinates import ExternalTemporalExecutionIdentity, require_execution_identity
+
+
+class PopulationPublicationViolation(StrEnum):
+    SPLIT_POPULATION_MANIFEST_MISMATCH = "split_population_manifest_mismatch"
+    MATCHED_REFERENCE_WITHOUT_MEMBERSHIP = "matched_reference_without_membership"
 
 
 class PopulationPublicationAsset(StrEnum):
@@ -244,7 +250,7 @@ def _population_membership_digest(
         sections.append(canonical_json_text(artifacts.chronology))
     if artifacts.matched_static_reference_manifest is not None:
         sections.append(canonical_json_text(artifacts.matched_static_reference_manifest.document))
-    return checksum_text("\n".join(sections))
+    return Checksum.from_text("\n".join(sections))
 
 
 @dataclass(slots=True, eq=False, kw_only=True)
@@ -291,12 +297,14 @@ def construct_published_split(request: ConstructPublishedSplitRequest) -> Constr
         raise ScientificContractError(
             ErrorMessage("split request population must match its manifest"),
             subject=request.population,
+            reason=PopulationPublicationViolation.SPLIT_POPULATION_MANIFEST_MISMATCH,
         )
     has_matched_reference = request.matched_static_reference_manifest is not None
     if has_matched_reference and request.matched_static_reference_membership is None:
         raise ScientificContractError(
             ErrorMessage("a matched reference manifest requires its matched reference membership"),
             subject=request.population,
+            reason=PopulationPublicationViolation.MATCHED_REFERENCE_WITHOUT_MEMBERSHIP,
         )
     assignments, manifest = split_membership(
         SplitConstructionRequest(
@@ -341,7 +349,7 @@ def construct_published_split(request: ConstructPublishedSplitRequest) -> Constr
     prepared = _PopulationSplitPublication(
         request=request,
         artifacts=artifacts,
-        digest=checksum_text("\n".join(sections)),
+        digest=Checksum.from_text("\n".join(sections)),
     )
     publication = publish_artifact(
         ArtifactPublication(
@@ -370,9 +378,9 @@ def construct_published_split(request: ConstructPublishedSplitRequest) -> Constr
 
 def _require_matching_reference_rows(temporal: pl.DataFrame, static: pl.DataFrame) -> None:
     row_columns = (
-        "client_id",
-        "stable_row_id",
-    )  # TODO: should already be in enum or already exists. Do not use hard-coded strings. Check what already exists. Use that instead of hard-coded strings.
+        PopulationFrameColumn.CLIENT_ID.value,
+        PopulationFrameColumn.STABLE_ROW_ID.value,
+    )
     temporal_rows = temporal.select(row_columns).sort(row_columns)
     static_rows = static.select(row_columns).sort(row_columns)
     if not temporal_rows.equals(static_rows):

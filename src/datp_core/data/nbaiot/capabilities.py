@@ -1,7 +1,9 @@
 """Capability declaration for the audited N-BaIoT artifact."""
 
 from datp_core.core.identifiers import (
+    ClientIdentityToken,
     EvidenceRole,
+    FamilyIdentity,
     FederatedThresholdMethod,
     MetricId,
     PopulationId,
@@ -21,18 +23,21 @@ from datp_core.data.populations.contracts import (
 
 from .schema import NBAIOT_DEVICE_FAMILIES, NBAIOT_DEVICE_IDENTITIES
 
+_PHYSICAL_CLIENT_IDENTITIES = tuple(ClientIdentityToken(device.value) for device in NBAIOT_DEVICE_IDENTITIES)
+_FAMILY_IDENTITIES = tuple(FamilyIdentity(family.value) for family in NBAIOT_DEVICE_FAMILIES)
+
 NBAIOT_CAPABILITIES = DatasetCapabilities(
     physical_clients=PhysicalClientCapability(
         CapabilityStatus.SUPPORTED,
         "Nine audited top-level device folders are preserved in every accepted source path.",
         "N-BaIoT physical-device folders provide defensible natural client identities.",
-        NBAIOT_DEVICE_IDENTITIES,
+        _PHYSICAL_CLIENT_IDENTITIES,
     ),
     family_taxonomy=FamilyTaxonomyCapability(
         CapabilityStatus.SUPPORTED,
         "N-BaIoT Table III defines the device type for each of the nine audited devices.",
         "The source-defined device-type mapping is fixed before evaluation and persisted with each canonical row.",
-        NBAIOT_DEVICE_FAMILIES,
+        _FAMILY_IDENTITIES,
     ),
     chronology=ChronologyCapability(
         CapabilityStatus.UNAVAILABLE,

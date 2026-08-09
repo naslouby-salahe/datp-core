@@ -13,7 +13,7 @@ from datp_core.core.errors import (
     ScientificContractError,
     require_contract,
 )
-from datp_core.core.identifiers import ContractSubject, FederatedThresholdMethod
+from datp_core.core.identifiers import ContractSubject, FederatedThresholdMethod, ValidationLabel
 from datp_core.core.numeric import (
     ClusterIndex,
     DistributionSkewness,
@@ -86,9 +86,9 @@ class ClusterMembership:
             self.members,
             self.contributing_local_quantiles,
             self.cluster_threshold,
-            members_label="cluster members",
-            match_message="contributing local quantile clients must exactly equal cluster members",
-            threshold_message="cluster threshold must equal the declared local-threshold aggregation",
+            members_label=ValidationLabel("cluster members"),
+            match_message=ErrorMessage("contributing local quantile clients must exactly equal cluster members"),
+            threshold_message=ErrorMessage("cluster threshold must equal the declared local-threshold aggregation"),
             expected_group_threshold=_aggregate_local_thresholds(
                 self.contributing_local_quantiles,
                 self.threshold_aggregation,
@@ -150,8 +150,8 @@ class GroupedThresholdResult:
         validate_assignments(
             self.assignments,
             expected_assignments,
-            label="threshold assignments",
-            mismatch_message="a cluster threshold assignment must use its cluster threshold",
+            label=ValidationLabel("threshold assignments"),
+            mismatch_message=ErrorMessage("a cluster threshold assignment must use its cluster threshold"),
         )
         require_contract(
             all((not cluster.members) == (cluster.cluster_threshold is None) for cluster in self.clusters),

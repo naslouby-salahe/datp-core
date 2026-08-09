@@ -4,6 +4,7 @@ from pathlib import Path
 import polars as pl
 
 from datp_core.core.identifiers import (
+    ClientIdentityToken,
     PopulationId,
     SplitProtocolId,
 )
@@ -25,7 +26,7 @@ def test_natural_devices_are_exactly_the_audited_nine(nbaiot_canonical_root: Pat
     )
     manifest, membership = construction.manifest, construction.membership
     assert manifest.document.population is PopulationId.NBAIOT_NATURAL_DEVICES
-    assert manifest.document.accepted_clients == tuple(sorted(NBAIOT_DEVICE_IDENTITIES))
+    assert manifest.document.accepted_clients == tuple(ClientIdentityToken(str(device)) for device in sorted(NBAIOT_DEVICE_IDENTITIES))
     assert len(manifest.document.accepted_clients) == 9
     assert membership.get_column("client_id").n_unique() == 9
     assert set(manifest.family_by_client)

@@ -1,6 +1,6 @@
 import pytest
 
-from datp_core.core.identifiers import PopulationId, PopulationIdentityKind
+from datp_core.core.identifiers import ClientIdentityToken, PopulationId, PopulationIdentityKind
 from datp_core.core.numeric import CalibrationSize, ClientCount, NonNegativeIntegerValue, Ratio
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.experiments.threshold_robustness.cohorts import (
@@ -13,7 +13,7 @@ from datp_core.experiments.threshold_robustness.cohorts import (
 def _client(client_id: str) -> ClientIdentity:
     return ClientIdentity(
         population=PopulationId.NBAIOT_NATURAL_DEVICES,
-        client_id=client_id,
+        client_id=ClientIdentityToken(client_id),
         identity_kind=PopulationIdentityKind.PHYSICAL_DEVICES,
     )
 

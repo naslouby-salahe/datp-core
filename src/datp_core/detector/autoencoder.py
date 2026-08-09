@@ -15,9 +15,7 @@ from datp_core.core.numeric import BatchSize, FeatureCount, LearningRate, Seed
 from datp_core.detector.training.contracts import AutoencoderArchitecture, AutoencoderProtocol, OptimizerProtocol
 from datp_core.runtime.compute import require_cuda_available
 
-type AutoencoderState = dict[
-    str, torch.Tensor
-]  # TODO should use a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Also i don't like using dict
+type AutoencoderState = dict[str, torch.Tensor]
 type AutoencoderStateView = Mapping[str, torch.Tensor]
 
 LEARNING_DTYPE = np.float32
@@ -100,26 +98,8 @@ def build_autoencoder_for_state(
     device: torch.device,
 ) -> ReconstructionAutoencoder:
     model = construct_autoencoder(protocol).to(device)
-    load_autoencoder_state(model, state)
-    return model
-
-
-def clone_state(
-    state: AutoencoderStateView,
-) -> AutoencoderState:  # TODO: i believe this is duplcated and probably should be either inlined or reused everywhere
-    return {name: tensor.detach().clone() for name, tensor in state.items()}
-
-
-def clone_autoencoder_state(
-    model: ReconstructionAutoencoder,
-) -> AutoencoderState:  # TODO: i believe this is duplcated and probably should be either inlined or reused everywhere
-    return clone_state(model.state_dict())
-
-
-def load_autoencoder_state(
-    model: ReconstructionAutoencoder, state: AutoencoderStateView
-) -> None:  # TODO: i believe this is duplcated and probably should be either inlined or reused everywhere
     model.load_state_dict(state, strict=True)
+    return model
 
 
 def _require_scoreable_feature_matrix(model: ReconstructionAutoencoder, features: np.ndarray) -> None:

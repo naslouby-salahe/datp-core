@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
-from datp_core.artifacts.provenance import Checksum, checksum_file
+from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.serializers.json import canonical_checksum
 from datp_core.core.errors import (
     ErrorMessage,
@@ -69,9 +69,7 @@ from datp_core.data.preprocessing.state import (
 
 def require_columns(
     frame: pl.DataFrame,
-    columns: Iterable[
-        str
-    ],  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    columns: Iterable[str],
     *,
     subject: ContractSubject | PartitionRole | PreprocessingFitScope | SplitProtocolId,
 ) -> None:
@@ -228,7 +226,7 @@ def centralized_fitted_state_after_publish(
     return CentralizedFittedPreprocessingState(
         protocol=spec.protocol,
         estimator_path=spec.estimator_path,
-        estimator_checksum=checksum_file(spec.estimator_path),
+        estimator_checksum=Checksum.from_file(spec.estimator_path),
         fit_row_count=spec.fit_row_count,
     )
 
@@ -239,7 +237,7 @@ def federated_fitted_state_after_publish(
     return FederatedFittedPreprocessingState(
         protocol=spec.protocol,
         estimator_path=spec.estimator_path,
-        estimator_checksum=checksum_file(spec.estimator_path),
+        estimator_checksum=Checksum.from_file(spec.estimator_path),
         fit_row_count=spec.fit_row_count,
         client_identity=spec.owner,
     )

@@ -27,7 +27,7 @@ def test_construct_shared_threshold_is_the_unweighted_mean_of_local_quantiles() 
         result.contributing_local_quantiles
     )
     assert result.shared_threshold.value == manual_mean
-    assert frozenset(assignment.client.client_id for assignment in result.assignments) == frozenset(
+    assert frozenset(assignment.client.client_id.value for assignment in result.assignments) == frozenset(
         {"client_a", "client_b"}
     )
 

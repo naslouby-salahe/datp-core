@@ -8,7 +8,7 @@ from datp_core.core.errors import (
     ErrorMessage,
     ExecutionStateError,
 )
-from datp_core.core.identifiers import ContractSubject, CudaDeviceName
+from datp_core.core.identifiers import ContractSubject, CudaDeviceName, CudaVersion, TorchVersion
 from datp_core.core.numeric import CudaDeviceCount
 from datp_core.runtime.configuration import CANONICAL_RUNTIME, CudaDeviceIndex
 
@@ -19,10 +19,8 @@ class CudaProvenance:
     device_count: CudaDeviceCount
     device_index: CudaDeviceIndex | None
     device_name: CudaDeviceName | None
-    cuda_version: (
-        str | None
-    )  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    torch_version: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    cuda_version: CudaVersion | None
+    torch_version: TorchVersion
 
     def __post_init__(self) -> None:
         selected = self.device_index is not None and self.device_name is not None
@@ -30,8 +28,6 @@ class CudaProvenance:
             raise ValueError("CUDA availability must match the recorded selected device")
         if self.device_index is not None and self.device_index.value >= self.device_count.value:
             raise ValueError("CUDA device index must reference an available device")
-        if not self.torch_version:
-            raise ValueError("CUDA provenance requires the PyTorch version")
 
 
 def require_cuda_available() -> None:
@@ -64,12 +60,12 @@ def cuda_provenance() -> CudaProvenance:
     device_count = CudaDeviceCount(torch.cuda.device_count() if available else 0)
     device_index = configured_cuda_device_index() if available else None
     device_name = CudaDeviceName(torch.cuda.get_device_name(device_index.value)) if device_index is not None else None
-    cuda_version = torch.version.cuda if available else None
+    cuda_version = CudaVersion(torch.version.cuda) if available and torch.version.cuda else None
     return CudaProvenance(
         cuda_available=available,
         device_count=device_count,
         device_index=device_index,
         device_name=device_name,
         cuda_version=cuda_version,
-        torch_version=torch.__version__,
+        torch_version=TorchVersion(torch.__version__),
     )

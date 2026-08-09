@@ -8,7 +8,7 @@ import skops.io as skops_io
 from sklearn.base import BaseEstimator
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
-from datp_core.artifacts.provenance import Checksum, checksum_file
+from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import (
     ArtifactIntegrityError,
     ErrorMessage,
@@ -100,7 +100,7 @@ def serialize_estimator(estimator: BaseEstimator | TrustedScaler, destination: P
         )
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_bytes(skops_io.dumps(estimator))
-    return checksum_file(destination)
+    return Checksum.from_file(destination)
 
 
 def load_estimator(path: Path, class_name: TrustedEstimatorClassName) -> TrustedScaler:

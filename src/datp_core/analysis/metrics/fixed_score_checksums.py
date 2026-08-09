@@ -5,7 +5,7 @@ from enum import StrEnum
 import polars as pl
 
 from datp_core.analysis.metrics.models import ClientMetricResult
-from datp_core.artifacts.provenance import Checksum, ordered_text_checksum
+from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.serializers.json import canonical_checksum
 from datp_core.core.identifiers import ScoreFrameColumn
 from datp_core.data.populations.contracts import ClientIdentity, PopulationOutcomeLabel
@@ -34,11 +34,11 @@ class ClientEvidenceChecksum:
 
 
 def evaluation_label_checksum(labels: Sequence[PopulationOutcomeLabel]) -> Checksum:
-    return ordered_text_checksum(tuple(label.value for label in labels))
+    return Checksum.from_ordered_texts(tuple(label.value for label in labels))
 
 
 def source_row_checksum(rows: Sequence[str]) -> Checksum:
-    return ordered_text_checksum(tuple(rows))
+    return Checksum.from_ordered_texts(tuple(rows))
 
 
 def client_population_checksum(manifest: FederatedScoreArtifactManifest) -> Checksum:
@@ -95,4 +95,4 @@ def score_column_checksum(
     column: ScoreFrameColumn,
 ) -> Checksum:
     data = pl.read_parquet(record.path, columns=[column.value]).to_dict(as_series=False)
-    return ordered_text_checksum(tuple(str(value) for value in data[column.value]))
+    return Checksum.from_ordered_texts(tuple(str(value) for value in data[column.value]))

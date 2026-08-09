@@ -9,7 +9,7 @@ from pathlib import Path
 from pydantic import TypeAdapter
 
 from datp_core.analysis.temporal import TemporalDeploymentProvenance
-from datp_core.artifacts.provenance import Checksum, checksum_text
+from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.repositories.publication import ArtifactPublication, FunctionalArtifactCodec, publish_artifact
 from datp_core.artifacts.serializers.json import canonical_json_text
 from datp_core.core.identifiers import PublicationStatus
@@ -154,14 +154,14 @@ def rebase_federated_threshold(
 
 
 def threshold_result_checksum(result: ThresholdConstructionResult) -> Checksum:
-    return checksum_text(canonical_json_text(result))
+    return Checksum.from_text(canonical_json_text(result))
 
 
 def federated_threshold_publication_checksum(
     result: ThresholdConstructionResult,
     temporal_provenance: TemporalDeploymentProvenance | None,
 ) -> Checksum:
-    return checksum_text(
+    return Checksum.from_text(
         canonical_json_text(
             _ThresholdPublicationProjection(
                 result=result,

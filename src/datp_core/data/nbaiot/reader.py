@@ -4,6 +4,7 @@ from pathlib import Path
 
 import polars as pl
 
+from datp_core.core.numeric import LogicalElementCount, ValidationIssueCount
 from datp_core.data.contracts import AggregateCountColumn, CanonicalProvenanceColumn
 from datp_core.data.materialization import provenance_expressions
 
@@ -44,7 +45,7 @@ class NBaIoTReader:
             .select(tuple(column.name for column in NBAIOT_SCHEMA.columns))
         )
 
-    def finite_value_summary(self, frame: pl.LazyFrame) -> tuple[int, int]: #TODO: should be LogicalElementCount and ValidationIssueCount instead of int, adapt all callers and usage. Might be better to just use LogicalElementCount(value) and ValidationIssueCount(value) directly in the callers and usage instead of this function.
+    def finite_value_summary(self, frame: pl.LazyFrame) -> tuple[LogicalElementCount, ValidationIssueCount]:
         summary = (
             frame.select(NBAIOT_FEATURE_COLUMNS)
             .select(
@@ -59,12 +60,12 @@ class NBaIoTReader:
             )
             .collect(engine="streaming")
         )
-        return int(summary.item(0, AggregateCountColumn.TOTAL_ROWS)), int(
-            summary.item(0, AggregateCountColumn.INVALID_ROWS)
+        return LogicalElementCount(int(summary.item(0, AggregateCountColumn.TOTAL_ROWS))), ValidationIssueCount(
+            int(summary.item(0, AggregateCountColumn.INVALID_ROWS))
         )
 
-    def validate_finite_values(self, frame: pl.LazyFrame) -> int: #TODO: should be LogicalElementCount instead of int, adapt all callers and usage. Might be better to just use LogicalElementCount(value) directly in the callers and usage instead of this function.
+    def validate_finite_values(self, frame: pl.LazyFrame) -> LogicalElementCount:
         total_rows, invalid = self.finite_value_summary(frame)
-        if invalid:
+        if invalid.value:
             raise ValueError("N-BaIoT contains non-finite feature values")
         return total_rows

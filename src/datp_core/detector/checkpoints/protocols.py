@@ -11,6 +11,7 @@ from datp_core.core.identifiers import (
     CheckpointSelectionRule,
     CheckpointStatus,
     ContractSubject,
+    ProcessedDataBranch,
 )
 from datp_core.core.numeric import MetricValue, RoundNumber
 from datp_core.detector.checkpoints.contracts import CheckpointProtocol
@@ -20,6 +21,13 @@ CHECKPOINT_PROTOCOL = CheckpointProtocol(
     maximum_round=RoundNumber(200),
 )
 CHECKPOINT_SELECTION_RULE = CheckpointSelectionRule.FIXED_TERMINAL_MAXIMUM_ROUND
+RETAINED_CHECKPOINT_STATUSES = frozenset(
+    {
+        CheckpointStatus.CANDIDATE,
+        CheckpointStatus.STABILITY_EVIDENCE,
+        CheckpointStatus.SELECTED_BY_NON_TEST_RULE,
+    }
+)
 
 
 def require_non_test_checkpoint_selection_inputs(
@@ -27,22 +35,22 @@ def require_non_test_checkpoint_selection_inputs(
     selection_rule: CheckpointSelectionRule,
     held_out_metrics: Sequence[MetricValue] | None,
     attack_labels_present: bool,
-    branch_label: str,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    branch: ProcessedDataBranch,
 ) -> None:
     """Reject test leakage and unsupported selection rules before branch-specific selection."""
     if held_out_metrics is not None:
         raise LeakageError(
-            ErrorMessage(f"held-out evaluation outcomes cannot influence {branch_label} checkpoint selection"),
+            ErrorMessage(f"held-out evaluation outcomes cannot influence {branch.value} checkpoint selection"),
             subject=ContractSubject.HELD_OUT_METRICS,
         )
     if attack_labels_present:
         raise LeakageError(
-            ErrorMessage(f"attack labels cannot influence {branch_label} checkpoint selection"),
+            ErrorMessage(f"attack labels cannot influence {branch.value} checkpoint selection"),
             subject=ContractSubject.ATTACK_LABELS,
         )
     if selection_rule is not CheckpointSelectionRule.FIXED_TERMINAL_MAXIMUM_ROUND:
         raise ScientificContractError(
-            ErrorMessage(f"unsupported {branch_label} checkpoint selection rule"),
+            ErrorMessage(f"unsupported {branch.value} checkpoint selection rule"),
             subject=ContractSubject.CHECKPOINT_SELECTION_RULE,
         )
 

@@ -95,7 +95,7 @@ class NBaIoTMaterializer:
                     SourceFileRole.BENIGN
                     if parse_source_identity(path)[1] == NBaIoTSourceLabel.BENIGN
                     else SourceFileRole.ATTACK,
-                    RowCount(row_count),
+                    RowCount(row_count.value),
                     source_relative_path,
                 )
                 for path, row_count in zip(source_paths, row_counts, strict=True)
@@ -114,7 +114,7 @@ class NBaIoTMaterializer:
             DatasetId.NBAIOT,
             (),
             (),
-            RowCount(sum(row_counts)),
+            RowCount(sum(count.value for count in row_counts)),
             RowCount(0),
             RowCount(0),
             ValidationIssueCount(0),

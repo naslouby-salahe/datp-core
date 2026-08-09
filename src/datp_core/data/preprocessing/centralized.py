@@ -248,7 +248,10 @@ def preprocess_centralized_population(
 
     schema = dataset_binding(dataset).schema
     feature_names = FeatureNameSequence(tuple(map(FeatureName, schema.feature_columns)))
-    protocol = build_centralized_preprocessing_protocol(feature_names)
+    protocol = build_preprocessing_protocol(
+        SCIENTIFIC_CENTRALIZED_PREPROCESSING_METHOD,
+        feature_names,
+    )
 
     partitions = extract_partitions(
         join_handoff_with_canonical_features(
@@ -281,10 +284,4 @@ def preprocess_centralized_population(
     )
 
 
-def build_centralized_preprocessing_protocol(  # TODO: should be inlined in preprocess_centralized_population. It is not used anywhere else. Remove this function and inline it in preprocess_centralized_population.
-    feature_names: FeatureNameSequence,
-) -> PreprocessingProtocol:
-    return build_preprocessing_protocol(
-        SCIENTIFIC_CENTRALIZED_PREPROCESSING_METHOD,
-        feature_names,
-    )
+

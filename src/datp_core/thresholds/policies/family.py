@@ -8,7 +8,13 @@ from datp_core.core.errors import (
     ScientificContractError,
     require_contract,
 )
-from datp_core.core.identifiers import AvailabilityStatus, ContractSubject, FamilyIdentity, FederatedThresholdMethod
+from datp_core.core.identifiers import (
+    AvailabilityStatus,
+    ContractSubject,
+    FamilyIdentity,
+    FederatedThresholdMethod,
+    ValidationLabel,
+)
 from datp_core.core.numeric import Quantile, ThresholdValue
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
@@ -62,9 +68,13 @@ class FamilyMembership:
             self.members,
             self.contributing_local_quantiles,
             self.family_threshold,
-            members_label="family members",
-            match_message="contributing local quantile clients must exactly match declared family members",
-            threshold_message="family threshold must equal the unweighted mean of contributing local quantiles",
+            members_label=ValidationLabel("family members"),
+            match_message=ErrorMessage(
+                "contributing local quantile clients must exactly match declared family members"
+            ),
+            threshold_message=ErrorMessage(
+                "family threshold must equal the unweighted mean of contributing local quantiles"
+            ),
         )
 
 
@@ -103,8 +113,8 @@ class FamilyThresholdResult:
         validate_assignments(
             self.assignments,
             expected_assignments,
-            label="threshold assignments",
-            mismatch_message="a family threshold assignment must use its family's constructed threshold",
+            label=ValidationLabel("threshold assignments"),
+            mismatch_message=ErrorMessage("a family threshold assignment must use its family's constructed threshold"),
         )
 
 
@@ -118,7 +128,7 @@ def construct_family_threshold(
             ErrorMessage("family threshold construction requires a non-empty family taxonomy"),
             subject=ContractSubject.THRESHOLD,
         )
-    require_eligible_cohort(eligible, "family threshold construction")
+    require_eligible_cohort(eligible, ValidationLabel("family threshold construction"))
     eligible_clients = tuple(item.client for item in eligible)
     require_unique_clients(eligible_clients, "eligible clients in family threshold construction")
     for client in eligible_clients:

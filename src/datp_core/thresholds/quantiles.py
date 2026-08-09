@@ -7,12 +7,17 @@ from typing import Literal
 import numpy as np
 from scipy.stats import norm
 
-from datp_core.artifacts.provenance import Checksum, checksum_text
+from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
 )
-from datp_core.core.identifiers import AvailabilityStatus, ContractSubject, QuantileInterpolationSemantics
+from datp_core.core.identifiers import (
+    AvailabilityStatus,
+    ContractSubject,
+    QuantileInterpolationSemantics,
+    ValidationLabel,
+)
 from datp_core.core.numeric import (
     CalibrationSampleWeights,
     ConformalRankIndex,
@@ -63,7 +68,7 @@ def calibration_scores_from_references(
             ErrorMessage("calibration score references must belong to one declared client"),
             subject=ContractSubject.CLIENT_IDENTITY,
         )
-    manifest_checksum = checksum_text("|".join(sorted(reference.stable_row_id for reference in references)))
+    manifest_checksum = Checksum.from_text("|".join(sorted(reference.stable_row_id for reference in references)))
     return ClientBenignCalibrationScores(
         client=client,
         coordinate=coordinate,
@@ -75,7 +80,7 @@ def calibration_scores_from_references(
 
 def require_eligible_cohort(
     eligible: tuple[ClientBenignCalibrationScores, ...],
-    policy_label: str,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    policy_label: ValidationLabel,
 ) -> None:
     if not eligible:
         raise ScientificContractError(
@@ -104,9 +109,7 @@ def local_quantile(client_scores: ClientBenignCalibrationScores, quantile: Quant
 
 def _numpy_interpolation_method(
     semantics: QuantileInterpolationSemantics,
-) -> Literal[
-    "linear"
-]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> Literal["linear"]:
     match semantics:
         case QuantileInterpolationSemantics.NUMPY_QUANTILE_LINEAR:
             return "linear"

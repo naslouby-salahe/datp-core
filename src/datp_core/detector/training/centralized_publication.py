@@ -6,7 +6,7 @@ from pathlib import Path
 import polars as pl
 import torch
 
-from datp_core.artifacts.provenance import Checksum, checksum_file
+from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.repositories.publication import ArtifactPublication, FunctionalArtifactCodec, publish_artifact
 from datp_core.artifacts.serializers.json import canonical_checksum
 from datp_core.core.errors import (
@@ -125,7 +125,7 @@ def _centralized_training_binding(
 ) -> CentralizedTrainingPublicationBinding:
     return CentralizedTrainingPublicationBinding(
         coordinate=request.coordinate,
-        model_tensor_checksum=checksum_file(directory / CentralizedArtifactName.MODEL_TENSORS),
+        model_tensor_checksum=Checksum.from_file(directory / CentralizedArtifactName.MODEL_TENSORS),
         final_epoch=request.checkpoint_protocol.maximum_round,
         batch_size=request.batch_size,
         preprocessing_state_checksum=request.preprocessing_state.estimator_checksum,
@@ -286,7 +286,7 @@ def load_reused_centralized_training(
         epoch_losses=epoch_losses,
         model_directory=directory,
         model_tensor_path=model_path,
-        model_tensor_checksum=checksum_file(model_path),
+        model_tensor_checksum=Checksum.from_file(model_path),
         preprocessing_state_checksum=request.preprocessing_state.estimator_checksum,
         split_manifest_checksum=request.split_manifest_checksum,
         device_name=CudaDeviceName(torch.cuda.get_device_name(resolve_cuda_device())),
@@ -305,13 +305,13 @@ def rebase_centralized_training(
         result.training,
         model_directory=directory,
         model_tensor_path=model_path,
-        model_tensor_checksum=checksum_file(model_path),
+        model_tensor_checksum=Checksum.from_file(model_path),
     )
     candidates = tuple(
         replace(
             candidate,
             tensor_path=directory / candidate_tensor_name(candidate.round_number),
-            tensor_checksum=checksum_file(directory / candidate_tensor_name(candidate.round_number)),
+            tensor_checksum=Checksum.from_file(directory / candidate_tensor_name(candidate.round_number)),
         )
         for candidate in result.candidates
     )
@@ -340,7 +340,7 @@ def _load_reused_candidate(
         coordinate=request.coordinate,
         round_number=candidate_round,
         tensor_path=path,
-        tensor_checksum=checksum_file(path),
+        tensor_checksum=Checksum.from_file(path),
         mean_training_loss=matching_losses[0],
         status=CheckpointStatus.CANDIDATE,
         preprocessing_state_checksum=request.preprocessing_state.estimator_checksum,

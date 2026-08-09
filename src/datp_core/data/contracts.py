@@ -7,7 +7,7 @@ from pathlib import Path
 import pyarrow as pa
 
 import datp_core.core.identifiers as domain_enums
-from datp_core.artifacts.provenance import Checksum, checksum_text
+from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.serializers.json import canonical_json_text, canonical_mapping
 from datp_core.core.contracts import StrictModel
 from datp_core.core.identifiers import (
@@ -16,6 +16,7 @@ from datp_core.core.identifiers import (
     ChronologyGroupIdentity,
     ColumnName,
     DatasetId,
+    NonEmptyString,
     PhysicalSchemaText,
     SourceIdentity,
     ValidationSourceContext,
@@ -225,7 +226,7 @@ class DatasetValidationIssue:
     code: DatasetValidationCode
     dataset: DatasetId
     source_context: ValidationSourceContext
-    reason: str # TODO: should be NBaIoTDevice and adapt all callers and usage. Might be better to just use NBaIoTDevice(value) directly in the callers and usage instead of this function.
+    reason: NonEmptyString
     affected_count: RowCount
 
     def __post_init__(self) -> None:
@@ -395,7 +396,7 @@ class ChronologyValidation:
     invalid_rows: RowCount
     duplicate_timestamp_count: RowCount
     is_monotonic: bool
-    reason: str
+    reason: NonEmptyString
     temporal_eligible: bool
     evidence_source_path: Path | None = None
     evidence_row_count: RowCount | None = None
@@ -482,7 +483,7 @@ class ManifestChronologyEntry(StrictModel):
     invalid_rows: RowCount
     duplicate_timestamp_count: RowCount
     is_monotonic: bool
-    reason: str
+    reason: NonEmptyString
     temporal_eligible: bool
     evidence_source_path: str | None = None
     evidence_row_count: RowCount | None = None
@@ -536,7 +537,7 @@ class ManifestValidationIssueEntry(StrictModel):
     code: DatasetValidationCode
     dataset: DatasetId
     source_context: ValidationSourceContext
-    reason: str
+    reason: NonEmptyString
     affected_count: RowCount
 
 
@@ -577,7 +578,7 @@ _SOURCE_STATE_NAME = CanonicalPublicationArtifact.SOURCE_STATE
 
 
 def complete_digest(manifest_payload: str, schema_payload: str) -> Checksum:
-    return checksum_text(f"{manifest_payload}\n{schema_payload}")
+    return Checksum.from_text(f"{manifest_payload}\n{schema_payload}")
 
 
 def schema_content(schema: CanonicalSchema) -> str:

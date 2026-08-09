@@ -5,6 +5,7 @@ from datp_core.analysis.mechanisms.divergence import ClientScoreVector, jensen_s
 from datp_core.analysis.preparation import ConfirmatoryAnalysisRequest, prepare_confirmatory_analysis
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.identifiers import (
+    ClientIdentityToken,
     EvidenceRole,
     FederatedThresholdMethod,
     MetricId,
@@ -23,8 +24,16 @@ from datp_core.presentation.export import export_analysis_report
 
 def test_analysis_report_contains_actual_mechanism_values(tmp_path: Path) -> None:
     clients = (
-        ClientIdentity(PopulationId.NBAIOT_NATURAL_DEVICES, "a", PopulationIdentityKind.PHYSICAL_DEVICES),
-        ClientIdentity(PopulationId.NBAIOT_NATURAL_DEVICES, "b", PopulationIdentityKind.PHYSICAL_DEVICES),
+        ClientIdentity(
+            PopulationId.NBAIOT_NATURAL_DEVICES,
+            ClientIdentityToken("a"),
+            PopulationIdentityKind.PHYSICAL_DEVICES,
+        ),
+        ClientIdentity(
+            PopulationId.NBAIOT_NATURAL_DEVICES,
+            ClientIdentityToken("b"),
+            PopulationIdentityKind.PHYSICAL_DEVICES,
+        ),
     )
     divergence = jensen_shannon_divergence(
         (

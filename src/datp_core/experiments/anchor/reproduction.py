@@ -7,7 +7,7 @@ from pydantic import ValidationError
 
 from datp_core.analysis.inference.bootstrap.contracts import BcaOutcome, BcaReason, BootstrapInterval
 from datp_core.analysis.inference.bootstrap.estimation import seed_level_bca_interval
-from datp_core.artifacts.provenance import checksum_file
+from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import (
     AnchorReproductionError,
     ErrorMessage,
@@ -165,7 +165,7 @@ def load_historical_observation(source: HistoricalMetricArtifactSource) -> Ancho
         checkpoint_status=ANCHOR_CHECKPOINT_STATUS,
         source_kind=AnchorObservationSourceKind.HISTORICAL_ARTIFACT,
         artifact_path=path.resolve(),
-        artifact_checksum=checksum_file(path),
+        artifact_checksum=Checksum.from_file(path),
         model_checkpoint_identity=document.provenance.model_checkpoint_identity,
         evidence_role=ANCHOR_EVIDENCE_ROLE,
     )

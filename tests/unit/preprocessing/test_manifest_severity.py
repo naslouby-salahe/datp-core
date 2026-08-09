@@ -14,7 +14,12 @@ from datp_core.core.identifiers import (
 from datp_core.core.numeric import AbsoluteTolerance, DirichletConcentration, Seed
 from datp_core.data.populations.contracts import ControlledPartitionCondition, ControlledPartitionKind
 from datp_core.data.preprocessing.artifact_validation import build_preprocessing_manifest
-from datp_core.data.preprocessing.artifacts import PreprocessingFitScope, RelativeAssetPath, TrustedEstimatorClassName
+from datp_core.data.preprocessing.artifacts import (
+    PreprocessingFitScope,
+    RelativeAssetPath,
+    RelativeAssetPathSequence,
+    TrustedEstimatorClassName,
+)
 from datp_core.data.preprocessing.models import PreprocessingProtocol, PreprocessingPublishContext
 
 _PROTOCOL = PreprocessingProtocol(
@@ -25,7 +30,7 @@ _PROTOCOL = PreprocessingProtocol(
     estimator_class_name=TrustedEstimatorClassName.STANDARD_SCALER,
     numerical_equivalence_absolute_tolerance=AbsoluteTolerance(1e-12),
 )
-_ASSET_PATHS = (RelativeAssetPath("estimator.skops"),)
+_ASSET_PATHS = RelativeAssetPathSequence((RelativeAssetPath("estimator.skops"),))
 
 
 def _context(condition: ControlledPartitionCondition | None) -> PreprocessingPublishContext:

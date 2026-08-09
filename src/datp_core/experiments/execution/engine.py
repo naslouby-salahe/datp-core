@@ -8,7 +8,7 @@ from shutil import rmtree
 
 from datp_core.analysis.metrics.models import metric_by_id
 from datp_core.artifacts.layout import experiment_output_directory
-from datp_core.artifacts.provenance import Checksum, checksum_file
+from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
 from datp_core.artifacts.repositories.models import ArtifactKind, ArtifactRecord, ArtifactState, CompletionState
 from datp_core.artifacts.repositories.publication import (
@@ -165,7 +165,7 @@ def _observed_artifacts(output_root: Path, declared: tuple[ArtifactRecord, ...])
         ArtifactRecord(
             kind=item.kind,
             relative_path=item.relative_path,
-            checksum=checksum_file(output_root / item.relative_path),
+            checksum=Checksum.from_file(output_root / item.relative_path),
             byte_count=ByteCount((output_root / item.relative_path).stat().st_size),
             state=ArtifactState.PUBLISHED,
         )
@@ -382,14 +382,14 @@ class PipelineStageRunner:
             ArtifactRecord(
                 kind=ArtifactKind.MANIFEST,
                 relative_path=evaluation_document_path.relative_to(output_root),
-                checksum=checksum_file(evaluation_document_path),
+                checksum=Checksum.from_file(evaluation_document_path),
                 byte_count=ByteCount(evaluation_document_path.stat().st_size),
                 state=ArtifactState.PUBLISHED,
             ),
             ArtifactRecord(
                 kind=ArtifactKind.MANIFEST,
                 relative_path=evaluation_complete_path.relative_to(output_root),
-                checksum=checksum_file(evaluation_complete_path),
+                checksum=Checksum.from_file(evaluation_complete_path),
                 byte_count=ByteCount(evaluation_complete_path.stat().st_size),
                 state=ArtifactState.PUBLISHED,
             ),

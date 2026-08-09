@@ -17,6 +17,7 @@ from datp_core.core.identifiers import (
     FamilyIdentity,
     FederatedThresholdMethod,
     QuantileInterpolationSemantics,
+    ValidationLabel,
 )
 from datp_core.core.numeric import (
     NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
@@ -198,8 +199,8 @@ def validate_assignments(
     assignments: tuple[ThresholdAssignment, ...],
     expected_assignments: tuple[ThresholdAssignment, ...],
     *,
-    label: str,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    mismatch_message: str,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    label: ValidationLabel,
+    mismatch_message: ErrorMessage,
 ) -> None:
     assigned_clients = tuple(item.client for item in assignments)
     expected_clients = tuple(item.client for item in expected_assignments)
@@ -242,9 +243,9 @@ def validate_group_membership(
     contributing_local_quantiles: tuple[LocalQuantile, ...],
     group_threshold: ThresholdValue,
     *,
-    members_label: str,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    match_message: str,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    threshold_message: str,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    members_label: ValidationLabel,
+    match_message: ErrorMessage,
+    threshold_message: ErrorMessage,
     expected_group_threshold: ThresholdValue | None = None,
 ) -> None:
     require_unique_clients(members, members_label)

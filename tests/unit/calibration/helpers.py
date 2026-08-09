@@ -5,7 +5,7 @@ from pathlib import Path
 import polars as pl
 from tests.unit.learning.federated.helpers import client_identity, fedavg_coordinate
 
-from datp_core.artifacts.provenance import Checksum, checksum_file
+from datp_core.artifacts.provenance import Checksum
 from datp_core.core.identifiers import PartitionRole, ScoreFrameColumn, SerializationFormat
 from datp_core.core.numeric import FeatureCount, RoundNumber, RowCount, Seed
 from datp_core.data.populations.contracts import ClientIdentity, PopulationOutcomeLabel
@@ -50,7 +50,7 @@ def benign_score_record(
         checkpoint_round=RoundNumber(2),
         checkpoint_checksum=Checksum("a" * 64),
         path=path,
-        checksum=checksum_file(path),
+        checksum=Checksum.from_file(path),
         row_count=RowCount(len(scores)),
         feature_count=FeatureCount(4),
         serialization_format=SerializationFormat.PARQUET,
@@ -69,7 +69,7 @@ def attack_score_record(tmp_path: Path, client_id: str, scores: tuple[float, ...
         checkpoint_round=RoundNumber(2),
         checkpoint_checksum=Checksum("a" * 64),
         path=path,
-        checksum=checksum_file(path),
+        checksum=Checksum.from_file(path),
         row_count=RowCount(len(scores)),
         feature_count=FeatureCount(4),
         serialization_format=SerializationFormat.PARQUET,

@@ -6,8 +6,6 @@ from datp_core.core.numeric import FeatureCount, Seed
 from datp_core.detector.autoencoder import (
     ReconstructionAutoencoder,
     build_reconstruction_autoencoder,
-    clone_autoencoder_state,
-    load_autoencoder_state,
 )
 from datp_core.detector.training.contracts import AutoencoderArchitecture, AutoencoderProtocol
 
@@ -62,9 +60,9 @@ def test_different_seeds_produce_different_initializations() -> None:
 def test_clone_and_load_state_round_trips_exactly() -> None:
     protocol = AutoencoderProtocol(widths=_ARCHITECTURE)
     model = build_reconstruction_autoencoder(protocol, initialization_seed=Seed(3))
-    cloned = clone_autoencoder_state(model)
+    cloned = {name: tensor.detach().clone() for name, tensor in model.state_dict().items()}
     other = build_reconstruction_autoencoder(protocol, initialization_seed=Seed(4))
-    load_autoencoder_state(other, cloned)
+    other.load_state_dict(cloned, strict=True)
     for left, right in zip(model.state_dict().values(), other.state_dict().values(), strict=True):
         assert torch.equal(left, right)
 

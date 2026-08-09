@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from datp_core.artifacts.provenance import Checksum, checksum_text
+from datp_core.artifacts.provenance import Checksum
 from datp_core.core.identifiers import DatasetId
 from datp_core.core.numeric import ByteCount, RowCount
 from datp_core.data.contracts import RawSourceFile, SourceFileRole
@@ -43,4 +43,4 @@ def test_inventory_checksum_uses_domain_checksum_text() -> None:
         for source in sources
     )
 
-    assert _inventory_checksum(sources) == checksum_text(joined)
+    assert _inventory_checksum(sources) == Checksum.from_text(joined)

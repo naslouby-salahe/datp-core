@@ -5,13 +5,13 @@ from typing import ClassVar
 
 import numpy as np
 
-from datp_core.artifacts.provenance import Checksum, checksum_text
+from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
     require_contract,
 )
-from datp_core.core.identifiers import AvailabilityStatus, ContractSubject, FederatedThresholdMethod
+from datp_core.core.identifiers import AvailabilityStatus, ContractSubject, FederatedThresholdMethod, ValidationLabel
 from datp_core.core.numeric import (
     CalibrationSampleWeights,
     NormalizedWeight,
@@ -62,8 +62,8 @@ class SharedThresholdResult:
             tuple(
                 ThresholdAssignment(item.client, self.shared_threshold) for item in self.contributing_local_quantiles
             ),
-            label="threshold assignments",
-            mismatch_message="every shared threshold assignment must carry the identical shared value",
+            label=ValidationLabel("threshold assignments"),
+            mismatch_message=ErrorMessage("every shared threshold assignment must carry the identical shared value"),
         )
         require_contract(
             floats_exactly_equal(
@@ -126,8 +126,10 @@ class SampleWeightedSharedThresholdResult:
             tuple(
                 ThresholdAssignment(item.client, self.shared_threshold) for item in self.contributing_local_quantiles
             ),
-            label="threshold assignments",
-            mismatch_message="every sample-weighted shared assignment must carry the identical shared value",
+            label=ValidationLabel("threshold assignments"),
+            mismatch_message=ErrorMessage(
+                "every sample-weighted shared assignment must carry the identical shared value"
+            ),
         )
         expected = sum(
             item.value.value * weight.value
@@ -149,7 +151,7 @@ def construct_shared_threshold(
             ErrorMessage("shared threshold construction requires the SHARED_THRESHOLD protocol"),
             subject=protocol.method,
         )
-    require_eligible_cohort(eligible, "shared threshold construction")
+    require_eligible_cohort(eligible, ValidationLabel("shared threshold construction"))
     local_quantiles = tuple(local_quantile(client_scores, protocol.quantile) for client_scores in eligible)
     shared_value = mean_local_threshold(local_quantiles)
     return SharedThresholdResult(
@@ -170,7 +172,7 @@ def construct_pooled_shared_quantile(
             ErrorMessage("pooled shared quantile construction requires the POOLED_SHARED_QUANTILE protocol"),
             subject=protocol.method,
         )
-    require_eligible_cohort(eligible, "pooled shared quantile construction")
+    require_eligible_cohort(eligible, ValidationLabel("pooled shared quantile construction"))
     pooled_scores = tuple(score for client_scores in eligible for score in client_scores.scores)
     shared_value = exact_empirical_quantile(
         np.asarray(tuple(score.value for score in pooled_scores), dtype=np.float64),
@@ -202,7 +204,7 @@ def construct_sample_weighted_shared_threshold(
             ErrorMessage("sample-weighted construction requires the SAMPLE_WEIGHTED_SHARED_THRESHOLD protocol"),
             subject=protocol.method,
         )
-    require_eligible_cohort(eligible, "sample-weighted shared threshold construction")
+    require_eligible_cohort(eligible, ValidationLabel("sample-weighted shared threshold construction"))
     local_quantiles = tuple(local_quantile(client_scores, protocol.quantile) for client_scores in eligible)
     weights = CalibrationSampleWeights(tuple(item.calibration_count for item in local_quantiles))
     shared_value = sample_weighted_mean(tuple(item.value for item in local_quantiles), weights)
@@ -228,6 +230,6 @@ def _require_common_score_set_checksum(eligible: tuple[ClientBenignCalibrationSc
 
 def _pooled_calibration_manifest_checksum(eligible: tuple[ClientBenignCalibrationScores, ...]) -> Checksum:
     ordered = sorted(eligible, key=lambda item: item.client)
-    return checksum_text(
-        "|".join(f"{item.client.client_id}:{item.calibration_manifest_checksum.value}" for item in ordered)
+    return Checksum.from_text(
+        "|".join(f"{item.client.client_id.value}:{item.calibration_manifest_checksum.value}" for item in ordered)
     )

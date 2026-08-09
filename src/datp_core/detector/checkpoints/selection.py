@@ -6,7 +6,6 @@ from dataclasses import replace
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import (
     ErrorMessage,
-    LeakageError,
     ScientificContractError,
 )
 from datp_core.core.identifiers import (
@@ -83,7 +82,7 @@ def select_checkpoint(
         selection_rule=selection_rule,
         held_out_metrics=held_out_metrics,
         attack_labels_present=attack_labels_present,
-        branch_label=ProcessedDataBranch.FEDERATED,
+        branch=ProcessedDataBranch.FEDERATED,
     )
     ordered = validate_ordered_checkpoint_inventory(
         candidates,
@@ -108,13 +107,4 @@ def select_checkpoint(
         candidates=statused,
         checkpoint_protocol=protocol,
         status=CheckpointStatus.SELECTED_BY_NON_TEST_RULE,
-    )
-
-
-def reject_centralized_checkpoint(  # TODO this seems like dead code and not used. CHeck if it should be wired or deleted.
-    marker_identity: FederatedTrainingCoordinate,
-) -> None:
-    raise LeakageError(
-        ErrorMessage(f"centralized checkpoint cannot enter federated selection ({marker_identity})"),
-        subject=ContractSubject.CHECKPOINT_CANDIDATES,
     )

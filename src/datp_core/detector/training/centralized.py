@@ -126,6 +126,14 @@ class InMemoryCentralizedModelSnapshot:
 
 
 @dataclass(frozen=True, slots=True)
+class TrainingEpochResults:
+    """Centralized training epoch losses and checkpoint snapshots."""
+
+    epoch_losses: tuple[CentralizedEpochLoss, ...]
+    candidate_snapshots: tuple[InMemoryCentralizedModelSnapshot, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class CentralizedTrainingResult:
     """Persistable centralized training result with no fabricated in-memory tensor state."""
 
@@ -240,7 +248,7 @@ def train_centralized_autoencoder(request: CentralizedTrainingRequest) -> Centra
         batch_size=request.batch_size,
         seed=request.training_seed,
     )
-    epoch_losses, snapshots = _run_training_epochs(
+    training_results = _run_training_epochs(
         model=model,
         optimizer=optimizer,
         loader=loader,
@@ -265,7 +273,7 @@ def train_centralized_autoencoder(request: CentralizedTrainingRequest) -> Centra
         training_seed=request.training_seed,
         train_row_count=RowCount(int(extracted.feature_matrix.shape[0])),
         feature_count=FeatureCount(int(extracted.feature_matrix.shape[1])),
-        epoch_losses=epoch_losses,
+        epoch_losses=training_results.epoch_losses,
         model_directory=request.output_directory,
         model_tensor_path=tensor_path,
         model_tensor_checksum=tensor_checksum,
@@ -275,7 +283,7 @@ def train_centralized_autoencoder(request: CentralizedTrainingRequest) -> Centra
         batch_size_used=request.batch_size,
         final_epoch=request.checkpoint_protocol.maximum_round,
     )
-    return CentralizedTrainingExecution(result=result, candidate_snapshots=snapshots)
+    return CentralizedTrainingExecution(result=result, candidate_snapshots=training_results.candidate_snapshots)
 
 
 def load_centralized_model_tensors(
@@ -463,10 +471,7 @@ def _run_training_epochs(
     loader: DataLoader[tuple[torch.Tensor, ...]],
     checkpoint_protocol: CheckpointProtocol,
     device: torch.device,
-) -> tuple[  # TODO: should be handled better instead of tuple of tuple and tuple
-    tuple[CentralizedEpochLoss, ...],
-    tuple[InMemoryCentralizedModelSnapshot, ...],
-]:
+) -> TrainingEpochResults:
     losses: list[CentralizedEpochLoss] = []
     snapshots: list[InMemoryCentralizedModelSnapshot] = []
     candidate_rounds = frozenset(candidate.value for candidate in checkpoint_protocol.candidates)
@@ -512,4 +517,4 @@ def _run_training_epochs(
             ErrorMessage("training failed to capture every declared checkpoint candidate"),
             subject=ContractSubject.CHECKPOINT_CANDIDATES,
         )
-    return tuple(losses), tuple(snapshots)
+    return TrainingEpochResults(epoch_losses=tuple(losses), candidate_snapshots=tuple(snapshots))

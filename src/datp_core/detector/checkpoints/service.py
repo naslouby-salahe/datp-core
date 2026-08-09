@@ -15,6 +15,7 @@ from datp_core.core.identifiers import (
     CheckpointSelectionRule,
     CheckpointStatus,
     ContractSubject,
+    ProcessedDataBranch,
     TrainingModelId,
 )
 from datp_core.core.numeric import MetricValue, RoundNumber, Seed
@@ -152,7 +153,7 @@ def select_centralized_checkpoint(
         selection_rule=selection_rule,
         held_out_metrics=held_out_metrics,
         attack_labels_present=attack_labels_present,
-        branch_label="centralized",
+        branch=ProcessedDataBranch.CENTRALIZED_REFERENCE,
     )
     ordered = validate_ordered_checkpoint_inventory(candidates, protocol.candidates)
     for candidate in ordered:

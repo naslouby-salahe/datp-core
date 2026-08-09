@@ -34,7 +34,7 @@ from datp_core.analysis.metrics.threshold_estimation import (
 from datp_core.analysis.operational.alert_burden import AlertBurdenDiagnostic, calculate_alert_burden
 from datp_core.analysis.operational.communication import summarize_communication
 from datp_core.analysis.operational.traffic_rates import ValidatedTrafficRateEvidence
-from datp_core.artifacts.provenance import checksum_file
+from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.serializers.json import canonical_checksum
 from datp_core.core.errors import (
     ArtifactIntegrityError,
@@ -225,7 +225,7 @@ def _evaluate_score_record(
                 ErrorMessage("threshold assignment missing for evaluation client without a deployment fallback"),
                 subject=ContractSubject.THRESHOLD,
             )
-    if not record.path.is_file() or checksum_file(record.path) != record.checksum:
+    if not record.path.is_file() or Checksum.from_file(record.path) != record.checksum:
         raise ArtifactIntegrityError(ErrorMessage("evaluation score artifact is incomplete or changed"))
 
     scores, labels, rows = _score_arrays(str(record.path))

@@ -510,7 +510,7 @@ def _client_score_vectors(
     )
     vectors: list[ClientScoreVector] = []
     for client_result in sorted(document.clients, key=lambda item: item.client):
-        path = score_root / client_result.client.client_id / FederatedScoreAssetName.CALIBRATION.value
+        path = score_root / client_result.client.client_id.value / FederatedScoreAssetName.CALIBRATION.value
         if not path.is_file():
             raise ScientificContractError(
                 ErrorMessage(f"missing persisted benign calibration scores for JS divergence: {path}"),
@@ -522,7 +522,7 @@ def _client_score_vectors(
         )
         if not scores:
             raise ScientificContractError(
-                ErrorMessage(f"empty calibration score vector for client {client_result.client.client_id}")
+                ErrorMessage(f"empty calibration score vector for client {client_result.client.client_id.value}")
             )
         vectors.append(ClientScoreVector(client=client_result.client, scores=scores))
     if len(vectors) < 2:
@@ -546,10 +546,10 @@ def _client_evaluation_scores(
     ordered_document_clients = tuple(sorted(document_clients))
     if frozenset(ordered_document_clients) != frozenset(expected_clients):
         missing = sorted(
-            client.client_id for client in expected_clients if client not in frozenset(ordered_document_clients)
+            client.client_id.value for client in expected_clients if client not in frozenset(ordered_document_clients)
         )
         extra = sorted(
-            client.client_id for client in ordered_document_clients if client not in frozenset(expected_clients)
+            client.client_id.value for client in ordered_document_clients if client not in frozenset(expected_clients)
         )
         raise ScientificContractError(
             ErrorMessage(
@@ -564,27 +564,27 @@ def _client_evaluation_scores(
     pairs: list[tuple[ClientIdentity, tuple[MetricValue, ...]]] = []
     benign_label = PopulationOutcomeLabel.BENIGN.value
     for client in expected_clients:
-        path = score_root / client.client_id / FederatedScoreAssetName.EVALUATION.value
+        path = score_root / client.client_id.value / FederatedScoreAssetName.EVALUATION.value
         if not path.is_file():
             raise ScientificContractError(
-                ErrorMessage(f"missing evaluation score parquet for client {client.client_id}: {path}")
+                ErrorMessage(f"missing evaluation score parquet for client {client.client_id.value}: {path}")
             )
         frame = pl.read_parquet(path)
         score_column = ScoreFrameColumn.RECONSTRUCTION_ERROR.value
         label_column = ScoreFrameColumn.OUTCOME_LABEL.value
         if score_column not in frame.columns:
             raise ScientificContractError(
-                ErrorMessage(f"missing reconstruction_error column for client {client.client_id}: {path}")
+                ErrorMessage(f"missing reconstruction_error column for client {client.client_id.value}: {path}")
             )
         if label_column not in frame.columns:
             raise ScientificContractError(
-                ErrorMessage(f"missing outcome_label column for client {client.client_id}: {path}")
+                ErrorMessage(f"missing outcome_label column for client {client.client_id.value}: {path}")
             )
         scores_raw = frame.get_column(score_column).to_list()
         labels = frame.get_column(label_column).to_list()
         if len(scores_raw) != len(labels):
             raise ScientificContractError(
-                ErrorMessage(f"score and label columns are misaligned for client {client.client_id}: {path}")
+                ErrorMessage(f"score and label columns are misaligned for client {client.client_id.value}: {path}")
             )
         scores = tuple(
             MetricValue(float(score))

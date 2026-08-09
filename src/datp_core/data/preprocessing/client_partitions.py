@@ -4,7 +4,7 @@ from pathlib import Path
 import polars as pl
 import structlog
 
-from datp_core.artifacts.provenance import Checksum, checksum_text
+from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.serializers.json import canonical_json_text
 from datp_core.core.contracts import ClientCollection, ClientOwned
 from datp_core.core.errors import (
@@ -82,7 +82,7 @@ class ModelInputExclusionEvidence:
     @property
     def evidence_checksum(self) -> Checksum:
         ordered = ",".join(map(str, self.excluded_stable_row_ids))
-        return checksum_text(
+        return Checksum.from_text(
             f"{self.dataset.value}|{self.population.value}|{self.reason}|{self.total_row_count.value}|{ordered}"
         )
 

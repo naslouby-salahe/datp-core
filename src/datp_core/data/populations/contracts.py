@@ -8,7 +8,7 @@ from pathlib import Path
 import polars as pl
 from pydantic import model_validator
 
-from datp_core.artifacts.provenance import Checksum, checksum_text
+from datp_core.artifacts.provenance import Checksum
 from datp_core.core.contracts import StrictModel
 from datp_core.core.errors import (
     CapabilityError,
@@ -17,9 +17,12 @@ from datp_core.core.errors import (
 )
 from datp_core.core.identifiers import (
     CaptureTimestampColumn,
+    ChronologyGroupIdentity,
+    ClientIdentityToken,
     ContractSubject,
     DatasetId,
     EvidenceRole,
+    FamilyIdentity,
     FederatedThresholdMethod,
     MetricId,
     PopulationId,
@@ -56,23 +59,17 @@ class CapabilityStatement:
 
 @dataclass(frozen=True, slots=True)
 class PhysicalClientCapability(CapabilityStatement):
-    identities: tuple[
-        str, ...
-    ]  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
+    identities: tuple[ClientIdentityToken, ...]
 
 
 @dataclass(frozen=True, slots=True)
 class FamilyTaxonomyCapability(CapabilityStatement):
-    families: tuple[
-        str, ...
-    ]  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
+    families: tuple[FamilyIdentity, ...]
 
 
 @dataclass(frozen=True, slots=True)
 class ChronologyCapability(CapabilityStatement):
-    temporal_group_identities: tuple[
-        str, ...
-    ]  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
+    temporal_group_identities: tuple[ChronologyGroupIdentity, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -263,15 +260,9 @@ class PopulationManifestDocument(StrictModel):
     identity_kind: PopulationIdentityKind
     partition_seed: Seed
     split_protocol: SplitProtocolId
-    candidate_clients: tuple[
-        str, ...
-    ]  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
-    accepted_clients: tuple[
-        str, ...
-    ]  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
-    excluded_client_ids: tuple[
-        str, ...
-    ]  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
+    candidate_clients: tuple[ClientIdentityToken, ...]
+    accepted_clients: tuple[ClientIdentityToken, ...]
+    excluded_client_ids: tuple[ClientIdentityToken, ...]
     total_membership_rows: RowCount
     benign_row_count: RowCount
     attack_row_count: RowCount
@@ -324,19 +315,13 @@ class DirichletPartitionDiagnosticsDocument(StrictModel):
     partition_kind: ControlledPartitionKind
     concentration: DirichletConcentration | None
     client_count: ClientCount
-    client_ids: tuple[
-        str, ...
-    ]  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
+    client_ids: tuple[ClientIdentityToken, ...]
     total_rows: RowCount
     client_row_counts: tuple[RowCount, ...]
     benign_row_counts: tuple[RowCount, ...]
     attack_row_counts: tuple[RowCount, ...]
-    empty_client_ids: tuple[
-        str, ...
-    ]  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
-    insufficient_benign_client_ids: tuple[
-        str, ...
-    ]  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
+    empty_client_ids: tuple[ClientIdentityToken, ...]
+    insufficient_benign_client_ids: tuple[ClientIdentityToken, ...]
     allocation_checksum: Checksum
 
     @model_validator(mode="after")
@@ -351,12 +336,8 @@ class ChronologicalPartitionDiagnosticsDocument(StrictModel):
     population: PopulationId
     expected_group_count: ClientCount
     observed_eligible_group_count: NonNegativeIntegerValue
-    eligible_group_ids: tuple[
-        str, ...
-    ]  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
-    excluded_group_ids: tuple[
-        str, ...
-    ]  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
+    eligible_group_ids: tuple[ChronologyGroupIdentity, ...]
+    excluded_group_ids: tuple[ChronologyGroupIdentity, ...]
     exclusion_reasons: tuple[ChronologyExclusionReason, ...]
     duplicate_timestamp_rows: RowCount
     total_temporal_rows: RowCount
@@ -374,22 +355,22 @@ class ChronologicalPartitionDiagnosticsDocument(StrictModel):
 @dataclass(frozen=True, slots=True)
 class ClientIdentity:
     population: PopulationId
-    client_id: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
+    client_id: ClientIdentityToken
     identity_kind: PopulationIdentityKind
 
     def __post_init__(self) -> None:
-        if not self.client_id or any(separator in self.client_id for separator in ("=", "/", "\\")):
-            raise ValueError("client identity must be a non-empty path-safe token")
+        if any(separator in self.client_id.value for separator in ("=", "/", "\\")):
+            raise ValueError("client identity must be a path-safe token")
 
     def __lt__(self, other: "ClientIdentity") -> bool:
         return (
             self.population.value,
             self.identity_kind.value,
-            self.client_id,
+            self.client_id.value,
         ) < (
             other.population.value,
             other.identity_kind.value,
-            other.client_id,
+            other.client_id.value,
         )
 
 
@@ -472,7 +453,7 @@ class PopulationManifest:
     document: PopulationManifestDocument
     clients: tuple[ClientIdentity, ...]
     feasibility: PopulationFeasibility
-    family_by_client: tuple[tuple[str, str], ...]
+    family_by_client: tuple[tuple[ClientIdentityToken, FamilyIdentity], ...]
 
     def __post_init__(self) -> None:
         client_ids = tuple(client.client_id for client in self.clients)
@@ -543,7 +524,7 @@ class PopulationConstructionRequest:
 @dataclass(frozen=True, slots=True)
 class PreprocessingHandoffRequest:
     construction: PopulationConstructionResult
-    deployment_fallback_client_ids: frozenset[str]
+    deployment_fallback_client_ids: frozenset[ClientIdentityToken]
     capture_timestamp_column: CaptureTimestampColumn | None = None
     expected_split_manifest_checksum: Checksum | None = None
 
@@ -579,9 +560,7 @@ def iid_condition() -> ControlledPartitionCondition:
 
 def client_identities(
     population: PopulationId,
-    client_ids: tuple[
-        str, ...
-    ],  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
+    client_ids: tuple[ClientIdentityToken, ...],
     identity_kind: PopulationIdentityKind,
 ) -> tuple[ClientIdentity, ...]:
     return tuple(ClientIdentity(population, client_id, identity_kind) for client_id in client_ids)
@@ -590,9 +569,7 @@ def client_identities(
 def build_population_manifest(
     document: PopulationManifestDocument,
     feasibility: PopulationFeasibility,
-    family_by_client: tuple[
-        tuple[str, str], ...
-    ] = (),  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
+    family_by_client: tuple[tuple[ClientIdentityToken, FamilyIdentity], ...] = (),
 ) -> PopulationManifest:
     return PopulationManifest(
         document,
@@ -602,13 +579,13 @@ def build_population_manifest(
     )
 
 
-def synthetic_client_ids(client_count: ClientCount) -> tuple[str, ...]:
+def synthetic_client_ids(client_count: ClientCount) -> tuple[ClientIdentityToken, ...]:
     width = max(2, len(str(client_count.value - 1)))
-    return tuple(f"synthetic_client_{index:0{width}d}" for index in range(client_count.value))
+    return tuple(ClientIdentityToken(f"synthetic_client_{index:0{width}d}") for index in range(client_count.value))
 
 
-def membership_checksum(client_ids: tuple[str, ...], stable_row_ids: tuple[str, ...]) -> Checksum:
-    return checksum_text("\n".join((*client_ids, *stable_row_ids)))
+def membership_checksum(client_ids: tuple[ClientIdentityToken, ...], stable_row_ids: tuple[str, ...]) -> Checksum:
+    return Checksum.from_text("\n".join((*(c.value for c in client_ids), *stable_row_ids)))
 
 
 def population_evidence_role(population_id: PopulationId) -> EvidenceRole:
@@ -767,17 +744,15 @@ def _threshold_methods(
     return supported
 
 
-def _require_unique_ordered(values: tuple[str, ...], field: PopulationManifestField) -> None:
+def _require_unique_ordered(values: tuple[ClientIdentityToken, ...], field: PopulationManifestField) -> None:
     if len(values) != len(frozenset(values)):
         raise ValueError(f"{field.value} must be unique")
 
 
 def _require_client_set_partition(
-    candidates: tuple[str, ...],
-    accepted: tuple[str, ...],
-    excluded: tuple[
-        str, ...
-    ],  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
+    candidates: tuple[ClientIdentityToken, ...],
+    accepted: tuple[ClientIdentityToken, ...],
+    excluded: tuple[ClientIdentityToken, ...],
 ) -> None:
     accepted_set = frozenset(accepted)
     if not accepted_set <= frozenset(candidates):

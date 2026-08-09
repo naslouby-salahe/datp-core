@@ -14,6 +14,7 @@ from datp_core.analysis.temporal import (
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.identifiers import (
     AvailabilityStatus,
+    ClientIdentityToken,
     ExperimentId,
     FederatedThresholdMethod,
     PartitionRole,
@@ -271,7 +272,7 @@ def test_client_trajectories_attach_to_recovery() -> None:
             seed=Seed(0),
             client=ClientIdentity(
                 PopulationId.EDGE_TEMPORAL_GROUPS,
-                "client-a",
+                ClientIdentityToken("client-a"),
                 PopulationIdentityKind.VERIFIED_TEMPORAL_GROUPS,
             ),
             threshold_method=FederatedThresholdMethod.LOCAL_THRESHOLD,
@@ -307,7 +308,7 @@ def test_client_trajectories_attach_to_recovery() -> None:
     )
     assert len(result.client_trajectories) == 1
     trajectory = result.client_trajectories[0]
-    assert trajectory.client_id == "client-a"
+    assert trajectory.client_id.value == "client-a"
     assert trajectory.threshold_movement_frozen is not None
     assert trajectory.threshold_movement_frozen.value == pytest.approx(0.1)
     assert trajectory.fpr_movement_recalibrated is not None

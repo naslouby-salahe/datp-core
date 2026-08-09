@@ -182,8 +182,8 @@ def test_eligibility_covers_every_candidate_client_never_silently_drops_one(tmp_
         for record in records
     )
     assert len(decisions) == 2
-    assert frozenset(item.support.client.client_id for item in decisions) == frozenset({"client_a", "client_b"})
-    assert tuple(client.client_id for client in eligible_clients(decisions)) == ("client_a",)
+    assert frozenset(item.support.client.client_id.value for item in decisions) == frozenset({"client_a", "client_b"})
+    assert tuple(client.client_id.value for client in eligible_clients(decisions)) == ("client_a",)
 
 
 def test_family_threshold_without_taxonomy_reports_typed_unavailability_not_a_crash() -> None:

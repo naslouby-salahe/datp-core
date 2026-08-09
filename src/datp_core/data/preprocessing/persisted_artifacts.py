@@ -3,7 +3,7 @@ from pathlib import Path
 
 import polars as pl
 
-from datp_core.artifacts.provenance import Checksum, checksum_text
+from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.serializers.json import canonical_json_text
 from datp_core.core.errors import (
     ErrorMessage,
@@ -150,7 +150,7 @@ def _validate_population_publication(
             canonical_json_text(primary),
         )
 
-    if complete != checksum_text("\n".join(sections)):
+    if complete != Checksum.from_text("\n".join(sections)):
         raise ScientificContractError(
             ErrorMessage("published population COMPLETE digest does not match its manifests"),
             subject=identity.population,
@@ -177,7 +177,7 @@ def _validate_split_publication(
             canonical_json_text(primary),
         )
 
-    if complete != checksum_text("\n".join(sections)):
+    if complete != Checksum.from_text("\n".join(sections)):
         raise ScientificContractError(
             ErrorMessage("published split COMPLETE digest does not match its manifests"),
             subject=identity.population,

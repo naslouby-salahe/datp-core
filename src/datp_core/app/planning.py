@@ -5,12 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
-from datp_core.artifacts.provenance import Checksum, checksum_text
+from datp_core.artifacts.provenance import Checksum
 from datp_core.core.identifiers import (
     ExperimentId,
     ExperimentReadiness,
     FederatedThresholdMethod,
     MetricId,
+    NonEmptyString,
     PopulationId,
     SplitProtocolId,
     TemporalState,
@@ -27,6 +28,10 @@ from datp_core.experiments.registry import ExperimentDeclaration
 from datp_core.thresholds.protocols import QUANTILE_GRID
 
 
+class PlanReason(NonEmptyString):
+    validation_name = "planning reason"
+
+
 class PlanDisposition(StrEnum):
     EXECUTABLE = "executable"
     SUPPRESSED = "suppressed"
@@ -38,22 +43,14 @@ class PlanDisposition(StrEnum):
 class PlanningEvidence:
     experiment: ExperimentId
     disposition: PlanDisposition
-    reason: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-
-    def __post_init__(self) -> None:
-        if not self.reason.strip():
-            raise ValueError("planning evidence requires a non-empty reason")
+    reason: PlanReason
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PlannedExperiment:
     coordinate: ExperimentCoordinate
     disposition: PlanDisposition
-    reason: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-
-    def __post_init__(self) -> None:
-        if not self.reason.strip():
-            raise ValueError("planned experiments require a non-empty reason")
+    reason: PlanReason
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -175,7 +172,9 @@ def _planned_entry(
     capabilities = population_capabilities(declaration.population)
     if cell.threshold_method not in capabilities.valid_threshold_methods:
         disposition = PlanDisposition.INFEASIBLE
-        reason = "threshold_method_unsupported: population capability contract does not authorize this threshold method"
+        reason = PlanReason(
+            "threshold_method_unsupported: population capability contract does not authorize this threshold method"
+        )
     population = population_declaration(declaration.population)
     return PlannedExperiment(
         coordinate=ExperimentCoordinate(
@@ -229,24 +228,22 @@ def _temporal_states(experiment: ExperimentId) -> tuple[TemporalState | None, ..
 def _resolve_disposition(
     declaration: ExperimentDeclaration,
     evidence: tuple[PlanningEvidence, ...],
-) -> tuple[
-    PlanDisposition, str
-]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+) -> tuple[PlanDisposition, PlanReason]:
     explicit = tuple(item for item in evidence if item.experiment is declaration.id)
     if explicit:
         item = explicit[0]
         return item.disposition, item.reason
     match declaration.readiness:
         case ExperimentReadiness.EXECUTABLE:
-            return PlanDisposition.EXECUTABLE, "declared executable by the validated protocol graph"
+            return PlanDisposition.EXECUTABLE, PlanReason("declared executable by the validated protocol graph")
         case ExperimentReadiness.SUPPRESSED:
-            return PlanDisposition.SUPPRESSED, "suppressed by the validated protocol graph"
+            return PlanDisposition.SUPPRESSED, PlanReason("suppressed by the validated protocol graph")
         case ExperimentReadiness.INFEASIBLE:
-            return PlanDisposition.INFEASIBLE, "declared infeasible by the validated protocol graph"
+            return PlanDisposition.INFEASIBLE, PlanReason("declared infeasible by the validated protocol graph")
         case ExperimentReadiness.BLOCKED:
-            return PlanDisposition.BLOCKED, "blocked by an unresolved scientific or artifact prerequisite"
+            return PlanDisposition.BLOCKED, PlanReason("blocked by an unresolved scientific or artifact prerequisite")
         case ExperimentReadiness.DECLARED:
-            return PlanDisposition.BLOCKED, "declared experiment requires explicit feasibility evidence"
+            return PlanDisposition.BLOCKED, PlanReason("declared experiment requires explicit feasibility evidence")
 
 
 def _validated_evidence(evidence: tuple[PlanningEvidence, ...]) -> tuple[PlanningEvidence, ...]:
@@ -258,4 +255,4 @@ def _validated_evidence(evidence: tuple[PlanningEvidence, ...]) -> tuple[Plannin
 
 def _digest_entries(entries: tuple[PlannedExperiment, ...]) -> Checksum:
     payload = "\n".join(f"{entry.coordinate.stable_key}|{entry.disposition.value}|{entry.reason}" for entry in entries)
-    return checksum_text(payload)
+    return Checksum.from_text(payload)

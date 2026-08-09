@@ -7,7 +7,7 @@ from typing import Protocol
 
 import polars as pl
 
-from datp_core.artifacts.provenance import Checksum, checksum_text
+from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.serializers.json import canonical_checksum
 from datp_core.core.errors import (
     ErrorMessage,
@@ -15,6 +15,7 @@ from datp_core.core.errors import (
 )
 from datp_core.core.identifiers import (
     CheckpointStatus,
+    ClientIdentityToken,
     ContractSubject,
     FeatureNameSequence,
     PartitionRole,
@@ -25,9 +26,10 @@ from datp_core.core.identifiers import (
 )
 from datp_core.core.numeric import BatchSize, FeatureCount, RoundNumber, RowCount
 from datp_core.data.populations.contracts import ClientIdentity
-from datp_core.detector.checkpoints.contracts import CentralizedCheckpointCandidate, CheckpointCandidate
+from datp_core.detector.checkpoints.models import CentralizedCheckpointCandidate
 from datp_core.detector.training.centralized import CentralizedTrainingCoordinate
 from datp_core.detector.training.contracts import AutoencoderProtocol, FederatedTrainingCoordinate
+from datp_core.detector.training.models import CheckpointCandidate
 
 
 class TrainingCoordinateContract(Protocol):
@@ -40,9 +42,7 @@ class TrainingCoordinateContract(Protocol):
 
 class ClientIdentityContract(Protocol):
     @property
-    def client_id(
-        self,
-    ) -> str: ...  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    def client_id(self) -> ClientIdentityToken: ...
 
     @property
     def population(self) -> PopulationId: ...
@@ -122,15 +122,9 @@ class ScoreArtifactManifest[
     checkpoint_status: CheckpointStatus
     preprocessing_state_set_checksum: Checksum
     split_manifest_checksum: Checksum
-    calibration_records: tuple[
-        ScoreRecord[CoordinateT, ClientT], ...
-    ]  # TODO: should be handled better than so much nested
-    evaluation_records: tuple[
-        ScoreRecord[CoordinateT, ClientT], ...
-    ]  # TODO: should be handled better than so much nested code
-    future_recalibration_records: tuple[
-        ScoreRecord[CoordinateT, ClientT], ...
-    ] = ()  # TODO: should be handled better than so much nested code
+    calibration_records: tuple[ScoreRecord[CoordinateT, ClientT], ...]
+    evaluation_records: tuple[ScoreRecord[CoordinateT, ClientT], ...]
+    future_recalibration_records: tuple[ScoreRecord[CoordinateT, ClientT], ...] = ()
 
     def __post_init__(self) -> None:
         if self.checkpoint_status not in _POST_SELECTION_CHECKPOINT_STATUSES:
@@ -229,10 +223,10 @@ def record_set_checksum[
     ClientT: ClientIdentityContract,
 ](records: tuple[ScoreRecord[CoordinateT, ClientT], ...]) -> Checksum:
     payload = "\n".join(
-        f"{record.scored_client.population.value}|{record.scored_client.client_id}|{record.checksum.value}"
-        for record in sorted(records, key=lambda item: item.scored_client.client_id)
+        f"{record.scored_client.population.value}|{record.scored_client.client_id.value}|{record.checksum.value}"
+        for record in sorted(records, key=lambda item: item.scored_client.client_id.value)
     )
-    return checksum_text(payload)
+    return Checksum.from_text(payload)
 
 
 def _require_consistent_partition_records[
@@ -288,9 +282,7 @@ def _require_matching_client_inventory[
     ClientT: ClientIdentityContract,
 ](
     left: tuple[ScoreRecord[CoordinateT, ClientT], ...],
-    right: tuple[
-        ScoreRecord[CoordinateT, ClientT], ...
-    ],  # TODO: i noticed a pattern of having tuple of records. This should be handled better than so much nested code. Check what already exists and use that instead of primitives
+    right: tuple[ScoreRecord[CoordinateT, ClientT], ...],
 ) -> None:
     left_clients = frozenset(record.scored_client for record in left)
     right_clients = frozenset(record.scored_client for record in right)

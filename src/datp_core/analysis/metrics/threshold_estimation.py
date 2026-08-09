@@ -218,7 +218,7 @@ def sample_efficiency_curve(
         return (
             item.provenance.coordinate.model.value,
             item.provenance.coordinate.preprocessing_identity.value,
-            item.provenance.client.client_id,
+            item.provenance.client.client_id.value,
             item.provenance.training_seed.value,
             item.provenance.calibration_size.value,
         )

@@ -7,7 +7,7 @@ from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
 )
-from datp_core.core.identifiers import FederatedThresholdMethod
+from datp_core.core.identifiers import FederatedThresholdMethod, ValidationLabel
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 from datp_core.thresholds.contracts import (
     LocalQuantile,
@@ -35,8 +35,8 @@ class LocalThresholdResult:
         validate_assignments(
             self.assignments,
             tuple(ThresholdAssignment(item.client, item.value) for item in self.local_quantiles),
-            label="threshold assignments",
-            mismatch_message="a local threshold assignment must equal the client's own local quantile",
+            label=ValidationLabel("threshold assignments"),
+            mismatch_message=ErrorMessage("a local threshold assignment must equal the client's own local quantile"),
         )
 
 
@@ -49,7 +49,7 @@ def construct_local_threshold(
             ErrorMessage("local threshold construction requires the LOCAL_THRESHOLD protocol"),
             subject=protocol.method,
         )
-    require_eligible_cohort(eligible, "local threshold construction")
+    require_eligible_cohort(eligible, ValidationLabel("local threshold construction"))
     local_quantiles = tuple(local_quantile(client_scores, protocol.quantile) for client_scores in eligible)
     return LocalThresholdResult(
         coordinate=eligible[0].coordinate,

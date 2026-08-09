@@ -5,10 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from datp_core.app.contracts import OverwriteMode
+from datp_core.app.models import DetailText
 from datp_core.app.planning import (
     ExperimentPlan,
     PlanDisposition,
     PlanningEvidence,
+    PlanReason,
     expand_experiment_plan,
     merge_experiment_plans,
 )
@@ -58,7 +60,9 @@ def executable_planning_evidence(experiment_id: ExperimentId) -> PlanningEvidenc
     return PlanningEvidence(
         experiment=experiment_id,
         disposition=PlanDisposition.EXECUTABLE,
-        reason="registered experiment recipe supplies locked execution prerequisites from protocol declarations",
+        reason=PlanReason(
+            "registered experiment recipe supplies locked execution prerequisites from protocol declarations"
+        ),
     )
 
 
@@ -76,7 +80,7 @@ def _planning_evidence(declaration: ExperimentDeclaration) -> tuple[PlanningEvid
             PlanningEvidence(
                 experiment=declaration.id,
                 disposition=PlanDisposition.BLOCKED,
-                reason=str(error),
+                reason=PlanReason(str(error)),
             ),
         )
     return (executable_planning_evidence(declaration.id),)
@@ -91,7 +95,7 @@ def _plan_for_declaration(declaration: ExperimentDeclaration) -> ExperimentPlan:
                 PlanningEvidence(
                     experiment=declaration.id,
                     disposition=PlanDisposition.EXECUTABLE,
-                    reason="historical anchor reproduction uses the locked historical seed cohort",
+                    reason=PlanReason("historical anchor reproduction uses the locked historical seed cohort"),
                 ),
             ),
         )
@@ -146,7 +150,7 @@ def preprocess_datasets(
 
 def format_plan(
     presentation: PlanPresentation,
-) -> str:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+) -> DetailText:
     lines = [
         f"plan_digest={presentation.plan.digest.value}",
         f"entries={len(presentation.plan.entries)}",
@@ -161,4 +165,4 @@ def format_plan(
         count = sum(1 for entry in presentation.plan.entries if entry.disposition is disposition)
         if count:
             lines.append(f"disposition[{disposition.value}]={count}")
-    return "\n".join(lines)
+    return DetailText("\n".join(lines))

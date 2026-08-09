@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from datp_core.app.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
+from datp_core.app.planning import PlanReason
 from datp_core.core.identifiers import ExperimentId
 from datp_core.core.numeric import Seed
 from datp_core.experiments.common.seeds import SeedCohort
@@ -63,7 +64,7 @@ def _tiny_campaign() -> CampaignPlan:
             PlanningEvidence(
                 experiment=declaration.id,
                 disposition=PlanDisposition.EXECUTABLE,
-                reason="tiny campaign fixture is available",
+                reason=PlanReason("tiny campaign fixture is available"),
             ),
         ),
     )

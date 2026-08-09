@@ -15,6 +15,7 @@ from datp_core.core.errors import (
     ScientificContractError,
 )
 from datp_core.core.identifiers import (
+    ClientIdentityToken,
     CommunicationEstimationMethod,
     ContractSubject,
     CudaDeviceName,
@@ -142,7 +143,7 @@ def _validate_client_rows(
         (RoundNumber(int(r)), str(c)) for r, c in zip(observed_rounds, observed_clients_list, strict=True)
     )
     expected_pairs = tuple(
-        (round_number, client.client_id) for round_number in expected_rounds for client in expected_clients
+        (round_number, client.client_id.value) for round_number in expected_rounds for client in expected_clients
     )
     if observed_pairs != expected_pairs:
         raise ArtifactIntegrityError(
@@ -228,13 +229,13 @@ def persist_federated_training_history(
 
         for result in item.client_results:
             c_rounds.append(item.round_number.value)
-            c_ids.append(result.client.client_id)
+            c_ids.append(result.client.client_id.value)
             c_samples.append(result.sample_count.value)
             c_losses.append(result.local_loss.value)
 
         for reference in item.personalized_state_references:
             p_rounds.append(item.round_number.value)
-            p_ids.append(reference.client.client_id)
+            p_ids.append(reference.client.client_id.value)
             p_losses.append(reference.local_loss.value)
             p_sums.append(reference.state_checksum.value)
 
@@ -349,7 +350,7 @@ def load_federated_training_history(
     ).iter_rows():
         client_dict_by_round.setdefault(RoundNumber(int(round_val)), []).append(
             _ClientRoundRow(
-                client=ClientIdentity(coordinate.population, str(client_val), identity_kind),
+                client=ClientIdentity(coordinate.population, ClientIdentityToken(str(client_val)), identity_kind),
                 sample_count=RowCount(int(sample_val)),
                 local_loss=MetricValue(float(loss_val)),
             )
@@ -362,7 +363,7 @@ def load_federated_training_history(
         ).iter_rows():
             personalized_dict_by_round.setdefault(RoundNumber(int(round_val)), []).append(
                 _PersonalizedRoundRow(
-                    client=ClientIdentity(coordinate.population, str(client_val), identity_kind),
+                    client=ClientIdentity(coordinate.population, ClientIdentityToken(str(client_val)), identity_kind),
                     local_loss=MetricValue(float(loss_val)),
                     state_checksum=Checksum(str(checksum_val)),
                 )

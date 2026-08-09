@@ -281,7 +281,7 @@ def family_identities(
 
 
 def client_with_id(clients: tuple[ClientIdentity, ...], client_id: ClientIdentityToken) -> ClientIdentity:
-    matches = tuple(candidate for candidate in clients if candidate.client_id == client_id.value)
+    matches = tuple(candidate for candidate in clients if candidate.client_id == client_id)
     if len(matches) != 1:
         raise ScientificContractError(
             ErrorMessage(f"population manifest must contain exactly one client {client_id.value}")

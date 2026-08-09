@@ -7,6 +7,7 @@ from datp_core.analysis.metrics.cohort_construction import (
 from datp_core.analysis.metrics.cohorts import ClientExclusionReason
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import (
+    ClientIdentityToken,
     EvaluationCohort,
     FederatedThresholdMethod,
     PopulationId,
@@ -30,10 +31,15 @@ def test_fpr_eligibility_requires_support_and_benign_evaluation() -> None:
     fpr_evaluable = {
         item.client.client_id for item in manifest.memberships if item.cohort is EvaluationCohort.FPR_EVALUABLE
     }
-    assert fpr_evaluable == {"device_a"}
+    assert fpr_evaluable == {ClientIdentityToken("device_a")}
     by_id = {record.client.client_id: record for record in manifest.records}
-    assert ClientExclusionReason.INSUFFICIENT_BENIGN_CALIBRATION in by_id["device_b"].exclusion_reasons
-    assert ClientExclusionReason.EMPTY_BENIGN_EVALUATION in by_id["device_c"].exclusion_reasons
+    assert (
+        ClientExclusionReason.INSUFFICIENT_BENIGN_CALIBRATION
+        in by_id[ClientIdentityToken("device_b")].exclusion_reasons
+    )
+    assert (
+        ClientExclusionReason.EMPTY_BENIGN_EVALUATION in by_id[ClientIdentityToken("device_c")].exclusion_reasons
+    )
 
 
 def test_fallback_cannot_enter_fpr_cohort() -> None:
@@ -43,7 +49,11 @@ def test_fallback_cannot_enter_fpr_cohort() -> None:
         partition_seed=Seed(0),
         client_counts=counts,
     )
-    cohorts = {item.cohort for item in manifest.memberships if item.client.client_id == "fallback_client"}
+    cohorts = {
+        item.cohort
+        for item in manifest.memberships
+        if item.client.client_id == ClientIdentityToken("fallback_client")
+    }
     assert EvaluationCohort.DEPLOYMENT_FALLBACK in cohorts
     assert EvaluationCohort.FPR_EVALUABLE not in cohorts
 
@@ -125,7 +135,7 @@ def _counts(
     deployment_fallback: bool = False,
 ) -> ClientPartitionCounts:
     return ClientPartitionCounts(
-        client=ClientIdentity(population, client_id, identity_kind),
+        client=ClientIdentity(population, ClientIdentityToken(client_id), identity_kind),
         benign_calibration_count=RowCount(calibration),
         benign_evaluation_count=RowCount(benign_evaluation),
         attack_evaluation_count=RowCount(attack_evaluation),

@@ -34,9 +34,9 @@ def client_scoring_input(
     publications: tuple[ClientPreprocessingResult, ...],
     client: ClientIdentity,
 ) -> ClientScoringInput:
-    matches = tuple(item for item in publications if item.client_identity.value == client.client_id)
+    matches = tuple(item for item in publications if item.client_identity.value == client.client_id.value)
     if len(matches) != 1:
-        raise ScientificContractError(ErrorMessage(f"expected one preprocessing publication for {client.client_id}"))
+        raise ScientificContractError(ErrorMessage(f"expected one preprocessing publication for {client.client_id.value}"))
     publication = matches[0]
     return ClientScoringInput(
         client=client,
@@ -62,7 +62,7 @@ def client_metric(
     eligibility_matches = tuple(item for item in cohort_manifest.records if item.client == assignment.client)
     if len(eligibility_matches) != 1:
         raise ScientificContractError(
-            ErrorMessage(f"expected one evaluation-cohort record for {assignment.client.client_id}"),
+            ErrorMessage(f"expected one evaluation-cohort record for {assignment.client.client_id.value}"),
             subject=ContractSubject.CLIENT_IDENTITY,
         )
     eligibility = eligibility_matches[0]
@@ -104,7 +104,7 @@ def score_record_for_client(
     matches = tuple(item for item in records if item.scored_client == client)
     if len(matches) != 1:
         raise ScientificContractError(
-            ErrorMessage(f"expected one {role.value} score record for {client.client_id}"),
+            ErrorMessage(f"expected one {role.value} score record for {client.client_id.value}"),
             subject=ContractSubject.CLIENT_IDENTITY,
         )
     return matches[0]

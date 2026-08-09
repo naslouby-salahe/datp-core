@@ -11,6 +11,7 @@ from datp_core.core.errors import (
     ScientificContractError,
 )
 from datp_core.core.identifiers import (
+    CanonicalSourcePath,
     ClientPathToken,
     ContractSubject,
     DatasetId,
@@ -44,7 +45,7 @@ from datp_core.experiments.common.coordinates import ExternalTemporalExecutionId
 
 @dataclass(frozen=True, slots=True)
 class _CanonicalSourceFile:
-    source_path: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    source_path: CanonicalSourcePath
     parquet_path: Path
 
 
@@ -53,12 +54,14 @@ def ciciot_source_files(
 ) -> tuple[_CanonicalSourceFile, ...]:
     sources = tuple(
         _CanonicalSourceFile(
-            source_path=str(
-                pl.read_parquet(
-                    path,
-                    columns=[SOURCE_PATH_COLUMN],
-                    n_rows=1,
-                ).item(0, 0)
+            source_path=CanonicalSourcePath(
+                str(
+                    pl.read_parquet(
+                        path,
+                        columns=[SOURCE_PATH_COLUMN],
+                        n_rows=1,
+                    ).item(0, 0)
+                )
             ),
             parquet_path=path,
         )
@@ -80,7 +83,7 @@ def ciciot_source_files(
 
 def canonical_source_file(
     source_files: tuple[_CanonicalSourceFile, ...],
-    source_path: str,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    source_path: CanonicalSourcePath,
 ) -> _CanonicalSourceFile:
     for source in source_files:
         if source.source_path == source_path:
@@ -93,14 +96,14 @@ def canonical_source_file(
 
 def single_client_source_path(
     assignments: pl.DataFrame,
-) -> str:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> CanonicalSourcePath:
     sources = assignments.get_column(SOURCE_PATH_COLUMN).unique().to_list()
     if len(sources) != 1:
         raise ScientificContractError(
             ErrorMessage("file-defined client assignments must originate from exactly one source file"),
             subject=ContractSubject.CLIENT_IDENTITY,
         )
-    return str(sources[0])
+    return CanonicalSourcePath(str(sources[0]))
 
 
 def preprocess_ciciot_client_local(
@@ -119,7 +122,7 @@ def preprocess_ciciot_client_local(
     publications: list[ClientPreprocessingResult] = []
     published_count = 0
     reused_count = 0
-    feature_cache: dict[str, pl.DataFrame] = {}
+    feature_cache: dict[CanonicalSourcePath, pl.DataFrame] = {}
 
     for client_str in client_id_vals:
         client_id = ClientPathToken(client_str)

@@ -264,6 +264,6 @@ class PopulationMetricResult(MetricResultHeader):
             raise ValueError("calibration-eligible client count cannot exceed the candidate count")
         if self.deployment_fallback_count.plus(self.unavailable_client_count) > self.candidate_client_count:
             raise ValueError("excluded client counts cannot exceed the candidate count")
-        excluded = tuple(client.client_id for client in self.excluded_clients)
+        excluded = tuple(client.client_id.value for client in self.excluded_clients)
         if len(excluded) != len(frozenset(excluded)):
             raise ValueError("excluded clients must be unique")

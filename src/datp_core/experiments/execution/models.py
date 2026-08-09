@@ -7,7 +7,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Protocol
 
-from datp_core.artifacts.provenance import Checksum, checksum_text
+from datp_core.artifacts.provenance import Checksum
 from datp_core.experiments.common.coordinates import ExperimentCoordinate
 
 
@@ -164,7 +164,7 @@ class CampaignEntry:
 
 
 def campaign_digest(entries: tuple[CampaignEntry, ...]) -> Checksum:
-    return checksum_text("\n".join(f"{entry.ordinal}|{entry.coordinate.stable_key}" for entry in entries))
+    return Checksum.from_text("\n".join(f"{entry.ordinal}|{entry.coordinate.stable_key}" for entry in entries))
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

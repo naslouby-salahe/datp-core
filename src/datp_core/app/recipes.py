@@ -12,7 +12,7 @@ from datp_core.analysis.metrics.models import AvailableMetric, metric_by_id
 from datp_core.app.contracts import AnchorRequirement, CampaignRole, OverwriteMode
 from datp_core.app.layout import ANCHOR_DIAGNOSTICS_DIRECTORY, ResearchArtifact, ResearchDirectory
 from datp_core.app.models import DetailText, DispatchOutcome, ThresholdMethodOutcome
-from datp_core.app.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
+from datp_core.app.planning import PlanDisposition, PlanningEvidence, PlanReason, expand_experiment_plan
 from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
 from datp_core.artifacts.serializers.json import canonical_checksum
@@ -617,7 +617,7 @@ def _report_supplementary(experiment_id: ExperimentId, overwrite: OverwriteMode)
             PlanningEvidence(
                 experiment=experiment_id,
                 disposition=PlanDisposition.EXECUTABLE,
-                reason="supplementary evidence report consumes the registered experiment recipe",
+                reason=PlanReason("supplementary evidence report consumes the registered experiment recipe"),
             ),
         ),
     )

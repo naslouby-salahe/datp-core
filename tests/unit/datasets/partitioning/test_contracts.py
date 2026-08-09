@@ -1,5 +1,6 @@
 import pytest
 
+from datp_core.core.identifiers import ClientIdentityToken
 from datp_core.core.numeric import ClientCount, DirichletConcentration
 from datp_core.data.populations.contracts import (
     ControlledPartitionCondition,
@@ -33,6 +34,6 @@ def test_controlled_partition_conditions_separate_iid_from_dirichlet() -> None:
 def test_synthetic_client_ids_are_stable_and_count_locked() -> None:
     ids = synthetic_client_ids(ClientCount(20))
     assert len(ids) == 20
-    assert ids[0] == "synthetic_client_00"
-    assert ids[-1] == "synthetic_client_19"
+    assert ids[0] == ClientIdentityToken("synthetic_client_00")
+    assert ids[-1] == ClientIdentityToken("synthetic_client_19")
     assert len(set(ids)) == 20

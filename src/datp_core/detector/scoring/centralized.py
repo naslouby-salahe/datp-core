@@ -7,7 +7,7 @@ import numpy as np
 import polars as pl
 import torch
 
-from datp_core.artifacts.provenance import Checksum, checksum_file, ordered_text_checksum
+from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.repositories.publication import (
     ArtifactPublication,
     FunctionalArtifactCodec,
@@ -321,7 +321,7 @@ def _score_artifact_pair(
             checkpoint_round=request.checkpoint.round_number,
             checkpoint_checksum=request.checkpoint.tensor_checksum,
             path=calibration_path,
-            checksum=checksum_file(calibration_path),
+            checksum=Checksum.from_file(calibration_path),
             row_count=calibration_row_count,
             feature_count=FeatureCount(len(request.feature_names)),
             serialization_format=SerializationFormat.PARQUET,
@@ -332,7 +332,7 @@ def _score_artifact_pair(
             checkpoint_round=request.checkpoint.round_number,
             checkpoint_checksum=request.checkpoint.tensor_checksum,
             path=evaluation_path,
-            checksum=checksum_file(evaluation_path),
+            checksum=Checksum.from_file(evaluation_path),
             row_count=evaluation_row_count,
             feature_count=FeatureCount(len(request.feature_names)),
             serialization_format=SerializationFormat.PARQUET,
@@ -345,7 +345,7 @@ def _validated_reused_score_frame(
     score_path: Path,
     partition_role: PartitionRole,
 ) -> pl.DataFrame:
-    score_checksum = checksum_file(score_path)
+    score_checksum = Checksum.from_file(score_path)
     score = pl.read_parquet(score_path)
     validated = validate_persisted_score_frame(score_path, score_checksum, RowCount(score.height))
     if _score_partition_binding(validated, partition_role) != _score_partition_binding(source, partition_role):
@@ -364,7 +364,7 @@ def _score_partition_binding(frame: pl.DataFrame, partition_role: PartitionRole)
     return ScorePartitionBinding(
         partition_role=partition_role,
         row_count=RowCount(frame.height),
-        ordered_identity_checksum=ordered_text_checksum(identity_values),
+        ordered_identity_checksum=Checksum.from_ordered_texts(identity_values),
     )
 
 
@@ -375,7 +375,7 @@ def _rebase_artifact(artifact: PooledScoreArtifact, path: Path) -> PooledScoreAr
         checkpoint_round=artifact.checkpoint_round,
         checkpoint_checksum=artifact.checkpoint_checksum,
         path=path,
-        checksum=checksum_file(path),
+        checksum=Checksum.from_file(path),
         row_count=artifact.row_count,
         feature_count=artifact.feature_count,
         serialization_format=artifact.serialization_format,

@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from datp_core.artifacts.provenance import checksum_text
+from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import PopulationId, SplitProtocolId
 from datp_core.core.numeric import Seed
@@ -78,7 +78,7 @@ def test_preprocessing_handoff_requires_declared_split_checksum(nbaiot_canonical
             PreprocessingHandoffRequest(
                 construction=construction,
                 deployment_fallback_client_ids=frozenset(),
-                expected_split_manifest_checksum=checksum_text("not the declared split"),
+                expected_split_manifest_checksum=Checksum.from_text("not the declared split"),
             )
         )
 

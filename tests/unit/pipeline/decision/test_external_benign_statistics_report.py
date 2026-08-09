@@ -1,6 +1,6 @@
 """Edge benign-only federated-statistics report consumer contract (WL-05)."""
 
-from datp_core.core.identifiers import EvidenceRole, ExperimentId, PopulationId
+from datp_core.core.identifiers import ClientIdentityToken, EvidenceRole, ExperimentId, PopulationId
 from datp_core.core.numeric import (
     AbsoluteThresholdError,
     ByteCount,
@@ -35,7 +35,7 @@ def _summary(seed_value: int, cv_fpr: float | None) -> ExternalBenignStatisticsS
         estimated_communication_bytes=ByteCount(160),
         clients=(
             ExternalBenignStatisticsClient(
-                client_id="client_a",
+                client_id=ClientIdentityToken("client_a"),
                 count=RowCount(10),
                 mean=ScoreMoment(0.3),
                 variance=ScoreVariance(0.02),

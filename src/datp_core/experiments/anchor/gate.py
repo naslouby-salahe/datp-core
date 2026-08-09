@@ -4,7 +4,7 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from datp_core.analysis.metrics.protocols import CONFIRMATORY_METRICS
-from datp_core.artifacts.provenance import Checksum, checksum_text
+from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.serializers.json import canonical_checksum, canonical_json_text
 from datp_core.core.errors import (
     AnchorReproductionError,
@@ -151,7 +151,7 @@ def _partition_discrepancies(
 def persist_anchor_gate_diagnostics(decision: AnchorGateDecision, diagnostics_directory: Path | None) -> Checksum:
     """Write gate decision, discrepancy diagnostics, and PASS handoff, returning gate checksum."""
     gate_json = canonical_json_text(decision)
-    checksum = checksum_text(gate_json)
+    checksum = Checksum.from_text(gate_json)
 
     if diagnostics_directory is None:
         return checksum
@@ -209,7 +209,7 @@ def build_anchor_confirmatory_handoff(
 
     inventory_checksum = _complete_artifact_inventory_checksum(
         gate_checksum=gate_checksum,
-        discrepancies_checksum=checksum_text(canonical_json_text(decision.reproduction.discrepancies)),
+        discrepancies_checksum=Checksum.from_text(canonical_json_text(decision.reproduction.discrepancies)),
         references_observations_checksum=references_observations_checksum,
         observation_artifact_checksums=tuple(item.artifact_checksum for item in decision.reproduction.observations),
     )
@@ -411,7 +411,7 @@ def _load_gate_decision_and_checksum(diagnostics_directory: Path) -> tuple[Ancho
             reason=AnchorArtifactValidationFailure.CORRUPTED_OR_INVALID,
         ) from error
 
-    artifact_checksum = checksum_text(canonical_json_text(decision))
+    artifact_checksum = Checksum.from_text(canonical_json_text(decision))
 
     marker_path = diagnostics_directory / AnchorArtifactFileName.GATE_COMPLETION.value
     if not marker_path.is_file():

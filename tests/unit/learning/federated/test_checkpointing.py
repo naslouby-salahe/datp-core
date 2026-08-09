@@ -19,7 +19,6 @@ from datp_core.detector.checkpoints.candidates import (
     retain_checkpoint_candidates,
 )
 from datp_core.detector.checkpoints.selection import (
-    reject_centralized_checkpoint,
     select_checkpoint,
     validate_candidate_coordinates,
 )
@@ -232,9 +231,3 @@ def test_rebase_checkpoint_candidates_rejects_target_checksum_mismatch(tmp_path:
 
     with pytest.raises(ArtifactIntegrityError, match="checkpoint candidate checksum mismatch"):
         rebase_checkpoint_candidates(candidates, dir_b)
-
-
-def test_reject_centralized_checkpoint_raises_leakage_error() -> None:
-    coordinate = fedavg_coordinate(Seed(0))
-    with pytest.raises(LeakageError, match="centralized checkpoint cannot enter"):
-        reject_centralized_checkpoint(coordinate)

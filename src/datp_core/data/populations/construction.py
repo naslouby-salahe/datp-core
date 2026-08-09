@@ -12,8 +12,10 @@ from datp_core.core.errors import (
     ScientificContractError,
 )
 from datp_core.core.identifiers import (
+    ClientIdentityToken,
     ContractSubject,
     DatasetId,
+    FamilyIdentity,
     FeatureNameSequence,
     PartitionRole,
     PopulationId,
@@ -59,15 +61,9 @@ class PopulationConstructionViolation(StrEnum):
 @dataclass(frozen=True, slots=True)
 class FeasibilityAssessmentRequest:
     expected_count: ClientCount
-    candidate_ids: tuple[
-        str, ...
-    ]  # TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
-    accepted_ids: tuple[
-        str, ...
-    ]  # TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
-    expected_identities: (
-        tuple[str, ...] | None
-    )  # TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
+    candidate_ids: tuple[ClientIdentityToken, ...]
+    accepted_ids: tuple[ClientIdentityToken, ...]
+    expected_identities: tuple[ClientIdentityToken, ...] | None
     chronology_required: bool
 
 
@@ -80,37 +76,22 @@ class PopulationFinalizationRequest:
     capabilities: PopulationCapabilities
     partition_seed: Seed
     split_protocol: SplitProtocolId
-    candidate_ids: tuple[
-        str, ...
-    ]  # TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
-    accepted_ids: tuple[
-        str, ...
-    ]  # TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
-    excluded_ids: tuple[
-        str, ...
-    ]  # TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
-    expected_identities: (
-        tuple[str, ...] | None
-    )  # TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
+    candidate_ids: tuple[ClientIdentityToken, ...]
+    accepted_ids: tuple[ClientIdentityToken, ...]
+    excluded_ids: tuple[ClientIdentityToken, ...]
+    expected_identities: tuple[ClientIdentityToken, ...] | None
     chronology_required: bool
     membership: pl.DataFrame
     canonical_schema_checksum: Checksum
-    family_by_client: tuple[
-        tuple[str, str], ...
-    ] = ()  # TODO: should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
+    family_by_client: tuple[tuple[ClientIdentityToken, FamilyIdentity], ...] = ()
 
 
 def assess_declared_feasibility(
     *,
     expected_count: ClientCount,
-    candidate_ids: tuple[
-        str, ...
-    ],  # TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
-    accepted_ids: tuple[
-        str, ...
-    ],  # TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
-    expected_identities: tuple[str, ...]
-    | None,  # TODO: should be tuple[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
+    candidate_ids: tuple[ClientIdentityToken, ...],
+    accepted_ids: tuple[ClientIdentityToken, ...],
+    expected_identities: tuple[ClientIdentityToken, ...] | None,
     chronology_required: bool,
 ) -> PopulationFeasibility:
     """Shared feasibility gate used by every population builder."""
@@ -182,28 +163,28 @@ def feasibility_from_candidates(request: FeasibilityAssessmentRequest) -> Popula
         return _infeasible(
             PopulationFeasibilityReason.IDENTITY_SET_MISMATCH,
             expected,
-            accepted_n,
+            NonNegativeIntegerValue(accepted_n),
             "observed candidate identities disagree with the audited identity set",
         )
     if not request.chronology_required and len(request.candidate_ids) != request.expected_count.value:
         return _infeasible(
             PopulationFeasibilityReason.CANDIDATE_COUNT_MISMATCH,
             expected,
-            accepted_n,
+            NonNegativeIntegerValue(accepted_n),
             "candidate client count disagrees with the population declaration",
         )
     if request.chronology_required and not request.accepted_ids:
         return _infeasible(
             PopulationFeasibilityReason.CHRONOLOGY_EVIDENCE_INSUFFICIENT,
             expected,
-            0,
+            NonNegativeIntegerValue(0),
             "no groups remain after chronology eligibility validation",
         )
     if not request.accepted_ids:
         return _infeasible(
             PopulationFeasibilityReason.EMPTY_ACCEPTED_CLIENTS,
             expected,
-            0,
+            NonNegativeIntegerValue(0),
             "population construction accepted no clients",
         )
     return PopulationFeasibility(
@@ -332,19 +313,17 @@ def join_handoff_with_canonical_features(
 def _infeasible(
     reason: PopulationFeasibilityReason,
     expected: ClientCount,
-    observed: int,  # TODO: should be NonNegativeIntegerValue and adapt all callers and usage. Do not use primitives for this, use something else instead of int. Check what already exists
+    observed: NonNegativeIntegerValue,
     evidence: str,
 ) -> PopulationFeasibility:
     return PopulationFeasibility(
-        PopulationFeasibilityStatus.INFEASIBLE, reason, expected, NonNegativeIntegerValue(observed), evidence
+        PopulationFeasibilityStatus.INFEASIBLE, reason, expected, observed, evidence
     )
 
 
 def _deployment_fallback_clients(
     candidate_clients: tuple[ClientIdentity, ...],
-    fallback_client_ids: frozenset[
-        str
-    ],  # TODO: should be frozenset[ClientId] and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
+    fallback_client_ids: frozenset[ClientIdentityToken],
 ) -> frozenset[ClientIdentity]:
     matches = frozenset(client for client in candidate_clients if client.client_id in fallback_client_ids)
     if frozenset(client.client_id for client in matches) != fallback_client_ids:
@@ -367,6 +346,9 @@ def _client_partition_counts(
     calibration_count = CohortAggregationColumn.BENIGN_CALIBRATION_COUNT
     benign_evaluation_count = CohortAggregationColumn.BENIGN_EVALUATION_COUNT
     attack_evaluation_count = CohortAggregationColumn.ATTACK_EVALUATION_COUNT
+    assignments = assignments.with_columns(
+        pl.col(client_column).struct.field("value").alias(client_column)
+    )
     summary = assignments.group_by(client_column).agg(
         pl.col(role_column)
         .filter(
@@ -395,7 +377,7 @@ def _client_partition_counts(
             (
                 pl.Series(
                     client_column.value,
-                    tuple(client.client_id for client in candidate_clients),
+                    tuple(client.client_id.value for client in candidate_clients),
                     dtype=pl.String,
                 ),
             )
@@ -410,7 +392,7 @@ def _client_partition_counts(
     accepted = frozenset(str(value) for value in assignments.get_column(client_column).unique().to_list())
     return tuple(
         ClientPartitionCounts(
-            client=(client := _client_identity(candidate_clients, str(row[0]))),
+            client=(client := _client_identity(candidate_clients, ClientIdentityToken(str(row[0])))),
             benign_calibration_count=RowCount(int(row[1])),
             benign_evaluation_count=RowCount(int(row[2])),
             attack_evaluation_count=RowCount(int(row[3])),
@@ -423,7 +405,7 @@ def _client_partition_counts(
 
 def _client_identity(
     clients: tuple[ClientIdentity, ...],
-    client_id: str,  # TODO: should be ClientId and adapt all callers and usage. Do not use primitives for this, use something else instead of str. Check what already exists
+    client_id: ClientIdentityToken,
 ) -> ClientIdentity:
     matches = tuple(client for client in clients if client.client_id == client_id)
     if len(matches) != 1:

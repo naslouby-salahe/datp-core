@@ -11,7 +11,14 @@ from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
 )
-from datp_core.core.identifiers import DatasetId, PopulationId, PopulationIdentityKind, SplitProtocolId
+from datp_core.core.identifiers import (
+    ChronologyGroupIdentity,
+    ClientIdentityToken,
+    DatasetId,
+    PopulationId,
+    PopulationIdentityKind,
+    SplitProtocolId,
+)
 from datp_core.core.numeric import NonNegativeIntegerValue, RowCount, Seed
 from datp_core.data.contracts import (
     CanonicalManifestDocument,
@@ -80,8 +87,10 @@ def construct_edge_sensor_groups(
             reason=EdgeIIoTPopulationViolation.STATIC_GROUPS_FORBID_CHRONOLOGICAL_SPLITS,
         )
     membership = _load_static_membership(canonical_root)
-    observed = tuple(membership.get_column(CLIENT_ID_COLUMN).unique().sort().to_list())
-    expected = tuple(sorted(EDGE_BENIGN_SENSOR_GROUPS))
+    observed = tuple(
+        ClientIdentityToken(value) for value in membership.get_column(CLIENT_ID_COLUMN).unique().sort().to_list()
+    )
+    expected = tuple(ClientIdentityToken(str(group)) for group in sorted(EDGE_BENIGN_SENSOR_GROUPS))
     if observed != expected:
         raise DataIntegrityError(
             ErrorMessage("Edge static sensor-group identities disagree with the audited set"),
@@ -133,7 +142,7 @@ def construct_edge_temporal_groups(
             reason=EdgeIIoTPopulationViolation.TEMPORAL_REQUIRES_CHRONOLOGICAL_SPLIT_PROTOCOL,
         )
     eligible_ids, excluded_ids, exclusion_reasons, duplicate_timestamps = _chronology_eligibility(canonical_root)
-    programme_candidates = tuple(sorted(EDGE_TEMPORAL_SENSOR_GROUPS))
+    programme_candidates = tuple(ChronologyGroupIdentity(str(group)) for group in sorted(EDGE_TEMPORAL_SENSOR_GROUPS))
     membership = _load_temporal_membership(canonical_root, eligible_ids) if eligible_ids else _empty_membership()
     diagnostics = ChronologicalPartitionDiagnosticsDocument(
         population=_TEMPORAL_POPULATION,
@@ -150,7 +159,7 @@ def construct_edge_temporal_groups(
         split_protocol=split_protocol,
         programme_candidates=programme_candidates,
         accepted_ids=eligible_ids,
-        excluded_ids=tuple(group_id for group_id in excluded_ids if group_id in programme_candidates),
+        excluded_ids=tuple(ChronologyGroupIdentity(str(group_id)) for group_id in excluded_ids if str(group_id) in frozenset(str(c) for c in programme_candidates)),
         membership=membership,
     )
     static_reference_manifest, static_reference_membership = _matched_static_reference(
@@ -171,9 +180,9 @@ def _finalize_temporal_manifest(
     *,
     partition_seed: Seed,
     split_protocol: SplitProtocolId,
-    programme_candidates: tuple[EdgeSensorGroup, ...],
-    accepted_ids: tuple[EdgeSensorGroup, ...],
-    excluded_ids: tuple[EdgeSensorGroup, ...],
+    programme_candidates: tuple[ChronologyGroupIdentity, ...],
+    accepted_ids: tuple[ChronologyGroupIdentity, ...],
+    excluded_ids: tuple[ChronologyGroupIdentity, ...],
     membership: pl.DataFrame,
 ) -> PopulationManifest:
     return finalize_population(
@@ -189,10 +198,10 @@ def _finalize_temporal_manifest(
             ),
             partition_seed=partition_seed,
             split_protocol=split_protocol,
-            candidate_ids=programme_candidates,
-            accepted_ids=accepted_ids,
-            excluded_ids=excluded_ids,
-            expected_identities=programme_candidates,
+            candidate_ids=tuple(ClientIdentityToken(str(group)) for group in programme_candidates),
+            accepted_ids=tuple(ClientIdentityToken(str(group)) for group in accepted_ids),
+            excluded_ids=tuple(ClientIdentityToken(str(group)) for group in excluded_ids),
+            expected_identities=tuple(ClientIdentityToken(str(group)) for group in programme_candidates),
             chronology_required=True,
             membership=select_membership_frame(membership),
             canonical_schema_checksum=EDGE_SCHEMA.checksum,
@@ -202,7 +211,12 @@ def _finalize_temporal_manifest(
 
 def _chronology_eligibility(
     canonical_root: Path,
-) -> tuple[tuple[EdgeSensorGroup, ...], tuple[EdgeSensorGroup, ...], tuple[ChronologyExclusionReason, ...], int]:
+) -> tuple[
+    tuple[ChronologyGroupIdentity, ...],
+    tuple[ChronologyGroupIdentity, ...],
+    tuple[ChronologyExclusionReason, ...],
+    int,
+]:
     manifest_path = Path(canonical_root) / CanonicalPublicationArtifact.MANIFEST
     if not manifest_path.is_file():
         raise DataIntegrityError(
@@ -211,25 +225,25 @@ def _chronology_eligibility(
             reason=EdgeIIoTPopulationViolation.MISSING_CANONICAL_MANIFEST,
         )
     document = CanonicalManifestDocument.model_validate_json(manifest_path.read_text(encoding="utf-8"))
-    eligible: list[EdgeSensorGroup] = []
-    excluded: list[EdgeSensorGroup] = []
+    eligible: list[ChronologyGroupIdentity] = []
+    excluded: list[ChronologyGroupIdentity] = []
     reasons: list[ChronologyExclusionReason] = []
     duplicate_total = 0
     for group in sorted(EDGE_BENIGN_SENSOR_GROUPS):
         if group is EdgeSensorGroup.MODBUS:
-            excluded.append(group)
+            excluded.append(ChronologyGroupIdentity(str(group)))
             reasons.append(ChronologyExclusionReason.MODBUS_ADDRESS_LITERAL)
             continue
         evidence = _chronology_for_group(group, document.chronology)
         if evidence is None:
-            excluded.append(group)
+            excluded.append(ChronologyGroupIdentity(str(group)))
             reasons.append(ChronologyExclusionReason.CANONICAL_CHRONOLOGY_MISSING)
             continue
         duplicate_total += evidence.duplicate_timestamp_count.value
         if evidence.temporal_eligible:
-            eligible.append(group)
+            eligible.append(ChronologyGroupIdentity(str(group)))
         else:
-            excluded.append(group)
+            excluded.append(ChronologyGroupIdentity(str(group)))
             reasons.append(ChronologyExclusionReason.CANONICAL_CHRONOLOGY_INELIGIBLE)
     return tuple(eligible), tuple(excluded), tuple(reasons), duplicate_total
 
@@ -268,7 +282,9 @@ def _load_static_membership(canonical_root: Path) -> pl.DataFrame:
     return select_membership_frame(frame)
 
 
-def _load_temporal_membership(canonical_root: Path, eligible_ids: tuple[EdgeSensorGroup, ...]) -> pl.DataFrame:
+def _load_temporal_membership(
+    canonical_root: Path, eligible_ids: tuple[ChronologyGroupIdentity, ...]
+) -> pl.DataFrame:
     temporal_root = canonical_branch_directory(canonical_root, EdgeAssetRole.TEMPORAL_BENIGN)
     paths = tuple(temporal_root / f"{group_id}.parquet" for group_id in eligible_ids)
     missing = tuple(path.name for path in paths if not path.is_file())
@@ -317,8 +333,8 @@ def _matched_static_reference(
     temporal_membership: pl.DataFrame,
     *,
     partition_seed: Seed,
-    eligible_ids: tuple[EdgeSensorGroup, ...],
-    programme_candidates: tuple[EdgeSensorGroup, ...],
+    eligible_ids: tuple[ChronologyGroupIdentity, ...],
+    programme_candidates: tuple[ChronologyGroupIdentity, ...],
 ) -> tuple[PopulationManifest, pl.DataFrame]:
     membership = select_membership_frame(temporal_membership)
     accepted = frozenset(eligible_ids)
@@ -336,10 +352,10 @@ def _matched_static_reference(
             ),
             partition_seed=partition_seed,
             split_protocol=SplitProtocolId.RANDOM_FRACTIONAL_STATIC_REFERENCE,
-            candidate_ids=programme_candidates,
-            accepted_ids=eligible_ids,
-            excluded_ids=excluded,
-            expected_identities=programme_candidates,
+            candidate_ids=tuple(ClientIdentityToken(str(group)) for group in programme_candidates),
+            accepted_ids=tuple(ClientIdentityToken(str(group)) for group in eligible_ids),
+            excluded_ids=tuple(ClientIdentityToken(str(group)) for group in excluded),
+            expected_identities=tuple(ClientIdentityToken(str(group)) for group in programme_candidates),
             chronology_required=True,
             membership=membership,
             canonical_schema_checksum=EDGE_SCHEMA.checksum,

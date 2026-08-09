@@ -12,6 +12,7 @@ from datp_core.core.errors import (
 from datp_core.core.identifiers import (
     ClientIdentityToken,
     DatasetId,
+    FamilyIdentity,
     PopulationId,
     PopulationIdentityKind,
     SplitProtocolId,
@@ -77,8 +78,8 @@ def construct_nbaiot_natural_devices(
     split_protocol: SplitProtocolId,
 ) -> PopulationConstructionResult:
     frame = _load_identity_frame(canonical_root)
-    candidates = tuple(sorted(NBAIOT_DEVICE_IDENTITIES))
-    observed = tuple(frame.get_column(CLIENT_ID_COLUMN).unique().sort().to_list())
+    candidates = tuple(ClientIdentityToken(str(device)) for device in sorted(NBAIOT_DEVICE_IDENTITIES))
+    observed = tuple(ClientIdentityToken(str(value)) for value in frame.get_column(CLIENT_ID_COLUMN).unique().sort().to_list())
     if observed != candidates:
         raise DataIntegrityError(
             ErrorMessage("N-BaIoT physical-client identities disagree with the audited set"),
@@ -87,7 +88,7 @@ def construct_nbaiot_natural_devices(
         )
     membership = select_membership_frame(frame).sort([CLIENT_ID_COLUMN, STABLE_ROW_ID_COLUMN])
     family_by_client = tuple(
-        (str(client_id), str(family))
+        (ClientIdentityToken(str(client_id)), FamilyIdentity(str(family)))
         for client_id, family in frame.select([CLIENT_ID_COLUMN, FAMILY_ID_COLUMN])
         .unique()
         .sort(CLIENT_ID_COLUMN)
@@ -129,7 +130,7 @@ def construct_nbaiot_dirichlet_clients(
 ) -> PopulationConstructionResult:
     source = _load_source_rows(canonical_root)
     client_ids = synthetic_client_ids(NBAIOT_DIRICHLET_CLIENTS.client_count)
-    client_identities = tuple(ClientIdentityToken(client_id) for client_id in client_ids)
+    client_identities = client_ids
     allocator = ControlledPartitionAllocator(
         population=_DIRICHLET_POPULATION,
         client_count=NBAIOT_DIRICHLET_CLIENTS.client_count,
@@ -251,21 +252,20 @@ def _build_diagnostics(
 ) -> DirichletPartitionDiagnosticsDocument:
     client_row_counts = tuple(benign.plus(attack) for benign, attack in zip(benign_counts, attack_counts, strict=True))
     empty_ids = tuple(
-        client_id.value for client_id, count in zip(client_ids, client_row_counts, strict=True) if count.value == 0
+        client_id for client_id, count in zip(client_ids, client_row_counts, strict=True) if count.value == 0
     )
     insufficient = tuple(
-        client_id.value
+        client_id
         for client_id, benign in zip(client_ids, benign_counts, strict=True)
         if not minimum_benign_support.fits_within(benign)
     )
-    string_client_ids = tuple(client_id.value for client_id in client_ids)
     return DirichletPartitionDiagnosticsDocument(
         population=_DIRICHLET_POPULATION,
         partition_seed=partition_seed,
         partition_kind=condition.kind,
         concentration=condition.concentration,
         client_count=client_count,
-        client_ids=string_client_ids,
+        client_ids=client_ids,
         total_rows=membership_height,
         client_row_counts=client_row_counts,
         benign_row_counts=benign_counts,
@@ -273,7 +273,7 @@ def _build_diagnostics(
         empty_client_ids=empty_ids,
         insufficient_benign_client_ids=insufficient,
         allocation_checksum=controlled_allocation_checksum(
-            string_client_ids,
+            client_ids,
             client_row_counts,
             condition,
             partition_seed,

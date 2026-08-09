@@ -14,6 +14,7 @@ from tests.unit.learning.federated.helpers import (
 
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import ScientificContractError
+from datp_core.core.identifiers import ClientIdentityToken
 from datp_core.core.numeric import Seed
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 from datp_core.detector.training.ditto import DittoTrainingRequest, train_ditto
@@ -43,7 +44,7 @@ def test_train_ditto_produces_distinct_global_and_personalized_checkpoints(tmp_p
     assert len(outcome.global_candidates) == len(CHECKPOINT.candidates)
     assert len(outcome.personalized_candidates) == 2
     for pcs in outcome.personalized_candidates:
-        assert pcs.client.client_id in {"client_a", "client_b"}
+        assert pcs.client.client_id in {ClientIdentityToken("client_a"), ClientIdentityToken("client_b")}
         assert len(pcs.candidates) == len(CHECKPOINT.candidates)
         for candidate in pcs.candidates:
             assert candidate.client is not None
@@ -82,7 +83,7 @@ def test_train_ditto_records_personalized_state_references_every_round(tmp_path:
     outcome = train_ditto(_request(tmp_path))
     for round_result in outcome.global_training_result.history.rounds:
         client_ids = {reference.client.client_id for reference in round_result.personalized_state_references}
-        assert client_ids == {"client_a", "client_b"}
+        assert client_ids == {ClientIdentityToken("client_a"), ClientIdentityToken("client_b")}
 
 
 def test_train_ditto_rejects_partial_participation(tmp_path: Path) -> None:

@@ -2,7 +2,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from datp_core.artifacts.layout import experiment_output_directory
-from datp_core.artifacts.provenance import Checksum, checksum_bytes
+from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.repositories.models import ArtifactKind, ArtifactRecord, ArtifactState
 from datp_core.artifacts.repositories.publication import build_completion_record, write_completion_record
 from datp_core.core.identifiers import (
@@ -113,7 +113,7 @@ def test_output_store_round_trips_a_valid_completion_record(tmp_path: Path) -> N
     artifact = ArtifactRecord(
         kind=ArtifactKind.SUMMARY,
         relative_path=relative,
-        checksum=checksum_bytes(payload),
+        checksum=Checksum.from_bytes(payload),
         byte_count=ByteCount(len(payload)),
         state=ArtifactState.PUBLISHED,
     )
@@ -141,7 +141,7 @@ def test_output_store_detects_protocol_digest_mismatch_on_resume(tmp_path: Path)
     artifact = ArtifactRecord(
         kind=ArtifactKind.SUMMARY,
         relative_path=relative,
-        checksum=checksum_bytes(payload),
+        checksum=Checksum.from_bytes(payload),
         byte_count=ByteCount(len(payload)),
         state=ArtifactState.PUBLISHED,
     )

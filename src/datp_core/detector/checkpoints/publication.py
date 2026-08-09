@@ -4,14 +4,20 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from datp_core.artifacts.provenance import Checksum, checksum_file
+from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.serializers.json import canonical_checksum, serialize_json_model
 from datp_core.core.errors import (
     ArtifactIntegrityError,
     ErrorMessage,
     ScientificContractError,
 )
-from datp_core.core.identifiers import ClientPathToken, ContractSubject, SafeTensorFilename, TrainingModelId
+from datp_core.core.identifiers import (
+    ArtifactFileName,
+    ClientPathToken,
+    ContractSubject,
+    SafeTensorFilename,
+    TrainingModelId,
+)
 from datp_core.core.numeric import BatchSize, ManifestSchemaVersion, ModelCoefficientValue
 from datp_core.detector.checkpoints.candidates import (
     retain_checkpoint_candidates,
@@ -46,7 +52,7 @@ _MANIFEST_SCHEMA_VERSION = ManifestSchemaVersion(2)
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PublicationFileChecksum:
-    name: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    name: ArtifactFileName
     checksum: Checksum
 
 
@@ -86,7 +92,7 @@ def build_manifest(
         entries=tuple(
             CandidateManifestEntry(
                 round_number=candidate.round_number,
-                client_id=(ClientPathToken(candidate.client.client_id) if candidate.client is not None else None),
+                client_id=(ClientPathToken(candidate.client.client_id.value) if candidate.client is not None else None),
                 tensor_name=SafeTensorFilename(candidate.tensor_path.name),
                 tensor_checksum=candidate.tensor_checksum,
             )
@@ -128,15 +134,13 @@ def expected_publication_files(
     manifest: CandidateManifest,
     *,
     include_history: bool,
-) -> tuple[
-    str, ...
-]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> tuple[ArtifactFileName, ...]:
     names = [FederatedHistoryAssetName.CANDIDATE_MANIFEST.value]
     names.extend(entry.tensor_name for entry in manifest.entries)
 
     if not include_history:
         names.sort()
-        return tuple(names)
+        return tuple(ArtifactFileName(name) for name in names)
 
     names.extend(
         (
@@ -150,21 +154,19 @@ def expected_publication_files(
         names.append(FederatedHistoryAssetName.PERSONALIZED_ROUNDS.value)
 
     names.sort()
-    return tuple(names)
+    return tuple(ArtifactFileName(name) for name in names)
 
 
 def publication_digest(
     directory: Path,
-    expected_files: Sequence[
-        str
-    ],  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    expected_files: Sequence[ArtifactFileName],
 ) -> Checksum:
     projection = tuple(
         PublicationFileChecksum(
             name=name,
-            checksum=checksum_file(directory / name),
+            checksum=Checksum.from_file(directory / name),
         )
-        for name in sorted(expected_files)
+        for name in sorted(expected_files, key=str)
     )
     return canonical_checksum(projection)
 

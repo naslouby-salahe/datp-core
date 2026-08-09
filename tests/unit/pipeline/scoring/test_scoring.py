@@ -4,17 +4,21 @@ import numpy as np
 import polars as pl
 import pytest
 
-from datp_core.artifacts.provenance import Checksum, checksum_file
+from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import LeakageError, ScientificContractError
 from datp_core.core.identifiers import (
     FeatureName,
     FeatureNameSequence,
+    OutcomeLabel,
+    OutcomeLabelSequence,
     PartitionRole,
     PopulationId,
     PreprocessingProtocolId,
     ScoreFrameColumn,
     SerializationFormat,
     SplitProtocolId,
+    StableRowId,
+    StableRowIdSequence,
     TrainingModelId,
 )
 from datp_core.core.numeric import FeatureCount, RoundNumber, RowCount, Seed
@@ -103,15 +107,15 @@ def test_shared_input_contract_rejects_null_feature_value() -> None:
 
 def test_score_frame_persists_exact_schema(tmp_path: Path) -> None:
     frame = score_frame(
-        ("row-0", "row-1"),
-        ("benign", "attack"),
+        StableRowIdSequence((StableRowId("row-0"), StableRowId("row-1"))),
+        OutcomeLabelSequence((OutcomeLabel("benign"), OutcomeLabel("attack"))),
         np.asarray((0.1, 0.9), dtype=np.float64),
     )
     path = tmp_path / "scores.parquet"
     frame.write_parquet(path)
     reloaded = validate_persisted_score_frame(
         path,
-        checksum_file(path),
+        Checksum.from_file(path),
         RowCount(frame.height),
     )
     assert tuple(reloaded.columns) == SCORE_FRAME_COLUMNS

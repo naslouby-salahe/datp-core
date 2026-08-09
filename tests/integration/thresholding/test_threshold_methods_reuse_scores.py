@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 from tests.unit.calibration.helpers import benign_score_record
 
-from datp_core.artifacts.provenance import checksum_file
+from datp_core.artifacts.provenance import Checksum
 from datp_core.core.identifiers import (
     CheckpointStatus,
     DatasetId,
@@ -99,7 +99,7 @@ def test_every_threshold_method_reads_the_same_frozen_score_artifact_unchanged(t
     manifest = _manifest(tmp_path)
     invariant = FixedScoreInvariant.from_manifest(manifest)
     checksums_before = tuple(
-        (record.scored_client.client_id, checksum_file(record.path)) for record in manifest.calibration_records
+        (record.scored_client.client_id, Checksum.from_file(record.path)) for record in manifest.calibration_records
     )
     eligible = tuple(_eligible_client_scores(record, manifest, invariant) for record in manifest.calibration_records)
     results = tuple(
@@ -127,7 +127,7 @@ def test_every_threshold_method_reads_the_same_frozen_score_artifact_unchanged(t
         )
     )
     checksums_after = tuple(
-        (record.scored_client.client_id, checksum_file(record.path)) for record in manifest.calibration_records
+        (record.scored_client.client_id, Checksum.from_file(record.path)) for record in manifest.calibration_records
     )
     assert checksums_before == checksums_after
     shared = _result(results, FederatedThresholdMethod.SHARED_THRESHOLD)

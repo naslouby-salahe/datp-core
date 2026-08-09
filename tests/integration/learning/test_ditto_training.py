@@ -104,7 +104,7 @@ def test_ditto_end_to_end_train_select_and_score_global_and_personalized(tmp_pat
                     ),
                 ),
                 batch_size=BATCH_SIZE,
-                output_directory=tmp_path / "scores" / "personalized" / client.client_id,
+                output_directory=tmp_path / "scores" / "personalized" / client.client_id.value,
                 preprocessing_state_set_checksum=decision.selected.preprocessing_state_set_checksum,
                 split_manifest_checksum=decision.selected.split_manifest_checksum,
                 overwrite=False,

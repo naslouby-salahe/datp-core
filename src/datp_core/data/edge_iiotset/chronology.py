@@ -11,7 +11,7 @@ from pathlib import Path
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from datp_core.core.identifiers import AvailabilityStatus, ChronologyGroupIdentity
+from datp_core.core.identifiers import AvailabilityStatus, ChronologyGroupIdentity, NonEmptyString
 from datp_core.core.numeric import RowCount
 from datp_core.data.contracts import CanonicalProvenanceColumn, ChronologyValidation
 from datp_core.data.materialization import canonical_provenance_arrow_field
@@ -111,7 +111,7 @@ class _PcapAligner:
             invalid_rows=RowCount(0),
             duplicate_timestamp_count=RowCount(self.duplicate_timestamp_count),
             is_monotonic=is_monotonic,
-            reason=reason,
+            reason=NonEmptyString(reason),
             temporal_eligible=True,
             evidence_source_path=source_relative_path(self.pcap_path),
             evidence_row_count=RowCount(self.total_rows + self.skipped_evidence_rows + self.trailing_evidence_rows),
@@ -196,7 +196,7 @@ def _unavailable_validation(
         invalid_rows=total_rows,
         duplicate_timestamp_count=RowCount(0),
         is_monotonic=False,
-        reason=reason,
+        reason=NonEmptyString(reason),
         temporal_eligible=False,
     )
 

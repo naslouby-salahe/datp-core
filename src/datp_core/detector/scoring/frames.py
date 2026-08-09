@@ -1,5 +1,6 @@
 """Score-frame schema validation, construction, and persisted-frame integrity."""
 
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -7,7 +8,7 @@ import numpy.typing as npt
 import polars as pl
 import torch
 
-from datp_core.artifacts.provenance import Checksum, checksum_file
+from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.serializers.safetensors import load_state_dict_tensors
 from datp_core.core.errors import (
     ArtifactIntegrityError,
@@ -15,7 +16,16 @@ from datp_core.core.errors import (
     LeakageError,
     ScientificContractError,
 )
-from datp_core.core.identifiers import ContractSubject, FeatureNameSequence, PartitionRole, ScoreFrameColumn
+from datp_core.core.identifiers import (
+    ContractSubject,
+    FeatureNameSequence,
+    OutcomeLabel,
+    OutcomeLabelSequence,
+    PartitionRole,
+    ScoreFrameColumn,
+    StableRowId,
+    StableRowIdSequence,
+)
 from datp_core.core.numeric import BatchSize, FeatureCount, RowCount
 from datp_core.data.populations.contracts import (
     OUTCOME_LABEL_COLUMN,
@@ -42,6 +52,13 @@ CALIBRATION_PARTITIONS = frozenset(
 )
 
 
+@dataclass(frozen=True, slots=True)
+class ScoreArrays:
+    feature_matrix: npt.NDArray[np.float32]
+    row_ids: StableRowIdSequence
+    labels: OutcomeLabelSequence
+
+
 def validate_score_input_frame(
     frame: pl.DataFrame,
     partition_role: PartitionRole,
@@ -63,22 +80,20 @@ def validate_score_input_frame(
 def extract_score_arrays(
     frame: pl.DataFrame,
     feature_names: FeatureNameSequence,
-) -> tuple[
-    npt.NDArray[np.float32], tuple[str, ...], tuple[str, ...]
-]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> ScoreArrays:
     matrix = frame.select(feature_names.as_list()).to_numpy().astype(LEARNING_DTYPE, copy=False)
-    labels = tuple(str(value) for value in frame.get_column(OUTCOME_LABEL_COLUMN).to_list())
-    row_ids = tuple(str(value) for value in frame.get_column(STABLE_ROW_ID_COLUMN).to_list())
-    return matrix, labels, row_ids
+    labels = OutcomeLabelSequence(
+        tuple(OutcomeLabel(str(value)) for value in frame.get_column(OUTCOME_LABEL_COLUMN).to_list())
+    )
+    row_ids = StableRowIdSequence(
+        tuple(StableRowId(str(value)) for value in frame.get_column(STABLE_ROW_ID_COLUMN).to_list())
+    )
+    return ScoreArrays(feature_matrix=matrix, row_ids=row_ids, labels=labels)
 
 
 def score_frame(
-    row_ids: tuple[
-        str, ...
-    ],  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    labels: tuple[
-        str, ...
-    ],  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    row_ids: StableRowIdSequence,
+    labels: OutcomeLabelSequence,
     scores: npt.NDArray[np.float64],
 ) -> pl.DataFrame:
     if len(row_ids) != len(labels) or len(row_ids) != scores.shape[0]:
@@ -88,8 +103,8 @@ def score_frame(
         )
     return pl.DataFrame(
         (
-            pl.Series(SCORE_FRAME_COLUMNS[0], row_ids, dtype=pl.Utf8),
-            pl.Series(SCORE_FRAME_COLUMNS[1], labels, dtype=pl.Utf8),
+            pl.Series(SCORE_FRAME_COLUMNS[0], tuple(str(rid) for rid in row_ids.row_ids), dtype=pl.Utf8),
+            pl.Series(SCORE_FRAME_COLUMNS[1], tuple(str(lbl) for lbl in labels.labels), dtype=pl.Utf8),
             pl.Series(
                 SCORE_FRAME_COLUMNS[2],
                 scores.tolist(),
@@ -109,7 +124,7 @@ def validate_persisted_score_frame(
             ErrorMessage("score artifact is missing"),
             subject=ContractSubject.ARTIFACT_PATH,
         )
-    if checksum_file(path) != checksum:
+    if Checksum.from_file(path) != checksum:
         raise ArtifactIntegrityError(
             ErrorMessage("score checksum changed after write"),
             subject=ContractSubject.ARTIFACT_PATH,
@@ -145,9 +160,9 @@ def score_and_persist_autoencoder_frame(
     destination: Path,
 ) -> PersistedScoreFrame:
     validate_score_input_frame(frame, partition_role, feature_names)
-    matrix, labels, row_ids = extract_score_arrays(frame, feature_names)
-    scores = reconstruction_errors(model, matrix, batch_size=batch_size, device=device)
-    if scores.shape[0] != matrix.shape[0]:
+    arrays = extract_score_arrays(frame, feature_names)
+    scores = reconstruction_errors(model, arrays.feature_matrix, batch_size=batch_size, device=device)
+    if scores.shape[0] != arrays.feature_matrix.shape[0]:
         raise ScientificContractError(
             ErrorMessage("score count must equal partition row count"),
             subject=partition_role,
@@ -157,12 +172,12 @@ def score_and_persist_autoencoder_frame(
             ErrorMessage(f"generated scores must be finite in {partition_role.value} partition"),
             subject=ContractSubject.SCORES,
         )
-    output = score_frame(row_ids, labels, scores)
+    output = score_frame(arrays.row_ids, arrays.labels, scores)
     destination.parent.mkdir(parents=True, exist_ok=True)
     output.write_parquet(destination)
     persisted = PersistedScoreFrame(
         path=destination,
-        checksum=checksum_file(destination),
+        checksum=Checksum.from_file(destination),
         row_count=RowCount(output.height),
         feature_count=FeatureCount(len(feature_names)),
     )

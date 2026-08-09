@@ -403,12 +403,28 @@ class SafeTensorFilename(NonEmptyString):
         return instance
 
 
+class ArtifactFileName(NonEmptyString):
+    validation_name: ClassVar[str] = "artifact filename"
+
+
 class CudaDeviceName(NonEmptyString):
     validation_name: ClassVar[str] = "CUDA device name"
 
 
+class CudaVersion(NonEmptyString):
+    validation_name: ClassVar[str] = "CUDA version"
+
+
+class TorchVersion(NonEmptyString):
+    validation_name: ClassVar[str] = "PyTorch version"
+
+
 class ColumnName(NonEmptyString):
     validation_name: ClassVar[str] = "column name"
+
+
+class ValidationLabel(NonEmptyString):
+    validation_name: ClassVar[str] = "validation label"
 
 
 class PhysicalSchemaText(NonEmptyString):
@@ -431,6 +447,10 @@ class CanonicalizationContractName(NonEmptyString):
     validation_name: ClassVar[str] = "canonicalization contract name"
 
 
+class CanonicalSourcePath(NonEmptyString):
+    validation_name: ClassVar[str] = "canonical source path"
+
+
 @dataclass(frozen=True, slots=True)
 class ClientPathToken:
     value: str
@@ -451,6 +471,11 @@ class ClientIdentityToken:
     def __post_init__(self) -> None:
         if not isinstance(self.value, str) or not self.value:
             raise ValueError("client identity token must be non-empty")
+
+    def __lt__(self, other: "ClientIdentityToken") -> bool:
+        if type(other) is not ClientIdentityToken:
+            return NotImplemented
+        return self.value < other.value
 
     __get_pydantic_core_schema__ = classmethod(pydantic_value_schema)
 

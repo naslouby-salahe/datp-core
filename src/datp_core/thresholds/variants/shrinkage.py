@@ -8,7 +8,7 @@ from datp_core.core.errors import (
     ScientificContractError,
     require_contract,
 )
-from datp_core.core.identifiers import ContractSubject, FederatedThresholdMethod
+from datp_core.core.identifiers import ContractSubject, FederatedThresholdMethod, ValidationLabel
 from datp_core.core.numeric import Quantile, ShrinkageWeight, ThresholdValue, floats_exactly_equal
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
@@ -72,8 +72,8 @@ class ShrinkageThresholdResult:
                 )
                 for local in self.local_quantiles
             ),
-            label="shrinkage assignments",
-            mismatch_message="shrinkage assignments must match the declared fixed weight curve",
+            label=ValidationLabel("shrinkage assignments"),
+            mismatch_message=ErrorMessage("shrinkage assignments must match the declared fixed weight curve"),
         )
 
 
@@ -86,7 +86,7 @@ def construct_fixed_shrinkage(
         raise ScientificContractError(
             ErrorMessage("fixed shrinkage requires the local-global shrinkage protocol"), subject=protocol.method
         )
-    require_eligible_cohort(eligible, "fixed shrinkage construction")
+    require_eligible_cohort(eligible, ValidationLabel("fixed shrinkage construction"))
     local_quantiles = tuple(local_quantile(item, quantile) for item in eligible)
     shared = mean_local_threshold(local_quantiles)
     return tuple(

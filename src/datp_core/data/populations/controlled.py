@@ -5,13 +5,13 @@ from enum import StrEnum
 
 import numpy as np
 
-from datp_core.artifacts.provenance import Checksum, checksum_text
+from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import (
     DataIntegrityError,
     ErrorMessage,
     ScientificContractError,
 )
-from datp_core.core.identifiers import PopulationId
+from datp_core.core.identifiers import ClientIdentityToken, PopulationId
 from datp_core.core.numeric import ClientCount, RowCount, Seed
 from datp_core.data.populations.contracts import ControlledPartitionKind
 
@@ -43,7 +43,7 @@ class ControlledPartitionAllocator:
         if row_count.value == 0:
             return tuple(RowCount(0) for _ in range(self.client_count.value))
         proportions = self._proportions()
-        counts = tuple(RowCount(value) for value in hamilton_integer_counts(row_count.value, proportions))
+        counts = hamilton_integer_counts(row_count, proportions)
         if sum(count.value for count in counts) != row_count.value:
             raise DataIntegrityError(
                 ErrorMessage("controlled partition allocation failed to conserve stratum rows"),
@@ -79,22 +79,20 @@ class ControlledPartitionAllocator:
 
 
 def controlled_allocation_checksum(
-    client_ids: tuple[
-        str, ...
-    ],  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
+    client_ids: tuple[ClientIdentityToken, ...],
     counts: tuple[RowCount, ...],
     condition: ControlledPartitionCondition,
     seed: Seed,
 ) -> Checksum:
     """Checksum the complete controlled allocation identity and resulting counts."""
     concentration = condition.kind.value if condition.concentration is None else str(condition.concentration.value)
-    return checksum_text(
+    return Checksum.from_text(
         "\n".join(
             (
                 condition.kind.value,
                 concentration,
                 str(seed.value),
-                *client_ids,
+                *(c.value for c in client_ids),
                 *(str(count.value) for count in counts),
             )
         )

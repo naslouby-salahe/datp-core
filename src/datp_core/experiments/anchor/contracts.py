@@ -10,7 +10,7 @@ from typing import Annotated, Literal
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from datp_core.analysis.inference.bootstrap.contracts import BootstrapInterval
-from datp_core.artifacts.provenance import Checksum, checksum_text
+from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.serializers.json import canonical_checksum, canonical_json_text
 from datp_core.core.contracts import StrictModel, str_enum_schema
 from datp_core.core.errors import (
@@ -444,7 +444,7 @@ class VerifiedAnchorGateArtifact(StrictModel):
     def validate_passed_gate(self) -> VerifiedAnchorGateArtifact:
         if self.decision.status is AnchorGateStatus.ANCHOR_REPRODUCTION_FAILED:
             raise ValueError("verified anchor-gate artifact cannot be blocked")
-        recomputed = checksum_text(canonical_json_text(self.decision))
+        recomputed = Checksum.from_text(canonical_json_text(self.decision))
         if recomputed != self.artifact_checksum:
             raise ValueError("anchor-gate artifact checksum does not match the decision payload")
         return self

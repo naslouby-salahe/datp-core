@@ -10,7 +10,7 @@ import polars as pl
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from datp_core.artifacts.provenance import Checksum, checksum_file, checksum_text
+from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.repositories.publication import publish_atomically
 from datp_core.core.identifiers import (
     CanonicalizationContractName,
@@ -167,7 +167,7 @@ def raw_source_file(
         dataset=dataset,
         relative_path=source_path_resolver(path),
         size_bytes=ByteCount(path.stat().st_size),
-        checksum=checksum_file(path),
+        checksum=Checksum.from_file(path),
         role=role,
         observed_row_count=observed_row_count,
     )
@@ -241,7 +241,7 @@ def _inventory_checksum(sources: tuple[RawSourceFile, ...]) -> Checksum:
         + "\n"
         for source in sources
     )
-    return checksum_text(joined)
+    return Checksum.from_text(joined)
 
 
 def canonical_schema_checksum(
@@ -249,7 +249,7 @@ def canonical_schema_checksum(
 ) -> Checksum:
     if tuple(column.nullable for column in columns) != tuple(field.nullable for field in physical_schema):
         raise ValueError("canonical column nullability must match the physical schema")
-    return checksum_text(schema_checksum_document_json(dataset, columns, physical_schema))
+    return Checksum.from_text(schema_checksum_document_json(dataset, columns, physical_schema))
 
 
 def canonical_provenance_column(column: CanonicalProvenanceColumn, position: int) -> CanonicalColumn:
@@ -329,7 +329,7 @@ def stream_parquet[AssetRoleT: StrEnum](
         raise ValueError("written Parquet schema differs from the declared canonical schema")
     return CanonicalAsset(
         relative_path=layout.relative_path,
-        checksum=checksum_file(destination),
+        checksum=Checksum.from_file(destination),
         row_count=RowCount(parquet.metadata.num_rows),
         columns=tuple(ColumnName(name) for name in actual_schema.names),
         role=layout.role,

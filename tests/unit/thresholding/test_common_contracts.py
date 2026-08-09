@@ -5,6 +5,7 @@ import pytest
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import (
+    ClientIdentityToken,
     FederatedThresholdMethod,
     PopulationId,
     PopulationIdentityKind,
@@ -35,7 +36,7 @@ COORDINATE = FederatedTrainingCoordinate(
 def _client(identity: str) -> ClientIdentity:
     return ClientIdentity(
         PopulationId.NBAIOT_NATURAL_DEVICES,
-        identity,
+        ClientIdentityToken(identity),
         PopulationIdentityKind.PHYSICAL_DEVICES,
     )
 

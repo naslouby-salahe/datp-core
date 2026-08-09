@@ -7,6 +7,7 @@ from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import (
     CheckpointStatus,
+    ClientIdentityToken,
     PartitionRole,
     PopulationId,
     PopulationIdentityKind,
@@ -198,7 +199,9 @@ def test_fixed_score_invariant_differs_across_dirichlet_severities(tmp_path: Pat
         return ScoreRecord(
             coordinate=coordinate,
             scored_client=ClientIdentity(
-                coordinate.population, "client_a", PopulationIdentityKind.SYNTHETIC_DIRICHLET_CLIENTS
+                coordinate.population,
+                ClientIdentityToken("client_a"),
+                PopulationIdentityKind.SYNTHETIC_DIRICHLET_CLIENTS,
             ),
             partition_role=role,
             checkpoint_round=RoundNumber(2),

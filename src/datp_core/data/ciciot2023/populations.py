@@ -87,7 +87,6 @@ def construct_ciciot_file_clients(
     )
     excluded = tuple(candidate for candidate in candidates if candidate not in frozenset(accepted))
     membership = select_membership_frame(eligible).sort([CLIENT_ID_COLUMN, STABLE_ROW_ID_COLUMN])
-    candidate_ids = tuple(candidate.value for candidate in candidates)
     manifest = finalize_population(
         PopulationFinalizationRequest(
             population=_POPULATION,
@@ -101,10 +100,10 @@ def construct_ciciot_file_clients(
             ),
             partition_seed=partition_seed,
             split_protocol=split_protocol,
-            candidate_ids=candidate_ids,
-            accepted_ids=tuple(client.value for client in accepted),
-            excluded_ids=tuple(client.value for client in excluded),
-            expected_identities=candidate_ids,
+            candidate_ids=candidates,
+            accepted_ids=accepted,
+            excluded_ids=excluded,
+            expected_identities=candidates,
             chronology_required=False,
             membership=membership,
             canonical_schema_checksum=CICIOT2023_SCHEMA.checksum,

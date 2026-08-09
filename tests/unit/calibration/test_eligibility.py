@@ -152,7 +152,7 @@ def test_eligible_clients_filters_and_orders_deterministically() -> None:
         ),
     )
     result = eligible_clients(decisions)
-    assert [client.client_id for client in result] == ["client_a", "client_b"]
+    assert [client.client_id.value for client in result] == ["client_a", "client_b"]
 
 
 def test_require_common_eligible_cohort_accepts_matching_cohorts() -> None:

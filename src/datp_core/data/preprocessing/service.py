@@ -64,9 +64,6 @@ _PROTOCOL_METHODS = {
 
 _AUDITED_TIMESTAMP_COLUMN = CaptureTimestampColumn(EdgeCanonicalColumn.CAPTURE_TIMESTAMP.value)
 
-_EMPTY_FALLBACK_CLIENT_IDS: frozenset[str] = (
-    frozenset()
-)  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Or even removed since we won't use str
 _EMPTY_CLIENT_IDENTITIES: frozenset[ClientIdentity] = frozenset()
 
 
@@ -97,7 +94,7 @@ def preprocess_federated(
     handoff = build_preprocessing_handoff(
         PreprocessingHandoffRequest(
             construction=construction,
-            deployment_fallback_client_ids=_EMPTY_FALLBACK_CLIENT_IDS,
+            deployment_fallback_client_ids=frozenset(),
             capture_timestamp_column=_capture_timestamp_column(request),
             expected_split_manifest_checksum=request.expected_split_manifest_checksum,
         )

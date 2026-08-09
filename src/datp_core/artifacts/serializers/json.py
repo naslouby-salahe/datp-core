@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, TypeAdapter
 
-from datp_core.artifacts.provenance import Checksum, checksum_text
+from datp_core.artifacts.provenance import Checksum
 
 if TYPE_CHECKING:
     from _typeshed import DataclassInstance
@@ -73,14 +73,14 @@ def canonical_json_text(value: object) -> str:
 
 
 def canonical_checksum(value: object) -> Checksum:
-    return checksum_text(canonical_json_text(value))
+    return Checksum.from_text(canonical_json_text(value))
 
 
 def serialize_json_model(model: BaseModel, destination: Path) -> Checksum:
     destination.parent.mkdir(parents=True, exist_ok=True)
     payload = canonical_json_text(model)
     destination.write_text(payload, encoding="utf-8")
-    return checksum_text(payload)
+    return Checksum.from_text(payload)
 
 
 def _canonical_dataclass_value(value: "DataclassInstance") -> CanonicalValue:

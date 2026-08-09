@@ -23,7 +23,14 @@ from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
 )
-from datp_core.core.identifiers import EvidenceRole, ExperimentId, FederatedThresholdMethod, MetricId, PopulationId
+from datp_core.core.identifiers import (
+    ClientIdentityToken,
+    EvidenceRole,
+    ExperimentId,
+    FederatedThresholdMethod,
+    MetricId,
+    PopulationId,
+)
 from datp_core.core.numeric import (
     AbsoluteThresholdError,
     ByteCount,
@@ -197,7 +204,7 @@ class ExternalBenignStatisticsAssetName(StrEnum):
 
 
 class ExternalBenignStatisticsClient(StrictModel):
-    client_id: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    client_id: ClientIdentityToken
     count: RowCount
     mean: ScoreMoment
     variance: ScoreVariance
@@ -302,7 +309,7 @@ def _benign_statistics_summary(
 
 def _benign_statistics_client(summary: ClientBenignSummary) -> ExternalBenignStatisticsClient:
     return ExternalBenignStatisticsClient(
-        client_id=summary.client.client_id,
+        client_id=summary.client.client_id.value,
         count=summary.count,
         mean=summary.mean,
         variance=summary.variance,
@@ -366,7 +373,7 @@ def _external_benign_statistics_markdown(manifest: ExternalBenignStatisticsRepor
         )
         lines.extend(
             (
-                f"| {client.client_id} | {client.count.value} | {client.mean.value:.6g} | "
+                f"| {client.client_id.value} | {client.count.value} | {client.mean.value:.6g} | "
                 f"{client.variance.value:.6g} | "
                 + (
                     f"{client.benign_exceedance_count.value}"

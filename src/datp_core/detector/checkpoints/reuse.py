@@ -208,7 +208,7 @@ def validated_personalized_manifest(
     expected_entries = tuple(
         (
             round_number,
-            ClientPathToken(client.client_id),
+            ClientPathToken(client.client_id.value),
             candidate_tensor_name(round_number, client),
         )
         for client in request.clients
@@ -257,14 +257,14 @@ def load_reused_personalized_candidates(
     entries_by_client: dict[str, list[CandidateManifestEntry]] = {}
     for entry in manifest.entries:
         if entry.client_id is not None:
-            entries_by_client.setdefault(str(entry.client_id), []).append(entry)
+            entries_by_client.setdefault(entry.client_id.value, []).append(entry)
 
     return tuple(
         PersonalizedCandidateSet(
             client=client,
             candidates=tuple(
                 _personalized_candidate(request, client, entry, losses_by_client_round)
-                for entry in entries_by_client.get(client.client_id, [])
+                for entry in entries_by_client.get(client.client_id.value, [])
             ),
         )
         for client in request.clients
@@ -280,7 +280,7 @@ def _personalized_candidate(
     path = request.personalized_output_directory / entry.tensor_name
     validate_persisted_checkpoint_file(path, entry.tensor_checksum)
 
-    key = (client.client_id, entry.round_number)
+    key = (client.client_id.value, entry.round_number)
     if key not in losses_by_client_round:
         raise ArtifactIntegrityError(
             ErrorMessage("personalized checkpoint requires exactly one matching client-round loss"),

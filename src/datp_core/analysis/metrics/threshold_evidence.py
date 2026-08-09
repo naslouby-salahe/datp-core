@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import polars as pl
 
 from datp_core.analysis.metrics.models import FederatedScoreRecord, HeldOutBenignScore
-from datp_core.artifacts.provenance import checksum_file
+from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
@@ -66,7 +66,7 @@ def _verify_score_rows(scores: tuple[HeldOutBenignScore, ...]) -> None:
     required_set = set(required)
 
     for record, supplied_rows in by_record.items():
-        if not record.path.is_file() or checksum_file(record.path) != record.checksum:
+        if not record.path.is_file() or Checksum.from_file(record.path) != record.checksum:
             raise ScientificContractError(
                 ErrorMessage("threshold diagnostics score provenance is unavailable or changed")
             )

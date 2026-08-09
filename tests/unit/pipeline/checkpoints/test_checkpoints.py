@@ -26,12 +26,12 @@ class _Candidate:
 def _candidate(tmp_path: Path, round_number: int) -> _Candidate:
     path = tmp_path / f"checkpoint_round_{round_number}.safetensors"
     path.write_text(f"round-{round_number}", encoding="utf-8")
-    from datp_core.artifacts.provenance import checksum_file
+    from datp_core.artifacts.provenance import Checksum
 
     return _Candidate(
         round_number=RoundNumber(round_number),
         tensor_path=path,
-        tensor_checksum=checksum_file(path),
+        tensor_checksum=Checksum.from_file(path),
         mean_training_loss=MetricValue(float(round_number)),
         status=CheckpointStatus.CANDIDATE,
     )

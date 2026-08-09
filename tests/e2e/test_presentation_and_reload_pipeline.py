@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from datp_core.artifacts.provenance import checksum_text
+from datp_core.artifacts.provenance import Checksum
 from datp_core.core.identifiers import AvailabilityStatus, EvidenceRole, ExperimentId, MetricId, PopulationId
 from datp_core.presentation.export import PublicationBundle, ReportProvenance, export_markdown
 from datp_core.presentation.tables import PublicationTable, TableCell
@@ -73,7 +73,7 @@ def test_presentation_export_is_deterministic_and_preserves_provenance_and_unava
         experiment=ExperimentId.SHARED_VS_LOCAL_CONFIRMATION,
         population=PopulationId.NBAIOT_NATURAL_DEVICES,
         evidence_role=EvidenceRole.CONFIRMATORY,
-        analysis_checksum=checksum_text("validated-analysis"),
+        analysis_checksum=Checksum.from_text("validated-analysis"),
     )
     bundle = PublicationBundle(
         provenance=provenance,

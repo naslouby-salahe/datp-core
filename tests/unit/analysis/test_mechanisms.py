@@ -41,6 +41,7 @@ from datp_core.analysis.scientific_decision import ScientificDecision
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.identifiers import (
     AvailabilityStatus,
+    ClientIdentityToken,
     EvidenceRole,
     ExperimentId,
     FederatedThresholdMethod,
@@ -567,4 +568,4 @@ def _client(
         if population is PopulationId.EDGE_SENSOR_GROUPS
         else PopulationIdentityKind.PHYSICAL_DEVICES
     )
-    return ClientIdentity(population, client_id, kind)
+    return ClientIdentity(population, ClientIdentityToken(client_id), kind)

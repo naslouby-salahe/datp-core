@@ -12,7 +12,7 @@ from pydantic import ValidationError
 
 from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
 from datp_core.artifacts.layout import evaluation_run_directory
-from datp_core.artifacts.provenance import Checksum, checksum_file
+from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
 from datp_core.artifacts.serializers.json import canonical_checksum, canonical_json_text
 from datp_core.core.contracts import StrictModel
@@ -177,7 +177,7 @@ def observation_from_evaluation_document(
         checkpoint_status=ANCHOR_CHECKPOINT_STATUS,
         source_kind=AnchorObservationSourceKind.INDEPENDENT_REPRODUCTION,
         artifact_path=document_path.resolve(),
-        artifact_checksum=checksum_file(document_path),
+        artifact_checksum=Checksum.from_file(document_path),
         model_checkpoint_identity=document.score_checkpoint_checksum,
         evidence_role=ANCHOR_EVIDENCE_ROLE,
     )
@@ -254,7 +254,7 @@ def collect_independent_observations_from_evaluations(
     seed_cohort: SeedCohort = HISTORICAL_ANCHOR_SEED_COHORT,
 ) -> tuple[AnchorObservedMetric, ...]:
     """Load SHARED/LOCAL CV(FPR) evaluations for every historical seed as independent observations."""
-    from datp_core.app.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
+    from datp_core.app.planning import PlanDisposition, PlanningEvidence, PlanReason, expand_experiment_plan
     from datp_core.experiments.registry import EXPERIMENTS
 
     declaration = next(item for item in EXPERIMENTS if item.id is ExperimentId.HISTORICAL_DATP_REPRODUCTION)
@@ -265,7 +265,7 @@ def collect_independent_observations_from_evaluations(
             PlanningEvidence(
                 experiment=declaration.id,
                 disposition=PlanDisposition.EXECUTABLE,
-                reason="independent anchor reproduction loads completed historical evaluation artifacts",
+                reason=PlanReason("independent anchor reproduction loads completed historical evaluation artifacts"),
             ),
         ),
     )

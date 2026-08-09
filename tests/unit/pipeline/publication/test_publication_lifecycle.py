@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from datp_core.artifacts.provenance import Checksum, checksum_bytes
+from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.repositories.models import (
     ArtifactKind,
     ArtifactRecord,
@@ -23,7 +23,7 @@ def artifact_for(relative: Path, payload: bytes) -> ArtifactRecord:
     return ArtifactRecord(
         kind=ArtifactKind.SUMMARY,
         relative_path=relative,
-        checksum=checksum_bytes(payload),
+        checksum=Checksum.from_bytes(payload),
         byte_count=ByteCount(len(payload)),
         state=ArtifactState.PUBLISHED,
     )

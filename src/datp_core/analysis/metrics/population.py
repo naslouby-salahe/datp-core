@@ -93,7 +93,7 @@ def calculate_population_metrics(
         attack_evaluable_client_count=RowCount(attack_evaluable_count),
         deployment_fallback_count=RowCount(fallback_count),
         unavailable_client_count=RowCount(unavailable_count),
-        excluded_clients=tuple(sorted(excluded_clients, key=lambda item: item.client_id)),
+        excluded_clients=tuple(sorted(excluded_clients, key=lambda item: item.client_id.value)),
         warnings=aggregates.warnings,
         evidence_role=first.evidence_role,
     )

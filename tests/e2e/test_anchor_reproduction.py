@@ -1,4 +1,5 @@
 from datp_core.app.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
+from datp_core.app.planning import PlanReason
 from datp_core.core.identifiers import (
     EvidenceRole,
     ExperimentId,
@@ -20,7 +21,7 @@ def test_anchor_reproduction_resolves_to_the_locked_federated_reference() -> Non
             PlanningEvidence(
                 experiment=declaration.id,
                 disposition=PlanDisposition.EXECUTABLE,
-                reason="anchor fixture is available",
+                reason=PlanReason("anchor fixture is available"),
             ),
         ),
     )

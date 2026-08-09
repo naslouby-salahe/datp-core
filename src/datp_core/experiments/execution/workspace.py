@@ -32,7 +32,7 @@ from datp_core.analysis.operational.communication import (
 )
 from datp_core.analysis.operational.traffic_rates import traffic_rate_evidence_for_population
 from datp_core.artifacts.layout import evaluation_run_directory
-from datp_core.artifacts.provenance import checksum_file
+from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
 from datp_core.artifacts.repositories.thresholds import (
     FederatedThresholdConstructionRequest,
@@ -303,7 +303,7 @@ class ExperimentWorkspace:
         record: FederatedScoreRecord,
         client: ClientIdentity,
     ) -> tuple[HeldOutBenignScore, ...]:
-        if not record.path.is_file() or checksum_file(record.path) != record.checksum:
+        if not record.path.is_file() or Checksum.from_file(record.path) != record.checksum:
             raise ScientificContractError(ErrorMessage("evaluation score provenance is unavailable or changed"))
         frame = pl.read_parquet(record.path).filter(
             pl.col(ScoreFrameColumn.OUTCOME_LABEL.value) == PopulationOutcomeLabel.BENIGN.value
@@ -408,7 +408,7 @@ class ExperimentWorkspace:
                     CommunicationMessageDiagnostic(
                         training_seed=training_seed,
                         coordinate=coordinate,
-                        sender=f"client:{client_id.client_id}",
+                        sender=f"client:{client_id.client_id.value}",
                         receiver="coordinator",
                         direction=MessageDirection.CLIENT_TO_COORDINATOR,
                         payload_kind=ThresholdPayloadKind.MODEL_TRANSMISSION,
@@ -423,7 +423,7 @@ class ExperimentWorkspace:
                         training_seed=training_seed,
                         coordinate=coordinate,
                         sender="coordinator",
-                        receiver=f"client:{client_id.client_id}",
+                        receiver=f"client:{client_id.client_id.value}",
                         direction=MessageDirection.COORDINATOR_TO_CLIENT,
                         payload_kind=ThresholdPayloadKind.MODEL_TRANSMISSION,
                         payload=payload,

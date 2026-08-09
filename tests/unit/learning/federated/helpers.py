@@ -9,6 +9,7 @@ import torch
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.identifiers import ClientPathToken as PreprocessingClientIdentity
 from datp_core.core.identifiers import (
+    ClientIdentityToken,
     FeatureName,
     FeatureNameSequence,
     OptimizerId,
@@ -152,7 +153,7 @@ def feature_protocol() -> PreprocessingProtocol:
 
 
 def client_identity(client_id: str) -> ClientIdentity:
-    return ClientIdentity(POPULATION, client_id, PopulationIdentityKind.PHYSICAL_DEVICES)
+    return ClientIdentity(POPULATION, ClientIdentityToken(client_id), PopulationIdentityKind.PHYSICAL_DEVICES)
 
 
 def fitted_state(path: Path, client_id: str, *, checksum_suffix: str = "a") -> FederatedFittedPreprocessingState:

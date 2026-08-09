@@ -19,6 +19,7 @@ from datp_core.core.errors import (
 )
 from datp_core.core.identifiers import (
     AvailabilityStatus,
+    ClientIdentityToken,
     EvidenceRole,
     ExperimentId,
     FederatedThresholdMethod,
@@ -126,9 +127,7 @@ class TemporalClientTrajectory(StrictModel):
     macro_f1_recalibrated: MetricValue | None = None
 
     @property
-    def client_id(
-        self,
-    ) -> str:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    def client_id(self) -> ClientIdentityToken:
         return self.client.client_id
 
     @property

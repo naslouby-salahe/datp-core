@@ -13,8 +13,6 @@ from datp_core.core.numeric import BatchSize, ClientCount, LearningRate, RoundNu
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.autoencoder import (
     build_reconstruction_autoencoder,
-    clone_autoencoder_state,
-    clone_state,
 )
 from datp_core.detector.checkpoints.contracts import CheckpointProtocol
 from datp_core.detector.checkpoints.publication import write_ditto_training
@@ -125,9 +123,12 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
         request.autoencoder,
         initialization_seed=request.training_seed,
     )
-    global_state = clone_autoencoder_state(initial_model)
+    global_state = {name: tensor.detach().clone() for name, tensor in initial_model.state_dict().items()}
 
-    personalized_states = {item.client: clone_state(global_state) for item in prepared}
+    personalized_states = {
+        item.client: {name: tensor.detach().clone() for name, tensor in global_state.items()}
+        for item in prepared
+    }
     personalized_snapshots: dict[ClientIdentity, list[RoundSnapshot]] = {item.client: [] for item in prepared}
 
     candidate_rounds = frozenset(request.checkpoint_protocol.candidates)

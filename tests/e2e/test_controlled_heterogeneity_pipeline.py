@@ -1,4 +1,5 @@
 from datp_core.app.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
+from datp_core.app.planning import PlanReason
 from datp_core.core.identifiers import (
     EvidenceRole,
     ExperimentId,
@@ -22,7 +23,7 @@ def test_controlled_heterogeneity_is_mechanism_evidence_not_a_second_confirmatio
             PlanningEvidence(
                 experiment=declaration.id,
                 disposition=PlanDisposition.EXECUTABLE,
-                reason="controlled condition is resolved",
+                reason=PlanReason("controlled condition is resolved"),
             ),
         ),
     )

@@ -871,14 +871,14 @@ def _client_metric(client: ClientMetricResult | None, metric: MetricId) -> Metri
 
 def _cohort_unavailable_reasons(cohort: EvaluationCohortManifest) -> tuple[str, ...]:
     reasons: list[str] = []
-    for record in sorted(cohort.records, key=lambda item: item.client.client_id):
+    for record in sorted(cohort.records, key=lambda item: item.client.client_id.value):
         if record.fpr_evaluable:
             continue
         client_id = record.client.client_id
         if record.exclusion_reasons:
             reasons.extend(f"{client_id}:{reason.value}" for reason in record.exclusion_reasons)
         else:
-            reasons.append(f"{client_id}:not_fpr_evaluable")
+            reasons.append(f"{client_id.value}:not_fpr_evaluable")
     return tuple(reasons)
 
 

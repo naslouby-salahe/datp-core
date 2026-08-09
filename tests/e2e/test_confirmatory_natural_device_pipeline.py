@@ -1,4 +1,5 @@
 from datp_core.app.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
+from datp_core.app.planning import PlanReason
 from datp_core.core.identifiers import (
     EvidenceRole,
     ExperimentId,
@@ -18,7 +19,7 @@ def test_confirmatory_campaign_changes_threshold_scope_only() -> None:
     evidence = PlanningEvidence(
         experiment=declaration.id,
         disposition=PlanDisposition.EXECUTABLE,
-        reason="confirmatory fixture is complete",
+        reason=PlanReason("confirmatory fixture is complete"),
     )
     plan = expand_experiment_plan(
         declarations=(declaration,),

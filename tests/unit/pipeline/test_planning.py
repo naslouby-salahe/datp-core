@@ -1,4 +1,5 @@
 from datp_core.app.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
+from datp_core.app.planning import PlanReason
 from datp_core.core.identifiers import (
     DatasetId,
     EvidenceRole,
@@ -35,7 +36,7 @@ def test_plan_expansion_is_deterministic_and_records_complete_coordinates() -> N
         PlanningEvidence(
             experiment=declaration.id,
             disposition=PlanDisposition.EXECUTABLE,
-            reason="all prerequisites validated",
+            reason=PlanReason("all prerequisites validated"),
         ),
     )
     first = expand_experiment_plan(
@@ -106,7 +107,7 @@ def test_planning_cannot_override_population_threshold_capabilities() -> None:
             PlanningEvidence(
                 experiment=declaration.id,
                 disposition=PlanDisposition.EXECUTABLE,
-                reason="caller claims the campaign is executable",
+                reason=PlanReason("caller claims the campaign is executable"),
             ),
         ),
     )

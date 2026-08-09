@@ -101,7 +101,7 @@ def matched_static_reference_inputs(
             subject=context.coordinate.population,
         )
     observed_clients = frozenset(str(value) for value in joined.get_column(CLIENT_ID_COLUMN).unique().to_list())
-    expected_clients = frozenset(client.client_id for client in context.clients)
+    expected_clients = frozenset(client.client_id.value for client in context.clients)
     if observed_clients != expected_clients:
         raise ScientificContractError(
             ErrorMessage("matched static and temporal client inventories must be identical"),
@@ -162,11 +162,11 @@ def _transform_matched_static_partition(
     estimator: TrustedScaler,
 ) -> pl.DataFrame:
     source = joined.filter(
-        (pl.col(CLIENT_ID_COLUMN) == client.client_id) & (pl.col(PARTITION_ROLE_COLUMN).cast(pl.String) == role.value)
+        (pl.col(CLIENT_ID_COLUMN) == client.client_id.value) & (pl.col(PARTITION_ROLE_COLUMN).cast(pl.String) == role.value)
     ).select((STABLE_ROW_ID_COLUMN, OUTCOME_LABEL_COLUMN, *feature_names.names))
     if source.is_empty():
         raise ScientificContractError(
-            ErrorMessage(f"matched static {role.value} partition is empty for {client.client_id}"),
+            ErrorMessage(f"matched static {role.value} partition is empty for {client.client_id.value}"),
             subject=role,
         )
     transformed = transform_feature_matrix(
@@ -188,7 +188,7 @@ def _client_publication(
     matches = tuple(item for item in publications if item.client_identity.value == client.client_id)
     if len(matches) != 1:
         raise ScientificContractError(
-            ErrorMessage(f"expected one historical preprocessing state for {client.client_id}"),
+            ErrorMessage(f"expected one historical preprocessing state for {client.client_id.value}"),
             subject=ContractSubject.CLIENT_IDENTITY,
         )
     return matches[0]

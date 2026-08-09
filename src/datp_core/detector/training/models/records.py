@@ -27,7 +27,7 @@ def validate_client_preprocessing_match(
     feature_names: FeatureNameSequence,
 ) -> None:
     state_identity = preprocessing_state.client_identity
-    if state_identity.value != client.client_id:
+    if state_identity.value != client.client_id.value:
         raise ScientificContractError(
             ErrorMessage("preprocessing state client identity token must match the client training input"),
             subject=ContractSubject.CLIENT_IDENTITY,

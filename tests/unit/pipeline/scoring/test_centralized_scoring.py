@@ -15,13 +15,17 @@ from tests.unit.learning.centralized.helpers import (
     training_coordinate,
 )
 
-from datp_core.artifacts.provenance import Checksum, checksum_file
+from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import LeakageError
 from datp_core.core.identifiers import (
     CheckpointStatus,
+    OutcomeLabel,
+    OutcomeLabelSequence,
     PartitionRole,
     ScoreFrameColumn,
     SerializationFormat,
+    StableRowId,
+    StableRowIdSequence,
     TrainingModelId,
 )
 from datp_core.core.numeric import FeatureCount, MetricValue, RoundNumber, RowCount, Seed
@@ -107,7 +111,7 @@ def test_reuse_rejects_changed_calibration_row_identity(tmp_path: Path) -> None:
         coordinate=coordinate,
         round_number=RoundNumber(1),
         tensor_path=checkpoint_path,
-        tensor_checksum=checksum_file(checkpoint_path),
+        tensor_checksum=Checksum.from_file(checkpoint_path),
         mean_training_loss=MetricValue(0.1),
         status=CheckpointStatus.CANDIDATE,
         preprocessing_state_checksum=preprocessing_checksum,
@@ -176,8 +180,12 @@ def _persist_score_artifact(
     path: Path,
 ) -> PooledScoreArtifact:
     score_frame(
-        tuple(str(value) for value in source[ScoreFrameColumn.STABLE_ROW_ID.value].to_list()),
-        tuple(str(value) for value in source[ScoreFrameColumn.OUTCOME_LABEL.value].to_list()),
+        StableRowIdSequence(
+            tuple(StableRowId(str(value)) for value in source[ScoreFrameColumn.STABLE_ROW_ID.value].to_list())
+        ),
+        OutcomeLabelSequence(
+            tuple(OutcomeLabel(str(value)) for value in source[ScoreFrameColumn.OUTCOME_LABEL.value].to_list())
+        ),
         np.zeros(source.height, dtype=np.float64),
     ).write_parquet(path)
     return PooledScoreArtifact(
@@ -186,7 +194,7 @@ def _persist_score_artifact(
         checkpoint_round=checkpoint.round_number,
         checkpoint_checksum=checkpoint.tensor_checksum,
         path=path,
-        checksum=checksum_file(path),
+        checksum=Checksum.from_file(path),
         row_count=RowCount(source.height),
         feature_count=FeatureCount(len(FEATURE_NAMES)),
         serialization_format=SerializationFormat.PARQUET,

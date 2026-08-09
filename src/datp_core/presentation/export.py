@@ -262,7 +262,7 @@ def export_temporal_publication(document: TemporalAnalysisDocument, output_direc
         )
         for trajectory in recovery.client_trajectories:
             lines.append(
-                f"  - client `{trajectory.client_id}` eligible={trajectory.eligible} "
+                f"  - client `{trajectory.client_id.value}` eligible={trajectory.eligible} "
                 f"fpr_static={_optional_metric(trajectory.fpr_static)} "
                 f"fpr_frozen={_optional_metric(trajectory.fpr_frozen)} "
                 f"fpr_recal={_optional_metric(trajectory.fpr_recalibrated)}"
@@ -781,7 +781,7 @@ def _render_one_mechanism(
         case ThresholdMovement():
             delta_tpr = f"{mechanism.delta_tpr.value:.6g}" if mechanism.delta_tpr is not None else "unavailable"
             return [
-                f"Client: `{mechanism.client.client_id}`",
+                f"Client: `{mechanism.client.client_id.value}`",
                 f"Seed: {mechanism.seed.value}",
                 f"Δ threshold: {mechanism.delta_threshold.value:.6g}",
                 f"Δ FPR: {mechanism.delta_fpr.value:.6g}",

@@ -7,7 +7,7 @@ from pydantic import ValidationError
 
 from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
 from datp_core.analysis.metrics.models import MetricStatus, metric_by_id
-from datp_core.artifacts.provenance import checksum_file
+from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
@@ -51,7 +51,7 @@ def eligible_calibration_scores(
                 ScoreValue(float(value))
                 for value in pl.read_parquet(record.path)[ScoreFrameColumn.RECONSTRUCTION_ERROR.value].to_list()
             ),
-            checksum_file(record.path),
+            Checksum.from_file(record.path),
             score_set_checksum,
         )
         for record in sorted(score_manifest.records_for(role), key=lambda item: item.scored_client)

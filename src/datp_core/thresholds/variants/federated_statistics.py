@@ -11,7 +11,7 @@ from datp_core.core.errors import (
     ScientificContractError,
     require_contract,
 )
-from datp_core.core.identifiers import ContractSubject, FederatedThresholdMethod
+from datp_core.core.identifiers import ContractSubject, FederatedThresholdMethod, ValidationLabel
 from datp_core.core.numeric import (
     AbsoluteThresholdError,
     ByteCount,
@@ -150,8 +150,8 @@ class FederatedStatisticsThresholdResult:
         validate_assignments(
             self.assignments,
             tuple(ThresholdAssignment(client, self.matched_threshold) for client in summary_clients),
-            label="threshold assignments",
-            mismatch_message="every benign-statistics assignment must carry the identical shared value",
+            label=ValidationLabel("threshold assignments"),
+            mismatch_message=ErrorMessage("every benign-statistics assignment must carry the identical shared value"),
         )
 
 

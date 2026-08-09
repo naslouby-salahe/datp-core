@@ -45,7 +45,7 @@ def candidate_tensor_name(
 ) -> SafeTensorFilename:
     if client is not None:
         return SafeTensorFilename(
-            f"{_CANDIDATE_PREFIX}{round_number.value}{_PERSONALIZED_INFIX}{client.client_id}{_CANDIDATE_SUFFIX}"
+            f"{_CANDIDATE_PREFIX}{round_number.value}{_PERSONALIZED_INFIX}{client.client_id.value}{_CANDIDATE_SUFFIX}"
         )
     return SafeTensorFilename(f"{_CANDIDATE_PREFIX}{round_number.value}{_CANDIDATE_SUFFIX}")
 
@@ -64,9 +64,7 @@ def persist_checkpoint_tensor(
 
 
 def _assert_checkpoint_reload_equality(
-    cpu_state_dict: dict[
-        str, torch.Tensor
-    ],  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Also i prefer something other than dict
+    cpu_state_dict: AutoencoderStateView,
     path: Path,
     autoencoder: AutoencoderProtocol,
 ) -> None:

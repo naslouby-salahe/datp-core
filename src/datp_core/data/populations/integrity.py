@@ -14,6 +14,7 @@ from datp_core.core.errors import (
 )
 from datp_core.core.identifiers import (
     CaptureTimestampColumn,
+    ClientIdentityToken,
     ContractSubject,
     PartitionRole,
     PopulationId,
@@ -65,13 +66,11 @@ class PopulationIntegrityViolation(StrEnum):
 
 
 def reject_non_benign_labels(
-    labels: Iterable[
-        str
-    ],  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
+    labels: Iterable[PopulationOutcomeLabel],
     *,
     message: str,
     subject: ContractSubject,
-    benign_label: str = PopulationOutcomeLabel.BENIGN.value,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
+    benign_label: PopulationOutcomeLabel = PopulationOutcomeLabel.BENIGN,
 ) -> None:
     if any(label != benign_label for label in labels):
         raise LeakageError(ErrorMessage(message), subject=subject)
@@ -79,7 +78,7 @@ def reject_non_benign_labels(
 
 def membership_frame_checksum(membership: pl.DataFrame) -> Checksum:
     return membership_checksum(
-        tuple(membership.get_column(CLIENT_ID_COLUMN).to_list()),
+        tuple(ClientIdentityToken(c) for c in membership.get_column(CLIENT_ID_COLUMN).to_list()),
         tuple(membership.get_column(STABLE_ROW_ID_COLUMN).to_list()),
     )
 
@@ -144,7 +143,7 @@ def validate_no_future_history_leakage(
             historical.filter(pl.col(CLIENT_ID_COLUMN) == client_id),
             future.filter(pl.col(CLIENT_ID_COLUMN) == client_id),
             capture_timestamp_column,
-            str(client_id),
+            ClientIdentityToken(client_id),
         )
 
 
@@ -195,13 +194,11 @@ def _require_membership_row_contract(
 
 def _require_membership_client_subset(
     membership: pl.DataFrame,
-    accepted_clients: tuple[
-        str, ...
-    ],  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
+    accepted_clients: tuple[ClientIdentityToken, ...],
     population: PopulationId,
 ) -> None:
     observed_clients = frozenset(membership.get_column(CLIENT_ID_COLUMN).unique().to_list())
-    accepted = frozenset(accepted_clients)
+    accepted = frozenset(c.value for c in accepted_clients)
     if not observed_clients <= accepted:
         raise DataIntegrityError(
             ErrorMessage("membership clients disagree with accepted client identities"),
@@ -217,9 +214,7 @@ def _require_membership_client_subset(
 
 
 def _require_candidate_count(
-    candidates: tuple[
-        str, ...
-    ],  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
+    candidates: tuple[ClientIdentityToken, ...],
     expected: ClientCount,
     population: PopulationId,
 ) -> None:
@@ -290,7 +285,7 @@ def _reject_client_future_history_leakage(
     historical: pl.DataFrame,
     future: pl.DataFrame,
     capture_timestamp_column: CaptureTimestampColumn,
-    client_id: str,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
+    client_id: ClientIdentityToken,
 ) -> None:
     if historical.height == 0 or future.height == 0:
         return
@@ -300,7 +295,7 @@ def _reject_client_future_history_leakage(
     )
     if boundary.filter(pl.col(_MAX_HIST) > pl.col(_MIN_FUT)).height > 0:
         raise LeakageError(
-            ErrorMessage(f"future rows precede historical rows for client {client_id!r}"),
+            ErrorMessage(f"future rows precede historical rows for client {client_id.value!r}"),
             subject=StageOperationId.SPLIT,
             reason=PopulationIntegrityViolation.FUTURE_PRECEDES_HISTORICAL,
         )
@@ -322,9 +317,7 @@ def _validate_label_counts(
 
 def _require_columns(
     frame: pl.DataFrame,
-    columns: tuple[
-        str, ...
-    ],  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else instead of str. Check what already exists
+    columns: tuple[str, ...],
     subject: StageOperationId,
 ) -> None:
     missing = tuple(column for column in columns if column not in frame.columns)

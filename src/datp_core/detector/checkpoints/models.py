@@ -13,16 +13,9 @@ from datp_core.core.errors import (
 from datp_core.core.identifiers import CheckpointSelectionRule, CheckpointStatus, ContractSubject
 from datp_core.core.numeric import MetricValue, RoundNumber, Seed
 from datp_core.detector.checkpoints.contracts import CheckpointProtocol
+from datp_core.detector.checkpoints.protocols import RETAINED_CHECKPOINT_STATUSES
 from datp_core.detector.training.centralized import CentralizedTrainingCoordinate
 from datp_core.detector.training.contracts import AutoencoderArchitecture
-
-RETAINED_CHECKPOINT_STATUSES = frozenset(
-    {
-        CheckpointStatus.CANDIDATE,
-        CheckpointStatus.STABILITY_EVIDENCE,
-        CheckpointStatus.SELECTED_BY_NON_TEST_RULE,
-    }
-)
 
 
 @runtime_checkable

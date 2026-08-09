@@ -22,9 +22,9 @@ from datp_core.analysis.metrics.cohort_evidence import client_partition_counts_f
 from datp_core.analysis.metrics.cohorts import EvaluationCohortManifest
 from datp_core.analysis.metrics.models import ClientMetricResult, MetricStatus, PopulationMetricResult, metric_by_id
 from datp_core.analysis.metrics.population import calculate_population_metrics
-from datp_core.app.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
+from datp_core.app.planning import PlanDisposition, PlanningEvidence, PlanReason, expand_experiment_plan
 from datp_core.artifacts.layout import evaluation_run_directory
-from datp_core.artifacts.provenance import Checksum, checksum_file
+from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
 from datp_core.artifacts.repositories.thresholds import (
     FederatedThresholdConstructionRequest,
@@ -508,7 +508,9 @@ def run_fedprox_stress_test_seed(
             PlanningEvidence(
                 experiment=declaration.id,
                 disposition=PlanDisposition.EXECUTABLE,
-                reason="the FedProx stress-test entry point supplies the locked natural-device execution prerequisites",
+                reason=PlanReason(
+                    "the FedProx stress-test entry point supplies the locked natural-device execution prerequisites"
+                ),
             ),
         ),
     )
@@ -901,7 +903,7 @@ def _personalized_scores(
                 feature_names=feature_names,
                 clients=(client_scoring_input(context.preprocessing.client_publications, client),),
                 batch_size=BATCH_SIZE,
-                output_directory=personalized_directory / client.client_id / ExecutionArtifactDirectory.SCORES,
+                output_directory=personalized_directory / client.client_id.value / ExecutionArtifactDirectory.SCORES,
                 preprocessing_state_set_checksum=context.preprocessing_state_set_checksum,
                 split_manifest_checksum=context.split_manifest_checksum,
                 overwrite=overwrite,
@@ -921,7 +923,7 @@ def _personalized_scores(
                 client,
                 personalized_coordinate,
                 scores,
-                checksum_file(record.path),
+                Checksum.from_file(record.path),
                 invariant.calibration_score_set_checksum,
             )
         )

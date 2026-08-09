@@ -8,6 +8,7 @@ from datp_core.core.identifiers import (
     AvailabilityStatus,
     CanonicalizationContractName,
     DatasetId,
+    NonEmptyString,
     ValidationSourceContext,
 )
 from datp_core.core.numeric import LogicalElementCount, RowCount, ValidationIssueCount
@@ -248,6 +249,6 @@ def _validation_issue(
         code,
         DatasetId.CICIOT2023,
         ValidationSourceContext(CICIoT2023ArtifactName.MERGED_CSV_DIRECTORY),
-        reason,
+        NonEmptyString(reason),
         affected_count,
     )

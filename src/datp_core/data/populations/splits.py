@@ -7,7 +7,7 @@ from math import floor, fsum
 import numpy as np
 import polars as pl
 
-from datp_core.artifacts.provenance import checksum_text
+from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import (
     DataIntegrityError,
     ErrorMessage,
@@ -16,6 +16,7 @@ from datp_core.core.errors import (
 )
 from datp_core.core.identifiers import (
     CaptureTimestampColumn,
+    ClientIdentityToken,
     ContractSubject,
     PartitionRole,
     SplitProtocolId,
@@ -81,13 +82,9 @@ def static_reference_split_protocol() -> StaticReferenceSplitProtocol:
 
 
 def hamilton_integer_counts(
-    total: int,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    ratios: tuple[
-        float, ...
-    ],  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-) -> tuple[
-    int, ...
-]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    total: RowCount,
+    ratios: tuple[float, ...],
+) -> tuple[RowCount, ...]:
     """Largest-remainder (Hamilton) integer allocation.
 
     For non-negative integer ``total`` and ratios that sum to one:
@@ -100,9 +97,10 @@ def hamilton_integer_counts(
     The result conserves every row exactly once and never depends on library defaults.
     """
     _require_hamilton_inputs(total, ratios)
-    raw = tuple(total * ratio for ratio in ratios)
+    total_value = total.value
+    raw = tuple(total_value * ratio for ratio in ratios)
     floors = tuple(floor(value) for value in raw)
-    residual = total - sum(floors)
+    residual = total_value - sum(floors)
     order = sorted(
         range(len(ratios)),
         key=lambda index: (-(raw[index] - floors[index]), index),
@@ -110,7 +108,7 @@ def hamilton_integer_counts(
     extras = [0] * len(ratios)
     for index in order[:residual]:
         extras[index] = 1
-    return tuple(floor_value + extra for floor_value, extra in zip(floors, extras, strict=True))
+    return tuple(RowCount(floor_value + extra) for floor_value, extra in zip(floors, extras, strict=True))
 
 
 def split_membership(
@@ -183,7 +181,7 @@ def _non_temporal_assignments(
                 ratios,
                 roles,
                 partition_seed,
-                str(client_id),
+                ClientIdentityToken(client_id),
             )
         )
         if attack.height > 0:
@@ -236,7 +234,7 @@ def _temporal_assignments(
         _sequential_role_frame(
             _require_sorted_client_rows(
                 membership,
-                str(client_id),
+                ClientIdentityToken(client_id),
                 capture_timestamp_column,
             ),
             ratios,
@@ -291,7 +289,7 @@ def _static_reference_assignments(
             ratios,
             roles,
             partition_seed,
-            str(client_id),
+            ClientIdentityToken(client_id),
         )
         for client_id in (membership.get_column(CLIENT_ID_COLUMN).unique().sort().to_list())
     ]
@@ -312,10 +310,10 @@ def _static_reference_assignments(
 
 def _require_sorted_client_rows(
     membership: pl.DataFrame,
-    client_id: str,
+    client_id: ClientIdentityToken,
     capture_timestamp_column: CaptureTimestampColumn,
 ) -> pl.DataFrame:
-    client_rows = membership.filter(pl.col(CLIENT_ID_COLUMN) == client_id).sort(
+    client_rows = membership.filter(pl.col(CLIENT_ID_COLUMN) == client_id.value).sort(
         [
             capture_timestamp_column,
             SOURCE_ROW_INDEX_COLUMN,
@@ -324,7 +322,7 @@ def _require_sorted_client_rows(
     )
     if client_rows.get_column(capture_timestamp_column).null_count() > 0:
         raise ScientificContractError(
-            ErrorMessage(f"temporal split encountered null capture timestamps for client {client_id}"),
+            ErrorMessage(f"temporal split encountered null capture timestamps for client {client_id.value}"),
             subject=ContractSubject.CLIENT_IDENTITY,
             reason=SplitConstructionViolation.NULL_CAPTURE_TIMESTAMPS,
         )
@@ -333,12 +331,10 @@ def _require_sorted_client_rows(
 
 def _fractional_role_frame(
     frame: pl.DataFrame,
-    ratios: tuple[
-        float, ...
-    ],  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    ratios: tuple[float, ...],
     roles: tuple[PartitionRole, ...],
     partition_seed: Seed,
-    client_id: str,
+    client_id: ClientIdentityToken,
 ) -> pl.DataFrame:
     if frame.height == 0:
         return frame.with_columns(pl.lit(None, dtype=pl.String).alias(PARTITION_ROLE_COLUMN))
@@ -362,8 +358,8 @@ def _sequential_role_frame(
     ratios: tuple[float, ...],
     roles: tuple[PartitionRole, ...],
 ) -> pl.DataFrame:
-    counts = hamilton_integer_counts(ordered.height, ratios)
-    if sum(counts) != ordered.height:
+    counts = hamilton_integer_counts(RowCount(ordered.height), ratios)
+    if sum(count.value for count in counts) != ordered.height:
         raise DataIntegrityError(
             ErrorMessage("Hamilton allocation failed to conserve rows"),
             subject=StageOperationId.SPLIT,
@@ -371,16 +367,16 @@ def _sequential_role_frame(
         )
     role_values: list[str] = []
     for role, count in zip(roles, counts, strict=True):
-        role_values.extend([role.value] * count)
+        role_values.extend([role.value] * count.value)
     return ordered.with_columns(pl.Series(PARTITION_ROLE_COLUMN, role_values))
 
 
 def _client_permutation(
     size: RowCount,
     partition_seed: Seed,
-    client_id: str,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    client_id: ClientIdentityToken,
 ) -> np.ndarray:
-    material = f"{partition_seed.value}:{client_id}".encode()
+    material = f"{partition_seed.value}:{client_id.value}".encode()
     digest = sha256(material).digest()
     seed_value = int.from_bytes(
         digest[:8],
@@ -437,10 +433,8 @@ def _split_manifest(
     assignments: pl.DataFrame,
     request: SplitConstructionRequest,
 ) -> SplitManifestDocument:
-    def count(
-        role: PartitionRole,
-    ) -> int:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-        return int(assignments.filter(pl.col(PARTITION_ROLE_COLUMN) == role).height)
+    def count(role: PartitionRole) -> RowCount:
+        return RowCount(int(assignments.filter(pl.col(PARTITION_ROLE_COLUMN) == role).height))
 
     ordered = assignments.sort([CLIENT_ID_COLUMN, STABLE_ROW_ID_COLUMN])
     payload = "\n".join(
@@ -459,12 +453,12 @@ def _split_manifest(
         partition_seed=request.partition_seed,
         split_protocol=request.split_protocol,
         assignment_row_count=RowCount(assignments.height),
-        train_row_count=RowCount(count(PartitionRole.TRAIN)),
-        calibration_row_count=RowCount(count(PartitionRole.CALIBRATION)),
-        evaluation_row_count=RowCount(count(PartitionRole.EVALUATION)),
-        future_recalibration_row_count=RowCount(count(PartitionRole.FUTURE_RECALIBRATION)),
-        static_reference_reserve_row_count=RowCount(count(PartitionRole.STATIC_REFERENCE_RESERVE)),
-        assignment_checksum=checksum_text(payload),
+        train_row_count=count(PartitionRole.TRAIN),
+        calibration_row_count=count(PartitionRole.CALIBRATION),
+        evaluation_row_count=count(PartitionRole.EVALUATION),
+        future_recalibration_row_count=count(PartitionRole.FUTURE_RECALIBRATION),
+        static_reference_reserve_row_count=count(PartitionRole.STATIC_REFERENCE_RESERVE),
+        assignment_checksum=Checksum.from_text(payload),
         population_manifest_checksum=request.population_manifest_checksum,
     )
 
@@ -481,12 +475,10 @@ def _require_membership_schema(membership: pl.DataFrame) -> None:
 
 
 def _require_hamilton_inputs(
-    total: int,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    ratios: tuple[
-        float, ...
-    ],  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    total: RowCount,
+    ratios: tuple[float, ...],
 ) -> None:
-    if total < 0:
+    if total.value < 0:
         raise ValueError("Hamilton allocation requires a non-negative total")
     if not ratios or any(ratio < 0 for ratio in ratios):
         raise ValueError("Hamilton allocation requires non-negative ratios that sum to one")

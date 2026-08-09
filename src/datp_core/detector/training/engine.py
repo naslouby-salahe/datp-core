@@ -10,7 +10,7 @@ from safetensors.torch import save
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
-from datp_core.artifacts.provenance import Checksum, checksum_bytes, checksum_text
+from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.serializers.json import canonical_json_text
 from datp_core.artifacts.serializers.safetensors import to_cpu_contiguous_state
 from datp_core.core.errors import (
@@ -52,8 +52,6 @@ from datp_core.detector.autoencoder import (
     build_autoencoder_for_state,
     build_optimizer,
     build_reconstruction_autoencoder,
-    clone_autoencoder_state,
-    clone_state,
 )
 from datp_core.detector.checkpoints.contracts import CheckpointProtocol
 from datp_core.detector.training.contracts import (
@@ -184,7 +182,7 @@ def prepare_federated_client_data(
         features_cpu=torch.as_tensor(
             matrix,
             dtype=TORCH_LEARNING_DTYPE,
-            device="cpu",  # TODO:should be using enum. identify what already exists. Do not use primitives for this, use something else. Check what already exists. And search whole cosebase to fix that
+            device="cpu",
         ),
         preprocessing_checksum=client_input.preprocessing_state.estimator_checksum,
     )
@@ -192,15 +190,15 @@ def prepare_federated_client_data(
 
 def _client_seed_component(
     client: ClientIdentity,
-) -> int:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> int:
     payload = canonical_json_text(
         {
             "population": client.population.value,
-            "client_id": client.client_id,
+            "client_id": client.client_id.value,
             "identity_kind": client.identity_kind.value,
         }
     )
-    digest = checksum_text(payload).value
+    digest = Checksum.from_text(payload).value
     return int(digest[:16], 16) & 0x7FFF_FFFF
 
 
@@ -333,7 +331,7 @@ def run_local_epoch(
             subject=ContractSubject.BATCH_SIZE,
         )
     return (
-        clone_state(model.state_dict()),
+        {name: tensor.detach().clone() for name, tensor in model.state_dict().items()},
         MetricValue(float(weighted_reconstruction_loss.item()) / total_samples),
         RowCount(total_samples),
     )
@@ -442,14 +440,14 @@ def preprocessing_state_set_checksum(
         [
             {
                 "population": item.client.population.value,
-                "client_id": item.client.client_id,
+                "client_id": item.client.client_id.value,
                 "identity_kind": item.client.identity_kind.value,
                 "preprocessing_checksum": item.preprocessing_checksum.value,
             }
             for item in sorted(provenance, key=lambda value: value.client)
         ]
     )
-    return checksum_text(payload)
+    return Checksum.from_text(payload)
 
 
 def serialize_and_checksum_state_dict(
@@ -457,7 +455,7 @@ def serialize_and_checksum_state_dict(
 ) -> tuple[Checksum, ByteCount, LogicalElementCount]:
     cpu_state = to_cpu_contiguous_state(state_dict)
     payload = save(cpu_state)
-    return checksum_bytes(payload), ByteCount(len(payload)), LogicalElementCount(len(cpu_state))
+    return Checksum.from_bytes(payload), ByteCount(len(payload)), LogicalElementCount(len(cpu_state))
 
 
 def create_communication_record(
@@ -485,7 +483,7 @@ def create_round_snapshot(
 ) -> RoundSnapshot:
     return RoundSnapshot(
         round_number=round_number,
-        state_dict=clone_state(state),
+        state_dict={name: tensor.detach().clone() for name, tensor in state.items()},
         mean_training_loss=loss,
     )
 
@@ -570,7 +568,7 @@ def run_federated_training[T: FedAvgProtocol | FedProxProtocol](
         request.autoencoder,
         initialization_seed=request.training_seed,
     )
-    global_state = clone_autoencoder_state(initial_model)
+    global_state = {name: tensor.detach().clone() for name, tensor in initial_model.state_dict().items()}
 
     candidate_rounds = frozenset(request.checkpoint_protocol.candidates)
     proximal_coefficient = _proximal_coefficient(request.training_protocol)

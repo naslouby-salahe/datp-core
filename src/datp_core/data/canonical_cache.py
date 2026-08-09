@@ -9,7 +9,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from filelock import FileLock
 
-from datp_core.artifacts.provenance import Checksum, checksum_file, checksum_text
+from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.serializers.json import canonical_json_text, canonical_value
 from datp_core.core.errors import (
     ErrorMessage,
@@ -397,7 +397,7 @@ def _source_state(
     return SourceStateDocument(
         content_checksum_verified=True,
         dataset=dataset,
-        manifest_checksum=checksum_text(manifest),
+        manifest_checksum=Checksum.from_text(manifest),
         sources=sources,
     )
 
@@ -499,7 +499,7 @@ def asset_is_valid(root: Path, asset: ManifestAssetEntry, expected_physical_sche
         path = canonical_asset_path(root, Path(asset.path))
     except ValueError:
         return False
-    if not path.is_file() or checksum_file(path) != asset.checksum:
+    if not path.is_file() or Checksum.from_file(path) != asset.checksum:
         return False
     try:
         parquet = pq.ParquetFile(path)

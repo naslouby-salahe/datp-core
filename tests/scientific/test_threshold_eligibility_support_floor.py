@@ -53,7 +53,7 @@ def _manifest(tmp_path: Path, calibration_sizes: dict[str, int]) -> ScoreArtifac
 def test_eligible_calibration_scores_excludes_clients_below_minimum_support(tmp_path: Path) -> None:
     manifest = _manifest(tmp_path, {"rich": 150, "poor": 50})
     eligible = eligible_calibration_scores(manifest)
-    assert tuple(item.client.client_id for item in eligible) == ("rich",)
+    assert tuple(item.client.client_id.value for item in eligible) == ("rich",)
     assert all(len(item.scores) >= 100 for item in eligible)
 
 

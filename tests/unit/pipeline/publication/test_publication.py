@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from datp_core.artifacts.provenance import checksum_file
+from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.repositories.publication import (
     ArtifactPublication,
     publish_artifact,
@@ -96,4 +96,4 @@ def test_artifact_codec_publishes_reuses_rebases_and_returns_completion_digest(
     assert first.value.path == target / "payload.txt"
     assert second.value == first.value
     assert first.complete_digest == second.complete_digest
-    assert first.complete_digest == checksum_file(target / "COMPLETE")
+    assert first.complete_digest == Checksum.from_file(target / "COMPLETE")

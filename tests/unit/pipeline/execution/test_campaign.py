@@ -1,9 +1,10 @@
 import pytest
 
 from datp_core.app.planning import expand_experiment_plan
-from datp_core.artifacts.provenance import checksum_text
+from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import (
+    ClientIdentityToken,
     FederatedThresholdMethod,
     PopulationId,
     PopulationIdentityKind,
@@ -53,7 +54,11 @@ def _ditto_personalized_coordinate() -> FederatedTrainingCoordinate:
 
 
 def _ditto_client(client_id: str) -> ClientIdentity:
-    return ClientIdentity(PopulationId.NBAIOT_NATURAL_DEVICES, client_id, PopulationIdentityKind.PHYSICAL_DEVICES)
+    return ClientIdentity(
+        PopulationId.NBAIOT_NATURAL_DEVICES,
+        ClientIdentityToken(client_id),
+        PopulationIdentityKind.PHYSICAL_DEVICES,
+    )
 
 
 def test_ditto_shared_threshold_accepts_distinct_personalized_model_checksums() -> None:
@@ -63,8 +68,8 @@ def test_ditto_shared_threshold_accepts_distinct_personalized_model_checksums() 
             _ditto_client(f"device-{index}"),
             coordinate,
             tuple(ScoreValue(value) for value in scores),
-            checksum_text(f"calibration-manifest-{index}"),
-            checksum_text(f"distinct-personalized-model-{index}"),
+            Checksum.from_text(f"calibration-manifest-{index}"),
+            Checksum.from_text(f"distinct-personalized-model-{index}"),
         )
         for index, scores in enumerate(
             (
