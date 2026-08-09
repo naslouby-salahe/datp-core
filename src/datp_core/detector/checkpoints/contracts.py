@@ -63,10 +63,6 @@ class PersistedCheckpoint(Protocol):
     def status(self) -> CheckpointStatus: ...
 
 
-class CheckpointIntegrityContract(PersistedCheckpoint, Protocol):
-    pass
-
-
 def validate_persisted_checkpoint_file(
     path: Path,
     checksum: Checksum,

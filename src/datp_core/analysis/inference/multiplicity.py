@@ -36,11 +36,15 @@ class HypothesisIdentifier(NonEmptyString):
     validation_name: ClassVar[str] = "hypothesis identifier"
 
 
+class HypothesisComparisonLabel(NonEmptyString):
+    validation_name: ClassVar[str] = "hypothesis comparison label"
+
+
 class MultiplicityHypothesis(StrictModel):
     hypothesis_id: HypothesisIdentifier
     experiment: ExperimentId
     metric: MetricId
-    comparison: str
+    comparison: HypothesisComparisonLabel
     left_method: FederatedThresholdMethod | None
     right_method: FederatedThresholdMethod | None
     evidence_role: EvidenceRole
@@ -48,8 +52,6 @@ class MultiplicityHypothesis(StrictModel):
 
     @model_validator(mode="after")
     def validate_hypothesis(self) -> "MultiplicityHypothesis":
-        if not self.comparison.strip():
-            raise ValueError("multiplicity hypothesis requires a non-empty comparison label")
         if (self.left_method is None) != (self.right_method is None):
             raise ValueError("multiplicity hypothesis threshold methods must both be present or both absent")
         if self.left_method is not None and self.left_method is self.right_method:

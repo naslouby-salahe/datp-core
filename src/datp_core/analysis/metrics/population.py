@@ -122,8 +122,8 @@ def _fpr_aggregates(
     mean = float(np.mean(array))
     std = float(np.std(array, ddof=0))
     metrics: list[MetricAvailability] = [
-        available(MetricId.MEAN_FPR, mean, denominator=len(values)),
-        available(MetricId.FPR_POPULATION_STANDARD_DEVIATION, std, denominator=len(values)),
+        available(MetricId.MEAN_FPR, mean, denominator=RowCount(len(values))),
+        available(MetricId.FPR_POPULATION_STANDARD_DEVIATION, std, denominator=RowCount(len(values))),
     ]
     warnings: tuple[MetricWarning, ...] = ()
     if mean == 0.0:
@@ -131,15 +131,15 @@ def _fpr_aggregates(
             unavailable(MetricId.FPR_COEFFICIENT_OF_VARIATION, MetricStatus.UNDEFINED, MetricReason.ZERO_MEAN)
         )
     else:
-        metrics.append(available(MetricId.FPR_COEFFICIENT_OF_VARIATION, std / mean, denominator=len(values)))
+        metrics.append(available(MetricId.FPR_COEFFICIENT_OF_VARIATION, std / mean, denominator=RowCount(len(values))))
         if mean < NEAR_ZERO_MEAN_FPR_WARNING_CUTOFF.value:
             warnings = (MetricWarning(WarningCode.NEAR_ZERO_MEAN_FPR, MetricId.FPR_COEFFICIENT_OF_VARIATION),)
     q25, q75 = np.quantile(array, (0.25, 0.75), method="linear")
     metrics.extend(
         (
-            available(MetricId.FPR_IQR, float(q75 - q25), denominator=len(values)),
-            available(MetricId.FPR_RANGE, float(np.max(array) - np.min(array)), denominator=len(values)),
-            available(MetricId.WORST_CLIENT_FPR, float(np.max(array)), denominator=len(values)),
+            available(MetricId.FPR_IQR, float(q75 - q25), denominator=RowCount(len(values))),
+            available(MetricId.FPR_RANGE, float(np.max(array) - np.min(array)), denominator=RowCount(len(values))),
+            available(MetricId.WORST_CLIENT_FPR, float(np.max(array)), denominator=RowCount(len(values))),
         )
     )
     metrics.extend(_equity_index_metrics(array))
@@ -160,8 +160,8 @@ def _equity_index_metrics(values: np.ndarray) -> tuple[MetricAvailability, ...]:
     ranks = np.arange(1, count + 1, dtype=np.float64)
     gini = (2.0 * float(np.sum(ranks * ordered)) / (count * total)) - ((count + 1.0) / count)
     return (
-        available(MetricId.JAIN_FAIRNESS_INDEX, jain, denominator=count),
-        available(MetricId.GINI_COEFFICIENT, gini, denominator=count),
+        available(MetricId.JAIN_FAIRNESS_INDEX, jain, denominator=RowCount(count)),
+        available(MetricId.GINI_COEFFICIENT, gini, denominator=RowCount(count)),
     )
 
 
@@ -205,7 +205,7 @@ def _coefficient_of_variation(metric: MetricId, values: tuple[MetricValue, ...])
     mean = float(np.mean(raw))
     if mean == 0.0:
         return unavailable(metric, MetricStatus.UNDEFINED, MetricReason.ZERO_MEAN)
-    return available(metric, float(np.std(raw, ddof=0)) / mean, denominator=len(values))
+    return available(metric, float(np.std(raw, ddof=0)) / mean, denominator=RowCount(len(values)))
 
 
 def _quantile_or_unavailable(
@@ -214,20 +214,24 @@ def _quantile_or_unavailable(
     if not values:
         return unavailable(metric, MetricStatus.UNAVAILABLE, MetricReason.NO_EVALUABLE_CLIENTS)
     raw = np.fromiter((v.value for v in values), dtype=np.float64, count=len(values))
-    return available(metric, float(np.quantile(raw, probability.value, method="linear")), denominator=len(values))
+    return available(
+        metric,
+        float(np.quantile(raw, probability.value, method="linear")),
+        denominator=RowCount(len(values)),
+    )
 
 
 def _minimum_or_unavailable(metric: MetricId, values: tuple[MetricValue, ...]) -> MetricAvailability:
     if not values:
         return unavailable(metric, MetricStatus.UNAVAILABLE, MetricReason.NO_EVALUABLE_CLIENTS)
-    return available(metric, min(v.value for v in values), denominator=len(values))
+    return available(metric, min(v.value for v in values), denominator=RowCount(len(values)))
 
 
 def _mean_or_unavailable(metric: MetricId, values: tuple[MetricValue, ...]) -> MetricAvailability:
     if not values:
         return unavailable(metric, MetricStatus.UNAVAILABLE, MetricReason.NO_EVALUABLE_CLIENTS)
     raw = np.fromiter((v.value for v in values), dtype=np.float64, count=len(values))
-    return available(metric, float(np.mean(raw)), denominator=len(values))
+    return available(metric, float(np.mean(raw)), denominator=RowCount(len(values)))
 
 
 def _pooled_macro_f1_or_unavailable(results: tuple[ClientMetricResult, ...]) -> MetricAvailability:

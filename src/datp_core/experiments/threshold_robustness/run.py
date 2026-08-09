@@ -20,8 +20,7 @@ from datp_core.core.errors import (
 )
 from datp_core.core.identifiers import (
     AnalysisMarkerText,
-    AnalysisReasonText,
-    ExperimentId,
+        ExperimentId,
     FederatedThresholdMethod,
     MetricId,
     PopulationId,
@@ -41,7 +40,11 @@ from datp_core.core.numeric import (
 )
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.experiments.common.coordinates import ExperimentCoordinate
-from datp_core.experiments.common.reports import AnalysisReportPublication
+from datp_core.experiments.common.reports import (
+    AnalysisReportFinalizationInput,
+    AnalysisReportPublication,
+    finalize_analysis_report,
+)
 from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.experiments.execution import execute_declared_experiment_seed
 from datp_core.experiments.execution.evidence import load_evaluation_document, population_metric
@@ -199,22 +202,6 @@ def _summary_path(experiment_id: ExperimentId, population: PopulationId) -> Path
     return _analysis_directory(experiment_id, population) / ThresholdRobustnessArtifactName.SUMMARY
 
 
-def _finalize_report(
-    directory: Path,
-    marker: Path,
-    missing_count: SeedObservationCount,
-    *,
-    marker_text: AnalysisMarkerText,
-) -> AnalysisReportPublication:
-    if missing_count.value == 0:
-        marker.write_text(f"{marker_text}\n", encoding="utf-8")
-        return AnalysisReportPublication(directories=(directory,), detail=AnalysisReasonText(str(marker_text)))
-    return AnalysisReportPublication(
-        directories=(directory,),
-        detail=AnalysisReasonText(f"{marker_text} ({missing_count.value} seed(s) missing)"),
-    )
-
-
 def _declaration_for(experiment_id: ExperimentId) -> ExperimentDeclaration:
     matches = tuple(item for item in EXPERIMENTS if item.id is experiment_id)
     if len(matches) != 1:
@@ -352,11 +339,13 @@ def report_shared_construction_sensitivity(
         MethodCvSummaryReport(experiment=experiment_id, rows=tuple(rows)),
         _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
     )
-    return _finalize_report(
-        directory,
-        _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
-        SeedObservationCount(missing),
-        marker_text=AnalysisMarkerText(ThresholdRobustnessAnalysisMarker.SHARED_CONSTRUCTION_SENSITIVITY),
+    return finalize_analysis_report(
+        AnalysisReportFinalizationInput(
+            directory=directory,
+            marker=_complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
+            missing_count=SeedObservationCount(missing),
+            marker_text=AnalysisMarkerText(ThresholdRobustnessAnalysisMarker.SHARED_CONSTRUCTION_SENSITIVITY),
+        )
     )
 
 
@@ -411,11 +400,13 @@ def report_quantile_sensitivity(
         QuantileSummaryReport(experiment=experiment_id, rows=tuple(rows)),
         _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
     )
-    return _finalize_report(
-        directory,
-        _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
-        SeedObservationCount(missing),
-        marker_text=AnalysisMarkerText(ThresholdRobustnessAnalysisMarker.QUANTILE_SENSITIVITY),
+    return finalize_analysis_report(
+        AnalysisReportFinalizationInput(
+            directory=directory,
+            marker=_complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
+            missing_count=SeedObservationCount(missing),
+            marker_text=AnalysisMarkerText(ThresholdRobustnessAnalysisMarker.QUANTILE_SENSITIVITY),
+        )
     )
 
 
@@ -476,14 +467,16 @@ def report_calibration_size_ablation(
         ),
         _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
     )
-    return _finalize_report(
-        directory,
-        _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
-        SeedObservationCount(missing),
-        marker_text=AnalysisMarkerText(
+    return finalize_analysis_report(
+        AnalysisReportFinalizationInput(
+            directory=directory,
+            marker=_complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
+            missing_count=SeedObservationCount(missing),
+            marker_text=AnalysisMarkerText(
             "calibration_size_ablation_analysis_complete "
             f"sizes={len(CALIBRATION_SIZES)} replicates={replicate_count.value}"
         ),
+        )
     )
 
 
@@ -578,11 +571,13 @@ def report_fixed_shrinkage_curve(
         ShrinkageCurveReport(experiment=experiment_id, rows=tuple(rows)),
         _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
     )
-    return _finalize_report(
-        directory,
-        _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
-        SeedObservationCount(missing),
-        marker_text=AnalysisMarkerText(ThresholdRobustnessAnalysisMarker.FIXED_SHRINKAGE_CURVE),
+    return finalize_analysis_report(
+        AnalysisReportFinalizationInput(
+            directory=directory,
+            marker=_complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
+            missing_count=SeedObservationCount(missing),
+            marker_text=AnalysisMarkerText(ThresholdRobustnessAnalysisMarker.FIXED_SHRINKAGE_CURVE),
+        )
     )
 
 
@@ -657,11 +652,13 @@ def report_size_aware_shrinkage(
         ),
         _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
     )
-    return _finalize_report(
-        directory,
-        _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
-        SeedObservationCount(missing),
-        marker_text=AnalysisMarkerText(ThresholdRobustnessAnalysisMarker.SIZE_AWARE_SHRINKAGE),
+    return finalize_analysis_report(
+        AnalysisReportFinalizationInput(
+            directory=directory,
+            marker=_complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
+            missing_count=SeedObservationCount(missing),
+            marker_text=AnalysisMarkerText(ThresholdRobustnessAnalysisMarker.SIZE_AWARE_SHRINKAGE),
+        )
     )
 
 
@@ -729,11 +726,13 @@ def report_local_conformal_coverage(
         ConformalCoverageReport(experiment=experiment_id, rows=tuple(rows)),
         _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
     )
-    return _finalize_report(
-        directory,
-        _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
-        SeedObservationCount(missing),
-        marker_text=AnalysisMarkerText(ThresholdRobustnessAnalysisMarker.LOCAL_CONFORMAL_COVERAGE),
+    return finalize_analysis_report(
+        AnalysisReportFinalizationInput(
+            directory=directory,
+            marker=_complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
+            missing_count=SeedObservationCount(missing),
+            marker_text=AnalysisMarkerText(ThresholdRobustnessAnalysisMarker.LOCAL_CONFORMAL_COVERAGE),
+        )
     )
 
 

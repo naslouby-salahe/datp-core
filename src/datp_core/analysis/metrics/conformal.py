@@ -153,7 +153,7 @@ def _coverage_metrics(
                     metric,
                     MetricStatus.UNAVAILABLE,
                     MetricReason.EMPTY_BENIGN_DENOMINATOR,
-                    denominator=0,
+                    denominator=RowCount(0),
                 )
                 for metric in (
                     MetricId.ACHIEVED_COVERAGE,
@@ -162,8 +162,8 @@ def _coverage_metrics(
                 )
             ),
         )
-    denominator = len(scores)
-    achieved = sum(not item.score.exceeds(assignment.threshold) for item in scores) / denominator
+    denominator = RowCount(len(scores))
+    achieved = sum(not item.score.exceeds(assignment.threshold) for item in scores) / denominator.value
     signed_error = achieved - target_coverage.value
     return (
         available(MetricId.TARGET_COVERAGE, target_coverage.value),

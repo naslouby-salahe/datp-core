@@ -13,7 +13,7 @@ from datp_core.core.errors import (
     ScientificContractError,
     require_contract,
 )
-from datp_core.core.identifiers import ContractSubject, FederatedThresholdMethod, ValidationLabel
+from datp_core.core.identifiers import ContractSubject, FederatedThresholdMethod, NonEmptyString, ValidationLabel
 from datp_core.core.numeric import (
     ClusterIndex,
     DistributionSkewness,
@@ -115,7 +115,7 @@ class GroupedThresholdResult:
             ErrorMessage("the number of clusters must equal the declared group count"),
             ContractSubject.THRESHOLD,
         )
-        require_unique_clients(tuple(item.client for item in self.fingerprints), "fingerprint")
+        require_unique_clients(tuple(item.client for item in self.fingerprints), NonEmptyString("fingerprint"))
         cluster_indices = tuple(item.cluster_index.value for item in self.clusters)
         expected_indices = frozenset(range(self.group_count.value))
         require_contract(

@@ -11,6 +11,7 @@ from datp_core.artifacts.repositories.publication import (
 )
 from datp_core.core.contracts import ClientCollection, ClientOwned
 from datp_core.core.identifiers import PublicationStatus
+from datp_core.core.numeric import FeatureCount
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.training.common import (
     DittoTrainingArtifacts,
@@ -45,7 +46,10 @@ class TrainDittoDetectorResult:
 
 def train_ditto_detector(request: TrainDittoDetectorRequest) -> TrainDittoDetectorResult:
     training_request = request.request
-    validate_federated_training_inputs(training_request.clients, training_request.autoencoder.widths[0].value)
+    validate_federated_training_inputs(
+        training_request.clients,
+        FeatureCount(training_request.autoencoder.widths[0].value),
+    )
     publication = publish_related_artifacts(
         RelatedArtifactPublication(
             request=training_request,

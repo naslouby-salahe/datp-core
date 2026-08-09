@@ -57,12 +57,17 @@ def calculate_client_metrics(
 
 def _rate(metric: MetricId, numerator: RowCount, denominator: RowCount) -> MetricAvailability:
     if denominator.value == 0:
-        return unavailable(metric, MetricStatus.UNAVAILABLE, MetricReason.EMPTY_BENIGN_DENOMINATOR, denominator=0)
-    return available(metric, numerator.value / denominator.value, denominator=denominator.value)
+        return unavailable(
+            metric,
+            MetricStatus.UNAVAILABLE,
+            MetricReason.EMPTY_BENIGN_DENOMINATOR,
+            denominator=RowCount(0),
+        )
+    return available(metric, numerator.value / denominator.value, denominator=denominator)
 
 
 def _attack_rate(confusion: ConfusionCounts) -> MetricAvailability:
-    denominator = confusion.attack_denominator.value
+    denominator = confusion.attack_denominator
     if not confusion.attack_assignment_valid:
         return unavailable(
             MetricId.TRUE_POSITIVE_RATE,
@@ -70,16 +75,16 @@ def _attack_rate(confusion: ConfusionCounts) -> MetricAvailability:
             MetricReason.INVALID_ATTACK_ASSIGNMENT,
             denominator=denominator,
         )
-    if denominator == 0:
+    if denominator.value == 0:
         return unavailable(
             MetricId.TRUE_POSITIVE_RATE,
             MetricStatus.UNAVAILABLE,
             MetricReason.EMPTY_ATTACK_DENOMINATOR,
-            denominator=0,
+            denominator=RowCount(0),
         )
     return available(
         MetricId.TRUE_POSITIVE_RATE,
-        confusion.true_positive.value / denominator,
+        confusion.true_positive.value / denominator.value,
         denominator=denominator,
     )
 
@@ -138,7 +143,7 @@ def _auroc(
             MetricId.AUROC,
             MetricStatus.UNAVAILABLE,
             MetricReason.SINGLE_CLASS_SCORES,
-            denominator=int(binary.size),
+            denominator=RowCount(binary.size),
         )
 
     order = np.argsort(score_values, kind="mergesort")
@@ -149,7 +154,7 @@ def _auroc(
 
     if not isfinite(value):
         return unavailable(MetricId.AUROC, MetricStatus.UNDEFINED, MetricReason.MISSING_CAPABILITY)
-    return available(MetricId.AUROC, value, denominator=int(binary.size))
+    return available(MetricId.AUROC, value, denominator=RowCount(binary.size))
 
 
 def _average_ranks(sorted_scores: np.ndarray) -> np.ndarray:

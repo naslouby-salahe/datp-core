@@ -3,10 +3,11 @@ import pytest
 from datp_core.analysis.metrics.models import MetricReason, MetricStatus
 from datp_core.analysis.metrics.semantics import available, unavailable
 from datp_core.core.identifiers import MetricId
+from datp_core.core.numeric import RowCount
 
 
 def test_available_preserves_numeric_denominator() -> None:
-    result = available(MetricId.FALSE_POSITIVE_RATE, 0.25, denominator=8)
+    result = available(MetricId.FALSE_POSITIVE_RATE, 0.25, denominator=RowCount(8))
 
     assert result.value.value == 0.25
     assert result.denominator is not None and result.denominator.value == 8

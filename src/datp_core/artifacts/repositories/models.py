@@ -11,7 +11,6 @@ from pydantic import model_validator
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.contracts import StrictModel
 from datp_core.core.numeric import ByteCount
-from datp_core.experiments.common.coordinates import ExperimentCoordinate
 
 
 class ArtifactKind(StrEnum):
@@ -75,20 +74,3 @@ class CompletionRecord(StrictModel):
     def complete(self) -> bool:
         return self.state is CompletionState.COMPLETE
 
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ExperimentManifest:
-    coordinate: ExperimentCoordinate
-    plan_digest: Checksum
-    campaign_digest: Checksum
-    protocol_digest: Checksum
-    artifacts: tuple[ArtifactRecord, ...]
-
-    def __post_init__(self) -> None:
-        if not self.artifacts:
-            raise ValueError("experiment manifests require an artifact inventory")
-        paths = tuple(item.relative_path for item in self.artifacts)
-        if len(paths) != len(frozenset(paths)):
-            raise ValueError("experiment manifest artifact paths must be unique")
-        if any(item.state not in {ArtifactState.PUBLISHED, ArtifactState.REUSED} for item in self.artifacts):
-            raise ValueError("experiment manifests cannot reference invalid or incomplete artifacts")

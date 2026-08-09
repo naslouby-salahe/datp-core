@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from datp_core.artifacts.repositories.publication import ArtifactPublication, FunctionalArtifactCodec, publish_artifact
 from datp_core.core.identifiers import PublicationStatus
+from datp_core.core.numeric import FeatureCount
 from datp_core.detector.checkpoints.identities import FederatedHistoryAssetName
 from datp_core.detector.training.common import (
     FederatedTrainingArtifacts,
@@ -33,7 +34,10 @@ class TrainFederatedDetectorResult:
 
 def train_federated_detector(request: TrainFederatedDetectorRequest) -> TrainFederatedDetectorResult:
     training_request = request.request
-    validate_federated_training_inputs(training_request.clients, training_request.autoencoder.widths[0].value)
+    validate_federated_training_inputs(
+        training_request.clients,
+        FeatureCount(training_request.autoencoder.widths[0].value),
+    )
     publication = publish_artifact(
         ArtifactPublication(
             target=training_request.output_directory,

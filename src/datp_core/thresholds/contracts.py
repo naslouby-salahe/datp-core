@@ -16,6 +16,7 @@ from datp_core.core.identifiers import (
     ContractSubject,
     FamilyIdentity,
     FederatedThresholdMethod,
+    NonEmptyString,
     QuantileInterpolationSemantics,
     ValidationLabel,
 )
@@ -157,7 +158,7 @@ def median_local_threshold(quantiles: tuple[LocalQuantile, ...]) -> ThresholdVal
     return ThresholdValue((ordered[midpoint - 1] + ordered[midpoint]) / 2.0)
 
 
-def require_unique_clients(clients: tuple[ClientIdentity, ...], label: str) -> None:
+def require_unique_clients(clients: tuple[ClientIdentity, ...], label: NonEmptyString) -> None:
     require_contract(
         len(frozenset(clients)) == len(clients),
         ErrorMessage(f"{label} must have unique client identities"),
@@ -173,13 +174,13 @@ def validate_local_quantiles(
 ) -> None:
     if method is FederatedThresholdMethod.LOCAL_THRESHOLD:
         message = "local threshold construction requires at least one eligible client"
-        label = "local quantiles"
+        label = NonEmptyString("local quantiles")
     elif method in {
         FederatedThresholdMethod.SHARED_THRESHOLD,
         FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD,
     }:
         message = "shared threshold construction requires at least one contributing local quantile"
-        label = "contributing local quantiles"
+        label = NonEmptyString("contributing local quantiles")
     else:
         raise ScientificContractError(
             ErrorMessage(f"local quantile validation does not support threshold method {method}"),
@@ -205,7 +206,7 @@ def validate_assignments(
     assigned_clients = tuple(item.client for item in assignments)
     expected_clients = tuple(item.client for item in expected_assignments)
     require_unique_clients(assigned_clients, label)
-    require_unique_clients(expected_clients, "expected clients")
+    require_unique_clients(expected_clients, NonEmptyString("expected clients"))
     require_contract(
         frozenset(assigned_clients) == frozenset(expected_clients),
         ErrorMessage("threshold assignments must cover exactly the contributing client set"),
@@ -250,7 +251,7 @@ def validate_group_membership(
 ) -> None:
     require_unique_clients(members, members_label)
     quantile_clients = tuple(item.client for item in contributing_local_quantiles)
-    require_unique_clients(quantile_clients, "contributing local quantiles")
+    require_unique_clients(quantile_clients, NonEmptyString("contributing local quantiles"))
     require_contract(
         frozenset(quantile_clients) == frozenset(members),
         ErrorMessage(match_message),
@@ -269,9 +270,9 @@ def validate_client_partition(
     assigned_clients: tuple[ClientIdentity, ...],
     unavailable_clients: tuple[ClientIdentity, ...],
 ) -> None:
-    require_unique_clients(eligible_clients, "eligible clients")
-    require_unique_clients(assigned_clients, "assigned clients")
-    require_unique_clients(unavailable_clients, "unavailable clients")
+    require_unique_clients(eligible_clients, NonEmptyString("eligible clients"))
+    require_unique_clients(assigned_clients, NonEmptyString("assigned clients"))
+    require_unique_clients(unavailable_clients, NonEmptyString("unavailable clients"))
     assigned_set = frozenset(assigned_clients)
     unavailable_set = frozenset(unavailable_clients)
     require_contract(

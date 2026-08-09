@@ -7,6 +7,7 @@ from datp_core.core.errors import (
     ScientificContractError,
 )
 from datp_core.core.identifiers import ContractSubject
+from datp_core.core.numeric import FeatureCount
 from datp_core.data.registry import resolve_population
 from datp_core.detector.checkpoints.candidates import rebase_checkpoint_candidates
 from datp_core.detector.checkpoints.identities import FederatedHistoryAssetName
@@ -43,7 +44,7 @@ class DittoTrainingArtifacts:
 
 def validate_federated_training_inputs(
     clients: tuple[ClientTrainingInput, ...],
-    autoencoder_width: int,
+    autoencoder_width: FeatureCount,
 ) -> None:
     if not clients:
         raise ScientificContractError(
@@ -51,7 +52,7 @@ def validate_federated_training_inputs(
             subject=ContractSubject.TRAINING,
         )
     feature_names = clients[0].feature_names
-    if autoencoder_width != len(feature_names):
+    if autoencoder_width.value != len(feature_names):
         raise ScientificContractError(
             ErrorMessage("autoencoder input width must match the transformed feature schema"),
             subject=ContractSubject.WIDTHS,

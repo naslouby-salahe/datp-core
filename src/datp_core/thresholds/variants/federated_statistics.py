@@ -11,7 +11,7 @@ from datp_core.core.errors import (
     ScientificContractError,
     require_contract,
 )
-from datp_core.core.identifiers import ContractSubject, FederatedThresholdMethod, ValidationLabel
+from datp_core.core.identifiers import ContractSubject, FederatedThresholdMethod, NonEmptyString, ValidationLabel
 from datp_core.core.numeric import (
     AbsoluteThresholdError,
     ByteCount,
@@ -146,7 +146,7 @@ class FederatedStatisticsThresholdResult:
             ContractSubject.THRESHOLD,
         )
         summary_clients = tuple(item.client for item in self.client_summaries)
-        require_unique_clients(summary_clients, "client summaries")
+        require_unique_clients(summary_clients, NonEmptyString("client summaries"))
         validate_assignments(
             self.assignments,
             tuple(ThresholdAssignment(client, self.matched_threshold) for client in summary_clients),
@@ -186,9 +186,7 @@ def construct_federated_benign_statistics(
         signed_attainment_error=MetricValue(signed_attainment_error),
         absolute_attainment_error=Ratio(abs(signed_attainment_error)),
         absolute_threshold_error_vs_pooled_quantile=absolute_threshold_error,
-        relative_threshold_error_vs_pooled_quantile=(
-            None if relative_threshold_error is None else RelativeThresholdError(relative_threshold_error)
-        ),
+        relative_threshold_error_vs_pooled_quantile=relative_threshold_error,
     )
     completed_summaries = tuple(
         _attach_benign_exceedance(summary, client_scores, matched_threshold)
@@ -269,8 +267,10 @@ def _communication_bytes(summaries: tuple[ClientBenignSummary, ...]) -> ByteCoun
 def _relative_threshold_error(
     absolute_error: AbsoluteThresholdError,
     pooled_quantile: ThresholdValue,
-) -> float | None:
+) -> RelativeThresholdError | None:
     if pooled_quantile.value == 0:
         return None
     candidate = absolute_error.value / abs(pooled_quantile.value)
-    return candidate if math.isfinite(candidate) else None
+    if not math.isfinite(candidate):
+        return None
+    return RelativeThresholdError(candidate)

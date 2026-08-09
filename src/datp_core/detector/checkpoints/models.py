@@ -3,7 +3,6 @@
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Protocol, runtime_checkable
 
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import (
@@ -16,26 +15,6 @@ from datp_core.detector.checkpoints.contracts import CheckpointProtocol
 from datp_core.detector.checkpoints.protocols import RETAINED_CHECKPOINT_STATUSES
 from datp_core.detector.training.centralized import CentralizedTrainingCoordinate
 from datp_core.detector.training.contracts import AutoencoderArchitecture
-
-
-@runtime_checkable
-class PersistedCheckpoint(Protocol):
-    """Minimum persisted-checkpoint shape shared by centralized and federated branches."""
-
-    @property
-    def round_number(self) -> RoundNumber: ...
-
-    @property
-    def tensor_path(self) -> Path: ...
-
-    @property
-    def tensor_checksum(self) -> Checksum: ...
-
-    @property
-    def mean_training_loss(self) -> MetricValue: ...
-
-    @property
-    def status(self) -> CheckpointStatus: ...
 
 
 class CentralizedCheckpointAssetName(StrEnum):
@@ -105,9 +84,3 @@ class CentralizedCheckpointDecision:
                 subject=self.selected.status,
             )
 
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class CentralizedCheckpointSetEntry:
-    round_number: RoundNumber
-    tensor_checksum: Checksum
-    status: CheckpointStatus

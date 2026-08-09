@@ -11,11 +11,17 @@ from datp_core.core.identifiers import MetricId
 from datp_core.core.numeric import MetricValue, RowCount
 
 
-def available(metric: MetricId, value: float, *, denominator: int | None = None) -> AvailableMetric:
+def available(
+    metric: MetricId,
+    value: MetricValue | float,
+    *,
+    denominator: RowCount | None = None,
+) -> AvailableMetric:
+    metric_value = value if type(value) is MetricValue else MetricValue(float(value))
     return AvailableMetric(
         metric=metric,
-        value=MetricValue(value),
-        denominator=None if denominator is None else RowCount(denominator),
+        value=metric_value,
+        denominator=denominator,
     )
 
 
@@ -24,15 +30,15 @@ def unavailable(
     status: MetricStatus,
     reason: MetricReason,
     *,
-    denominator: int | None = None,
+    denominator: RowCount | None = None,
 ) -> UnavailableMetric:
     return UnavailableMetric(
         metric=metric,
         status=status,
         reason=reason,
-        denominator=None if denominator is None else RowCount(denominator),
+        denominator=denominator,
     )
 
 
-def metric_value(metric: MetricAvailability) -> float | None:
-    return None if metric.value is None else metric.value.value
+def metric_value(metric: MetricAvailability) -> MetricValue | None:
+    return metric.value

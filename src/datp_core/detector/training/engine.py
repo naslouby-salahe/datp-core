@@ -37,6 +37,7 @@ from datp_core.core.numeric import (
     RoundNumber,
     RowCount,
     Seed,
+    SeedDerivationComponent,
 )
 from datp_core.data.populations.contracts import (
     OUTCOME_LABEL_COLUMN,
@@ -190,7 +191,7 @@ def prepare_federated_client_data(
 
 def _client_seed_component(
     client: ClientIdentity,
-) -> int:
+) -> SeedDerivationComponent:
     payload = canonical_json_text(
         {
             "population": client.population.value,
@@ -199,7 +200,7 @@ def _client_seed_component(
         }
     )
     digest = Checksum.from_text(payload).value
-    return int(digest[:16], 16) & 0x7FFF_FFFF
+    return SeedDerivationComponent(int(digest[:16], 16) & 0x7FFF_FFFF)
 
 
 def derive_client_stream_seed(
@@ -208,9 +209,9 @@ def derive_client_stream_seed(
     client: ClientIdentity,
     stream: TrainingStream,
 ) -> Seed:
-    round_seed = derive_worker_seed(training_seed, round_number.value)
+    round_seed = derive_worker_seed(training_seed, SeedDerivationComponent(round_number.value))
     client_seed = derive_worker_seed(round_seed, _client_seed_component(client))
-    return derive_worker_seed(client_seed, stream.value)
+    return derive_worker_seed(client_seed, SeedDerivationComponent(stream.value))
 
 
 def build_client_loader(

@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 import torch
 
-from datp_core.core.numeric import Seed
+from datp_core.core.numeric import Seed, SeedDerivationComponent
 from datp_core.runtime.compute import (
     cuda_provenance,
     require_cuda_available,
@@ -49,12 +49,12 @@ def test_deterministic_cuda_setup_and_worker_seed_derivation() -> None:
     configure_deterministic_execution(seed)
     generator = seed_torch_generators(seed)
     assert generator.device.type == "cuda"
-    worker_a = derive_worker_seed(seed, 0)
-    worker_b = derive_worker_seed(seed, 1)
+    worker_a = derive_worker_seed(seed, SeedDerivationComponent(0))
+    worker_b = derive_worker_seed(seed, SeedDerivationComponent(1))
     assert worker_a != worker_b
-    assert derive_worker_seed(seed, 0) == worker_a
-    with pytest.raises(ValueError, match="non-negative"):
-        derive_worker_seed(seed, -1)
+    assert derive_worker_seed(seed, SeedDerivationComponent(0)) == worker_a
+    with pytest.raises(ValueError, match="seed derivation component"):
+        SeedDerivationComponent(-1)
 
 
 def test_cuda_tensor_smoke() -> None:

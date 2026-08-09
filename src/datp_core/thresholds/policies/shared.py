@@ -11,7 +11,13 @@ from datp_core.core.errors import (
     ScientificContractError,
     require_contract,
 )
-from datp_core.core.identifiers import AvailabilityStatus, ContractSubject, FederatedThresholdMethod, ValidationLabel
+from datp_core.core.identifiers import (
+    AvailabilityStatus,
+    ContractSubject,
+    FederatedThresholdMethod,
+    NonEmptyString,
+    ValidationLabel,
+)
 from datp_core.core.numeric import (
     CalibrationSampleWeights,
     NormalizedWeight,
@@ -91,7 +97,10 @@ class PooledSharedQuantileResult:
             ErrorMessage("pooled shared quantile requires at least one pooled benign score"),
             ContractSubject.CALIBRATION,
         )
-        require_unique_clients(tuple(item.client for item in self.assignments), "pooled shared quantile assignments")
+        require_unique_clients(
+            tuple(item.client for item in self.assignments),
+            NonEmptyString("pooled shared quantile assignments"),
+        )
         require_contract(
             bool(self.assignments),
             ErrorMessage("a shared threshold result requires at least one client assignment"),

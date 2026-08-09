@@ -11,7 +11,7 @@ from datp_core.core.errors import (
     ScientificContractError,
 )
 from datp_core.core.identifiers import MetricId
-from datp_core.core.numeric import Ratio, Seed
+from datp_core.core.numeric import MetricValue, Ratio, Seed
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 
@@ -49,7 +49,7 @@ class AlertBurdenDiagnostic:
             raise ScientificContractError(ErrorMessage("suppressed alert burden requires an explicit warning"))
 
     @property
-    def alerts_per_client_per_day(self) -> float | None:
+    def alerts_per_client_per_day(self) -> MetricValue | None:
         return metric_value(self.metric)
 
 

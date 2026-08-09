@@ -5,7 +5,7 @@ import random
 import numpy as np
 import torch
 
-from datp_core.core.numeric import Seed
+from datp_core.core.numeric import Seed, SeedDerivationComponent
 from datp_core.runtime.compute import require_cuda_available
 
 
@@ -21,10 +21,8 @@ def configure_deterministic_execution(seed: Seed) -> None:
     torch.backends.cudnn.benchmark = False
 
 
-def derive_worker_seed(base_seed: Seed, worker_id: int) -> Seed:
-    if worker_id < 0:
-        raise ValueError("worker_id must be non-negative")
-    derived = (base_seed.value * 1_000_003 + worker_id * 97 + 17) % (2**31 - 1)
+def derive_worker_seed(base_seed: Seed, component: SeedDerivationComponent) -> Seed:
+    derived = (base_seed.value * 1_000_003 + component.value * 97 + 17) % (2**31 - 1)
     return Seed(derived)
 
 

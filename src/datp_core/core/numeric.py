@@ -267,6 +267,10 @@ class SeedObservationCount(NonNegativeIntegerValue):
     validation_name: ClassVar[str] = "seed observation count"
 
 
+class SeedDerivationComponent(NonNegativeIntegerValue):
+    validation_name: ClassVar[str] = "seed derivation component"
+
+
 class PresentationDecimalCount(NonNegativeIntegerValue):
     validation_name: ClassVar[str] = "presentation decimal count"
 

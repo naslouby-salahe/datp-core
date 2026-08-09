@@ -49,4 +49,5 @@ def test_alert_burden_uses_valid_per_client_rate() -> None:
         evidence=evidence,
     )
 
-    assert result.alerts_per_client_per_day == 4.0
+    assert result.alerts_per_client_per_day is not None
+    assert result.alerts_per_client_per_day.value == 4.0

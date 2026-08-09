@@ -13,6 +13,7 @@ from datp_core.core.identifiers import (
     ContractSubject,
     FamilyIdentity,
     FederatedThresholdMethod,
+    NonEmptyString,
     ValidationLabel,
 )
 from datp_core.core.numeric import Quantile, ThresholdValue
@@ -130,7 +131,7 @@ def construct_family_threshold(
         )
     require_eligible_cohort(eligible, ValidationLabel("family threshold construction"))
     eligible_clients = tuple(item.client for item in eligible)
-    require_unique_clients(eligible_clients, "eligible clients in family threshold construction")
+    require_unique_clients(eligible_clients, NonEmptyString("eligible clients in family threshold construction"))
     for client in eligible_clients:
         matching = tuple(item.family for item in family_by_client if item.client == client)
         if len(matching) != 1:

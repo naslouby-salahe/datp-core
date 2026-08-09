@@ -1,6 +1,6 @@
 """Centralized and federated checkpoint retention, validation, and selection."""
 
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -18,20 +18,18 @@ from datp_core.core.identifiers import (
     ProcessedDataBranch,
     TrainingModelId,
 )
-from datp_core.core.numeric import MetricValue, RoundNumber, Seed
+from datp_core.core.numeric import MetricValue, Seed
 from datp_core.data.populations.contracts import ClientIdentity
-from datp_core.detector.checkpoints.contracts import CheckpointProtocol, validate_persisted_checkpoint_file
+from datp_core.detector.checkpoints.candidates import candidate_tensor_name
 from datp_core.detector.checkpoints.contracts import (
-    select_terminal_checkpoint as apply_terminal_selection,
-)
-from datp_core.detector.checkpoints.contracts import (
-    validate_ordered_checkpoint_inventory as validate_inventory,
+    CheckpointProtocol,
+    select_terminal_checkpoint,
+    validate_ordered_checkpoint_inventory,
+    validate_persisted_checkpoint_file,
 )
 from datp_core.detector.checkpoints.models import (
-    CentralizedCheckpointAssetName,
     CentralizedCheckpointCandidate,
     CentralizedCheckpointDecision,
-    PersistedCheckpoint,
 )
 from datp_core.detector.checkpoints.protocols import (
     CHECKPOINT_SELECTION_RULE,
@@ -79,30 +77,6 @@ class SelectCentralizedCheckpointRequest:
     training_seed: Seed
     held_out_metrics: tuple[MetricValue, ...] | None
     attack_labels_present: bool
-
-
-def validate_ordered_checkpoint_inventory[CandidateT: PersistedCheckpoint](
-    candidates: Sequence[CandidateT],
-    expected_rounds: tuple[RoundNumber, ...],
-) -> tuple[CandidateT, ...]:
-    return validate_inventory(candidates, expected_rounds)
-
-
-def select_terminal_checkpoint[CandidateT: PersistedCheckpoint](
-    candidates: Sequence[CandidateT],
-    maximum_round: RoundNumber,
-    *,
-    rebuild: Callable[[CandidateT, CheckpointStatus], CandidateT],
-) -> tuple[tuple[CandidateT, ...], CandidateT]:
-    return apply_terminal_selection(candidates, maximum_round, rebuild=rebuild)
-
-
-def candidate_tensor_name(round_number: RoundNumber) -> str:
-    return (
-        f"{CentralizedCheckpointAssetName.CANDIDATE_PREFIX}"
-        f"{round_number.value}"
-        f"{CentralizedCheckpointAssetName.CANDIDATE_SUFFIX}"
-    )
 
 
 def retain_centralized_checkpoint_candidates(
