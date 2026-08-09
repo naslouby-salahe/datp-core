@@ -87,9 +87,7 @@ def _validate_available_empirical_cdf(series: EmpiricalCdfFigureSeries) -> None:
         raise ValueError("empirical CDF x and y values must have equal length")
     if any(not (0.0 < y.value <= 1.0) for y in series.y_values):
         raise ValueError("empirical CDF y values must lie in (0, 1]")
-    if any(
-        left.value > right.value for left, right in zip(series.y_values, series.y_values[1:], strict=False)
-    ):
+    if any(left.value > right.value for left, right in zip(series.y_values, series.y_values[1:], strict=False)):
         raise ValueError("empirical CDF y values must be nondecreasing")
     if series.unavailable_reason is not None:
         raise ValueError("available empirical CDF series cannot carry an unavailable reason")

@@ -209,18 +209,17 @@ def _operational_alert_burden_failure(request: ClaimRequest) -> ClaimDecision | 
 
 
 def _external_assignment_failure(request: ClaimRequest) -> ClaimDecision | None:
-    if (
-        request.kind is ClaimKind.EXTERNAL
-        and request.metric
-        in {MetricId.TRUE_POSITIVE_RATE, MetricId.BALANCED_ACCURACY, MetricId.BINARY_MACRO_F1, MetricId.AUROC}
-    ):
+    if request.kind is ClaimKind.EXTERNAL and request.metric in {
+        MetricId.TRUE_POSITIVE_RATE,
+        MetricId.BALANCED_ACCURACY,
+        MetricId.BINARY_MACRO_F1,
+        MetricId.AUROC,
+    }:
         return _blocked(ClaimReason("Edge external evidence has no valid client-level attack assignment"))
     return None
 
 
-def _temporal_guard_result(
-    request: ClaimRequest, normalized_wording: NormalizedClaimWording
-) -> ClaimDecision | None:
+def _temporal_guard_result(request: ClaimRequest, normalized_wording: NormalizedClaimWording) -> ClaimDecision | None:
     if request.kind is ClaimKind.TEMPORAL:
         if any(phrase.value in normalized_wording for phrase in _TEMPORAL_GUARD_PHRASES):
             return _blocked(ClaimReason("one-shot recalibration cannot be represented as general drift handling"))
