@@ -146,8 +146,8 @@ def empirical_cdf_series_from_points(
         x_metric=MetricId.RECONSTRUCTION_ERROR,
         y_metric=MetricId.EMPIRICAL_CUMULATIVE_PROBABILITY,
         availability=AvailabilityStatus.AVAILABLE,
-        x_values=tuple(point[0].value for point in points),
-        y_values=tuple(point[1].value for point in points),
+        x_values=tuple(point[0] for point in points),
+        y_values=tuple(point[1] for point in points),
         client_id=client_id,
         seed=seed,
         score_role=score_role,
@@ -157,7 +157,7 @@ def empirical_cdf_series_from_points(
     )
 
 
-def render_markdown_figure(figure: FigureSpec) -> str:
+def render_markdown_figure(figure: FigureSpec) -> ReportLine:
     """Render every validated figure series as explicit publication evidence."""
     rows = [
         f"### {figure.title}",
@@ -183,17 +183,17 @@ def render_markdown_figure(figure: FigureSpec) -> str:
             ]
         )
         rows.extend(_render_series(series) for series in figure.series)
-    return "\n".join(rows).rstrip()
+    return ReportLine("\n".join(rows).rstrip())
 
 
-def _render_series(series: FigureSeries) -> str:
+def _render_series(series: FigureSeries) -> ReportLine:
     values = ", ".join(format(value.value, ".17g") for value in series.values) if series.values else "—"
-    return f"| {series.label} | `{series.metric.value}` | `{series.availability.value}` | {values} |"
+    return ReportLine(f"| {series.label} | `{series.metric.value}` | `{series.availability.value}` | {values} |")
 
 
-def _render_empirical_series(series: EmpiricalCdfFigureSeries) -> str:
-    x_values = ", ".join(format(value, ".17g") for value in series.x_values) if series.x_values else "—"
-    y_values = ", ".join(format(value, ".17g") for value in series.y_values) if series.y_values else "—"
+def _render_empirical_series(series: EmpiricalCdfFigureSeries) -> ReportLine:
+    x_values = ", ".join(format(value.value, ".17g") for value in series.x_values) if series.x_values else "—"
+    y_values = ", ".join(format(value.value, ".17g") for value in series.y_values) if series.y_values else "—"
     overlays = (
         ", ".join(
             f"{overlay.method.value}={format(overlay.value.value, '.17g')}" for overlay in series.threshold_overlays
@@ -205,7 +205,7 @@ def _render_empirical_series(series: EmpiricalCdfFigureSeries) -> str:
     seed = str(series.seed.value) if series.seed is not None else "—"
     role = series.score_role.value if series.score_role is not None else "—"
     reason = series.unavailable_reason if series.unavailable_reason is not None else "—"
-    return (
+    return ReportLine(
         f"| {series.label} | `{series.x_metric.value}` | `{series.y_metric.value}` | "
         f"`{series.availability.value}` | {client} | {seed} | {role} | {x_values} | {y_values} | "
         f"{overlays} | {reason} |"

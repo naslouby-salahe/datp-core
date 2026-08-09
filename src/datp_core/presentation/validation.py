@@ -111,17 +111,19 @@ class ClaimRequest:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ClaimDecision:
     status: ClaimStatus
-    wording: str
+    wording: ClaimWording | None
     reason: ClaimReason
     anchor_gate_checksum: Checksum | None = None
 
     def __post_init__(self) -> None:
+        if self.wording is not None and not isinstance(self.wording, ClaimWording):
+            object.__setattr__(self, "wording", ClaimWording(self.wording))
         if not isinstance(self.reason, ClaimReason):
             object.__setattr__(self, "reason", ClaimReason(self.reason))
 
 
 def validate_claim(request: ClaimRequest) -> ClaimDecision:
-    normalized_wording = request.wording.casefold()
+    normalized_wording = NormalizedClaimWording(request.wording.casefold())
     availability_failure = _availability_failure(request)
     if availability_failure is not None:
         return availability_failure
@@ -216,14 +218,16 @@ def _external_assignment_failure(request: ClaimRequest) -> ClaimDecision | None:
     return None
 
 
-def _temporal_guard_result(request: ClaimRequest, normalized_wording: str) -> ClaimDecision | None:
+def _temporal_guard_result(
+    request: ClaimRequest, normalized_wording: NormalizedClaimWording
+) -> ClaimDecision | None:
     if request.kind is ClaimKind.TEMPORAL:
         if any(phrase.value in normalized_wording for phrase in _TEMPORAL_GUARD_PHRASES):
             return _blocked(ClaimReason("one-shot recalibration cannot be represented as general drift handling"))
         if request.evidence_decision is not EvidenceDecision.SUPPORTED:
             return ClaimDecision(
                 status=ClaimStatus.NARROWED,
-                wording=(
+                wording=ClaimWording(
                     f"[NARROWED:{request.evidence_decision.value}] Temporal boundary evidence is "
                     f"{request.evidence_decision.value} and does not support a positive recovery claim."
                 ),
@@ -232,19 +236,21 @@ def _temporal_guard_result(request: ClaimRequest, normalized_wording: str) -> Cl
     return None
 
 
-def _privacy_guard_suppression(normalized_wording: str) -> ClaimDecision | None:
+def _privacy_guard_suppression(normalized_wording: NormalizedClaimWording) -> ClaimDecision | None:
     if any(phrase.value in normalized_wording for phrase in _PRIVACY_GUARD_PHRASES):
         return _suppressed(ClaimReason("data locality is not a formal privacy guarantee"))
     return None
 
 
-def _deployment_guard_suppression(normalized_wording: str) -> ClaimDecision | None:
+def _deployment_guard_suppression(normalized_wording: NormalizedClaimWording) -> ClaimDecision | None:
     if any(phrase.value in normalized_wording for phrase in _DEPLOYMENT_GUARD_PHRASES):
         return _suppressed(ClaimReason("message-size estimates are not deployment measurements"))
     return None
 
 
-def _applicability_boundary_failure(request: ClaimRequest, normalized_wording: str) -> ClaimDecision | None:
+def _applicability_boundary_failure(
+    request: ClaimRequest, normalized_wording: NormalizedClaimWording
+) -> ClaimDecision | None:
     if request.evidence_role is EvidenceRole.APPLICABILITY_BOUNDARY and (
         _cites_file_defined_pseudo_clients(request.population)
         or ClaimGuardPhrase.PHYSICAL_DEVICE.value in normalized_wording
@@ -257,7 +263,7 @@ def _confirmatory_result(request: ClaimRequest) -> ClaimDecision:
     if request.metric is not MetricId.FPR_COEFFICIENT_OF_VARIATION:
         return ClaimDecision(
             status=ClaimStatus.NARROWED,
-            wording=(
+            wording=ClaimWording(
                 f"[NARROWED:control] Metric `{request.metric.value}` is a control or trade-off measure, "
                 "not the confirmatory FPR equity endpoint."
             ),
@@ -269,7 +275,7 @@ def _confirmatory_result(request: ClaimRequest) -> ClaimDecision:
     if request.evidence_decision is not EvidenceDecision.SUPPORTED:
         return ClaimDecision(
             status=ClaimStatus.NARROWED,
-            wording=(
+            wording=ClaimWording(
                 f"[NARROWED:{request.evidence_decision.value}] Confirmatory evidence is "
                 f"{request.evidence_decision.value} and cannot support a positive claim."
             ),
@@ -294,7 +300,7 @@ def _supportive_result(request: ClaimRequest) -> ClaimDecision | None:
     if request.kind is ClaimKind.SUPPORTIVE and request.evidence_decision is not EvidenceDecision.SUPPORTED:
         return ClaimDecision(
             status=ClaimStatus.NARROWED,
-            wording=(
+            wording=ClaimWording(
                 f"[NARROWED:{request.evidence_decision.value}] Supportive evidence is "
                 f"{request.evidence_decision.value} and cannot be exported as a positive claim."
             ),
@@ -336,11 +342,11 @@ def _kind_role_mismatch(request: ClaimRequest) -> ClaimDecision | None:
 
 
 def _blocked(reason: ClaimReason) -> ClaimDecision:
-    return ClaimDecision(status=ClaimStatus.BLOCKED, wording="", reason=reason)
+    return ClaimDecision(status=ClaimStatus.BLOCKED, wording=None, reason=reason)
 
 
 def _suppressed(reason: ClaimReason) -> ClaimDecision:
-    return ClaimDecision(status=ClaimStatus.SUPPRESSED, wording="", reason=reason)
+    return ClaimDecision(status=ClaimStatus.SUPPRESSED, wording=None, reason=reason)
 
 
 _POPULATION_IDENTITY_KINDS: dict[PopulationId, PopulationIdentityKind] = {
