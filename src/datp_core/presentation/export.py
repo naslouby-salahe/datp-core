@@ -32,11 +32,19 @@ from datp_core.core.identifiers import (
     ExperimentId,
     MetricId,
     PopulationId,
+    ReportLine,
 )
 from datp_core.core.numeric import MetricValue
 from datp_core.experiments.anchor.contracts import VerifiedAnchorGateArtifact
 from datp_core.presentation.figures import FigureSpec, render_markdown_figure
-from datp_core.presentation.tables import EvidenceText, PublicationTable, TableCell, TableTitle, render_markdown_table
+from datp_core.presentation.tables import (
+    EvidenceText,
+    PublicationTable,
+    TableCell,
+    TableCellRenderedValue,
+    TableTitle,
+    render_markdown_table,
+)
 from datp_core.presentation.validation import (
     ClaimDecision,
     ClaimKind,
@@ -81,7 +89,11 @@ _PUBLISHABLE_CLAIM_STATUSES = frozenset({ClaimStatus.PERMITTED, ClaimStatus.NARR
 
 def export_markdown(bundle: PublicationBundle, destination: Path) -> Path:
     blocked = tuple(decision for decision in bundle.claims if decision.status not in _PUBLISHABLE_CLAIM_STATUSES)
-    permitted = tuple(decision.wording for decision in bundle.claims if decision.status in _PUBLISHABLE_CLAIM_STATUSES)
+    permitted = tuple(
+        decision.wording
+        for decision in bundle.claims
+        if decision.status in _PUBLISHABLE_CLAIM_STATUSES and decision.wording is not None
+    )
     evidence_publishable = bool(permitted) or not bundle.claims
     provenance = bundle.provenance
     header = (
@@ -169,9 +181,7 @@ def export_external_publication(document: ExternalAnalysisDocument, output_direc
             evidence_decision=EvidenceDecision.BOUNDARY,
             verified_anchor_gate=None,
             traffic_rate_available=False,
-            wording=ClaimWording(
-                "External paired threshold contrast remains supplementary and claim-bounded."
-            ),
+            wording=ClaimWording("External paired threshold contrast remains supplementary and claim-bounded."),
         )
     )
     payload = "\n".join(
@@ -299,7 +309,7 @@ def export_temporal_publication(document: TemporalAnalysisDocument, output_direc
                                 if document.campaign_decision.decision is ScientificDecision.BLOCKED
                                 else AvailabilityStatus.AVAILABLE
                             ),
-                            rendered_value=document.campaign_decision.decision.value,
+                            rendered_value=TableCellRenderedValue(document.campaign_decision.decision.value),
                             evidence=EvidenceText(document.campaign_decision.rationale),
                         ),
                     ),
@@ -333,7 +343,7 @@ def export_mechanism_publication(
             claims=(
                 ClaimDecision(
                     status=ClaimStatus.NARROWED,
-                    wording="Mechanism evidence is associative and non-confirmatory.",
+                    wording=ClaimWording("Mechanism evidence is associative and non-confirmatory."),
                     reason=ClaimReason("mechanism claim tier"),
                 ),
             ),
@@ -346,10 +356,8 @@ def export_mechanism_publication(
                         TableCell(
                             metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
                             availability=AvailabilityStatus.UNAVAILABLE,
-                            rendered_value="",
-                            evidence=EvidenceText(
-                                "no mechanism evidence values were available for tabular export"
-                            ),
+                            rendered_value=TableCellRenderedValue(""),
+                            evidence=EvidenceText("no mechanism evidence values were available for tabular export"),
                         ),
                     ),
                 ),
@@ -362,8 +370,8 @@ def export_mechanism_publication(
 
 def _render_analysis_sections(
     document: AnalysisDocument,
-) -> str:
-    sections: list[str] = []
+) -> ReportLine:
+    sections: list[ReportLine] = []
     sections.extend(_render_decision(document.decision))
     sections.extend(_render_interval(document.interval))
     sections.extend(_render_descriptive(document.descriptive))
@@ -376,33 +384,45 @@ def _render_analysis_sections(
     if document.mechanisms:
         sections.extend(_render_mechanisms(document.mechanisms))
     if document.unavailable_reason:
-        sections.extend(["## Unavailable / blocked", "", document.unavailable_reason, ""])
+        sections.extend(
+            [
+                ReportLine("## Unavailable / blocked"),
+                ReportLine(""),
+                ReportLine(document.unavailable_reason),
+                ReportLine(""),
+            ]
+        )
     if document.excluded_seeds:
         seeds = ", ".join(str(seed.value) for seed in document.excluded_seeds)
-        sections.extend(["## Exclusions", "", f"Excluded seeds: {seeds}", ""])
-    return "\n".join(sections).rstrip() + "\n"
+        sections.extend(
+            [ReportLine("## Exclusions"), ReportLine(""), ReportLine(f"Excluded seeds: {seeds}"), ReportLine("")]
+        )
+    return ReportLine("\n".join(sections).rstrip() + "\n")
 
 
 def _render_decision(
     decision: ScientificDecisionResult,
-) -> list[str]:
+) -> list[ReportLine]:
     point = f"{decision.point_estimate.value:.6g}" if decision.point_estimate else "unavailable"
     return [
-        "# Confirmatory Analysis",
-        "",
-        "## Decision",
-        "",
-        f"Evidence role: `{decision.evidence_role.value}`",
-        f"Decision: `{decision.decision.value}`",
-        f"Point estimate: {point}",
-        f"Rationale: {decision.rationale}",
-        "",
+        ReportLine(line)
+        for line in [
+            "# Confirmatory Analysis",
+            "",
+            "## Decision",
+            "",
+            f"Evidence role: `{decision.evidence_role.value}`",
+            f"Decision: `{decision.decision.value}`",
+            f"Point estimate: {point}",
+            f"Rationale: {decision.rationale}",
+            "",
+        ]
     ]
 
 
 def _render_interval(
     interval: BootstrapInterval,
-) -> list[str]:
+) -> list[ReportLine]:
     lower = f"{interval.lower_bound.value:.6g}" if interval.lower_bound else "unavailable"
     point = f"{interval.point_estimate.value:.6g}" if interval.point_estimate else "unavailable"
     upper = f"{interval.upper_bound.value:.6g}" if interval.upper_bound else "unavailable"
@@ -422,12 +442,12 @@ def _render_interval(
     if interval.adjustment is not None:
         lines.append(f"Bias correction: {interval.adjustment.bias_correction.value:.6g}")
         lines.append(f"Acceleration: {interval.adjustment.acceleration.value:.6g}")
-    return [*lines, ""]
+    return [ReportLine(line) for line in [*lines, ""]]
 
 
 def _render_descriptive(
     descriptive: DescriptiveSummary,
-) -> list[str]:
+) -> list[ReportLine]:
     lines = [
         "## Descriptive Summary",
         "",
@@ -446,12 +466,12 @@ def _render_descriptive(
         lines.append(f"Max: {descriptive.statistics.maximum.value:.6g}")
     if descriptive.reason:
         lines.append(f"Reason: {descriptive.reason}")
-    return [*lines, ""]
+    return [ReportLine(line) for line in [*lines, ""]]
 
 
 def _render_wilcoxon(
     wilcoxon: WilcoxonResult,
-) -> list[str]:
+) -> list[ReportLine]:
     lines = [
         "## Wilcoxon Signed-Rank",
         "",
@@ -473,12 +493,12 @@ def _render_wilcoxon(
         lines.append(f"Fallback reason: {wilcoxon.fallback_reason}")
     if wilcoxon.reason:
         lines.append(f"Reason: {wilcoxon.reason}")
-    return [*lines, ""]
+    return [ReportLine(line) for line in [*lines, ""]]
 
 
 def _render_rank_biserial(
     rb: RankBiserialResult,
-) -> list[str]:
+) -> list[ReportLine]:
     lines = [
         "## Matched-Pairs Rank-Biserial Correlation",
         "",
@@ -493,26 +513,29 @@ def _render_rank_biserial(
         lines.append(f"Negative rank sum: {rb.negative_rank_sum.value:.6g}")
     if rb.reason:
         lines.append(f"Reason: {rb.reason}")
-    return [*lines, ""]
+    return [ReportLine(line) for line in [*lines, ""]]
 
 
 def _render_sign_consistency(
     sc: PairedDifferenceCounts,
-) -> list[str]:
+) -> list[ReportLine]:
     total = sc.positive.value + sc.zero.value + sc.negative.value
     return [
-        "## Sign Consistency",
-        "",
-        f"Positive: {sc.positive.value}/{total}",
-        f"Zero: {sc.zero.value}/{total}",
-        f"Negative: {sc.negative.value}/{total}",
-        "",
+        ReportLine(line)
+        for line in [
+            "## Sign Consistency",
+            "",
+            f"Positive: {sc.positive.value}/{total}",
+            f"Zero: {sc.zero.value}/{total}",
+            f"Negative: {sc.negative.value}/{total}",
+            "",
+        ]
     ]
 
 
 def _render_paired_contrasts(
     contrasts: tuple,
-) -> list[str]:
+) -> list[ReportLine]:
     lines = [
         "## Paired Seed Values",
         "",
@@ -526,12 +549,12 @@ def _render_paired_contrasts(
             f"`{contrast.fixed_score.model_checksum.value[:12]}` | "
             f"`{contrast.fixed_score.selected_checkpoint_checksum.value[:12]}` |"
         )
-    return [*lines, ""]
+    return [ReportLine(line) for line in [*lines, ""]]
 
 
 def _render_multiplicity(
     result: MultiplicityResult,
-) -> list[str]:
+) -> list[ReportLine]:
     lines = [
         "## Multiplicity Correction",
         "",
@@ -550,46 +573,46 @@ def _render_multiplicity(
             f"`{hypothesis.metric.value}` | {hypothesis.comparison} | "
             f"{decision.raw_p_value.value:.6g} | {decision.adjusted_p_value.value:.6g} | {rej} |"
         )
-    return [*lines, ""]
+    return [ReportLine(line) for line in [*lines, ""]]
 
 
 def _render_mechanisms(
     mechanisms: tuple[MechanismEvidence, ...],
-) -> list[str]:
+) -> list[ReportLine]:
     lines = ["## Mechanism Evidence", ""]
     for index, mechanism in enumerate(mechanisms, start=1):
         lines.append(f"### Mechanism record {index}: {_mechanism_title(mechanism)}")
         lines.extend(_render_one_mechanism(mechanism))
         lines.append("")
-    return lines
+    return [ReportLine(line) for line in lines]
 
 
 def _mechanism_title(
     mechanism: MechanismEvidence,
-) -> str:
+) -> ReportLine:
     match mechanism:
         case AssociationResult():
-            return "heterogeneity_benefit_association"
+            return ReportLine("heterogeneity_benefit_association")
         case DivergenceResult():
-            return "jensen_shannon_score_divergence"
+            return ReportLine("jensen_shannon_score_divergence")
         case ClusterStabilityResult():
-            return "cluster_stability"
+            return ReportLine("cluster_stability")
         case ClusterEvidenceRecord():
-            return "cluster_evidence"
+            return ReportLine("cluster_evidence")
         case GroupedDispersionResult():
-            return "grouped_dispersion"
+            return ReportLine("grouped_dispersion")
         case ThresholdMovement():
-            return "threshold_movement"
+            return ReportLine("threshold_movement")
         case ThresholdMovementCohort():
-            return "threshold_movement_cohort"
+            return ReportLine("threshold_movement_cohort")
         case ThresholdMovementMultiSeedUncertainty():
-            return "threshold_movement_across_seed_uncertainty"
+            return ReportLine("threshold_movement_across_seed_uncertainty")
         case AbsorptionCohortResult():
-            return "model_personalization_absorption"
+            return ReportLine("model_personalization_absorption")
         case ScientificDecisionResult():
-            return "scientific_decision"
+            return ReportLine("scientific_decision")
         case _:
-            return "mechanism_evidence"
+            return ReportLine("mechanism_evidence")
 
 
 def _mechanism_tables(mechanisms: tuple[MechanismEvidence, ...]) -> tuple[PublicationTable, ...]:
@@ -602,7 +625,7 @@ def _mechanism_tables(mechanisms: tuple[MechanismEvidence, ...]) -> tuple[Public
                     TableCell(
                         metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
                         availability=mechanism.availability,
-                        rendered_value=f"{stats.spearman_rho.value:.6g}",
+                        rendered_value=TableCellRenderedValue(f"{stats.spearman_rho.value:.6g}"),
                         evidence=EvidenceText(
                             f"Spearman association n={mechanism.observation_count.value}; "
                             f"slope={stats.regression_slope.value:.6g}; R²={stats.r_squared.value:.6g}; "
@@ -615,7 +638,7 @@ def _mechanism_tables(mechanisms: tuple[MechanismEvidence, ...]) -> tuple[Public
                     TableCell(
                         metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
                         availability=mechanism.availability,
-                        rendered_value=f"{mechanism.aggregate.value:.6g}",
+                        rendered_value=TableCellRenderedValue(f"{mechanism.aggregate.value:.6g}"),
                         evidence=EvidenceText(
                             f"mean pairwise JS distance (base-2), clients={len(mechanism.clients)}, "
                             f"bins={mechanism.protocol.bin_count.value}"
@@ -632,7 +655,7 @@ def _mechanism_tables(mechanisms: tuple[MechanismEvidence, ...]) -> tuple[Public
                     TableCell(
                         metric=MetricId.MEAN_FPR,
                         availability=mechanism.availability,
-                        rendered_value=f"{mechanism.mean_delta_fpr.value:.6g}",
+                        rendered_value=TableCellRenderedValue(f"{mechanism.mean_delta_fpr.value:.6g}"),
                         evidence=EvidenceText(
                             f"mean ΔFPR; client_dispersion={dispersion}; n={len(mechanism.movements)}"
                         ),
@@ -643,7 +666,7 @@ def _mechanism_tables(mechanisms: tuple[MechanismEvidence, ...]) -> tuple[Public
                     TableCell(
                         metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
                         availability=AvailabilityStatus.AVAILABLE,
-                        rendered_value=f"{mechanism.mean_retention.value:.6g}",
+                        rendered_value=TableCellRenderedValue(f"{mechanism.mean_retention.value:.6g}"),
                         evidence=EvidenceText(
                             f"mean CV(FPR) retention; decision={mechanism.decision.decision.value}; "
                             f"seeds={len(mechanism.observations)}; "
@@ -656,7 +679,7 @@ def _mechanism_tables(mechanisms: tuple[MechanismEvidence, ...]) -> tuple[Public
                     TableCell(
                         metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
                         availability=mechanism.availability,
-                        rendered_value=f"{mechanism.cv_fpr_equity_recovery_fraction.value:.6g}",
+                        rendered_value=TableCellRenderedValue(f"{mechanism.cv_fpr_equity_recovery_fraction.value:.6g}"),
                         evidence=EvidenceText(
                             f"CV(FPR) equity recovery; empty_clusters={len(mechanism.partition.empty_groups)}; "
                             f"seed={mechanism.seed.value}"
@@ -673,7 +696,7 @@ def _mechanism_tables(mechanisms: tuple[MechanismEvidence, ...]) -> tuple[Public
 
 def _render_one_mechanism(
     mechanism: MechanismEvidence,
-) -> list[str]:
+) -> list[ReportLine]:
     match mechanism:
         case AssociationResult():
             return _render_association_result(mechanism)
@@ -696,10 +719,10 @@ def _render_one_mechanism(
         case ScientificDecisionResult():
             return _render_scientific_decision_result(mechanism)
         case _:
-            return ["Unhandled mechanism evidence kind"]
+            return [ReportLine("Unhandled mechanism evidence kind")]
 
 
-def _render_association_result(mechanism: AssociationResult) -> list[str]:
+def _render_association_result(mechanism: AssociationResult) -> list[ReportLine]:
     lines = [
         f"Observations: {mechanism.observation_count.value}",
         f"Availability: `{mechanism.availability.value}`",
@@ -712,8 +735,7 @@ def _render_association_result(mechanism: AssociationResult) -> list[str]:
                 f"Spearman rho: {stats.spearman_rho.value:.6g}",
                 f"Spearman p: {stats.spearman_p_value.value:.6g}",
                 f"Intercept: {stats.regression_intercept.value:.6g}",
-                f"Slope: {stats.regression_slope.value:.6g} "
-                f"(SE {stats.regression_slope_standard_error.value:.6g})",
+                f"Slope: {stats.regression_slope.value:.6g} (SE {stats.regression_slope_standard_error.value:.6g})",
                 f"Slope CI: [{lower.value:.6g}, {upper.value:.6g}]",
                 f"R²: {stats.r_squared.value:.6g}",
                 f"Leverage: {', '.join(f'{value.value:.6g}' for value in stats.leverage)}",
@@ -723,10 +745,10 @@ def _render_association_result(mechanism: AssociationResult) -> list[str]:
         )
     if mechanism.reason:
         lines.append(f"Reason: {mechanism.reason}")
-    return lines
+    return [ReportLine(line) for line in lines]
 
 
-def _render_divergence_result(mechanism: DivergenceResult) -> list[str]:
+def _render_divergence_result(mechanism: DivergenceResult) -> list[ReportLine]:
     lines = [
         f"Clients: {len(mechanism.clients)}",
         f"Availability: `{mechanism.availability.value}`",
@@ -741,24 +763,25 @@ def _render_divergence_result(mechanism: DivergenceResult) -> list[str]:
         lines.append(f"Source score checksum: `{mechanism.source_score_checksum.value}`")
     if mechanism.aggregate is not None:
         lines.append(f"Aggregate JS distance: {mechanism.aggregate.value:.6g}")
-        lines.append(
-            f"Pairwise values: {', '.join(f'{value.value:.6g}' for value in mechanism.pairwise_values)}"
-        )
+        lines.append(f"Pairwise values: {', '.join(f'{value.value:.6g}' for value in mechanism.pairwise_values)}")
     if mechanism.reason:
         lines.append(f"Reason: {mechanism.reason}")
-    return lines
+    return [ReportLine(line) for line in lines]
 
 
-def _render_cluster_stability_result(mechanism: ClusterStabilityResult) -> list[str]:
+def _render_cluster_stability_result(mechanism: ClusterStabilityResult) -> list[ReportLine]:
     return [
-        f"ARI: {mechanism.adjusted_rand_index.value:.6g}",
-        f"Clients: {len(mechanism.compared_clients)}",
-        f"Left singletons: {len(mechanism.left_partition.singleton_groups)}",
-        f"Right empty groups: {len(mechanism.right_partition.empty_groups)}",
+        ReportLine(line)
+        for line in [
+            f"ARI: {mechanism.adjusted_rand_index.value:.6g}",
+            f"Clients: {len(mechanism.compared_clients)}",
+            f"Left singletons: {len(mechanism.left_partition.singleton_groups)}",
+            f"Right empty groups: {len(mechanism.right_partition.empty_groups)}",
+        ]
     ]
 
 
-def _render_cluster_evidence_record(mechanism: ClusterEvidenceRecord) -> list[str]:
+def _render_cluster_evidence_record(mechanism: ClusterEvidenceRecord) -> list[ReportLine]:
     equity = (
         f"{mechanism.cv_fpr_equity_recovery_fraction.value:.6g}"
         if mechanism.cv_fpr_equity_recovery_fraction is not None
@@ -780,61 +803,73 @@ def _render_cluster_evidence_record(mechanism: ClusterEvidenceRecord) -> list[st
         else (mechanism.dispersion_unavailable_reason or "unavailable")
     )
     return [
-        f"Seed: {mechanism.seed.value}",
-        f"Memberships: {len(mechanism.memberships)}",
-        f"Contributing quantile dispersion: {contributing}",
-        f"Effective threshold dispersion: {effective}",
-        f"CV(FPR) equity recovery: {equity}",
-        f"Threshold-dispersion recovery: {threshold_recovery}",
-        f"Empty clusters: {len(mechanism.partition.empty_groups)}",
-        f"Evidence availability: `{mechanism.evidence_availability.value}`",
+        ReportLine(line)
+        for line in [
+            f"Seed: {mechanism.seed.value}",
+            f"Memberships: {len(mechanism.memberships)}",
+            f"Contributing quantile dispersion: {contributing}",
+            f"Effective threshold dispersion: {effective}",
+            f"CV(FPR) equity recovery: {equity}",
+            f"Threshold-dispersion recovery: {threshold_recovery}",
+            f"Empty clusters: {len(mechanism.partition.empty_groups)}",
+            f"Evidence availability: `{mechanism.evidence_availability.value}`",
+        ]
     ]
 
 
-def _render_grouped_dispersion_result(mechanism: GroupedDispersionResult) -> list[str]:
+def _render_grouped_dispersion_result(mechanism: GroupedDispersionResult) -> list[ReportLine]:
     return [
-        f"Availability: `{mechanism.availability.value}`",
-        f"Groups: {len(mechanism.group_sizes)}",
-        f"Singletons: {len(mechanism.singleton_groups)}",
-        f"Empty: {len(mechanism.empty_groups)}",
-        (
-            f"Across-group threshold spread: {mechanism.across_group_threshold_spread.value:.6g}"
-            if mechanism.across_group_threshold_spread is not None
-            else f"Reason: {mechanism.reason}"
-        ),
+        ReportLine(line)
+        for line in [
+            f"Availability: `{mechanism.availability.value}`",
+            f"Groups: {len(mechanism.group_sizes)}",
+            f"Singletons: {len(mechanism.singleton_groups)}",
+            f"Empty: {len(mechanism.empty_groups)}",
+            (
+                f"Across-group threshold spread: {mechanism.across_group_threshold_spread.value:.6g}"
+                if mechanism.across_group_threshold_spread is not None
+                else f"Reason: {mechanism.reason}"
+            ),
+        ]
     ]
 
 
-def _render_threshold_movement(mechanism: ThresholdMovement) -> list[str]:
+def _render_threshold_movement(mechanism: ThresholdMovement) -> list[ReportLine]:
     delta_tpr = f"{mechanism.delta_tpr.value:.6g}" if mechanism.delta_tpr is not None else "unavailable"
     return [
-        f"Client: `{mechanism.client.client_id.value}`",
-        f"Seed: {mechanism.seed.value}",
-        f"Δ threshold: {mechanism.delta_threshold.value:.6g}",
-        f"Δ FPR: {mechanism.delta_fpr.value:.6g}",
-        f"Δ TPR: {delta_tpr}",
+        ReportLine(line)
+        for line in [
+            f"Client: `{mechanism.client.client_id.value}`",
+            f"Seed: {mechanism.seed.value}",
+            f"Δ threshold: {mechanism.delta_threshold.value:.6g}",
+            f"Δ FPR: {mechanism.delta_fpr.value:.6g}",
+            f"Δ TPR: {delta_tpr}",
+        ]
     ]
 
 
-def _render_threshold_movement_cohort(mechanism: ThresholdMovementCohort) -> list[str]:
+def _render_threshold_movement_cohort(mechanism: ThresholdMovementCohort) -> list[ReportLine]:
     dispersion = (
         f"{mechanism.client_dispersion_delta_fpr.value:.6g}"
         if mechanism.client_dispersion_delta_fpr is not None
         else "unavailable"
     )
     return [
-        f"Movements: {len(mechanism.movements)}",
-        f"Availability: `{mechanism.availability.value}`",
-        (
-            f"Mean Δ FPR: {mechanism.mean_delta_fpr.value:.6g}"
-            if mechanism.mean_delta_fpr is not None
-            else f"Reason: {mechanism.reason}"
-        ),
-        f"Client dispersion of Δ FPR: {dispersion}",
+        ReportLine(line)
+        for line in [
+            f"Movements: {len(mechanism.movements)}",
+            f"Availability: `{mechanism.availability.value}`",
+            (
+                f"Mean Δ FPR: {mechanism.mean_delta_fpr.value:.6g}"
+                if mechanism.mean_delta_fpr is not None
+                else f"Reason: {mechanism.reason}"
+            ),
+            f"Client dispersion of Δ FPR: {dispersion}",
+        ]
     ]
 
 
-def _render_threshold_movement_uncertainty(mechanism: ThresholdMovementMultiSeedUncertainty) -> list[str]:
+def _render_threshold_movement_uncertainty(mechanism: ThresholdMovementMultiSeedUncertainty) -> list[ReportLine]:
     across = (
         f"{mechanism.across_seed_dispersion_delta_fpr.value:.6g}"
         if mechanism.across_seed_dispersion_delta_fpr is not None
@@ -846,14 +881,17 @@ def _render_threshold_movement_uncertainty(mechanism: ThresholdMovementMultiSeed
         else "unavailable"
     )
     return [
-        f"Seed summaries: {len(mechanism.seed_summaries)}",
-        f"Availability: `{mechanism.availability.value}`",
-        f"Mean of seed-mean Δ FPR: {mean}",
-        f"Across-seed dispersion of mean Δ FPR: {across}",
+        ReportLine(line)
+        for line in [
+            f"Seed summaries: {len(mechanism.seed_summaries)}",
+            f"Availability: `{mechanism.availability.value}`",
+            f"Mean of seed-mean Δ FPR: {mean}",
+            f"Across-seed dispersion of mean Δ FPR: {across}",
+        ]
     ]
 
 
-def _render_absorption_cohort_result(mechanism: AbsorptionCohortResult) -> list[str]:
+def _render_absorption_cohort_result(mechanism: AbsorptionCohortResult) -> list[ReportLine]:
     retention_interval = mechanism.retention_interval
     retention_bca = (
         f"BCa[{retention_interval.lower_bound.value:.6g}, {retention_interval.upper_bound.value:.6g}]"
@@ -863,24 +901,30 @@ def _render_absorption_cohort_result(mechanism: AbsorptionCohortResult) -> list[
         else "BCa unavailable"
     )
     return [
-        f"Seeds: {len(mechanism.observations)}",
-        f"Decision: `{mechanism.decision.decision.value}`",
-        f"Rationale: {mechanism.decision.rationale}",
-        (
-            f"Mean retention: {mechanism.mean_retention.value:.6g}"
-            if mechanism.mean_retention is not None
-            else "Mean retention: unavailable"
-        ),
-        f"Retention BCa interval across seeds: {retention_bca}",
-        f"Alternative-route seeds: {mechanism.alternative_route_seed_count.value}",
+        ReportLine(line)
+        for line in [
+            f"Seeds: {len(mechanism.observations)}",
+            f"Decision: `{mechanism.decision.decision.value}`",
+            f"Rationale: {mechanism.decision.rationale}",
+            (
+                f"Mean retention: {mechanism.mean_retention.value:.6g}"
+                if mechanism.mean_retention is not None
+                else "Mean retention: unavailable"
+            ),
+            f"Retention BCa interval across seeds: {retention_bca}",
+            f"Alternative-route seeds: {mechanism.alternative_route_seed_count.value}",
+        ]
     ]
 
 
-def _render_scientific_decision_result(mechanism: ScientificDecisionResult) -> list[str]:
+def _render_scientific_decision_result(mechanism: ScientificDecisionResult) -> list[ReportLine]:
     return [
-        f"Decision: `{mechanism.decision.value}`",
-        f"Evidence role: `{mechanism.evidence_role.value}`",
-        f"Rationale: {mechanism.rationale}",
+        ReportLine(line)
+        for line in [
+            f"Decision: `{mechanism.decision.value}`",
+            f"Evidence role: `{mechanism.evidence_role.value}`",
+            f"Rationale: {mechanism.rationale}",
+        ]
     ]
 
 
@@ -895,7 +939,7 @@ def _interval_table(interval: BootstrapInterval) -> PublicationTable:
             TableCell(
                 metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
                 availability=interval.availability,
-                rendered_value=point,
+                rendered_value=TableCellRenderedValue(point),
                 evidence=EvidenceText(evidence),
             ),
         ),
@@ -911,7 +955,7 @@ def _wilcoxon_table(wilcoxon: WilcoxonResult, rank_biserial: RankBiserialResult)
             TableCell(
                 metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
                 availability=wilcoxon.availability,
-                rendered_value=p_value,
+                rendered_value=TableCellRenderedValue(p_value),
                 evidence=EvidenceText(
                     f"Wilcoxon method={wilcoxon.computation_method.value if wilcoxon.computation_method else 'none'}"
                 ),
@@ -919,7 +963,7 @@ def _wilcoxon_table(wilcoxon: WilcoxonResult, rank_biserial: RankBiserialResult)
             TableCell(
                 metric=MetricId.MEAN_FPR,
                 availability=rank_biserial.availability,
-                rendered_value=effect,
+                rendered_value=TableCellRenderedValue(effect),
                 evidence=EvidenceText("matched-pairs rank-biserial"),
             ),
         ),
@@ -934,7 +978,7 @@ def _paired_values_table(document: AnalysisDocument) -> PublicationTable:
                 TableCell(
                     metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
                     availability=AvailabilityStatus.UNAVAILABLE,
-                    rendered_value="",
+                    rendered_value=TableCellRenderedValue(""),
                     evidence=EvidenceText(document.unavailable_reason or "no paired contrasts"),
                 ),
             ),
@@ -959,7 +1003,7 @@ def _paired_values_table(document: AnalysisDocument) -> PublicationTable:
             TableCell(
                 metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
                 availability=availability,
-                rendered_value=rendered_value,
+                rendered_value=TableCellRenderedValue(rendered_value),
                 evidence=EvidenceText(evidence),
             ),
         ),
@@ -968,8 +1012,8 @@ def _paired_values_table(document: AnalysisDocument) -> PublicationTable:
 
 def _optional_metric(
     value: MetricValue | None,
-) -> str:
-    return "—" if value is None else f"{value.value:.6g}"
+) -> ReportLine:
+    return ReportLine("—" if value is None else f"{value.value:.6g}")
 
 
 def _map_decision(decision: ScientificDecision) -> EvidenceDecision:
