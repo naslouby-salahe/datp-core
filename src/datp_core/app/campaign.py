@@ -13,7 +13,9 @@ from datp_core.app.planning import (
     PlanReason,
     expand_experiment_plan,
     merge_experiment_plans,
-    seed_cohort_for,
+)
+from datp_core.app.planning import (
+    seed_cohort_for as _seed_cohort_for,
 )
 from datp_core.app.recipes import anchor_gated_experiment_ids
 from datp_core.app.validation import (
@@ -93,7 +95,7 @@ def _plan_for_declaration(declaration: ExperimentDeclaration) -> ExperimentPlan:
         )
     return expand_experiment_plan(
         declarations=(declaration,),
-        seed_cohort=seed_cohort_for(declaration.id),
+        seed_cohort=_seed_cohort_for(declaration.id),
         evidence=_planning_evidence(declaration),
     )
 
@@ -108,7 +110,7 @@ def build_programme_plan(experiment_id: ExperimentId | None) -> PlanPresentation
             declaration.id,
             HISTORICAL_ANCHOR_SEED_COHORT.values
             if declaration.id is ExperimentId.HISTORICAL_DATP_REPRODUCTION
-            else seed_cohort_for(declaration.id).values,
+            else _seed_cohort_for(declaration.id).values,
         )
         for declaration in declarations
     )

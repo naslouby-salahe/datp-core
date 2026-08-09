@@ -4,10 +4,10 @@ from pathlib import Path
 
 import pytest
 
-from datp_core.app.campaign import build_programme_plan, seed_cohort_for
+from datp_core.app.campaign import build_programme_plan
 from datp_core.app.contracts import OverwriteMode
 from datp_core.app.models import DetailText, ReportResult
-from datp_core.app.planning import PlanDisposition
+from datp_core.app.planning import PlanDisposition, seed_cohort_for
 from datp_core.app.recipes import recipe_for
 from datp_core.app.research import registered_experiment_ids
 from datp_core.app.validation import require_experiment_execution_ready, validate_programme
