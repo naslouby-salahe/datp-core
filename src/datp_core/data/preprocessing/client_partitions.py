@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from enum import StrEnum
 from pathlib import Path
 
 import polars as pl
@@ -29,9 +28,12 @@ from datp_core.data.edge_iiotset.schema import EDGE_NUMERIC_FEATURE_COLUMNS, Edg
 from datp_core.data.populations.construction import join_handoff_with_canonical_features
 from datp_core.data.populations.contracts import (
     CLIENT_ID_COLUMN,
+    ModelInputExclusionEvidence,
+    ModelInputExclusionReason,
     PARTITION_ROLE_COLUMN,
     STABLE_ROW_ID_COLUMN,
     PreprocessingHandoff,
+    model_input_exclusion_checksum,
 )
 from datp_core.data.preprocessing.artifact_validation import extract_partitions
 from datp_core.data.preprocessing.artifacts import PartitionOrdering
@@ -52,10 +54,6 @@ PARQUET_PATTERN = "*.parquet"
 MODEL_INPUT_EXCLUSION_ASSET = "model_input_exclusions.json"
 
 
-class ModelInputExclusionReason(StrEnum):
-    NONFINITE_OR_NULL_NUMERIC_MODEL_INPUT_FEATURE = "nonfinite_or_null_numeric_model_input_feature"
-
-
 MODEL_INPUT_EXCLUSION_REASON = ModelInputExclusionReason.NONFINITE_OR_NULL_NUMERIC_MODEL_INPUT_FEATURE
 _FINITE_ELIGIBLE_COLUMN = "__eligible"
 
@@ -65,34 +63,6 @@ _EDGE_PUBLISHED_POPULATIONS = frozenset(
         PopulationId.EDGE_SENSOR_GROUPS,
     }
 )
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ModelInputExclusionEvidence:
-    dataset: DatasetId
-    population: PopulationId
-    excluded_stable_row_ids: tuple[StableRowId, ...]
-    total_row_count: RowCount
-    reason: ModelInputExclusionReason = MODEL_INPUT_EXCLUSION_REASON
-
-    def __post_init__(self) -> None:
-        if self.reason is not ModelInputExclusionReason.NONFINITE_OR_NULL_NUMERIC_MODEL_INPUT_FEATURE:
-            raise ValueError("model-input exclusion reason must match the locked nonfinite gate")
-        if len(self.excluded_stable_row_ids) != len(set(self.excluded_stable_row_ids)):
-            raise ValueError("excluded stable row identities must be unique")
-        if self.total_row_count.value < len(self.excluded_stable_row_ids):
-            raise ValueError("excluded row count cannot exceed total joined rows")
-
-    @property
-    def excluded_row_count(self) -> RowCount:
-        return RowCount(len(self.excluded_stable_row_ids))
-
-    @property
-    def evidence_checksum(self) -> Checksum:
-        ordered = ",".join(map(str, self.excluded_stable_row_ids))
-        return Checksum.from_text(
-            f"{self.dataset.value}|{self.population.value}|{self.reason.value}|{self.total_row_count.value}|{ordered}"
-        )
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -230,9 +200,14 @@ def join_published_handoff(
         dataset=handoff.population_manifest.document.dataset,
         population=handoff.population_manifest.document.population,
     )
+    if eligibility.exclusion_evidence.excluded_row_count.value:
+        raise ScientificContractError(
+            ErrorMessage("published Edge population contains rows excluded by model-input eligibility"),
+            subject=handoff.population_manifest.document.population,
+        )
     return PublishedHandoffJoin(
-        joined_rows=eligibility.eligible_rows,
-        exclusion_evidence=eligibility.exclusion_evidence,
+        joined_rows=joined,
+        exclusion_evidence=None,
     )
 
 
@@ -262,8 +237,17 @@ def exclude_nonfinite_model_input_rows(
     evidence = ModelInputExclusionEvidence(
         dataset=dataset,
         population=population,
+        reason=MODEL_INPUT_EXCLUSION_REASON,
         excluded_stable_row_ids=excluded_ids,
         total_row_count=RowCount(joined.height),
+        excluded_row_count=RowCount(len(excluded_ids)),
+        evidence_checksum=model_input_exclusion_checksum(
+            dataset=dataset,
+            population=population,
+            reason=MODEL_INPUT_EXCLUSION_REASON,
+            total_row_count=RowCount(joined.height),
+            excluded_stable_row_ids=excluded_ids,
+        ),
     )
 
     if evidence.excluded_row_count.value:
@@ -285,7 +269,7 @@ def write_model_input_exclusion_evidence(destination: Path, evidence: ModelInput
     payload = {
         "dataset": evidence.dataset.value,
         "population": evidence.population.value,
-        "reason": evidence.reason,
+        "reason": evidence.reason.value,
         "total_row_count": evidence.total_row_count.value,
         "excluded_row_count": evidence.excluded_row_count.value,
         "excluded_stable_row_ids": tuple(map(str, evidence.excluded_stable_row_ids)),

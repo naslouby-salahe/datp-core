@@ -57,7 +57,7 @@ from datp_core.experiments.execution import execute_declared_experiment_seed
 from datp_core.experiments.execution.evidence import load_evaluation_document, population_metric
 from datp_core.experiments.execution.layout import EvaluationRunAssetDirectory
 from datp_core.experiments.registry import EXPERIMENTS, ExperimentDeclaration
-from datp_core.presentation.export import export_external_publication
+from datp_core.presentation.export import export_external_publication, format_publication_metric
 from datp_core.runtime.filesystem import write_text_atomically
 from datp_core.thresholds.dispatch import ThresholdConstructionResult
 from datp_core.thresholds.variants.federated_statistics import (
@@ -357,21 +357,21 @@ def _external_benign_statistics_markdown(manifest: ExternalBenignStatisticsRepor
                 "",
                 "| Quantity | Value |",
                 "|---|---:|",
-                f"| Matched threshold (estimator) | {row.matched_threshold.value:.6g} |",
-                f"| Pooled benign quantile threshold | {row.pooled_quantile_threshold.value:.6g} |",
-                f"| Global mean | {row.global_mean.value:.6g} |",
-                f"| Within-client variance | {row.within_client_variance.value:.6g} |",
-                f"| Between-client variance | {row.between_client_variance.value:.6g} |",
-                f"| Full pooled variance | {row.full_pooled_variance.value:.6g} |",
+                f"| Matched threshold (estimator) | {format_publication_metric(row.matched_threshold.value)} |",
+                f"| Pooled benign quantile threshold | {format_publication_metric(row.pooled_quantile_threshold.value)} |",
+                f"| Global mean | {format_publication_metric(row.global_mean.value)} |",
+                f"| Within-client variance | {format_publication_metric(row.within_client_variance.value)} |",
+                f"| Between-client variance | {format_publication_metric(row.between_client_variance.value)} |",
+                f"| Full pooled variance | {format_publication_metric(row.full_pooled_variance.value)} |",
                 "| Between-client variance ratio | "
-                + (f"{row.between_ratio.value:.6g}" if row.between_ratio is not None else "unavailable")
+                + (format_publication_metric(row.between_ratio.value) if row.between_ratio is not None else "unavailable")
                 + " |",
-                f"| Absolute threshold error | {row.absolute_threshold_error.value:.6g} |",
-                f"| Achieved benign exceedance | {row.achieved_benign_exceedance.value:.6g} |",
-                f"| Estimated communication bytes | {row.estimated_communication_bytes.value:.6g} |",
-                "| CV(FPR) | " + (f"{row.cv_fpr.value:.6g}" if row.cv_fpr is not None else "unavailable") + " |",
+                f"| Absolute threshold error | {format_publication_metric(row.absolute_threshold_error.value)} |",
+                f"| Achieved benign exceedance | {format_publication_metric(row.achieved_benign_exceedance.value)} |",
+                f"| Estimated communication bytes | {format_publication_metric(row.estimated_communication_bytes.value)} |",
+                "| CV(FPR) | " + (format_publication_metric(row.cv_fpr.value) if row.cv_fpr is not None else "unavailable") + " |",
                 "| Worst-client FPR | "
-                + (f"{row.worst_client_fpr.value:.6g}" if row.worst_client_fpr is not None else "unavailable")
+                + (format_publication_metric(row.worst_client_fpr.value) if row.worst_client_fpr is not None else "unavailable")
                 + " |",
                 "",
                 "### Disclosed per-client benign summary",
@@ -382,8 +382,8 @@ def _external_benign_statistics_markdown(manifest: ExternalBenignStatisticsRepor
         )
         lines.extend(
             (
-                f"| {client.client_id.value} | {client.count.value} | {client.mean.value:.6g} | "
-                f"{client.variance.value:.6g} | "
+                f"| {client.client_id.value} | {client.count.value} | {format_publication_metric(client.mean.value)} | "
+                f"{format_publication_metric(client.variance.value)} | "
                 + (
                     f"{client.benign_exceedance_count.value}"
                     if client.benign_exceedance_count is not None

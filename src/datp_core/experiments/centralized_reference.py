@@ -60,7 +60,13 @@ from datp_core.experiments.common.seeds import (
 )
 from datp_core.experiments.execution.context import training_feature_names
 from datp_core.experiments.execution.layout import ExecutionArtifactDirectory
-from datp_core.presentation.export import PUBLICATION_FILENAME, PublicationBundle, ReportProvenance, export_markdown
+from datp_core.presentation.export import (
+    PUBLICATION_FILENAME,
+    PublicationBundle,
+    ReportProvenance,
+    export_markdown,
+    format_publication_metric,
+)
 from datp_core.presentation.tables import (
     EvidenceText,
     PublicationTable,
@@ -375,7 +381,7 @@ def _centralized_reference_table(evaluation: CentralizedEvaluationDocument) -> P
                 TableCell(
                     metric=metric_id,
                     availability=AvailabilityStatus.AVAILABLE,
-                    rendered_value=TableCellRenderedValue(f"{metric.value.value:.6g}"),
+                    rendered_value=TableCellRenderedValue(format_publication_metric(metric.value.value)),
                     evidence=EvidenceText(
                         f"pooled centralized held-out metric; seed={evaluation.coordinate.training_seed.value}"
                     ),

@@ -917,7 +917,7 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
     ),
     ExperimentRecipe(
         experiment=ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION,
-        anchor_requirement=AnchorRequirement.NOT_REQUIRED,
+        anchor_requirement=AnchorRequirement.REQUIRED,
         campaign_role=CampaignRole.MANDATORY,
         dispatch=_external_recipe(ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION),
         report=_report_external,
@@ -925,7 +925,7 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
     ),
     ExperimentRecipe(
         experiment=ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY,
-        anchor_requirement=AnchorRequirement.NOT_REQUIRED,
+        anchor_requirement=AnchorRequirement.REQUIRED,
         campaign_role=CampaignRole.MANDATORY,
         dispatch=_external_recipe(ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY),
         report=_report_external,
@@ -933,7 +933,7 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
     ),
     ExperimentRecipe(
         experiment=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
-        anchor_requirement=AnchorRequirement.NOT_REQUIRED,
+        anchor_requirement=AnchorRequirement.REQUIRED,
         campaign_role=CampaignRole.MANDATORY,
         dispatch=_dispatch_temporal,
         report=_report_temporal,

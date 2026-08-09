@@ -43,6 +43,7 @@ from datp_core.data.populations.contracts import (
     PopulationConstructionRequest,
     PopulationConstructionResult,
     PopulationFrameColumn,
+    ModelInputExclusionEvidence,
     PopulationManifest,
     PopulationManifestDocument,
     SplitConstructionRequest,
@@ -69,6 +70,7 @@ class PopulationPublicationAsset(StrEnum):
     MATCHED_STATIC_MEMBERSHIP = "matched_static_reference_membership.parquet"
     CICIOT_EXCLUDED_ROWS = "ciciot_excluded_rows.parquet"
     CICIOT_CLIENT_ELIGIBILITY = "ciciot_client_eligibility.parquet"
+    MODEL_INPUT_EXCLUSIONS = "model_input_exclusions.json"
     COMPLETE = "COMPLETE"
 
 
@@ -140,6 +142,7 @@ class PopulationMembershipArtifacts:
     matched_static_reference_membership: pl.DataFrame | None
     ciciot_excluded_rows: pl.DataFrame | None = None
     ciciot_client_eligibility: pl.DataFrame | None = None
+    model_input_exclusions: ModelInputExclusionEvidence | None = None
 
 
 def _population_membership_artifacts(construction: PopulationConstructionResult) -> PopulationMembershipArtifacts:
@@ -158,6 +161,7 @@ def _population_membership_artifacts(construction: PopulationConstructionResult)
         matched_static_reference_membership=matched_reference.membership if matched_reference is not None else None,
         ciciot_excluded_rows=evidence.excluded_rows if evidence is not None else None,
         ciciot_client_eligibility=evidence.client_eligibility if evidence is not None else None,
+        model_input_exclusions=construction.model_input_exclusions,
     )
 
 
@@ -183,6 +187,7 @@ class ConstructPublishedPopulationResult:
     complete_digest: Checksum
     ciciot_excluded_rows: pl.DataFrame | None = None
     ciciot_client_eligibility: pl.DataFrame | None = None
+    model_input_exclusions: ModelInputExclusionEvidence | None = None
 
 
 @dataclass(slots=True, eq=False)
@@ -236,6 +241,7 @@ def construct_published_population(
         complete_digest=publication.complete_digest,
         ciciot_excluded_rows=published.ciciot_excluded_rows,
         ciciot_client_eligibility=published.ciciot_client_eligibility,
+        model_input_exclusions=published.model_input_exclusions,
     )
 
 
@@ -251,6 +257,8 @@ def _population_membership_digest(
         sections.append(canonical_json_text(artifacts.chronology))
     if artifacts.matched_static_reference_manifest is not None:
         sections.append(canonical_json_text(artifacts.matched_static_reference_manifest.document))
+    if artifacts.model_input_exclusions is not None:
+        sections.append(canonical_json_text(artifacts.model_input_exclusions))
     return Checksum.from_text("\n".join(sections))
 
 
@@ -425,6 +433,11 @@ def _write_population_membership(
         artifacts.ciciot_client_eligibility.write_parquet(
             directory / PopulationPublicationAsset.CICIOT_CLIENT_ELIGIBILITY
         )
+    if artifacts.model_input_exclusions is not None:
+        serialize_json_model(
+            artifacts.model_input_exclusions,
+            directory / PopulationPublicationAsset.MODEL_INPUT_EXCLUSIONS,
+        )
     (directory / PopulationPublicationAsset.COMPLETE).write_text(publication.digest.value, encoding="utf-8")
     return artifacts
 
@@ -484,6 +497,11 @@ def _matches_population_artifacts(
         return False
     if expected.chronology is not None and not _matches_chronology(directory, expected.chronology):
         return False
+    if expected.model_input_exclusions is not None and not _matches_model_input_exclusions(
+        directory,
+        expected.model_input_exclusions,
+    ):
+        return False
     if expected.matched_static_reference_manifest is None:
         return _matches_ciciot_evidence(directory, expected)
     return _matches_static_reference(directory, expected.matched_static_reference_manifest)
@@ -500,6 +518,19 @@ def _matches_ciciot_evidence(directory: Path, expected: PopulationMembershipArti
     return excluded_rows.equals(expected.ciciot_excluded_rows) and client_evidence.equals(
         expected.ciciot_client_eligibility
     )
+
+
+def _matches_model_input_exclusions(
+    directory: Path,
+    expected: ModelInputExclusionEvidence,
+) -> bool:
+    try:
+        persisted = ModelInputExclusionEvidence.model_validate_json(
+            (directory / PopulationPublicationAsset.MODEL_INPUT_EXCLUSIONS).read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError):
+        return False
+    return persisted == expected
 
 
 def _matches_chronology(

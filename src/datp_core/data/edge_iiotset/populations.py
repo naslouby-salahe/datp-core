@@ -18,6 +18,7 @@ from datp_core.core.identifiers import (
     PopulationId,
     PopulationIdentityKind,
     SplitProtocolId,
+    StableRowId,
 )
 from datp_core.core.numeric import NonNegativeIntegerValue, RowCount, Seed, ValidationIssueCount
 from datp_core.data.contracts import (
@@ -29,6 +30,7 @@ from datp_core.data.contracts import (
 from datp_core.data.edge_iiotset.capabilities import EDGE_IIOTSET_CAPABILITIES, EDGE_TEMPORAL_SENSOR_GROUPS
 from datp_core.data.edge_iiotset.schema import (
     EDGE_BENIGN_SENSOR_GROUPS,
+    EDGE_NUMERIC_FEATURE_COLUMNS,
     EDGE_SCHEMA,
     EdgeAssetRole,
     EdgeCanonicalColumn,
@@ -46,12 +48,15 @@ from datp_core.data.populations.contracts import (
     ChronologicalPartitionDiagnosticsDocument,
     ChronologyExclusionReason,
     MatchedReferencePopulation,
+    ModelInputExclusionEvidence,
+    ModelInputExclusionReason,
     PopulationConstructionResult,
     PopulationManifest,
     PopulationOutcomeLabel,
     build_population_capabilities,
     population_evidence_role,
     select_membership_frame,
+    model_input_exclusion_checksum,
 )
 from datp_core.data.populations.paths import PartitioningFilePattern, canonical_branch_directory
 
@@ -86,7 +91,7 @@ def construct_edge_sensor_groups(
             subject=_SENSOR_POPULATION,
             reason=EdgeIIoTPopulationViolation.STATIC_GROUPS_FORBID_CHRONOLOGICAL_SPLITS,
         )
-    membership = _load_static_membership(canonical_root)
+    membership, model_input_exclusions = _load_static_membership(canonical_root)
     observed = tuple(
         ClientIdentityToken(value) for value in membership.get_column(CLIENT_ID_COLUMN).unique().sort().to_list()
     )
@@ -125,7 +130,12 @@ def construct_edge_sensor_groups(
             canonical_schema_checksum=EDGE_SCHEMA.checksum,
         )
     )
-    return PopulationConstructionResult(manifest, membership, None)
+    return PopulationConstructionResult(
+        manifest,
+        membership,
+        None,
+        model_input_exclusions=model_input_exclusions,
+    )
 
 
 def construct_edge_temporal_groups(
@@ -143,7 +153,11 @@ def construct_edge_temporal_groups(
         )
     eligible_ids, excluded_ids, exclusion_reasons, duplicate_timestamps = _chronology_eligibility(canonical_root)
     programme_candidates = tuple(ChronologyGroupIdentity(str(group)) for group in sorted(EDGE_TEMPORAL_SENSOR_GROUPS))
-    membership = _load_temporal_membership(canonical_root, eligible_ids) if eligible_ids else _empty_membership()
+    membership, model_input_exclusions = (
+        _load_temporal_membership(canonical_root, eligible_ids)
+        if eligible_ids
+        else (_empty_membership(), _empty_model_input_exclusions(_TEMPORAL_POPULATION))
+    )
     diagnostics = ChronologicalPartitionDiagnosticsDocument(
         population=_TEMPORAL_POPULATION,
         expected_group_count=EDGE_TEMPORAL_GROUPS.client_count,
@@ -177,6 +191,7 @@ def construct_edge_temporal_groups(
         membership,
         diagnostics,
         MatchedReferencePopulation(static_reference_manifest, static_reference_membership),
+        model_input_exclusions=model_input_exclusions,
     )
 
 
@@ -261,7 +276,7 @@ def _chronology_for_group(
     return None
 
 
-def _load_static_membership(canonical_root: Path) -> pl.DataFrame:
+def _load_static_membership(canonical_root: Path) -> tuple[pl.DataFrame, ModelInputExclusionEvidence]:
     paths = sorted(
         canonical_branch_directory(canonical_root, EdgeAssetRole.STATIC_BENIGN).glob(PartitioningFilePattern.PARQUET)
     )
@@ -271,7 +286,7 @@ def _load_static_membership(canonical_root: Path) -> pl.DataFrame:
             subject=_SENSOR_POPULATION,
             reason=EdgeIIoTPopulationViolation.MISSING_STATIC_BENIGN_ASSETS,
         )
-    frame = (
+    return _model_input_eligible_membership(
         pl.scan_parquet([str(path) for path in paths])
         .select(
             pl.col(_GROUP).alias(CLIENT_ID_COLUMN),
@@ -279,14 +294,17 @@ def _load_static_membership(canonical_root: Path) -> pl.DataFrame:
             pl.col(CanonicalProvenanceColumn.SOURCE_PATH).alias(SOURCE_PATH_COLUMN),
             pl.col(CanonicalProvenanceColumn.SOURCE_ROW_INDEX).alias(SOURCE_ROW_INDEX_COLUMN),
             pl.lit(PopulationOutcomeLabel.BENIGN.value).alias(OUTCOME_LABEL_COLUMN),
-        )
-        .collect(engine="streaming")
-        .sort([CLIENT_ID_COLUMN, STABLE_ROW_ID_COLUMN])
+            _finite_model_input_expression().alias("__model_input_eligible"),
+        ),
+        population=_SENSOR_POPULATION,
+        sort_columns=(CLIENT_ID_COLUMN, STABLE_ROW_ID_COLUMN),
+        membership_only=True,
     )
-    return select_membership_frame(frame)
 
 
-def _load_temporal_membership(canonical_root: Path, eligible_ids: tuple[ChronologyGroupIdentity, ...]) -> pl.DataFrame:
+def _load_temporal_membership(
+    canonical_root: Path, eligible_ids: tuple[ChronologyGroupIdentity, ...]
+) -> tuple[pl.DataFrame, ModelInputExclusionEvidence]:
     temporal_root = canonical_branch_directory(canonical_root, EdgeAssetRole.TEMPORAL_BENIGN)
     paths = tuple(temporal_root / f"{group_id}.parquet" for group_id in eligible_ids)
     missing = tuple(path.name for path in paths if not path.is_file())
@@ -296,7 +314,7 @@ def _load_temporal_membership(canonical_root: Path, eligible_ids: tuple[Chronolo
             subject=_TEMPORAL_POPULATION,
             reason=EdgeIIoTPopulationViolation.MISSING_TEMPORAL_BENIGN_ASSETS,
         )
-    frame = (
+    frame, evidence = _model_input_eligible_membership(
         pl.scan_parquet([str(path) for path in paths])
         .select(
             pl.col(_GROUP).alias(CLIENT_ID_COLUMN),
@@ -305,9 +323,11 @@ def _load_temporal_membership(canonical_root: Path, eligible_ids: tuple[Chronolo
             pl.col(CanonicalProvenanceColumn.SOURCE_ROW_INDEX).alias(SOURCE_ROW_INDEX_COLUMN),
             pl.col(_CAPTURE),
             pl.lit(PopulationOutcomeLabel.BENIGN.value).alias(OUTCOME_LABEL_COLUMN),
-        )
-        .collect(engine="streaming")
-        .sort([CLIENT_ID_COLUMN, _CAPTURE, SOURCE_ROW_INDEX_COLUMN, STABLE_ROW_ID_COLUMN])
+            _finite_model_input_expression().alias("__model_input_eligible"),
+        ),
+        population=_TEMPORAL_POPULATION,
+        sort_columns=(CLIENT_ID_COLUMN, _CAPTURE, SOURCE_ROW_INDEX_COLUMN, STABLE_ROW_ID_COLUMN),
+        membership_only=False,
     )
     if frame.get_column(_CAPTURE).null_count() > 0:
         raise ScientificContractError(
@@ -315,7 +335,73 @@ def _load_temporal_membership(canonical_root: Path, eligible_ids: tuple[Chronolo
             subject=_TEMPORAL_POPULATION,
             reason=EdgeIIoTPopulationViolation.NULL_TEMPORAL_CAPTURE_TIMESTAMPS,
         )
-    return frame
+    return frame, evidence
+
+
+def _finite_model_input_expression() -> pl.Expr:
+    feature_columns = tuple(column.value for column in EDGE_NUMERIC_FEATURE_COLUMNS)
+    return pl.all_horizontal(
+        tuple(pl.col(column).cast(pl.Float64, strict=True).is_finite().fill_null(False) for column in feature_columns)
+    )
+
+
+def _model_input_eligible_membership(
+    candidate_rows: pl.LazyFrame,
+    *,
+    population: PopulationId,
+    sort_columns: tuple[object, ...],
+    membership_only: bool,
+) -> tuple[pl.DataFrame, ModelInputExclusionEvidence]:
+    """Apply the immutable feature gate before a row can enter membership or a split."""
+    annotated = candidate_rows.collect(engine="streaming")
+    eligible = annotated.filter(pl.col("__model_input_eligible")).drop("__model_input_eligible")
+    excluded_ids = tuple(
+        StableRowId(str(value))
+        for value in annotated.filter(~pl.col("__model_input_eligible"))
+        .get_column(STABLE_ROW_ID_COLUMN)
+        .sort()
+        .to_list()
+    )
+    total_rows = RowCount(annotated.height)
+    reason = ModelInputExclusionReason.NONFINITE_OR_NULL_NUMERIC_MODEL_INPUT_FEATURE
+    evidence = ModelInputExclusionEvidence(
+        dataset=DatasetId.EDGE_IIOTSET,
+        population=population,
+        reason=reason,
+        total_row_count=total_rows,
+        excluded_row_count=RowCount(len(excluded_ids)),
+        excluded_stable_row_ids=excluded_ids,
+        evidence_checksum=model_input_exclusion_checksum(
+            dataset=DatasetId.EDGE_IIOTSET,
+            population=population,
+            reason=reason,
+            total_row_count=total_rows,
+            excluded_stable_row_ids=excluded_ids,
+        ),
+    )
+    membership = select_membership_frame(eligible) if membership_only else eligible
+    return membership.sort(sort_columns), evidence
+
+
+def _empty_model_input_exclusions(population: PopulationId) -> ModelInputExclusionEvidence:
+    reason = ModelInputExclusionReason.NONFINITE_OR_NULL_NUMERIC_MODEL_INPUT_FEATURE
+    empty_ids: tuple[StableRowId, ...] = ()
+    total_rows = RowCount(0)
+    return ModelInputExclusionEvidence(
+        dataset=DatasetId.EDGE_IIOTSET,
+        population=population,
+        reason=reason,
+        total_row_count=total_rows,
+        excluded_row_count=RowCount(0),
+        excluded_stable_row_ids=empty_ids,
+        evidence_checksum=model_input_exclusion_checksum(
+            dataset=DatasetId.EDGE_IIOTSET,
+            population=population,
+            reason=reason,
+            total_row_count=total_rows,
+            excluded_stable_row_ids=empty_ids,
+        ),
+    )
 
 
 def _empty_membership() -> pl.DataFrame:

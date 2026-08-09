@@ -40,6 +40,7 @@ from datp_core.core.identifiers import (
 from datp_core.core.numeric import MetricValue
 from datp_core.experiments.anchor.contracts import VerifiedAnchorGateArtifact
 from datp_core.presentation.figures import FigureSpec, render_markdown_figure
+from datp_core.presentation.temporal_figures import export_temporal_figure_sources, temporal_publication_figures
 from datp_core.presentation.tables import (
     EvidenceText,
     PublicationTable,
@@ -61,6 +62,23 @@ from datp_core.runtime.filesystem import write_text_atomically
 
 PUBLICATION_FILENAME = "publication.md"
 MECHANISM_REPORT_FILENAME = "mechanism_report.md"
+PUBLICATION_DECIMAL_PLACES = 3
+PUBLICATION_P_VALUE_SIGNIFICANT_DIGITS = 3
+PUBLICATION_P_VALUE_DISPLAY_THRESHOLD = 0.001
+
+
+def format_publication_metric(value: float) -> str:
+    return f"{value:.{PUBLICATION_DECIMAL_PLACES}f}"
+
+
+def _format_publication_metric(value: float) -> str:
+    return format_publication_metric(value)
+
+
+def _format_publication_p_value(value: float) -> str:
+    if value < PUBLICATION_P_VALUE_DISPLAY_THRESHOLD:
+        return "< 0.001"
+    return f"{value:.{PUBLICATION_P_VALUE_SIGNIFICANT_DIGITS}g}"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -220,6 +238,8 @@ def export_external_publication(document: ExternalAnalysisDocument, output_direc
 
 
 def export_temporal_publication(document: TemporalAnalysisDocument, output_directory: Path) -> Path:
+    figures = temporal_publication_figures(document)
+    figure_sources = export_temporal_figure_sources(document, output_directory)
     claim = validate_claim(
         ClaimRequest(
             kind=ClaimKind.TEMPORAL,
@@ -251,15 +271,15 @@ def export_temporal_publication(document: TemporalAnalysisDocument, output_direc
     ]
     for record in document.records:
         recovery = record.recovery
-        ratio = "undefined" if recovery.recovery_ratio is None else f"{recovery.recovery_ratio.value:.6g}"
-        mean_static = "—" if recovery.mean_fpr_static is None else f"{recovery.mean_fpr_static.value:.6g}"
-        mean_frozen = "—" if recovery.mean_fpr_frozen is None else f"{recovery.mean_fpr_frozen.value:.6g}"
-        mean_recal = "—" if recovery.mean_fpr_recalibrated is None else f"{recovery.mean_fpr_recalibrated.value:.6g}"
+        ratio = "undefined" if recovery.recovery_ratio is None else _format_publication_metric(recovery.recovery_ratio.value)
+        mean_static = "—" if recovery.mean_fpr_static is None else _format_publication_metric(recovery.mean_fpr_static.value)
+        mean_frozen = "—" if recovery.mean_fpr_frozen is None else _format_publication_metric(recovery.mean_fpr_frozen.value)
+        mean_recal = "—" if recovery.mean_fpr_recalibrated is None else _format_publication_metric(recovery.mean_fpr_recalibrated.value)
         lines.append(
-            f"| {recovery.seed.value} | {recovery.static_reference_cv.value:.6g} | "
-            f"{recovery.frozen_future_cv.value:.6g} | {recovery.recalibrated_future_cv.value:.6g} | "
+            f"| {recovery.seed.value} | {_format_publication_metric(recovery.static_reference_cv.value)} | "
+            f"{_format_publication_metric(recovery.frozen_future_cv.value)} | {_format_publication_metric(recovery.recalibrated_future_cv.value)} | "
             f"{mean_static} | {mean_frozen} | {mean_recal} | "
-            f"{recovery.drift_excess.value:.6g} | {recovery.recovered_amount.value:.6g} | "
+            f"{_format_publication_metric(recovery.drift_excess.value)} | {_format_publication_metric(recovery.recovered_amount.value)} | "
             f"{ratio} | `{record.interpretation.value}` |"
         )
     lines.extend(["", "## Per-seed provenance", ""])
@@ -291,6 +311,22 @@ def export_temporal_publication(document: TemporalAnalysisDocument, output_direc
                 f"fpr_recal={_optional_metric(trajectory.fpr_recalibrated)}"
             )
     lines.append("")
+    lines.extend(
+        [
+            "## Figure reproduction sources",
+            "",
+            (
+                f"- `FIGURE-011`: `{figure_sources.fpr_trajectory_source.name}` "
+                f"(checksum=`{figure_sources.fpr_trajectory_checksum.value}`)"
+            ),
+            (
+                f"- `FIGURE-012`: `{figure_sources.threshold_movement_source.name}` "
+                f"(checksum=`{figure_sources.threshold_movement_checksum.value}`)"
+            ),
+            f"- provenance manifest: `{figure_sources.manifest.name}`",
+            "",
+        ]
+    )
     write_text_atomically(output_directory / "temporal_analysis_report.md", FileContentText("\n".join(lines)))
     return export_markdown(
         PublicationBundle(
@@ -318,7 +354,7 @@ def export_temporal_publication(document: TemporalAnalysisDocument, output_direc
                     ),
                 ),
             ),
-            figures=(),
+            figures=figures,
         ),
         output_directory / PUBLICATION_FILENAME,
     )
@@ -407,7 +443,7 @@ def _render_analysis_sections(
 def _render_decision(
     decision: ScientificDecisionResult,
 ) -> list[ReportLine]:
-    point = f"{decision.point_estimate.value:.6g}" if decision.point_estimate else "unavailable"
+    point = _format_publication_metric(decision.point_estimate.value) if decision.point_estimate else "unavailable"
     return [
         ReportLine(line)
         for line in [
@@ -427,9 +463,9 @@ def _render_decision(
 def _render_interval(
     interval: BootstrapInterval,
 ) -> list[ReportLine]:
-    lower = f"{interval.lower_bound.value:.6g}" if interval.lower_bound else "unavailable"
-    point = f"{interval.point_estimate.value:.6g}" if interval.point_estimate else "unavailable"
-    upper = f"{interval.upper_bound.value:.6g}" if interval.upper_bound else "unavailable"
+    lower = _format_publication_metric(interval.lower_bound.value) if interval.lower_bound else "unavailable"
+    point = _format_publication_metric(interval.point_estimate.value) if interval.point_estimate else "unavailable"
+    upper = _format_publication_metric(interval.upper_bound.value) if interval.upper_bound else "unavailable"
     lines = [
         "## BCa Bootstrap Interval",
         "",
@@ -444,8 +480,8 @@ def _render_interval(
     if interval.reason:
         lines.append(f"Reason: {interval.reason.value}")
     if interval.adjustment is not None:
-        lines.append(f"Bias correction: {interval.adjustment.bias_correction.value:.6g}")
-        lines.append(f"Acceleration: {interval.adjustment.acceleration.value:.6g}")
+        lines.append(f"Bias correction: {_format_publication_metric(interval.adjustment.bias_correction.value)}")
+        lines.append(f"Acceleration: {_format_publication_metric(interval.adjustment.acceleration.value)}")
     return [ReportLine(line) for line in [*lines, ""]]
 
 
@@ -464,10 +500,10 @@ def _render_descriptive(
             f"Excluded: {descriptive.counts.excluded.value} | Unavailable: {descriptive.counts.unavailable.value}"
         )
     if descriptive.statistics:
-        lines.append(f"Mean: {descriptive.statistics.mean.value:.6g}")
-        lines.append(f"Median: {descriptive.statistics.median.value:.6g}")
-        lines.append(f"Min: {descriptive.statistics.minimum.value:.6g}")
-        lines.append(f"Max: {descriptive.statistics.maximum.value:.6g}")
+        lines.append(f"Mean: {_format_publication_metric(descriptive.statistics.mean.value)}")
+        lines.append(f"Median: {_format_publication_metric(descriptive.statistics.median.value)}")
+        lines.append(f"Min: {_format_publication_metric(descriptive.statistics.minimum.value)}")
+        lines.append(f"Max: {_format_publication_metric(descriptive.statistics.maximum.value)}")
     if descriptive.reason:
         lines.append(f"Reason: {descriptive.reason}")
     return [ReportLine(line) for line in [*lines, ""]]
@@ -488,9 +524,9 @@ def _render_wilcoxon(
     if wilcoxon.zero_method is not None:
         lines.append(f"Zero handling: `{wilcoxon.zero_method.value}`")
     if wilcoxon.statistic:
-        lines.append(f"Statistic: {wilcoxon.statistic.value:.6g}")
+        lines.append(f"Statistic: {_format_publication_metric(wilcoxon.statistic.value)}")
     if wilcoxon.p_value:
-        lines.append(f"P-value: {wilcoxon.p_value.value:.6g}")
+        lines.append(f"P-value: {_format_publication_p_value(wilcoxon.p_value.value)}")
     if wilcoxon.computation_method:
         lines.append(f"Executed method: `{wilcoxon.computation_method.value}`")
     if wilcoxon.fallback_reason:
@@ -510,11 +546,11 @@ def _render_rank_biserial(
         f"Nonzero pairs: {rb.nonzero_pair_count.value}",
     ]
     if rb.value:
-        lines.append(f"Correlation: {rb.value.value:.6g}")
+        lines.append(f"Correlation: {_format_publication_metric(rb.value.value)}")
     if rb.positive_rank_sum:
-        lines.append(f"Positive rank sum: {rb.positive_rank_sum.value:.6g}")
+        lines.append(f"Positive rank sum: {_format_publication_metric(rb.positive_rank_sum.value)}")
     if rb.negative_rank_sum:
-        lines.append(f"Negative rank sum: {rb.negative_rank_sum.value:.6g}")
+        lines.append(f"Negative rank sum: {_format_publication_metric(rb.negative_rank_sum.value)}")
     if rb.reason:
         lines.append(f"Reason: {rb.reason}")
     return [ReportLine(line) for line in [*lines, ""]]
@@ -546,8 +582,8 @@ def _render_paired_contrasts(contrasts: PairedContrasts) -> list[ReportLine]:
     ]
     for contrast in contrasts.values:
         lines.append(
-            f"| {contrast.seed.value} | {contrast.left_value.value:.6g} | "
-            f"{contrast.right_value.value:.6g} | {contrast.delta.value:.6g} | "
+            f"| {contrast.seed.value} | {_format_publication_metric(contrast.left_value.value)} | "
+            f"{_format_publication_metric(contrast.right_value.value)} | {_format_publication_metric(contrast.delta.value)} | "
             f"`{contrast.fixed_score.model_checksum.value[:12]}` | "
             f"`{contrast.fixed_score.selected_checkpoint_checksum.value[:12]}` |"
         )
@@ -573,7 +609,8 @@ def _render_multiplicity(
         lines.append(
             f"| `{hypothesis.hypothesis_id}` | `{hypothesis.experiment.value}` | "
             f"`{hypothesis.metric.value}` | {hypothesis.comparison} | "
-            f"{decision.raw_p_value.value:.6g} | {decision.adjusted_p_value.value:.6g} | {rej} |"
+            f"{_format_publication_p_value(decision.raw_p_value.value)} | "
+            f"{_format_publication_p_value(decision.adjusted_p_value.value)} | {rej} |"
         )
     return [ReportLine(line) for line in [*lines, ""]]
 
@@ -620,10 +657,11 @@ def _mechanism_tables(mechanisms: tuple[MechanismEvidence, ...]) -> tuple[Public
                     TableCell(
                         metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
                         availability=mechanism.availability,
-                        rendered_value=TableCellRenderedValue(f"{stats.spearman_rho.value:.6g}"),
+                        rendered_value=TableCellRenderedValue(_format_publication_metric(stats.spearman_rho.value)),
                         evidence=EvidenceText(
                             f"Spearman association n={mechanism.observation_count.value}; "
-                            f"slope={stats.regression_slope.value:.6g}; R²={stats.r_squared.value:.6g}; "
+                            f"slope={_format_publication_metric(stats.regression_slope.value)}; "
+                            f"R²={_format_publication_metric(stats.r_squared.value)}; "
                             f"sufficient={stats.evidentiary_sufficient}"
                         ),
                     )
@@ -633,7 +671,7 @@ def _mechanism_tables(mechanisms: tuple[MechanismEvidence, ...]) -> tuple[Public
                     TableCell(
                         metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
                         availability=mechanism.availability,
-                        rendered_value=TableCellRenderedValue(f"{mechanism.aggregate.value:.6g}"),
+                        rendered_value=TableCellRenderedValue(_format_publication_metric(mechanism.aggregate.value)),
                         evidence=EvidenceText(
                             f"mean pairwise JS distance (base-2), clients={len(mechanism.clients)}, "
                             f"bins={mechanism.protocol.bin_count.value}"
@@ -642,7 +680,7 @@ def _mechanism_tables(mechanisms: tuple[MechanismEvidence, ...]) -> tuple[Public
                 )
             case ThresholdMovementCohort() if mechanism.mean_delta_fpr is not None:
                 dispersion = (
-                    f"{mechanism.client_dispersion_delta_fpr.value:.6g}"
+                    _format_publication_metric(mechanism.client_dispersion_delta_fpr.value)
                     if mechanism.client_dispersion_delta_fpr is not None
                     else "unavailable"
                 )
@@ -650,7 +688,7 @@ def _mechanism_tables(mechanisms: tuple[MechanismEvidence, ...]) -> tuple[Public
                     TableCell(
                         metric=MetricId.MEAN_FPR,
                         availability=mechanism.availability,
-                        rendered_value=TableCellRenderedValue(f"{mechanism.mean_delta_fpr.value:.6g}"),
+                        rendered_value=TableCellRenderedValue(_format_publication_metric(mechanism.mean_delta_fpr.value)),
                         evidence=EvidenceText(
                             f"mean ΔFPR; client_dispersion={dispersion}; n={len(mechanism.movements)}"
                         ),
@@ -661,7 +699,7 @@ def _mechanism_tables(mechanisms: tuple[MechanismEvidence, ...]) -> tuple[Public
                     TableCell(
                         metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
                         availability=AvailabilityStatus.AVAILABLE,
-                        rendered_value=TableCellRenderedValue(f"{mechanism.mean_retention.value:.6g}"),
+                        rendered_value=TableCellRenderedValue(_format_publication_metric(mechanism.mean_retention.value)),
                         evidence=EvidenceText(
                             f"mean CV(FPR) retention; decision={mechanism.decision.decision.value}; "
                             f"seeds={len(mechanism.observations)}; "
@@ -674,7 +712,9 @@ def _mechanism_tables(mechanisms: tuple[MechanismEvidence, ...]) -> tuple[Public
                     TableCell(
                         metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
                         availability=mechanism.availability,
-                        rendered_value=TableCellRenderedValue(f"{mechanism.cv_fpr_equity_recovery.fraction.value:.6g}"),
+                        rendered_value=TableCellRenderedValue(
+                            _format_publication_metric(mechanism.cv_fpr_equity_recovery.fraction.value)
+                        ),
                         evidence=EvidenceText(
                             f"CV(FPR) equity recovery; empty_clusters={len(mechanism.partition.empty_groups)}; "
                             f"seed={mechanism.seed.value}"
@@ -705,14 +745,20 @@ def _render_association_result(mechanism: AssociationResult) -> list[ReportLine]
         interval = stats.regression_slope_confidence_interval
         lines.extend(
             [
-                f"Spearman rho: {stats.spearman_rho.value:.6g}",
-                f"Spearman p: {stats.spearman_p_value.value:.6g}",
-                f"Intercept: {stats.regression_intercept.value:.6g}",
-                f"Slope: {stats.regression_slope.value:.6g} (SE {stats.regression_slope_standard_error.value:.6g})",
-                f"Slope CI: [{interval.lower_bound.value:.6g}, {interval.upper_bound.value:.6g}]",
-                f"R²: {stats.r_squared.value:.6g}",
-                f"Leverage: {', '.join(f'{value.value:.6g}' for value in stats.leverage)}",
-                "Influence: " + ", ".join(f"{value.value:.6g}" for value in stats.leave_one_out_diagnostics.influences),
+                f"Spearman rho: {_format_publication_metric(stats.spearman_rho.value)}",
+                f"Spearman p: {_format_publication_p_value(stats.spearman_p_value.value)}",
+                f"Intercept: {_format_publication_metric(stats.regression_intercept.value)}",
+                f"Slope: {_format_publication_metric(stats.regression_slope.value)} "
+                f"(SE {_format_publication_metric(stats.regression_slope_standard_error.value)})",
+                f"Slope CI: [{_format_publication_metric(interval.lower_bound.value)}, "
+                f"{_format_publication_metric(interval.upper_bound.value)}]",
+                f"R²: {_format_publication_metric(stats.r_squared.value)}",
+                f"Leverage: {', '.join(_format_publication_metric(value.value) for value in stats.leverage)}",
+                "Influence: "
+                + ", ".join(
+                    _format_publication_metric(value.value)
+                    for value in stats.leave_one_out_diagnostics.influences
+                ),
                 f"Evidentiary sufficient: {stats.evidentiary_sufficient}",
             ]
         )
@@ -729,19 +775,19 @@ def _render_divergence_result(mechanism: DivergenceResult) -> list[ReportLine]:
         f"Score source: `{mechanism.protocol.score_source.value}`",
         f"Shared support: `{mechanism.protocol.shared_support.value}`",
         f"Binning: `{mechanism.protocol.binning.value}` bins={mechanism.protocol.bin_count.value}",
-        f"Smoothing: {mechanism.protocol.smoothing_constant.value:.6g}",
+        f"Smoothing: {_format_publication_metric(mechanism.protocol.smoothing_constant.value)}",
         f"Log base: `{mechanism.protocol.logarithm_base.value}`",
         f"Aggregation: `{mechanism.protocol.aggregation.value}`",
     ]
     if mechanism.source_score_checksum is not None:
         lines.append(f"Source score checksum: `{mechanism.source_score_checksum.value}`")
     if mechanism.aggregate is not None:
-        lines.append(f"Aggregate JS distance: {mechanism.aggregate.value:.6g}")
+        lines.append(f"Aggregate JS distance: {_format_publication_metric(mechanism.aggregate.value)}")
         lines.append(
             "Pairwise values: "
             + ", ".join(
                 f"{distance.left_client.client_id.value}/{distance.right_client.client_id.value}="
-                f"{distance.value.value:.6g}"
+                f"{_format_publication_metric(distance.value.value)}"
                 for distance in mechanism.pairwise_distances
             )
         )
@@ -755,7 +801,7 @@ def _render_cluster_stability_result(mechanism: ClusterStabilityResult) -> list[
     return [
         ReportLine(line)
         for line in [
-            f"ARI: {mechanism.adjusted_rand_index.value:.6g}",
+            f"ARI: {_format_publication_metric(mechanism.adjusted_rand_index.value)}",
             f"Clients: {len(mechanism.compared_clients)}",
             f"Left singletons: {len(mechanism.left_partition.singleton_groups)}",
             f"Right empty groups: {len(mechanism.right_partition.empty_groups)}",
@@ -766,22 +812,22 @@ def _render_cluster_stability_result(mechanism: ClusterStabilityResult) -> list[
 @_render_one_mechanism.register
 def _render_cluster_evidence_record(mechanism: ClusterEvidenceRecord) -> list[ReportLine]:
     equity = (
-        f"{mechanism.cv_fpr_equity_recovery.fraction.value:.6g}"
+        _format_publication_metric(mechanism.cv_fpr_equity_recovery.fraction.value)
         if mechanism.cv_fpr_equity_recovery.fraction is not None
         else mechanism.cv_fpr_equity_recovery.reason
     )
     threshold_recovery = (
-        f"{mechanism.threshold_dispersion_recovery.fraction.value:.6g}"
+        _format_publication_metric(mechanism.threshold_dispersion_recovery.fraction.value)
         if mechanism.threshold_dispersion_recovery.fraction is not None
         else mechanism.threshold_dispersion_recovery.reason
     )
     contributing = (
-        f"{mechanism.contributing_quantile_dispersion.value:.6g}"
+        _format_publication_metric(mechanism.contributing_quantile_dispersion.value)
         if mechanism.contributing_quantile_dispersion is not None
         else (mechanism.dispersion_unavailable_reason or "unavailable")
     )
     effective = (
-        f"{mechanism.effective_threshold_dispersion.value:.6g}"
+        _format_publication_metric(mechanism.effective_threshold_dispersion.value)
         if mechanism.effective_threshold_dispersion is not None
         else (mechanism.dispersion_unavailable_reason or "unavailable")
     )
@@ -810,7 +856,8 @@ def _render_grouped_dispersion_result(mechanism: GroupedDispersionResult) -> lis
             f"Singletons: {sum(group.size.value == 1 for group in mechanism.groups)}",
             f"Empty: {sum(group.size.value == 0 for group in mechanism.groups)}",
             (
-                f"Across-group threshold spread: {mechanism.across_group_threshold_spread.value:.6g}"
+                f"Across-group threshold spread: "
+                f"{_format_publication_metric(mechanism.across_group_threshold_spread.value)}"
                 if mechanism.across_group_threshold_spread is not None
                 else f"Reason: {mechanism.reason}"
             ),
@@ -820,14 +867,14 @@ def _render_grouped_dispersion_result(mechanism: GroupedDispersionResult) -> lis
 
 @_render_one_mechanism.register
 def _render_threshold_movement(mechanism: ThresholdMovement) -> list[ReportLine]:
-    delta_tpr = f"{mechanism.delta_tpr.value:.6g}" if mechanism.delta_tpr is not None else "unavailable"
+    delta_tpr = _format_publication_metric(mechanism.delta_tpr.value) if mechanism.delta_tpr is not None else "unavailable"
     return [
         ReportLine(line)
         for line in [
             f"Client: `{mechanism.client.client_id.value}`",
             f"Seed: {mechanism.seed.value}",
-            f"Δ threshold: {mechanism.delta_threshold.value:.6g}",
-            f"Δ FPR: {mechanism.delta_fpr.value:.6g}",
+            f"Δ threshold: {_format_publication_metric(mechanism.delta_threshold.value)}",
+            f"Δ FPR: {_format_publication_metric(mechanism.delta_fpr.value)}",
             f"Δ TPR: {delta_tpr}",
         ]
     ]
@@ -836,7 +883,7 @@ def _render_threshold_movement(mechanism: ThresholdMovement) -> list[ReportLine]
 @_render_one_mechanism.register
 def _render_threshold_movement_cohort(mechanism: ThresholdMovementCohort) -> list[ReportLine]:
     dispersion = (
-        f"{mechanism.client_dispersion_delta_fpr.value:.6g}"
+        _format_publication_metric(mechanism.client_dispersion_delta_fpr.value)
         if mechanism.client_dispersion_delta_fpr is not None
         else "unavailable"
     )
@@ -846,7 +893,7 @@ def _render_threshold_movement_cohort(mechanism: ThresholdMovementCohort) -> lis
             f"Movements: {len(mechanism.movements)}",
             f"Availability: `{mechanism.availability.value}`",
             (
-                f"Mean Δ FPR: {mechanism.mean_delta_fpr.value:.6g}"
+                f"Mean Δ FPR: {_format_publication_metric(mechanism.mean_delta_fpr.value)}"
                 if mechanism.mean_delta_fpr is not None
                 else f"Reason: {mechanism.reason}"
             ),
@@ -858,12 +905,12 @@ def _render_threshold_movement_cohort(mechanism: ThresholdMovementCohort) -> lis
 @_render_one_mechanism.register
 def _render_threshold_movement_uncertainty(mechanism: ThresholdMovementMultiSeedUncertainty) -> list[ReportLine]:
     across = (
-        f"{mechanism.across_seed_dispersion_delta_fpr.value:.6g}"
+        _format_publication_metric(mechanism.across_seed_dispersion_delta_fpr.value)
         if mechanism.across_seed_dispersion_delta_fpr is not None
         else "unavailable"
     )
     mean = (
-        f"{mechanism.mean_of_seed_mean_delta_fpr.value:.6g}"
+        _format_publication_metric(mechanism.mean_of_seed_mean_delta_fpr.value)
         if mechanism.mean_of_seed_mean_delta_fpr is not None
         else "unavailable"
     )
@@ -882,7 +929,8 @@ def _render_threshold_movement_uncertainty(mechanism: ThresholdMovementMultiSeed
 def _render_absorption_cohort_result(mechanism: AbsorptionCohortResult) -> list[ReportLine]:
     retention_interval = mechanism.retention_interval
     retention_bca = (
-        f"BCa[{retention_interval.lower_bound.value:.6g}, {retention_interval.upper_bound.value:.6g}]"
+        f"BCa[{_format_publication_metric(retention_interval.lower_bound.value)}, "
+        f"{_format_publication_metric(retention_interval.upper_bound.value)}]"
         if retention_interval is not None
         and retention_interval.lower_bound is not None
         and retention_interval.upper_bound is not None
@@ -895,7 +943,7 @@ def _render_absorption_cohort_result(mechanism: AbsorptionCohortResult) -> list[
             f"Decision: `{mechanism.decision.decision.value}`",
             f"Rationale: {mechanism.decision.rationale}",
             (
-                f"Mean retention: {mechanism.mean_retention.value:.6g}"
+                f"Mean retention: {_format_publication_metric(mechanism.mean_retention.value)}"
                 if mechanism.mean_retention is not None
                 else "Mean retention: unavailable"
             ),
@@ -918,7 +966,7 @@ def _render_scientific_decision_result(mechanism: ScientificDecisionResult) -> l
 
 
 def _interval_table(interval: BootstrapInterval) -> PublicationTable:
-    point = f"{interval.point_estimate.value:.6g}" if interval.point_estimate else ""
+    point = _format_publication_metric(interval.point_estimate.value) if interval.point_estimate else ""
     evidence = f"BCa outcome={interval.outcome.value}"
     if interval.reason is not None:
         evidence = f"{evidence} reason={interval.reason.value}"
@@ -936,8 +984,8 @@ def _interval_table(interval: BootstrapInterval) -> PublicationTable:
 
 
 def _wilcoxon_table(wilcoxon: WilcoxonResult, rank_biserial: RankBiserialResult) -> PublicationTable:
-    p_value = f"{wilcoxon.p_value.value:.6g}" if wilcoxon.p_value else ""
-    effect = f"{rank_biserial.value.value:.6g}" if rank_biserial.value else ""
+    p_value = _format_publication_p_value(wilcoxon.p_value.value) if wilcoxon.p_value else ""
+    effect = _format_publication_metric(rank_biserial.value.value) if rank_biserial.value else ""
     return PublicationTable(
         title=TableTitle("Secondary paired inference"),
         cells=(
@@ -980,7 +1028,11 @@ def _paired_values_table(document: AnalysisDocument) -> PublicationTable:
         else AvailabilityStatus.UNAVAILABLE
     )
     point = document.interval.point_estimate
-    rendered_value = f"{point.value:.6g}" if point is not None and availability is AvailabilityStatus.AVAILABLE else ""
+    rendered_value = (
+        _format_publication_metric(point.value)
+        if point is not None and availability is AvailabilityStatus.AVAILABLE
+        else ""
+    )
     evidence = (
         f"{len(document.contrasts)} paired seeds with fixed-score provenance"
         if availability is AvailabilityStatus.AVAILABLE
@@ -1002,7 +1054,7 @@ def _paired_values_table(document: AnalysisDocument) -> PublicationTable:
 def _optional_metric(
     value: MetricValue | None,
 ) -> ReportLine:
-    return ReportLine("—" if value is None else f"{value.value:.6g}")
+    return ReportLine("—" if value is None else _format_publication_metric(value.value))
 
 
 _SCIENTIFIC_DECISION_EVIDENCE_DECISIONS: dict[ScientificDecision, EvidenceDecision] = {

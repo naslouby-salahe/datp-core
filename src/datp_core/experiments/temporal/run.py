@@ -164,6 +164,12 @@ class TemporalSeedResult:
 
     def __post_init__(self) -> None:
         methods = _common_completed_methods(self.static_reference, self.frozen_future, self.recalibrated_future)
+        _require_matching_temporal_evaluation_cohorts(
+            self.static_reference,
+            self.frozen_future,
+            self.recalibrated_future,
+            methods,
+        )
         if tuple(item.method for item in self.recoveries) != methods:
             raise ValueError("temporal recoveries must follow the completed threshold-method order")
         if any(item.recovery.seed != self.partition_seed for item in self.recoveries):
@@ -456,6 +462,7 @@ def _execute_temporal_states(
     )
     validate_frozen_recalibrated_pair(frozen_provenance, recalibrated_provenance)
     _validate_shared_temporal_detector(static_provenance, frozen_provenance)
+    _require_common_temporal_eligibility_cohort(static_scores, future_scores)
     static = _evaluate_state(
         context=context,
         identity=static_identity,
@@ -487,6 +494,50 @@ def _execute_temporal_states(
         overwrite=overwrite,
     )
     return static, frozen, recalibrated
+
+
+def _require_common_temporal_eligibility_cohort(
+    static_scores: FederatedScoreArtifactManifest,
+    future_scores: FederatedScoreArtifactManifest,
+) -> None:
+    static_clients = frozenset(
+        item.client for item in eligible_calibration_scores(static_scores, PartitionRole.CALIBRATION)
+    )
+    frozen_clients = frozenset(
+        item.client for item in eligible_calibration_scores(future_scores, PartitionRole.CALIBRATION)
+    )
+    recalibrated_clients = frozenset(
+        item.client for item in eligible_calibration_scores(future_scores, PartitionRole.FUTURE_RECALIBRATION)
+    )
+    if static_clients != frozen_clients or frozen_clients != recalibrated_clients:
+        raise ScientificContractError(
+            ErrorMessage("temporal state comparisons require one identical calibration-eligible client cohort"),
+            subject=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
+        )
+
+
+def _require_matching_temporal_evaluation_cohorts(
+    static: TemporalStateResult,
+    frozen: TemporalStateResult,
+    recalibrated: TemporalStateResult,
+    methods: tuple[FederatedThresholdMethod, ...],
+) -> None:
+    for method in methods:
+        outcomes = (
+            static.outcome_for(method),
+            frozen.outcome_for(method),
+            recalibrated.outcome_for(method),
+        )
+        inventories = tuple(item.client_inventory_checksum for item in outcomes)
+        cohorts = tuple(
+            tuple(client.client for client in outcome.clients if client.cohort is EvaluationCohort.FPR_EVALUABLE)
+            for outcome in outcomes
+        )
+        if inventories[0] != inventories[1] or inventories[1] != inventories[2] or cohorts[0] != cohorts[1] or cohorts[1] != cohorts[2]:
+            raise ScientificContractError(
+                ErrorMessage("temporal recovery requires identical FPR-evaluable client cohorts across all states"),
+                subject=method,
+            )
 
 
 def _cluster_aggregation(method: FederatedThresholdMethod) -> ClusterThresholdAggregation | None:

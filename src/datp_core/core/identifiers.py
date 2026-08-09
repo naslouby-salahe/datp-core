@@ -174,6 +174,7 @@ class MetricId(StrEnum):
     MEAN_CLIENT_BALANCED_ACCURACY = "mean_client_balanced_accuracy"
     ABSOLUTE_THRESHOLD_ERROR = "absolute_threshold_error"
     RELATIVE_THRESHOLD_ERROR = "relative_threshold_error"
+    THRESHOLD_VALUE = "threshold_value"
     SIGNED_ATTAINMENT_ERROR = "signed_attainment_error"
     ABSOLUTE_ATTAINMENT_ERROR = "absolute_attainment_error"
     TARGET_COVERAGE = "target_coverage"
