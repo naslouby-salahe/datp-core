@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass, field
 
+from pydantic import ConfigDict
+
 from datp_core.analysis.metrics.cohorts import EvaluationCohortManifest
 from datp_core.analysis.metrics.conformal import ConformalCoverageDiagnostic
 from datp_core.analysis.metrics.fixed_score import FixedScoreEvidence
@@ -126,6 +128,7 @@ class FederatedEvaluationRequest:
 
 
 class FederatedEvaluationDocument(StrictModel):
+    model_config = ConfigDict(revalidate_instances="never")
     stage: StageOperationId
     score_coordinate: FederatedTrainingCoordinate
     score_checkpoint_round: RoundNumber

@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Annotated, Literal, cast, overload
 
-from pydantic import Field, GetCoreSchemaHandler, model_validator
+from pydantic import ConfigDict, Field, GetCoreSchemaHandler, model_validator
 
 from datp_core.core.contracts import StrictModel, sequence_pydantic_schema, validate_non_empty_tuple
 from datp_core.core.errors import (
@@ -75,6 +75,7 @@ class AutoencoderArchitecture(Sequence[FeatureCount]):
 
 
 class AutoencoderProtocol(StrictModel):
+    model_config = ConfigDict(revalidate_instances="never")
     widths: AutoencoderArchitecture
 
     @model_validator(mode="after")

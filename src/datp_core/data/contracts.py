@@ -5,6 +5,7 @@ from enum import StrEnum
 from pathlib import Path
 
 import pyarrow as pa
+from pydantic import ConfigDict
 
 import datp_core.core.identifiers as domain_enums
 from datp_core.artifacts.provenance import Checksum
@@ -476,6 +477,7 @@ def _validate_chronology_counts(validation: ChronologyValidation) -> None:
 
 
 class SchemaChecksumDocument(StrictModel):
+    model_config = ConfigDict(revalidate_instances="never")
     canonicalization_contract: CanonicalizationContractName
     columns: tuple[CanonicalColumn, ...]
     dataset: DatasetId

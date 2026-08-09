@@ -1,6 +1,6 @@
 """Cached orchestration for one federated experiment coordinate."""
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
 
@@ -260,7 +260,23 @@ class ExperimentWorkspace:
         for method in population_capabilities(self.coordinate.population).valid_threshold_methods:
             if method is self.coordinate.threshold_method:
                 continue
-            comparison_coordinate = replace(self.coordinate, threshold_method=method)
+            comparison_coordinate = ExperimentCoordinate(
+                experiment=self.coordinate.experiment,
+                evidence_role=self.coordinate.evidence_role,
+                dataset=self.coordinate.dataset,
+                population=self.coordinate.population,
+                training_model=self.coordinate.training_model,
+                training_seed=self.coordinate.training_seed,
+                split_protocol=self.coordinate.split_protocol,
+                preprocessing_protocol=self.coordinate.preprocessing_protocol,
+                model_coefficient=self.coordinate.model_coefficient,
+                threshold_method=method,
+                metric=self.coordinate.metric,
+                temporal_state=self.coordinate.temporal_state,
+                threshold_quantile=self.coordinate.threshold_quantile,
+                controlled_partition_kind=self.coordinate.controlled_partition_kind,
+                dirichlet_concentration=self.coordinate.dirichlet_concentration,
+            )
             path = (
                 evaluation_run_directory(self.output_root, comparison_coordinate)
                 / EvaluationRunAssetDirectory.EVALUATION

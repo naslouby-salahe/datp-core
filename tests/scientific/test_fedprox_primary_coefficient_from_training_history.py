@@ -114,14 +114,17 @@ def test_primary_coefficient_is_lowest_mean_terminal_loss(tmp_path: Path) -> Non
 
 
 def test_terminal_loss_candidate_rejects_mean_that_disagrees_with_seed_observations() -> None:
+    coefficient = ProximalCoefficient(0.1)
+    mean_terminal_training_loss = MetricValue(0.2)
+    per_seed_terminal_losses = tuple(
+        FedProxTerminalLossObservation(seed=seed, terminal_training_loss=MetricValue(0.1))
+        for seed in CONFIRMATORY_SEED_COHORT.values
+    )
     with pytest.raises(ScientificContractError, match="mean terminal loss"):
         FedProxCoefficientTerminalLoss(
-            coefficient=ProximalCoefficient(0.1),
-            mean_terminal_training_loss=MetricValue(0.2),
-            per_seed_terminal_losses=tuple(
-                FedProxTerminalLossObservation(seed=seed, terminal_training_loss=MetricValue(0.1))
-                for seed in CONFIRMATORY_SEED_COHORT.values
-            ),
+            coefficient=coefficient,
+            mean_terminal_training_loss=mean_terminal_training_loss,
+            per_seed_terminal_losses=per_seed_terminal_losses,
         )
 
 

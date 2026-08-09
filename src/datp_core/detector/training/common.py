@@ -1,4 +1,4 @@
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 
 from datp_core.artifacts.provenance import Checksum
@@ -70,7 +70,21 @@ def materialize_global_federated_training(
     request: FederatedTrainingRequest[GlobalFederatedProtocol],
     directory: Path,
 ) -> FederatedTrainingArtifacts:
-    outcome = train_global_federated(replace(request, output_directory=directory))
+    outcome = train_global_federated(
+        FederatedTrainingRequest(
+            coordinate=request.coordinate,
+            clients=request.clients,
+            population_client_count=request.population_client_count,
+            autoencoder=request.autoencoder,
+            training_protocol=request.training_protocol,
+            checkpoint_protocol=request.checkpoint_protocol,
+            training_seed=request.training_seed,
+            batch_size=request.batch_size,
+            learning_rate=request.learning_rate,
+            split_manifest_checksum=request.split_manifest_checksum,
+            output_directory=directory,
+        )
+    )
     return FederatedTrainingArtifacts(outcome.training_result, outcome.candidates)
 
 
@@ -131,8 +145,17 @@ def write_ditto_training(
 ) -> DittoTrainingArtifacts:
     global_directory, personalized_directory = ditto_directories(directories)
     outcome = train_ditto(
-        replace(
-            request,
+        DittoTrainingRequest(
+            coordinates=request.coordinates,
+            clients=request.clients,
+            population_client_count=request.population_client_count,
+            autoencoder=request.autoencoder,
+            training_protocol=request.training_protocol,
+            checkpoint_protocol=request.checkpoint_protocol,
+            training_seed=request.training_seed,
+            batch_size=request.batch_size,
+            learning_rate=request.learning_rate,
+            split_manifest_checksum=request.split_manifest_checksum,
             global_output_directory=global_directory,
             personalized_output_directory=personalized_directory,
         )

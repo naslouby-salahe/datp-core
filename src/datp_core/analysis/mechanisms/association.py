@@ -23,7 +23,7 @@ from datp_core.core.identifiers import (
     PopulationId,
     RegimeLabel,
 )
-from datp_core.core.numeric import MetricValue, PairedObservationCount, Ratio, Seed
+from datp_core.core.numeric import MetricValue, PairedObservationCount, Ratio, Seed, is_numeric_zero
 
 MINIMUM_ASSOCIATION_OBSERVATIONS = PairedObservationCount(3)
 MINIMUM_PUBLICATION_OBSERVATIONS = PairedObservationCount(5)
@@ -153,12 +153,12 @@ def heterogeneity_benefit_association(
             observations,
             AssociationIssue.NON_FINITE_OBSERVATION,
         )
-    if np.ptp(x_values) == 0.0:
+    if is_numeric_zero(float(np.ptp(x_values))):
         return _unavailable_association(
             observations,
             AssociationIssue.ZERO_HETEROGENEITY_VARIATION,
         )
-    if np.ptp(y_values) == 0.0:
+    if is_numeric_zero(float(np.ptp(y_values))):
         return _unavailable_association(
             observations,
             AssociationIssue.ZERO_BENEFIT_VARIATION,
@@ -223,7 +223,7 @@ def _leave_one_out(
         mask[index] = False
         x_loo = x_values[mask]
         y_loo = y_values[mask]
-        if np.ptp(x_loo) == 0.0 or np.ptp(y_loo) == 0.0:
+        if is_numeric_zero(float(np.ptp(x_loo))) or is_numeric_zero(float(np.ptp(y_loo))):
             slopes.append(MetricValue(full_slope.value))
             r_squared_values.append(Ratio(0.0))
             influences.append(MetricValue(0.0))

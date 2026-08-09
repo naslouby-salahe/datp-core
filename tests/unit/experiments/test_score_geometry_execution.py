@@ -24,5 +24,6 @@ def test_score_geometry_blocks_when_a_required_threshold_overlay_is_missing(
     monkeypatch.setattr(run, "_evaluation_path", lambda *_: object())
     monkeypatch.setattr(run, "load_evaluation_document", load_document)
 
+    seed = Seed(202)
     with pytest.raises(ScientificContractError, match="cluster evaluation is absent"):
-        run._score_geometry_threshold_overlays(Seed(202), ())
+        run._score_geometry_threshold_overlays(seed, ())

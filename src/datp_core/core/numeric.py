@@ -161,7 +161,7 @@ class NonNegativeFiniteFloatValue(FiniteFloatValue):
 class OpenUnitIntervalValue(FiniteFloatValue):
     def __post_init__(self) -> None:
         super().__post_init__()
-        if not 0 < self.value < 1:
+        if self.value <= NUMERIC_ZERO or self.value >= 1.0:
             raise ValueError(f"{self.validation_name} must be in (0, 1)")
 
 

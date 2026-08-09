@@ -140,20 +140,20 @@ def test_transform_feature_matrix_validations() -> None:
     fitted = StandardScaler().fit(np.array([[1.0, 2.0], [3.0, 4.0]]))
 
     vector = np.array([1.0, 2.0])
+    transform_description = ValidationReasonText("transformed evaluation matrix")
     with pytest.raises(ScientificContractError, match="two-dimensional"):
         transform_feature_matrix(
             fitted,
             vector,
             protocol.input_feature_names,
             PartitionRole.TRAIN,
-            description=ValidationReasonText("transformed evaluation matrix"),
+            description=transform_description,
         )
 
     require_finite_matrix(
         np.asarray([[1.0, 2.0]]), subject=ContractSubject.FEATURES, description=ValidationReasonText("test matrix")
     )
     non_finite_matrix = np.asarray([[1.0, np.nan]])
+    test_description = ValidationReasonText("test matrix")
     with pytest.raises(ScientificContractError):
-        require_finite_matrix(
-            non_finite_matrix, subject=ContractSubject.FEATURES, description=ValidationReasonText("test matrix")
-        )
+        require_finite_matrix(non_finite_matrix, subject=ContractSubject.FEATURES, description=test_description)

@@ -148,11 +148,9 @@ def test_dispatch_rejects_method_unsupported_by_population_capabilities() -> Non
 
 
 def test_validate_population_capability_rejects_unsupported_method() -> None:
+    capabilities = _capabilities((FederatedThresholdMethod.SHARED_THRESHOLD,))
     with pytest.raises(CapabilityError):
-        validate_population_capability(
-            _capabilities((FederatedThresholdMethod.SHARED_THRESHOLD,)),
-            FederatedThresholdMethod.LOCAL_THRESHOLD,
-        )
+        validate_population_capability(capabilities, FederatedThresholdMethod.LOCAL_THRESHOLD)
 
 
 def test_reject_centralized_threshold_method_raises_leakage_error() -> None:
@@ -249,8 +247,9 @@ def test_non_cluster_threshold_rejects_cluster_aggregation() -> None:
 
 def test_canonical_support_rejects_client_below_one_hundred_benign_rows() -> None:
     undersized = (client_scores("undersized", tuple(float(value) for value in range(50))),)
+    request = _request(FederatedThresholdMethod.SHARED_THRESHOLD, eligible=undersized)
     with pytest.raises(ScientificContractError, match="minimum benign calibration support"):
-        dispatch_federated_threshold(_request(FederatedThresholdMethod.SHARED_THRESHOLD, eligible=undersized))
+        dispatch_federated_threshold(request)
 
 
 def test_declared_size_ablation_support_allows_fifty_benign_rows() -> None:

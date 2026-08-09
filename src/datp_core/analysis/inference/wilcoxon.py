@@ -31,6 +31,11 @@ from datp_core.core.numeric import (
 )
 
 
+def _nonzero_differences(deltas: NDArray[np.float64]) -> NDArray[np.float64]:
+    """Keep exact-zero semantics without directly comparing floating point values."""
+    return deltas[~np.isclose(deltas, 0.0, rtol=0.0, atol=0.0)]
+
+
 class WilcoxonComputationMethod(StrEnum):
     EXACT = "exact"
     ASYMPTOTIC = "asymptotic"
@@ -203,7 +208,7 @@ def matched_pairs_rank_biserial(
     if protocol.effect_size is not EffectSizeId.MATCHED_PAIRS_RANK_BISERIAL:
         raise ValueError("paired effect size requires matched-pairs rank-biserial correlation")
     deltas = paired_deltas(contrasts)
-    nonzero = deltas[deltas != 0.0]
+    nonzero = _nonzero_differences(deltas)
     if not nonzero.size:
         return RankBiserialResult(
             value=None,
@@ -259,7 +264,7 @@ def _select_wilcoxon_method(
 ) -> WilcoxonMethodSelection:
     zero_method = protocol.wilcoxon_zero_method.value
     alternative = protocol.wilcoxon_alternative.value
-    nonzero = deltas[deltas != 0.0]
+    nonzero = _nonzero_differences(deltas)
     if nonzero.size == 0:
         return WilcoxonMethodSelection(
             method=WilcoxonComputationMethod.ASYMPTOTIC,

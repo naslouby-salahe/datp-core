@@ -1,6 +1,5 @@
 """Centralized reconstruction-score generation, persistence, and reuse."""
 
-from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -116,7 +115,17 @@ def write_centralized_scoring(
     request: CentralizedScoringRequest,
     directory: Path,
 ) -> CentralizedScoringResult:
-    published_request = replace(request, output_directory=directory)
+    published_request = CentralizedScoringRequest(
+        coordinate=request.coordinate,
+        checkpoint=request.checkpoint,
+        autoencoder=request.autoencoder,
+        feature_names=request.feature_names,
+        calibration_features=request.calibration_features,
+        evaluation_features=request.evaluation_features,
+        batch_size=request.batch_size,
+        output_directory=directory,
+        preprocessing_state_checksum=request.preprocessing_state_checksum,
+    )
     scoring = score_centralized_reference(published_request)
     write_artifact_completion_marker(
         directory / CentralizedScoreAssetName.COMPLETE,
@@ -231,7 +240,10 @@ def score_artifact_set_checksum(
     )
 
 
-def _centralized_request(request: GenerateCentralizedScoresRequest, directory: Path) -> CentralizedScoringRequest:
+def _centralized_request(
+    request: GenerateCentralizedScoresRequest,
+    directory: Path,
+) -> CentralizedScoringRequest:
     return CentralizedScoringRequest(
         coordinate=request.coordinate,
         checkpoint=request.checkpoint,

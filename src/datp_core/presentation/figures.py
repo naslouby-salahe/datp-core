@@ -84,26 +84,39 @@ class PairedMetricFigureSeries:
     unavailable_reason: AnalysisReasonText | None = None
 
     def __post_init__(self) -> None:
-        if not isinstance(self.label, FigureLabel):
-            object.__setattr__(self, "label", FigureLabel(self.label))
-        if not isinstance(self.x_label, FigureLabel):
-            object.__setattr__(self, "x_label", FigureLabel(self.x_label))
-        if not isinstance(self.y_label, FigureLabel):
-            object.__setattr__(self, "y_label", FigureLabel(self.y_label))
-        if self.unavailable_reason is not None and not isinstance(self.unavailable_reason, AnalysisReasonText):
-            object.__setattr__(self, "unavailable_reason", AnalysisReasonText(self.unavailable_reason))
+        _coerce_paired_metric_series_labels(self)
         if self.availability is AvailabilityStatus.AVAILABLE:
-            if not self.x_values or len(self.x_values) != len(self.y_values):
-                raise ValueError("available paired-metric series require aligned x and y values")
-            if self.point_labels and len(self.point_labels) != len(self.x_values):
-                raise ValueError("paired-metric point labels must cover every value pair")
-            if self.unavailable_reason is not None:
-                raise ValueError("available paired-metric series cannot carry an unavailable reason")
+            _validate_available_paired_metric_series(self)
         else:
-            if self.x_values or self.y_values or self.point_labels:
-                raise ValueError("unavailable paired-metric series cannot contain values or point labels")
-            if self.unavailable_reason is None:
-                raise ValueError("unavailable paired-metric series require an explicit reason")
+            _validate_unavailable_paired_metric_series(self)
+
+
+def _coerce_paired_metric_series_labels(series: PairedMetricFigureSeries) -> None:
+    for field_name, label_type in (
+        ("label", FigureLabel),
+        ("x_label", FigureLabel),
+        ("y_label", FigureLabel),
+        ("unavailable_reason", AnalysisReasonText),
+    ):
+        value = getattr(series, field_name)
+        if value is not None and not isinstance(value, label_type):
+            object.__setattr__(series, field_name, label_type(value))
+
+
+def _validate_available_paired_metric_series(series: PairedMetricFigureSeries) -> None:
+    if not series.x_values or len(series.x_values) != len(series.y_values):
+        raise ValueError("available paired-metric series require aligned x and y values")
+    if series.point_labels and len(series.point_labels) != len(series.x_values):
+        raise ValueError("paired-metric point labels must cover every value pair")
+    if series.unavailable_reason is not None:
+        raise ValueError("available paired-metric series cannot carry an unavailable reason")
+
+
+def _validate_unavailable_paired_metric_series(series: PairedMetricFigureSeries) -> None:
+    if series.x_values or series.y_values or series.point_labels:
+        raise ValueError("unavailable paired-metric series cannot contain values or point labels")
+    if series.unavailable_reason is None:
+        raise ValueError("unavailable paired-metric series require an explicit reason")
 
 
 def _validate_empirical_cdf_axes(series: EmpiricalCdfFigureSeries) -> None:

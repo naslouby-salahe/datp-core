@@ -334,14 +334,16 @@ def test_empirical_cdf_rejects_fpr_as_score_metric() -> None:
     label = FigureLabel("bad")
     client_id = ClientIdentityToken("device_a")
     seed = Seed(0)
+    x_values = (MetricValue(0.1),)
+    y_values = (MetricValue(1.0),)
     with pytest.raises(ValueError, match="reconstruction-error x metric"):
         EmpiricalCdfFigureSeries(
             label=label,
             x_metric=MetricId.FALSE_POSITIVE_RATE,
             y_metric=MetricId.EMPIRICAL_CUMULATIVE_PROBABILITY,
             availability=AvailabilityStatus.AVAILABLE,
-            x_values=(MetricValue(0.1),),
-            y_values=(MetricValue(1.0),),
+            x_values=x_values,
+            y_values=y_values,
             client_id=client_id,
             seed=seed,
             score_role=ScoreRole.BENIGN_EVALUATION,

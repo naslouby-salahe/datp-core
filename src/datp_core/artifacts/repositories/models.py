@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-from pydantic import model_validator
+from pydantic import ConfigDict, model_validator
 
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.contracts import StrictModel
@@ -51,6 +51,7 @@ class ArtifactRecord:
 
 
 class CompletionRecord(StrictModel):
+    model_config = ConfigDict(revalidate_instances="never")
     plan_digest: Checksum
     campaign_digest: Checksum
     protocol_digest: Checksum

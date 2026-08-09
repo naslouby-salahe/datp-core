@@ -29,6 +29,7 @@ from datp_core.core.numeric import (
     SubsampleReplicateCount,
     ThresholdValue,
     ThresholdVariance,
+    is_numeric_zero,
 )
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
@@ -176,7 +177,7 @@ def evaluate_threshold_estimate(
     absolute_error = abs(estimated_threshold.value - exact_pooled_benign_quantile_reference.value)
     reference = exact_pooled_benign_quantile_reference.value
 
-    if reference == 0.0:
+    if is_numeric_zero(reference):
         relative_metric = unavailable(
             MetricId.RELATIVE_THRESHOLD_ERROR,
             MetricStatus.UNDEFINED,

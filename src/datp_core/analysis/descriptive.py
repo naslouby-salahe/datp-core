@@ -11,7 +11,7 @@ from datp_core.analysis.contrasts import MetricSeries, PairedDifferenceCounts
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.contracts import StrictModel
 from datp_core.core.identifiers import AnalysisReasonText, AvailabilityStatus, EvidenceRole, FederatedThresholdMethod
-from datp_core.core.numeric import MetricValue, PairedObservationCount, Quantile, Ratio, Seed
+from datp_core.core.numeric import MetricValue, PairedObservationCount, Quantile, Ratio, Seed, is_numeric_zero
 from datp_core.data.populations.contracts import ClientIdentity
 
 
@@ -156,7 +156,7 @@ def summarize_cross_seed_metric_values(values: MetricSeries) -> CrossSeedMetricS
 def count_paired_differences(values: MetricSeries) -> PairedDifferenceCounts:
     return PairedDifferenceCounts(
         positive=PairedObservationCount(sum(value.value > 0.0 for value in values)),
-        zero=PairedObservationCount(sum(value.value == 0.0 for value in values)),
+        zero=PairedObservationCount(sum(is_numeric_zero(value.value) for value in values)),
         negative=PairedObservationCount(sum(value.value < 0.0 for value in values)),
     )
 

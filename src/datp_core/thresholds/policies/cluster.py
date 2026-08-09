@@ -23,6 +23,7 @@ from datp_core.core.numeric import (
     ScoreMoment,
     Seed,
     ThresholdValue,
+    is_numeric_zero,
 )
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
@@ -246,7 +247,7 @@ def _as_fingerprint_features(row: np.ndarray) -> FingerprintFeatures:
 def _raw_fingerprint(scores: np.ndarray) -> FingerprintFeatures:
     mean = float(np.mean(scores))
     standard_deviation = float(np.std(scores, ddof=0))
-    if standard_deviation == 0.0 or np.ptp(scores) == 0.0:
+    if is_numeric_zero(standard_deviation) or is_numeric_zero(float(np.ptp(scores))):
         skewness_value = 0.0
     else:
         skewness_value = float(skew(scores, bias=True))

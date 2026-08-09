@@ -22,7 +22,7 @@ from datp_core.core.errors import (
     ScientificContractError,
 )
 from datp_core.core.identifiers import EvaluationCohort, MetricId
-from datp_core.core.numeric import MetricValue, Quantile, RowCount
+from datp_core.core.numeric import MetricValue, Quantile, RowCount, is_numeric_zero
 from datp_core.data.populations.contracts import ClientIdentity
 
 
@@ -160,7 +160,7 @@ def _fpr_aggregates(
         available(MetricId.FPR_POPULATION_STANDARD_DEVIATION, MetricValue(std), denominator=RowCount(len(values))),
     ]
     warnings: tuple[MetricWarning, ...] = ()
-    if mean == 0.0:
+    if is_numeric_zero(mean):
         metrics.append(
             unavailable(MetricId.FPR_COEFFICIENT_OF_VARIATION, MetricStatus.UNDEFINED, MetricReason.ZERO_MEAN)
         )
@@ -193,7 +193,7 @@ def _fpr_aggregates(
 def _equity_index_metrics(values: np.ndarray) -> tuple[MetricAvailability, ...]:
     total = float(np.sum(values))
     count = int(values.size)
-    if total == 0.0:
+    if is_numeric_zero(total):
         return (
             unavailable(MetricId.JAIN_FAIRNESS_INDEX, MetricStatus.UNDEFINED, MetricReason.ZERO_MEAN),
             unavailable(MetricId.GINI_COEFFICIENT, MetricStatus.UNDEFINED, MetricReason.ZERO_MEAN),
@@ -247,7 +247,7 @@ def _coefficient_of_variation(metric: MetricId, values: tuple[MetricValue, ...])
         return unavailable(metric, MetricStatus.UNAVAILABLE, MetricReason.NO_EVALUABLE_CLIENTS)
     raw = np.fromiter((v.value for v in values), dtype=np.float64, count=len(values))
     mean = float(np.mean(raw))
-    if mean == 0.0:
+    if is_numeric_zero(mean):
         return unavailable(metric, MetricStatus.UNDEFINED, MetricReason.ZERO_MEAN)
     return available(metric, MetricValue(float(np.std(raw, ddof=0)) / mean), denominator=RowCount(len(values)))
 

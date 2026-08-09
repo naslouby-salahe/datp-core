@@ -135,15 +135,20 @@ def test_shared_score_artifact_rejects_training_partition(
         model=TrainingModelId.FEDAVG_AUTOENCODER,
         model_coefficient=None,
     )
+    checkpoint_round = RoundNumber(1)
+    checkpoint_checksum = Checksum("a" * 64)
+    checksum = Checksum("b" * 64)
+    row_count = RowCount(1)
+    feature_count = FeatureCount(2)
     with pytest.raises(ScientificContractError, match="post-training"):
         ScoreArtifact(
             coordinate=coordinate,
             partition_role=PartitionRole.TRAIN,
-            checkpoint_round=RoundNumber(1),
-            checkpoint_checksum=Checksum("a" * 64),
+            checkpoint_round=checkpoint_round,
+            checkpoint_checksum=checkpoint_checksum,
             path=tmp_path / "scores.parquet",
-            checksum=Checksum("b" * 64),
-            row_count=RowCount(1),
-            feature_count=FeatureCount(2),
+            checksum=checksum,
+            row_count=row_count,
+            feature_count=feature_count,
             serialization_format=SerializationFormat.PARQUET,
         )

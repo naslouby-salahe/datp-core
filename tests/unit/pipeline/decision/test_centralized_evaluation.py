@@ -34,11 +34,14 @@ from datp_core.thresholds.centralized import (
 
 
 def test_centralized_evaluation_score_set_rejects_misaligned_records() -> None:
+    source_row_ids = (StableRowId("evaluation-0"),)
+    labels = (PopulationOutcomeLabel.BENIGN,)
+    scores = (ScoreValue(0.1), ScoreValue(0.2))
     with pytest.raises(ScientificContractError, match="must align"):
         CentralizedEvaluationScoreSet(
-            source_row_ids=(StableRowId("evaluation-0"),),
-            labels=(PopulationOutcomeLabel.BENIGN,),
-            scores=(ScoreValue(0.1), ScoreValue(0.2)),
+            source_row_ids=source_row_ids,
+            labels=labels,
+            scores=scores,
         )
 
 
