@@ -5,7 +5,14 @@ from pathlib import Path
 
 import pyarrow as pa
 
-from datp_core.core.identifiers import ColumnName, DatasetId, PhysicalSchemaText
+from datp_core.core.identifiers import (
+    AttackSubtypeToken,
+    ColumnName,
+    DatasetId,
+    FeatureNamePrefix,
+    PhysicalSchemaText,
+    SourcePathPart,
+)
 from datp_core.core.numeric import CanonicalColumnPosition
 from datp_core.data.contracts import (
     CanonicalColumn,
@@ -114,16 +121,17 @@ _CHANNEL_STATISTICS: tuple[NBaIoTChannelStatistic, ...] = tuple(NBaIoTChannelSta
 
 def _feature_columns() -> tuple[ColumnName, ...]:
     return (
-        _feature_group("MI_dir", _BASIC_STATISTICS)
-        + _feature_group("H", _BASIC_STATISTICS)
-        + _feature_group("HH", _CHANNEL_STATISTICS)
-        + _feature_group("HH_jit", _BASIC_STATISTICS)
-        + _feature_group("HpHp", _CHANNEL_STATISTICS)
+        _feature_group(FeatureNamePrefix("MI_dir"), _BASIC_STATISTICS)
+        + _feature_group(FeatureNamePrefix("H"), _BASIC_STATISTICS)
+        + _feature_group(FeatureNamePrefix("HH"), _CHANNEL_STATISTICS)
+        + _feature_group(FeatureNamePrefix("HH_jit"), _BASIC_STATISTICS)
+        + _feature_group(FeatureNamePrefix("HpHp"), _CHANNEL_STATISTICS)
     )
 
 
 def _feature_group(
-    prefix: str, statistics: tuple[NBaIoTBasicStatistic, ...] | tuple[NBaIoTChannelStatistic, ...]
+    prefix: FeatureNamePrefix,
+    statistics: tuple[NBaIoTBasicStatistic, ...] | tuple[NBaIoTChannelStatistic, ...],
 ) -> tuple[ColumnName, ...]:
     return tuple(ColumnName(f"{prefix}_{window}_{statistic}") for window in _WINDOWS for statistic in statistics)
 
@@ -233,12 +241,12 @@ NBAIOT_SCHEMA = CanonicalSchema(
 def parse_source_identity(
     path: Path,
 ) -> tuple[NBaIoTDevice, NBaIoTSourceLabel, NBaIoTAttackFamily | None, NBaIoTAttackSubtype | None]:
-    parts = path.parts
+    parts = tuple(SourcePathPart(part) for part in path.parts)
     if path.suffix != NBaIoTArtifactName.CSV_SUFFIX or len(parts) < 2:
         raise ValueError("N-BaIoT sources must be extracted CSV files")
     if path.name == NBaIoTArtifactName.BENIGN_TRAFFIC_FILE:
         return _benign_source_identity(parts)
-    return _attack_source_identity(parts, path.stem)
+    return _attack_source_identity(parts, AttackSubtypeToken(path.stem))
 
 
 def source_relative_path(path: Path) -> Path:
@@ -248,13 +256,13 @@ def source_relative_path(path: Path) -> Path:
 
 
 def _benign_source_identity(
-    parts: tuple[str, ...],
+    parts: tuple[SourcePathPart, ...],
 ) -> tuple[NBaIoTDevice, NBaIoTSourceLabel, None, None]:
     return _device(parts[-2]), NBaIoTSourceLabel.BENIGN, None, None
 
 
 def _attack_source_identity(
-    parts: tuple[str, ...], subtype: str
+    parts: tuple[SourcePathPart, ...], subtype: AttackSubtypeToken
 ) -> tuple[NBaIoTDevice, NBaIoTSourceLabel, NBaIoTAttackFamily, NBaIoTAttackSubtype]:
     device = _device(parts[-3])
     attack_directory = parts[-2]
@@ -288,7 +296,7 @@ def device_family(device: NBaIoTDevice) -> NBaIoTDeviceFamily:
             return NBaIoTDeviceFamily.WEBCAM
 
 
-def _device(value: str) -> NBaIoTDevice:
+def _device(value: SourcePathPart) -> NBaIoTDevice:
     try:
         return NBaIoTDevice(value.lower())
     except ValueError as error:

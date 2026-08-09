@@ -5,6 +5,7 @@ from pathlib import Path
 
 import polars as pl
 
+from datp_core.core.identifiers import RawSourceFilename
 from datp_core.core.numeric import RowCount
 from datp_core.data.materialization import provenance_expressions
 
@@ -46,7 +47,9 @@ class CICIoT2023Reader:
 
     @staticmethod
     def _validate_source_path(path: Path) -> None:
-        if path.parent.name != CICIoT2023ArtifactName.MERGED_CSV_DIRECTORY or not is_accepted_merged_source(path.name):
+        if path.parent.name != CICIoT2023ArtifactName.MERGED_CSV_DIRECTORY or not is_accepted_merged_source(
+            RawSourceFilename(path.name)
+        ):
             raise ValueError("CICIoT2023 accepts only audited merged CSV sources")
 
     @staticmethod

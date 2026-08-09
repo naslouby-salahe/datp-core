@@ -8,7 +8,7 @@ from datp_core.core.identifiers import (
     AvailabilityStatus,
     CanonicalizationContractName,
     DatasetId,
-    NonEmptyString,
+    ValidationReasonText,
     ValidationSourceContext,
 )
 from datp_core.core.numeric import LogicalElementCount, RowCount, ValidationIssueCount
@@ -209,7 +209,7 @@ def _label_issue(affected_count: RowCount) -> DatasetValidationIssue | None:
     return _validation_issue(
         affected_count,
         DatasetValidationCode.UNRECOGNIZED_OR_EMPTY_LABEL,
-        "Merged rows contain empty or unrecognized labels.",
+        ValidationReasonText("Merged rows contain empty or unrecognized labels."),
     )
 
 
@@ -217,7 +217,9 @@ def _infinite_rate_issue(affected_count: RowCount) -> DatasetValidationIssue | N
     return _validation_issue(
         affected_count,
         DatasetValidationCode.INFINITE_RATE,
-        "Lossless canonical data retain infinite Rate values; model-input eligibility excludes non-finite features.",
+        ValidationReasonText(
+            "Lossless canonical data retain infinite Rate values; model-input eligibility excludes non-finite features."
+        ),
     )
 
 
@@ -225,7 +227,9 @@ def _nonfinite_feature_issue(affected_count: RowCount) -> DatasetValidationIssue
     return _validation_issue(
         affected_count,
         DatasetValidationCode.NONFINITE_MODEL_INPUT_FEATURE,
-        "Lossless canonical data retain non-finite features; model-input eligibility excludes affected rows.",
+        ValidationReasonText(
+            "Lossless canonical data retain non-finite features; model-input eligibility excludes affected rows."
+        ),
     )
 
 
@@ -233,14 +237,16 @@ def _empty_rate_issue(affected_count: RowCount) -> DatasetValidationIssue | None
     return _validation_issue(
         affected_count,
         DatasetValidationCode.EMPTY_RATE,
-        "Lossless canonical data retain empty Rate values; model-input eligibility excludes non-finite features.",
+        ValidationReasonText(
+            "Lossless canonical data retain empty Rate values; model-input eligibility excludes non-finite features."
+        ),
     )
 
 
 def _validation_issue(
     affected_count: RowCount,
     code: DatasetValidationCode,
-    reason: str,
+    reason: ValidationReasonText,
 ) -> DatasetValidationIssue | None:
     if affected_count.value == 0:
         return None
@@ -249,6 +255,6 @@ def _validation_issue(
         code,
         DatasetId.CICIOT2023,
         ValidationSourceContext(CICIoT2023ArtifactName.MERGED_CSV_DIRECTORY),
-        NonEmptyString(reason),
+        reason,
         affected_count,
     )

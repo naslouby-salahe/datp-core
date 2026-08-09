@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pyarrow as pa
 
-from datp_core.core.identifiers import ColumnName, DatasetId, PhysicalSchemaText
+from datp_core.core.identifiers import ColumnName, DatasetId, PhysicalSchemaText, RawSourceFilename
 from datp_core.core.numeric import CanonicalColumnPosition, ClientCount
 from datp_core.data.contracts import (
     CanonicalColumn,
@@ -239,7 +239,7 @@ CICIOT2023_SCHEMA = CanonicalSchema(
 )
 
 
-def is_accepted_merged_source(path_name: str) -> bool: 
+def is_accepted_merged_source(path_name: RawSourceFilename) -> bool:
     prefix = CICIoT2023ArtifactName.MERGED_FILE_PREFIX
     suffix = CICIoT2023ArtifactName.CSV_SUFFIX
     numeric_identifier = path_name[len(prefix) : -len(suffix)]
