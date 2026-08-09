@@ -12,7 +12,13 @@ from datp_core.core.errors import (
     ScientificContractError,
     require_contract,
 )
-from datp_core.core.identifiers import ContractSubject, PartitionRole, ScoreFrameColumn, StableRowId
+from datp_core.core.identifiers import (
+    ContractSubject,
+    PartitionRole,
+    ScoreFrameColumn,
+    StableRowId,
+    ValidationReasonText,
+)
 from datp_core.core.numeric import CalibrationSize, RowCount, ScoreValue
 from datp_core.data.populations.contracts import ClientIdentity, EligibleCohort, PopulationOutcomeLabel
 from datp_core.data.populations.integrity import reject_non_benign_labels
@@ -131,7 +137,7 @@ def load_benign_calibration_references(
     label_column = frame.get_column(ScoreFrameColumn.OUTCOME_LABEL.value)
     reject_non_benign_labels(
         tuple(PopulationOutcomeLabel(str(label)) for label in label_column.cast(pl.String).to_list()),
-        message="attack-labelled rows cannot enter benign calibration construction",
+        message=ValidationReasonText("attack-labelled rows cannot enter benign calibration construction"),
         subject=ContractSubject.CALIBRATION,
         benign_label=benign_label,
     )

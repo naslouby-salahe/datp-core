@@ -36,6 +36,7 @@ from datp_core.core.identifiers import (
     QuantileInterpolationSemantics,
     ScoreFrameColumn,
     StableRowId,
+    ValidationReasonText,
 )
 from datp_core.core.numeric import Quantile, RoundNumber, RowCount, ScoreValue, ThresholdValue
 from datp_core.data.populations.contracts import PopulationOutcomeLabel
@@ -377,7 +378,7 @@ def reject_attack_rows_in_benign_calibration(
 ) -> None:
     reject_non_benign_labels(
         tuple(PopulationOutcomeLabel(str(label)) for label in labels),
-        message="attack-labelled rows cannot enter centralized benign calibration",
+        message=ValidationReasonText("attack-labelled rows cannot enter centralized benign calibration"),
         subject=ContractSubject.LABEL,
         benign_label=benign_label,
     )
