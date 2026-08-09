@@ -11,6 +11,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from datp_core.artifacts.provenance import Checksum, checksum_file, checksum_text
+from datp_core.artifacts.repositories.publication import publish_atomically
 from datp_core.core.identifiers import DatasetId, PublicationStatus
 from datp_core.core.numeric import ByteCount, CanonicalColumnPosition, RowCount, SourceFileCount
 from datp_core.data.canonical_cache import (
@@ -47,7 +48,6 @@ from datp_core.data.contracts import (
     schema_checksum_document_json,
     schema_content,
 )
-from datp_core.data.publication import publish_canonical_atomically
 
 _COMPLETE_NAME, _MANIFEST_NAME, _SCHEMA_NAME, _SOURCE_STATE_NAME = publication_artifact_names()
 
@@ -337,8 +337,9 @@ def publish_canonical[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
         _write_canonical(temporary, publication)
         return target
 
-    outcome = publish_canonical_atomically(
+    outcome = publish_atomically(
         target=target,
+        overwrite=False,
         is_reusable=lambda directory: completed_publication_is_reusable(directory, publication.match_request()),
         write=write,
         reusable_value=lambda directory: directory,

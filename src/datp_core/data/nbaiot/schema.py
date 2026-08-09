@@ -67,12 +67,12 @@ class NBaIoTColumnSource(StrEnum):
     AUDITED_SOURCE_PATH = "audited source path"
 
 
-_WINDOWS: tuple[str, ...] = ("L5", "L3", "L1", "L0.1", "L0.01")
-_BASIC_STATISTICS: tuple[str, ...] = ("weight", "mean", "variance")
-_CHANNEL_STATISTICS: tuple[str, ...] = ("weight", "mean", "std", "magnitude", "radius", "covariance", "pcc")
+_WINDOWS: tuple[str, ...] = ("L5", "L3", "L1", "L0.1", "L0.01") #TODO: should be tuple of NBaIoTWindow and adapt all callers and usage and create NBaIoTWindow enum
+_BASIC_STATISTICS: tuple[str, ...] = ("weight", "mean", "variance") #TODO: should be tuple of NBaIoTBasicStatistic and adapt all callers and usage and create NBaIoTBasicStatistic enum
+_CHANNEL_STATISTICS: tuple[str, ...] = ("weight", "mean", "std", "magnitude", "radius", "covariance", "pcc") #TODO: should be tuple of NBaIoTChannelStatistic and adapt all callers and usage and create NBaIoTChannelStatistic enum
 
 
-def _feature_columns() -> tuple[str, ...]:
+def _feature_columns() -> tuple[str, ...]: #TODO: should be tuple of NBaIoTFeatureColumn and adapt all callers and usage and create NBaIoTFeatureColumn enum
     return (
         _feature_group("MI_dir", _BASIC_STATISTICS)
         + _feature_group("H", _BASIC_STATISTICS)
@@ -87,10 +87,10 @@ def _feature_group(prefix: str, statistics: tuple[str, ...]) -> tuple[str, ...]:
 
 
 NBAIOT_FEATURE_COLUMNS = _feature_columns()
-NBAIOT_DEVICE_IDENTITIES: tuple[str, ...] = tuple(device.value for device in NBaIoTDevice)
-NBAIOT_DEVICE_FAMILIES: tuple[str, ...] = tuple(family.value for family in NBaIoTDeviceFamily)
-NBAIOT_ATTACK_FAMILIES: tuple[str, ...] = ("gafgyt", "mirai")
-NBAIOT_ATTACK_SUBTYPES: tuple[str, ...] = ("ack", "combo", "junk", "scan", "syn", "tcp", "udp", "udpplain")
+NBAIOT_DEVICE_IDENTITIES: tuple[str, ...] = tuple(device.value for device in NBaIoTDevice) #TODO: should be tuple of NBaIoTDevice and adapt all callers and usage
+NBAIOT_DEVICE_FAMILIES: tuple[str, ...] = tuple(family.value for family in NBaIoTDeviceFamily) #TODO: should be tuple of NBaIoTDeviceFamily and adapt all callers and usage
+NBAIOT_ATTACK_FAMILIES: tuple[str, ...] = ("gafgyt", "mirai") #TODO: should be tuple of NBaIoTAttackFamily and adapt all callers and usage and create NBaIoTAttackFamily enum
+NBAIOT_ATTACK_SUBTYPES: tuple[str, ...] = ("ack", "combo", "junk", "scan", "syn", "tcp", "udp", "udpplain") #TODO: should be tuple of NBaIoTAttackSubtype and adapt all callers and usage and create NBaIoTAttackSubtype enum
 
 
 NBAIOT_PROVENANCE_COLUMNS: tuple[str, ...] = tuple(CanonicalProvenanceColumn)

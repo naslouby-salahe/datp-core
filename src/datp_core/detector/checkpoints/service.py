@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from datp_core.artifacts.provenance import Checksum
-from datp_core.artifacts.serializers.json import canonical_checksum
+from datp_core.artifacts.serializers.safetensors import save_state_dict_tensors
 from datp_core.core.errors import LeakageError, ScientificContractError
 from datp_core.core.identifiers import (
     CheckpointSelectionRule,
@@ -26,7 +26,6 @@ from datp_core.detector.checkpoints.models import (
     CentralizedCheckpointAssetName,
     CentralizedCheckpointCandidate,
     CentralizedCheckpointDecision,
-    CentralizedCheckpointSetEntry,
     PersistedCheckpoint,
 )
 from datp_core.detector.checkpoints.protocols import (
@@ -43,7 +42,6 @@ from datp_core.detector.training.centralized import (
     InMemoryCentralizedModelSnapshot,
     assert_safetensors_reload,
     model_from_in_memory_snapshot,
-    persist_state_dict_tensors,
 )
 from datp_core.detector.training.contracts import AutoencoderProtocol
 from datp_core.detector.training.models import (
@@ -119,7 +117,7 @@ def retain_centralized_checkpoint_candidates(
     candidates: list[CentralizedCheckpointCandidate] = []
     for snapshot in snapshots:
         path = training_result.model_directory / candidate_tensor_name(snapshot.round_number)
-        checksum = persist_state_dict_tensors(snapshot.state_dict, path)
+        checksum = save_state_dict_tensors(snapshot.state_dict, path)
         _verify_candidate_reload(snapshot, path, autoencoder)
         candidates.append(
             CentralizedCheckpointCandidate(
@@ -211,21 +209,6 @@ def validate_centralized_candidate_coordinates(
                 "checkpoint candidate training seed mismatch",
                 subject=ContractSubject.SEED,
             )
-
-
-def centralized_candidate_set_checksum(
-    candidates: Sequence[CentralizedCheckpointCandidate],
-) -> Checksum:
-    return canonical_checksum(
-        tuple(
-            CentralizedCheckpointSetEntry(
-                round_number=item.round_number,
-                tensor_checksum=item.tensor_checksum,
-                status=item.status,
-            )
-            for item in candidates
-        )
-    )
 
 
 def select_federated_primary_checkpoint(request: SelectFederatedCheckpointRequest) -> CheckpointDecision:

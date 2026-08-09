@@ -12,6 +12,7 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from datp_core.artifacts.provenance import Checksum, checksum_bytes, checksum_text
 from datp_core.artifacts.serializers.json import canonical_json_text
+from datp_core.artifacts.serializers.safetensors import to_cpu_contiguous_state
 from datp_core.core.errors import LeakageError, ScientificContractError
 from datp_core.core.identifiers import (
     CommunicationEstimationMethod,
@@ -448,7 +449,7 @@ def preprocessing_state_set_checksum(
 def serialize_and_checksum_state_dict(
     state_dict: AutoencoderStateView,
 ) -> tuple[Checksum, ByteCount, LogicalElementCount]:
-    cpu_state = {name: tensor.detach().cpu().contiguous() for name, tensor in state_dict.items()}
+    cpu_state = to_cpu_contiguous_state(state_dict)
     payload = save(cpu_state)
     return checksum_bytes(payload), ByteCount(len(payload)), LogicalElementCount(len(cpu_state))
 

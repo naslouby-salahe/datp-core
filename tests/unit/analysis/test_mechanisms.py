@@ -61,10 +61,8 @@ from datp_core.core.numeric import (
     ThresholdValue,
 )
 from datp_core.data.populations.contracts import ClientIdentity
-from datp_core.detector.training.contracts import (
-    MODEL_ABSORPTION_DECISION_PROTOCOL,
-    FederatedTrainingCoordinate,
-)
+from datp_core.detector.training.contracts import FederatedTrainingCoordinate
+from datp_core.detector.training.protocols import MODEL_ABSORPTION_DECISION_PROTOCOL
 from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT
 
 

@@ -171,14 +171,6 @@ class CheckpointDecision:
             )
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
-class CheckpointSetEntry:
-    round_number: RoundNumber
-    tensor_checksum: Checksum
-    status: CheckpointStatus
-    client: ClientIdentity | None = None
-
-
 @dataclass(frozen=True, slots=True)
 class DittoCheckpointCandidate:
     global_candidate: CheckpointCandidate
@@ -256,13 +248,6 @@ class CentralizedCheckpointDecision:
             )
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
-class CentralizedCheckpointSetEntry:
-    round_number: RoundNumber
-    tensor_checksum: Checksum
-    status: CheckpointStatus
-
-
 def validate_persisted_checkpoint_file(
     path: Path,
     checksum: Checksum,
@@ -299,13 +284,6 @@ def validate_ordered_checkpoint_inventory[CandidateT: PersistedCheckpoint](
             "checkpoint candidate paths must be unique", subject=ContractSubject.CHECKPOINT_CANDIDATES
         )
     return ordered
-
-
-def validate_checkpoint_inventory_files[CandidateT: CheckpointIntegrityContract](
-    candidates: Sequence[CandidateT],
-) -> None:
-    for candidate in candidates:
-        validate_persisted_checkpoint_file(candidate.tensor_path, candidate.tensor_checksum)
 
 
 def select_terminal_checkpoint[CandidateT: PersistedCheckpoint](

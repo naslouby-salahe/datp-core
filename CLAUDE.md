@@ -40,229 +40,11 @@ Do not add security attacks, defenses, formal privacy claims, deployment claims,
 
 ## 3. Canonical source architecture
 
-The source tree below is the canonical DATP-Core architecture. It is an ownership contract, not a suggestion. Production functionality must live in these packages and files; obsolete roots are deleted after every active caller has been migrated. Do not preserve old locations with aliases, re-exports, forwarding modules, redirects, fallback imports, or compatibility packages.
-
-```text
-src/datp_core/
-├── core/
-│   ├── errors.py
-│   ├── identifiers.py
-│   ├── numeric.py
-│   └── contracts.py
-│
-├── data/
-│   ├── populations/
-│   │   ├── contracts.py
-│   │   ├── construction.py
-│   │   ├── controlled.py
-│   │   ├── splits.py
-│   │   └── integrity.py
-│   │
-│   ├── preprocessing/
-│   │   ├── contracts.py
-│   │   ├── fitting.py
-│   │   ├── transforms.py
-│   │   └── validation.py
-│   │
-│   ├── nbaiot/
-│   │   ├── capabilities.py
-│   │   ├── schema.py
-│   │   ├── reader.py
-│   │   ├── materialize.py
-│   │   └── populations.py
-│   │
-│   ├── ciciot2023/
-│   │   ├── capabilities.py
-│   │   ├── schema.py
-│   │   ├── reader.py
-│   │   ├── materialize.py
-│   │   ├── populations.py
-│   │   └── file_clients.py
-│   │
-│   └── edge_iiotset/
-│       ├── capabilities.py
-│       ├── schema.py
-│       ├── reader.py
-│       ├── chronology.py
-│       ├── materialize.py
-│       └── populations.py
-│
-├── detector/
-│   ├── autoencoder.py
-│   │
-│   ├── training/
-│   │   ├── contracts.py
-│   │   ├── common.py
-│   │   ├── centralized.py
-│   │   ├── fedavg.py
-│   │   ├── fedprox.py
-│   │   └── ditto.py
-│   │
-│   ├── checkpoints/
-│   │   ├── contracts.py
-│   │   └── selection.py
-│   │
-│   └── scoring/
-│       ├── contracts.py
-│       ├── frames.py
-│       ├── centralized.py
-│       └── federated.py
-│
-├── thresholds/
-│   ├── contracts.py
-│   ├── dispatch.py
-│   ├── quantiles.py
-│   │
-│   ├── calibration/
-│   │   ├── eligibility.py
-│   │   └── sampling.py
-│   │
-│   ├── policies/
-│   │   ├── shared.py
-│   │   ├── local.py
-│   │   ├── family.py
-│   │   └── cluster.py
-│   │
-│   └── variants/
-│       ├── shrinkage.py
-│       ├── conformal.py
-│       └── federated_statistics.py
-│
-├── analysis/
-│   ├── metrics/
-│   │   ├── contracts.py
-│   │   ├── confusion.py
-│   │   ├── client.py
-│   │   ├── population.py
-│   │   ├── cohorts.py
-│   │   ├── fixed_score.py
-│   │   ├── conformal.py
-│   │   └── threshold_estimation.py
-│   │
-│   ├── inference/
-│   │   ├── descriptive.py
-│   │   ├── contrasts.py
-│   │   ├── bootstrap.py
-│   │   ├── wilcoxon.py
-│   │   ├── multiplicity.py
-│   │   └── decisions.py
-│   │
-│   ├── mechanisms/
-│   │   ├── absorption.py
-│   │   ├── association.py
-│   │   ├── clustering.py
-│   │   ├── dispersion.py
-│   │   ├── divergence.py
-│   │   └── movement.py
-│   │
-│   └── operational/
-│       ├── communication.py
-│       ├── alert_burden.py
-│       └── traffic_rates.py
-│
-├── experiments/
-│   ├── registry.py
-│   │
-│   ├── common/
-│   │   ├── coordinates.py
-│   │   └── seeds.py
-│   │
-│   ├── anchor/
-│   │   ├── spec.py
-│   │   ├── run.py
-│   │   ├── analyze.py
-│   │   └── report.py
-│   │
-│   ├── confirmatory/
-│   │   ├── spec.py
-│   │   ├── run.py
-│   │   ├── analyze.py
-│   │   └── report.py
-│   │
-│   ├── threshold_robustness/
-│   │   ├── spec.py
-│   │   ├── run.py
-│   │   ├── analyze.py
-│   │   └── report.py
-│   │
-│   ├── federated_threshold/
-│   │   ├── spec.py
-│   │   ├── run.py
-│   │   ├── analyze.py
-│   │   └── report.py
-│   │
-│   ├── heterogeneity/
-│   │   ├── spec.py
-│   │   ├── run.py
-│   │   ├── analyze.py
-│   │   └── report.py
-│   │
-│   ├── training_stress/
-│   │   ├── fedprox.py
-│   │   ├── ditto.py
-│   │   └── absorption.py
-│   │
-│   ├── external/
-│   │   ├── spec.py
-│   │   ├── run.py
-│   │   ├── analyze.py
-│   │   └── report.py
-│   │
-│   ├── applicability/
-│   │   ├── spec.py
-│   │   ├── run.py
-│   │   ├── analyze.py
-│   │   └── report.py
-│   │
-│   └── temporal/
-│       ├── spec.py
-│       ├── run.py
-│       ├── analyze.py
-│       └── report.py
-│
-├── artifacts/
-│   ├── layout.py
-│   ├── provenance.py
-│   ├── publication.py
-│   ├── reuse.py
-│   │
-│   ├── serializers/
-│   │   ├── json.py
-│   │   ├── parquet.py
-│   │   ├── safetensors.py
-│   │   └── skops.py
-│   │
-│   └── repositories/
-│       ├── datasets.py
-│       ├── populations.py
-│       ├── preprocessing.py
-│       ├── checkpoints.py
-│       ├── scores.py
-│       ├── thresholds.py
-│       └── evaluations.py
-│
-├── presentation/
-│   ├── tables.py
-│   ├── figures.py
-│   └── validation.py
-│
-├── app/
-│   ├── planning.py
-│   ├── campaign.py
-│   ├── validation.py
-│   └── cli/
-│       ├── app.py
-│       ├── execution.py
-│       └── anchor.py
-│
-└── runtime/
-    ├── compute.py
-    ├── configuration.py
-    ├── determinism.py
-    └── filesystem.py
-```
-
-`__init__.py` package markers are permitted and should remain empty unless a package genuinely owns a stable public facade. Do not use them as re-export barrels.
+Package ownership below is a contract, not a suggestion. Production functionality must live in the
+package that owns its responsibility; obsolete roots are deleted after every active caller has been
+migrated. Do not preserve old locations with aliases, re-exports, forwarding modules, redirects,
+fallback imports, or compatibility packages. Do not use `__init__.py` package markers as re-export
+barrels; they should remain empty unless a package genuinely owns a stable public facade.
 
 Canonical ownership is:
 
@@ -271,9 +53,9 @@ Canonical ownership is:
 - `detector`: autoencoder, training algorithms, checkpoint contracts/selection, and score generation.
 - `thresholds`: benign calibration eligibility/sampling, quantile construction, threshold policies, and declared threshold variants.
 - `analysis`: metrics, statistical inference/decisions, mechanisms, and operational translation only. It does not execute experiments or own persistence.
-- `experiments`: experiment declarations/specifications plus complete run/analyze/report recipes. `anchor` is an experiment, not a top-level package. Training-side stress tests remain scientifically separate from the fixed-detector threshold ladder.
-- `artifacts`: all generic layout, provenance, serialization, publication, reuse, and artifact-repository ownership. Dataset, detector, threshold, evaluation, and experiment code must not invent parallel persistence stacks.
-- `presentation`: reusable table/figure construction and presentation validation only. Experiment-specific reporting belongs to each experiment's `report.py`.
+- `experiments`: experiment declarations/specifications plus their run/report recipes. `anchor` is an experiment, not a top-level package. Training-side stress tests remain scientifically separate from the fixed-detector threshold ladder.
+- `artifacts`: generic layout, provenance, serialization, publication, reuse, and completion-marker/checksum lifecycle ownership shared by every domain. Domain packages (`data`, `detector`, `thresholds`) may keep their own persistence orchestration colocated with the validation logic that governs it, but the underlying atomic-publish/checksum/reload primitives must delegate to `artifacts` rather than reimplementing them.
+- `presentation`: reusable table/figure construction and presentation validation only. Experiment-specific reporting belongs to each experiment's own report logic.
 - `app`: public programme planning/campaign/validation and CLI adapters only. It does not own scientific execution kernels.
 - `runtime`: compute/device, deterministic execution, process configuration, and filesystem primitives.
 
@@ -291,11 +73,9 @@ The following source roots and architectural concepts are obsolete and must not 
 - `datp_core.thresholding`;
 - `datp_core.reporting`;
 - `datp_core.cli`;
-- experiment execution as large flat modules when the target package has `spec.py`, `run.py`, `analyze.py`, and `report.py`;
-- generic `service.py`, `models.py`, `publication.py`, `paths.py`, `registry.py`, or `utils.py` modules whose responsibility belongs to one of the explicit files above;
 - forwarding or redirect modules preserving deleted imports.
 
-A structural change may move, merge, split, rename, or delete source files when required by this tree. Never keep a superseded package merely because it already contains working code.
+Do not invent a second, independent implementation of a concept another package already owns (duplicate models, duplicate constants, duplicate atomic-publish lifecycles, duplicate checksum logic). A structural change may move, merge, split, rename, or delete source files when required by this ownership contract. Never keep a superseded module merely because it already contains working code.
 
 ## 4. No backward compatibility
 
@@ -482,7 +262,7 @@ For broad work:
 1. read the roadmap and this contract;
 2. inspect current experiment specifications, call graph, datasets/capabilities, artifacts, and tests;
 3. search for reusable implementations;
-4. define clean target ownership using the canonical tree and delete duplicate paths;
+4. define clean target ownership using the canonical package boundaries and delete duplicate paths;
 5. implement the canonical contracts and migrate every active caller;
 6. validate registry, planning, fixed-score science, naming, typing, imports, dead code, and tests;
 7. perform a final scientific-drift audit against the roadmap;

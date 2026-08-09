@@ -836,9 +836,3 @@ POPULATIONS = (
     EDGE_SENSOR_GROUPS,
     EDGE_TEMPORAL_GROUPS,
 )
-
-
-def split_protocol_for_population(population: PopulationId) -> SplitProtocolId:
-    if population is PopulationId.EDGE_TEMPORAL_GROUPS:
-        return SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE
-    return SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS

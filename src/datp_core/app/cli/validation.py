@@ -21,11 +21,6 @@ from datp_core.core.errors import (
 type CliHandledError = DatpCoreError | ValueError
 
 
-def echo_lines(lines: tuple[str, ...]) -> None:
-    for line in lines:
-        typer.echo(line)
-
-
 def map_exception_to_exit(error: CliHandledError) -> int:
     if isinstance(error, MissingPrerequisiteError):
         if error.reason == "anchor_gate":

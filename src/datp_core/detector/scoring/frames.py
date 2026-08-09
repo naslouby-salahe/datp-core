@@ -6,9 +6,9 @@ import numpy as np
 import numpy.typing as npt
 import polars as pl
 import torch
-from safetensors.torch import load_file
 
 from datp_core.artifacts.provenance import Checksum, checksum_file
+from datp_core.artifacts.serializers.safetensors import load_state_dict_tensors
 from datp_core.core.errors import (
     ArtifactIntegrityError,
     LeakageError,
@@ -189,7 +189,7 @@ def load_checkpoint_model(
         )
     validate_persisted_checkpoint_file(checkpoint.tensor_path, checkpoint.tensor_checksum)
     model = ReconstructionAutoencoder(autoencoder.widths).to(device)
-    state = load_file(str(checkpoint.tensor_path), device=str(device))
+    state = load_state_dict_tensors(checkpoint.tensor_path, device)
     model.load_state_dict(state, strict=True)
     model.eval()
     return model

@@ -6,9 +6,13 @@ from os import replace as atomic_replace
 from pathlib import Path
 
 import torch
-from safetensors.torch import load_file, save_file
 
-from datp_core.artifacts.provenance import Checksum, checksum_file
+from datp_core.artifacts.provenance import Checksum
+from datp_core.artifacts.serializers.safetensors import (
+    load_state_dict_tensors,
+    save_state_dict_tensors,
+    to_cpu_contiguous_state,
+)
 from datp_core.core.errors import ArtifactIntegrityError, ScientificContractError
 from datp_core.core.identifiers import CheckpointStatus, ContractSubject, SafeTensorFilename
 from datp_core.core.numeric import RoundNumber
@@ -47,13 +51,12 @@ def persist_checkpoint_tensor(
     path: Path,
     autoencoder: AutoencoderProtocol,
 ) -> Checksum:
-    path.parent.mkdir(parents=True, exist_ok=True)
     staging = path.with_name(f".{path.name}.tmp")
-    cpu_state = {name: tensor.detach().cpu().contiguous() for name, tensor in state_dict.items()}
-    save_file(cpu_state, str(staging))
+    cpu_state = to_cpu_contiguous_state(state_dict)
+    checksum = save_state_dict_tensors(cpu_state, staging)
     _assert_checkpoint_reload_equality(cpu_state, staging, autoencoder)
     atomic_replace(staging, path)
-    return checksum_file(path)
+    return checksum
 
 
 def _assert_checkpoint_reload_equality(
@@ -61,7 +64,7 @@ def _assert_checkpoint_reload_equality(
     path: Path,
     autoencoder: AutoencoderProtocol,
 ) -> None:
-    loaded = load_file(str(path), device="cpu")
+    loaded = load_state_dict_tensors(path, torch.device("cpu"))
     if loaded.keys() != cpu_state_dict.keys():
         raise ArtifactIntegrityError(
             "checkpoint tensor names do not match the expected model state",

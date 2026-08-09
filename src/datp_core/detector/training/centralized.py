@@ -7,11 +7,11 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 import torch
-from safetensors.torch import load_file, save_file
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
-from datp_core.artifacts.provenance import Checksum, checksum_file
+from datp_core.artifacts.provenance import Checksum
+from datp_core.artifacts.serializers.safetensors import load_state_dict_tensors, save_state_dict_tensors
 from datp_core.core.errors import (
     ArtifactIntegrityError,
     ExecutionStateError,
@@ -57,7 +57,6 @@ from datp_core.detector.autoencoder import (
     LEARNING_DTYPE,
     TORCH_LEARNING_DTYPE,
     AutoencoderState,
-    AutoencoderStateView,
     ReconstructionAutoencoder,
     build_optimizer,
     construct_autoencoder,
@@ -249,7 +248,7 @@ def train_centralized_autoencoder(request: CentralizedTrainingRequest) -> Centra
     )
     request.output_directory.mkdir(parents=True, exist_ok=True)
     tensor_path = request.output_directory / CentralizedArtifactName.MODEL_TENSORS
-    tensor_checksum = persist_state_dict_tensors(model.state_dict(), tensor_path)
+    tensor_checksum = save_state_dict_tensors(model.state_dict(), tensor_path)
     assert_safetensors_reload(model, tensor_path, device)
     result = CentralizedTrainingResult(
         coordinate=request.coordinate,
@@ -288,7 +287,7 @@ def load_centralized_model_tensors(
     if resolved.type != "cuda":
         raise ExecutionStateError("centralized model reload requires CUDA", subject=ContractSubject.CUDA)
     model = construct_autoencoder(autoencoder).to(resolved)
-    state = load_file(str(path), device=str(resolved))
+    state = load_state_dict_tensors(path, resolved)
     model.load_state_dict(state, strict=True)
     model.eval()
     return model
@@ -317,20 +316,13 @@ def declared_centralized_training_values() -> tuple[
     return CENTRALIZED_TRAINING_PROTOCOL, NBAIOT_AUTOENCODER, LEARNING_RATE, BATCH_SIZE, WEIGHT_DECAY
 
 
-def persist_state_dict_tensors(state_dict: AutoencoderStateView, path: Path) -> Checksum:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    cpu_state = {name: tensor.detach().cpu().contiguous() for name, tensor in state_dict.items()}
-    save_file(cpu_state, str(path))
-    return checksum_file(path)
-
-
 def assert_safetensors_reload(
     model: ReconstructionAutoencoder,
     path: Path,
     device: torch.device,
 ) -> None:
     reloaded = construct_autoencoder(AutoencoderProtocol(widths=model.widths)).to(device)
-    state = load_file(str(path), device=str(device))
+    state = load_state_dict_tensors(path, device)
     reloaded.load_state_dict(state, strict=True)
     for left, right in zip(model.state_dict().values(), reloaded.state_dict().values(), strict=True):
         if not torch.equal(left, right):

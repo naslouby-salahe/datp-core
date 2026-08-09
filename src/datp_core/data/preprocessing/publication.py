@@ -2,20 +2,19 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from filelock import FileLock
 from pydantic import BaseModel, ValidationError
 
-from datp_core.artifacts.provenance import Checksum, checksum_text
+from datp_core.artifacts.provenance import Checksum
+from datp_core.artifacts.repositories.publication import (
+    ArtifactPublication,
+    FunctionalArtifactCodec,
+    complete_digest,
+    publish_artifact,
+)
 from datp_core.artifacts.serializers.json import canonical_json_text
 from datp_core.core.errors import ArtifactIntegrityError
 from datp_core.core.identifiers import ContractSubject, PublicationStatus
 from datp_core.data.preprocessing.artifacts import ProcessedAssetName
-from datp_core.runtime.filesystem import (
-    cleanup_staging_on_failure,
-    create_staging_directory,
-    remove_stale_staging_directories,
-    replace_directory,
-)
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,39 +40,31 @@ class ProcessedPublicationResult[ManifestT: BaseModel]:
 def publish_processed[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseModel](
     publication: ProcessedPublication[ManifestT, SchemaT, ReportT],
 ) -> ProcessedPublicationResult[ManifestT]:
-    target = publication.coordinate_directory
-    target.parent.mkdir(parents=True, exist_ok=True)
-    with FileLock(f"{target}.lock"):
-        remove_stale_staging_directories(target)
-        if not publication.overwrite and _is_reusable(target, publication):
-            return ProcessedPublicationResult(
-                coordinate_directory=target,
-                publication_status=PublicationStatus.REUSED,
-                manifest=_read_model(
-                    target,
-                    ProcessedAssetName.PREPROCESSING_MANIFEST,
-                    publication.manifest_type,
-                ),
-            )
-        staging = create_staging_directory(target)
-        with cleanup_staging_on_failure(staging):
-            _write_processed(staging, publication)
-            replace_directory(staging, target)
+    outcome = publish_artifact(
+        ArtifactPublication(
+            target=publication.coordinate_directory,
+            request=publication,
+            codec=FunctionalArtifactCodec(
+                writer=_write_processed,
+                validator=_is_reusable,
+                loader=_load_manifest,
+                rebaser=lambda manifest, _directory: manifest,
+            ),
+            overwrite=publication.overwrite,
+            complete_marker=ProcessedAssetName.COMPLETE,
+        )
+    )
     return ProcessedPublicationResult(
-        coordinate_directory=target,
-        publication_status=PublicationStatus.PUBLISHED,
-        manifest=publication.manifest,
+        coordinate_directory=publication.coordinate_directory,
+        publication_status=outcome.status,
+        manifest=outcome.value,
     )
 
 
-def complete_digest(manifest_payload: str, schema_payload: str) -> Checksum:
-    return checksum_text(f"{manifest_payload}\n{schema_payload}")
-
-
 def _write_processed[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseModel](
-    directory: Path,
     publication: ProcessedPublication[ManifestT, SchemaT, ReportT],
-) -> None:
+    directory: Path,
+) -> ManifestT:
     report = publication.writer(directory)
     manifest_payload = _write_model(publication.manifest, directory.joinpath(ProcessedAssetName.PREPROCESSING_MANIFEST))
     schema_payload = _write_model(publication.schema, directory.joinpath(ProcessedAssetName.SCHEMA))
@@ -83,16 +74,24 @@ def _write_processed[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseMode
     directory.joinpath(ProcessedAssetName.COMPLETE).write_text(digest.value, encoding="utf-8")
 
     _assert_required_assets(directory, publication.required_assets)
-    if not _is_reusable(directory, publication):
+    if not _is_reusable(publication, directory):
         raise ArtifactIntegrityError(
             "processed publication failed complete-asset validation",
             subject=ContractSubject.ARTIFACT_PATH,
         )
+    return publication.manifest
+
+
+def _load_manifest[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseModel](
+    publication: ProcessedPublication[ManifestT, SchemaT, ReportT],
+    directory: Path,
+) -> ManifestT:
+    return _read_model(directory, ProcessedAssetName.PREPROCESSING_MANIFEST, publication.manifest_type)
 
 
 def _is_reusable[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseModel](
-    directory: Path,
     publication: ProcessedPublication[ManifestT, SchemaT, ReportT],
+    directory: Path,
 ) -> bool:
     try:
         manifest_path = directory.joinpath(ProcessedAssetName.PREPROCESSING_MANIFEST)
