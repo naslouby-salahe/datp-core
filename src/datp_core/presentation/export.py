@@ -329,6 +329,7 @@ def export_mechanism_publication(
     population: PopulationId,
     output_directory: Path,
     evidence_role: EvidenceRole,
+    figures: tuple[FigureSpec, ...] = (),
 ) -> Path:
     payload = "\n".join(_render_mechanisms(mechanisms))
     write_text_atomically(output_directory / MECHANISM_REPORT_FILENAME, FileContentText(payload))
@@ -363,7 +364,7 @@ def export_mechanism_publication(
                     ),
                 ),
             ),
-            figures=(),
+            figures=figures,
         ),
         output_directory / PUBLICATION_FILENAME,
     )

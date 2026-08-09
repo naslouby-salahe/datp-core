@@ -33,6 +33,7 @@ from datp_core.presentation.figures import (
     EmpiricalCdfFigureSeries,
     FigureSeries,
     FigureSpec,
+    PairedMetricFigureSeries,
     ThresholdOverlay,
     empirical_cdf_series_from_points,
     render_markdown_figure,
@@ -99,6 +100,30 @@ def test_figure_only_bundle_is_fully_rendered(tmp_path: Path) -> None:
     assert "0.25, 0.5" in content
     assert "Unavailable comparator" in content
     assert "`unavailable`" in content
+
+
+def test_paired_metric_figure_preserves_labels_and_xy_reproducibility_data() -> None:
+    rendered = render_markdown_figure(
+        FigureSpec(
+            title=FigureTitle("Threshold movement"),
+            paired_metric_series=(
+                PairedMetricFigureSeries(
+                    label=FigureLabel("ennio_doorbell:seed_0"),
+                    x_label=FigureLabel("threshold shift"),
+                    y_label=FigureLabel("FPR change"),
+                    availability=AvailabilityStatus.AVAILABLE,
+                    x_values=(MetricValue(0.1),),
+                    y_values=(MetricValue(-0.2),),
+                    point_labels=(FigureLabel("ennio_doorbell"),),
+                ),
+            ),
+        )
+    )
+
+    assert "threshold shift" in rendered
+    assert "FPR change" in rendered
+    assert "ennio_doorbell" in rendered
+    assert "-0.20000000000000001" in rendered
 
 
 def test_blocked_claims_are_separated_from_permitted_wording_by_status(tmp_path: Path) -> None:
@@ -222,6 +247,34 @@ def test_export_mechanism_publication_does_not_override_supplied_role(
     )
     provenance_text = (tmp_path / "publication.md").read_text()
     assert EvidenceRole.TRAINING_STRESS_TEST.value in provenance_text
+
+
+def test_export_mechanism_publication_renders_supplied_figures(
+    tmp_path: Path,
+    sample_absorption_mechanisms: tuple[AbsorptionCohortResult, ...],
+) -> None:
+    figure = FigureSpec(
+        title=FigureTitle("Required mechanism figure"),
+        series=(
+            FigureSeries(
+                label=FigureLabel("seed-level evidence"),
+                metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
+                availability=AvailabilityStatus.AVAILABLE,
+                values=(MetricValue(0.25),),
+            ),
+        ),
+    )
+    export_mechanism_publication(
+        sample_absorption_mechanisms,
+        experiment=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
+        population=PopulationId.NBAIOT_NATURAL_DEVICES,
+        output_directory=tmp_path,
+        evidence_role=EvidenceRole.TRAINING_STRESS_TEST,
+        figures=(figure,),
+    )
+    publication = (tmp_path / "publication.md").read_text(encoding="utf-8")
+    assert "## Figures" in publication
+    assert "Required mechanism figure" in publication
 
 
 def test_empirical_cdf_figure_series_uses_reconstruction_and_cumulative_metrics() -> None:

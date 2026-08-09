@@ -114,10 +114,12 @@ class CentralizedTrainingPublicationBinding:
     feature_count: FeatureCount
     autoencoder_widths: tuple[FeatureCount, ...]
     train_row_count: RowCount
+    training_history_checksum: Checksum
     optimizer_identity: OptimizerId
     learning_rate: LearningRate
     weight_decay: WeightDecay
     checkpoint_rounds: tuple[RoundNumber, ...]
+    checkpoint_tensor_checksums: tuple[Checksum, ...]
 
 
 def _centralized_training_binding(
@@ -134,10 +136,15 @@ def _centralized_training_binding(
         feature_count=FeatureCount(len(request.feature_names)),
         autoencoder_widths=tuple(request.autoencoder.widths),
         train_row_count=RowCount(request.training_features.height),
+        training_history_checksum=Checksum.from_file(directory / CentralizedArtifactName.TRAINING_HISTORY),
         optimizer_identity=request.training_protocol.optimizer.identity,
         learning_rate=request.learning_rate,
         weight_decay=request.weight_decay,
         checkpoint_rounds=tuple(request.checkpoint_protocol.candidates),
+        checkpoint_tensor_checksums=tuple(
+            Checksum.from_file(directory / candidate_tensor_name(candidate))
+            for candidate in request.checkpoint_protocol.candidates
+        ),
     )
 
 

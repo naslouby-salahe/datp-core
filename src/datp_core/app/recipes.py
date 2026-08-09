@@ -418,14 +418,29 @@ def _dispatch_declared(
     )
 
 
-def _dispatch_analysis(experiment_id: ExperimentId) -> DispatchOutcome:
+def _dispatch_analysis(
+    experiment_id: ExperimentId,
+    output_root: Path,
+    overwrite: OverwriteMode,
+) -> DispatchOutcome:
+    if output_root != OUTPUTS_ROOT:
+        raise ScientificContractError(
+            ErrorMessage(
+                "analysis-only experiments require the full frozen confirmatory evidence and cannot run in smoke mode"
+            ),
+            subject=experiment_id,
+        )
+    paths, detail = _report_heterogeneity(experiment_id, overwrite)
     return DispatchOutcome(
-        detail=DetailText(f"analysis-only experiment {experiment_id.value} reuses frozen confirmatory scores"),
+        detail=DetailText(f"analysis-only experiment validated frozen evidence: {detail}"),
         method_outcomes=tuple(
             ThresholdMethodOutcome(
                 method=method,
                 status=ThresholdMethodExecutionStatus.COMPLETED,
-                detail=DetailText("analysis-only experiment reuses frozen confirmatory score artifacts"),
+                detail=DetailText(
+                    "analysis artifact generated from validated frozen confirmatory score evidence: "
+                    + ",".join(str(path) for path in paths)
+                ),
             )
             for method in _declared_methods(experiment_id)
         ),
@@ -842,8 +857,8 @@ def _declared_recipe(experiment_id: ExperimentId) -> DispatchHandler:
 
 def _analysis_recipe(experiment_id: ExperimentId) -> DispatchHandler:
     def dispatch(seeds: tuple[Seed, ...], output_root: Path, overwrite: OverwriteMode) -> DispatchOutcome:
-        del seeds, output_root, overwrite
-        return _dispatch_analysis(experiment_id)
+        del seeds
+        return _dispatch_analysis(experiment_id, output_root, overwrite)
 
     return dispatch
 

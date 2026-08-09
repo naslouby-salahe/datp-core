@@ -114,3 +114,17 @@ def test_centralized_training_reuse_requires_all_artifact_parts(tmp_path: Path) 
     (directory / CentralizedArtifactName.COMPLETE).write_text("stale", encoding="utf-8")
 
     assert centralized_training_is_reusable(request, directory) is False
+
+
+def test_centralized_training_reuse_rejects_tampered_history_and_candidate_contents(tmp_path: Path) -> None:
+    directory = tmp_path / "run"
+    request = _request(tmp_path)
+    _publish_marker(directory, request)
+
+    (directory / CentralizedArtifactName.TRAINING_HISTORY).write_bytes(b"different history bytes")
+    assert centralized_training_is_reusable(request, directory) is False
+
+    _publish_marker(directory, request)
+    candidate = directory / candidate_tensor_name(request.checkpoint_protocol.candidates[0])
+    candidate.write_bytes(b"different candidate tensor bytes")
+    assert centralized_training_is_reusable(request, directory) is False

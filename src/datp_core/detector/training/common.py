@@ -3,6 +3,7 @@ from pathlib import Path
 
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import (
+    ArtifactIntegrityError,
     ErrorMessage,
     ScientificContractError,
 )
@@ -77,8 +78,20 @@ def federated_training_is_reusable(
     request: FederatedTrainingRequest[GlobalFederatedProtocol],
     directory: Path,
 ) -> bool:
-    del request
-    return (directory / FederatedHistoryAssetName.COMPLETE.value).is_file()
+    """Accept reuse only after request-bound manifest and artifact validation.
+
+    A COMPLETE marker is a necessary completion signal, not proof that it
+    describes this request.  Returning ``False`` lets the atomic publisher
+    replace stale or corrupted output instead of sending it to a loader that
+    will fail after the reuse branch has already been selected.
+    """
+    if not (directory / FederatedHistoryAssetName.COMPLETE.value).is_file():
+        return False
+    try:
+        load_reused_federated_artifacts(request, directory)
+    except (ArtifactIntegrityError, OSError, ScientificContractError, ValueError):
+        return False
+    return True
 
 
 def load_reused_federated_artifacts(
@@ -135,10 +148,15 @@ def ditto_training_is_reusable(
     request: DittoTrainingRequest,
     directories: tuple[Path, ...],
 ) -> bool:
-    del request
     global_directory, personalized_directory = ditto_directories(directories)
     filename = FederatedHistoryAssetName.COMPLETE.value
-    return (global_directory / filename).is_file() and (personalized_directory / filename).is_file()
+    if not (global_directory / filename).is_file() or not (personalized_directory / filename).is_file():
+        return False
+    try:
+        load_reused_ditto_artifacts(request, directories)
+    except (ArtifactIntegrityError, OSError, ScientificContractError, ValueError):
+        return False
+    return True
 
 
 def load_reused_ditto_artifacts(

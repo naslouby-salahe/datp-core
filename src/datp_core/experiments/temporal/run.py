@@ -681,22 +681,6 @@ def _validate_campaign_recovery_provenance(campaign: TemporalCampaignResult) -> 
 
 
 def _validate_campaign_shared_detector_identity(campaign: TemporalCampaignResult) -> None:
-    detector_keys = tuple(
-        (
-            seed.static_reference.provenance.checkpoint_checksum,
-            seed.static_reference.provenance.preprocessing_state_set_checksum,
-            seed.frozen_future.provenance.checkpoint_checksum,
-            seed.frozen_future.provenance.preprocessing_state_set_checksum,
-            seed.recalibrated_future.provenance.checkpoint_checksum,
-            seed.recalibrated_future.provenance.preprocessing_state_set_checksum,
-        )
-        for seed in campaign.seeds
-    )
-    if len(frozenset(detector_keys)) != 1:
-        raise ScientificContractError(
-            ErrorMessage("temporal campaign seeds must share one fitted detector and preprocessing identity"),
-            subject=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
-        )
     for seed in campaign.seeds:
         _validate_shared_temporal_detector(seed.static_reference.provenance, seed.frozen_future.provenance)
         validate_frozen_recalibrated_pair(seed.frozen_future.provenance, seed.recalibrated_future.provenance)
@@ -707,25 +691,6 @@ def _document_level_deployment_provenance(
 ) -> tuple[TemporalDeploymentProvenance, TemporalDeploymentProvenance, TemporalDeploymentProvenance]:
     if not records:
         raise ScientificContractError(ErrorMessage("temporal document provenance requires recovery records"))
-    detector_keys = tuple(
-        (
-            record.provenance.static_reference.checkpoint_checksum,
-            record.provenance.static_reference.preprocessing_state_set_checksum,
-            record.provenance.static_reference.coordinate_checksum,
-            record.provenance.frozen_future.checkpoint_checksum,
-            record.provenance.frozen_future.preprocessing_state_set_checksum,
-            record.provenance.frozen_future.coordinate_checksum,
-            record.provenance.recalibrated_future.checkpoint_checksum,
-            record.provenance.recalibrated_future.preprocessing_state_set_checksum,
-            record.provenance.recalibrated_future.coordinate_checksum,
-        )
-        for record in records
-    )
-    if len(frozenset(detector_keys)) != 1:
-        raise ScientificContractError(
-            ErrorMessage("temporal document provenance requires shared detector identity across seeds"),
-            subject=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
-        )
     for record in records:
         _validate_shared_temporal_detector(record.provenance.static_reference, record.provenance.frozen_future)
         validate_frozen_recalibrated_pair(record.provenance.frozen_future, record.provenance.recalibrated_future)
@@ -737,9 +702,15 @@ def _document_level_deployment_provenance(
         split_protocol=static_template.split_protocol,
         calibration_role=static_template.calibration_role,
         evaluation_role=static_template.evaluation_role,
-        coordinate_checksum=static_template.coordinate_checksum,
-        checkpoint_checksum=static_template.checkpoint_checksum,
-        preprocessing_state_set_checksum=static_template.preprocessing_state_set_checksum,
+        coordinate_checksum=_aggregate_checksums(
+            tuple(item.provenance.static_reference.coordinate_checksum for item in records)
+        ),
+        checkpoint_checksum=_aggregate_checksums(
+            tuple(item.provenance.static_reference.checkpoint_checksum for item in records)
+        ),
+        preprocessing_state_set_checksum=_aggregate_checksums(
+            tuple(item.provenance.static_reference.preprocessing_state_set_checksum for item in records)
+        ),
         split_manifest_checksum=_aggregate_checksums(
             tuple(item.provenance.static_reference.split_manifest_checksum for item in records)
         ),
@@ -755,9 +726,15 @@ def _document_level_deployment_provenance(
         split_protocol=frozen_template.split_protocol,
         calibration_role=frozen_template.calibration_role,
         evaluation_role=frozen_template.evaluation_role,
-        coordinate_checksum=frozen_template.coordinate_checksum,
-        checkpoint_checksum=frozen_template.checkpoint_checksum,
-        preprocessing_state_set_checksum=frozen_template.preprocessing_state_set_checksum,
+        coordinate_checksum=_aggregate_checksums(
+            tuple(item.provenance.frozen_future.coordinate_checksum for item in records)
+        ),
+        checkpoint_checksum=_aggregate_checksums(
+            tuple(item.provenance.frozen_future.checkpoint_checksum for item in records)
+        ),
+        preprocessing_state_set_checksum=_aggregate_checksums(
+            tuple(item.provenance.frozen_future.preprocessing_state_set_checksum for item in records)
+        ),
         split_manifest_checksum=_aggregate_checksums(
             tuple(item.provenance.frozen_future.split_manifest_checksum for item in records)
         ),
@@ -773,9 +750,15 @@ def _document_level_deployment_provenance(
         split_protocol=recalibrated_template.split_protocol,
         calibration_role=recalibrated_template.calibration_role,
         evaluation_role=recalibrated_template.evaluation_role,
-        coordinate_checksum=recalibrated_template.coordinate_checksum,
-        checkpoint_checksum=recalibrated_template.checkpoint_checksum,
-        preprocessing_state_set_checksum=recalibrated_template.preprocessing_state_set_checksum,
+        coordinate_checksum=_aggregate_checksums(
+            tuple(item.provenance.recalibrated_future.coordinate_checksum for item in records)
+        ),
+        checkpoint_checksum=_aggregate_checksums(
+            tuple(item.provenance.recalibrated_future.checkpoint_checksum for item in records)
+        ),
+        preprocessing_state_set_checksum=_aggregate_checksums(
+            tuple(item.provenance.recalibrated_future.preprocessing_state_set_checksum for item in records)
+        ),
         split_manifest_checksum=frozen.split_manifest_checksum,
         calibration_score_set_checksum=_aggregate_checksums(
             tuple(item.provenance.recalibrated_future.calibration_score_set_checksum for item in records)

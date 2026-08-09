@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from datp_core.analysis.descriptive import ScoreRole
+from datp_core.analysis.descriptive import ScoreGeometryResult, ScoreRole
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.identifiers import (
     AnalysisReasonText,
@@ -70,6 +70,42 @@ class EmpiricalCdfFigureSeries:
             _validate_unavailable_empirical_cdf(self)
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PairedMetricFigureSeries:
+    """Reproducibility data for a labelled scatter or fitted paired-metric line."""
+
+    label: FigureLabel
+    x_label: FigureLabel
+    y_label: FigureLabel
+    availability: AvailabilityStatus
+    x_values: tuple[MetricValue, ...]
+    y_values: tuple[MetricValue, ...]
+    point_labels: tuple[FigureLabel, ...] = ()
+    unavailable_reason: AnalysisReasonText | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.label, FigureLabel):
+            object.__setattr__(self, "label", FigureLabel(self.label))
+        if not isinstance(self.x_label, FigureLabel):
+            object.__setattr__(self, "x_label", FigureLabel(self.x_label))
+        if not isinstance(self.y_label, FigureLabel):
+            object.__setattr__(self, "y_label", FigureLabel(self.y_label))
+        if self.unavailable_reason is not None and not isinstance(self.unavailable_reason, AnalysisReasonText):
+            object.__setattr__(self, "unavailable_reason", AnalysisReasonText(self.unavailable_reason))
+        if self.availability is AvailabilityStatus.AVAILABLE:
+            if not self.x_values or len(self.x_values) != len(self.y_values):
+                raise ValueError("available paired-metric series require aligned x and y values")
+            if self.point_labels and len(self.point_labels) != len(self.x_values):
+                raise ValueError("paired-metric point labels must cover every value pair")
+            if self.unavailable_reason is not None:
+                raise ValueError("available paired-metric series cannot carry an unavailable reason")
+        else:
+            if self.x_values or self.y_values or self.point_labels:
+                raise ValueError("unavailable paired-metric series cannot contain values or point labels")
+            if self.unavailable_reason is None:
+                raise ValueError("unavailable paired-metric series require an explicit reason")
+
+
 def _validate_empirical_cdf_axes(series: EmpiricalCdfFigureSeries) -> None:
     if series.x_metric is not MetricId.RECONSTRUCTION_ERROR and series.availability is AvailabilityStatus.AVAILABLE:
         raise ValueError("empirical reconstruction CDF series must use reconstruction-error x metric")
@@ -105,11 +141,12 @@ class FigureSpec:
     title: FigureTitle
     series: tuple[FigureSeries, ...] = ()
     empirical_cdf_series: tuple[EmpiricalCdfFigureSeries, ...] = ()
+    paired_metric_series: tuple[PairedMetricFigureSeries, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.title, FigureTitle):
             object.__setattr__(self, "title", FigureTitle(self.title))
-        if not self.series and not self.empirical_cdf_series:
+        if not self.series and not self.empirical_cdf_series and not self.paired_metric_series:
             raise ValueError("figure specifications require at least one series")
 
 
@@ -155,6 +192,63 @@ def empirical_cdf_series_from_points(
     )
 
 
+def score_geometry_figure(
+    geometry: ScoreGeometryResult,
+    *,
+    title: FigureTitle,
+    client_id: ClientIdentityToken | None = None,
+) -> FigureSpec:
+    """Build one validated empirical-CDF figure from a frozen score-geometry record.
+
+    A client filter is used only for the pre-specified deep-dive panel; callers
+    otherwise receive every declared client and score role in the geometry.
+    """
+    series: list[EmpiricalCdfFigureSeries] = []
+    for client_geometry in geometry.clients:
+        if client_id is not None and client_geometry.client.client_id != client_id:
+            continue
+        label = FigureLabel(
+            f"seed{geometry.seed.value}:{client_geometry.client.client_id.value}:{client_geometry.score_role.value}"
+        )
+        overlays = tuple(
+            ThresholdOverlay(method=item.method, value=ThresholdValue(item.threshold.value))
+            for item in geometry.threshold_overlays
+            if item.client is None or item.client == client_geometry.client
+        )
+        if client_geometry.unavailable_reason is not None:
+            series.append(
+                empirical_cdf_series_from_points(
+                    label=label,
+                    points=(),
+                    client_id=client_geometry.client.client_id,
+                    seed=geometry.seed,
+                    score_role=client_geometry.score_role,
+                    threshold_overlays=(),
+                    source_checksum=geometry.source_score_checksum,
+                    unavailable_reason=AnalysisReasonText(client_geometry.unavailable_reason),
+                )
+            )
+            continue
+        points = tuple(
+            (point.score, MetricValue(point.cumulative_probability.value)) for point in client_geometry.empirical_cdf
+        )
+        series.append(
+            empirical_cdf_series_from_points(
+                label=label,
+                points=points,
+                client_id=client_geometry.client.client_id,
+                seed=geometry.seed,
+                score_role=client_geometry.score_role,
+                threshold_overlays=overlays,
+                source_checksum=geometry.source_score_checksum,
+            )
+        )
+    if not series:
+        selected = client_id.value if client_id is not None else "all clients"
+        raise ValueError(f"score geometry contains no series for {selected}")
+    return FigureSpec(title=title, empirical_cdf_series=tuple(series))
+
+
 def render_markdown_figure(figure: FigureSpec) -> ReportLine:
     """Render every validated figure series as explicit publication evidence."""
     rows = [
@@ -181,6 +275,15 @@ def render_markdown_figure(figure: FigureSpec) -> ReportLine:
             ]
         )
         rows.extend(_render_series(series) for series in figure.series)
+    if figure.paired_metric_series:
+        rows.extend(
+            [
+                "",
+                "| Series | X axis | Y axis | Availability | Point labels | X values | Y values | Reason |",
+                "| --- | --- | --- | --- | --- | --- | --- | --- |",
+            ]
+        )
+        rows.extend(_render_paired_metric_series(series) for series in figure.paired_metric_series)
     return ReportLine("\n".join(rows).rstrip())
 
 
@@ -207,4 +310,15 @@ def _render_empirical_series(series: EmpiricalCdfFigureSeries) -> ReportLine:
         f"| {series.label} | `{series.x_metric.value}` | `{series.y_metric.value}` | "
         f"`{series.availability.value}` | {client} | {seed} | {role} | {x_values} | {y_values} | "
         f"{overlays} | {reason} |"
+    )
+
+
+def _render_paired_metric_series(series: PairedMetricFigureSeries) -> ReportLine:
+    labels = ", ".join(series.point_labels) if series.point_labels else "—"
+    x_values = ", ".join(format(value.value, ".17g") for value in series.x_values) if series.x_values else "—"
+    y_values = ", ".join(format(value.value, ".17g") for value in series.y_values) if series.y_values else "—"
+    reason = series.unavailable_reason if series.unavailable_reason is not None else "—"
+    return ReportLine(
+        f"| {series.label} | {series.x_label} | {series.y_label} | `{series.availability.value}` | "
+        f"{labels} | {x_values} | {y_values} | {reason} |"
     )

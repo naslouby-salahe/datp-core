@@ -14,8 +14,9 @@ from datp_core.analysis.descriptive import (
     summarize_values,
 )
 from datp_core.artifacts.provenance import Checksum
-from datp_core.core.identifiers import AvailabilityStatus, EvidenceRole
+from datp_core.core.identifiers import AvailabilityStatus, ClientIdentityToken, EvidenceRole, FigureTitle
 from datp_core.core.numeric import MetricValue, PairedObservationCount, Ratio, Seed
+from datp_core.presentation.figures import score_geometry_figure
 
 _DEFAULT_QUANTILES = QuantileRange(lower=Ratio(0.25), upper=Ratio(0.75))
 
@@ -125,3 +126,29 @@ def test_score_geometry_retains_every_declared_client_without_silent_omission() 
     assert attack[0].unavailable_reason is not None
     assert attack[1].empirical_cdf[0].score == MetricValue(0.9)
     assert attack[1].empirical_cdf[0].cumulative_probability == Ratio(1.0)
+
+
+def test_score_geometry_figure_can_select_the_prespecified_deep_dive_client() -> None:
+    clients = (client_identity("ennio_doorbell"), client_identity("device_b"))
+    geometry = score_geometry_from_client_vectors(
+        seed=Seed(0),
+        source_score_checksum=Checksum("e" * 64),
+        benign_evaluation=tuple(
+            ClientEvaluationScoreSeries(client=client, scores=(MetricValue(0.1), MetricValue(0.2)))
+            for client in clients
+        ),
+        attack_evaluation=tuple(
+            ClientEvaluationScoreSeries(client=client, scores=(MetricValue(0.3),)) for client in clients
+        ),
+        threshold_overlays=(),
+        attack_geometry_available=True,
+    )
+
+    deep_dive = score_geometry_figure(
+        geometry,
+        title=FigureTitle("Ennio Doorbell empirical score CDF"),
+        client_id=ClientIdentityToken("ennio_doorbell"),
+    )
+
+    assert len(deep_dive.empirical_cdf_series) == 2
+    assert {series.client_id for series in deep_dive.empirical_cdf_series} == {ClientIdentityToken("ennio_doorbell")}

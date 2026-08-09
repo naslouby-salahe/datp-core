@@ -228,6 +228,7 @@ data/raw
 data/manifests/
 data/processed/
 outputs/
+tmp/
 .runtime/
 .import_linter_cache/
 .tmp/implementation/

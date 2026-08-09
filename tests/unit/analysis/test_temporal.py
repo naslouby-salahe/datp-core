@@ -12,6 +12,7 @@ from datp_core.analysis.temporal import (
     temporal_recovery,
 )
 from datp_core.artifacts.provenance import Checksum
+from datp_core.artifacts.serializers.json import canonical_checksum
 from datp_core.core.identifiers import (
     AvailabilityStatus,
     ClientIdentityToken,
@@ -26,6 +27,7 @@ from datp_core.core.identifiers import (
 from datp_core.core.numeric import MetricValue, Ratio, Seed
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.experiments.common.seeds import BOUNDED_EVIDENCE_SEED_COHORT
+from datp_core.experiments.temporal.run import _document_level_deployment_provenance
 
 _TEST_TEMPORAL_DECISION_PROTOCOL = TemporalDecisionProtocol(
     drift_excess_materiality_threshold=MetricValue(0.1),
@@ -170,6 +172,26 @@ def test_full_material_recovery_cohort_is_supported() -> None:
         for record in records
     )
     assert decide_temporal_campaign(records).decision is ScientificDecision.SUPPORTED
+
+
+def test_campaign_provenance_preserves_one_detector_per_seed() -> None:
+    records = tuple(
+        _recovery(
+            seed.value,
+            0.10,
+            0.30,
+            0.12,
+            detector=_checksum("d", seed.value + 1),
+        )
+        for seed in BOUNDED_EVIDENCE_SEED_COHORT.values
+    )
+
+    static, frozen, recalibrated = _document_level_deployment_provenance(records)
+    expected = canonical_checksum(tuple(record.provenance.static_reference.checkpoint_checksum for record in records))
+
+    assert static.checkpoint_checksum == expected
+    assert frozen.checkpoint_checksum == expected
+    assert recalibrated.checkpoint_checksum == expected
 
 
 def test_mixed_method_campaign_is_blocked() -> None:
@@ -326,6 +348,7 @@ def _recovery(
     recalibrated_cv: float,
     *,
     method: FederatedThresholdMethod = FederatedThresholdMethod.LOCAL_THRESHOLD,
+    detector: Checksum | None = None,
 ):
     return temporal_recovery(
         seed=Seed(seed),
@@ -334,7 +357,7 @@ def _recovery(
         static_reference_cv=MetricValue(static_cv),
         frozen_future_cv=MetricValue(frozen_cv),
         recalibrated_future_cv=MetricValue(recalibrated_cv),
-        provenance=_seed_provenance(seed, method=method),
+        provenance=_seed_provenance(seed, method=method, detector=detector),
         decision_protocol=_TEST_TEMPORAL_DECISION_PROTOCOL,
     )
 
@@ -343,9 +366,10 @@ def _seed_provenance(
     seed: int,
     *,
     method: FederatedThresholdMethod = FederatedThresholdMethod.LOCAL_THRESHOLD,
+    detector: Checksum | None = None,
 ) -> TemporalSeedProvenance:
     index = seed + 1
-    detector = Checksum("a" * 64)
+    detector_checksum = detector if detector is not None else Checksum("a" * 64)
     preprocess = Checksum("b" * 64)
     coordinate = Checksum("c" * 64)
     future_eval = _checksum("d", index)
@@ -356,7 +380,7 @@ def _seed_provenance(
         calibration_role=PartitionRole.CALIBRATION,
         evaluation_role=PartitionRole.EVALUATION,
         coordinate_checksum=coordinate,
-        checkpoint_checksum=detector,
+        checkpoint_checksum=detector_checksum,
         preprocessing_state_set_checksum=preprocess,
         split_manifest_checksum=_checksum("1", index),
         calibration_score_set_checksum=_checksum("2", index),
@@ -368,7 +392,7 @@ def _seed_provenance(
         calibration_role=PartitionRole.CALIBRATION,
         evaluation_role=PartitionRole.EVALUATION,
         coordinate_checksum=coordinate,
-        checkpoint_checksum=detector,
+        checkpoint_checksum=detector_checksum,
         preprocessing_state_set_checksum=preprocess,
         split_manifest_checksum=future_split,
         calibration_score_set_checksum=_checksum("4", index),
@@ -380,7 +404,7 @@ def _seed_provenance(
         calibration_role=PartitionRole.FUTURE_RECALIBRATION,
         evaluation_role=PartitionRole.EVALUATION,
         coordinate_checksum=coordinate,
-        checkpoint_checksum=detector,
+        checkpoint_checksum=detector_checksum,
         preprocessing_state_set_checksum=preprocess,
         split_manifest_checksum=future_split,
         calibration_score_set_checksum=_checksum("5", index),

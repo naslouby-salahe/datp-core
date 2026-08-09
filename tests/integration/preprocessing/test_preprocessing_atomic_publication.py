@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import numpy as np
 import polars as pl
 from sklearn.preprocessing import StandardScaler
 
@@ -12,6 +13,7 @@ from datp_core.core.identifiers import (
     PartitionRole,
     PopulationId,
     PreprocessingProtocolId,
+    PublicationStatus,
     SerializationFormat,
     SplitProtocolId,
 )
@@ -29,6 +31,7 @@ from datp_core.data.preprocessing.models import (
     PreprocessingProtocol,
     PreprocessingPublishContext,
 )
+from datp_core.data.preprocessing.state import load_estimator, serialize_estimator
 
 
 def test_partial_asset_is_rebuilt_after_cleanup(tmp_path: Path) -> None:
@@ -94,3 +97,31 @@ def test_partial_asset_is_rebuilt_after_cleanup(tmp_path: Path) -> None:
 
     assert rebuilt.paths.train.parent == first.paths.train.parent
     assert (rebuilt.paths.train.parent / ProcessedAssetName.COMPLETE).is_file()
+
+    # Exercise persisted scientific content, not just its schema/manifest: this
+    # is an actual transformed calibration row with stable-row provenance.
+    calibration = pl.read_parquet(rebuilt.paths.calibration)
+    tampered_calibration = calibration.with_columns((pl.col("f0") + 100.0).alias("f0"))
+    tampered_calibration.write_parquet(rebuilt.paths.calibration)
+    assert pl.read_parquet(rebuilt.paths.calibration).get_column("f0").to_list() == [100.0]
+
+    repaired_partitions = publish_client_preprocessing(request)
+    assert repaired_partitions.publication_status is PublicationStatus.PUBLISHED
+    assert pl.read_parquet(repaired_partitions.paths.calibration).get_column("f0").to_list() == [0.0]
+
+    # A valid-but-different skops payload must also be rejected; merely being
+    # parseable is insufficient for scientific preprocessing reuse.
+    state_path = repaired_partitions.fitted_state.estimator_path
+    serialize_estimator(StandardScaler().fit(np.asarray([[100.0, 101.0], [102.0, 103.0]])), state_path)
+    tampered_estimator = load_estimator(state_path, protocol.estimator_class_name)
+    assert isinstance(tampered_estimator, StandardScaler)
+    assert tampered_estimator.transform(np.asarray([[0.5, 1.5]])).tolist() != [[0.0, 0.0]]
+
+    repaired_state = publish_client_preprocessing(request)
+    assert repaired_state.publication_status is PublicationStatus.PUBLISHED
+    repaired_estimator = load_estimator(
+        repaired_state.fitted_state.estimator_path,
+        protocol.estimator_class_name,
+    )
+    assert isinstance(repaired_estimator, StandardScaler)
+    assert repaired_estimator.transform(np.asarray([[0.5, 1.5]])).tolist() == [[0.0, 0.0]]

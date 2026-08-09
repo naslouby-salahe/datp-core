@@ -78,10 +78,13 @@ def _write_processed[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseMode
     schema_payload = _write_model(publication.schema, directory.joinpath(ProcessedAssetName.SCHEMA))
     _write_model(report, directory.joinpath(ProcessedAssetName.VALIDATION_REPORT))
 
-    digest = complete_digest(manifest_payload, schema_payload)
+    _assert_required_assets(directory, _assets_before_completion(publication.required_assets))
+    digest = complete_digest(
+        manifest_payload,
+        schema_payload,
+        _published_asset_checksum(directory, publication.required_assets),
+    )
     directory.joinpath(ProcessedAssetName.COMPLETE).write_text(digest.value, encoding="utf-8")
-
-    _assert_required_assets(directory, publication.required_assets)
     if not _is_reusable(publication, directory):
         raise ArtifactIntegrityError(
             ErrorMessage("processed publication failed complete-asset validation"),
@@ -115,6 +118,7 @@ def _is_reusable[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseModel](
         expected = complete_digest(
             SerializedDocumentText(manifest_text),
             SerializedDocumentText(schema_text),
+            _published_asset_checksum(directory, publication.required_assets),
         )
         actual = Checksum(complete_path.read_text(encoding="utf-8").strip())
 
@@ -173,3 +177,40 @@ def _assert_required_assets(directory: Path, required_assets: tuple[ProcessedAss
             ErrorMessage(f"processed publication missing assets: {', '.join(asset.value for asset in missing)}"),
             subject=ContractSubject.ARTIFACT_PATH,
         )
+
+
+def _published_assets(required_assets: tuple[ProcessedAssetName, ...]) -> tuple[ProcessedAssetName, ...]:
+    """Return every mutable artifact whose bytes certify a processed publication.
+
+    The manifest/schema are covered directly by ``complete_digest``.  The fitted
+    state, transformed partitions, and validation report need an explicit
+    checksum projection so a stale or modified path cannot be reused merely
+    because it still exists.
+    """
+    if len(required_assets) != len(frozenset(required_assets)):
+        raise ValueError("processed publication assets must be unique")
+    metadata_assets = frozenset(
+        {
+            ProcessedAssetName.SCHEMA,
+            ProcessedAssetName.PREPROCESSING_MANIFEST,
+            ProcessedAssetName.COMPLETE,
+        }
+    )
+    return tuple(asset for asset in required_assets if asset not in metadata_assets)
+
+
+def _published_asset_checksum(
+    directory: Path,
+    required_assets: tuple[ProcessedAssetName, ...],
+) -> SerializedDocumentText:
+    """Canonical checksum projection for all persisted, non-manifest assets."""
+    _assert_required_assets(directory, _assets_before_completion(required_assets))
+    payload = "\n".join(
+        f"{asset.value}:{Checksum.from_file(directory.joinpath(asset)).value}"
+        for asset in _published_assets(required_assets)
+    )
+    return SerializedDocumentText(payload)
+
+
+def _assets_before_completion(required_assets: tuple[ProcessedAssetName, ...]) -> tuple[ProcessedAssetName, ...]:
+    return tuple(asset for asset in required_assets if asset is not ProcessedAssetName.COMPLETE)

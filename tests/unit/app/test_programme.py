@@ -1,12 +1,21 @@
 """Programme registry, planning, feasibility, and scientific naming invariants."""
 
+from pathlib import Path
+
+import pytest
+
 from datp_core.app.campaign import build_programme_plan, seed_cohort_for
+from datp_core.app.contracts import OverwriteMode
+from datp_core.app.models import DetailText
 from datp_core.app.planning import PlanDisposition
+from datp_core.app.recipes import recipe_for
 from datp_core.app.research import registered_experiment_ids
 from datp_core.app.validation import require_experiment_execution_ready, validate_programme
+from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import ExperimentId, ExperimentReadiness, FederatedThresholdMethod
 from datp_core.experiments.common.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_SEED_COHORT
 from datp_core.experiments.registry import EXPERIMENTS
+from datp_core.runtime.configuration import OUTPUTS_ROOT
 
 
 def test_every_non_suppressed_experiment_has_exactly_one_recipe() -> None:
@@ -66,3 +75,31 @@ def test_runtime_threshold_identifiers_are_descriptive() -> None:
     assert FederatedThresholdMethod.LOCAL_THRESHOLD.value == "local_threshold"
     assert FederatedThresholdMethod.FAMILY_THRESHOLD.value == "family_threshold"
     assert FederatedThresholdMethod.CLUSTER_THRESHOLD.value == "cluster_threshold"
+
+
+def test_analysis_only_recipe_generates_or_validates_its_publication_before_reporting_completion(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    observed: list[ExperimentId] = []
+
+    def report(experiment_id: ExperimentId, overwrite: OverwriteMode) -> tuple[tuple[Path, ...], DetailText]:
+        assert overwrite is OverwriteMode.KEEP_EXISTING
+        observed.append(experiment_id)
+        return (tmp_path,), DetailText("validated mechanism publication")
+
+    monkeypatch.setattr("datp_core.app.recipes._report_heterogeneity", report)
+    recipe = recipe_for(ExperimentId.PER_CLIENT_SCORE_GEOMETRY)
+
+    outcome = recipe.dispatch((), OUTPUTS_ROOT, OverwriteMode.KEEP_EXISTING)
+
+    assert observed == [ExperimentId.PER_CLIENT_SCORE_GEOMETRY]
+    assert all(item.status.value == "completed" for item in outcome.method_outcomes)
+    assert "validated frozen evidence" in outcome.detail
+
+
+def test_analysis_only_recipe_cannot_report_completion_from_smoke_output() -> None:
+    recipe = recipe_for(ExperimentId.PER_CLIENT_SCORE_GEOMETRY)
+
+    with pytest.raises(ScientificContractError, match="full frozen confirmatory evidence"):
+        recipe.dispatch((), Path("smoke_outputs"), OverwriteMode.KEEP_EXISTING)

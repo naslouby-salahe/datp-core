@@ -14,10 +14,12 @@ from tests.unit.learning.federated.helpers import (
 
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import ScientificContractError
-from datp_core.core.identifiers import ClientIdentityToken
+from datp_core.core.identifiers import ClientIdentityToken, PublicationStatus
 from datp_core.core.numeric import Seed
+from datp_core.detector.training.common import ditto_training_is_reusable
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 from datp_core.detector.training.ditto import DittoTrainingRequest, train_ditto
+from datp_core.detector.training.ditto_publication import TrainDittoDetectorRequest, train_ditto_detector
 from datp_core.detector.training.models import DittoTrainingCoordinates
 
 
@@ -125,3 +127,18 @@ def test_ditto_training_coordinates_reject_mismatched_regularization(tmp_path: P
             global_coordinate=coordinates.global_coordinate,
             personalized_coordinate=mismatched_personalized,
         )
+
+
+def test_ditto_markers_without_valid_artifacts_are_not_reusable(tmp_path: Path) -> None:
+    request = _request(tmp_path)
+    for directory in (request.global_output_directory, request.personalized_output_directory):
+        directory.mkdir(parents=True)
+        (directory / "COMPLETE").write_text("stale completion marker", encoding="utf-8")
+
+    assert ditto_training_is_reusable(
+        request,
+        (request.global_output_directory, request.personalized_output_directory),
+    ) is False
+
+    rebuilt = train_ditto_detector(TrainDittoDetectorRequest(request=request, overwrite=False))
+    assert rebuilt.publication_status is PublicationStatus.PUBLISHED

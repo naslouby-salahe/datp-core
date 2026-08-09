@@ -269,9 +269,13 @@ def publish_related_artifacts[RequestT, ResultT](
 def complete_digest(
     manifest_payload: SerializedDocumentText,
     schema_payload: SerializedDocumentText,
+    artifact_payload: SerializedDocumentText | None = None,
 ) -> Checksum:
-    """Bind a manifest and schema payload into one deterministic completion digest."""
-    return Checksum.from_text(f"{manifest_payload}\n{schema_payload}")
+    """Bind metadata and, when supplied, a persisted-asset projection into COMPLETE."""
+    payloads = (manifest_payload, schema_payload)
+    if artifact_payload is not None:
+        payloads = (*payloads, artifact_payload)
+    return Checksum.from_text("\n".join(payloads))
 
 
 def write_artifact_completion_marker(marker: Path, digest: Checksum) -> None:

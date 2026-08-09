@@ -7,22 +7,19 @@ movement analyses reuse frozen confirmatory score artifacts.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
 import polars as pl
 
-from datp_core.analysis.descriptive import (
-    ClientEvaluationScoreSeries,
-    ScoreGeometryResult,
-    ScoreGeometryThresholdOverlay,
-    score_geometry_from_client_vectors,
-)
 from datp_core.analysis.mechanisms import (
     AssociationObservation,
+    AssociationResult,
     ClientScoreVector,
     MechanismEvidence,
+    ThresholdMovement,
     ThresholdMovementCohort,
     heterogeneity_benefit_association,
     jensen_shannon_from_client_scores,
@@ -41,21 +38,25 @@ from datp_core.core.errors import (
 )
 from datp_core.core.identifiers import (
     AnalysisReasonText,
+    AvailabilityStatus,
     EvidenceRole,
     ExperimentId,
     FederatedThresholdMethod,
+    FigureLabel,
+    FigureTitle,
     MetricId,
     PopulationId,
     RegimeLabel,
     ScoreFrameColumn,
 )
 from datp_core.core.numeric import DirichletConcentration, MetricValue, Seed
-from datp_core.data.populations.contracts import ClientIdentity, ControlledPartitionKind
+from datp_core.data.nbaiot.schema import NBaIoTDevice
+from datp_core.data.populations.contracts import ControlledPartitionKind
 from datp_core.data.populations.declarations import DIRICHLET_CONCENTRATIONS
 from datp_core.detector.scoring.models import FederatedScoreAssetName
-from datp_core.detector.training.models import FederatedTrainingCoordinate
 from datp_core.experiments.common.coordinates import ExperimentCoordinate
 from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
+from datp_core.experiments.confirmatory.run import build_confirmatory_score_geometry, persist_score_geometry
 from datp_core.experiments.execution import execute_declared_experiment_seed
 from datp_core.experiments.execution.evidence import load_evaluation_document, population_metric
 from datp_core.experiments.execution.layout import (
@@ -65,6 +66,7 @@ from datp_core.experiments.execution.layout import (
 )
 from datp_core.experiments.registry import EXPERIMENTS, ExperimentDeclaration
 from datp_core.presentation.export import export_mechanism_publication
+from datp_core.presentation.figures import FigureSpec, PairedMetricFigureSeries
 from datp_core.runtime.configuration import OUTPUTS_ROOT
 
 
@@ -235,6 +237,203 @@ def _collect_heterogeneity_movement_cohorts() -> tuple[ThresholdMovementCohort, 
     return tuple(movement_cohorts)
 
 
+def _controlled_heterogeneity_figures(
+    observations: tuple[AssociationObservation, ...],
+) -> tuple[FigureSpec, ...]:
+    """Publish every declared severity/seed value, rather than a smoothed summary."""
+    x_label = FigureLabel("locked benign-calibration Jensen-Shannon divergence")
+    y_label = FigureLabel("shared-local CV(FPR) gain")
+    by_regime: dict[RegimeLabel, list[AssociationObservation]] = {}
+    for observation in observations:
+        by_regime.setdefault(observation.regime_label, []).append(observation)
+    if not by_regime:
+        series = (
+            PairedMetricFigureSeries(
+                label=FigureLabel("no valid controlled heterogeneity observations"),
+                x_label=x_label,
+                y_label=y_label,
+                availability=AvailabilityStatus.UNAVAILABLE,
+                x_values=(),
+                y_values=(),
+                unavailable_reason=AnalysisReasonText("no valid controlled heterogeneity observations"),
+            ),
+        )
+    else:
+        series = tuple(
+            PairedMetricFigureSeries(
+                label=FigureLabel(str(regime)),
+                x_label=x_label,
+                y_label=y_label,
+                availability=AvailabilityStatus.AVAILABLE,
+                x_values=tuple(item.heterogeneity for item in ordered),
+                y_values=tuple(item.benefit for item in ordered),
+                point_labels=tuple(FigureLabel(f"seed_{item.seed.value}") for item in ordered),
+            )
+            for regime, values in sorted(by_regime.items(), key=lambda item: str(item[0]))
+            for ordered in (tuple(sorted(values, key=lambda item: item.seed.value)),)
+        )
+    return (
+        FigureSpec(
+            title=FigureTitle(
+                "Controlled non-IID seed distributions: Jensen-Shannon heterogeneity versus CV(FPR) gain"
+            ),
+            paired_metric_series=series,
+        ),
+    )
+
+
+def _association_figure(result: AssociationResult) -> FigureSpec:
+    x_label = FigureLabel("locked benign-calibration Jensen-Shannon divergence")
+    y_label = FigureLabel("shared-local CV(FPR) gain")
+    ordered = tuple(sorted(result.observations, key=lambda item: (item.seed.value, str(item.regime_label))))
+    if not ordered:
+        raw_series = PairedMetricFigureSeries(
+            label=FigureLabel("valid regime/seed observations"),
+            x_label=x_label,
+            y_label=y_label,
+            availability=AvailabilityStatus.UNAVAILABLE,
+            x_values=(),
+            y_values=(),
+            unavailable_reason=result.reason or AnalysisReasonText("no valid association observations"),
+        )
+    else:
+        raw_series = PairedMetricFigureSeries(
+            label=FigureLabel("valid regime/seed observations"),
+            x_label=x_label,
+            y_label=y_label,
+            availability=AvailabilityStatus.AVAILABLE,
+            x_values=tuple(item.heterogeneity for item in ordered),
+            y_values=tuple(item.benefit for item in ordered),
+            point_labels=tuple(FigureLabel(f"{item.regime_label}:seed_{item.seed.value}") for item in ordered),
+        )
+    if result.statistics is None or not ordered:
+        regression_series = PairedMetricFigureSeries(
+            label=FigureLabel("pre-specified descriptive regression"),
+            x_label=x_label,
+            y_label=y_label,
+            availability=AvailabilityStatus.UNAVAILABLE,
+            x_values=(),
+            y_values=(),
+            unavailable_reason=result.reason or AnalysisReasonText("descriptive regression is unavailable"),
+        )
+    else:
+        regression_x = tuple(sorted((item.heterogeneity for item in ordered), key=lambda item: item.value))
+        regression_series = PairedMetricFigureSeries(
+            label=FigureLabel("pre-specified descriptive regression"),
+            x_label=x_label,
+            y_label=y_label,
+            availability=AvailabilityStatus.AVAILABLE,
+            x_values=regression_x,
+            y_values=tuple(
+                MetricValue(
+                    result.statistics.regression_intercept.value
+                    + result.statistics.regression_slope.value * value.value
+                )
+                for value in regression_x
+            ),
+            point_labels=tuple(FigureLabel("fitted") for _ in regression_x),
+        )
+    return FigureSpec(
+        title=FigureTitle("Heterogeneity–benefit association: observed points and descriptive regression"),
+        paired_metric_series=(raw_series, regression_series),
+    )
+
+
+def _threshold_movement_figures(
+    cohorts: tuple[ThresholdMovementCohort, ...],
+) -> tuple[FigureSpec, ...]:
+    movements = tuple(movement for cohort in cohorts for movement in cohort.movements)
+    _require_complete_natural_device_movement_coverage(movements)
+    return (
+        _threshold_movement_figure(
+            movements,
+            title=FigureTitle("Threshold shift versus FPR change (all N-BaIoT devices and seeds)"),
+            y_label=FigureLabel("local-minus-shared false-positive-rate change"),
+            value_for=lambda movement: movement.delta_fpr,
+            unavailable_reason=AnalysisReasonText("FPR movement is unavailable"),
+        ),
+        _threshold_movement_figure(
+            movements,
+            title=FigureTitle("Threshold shift versus TPR change (all N-BaIoT devices and seeds)"),
+            y_label=FigureLabel("local-minus-shared true-positive-rate change"),
+            value_for=lambda movement: movement.delta_tpr,
+            unavailable_reason=AnalysisReasonText("attack-sensitive TPR movement is unavailable"),
+        ),
+    )
+
+
+def _threshold_movement_figure(
+    movements: tuple[ThresholdMovement, ...],
+    *,
+    title: FigureTitle,
+    y_label: FigureLabel,
+    value_for: Callable[[ThresholdMovement], MetricValue | None],
+    unavailable_reason: AnalysisReasonText,
+) -> FigureSpec:
+    x_label = FigureLabel("local-minus-shared threshold shift")
+    if not movements:
+        return FigureSpec(
+            title=title,
+            paired_metric_series=(
+                PairedMetricFigureSeries(
+                    label=FigureLabel("no threshold movement observations"),
+                    x_label=x_label,
+                    y_label=y_label,
+                    availability=AvailabilityStatus.UNAVAILABLE,
+                    x_values=(),
+                    y_values=(),
+                    unavailable_reason=AnalysisReasonText("no threshold movement observations"),
+                ),
+            ),
+        )
+    series: list[PairedMetricFigureSeries] = []
+    for movement in movements:
+        value = value_for(movement)
+        label = FigureLabel(f"{movement.client.client_id.value}:seed_{movement.seed.value}")
+        if value is None:
+            series.append(
+                PairedMetricFigureSeries(
+                    label=label,
+                    x_label=x_label,
+                    y_label=y_label,
+                    availability=AvailabilityStatus.UNAVAILABLE,
+                    x_values=(),
+                    y_values=(),
+                    unavailable_reason=unavailable_reason,
+                )
+            )
+            continue
+        series.append(
+            PairedMetricFigureSeries(
+                label=label,
+                x_label=x_label,
+                y_label=y_label,
+                availability=AvailabilityStatus.AVAILABLE,
+                x_values=(movement.delta_threshold,),
+                y_values=(value,),
+                point_labels=(FigureLabel(movement.client.client_id.value),),
+            )
+        )
+    return FigureSpec(title=title, paired_metric_series=tuple(series))
+
+
+def _require_complete_natural_device_movement_coverage(movements: tuple[ThresholdMovement, ...]) -> None:
+    expected = frozenset(device.value for device in NBaIoTDevice)
+    by_seed: dict[Seed, set[str]] = {}
+    for movement in movements:
+        by_seed.setdefault(movement.seed, set()).add(movement.client.client_id.value)
+    for seed, observed in by_seed.items():
+        observed_ids = frozenset(observed)
+        if observed_ids != expected:
+            raise ScientificContractError(
+                ErrorMessage(
+                    "threshold-movement figure must retain every declared natural device "
+                    f"for seed {seed.value}; missing={sorted(expected - observed_ids)} "
+                    f"extra={sorted(observed_ids - expected)}"
+                )
+            )
+
+
 def analyze_controlled_heterogeneity_sweep(*, overwrite: bool) -> Path:
     output = (
         OUTPUTS_ROOT
@@ -253,6 +452,7 @@ def analyze_controlled_heterogeneity_sweep(*, overwrite: bool) -> Path:
     associations = _collect_heterogeneity_associations()
     if associations:
         mechanisms.append(heterogeneity_benefit_association(associations))
+    figures = _controlled_heterogeneity_figures(associations)
 
     movements = _collect_heterogeneity_movement_cohorts()
     if movements:
@@ -270,6 +470,7 @@ def analyze_controlled_heterogeneity_sweep(*, overwrite: bool) -> Path:
             population=PopulationId.NBAIOT_DIRICHLET_CLIENTS,
             output_directory=output,
             evidence_role=EvidenceRole.MECHANISM,
+            figures=figures,
         )
     return output
 
@@ -287,42 +488,8 @@ def analyze_per_client_score_geometry(*, overwrite: bool) -> Path:
 
         rmtree(output)
 
-    geometries: list[ScoreGeometryResult] = []
-    for seed in CONFIRMATORY_SEED_COHORT.values:
-        shared = _load_confirmatory_evaluation(seed, FederatedThresholdMethod.SHARED_THRESHOLD)
-        expected_clients = tuple(sorted(item.client for item in shared.clients))
-        if not expected_clients:
-            raise ScientificContractError(
-                ErrorMessage(f"per-client score geometry requires evaluation clients for seed {seed.value}")
-            )
-        benign_eval = _client_evaluation_scores(
-            score_coordinate=shared.score_coordinate,
-            document_clients=tuple(item.client for item in shared.clients),
-            expected_clients=expected_clients,
-            benign_only=True,
-        )
-        attack_eval = _client_evaluation_scores(
-            score_coordinate=shared.score_coordinate,
-            document_clients=tuple(item.client for item in shared.clients),
-            expected_clients=expected_clients,
-            benign_only=False,
-        )
-        attack_available = any(item.scores for item in attack_eval)
-        geometries.append(
-            score_geometry_from_client_vectors(
-                seed=seed,
-                source_score_checksum=shared.fixed_score_evidence.evaluation.score_checksum,
-                benign_evaluation=benign_eval,
-                attack_evaluation=attack_eval,
-                threshold_overlays=_score_geometry_threshold_overlays(seed, expected_clients),
-                attack_geometry_available=attack_available,
-                attack_geometry_reason=(
-                    None if attack_available else AnalysisReasonText("attack evaluation scores unavailable")
-                ),
-            )
-        )
-
-    _persist_score_geometry(tuple(geometries), output / "score_geometry")
+    geometries, figures = build_confirmatory_score_geometry()
+    persist_score_geometry(geometries, output / "score_geometry")
     if geometries:
         export_mechanism_publication(
             (),
@@ -330,6 +497,7 @@ def analyze_per_client_score_geometry(*, overwrite: bool) -> Path:
             population=PopulationId.NBAIOT_NATURAL_DEVICES,
             output_directory=output,
             evidence_role=EvidenceRole.MECHANISM,
+            figures=figures,
         )
     return output
 
@@ -368,8 +536,8 @@ def analyze_heterogeneity_benefit_association(*, overwrite: bool) -> Path:
                     benefit=MetricValue(shared_cv.value - local_cv.value),
                 )
             )
-    if association_observations:
-        mechanisms.append(heterogeneity_benefit_association(tuple(association_observations)))
+    association = heterogeneity_benefit_association(tuple(association_observations))
+    mechanisms.append(association)
 
     if mechanisms:
         export_mechanism_publication(
@@ -378,6 +546,7 @@ def analyze_heterogeneity_benefit_association(*, overwrite: bool) -> Path:
             population=PopulationId.NBAIOT_NATURAL_DEVICES,
             output_directory=output,
             evidence_role=EvidenceRole.MECHANISM,
+            figures=(_association_figure(association),),
         )
     return output
 
@@ -422,6 +591,7 @@ def analyze_threshold_movement_tradeoff(*, overwrite: bool) -> Path:
         population=PopulationId.NBAIOT_NATURAL_DEVICES,
         output_directory=output,
         evidence_role=EvidenceRole.MECHANISM,
+        figures=_threshold_movement_figures(tuple(movement_cohorts)),
     )
     return output
 
@@ -549,103 +719,3 @@ def _client_score_vectors(
             ErrorMessage("Jensen-Shannon construction requires at least two client score vectors")
         )
     return tuple(vectors), document.fixed_score_evidence.calibration.score_checksum
-
-
-def _client_evaluation_scores(
-    *,
-    score_coordinate: FederatedTrainingCoordinate,
-    document_clients: tuple[ClientIdentity, ...],
-    expected_clients: tuple[ClientIdentity, ...],
-    benign_only: bool,
-) -> tuple[ClientEvaluationScoreSeries, ...]:
-    from datp_core.data.populations.contracts import PopulationOutcomeLabel
-
-    ordered_document_clients = tuple(sorted(document_clients))
-    if frozenset(ordered_document_clients) != frozenset(expected_clients):
-        missing = sorted(
-            client.client_id.value for client in expected_clients if client not in frozenset(ordered_document_clients)
-        )
-        extra = sorted(
-            client.client_id.value for client in ordered_document_clients if client not in frozenset(expected_clients)
-        )
-        raise ScientificContractError(
-            ErrorMessage(
-                "evaluation document clients do not match the expected score-geometry client set"
-                f" missing={missing} extra={extra}"
-            )
-        )
-    if len(ordered_document_clients) != len(frozenset(ordered_document_clients)):
-        raise ScientificContractError(ErrorMessage("evaluation document clients must be unique for score geometry"))
-
-    score_root = federated_training_directory(score_coordinate, OUTPUTS_ROOT) / ExecutionArtifactDirectory.SCORES
-    pairs: list[ClientEvaluationScoreSeries] = []
-    benign_label = PopulationOutcomeLabel.BENIGN.value
-    for client in expected_clients:
-        path = score_root / client.client_id.value / FederatedScoreAssetName.EVALUATION.value
-        if not path.is_file():
-            raise ScientificContractError(
-                ErrorMessage(f"missing evaluation score parquet for client {client.client_id.value}: {path}")
-            )
-        frame = pl.read_parquet(path)
-        score_column = ScoreFrameColumn.RECONSTRUCTION_ERROR.value
-        label_column = ScoreFrameColumn.OUTCOME_LABEL.value
-        if score_column not in frame.columns:
-            raise ScientificContractError(
-                ErrorMessage(f"missing reconstruction_error column for client {client.client_id.value}: {path}")
-            )
-        if label_column not in frame.columns:
-            raise ScientificContractError(
-                ErrorMessage(f"missing outcome_label column for client {client.client_id.value}: {path}")
-            )
-        scores_raw = frame.get_column(score_column).to_list()
-        labels = frame.get_column(label_column).to_list()
-        if len(scores_raw) != len(labels):
-            raise ScientificContractError(
-                ErrorMessage(f"score and label columns are misaligned for client {client.client_id.value}: {path}")
-            )
-        scores = tuple(
-            MetricValue(float(score))
-            for score, label in zip(scores_raw, labels, strict=True)
-            if (str(label) == benign_label) is benign_only
-        )
-        pairs.append(ClientEvaluationScoreSeries(client=client, scores=scores))
-    return tuple(pairs)
-
-
-def _score_geometry_threshold_overlays(
-    seed: Seed,
-    expected_clients: tuple[ClientIdentity, ...],
-) -> tuple[ScoreGeometryThresholdOverlay, ...]:
-    expected = frozenset(expected_clients)
-    overlays: list[ScoreGeometryThresholdOverlay] = []
-    for method in (
-        FederatedThresholdMethod.SHARED_THRESHOLD,
-        FederatedThresholdMethod.LOCAL_THRESHOLD,
-        FederatedThresholdMethod.CLUSTER_THRESHOLD,
-    ):
-        try:
-            document = _load_confirmatory_evaluation(seed, method)
-        except ScientificContractError:
-            continue
-        for client_result in sorted(document.clients, key=lambda item: item.client):
-            if client_result.client not in expected:
-                continue
-            overlays.append(
-                ScoreGeometryThresholdOverlay(
-                    method=method,
-                    threshold=MetricValue(client_result.threshold.value),
-                    client=client_result.client,
-                )
-            )
-    return tuple(overlays)
-
-
-def _persist_score_geometry(
-    geometries: tuple[ScoreGeometryResult, ...],
-    output_directory: Path,
-) -> None:
-    from datp_core.artifacts.serializers.json import serialize_json_model
-
-    output_directory.mkdir(parents=True, exist_ok=True)
-    for geometry in geometries:
-        serialize_json_model(geometry, output_directory / f"seed_{geometry.seed.value}.json")

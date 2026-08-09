@@ -20,6 +20,7 @@ from datp_core.detector.checkpoints.protocols import CHECKPOINT_SELECTION_RULE
 from datp_core.detector.checkpoints.selection import select_checkpoint
 from datp_core.detector.scoring.federated import publish_federated_scores
 from datp_core.detector.scoring.models import ClientScoringInput, GenerateFederatedScoresRequest
+from datp_core.detector.training.common import federated_training_is_reusable
 from datp_core.detector.training.engine import FederatedTrainingRequest
 from datp_core.detector.training.federated import train_global_federated
 from datp_core.detector.training.federated_publication import TrainFederatedDetectorRequest, train_federated_detector
@@ -95,3 +96,14 @@ def test_fedavg_reruns_identical_coordinate_and_reuses_published_training(tmp_pa
     assert tuple(candidate.tensor_checksum for candidate in first.candidates) == tuple(
         candidate.tensor_checksum for candidate in second.candidates
     )
+
+
+def test_fedavg_marker_without_valid_artifacts_is_not_reusable(tmp_path: Path) -> None:
+    request = _training_request(tmp_path)
+    request.output_directory.mkdir(parents=True)
+    (request.output_directory / "COMPLETE").write_text("stale completion marker", encoding="utf-8")
+
+    assert federated_training_is_reusable(request, request.output_directory) is False
+
+    rebuilt = train_federated_detector(TrainFederatedDetectorRequest(request=request, overwrite=False))
+    assert rebuilt.publication_status is PublicationStatus.PUBLISHED

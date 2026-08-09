@@ -43,10 +43,10 @@ from datp_core.core.errors import (
 )
 from datp_core.core.identifiers import (
     AnalysisReasonText,
+    ClientIdentityToken,
     EvidenceRole,
     ExperimentId,
     FederatedThresholdMethod,
-    FigureLabel,
     FigureTitle,
     MetricId,
     PopulationId,
@@ -54,7 +54,8 @@ from datp_core.core.identifiers import (
     ScoreFrameColumn,
     TrainingModelId,
 )
-from datp_core.core.numeric import MetricValue, ModelCoefficientValue, Ratio, Seed, ThresholdValue
+from datp_core.core.numeric import MetricValue, ModelCoefficientValue, Ratio, Seed
+from datp_core.data.nbaiot.schema import NBaIoTDevice
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.scoring.models import FederatedScoreAssetName
 from datp_core.detector.training.models import FederatedTrainingCoordinate
@@ -70,7 +71,7 @@ from datp_core.experiments.execution.layout import (
 )
 from datp_core.experiments.registry import EXPERIMENTS, ExperimentDeclaration
 from datp_core.presentation.export import export_confirmatory_publication, export_mechanism_publication
-from datp_core.presentation.figures import FigureSpec, ThresholdOverlay
+from datp_core.presentation.figures import FigureSpec, score_geometry_figure
 from datp_core.runtime.configuration import OUTPUTS_ROOT
 from datp_core.thresholds.policies.cluster import GroupedThresholdResult
 
@@ -197,8 +198,8 @@ def analyze_confirmatory_campaign(*, anchor_gate_diagnostics_directory: Path | N
             mechanisms=all_mechanisms,
         )
     )
-    geometries, figures = _confirmatory_score_geometry()
-    _persist_score_geometry(geometries, output / ConfirmatoryAssetDirectory.SCORE_GEOMETRY)
+    geometries, figures = build_confirmatory_score_geometry()
+    persist_score_geometry(geometries, output / ConfirmatoryAssetDirectory.SCORE_GEOMETRY)
     export_confirmatory_publication(
         result.document,
         output,
@@ -258,7 +259,7 @@ def _confirmatory_mechanisms() -> tuple[MechanismEvidence, ...]:
     return tuple(mechanisms)
 
 
-def _confirmatory_score_geometry() -> tuple[tuple[ScoreGeometryResult, ...], tuple[FigureSpec, ...]]:
+def build_confirmatory_score_geometry() -> tuple[tuple[ScoreGeometryResult, ...], tuple[FigureSpec, ...]]:
     geometries: list[ScoreGeometryResult] = []
     figures: list[FigureSpec] = []
     for seed in CONFIRMATORY_SEED_COHORT.values:
@@ -293,74 +294,28 @@ def _confirmatory_score_geometry() -> tuple[tuple[ScoreGeometryResult, ...], tup
             ),
         )
         geometries.append(geometry)
-        figures.append(_empirical_cdf_figure_from_geometry(geometry))
+        figures.append(
+            score_geometry_figure(
+                geometry,
+                title=FigureTitle(f"Per-client empirical score CDF (seed {geometry.seed.value})"),
+            )
+        )
+        figures.append(
+            score_geometry_figure(
+                geometry,
+                title=FigureTitle(f"Ennio Doorbell empirical score CDF (seed {geometry.seed.value})"),
+                client_id=ClientIdentityToken(NBaIoTDevice.ENNIO_DOORBELL.value),
+            )
+        )
     return tuple(geometries), tuple(figures)
 
 
-def _persist_score_geometry(geometries: tuple[ScoreGeometryResult, ...], output_directory: Path) -> None:
+def persist_score_geometry(geometries: tuple[ScoreGeometryResult, ...], output_directory: Path) -> None:
     from datp_core.artifacts.serializers.json import serialize_json_model
 
     output_directory.mkdir(parents=True, exist_ok=True)
     for geometry in geometries:
         serialize_json_model(geometry, output_directory / f"seed_{geometry.seed.value}.json")
-
-
-def _empirical_cdf_figure_from_geometry(geometry: ScoreGeometryResult) -> FigureSpec:
-    from datp_core.presentation.figures import EmpiricalCdfFigureSeries, empirical_cdf_series_from_points
-
-    series: list[EmpiricalCdfFigureSeries] = []
-    for client_geometry in geometry.clients:
-        label = FigureLabel(
-            f"seed{geometry.seed.value}:{client_geometry.client.client_id.value}:{client_geometry.score_role.value}"
-        )
-        overlays = _client_threshold_overlays(geometry.threshold_overlays, client_geometry.client)
-        if client_geometry.unavailable_reason is not None:
-            series.append(
-                empirical_cdf_series_from_points(
-                    label=label,
-                    points=(),
-                    client_id=client_geometry.client.client_id,
-                    seed=geometry.seed,
-                    score_role=client_geometry.score_role,
-                    threshold_overlays=(),
-                    source_checksum=geometry.source_score_checksum,
-                    unavailable_reason=AnalysisReasonText(client_geometry.unavailable_reason),
-                )
-            )
-            continue
-        points = tuple(
-            (point.score, MetricValue(point.cumulative_probability.value)) for point in client_geometry.empirical_cdf
-        )
-        series.append(
-            empirical_cdf_series_from_points(
-                label=label,
-                points=points,
-                client_id=client_geometry.client.client_id,
-                seed=geometry.seed,
-                score_role=client_geometry.score_role,
-                threshold_overlays=overlays,
-                source_checksum=geometry.source_score_checksum,
-            )
-        )
-    if not series:
-        raise ScientificContractError(
-            ErrorMessage(f"confirmatory score geometry produced no client series for seed {geometry.seed.value}")
-        )
-    return FigureSpec(
-        title=FigureTitle(f"Per-client empirical score CDF (seed {geometry.seed.value})"),
-        empirical_cdf_series=tuple(series),
-    )
-
-
-def _client_threshold_overlays(
-    overlays: tuple[ScoreGeometryThresholdOverlay, ...],
-    client: ClientIdentity,
-) -> tuple[ThresholdOverlay, ...]:
-    return tuple(
-        ThresholdOverlay(method=item.method, value=ThresholdValue(item.threshold.value))
-        for item in overlays
-        if item.client is None or item.client == client
-    )
 
 
 def _score_geometry_threshold_overlays(
@@ -374,10 +329,7 @@ def _score_geometry_threshold_overlays(
         FederatedThresholdMethod.LOCAL_THRESHOLD,
         FederatedThresholdMethod.CLUSTER_THRESHOLD,
     ):
-        try:
-            document = load_evaluation_document(_evaluation_path(seed, method))
-        except ScientificContractError:
-            continue
+        document = load_evaluation_document(_evaluation_path(seed, method))
         for client_result in sorted(document.clients, key=lambda item: item.client):
             if client_result.client not in expected:
                 continue
@@ -388,6 +340,24 @@ def _score_geometry_threshold_overlays(
                     client=client_result.client,
                 )
             )
+    required = frozenset(
+        (method, client)
+        for method in (
+            FederatedThresholdMethod.SHARED_THRESHOLD,
+            FederatedThresholdMethod.LOCAL_THRESHOLD,
+            FederatedThresholdMethod.CLUSTER_THRESHOLD,
+        )
+        for client in expected_clients
+    )
+    observed = frozenset((item.method, item.client) for item in overlays)
+    if observed != required:
+        missing = sorted(f"{method.value}:{client.client_id.value}" for method, client in required - observed)
+        extra = sorted(
+            f"{method.value}:{client.client_id.value}" for method, client in observed - required if client is not None
+        )
+        raise ScientificContractError(
+            ErrorMessage(f"score geometry threshold overlays are incomplete missing={missing} extra={extra}")
+        )
     return tuple(overlays)
 
 
@@ -720,7 +690,6 @@ def absorption_corner_from_evaluation_document(
         eligibility_checksum=evidence.population.eligibility_cohort_checksum,
         population_cv_fpr=population_metric(document, MetricId.FPR_COEFFICIENT_OF_VARIATION),
     )
-
 
 
 def _evaluation_path(training_seed: Seed, method: FederatedThresholdMethod) -> Path:
