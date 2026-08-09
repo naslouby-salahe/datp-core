@@ -19,6 +19,7 @@ from datp_core.core.identifiers import (
     DatasetId,
     PhysicalSchemaText,
     PublicationStatus,
+    SerializedDocumentText,
     SourceIdentity,
 )
 from datp_core.core.numeric import ByteCount, CanonicalColumnPosition, LogicalElementCount, RowCount, SourceFileCount
@@ -71,7 +72,7 @@ class CanonicalManifest[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum]:
     chronology: tuple[ChronologyValidation, ...] = ()
     eligibility_policy: ModelInputEligibilityPolicy[EligibilityReasonT] | None = None
 
-    def content(self) -> str:
+    def content(self) -> SerializedDocumentText:
         return serialized_manifest_json(
             ManifestSerializationRequest(
                 dataset=self.dataset,
@@ -253,7 +254,9 @@ def canonical_schema_checksum(
     return Checksum.from_text(schema_checksum_document_json(dataset, columns, physical_schema))
 
 
-def canonical_provenance_column(column: CanonicalProvenanceColumn, position: int) -> CanonicalColumn:
+def canonical_provenance_column(
+    column: CanonicalProvenanceColumn, position: CanonicalColumnPosition
+) -> CanonicalColumn:
     source_name, dtype = _provenance_column_details(column)
     return CanonicalColumn(
         ColumnName(column),
@@ -261,7 +264,7 @@ def canonical_provenance_column(column: CanonicalProvenanceColumn, position: int
         dtype,
         CanonicalColumnRole.PROVENANCE,
         True,
-        CanonicalColumnPosition(position),
+        position,
     )
 
 

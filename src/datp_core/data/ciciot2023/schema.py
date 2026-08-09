@@ -210,7 +210,7 @@ def _canonical_columns() -> tuple[CanonicalColumn, ...]:
     )
     provenance_position = evidence_position + len(evidence_columns)
     provenance_columns = tuple(
-        canonical_provenance_column(column, provenance_position + index)
+        canonical_provenance_column(column, CanonicalColumnPosition(provenance_position + index))
         for index, column in enumerate(CanonicalProvenanceColumn)
     )
     return feature_columns + label_columns + evidence_columns + provenance_columns

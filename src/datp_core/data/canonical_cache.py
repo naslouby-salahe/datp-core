@@ -22,6 +22,7 @@ from datp_core.core.identifiers import (
     DatasetId,
     PhysicalSchemaText,
     PublicationStatus,
+    SerializedDocumentText,
     SourceIdentity,
 )
 from datp_core.core.numeric import ByteCount, RowCount
@@ -130,7 +131,7 @@ class SourceStateProbe:
     target: Path
     dataset: DatasetId
     source_paths: tuple[Path, ...]
-    manifest: str
+    manifest: SerializedDocumentText
     source_path_resolver: SourcePathResolver
 
 
@@ -177,7 +178,7 @@ def reuse_published_canonical[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
 
 def _fast_reusable_manifest[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
     target: Path, request: CanonicalReuseRequest[AssetRoleT, EligibilityReasonT]
-) -> tuple[CanonicalManifestDocument, str] | None:
+) -> tuple[CanonicalManifestDocument, SerializedDocumentText] | None:
     schema = request.schema
     schema_file = target / CanonicalPublicationArtifact.SCHEMA
     manifest_file = target / CanonicalPublicationArtifact.MANIFEST
@@ -374,7 +375,7 @@ def write_source_state(
     manifest_path = target / CanonicalPublicationArtifact.MANIFEST
     if not manifest_path.is_file():
         return
-    manifest = manifest_path.read_text(encoding="utf-8")
+    manifest = SerializedDocumentText(manifest_path.read_text(encoding="utf-8"))
     state_path = target / CanonicalPublicationArtifact.SOURCE_STATE
     temporary = state_path.with_name(f".{CanonicalPublicationArtifact.SOURCE_STATE}")
     temporary.write_text(
@@ -387,7 +388,7 @@ def write_source_state(
 def _source_state(
     dataset: DatasetId,
     source_paths: tuple[Path, ...],
-    manifest: str,
+    manifest: SerializedDocumentText,
     source_path_resolver: SourcePathResolver,
 ) -> SourceStateDocument:
     sources = tuple(
@@ -427,11 +428,11 @@ def _reusable_manifest[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
 
 def _read_manifest(
     target: Path, schema_file: Path, manifest_file: Path, complete_file: Path
-) -> tuple[CanonicalManifestDocument, str] | None:
+) -> tuple[CanonicalManifestDocument, SerializedDocumentText] | None:
     if not _publication_files_exist(target, schema_file, manifest_file, complete_file):
         return None
     try:
-        serialized_manifest = manifest_file.read_text(encoding="utf-8")
+        serialized_manifest = SerializedDocumentText(manifest_file.read_text(encoding="utf-8"))
         return CanonicalManifestDocument.model_validate_json(serialized_manifest), serialized_manifest
     except (OSError, ValueError):
         return None
@@ -442,7 +443,7 @@ def _publication_files_exist(target: Path, schema_file: Path, manifest_file: Pat
 
 
 def _documents_match_publication(
-    schema_file: Path, complete_file: Path, serialized_manifest: str, schema: CanonicalSchema
+    schema_file: Path, complete_file: Path, serialized_manifest: SerializedDocumentText, schema: CanonicalSchema
 ) -> bool:
     serialized_schema = schema_content(schema)
     return (
@@ -549,7 +550,7 @@ def serialized_asset[AssetRoleT: StrEnum](asset: CanonicalAsset[AssetRoleT]) -> 
 def serialized_manifest_json[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
     request: ManifestSerializationRequest[EligibilityReasonT],
     assets: tuple[CanonicalAsset[AssetRoleT], ...],
-) -> str:
+) -> SerializedDocumentText:
     return canonical_json_text(
         CanonicalManifestDocument(
             assets=tuple(_asset_entry(asset) for asset in assets),

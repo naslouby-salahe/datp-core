@@ -59,14 +59,19 @@ class PcapChronology:
     @classmethod
     def validate(cls, group_identity: ChronologyGroupIdentity, csv_path: Path, pcap_path: Path) -> "PcapChronology":
         if not pcap_path.is_file():
-            return cls(pcap_path, _unavailable_validation(group_identity, csv_path, "Paired PCAP is missing."))
+            return cls(
+                pcap_path,
+                _unavailable_validation(group_identity, csv_path, ValidationReasonText("Paired PCAP is missing.")),
+            )
         try:
             aligner = _PcapAligner(csv_path, pcap_path)
             aligner.align_all()
         except (ValueError, csv.Error) as error:
             return cls(
                 pcap_path,
-                _unavailable_validation(group_identity, csv_path, f"PCAP alignment could not be verified: {error}"),
+                _unavailable_validation(
+                    group_identity, csv_path, ValidationReasonText(f"PCAP alignment could not be verified: {error}")
+                ),
             )
         return cls(pcap_path, aligner.validation(group_identity))
 
@@ -135,22 +140,24 @@ class _PcapAligner:
             trailing_evidence_rows=RowCount(self.trailing_evidence_rows),
         )
 
-    def _first_match(self, clocks: Iterator[int], records: Iterator[_PcapRecord]) -> _PcapRecord:
+    def _first_match(self, clocks: Iterator[MicrosecondClock], records: Iterator[_PcapRecord]) -> _PcapRecord:
         first_clock = next(clocks, None)
         first_record = next(records, None)
         if first_clock is None or first_record is None:
             raise ValueError("CSV and paired PCAP must both contain records")
-        self.alignment_offset_microseconds = (first_clock - first_record.utc_clock_microseconds) % _MICROSECONDS_PER_DAY
+        self.alignment_offset_microseconds = MicrosecondOffset(
+            (first_clock.value - first_record.utc_clock_microseconds.value) % _MICROSECONDS_PER_DAY
+        )
         if self.expected_offset_microseconds not in (None, self.alignment_offset_microseconds):
             raise ValueError("paired PCAP display offset changed after chronology validation")
         return first_record
 
     def _remaining_matches(
         self,
-        clocks: Iterator[int],
+        clocks: Iterator[MicrosecondClock],
         records: Iterator[_PcapRecord],
-        previous_timestamp: int,
-    ) -> Iterator[int]:
+        previous_timestamp: NanosecondTimestamp,
+    ) -> Iterator[NanosecondTimestamp]:
         offset = self.alignment_offset_microseconds
         if offset is None:
             raise ValueError("PCAP alignment offset is unavailable")
@@ -159,7 +166,9 @@ class _PcapAligner:
             yield self._record_match(record, previous_timestamp)
             previous_timestamp = record.timestamp_nanoseconds
 
-    def _next_matching_record(self, clock: int, records: Iterator[_PcapRecord], offset: int) -> _PcapRecord:
+    def _next_matching_record(
+        self, clock: MicrosecondClock, records: Iterator[_PcapRecord], offset: MicrosecondOffset
+    ) -> _PcapRecord:
         record = next(records, None)
         while record is not None and not _clock_matches(clock, record.utc_clock_microseconds, offset):
             self.skipped_evidence_rows += 1
@@ -168,7 +177,7 @@ class _PcapAligner:
             raise ValueError("PCAP does not cover every CSV record")
         return record
 
-    def _record_match(self, record: _PcapRecord, previous_timestamp: int | None) -> int:
+    def _record_match(self, record: _PcapRecord, previous_timestamp: NanosecondTimestamp | None) -> NanosecondTimestamp:
         self.total_rows += 1
         if previous_timestamp == record.timestamp_nanoseconds:
             self.duplicate_timestamp_count += 1
@@ -181,14 +190,16 @@ def paired_capture_path(csv_path: Path) -> Path:
     return csv_path.with_suffix(EdgeArtifactSuffix.PCAP)
 
 
-def write_capture_timeline(csv_path: Path, pcap_path: Path, destination: Path, offset_microseconds: int) -> None:
+def write_capture_timeline(
+    csv_path: Path, pcap_path: Path, destination: Path, offset_microseconds: MicrosecondOffset
+) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     aligner = _PcapAligner(csv_path, pcap_path, offset_microseconds)
     with pq.ParquetWriter(destination, _TIMELINE_SCHEMA, compression="zstd") as writer:
-        indexes: list[int] = []
-        timestamps: list[int] = []
+        indexes: list[SourceRowIndex] = []
+        timestamps: list[NanosecondTimestamp] = []
         for index, timestamp in enumerate(aligner.matches()):
-            indexes.append(index)
+            indexes.append(SourceRowIndex(index))
             timestamps.append(timestamp)
             if len(indexes) == _TIMELINE_BATCH_SIZE:
                 _write_timeline_batch(writer, indexes, timestamps)
@@ -215,7 +226,7 @@ def _unavailable_validation(
     )
 
 
-def _csv_capture_clocks(path: Path) -> Iterator[int]:
+def _csv_capture_clocks(path: Path) -> Iterator[MicrosecondClock]:
     with path.open("r", encoding="utf-8", newline="") as source:
         reader = csv.reader(source)
         header = next(reader, None)
@@ -228,10 +239,10 @@ def _csv_capture_clocks(path: Path) -> Iterator[int]:
         for row in reader:
             if len(row) <= timestamp_column:
                 raise ValueError("Edge CSV record is missing frame.time")
-            yield _capture_clock_microseconds(row[timestamp_column])
+            yield _capture_clock_microseconds(UtcInstantText(row[timestamp_column]))
 
 
-def _capture_clock_microseconds(value: str) -> int:
+def _capture_clock_microseconds(value: UtcInstantText) -> MicrosecondClock:
     match = _CLOCK_PATTERN.fullmatch(value)
     if match is None:
         raise ValueError("Edge CSV frame.time is not a capture-clock value")
@@ -239,11 +250,18 @@ def _capture_clock_microseconds(value: str) -> int:
     if hours > 23 or minutes > 59 or seconds > 59:
         raise ValueError("Edge CSV capture clock is outside a valid day")
     microseconds = int(match.group("fraction")[:6].ljust(6, "0"))
-    return ((hours * 3_600 + minutes * 60 + seconds) * _MICROSECONDS_PER_SECOND) + microseconds
+    return MicrosecondClock(((hours * 3_600 + minutes * 60 + seconds) * _MICROSECONDS_PER_SECOND) + microseconds)
 
 
-def _clock_matches(csv_clock_microseconds: int, pcap_clock_microseconds: int, offset_microseconds: int) -> bool:
-    return (pcap_clock_microseconds + offset_microseconds) % _MICROSECONDS_PER_DAY == csv_clock_microseconds
+def _clock_matches(
+    csv_clock_microseconds: MicrosecondClock,
+    pcap_clock_microseconds: MicrosecondClock,
+    offset_microseconds: MicrosecondOffset,
+) -> bool:
+    return (
+        (pcap_clock_microseconds.value + offset_microseconds.value) % _MICROSECONDS_PER_DAY
+        == csv_clock_microseconds.value
+    )
 
 
 def _pcap_records(path: Path) -> Iterator[_PcapRecord]:
@@ -260,8 +278,12 @@ def _pcap_records(path: Path) -> Iterator[_PcapRecord]:
                 raise ValueError("PCAP packet body is truncated")
             microseconds = fraction // _NANOSECONDS_PER_MICROSECOND if nanosecond_resolution else fraction
             yield _PcapRecord(
-                timestamp_nanoseconds=seconds * _NANOSECONDS_PER_SECOND + microseconds * _NANOSECONDS_PER_MICROSECOND,
-                utc_clock_microseconds=(seconds % 86_400) * _MICROSECONDS_PER_SECOND + microseconds,
+                timestamp_nanoseconds=NanosecondTimestamp(
+                    seconds * _NANOSECONDS_PER_SECOND + microseconds * _NANOSECONDS_PER_MICROSECOND
+                ),
+                utc_clock_microseconds=MicrosecondClock(
+                    (seconds % 86_400) * _MICROSECONDS_PER_SECOND + microseconds
+                ),
             )
 
 
@@ -281,12 +303,14 @@ def _pcap_format(global_header: bytes) -> tuple[_PcapByteOrder, bool]:
             raise ValueError("unsupported PCAP format")
 
 
-def _write_timeline_batch(writer: pq.ParquetWriter, indexes: list[int], timestamps: list[int]) -> None:
+def _write_timeline_batch(
+    writer: pq.ParquetWriter, indexes: list[SourceRowIndex], timestamps: list[NanosecondTimestamp]
+) -> None:
     writer.write_table(
         pa.table(
             (
-                pa.array(indexes, type=pa.uint64()),
-                pa.array(timestamps, type=pa.timestamp("ns", tz="UTC")),
+                pa.array([index.value for index in indexes], type=pa.uint64()),
+                pa.array([timestamp.value for timestamp in timestamps], type=pa.timestamp("ns", tz="UTC")),
             ),
             schema=_TIMELINE_SCHEMA,
         )

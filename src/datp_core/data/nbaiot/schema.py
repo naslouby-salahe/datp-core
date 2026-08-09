@@ -146,7 +146,7 @@ def _canonical_columns() -> tuple[CanonicalColumn, ...]:
         for position, column in enumerate(NBAIOT_FEATURE_COLUMNS)
     )
     provenance_columns = tuple(
-        canonical_provenance_column(column, len(feature_columns) + index)
+        canonical_provenance_column(column, CanonicalColumnPosition(len(feature_columns) + index))
         for index, column in enumerate(tuple(CanonicalProvenanceColumn)[:-1])
     )
     evidence_start = len(feature_columns) + len(provenance_columns)
@@ -194,7 +194,7 @@ def _canonical_columns() -> tuple[CanonicalColumn, ...]:
     )
     stable_identity = canonical_provenance_column(
         CanonicalProvenanceColumn.STABLE_ROW_ID,
-        evidence_start + len(evidence_columns),
+        CanonicalColumnPosition(evidence_start + len(evidence_columns)),
     )
     return feature_columns + provenance_columns + evidence_columns + (stable_identity,)
 

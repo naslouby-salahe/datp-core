@@ -18,12 +18,15 @@ from datp_core.core.identifiers import (
     DatasetId,
     NonEmptyString,
     PhysicalSchemaText,
+    SerializedDocumentText,
     SourceIdentity,
     ValidationSourceContext,
+    ValidationSubject,
 )
 from datp_core.core.numeric import (
     ByteCount,
     CanonicalColumnPosition,
+    MicrosecondOffset,
     RowCount,
     SourceFileCount,
     SourceRowIndex,
@@ -189,9 +192,15 @@ class CanonicalSchema:
 
     def __post_init__(self) -> None:
         _validate_canonical_columns(self.columns, self.physical_schema)
-        _validate_declared_columns(self.columns, self.feature_columns, CanonicalColumnRole.FEATURE, "feature")
-        _validate_declared_columns(self.columns, self.label_columns, CanonicalColumnRole.LABEL, "label")
-        _validate_declared_columns(self.columns, self.provenance_columns, CanonicalColumnRole.PROVENANCE, "provenance")
+        _validate_declared_columns(
+            self.columns, self.feature_columns, CanonicalColumnRole.FEATURE, ValidationSubject("feature")
+        )
+        _validate_declared_columns(
+            self.columns, self.label_columns, CanonicalColumnRole.LABEL, ValidationSubject("label")
+        )
+        _validate_declared_columns(
+            self.columns, self.provenance_columns, CanonicalColumnRole.PROVENANCE, ValidationSubject("provenance")
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -255,7 +264,7 @@ class DatasetValidationReport:
             raise TypeError("validation reports require a typed availability status")
         if type(self.warning_count) is not ValidationIssueCount:
             raise TypeError("validation reports require a typed warning count")
-        if self.warning_count.value != _warning_count(self.issues):
+        if self.warning_count.value != _warning_count(self.issues).value:
             raise ValueError("warning count must match warning issues")
         if self.excluded_rows != _excluded_row_count(self.exclusions):
             raise ValueError("excluded rows must match recorded exclusions")
@@ -301,7 +310,7 @@ def _validate_declared_columns(
     columns: tuple[CanonicalColumn, ...],
     declared: tuple[ColumnName, ...],
     role: CanonicalColumnRole,
-    subject: str,
+    subject: ValidationSubject,
 ) -> None:
     names = tuple(column.name for column in columns if column.role is role)
     if names != declared:
@@ -347,8 +356,8 @@ def _validate_report_collections(
         raise TypeError("dataset exclusions must be an immutable tuple")
 
 
-def _warning_count(issues: tuple[DatasetValidationIssue, ...]) -> int:
-    return sum(issue.severity is ValidationSeverity.WARNING for issue in issues)
+def _warning_count(issues: tuple[DatasetValidationIssue, ...]) -> ValidationIssueCount:
+    return ValidationIssueCount(sum(issue.severity is ValidationSeverity.WARNING for issue in issues))
 
 
 def _excluded_row_count(exclusions: tuple[DatasetExclusion, ...]) -> RowCount:
@@ -401,7 +410,7 @@ class ChronologyValidation:
     evidence_source_path: Path | None = None
     evidence_row_count: RowCount | None = None
     alignment_verified: bool = False
-    alignment_offset_microseconds: int | None = None
+    alignment_offset_microseconds: MicrosecondOffset | None = None
     skipped_evidence_rows: RowCount = RowCount(0)
     trailing_evidence_rows: RowCount = RowCount(0)
 
@@ -423,11 +432,13 @@ def _validate_chronology_evidence(validation: ChronologyValidation) -> None:
 
 
 def _validate_evidence_counts(validation: ChronologyValidation) -> None:
-    _validate_optional_non_negative(validation.alignment_offset_microseconds, "chronology alignment offsets")
+    _validate_optional_non_negative(
+        validation.alignment_offset_microseconds, ValidationSubject("chronology alignment offsets")
+    )
 
 
-def _validate_optional_non_negative(value: int | None, subject: str) -> None:
-    if value is not None and value < 0:
+def _validate_optional_non_negative(value: MicrosecondOffset | None, subject: ValidationSubject) -> None:
+    if value is not None and value.value < 0:
         raise ValueError(f"{subject} must be non-negative")
 
 
@@ -488,7 +499,7 @@ class ManifestChronologyEntry(StrictModel):
     evidence_source_path: str | None = None
     evidence_row_count: RowCount | None = None
     alignment_verified: bool = False
-    alignment_offset_microseconds: int | None = None
+    alignment_offset_microseconds: MicrosecondOffset | None = None
     skipped_evidence_rows: RowCount = RowCount(0)
     trailing_evidence_rows: RowCount = RowCount(0)
 
@@ -577,17 +588,17 @@ _SCHEMA_NAME = CanonicalPublicationArtifact.SCHEMA
 _SOURCE_STATE_NAME = CanonicalPublicationArtifact.SOURCE_STATE
 
 
-def complete_digest(manifest_payload: str, schema_payload: str) -> Checksum:
+def complete_digest(manifest_payload: SerializedDocumentText, schema_payload: SerializedDocumentText) -> Checksum:
     return Checksum.from_text(f"{manifest_payload}\n{schema_payload}")
 
 
-def schema_content(schema: CanonicalSchema) -> str:
+def schema_content(schema: CanonicalSchema) -> SerializedDocumentText:
     return canonical_json_text(schema)
 
 
 def schema_checksum_document_json(
     dataset: DatasetId, columns: tuple[CanonicalColumn, ...], physical_schema: pa.Schema
-) -> str:
+) -> SerializedDocumentText:
     return canonical_json_text(
         SchemaChecksumDocument(
             canonicalization_contract=_CANONICAL_PUBLICATION_CONTRACT,
