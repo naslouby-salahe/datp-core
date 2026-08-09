@@ -21,6 +21,7 @@ from datp_core.core.errors import (
     ScientificContractError,
 )
 from datp_core.core.identifiers import (
+    ArtifactFileName,
     CheckpointStatus,
     ContractSubject,
     PartitionRole,
@@ -188,7 +189,7 @@ def publish_federated_scores(request: GenerateFederatedScoresRequest) -> Federat
                 rebaser=rebase_federated_scores,
             ),
             overwrite=request.overwrite,
-            complete_marker=FederatedScoreAssetName.COMPLETE.value,
+            complete_marker=ArtifactFileName(FederatedScoreAssetName.COMPLETE.value),
         )
     )
     return publication.value

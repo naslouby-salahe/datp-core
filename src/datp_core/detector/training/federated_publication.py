@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 
 from datp_core.artifacts.repositories.publication import ArtifactPublication, FunctionalArtifactCodec, publish_artifact
-from datp_core.core.identifiers import PublicationStatus
+from datp_core.core.identifiers import ArtifactFileName, PublicationStatus
 from datp_core.core.numeric import FeatureCount
 from datp_core.detector.checkpoints.identities import FederatedHistoryAssetName
 from datp_core.detector.training.common import (
@@ -49,7 +49,7 @@ def train_federated_detector(request: TrainFederatedDetectorRequest) -> TrainFed
                 rebaser=rebase_federated_training,
             ),
             overwrite=request.overwrite,
-            complete_marker=FederatedHistoryAssetName.COMPLETE,
+            complete_marker=ArtifactFileName(FederatedHistoryAssetName.COMPLETE),
         )
     )
     artifacts: FederatedTrainingArtifacts = publication.value

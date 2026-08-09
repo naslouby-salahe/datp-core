@@ -10,7 +10,7 @@ from datp_core.artifacts.repositories.publication import (
     publish_related_artifacts,
 )
 from datp_core.core.contracts import ClientCollection, ClientOwned
-from datp_core.core.identifiers import PublicationStatus
+from datp_core.core.identifiers import PublicationStatus, RelatedPublicationMemberIdentity
 from datp_core.core.numeric import FeatureCount
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.training.common import (
@@ -55,11 +55,11 @@ def train_ditto_detector(request: TrainDittoDetectorRequest) -> TrainDittoDetect
             request=training_request,
             members=(
                 RelatedPublicationMember(
-                    identity=DittoPublicationMember.GLOBAL.value,
+                    identity=RelatedPublicationMemberIdentity(DittoPublicationMember.GLOBAL.value),
                     target=training_request.global_output_directory,
                 ),
                 RelatedPublicationMember(
-                    identity=DittoPublicationMember.PERSONALIZED.value,
+                    identity=RelatedPublicationMemberIdentity(DittoPublicationMember.PERSONALIZED.value),
                     target=training_request.personalized_output_directory,
                 ),
             ),

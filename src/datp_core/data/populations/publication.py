@@ -27,6 +27,7 @@ from datp_core.core.errors import (
     ScientificContractError,
 )
 from datp_core.core.identifiers import (
+    ArtifactFileName,
     CaptureTimestampColumn,
     ContractSubject,
     DatasetId,
@@ -221,7 +222,7 @@ def construct_published_population(
                 rebaser=_rebase_population_membership,
             ),
             overwrite=request.overwrite,
-            complete_marker=PopulationPublicationAsset.COMPLETE,
+            complete_marker=ArtifactFileName(PopulationPublicationAsset.COMPLETE),
         )
     )
     published = publication.value
@@ -362,7 +363,7 @@ def construct_published_split(request: ConstructPublishedSplitRequest) -> Constr
                 rebaser=_rebase_population_split,
             ),
             overwrite=request.overwrite,
-            complete_marker=SplitPublicationAsset.COMPLETE,
+            complete_marker=ArtifactFileName(SplitPublicationAsset.COMPLETE),
         )
     )
     published = publication.value

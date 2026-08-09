@@ -21,7 +21,13 @@ from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
 )
-from datp_core.core.identifiers import ContractSubject, PartitionRole, ScoreFrameColumn, SerializationFormat
+from datp_core.core.identifiers import (
+    ArtifactFileName,
+    ContractSubject,
+    PartitionRole,
+    ScoreFrameColumn,
+    SerializationFormat,
+)
 from datp_core.core.numeric import FeatureCount, RowCount
 from datp_core.detector.autoencoder import ReconstructionAutoencoder
 from datp_core.detector.scoring.frames import (
@@ -66,7 +72,7 @@ def generate_centralized_scores(request: GenerateCentralizedScoresRequest) -> Ge
                 rebaser=rebase_centralized_scoring,
             ),
             overwrite=request.overwrite,
-            complete_marker=CentralizedScoreAssetName.COMPLETE,
+            complete_marker=ArtifactFileName(CentralizedScoreAssetName.COMPLETE),
         )
     )
     return GenerateCentralizedScoresResult(

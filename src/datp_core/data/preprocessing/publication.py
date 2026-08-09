@@ -16,7 +16,12 @@ from datp_core.core.errors import (
     ArtifactIntegrityError,
     ErrorMessage,
 )
-from datp_core.core.identifiers import ContractSubject, PublicationStatus
+from datp_core.core.identifiers import (
+    ArtifactFileName,
+    ContractSubject,
+    PublicationStatus,
+    SerializedDocumentText,
+)
 from datp_core.data.preprocessing.artifacts import ProcessedAssetName
 
 
@@ -54,7 +59,7 @@ def publish_processed[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseMod
                 rebaser=lambda manifest, _directory: manifest,
             ),
             overwrite=publication.overwrite,
-            complete_marker=ProcessedAssetName.COMPLETE,
+            complete_marker=ArtifactFileName(ProcessedAssetName.COMPLETE),
         )
     )
     return ProcessedPublicationResult(
@@ -107,7 +112,10 @@ def _is_reusable[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseModel](
         manifest_text = manifest_path.read_text(encoding="utf-8")
         schema_text = schema_path.read_text(encoding="utf-8")
 
-        expected = complete_digest(manifest_text, schema_text)
+        expected = complete_digest(
+            SerializedDocumentText(manifest_text),
+            SerializedDocumentText(schema_text),
+        )
         actual = Checksum(complete_path.read_text(encoding="utf-8").strip())
 
         if actual != expected:
@@ -127,7 +135,7 @@ def _is_reusable[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseModel](
     )
 
 
-def _write_model(model: BaseModel, destination: Path) -> str:
+def _write_model(model: BaseModel, destination: Path) -> SerializedDocumentText:
     payload = canonical_json_text(model)
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(payload, encoding="utf-8")

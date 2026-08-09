@@ -15,6 +15,7 @@ from datp_core.core.errors import (
     ScientificContractError,
 )
 from datp_core.core.identifiers import (
+    ArtifactFileName,
     CentralizedModelId,
     CheckpointStatus,
     ContractSubject,
@@ -170,7 +171,7 @@ def train_centralized_detector(request: TrainCentralizedDetectorRequest) -> Trai
                 rebaser=rebase_centralized_training,
             ),
             overwrite=request.overwrite,
-            complete_marker=CentralizedArtifactName.COMPLETE,
+            complete_marker=ArtifactFileName(CentralizedArtifactName.COMPLETE),
         )
     )
     artifacts: CentralizedTrainingArtifacts = publication.value

@@ -13,6 +13,7 @@ import pyarrow.parquet as pq
 from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.repositories.publication import publish_atomically
 from datp_core.core.identifiers import (
+    ArtifactFileName,
     CanonicalizationContractName,
     ColumnName,
     DatasetId,
@@ -353,7 +354,7 @@ def publish_canonical[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
         write=write,
         reusable_value=lambda directory: directory,
         remove_target=lambda directory: _remove_target(directory, publication.canonical_root),
-        complete_marker=_COMPLETE_NAME,
+        complete_marker=ArtifactFileName(_COMPLETE_NAME),
     )
     if outcome.status is PublicationStatus.REUSED:
         write_source_state(
