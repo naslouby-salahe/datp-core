@@ -401,7 +401,7 @@ def _status_for_experiment(
     )
 
 
-def format_status(report: ProgrammeStatusReport) -> str:
+def format_status(report: ProgrammeStatusReport) -> DetailText:
     lines = [
         f"anchor_gate={report.anchor_gate.value}",
         f"campaign_completion={report.campaign_completion.value}",
@@ -411,4 +411,4 @@ def format_status(report: ProgrammeStatusReport) -> str:
         f"readiness={record.readiness.value} registration={record.registration.value} detail={record.detail}"
         for record in report.records
     )
-    return "\n".join(lines)
+    return DetailText("\n".join(lines))
