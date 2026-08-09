@@ -7,13 +7,14 @@ from pydantic import model_validator
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.contracts import StrictModel
 from datp_core.core.identifiers import (
+    AnalysisReasonText,
     AvailabilityStatus,
     EvidenceRole,
     ExperimentId,
     FederatedThresholdMethod,
     PopulationId,
 )
-from datp_core.core.numeric import MetricValue, Ratio, Seed, ThresholdValue
+from datp_core.core.numeric import ClientCount, MetricValue, Ratio, Seed, SeedCount, ThresholdValue
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 
@@ -61,12 +62,8 @@ class ThresholdMovement(StrictModel):
         return AvailabilityStatus.AVAILABLE if self.delta_tpr is not None else AvailabilityStatus.UNAVAILABLE
 
     @property
-    def reason(
-        self,
-    ) -> (
-        str | None
-    ):  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-        return None if self.delta_tpr is not None else "attack-sensitive movement unavailable"
+    def reason(self) -> AnalysisReasonText | None:
+        return None if self.delta_tpr is not None else AnalysisReasonText("attack-sensitive movement unavailable")
 
 
 class ThresholdMovementCohort(StrictModel):
@@ -77,9 +74,7 @@ class ThresholdMovementCohort(StrictModel):
     mean_delta_fpr: MetricValue | None
     client_dispersion_delta_fpr: MetricValue | None
     availability: AvailabilityStatus
-    reason: (
-        str | None
-    )  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    reason: AnalysisReasonText | None
 
     evidence_role: ClassVar[EvidenceRole] = EvidenceRole.MECHANISM
 
@@ -101,7 +96,7 @@ class ThresholdMovementSeedSummary(StrictModel):
     mean_delta_threshold: MetricValue
     mean_delta_fpr: MetricValue
     client_dispersion_delta_fpr: MetricValue
-    client_count: int  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    client_count: ClientCount
 
 
 class ThresholdMovementMultiSeedUncertainty(StrictModel):
@@ -111,9 +106,7 @@ class ThresholdMovementMultiSeedUncertainty(StrictModel):
     mean_of_seed_mean_delta_fpr: MetricValue | None
     across_seed_dispersion_delta_fpr: MetricValue | None
     availability: AvailabilityStatus
-    reason: (
-        str | None
-    )  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    reason: AnalysisReasonText | None
 
     evidence_role: ClassVar[EvidenceRole] = EvidenceRole.MECHANISM
 
@@ -180,7 +173,7 @@ def summarize_threshold_movements(
             mean_delta_fpr=None,
             client_dispersion_delta_fpr=None,
             availability=AvailabilityStatus.UNAVAILABLE,
-            reason="no threshold-movement observations",
+            reason=AnalysisReasonText("no threshold-movement observations"),
         )
     delta_thresholds = tuple(item.delta_threshold.value for item in movements)
     delta_fprs = tuple(item.delta_fpr.value for item in movements)
@@ -199,8 +192,7 @@ def summarize_threshold_movements(
 def summarize_threshold_movements_across_seeds(
     cohorts: tuple[ThresholdMovementCohort, ...],
     *,
-    required_seed_count: int
-    | None = None,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    required_seed_count: SeedCount | None = None,
 ) -> ThresholdMovementMultiSeedUncertainty:
     """Aggregate per-seed movement summaries; dispersion is across seeds, not clients."""
     summaries: list[ThresholdMovementSeedSummary] = []
@@ -217,7 +209,9 @@ def summarize_threshold_movements_across_seeds(
                 mean_of_seed_mean_delta_fpr=None,
                 across_seed_dispersion_delta_fpr=None,
                 availability=AvailabilityStatus.UNAVAILABLE,
-                reason="across-seed movement uncertainty requires every seed cohort to be available",
+                reason=AnalysisReasonText(
+                    "across-seed movement uncertainty requires every seed cohort to be available"
+                ),
             )
         first = cohort.movements[0]
         if any(item.seed != first.seed or item.experiment is not first.experiment for item in cohort.movements[1:]):
@@ -229,7 +223,7 @@ def summarize_threshold_movements_across_seeds(
                 mean_delta_threshold=cohort.mean_delta_threshold,
                 mean_delta_fpr=cohort.mean_delta_fpr,
                 client_dispersion_delta_fpr=cohort.client_dispersion_delta_fpr,
-                client_count=len(cohort.movements),
+                client_count=ClientCount(len(cohort.movements)),
             )
         )
     if not summaries:
@@ -238,20 +232,20 @@ def summarize_threshold_movements_across_seeds(
             mean_of_seed_mean_delta_fpr=None,
             across_seed_dispersion_delta_fpr=None,
             availability=AvailabilityStatus.UNAVAILABLE,
-            reason="no available per-seed threshold-movement summaries",
+            reason=AnalysisReasonText("no available per-seed threshold-movement summaries"),
         )
     seeds = tuple(item.seed for item in summaries)
     if len(seeds) != len(frozenset(seeds)):
         raise ValueError("across-seed movement summaries must be unique by seed")
-    if required_seed_count is not None and len(summaries) != required_seed_count:
+    if required_seed_count is not None and len(summaries) != required_seed_count.value:
         return ThresholdMovementMultiSeedUncertainty(
             seed_summaries=tuple(summaries),
             mean_of_seed_mean_delta_fpr=None,
             across_seed_dispersion_delta_fpr=None,
             availability=AvailabilityStatus.UNAVAILABLE,
-            reason=(
+            reason=AnalysisReasonText(
                 "across-seed movement uncertainty requires the complete declared seed cohort "
-                f"(observed={len(summaries)}, required={required_seed_count})"
+                f"(observed={len(summaries)}, required={required_seed_count.value})"
             ),
         )
     seed_means = tuple(item.mean_delta_fpr.value for item in summaries)

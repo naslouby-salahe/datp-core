@@ -14,6 +14,7 @@ from datp_core.core.identifiers import (
     PopulationId,
     PreprocessingProtocolId,
     SplitProtocolId,
+    StageExecutionEvidence,
     TemporalState,
     TrainingModelId,
 )
@@ -49,7 +50,11 @@ class Runner:
         assert provenance.plan_digest.value
         self.stages.append(stage)
         self.output_roots.append(output_root)
-        return StageExecution(stage=stage, outcome=StageOutcome.COMPLETED, evidence=coordinate.stable_key)
+        return StageExecution(
+            stage=stage,
+            outcome=StageOutcome.COMPLETED,
+            evidence=StageExecutionEvidence(coordinate.stable_key),
+        )
 
 
 class OutputStore:
@@ -232,8 +237,16 @@ def test_partial_execution_is_a_valid_recipe_prefix() -> None:
             del coordinate, provenance
             assert output_root == OUTPUT_ROOT
             if stage is PipelineStage.SELECT_CHECKPOINT:
-                return StageExecution(stage=stage, outcome=StageOutcome.BLOCKED, evidence="fixture halts here")
-            return StageExecution(stage=stage, outcome=StageOutcome.COMPLETED, evidence="fixture")
+                return StageExecution(
+                    stage=stage,
+                    outcome=StageOutcome.BLOCKED,
+                    evidence=StageExecutionEvidence("fixture halts here"),
+                )
+            return StageExecution(
+                stage=stage,
+                outcome=StageOutcome.COMPLETED,
+                evidence=StageExecutionEvidence("fixture"),
+            )
 
     result = execute_experiment(
         coordinate=coordinate(),

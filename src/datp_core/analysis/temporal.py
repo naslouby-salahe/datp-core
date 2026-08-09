@@ -18,8 +18,10 @@ from datp_core.core.errors import (
     ScientificContractError,
 )
 from datp_core.core.identifiers import (
+    AnalysisReasonText,
     AvailabilityStatus,
     ClientIdentityToken,
+    DecisionRationale,
     EvidenceRole,
     ExperimentId,
     FederatedThresholdMethod,
@@ -28,7 +30,7 @@ from datp_core.core.identifiers import (
     SplitProtocolId,
     TemporalState,
 )
-from datp_core.core.numeric import MetricValue, Ratio, Seed
+from datp_core.core.numeric import MetricValue, Ratio, Seed, SeedCount, SeedObservationCount
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.scoring.contracts import (
     ClientIdentityContract,
@@ -73,9 +75,7 @@ class TemporalSeedProvenance(StrictModel):
     source_row_checksum: Checksum
     row_order_checksum: Checksum
     excluded_clients: tuple[ClientIdentity, ...] = ()
-    unavailable_reasons: tuple[
-        str, ...
-    ] = ()  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    unavailable_reasons: tuple[AnalysisReasonText, ...] = ()
 
     @model_validator(mode="after")
     def validate_bindings(self) -> TemporalSeedProvenance:
@@ -107,9 +107,7 @@ class TemporalClientTrajectory(StrictModel):
     client: ClientIdentity
     threshold_method: FederatedThresholdMethod
     eligible: bool
-    exclusion_reason: (
-        str | None
-    )  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    exclusion_reason: AnalysisReasonText | None
     threshold_static: MetricValue | None
     threshold_frozen: MetricValue | None
     threshold_recalibrated: MetricValue | None
@@ -168,9 +166,7 @@ class TemporalRecoveryResult(StrictModel):
     mean_fpr_frozen: MetricValue | None = None
     mean_fpr_recalibrated: MetricValue | None = None
     client_trajectories: tuple[TemporalClientTrajectory, ...] = ()
-    unavailable_reason: str | None = (
-        None  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-    )
+    unavailable_reason: AnalysisReasonText | None = None
 
     @model_validator(mode="after")
     def validate_recovery(self) -> TemporalRecoveryResult:
@@ -242,17 +238,13 @@ class TemporalRecoveryResult(StrictModel):
         return TemporalInterpretation.TEMPORAL_DEGRADATION_WITHOUT_RECOVERY
 
     @property
-    def reason(
-        self,
-    ) -> (
-        str | None
-    ):  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    def reason(self) -> AnalysisReasonText | None:
         if self.unavailable_reason is not None:
             return self.unavailable_reason
         if self.recovery_ratio is None:
-            return "drift excess does not satisfy the declared positive-materiality rule"
+            return AnalysisReasonText("drift excess does not satisfy the declared positive-materiality rule")
         if self.interpretation is TemporalInterpretation.TEMPORAL_DEGRADATION_WITH_PARTIAL_OR_WEAK_RECOVERY:
-            return (
+            return AnalysisReasonText(
                 "recovery_ratio is positive but below the declared material recovery-ratio minimum "
                 f"({self.material_recovery_ratio_minimum.value})"
             )
@@ -286,7 +278,7 @@ def temporal_recovery(
     mean_fpr_frozen: MetricValue | None = None,
     mean_fpr_recalibrated: MetricValue | None = None,
     client_trajectories: tuple[TemporalClientTrajectory, ...] = (),
-    unavailable_reason: str | None = None,
+    unavailable_reason: AnalysisReasonText | None = None,
 ) -> TemporalRecoveryResult:
     return TemporalRecoveryResult(
         seed=seed,
@@ -341,9 +333,9 @@ def decide_temporal_campaign(
     point = recovery_interval.point_estimate if recovery_interval is not None else None
     decision, rationale = _campaign_decision_from_counts(
         counts,
-        total=len(records),
-        defined_recovery_count=len(defined_ratios),
-        cohort_size=required_seed_cohort.member_count.value,
+        total=SeedObservationCount(len(records)),
+        defined_recovery_count=SeedObservationCount(len(defined_ratios)),
+        cohort_size=required_seed_cohort.member_count,
     )
     return ScientificDecisionResult(
         evidence_role=EvidenceRole.TEMPORAL_BOUNDARY,
@@ -356,92 +348,112 @@ def decide_temporal_campaign(
 
 @dataclass(frozen=True, slots=True)
 class _TemporalInterpretationCounts:
-    material_recovery: int  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-    partial_or_weak_recovery: int  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-    without_recovery: int  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-    opposite: int  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-    no_degradation: int  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-    blocked: int  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    material_recovery: SeedObservationCount
+    partial_or_weak_recovery: SeedObservationCount
+    without_recovery: SeedObservationCount
+    opposite: SeedObservationCount
+    no_degradation: SeedObservationCount
+    blocked: SeedObservationCount
 
 
 def _temporal_interpretation_counts(
     records: tuple[TemporalRecoveryResult, ...],
 ) -> _TemporalInterpretationCounts:
     return _TemporalInterpretationCounts(
-        material_recovery=sum(
-            record.interpretation is TemporalInterpretation.TEMPORAL_DEGRADATION_WITH_MATERIAL_RECOVERY
-            for record in records
+        material_recovery=SeedObservationCount(
+            sum(
+                record.interpretation is TemporalInterpretation.TEMPORAL_DEGRADATION_WITH_MATERIAL_RECOVERY
+                for record in records
+            )
         ),
-        partial_or_weak_recovery=sum(
-            record.interpretation is TemporalInterpretation.TEMPORAL_DEGRADATION_WITH_PARTIAL_OR_WEAK_RECOVERY
-            for record in records
+        partial_or_weak_recovery=SeedObservationCount(
+            sum(
+                record.interpretation is TemporalInterpretation.TEMPORAL_DEGRADATION_WITH_PARTIAL_OR_WEAK_RECOVERY
+                for record in records
+            )
         ),
-        without_recovery=sum(
-            record.interpretation is TemporalInterpretation.TEMPORAL_DEGRADATION_WITHOUT_RECOVERY for record in records
+        without_recovery=SeedObservationCount(
+            sum(
+                record.interpretation is TemporalInterpretation.TEMPORAL_DEGRADATION_WITHOUT_RECOVERY
+                for record in records
+            )
         ),
-        opposite=sum(record.interpretation is TemporalInterpretation.OPPOSITE_TEMPORAL_MOVEMENT for record in records),
-        no_degradation=sum(
-            record.interpretation is TemporalInterpretation.NO_DETECTABLE_TEMPORAL_DEGRADATION for record in records
+        opposite=SeedObservationCount(
+            sum(record.interpretation is TemporalInterpretation.OPPOSITE_TEMPORAL_MOVEMENT for record in records)
         ),
-        blocked=sum(record.interpretation is TemporalInterpretation.BLOCKED_OR_UNAVAILABLE for record in records),
+        no_degradation=SeedObservationCount(
+            sum(
+                record.interpretation is TemporalInterpretation.NO_DETECTABLE_TEMPORAL_DEGRADATION
+                for record in records
+            )
+        ),
+        blocked=SeedObservationCount(
+            sum(record.interpretation is TemporalInterpretation.BLOCKED_OR_UNAVAILABLE for record in records)
+        ),
     )
 
 
 def _campaign_decision_from_counts(
     counts: _TemporalInterpretationCounts,
     *,
-    total: int,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-    defined_recovery_count: int,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-    cohort_size: int,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-) -> tuple[
-    ScientificDecision, str
-]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-    if total < cohort_size or total < 2:
+    total: SeedObservationCount,
+    defined_recovery_count: SeedObservationCount,
+    cohort_size: SeedCount,
+) -> tuple[ScientificDecision, DecisionRationale]:
+    if total.value < cohort_size.value or total.value < 2:
         return (
             ScientificDecision.BLOCKED,
-            "publication-level temporal SUPPORTED requires the complete multi-seed declared cohort",
+            DecisionRationale("publication-level temporal SUPPORTED requires the complete multi-seed declared cohort"),
         )
-    if counts.blocked > 0:
+    if counts.blocked.value > 0:
         return (
             ScientificDecision.BLOCKED,
-            "temporal campaign contains blocked or unavailable seed evidence",
+            DecisionRationale("temporal campaign contains blocked or unavailable seed evidence"),
         )
     if counts.material_recovery == total:
         return (
             ScientificDecision.SUPPORTED,
-            "campaign-level temporal evidence shows material degradation with material "
-            f"one-shot recalibration recovery on every seed of the declared cohort "
-            f"(defined_recovery_ratio_count={defined_recovery_count})",
+            DecisionRationale(
+                "campaign-level temporal evidence shows material degradation with material "
+                "one-shot recalibration recovery on every seed of the declared cohort "
+                f"(defined_recovery_ratio_count={defined_recovery_count.value})"
+            ),
         )
     if counts.opposite == total:
         return (
             ScientificDecision.OPPOSITE_DIRECTION,
-            "campaign-level temporal evidence moved opposite to the declared degradation direction",
+            DecisionRationale(
+                "campaign-level temporal evidence moved opposite to the declared degradation direction"
+            ),
         )
     if counts.no_degradation == total:
         return (
             ScientificDecision.BOUNDARY_RESULT,
-            "campaign-level temporal evidence shows no material degradation across the seed cohort",
+            DecisionRationale(
+                "campaign-level temporal evidence shows no material degradation across the seed cohort"
+            ),
         )
     if counts.without_recovery == total:
         return (
             ScientificDecision.BOUNDARY_RESULT,
-            "campaign-level temporal evidence shows degradation without material recovery",
+            DecisionRationale("campaign-level temporal evidence shows degradation without material recovery"),
         )
     if counts.partial_or_weak_recovery == total:
         return (
             ScientificDecision.BOUNDARY_RESULT,
-            "campaign-level temporal evidence shows only partial or weak recovery below the material ratio minimum",
+            DecisionRationale(
+                "campaign-level temporal evidence shows only partial or weak recovery below the material ratio minimum"
+            ),
         )
     return (
         ScientificDecision.BOUNDARY_RESULT,
-        (
+        DecisionRationale(
             "campaign-level temporal evidence is mixed across seeds "
-            f"(material_recovery={counts.material_recovery}, "
-            f"partial_or_weak={counts.partial_or_weak_recovery}, "
-            f"without={counts.without_recovery}, "
-            f"no_degradation={counts.no_degradation}, opposite={counts.opposite}, "
-            f"defined_recovery_ratio_count={defined_recovery_count})"
+            f"(material_recovery={counts.material_recovery.value}, "
+            f"partial_or_weak={counts.partial_or_weak_recovery.value}, "
+            f"without={counts.without_recovery.value}, "
+            f"no_degradation={counts.no_degradation.value}, opposite={counts.opposite.value}, "
+            f"defined_recovery_ratio_count={defined_recovery_count.value})"
         ),
     )
 
@@ -456,7 +468,7 @@ def _blocked_temporal_campaign(
             decision=ScientificDecision.BLOCKED,
             point_estimate=None,
             interval=None,
-            rationale="temporal campaign decision requires the complete declared seed cohort",
+            rationale=DecisionRationale("temporal campaign decision requires the complete declared seed cohort"),
         )
     if len({record.experiment for record in records}) != 1 or len({record.threshold_method for record in records}) != 1:
         return ScientificDecisionResult(
@@ -464,7 +476,9 @@ def _blocked_temporal_campaign(
             decision=ScientificDecision.BLOCKED,
             point_estimate=None,
             interval=None,
-            rationale="temporal campaign records must share one experiment and threshold method",
+            rationale=DecisionRationale(
+                "temporal campaign records must share one experiment and threshold method"
+            ),
         )
     seeds = tuple(record.seed for record in records)
     if len(seeds) != len(frozenset(seeds)):
@@ -473,7 +487,7 @@ def _blocked_temporal_campaign(
             decision=ScientificDecision.BLOCKED,
             point_estimate=None,
             interval=None,
-            rationale="temporal campaign records must be unique by seed",
+            rationale=DecisionRationale("temporal campaign records must be unique by seed"),
         )
     if frozenset(seeds) != frozenset(required_seed_cohort.values):
         return ScientificDecisionResult(
@@ -481,7 +495,9 @@ def _blocked_temporal_campaign(
             decision=ScientificDecision.BLOCKED,
             point_estimate=None,
             interval=None,
-            rationale="temporal campaign records must equal the complete declared seed cohort",
+            rationale=DecisionRationale(
+                "temporal campaign records must equal the complete declared seed cohort"
+            ),
         )
     if required_seed_cohort.member_count.value < 2:
         return ScientificDecisionResult(
@@ -489,7 +505,9 @@ def _blocked_temporal_campaign(
             decision=ScientificDecision.BLOCKED,
             point_estimate=None,
             interval=None,
-            rationale="publication-level temporal decisions require a multi-seed declared cohort",
+            rationale=DecisionRationale(
+                "publication-level temporal decisions require a multi-seed declared cohort"
+            ),
         )
     provenances = tuple(record.provenance for record in records)
     if any(item.seed != record.seed for item, record in zip(provenances, records, strict=True)):
@@ -498,7 +516,7 @@ def _blocked_temporal_campaign(
             decision=ScientificDecision.BLOCKED,
             point_estimate=None,
             interval=None,
-            rationale="temporal provenance seeds must match recovery records one-to-one",
+            rationale=DecisionRationale("temporal provenance seeds must match recovery records one-to-one"),
         )
     if len({item.population for item in provenances}) != 1:
         return ScientificDecisionResult(
@@ -506,7 +524,7 @@ def _blocked_temporal_campaign(
             decision=ScientificDecision.BLOCKED,
             point_estimate=None,
             interval=None,
-            rationale="temporal provenance records must share one population identity",
+            rationale=DecisionRationale("temporal provenance records must share one population identity"),
         )
     checksum_keys = tuple(
         (
@@ -533,7 +551,7 @@ def _blocked_temporal_campaign(
             decision=ScientificDecision.BLOCKED,
             point_estimate=None,
             interval=None,
-            rationale="temporal provenance must not be cloned across seeds",
+            rationale=DecisionRationale("temporal provenance must not be cloned across seeds"),
         )
     return None
 

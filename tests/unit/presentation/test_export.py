@@ -2,18 +2,25 @@ from pathlib import Path
 
 import pytest
 
+from datp_core.analysis.descriptive import ScoreRole
 from datp_core.analysis.inference.bootstrap.contracts import BcaReason, BootstrapInterval
 from datp_core.analysis.mechanisms import AbsorptionCohortResult
 from datp_core.analysis.scientific_decision import ScientificDecision, ScientificDecisionResult
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.identifiers import (
+    AnalysisReasonText,
     AvailabilityStatus,
+    ClientIdentityToken,
+    DecisionRationale,
     EvidenceRole,
     ExperimentId,
+    FederatedThresholdMethod,
+    FigureLabel,
+    FigureTitle,
     MetricId,
     PopulationId,
 )
-from datp_core.core.numeric import MetricValue, Seed
+from datp_core.core.numeric import MetricValue, Seed, ThresholdValue
 from datp_core.presentation.export import (
     PublicationBundle,
     ReportProvenance,
@@ -25,10 +32,12 @@ from datp_core.presentation.figures import (
     EmpiricalCdfFigureSeries,
     FigureSeries,
     FigureSpec,
+    ThresholdOverlay,
     empirical_cdf_series_from_points,
     render_markdown_figure,
 )
-from datp_core.presentation.validation import ClaimDecision, ClaimStatus
+from datp_core.presentation.tables import EvidenceText, PublicationTable, TableCell, TableTitle
+from datp_core.presentation.validation import ClaimDecision, ClaimReason, ClaimStatus
 
 
 def _provenance() -> ReportProvenance:
@@ -56,16 +65,16 @@ def test_interval_table_surfaces_the_bca_degeneracy_reason() -> None:
 def test_figure_only_bundle_is_fully_rendered(tmp_path: Path) -> None:
     destination = tmp_path / "report.md"
     figure = FigureSpec(
-        title="FPR disparity",
+        title=FigureTitle("FPR disparity"),
         series=(
             FigureSeries(
-                label="Local threshold",
+                label=FigureLabel("Local threshold"),
                 metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
                 availability=AvailabilityStatus.AVAILABLE,
-                values=(0.25, 0.5),
+                values=(MetricValue(0.25), MetricValue(0.5)),
             ),
             FigureSeries(
-                label="Unavailable comparator",
+                label=FigureLabel("Unavailable comparator"),
                 metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
                 availability=AvailabilityStatus.UNAVAILABLE,
                 values=(),
@@ -90,12 +99,12 @@ def test_blocked_claims_are_separated_from_permitted_wording_by_status(tmp_path:
     permitted = ClaimDecision(
         status=ClaimStatus.PERMITTED,
         wording="Local thresholding reduces FPR dispersion under the confirmatory ladder.",
-        reason="claim matches evidence scope",
+        reason=ClaimReason("claim matches evidence scope"),
     )
     blocked = ClaimDecision(
         status=ClaimStatus.BLOCKED,
         wording="",
-        reason="the anchor gate blocks dependent journal claims",
+        reason=ClaimReason("the anchor gate blocks dependent journal claims"),
     )
     export_markdown(
         PublicationBundle(provenance=_provenance(), claims=(permitted, blocked), tables=(), figures=()),
@@ -108,33 +117,31 @@ def test_blocked_claims_are_separated_from_permitted_wording_by_status(tmp_path:
 
 
 def test_all_blocked_claims_suppress_tables_and_figures(tmp_path: Path) -> None:
-    from datp_core.presentation.tables import PublicationTable, TableCell
-
     destination = tmp_path / "report.md"
     blocked = ClaimDecision(
         status=ClaimStatus.BLOCKED,
         wording="",
-        reason="confirmatory BCa interval is unavailable",
+        reason=ClaimReason("confirmatory BCa interval is unavailable"),
     )
     table = PublicationTable(
-        title="Paired seed inventory",
+        title=TableTitle("Paired seed inventory"),
         cells=(
             TableCell(
                 metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
                 availability=AvailabilityStatus.AVAILABLE,
                 rendered_value="0.12",
-                evidence="should not appear when every claim is blocked",
+                evidence=EvidenceText("should not appear when every claim is blocked"),
             ),
         ),
     )
     figure = FigureSpec(
-        title="Should not appear",
+        title=FigureTitle("Should not appear"),
         series=(
             FigureSeries(
-                label="local",
+                label=FigureLabel("local"),
                 metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
                 availability=AvailabilityStatus.AVAILABLE,
-                values=(0.1, 0.2),
+                values=(MetricValue(0.1), MetricValue(0.2)),
             ),
         ),
     )
@@ -175,7 +182,7 @@ def sample_absorption_mechanisms() -> tuple[AbsorptionCohortResult, ...]:
                 decision=ScientificDecision.BLOCKED,
                 point_estimate=None,
                 interval=None,
-                rationale="fixture cohort blocked for evidence-role publication test",
+                rationale=DecisionRationale("fixture cohort blocked for evidence-role publication test"),
             ),
             mean_retention=None,
         ),
@@ -212,18 +219,18 @@ def test_export_mechanism_publication_does_not_override_supplied_role(
 
 def test_empirical_cdf_figure_series_uses_reconstruction_and_cumulative_metrics() -> None:
     series = empirical_cdf_series_from_points(
-        label="seed0:device_a:benign_evaluation",
+        label=FigureLabel("seed0:device_a:benign_evaluation"),
         points=(
             (MetricValue(0.1), MetricValue(0.5)),
             (MetricValue(0.3), MetricValue(1.0)),
         ),
-        client_id="device_a",
+        client_id=ClientIdentityToken("device_a"),
         seed=Seed(0),
-        score_role="benign_evaluation",
+        score_role=ScoreRole.BENIGN_EVALUATION,
         threshold_overlays=(
-            ("shared_threshold", 0.2),
-            ("local_threshold", 0.25),
-            ("cluster_threshold", 0.22),
+            ThresholdOverlay(method=FederatedThresholdMethod.SHARED_THRESHOLD, value=ThresholdValue(0.2)),
+            ThresholdOverlay(method=FederatedThresholdMethod.LOCAL_THRESHOLD, value=ThresholdValue(0.25)),
+            ThresholdOverlay(method=FederatedThresholdMethod.CLUSTER_THRESHOLD, value=ThresholdValue(0.22)),
         ),
         source_checksum=Checksum("f" * 64),
     )
@@ -232,16 +239,19 @@ def test_empirical_cdf_figure_series_uses_reconstruction_and_cumulative_metrics(
     assert series.y_metric is MetricId.EMPIRICAL_CUMULATIVE_PROBABILITY
     assert series.x_values == (0.1, 0.3)
     assert series.y_values == (0.5, 1.0)
-    assert series.threshold_overlays[0] == ("shared_threshold", 0.2)
+    assert series.threshold_overlays[0] == ThresholdOverlay(
+        method=FederatedThresholdMethod.SHARED_THRESHOLD,
+        value=ThresholdValue(0.2),
+    )
 
     unavailable = empirical_cdf_series_from_points(
-        label="seed0:device_b:attack_evaluation",
+        label=FigureLabel("seed0:device_b:attack_evaluation"),
         points=(),
-        client_id="device_b",
+        client_id=ClientIdentityToken("device_b"),
         seed=Seed(0),
-        score_role="attack_evaluation",
+        score_role=ScoreRole.ATTACK_EVALUATION,
         source_checksum=Checksum("f" * 64),
-        unavailable_reason="no scores available for the declared role",
+        unavailable_reason=AnalysisReasonText("no scores available for the declared role"),
     )
     assert unavailable.availability is AvailabilityStatus.UNAVAILABLE
     assert unavailable.x_values == ()
@@ -249,7 +259,7 @@ def test_empirical_cdf_figure_series_uses_reconstruction_and_cumulative_metrics(
 
     rendered = render_markdown_figure(
         FigureSpec(
-            title="Per-client empirical score CDF",
+            title=FigureTitle("Per-client empirical score CDF"),
             empirical_cdf_series=(series, unavailable),
         )
     )
@@ -263,15 +273,15 @@ def test_empirical_cdf_figure_series_uses_reconstruction_and_cumulative_metrics(
 def test_empirical_cdf_rejects_fpr_as_score_metric() -> None:
     with pytest.raises(ValueError, match="reconstruction-error x metric"):
         EmpiricalCdfFigureSeries(
-            label="bad",
+            label=FigureLabel("bad"),
             x_metric=MetricId.FALSE_POSITIVE_RATE,
             y_metric=MetricId.EMPIRICAL_CUMULATIVE_PROBABILITY,
             availability=AvailabilityStatus.AVAILABLE,
             x_values=(0.1,),
             y_values=(1.0,),
-            client_id="device_a",
+            client_id=ClientIdentityToken("device_a"),
             seed=Seed(0),
-            score_role="benign_evaluation",
+            score_role=ScoreRole.BENIGN_EVALUATION,
             threshold_overlays=(),
             source_checksum=None,
         )

@@ -9,8 +9,8 @@ from sklearn.metrics import adjusted_rand_score
 from datp_core.analysis.inference.wilcoxon import CorrelationCoefficient
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.contracts import ClientOwned, StrictModel
-from datp_core.core.identifiers import AvailabilityStatus, EvidenceRole, FederatedThresholdMethod
-from datp_core.core.numeric import ClusterIndex, MetricValue, PairedObservationCount, Seed, ThresholdValue
+from datp_core.core.identifiers import AnalysisReasonText, AvailabilityStatus, EvidenceRole, FederatedThresholdMethod
+from datp_core.core.numeric import ClusterIndex, GroupCount, MetricValue, PairedObservationCount, Seed, ThresholdValue
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.thresholds.policies.cluster import ClusterFingerprint, ClusterMembership, GroupedThresholdResult
 
@@ -26,8 +26,7 @@ class ClusterPartitionSummary(StrictModel):
         cls,
         memberships: tuple[ClusterMembership, ...],
         *,
-        declared_group_count: int
-        | None = None,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+        declared_group_count: GroupCount | None = None,
         observed_empty_cluster_indexes: tuple[ClusterIndex, ...] = (),
     ) -> "ClusterPartitionSummary":
         """Build partition sizes preserving actual observed cluster indexes.
@@ -43,7 +42,7 @@ class ClusterPartitionSummary(StrictModel):
                 (
                     *(item.cluster_index.value for item in memberships),
                     *tuple(i.value for i in observed_empty_cluster_indexes),
-                    -1 if declared_group_count is None else declared_group_count - 1,
+                    -1 if declared_group_count is None else declared_group_count.value - 1,
                 ),
                 default=-1,
             )
@@ -82,17 +81,11 @@ class ClusterEvidenceRecord(StrictModel):
     contributing_quantile_dispersion: MetricValue | None
     effective_threshold_dispersion: MetricValue | None
     threshold_dispersion_recovery_fraction: MetricValue | None
-    threshold_dispersion_recovery_reason: (
-        str | None
-    )  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    threshold_dispersion_recovery_reason: AnalysisReasonText | None
     cv_fpr_equity_recovery_fraction: MetricValue | None
-    cv_fpr_equity_recovery_reason: (
-        str | None
-    )  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    cv_fpr_equity_recovery_reason: AnalysisReasonText | None
     evidence_availability: ClusterEvidenceAvailability = ClusterEvidenceAvailability.AVAILABLE
-    dispersion_unavailable_reason: str | None = (
-        None  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-    )
+    dispersion_unavailable_reason: AnalysisReasonText | None = None
 
     evidence_role: ClassVar[EvidenceRole] = EvidenceRole.MECHANISM
 
@@ -125,12 +118,18 @@ class ClusterEvidenceRecord(StrictModel):
         return self.cv_fpr_equity_recovery_fraction
 
     @property
-    def recovery_fraction_reason(
-        self,
-    ) -> (
-        str | None
-    ):  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    def recovery_fraction_reason(self) -> AnalysisReasonText | None:
         return self.cv_fpr_equity_recovery_reason
+
+
+class ClusterContingencyMatrix(StrictModel):
+    rows: tuple[tuple[PairedObservationCount, ...], ...]
+
+    def row_count(self) -> int:
+        return len(self.rows)
+
+    def row_at(self, index: int) -> tuple[PairedObservationCount, ...]:
+        return self.rows[index]
 
 
 class ClusterStabilityResult(StrictModel):
@@ -138,7 +137,7 @@ class ClusterStabilityResult(StrictModel):
     compared_clients: tuple[ClientIdentity, ...]
     left_partition: ClusterPartitionSummary
     right_partition: ClusterPartitionSummary
-    contingency: tuple[tuple[PairedObservationCount, ...], ...]
+    contingency: ClusterContingencyMatrix
     left_source_checksum: Checksum | None = None
     right_source_checksum: Checksum | None = None
 
@@ -150,15 +149,15 @@ class ClusterStabilityResult(StrictModel):
             raise ValueError("cluster stability requires at least two clients")
         if len(set(self.compared_clients)) != len(self.compared_clients):
             raise ValueError("cluster stability requires unique compared clients")
-        if len(self.contingency) != len(self.left_partition.group_sizes):
+        if self.contingency.row_count() != len(self.left_partition.group_sizes):
             raise ValueError("cluster contingency row count must match the left partition")
-        if any(len(row) != len(self.right_partition.group_sizes) for row in self.contingency):
+        if any(len(row) != len(self.right_partition.group_sizes) for row in self.contingency.rows):
             raise ValueError("cluster contingency column count must match the right partition")
-        row_totals = tuple(sum(value.value for value in row) for row in self.contingency)
+        row_totals = tuple(sum(value.value for value in row) for row in self.contingency.rows)
         if row_totals != tuple(value.value for value in self.left_partition.group_sizes):
             raise ValueError("cluster contingency row totals must match the left partition")
         column_totals = tuple(
-            sum(row[column].value for row in self.contingency)
+            sum(row[column].value for row in self.contingency.rows)
             for column in range(len(self.right_partition.group_sizes))
         )
         if column_totals != tuple(value.value for value in self.right_partition.group_sizes):
@@ -179,7 +178,7 @@ def cluster_evidence_from_grouped_result(
 ) -> ClusterEvidenceRecord:
     partition = ClusterPartitionSummary.from_memberships(
         result.clusters,
-        declared_group_count=result.group_count.value,
+        declared_group_count=result.group_count,
     )
     contributing = tuple(
         quantile.value.value for membership in result.clusters for quantile in membership.contributing_local_quantiles
@@ -189,12 +188,16 @@ def cluster_evidence_from_grouped_result(
     )
     contributing_dispersion = MetricValue(max(contributing) - min(contributing)) if len(contributing) >= 2 else None
     effective_dispersion = MetricValue(max(effective) - min(effective)) if len(effective) >= 2 else None
-    dispersion_reason = None
+    dispersion_reason: AnalysisReasonText | None = None
     if contributing_dispersion is None or effective_dispersion is None:
-        dispersion_reason = "dispersion requires at least two computed cluster quantiles or thresholds"
+        dispersion_reason = AnalysisReasonText(
+            "dispersion requires at least two computed cluster quantiles or thresholds"
+        )
     if local_dispersion is None or local_dispersion.value <= 0.0 or effective_dispersion is None:
         threshold_recovery = None
-        threshold_reason = "local-threshold dispersion is unavailable or non-positive"
+        threshold_reason: AnalysisReasonText | None = AnalysisReasonText(
+            "local-threshold dispersion is unavailable or non-positive"
+        )
     else:
         threshold_recovery = MetricValue(1.0 - (effective_dispersion.value / local_dispersion.value))
         threshold_reason = None
@@ -231,10 +234,10 @@ def empty_cluster_evidence_record(
     *,
     seed: Seed,
     source_threshold_checksum: Checksum,
-    declared_group_count: int,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    declared_group_count: GroupCount,
     filled_memberships: tuple[ClusterMembership, ...],
     fingerprints: tuple[ClusterFingerprint, ...] = (),
-    reason: str,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    reason: AnalysisReasonText,
     observed_empty_cluster_indexes: tuple[ClusterIndex, ...] = (),
 ) -> ClusterEvidenceRecord:
     """Preserve empty-cluster negative evidence without fabricating memberships or zero metrics.
@@ -262,7 +265,7 @@ def empty_cluster_evidence_record(
     dispersion_reason = (
         None
         if contributing_dispersion is not None and effective_dispersion is not None
-        else "dispersion is unavailable for empty or incomplete cluster partitions"
+        else AnalysisReasonText("dispersion is unavailable for empty or incomplete cluster partitions")
     )
     return ClusterEvidenceRecord(
         seed=seed,
@@ -287,12 +290,14 @@ def _cv_fpr_equity_recovery(
     shared_cv_fpr: MetricValue | None,
     local_cv_fpr: MetricValue | None,
     cluster_cv_fpr: MetricValue | None,
-) -> tuple[MetricValue | None, str | None]:
+) -> tuple[MetricValue | None, AnalysisReasonText | None]:
     if shared_cv_fpr is None or local_cv_fpr is None or cluster_cv_fpr is None:
-        return None, "CV(FPR) equity recovery requires shared, local, and cluster population CV(FPR)"
+        return None, AnalysisReasonText(
+            "CV(FPR) equity recovery requires shared, local, and cluster population CV(FPR)"
+        )
     gap = shared_cv_fpr.value - local_cv_fpr.value
     if gap <= 0.0:
-        return None, (
+        return None, AnalysisReasonText(
             "CV(FPR) equity recovery is undefined when the SHARED_THRESHOLD–LOCAL_THRESHOLD gap is non-positive"
         )
     recovered = shared_cv_fpr.value - cluster_cv_fpr.value
@@ -305,10 +310,8 @@ def cluster_stability(
     *,
     left_source_checksum: Checksum | None = None,
     right_source_checksum: Checksum | None = None,
-    left_declared_group_count: int
-    | None = None,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-    right_declared_group_count: int
-    | None = None,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    left_declared_group_count: GroupCount | None = None,
+    right_declared_group_count: GroupCount | None = None,
 ) -> ClusterStabilityResult:
     left_assignments = _cluster_assignments(left)
     right_assignments = _cluster_assignments(right)
@@ -316,8 +319,8 @@ def cluster_stability(
     right_clients = tuple(item.client for item in right_assignments)
     if left_clients != right_clients:
         raise ValueError("cluster stability requires identical persisted client memberships")
-    left_labels = tuple(item.value.value for item in left_assignments)
-    right_labels = tuple(item.value.value for item in right_assignments)
+    left_labels = tuple(item.value for item in left_assignments)
+    right_labels = tuple(item.value for item in right_assignments)
     left_partition = ClusterPartitionSummary.from_memberships(
         left,
         declared_group_count=left_declared_group_count,
@@ -327,15 +330,20 @@ def cluster_stability(
         declared_group_count=right_declared_group_count,
     )
     return ClusterStabilityResult(
-        adjusted_rand_index=CorrelationCoefficient(adjusted_rand_score(left_labels, right_labels)),
+        adjusted_rand_index=CorrelationCoefficient(
+            adjusted_rand_score(
+                tuple(label.value for label in left_labels),
+                tuple(label.value for label in right_labels),
+            )
+        ),
         compared_clients=left_clients,
         left_partition=left_partition,
         right_partition=right_partition,
         contingency=_contingency(
             left_labels,
             right_labels,
-            len(left_partition.group_sizes),
-            len(right_partition.group_sizes),
+            GroupCount(len(left_partition.group_sizes)),
+            GroupCount(len(right_partition.group_sizes)),
         ),
         left_source_checksum=left_source_checksum,
         right_source_checksum=right_source_checksum,
@@ -365,28 +373,26 @@ def _cluster_assignments(
 
 
 def _contingency(
-    left_labels: tuple[
-        int, ...
-    ],  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-    right_labels: tuple[
-        int, ...
-    ],  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-    left_group_count: int,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-    right_group_count: int,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-) -> tuple[tuple[PairedObservationCount, ...], ...]:  # TODO: should be better than tuple of tuple
-    return tuple(
-        tuple(
-            PairedObservationCount(
-                sum(
-                    left_label == left_index and right_label == right_index
-                    for left_label, right_label in zip(
-                        left_labels,
-                        right_labels,
-                        strict=True,
+    left_labels: tuple[ClusterIndex, ...],
+    right_labels: tuple[ClusterIndex, ...],
+    left_group_count: GroupCount,
+    right_group_count: GroupCount,
+) -> ClusterContingencyMatrix:
+    return ClusterContingencyMatrix(
+        rows=tuple(
+            tuple(
+                PairedObservationCount(
+                    sum(
+                        left_label.value == left_index and right_label.value == right_index
+                        for left_label, right_label in zip(
+                            left_labels,
+                            right_labels,
+                            strict=True,
+                        )
                     )
                 )
+                for right_index in range(right_group_count.value)
             )
-            for right_index in range(right_group_count)
+            for left_index in range(left_group_count.value)
         )
-        for left_index in range(left_group_count)
     )

@@ -1,5 +1,6 @@
 """Deterministic descriptive summaries for seed- and client-level evidence."""
 
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import ClassVar
 
@@ -9,8 +10,8 @@ from pydantic import model_validator
 from datp_core.analysis.contrasts import MetricSeries, PairedDifferenceCounts
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.contracts import StrictModel
-from datp_core.core.identifiers import AvailabilityStatus, EvidenceRole, FederatedThresholdMethod
-from datp_core.core.numeric import MetricValue, PairedObservationCount, Ratio, Seed
+from datp_core.core.identifiers import AnalysisReasonText, AvailabilityStatus, EvidenceRole, FederatedThresholdMethod
+from datp_core.core.numeric import MetricValue, PairedObservationCount, Quantile, Ratio, Seed
 from datp_core.data.populations.contracts import ClientIdentity
 
 
@@ -62,9 +63,7 @@ class DescriptiveSummary(StrictModel):
     counts: ObservationCounts
     quantiles: QuantileRange
     statistics: DescriptiveStatistics | None
-    reason: (
-        str | None
-    )  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    reason: AnalysisReasonText | None
 
     @model_validator(mode="after")
     def validate_summary(self) -> "DescriptiveSummary":
@@ -98,7 +97,7 @@ def summarize_values(
             counts=counts,
             quantiles=quantiles,
             statistics=None,
-            reason="no available values",
+            reason=AnalysisReasonText("no available values"),
         )
     array = _metric_array(values)
     return DescriptiveSummary(
@@ -174,9 +173,7 @@ class ClientScoreGeometry(StrictModel):
     standard_deviation: MetricValue | None
     minimum: MetricValue | None
     maximum: MetricValue | None
-    unavailable_reason: str | None = (
-        None  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-    )
+    unavailable_reason: AnalysisReasonText | None = None
 
     @model_validator(mode="after")
     def validate_geometry(self) -> "ClientScoreGeometry":
@@ -205,9 +202,7 @@ class ScoreGeometryResult(StrictModel):
     clients: tuple[ClientScoreGeometry, ...]
     threshold_overlays: tuple[ScoreGeometryThresholdOverlay, ...]
     attack_geometry_available: bool
-    attack_geometry_reason: str | None = (
-        None  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-    )
+    attack_geometry_reason: AnalysisReasonText | None = None
 
     evidence_role: ClassVar[EvidenceRole] = EvidenceRole.MECHANISM
 
@@ -216,13 +211,13 @@ class ScoreGeometryResult(StrictModel):
         return AvailabilityStatus.AVAILABLE if self.clients else AvailabilityStatus.UNAVAILABLE
 
 
-_DEFAULT_CDF_QUANTILES = (
-    0.05,
-    0.25,
-    0.5,
-    0.75,
-    0.95,
-)  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity. ANd even checki if needs to be moved
+_DEFAULT_CDF_QUANTILES: tuple[Quantile, ...] = (
+    Quantile(0.05),
+    Quantile(0.25),
+    Quantile(0.5),
+    Quantile(0.75),
+    Quantile(0.95),
+)
 
 
 def empirical_cdf_points(scores: tuple[MetricValue, ...]) -> tuple[EmpiricalCdfPoint, ...]:
@@ -244,9 +239,7 @@ def client_score_geometry(
     client: ClientIdentity,
     score_role: ScoreRole,
     scores: tuple[MetricValue, ...],
-    quantiles: tuple[
-        float, ...
-    ] = _DEFAULT_CDF_QUANTILES,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    quantiles: tuple[Quantile, ...] = _DEFAULT_CDF_QUANTILES,
 ) -> ClientScoreGeometry:
     if not scores:
         return ClientScoreGeometry(
@@ -259,10 +252,12 @@ def client_score_geometry(
             standard_deviation=None,
             minimum=None,
             maximum=None,
-            unavailable_reason="no scores available for the declared role",
+            unavailable_reason=AnalysisReasonText("no scores available for the declared role"),
         )
     array = _metric_array(scores)
-    quantile_values = tuple(MetricValue(float(np.quantile(array, level, method="linear"))) for level in quantiles)
+    quantile_values = tuple(
+        MetricValue(float(np.quantile(array, level.value, method="linear"))) for level in quantiles
+    )
     return ClientScoreGeometry(
         client=client,
         score_role=score_role,
@@ -276,25 +271,30 @@ def client_score_geometry(
     )
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ClientEvaluationScoreSeries:
+    client: ClientIdentity
+    scores: tuple[MetricValue, ...]
+
+
 def score_geometry_from_client_vectors(
     *,
     seed: Seed,
     source_score_checksum: Checksum,
-    benign_evaluation: tuple[tuple[ClientIdentity, tuple[MetricValue, ...]], ...],
-    attack_evaluation: tuple[tuple[ClientIdentity, tuple[MetricValue, ...]], ...] | None,
+    benign_evaluation: tuple[ClientEvaluationScoreSeries, ...],
+    attack_evaluation: tuple[ClientEvaluationScoreSeries, ...] | None,
     threshold_overlays: tuple[ScoreGeometryThresholdOverlay, ...],
     attack_geometry_available: bool,
-    attack_geometry_reason: str
-    | None = None,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    attack_geometry_reason: AnalysisReasonText | None = None,
 ) -> ScoreGeometryResult:
     clients = tuple(
-        client_score_geometry(client=client, score_role=ScoreRole.BENIGN_EVALUATION, scores=scores)
-        for client, scores in sorted(benign_evaluation, key=lambda item: item[0])
+        client_score_geometry(client=item.client, score_role=ScoreRole.BENIGN_EVALUATION, scores=item.scores)
+        for item in sorted(benign_evaluation, key=lambda item: item.client)
     )
     if attack_evaluation is not None and attack_geometry_available:
         clients = clients + tuple(
-            client_score_geometry(client=client, score_role=ScoreRole.ATTACK_EVALUATION, scores=scores)
-            for client, scores in sorted(attack_evaluation, key=lambda item: item[0])
+            client_score_geometry(client=item.client, score_role=ScoreRole.ATTACK_EVALUATION, scores=item.scores)
+            for item in sorted(attack_evaluation, key=lambda item: item.client)
         )
     available = tuple(
         item

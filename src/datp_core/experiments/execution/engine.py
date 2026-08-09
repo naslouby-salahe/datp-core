@@ -22,7 +22,7 @@ from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
 )
-from datp_core.core.identifiers import ExperimentId, PublicationStatus
+from datp_core.core.identifiers import ExperimentId, PublicationStatus, StageExecutionEvidence
 from datp_core.core.numeric import ByteCount
 from datp_core.data.service import DatasetMaterializationRequest, materialize_datasets
 from datp_core.detector.scoring.contracts import FixedScoreInvariant
@@ -191,7 +191,11 @@ class PipelineStageRunner:
         try:
             return self._run(stage, coordinate, provenance, output_root)
         except ScientificContractError as error:
-            return StageExecution(stage=stage, outcome=StageOutcome.BLOCKED, evidence=str(error))
+            return StageExecution(
+                stage=stage,
+                outcome=StageOutcome.BLOCKED,
+                evidence=StageExecutionEvidence(str(error)),
+            )
 
     def _workspace_for(self, coordinate: ExperimentCoordinate, output_root: Path) -> ExperimentWorkspace:
         workspace = self._workspace
@@ -218,7 +222,7 @@ class PipelineStageRunner:
                 return StageExecution(
                     stage=stage,
                     outcome=StageOutcome.COMPLETED,
-                    evidence=f"coordinate validated: {coordinate.stable_key}",
+                    evidence=StageExecutionEvidence(f"coordinate validated: {coordinate.stable_key}"),
                 )
             case PipelineStage.MATERIALIZE_DATASET:
                 return self._materialize_dataset(stage, coordinate)
@@ -226,7 +230,7 @@ class PipelineStageRunner:
                 return StageExecution(
                     stage=stage,
                     outcome=StageOutcome.COMPLETED,
-                    evidence=(
+                    evidence=StageExecutionEvidence(
                         f"clients={len(workspace.context.clients)} "
                         f"split_checksum={workspace.context.split_manifest_checksum.value}"
                     ),
@@ -235,7 +239,7 @@ class PipelineStageRunner:
                 return StageExecution(
                     stage=stage,
                     outcome=StageOutcome.COMPLETED,
-                    evidence=f"state_set={workspace.context.preprocessing_state_set_checksum.value}",
+                    evidence=StageExecutionEvidence(f"state_set={workspace.context.preprocessing_state_set_checksum.value}"),
                 )
             case PipelineStage.TRAIN_DETECTOR:
                 return self._train_detector(stage, workspace)
@@ -243,7 +247,7 @@ class PipelineStageRunner:
                 return StageExecution(
                     stage=stage,
                     outcome=StageOutcome.COMPLETED,
-                    evidence=f"selected_round={workspace.selected_checkpoint.round_number.value}",
+                    evidence=StageExecutionEvidence(f"selected_round={workspace.selected_checkpoint.round_number.value}"),
                 )
             case PipelineStage.GENERATE_SCORES:
                 return self._generate_scores(stage, coordinate, workspace)
@@ -269,7 +273,9 @@ class PipelineStageRunner:
         return StageExecution(
             stage=stage,
             outcome=StageOutcome.COMPLETED,
-            evidence=f"{publication.dataset.value} status={publication.publication_status.value}",
+            evidence=StageExecutionEvidence(
+                f"{publication.dataset.value} status={publication.publication_status.value}"
+            ),
         )
 
     def _train_detector(self, stage: PipelineStage, workspace: ExperimentWorkspace) -> StageExecution:
@@ -280,7 +286,9 @@ class PipelineStageRunner:
         return StageExecution(
             stage=stage,
             outcome=outcome,
-            evidence=f"rounds={len(result.candidates)} status={result.publication_status.value}",
+            evidence=StageExecutionEvidence(
+                f"rounds={len(result.candidates)} status={result.publication_status.value}"
+            ),
         )
 
     def _observe(self, boundary: ObservationBoundary, coordinate: ExperimentCoordinate, checksum: Checksum) -> None:
@@ -297,7 +305,11 @@ class PipelineStageRunner:
     ) -> StageExecution:
         checksum = canonical_checksum(FixedScoreInvariant.from_manifest(workspace.scores))
         self._observe(ObservationBoundary.AFTER_SCORE_GENERATION_BEFORE_CALIBRATION, coordinate, checksum)
-        return StageExecution(stage=stage, outcome=StageOutcome.COMPLETED, evidence=f"score_invariant={checksum.value}")
+        return StageExecution(
+            stage=stage,
+            outcome=StageOutcome.COMPLETED,
+            evidence=StageExecutionEvidence(f"score_invariant={checksum.value}"),
+        )
 
     def _build_calibration(
         self,
@@ -315,7 +327,7 @@ class PipelineStageRunner:
                 f"replicates={len(lattice.replicate_manifests)}"
             )
         self._observe(ObservationBoundary.AFTER_CALIBRATION_BEFORE_THRESHOLD_CONSTRUCTION, coordinate, checksum)
-        return StageExecution(stage=stage, outcome=StageOutcome.COMPLETED, evidence=evidence)
+        return StageExecution(stage=stage, outcome=StageOutcome.COMPLETED, evidence=StageExecutionEvidence(evidence))
 
     def _construct_thresholds(
         self,
@@ -328,7 +340,7 @@ class PipelineStageRunner:
         return StageExecution(
             stage=stage,
             outcome=StageOutcome.COMPLETED,
-            evidence=f"threshold_checksum={checksum.value}",
+            evidence=StageExecutionEvidence(f"threshold_checksum={checksum.value}"),
         )
 
     def _evaluate_detector(
@@ -342,7 +354,7 @@ class PipelineStageRunner:
         return StageExecution(
             stage=stage,
             outcome=StageOutcome.COMPLETED,
-            evidence=f"complete_digest={evaluation.complete_digest.value}",
+            evidence=StageExecutionEvidence(f"complete_digest={evaluation.complete_digest.value}"),
         )
 
     def _analyze_evidence(
@@ -355,7 +367,7 @@ class PipelineStageRunner:
         return StageExecution(
             stage=stage,
             outcome=StageOutcome.COMPLETED,
-            evidence=f"metric={coordinate.metric.value} status={result.status.value}",
+            evidence=StageExecutionEvidence(f"metric={coordinate.metric.value} status={result.status.value}"),
         )
 
     def _finalize_publication(
@@ -405,5 +417,5 @@ class PipelineStageRunner:
         return StageExecution(
             stage=stage,
             outcome=StageOutcome.COMPLETED,
-            evidence=f"completion_state={record.state.value} artifacts={len(record.artifacts)}",
+            evidence=StageExecutionEvidence(f"completion_state={record.state.value} artifacts={len(record.artifacts)}"),
         )

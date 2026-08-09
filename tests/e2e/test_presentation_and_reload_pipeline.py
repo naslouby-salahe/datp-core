@@ -1,9 +1,16 @@
 from pathlib import Path
 
 from datp_core.artifacts.provenance import Checksum
-from datp_core.core.identifiers import AvailabilityStatus, EvidenceRole, ExperimentId, MetricId, PopulationId
+from datp_core.core.identifiers import (
+    AvailabilityStatus,
+    ClaimWording,
+    EvidenceRole,
+    ExperimentId,
+    MetricId,
+    PopulationId,
+)
 from datp_core.presentation.export import PublicationBundle, ReportProvenance, export_markdown
-from datp_core.presentation.tables import PublicationTable, TableCell
+from datp_core.presentation.tables import EvidenceText, PublicationTable, TableCell, TableTitle
 from datp_core.presentation.validation import (
     ClaimKind,
     ClaimRequest,
@@ -25,7 +32,7 @@ def test_presentation_export_is_deterministic_and_preserves_provenance_and_unava
             evidence_decision=EvidenceDecision.SUPPORTED,
             verified_anchor_gate=None,
             traffic_rate_available=False,
-            wording="Local calibration reduced cross-client FPR dispersion.",
+            wording=ClaimWording("Local calibration reduced cross-client FPR dispersion."),
         )
     )
     permitted = validate_claim(
@@ -37,7 +44,7 @@ def test_presentation_export_is_deterministic_and_preserves_provenance_and_unava
             evidence_decision=EvidenceDecision.SUPPORTED,
             verified_anchor_gate=None,
             traffic_rate_available=False,
-            wording="Supportive threshold construction sensitivity remains claim-bounded.",
+            wording=ClaimWording("Supportive threshold construction sensitivity remains claim-bounded."),
         )
     )
     blocked = validate_claim(
@@ -49,23 +56,23 @@ def test_presentation_export_is_deterministic_and_preserves_provenance_and_unava
             evidence_decision=EvidenceDecision.BOUNDARY,
             verified_anchor_gate=None,
             traffic_rate_available=False,
-            wording="Edge clients improved attack detection.",
+            wording=ClaimWording("Edge clients improved attack detection."),
         )
     )
     table = PublicationTable(
-        title="External boundary",
+        title=TableTitle("External boundary"),
         cells=(
             TableCell(
                 metric=MetricId.FALSE_POSITIVE_RATE,
                 availability=AvailabilityStatus.AVAILABLE,
                 rendered_value="0.125",
-                evidence="held-out benign evaluation",
+                evidence=EvidenceText("held-out benign evaluation"),
             ),
             TableCell(
                 metric=MetricId.TRUE_POSITIVE_RATE,
                 availability=AvailabilityStatus.UNAVAILABLE,
                 rendered_value="",
-                evidence="client-level attack assignment is unavailable",
+                evidence=EvidenceText("client-level attack assignment is unavailable"),
             ),
         ),
     )

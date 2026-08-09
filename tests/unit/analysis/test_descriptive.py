@@ -3,6 +3,7 @@ from tests.unit.learning.federated.helpers import client_identity
 
 from datp_core.analysis.contrasts import MetricSeries
 from datp_core.analysis.descriptive import (
+    ClientEvaluationScoreSeries,
     ObservationCounts,
     QuantileRange,
     ScoreRole,
@@ -102,14 +103,14 @@ def test_score_geometry_retains_every_declared_client_without_silent_omission() 
         seed=Seed(0),
         source_score_checksum=Checksum("e" * 64),
         benign_evaluation=(
-            (clients[0], (MetricValue(0.1), MetricValue(0.2))),
-            (clients[1], ()),
-            (clients[2], (MetricValue(0.4),)),
+            ClientEvaluationScoreSeries(client=clients[0], scores=(MetricValue(0.1), MetricValue(0.2))),
+            ClientEvaluationScoreSeries(client=clients[1], scores=()),
+            ClientEvaluationScoreSeries(client=clients[2], scores=(MetricValue(0.4),)),
         ),
         attack_evaluation=(
-            (clients[0], ()),
-            (clients[1], (MetricValue(0.9),)),
-            (clients[2], ()),
+            ClientEvaluationScoreSeries(client=clients[0], scores=()),
+            ClientEvaluationScoreSeries(client=clients[1], scores=(MetricValue(0.9),)),
+            ClientEvaluationScoreSeries(client=clients[2], scores=()),
         ),
         threshold_overlays=(),
         attack_geometry_available=True,

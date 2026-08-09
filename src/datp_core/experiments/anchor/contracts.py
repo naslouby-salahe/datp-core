@@ -18,6 +18,7 @@ from datp_core.core.errors import (
     require_contract,
 )
 from datp_core.core.identifiers import (
+    ArtifactDirectoryPathText,
     CheckpointStatus,
     ContractSubject,
     EvidenceRole,
@@ -28,8 +29,10 @@ from datp_core.core.identifiers import (
     NonEmptyString,
     PopulationId,
     PreprocessingProtocolId,
+    SourceRuleDescription,
     SplitProtocolId,
     TrainingModelId,
+    UtcInstantText,
 )
 from datp_core.core.numeric import ClientCount, MetricDelta, MetricValue, Seed
 from datp_core.experiments.common.seeds import SeedCohort
@@ -124,15 +127,8 @@ class ExactCountRule(StrictModel):
 
 
 class SourceDefinedRule(StrictModel):
-    description: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    description: SourceRuleDescription
     strategy: Literal[AnchorComparisonStrategy.SOURCE_DEFINED] = AnchorComparisonStrategy.SOURCE_DEFINED
-
-    @field_validator("description")
-    @classmethod
-    def validate_description(cls, v: str) -> str:
-        if not v:
-            raise ValueError("source-defined rule requires a non-empty description")
-        return v
 
 
 AnchorToleranceRule = Annotated[
@@ -438,7 +434,7 @@ class VerifiedAnchorGateArtifact(StrictModel):
 
     decision: AnchorGateDecision
     artifact_checksum: Checksum
-    diagnostics_directory: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    diagnostics_directory: ArtifactDirectoryPathText
 
     @model_validator(mode="after")
     def validate_passed_gate(self) -> VerifiedAnchorGateArtifact:
@@ -477,7 +473,7 @@ class AnchorConfirmatoryHandoff(StrictModel):
     complete_artifact_inventory_checksum: Checksum
     verified_gate_status: AnchorGateStatus
     verified_gate_artifact_checksum: Checksum
-    diagnostics_directory: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    diagnostics_directory: ArtifactDirectoryPathText
 
     @model_validator(mode="after")
     def validate_handoff_integrity(self) -> AnchorConfirmatoryHandoff:
@@ -493,8 +489,6 @@ class AnchorConfirmatoryHandoff(StrictModel):
             raise ValueError("handoff gate decision checksum must match verified gate artifact checksum")
         if not self.threshold_protocol_identities:
             raise ValueError("handoff requires at least one threshold protocol identity")
-        if not self.diagnostics_directory.strip():
-            raise ValueError("handoff diagnostics directory must be non-empty")
         recomputed = _handoff_creation_identity(self)
         if recomputed != self.creation_identity:
             raise ValueError("handoff creation identity does not match the binding payload")
@@ -568,7 +562,7 @@ class HistoricalArtifactProvenanceDocument(HistoricalBoundaryModel):
     metric_code_version: Checksum
     threshold_code_version: Checksum
     package_version: Checksum
-    generated_at_utc: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    generated_at_utc: UtcInstantText
 
 
 class HistoricalMetricsDocument(HistoricalBoundaryModel):

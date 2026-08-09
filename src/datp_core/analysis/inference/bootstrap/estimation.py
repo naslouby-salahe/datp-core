@@ -180,7 +180,7 @@ def _bca_interval_from_distribution(
         dtype=np.float64,
     )
     shifted = bias_correction + standard_quantiles
-    denominator = 1.0 - acceleration * shifted
+    denominator = 1.0 - acceleration.value * shifted
     if np.any(np.abs(denominator) <= np.finfo(np.float64).eps):
         return BcaReason.INVALID_ADJUSTED_QUANTILES
     adjusted_quantiles = np.asarray(
@@ -196,16 +196,12 @@ def _bca_interval_from_distribution(
         MetricValue(upper),
         BcaAdjustment(
             bias_correction=MetricValue(bias_correction),
-            acceleration=MetricValue(acceleration),
+            acceleration=acceleration,
         ),
     )
 
 
-def _jackknife_acceleration(
-    deltas: NDArray[np.float64],
-) -> (
-    float | None
-):  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+def _jackknife_acceleration(deltas: NDArray[np.float64]) -> MetricValue | None:
     if deltas.size < 2:
         return None
     jackknife = (float(np.sum(deltas)) - deltas) / (deltas.size - 1)
@@ -214,7 +210,7 @@ def _jackknife_acceleration(
     if squared_sum <= 0.0:
         return None
     acceleration = float(np.sum(centered**3) / (6.0 * squared_sum**1.5))
-    return acceleration if np.isfinite(acceleration) else None
+    return MetricValue(acceleration) if np.isfinite(acceleration) else None
 
 
 def _point_estimate_or_none(contrasts: PairedContrasts) -> MetricValue | None:

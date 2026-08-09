@@ -7,7 +7,7 @@ from datp_core.core.identifiers import (
     PopulationId,
     TrainingModelId,
 )
-from datp_core.core.numeric import ClientCount, MetricValue
+from datp_core.core.numeric import ClientCount, MetricValue, PresentationDecimalCount
 from datp_core.experiments.anchor.comparison import (
     compare_anchor_metric,
     full_precision_failure_stands_despite_rounded_equality,
@@ -61,9 +61,9 @@ def test_full_precision_failure_despite_rounded_equality() -> None:
     assert round(expected, 5) == round(observed, 5)
     assert full_precision_failure_stands_despite_rounded_equality(
         full_precision_decision=comparison.decision,
-        presentation_decimals=5,
-        expected=expected,
-        observed=observed,
+        presentation_decimals=PresentationDecimalCount(5),
+        expected=MetricValue(expected),
+        observed=MetricValue(observed),
     )
 
 

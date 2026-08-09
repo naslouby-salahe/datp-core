@@ -1,5 +1,4 @@
-from datp_core.app.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
-from datp_core.app.planning import PlanReason
+from datp_core.app.planning import PlanDisposition, PlanningEvidence, PlanReason, expand_experiment_plan
 from datp_core.core.identifiers import EvidenceRole, ExperimentId, PopulationId, TrainingModelId
 from datp_core.core.numeric import Seed
 from datp_core.detector.training.protocols import FEDPROX_COEFFICIENTS
@@ -29,7 +28,10 @@ def test_fedprox_stress_entry_point_marks_experiment_executable_with_standard_ro
             PlanningEvidence(
                 experiment=declaration.id,
                 disposition=PlanDisposition.EXECUTABLE,
-                reason=PlanReason("the FedProx stress-test entry point supplies the locked natural-device execution prerequisites"),
+                reason=PlanReason(
+                    "the FedProx stress-test entry point supplies the locked natural-device "
+                    "execution prerequisites"
+                ),
             ),
         ),
     )

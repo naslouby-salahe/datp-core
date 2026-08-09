@@ -10,7 +10,12 @@ from datp_core.core.errors import (
     AnchorReproductionError,
     ErrorMessage,
 )
-from datp_core.core.identifiers import ExperimentReadiness, PreprocessingProtocolId, ScoreFrameColumn
+from datp_core.core.identifiers import (
+    ArtifactDirectoryPathText,
+    ExperimentReadiness,
+    PreprocessingProtocolId,
+    ScoreFrameColumn,
+)
 from datp_core.data.populations.declarations import split_protocol_for_population
 from datp_core.detector.checkpoints.protocols import CHECKPOINT_PROTOCOL, CHECKPOINT_SELECTION_RULE
 from datp_core.detector.training.protocols import NBAIOT_AUTOENCODER
@@ -237,7 +242,7 @@ def build_anchor_confirmatory_handoff(
         "complete_artifact_inventory_checksum": inventory_checksum,
         "verified_gate_status": decision.status,
         "verified_gate_artifact_checksum": gate_checksum,
-        "diagnostics_directory": str(diagnostics_directory.resolve()),
+        "diagnostics_directory": ArtifactDirectoryPathText(str(diagnostics_directory.resolve())),
     }
 
     return validate_handoff_against_confirmatory_programme(
@@ -262,7 +267,7 @@ def build_anchor_confirmatory_handoff(
             complete_artifact_inventory_checksum=inventory_checksum,
             verified_gate_status=decision.status,
             verified_gate_artifact_checksum=gate_checksum,
-            diagnostics_directory=str(diagnostics_directory.resolve()),
+            diagnostics_directory=ArtifactDirectoryPathText(str(diagnostics_directory.resolve())),
         )
     )
 
@@ -285,7 +290,7 @@ def load_verified_anchor_gate_artifact(diagnostics_directory: Path) -> VerifiedA
     return VerifiedAnchorGateArtifact(
         decision=decision,
         artifact_checksum=artifact_checksum,
-        diagnostics_directory=str(diagnostics_directory.resolve()),
+        diagnostics_directory=ArtifactDirectoryPathText(str(diagnostics_directory.resolve())),
     )
 
 
@@ -335,7 +340,7 @@ def load_anchor_confirmatory_handoff(
             reason=AnchorArtifactValidationFailure.STATUS_MISMATCH,
         )
 
-    if handoff.diagnostics_directory != str(diagnostics_directory.resolve()):
+    if str(handoff.diagnostics_directory) != str(diagnostics_directory.resolve()):
         raise AnchorReproductionError(
             ErrorMessage(f"anchor confirmatory handoff diagnostics directory is mismatched: {handoff_path}"),
             reason=AnchorArtifactValidationFailure.DIRECTORY_MISMATCH,

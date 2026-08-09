@@ -43,7 +43,6 @@ from datp_core.core.identifiers import (
     DatasetId,
     EvidenceRole,
     ExperimentId,
-    FamilyIdentity,
     FeatureNameSequence,
     FederatedThresholdMethod,
     FedProxCoefficientSelectionRule,
@@ -58,6 +57,7 @@ from datp_core.core.identifiers import (
 )
 from datp_core.core.numeric import (
     NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
+    CampaignOrdinal,
     ClientCount,
     DittoRegularization,
     MetricValue,
@@ -67,6 +67,7 @@ from datp_core.core.numeric import (
     RowCount,
     ScoreValue,
     Seed,
+    SeedObservationCount,
 )
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.data.populations.publication import ConstructDeclaredPopulationRequest, construct_declared_population
@@ -481,7 +482,7 @@ def analyze_ditto_absorption(
     cohort = decide_absorption_cohort(
         tuple(observations),
         _MODEL_ABSORPTION_DECISION_PROTOCOL,
-        alternative_route_seed_count=alternative_route,
+        alternative_route_seed_count=SeedObservationCount(alternative_route),
     )
     export_mechanism_publication(
         (cohort,),
@@ -528,7 +529,8 @@ def run_fedprox_stress_test_seed(
             subject=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST,
         )
     campaign_entries = tuple(
-        CampaignEntry(ordinal=index, coordinate=coordinate) for index, coordinate in enumerate(coordinates)
+        CampaignEntry(ordinal=CampaignOrdinal(index), coordinate=coordinate)
+        for index, coordinate in enumerate(coordinates)
     )
     campaign = CampaignPlan(
         entries=campaign_entries,
@@ -851,10 +853,7 @@ def _population_context(
         clients=clients,
         family_by_client=family_identities(
             clients,
-            tuple(
-                (ClientIdentityToken(client), FamilyIdentity(family))
-                for client, family in population_result.construction.manifest.family_by_client
-            ),
+            population_result.construction.manifest.family_by_client,
         ),
         preprocessing=preprocessing,
         split_manifest_checksum=population_result.split_manifest.assignment_checksum,

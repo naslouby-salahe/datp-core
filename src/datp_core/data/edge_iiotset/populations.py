@@ -159,7 +159,11 @@ def construct_edge_temporal_groups(
         split_protocol=split_protocol,
         programme_candidates=programme_candidates,
         accepted_ids=eligible_ids,
-        excluded_ids=tuple(ChronologyGroupIdentity(str(group_id)) for group_id in excluded_ids if str(group_id) in frozenset(str(c) for c in programme_candidates)),
+        excluded_ids=tuple(
+            ChronologyGroupIdentity(str(group_id))
+            for group_id in excluded_ids
+            if str(group_id) in frozenset(str(c) for c in programme_candidates)
+        ),
         membership=membership,
     )
     static_reference_manifest, static_reference_membership = _matched_static_reference(

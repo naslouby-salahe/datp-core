@@ -4,23 +4,36 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from datp_core.analysis.descriptive import ScoreRole
 from datp_core.artifacts.provenance import Checksum
-from datp_core.core.identifiers import AvailabilityStatus, MetricId
-from datp_core.core.numeric import MetricValue, Seed
+from datp_core.core.identifiers import (
+    AnalysisReasonText,
+    AvailabilityStatus,
+    ClientIdentityToken,
+    FederatedThresholdMethod,
+    FigureLabel,
+    FigureTitle,
+    MetricId,
+)
+from datp_core.core.numeric import MetricValue, Seed, ThresholdValue
+
+
+@dataclass(frozen=True, slots=True)
+class ThresholdOverlay:
+    method: FederatedThresholdMethod
+    value: ThresholdValue
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class FigureSeries:
-    label: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    label: FigureLabel
     metric: MetricId
     availability: AvailabilityStatus
-    values: tuple[
-        float, ...
-    ]  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    values: tuple[MetricValue, ...]
 
     def __post_init__(self) -> None:
-        if not self.label.strip():
-            raise ValueError("figure series require a label")
+        if not isinstance(self.label, FigureLabel):
+            object.__setattr__(self, "label", FigureLabel(self.label))
         if self.availability is not AvailabilityStatus.AVAILABLE and self.values:
             raise ValueError("unavailable figure series cannot contain values")
         if self.availability is AvailabilityStatus.AVAILABLE and not self.values:
@@ -31,28 +44,24 @@ class FigureSeries:
 class EmpiricalCdfFigureSeries:
     """Typed empirical CDF series: x = reconstruction score, y = cumulative probability."""
 
-    label: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    label: FigureLabel
     x_metric: MetricId
     y_metric: MetricId
     availability: AvailabilityStatus
     x_values: tuple[float, ...]
     y_values: tuple[float, ...]
-    client_id: (
-        str | None
-    )  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    client_id: ClientIdentityToken | None
     seed: Seed | None
-    score_role: str | None
-    threshold_overlays: tuple[
-        tuple[str, float], ...
-    ]  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    score_role: ScoreRole | None
+    threshold_overlays: tuple[ThresholdOverlay, ...]
     source_checksum: Checksum | None
-    unavailable_reason: str | None = (
-        None  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    )
+    unavailable_reason: AnalysisReasonText | None = None
 
     def __post_init__(self) -> None:
-        if not self.label.strip():
-            raise ValueError("empirical CDF series require a label")
+        if not isinstance(self.label, FigureLabel):
+            object.__setattr__(self, "label", FigureLabel(self.label))
+        if self.unavailable_reason is not None and not isinstance(self.unavailable_reason, AnalysisReasonText):
+            object.__setattr__(self, "unavailable_reason", AnalysisReasonText(self.unavailable_reason))
         if self.x_metric is not MetricId.RECONSTRUCTION_ERROR and self.availability is AvailabilityStatus.AVAILABLE:
             raise ValueError("empirical reconstruction CDF series must use reconstruction-error x metric")
         if (
@@ -80,32 +89,27 @@ class EmpiricalCdfFigureSeries:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class FigureSpec:
-    title: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    title: FigureTitle
     series: tuple[FigureSeries, ...] = ()
     empirical_cdf_series: tuple[EmpiricalCdfFigureSeries, ...] = ()
 
     def __post_init__(self) -> None:
-        if not self.title.strip():
-            raise ValueError("figure specifications require a title")
+        if not isinstance(self.title, FigureTitle):
+            object.__setattr__(self, "title", FigureTitle(self.title))
         if not self.series and not self.empirical_cdf_series:
             raise ValueError("figure specifications require at least one series")
 
 
 def empirical_cdf_series_from_points(
     *,
-    label: str,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    label: FigureLabel,
     points: tuple[tuple[MetricValue, MetricValue], ...],
-    client_id: str
-    | None,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    client_id: ClientIdentityToken | None,
     seed: Seed | None,
-    score_role: str
-    | None,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    threshold_overlays: tuple[
-        tuple[str, float], ...
-    ] = (),  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    score_role: ScoreRole | None,
+    threshold_overlays: tuple[ThresholdOverlay, ...] = (),
     source_checksum: Checksum | None,
-    unavailable_reason: str
-    | None = None,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    unavailable_reason: AnalysisReasonText | None = None,
 ) -> EmpiricalCdfFigureSeries:
     if unavailable_reason is not None:
         return EmpiricalCdfFigureSeries(
@@ -138,9 +142,7 @@ def empirical_cdf_series_from_points(
     )
 
 
-def render_markdown_figure(
-    figure: FigureSpec,
-) -> str:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+def render_markdown_figure(figure: FigureSpec) -> str:
     """Render every validated figure series as explicit publication evidence."""
     rows = [
         f"### {figure.title}",
@@ -169,26 +171,24 @@ def render_markdown_figure(
     return "\n".join(rows).rstrip()
 
 
-def _render_series(
-    series: FigureSeries,
-) -> str:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    values = ", ".join(format(value, ".17g") for value in series.values) if series.values else "—"
+def _render_series(series: FigureSeries) -> str:
+    values = ", ".join(format(value.value, ".17g") for value in series.values) if series.values else "—"
     return f"| {series.label} | `{series.metric.value}` | `{series.availability.value}` | {values} |"
 
 
-def _render_empirical_series(
-    series: EmpiricalCdfFigureSeries,
-) -> str:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+def _render_empirical_series(series: EmpiricalCdfFigureSeries) -> str:
     x_values = ", ".join(format(value, ".17g") for value in series.x_values) if series.x_values else "—"
     y_values = ", ".join(format(value, ".17g") for value in series.y_values) if series.y_values else "—"
     overlays = (
-        ", ".join(f"{label}={format(value, '.17g')}" for label, value in series.threshold_overlays)
+        ", ".join(
+            f"{overlay.method.value}={format(overlay.value.value, '.17g')}" for overlay in series.threshold_overlays
+        )
         if series.threshold_overlays
         else "—"
     )
-    client = series.client_id if series.client_id is not None else "—"
+    client = series.client_id.value if series.client_id is not None else "—"
     seed = str(series.seed.value) if series.seed is not None else "—"
-    role = series.score_role if series.score_role is not None else "—"
+    role = series.score_role.value if series.score_role is not None else "—"
     reason = series.unavailable_reason if series.unavailable_reason is not None else "—"
     return (
         f"| {series.label} | `{series.x_metric.value}` | `{series.y_metric.value}` | "

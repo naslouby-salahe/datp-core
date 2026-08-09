@@ -10,6 +10,7 @@ import polars as pl
 
 from datp_core.analysis.contrasts import PairedContrast, build_paired_contrast
 from datp_core.analysis.descriptive import (
+    ClientEvaluationScoreSeries,
     ScoreGeometryResult,
     ScoreGeometryThresholdOverlay,
     score_geometry_from_client_vectors,
@@ -31,7 +32,7 @@ from datp_core.analysis.mechanisms import (
 )
 from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
 from datp_core.analysis.metrics.models import MetricStatus, metric_by_id
-from datp_core.app.planning import expand_experiment_plan
+from datp_core.app.planning import PlanReason, expand_experiment_plan
 from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
@@ -41,15 +42,19 @@ from datp_core.core.errors import (
     ScientificContractError,
 )
 from datp_core.core.identifiers import (
+    AnalysisReasonText,
     EvidenceRole,
     ExperimentId,
     FederatedThresholdMethod,
+    FigureLabel,
+    FigureTitle,
     MetricId,
     PopulationId,
+    RegimeLabel,
     ScoreFrameColumn,
     TrainingModelId,
 )
-from datp_core.core.numeric import MetricValue, ModelCoefficientValue, Ratio, Seed
+from datp_core.core.numeric import MetricValue, ModelCoefficientValue, Ratio, Seed, ThresholdValue
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.scoring.models import FederatedScoreAssetName
 from datp_core.detector.training.models import FederatedTrainingCoordinate
@@ -65,7 +70,7 @@ from datp_core.experiments.execution.layout import (
 )
 from datp_core.experiments.registry import EXPERIMENTS, ExperimentDeclaration
 from datp_core.presentation.export import export_confirmatory_publication, export_mechanism_publication
-from datp_core.presentation.figures import FigureSpec
+from datp_core.presentation.figures import FigureSpec, ThresholdOverlay
 from datp_core.runtime.configuration import OUTPUTS_ROOT
 from datp_core.thresholds.policies.cluster import GroupedThresholdResult
 
@@ -73,6 +78,8 @@ from datp_core.thresholds.policies.cluster import GroupedThresholdResult
 class ConfirmatoryAssetDirectory(StrEnum):
     ROOT = "confirmatory"
     ANALYSIS = "analysis"
+    SCORE_GEOMETRY = "score_geometry"
+    MECHANISMS = "mechanisms"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -125,7 +132,7 @@ def run_confirmatory_seed(
     result = execute_declared_experiment_seed(
         declaration=declaration,
         seed_cohort=SeedCohort(values=(training_seed,)),
-        reason="the confirmatory entry point supplies the locked natural-device execution prerequisites",
+        reason=PlanReason("the confirmatory entry point supplies the locked natural-device execution prerequisites"),
         output_root=output_root,
         overwrite=overwrite,
     )
@@ -150,7 +157,7 @@ def run_family_grouped_mechanism_seed(
     result = execute_declared_experiment_seed(
         declaration=declaration,
         seed_cohort=SeedCohort(values=(training_seed,)),
-        reason=(
+        reason=PlanReason(
             "the family/grouped mechanism entry point supplies the locked "
             "natural-device execution prerequisites for family/cluster threshold evidence"
         ),
@@ -166,6 +173,7 @@ def run_family_grouped_mechanism_seed(
 
 def analyze_confirmatory_campaign(*, anchor_gate_diagnostics_directory: Path | None = None) -> Path:
     from datp_core.experiments.anchor.gate import load_anchor_confirmatory_handoff, load_verified_anchor_gate_artifact
+    from datp_core.experiments.anchor.run import default_anchor_diagnostics_directory
 
     output = (
         OUTPUTS_ROOT
@@ -173,9 +181,7 @@ def analyze_confirmatory_campaign(*, anchor_gate_diagnostics_directory: Path | N
         / PopulationId.NBAIOT_NATURAL_DEVICES.value
         / ConfirmatoryAssetDirectory.ANALYSIS
     )
-    gate_directory = (
-        anchor_gate_diagnostics_directory or (OUTPUTS_ROOT / "anchor" / "diagnostics")
-    )  # TODO: no hardcoded values. Should use what already exists. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    gate_directory = anchor_gate_diagnostics_directory or default_anchor_diagnostics_directory()
     verified_gate = load_verified_anchor_gate_artifact(gate_directory)
     load_anchor_confirmatory_handoff(gate_directory, verified_gate=verified_gate)
     mechanisms = _confirmatory_mechanisms()
@@ -192,9 +198,7 @@ def analyze_confirmatory_campaign(*, anchor_gate_diagnostics_directory: Path | N
         )
     )
     geometries, figures = _confirmatory_score_geometry()
-    _persist_score_geometry(
-        geometries, output / "score_geometry"
-    )  # TODO: no hardcoded values. Should use what already exists. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    _persist_score_geometry(geometries, output / ConfirmatoryAssetDirectory.SCORE_GEOMETRY)
     export_confirmatory_publication(
         result.document,
         output,
@@ -206,8 +210,7 @@ def analyze_confirmatory_campaign(*, anchor_gate_diagnostics_directory: Path | N
             all_mechanisms,
             experiment=ExperimentId.SHARED_VS_LOCAL_CONFIRMATION,
             population=PopulationId.NBAIOT_NATURAL_DEVICES,
-            output_directory=output
-            / "mechanisms",  # TODO: no hardcoded values. Should use what already exists. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+            output_directory=output / ConfirmatoryAssetDirectory.MECHANISMS,
             evidence_role=EvidenceRole.MECHANISM,
         )
     return output
@@ -239,7 +242,7 @@ def _confirmatory_mechanisms() -> tuple[MechanismEvidence, ...]:
                     seed=seed,
                     experiment=ExperimentId.SHARED_VS_LOCAL_CONFIRMATION,
                     population=PopulationId.NBAIOT_NATURAL_DEVICES,
-                    regime_label=f"seed_{seed.value}",
+                    regime_label=RegimeLabel(f"seed_{seed.value}"),
                     heterogeneity=divergence.aggregate,
                     benefit=benefit,
                 )
@@ -247,7 +250,7 @@ def _confirmatory_mechanisms() -> tuple[MechanismEvidence, ...]:
     mechanisms.append(
         summarize_threshold_movements_across_seeds(
             tuple(movement_cohorts),
-            required_seed_count=CONFIRMATORY_SEED_COHORT.member_count.value,
+            required_seed_count=CONFIRMATORY_SEED_COHORT.member_count,
         )
     )
     if association_observations:
@@ -277,7 +280,7 @@ def _confirmatory_score_geometry() -> tuple[tuple[ScoreGeometryResult, ...], tup
             expected_clients=expected_clients,
             benign_only=False,
         )
-        attack_available = any(scores for _, scores in attack_eval)
+        attack_available = any(item.scores for item in attack_eval)
         geometry = score_geometry_from_client_vectors(
             seed=seed,
             source_score_checksum=shared.fixed_score_evidence.evaluation.score_checksum,
@@ -285,7 +288,9 @@ def _confirmatory_score_geometry() -> tuple[tuple[ScoreGeometryResult, ...], tup
             attack_evaluation=attack_eval,
             threshold_overlays=_score_geometry_threshold_overlays(seed, expected_clients),
             attack_geometry_available=attack_available,
-            attack_geometry_reason=None if attack_available else "attack evaluation scores unavailable",
+            attack_geometry_reason=(
+                None if attack_available else AnalysisReasonText("attack evaluation scores unavailable")
+            ),
         )
         geometries.append(geometry)
         figures.append(_empirical_cdf_figure_from_geometry(geometry))
@@ -305,19 +310,21 @@ def _empirical_cdf_figure_from_geometry(geometry: ScoreGeometryResult) -> Figure
 
     series: list[EmpiricalCdfFigureSeries] = []
     for client_geometry in geometry.clients:
-        label = f"seed{geometry.seed.value}:{client_geometry.client.client_id.value}:{client_geometry.score_role.value}"
-        overlays = _client_threshold_overlay_pairs(geometry.threshold_overlays, client_geometry.client)
+        label = FigureLabel(
+            f"seed{geometry.seed.value}:{client_geometry.client.client_id.value}:{client_geometry.score_role.value}"
+        )
+        overlays = _client_threshold_overlays(geometry.threshold_overlays, client_geometry.client)
         if client_geometry.unavailable_reason is not None:
             series.append(
                 empirical_cdf_series_from_points(
                     label=label,
                     points=(),
-                    client_id=client_geometry.client.client_id.value,
+                    client_id=client_geometry.client.client_id,
                     seed=geometry.seed,
-                    score_role=client_geometry.score_role.value,
+                    score_role=client_geometry.score_role,
                     threshold_overlays=(),
                     source_checksum=geometry.source_score_checksum,
-                    unavailable_reason=client_geometry.unavailable_reason,
+                    unavailable_reason=AnalysisReasonText(client_geometry.unavailable_reason),
                 )
             )
             continue
@@ -330,7 +337,7 @@ def _empirical_cdf_figure_from_geometry(geometry: ScoreGeometryResult) -> Figure
                 points=points,
                 client_id=client_geometry.client.client_id,
                 seed=geometry.seed,
-                score_role=client_geometry.score_role.value,
+                score_role=client_geometry.score_role,
                 threshold_overlays=overlays,
                 source_checksum=geometry.source_score_checksum,
             )
@@ -340,17 +347,19 @@ def _empirical_cdf_figure_from_geometry(geometry: ScoreGeometryResult) -> Figure
             ErrorMessage(f"confirmatory score geometry produced no client series for seed {geometry.seed.value}")
         )
     return FigureSpec(
-        title=f"Per-client empirical score CDF (seed {geometry.seed.value})",
+        title=FigureTitle(f"Per-client empirical score CDF (seed {geometry.seed.value})"),
         empirical_cdf_series=tuple(series),
     )
 
 
-def _client_threshold_overlay_pairs(
+def _client_threshold_overlays(
     overlays: tuple[ScoreGeometryThresholdOverlay, ...],
     client: ClientIdentity,
-) -> tuple[tuple[str, float], ...]:
+) -> tuple[ThresholdOverlay, ...]:
     return tuple(
-        (item.method.value, item.threshold.value) for item in overlays if item.client is None or item.client == client
+        ThresholdOverlay(method=item.method, value=ThresholdValue(item.threshold.value))
+        for item in overlays
+        if item.client is None or item.client == client
     )
 
 
@@ -388,9 +397,7 @@ def _client_evaluation_scores(
     document_clients: tuple[ClientIdentity, ...],
     expected_clients: tuple[ClientIdentity, ...],
     benign_only: bool,
-) -> tuple[
-    tuple[ClientIdentity, tuple[MetricValue, ...]], ...
-]:  # TODO: should be a class or something handled better than tuple of tuples...
+) -> tuple[ClientEvaluationScoreSeries, ...]:
     from datp_core.data.populations.contracts import PopulationOutcomeLabel
 
     ordered_document_clients = tuple(sorted(document_clients))
@@ -411,7 +418,7 @@ def _client_evaluation_scores(
         raise ScientificContractError(ErrorMessage("evaluation document clients must be unique for score geometry"))
 
     score_root = federated_training_directory(score_coordinate, OUTPUTS_ROOT) / ExecutionArtifactDirectory.SCORES
-    pairs: list[tuple[ClientIdentity, tuple[MetricValue, ...]]] = []
+    pairs: list[ClientEvaluationScoreSeries] = []
     benign_label = PopulationOutcomeLabel.BENIGN.value
     for client in expected_clients:
         path = score_root / client.client_id.value / FederatedScoreAssetName.EVALUATION.value
@@ -448,7 +455,7 @@ def _client_evaluation_scores(
                 for score, label in zip(scores_raw, labels, strict=True)
                 if str(label) != benign_label
             )
-        pairs.append((client, scores))
+        pairs.append(ClientEvaluationScoreSeries(client=client, scores=scores))
     return tuple(pairs)
 
 
@@ -541,8 +548,8 @@ def _confirmatory_cluster_mechanisms() -> tuple[MechanismEvidence, ...]:
                 right[1].clusters,
                 left_source_checksum=left[2],
                 right_source_checksum=right[2],
-                left_declared_group_count=left[1].group_count.value,
-                right_declared_group_count=right[1].group_count.value,
+                left_declared_group_count=left[1].group_count,
+                right_declared_group_count=right[1].group_count,
             )
         )
     return tuple(mechanisms)
@@ -658,8 +665,8 @@ def _confirmatory_contrast(training_seed: Seed) -> PairedContrast:
         left=shared,
         right=local,
         metric=metric,
-        left_value=_required_metric(shared, metric),
-        right_value=_required_metric(local, metric),
+        left_value=population_metric(shared, metric),
+        right_value=population_metric(local, metric),
         evidence_role=EvidenceRole.CONFIRMATORY,
     )
 
@@ -689,7 +696,7 @@ def absorption_corner_from_evaluation_document(
     return AbsorptionCornerEvidence(
         seed=coordinate.training_seed,
         experiment=experiment,
-        population=coordinate.population.value,
+        population=coordinate.population,
         model=coordinate.model,
         threshold_method=document.threshold_method,
         coefficient=coefficient,
@@ -704,11 +711,6 @@ def absorption_corner_from_evaluation_document(
         population_cv_fpr=population_metric(document, MetricId.FPR_COEFFICIENT_OF_VARIATION),
     )
 
-
-def _required_metric(
-    document: FederatedEvaluationDocument, metric: MetricId
-) -> MetricValue:  # TODO: could just be inlined though
-    return population_metric(document, metric)
 
 
 def _evaluation_path(training_seed: Seed, method: FederatedThresholdMethod) -> Path:

@@ -130,10 +130,10 @@ def load_benign_calibration_references(
         )
     label_column = frame.get_column(ScoreFrameColumn.OUTCOME_LABEL.value)
     reject_non_benign_labels(
-        tuple(label_column.cast(pl.String).to_list()),
+        tuple(PopulationOutcomeLabel(str(label)) for label in label_column.cast(pl.String).to_list()),
         message="attack-labelled rows cannot enter benign calibration construction",
         subject=ContractSubject.CALIBRATION,
-        benign_label=benign_label.value,
+        benign_label=benign_label,
     )
     row_ids = id_column.cast(pl.String).to_list()
     scores = frame.get_column(ScoreFrameColumn.RECONSTRUCTION_ERROR.value).cast(pl.Float64).to_list()

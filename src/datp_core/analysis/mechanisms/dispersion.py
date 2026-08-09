@@ -4,7 +4,7 @@ import numpy as np
 from pydantic import model_validator
 
 from datp_core.core.contracts import StrictModel
-from datp_core.core.identifiers import AvailabilityStatus, EvidenceRole
+from datp_core.core.identifiers import AnalysisReasonText, AvailabilityStatus, EvidenceRole
 from datp_core.core.numeric import ClusterIndex, MetricValue, PairedObservationCount, Ratio, ThresholdValue
 
 
@@ -32,9 +32,7 @@ class GroupedDispersionResult(StrictModel):
     singleton_groups: tuple[ClusterIndex, ...]
     empty_groups: tuple[ClusterIndex, ...]
     availability: AvailabilityStatus
-    reason: (
-        str | None
-    )  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    reason: AnalysisReasonText | None
 
     @model_validator(mode="after")
     def validate_result(self) -> "GroupedDispersionResult":
@@ -75,7 +73,7 @@ def grouped_dispersion(
             singleton_groups=(),
             empty_groups=(),
             availability=AvailabilityStatus.UNAVAILABLE,
-            reason="grouped dispersion requires at least one group",
+            reason=AnalysisReasonText("grouped dispersion requires at least one group"),
         )
     ordered = tuple(sorted(observations, key=lambda item: item.group_index.value))
     if tuple(item.group_index.value for item in ordered) != tuple(range(len(ordered))):

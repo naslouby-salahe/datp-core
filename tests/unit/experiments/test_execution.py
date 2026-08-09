@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from datp_core.app.planning import PlanReason
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import ExperimentId, FederatedThresholdMethod
 from datp_core.core.numeric import Seed
@@ -38,7 +39,7 @@ def test_execute_declared_experiment_seed_returns_completed_threshold_methods(
     result = execute_declared_experiment_seed(
         declaration=declaration,
         seed_cohort=SeedCohort(values=(Seed(0),)),
-        reason="unit test exercises the shared execution primitive",
+        reason=PlanReason("unit test exercises the shared execution primitive"),
         output_root=tmp_path,
         overwrite=False,
     )
@@ -57,7 +58,7 @@ def test_execute_declared_experiment_seed_raises_on_empty_campaign(tmp_path: Pat
         execute_declared_experiment_seed(
             declaration=declaration,
             seed_cohort=SeedCohort(values=(Seed(0),)),
-            reason="unit test exercises the empty-campaign failure path",
+            reason=PlanReason("unit test exercises the empty-campaign failure path"),
             output_root=tmp_path,
             overwrite=False,
         )

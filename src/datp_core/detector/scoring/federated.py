@@ -268,7 +268,11 @@ def _build_records(
 
 
 def _rebased_record(record: FederatedScoreRecord, output_directory: Path) -> FederatedScoreRecord:
-    path = output_directory / record.scored_client.client_id.value / _asset_name_for_partition(record.partition_role).value
+    path = (
+        output_directory
+        / record.scored_client.client_id.value
+        / _asset_name_for_partition(record.partition_role).value
+    )
     if not path.is_file():
         raise ArtifactIntegrityError(
             ErrorMessage("published score partition missing after atomic replace"),
@@ -334,7 +338,8 @@ def _validate_request(request: ScoreGenerationRequest) -> None:
     if not _split_binding_is_valid(request):
         raise ScientificContractError(
             ErrorMessage(
-                "scored split must match checkpoint training split except for the matched Edge temporal static reference"
+                "scored split must match checkpoint training split except for the matched "
+                "Edge temporal static reference"
             ),
             subject=ContractSubject.SPLIT,
         )

@@ -16,7 +16,6 @@ from datp_core.analysis.metrics.models import (
 )
 from datp_core.analysis.metrics.semantics import (
     available,
-    metric_value,
     unavailable,
 )
 from datp_core.artifacts.provenance import Checksum
@@ -25,7 +24,15 @@ from datp_core.core.errors import (
     ScientificContractError,
 )
 from datp_core.core.identifiers import MetricId, ScoreFrameColumn, StableRowId
-from datp_core.core.numeric import ConformalRankIndex, CoverageTarget, Quantile, RowCount, Seed, ThresholdValue
+from datp_core.core.numeric import (
+    ConformalRankIndex,
+    CoverageTarget,
+    MetricValue,
+    Quantile,
+    RowCount,
+    Seed,
+    ThresholdValue,
+)
 from datp_core.data.populations.contracts import ClientIdentity, PopulationOutcomeLabel
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 from datp_core.thresholds.variants.conformal import ConformalAssignment
@@ -83,28 +90,16 @@ class ConformalCoverageDiagnostic:
             raise ScientificContractError(ErrorMessage("coverage outcome metrics must share one availability state"))
 
     @property
-    def achieved_held_out_benign_coverage(
-        self,
-    ) -> (
-        float | None
-    ):  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-        return metric_value(metric_by_id(self.metrics, MetricId.ACHIEVED_COVERAGE))
+    def achieved_held_out_benign_coverage(self) -> MetricValue | None:
+        return metric_by_id(self.metrics, MetricId.ACHIEVED_COVERAGE).value
 
     @property
-    def signed_coverage_error(
-        self,
-    ) -> (
-        float | None
-    ):  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-        return metric_value(metric_by_id(self.metrics, MetricId.SIGNED_COVERAGE_ERROR))
+    def signed_coverage_error(self) -> MetricValue | None:
+        return metric_by_id(self.metrics, MetricId.SIGNED_COVERAGE_ERROR).value
 
     @property
-    def absolute_coverage_error(
-        self,
-    ) -> (
-        float | None
-    ):  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-        return metric_value(metric_by_id(self.metrics, MetricId.ABSOLUTE_COVERAGE_ERROR))
+    def absolute_coverage_error(self) -> MetricValue | None:
+        return metric_by_id(self.metrics, MetricId.ABSOLUTE_COVERAGE_ERROR).value
 
     @property
     def unavailable_reason(self) -> MetricReason | None:

@@ -451,6 +451,70 @@ class CanonicalSourcePath(NonEmptyString):
     validation_name: ClassVar[str] = "canonical source path"
 
 
+class DecisionRationale(NonEmptyString):
+    validation_name: ClassVar[str] = "decision rationale"
+
+
+class AnalysisReasonText(NonEmptyString):
+    validation_name: ClassVar[str] = "analysis reason text"
+
+
+class FigureLabel(NonEmptyString):
+    validation_name: ClassVar[str] = "figure label"
+
+
+class FigureTitle(NonEmptyString):
+    validation_name: ClassVar[str] = "figure title"
+
+
+class ClaimWording(NonEmptyString):
+    validation_name: ClassVar[str] = "claim wording"
+
+
+class MessageEndpoint(NonEmptyString):
+    validation_name: ClassVar[str] = "message endpoint"
+
+
+class CommunicationGroupIdentity(NonEmptyString):
+    validation_name: ClassVar[str] = "communication group identity"
+
+
+class TrafficRateReference(NonEmptyString):
+    validation_name: ClassVar[str] = "traffic-rate reference"
+
+
+class TrafficRateProvenanceText(NonEmptyString):
+    validation_name: ClassVar[str] = "traffic-rate provenance"
+
+
+class TrafficRateLocatorText(NonEmptyString):
+    validation_name: ClassVar[str] = "traffic-rate locator text"
+
+
+class RegimeLabel(NonEmptyString):
+    validation_name: ClassVar[str] = "regime label"
+
+
+class StageExecutionEvidence(NonEmptyString):
+    validation_name: ClassVar[str] = "stage execution evidence"
+
+
+class UtcInstantText(NonEmptyString):
+    validation_name: ClassVar[str] = "UTC instant text"
+
+
+class ArtifactDirectoryPathText(NonEmptyString):
+    validation_name: ClassVar[str] = "artifact directory path text"
+
+
+class AnalysisMarkerText(NonEmptyString):
+    validation_name: ClassVar[str] = "analysis marker text"
+
+
+class SourceRuleDescription(NonEmptyString):
+    validation_name: ClassVar[str] = "source-defined rule description"
+
+
 @dataclass(frozen=True, slots=True)
 class ClientPathToken:
     value: str

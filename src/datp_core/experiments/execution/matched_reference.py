@@ -162,7 +162,8 @@ def _transform_matched_static_partition(
     estimator: TrustedScaler,
 ) -> pl.DataFrame:
     source = joined.filter(
-        (pl.col(CLIENT_ID_COLUMN) == client.client_id.value) & (pl.col(PARTITION_ROLE_COLUMN).cast(pl.String) == role.value)
+        (pl.col(CLIENT_ID_COLUMN) == client.client_id.value)
+        & (pl.col(PARTITION_ROLE_COLUMN).cast(pl.String) == role.value)
     ).select((STABLE_ROW_ID_COLUMN, OUTCOME_LABEL_COLUMN, *feature_names.names))
     if source.is_empty():
         raise ScientificContractError(

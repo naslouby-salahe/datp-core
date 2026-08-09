@@ -5,6 +5,7 @@ from shutil import rmtree
 from datp_core.app.contracts import OverwriteMode, ProgrammeExecutionMode
 from datp_core.app.layout import ANCHOR_DIAGNOSTICS_DIRECTORY, SMOKE_OUTPUT_ROOT
 from datp_core.app.models import AnchorCommandResult, DetailText
+from datp_core.app.planning import PlanReason
 from datp_core.core.errors import AnchorReproductionError
 from datp_core.core.identifiers import DatasetId, ExperimentId, ExperimentReadiness
 from datp_core.experiments.anchor.contracts import AnchorGateStatus
@@ -48,7 +49,7 @@ def reproduce_anchor(*, overwrite: OverwriteMode, mode: ProgrammeExecutionMode) 
     execute_declared_experiment_seed(
         declaration=require_experiment_declaration(ExperimentId.HISTORICAL_DATP_REPRODUCTION),
         seed_cohort=seed_cohort,
-        reason="independent anchor reproduction supplies locked historical-seed execution prerequisites",
+        reason=PlanReason("independent anchor reproduction supplies locked historical-seed execution prerequisites"),
         output_root=output_root,
         overwrite=overwrite.requested,
     )

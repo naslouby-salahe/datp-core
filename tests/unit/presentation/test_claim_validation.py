@@ -1,4 +1,4 @@
-from datp_core.core.identifiers import AvailabilityStatus, EvidenceRole, MetricId, PopulationId
+from datp_core.core.identifiers import AvailabilityStatus, ClaimWording, EvidenceRole, MetricId, PopulationId
 from datp_core.experiments.anchor.contracts import VerifiedAnchorGateArtifact
 from datp_core.presentation.validation import (
     ClaimKind,
@@ -21,7 +21,7 @@ def claim_request(
     kind: ClaimKind,
     evidence_role: EvidenceRole,
     metric: MetricId,
-    wording: str,
+    wording: str | ClaimWording,
     availability: AvailabilityStatus = AvailabilityStatus.AVAILABLE,
     evidence_decision: EvidenceDecision = EvidenceDecision.SUPPORTED,
     verified_anchor_gate: VerifiedAnchorGateArtifact | None = None,
@@ -36,7 +36,7 @@ def claim_request(
         evidence_decision=evidence_decision,
         verified_anchor_gate=verified_anchor_gate,
         traffic_rate_available=traffic_rate_available,
-        wording=wording,
+        wording=wording if isinstance(wording, ClaimWording) else ClaimWording(wording),
         population=population,
     )
 

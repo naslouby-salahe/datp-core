@@ -346,9 +346,6 @@ def _client_partition_counts(
     calibration_count = CohortAggregationColumn.BENIGN_CALIBRATION_COUNT
     benign_evaluation_count = CohortAggregationColumn.BENIGN_EVALUATION_COUNT
     attack_evaluation_count = CohortAggregationColumn.ATTACK_EVALUATION_COUNT
-    assignments = assignments.with_columns(
-        pl.col(client_column).struct.field("value").alias(client_column)
-    )
     summary = assignments.group_by(client_column).agg(
         pl.col(role_column)
         .filter(

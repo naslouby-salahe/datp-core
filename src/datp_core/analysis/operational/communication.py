@@ -9,7 +9,12 @@ from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
 )
-from datp_core.core.identifiers import CommunicationEstimationMethod, MetricId
+from datp_core.core.identifiers import (
+    CommunicationEstimationMethod,
+    CommunicationGroupIdentity,
+    MessageEndpoint,
+    MetricId,
+)
 from datp_core.core.numeric import ByteCount, LogicalElementCount, Seed
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
@@ -46,28 +51,22 @@ class CommunicationMessageDiagnostic:
 
     training_seed: Seed
     coordinate: FederatedTrainingCoordinate
-    sender: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-    receiver: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    sender: MessageEndpoint
+    receiver: MessageEndpoint
     direction: MessageDirection
     payload_kind: ThresholdPayloadKind
     payload: SerializedPayloadEvidence
     client: ClientIdentity | None
-    group_identity: (
-        str | None
-    )  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    group_identity: CommunicationGroupIdentity | None
     estimation_basis: CommunicationEstimationMethod
 
     def __post_init__(self) -> None:
-        if not self.sender.strip() or not self.receiver.strip() or self.sender == self.receiver:
+        if self.sender == self.receiver:
             raise ScientificContractError(
                 ErrorMessage("communication records require distinct non-empty sender and receiver identities")
             )
         if self.coordinate.training_seed != self.training_seed:
             raise ScientificContractError(ErrorMessage("communication coordinate must match training seed"))
-        if self.group_identity is not None and not self.group_identity.strip():
-            raise ScientificContractError(
-                ErrorMessage("grouped communication identity must be non-empty when declared")
-            )
         if self.estimation_basis is not CommunicationEstimationMethod.SERIALIZED_MESSAGE_SIZE_ESTIMATE:
             raise ScientificContractError(
                 ErrorMessage("communication diagnostics require serialized-size estimate evidence")

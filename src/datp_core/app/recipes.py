@@ -402,7 +402,7 @@ def _dispatch_declared(
         execute_declared_experiment_seed(
             declaration=declaration,
             seed_cohort=SeedCohort(values=(seed,)),
-            reason=f"registered supplementary recipe for {experiment_id.value}",
+            reason=PlanReason(f"registered supplementary recipe for {experiment_id.value}"),
             output_root=output_root,
             overwrite=overwrite.requested,
         )
@@ -574,32 +574,32 @@ def _report_temporal(experiment_id: ExperimentId, overwrite: OverwriteMode) -> t
 
 def _report_robustness(experiment_id: ExperimentId, overwrite: OverwriteMode) -> tuple[tuple[Path, ...], DetailText]:
     if experiment_id is ExperimentId.SHARED_CONSTRUCTION_SENSITIVITY:
-        paths, detail = report_shared_construction_sensitivity(experiment_id, overwrite.requested)
+        result = report_shared_construction_sensitivity(experiment_id, overwrite.requested)
     elif experiment_id is ExperimentId.QUANTILE_SENSITIVITY:
-        paths, detail = report_quantile_sensitivity(experiment_id, overwrite.requested)
+        result = report_quantile_sensitivity(experiment_id, overwrite.requested)
     elif experiment_id is ExperimentId.CALIBRATION_SIZE_ABLATION:
-        paths, detail = report_calibration_size_ablation(experiment_id, overwrite.requested)
+        result = report_calibration_size_ablation(experiment_id, overwrite.requested)
     elif experiment_id is ExperimentId.FIXED_SHRINKAGE_CURVE:
-        paths, detail = report_fixed_shrinkage_curve(experiment_id, overwrite.requested)
+        result = report_fixed_shrinkage_curve(experiment_id, overwrite.requested)
     elif experiment_id is ExperimentId.SIZE_AWARE_SHRINKAGE:
-        paths, detail = report_size_aware_shrinkage(experiment_id, overwrite.requested)
+        result = report_size_aware_shrinkage(experiment_id, overwrite.requested)
     elif experiment_id is ExperimentId.LOCAL_CONFORMAL_COVERAGE:
-        paths, detail = report_local_conformal_coverage(experiment_id, overwrite.requested)
+        result = report_local_conformal_coverage(experiment_id, overwrite.requested)
     else:
         raise ReportEvidenceError(ErrorMessage(f"unsupported threshold robustness report: {experiment_id.value}"))
-    return paths, DetailText(detail)
+    return result.directories, DetailText(result.detail)
 
 
 def _report_estimation(experiment_id: ExperimentId, overwrite: OverwriteMode) -> tuple[tuple[Path, ...], DetailText]:
     if experiment_id is ExperimentId.FEDERATED_BENIGN_STATISTICS_COMPARISON:
-        paths, detail = report_federated_benign_statistics_comparison(experiment_id, overwrite.requested)
+        result = report_federated_benign_statistics_comparison(experiment_id, overwrite.requested)
     elif experiment_id is ExperimentId.FEDERATED_QUANTILE_ESTIMATION:
-        paths, detail = report_federated_quantile_estimation(experiment_id, overwrite.requested)
+        result = report_federated_quantile_estimation(experiment_id, overwrite.requested)
     elif experiment_id is ExperimentId.FIXED_COEFFICIENT_STATISTICS_SENSITIVITY:
-        paths, detail = report_fixed_coefficient_statistics_sensitivity(experiment_id, overwrite.requested)
+        result = report_fixed_coefficient_statistics_sensitivity(experiment_id, overwrite.requested)
     else:
         raise ReportEvidenceError(ErrorMessage(f"unsupported federated estimation report: {experiment_id.value}"))
-    return paths, DetailText(detail)
+    return result.directories, DetailText(result.detail)
 
 
 def _supplementary_directory(experiment_id: ExperimentId) -> Path:

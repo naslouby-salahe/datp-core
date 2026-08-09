@@ -7,7 +7,12 @@ from datp_core.analysis.operational.traffic_rates import (
     TrafficRateUnit,
     ValidatedTrafficRateEvidence,
 )
-from datp_core.core.identifiers import PopulationId, TrafficRateEvidenceType
+from datp_core.core.identifiers import (
+    PopulationId,
+    TrafficRateEvidenceType,
+    TrafficRateLocatorText,
+    TrafficRateProvenanceText,
+)
 from datp_core.core.numeric import Ratio, Seed, TrafficRatePerDay
 
 
@@ -30,8 +35,8 @@ def test_alert_burden_uses_valid_per_client_rate() -> None:
         TrafficRateEvidenceType.MEASURED,
         PopulationId.NBAIOT_NATURAL_DEVICES,
         TrafficRatePerDay(20),
-        "source",
-        "audit",
+        TrafficRateLocatorText("source"),
+        TrafficRateProvenanceText("audit"),
         TrafficRateUnit.BENIGN_DECISIONS_PER_CLIENT_PER_DAY,
         TrafficRateGranularity.PER_CLIENT,
         True,

@@ -7,7 +7,6 @@ import polars as pl
 import torch
 
 from datp_core.artifacts.provenance import Checksum
-from datp_core.core.identifiers import ClientPathToken as PreprocessingClientIdentity
 from datp_core.core.identifiers import (
     ClientIdentityToken,
     FeatureName,
@@ -20,6 +19,7 @@ from datp_core.core.identifiers import (
     SplitProtocolId,
     TrainingModelId,
 )
+from datp_core.core.identifiers import ClientPathToken as PreprocessingClientIdentity
 from datp_core.core.numeric import (
     NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
     BatchSize,

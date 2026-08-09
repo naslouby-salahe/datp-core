@@ -79,7 +79,10 @@ def construct_nbaiot_natural_devices(
 ) -> PopulationConstructionResult:
     frame = _load_identity_frame(canonical_root)
     candidates = tuple(ClientIdentityToken(str(device)) for device in sorted(NBAIOT_DEVICE_IDENTITIES))
-    observed = tuple(ClientIdentityToken(str(value)) for value in frame.get_column(CLIENT_ID_COLUMN).unique().sort().to_list())
+    observed = tuple(
+        ClientIdentityToken(str(value))
+        for value in frame.get_column(CLIENT_ID_COLUMN).unique().sort().to_list()
+    )
     if observed != candidates:
         raise DataIntegrityError(
             ErrorMessage("N-BaIoT physical-client identities disagree with the audited set"),

@@ -8,7 +8,13 @@ from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
 )
-from datp_core.core.identifiers import PopulationId, TrafficRateEvidenceType
+from datp_core.core.identifiers import (
+    PopulationId,
+    TrafficRateEvidenceType,
+    TrafficRateLocatorText,
+    TrafficRateProvenanceText,
+    TrafficRateReference,
+)
 from datp_core.core.numeric import TrafficRatePerDay
 
 
@@ -35,8 +41,8 @@ class ValidatedTrafficRateEvidence:
     evidence_kind: TrafficRateEvidenceType
     population: PopulationId
     rate_per_day: TrafficRatePerDay
-    source_locator: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-    provenance: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    source_locator: TrafficRateLocatorText
+    provenance: TrafficRateProvenanceText
     unit: TrafficRateUnit
     granularity: TrafficRateGranularity
     applicable_to_each_client: bool
@@ -46,8 +52,8 @@ class ValidatedTrafficRateEvidence:
             raise ScientificContractError(
                 ErrorMessage("unavailable traffic-rate evidence cannot support operational calculation")
             )
-        if not self.source_locator or self.source_locator.isspace() or not self.provenance or self.provenance.isspace():
-            raise ScientificContractError(ErrorMessage("traffic-rate evidence requires source and provenance"))
+        object.__setattr__(self, "source_locator", TrafficRateLocatorText(self.source_locator))
+        object.__setattr__(self, "provenance", TrafficRateProvenanceText(self.provenance))
         if self.granularity is TrafficRateGranularity.PER_CLIENT and not self.applicable_to_each_client:
             raise ScientificContractError(
                 ErrorMessage("per-client traffic-rate evidence must be applicable to each client")
@@ -73,7 +79,7 @@ class TrafficRateSourceLocator(StrictModel):
     """A structured reference to one traffic-rate evidence source."""
 
     scheme: TrafficRateLocatorScheme
-    reference: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    reference: TrafficRateReference
 
     @model_validator(mode="after")
     def validate_reference(self) -> "TrafficRateSourceLocator":
@@ -81,8 +87,8 @@ class TrafficRateSourceLocator(StrictModel):
             raise ValueError("traffic-rate source locator requires a non-empty reference")
         return self
 
-    def as_text(self) -> str:
-        return f"{self.scheme.value}:{self.reference}"
+    def as_text(self) -> TrafficRateLocatorText:
+        return TrafficRateLocatorText(f"{self.scheme.value}:{self.reference}")
 
 
 class TrafficRateEvidence(StrictModel):
@@ -90,7 +96,7 @@ class TrafficRateEvidence(StrictModel):
     rate_per_day: TrafficRatePerDay
     evidence_kind: TrafficRateEvidenceType
     source_locator: TrafficRateSourceLocator
-    provenance: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    provenance: TrafficRateProvenanceText
     unit: TrafficRateUnit
     granularity: TrafficRateGranularity
     applicable_to_each_client: bool

@@ -108,7 +108,7 @@ def _classify_client(
     attack_reasons = _attack_exclusion_reasons(counts, capabilities)
     attack_evaluable = counts.accepted and not attack_reasons
 
-    combined_unique_reasons = _unique_reasons((*reasons, *attack_reasons))
+    combined_unique_reasons = tuple(dict.fromkeys((*reasons, *attack_reasons)))
 
     memberships = _cohort_memberships(
         client,
@@ -229,9 +229,3 @@ def _cohort_memberships(
             )
         )
     return tuple(memberships)
-
-
-def _unique_reasons(  # TODO: should inlined
-    reasons: tuple[ClientExclusionReason, ...],
-) -> tuple[ClientExclusionReason, ...]:
-    return tuple(dict.fromkeys(reasons))

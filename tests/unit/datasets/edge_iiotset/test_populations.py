@@ -26,7 +26,9 @@ def test_edge_static_includes_ten_groups_with_modbus(edge_canonical_root: Path) 
         edge_canonical_root, partition_seed=Seed(0), split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS
     )
     manifest, membership = construction.manifest, construction.membership
-    assert manifest.document.accepted_clients == tuple(ClientIdentityToken(str(group)) for group in sorted(EDGE_BENIGN_SENSOR_GROUPS))
+    assert manifest.document.accepted_clients == tuple(
+        ClientIdentityToken(str(group)) for group in sorted(EDGE_BENIGN_SENSOR_GROUPS)
+    )
     assert ClientIdentityToken("Modbus") in manifest.document.accepted_clients
     assert membership.get_column("client_id").n_unique() == 10
     assert manifest.document.attack_row_count.value == 0

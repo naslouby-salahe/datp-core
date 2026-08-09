@@ -11,7 +11,7 @@ from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
 )
-from datp_core.core.identifiers import ContractSubject, MetricId
+from datp_core.core.identifiers import ContractSubject, MetricId, ValidationLabel
 from datp_core.core.numeric import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE, AbsoluteTolerance, floats_absolutely_close
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.scoring.contracts import FixedScoreInvariant, ScoreArtifactManifest
@@ -49,69 +49,74 @@ def validate_fixed_score_controls(
         first.detector.coordinate,
         second.detector.coordinate,
         ContractSubject.COORDINATE,
-        "training coordinate",
+        ValidationLabel("training coordinate"),
     )
     _require_equal(
         first.calibration.role,
         second.calibration.role,
         ContractSubject.SPLIT,
-        "calibration partition role",
+        ValidationLabel("calibration partition role"),
     )
     for left, right, subject, name in (
-        (first.detector.model_checksum, second.detector.model_checksum, ContractSubject.SCORES, "model checksum"),
+        (
+            first.detector.model_checksum,
+            second.detector.model_checksum,
+            ContractSubject.SCORES,
+            ValidationLabel("model checksum"),
+        ),
         (
             first.detector.preprocessing_checksum,
             second.detector.preprocessing_checksum,
             ContractSubject.PREPROCESSING,
-            "preprocessing checksum",
+            ValidationLabel("preprocessing checksum"),
         ),
         (
             first.detector.selected_checkpoint_checksum,
             second.detector.selected_checkpoint_checksum,
             ContractSubject.CHECKPOINT_CANDIDATES,
-            "selected-checkpoint checksum",
+            ValidationLabel("selected-checkpoint checksum"),
         ),
         (
             first.calibration.score_checksum,
             second.calibration.score_checksum,
             ContractSubject.SCORES,
-            "calibration-score checksum",
+            ValidationLabel("calibration-score checksum"),
         ),
         (
             first.evaluation.score_checksum,
             second.evaluation.score_checksum,
             ContractSubject.SCORES,
-            "evaluation-score checksum",
+            ValidationLabel("evaluation-score checksum"),
         ),
         (
             first.evaluation.label_checksum,
             second.evaluation.label_checksum,
             ContractSubject.LABEL,
-            "evaluation-label checksum",
+            ValidationLabel("evaluation-label checksum"),
         ),
         (
             first.population.client_inventory_checksum,
             second.population.client_inventory_checksum,
             ContractSubject.CLIENT_IDENTITY,
-            "client population",
+            ValidationLabel("client population"),
         ),
         (
             first.population.eligibility_cohort_checksum,
             second.population.eligibility_cohort_checksum,
             ContractSubject.CLIENT_IDENTITY,
-            "eligibility cohort",
+            ValidationLabel("eligibility cohort"),
         ),
         (
             first.evaluation.source_row_checksum,
             second.evaluation.source_row_checksum,
             ContractSubject.ROWS,
-            "source-row identities",
+            ValidationLabel("source-row identities"),
         ),
         (
             first.evaluation.score_order_checksum,
             second.evaluation.score_order_checksum,
             ContractSubject.SCORES,
-            "score ordering",
+            ValidationLabel("score ordering"),
         ),
     ):
         _require_equal(left, right, subject, name)
@@ -204,8 +209,11 @@ def _validate_aurocs(evidence: FixedScoreEvidence, clients: tuple[ClientMetricRe
 
 
 def _require_equal[ValueT](
-    left: ValueT, right: ValueT, subject: ContractSubject, name: str
-) -> None:  # TODO:should be a class. Check what already exists for name. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    left: ValueT,
+    right: ValueT,
+    subject: ContractSubject,
+    name: ValidationLabel,
+) -> None:
     if left != right:
         raise ScientificContractError(ErrorMessage(f"fixed-score control failed: {name} differs"), subject=subject)
 

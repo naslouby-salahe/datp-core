@@ -23,6 +23,7 @@ from datp_core.core.errors import (
 from datp_core.core.identifiers import (
     AvailabilityStatus,
     CentralizedModelId,
+    ClaimWording,
     DatasetId,
     EvidenceRole,
     ExperimentId,
@@ -59,7 +60,7 @@ from datp_core.experiments.common.seeds import (
 from datp_core.experiments.execution.context import training_feature_names
 from datp_core.experiments.execution.layout import ExecutionArtifactDirectory
 from datp_core.presentation.export import PUBLICATION_FILENAME, PublicationBundle, ReportProvenance, export_markdown
-from datp_core.presentation.tables import PublicationTable, TableCell
+from datp_core.presentation.tables import EvidenceText, PublicationTable, TableCell, TableTitle
 from datp_core.presentation.validation import ClaimKind, ClaimRequest, EvidenceDecision, validate_claim
 from datp_core.runtime.configuration import DATA_ROOT, OUTPUTS_ROOT
 from datp_core.runtime.filesystem import write_text_atomically
@@ -103,7 +104,7 @@ class CentralizedReferenceScope:
     autoencoder: AutoencoderProtocol
     seed_cohort: SeedCohort
     provenance_experiment: ExperimentId
-    claim_wording: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    claim_wording: ClaimWording
 
 
 NBAIOT_CENTRALIZED_REFERENCE = CentralizedReferenceScope(
@@ -112,7 +113,7 @@ NBAIOT_CENTRALIZED_REFERENCE = CentralizedReferenceScope(
     autoencoder=NBAIOT_AUTOENCODER,
     seed_cohort=CONFIRMATORY_SEED_COHORT,
     provenance_experiment=ExperimentId.SHARED_VS_LOCAL_CONFIRMATION,
-    claim_wording=(
+    claim_wording=ClaimWording(
         "The privacy-incompatible centralized reference is independent pooled context "
         "for the cost of federation and is not part of the federated threshold-scope "
         "causal ladder."
@@ -125,7 +126,7 @@ CIC_CENTRALIZED_REFERENCE = CentralizedReferenceScope(
     autoencoder=CICIOT2023_AUTOENCODER,
     seed_cohort=BOUNDED_EVIDENCE_SEED_COHORT,
     provenance_experiment=ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY,
-    claim_wording=(
+    claim_wording=ClaimWording(
         "The privacy-incompatible centralized reference is independent pooled context "
         "for the cost of federation under the CICIoT2023 file-defined applicability "
         "boundary and is not part of the federated threshold-scope causal ladder."
@@ -368,7 +369,9 @@ def _centralized_reference_table(evaluation: CentralizedEvaluationDocument) -> P
                     metric=metric_id,
                     availability=AvailabilityStatus.AVAILABLE,
                     rendered_value=f"{metric.value.value:.6g}",
-                    evidence=f"pooled centralized held-out metric; seed={evaluation.coordinate.training_seed.value}",
+                    evidence=EvidenceText(
+                        f"pooled centralized held-out metric; seed={evaluation.coordinate.training_seed.value}"
+                    ),
                 )
             )
         else:
@@ -377,11 +380,11 @@ def _centralized_reference_table(evaluation: CentralizedEvaluationDocument) -> P
                     metric=metric_id,
                     availability=_metric_availability(metric.status),
                     rendered_value="",
-                    evidence=f"unavailable: {metric.reason.value}",
+                    evidence=EvidenceText(f"unavailable: {metric.reason.value}"),
                 )
             )
     return PublicationTable(
-        title=f"Centralized reference seed {evaluation.coordinate.training_seed.value}",
+        title=TableTitle(f"Centralized reference seed {evaluation.coordinate.training_seed.value}"),
         cells=tuple(cells),
     )
 

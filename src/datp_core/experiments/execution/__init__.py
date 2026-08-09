@@ -12,6 +12,7 @@ from datp_core.core.errors import (
     ScientificContractError,
 )
 from datp_core.core.identifiers import FederatedThresholdMethod
+from datp_core.core.numeric import CampaignOrdinal
 from datp_core.experiments.common.coordinates import ExecutionRoute, execution_route_for
 from datp_core.experiments.common.seeds import SeedCohort
 from datp_core.experiments.execution.engine import CompletionRecordOutputStore, PipelineStageRunner, execute_campaign
@@ -32,7 +33,10 @@ def build_campaign(plan: ExperimentPlan) -> CampaignPlan:
         if entry.disposition is PlanDisposition.EXECUTABLE
         and execution_route_for(entry.coordinate) is ExecutionRoute.SINGLE_COORDINATE
     )
-    entries = tuple(CampaignEntry(ordinal=index, coordinate=coordinate) for index, coordinate in enumerate(coordinates))
+    entries = tuple(
+        CampaignEntry(ordinal=CampaignOrdinal(index), coordinate=coordinate)
+        for index, coordinate in enumerate(coordinates)
+    )
     return CampaignPlan(entries=entries, digest=campaign_digest(entries), plan_digest=plan.digest)
 
 
@@ -40,7 +44,7 @@ def execute_declared_experiment_seed(
     *,
     declaration: ExperimentDeclaration,
     seed_cohort: SeedCohort,
-    reason: str,
+    reason: PlanReason,
     output_root: Path,
     overwrite: bool,
 ) -> DeclaredExperimentSeedResult:
@@ -49,7 +53,7 @@ def execute_declared_experiment_seed(
         seed_cohort=seed_cohort,
         evidence=(
             PlanningEvidence(
-                experiment=declaration.id, disposition=PlanDisposition.EXECUTABLE, reason=PlanReason(reason)
+                experiment=declaration.id, disposition=PlanDisposition.EXECUTABLE, reason=reason
             ),
         ),
     )

@@ -34,6 +34,7 @@ from datp_core.core.numeric import NonNegativeIntegerValue
 from datp_core.detector.checkpoints.protocols import CHECKPOINT_PROTOCOL
 from datp_core.experiments.anchor.contracts import (
     AnchorDependencyBlocker,
+    AnchorDetail,
     AnchorDiscrepancyReason,
     AnchorGateDecision,
     AnchorGateStatus,
@@ -61,6 +62,11 @@ from datp_core.experiments.common.seeds import SeedCohort
 from datp_core.experiments.execution.evidence import load_evaluation_document, population_metric
 from datp_core.experiments.execution.layout import EvaluationRunAssetDirectory
 from datp_core.runtime.configuration import OUTPUTS_ROOT
+
+
+class AnchorLayoutDirectory(StrEnum):
+    ROOT = "anchor"
+    DIAGNOSTICS = "diagnostics"
 
 
 class IndependentAnchorAssetName(StrEnum):
@@ -91,9 +97,7 @@ class VerifyAnchorStageStatus:
     discrepancy_count: NonNegativeIntegerValue
     observation_count: NonNegativeIntegerValue
     reference_count: NonNegativeIntegerValue
-    dependency_blocker: (
-        str | None
-    )  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    dependency_blocker: AnchorDetail | None
     diagnostics_checksum: Checksum
 
 
@@ -104,15 +108,11 @@ class VerifyAnchorStageResult:
 
 
 def independent_package_directory(output_root: Path = OUTPUTS_ROOT) -> Path:
-    return (
-        output_root / "anchor" / IndependentAnchorAssetName.ROOT.value
-    )  # TODO no hardcoded values. Should use what already exists. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    return output_root / AnchorLayoutDirectory.ROOT / IndependentAnchorAssetName.ROOT
 
 
 def default_anchor_diagnostics_directory(output_root: Path = OUTPUTS_ROOT) -> Path:
-    return (
-        output_root / "anchor" / "diagnostics"
-    )  # TODO no hardcoded values. Should use what already exists. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    return output_root / AnchorLayoutDirectory.ROOT / AnchorLayoutDirectory.DIAGNOSTICS
 
 
 def verify_anchor(request: VerifyAnchorStageRequest) -> VerifyAnchorStageResult:

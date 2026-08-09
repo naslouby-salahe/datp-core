@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 
 import polars as pl
@@ -48,7 +49,11 @@ from datp_core.runtime.filesystem import write_text_atomically
 CANONICAL_DATA_DIRECTORY = "data"
 PARQUET_PATTERN = "*.parquet"
 MODEL_INPUT_EXCLUSION_ASSET = "model_input_exclusions.json"
-MODEL_INPUT_EXCLUSION_REASON = "nonfinite_or_null_numeric_model_input_feature"
+class ModelInputExclusionReason(StrEnum):
+    NONFINITE_OR_NULL_NUMERIC_MODEL_INPUT_FEATURE = "nonfinite_or_null_numeric_model_input_feature"
+
+
+MODEL_INPUT_EXCLUSION_REASON = ModelInputExclusionReason.NONFINITE_OR_NULL_NUMERIC_MODEL_INPUT_FEATURE
 _FINITE_ELIGIBLE_COLUMN = "__eligible"
 
 _EDGE_PUBLISHED_POPULATIONS = frozenset(
@@ -65,10 +70,10 @@ class ModelInputExclusionEvidence:
     population: PopulationId
     excluded_stable_row_ids: tuple[StableRowId, ...]
     total_row_count: RowCount
-    reason: str = MODEL_INPUT_EXCLUSION_REASON
+    reason: ModelInputExclusionReason = MODEL_INPUT_EXCLUSION_REASON
 
     def __post_init__(self) -> None:
-        if self.reason != MODEL_INPUT_EXCLUSION_REASON:
+        if self.reason is not ModelInputExclusionReason.NONFINITE_OR_NULL_NUMERIC_MODEL_INPUT_FEATURE:
             raise ValueError("model-input exclusion reason must match the locked nonfinite gate")
         if len(self.excluded_stable_row_ids) != len(set(self.excluded_stable_row_ids)):
             raise ValueError("excluded stable row identities must be unique")
@@ -83,7 +88,7 @@ class ModelInputExclusionEvidence:
     def evidence_checksum(self) -> Checksum:
         ordered = ",".join(map(str, self.excluded_stable_row_ids))
         return Checksum.from_text(
-            f"{self.dataset.value}|{self.population.value}|{self.reason}|{self.total_row_count.value}|{ordered}"
+            f"{self.dataset.value}|{self.population.value}|{self.reason.value}|{self.total_row_count.value}|{ordered}"
         )
 
 

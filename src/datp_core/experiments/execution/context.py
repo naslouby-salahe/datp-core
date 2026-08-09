@@ -164,10 +164,7 @@ def resolve_execution_context(coordinate: ExperimentCoordinate, output_root: Pat
             )
         )
         clients = population_result.construction.manifest.clients
-        family_pairs = tuple(
-            (ClientIdentityToken(c), FamilyIdentity(f))
-            for c, f in population_result.construction.manifest.family_by_client
-        )
+        family_pairs = population_result.construction.manifest.family_by_client
         split_checksum = population_result.split_manifest.assignment_checksum
         training_directory = federated_training_directory(training_coordinate, output_root)
     else:
@@ -208,10 +205,7 @@ def resolve_execution_context(coordinate: ExperimentCoordinate, output_root: Pat
             )
         )
         clients = population_result.population_manifest.clients
-        family_pairs = tuple(
-            (ClientIdentityToken(c), FamilyIdentity(f))
-            for c, f in population_result.population_manifest.family_by_client
-        )
+        family_pairs = population_result.population_manifest.family_by_client
         split_checksum = split_result.manifest.assignment_checksum
         training_directory = root / ExecutionArtifactDirectory.TRAINING
     state_checksum = preprocessing_state_set_checksum(

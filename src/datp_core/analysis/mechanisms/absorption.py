@@ -1,5 +1,7 @@
 """Model-personalization absorption decisions from paired seed CV(FPR) evidence."""
 
+from enum import StrEnum
+
 from pydantic import model_validator
 
 from datp_core.analysis.inference.bootstrap.contracts import BcaOutcome, BootstrapInterval
@@ -9,17 +11,34 @@ from datp_core.analysis.metrics.protocols import ABSORPTION_REFERENCE_EFFECT_MAT
 from datp_core.analysis.scientific_decision import ScientificDecision, ScientificDecisionResult
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.contracts import StrictModel
-from datp_core.core.identifiers import EvidenceRole, ExperimentId, FederatedThresholdMethod, TrainingModelId
+from datp_core.core.identifiers import (
+    DecisionRationale,
+    EvidenceRole,
+    ExperimentId,
+    FederatedThresholdMethod,
+    PopulationId,
+    TrainingModelId,
+)
 from datp_core.core.numeric import (
     NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
     MetricValue,
     ModelCoefficientValue,
     ProximalCoefficient,
     Seed,
+    SeedObservationCount,
 )
 from datp_core.detector.training.contracts import ModelAbsorptionDecisionProtocol
 from datp_core.experiments.common.seeds import CONFIRMATORY_ANALYSIS_SEED, CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.experiments.confirmatory.spec import CONFIRMATORY_INFERENCE_PROTOCOL
+
+_ZERO_ALTERNATIVE_ROUTE_SEED_COUNT = SeedObservationCount(0)
+
+
+class AbsorptionRatioUnavailableReason(StrEnum):
+    REFERENCE_EFFECT_NON_POSITIVE = "reference CV(FPR) effect is non-positive"
+    REFERENCE_EFFECT_BELOW_MATERIALITY = (
+        "reference CV(FPR) effect is below the declared absorption denominator materiality cutoff"
+    )
 
 
 class AbsorptionCornerEvidence(StrictModel):
@@ -27,7 +46,7 @@ class AbsorptionCornerEvidence(StrictModel):
 
     seed: Seed
     experiment: ExperimentId
-    population: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    population: PopulationId
     model: TrainingModelId
     threshold_method: FederatedThresholdMethod
     coefficient: ModelCoefficientValue | None
@@ -43,8 +62,6 @@ class AbsorptionCornerEvidence(StrictModel):
 
     @model_validator(mode="after")
     def validate_corner(self) -> "AbsorptionCornerEvidence":
-        if not self.population.strip():
-            raise ValueError("absorption corner requires a population identity")
         if self.threshold_method not in {
             FederatedThresholdMethod.SHARED_THRESHOLD,
             FederatedThresholdMethod.LOCAL_THRESHOLD,
@@ -141,9 +158,7 @@ class AbsorptionSeedObservation(StrictModel):
     personalized_local_cv: MetricValue
     corners: AbsorptionFourCornerEvidence | None = None
     model_coefficient: ProximalCoefficient | ModelCoefficientValue | None = None
-    ratio_unavailable_reason: str | None = (
-        None  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-    )
+    ratio_unavailable_reason: AbsorptionRatioUnavailableReason | None = None
 
     @model_validator(mode="after")
     def validate_observation(self) -> "AbsorptionSeedObservation":
@@ -169,14 +184,11 @@ class AbsorptionSeedObservation(StrictModel):
     def from_corners(cls, corners: AbsorptionFourCornerEvidence) -> "AbsorptionSeedObservation":
         reference_effect = corners.reference_effect
         personalized_effect = corners.personalized_effect
-        ratio_reason = None
+        ratio_reason: AbsorptionRatioUnavailableReason | None = None
         if reference_effect.value <= 0.0:
-            ratio_reason = "reference CV(FPR) effect is non-positive"
+            ratio_reason = AbsorptionRatioUnavailableReason.REFERENCE_EFFECT_NON_POSITIVE
         elif reference_effect.value < ABSORPTION_REFERENCE_EFFECT_MATERIALITY_CUTOFF.value:
-            ratio_reason = (
-                "reference CV(FPR) effect is below the declared absorption denominator materiality cutoff "
-                f"({ABSORPTION_REFERENCE_EFFECT_MATERIALITY_CUTOFF.value})"
-            )
+            ratio_reason = AbsorptionRatioUnavailableReason.REFERENCE_EFFECT_BELOW_MATERIALITY
         coefficient = corners.personalized_shared.coefficient
         return cls(
             seed=corners.seed,
@@ -217,14 +229,12 @@ class AbsorptionCohortResult(StrictModel):
     reference_effect_interval: BootstrapInterval | None = None
     personalized_effect_interval: BootstrapInterval | None = None
     paired_absorption_change_interval: BootstrapInterval | None = None
-    alternative_route_seed_count: int = 0  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    alternative_route_seed_count: SeedObservationCount = SeedObservationCount(0)
 
     @model_validator(mode="after")
     def validate_result(self) -> "AbsorptionCohortResult":
         if self.decision.evidence_role is not EvidenceRole.TRAINING_STRESS_TEST:
             raise ValueError("absorption cohort decisions must remain training-stress-test evidence")
-        if self.alternative_route_seed_count < 0:
-            raise ValueError("alternative-route seed count cannot be negative")
         return self
 
 
@@ -240,7 +250,7 @@ def decide_model_absorption(
             decision=ScientificDecision.BLOCKED,
             point_estimate=None,
             interval=None,
-            rationale="model absorption requires a valid positive reference CV(FPR) effect",
+            rationale=DecisionRationale("model absorption requires a valid positive reference CV(FPR) effect"),
         )
     retention = MetricValue(personalized_effect.value / reference_effect.value)
     if personalized_effect.value < 0.0:
@@ -249,17 +259,19 @@ def decide_model_absorption(
             decision=ScientificDecision.OPPOSITE_DIRECTION,
             point_estimate=retention,
             interval=None,
-            rationale="the personalized-model CV(FPR) effect reversed the reference threshold-scope direction",
+            rationale=DecisionRationale(
+                "the personalized-model CV(FPR) effect reversed the reference threshold-scope direction"
+            ),
         )
     if retention.value >= protocol.full_retention_minimum.value:
         decision = ScientificDecision.SUPPORTED
-        rationale = "the personalized-model CV(FPR) threshold-scope effect is retained"
+        rationale = DecisionRationale("the personalized-model CV(FPR) threshold-scope effect is retained")
     elif retention.value >= protocol.partial_retention_minimum.value:
         decision = ScientificDecision.PARTIAL_ABSORPTION
-        rationale = "the personalized-model CV(FPR) threshold-scope effect is partially absorbed"
+        rationale = DecisionRationale("the personalized-model CV(FPR) threshold-scope effect is partially absorbed")
     else:
         decision = ScientificDecision.FULL_ABSORPTION
-        rationale = "the personalized-model CV(FPR) threshold-scope effect is largely absorbed"
+        rationale = DecisionRationale("the personalized-model CV(FPR) threshold-scope effect is largely absorbed")
     return ScientificDecisionResult(
         evidence_role=EvidenceRole.TRAINING_STRESS_TEST,
         decision=decision,
@@ -274,13 +286,11 @@ def decide_absorption_cohort(
     protocol: ModelAbsorptionDecisionProtocol,
     *,
     required_seed_cohort: SeedCohort = CONFIRMATORY_SEED_COHORT,
-    alternative_route_seed_count: int = 0,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    alternative_route_seed_count: SeedObservationCount = _ZERO_ALTERNATIVE_ROUTE_SEED_COUNT,
     inference_protocol: PairedInferenceProtocol | None = None,
     analysis_seed: Seed = CONFIRMATORY_ANALYSIS_SEED,
 ) -> AbsorptionCohortResult:
     """Cohort-level absorption using paired seed-level CV(FPR) retention ratios."""
-    if alternative_route_seed_count < 0:
-        raise ValueError("alternative-route seed count cannot be negative")
     route_count = alternative_route_seed_count
     blocked = _blocked_cohort(observations, required_seed_cohort)
     if blocked is not None:
@@ -295,7 +305,7 @@ def decide_absorption_cohort(
         reasons = sorted(
             {
                 item.ratio_unavailable_reason
-                or "reference CV(FPR) effect is non-positive or below the materiality cutoff"
+                or AbsorptionRatioUnavailableReason.REFERENCE_EFFECT_NON_POSITIVE
                 for item in observations
                 if item.retention_ratio is None
             }
@@ -305,9 +315,9 @@ def decide_absorption_cohort(
             decision=ScientificDecision.INFEASIBLE,
             point_estimate=None,
             interval=None,
-            rationale=(
+            rationale=DecisionRationale(
                 "absorption cohort ratio interpretation is unavailable: "
-                + "; ".join(reasons)
+                + "; ".join(reason.value for reason in reasons)
                 + "; paired difference estimands remain available"
             ),
         )
@@ -319,7 +329,7 @@ def decide_absorption_cohort(
         )
     defined_ratios = tuple(ratio for ratio in ratios if ratio is not None)
     mean_retention = MetricValue(sum(item.value for item in defined_ratios) / len(defined_ratios))
-    opposite_count = sum(1 for item in observations if item.is_opposite_direction)
+    opposite_count = SeedObservationCount(sum(1 for item in observations if item.is_opposite_direction))
     stats_protocol = inference_protocol or CONFIRMATORY_INFERENCE_PROTOCOL
     retention_interval = seed_level_bca_interval(
         defined_ratios,
@@ -377,7 +387,7 @@ def _blocked_cohort(
             decision=ScientificDecision.BLOCKED,
             point_estimate=None,
             interval=None,
-            rationale="absorption cohort requires the complete declared seed cohort",
+            rationale=DecisionRationale("absorption cohort requires the complete declared seed cohort"),
         )
     seeds = tuple(item.seed for item in observations)
     if len(seeds) != len(frozenset(seeds)):
@@ -386,7 +396,7 @@ def _blocked_cohort(
             decision=ScientificDecision.BLOCKED,
             point_estimate=None,
             interval=None,
-            rationale="absorption cohort records must be unique by seed",
+            rationale=DecisionRationale("absorption cohort records must be unique by seed"),
         )
     if frozenset(seeds) != frozenset(required_seed_cohort.values):
         return ScientificDecisionResult(
@@ -394,7 +404,7 @@ def _blocked_cohort(
             decision=ScientificDecision.BLOCKED,
             point_estimate=None,
             interval=None,
-            rationale="absorption cohort must equal the complete declared seed set",
+            rationale=DecisionRationale("absorption cohort must equal the complete declared seed set"),
         )
     if len({item.experiment for item in observations}) != 1:
         return ScientificDecisionResult(
@@ -402,7 +412,7 @@ def _blocked_cohort(
             decision=ScientificDecision.BLOCKED,
             point_estimate=None,
             interval=None,
-            rationale="absorption cohort records must share one experiment identity",
+            rationale=DecisionRationale("absorption cohort records must share one experiment identity"),
         )
     if len({(item.reference_model, item.personalized_model) for item in observations}) != 1:
         return ScientificDecisionResult(
@@ -410,7 +420,7 @@ def _blocked_cohort(
             decision=ScientificDecision.BLOCKED,
             point_estimate=None,
             interval=None,
-            rationale="absorption cohort records must share one model pair",
+            rationale=DecisionRationale("absorption cohort records must share one model pair"),
         )
     coefficients = tuple(item.model_coefficient for item in observations if item.model_coefficient is not None)
     if coefficients and len(coefficients) != len(observations):
@@ -419,7 +429,9 @@ def _blocked_cohort(
             decision=ScientificDecision.BLOCKED,
             point_estimate=None,
             interval=None,
-            rationale="absorption cohort coefficients must be present for every seed when any seed declares one",
+            rationale=DecisionRationale(
+                "absorption cohort coefficients must be present for every seed when any seed declares one"
+            ),
         )
     if coefficients and len({item.value for item in coefficients}) != 1:
         return ScientificDecisionResult(
@@ -427,7 +439,7 @@ def _blocked_cohort(
             decision=ScientificDecision.BLOCKED,
             point_estimate=None,
             interval=None,
-            rationale="absorption cohort records must share one model coefficient",
+            rationale=DecisionRationale("absorption cohort records must share one model coefficient"),
         )
     return None
 
@@ -437,7 +449,7 @@ def _classify_cohort(
     observations: tuple[AbsorptionSeedObservation, ...],
     protocol: ModelAbsorptionDecisionProtocol,
     mean_retention: MetricValue,
-    opposite_count: int,
+    opposite_count: SeedObservationCount,
     retention_interval: BootstrapInterval | None,
 ) -> ScientificDecisionResult:
     total = len(observations)
@@ -456,22 +468,24 @@ def _classify_cohort(
         and interval.upper_bound is not None
         else "BCa=unavailable"
     )
-    range_text = f"(mean={mean_retention.value:.4g}, {interval_text}, opposite_seeds={opposite_count}/{total})"
-    if opposite_count == total:
+    range_text = f"(mean={mean_retention.value:.4g}, {interval_text}, opposite_seeds={opposite_count.value}/{total})"
+    if opposite_count.value == total:
         return ScientificDecisionResult(
             evidence_role=EvidenceRole.TRAINING_STRESS_TEST,
             decision=ScientificDecision.OPPOSITE_DIRECTION,
             point_estimate=mean_retention,
             interval=interval,
-            rationale="every seed reversed the reference CV(FPR) threshold-scope direction under personalization",
+            rationale=DecisionRationale(
+                "every seed reversed the reference CV(FPR) threshold-scope direction under personalization"
+            ),
         )
-    if opposite_count > 0:
+    if opposite_count.value > 0:
         return ScientificDecisionResult(
             evidence_role=EvidenceRole.TRAINING_STRESS_TEST,
             decision=ScientificDecision.OPPOSITE_DIRECTION,
             point_estimate=mean_retention,
             interval=interval,
-            rationale=(
+            rationale=DecisionRationale(
                 "absorption cohort contains opposite-direction CV(FPR) effects and cannot be classified "
                 f"as retained or absorbed {range_text}"
             ),
@@ -482,7 +496,7 @@ def _classify_cohort(
             decision=ScientificDecision.DIRECTIONAL_INCONCLUSIVE,
             point_estimate=mean_retention,
             interval=interval,
-            rationale=(
+            rationale=DecisionRationale(
                 "absorption retention classification requires an available BCa interval with finite bounds "
                 f"{range_text}"
             ),
@@ -495,7 +509,7 @@ def _classify_cohort(
             decision=ScientificDecision.SUPPORTED,
             point_estimate=mean_retention,
             interval=interval,
-            rationale=(
+            rationale=DecisionRationale(
                 f"paired seed-level CV(FPR) retention remains at or above the full-retention threshold {range_text}"
             ),
         )
@@ -508,7 +522,9 @@ def _classify_cohort(
             decision=ScientificDecision.FULL_ABSORPTION,
             point_estimate=mean_retention,
             interval=interval,
-            rationale=(f"paired seed-level CV(FPR) retention lies below the partial-retention threshold {range_text}"),
+            rationale=DecisionRationale(
+                f"paired seed-level CV(FPR) retention lies below the partial-retention threshold {range_text}"
+            ),
         )
     if (
         mean_retention.value >= protocol.partial_retention_minimum.value
@@ -520,14 +536,16 @@ def _classify_cohort(
             decision=ScientificDecision.PARTIAL_ABSORPTION,
             point_estimate=mean_retention,
             interval=interval,
-            rationale=(f"paired seed-level CV(FPR) retention is partially absorbed with residual effect {range_text}"),
+            rationale=DecisionRationale(
+                f"paired seed-level CV(FPR) retention is partially absorbed with residual effect {range_text}"
+            ),
         )
     return ScientificDecisionResult(
         evidence_role=EvidenceRole.TRAINING_STRESS_TEST,
         decision=ScientificDecision.DIRECTIONAL_INCONCLUSIVE,
         point_estimate=mean_retention,
         interval=interval,
-        rationale=(
+        rationale=DecisionRationale(
             "absorption retention interval straddles declared retention boundaries and cannot support "
             f"a unique classification {range_text}"
         ),

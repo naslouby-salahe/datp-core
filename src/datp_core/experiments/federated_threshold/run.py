@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
@@ -9,7 +10,7 @@ from typing import TYPE_CHECKING, ClassVar
 from pydantic import TypeAdapter
 
 from datp_core.analysis.metrics.models import MetricStatus, metric_by_id
-from datp_core.app.planning import expand_experiment_plan
+from datp_core.app.planning import PlanReason, expand_experiment_plan
 from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
@@ -20,7 +21,14 @@ from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
 )
-from datp_core.core.identifiers import ExperimentId, FederatedThresholdMethod, MetricId, PopulationId
+from datp_core.core.identifiers import (
+    AnalysisMarkerText,
+    AnalysisReasonText,
+    ExperimentId,
+    FederatedThresholdMethod,
+    MetricId,
+    PopulationId,
+)
 from datp_core.core.numeric import (
     AbsoluteThresholdError,
     ByteCount,
@@ -29,11 +37,13 @@ from datp_core.core.numeric import (
     Ratio,
     Seed,
     SeedCount,
+    SeedObservationCount,
     SummaryCoefficient,
     ThresholdValue,
     ThresholdVariance,
 )
 from datp_core.experiments.common.coordinates import ExperimentCoordinate
+from datp_core.experiments.common.reports import AnalysisReportPublication
 from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.experiments.execution import execute_declared_experiment_seed
 from datp_core.experiments.execution.evidence import load_evaluation_document
@@ -54,6 +64,12 @@ class FederatedEstimationArtifactName(StrEnum):
     ROOT = "federated_threshold_estimation"
     ANALYSIS = "analysis"
     SUMMARY = "summary.json"
+
+
+class FederatedEstimationAnalysisMarker(StrEnum):
+    FEDERATED_BENIGN_STATISTICS_COMPARISON = "federated_benign_statistics_comparison_analysis_complete"
+    FEDERATED_QUANTILE_ESTIMATION = "federated_quantile_estimation_analysis_complete"
+    FIXED_COEFFICIENT_STATISTICS_SENSITIVITY = "fixed_coefficient_statistics_sensitivity_analysis_complete"
 
 
 class FederatedEstimationSeedResult(StrictModel):
@@ -78,6 +94,12 @@ class EstimationSummary(StrictModel):
 class EstimationSummaryReport(StrictModel):
     experiment: ExperimentId
     rows: tuple[EstimationSummary, ...]
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class EstimationSummaryLoad:
+    summary: EstimationSummary | None
+    missing_count: SeedObservationCount
 
 
 class FixedCoefficientSummary(StrictModel):
@@ -210,8 +232,8 @@ def _cv(values: list[MetricValue]) -> MetricValue | None:
     return MetricValue(variance**0.5 / mean)
 
 
-def _mean_absolute_threshold_error(values: list[float]) -> AbsoluteThresholdError | None:
-    return AbsoluteThresholdError(sum(values) / len(values)) if values else None
+def _mean_absolute_threshold_error(values: list[AbsoluteThresholdError]) -> AbsoluteThresholdError | None:
+    return AbsoluteThresholdError(sum(item.value for item in values) / len(values)) if values else None
 
 
 def _mean_ratio(values: list[float]) -> Ratio | None:
@@ -229,16 +251,17 @@ def _mean_bytes(values: list[ByteCount]) -> AverageByteCount | None:
 def _finalize_report(
     directory: Path,
     marker: Path,
-    missing_count: int,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    missing_count: SeedObservationCount,
     *,
-    marker_text: str,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-) -> tuple[
-    tuple[Path, ...], str
-]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    if missing_count == 0:
-        marker.write_text(marker_text, encoding="utf-8")
-        return (directory,), marker_text.strip().split("\n", 1)[0]
-    return (directory,), f"{marker_text.strip().split(chr(10), 1)[0]} ({missing_count} seed(s) missing)"
+    marker_text: AnalysisMarkerText,
+) -> AnalysisReportPublication:
+    if missing_count.value == 0:
+        marker.write_text(f"{marker_text}\n", encoding="utf-8")
+        return AnalysisReportPublication(directories=(directory,), detail=AnalysisReasonText(str(marker_text)))
+    return AnalysisReportPublication(
+        directories=(directory,),
+        detail=AnalysisReasonText(f"{marker_text} ({missing_count.value} seed(s) missing)"),
+    )
 
 
 def _run_estimation_seed(
@@ -251,7 +274,7 @@ def _run_estimation_seed(
     result = execute_declared_experiment_seed(
         declaration=declaration,
         seed_cohort=SeedCohort(values=(training_seed,)),
-        reason=f"federated threshold estimation entry point for {experiment_id.value}",
+        reason=PlanReason(f"federated threshold estimation entry point for {experiment_id.value}"),
         output_root=output_root,
         overwrite=overwrite,
     )
@@ -268,9 +291,7 @@ def _estimation_summary(
     method: FederatedThresholdMethod,
     include_threshold_error: bool,
     include_exceedance_and_variance: bool,
-) -> tuple[
-    EstimationSummary | None, int
-]:  # TODO Should not retun int. Either it's the class or None. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> EstimationSummaryLoad:
     documents: list[FederatedEvaluationDocument] = []
     missing = 0
     for seed in CONFIRMATORY_SEED_COHORT.values:
@@ -279,7 +300,7 @@ def _estimation_summary(
         except ScientificContractError:
             missing += 1
     if not documents:
-        return None, missing
+        return EstimationSummaryLoad(summary=None, missing_count=SeedObservationCount(missing))
 
     cv_values = [
         value for document in documents if (value := _try_metric_value(document, MetricId.FPR_COEFFICIENT_OF_VARIATION))
@@ -287,8 +308,8 @@ def _estimation_summary(
     worst_values = [
         value for document in documents if (value := _try_metric_value(document, MetricId.WORST_CLIENT_FPR))
     ]
-    threshold_errors: list[float] = []
-    attainment_errors: list[float] = []
+    threshold_errors: list[AbsoluteThresholdError] = []
+    attainment_errors: list[MetricValue] = []
     exceedances: list[float] = []
     variances: list[float] = []
     communication: list[ByteCount] = []
@@ -305,8 +326,8 @@ def _estimation_summary(
         if document.diagnostics.communication is not None:
             communication.append(document.diagnostics.communication.total_estimated_serialized_bytes)
 
-    return (
-        EstimationSummary(
+    return EstimationSummaryLoad(
+        summary=EstimationSummary(
             method=method,
             seed_count=SeedCount(len(documents)),
             mean_cv_fpr=_mean_metric(cv_values),
@@ -314,13 +335,15 @@ def _estimation_summary(
             cv_fpr_across_seeds=_cv(cv_values),
             mean_absolute_threshold_error=_mean_absolute_threshold_error(threshold_errors),
             mean_absolute_attainment_error=(
-                MetricValue(sum(attainment_errors) / len(attainment_errors)) if attainment_errors else None
+                MetricValue(sum(item.value for item in attainment_errors) / len(attainment_errors))
+                if attainment_errors
+                else None
             ),
             mean_achieved_exceedance=_mean_ratio(exceedances),
             mean_threshold_variance=_mean_threshold_variance(variances),
             mean_estimated_communication_bytes=_mean_bytes(communication),
         ),
-        missing,
+        missing_count=SeedObservationCount(missing),
     )
 
 
@@ -341,9 +364,7 @@ def run_federated_benign_statistics_comparison_seed(
 def report_federated_benign_statistics_comparison(
     experiment_id: ExperimentId,
     overwrite: bool,
-) -> tuple[
-    tuple[Path, ...], str
-]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> AnalysisReportPublication:
     del overwrite
     declaration = _declaration_for(experiment_id)
     directory = _analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
@@ -351,15 +372,15 @@ def report_federated_benign_statistics_comparison(
     rows: list[EstimationSummary] = []
     missing = 0
     for method in declaration.federated_thresholds:
-        summary, missing_for_method = _estimation_summary(
+        loaded = _estimation_summary(
             experiment_id=experiment_id,
             method=method,
             include_threshold_error=True,
             include_exceedance_and_variance=False,
         )
-        missing += missing_for_method
-        if summary is not None:
-            rows.append(summary)
+        missing += loaded.missing_count.value
+        if loaded.summary is not None:
+            rows.append(loaded.summary)
     serialize_json_model(
         EstimationSummaryReport(experiment=experiment_id, rows=tuple(rows)),
         _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
@@ -367,8 +388,8 @@ def report_federated_benign_statistics_comparison(
     return _finalize_report(
         directory,
         _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
-        missing,
-        marker_text="federated_benign_statistics_comparison_analysis_complete\n",
+        SeedObservationCount(missing),
+        marker_text=AnalysisMarkerText(FederatedEstimationAnalysisMarker.FEDERATED_BENIGN_STATISTICS_COMPARISON),
     )
 
 
@@ -388,9 +409,7 @@ def run_federated_quantile_estimation_seed(
 def report_federated_quantile_estimation(
     experiment_id: ExperimentId,
     overwrite: bool,
-) -> tuple[
-    tuple[Path, ...], str
-]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> AnalysisReportPublication:
     del overwrite
     declaration = _declaration_for(experiment_id)
     directory = _analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
@@ -398,15 +417,15 @@ def report_federated_quantile_estimation(
     rows: list[EstimationSummary] = []
     missing = 0
     for method in declaration.federated_thresholds:
-        summary, missing_for_method = _estimation_summary(
+        loaded = _estimation_summary(
             experiment_id=experiment_id,
             method=method,
             include_threshold_error=False,
             include_exceedance_and_variance=True,
         )
-        missing += missing_for_method
-        if summary is not None:
-            rows.append(summary)
+        missing += loaded.missing_count.value
+        if loaded.summary is not None:
+            rows.append(loaded.summary)
     serialize_json_model(
         EstimationSummaryReport(experiment=experiment_id, rows=tuple(rows)),
         _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
@@ -414,8 +433,8 @@ def report_federated_quantile_estimation(
     return _finalize_report(
         directory,
         _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
-        missing,
-        marker_text="federated_quantile_estimation_analysis_complete\n",
+        SeedObservationCount(missing),
+        marker_text=AnalysisMarkerText(FederatedEstimationAnalysisMarker.FEDERATED_QUANTILE_ESTIMATION),
     )
 
 
@@ -440,9 +459,7 @@ def run_fixed_coefficient_statistics_sensitivity_seed(
 def report_fixed_coefficient_statistics_sensitivity(
     experiment_id: ExperimentId,
     overwrite: bool,
-) -> tuple[
-    tuple[Path, ...], str
-]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> AnalysisReportPublication:
     del overwrite
     declaration = _declaration_for(experiment_id)
     directory = _analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
@@ -495,8 +512,8 @@ def report_fixed_coefficient_statistics_sensitivity(
     return _finalize_report(
         directory,
         _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
-        missing,
-        marker_text="fixed_coefficient_statistics_sensitivity_analysis_complete\n",
+        SeedObservationCount(missing),
+        marker_text=AnalysisMarkerText(FederatedEstimationAnalysisMarker.FIXED_COEFFICIENT_STATISTICS_SENSITIVITY),
     )
 
 

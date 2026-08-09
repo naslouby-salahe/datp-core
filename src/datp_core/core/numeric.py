@@ -191,6 +191,7 @@ class SeedCount(PositiveIntegerValue):
     validation_name: ClassVar[str] = "seed count"
 
 
+
 class RoundNumber(PositiveIntegerValue):
     validation_name: ClassVar[str] = "round number"
 
@@ -260,6 +261,18 @@ class ValidationIssueCount(NonNegativeIntegerValue):
 
 class PairedObservationCount(NonNegativeIntegerValue):
     validation_name: ClassVar[str] = "paired observation count"
+
+
+class SeedObservationCount(NonNegativeIntegerValue):
+    validation_name: ClassVar[str] = "seed observation count"
+
+
+class PresentationDecimalCount(NonNegativeIntegerValue):
+    validation_name: ClassVar[str] = "presentation decimal count"
+
+
+class CampaignOrdinal(NonNegativeIntegerValue):
+    validation_name: ClassVar[str] = "campaign ordinal"
 
 
 class LogicalElementCount(PositiveIntegerValue):

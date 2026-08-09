@@ -44,6 +44,7 @@ from datp_core.core.errors import (
     ScientificContractError,
 )
 from datp_core.core.identifiers import (
+    AnalysisReasonText,
     EvaluationCohort,
     ExperimentId,
     FederatedThresholdMethod,
@@ -92,11 +93,17 @@ class TemporalArtifactDirectory(StrEnum):
     EVIDENCE = "evidence"
 
 
+class TemporalClientUnavailableReason(StrEnum):
+    EXCLUDED_FROM_FPR_EVALUABLE_COHORT = "excluded_from_fpr_evaluable_cohort"
+    CLIENT_NOT_EVALUABLE = "client_not_evaluable"
+    NOT_FPR_EVALUABLE = "not_fpr_evaluable"
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class TemporalMethodUnavailability:
     method: FederatedThresholdMethod
     reason: ThresholdInfeasibilityReason
-    detail: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    detail: AnalysisReasonText
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -112,9 +119,7 @@ class TemporalMethodOutcome:
     row_order_checksum: Checksum
     clients: tuple[ClientMetricResult, ...]
     excluded_clients: tuple[ClientIdentity, ...]
-    unavailable_reasons: tuple[
-        str, ...
-    ]  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    unavailable_reasons: tuple[AnalysisReasonText, ...]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -357,7 +362,8 @@ def _recovery_for_method(
     if not trajectories:
         raise ScientificContractError(
             ErrorMessage(
-                f"temporal recovery requires non-empty client trajectories when evaluations exist (seed={partition_seed.value})"
+                "temporal recovery requires non-empty client trajectories when evaluations "
+                f"exist (seed={partition_seed.value})"
             ),
             subject=method,
         )
@@ -528,7 +534,11 @@ def _evaluate_state(
         threshold = threshold_publication.result
         if isinstance(threshold, ThresholdUnavailableResult):
             unavailable.append(
-                TemporalMethodUnavailability(method=method, reason=threshold.reason, detail=threshold.detail)
+                TemporalMethodUnavailability(
+                    method=method,
+                    reason=threshold.reason,
+                    detail=AnalysisReasonText(threshold.detail),
+                )
             )
             continue
         evaluation_inputs = build_federated_evaluation_inputs(scores, method, calibration_role=calibration_role)
@@ -810,7 +820,9 @@ def _build_client_trajectories(
                 eligible=eligible,
                 exclusion_reason=None
                 if eligible
-                else _exclusion_reason(client, static_outcome, frozen_outcome, recalibrated_outcome),
+                else AnalysisReasonText(
+                    _exclusion_reason(client, static_outcome, frozen_outcome, recalibrated_outcome)
+                ),
                 threshold_static=_client_threshold(static_client),
                 threshold_frozen=_client_threshold(frozen_client),
                 threshold_recalibrated=_client_threshold(recalibrated_client),
@@ -838,11 +850,13 @@ def _client_by_identity(clients: tuple[ClientMetricResult, ...], identity: Clien
 def _exclusion_reason(
     client: ClientIdentity,
     *outcomes: TemporalMethodOutcome,
-) -> str:
+) -> TemporalClientUnavailableReason:
     excluded = any(excluded_client == client for outcome in outcomes for excluded_client in outcome.excluded_clients)
     return (
-        "excluded_from_fpr_evaluable_cohort" if excluded else "client_not_evaluable"
-    )  # TODO: should not use hardcoded values. CHeck if exists in enum or create enum
+        TemporalClientUnavailableReason.EXCLUDED_FROM_FPR_EVALUABLE_COHORT
+        if excluded
+        else TemporalClientUnavailableReason.CLIENT_NOT_EVALUABLE
+    )
 
 
 def _client_is_eligible(
@@ -869,16 +883,22 @@ def _client_metric(client: ClientMetricResult | None, metric: MetricId) -> Metri
     return result.value if result.status is MetricStatus.AVAILABLE else None
 
 
-def _cohort_unavailable_reasons(cohort: EvaluationCohortManifest) -> tuple[str, ...]:
-    reasons: list[str] = []
+def _cohort_unavailable_reasons(cohort: EvaluationCohortManifest) -> tuple[AnalysisReasonText, ...]:
+    reasons: list[AnalysisReasonText] = []
     for record in sorted(cohort.records, key=lambda item: item.client.client_id.value):
         if record.fpr_evaluable:
             continue
         client_id = record.client.client_id
         if record.exclusion_reasons:
-            reasons.extend(f"{client_id}:{reason.value}" for reason in record.exclusion_reasons)
+            reasons.extend(
+                AnalysisReasonText(f"{client_id}:{reason.value}") for reason in record.exclusion_reasons
+            )
         else:
-            reasons.append(f"{client_id.value}:not_fpr_evaluable")
+            reasons.append(
+                AnalysisReasonText(
+                    f"{client_id.value}:{TemporalClientUnavailableReason.NOT_FPR_EVALUABLE.value}"
+                )
+            )
     return tuple(reasons)
 
 
@@ -887,11 +907,9 @@ def _union_clients(*groups: tuple[ClientIdentity, ...]) -> tuple[ClientIdentity,
 
 
 def _union_text(
-    *groups: tuple[str, ...],
-) -> tuple[
-    str, ...
-]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    ordered: list[str] = []
+    *groups: tuple[AnalysisReasonText, ...],
+) -> tuple[AnalysisReasonText, ...]:
+    ordered: list[AnalysisReasonText] = []
     seen: set[str] = set()
     for group in groups:
         for item in group:

@@ -1,14 +1,15 @@
 """Generic paired-inference contracts, Wilcoxon testing, and rank-biserial effect size."""
 
+from dataclasses import dataclass
 from enum import StrEnum
-from math import isfinite
-from typing import ClassVar, Protocol, SupportsFloat, cast
+from typing import ClassVar, cast
 
 import numpy as np
 from numpy.typing import NDArray
 from pydantic import model_validator
 from scipy import stats
 
+from datp_core.analysis.adapters.scipy import StatisticPValueResult, statistic_p_value
 from datp_core.analysis.contrasts import PairedContrasts
 from datp_core.analysis.inference.contracts import (
     PairedInferenceProtocol,
@@ -17,6 +18,7 @@ from datp_core.analysis.inference.contracts import (
 )
 from datp_core.core.contracts import StrictModel
 from datp_core.core.identifiers import (
+    AnalysisReasonText,
     AvailabilityStatus,
     EffectSizeId,
     StatisticalTestId,
@@ -27,22 +29,6 @@ from datp_core.core.numeric import (
     PairedObservationCount,
     RankSum,
 )
-
-
-class StatisticPValueResult(Protocol):
-    statistic: SupportsFloat
-    pvalue: SupportsFloat
-
-
-def statistic_p_value(
-    result: StatisticPValueResult,
-) -> (
-    tuple[float, float] | None
-):  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-    statistic, pvalue = float(result.statistic), float(result.pvalue)
-    if not all(isfinite(value) for value in (statistic, pvalue)):
-        return None
-    return statistic, pvalue
 
 
 class WilcoxonComputationMethod(StrEnum):
@@ -63,6 +49,12 @@ class CorrelationCoefficient(MetricValue):
             raise ValueError("correlation coefficient must lie in [-1, 1]")
 
 
+@dataclass(frozen=True, slots=True)
+class WilcoxonMethodSelection:
+    method: WilcoxonComputationMethod
+    fallback_reason: AnalysisReasonText | None
+
+
 class WilcoxonResult(StrictModel):
     statistic: RankSum | None
     p_value: PValue | None
@@ -72,12 +64,8 @@ class WilcoxonResult(StrictModel):
     computation_method: WilcoxonComputationMethod | None
     zero_method: WilcoxonZeroMethod | None
     availability: AvailabilityStatus
-    reason: (
-        str | None
-    )  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-    fallback_reason: (
-        str | None
-    )  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    reason: AnalysisReasonText | None
+    fallback_reason: AnalysisReasonText | None
 
     @model_validator(mode="after")
     def validate_result(self) -> "WilcoxonResult":
@@ -114,9 +102,7 @@ class RankBiserialResult(StrictModel):
     negative_rank_sum: RankSum | None
     nonzero_pair_count: PairedObservationCount
     availability: AvailabilityStatus
-    reason: (
-        str | None
-    )  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    reason: AnalysisReasonText | None
 
     @model_validator(mode="after")
     def validate_result(self) -> "RankBiserialResult":
@@ -145,7 +131,9 @@ def paired_deltas(contrasts: PairedContrasts) -> NDArray[np.float64]:
 
 def paired_wilcoxon(contrasts: PairedContrasts, protocol: PairedInferenceProtocol) -> WilcoxonResult:
     if len(contrasts) != protocol.paired_seed_count.value:
-        return blocked_wilcoxon("paired contrast count does not match the declared inference protocol")
+        return blocked_wilcoxon(
+            AnalysisReasonText("paired contrast count does not match the declared inference protocol")
+        )
     if protocol.statistical_test is not StatisticalTestId.WILCOXON_SIGNED_RANK:
         raise ValueError("paired Wilcoxon requires the Wilcoxon signed-rank protocol")
     if protocol.wilcoxon_computation_preference is not WilcoxonComputationPreference.EXACT_PREFERRED:
@@ -163,17 +151,17 @@ def paired_wilcoxon(contrasts: PairedContrasts, protocol: PairedInferenceProtoco
             computation_method=None,
             zero_method=protocol.wilcoxon_zero_method,
             availability=AvailabilityStatus.UNDEFINED,
-            reason="Wilcoxon requires at least one nonzero paired difference",
+            reason=AnalysisReasonText("Wilcoxon requires at least one nonzero paired difference"),
             fallback_reason=None,
         )
-    method, fallback_reason = _select_wilcoxon_method(deltas, protocol)
+    selection = _select_wilcoxon_method(deltas, protocol)
     result = cast(
         StatisticPValueResult,
         stats.wilcoxon(
             deltas,
             alternative=protocol.wilcoxon_alternative.value,
             zero_method=protocol.wilcoxon_zero_method.value,
-            method=method.value,
+            method=selection.method.value,
         ),
     )
     extracted = statistic_p_value(result)
@@ -187,21 +175,20 @@ def paired_wilcoxon(contrasts: PairedContrasts, protocol: PairedInferenceProtoco
             computation_method=None,
             zero_method=protocol.wilcoxon_zero_method,
             availability=AvailabilityStatus.UNAVAILABLE,
-            reason="SciPy Wilcoxon result does not expose finite statistic and p-value values",
+            reason=AnalysisReasonText("SciPy Wilcoxon result does not expose finite statistic and p-value values"),
             fallback_reason=None,
         )
-    statistic, p_value = extracted
     return WilcoxonResult(
-        statistic=RankSum(statistic),
-        p_value=PValue(p_value),
+        statistic=RankSum(extracted.statistic.value),
+        p_value=PValue(extracted.p_value.value),
         nonzero_pair_count=nonzero_pair_count,
         effective_sample_size=effective_sample_size,
         requested_method=protocol.wilcoxon_computation_preference,
-        computation_method=method,
+        computation_method=selection.method,
         zero_method=protocol.wilcoxon_zero_method,
         availability=AvailabilityStatus.AVAILABLE,
         reason=None,
-        fallback_reason=fallback_reason,
+        fallback_reason=selection.fallback_reason,
     )
 
 
@@ -210,7 +197,9 @@ def matched_pairs_rank_biserial(
     protocol: PairedInferenceProtocol,
 ) -> RankBiserialResult:
     if len(contrasts) != protocol.paired_seed_count.value:
-        return blocked_rank_biserial("paired contrast count does not match the declared inference protocol")
+        return blocked_rank_biserial(
+            AnalysisReasonText("paired contrast count does not match the declared inference protocol")
+        )
     if protocol.effect_size is not EffectSizeId.MATCHED_PAIRS_RANK_BISERIAL:
         raise ValueError("paired effect size requires matched-pairs rank-biserial correlation")
     deltas = paired_deltas(contrasts)
@@ -222,7 +211,7 @@ def matched_pairs_rank_biserial(
             negative_rank_sum=None,
             nonzero_pair_count=PairedObservationCount(0),
             availability=AvailabilityStatus.UNDEFINED,
-            reason="rank-biserial correlation requires at least one nonzero paired difference",
+            reason=AnalysisReasonText("rank-biserial correlation requires at least one nonzero paired difference"),
         )
     ranks = np.asarray(stats.rankdata(np.abs(nonzero), method="average"), dtype=np.float64)
     positive_rank_sum = float(np.sum(ranks[nonzero > 0.0]))
@@ -238,9 +227,7 @@ def matched_pairs_rank_biserial(
     )
 
 
-def blocked_wilcoxon(
-    reason: str,
-) -> WilcoxonResult:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+def blocked_wilcoxon(reason: AnalysisReasonText) -> WilcoxonResult:
     return WilcoxonResult(
         statistic=None,
         p_value=None,
@@ -255,9 +242,7 @@ def blocked_wilcoxon(
     )
 
 
-def blocked_rank_biserial(
-    reason: str,
-) -> RankBiserialResult:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+def blocked_rank_biserial(reason: AnalysisReasonText) -> RankBiserialResult:
     return RankBiserialResult(
         value=None,
         positive_rank_sum=None,
@@ -271,28 +256,30 @@ def blocked_rank_biserial(
 def _select_wilcoxon_method(
     deltas: NDArray[np.float64],
     protocol: PairedInferenceProtocol,
-) -> tuple[
-    WilcoxonComputationMethod, str | None
-]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+) -> WilcoxonMethodSelection:
     zero_method = protocol.wilcoxon_zero_method.value
     alternative = protocol.wilcoxon_alternative.value
     nonzero = deltas[deltas != 0.0]
     if nonzero.size == 0:
-        return (
-            WilcoxonComputationMethod.ASYMPTOTIC,
-            "exact Wilcoxon unavailable: no non-zero differences after declared zero handling",
+        return WilcoxonMethodSelection(
+            method=WilcoxonComputationMethod.ASYMPTOTIC,
+            fallback_reason=AnalysisReasonText(
+                "exact Wilcoxon unavailable: no non-zero differences after declared zero handling"
+            ),
         )
     absolute = np.abs(nonzero)
     if absolute.size != len({float(value) for value in absolute}):
-        return (
-            WilcoxonComputationMethod.ASYMPTOTIC,
-            "exact Wilcoxon unavailable: absolute paired differences contain ties",
+        return WilcoxonMethodSelection(
+            method=WilcoxonComputationMethod.ASYMPTOTIC,
+            fallback_reason=AnalysisReasonText(
+                "exact Wilcoxon unavailable: absolute paired differences contain ties"
+            ),
         )
     zero_count = int(deltas.size - nonzero.size)
     if zero_count > 0:
-        return (
-            WilcoxonComputationMethod.ASYMPTOTIC,
-            (
+        return WilcoxonMethodSelection(
+            method=WilcoxonComputationMethod.ASYMPTOTIC,
+            fallback_reason=AnalysisReasonText(
                 "exact Wilcoxon unavailable: zero differences are present with "
                 f"declared zero handling `{zero_method}` (zeros={zero_count})"
             ),
@@ -305,11 +292,16 @@ def _select_wilcoxon_method(
             method="exact",
         )
     except ValueError as error:
-        return WilcoxonComputationMethod.ASYMPTOTIC, f"exact Wilcoxon unavailable: {error}"
+        return WilcoxonMethodSelection(
+            method=WilcoxonComputationMethod.ASYMPTOTIC,
+            fallback_reason=AnalysisReasonText(f"exact Wilcoxon unavailable: {error}"),
+        )
     extracted = statistic_p_value(cast(StatisticPValueResult, result))
     if extracted is None:
-        return (
-            WilcoxonComputationMethod.ASYMPTOTIC,
-            "exact Wilcoxon unavailable: SciPy exact path did not return finite statistic and p-value",
+        return WilcoxonMethodSelection(
+            method=WilcoxonComputationMethod.ASYMPTOTIC,
+            fallback_reason=AnalysisReasonText(
+                "exact Wilcoxon unavailable: SciPy exact path did not return finite statistic and p-value"
+            ),
         )
-    return WilcoxonComputationMethod.EXACT, None
+    return WilcoxonMethodSelection(method=WilcoxonComputationMethod.EXACT, fallback_reason=None)

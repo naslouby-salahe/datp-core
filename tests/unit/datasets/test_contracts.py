@@ -5,7 +5,7 @@ import pyarrow as pa
 import pytest
 
 from datp_core.artifacts.provenance import Checksum
-from datp_core.core.identifiers import AvailabilityStatus, ChronologyGroupIdentity, DatasetId
+from datp_core.core.identifiers import AvailabilityStatus, ChronologyGroupIdentity, DatasetId, NonEmptyString
 from datp_core.core.numeric import (
     ByteCount,
     CanonicalColumnPosition,
@@ -57,7 +57,7 @@ def test_chronology_preserves_static_and_temporal_status() -> None:
         RowCount(1),
         RowCount(0),
         True,
-        "address literal",
+        NonEmptyString("address literal"),
         False,
     )
     assert result.temporal_eligible is False
@@ -74,7 +74,7 @@ def test_chronology_rejects_raw_duplicate_timestamp_count() -> None:
             RowCount(1),
             0,  # type: ignore[arg-type]
             True,
-            "address literal",
+            NonEmptyString("address literal"),
             False,
         )
 

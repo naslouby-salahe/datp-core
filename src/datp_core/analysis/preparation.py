@@ -49,6 +49,8 @@ from datp_core.core.errors import (
     ScientificContractError,
 )
 from datp_core.core.identifiers import (
+    AnalysisReasonText,
+    DecisionRationale,
     EvidenceRole,
     ExperimentId,
     FederatedThresholdMethod,
@@ -67,9 +69,7 @@ class ConfirmatoryAnalysisRequest:
     analysis_seed: Seed
     multiplicity_plan: MultiplicityPlan | None = None
     mechanisms: tuple[MechanismEvidence, ...] = ()
-    unavailable_reason: str | None = (
-        None  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-    )
+    unavailable_reason: AnalysisReasonText | None = None
     excluded_seeds: tuple[Seed, ...] = ()
 
 
@@ -86,9 +86,7 @@ class AnalysisDocument(StrictModel):
     multiplicity_result: MultiplicityResult | None
     mechanisms: tuple[MechanismEvidence, ...]
     excluded_seeds: tuple[Seed, ...]
-    unavailable_reason: (
-        str | None
-    )  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    unavailable_reason: AnalysisReasonText | None
 
     @model_validator(mode="after")
     def validate_multiplicity(self) -> "AnalysisDocument":
@@ -104,9 +102,7 @@ class ExternalAnalysisRequest:
     plan: SupplementaryPairedAnalysisPlan
     analysis_seed: Seed
     mechanisms: tuple[MechanismEvidence, ...] = ()
-    unavailable_reason: str | None = (
-        None  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-    )
+    unavailable_reason: AnalysisReasonText | None = None
     excluded_seeds: tuple[Seed, ...] = ()
 
 
@@ -120,9 +116,7 @@ class ExternalAnalysisDocument(StrictModel):
     rank_biserial: RankBiserialResult
     mechanisms: tuple[MechanismEvidence, ...]
     excluded_seeds: tuple[Seed, ...]
-    unavailable_reason: (
-        str | None
-    )  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    unavailable_reason: AnalysisReasonText | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -149,9 +143,7 @@ class TemporalAnalysisDocument(StrictModel):
     campaign_decision: ScientificDecisionResult
     paired_seed_identities: tuple[Seed, ...]
     excluded_seeds: tuple[Seed, ...] = ()
-    unavailable_reason: str | None = (
-        None  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-    )
+    unavailable_reason: AnalysisReasonText | None = None
     drift_excess_interval: BootstrapInterval | None = None
     recovered_amount_interval: BootstrapInterval | None = None
     recovery_ratio_interval: BootstrapInterval | None = None
@@ -188,16 +180,28 @@ def prepare_confirmatory_analysis(request: ConfirmatoryAnalysisRequest) -> Analy
     try:
         contrasts = validate_confirmatory_contrasts(request.contrasts, protocol)
     except PairedAnalysisContractError as error:
-        return _blocked_confirmatory_document(request, error.reason.value)
+        return _blocked_confirmatory_document(
+            request,
+            unavailable_reason=AnalysisReasonText(error.reason.value),
+            bca_reason=error.reason,
+        )
     if request.unavailable_reason is not None:
-        return _blocked_confirmatory_document(request, request.unavailable_reason)
+        return _blocked_confirmatory_document(
+            request,
+            unavailable_reason=request.unavailable_reason,
+            bca_reason=BcaReason.FIXED_COORDINATE_MISMATCH,
+        )
     interval = paired_bca_interval(
         contrasts,
         protocol=protocol,
         analysis_seed=request.analysis_seed,
     )
     if interval.outcome.value != "available":
-        reason = interval.reason.value if interval.reason is not None else "confirmatory BCa interval is blocked"
+        reason_text = (
+            AnalysisReasonText(interval.reason.value)
+            if interval.reason is not None
+            else AnalysisReasonText("confirmatory BCa interval is blocked")
+        )
         deltas = tuple(contrast.delta for contrast in contrasts)
         return AnalysisDocument(
             contrasts=contrasts,
@@ -211,13 +215,13 @@ def prepare_confirmatory_analysis(request: ConfirmatoryAnalysisRequest) -> Analy
                 quantiles=_quantile_range(protocol),
             ),
             sign_consistency=count_paired_differences(deltas),
-            wilcoxon=blocked_wilcoxon(f"dependent Wilcoxon blocked: {reason}"),
-            rank_biserial=blocked_rank_biserial(f"dependent rank-biserial blocked: {reason}"),
+            wilcoxon=blocked_wilcoxon(AnalysisReasonText(f"dependent Wilcoxon blocked: {reason_text}")),
+            rank_biserial=blocked_rank_biserial(AnalysisReasonText(f"dependent rank-biserial blocked: {reason_text}")),
             multiplicity_plan=None,
             multiplicity_result=None,
             mechanisms=request.mechanisms,
             excluded_seeds=request.excluded_seeds,
-            unavailable_reason=reason,
+            unavailable_reason=reason_text,
         )
     deltas = tuple(contrast.delta for contrast in contrasts)
     multiplicity = None if request.multiplicity_plan is None else holm_adjust(request.multiplicity_plan, protocol)
@@ -252,9 +256,17 @@ def prepare_external_analysis(request: ExternalAnalysisRequest) -> ExternalAnaly
     try:
         contrasts = validate_supplementary_contrasts(request.contrasts, request.plan)
     except PairedAnalysisContractError as error:
-        return _blocked_external_document(request, error.reason.value)
+        return _blocked_external_document(
+            request,
+            unavailable_reason=AnalysisReasonText(error.reason.value),
+            bca_reason=error.reason,
+        )
     if request.unavailable_reason is not None:
-        return _blocked_external_document(request, request.unavailable_reason)
+        return _blocked_external_document(
+            request,
+            unavailable_reason=request.unavailable_reason,
+            bca_reason=BcaReason.FIXED_COORDINATE_MISMATCH,
+        )
     interval = supplementary_paired_bca_interval(
         contrasts,
         plan=request.plan,
@@ -262,7 +274,11 @@ def prepare_external_analysis(request: ExternalAnalysisRequest) -> ExternalAnaly
     )
     deltas = tuple(contrast.delta for contrast in contrasts)
     if interval.outcome.value != "available":
-        reason = interval.reason.value if interval.reason is not None else "external BCa interval is blocked"
+        reason_text = (
+            AnalysisReasonText(interval.reason.value)
+            if interval.reason is not None
+            else AnalysisReasonText("external BCa interval is blocked")
+        )
         return ExternalAnalysisDocument(
             plan=request.plan,
             contrasts=contrasts,
@@ -274,11 +290,11 @@ def prepare_external_analysis(request: ExternalAnalysisRequest) -> ExternalAnaly
                 quantiles=_quantile_range(protocol),
             ),
             sign_consistency=count_paired_differences(deltas),
-            wilcoxon=blocked_wilcoxon(f"dependent Wilcoxon blocked: {reason}"),
-            rank_biserial=blocked_rank_biserial(f"dependent rank-biserial blocked: {reason}"),
+            wilcoxon=blocked_wilcoxon(AnalysisReasonText(f"dependent Wilcoxon blocked: {reason_text}")),
+            rank_biserial=blocked_rank_biserial(AnalysisReasonText(f"dependent rank-biserial blocked: {reason_text}")),
             mechanisms=request.mechanisms,
             excluded_seeds=request.excluded_seeds,
-            unavailable_reason=reason,
+            unavailable_reason=reason_text,
         )
     return ExternalAnalysisDocument(
         plan=request.plan,
@@ -358,14 +374,16 @@ def prepare_temporal_analysis(request: TemporalAnalysisRequest) -> TemporalAnaly
 
 def _blocked_confirmatory_document(
     request: ConfirmatoryAnalysisRequest,
-    reason: str,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    *,
+    unavailable_reason: AnalysisReasonText,
+    bca_reason: BcaReason,
 ) -> AnalysisDocument:
     protocol = request.inference_protocol
     interval = BootstrapInterval.blocked(
         protocol=protocol,
         analysis_seed=request.analysis_seed,
         point_estimate=None,
-        reason=_bca_reason_or_fixed(reason),
+        reason=bca_reason,
     )
     return AnalysisDocument(
         contrasts=request.contrasts,
@@ -376,7 +394,7 @@ def _blocked_confirmatory_document(
             decision=ScientificDecision.NOT_ESTABLISHED,
             point_estimate=None,
             interval=interval,
-            rationale=f"confirmatory analysis blocked: {reason}",
+            rationale=DecisionRationale(f"confirmatory analysis blocked: {unavailable_reason}"),
         ),
         descriptive=summarize_values(
             (),
@@ -385,26 +403,30 @@ def _blocked_confirmatory_document(
             quantiles=_quantile_range(protocol),
         ),
         sign_consistency=count_paired_differences(()),
-        wilcoxon=blocked_wilcoxon(f"dependent Wilcoxon blocked: {reason}"),
-        rank_biserial=blocked_rank_biserial(f"dependent rank-biserial blocked: {reason}"),
+        wilcoxon=blocked_wilcoxon(AnalysisReasonText(f"dependent Wilcoxon blocked: {unavailable_reason}")),
+        rank_biserial=blocked_rank_biserial(
+            AnalysisReasonText(f"dependent rank-biserial blocked: {unavailable_reason}")
+        ),
         multiplicity_plan=None,
         multiplicity_result=None,
         mechanisms=request.mechanisms,
         excluded_seeds=request.excluded_seeds,
-        unavailable_reason=reason,
+        unavailable_reason=unavailable_reason,
     )
 
 
 def _blocked_external_document(
     request: ExternalAnalysisRequest,
-    reason: str,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    *,
+    unavailable_reason: AnalysisReasonText,
+    bca_reason: BcaReason,
 ) -> ExternalAnalysisDocument:
     protocol = request.plan.inference_protocol
     interval = BootstrapInterval.blocked(
         protocol=protocol,
         analysis_seed=request.analysis_seed,
         point_estimate=None,
-        reason=_bca_reason_or_fixed(reason),
+        reason=bca_reason,
     )
     return ExternalAnalysisDocument(
         plan=request.plan,
@@ -417,21 +439,14 @@ def _blocked_external_document(
             quantiles=_quantile_range(protocol),
         ),
         sign_consistency=count_paired_differences(()),
-        wilcoxon=blocked_wilcoxon(f"dependent Wilcoxon blocked: {reason}"),
-        rank_biserial=blocked_rank_biserial(f"dependent rank-biserial blocked: {reason}"),
+        wilcoxon=blocked_wilcoxon(AnalysisReasonText(f"dependent Wilcoxon blocked: {unavailable_reason}")),
+        rank_biserial=blocked_rank_biserial(
+            AnalysisReasonText(f"dependent rank-biserial blocked: {unavailable_reason}")
+        ),
         mechanisms=request.mechanisms,
         excluded_seeds=request.excluded_seeds,
-        unavailable_reason=reason,
+        unavailable_reason=unavailable_reason,
     )
-
-
-def _bca_reason_or_fixed(
-    reason: str,
-) -> BcaReason:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-    for item in BcaReason:
-        if item.value == reason:
-            return item
-    return BcaReason.FIXED_COORDINATE_MISMATCH
 
 
 def _quantile_range(protocol: PairedInferenceProtocol) -> QuantileRange:

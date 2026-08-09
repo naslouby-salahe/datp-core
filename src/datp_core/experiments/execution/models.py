@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Protocol
 
 from datp_core.artifacts.provenance import Checksum
+from datp_core.core.identifiers import StageExecutionEvidence
+from datp_core.core.numeric import CampaignOrdinal
 from datp_core.experiments.common.coordinates import ExperimentCoordinate
 
 
@@ -99,11 +101,7 @@ class ExecutionProvenance:
 class StageExecution:
     stage: PipelineStage
     outcome: StageOutcome
-    evidence: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-
-    def __post_init__(self) -> None:
-        if not self.evidence.strip():
-            raise ValueError("stage execution requires evidence")
+    evidence: StageExecutionEvidence
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -155,16 +153,12 @@ class ExperimentOutputStore(Protocol):
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CampaignEntry:
-    ordinal: int  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    ordinal: CampaignOrdinal
     coordinate: ExperimentCoordinate
-
-    def __post_init__(self) -> None:
-        if self.ordinal < 0:
-            raise ValueError("campaign ordinals must be non-negative")
 
 
 def campaign_digest(entries: tuple[CampaignEntry, ...]) -> Checksum:
-    return Checksum.from_text("\n".join(f"{entry.ordinal}|{entry.coordinate.stable_key}" for entry in entries))
+    return Checksum.from_text("\n".join(f"{entry.ordinal.value}|{entry.coordinate.stable_key}" for entry in entries))
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -174,7 +168,7 @@ class CampaignPlan:
     plan_digest: Checksum
 
     def __post_init__(self) -> None:
-        if tuple(item.ordinal for item in self.entries) != tuple(range(len(self.entries))):
+        if tuple(item.ordinal.value for item in self.entries) != tuple(range(len(self.entries))):
             raise ValueError("campaign entries must use contiguous deterministic ordinals")
         if self.digest != campaign_digest(self.entries):
             raise ValueError("campaign digest does not match campaign entries")

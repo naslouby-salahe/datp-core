@@ -25,14 +25,22 @@ from datp_core.analysis.preparation import AnalysisDocument, ExternalAnalysisDoc
 from datp_core.analysis.scientific_decision import ScientificDecision, ScientificDecisionResult
 from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.serializers.json import canonical_checksum
-from datp_core.core.identifiers import AvailabilityStatus, EvidenceRole, ExperimentId, MetricId, PopulationId
+from datp_core.core.identifiers import (
+    AvailabilityStatus,
+    ClaimWording,
+    EvidenceRole,
+    ExperimentId,
+    MetricId,
+    PopulationId,
+)
 from datp_core.core.numeric import MetricValue
 from datp_core.experiments.anchor.contracts import VerifiedAnchorGateArtifact
 from datp_core.presentation.figures import FigureSpec, render_markdown_figure
-from datp_core.presentation.tables import PublicationTable, TableCell, render_markdown_table
+from datp_core.presentation.tables import EvidenceText, PublicationTable, TableCell, TableTitle, render_markdown_table
 from datp_core.presentation.validation import (
     ClaimDecision,
     ClaimKind,
+    ClaimReason,
     ClaimRequest,
     ClaimStatus,
     EvidenceDecision,
@@ -127,7 +135,7 @@ def export_confirmatory_publication(
             evidence_decision=_map_decision(document.decision.decision),
             verified_anchor_gate=verified_anchor_gate,
             traffic_rate_available=False,
-            wording=document.decision.rationale,
+            wording=ClaimWording(document.decision.rationale),
         )
     )
     tables = (
@@ -161,7 +169,9 @@ def export_external_publication(document: ExternalAnalysisDocument, output_direc
             evidence_decision=EvidenceDecision.BOUNDARY,
             verified_anchor_gate=None,
             traffic_rate_available=False,
-            wording="External paired threshold contrast remains supplementary and claim-bounded.",
+            wording=ClaimWording(
+                "External paired threshold contrast remains supplementary and claim-bounded."
+            ),
         )
     )
     payload = "\n".join(
@@ -206,7 +216,7 @@ def export_temporal_publication(document: TemporalAnalysisDocument, output_direc
             evidence_decision=_map_decision(document.campaign_decision.decision),
             verified_anchor_gate=None,
             traffic_rate_available=False,
-            wording=document.campaign_decision.rationale,
+            wording=ClaimWording(document.campaign_decision.rationale),
         )
     )
     lines = [
@@ -280,7 +290,7 @@ def export_temporal_publication(document: TemporalAnalysisDocument, output_direc
             claims=(claim,),
             tables=(
                 PublicationTable(
-                    title="Temporal campaign decision",
+                    title=TableTitle("Temporal campaign decision"),
                     cells=(
                         TableCell(
                             metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
@@ -290,7 +300,7 @@ def export_temporal_publication(document: TemporalAnalysisDocument, output_direc
                                 else AvailabilityStatus.AVAILABLE
                             ),
                             rendered_value=document.campaign_decision.decision.value,
-                            evidence=document.campaign_decision.rationale,
+                            evidence=EvidenceText(document.campaign_decision.rationale),
                         ),
                     ),
                 ),
@@ -324,20 +334,22 @@ def export_mechanism_publication(
                 ClaimDecision(
                     status=ClaimStatus.NARROWED,
                     wording="Mechanism evidence is associative and non-confirmatory.",
-                    reason="mechanism claim tier",
+                    reason=ClaimReason("mechanism claim tier"),
                 ),
             ),
             tables=tables
             if tables
             else (
                 PublicationTable(
-                    title="Mechanism evidence",
+                    title=TableTitle("Mechanism evidence"),
                     cells=(
                         TableCell(
                             metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
                             availability=AvailabilityStatus.UNAVAILABLE,
                             rendered_value="",
-                            evidence="no mechanism evidence values were available for tabular export",
+                            evidence=EvidenceText(
+                                "no mechanism evidence values were available for tabular export"
+                            ),
                         ),
                     ),
                 ),
@@ -350,10 +362,8 @@ def export_mechanism_publication(
 
 def _render_analysis_sections(
     document: AnalysisDocument,
-) -> str:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    sections: list[
-        str
-    ] = []  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> str:
+    sections: list[str] = []
     sections.extend(_render_decision(document.decision))
     sections.extend(_render_interval(document.interval))
     sections.extend(_render_descriptive(document.descriptive))
@@ -375,9 +385,7 @@ def _render_analysis_sections(
 
 def _render_decision(
     decision: ScientificDecisionResult,
-) -> list[
-    str
-]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> list[str]:
     point = f"{decision.point_estimate.value:.6g}" if decision.point_estimate else "unavailable"
     return [
         "# Confirmatory Analysis",
@@ -394,9 +402,7 @@ def _render_decision(
 
 def _render_interval(
     interval: BootstrapInterval,
-) -> list[
-    str
-]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> list[str]:
     lower = f"{interval.lower_bound.value:.6g}" if interval.lower_bound else "unavailable"
     point = f"{interval.point_estimate.value:.6g}" if interval.point_estimate else "unavailable"
     upper = f"{interval.upper_bound.value:.6g}" if interval.upper_bound else "unavailable"
@@ -421,9 +427,7 @@ def _render_interval(
 
 def _render_descriptive(
     descriptive: DescriptiveSummary,
-) -> list[
-    str
-]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> list[str]:
     lines = [
         "## Descriptive Summary",
         "",
@@ -447,9 +451,7 @@ def _render_descriptive(
 
 def _render_wilcoxon(
     wilcoxon: WilcoxonResult,
-) -> list[
-    str
-]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> list[str]:
     lines = [
         "## Wilcoxon Signed-Rank",
         "",
@@ -476,9 +478,7 @@ def _render_wilcoxon(
 
 def _render_rank_biserial(
     rb: RankBiserialResult,
-) -> list[
-    str
-]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> list[str]:
     lines = [
         "## Matched-Pairs Rank-Biserial Correlation",
         "",
@@ -498,9 +498,7 @@ def _render_rank_biserial(
 
 def _render_sign_consistency(
     sc: PairedDifferenceCounts,
-) -> list[
-    str
-]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> list[str]:
     total = sc.positive.value + sc.zero.value + sc.negative.value
     return [
         "## Sign Consistency",
@@ -514,9 +512,7 @@ def _render_sign_consistency(
 
 def _render_paired_contrasts(
     contrasts: tuple,
-) -> list[
-    str
-]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> list[str]:
     lines = [
         "## Paired Seed Values",
         "",
@@ -535,9 +531,7 @@ def _render_paired_contrasts(
 
 def _render_multiplicity(
     result: MultiplicityResult,
-) -> list[
-    str
-]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> list[str]:
     lines = [
         "## Multiplicity Correction",
         "",
@@ -561,9 +555,7 @@ def _render_multiplicity(
 
 def _render_mechanisms(
     mechanisms: tuple[MechanismEvidence, ...],
-) -> list[
-    str
-]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> list[str]:
     lines = ["## Mechanism Evidence", ""]
     for index, mechanism in enumerate(mechanisms, start=1):
         lines.append(f"### Mechanism record {index}: {_mechanism_title(mechanism)}")
@@ -574,7 +566,7 @@ def _render_mechanisms(
 
 def _mechanism_title(
     mechanism: MechanismEvidence,
-) -> str:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> str:
     match mechanism:
         case AssociationResult():
             return "heterogeneity_benefit_association"
@@ -611,7 +603,7 @@ def _mechanism_tables(mechanisms: tuple[MechanismEvidence, ...]) -> tuple[Public
                         metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
                         availability=mechanism.availability,
                         rendered_value=f"{stats.spearman_rho.value:.6g}",
-                        evidence=(
+                        evidence=EvidenceText(
                             f"Spearman association n={mechanism.observation_count.value}; "
                             f"slope={stats.regression_slope.value:.6g}; R²={stats.r_squared.value:.6g}; "
                             f"sufficient={stats.evidentiary_sufficient}"
@@ -624,7 +616,7 @@ def _mechanism_tables(mechanisms: tuple[MechanismEvidence, ...]) -> tuple[Public
                         metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
                         availability=mechanism.availability,
                         rendered_value=f"{mechanism.aggregate.value:.6g}",
-                        evidence=(
+                        evidence=EvidenceText(
                             f"mean pairwise JS distance (base-2), clients={len(mechanism.clients)}, "
                             f"bins={mechanism.protocol.bin_count.value}"
                         ),
@@ -641,7 +633,9 @@ def _mechanism_tables(mechanisms: tuple[MechanismEvidence, ...]) -> tuple[Public
                         metric=MetricId.MEAN_FPR,
                         availability=mechanism.availability,
                         rendered_value=f"{mechanism.mean_delta_fpr.value:.6g}",
-                        evidence=f"mean ΔFPR; client_dispersion={dispersion}; n={len(mechanism.movements)}",
+                        evidence=EvidenceText(
+                            f"mean ΔFPR; client_dispersion={dispersion}; n={len(mechanism.movements)}"
+                        ),
                     )
                 )
             case AbsorptionCohortResult() if mechanism.mean_retention is not None:
@@ -650,7 +644,7 @@ def _mechanism_tables(mechanisms: tuple[MechanismEvidence, ...]) -> tuple[Public
                         metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
                         availability=AvailabilityStatus.AVAILABLE,
                         rendered_value=f"{mechanism.mean_retention.value:.6g}",
-                        evidence=(
+                        evidence=EvidenceText(
                             f"mean CV(FPR) retention; decision={mechanism.decision.decision.value}; "
                             f"seeds={len(mechanism.observations)}; "
                             f"alternative_route_seeds={mechanism.alternative_route_seed_count}"
@@ -663,7 +657,7 @@ def _mechanism_tables(mechanisms: tuple[MechanismEvidence, ...]) -> tuple[Public
                         metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
                         availability=mechanism.availability,
                         rendered_value=f"{mechanism.cv_fpr_equity_recovery_fraction.value:.6g}",
-                        evidence=(
+                        evidence=EvidenceText(
                             f"CV(FPR) equity recovery; empty_clusters={len(mechanism.partition.empty_groups)}; "
                             f"seed={mechanism.seed.value}"
                         ),
@@ -673,14 +667,12 @@ def _mechanism_tables(mechanisms: tuple[MechanismEvidence, ...]) -> tuple[Public
                 continue
     if not cells:
         return ()
-    return (PublicationTable(title="Mechanism scientific values", cells=tuple(cells)),)
+    return (PublicationTable(title=TableTitle("Mechanism scientific values"), cells=tuple(cells)),)
 
 
 def _render_one_mechanism(
     mechanism: MechanismEvidence,
-) -> list[
-    str
-]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> list[str]:
     match mechanism:
         case AssociationResult():
             lines = [
@@ -839,7 +831,7 @@ def _render_one_mechanism(
                     else "Mean retention: unavailable"
                 ),
                 f"Retention BCa interval across seeds: {retention_bca}",
-                f"Alternative-route seeds: {mechanism.alternative_route_seed_count}",
+                f"Alternative-route seeds: {mechanism.alternative_route_seed_count.value}",
             ]
         case ScientificDecisionResult():
             return [
@@ -857,13 +849,13 @@ def _interval_table(interval: BootstrapInterval) -> PublicationTable:
     if interval.reason is not None:
         evidence = f"{evidence} reason={interval.reason.value}"
     return PublicationTable(
-        title="Paired BCa interval",
+        title=TableTitle("Paired BCa interval"),
         cells=(
             TableCell(
                 metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
                 availability=interval.availability,
                 rendered_value=point,
-                evidence=evidence,
+                evidence=EvidenceText(evidence),
             ),
         ),
     )
@@ -873,13 +865,13 @@ def _wilcoxon_table(wilcoxon: WilcoxonResult, rank_biserial: RankBiserialResult)
     p_value = f"{wilcoxon.p_value.value:.6g}" if wilcoxon.p_value else ""
     effect = f"{rank_biserial.value.value:.6g}" if rank_biserial.value else ""
     return PublicationTable(
-        title="Secondary paired inference",
+        title=TableTitle("Secondary paired inference"),
         cells=(
             TableCell(
                 metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
                 availability=wilcoxon.availability,
                 rendered_value=p_value,
-                evidence=(
+                evidence=EvidenceText(
                     f"Wilcoxon method={wilcoxon.computation_method.value if wilcoxon.computation_method else 'none'}"
                 ),
             ),
@@ -887,7 +879,7 @@ def _wilcoxon_table(wilcoxon: WilcoxonResult, rank_biserial: RankBiserialResult)
                 metric=MetricId.MEAN_FPR,
                 availability=rank_biserial.availability,
                 rendered_value=effect,
-                evidence="matched-pairs rank-biserial",
+                evidence=EvidenceText("matched-pairs rank-biserial"),
             ),
         ),
     )
@@ -896,13 +888,13 @@ def _wilcoxon_table(wilcoxon: WilcoxonResult, rank_biserial: RankBiserialResult)
 def _paired_values_table(document: AnalysisDocument) -> PublicationTable:
     if not document.contrasts:
         return PublicationTable(
-            title="Paired seed inventory",
+            title=TableTitle("Paired seed inventory"),
             cells=(
                 TableCell(
                     metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
                     availability=AvailabilityStatus.UNAVAILABLE,
                     rendered_value="",
-                    evidence=document.unavailable_reason or "no paired contrasts",
+                    evidence=EvidenceText(document.unavailable_reason or "no paired contrasts"),
                 ),
             ),
         )
@@ -921,13 +913,13 @@ def _paired_values_table(document: AnalysisDocument) -> PublicationTable:
         else document.unavailable_reason or document.decision.rationale or "confirmatory evidence unavailable"
     )
     return PublicationTable(
-        title="Paired seed inventory",
+        title=TableTitle("Paired seed inventory"),
         cells=(
             TableCell(
                 metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
                 availability=availability,
                 rendered_value=rendered_value,
-                evidence=evidence,
+                evidence=EvidenceText(evidence),
             ),
         ),
     )
@@ -935,7 +927,7 @@ def _paired_values_table(document: AnalysisDocument) -> PublicationTable:
 
 def _optional_metric(
     value: MetricValue | None,
-) -> str:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> str:
     return "—" if value is None else f"{value.value:.6g}"
 
 

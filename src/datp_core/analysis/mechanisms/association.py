@@ -15,7 +15,14 @@ from datp_core.analysis.adapters.scipy import (
 )
 from datp_core.analysis.inference.wilcoxon import CorrelationCoefficient, PValue
 from datp_core.core.contracts import StrictModel
-from datp_core.core.identifiers import AvailabilityStatus, EvidenceRole, ExperimentId, PopulationId
+from datp_core.core.identifiers import (
+    AnalysisReasonText,
+    AvailabilityStatus,
+    EvidenceRole,
+    ExperimentId,
+    PopulationId,
+    RegimeLabel,
+)
 from datp_core.core.numeric import MetricValue, PairedObservationCount, Ratio, Seed
 
 MINIMUM_ASSOCIATION_OBSERVATIONS = PairedObservationCount(3)
@@ -47,15 +54,9 @@ class AssociationObservation(StrictModel):
     seed: Seed
     experiment: ExperimentId
     population: PopulationId
-    regime_label: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Maybe it's enum
+    regime_label: RegimeLabel
     heterogeneity: MetricValue
     benefit: MetricValue
-
-    @model_validator(mode="after")
-    def validate_observation(self) -> "AssociationObservation":
-        if not self.regime_label.strip():
-            raise ValueError("association observation requires a non-empty regime label")
-        return self
 
 
 class AssociationStatistics(StrictModel):
@@ -80,6 +81,12 @@ class AssociationStatistics(StrictModel):
         return self
 
 
+class LeaveOneOutAssociationDiagnostics(StrictModel):
+    slopes: tuple[MetricValue, ...]
+    r_squared: tuple[Ratio, ...]
+    influences: tuple[MetricValue, ...]
+
+
 class AssociationResult(StrictModel):
     observations: tuple[AssociationObservation, ...]
     statistics: AssociationStatistics | None
@@ -90,7 +97,6 @@ class AssociationResult(StrictModel):
     @model_validator(mode="after")
     def validate_result(self) -> "AssociationResult":
         if (self.statistics is None) == (self.issue is None):
-            # Allow computed statistics with INSUFFICIENT_EVIDENCE issue
             if not (self.statistics is not None and self.issue is AssociationIssue.INSUFFICIENT_EVIDENCE):
                 raise ValueError("association result requires either statistics or one issue")
         if self.statistics is not None:
@@ -114,12 +120,8 @@ class AssociationResult(StrictModel):
         return self.issue.availability
 
     @property
-    def reason(
-        self,
-    ) -> (
-        str | None
-    ):  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-        return None if self.issue is None else self.issue.value
+    def reason(self) -> AnalysisReasonText | None:
+        return None if self.issue is None else AnalysisReasonText(self.issue.value)
 
     @property
     def observation_count(self) -> PairedObservationCount:
@@ -176,30 +178,29 @@ def heterogeneity_benefit_association(
             observations,
             AssociationIssue.INVALID_STATISTICS,
         )
-    values = spearman + regression
     design = np.column_stack((np.ones(x_values.size), x_values))
     leverage = np.einsum("ij,ji->i", design, np.linalg.pinv(design))
-    slope = values[3]
-    slope_se = values[4]
+    slope = regression.slope.value
+    slope_se = regression.stderr.value
     alpha = 1.0 - confidence_level.value
     t_critical = float(stats.t.ppf(1.0 - alpha / 2.0, df=max(x_values.size - 2, 1)))
-    loo_slopes, loo_r2, influence = _leave_one_out(x_values, y_values, slope)
+    loo = _leave_one_out(x_values, y_values, slope)
     sufficient = len(observations) >= MINIMUM_PUBLICATION_OBSERVATIONS.value
     statistics = AssociationStatistics(
-        spearman_rho=CorrelationCoefficient(values[0]),
-        spearman_p_value=PValue(values[1]),
-        regression_intercept=MetricValue(values[2]),
-        regression_slope=MetricValue(slope),
-        regression_slope_standard_error=MetricValue(slope_se),
+        spearman_rho=CorrelationCoefficient(spearman.statistic.value),
+        spearman_p_value=PValue(spearman.p_value.value),
+        regression_intercept=regression.intercept,
+        regression_slope=regression.slope,
+        regression_slope_standard_error=regression.stderr,
         regression_slope_confidence_interval=(
             MetricValue(slope - t_critical * slope_se),
             MetricValue(slope + t_critical * slope_se),
         ),
-        r_squared=Ratio(values[5] ** 2),
+        r_squared=Ratio(regression.rvalue.value**2),
         leverage=tuple(Ratio(float(value)) for value in leverage),
-        leave_one_out_slopes=loo_slopes,
-        leave_one_out_r_squared=loo_r2,
-        influence=influence,
+        leave_one_out_slopes=loo.slopes,
+        leave_one_out_r_squared=loo.r_squared,
+        influence=loo.influences,
         evidentiary_sufficient=sufficient,
     )
     return AssociationResult(
@@ -213,9 +214,7 @@ def _leave_one_out(
     x_values: np.ndarray,
     y_values: np.ndarray,
     full_slope: float,
-) -> tuple[
-    tuple[MetricValue, ...], tuple[Ratio, ...], tuple[MetricValue, ...]
-]:  # TODO: should be better than tuple of tuple...
+) -> LeaveOneOutAssociationDiagnostics:
     slopes: list[MetricValue] = []
     r_squared_values: list[Ratio] = []
     influences: list[MetricValue] = []
@@ -239,11 +238,15 @@ def _leave_one_out(
             r_squared_values.append(Ratio(0.0))
             influences.append(MetricValue(0.0))
             continue
-        loo_slope = extracted[1]
-        slopes.append(MetricValue(loo_slope))
-        r_squared_values.append(Ratio(extracted[3] ** 2))
+        loo_slope = extracted.slope.value
+        slopes.append(extracted.slope)
+        r_squared_values.append(Ratio(extracted.rvalue.value**2))
         influences.append(MetricValue(full_slope - loo_slope))
-    return tuple(slopes), tuple(r_squared_values), tuple(influences)
+    return LeaveOneOutAssociationDiagnostics(
+        slopes=tuple(slopes),
+        r_squared=tuple(r_squared_values),
+        influences=tuple(influences),
+    )
 
 
 def _unavailable_association(

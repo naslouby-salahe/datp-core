@@ -1,4 +1,11 @@
-from datp_core.core.numeric import MetricDelta, floats_absolutely_close, floats_exactly_equal, is_numeric_zero
+from datp_core.core.numeric import (
+    MetricDelta,
+    MetricValue,
+    PresentationDecimalCount,
+    floats_absolutely_close,
+    floats_exactly_equal,
+    is_numeric_zero,
+)
 from datp_core.experiments.anchor.contracts import (
     AbsoluteToleranceRule,
     AnchorComparisonDecision,
@@ -50,8 +57,8 @@ def compare_anchor_metric(
             rule,
             decision=AnchorComparisonDecision.BLOCKED_INVALID_INPUT,
             reason=coordinate_failure,
-            signed=delta.signed,
-            relative=delta.relative,
+            signed=MetricDelta(delta.signed),
+            relative=None if delta.relative is None else MetricDelta(delta.relative),
         )
     return _compare_with_rule(reference, observation, rule, delta)
 
@@ -64,16 +71,17 @@ def reject_global_floating_point_tolerance() -> None:
 def full_precision_failure_stands_despite_rounded_equality(
     *,
     full_precision_decision: AnchorComparisonDecision,
-    presentation_decimals: int,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    expected: float,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    observed: float,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    presentation_decimals: PresentationDecimalCount,
+    expected: MetricValue,
+    observed: MetricValue,
 ) -> bool:
     """Return True when rounded presentation equality must not rescue a full-precision failure."""
-    if presentation_decimals < 0:
-        raise ValueError("presentation decimals must be non-negative")
     if full_precision_decision is AnchorComparisonDecision.EQUIVALENT:
         return False
-    return floats_exactly_equal(round(expected, presentation_decimals), round(observed, presentation_decimals))
+    return floats_exactly_equal(
+        round(expected.value, presentation_decimals.value),
+        round(observed.value, presentation_decimals.value),
+    )
 
 
 def _compare_with_rule(
@@ -127,7 +135,7 @@ def _relative_result(
             rule,
             decision=AnchorComparisonDecision.UNAVAILABLE,
             reason=AnchorDiscrepancyReason.RELATIVE_COMPARISON_UNDEFINED_FOR_ZERO_REFERENCE,
-            signed=delta.signed,
+            signed=MetricDelta(delta.signed),
         )
     if abs(delta.relative) <= rule.relative_tolerance.value:
         return _pass(reference, observation, rule, delta)
@@ -147,8 +155,8 @@ def _interval_result(
             rule,
             decision=AnchorComparisonDecision.UNAVAILABLE,
             reason=AnchorDiscrepancyReason.MISSING_MANDATORY_OBSERVATION,
-            signed=delta.signed,
-            relative=delta.relative,
+            signed=MetricDelta(delta.signed),
+            relative=None if delta.relative is None else MetricDelta(delta.relative),
         )
 
     left = reference.interval
@@ -174,8 +182,8 @@ def _count_result(
             rule,
             decision=AnchorComparisonDecision.UNAVAILABLE,
             reason=AnchorDiscrepancyReason.MISSING_MANDATORY_OBSERVATION,
-            signed=delta.signed,
-            relative=delta.relative,
+            signed=MetricDelta(delta.signed),
+            relative=None if delta.relative is None else MetricDelta(delta.relative),
         )
     if reference.count == observation.count:
         return _pass(reference, observation, rule, delta)
@@ -185,8 +193,8 @@ def _count_result(
         rule,
         decision=AnchorComparisonDecision.MATERIAL_DISCREPANCY,
         reason=AnchorDiscrepancyReason.COUNT_MISMATCH,
-        signed=float(observation.count.value - reference.count.value),
-        relative=delta.relative,
+        signed=MetricDelta(float(observation.count.value - reference.count.value)),
+        relative=None if delta.relative is None else MetricDelta(delta.relative),
     )
 
 
@@ -220,8 +228,7 @@ def _pass(
         observation,
         rule,
         decision=AnchorComparisonDecision.EQUIVALENT,
-        signed=delta.signed,
-        relative=delta.relative,
+        signed=MetricDelta(delta.signed), relative=None if delta.relative is None else MetricDelta(delta.relative),
     )
 
 
@@ -238,8 +245,7 @@ def _fail(
         rule,
         decision=AnchorComparisonDecision.MATERIAL_DISCREPANCY,
         reason=reason,
-        signed=delta.signed,
-        relative=delta.relative,
+        signed=MetricDelta(delta.signed), relative=None if delta.relative is None else MetricDelta(delta.relative),
     )
 
 
@@ -250,17 +256,15 @@ def _build(
     *,
     decision: AnchorComparisonDecision,
     reason: AnchorDiscrepancyReason | None = None,
-    signed: float
-    | None = None,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    relative: float
-    | None = None,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    signed: MetricDelta | None = None,
+    relative: MetricDelta | None = None,
 ) -> AnchorMetricComparison:
     return AnchorMetricComparison(
         reference=reference,
         observation=observation,
         decision=decision,
-        signed_difference=None if signed is None else MetricDelta(signed),
-        relative_difference=None if relative is None else MetricDelta(relative),
+        signed_difference=signed,
+        relative_difference=relative,
         tolerance_rule=rule,
         reason=reason,
     )

@@ -7,6 +7,7 @@ from datp_core.analysis.inference.wilcoxon import CorrelationCoefficient
 from datp_core.analysis.mechanisms.absorption import (
     AbsorptionCornerEvidence,
     AbsorptionFourCornerEvidence,
+    AbsorptionRatioUnavailableReason,
     AbsorptionSeedObservation,
     decide_absorption_cohort,
     decide_model_absorption,
@@ -17,6 +18,7 @@ from datp_core.analysis.mechanisms.association import (
     heterogeneity_benefit_association,
 )
 from datp_core.analysis.mechanisms.clustering import (
+    ClusterContingencyMatrix,
     ClusterPartitionSummary,
     ClusterStabilityResult,
     cluster_stability,
@@ -40,6 +42,7 @@ from datp_core.analysis.metrics.protocols import ABSORPTION_REFERENCE_EFFECT_MAT
 from datp_core.analysis.scientific_decision import ScientificDecision
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.identifiers import (
+    AnalysisReasonText,
     AvailabilityStatus,
     ClientIdentityToken,
     EvidenceRole,
@@ -48,11 +51,13 @@ from datp_core.core.identifiers import (
     PopulationId,
     PopulationIdentityKind,
     PreprocessingProtocolId,
+    RegimeLabel,
     SplitProtocolId,
     TrainingModelId,
 )
 from datp_core.core.numeric import (
     ClusterIndex,
+    GroupCount,
     MetricValue,
     ModelCoefficientValue,
     PairedObservationCount,
@@ -73,7 +78,7 @@ def test_association_reports_all_observations_with_typed_statistics() -> None:
             seed=Seed(0),
             experiment=ExperimentId.SHARED_VS_LOCAL_CONFIRMATION,
             population=PopulationId.NBAIOT_NATURAL_DEVICES,
-            regime_label="alpha_0.1",
+            regime_label=RegimeLabel("alpha_0.1"),
             heterogeneity=MetricValue(0.1),
             benefit=MetricValue(0.01),
         ),
@@ -81,7 +86,7 @@ def test_association_reports_all_observations_with_typed_statistics() -> None:
             seed=Seed(1),
             experiment=ExperimentId.SHARED_VS_LOCAL_CONFIRMATION,
             population=PopulationId.NBAIOT_NATURAL_DEVICES,
-            regime_label="alpha_0.3",
+            regime_label=RegimeLabel("alpha_0.3"),
             heterogeneity=MetricValue(0.3),
             benefit=MetricValue(0.04),
         ),
@@ -89,7 +94,7 @@ def test_association_reports_all_observations_with_typed_statistics() -> None:
             seed=Seed(2),
             experiment=ExperimentId.SHARED_VS_LOCAL_CONFIRMATION,
             population=PopulationId.NBAIOT_NATURAL_DEVICES,
-            regime_label="alpha_0.7",
+            regime_label=RegimeLabel("alpha_0.7"),
             heterogeneity=MetricValue(0.7),
             benefit=MetricValue(0.09),
         ),
@@ -149,9 +154,11 @@ def test_cluster_stability_validates_contingency_margins() -> None:
                     PairedObservationCount(1),
                 )
             ),
-            contingency=(
-                (PairedObservationCount(0), PairedObservationCount(0)),
-                (PairedObservationCount(1), PairedObservationCount(1)),
+            contingency=ClusterContingencyMatrix(
+                rows=(
+                    (PairedObservationCount(0), PairedObservationCount(0)),
+                    (PairedObservationCount(1), PairedObservationCount(1)),
+                )
             ),
         )
 
@@ -195,7 +202,7 @@ def test_partition_summary_preserves_unsorted_memberships_and_missing_middle_ind
     )
     summary = ClusterPartitionSummary.from_memberships(
         memberships,
-        declared_group_count=3,
+        declared_group_count=GroupCount(3),
         observed_empty_cluster_indexes=(ClusterIndex(1),),
     )
     assert summary.group_sizes == (
@@ -208,8 +215,8 @@ def test_partition_summary_preserves_unsorted_memberships_and_missing_middle_ind
     stability = cluster_stability(
         memberships,
         memberships,
-        left_declared_group_count=3,
-        right_declared_group_count=3,
+        left_declared_group_count=GroupCount(3),
+        right_declared_group_count=GroupCount(3),
     )
     assert stability.compared_clients == (client_a, client_b)
     assert stability.left_partition.group_sizes == summary.group_sizes
@@ -218,10 +225,10 @@ def test_partition_summary_preserves_unsorted_memberships_and_missing_middle_ind
     empty = empty_cluster_evidence_record(
         seed=Seed(0),
         source_threshold_checksum=Checksum("c" * 64),
-        declared_group_count=3,
+        declared_group_count=GroupCount(3),
         filled_memberships=memberships,
         observed_empty_cluster_indexes=(ClusterIndex(1),),
-        reason="declared empty cluster retained for negative evidence",
+        reason=AnalysisReasonText("declared empty cluster retained for negative evidence"),
     )
     assert empty.partition.empty_cluster_indexes == (ClusterIndex(1),)
     assert empty.partition.group_sizes[1] == PairedObservationCount(0)
@@ -334,7 +341,7 @@ def _corner(
     return AbsorptionCornerEvidence(
         seed=Seed(seed),
         experiment=experiment,
-        population=PopulationId.NBAIOT_NATURAL_DEVICES.value,
+        population=PopulationId.NBAIOT_NATURAL_DEVICES,
         model=model,
         threshold_method=method,
         coefficient=coefficient,
@@ -381,9 +388,7 @@ def test_absorption_ratio_unavailable_below_materiality_cutoff() -> None:
         reference_local_cv=MetricValue(0.2 - cutoff / 2.0),
         personalized_shared_cv=MetricValue(0.2),
         personalized_local_cv=MetricValue(0.2 - cutoff / 4.0),
-        ratio_unavailable_reason=(
-            f"reference CV(FPR) effect is below the declared absorption denominator materiality cutoff ({cutoff})"
-        ),
+        ratio_unavailable_reason=AbsorptionRatioUnavailableReason.REFERENCE_EFFECT_BELOW_MATERIALITY,
     )
     assert near_zero.retention_ratio is None
     cohort = tuple(
@@ -398,9 +403,7 @@ def test_absorption_ratio_unavailable_below_materiality_cutoff() -> None:
             reference_local_cv=MetricValue(0.2 - cutoff / 2.0),
             personalized_shared_cv=MetricValue(0.2),
             personalized_local_cv=MetricValue(0.2 - cutoff / 4.0),
-            ratio_unavailable_reason=(
-                f"reference CV(FPR) effect is below the declared absorption denominator materiality cutoff ({cutoff})"
-            ),
+            ratio_unavailable_reason=AbsorptionRatioUnavailableReason.REFERENCE_EFFECT_BELOW_MATERIALITY,
         )
         for seed in range(CONFIRMATORY_SEED_COHORT.member_count.value)
     )

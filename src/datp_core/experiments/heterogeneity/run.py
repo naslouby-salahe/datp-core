@@ -14,6 +14,7 @@ from pathlib import Path
 import polars as pl
 
 from datp_core.analysis.descriptive import (
+    ClientEvaluationScoreSeries,
     ScoreGeometryResult,
     ScoreGeometryThresholdOverlay,
     score_geometry_from_client_vectors,
@@ -30,7 +31,7 @@ from datp_core.analysis.mechanisms import (
 )
 from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
 from datp_core.analysis.metrics.protocols import FIXED_SCORE_AUROC_INVARIANCE_TOLERANCE
-from datp_core.app.planning import expand_experiment_plan
+from datp_core.app.planning import PlanReason, expand_experiment_plan
 from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
@@ -39,11 +40,13 @@ from datp_core.core.errors import (
     ScientificContractError,
 )
 from datp_core.core.identifiers import (
+    AnalysisReasonText,
     EvidenceRole,
     ExperimentId,
     FederatedThresholdMethod,
     MetricId,
     PopulationId,
+    RegimeLabel,
     ScoreFrameColumn,
 )
 from datp_core.core.numeric import DirichletConcentration, MetricValue, Seed
@@ -87,7 +90,7 @@ def run_controlled_heterogeneity_sweep_seed(
     result = execute_declared_experiment_seed(
         declaration=declaration,
         seed_cohort=SeedCohort(values=(training_seed,)),
-        reason="controlled heterogeneity sweep executes the locked Dirichlet population grid",
+        reason=PlanReason("controlled heterogeneity sweep executes the locked Dirichlet population grid"),
         output_root=output_root,
         overwrite=overwrite,
     )
@@ -181,7 +184,7 @@ def analyze_controlled_heterogeneity_sweep(*, overwrite: bool) -> Path:
                         seed=seed,
                         experiment=ExperimentId.CONTROLLED_HETEROGENEITY_SWEEP,
                         population=PopulationId.NBAIOT_DIRICHLET_CLIENTS,
-                        regime_label=f"alpha_{concentration.value}",
+                        regime_label=RegimeLabel(f"alpha_{concentration.value}"),
                         heterogeneity=divergence.aggregate,
                         benefit=MetricValue(shared_cv.value - local_cv.value),
                     )
@@ -206,7 +209,7 @@ def analyze_controlled_heterogeneity_sweep(*, overwrite: bool) -> Path:
                     seed=seed,
                     experiment=ExperimentId.CONTROLLED_HETEROGENEITY_SWEEP,
                     population=PopulationId.NBAIOT_DIRICHLET_CLIENTS,
-                    regime_label="IID",  # TODO: should not be hardcoded. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+                    regime_label=RegimeLabel(ControlledPartitionKind.IID.value),
                     heterogeneity=iid_divergence.aggregate,
                     benefit=MetricValue(
                         population_metric(iid_shared, MetricId.FPR_COEFFICIENT_OF_VARIATION).value
@@ -242,7 +245,7 @@ def analyze_controlled_heterogeneity_sweep(*, overwrite: bool) -> Path:
         mechanisms.append(
             summarize_threshold_movements_across_seeds(
                 tuple(movement_cohorts),
-                required_seed_count=CONFIRMATORY_SEED_COHORT.member_count.value,
+                required_seed_count=CONFIRMATORY_SEED_COHORT.member_count,
             )
         )
 
@@ -290,7 +293,7 @@ def analyze_per_client_score_geometry(*, overwrite: bool) -> Path:
             expected_clients=expected_clients,
             benign_only=False,
         )
-        attack_available = any(scores for _, scores in attack_eval)
+        attack_available = any(item.scores for item in attack_eval)
         geometries.append(
             score_geometry_from_client_vectors(
                 seed=seed,
@@ -299,7 +302,9 @@ def analyze_per_client_score_geometry(*, overwrite: bool) -> Path:
                 attack_evaluation=attack_eval,
                 threshold_overlays=_score_geometry_threshold_overlays(seed, expected_clients),
                 attack_geometry_available=attack_available,
-                attack_geometry_reason=None if attack_available else "attack evaluation scores unavailable",
+                attack_geometry_reason=(
+                    None if attack_available else AnalysisReasonText("attack evaluation scores unavailable")
+                ),
             )
         )
 
@@ -344,7 +349,7 @@ def analyze_heterogeneity_benefit_association(*, overwrite: bool) -> Path:
                     seed=seed,
                     experiment=ExperimentId.HETEROGENEITY_BENEFIT_ASSOCIATION,
                     population=PopulationId.NBAIOT_NATURAL_DEVICES,
-                    regime_label=f"seed_{seed.value}",
+                    regime_label=RegimeLabel(f"seed_{seed.value}"),
                     heterogeneity=divergence.aggregate,
                     benefit=MetricValue(shared_cv.value - local_cv.value),
                 )
@@ -393,7 +398,7 @@ def analyze_threshold_movement_tradeoff(*, overwrite: bool) -> Path:
     mechanisms.append(
         summarize_threshold_movements_across_seeds(
             tuple(movement_cohorts),
-            required_seed_count=CONFIRMATORY_SEED_COHORT.member_count.value,
+            required_seed_count=CONFIRMATORY_SEED_COHORT.member_count,
         )
     )
 
@@ -538,9 +543,7 @@ def _client_evaluation_scores(
     document_clients: tuple[ClientIdentity, ...],
     expected_clients: tuple[ClientIdentity, ...],
     benign_only: bool,
-) -> tuple[
-    tuple[ClientIdentity, tuple[MetricValue, ...]], ...
-]:  # TODO: should be handled better rather than tuple of tuples. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> tuple[ClientEvaluationScoreSeries, ...]:
     from datp_core.data.populations.contracts import PopulationOutcomeLabel
 
     ordered_document_clients = tuple(sorted(document_clients))
@@ -561,7 +564,7 @@ def _client_evaluation_scores(
         raise ScientificContractError(ErrorMessage("evaluation document clients must be unique for score geometry"))
 
     score_root = federated_training_directory(score_coordinate, OUTPUTS_ROOT) / ExecutionArtifactDirectory.SCORES
-    pairs: list[tuple[ClientIdentity, tuple[MetricValue, ...]]] = []
+    pairs: list[ClientEvaluationScoreSeries] = []
     benign_label = PopulationOutcomeLabel.BENIGN.value
     for client in expected_clients:
         path = score_root / client.client_id.value / FederatedScoreAssetName.EVALUATION.value
@@ -591,7 +594,7 @@ def _client_evaluation_scores(
             for score, label in zip(scores_raw, labels, strict=True)
             if (str(label) == benign_label) is benign_only
         )
-        pairs.append((client, scores))
+        pairs.append(ClientEvaluationScoreSeries(client=client, scores=scores))
     return tuple(pairs)
 
 

@@ -10,8 +10,8 @@ from scipy.spatial.distance import jensenshannon
 
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.contracts import StrictModel
-from datp_core.core.identifiers import AvailabilityStatus, EvidenceRole
-from datp_core.core.numeric import MetricValue, PairedObservationCount, PositiveIntegerValue
+from datp_core.core.identifiers import AnalysisReasonText, AvailabilityStatus, EvidenceRole
+from datp_core.core.numeric import MetricValue, PairedObservationCount, PositiveIntegerValue, ScoreValue
 from datp_core.data.populations.contracts import ClientIdentity
 
 MINIMUM_DIVERGENCE_CLIENTS = PairedObservationCount(2)
@@ -31,8 +31,8 @@ class DivergenceBlocker(StrEnum):
     NON_FINITE_SCORE = "non_finite_score"
 
     @property
-    def reason(self) -> str:
-        return f"Jensen-Shannon divergence is blocked: {self.value}"
+    def reason(self) -> AnalysisReasonText:
+        return AnalysisReasonText(f"Jensen-Shannon divergence is blocked: {self.value}")
 
 
 class JensenShannonScoreSource(StrEnum):
@@ -130,7 +130,7 @@ class DivergenceResult(StrictModel):
         return AvailabilityStatus.AVAILABLE if self.blocker is None else AvailabilityStatus.UNAVAILABLE
 
     @property
-    def reason(self) -> str | None:
+    def reason(self) -> AnalysisReasonText | None:
         return None if self.blocker is None else self.blocker.reason
 
 
@@ -174,24 +174,24 @@ def jensen_shannon_divergence(
             protocol=protocol,
             source_score_checksum=source_score_checksum,
         )
-    support_min = float(min(float(array.min()) for array in arrays))
-    support_max = float(max(float(array.max()) for array in arrays))
-    if not np.isfinite(support_min) or not np.isfinite(support_max):
+    support_min = ScoreValue(float(min(float(array.min()) for array in arrays)))
+    support_max = ScoreValue(float(max(float(array.max()) for array in arrays)))
+    if not np.isfinite(support_min.value) or not np.isfinite(support_max.value):
         return blocked_jensen_shannon_divergence(
             clients,
             DivergenceBlocker.COMMON_SUPPORT_UNRESOLVED,
             protocol=protocol,
             source_score_checksum=source_score_checksum,
         )
-    if support_max <= support_min:
-        support_max = support_min + protocol.smoothing_constant.value
+    if support_max.value <= support_min.value:
+        support_max = ScoreValue(support_min.value + protocol.smoothing_constant.value)
     histograms = tuple(
         _smoothed_histogram(
             array,
             support_min=support_min,
             support_max=support_max,
-            bin_count=protocol.bin_count.value,
-            smoothing=protocol.smoothing_constant.value,
+            bin_count=protocol.bin_count,
+            smoothing=protocol.smoothing_constant,
         )
         for array in arrays
     )
@@ -232,12 +232,12 @@ def _score_array(scores: tuple[MetricValue, ...]) -> NDArray[np.float64]:
 def _smoothed_histogram(
     scores: NDArray[np.float64],
     *,
-    support_min: float,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-    support_max: float,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-    bin_count: int,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
-    smoothing: float,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    support_min: ScoreValue,
+    support_max: ScoreValue,
+    bin_count: PositiveIntegerValue,
+    smoothing: MetricValue,
 ) -> NDArray[np.float64]:
-    counts, _ = np.histogram(scores, bins=bin_count, range=(support_min, support_max))
-    density = counts.astype(np.float64) + smoothing
+    counts, _ = np.histogram(scores, bins=bin_count.value, range=(support_min.value, support_max.value))
+    density = counts.astype(np.float64) + smoothing.value
     density /= density.sum()
     return density

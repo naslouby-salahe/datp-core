@@ -1,8 +1,7 @@
 from pathlib import Path
 
-from datp_core.app.planning import PlanDisposition, PlanningEvidence, expand_experiment_plan
-from datp_core.app.planning import PlanReason
-from datp_core.core.identifiers import ExperimentId
+from datp_core.app.planning import PlanDisposition, PlanningEvidence, PlanReason, expand_experiment_plan
+from datp_core.core.identifiers import ExperimentId, StageExecutionEvidence
 from datp_core.core.numeric import Seed
 from datp_core.experiments.common.seeds import SeedCohort
 from datp_core.experiments.execution import build_campaign
@@ -52,7 +51,11 @@ class _SuccessfulRunner:
         del coordinate, provenance
         self.stages.append(stage)
         self.output_roots.append(output_root)
-        return StageExecution(stage=stage, outcome=StageOutcome.COMPLETED, evidence="tiny deterministic fixture")
+        return StageExecution(
+            stage=stage,
+            outcome=StageOutcome.COMPLETED,
+            evidence=StageExecutionEvidence("tiny deterministic fixture"),
+        )
 
 
 def _tiny_campaign() -> CampaignPlan:

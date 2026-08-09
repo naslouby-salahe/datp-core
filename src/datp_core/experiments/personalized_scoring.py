@@ -36,7 +36,9 @@ def client_scoring_input(
 ) -> ClientScoringInput:
     matches = tuple(item for item in publications if item.client_identity.value == client.client_id.value)
     if len(matches) != 1:
-        raise ScientificContractError(ErrorMessage(f"expected one preprocessing publication for {client.client_id.value}"))
+        raise ScientificContractError(
+            ErrorMessage(f"expected one preprocessing publication for {client.client_id.value}")
+        )
     publication = matches[0]
     return ClientScoringInput(
         client=client,

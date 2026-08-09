@@ -10,7 +10,13 @@ from datp_core.analysis.operational.traffic_rates import (
     validate_traffic_rate_evidence,
 )
 from datp_core.core.errors import ScientificContractError
-from datp_core.core.identifiers import PopulationId, TrafficRateEvidenceType
+from datp_core.core.identifiers import (
+    PopulationId,
+    TrafficRateEvidenceType,
+    TrafficRateLocatorText,
+    TrafficRateProvenanceText,
+    TrafficRateReference,
+)
 from datp_core.core.numeric import TrafficRatePerDay
 
 
@@ -20,8 +26,8 @@ def test_traffic_rate_evidence_requires_per_client_applicability() -> None:
             TrafficRateEvidenceType.MEASURED,
             PopulationId.NBAIOT_NATURAL_DEVICES,
             TrafficRatePerDay(10),
-            "source",
-            "audit",
+            TrafficRateLocatorText("source"),
+            TrafficRateProvenanceText("audit"),
             TrafficRateUnit.BENIGN_DECISIONS_PER_CLIENT_PER_DAY,
             TrafficRateGranularity.PER_CLIENT,
             False,
@@ -33,8 +39,8 @@ def test_dataset_derived_traffic_rate_is_accepted() -> None:
         TrafficRateEvidenceType.DATASET_DERIVED,
         PopulationId.NBAIOT_NATURAL_DEVICES,
         TrafficRatePerDay(10),
-        "source",
-        "audit",
+        TrafficRateLocatorText("source"),
+        TrafficRateProvenanceText("audit"),
         TrafficRateUnit.BENIGN_DECISIONS_PER_CLIENT_PER_DAY,
         TrafficRateGranularity.PER_CLIENT,
         True,
@@ -51,9 +57,9 @@ def test_declared_traffic_rate_evidence_rejects_unavailable_kind() -> None:
             evidence_kind=TrafficRateEvidenceType.UNAVAILABLE,
             source_locator=TrafficRateSourceLocator(
                 scheme=TrafficRateLocatorScheme.DATASET_PATH,
-                reference="data/canonical/nbaiot",
+                reference=TrafficRateReference("data/canonical/nbaiot"),
             ),
-            provenance="audit",
+            provenance=TrafficRateProvenanceText("audit"),
             unit=TrafficRateUnit.BENIGN_DECISIONS_PER_CLIENT_PER_DAY,
             granularity=TrafficRateGranularity.PER_CLIENT,
             applicable_to_each_client=True,
@@ -67,9 +73,9 @@ def test_declared_traffic_rate_evidence_converts_to_validated_evidence() -> None
         evidence_kind=TrafficRateEvidenceType.DATASET_DERIVED,
         source_locator=TrafficRateSourceLocator(
             scheme=TrafficRateLocatorScheme.DATASET_PATH,
-            reference="data/canonical/nbaiot",
+            reference=TrafficRateReference("data/canonical/nbaiot"),
         ),
-        provenance="audit",
+        provenance=TrafficRateProvenanceText("audit"),
         unit=TrafficRateUnit.BENIGN_DECISIONS_PER_CLIENT_PER_DAY,
         granularity=TrafficRateGranularity.PER_CLIENT,
         applicable_to_each_client=True,

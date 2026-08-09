@@ -12,7 +12,7 @@ from datp_core.analysis.evidence import AnalyzeExternalEvidenceRequest, analyze_
 from datp_core.analysis.inference.contracts import PairedInferenceProtocol
 from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
 from datp_core.analysis.metrics.models import MetricStatus, metric_by_id
-from datp_core.app.planning import expand_experiment_plan
+from datp_core.app.planning import PlanReason, expand_experiment_plan
 from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
@@ -117,7 +117,7 @@ def _run_seed(
     result = execute_declared_experiment_seed(
         declaration=declaration,
         seed_cohort=SeedCohort(values=(partition_seed,)),
-        reason=reason.value,
+        reason=PlanReason(reason),
         output_root=output_root,
         overwrite=overwrite,
     )
@@ -309,7 +309,7 @@ def _benign_statistics_summary(
 
 def _benign_statistics_client(summary: ClientBenignSummary) -> ExternalBenignStatisticsClient:
     return ExternalBenignStatisticsClient(
-        client_id=summary.client.client_id.value,
+        client_id=summary.client.client_id,
         count=summary.count,
         mean=summary.mean,
         variance=summary.variance,

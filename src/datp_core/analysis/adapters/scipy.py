@@ -1,7 +1,10 @@
 """Typed extraction boundaries for SciPy result objects."""
 
+from dataclasses import dataclass
 from math import isfinite
 from typing import Protocol, SupportsFloat
+
+from datp_core.core.numeric import MetricValue
 
 
 class StatisticPValueResult(Protocol):
@@ -16,18 +19,28 @@ class LinearRegressionResult(Protocol):
     rvalue: SupportsFloat
 
 
-def statistic_p_value(result: StatisticPValueResult) -> tuple[float, float] | None:
+@dataclass(frozen=True, slots=True)
+class StatisticPValueValues:
+    statistic: MetricValue
+    p_value: MetricValue
+
+
+@dataclass(frozen=True, slots=True)
+class LinearRegressionValues:
+    intercept: MetricValue
+    slope: MetricValue
+    stderr: MetricValue
+    rvalue: MetricValue
+
+
+def statistic_p_value(result: StatisticPValueResult) -> StatisticPValueValues | None:
     statistic, pvalue = float(result.statistic), float(result.pvalue)
     if not all(isfinite(value) for value in (statistic, pvalue)):
         return None
-    return statistic, pvalue
+    return StatisticPValueValues(statistic=MetricValue(statistic), p_value=MetricValue(pvalue))
 
 
-def linear_regression_values(
-    result: LinearRegressionResult,
-) -> (
-    tuple[float, float, float, float] | None
-):  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+def linear_regression_values(result: LinearRegressionResult) -> LinearRegressionValues | None:
     intercept, slope, stderr, rvalue = (
         float(result.intercept),
         float(result.slope),
@@ -36,4 +49,9 @@ def linear_regression_values(
     )
     if not all(isfinite(value) for value in (intercept, slope, stderr, rvalue)):
         return None
-    return intercept, slope, stderr, rvalue
+    return LinearRegressionValues(
+        intercept=MetricValue(intercept),
+        slope=MetricValue(slope),
+        stderr=MetricValue(stderr),
+        rvalue=MetricValue(rvalue),
+    )

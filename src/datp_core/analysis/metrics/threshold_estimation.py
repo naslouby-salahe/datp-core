@@ -10,7 +10,7 @@ from datp_core.analysis.metrics.models import (
     metric_by_id,
     validate_metric_set,
 )
-from datp_core.analysis.metrics.semantics import available, metric_value, unavailable
+from datp_core.analysis.metrics.semantics import available, unavailable
 from datp_core.analysis.metrics.threshold_evidence import VerifiedHeldOutBenignScores
 from datp_core.core.errors import (
     ErrorMessage,
@@ -18,9 +18,12 @@ from datp_core.core.errors import (
 )
 from datp_core.core.identifiers import MetricId
 from datp_core.core.numeric import (
+    AbsoluteThresholdError,
     CalibrationSize,
+    MetricValue,
     Quantile,
     Ratio,
+    RelativeThresholdError,
     ReplicateIndex,
     Seed,
     SubsampleReplicateCount,
@@ -95,39 +98,33 @@ class ThresholdEstimationDiagnostic:
             )
 
     @property
-    def absolute_threshold_error(
-        self,
-    ) -> float:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-        result = metric_value(metric_by_id(self.metrics, MetricId.ABSOLUTE_THRESHOLD_ERROR))
-        assert result is not None
-        return result
+    def absolute_threshold_error(self) -> AbsoluteThresholdError:
+        result = metric_by_id(self.metrics, MetricId.ABSOLUTE_THRESHOLD_ERROR).value
+        if result is None:
+            raise ScientificContractError(ErrorMessage("absolute threshold error must be available"))
+        return AbsoluteThresholdError(result.value)
 
     @property
     def relative_threshold_error_status(self) -> MetricStatus:
         return metric_by_id(self.metrics, MetricId.RELATIVE_THRESHOLD_ERROR).status
 
     @property
-    def relative_threshold_error(
-        self,
-    ) -> (
-        float | None
-    ):  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-        return metric_value(metric_by_id(self.metrics, MetricId.RELATIVE_THRESHOLD_ERROR))
+    def relative_threshold_error(self) -> RelativeThresholdError | None:
+        result = metric_by_id(self.metrics, MetricId.RELATIVE_THRESHOLD_ERROR).value
+        return None if result is None else RelativeThresholdError(result.value)
 
     @property
-    def signed_attainment_error(
-        self,
-    ) -> float:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-        result = metric_value(metric_by_id(self.metrics, MetricId.SIGNED_ATTAINMENT_ERROR))
-        assert result is not None
+    def signed_attainment_error(self) -> MetricValue:
+        result = metric_by_id(self.metrics, MetricId.SIGNED_ATTAINMENT_ERROR).value
+        if result is None:
+            raise ScientificContractError(ErrorMessage("signed attainment error must be available"))
         return result
 
     @property
-    def absolute_attainment_error(
-        self,
-    ) -> float:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-        result = metric_value(metric_by_id(self.metrics, MetricId.ABSOLUTE_ATTAINMENT_ERROR))
-        assert result is not None
+    def absolute_attainment_error(self) -> MetricValue:
+        result = metric_by_id(self.metrics, MetricId.ABSOLUTE_ATTAINMENT_ERROR).value
+        if result is None:
+            raise ScientificContractError(ErrorMessage("absolute attainment error must be available"))
         return result
 
     @property

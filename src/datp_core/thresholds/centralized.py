@@ -375,10 +375,10 @@ def reject_attack_rows_in_benign_calibration(
     benign_label: PopulationOutcomeLabel,
 ) -> None:
     reject_non_benign_labels(
-        labels,
+        tuple(PopulationOutcomeLabel(str(label)) for label in labels),
         message="attack-labelled rows cannot enter centralized benign calibration",
         subject=ContractSubject.LABEL,
-        benign_label=benign_label.value,
+        benign_label=benign_label,
     )
 
 

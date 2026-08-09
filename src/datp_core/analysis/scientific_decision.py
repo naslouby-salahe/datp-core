@@ -6,7 +6,7 @@ from pydantic import model_validator
 
 from datp_core.analysis.inference.bootstrap.contracts import BootstrapInterval
 from datp_core.core.contracts import StrictModel
-from datp_core.core.identifiers import AvailabilityStatus, EvidenceRole
+from datp_core.core.identifiers import AvailabilityStatus, DecisionRationale, EvidenceRole
 from datp_core.core.numeric import MetricValue
 
 
@@ -28,12 +28,10 @@ class ScientificDecisionResult(StrictModel):
     decision: ScientificDecision
     point_estimate: MetricValue | None
     interval: BootstrapInterval | None
-    rationale: str  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists. Adapt all usage and callers. No backwards compatiblity
+    rationale: DecisionRationale
 
     @model_validator(mode="after")
     def validate_decision(self) -> "ScientificDecisionResult":
-        if not self.rationale.strip():
-            raise ValueError("scientific decisions require a rationale")
         if self.interval is not None and self.point_estimate != self.interval.point_estimate:
             raise ValueError("decision estimate must match its interval estimate")
         return self
@@ -61,20 +59,20 @@ def decide_confirmatory(interval: BootstrapInterval) -> ScientificDecisionResult
             decision=ScientificDecision.NOT_ESTABLISHED,
             point_estimate=interval.point_estimate,
             interval=interval,
-            rationale="confirmatory BCa interval is unavailable or degenerate",
+            rationale=DecisionRationale("confirmatory BCa interval is unavailable or degenerate"),
         )
     if interval.lower_bound.value > 0.0:
         decision = ScientificDecision.SUPPORTED
-        rationale = "the paired BCa interval supports lower CV(FPR) under local thresholds"
+        rationale = DecisionRationale("the paired BCa interval supports lower CV(FPR) under local thresholds")
     elif interval.upper_bound.value < 0.0:
         decision = ScientificDecision.OPPOSITE_DIRECTION
-        rationale = "the paired BCa interval supports the opposite direction"
+        rationale = DecisionRationale("the paired BCa interval supports the opposite direction")
     elif interval.point_estimate.value > 0.0:
         decision = ScientificDecision.DIRECTIONAL_INCONCLUSIVE
-        rationale = "the point estimate is directional but the paired BCa interval crosses zero"
+        rationale = DecisionRationale("the point estimate is directional but the paired BCa interval crosses zero")
     else:
         decision = ScientificDecision.NO_OBSERVED_ADVANTAGE
-        rationale = "the paired BCa interval crosses zero without a positive point estimate"
+        rationale = DecisionRationale("the paired BCa interval crosses zero without a positive point estimate")
     return ScientificDecisionResult(
         evidence_role=EvidenceRole.CONFIRMATORY,
         decision=decision,

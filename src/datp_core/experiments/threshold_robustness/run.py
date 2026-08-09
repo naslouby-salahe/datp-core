@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 from datp_core.analysis.metrics.models import MetricStatus, metric_by_id
 from datp_core.analysis.metrics.population import calculate_population_metrics
-from datp_core.app.planning import expand_experiment_plan
+from datp_core.app.planning import PlanReason, expand_experiment_plan
 from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
@@ -18,7 +18,14 @@ from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
 )
-from datp_core.core.identifiers import ExperimentId, FederatedThresholdMethod, MetricId, PopulationId
+from datp_core.core.identifiers import (
+    AnalysisMarkerText,
+    AnalysisReasonText,
+    ExperimentId,
+    FederatedThresholdMethod,
+    MetricId,
+    PopulationId,
+)
 from datp_core.core.numeric import (
     CalibrationSize,
     ClientCount,
@@ -29,10 +36,12 @@ from datp_core.core.numeric import (
     ReplicateIndex,
     Seed,
     SeedCount,
+    SeedObservationCount,
     ShrinkageWeight,
 )
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.experiments.common.coordinates import ExperimentCoordinate
+from datp_core.experiments.common.reports import AnalysisReportPublication
 from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.experiments.execution import execute_declared_experiment_seed
 from datp_core.experiments.execution.evidence import load_evaluation_document, population_metric
@@ -61,6 +70,14 @@ class ThresholdRobustnessArtifactName(StrEnum):
     ROOT = "threshold_robustness"
     ANALYSIS = "analysis"
     SUMMARY = "summary.json"
+
+
+class ThresholdRobustnessAnalysisMarker(StrEnum):
+    SHARED_CONSTRUCTION_SENSITIVITY = "shared_construction_sensitivity_analysis_complete"
+    QUANTILE_SENSITIVITY = "quantile_sensitivity_analysis_complete"
+    FIXED_SHRINKAGE_CURVE = "fixed_shrinkage_curve_analysis_complete"
+    SIZE_AWARE_SHRINKAGE = "size_aware_shrinkage_analysis_complete"
+    LOCAL_CONFORMAL_COVERAGE = "local_conformal_coverage_analysis_complete"
 
 
 class ThresholdRobustnessSeedResult(StrictModel):
@@ -185,16 +202,17 @@ def _summary_path(experiment_id: ExperimentId, population: PopulationId) -> Path
 def _finalize_report(
     directory: Path,
     marker: Path,
-    missing_count: int,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+    missing_count: SeedObservationCount,
     *,
-    marker_text: str,  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-) -> tuple[
-    tuple[Path, ...], str
-]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
-    if missing_count == 0:
-        marker.write_text(marker_text, encoding="utf-8")
-        return (directory,), marker_text.strip().split("\n", 1)[0]
-    return (directory,), f"{marker_text.strip().split(chr(10), 1)[0]} ({missing_count} seed(s) missing)"
+    marker_text: AnalysisMarkerText,
+) -> AnalysisReportPublication:
+    if missing_count.value == 0:
+        marker.write_text(f"{marker_text}\n", encoding="utf-8")
+        return AnalysisReportPublication(directories=(directory,), detail=AnalysisReasonText(str(marker_text)))
+    return AnalysisReportPublication(
+        directories=(directory,),
+        detail=AnalysisReasonText(f"{marker_text} ({missing_count.value} seed(s) missing)"),
+    )
 
 
 def _declaration_for(experiment_id: ExperimentId) -> ExperimentDeclaration:
@@ -253,7 +271,7 @@ def _run_robustness_seed(
     result = execute_declared_experiment_seed(
         declaration=declaration,
         seed_cohort=SeedCohort(values=(training_seed,)),
-        reason=f"threshold robustness entry point for {experiment_id.value}",
+        reason=PlanReason(f"threshold robustness entry point for {experiment_id.value}"),
         output_root=output_root,
         overwrite=overwrite,
     )
@@ -314,9 +332,7 @@ def run_shared_construction_sensitivity_seed(
 def report_shared_construction_sensitivity(
     experiment_id: ExperimentId,
     overwrite: bool,
-) -> tuple[
-    tuple[Path, ...], str
-]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> AnalysisReportPublication:
     del overwrite
     declaration = _declaration_for(experiment_id)
     directory = _analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
@@ -339,8 +355,8 @@ def report_shared_construction_sensitivity(
     return _finalize_report(
         directory,
         _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
-        missing,
-        marker_text="shared_construction_sensitivity_analysis_complete\n",
+        SeedObservationCount(missing),
+        marker_text=AnalysisMarkerText(ThresholdRobustnessAnalysisMarker.SHARED_CONSTRUCTION_SENSITIVITY),
     )
 
 
@@ -360,9 +376,7 @@ def run_quantile_sensitivity_seed(
 def report_quantile_sensitivity(
     experiment_id: ExperimentId,
     overwrite: bool,
-) -> tuple[
-    tuple[Path, ...], str
-]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> AnalysisReportPublication:
     del overwrite
     declaration = _declaration_for(experiment_id)
     directory = _analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
@@ -400,8 +414,8 @@ def report_quantile_sensitivity(
     return _finalize_report(
         directory,
         _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
-        missing,
-        marker_text="quantile_sensitivity_analysis_complete\n",
+        SeedObservationCount(missing),
+        marker_text=AnalysisMarkerText(ThresholdRobustnessAnalysisMarker.QUANTILE_SENSITIVITY),
     )
 
 
@@ -422,9 +436,7 @@ def run_calibration_size_ablation_seed(
 def report_calibration_size_ablation(
     experiment_id: ExperimentId,
     overwrite: bool,
-) -> tuple[
-    tuple[Path, ...], str
-]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> AnalysisReportPublication:
     del overwrite
     replicate_count = require_calibration_subsample_replicate_count()
     declaration = _declaration_for(experiment_id)
@@ -464,15 +476,14 @@ def report_calibration_size_ablation(
         ),
         _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
     )
-    marker = (
-        "calibration_size_ablation_analysis_complete "
-        f"sizes={len(CALIBRATION_SIZES)} replicates={replicate_count.value}\n"
-    )
     return _finalize_report(
         directory,
         _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
-        missing,
-        marker_text=marker,
+        SeedObservationCount(missing),
+        marker_text=AnalysisMarkerText(
+            "calibration_size_ablation_analysis_complete "
+            f"sizes={len(CALIBRATION_SIZES)} replicates={replicate_count.value}"
+        ),
     )
 
 
@@ -531,9 +542,7 @@ def run_fixed_shrinkage_curve_seed(
 def report_fixed_shrinkage_curve(
     experiment_id: ExperimentId,
     overwrite: bool,
-) -> tuple[
-    tuple[Path, ...], str
-]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> AnalysisReportPublication:
     del overwrite
     directory = _analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
     directory.mkdir(parents=True, exist_ok=True)
@@ -572,8 +581,8 @@ def report_fixed_shrinkage_curve(
     return _finalize_report(
         directory,
         _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
-        missing,
-        marker_text="fixed_shrinkage_curve_analysis_complete\n",
+        SeedObservationCount(missing),
+        marker_text=AnalysisMarkerText(ThresholdRobustnessAnalysisMarker.FIXED_SHRINKAGE_CURVE),
     )
 
 
@@ -599,7 +608,7 @@ def run_size_aware_shrinkage_seed(
     result = execute_declared_experiment_seed(
         declaration=filtered,
         seed_cohort=SeedCohort(values=(training_seed,)),
-        reason=(
+        reason=PlanReason(
             "size-aware shrinkage executes its declared reference corners only because "
             "no lambda(n_k) function is declared"
         ),
@@ -616,9 +625,7 @@ def run_size_aware_shrinkage_seed(
 def report_size_aware_shrinkage(
     experiment_id: ExperimentId,
     overwrite: bool,
-) -> tuple[
-    tuple[Path, ...], str
-]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> AnalysisReportPublication:
     del overwrite
     directory = _analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
     directory.mkdir(parents=True, exist_ok=True)
@@ -653,8 +660,8 @@ def report_size_aware_shrinkage(
     return _finalize_report(
         directory,
         _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
-        missing,
-        marker_text="size_aware_shrinkage_analysis_complete\n",
+        SeedObservationCount(missing),
+        marker_text=AnalysisMarkerText(ThresholdRobustnessAnalysisMarker.SIZE_AWARE_SHRINKAGE),
     )
 
 
@@ -674,9 +681,7 @@ def run_local_conformal_coverage_seed(
 def report_local_conformal_coverage(
     experiment_id: ExperimentId,
     overwrite: bool,
-) -> tuple[
-    tuple[Path, ...], str
-]:  # TODO:should be a class. Check what already exists. Do not use primitives for this, use something else. Check what already exists
+) -> AnalysisReportPublication:
     del overwrite
     directory = _analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
     directory.mkdir(parents=True, exist_ok=True)
@@ -709,18 +714,14 @@ def report_local_conformal_coverage(
                     achieved_coverage=(
                         None
                         if diagnostic.achieved_held_out_benign_coverage is None
-                        else Ratio(diagnostic.achieved_held_out_benign_coverage)
+                        else Ratio(diagnostic.achieved_held_out_benign_coverage.value)
                     ),
                     signed_coverage_error=(
                         None
                         if diagnostic.signed_coverage_error is None
-                        else MetricDelta(diagnostic.signed_coverage_error)
+                        else MetricDelta(diagnostic.signed_coverage_error.value)
                     ),
-                    absolute_coverage_error=(
-                        None
-                        if diagnostic.absolute_coverage_error is None
-                        else MetricValue(diagnostic.absolute_coverage_error)
-                    ),
+                    absolute_coverage_error=diagnostic.absolute_coverage_error,
                     client_fpr=client_fpr,
                 )
             )
@@ -731,8 +732,8 @@ def report_local_conformal_coverage(
     return _finalize_report(
         directory,
         _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
-        missing,
-        marker_text="local_conformal_coverage_analysis_complete\n",
+        SeedObservationCount(missing),
+        marker_text=AnalysisMarkerText(ThresholdRobustnessAnalysisMarker.LOCAL_CONFORMAL_COVERAGE),
     )
 
 
