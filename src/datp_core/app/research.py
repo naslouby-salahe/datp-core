@@ -10,6 +10,7 @@ from datp_core.app.anchor import (
     reproduce_anchor,
     verify_anchor_programme,
 )
+from datp_core.app.campaign import preprocess_datasets
 from datp_core.app.contracts import (
     AnchorRequirement,
     ArtifactPresence,
@@ -34,12 +35,19 @@ from datp_core.app.models import (
     ProgrammeStatusReport,
     ReportResult,
 )
+from datp_core.app.planning import seed_cohort_for
 from datp_core.app.recipes import (
     EXPERIMENT_RECIPES,
     anchor_gated_experiment_ids,
     mandatory_experiment_ids,
     recipe_for,
     registered_experiment_ids,
+)
+from datp_core.app.validation import (
+    reject_anchor_as_experiment,
+    require_experiment_declaration,
+    require_experiment_execution_ready,
+    validate_programme,
 )
 from datp_core.core.errors import (
     AnchorReproductionError,
@@ -59,6 +67,14 @@ from datp_core.experiments.anchor.gate import (
     load_anchor_confirmatory_handoff,
     load_verified_anchor_gate_artifact,
 )
+from datp_core.experiments.centralized_reference import (
+    CIC_CENTRALIZED_REFERENCE,
+    NBAIOT_CENTRALIZED_REFERENCE,
+    centralized_reference_completion_marker,
+    centralized_reference_directory,
+    run_centralized_reference_seed,
+)
+from datp_core.experiments.graph import CANONICAL_PROTOCOL_GRAPH, validate_protocol_graph
 from datp_core.runtime.configuration import DATA_ROOT, OUTPUTS_ROOT
 from datp_core.runtime.filesystem import write_text_atomically
 
@@ -83,8 +99,6 @@ def _output_root(mode: ProgrammeExecutionMode) -> Path:
 
 
 def canonical_smoke_seed(experiment_id: ExperimentId) -> Seed:
-    from datp_core.app.campaign import seed_cohort_for
-
     return seed_cohort_for(experiment_id).values[0]
 
 
@@ -108,12 +122,6 @@ def run_experiment(
     overwrite: OverwriteMode,
     mode: ProgrammeExecutionMode,
 ) -> ExperimentRunResult:
-    from datp_core.app.campaign import seed_cohort_for
-    from datp_core.app.validation import (
-        reject_anchor_as_experiment,
-        require_experiment_execution_ready,
-    )
-
     reject_anchor_as_experiment(experiment_id)
     require_experiment_execution_ready(experiment_id)
     recipe = recipe_for(experiment_id)
@@ -142,8 +150,6 @@ def run_smoke(
     *,
     overwrite: OverwriteMode,
 ) -> CampaignRunResult:
-    from datp_core.app.validation import reject_anchor_as_experiment
-
     if experiment_id is not None:
         reject_anchor_as_experiment(experiment_id)
     if overwrite.requested and SMOKE_OUTPUT_ROOT.exists():
@@ -207,14 +213,6 @@ def _publish_smoke_summary(results: tuple[ExperimentRunResult, ...]) -> None:
 
 
 def _run_centralized_reference(overwrite: OverwriteMode) -> None:
-    from datp_core.experiments.centralized_reference import (
-        CIC_CENTRALIZED_REFERENCE,
-        NBAIOT_CENTRALIZED_REFERENCE,
-        centralized_reference_completion_marker,
-        centralized_reference_directory,
-        run_centralized_reference_seed,
-    )
-
     for scope in (NBAIOT_CENTRALIZED_REFERENCE, CIC_CENTRALIZED_REFERENCE):
         marker = centralized_reference_completion_marker(scope)
         if marker.is_file() and not overwrite.requested:
@@ -232,9 +230,6 @@ def _run_centralized_reference(overwrite: OverwriteMode) -> None:
 
 
 def run_campaign(*, overwrite: OverwriteMode) -> CampaignRunResult:
-    from datp_core.app.campaign import preprocess_datasets
-    from datp_core.app.validation import require_experiment_execution_ready, validate_programme
-
     validate_programme(None)
     for recipe in EXPERIMENT_RECIPES:
         require_experiment_execution_ready(recipe.experiment)
@@ -308,9 +303,6 @@ def _generate_campaign_report(overwrite: OverwriteMode) -> ReportResult:
 
 
 def programme_status(experiment_id: ExperimentId | None) -> ProgrammeStatusReport:
-    from datp_core.app.validation import reject_anchor_as_experiment, require_experiment_declaration
-    from datp_core.experiments.graph import CANONICAL_PROTOCOL_GRAPH, validate_protocol_graph
-
     graph = validate_protocol_graph(CANONICAL_PROTOCOL_GRAPH)
     if experiment_id is None:
         target_ids = tuple(
@@ -334,8 +326,6 @@ def _status_for_experiment(
     experiment_id: ExperimentId,
     anchor_gate: AnchorGateStatus,
 ) -> ExperimentStatusRecord:
-    from datp_core.app.validation import require_experiment_declaration, require_experiment_execution_ready
-
     declaration = require_experiment_declaration(experiment_id)
     if declaration.readiness is ExperimentReadiness.SUPPRESSED:
         return ExperimentStatusRecord(

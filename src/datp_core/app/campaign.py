@@ -13,19 +13,20 @@ from datp_core.app.planning import (
     PlanReason,
     expand_experiment_plan,
     merge_experiment_plans,
+    seed_cohort_for,
 )
+from datp_core.app.recipes import anchor_gated_experiment_ids
 from datp_core.app.validation import (
     require_experiment_declaration,
     require_experiment_execution_ready,
     validate_programme,
 )
 from datp_core.core.errors import UnresolvedScientificValueError
-from datp_core.core.identifiers import DatasetId, ExperimentId, ExperimentReadiness, PopulationId
+from datp_core.core.identifiers import DatasetId, ExperimentId, ExperimentReadiness
 from datp_core.core.numeric import Seed
 from datp_core.data.registry import DatasetPublication
 from datp_core.data.service import DatasetMaterializationRequest, materialize_datasets
 from datp_core.experiments.anchor.spec import HISTORICAL_ANCHOR_SEED_COHORT
-from datp_core.experiments.common.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.experiments.registry import EXPERIMENTS, ExperimentDeclaration
 from datp_core.runtime.configuration import DATA_ROOT
 
@@ -43,17 +44,6 @@ class PlanPresentation:
 class PreprocessResult:
     datasets: tuple[DatasetId, ...]
     publications: tuple[DatasetPublication, ...]
-
-
-def seed_cohort_for(experiment_id: ExperimentId) -> SeedCohort:
-    declaration = require_experiment_declaration(experiment_id)
-    if declaration.population in {
-        PopulationId.EDGE_SENSOR_GROUPS,
-        PopulationId.EDGE_TEMPORAL_GROUPS,
-        PopulationId.CICIOT_FILE_CLIENTS,
-    }:
-        return BOUNDED_EVIDENCE_SEED_COHORT
-    return CONFIRMATORY_SEED_COHORT
 
 
 def executable_planning_evidence(experiment_id: ExperimentId) -> PlanningEvidence:
@@ -109,8 +99,6 @@ def _plan_for_declaration(declaration: ExperimentDeclaration) -> ExperimentPlan:
 
 
 def build_programme_plan(experiment_id: ExperimentId | None) -> PlanPresentation:
-    from datp_core.app.research import anchor_gated_experiment_ids
-
     validation = validate_programme(experiment_id)
     declarations = EXPERIMENTS if experiment_id is None else (require_experiment_declaration(experiment_id),)
     plan = merge_experiment_plans(tuple(_plan_for_declaration(declaration) for declaration in declarations))

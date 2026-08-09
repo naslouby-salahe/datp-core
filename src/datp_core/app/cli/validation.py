@@ -21,6 +21,16 @@ from datp_core.core.errors import (
 
 type CliHandledError = DatpCoreError | ValueError
 
+_EXIT_CODES: dict[type[Exception], CliExitCode] = {
+    UnknownIdentifierError: CliExitCode.UNKNOWN_IDENTIFIER,
+    ProtocolValidationError: CliExitCode.INVALID_DECLARATION,
+    ReportEvidenceError: CliExitCode.MISSING_REPORT_EVIDENCE,
+    ArtifactIntegrityError: CliExitCode.INVALID_ARTIFACT,
+    AnchorReproductionError: CliExitCode.ANCHOR_GATE_FAILURE,
+    ScientificContractError: CliExitCode.SCIENTIFIC_CONTRACT,
+    ValueError: CliExitCode.USAGE,
+}
+
 
 def map_exception_to_exit(error: CliHandledError) -> CliExitCode:
     if isinstance(error, MissingPrerequisiteError):
@@ -30,20 +40,10 @@ def map_exception_to_exit(error: CliHandledError) -> CliExitCode:
         ):
             return CliExitCode.ANCHOR_GATE_FAILURE
         return CliExitCode.INCOMPLETE_PREREQUISITE
-    if isinstance(error, UnknownIdentifierError):
-        return CliExitCode.UNKNOWN_IDENTIFIER
-    if isinstance(error, ProtocolValidationError):
-        return CliExitCode.INVALID_DECLARATION
-    if isinstance(error, ReportEvidenceError):
-        return CliExitCode.MISSING_REPORT_EVIDENCE
-    if isinstance(error, ArtifactIntegrityError):
-        return CliExitCode.INVALID_ARTIFACT
-    if isinstance(error, AnchorReproductionError):
-        return CliExitCode.ANCHOR_GATE_FAILURE
-    if isinstance(error, ScientificContractError):
-        return CliExitCode.SCIENTIFIC_CONTRACT
-    if isinstance(error, ValueError):
-        return CliExitCode.USAGE
+    for error_type in type(error).__mro__:
+        exit_code = _EXIT_CODES.get(error_type)
+        if exit_code is not None:
+            return exit_code
     return CliExitCode.INTERNAL
 
 

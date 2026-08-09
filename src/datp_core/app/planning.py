@@ -22,9 +22,14 @@ from datp_core.data.populations.contracts import ControlledPartitionKind
 from datp_core.data.populations.declarations import DIRICHLET_CONCENTRATIONS, split_protocol_for_population
 from datp_core.data.registry import population_capabilities, population_declaration
 from datp_core.detector.training.protocols import DITTO_TRAINING_PROTOCOLS, FEDPROX_TRAINING_PROTOCOLS
+from datp_core.experiments.anchor.spec import HISTORICAL_ANCHOR_SEED_COHORT
 from datp_core.experiments.common.coordinates import EXECUTION_IDENTITY_DECLARATIONS, ExperimentCoordinate
-from datp_core.experiments.common.seeds import SeedCohort
-from datp_core.experiments.registry import ExperimentDeclaration
+from datp_core.experiments.common.seeds import (
+    BOUNDED_EVIDENCE_SEED_COHORT,
+    CONFIRMATORY_SEED_COHORT,
+    SeedCohort,
+)
+from datp_core.experiments.registry import ExperimentDeclaration, require_experiment_declaration
 from datp_core.thresholds.protocols import QUANTILE_GRID
 
 
@@ -37,6 +42,20 @@ class PlanDisposition(StrEnum):
     SUPPRESSED = "suppressed"
     INFEASIBLE = "infeasible"
     BLOCKED = "blocked"
+
+
+def seed_cohort_for(experiment_id: ExperimentId) -> SeedCohort:
+    """Resolve the protocol-declared seed cohort for one experiment."""
+    declaration = require_experiment_declaration(experiment_id)
+    if declaration.population in {
+        PopulationId.EDGE_SENSOR_GROUPS,
+        PopulationId.EDGE_TEMPORAL_GROUPS,
+        PopulationId.CICIOT_FILE_CLIENTS,
+    }:
+        return BOUNDED_EVIDENCE_SEED_COHORT
+    if experiment_id is ExperimentId.HISTORICAL_DATP_REPRODUCTION:
+        return HISTORICAL_ANCHOR_SEED_COHORT
+    return CONFIRMATORY_SEED_COHORT
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

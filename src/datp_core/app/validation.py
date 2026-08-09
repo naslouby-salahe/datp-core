@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from datp_core.app.recipes import anchor_gated_experiment_ids, registered_experiment_ids
 from datp_core.core.errors import (
     ErrorMessage,
     ProtocolValidationError,
@@ -58,8 +59,6 @@ def require_experiment_execution_ready(experiment_id: ExperimentId) -> None:
 
 
 def validate_programme(experiment_id: ExperimentId | None) -> ValidationResult:
-    from datp_core.app.research import anchor_gated_experiment_ids, registered_experiment_ids
-
     graph = validate_protocol_graph(CANONICAL_PROTOCOL_GRAPH)
     registered = registered_experiment_ids()
     if len(registered) != len(frozenset(registered)):

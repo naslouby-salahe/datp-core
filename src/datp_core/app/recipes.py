@@ -12,7 +12,13 @@ from datp_core.analysis.metrics.models import AvailableMetric, metric_by_id
 from datp_core.app.contracts import AnchorRequirement, CampaignRole, OverwriteMode
 from datp_core.app.layout import ANCHOR_DIAGNOSTICS_DIRECTORY, ResearchArtifact, ResearchDirectory
 from datp_core.app.models import DetailText, DispatchOutcome, ReportResult, ThresholdMethodOutcome
-from datp_core.app.planning import PlanDisposition, PlanningEvidence, PlanReason, expand_experiment_plan
+from datp_core.app.planning import (
+    PlanDisposition,
+    PlanningEvidence,
+    PlanReason,
+    expand_experiment_plan,
+    seed_cohort_for,
+)
 from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
 from datp_core.artifacts.serializers.json import canonical_checksum
@@ -32,6 +38,12 @@ from datp_core.core.identifiers import (
 )
 from datp_core.core.numeric import Seed
 from datp_core.detector.training.protocols import DITTO_PRIMARY_REGULARIZATION, FEDPROX_COEFFICIENTS
+from datp_core.experiments.centralized_reference import (
+    CIC_CENTRALIZED_REFERENCE,
+    NBAIOT_CENTRALIZED_REFERENCE,
+    centralized_reference_report_complete,
+    report_centralized_reference,
+)
 from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.experiments.confirmatory.run import (
     ConfirmatoryAssetDirectory,
@@ -51,6 +63,7 @@ from datp_core.experiments.external import (
     run_ciciot_boundary_seed,
     run_external_validation_seed,
 )
+from datp_core.experiments.external.run import ExternalBenignStatisticsAssetName
 from datp_core.experiments.federated_threshold import (
     FederatedEstimationSeedResult,
     federated_benign_statistics_comparison_analysis_marker_present,
@@ -71,6 +84,7 @@ from datp_core.experiments.heterogeneity import (
     analyze_threshold_movement_tradeoff,
     run_controlled_heterogeneity_sweep_seed,
 )
+from datp_core.experiments.registry import ExperimentDeclaration, require_experiment_declaration
 from datp_core.experiments.temporal import (
     TemporalArtifactDirectory,
     TemporalCampaignResult,
@@ -99,6 +113,21 @@ from datp_core.experiments.threshold_robustness import (
     run_size_aware_shrinkage_seed,
     shared_construction_sensitivity_analysis_marker_present,
     size_aware_shrinkage_analysis_marker_present,
+)
+from datp_core.experiments.training_stress import (
+    TrainingStressArtifactName,
+    analyze_ditto_absorption,
+    analyze_fedprox_absorption,
+    build_fedprox_absorption_observation,
+    ditto_analysis_directory,
+    fedprox_analysis_directory,
+    fedprox_stress_test_root,
+    load_ditto_stress_test_evidence,
+    load_fedprox_primary_coefficient_decision,
+    run_ditto_stress_test_seed,
+    run_fedprox_stress_test_seed,
+    select_primary_fedprox_coefficient_from_artifacts,
+    write_fedprox_primary_coefficient_decision,
 )
 from datp_core.presentation.export import MECHANISM_REPORT_FILENAME, PUBLICATION_FILENAME
 from datp_core.runtime.configuration import OUTPUTS_ROOT
@@ -159,9 +188,7 @@ class ExperimentRecipe:
 _METHOD_NOT_COMPLETED_DETAIL = "declared but not completed in this execution"
 
 
-def _declaration(experiment_id: ExperimentId):
-    from datp_core.app.campaign import require_experiment_declaration
-
+def _declaration(experiment_id: ExperimentId) -> ExperimentDeclaration:
     return require_experiment_declaration(experiment_id)
 
 
@@ -245,8 +272,6 @@ def _dispatch_external(
 
 
 def _dispatch_fedprox(seeds: tuple[Seed, ...], output_root: Path, overwrite: OverwriteMode) -> DispatchOutcome:
-    from datp_core.experiments.training_stress import run_fedprox_stress_test_seed
-
     results = tuple(
         run_fedprox_stress_test_seed(
             training_seed=seed,
@@ -269,8 +294,6 @@ def _dispatch_fedprox(seeds: tuple[Seed, ...], output_root: Path, overwrite: Ove
 
 
 def _dispatch_ditto(seeds: tuple[Seed, ...], output_root: Path, overwrite: OverwriteMode) -> DispatchOutcome:
-    from datp_core.experiments.training_stress import run_ditto_stress_test_seed
-
     results = tuple(
         run_ditto_stress_test_seed(
             training_seed=seed,
@@ -448,11 +471,6 @@ def _dispatch_analysis(
 
 
 def _report_confirmatory(experiment_id: ExperimentId, overwrite: OverwriteMode) -> ReportResult:
-    from datp_core.experiments.centralized_reference import (
-        NBAIOT_CENTRALIZED_REFERENCE,
-        report_centralized_reference,
-    )
-
     centralized = report_centralized_reference(
         NBAIOT_CENTRALIZED_REFERENCE, output_root=OUTPUTS_ROOT, overwrite=overwrite.requested
     )
@@ -474,11 +492,6 @@ def _report_external(experiment_id: ExperimentId, overwrite: OverwriteMode) -> R
             detail=DetailText(f"paired={result.output_directory} benign_statistics={benign.output_directory}"),
         )
     if experiment_id is ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY:
-        from datp_core.experiments.centralized_reference import (
-            CIC_CENTRALIZED_REFERENCE,
-            report_centralized_reference,
-        )
-
         result = analyze_ciciot_boundary_campaign(output_root=OUTPUTS_ROOT, overwrite=overwrite.requested)
         centralized = report_centralized_reference(
             CIC_CENTRALIZED_REFERENCE, output_root=OUTPUTS_ROOT, overwrite=overwrite.requested
@@ -506,16 +519,6 @@ def _report_heterogeneity(experiment_id: ExperimentId, overwrite: OverwriteMode)
 
 
 def _report_fedprox(experiment_id: ExperimentId, overwrite: OverwriteMode) -> ReportResult:
-    from datp_core.experiments.training_stress import (
-        TrainingStressArtifactName,
-        analyze_fedprox_absorption,
-        build_fedprox_absorption_observation,
-        fedprox_analysis_directory,
-        fedprox_stress_test_root,
-        select_primary_fedprox_coefficient_from_artifacts,
-        write_fedprox_primary_coefficient_decision,
-    )
-
     try:
         primary = select_primary_fedprox_coefficient_from_artifacts(
             output_root=OUTPUTS_ROOT,
@@ -563,12 +566,6 @@ def _report_fedprox(experiment_id: ExperimentId, overwrite: OverwriteMode) -> Re
 
 
 def _report_ditto(experiment_id: ExperimentId, overwrite: OverwriteMode) -> ReportResult:
-    from datp_core.experiments.training_stress import (
-        analyze_ditto_absorption,
-        ditto_analysis_directory,
-        load_ditto_stress_test_evidence,
-    )
-
     output = ditto_analysis_directory(DITTO_PRIMARY_REGULARIZATION, output_root=OUTPUTS_ROOT)
     if overwrite.requested and output.exists():
         rmtree(output)
@@ -638,8 +635,6 @@ def _supplementary_directory(experiment_id: ExperimentId) -> Path:
 
 
 def _report_supplementary(experiment_id: ExperimentId, overwrite: OverwriteMode) -> ReportResult:
-    from datp_core.app.campaign import seed_cohort_for
-
     declaration = _declaration(experiment_id)
     plan = expand_experiment_plan(
         declarations=(declaration,),
@@ -717,8 +712,6 @@ def _external_marker(experiment_id: ExperimentId) -> bool:
     if not paired_complete:
         return False
     if experiment_id is ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION:
-        from datp_core.experiments.external.run import ExternalBenignStatisticsAssetName
-
         return (
             OUTPUTS_ROOT
             / ExternalBenignStatisticsAssetName.ROOT
@@ -727,24 +720,12 @@ def _external_marker(experiment_id: ExperimentId) -> bool:
             / ExternalBenignStatisticsAssetName.COMPLETE
         ).is_file()
     if experiment_id is ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY:
-        from datp_core.experiments.centralized_reference import (
-            CIC_CENTRALIZED_REFERENCE,
-            centralized_reference_report_complete,
-        )
-
         return centralized_reference_report_complete(CIC_CENTRALIZED_REFERENCE).is_file()
     raise ReportEvidenceError(ErrorMessage(f"unsupported external marker: {experiment_id.value}"))
 
 
 def _fedprox_marker(experiment_id: ExperimentId) -> bool:
     del experiment_id
-    from datp_core.experiments.training_stress import (
-        TrainingStressArtifactName,
-        fedprox_analysis_directory,
-        fedprox_stress_test_root,
-        load_fedprox_primary_coefficient_decision,
-    )
-
     decision_path = (
         fedprox_stress_test_root(output_root=OUTPUTS_ROOT) / TrainingStressArtifactName.PRIMARY_COEFFICIENT_DECISION
     )
@@ -768,8 +749,6 @@ def _fedprox_marker(experiment_id: ExperimentId) -> bool:
 
 def _ditto_marker(experiment_id: ExperimentId) -> bool:
     del experiment_id
-    from datp_core.experiments.training_stress import ditto_analysis_directory
-
     output = ditto_analysis_directory(DITTO_PRIMARY_REGULARIZATION, output_root=OUTPUTS_ROOT)
     return (output / PUBLICATION_FILENAME).is_file() and (output / MECHANISM_REPORT_FILENAME).is_file()
 

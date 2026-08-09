@@ -1,38 +1,38 @@
 """Historical anchor reproduction, verification, and gate status."""
 
+from pathlib import Path
 from shutil import rmtree
 
+from datp_core.app.campaign import preprocess_datasets
 from datp_core.app.contracts import OverwriteMode, ProgrammeExecutionMode
 from datp_core.app.layout import ANCHOR_DIAGNOSTICS_DIRECTORY, SMOKE_OUTPUT_ROOT
 from datp_core.app.models import AnchorCommandResult, DetailText
 from datp_core.app.planning import PlanReason
+from datp_core.app.validation import require_experiment_declaration
 from datp_core.core.errors import AnchorReproductionError
 from datp_core.core.identifiers import DatasetId, ExperimentId, ExperimentReadiness
 from datp_core.experiments.anchor.contracts import AnchorGateStatus
 from datp_core.experiments.anchor.gate import load_anchor_gate_decision
+from datp_core.experiments.anchor.run import (
+    VerifyAnchorStageRequest,
+    clear_independent_package,
+    collect_independent_observations_from_evaluations,
+    default_anchor_diagnostics_directory,
+    independent_package_directory,
+    publish_independent_observations,
+    verify_anchor,
+)
 from datp_core.experiments.anchor.spec import ANCHOR_DECISION_PROTOCOL, HISTORICAL_ANCHOR_SEED_COHORT
 from datp_core.experiments.common.seeds import SeedCohort
 from datp_core.experiments.execution import execute_declared_experiment_seed
 from datp_core.runtime.configuration import OUTPUTS_ROOT
 
 
-def _output_root(mode: ProgrammeExecutionMode):
+def _output_root(mode: ProgrammeExecutionMode) -> Path:
     return SMOKE_OUTPUT_ROOT if mode is ProgrammeExecutionMode.SMOKE else OUTPUTS_ROOT
 
 
 def reproduce_anchor(*, overwrite: OverwriteMode, mode: ProgrammeExecutionMode) -> AnchorCommandResult:
-    from datp_core.app.campaign import preprocess_datasets
-    from datp_core.app.validation import require_experiment_declaration
-    from datp_core.experiments.anchor.run import (
-        VerifyAnchorStageRequest,
-        clear_independent_package,
-        collect_independent_observations_from_evaluations,
-        default_anchor_diagnostics_directory,
-        independent_package_directory,
-        publish_independent_observations,
-        verify_anchor,
-    )
-
     preprocess_datasets(DatasetId.NBAIOT, overwrite=OverwriteMode.KEEP_EXISTING)
     output_root = _output_root(mode)
     diagnostics = default_anchor_diagnostics_directory(output_root)
@@ -85,13 +85,6 @@ def reproduce_anchor(*, overwrite: OverwriteMode, mode: ProgrammeExecutionMode) 
 
 
 def verify_anchor_programme(*, mode: ProgrammeExecutionMode) -> AnchorCommandResult:
-    from datp_core.experiments.anchor.run import (
-        VerifyAnchorStageRequest,
-        default_anchor_diagnostics_directory,
-        independent_package_directory,
-        verify_anchor,
-    )
-
     output_root = _output_root(mode)
     result = verify_anchor(
         VerifyAnchorStageRequest(
