@@ -13,11 +13,11 @@ from datp_core.core.numeric import MetricValue, RowCount
 
 def available(
     metric: MetricId,
-    value: MetricValue | float,
+    value: MetricValue,
     *,
     denominator: RowCount | None = None,
 ) -> AvailableMetric:
-    metric_value = value if type(value) is MetricValue else MetricValue(float(value))
+    metric_value = value
     return AvailableMetric(
         metric=metric,
         value=metric_value,

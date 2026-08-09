@@ -12,7 +12,7 @@ from datp_core.core.errors import (
     ScientificContractError,
 )
 from datp_core.core.identifiers import ContractSubject, MetricId
-from datp_core.core.numeric import RowCount, ScoreValue
+from datp_core.core.numeric import MetricValue, RowCount, ScoreValue
 from datp_core.data.populations.contracts import PopulationOutcomeLabel
 
 CLIENT_METRICS: tuple[MetricId, ...] = (
@@ -63,7 +63,7 @@ def _rate(metric: MetricId, numerator: RowCount, denominator: RowCount) -> Metri
             MetricReason.EMPTY_BENIGN_DENOMINATOR,
             denominator=RowCount(0),
         )
-    return available(metric, numerator.value / denominator.value, denominator=denominator)
+    return available(metric, MetricValue(numerator.value / denominator.value), denominator=denominator)
 
 
 def _attack_rate(confusion: ConfusionCounts) -> MetricAvailability:
@@ -84,7 +84,7 @@ def _attack_rate(confusion: ConfusionCounts) -> MetricAvailability:
         )
     return available(
         MetricId.TRUE_POSITIVE_RATE,
-        confusion.true_positive.value / denominator.value,
+        MetricValue(confusion.true_positive.value / denominator.value),
         denominator=denominator,
     )
 
@@ -96,7 +96,7 @@ def _balanced_accuracy(fpr: MetricAvailability, tpr: MetricAvailability) -> Metr
             MetricStatus.UNAVAILABLE,
             MetricReason.MISSING_CAPABILITY,
         )
-    return available(MetricId.BALANCED_ACCURACY, (tpr.value.value + (1.0 - fpr.value.value)) / 2.0)
+    return available(MetricId.BALANCED_ACCURACY, MetricValue((tpr.value.value + (1.0 - fpr.value.value)) / 2.0))
 
 
 def _binary_macro_f1(confusion: ConfusionCounts) -> MetricAvailability:
@@ -123,7 +123,7 @@ def _binary_macro_f1(confusion: ConfusionCounts) -> MetricAvailability:
 
     attack_f1 = 2.0 * true_positive / attack_denominator
     benign_f1 = 2.0 * true_negative / benign_denominator
-    return available(MetricId.BINARY_MACRO_F1, (attack_f1 + benign_f1) / 2.0)
+    return available(MetricId.BINARY_MACRO_F1, MetricValue((attack_f1 + benign_f1) / 2.0))
 
 
 def _auroc(
@@ -154,7 +154,7 @@ def _auroc(
 
     if not isfinite(value):
         return unavailable(MetricId.AUROC, MetricStatus.UNDEFINED, MetricReason.MISSING_CAPABILITY)
-    return available(MetricId.AUROC, value, denominator=RowCount(binary.size))
+    return available(MetricId.AUROC, MetricValue(value), denominator=RowCount(binary.size))
 
 
 def _average_ranks(sorted_scores: np.ndarray) -> np.ndarray:

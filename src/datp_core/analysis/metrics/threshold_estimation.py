@@ -183,7 +183,7 @@ def evaluate_threshold_estimate(
             MetricReason.ZERO_MEAN,
         )
     else:
-        relative_metric = available(MetricId.RELATIVE_THRESHOLD_ERROR, absolute_error / abs(reference))
+        relative_metric = available(MetricId.RELATIVE_THRESHOLD_ERROR, MetricValue(absolute_error / abs(reference)))
 
     return ThresholdEstimationDiagnostic(
         provenance=provenance,
@@ -192,10 +192,10 @@ def evaluate_threshold_estimate(
         target_exceedance=Ratio(target_exceedance),
         achieved_benign_exceedance=Ratio(achieved),
         metrics=(
-            available(MetricId.ABSOLUTE_THRESHOLD_ERROR, absolute_error),
+            available(MetricId.ABSOLUTE_THRESHOLD_ERROR, MetricValue(absolute_error)),
             relative_metric,
-            available(MetricId.SIGNED_ATTAINMENT_ERROR, signed_attainment_error),
-            available(MetricId.ABSOLUTE_ATTAINMENT_ERROR, abs(signed_attainment_error)),
+            available(MetricId.SIGNED_ATTAINMENT_ERROR, MetricValue(signed_attainment_error)),
+            available(MetricId.ABSOLUTE_ATTAINMENT_ERROR, MetricValue(abs(signed_attainment_error))),
         ),
     )
 

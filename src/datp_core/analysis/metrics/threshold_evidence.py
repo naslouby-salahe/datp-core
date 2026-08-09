@@ -9,7 +9,7 @@ from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
 )
-from datp_core.core.identifiers import ScoreFrameColumn
+from datp_core.core.identifiers import ColumnName, ScoreFrameColumn
 from datp_core.data.populations.contracts import ClientIdentity, PopulationOutcomeLabel
 from datp_core.detector.training.models import FederatedTrainingCoordinate
 
@@ -59,11 +59,11 @@ def _verify_score_rows(scores: tuple[HeldOutBenignScore, ...]) -> None:
         by_record[item.score_record].append(item)
 
     required = (
-        ScoreFrameColumn.STABLE_ROW_ID.value,
-        ScoreFrameColumn.OUTCOME_LABEL.value,
-        ScoreFrameColumn.RECONSTRUCTION_ERROR.value,
+        ColumnName(ScoreFrameColumn.STABLE_ROW_ID.value),
+        ColumnName(ScoreFrameColumn.OUTCOME_LABEL.value),
+        ColumnName(ScoreFrameColumn.RECONSTRUCTION_ERROR.value),
     )
-    required_set: set[str] = set(required)
+    required_set: set[ColumnName] = set(required)
 
     for record, supplied_rows in by_record.items():
         _verify_score_record(record, supplied_rows, required_set, required)
@@ -72,8 +72,8 @@ def _verify_score_rows(scores: tuple[HeldOutBenignScore, ...]) -> None:
 def _verify_score_record(
     record: FederatedScoreRecord,
     supplied_rows: list[HeldOutBenignScore],
-    required_set: set[str],
-    required: tuple[str, str, str],
+    required_set: set[ColumnName],
+    required: tuple[ColumnName, ColumnName, ColumnName],
 ) -> None:
     if not record.path.is_file() or Checksum.from_file(record.path) != record.checksum:
         raise ScientificContractError(

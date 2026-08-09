@@ -7,7 +7,7 @@ import polars as pl
 from datp_core.analysis.metrics.models import ClientMetricResult
 from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.serializers.json import canonical_checksum
-from datp_core.core.identifiers import ScoreFrameColumn
+from datp_core.core.identifiers import ScoreFrameColumn, StableRowId
 from datp_core.data.populations.contracts import ClientIdentity, PopulationOutcomeLabel
 from datp_core.detector.scoring.contracts import ScoreArtifactManifest, ScoreRecord
 from datp_core.detector.training.models import FederatedTrainingCoordinate
@@ -37,7 +37,7 @@ def evaluation_label_checksum(labels: Sequence[PopulationOutcomeLabel]) -> Check
     return Checksum.from_ordered_texts(tuple(label.value for label in labels))
 
 
-def source_row_checksum(rows: Sequence[str]) -> Checksum:
+def source_row_checksum(rows: Sequence[StableRowId]) -> Checksum:
     return Checksum.from_ordered_texts(tuple(rows))
 
 

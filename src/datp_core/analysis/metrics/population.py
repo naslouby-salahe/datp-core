@@ -73,9 +73,9 @@ def calculate_population_metrics(
         candidate_client_count=RowCount(len(results)),
         calibration_eligible_client_count=RowCount(calibration_eligible_count),
         fpr_evaluable_client_count=RowCount(len(fpr_values)),
-        attack_evaluable_client_count=RowCount(attack_evaluable_count),
-        deployment_fallback_count=RowCount(fallback_count),
-        unavailable_client_count=RowCount(unavailable_count),
+        attack_evaluable_client_count=attack_evaluable_count,
+        deployment_fallback_count=fallback_count,
+        unavailable_client_count=unavailable_count,
         excluded_clients=tuple(sorted(excluded_clients, key=lambda item: item.client_id.value)),
         warnings=aggregates.warnings,
         evidence_role=first.evidence_role,
@@ -84,7 +84,7 @@ def calculate_population_metrics(
 
 def _classify_population_results(
     results: tuple[ClientMetricResult, ...],
-) -> tuple[list[ClientMetricResult], list[MetricValue], list[ClientIdentity], int, int, int]:
+) -> tuple[list[ClientMetricResult], list[MetricValue], list[ClientIdentity], RowCount, RowCount, RowCount]:
     fpr_evaluable: list[ClientMetricResult] = []
     fpr_values: list[MetricValue] = []
     excluded_clients: list[ClientIdentity] = []
@@ -109,9 +109,9 @@ def _classify_population_results(
         fpr_evaluable,
         fpr_values,
         excluded_clients,
-        attack_evaluable_count,
-        fallback_count,
-        unavailable_count,
+        RowCount(attack_evaluable_count),
+        RowCount(fallback_count),
+        RowCount(unavailable_count),
     )
 
 
@@ -149,8 +149,8 @@ def _fpr_aggregates(
     mean = float(np.mean(array))
     std = float(np.std(array, ddof=0))
     metrics: list[MetricAvailability] = [
-        available(MetricId.MEAN_FPR, mean, denominator=RowCount(len(values))),
-        available(MetricId.FPR_POPULATION_STANDARD_DEVIATION, std, denominator=RowCount(len(values))),
+        available(MetricId.MEAN_FPR, MetricValue(mean), denominator=RowCount(len(values))),
+        available(MetricId.FPR_POPULATION_STANDARD_DEVIATION, MetricValue(std), denominator=RowCount(len(values))),
     ]
     warnings: tuple[MetricWarning, ...] = ()
     if mean == 0.0:
@@ -158,15 +158,25 @@ def _fpr_aggregates(
             unavailable(MetricId.FPR_COEFFICIENT_OF_VARIATION, MetricStatus.UNDEFINED, MetricReason.ZERO_MEAN)
         )
     else:
-        metrics.append(available(MetricId.FPR_COEFFICIENT_OF_VARIATION, std / mean, denominator=RowCount(len(values))))
+        metrics.append(
+            available(
+                MetricId.FPR_COEFFICIENT_OF_VARIATION,
+                MetricValue(std / mean),
+                denominator=RowCount(len(values)),
+            )
+        )
         if mean < NEAR_ZERO_MEAN_FPR_WARNING_CUTOFF.value:
             warnings = (MetricWarning(WarningCode.NEAR_ZERO_MEAN_FPR, MetricId.FPR_COEFFICIENT_OF_VARIATION),)
     q25, q75 = np.quantile(array, (0.25, 0.75), method="linear")
     metrics.extend(
         (
-            available(MetricId.FPR_IQR, float(q75 - q25), denominator=RowCount(len(values))),
-            available(MetricId.FPR_RANGE, float(np.max(array) - np.min(array)), denominator=RowCount(len(values))),
-            available(MetricId.WORST_CLIENT_FPR, float(np.max(array)), denominator=RowCount(len(values))),
+            available(MetricId.FPR_IQR, MetricValue(float(q75 - q25)), denominator=RowCount(len(values))),
+            available(
+                MetricId.FPR_RANGE,
+                MetricValue(float(np.max(array) - np.min(array))),
+                denominator=RowCount(len(values)),
+            ),
+            available(MetricId.WORST_CLIENT_FPR, MetricValue(float(np.max(array))), denominator=RowCount(len(values))),
         )
     )
     metrics.extend(_equity_index_metrics(array))
@@ -187,8 +197,8 @@ def _equity_index_metrics(values: np.ndarray) -> tuple[MetricAvailability, ...]:
     ranks = np.arange(1, count + 1, dtype=np.float64)
     gini = (2.0 * float(np.sum(ranks * ordered)) / (count * total)) - ((count + 1.0) / count)
     return (
-        available(MetricId.JAIN_FAIRNESS_INDEX, jain, denominator=RowCount(count)),
-        available(MetricId.GINI_COEFFICIENT, gini, denominator=RowCount(count)),
+        available(MetricId.JAIN_FAIRNESS_INDEX, MetricValue(jain), denominator=RowCount(count)),
+        available(MetricId.GINI_COEFFICIENT, MetricValue(gini), denominator=RowCount(count)),
     )
 
 
@@ -232,7 +242,7 @@ def _coefficient_of_variation(metric: MetricId, values: tuple[MetricValue, ...])
     mean = float(np.mean(raw))
     if mean == 0.0:
         return unavailable(metric, MetricStatus.UNDEFINED, MetricReason.ZERO_MEAN)
-    return available(metric, float(np.std(raw, ddof=0)) / mean, denominator=RowCount(len(values)))
+    return available(metric, MetricValue(float(np.std(raw, ddof=0)) / mean), denominator=RowCount(len(values)))
 
 
 def _quantile_or_unavailable(
@@ -243,7 +253,7 @@ def _quantile_or_unavailable(
     raw = np.fromiter((v.value for v in values), dtype=np.float64, count=len(values))
     return available(
         metric,
-        float(np.quantile(raw, probability.value, method="linear")),
+        MetricValue(float(np.quantile(raw, probability.value, method="linear"))),
         denominator=RowCount(len(values)),
     )
 
@@ -251,14 +261,14 @@ def _quantile_or_unavailable(
 def _minimum_or_unavailable(metric: MetricId, values: tuple[MetricValue, ...]) -> MetricAvailability:
     if not values:
         return unavailable(metric, MetricStatus.UNAVAILABLE, MetricReason.NO_EVALUABLE_CLIENTS)
-    return available(metric, min(v.value for v in values), denominator=RowCount(len(values)))
+    return available(metric, MetricValue(min(v.value for v in values)), denominator=RowCount(len(values)))
 
 
 def _mean_or_unavailable(metric: MetricId, values: tuple[MetricValue, ...]) -> MetricAvailability:
     if not values:
         return unavailable(metric, MetricStatus.UNAVAILABLE, MetricReason.NO_EVALUABLE_CLIENTS)
     raw = np.fromiter((v.value for v in values), dtype=np.float64, count=len(values))
-    return available(metric, float(np.mean(raw)), denominator=RowCount(len(values)))
+    return available(metric, MetricValue(float(np.mean(raw))), denominator=RowCount(len(values)))
 
 
 def _pooled_macro_f1_or_unavailable(results: tuple[ClientMetricResult, ...]) -> MetricAvailability:
@@ -285,4 +295,4 @@ def _pooled_macro_f1_or_unavailable(results: tuple[ClientMetricResult, ...]) -> 
     attack_f1 = 2.0 * true_positive / attack_denominator
     benign_f1 = 2.0 * true_negative / benign_denominator
 
-    return available(MetricId.POOLED_MACRO_F1, (attack_f1 + benign_f1) / 2.0)
+    return available(MetricId.POOLED_MACRO_F1, MetricValue((attack_f1 + benign_f1) / 2.0))

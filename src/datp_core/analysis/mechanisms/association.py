@@ -184,7 +184,7 @@ def heterogeneity_benefit_association(
     slope_se = regression.stderr.value
     alpha = 1.0 - confidence_level.value
     t_critical = float(stats.t.ppf(1.0 - alpha / 2.0, df=max(x_values.size - 2, 1)))
-    loo = _leave_one_out(x_values, y_values, slope)
+    loo = _leave_one_out(x_values, y_values, regression.slope)
     sufficient = len(observations) >= MINIMUM_PUBLICATION_OBSERVATIONS.value
     statistics = AssociationStatistics(
         spearman_rho=CorrelationCoefficient(spearman.statistic.value),
@@ -213,7 +213,7 @@ def heterogeneity_benefit_association(
 def _leave_one_out(
     x_values: np.ndarray,
     y_values: np.ndarray,
-    full_slope: float,
+    full_slope: MetricValue,
 ) -> LeaveOneOutAssociationDiagnostics:
     slopes: list[MetricValue] = []
     r_squared_values: list[Ratio] = []
@@ -224,7 +224,7 @@ def _leave_one_out(
         x_loo = x_values[mask]
         y_loo = y_values[mask]
         if np.ptp(x_loo) == 0.0 or np.ptp(y_loo) == 0.0:
-            slopes.append(MetricValue(full_slope))
+            slopes.append(MetricValue(full_slope.value))
             r_squared_values.append(Ratio(0.0))
             influences.append(MetricValue(0.0))
             continue
@@ -234,14 +234,14 @@ def _leave_one_out(
         )
         extracted = linear_regression_values(fit)
         if extracted is None:
-            slopes.append(MetricValue(full_slope))
+            slopes.append(MetricValue(full_slope.value))
             r_squared_values.append(Ratio(0.0))
             influences.append(MetricValue(0.0))
             continue
         loo_slope = extracted.slope.value
         slopes.append(extracted.slope)
         r_squared_values.append(Ratio(extracted.rvalue.value**2))
-        influences.append(MetricValue(full_slope - loo_slope))
+        influences.append(MetricValue(full_slope.value - loo_slope))
     return LeaveOneOutAssociationDiagnostics(
         slopes=tuple(slopes),
         r_squared=tuple(r_squared_values),

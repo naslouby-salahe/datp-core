@@ -10,7 +10,16 @@ from datp_core.analysis.inference.wilcoxon import CorrelationCoefficient
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.contracts import ClientOwned, StrictModel
 from datp_core.core.identifiers import AnalysisReasonText, AvailabilityStatus, EvidenceRole, FederatedThresholdMethod
-from datp_core.core.numeric import ClusterIndex, GroupCount, MetricValue, PairedObservationCount, Seed, ThresholdValue
+from datp_core.core.numeric import (
+    ClusterIndex,
+    GroupCount,
+    MatrixRowIndex,
+    MetricValue,
+    PairedObservationCount,
+    RowCount,
+    Seed,
+    ThresholdValue,
+)
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.thresholds.policies.cluster import ClusterFingerprint, ClusterMembership, GroupedThresholdResult
 
@@ -125,11 +134,11 @@ class ClusterEvidenceRecord(StrictModel):
 class ClusterContingencyMatrix(StrictModel):
     rows: tuple[tuple[PairedObservationCount, ...], ...]
 
-    def row_count(self) -> int:
-        return len(self.rows)
+    def row_count(self) -> RowCount:
+        return RowCount(len(self.rows))
 
-    def row_at(self, index: int) -> tuple[PairedObservationCount, ...]:
-        return self.rows[index]
+    def row_at(self, index: MatrixRowIndex) -> tuple[PairedObservationCount, ...]:
+        return self.rows[index.value]
 
 
 class ClusterStabilityResult(StrictModel):
@@ -149,7 +158,7 @@ class ClusterStabilityResult(StrictModel):
             raise ValueError("cluster stability requires at least two clients")
         if len(set(self.compared_clients)) != len(self.compared_clients):
             raise ValueError("cluster stability requires unique compared clients")
-        if self.contingency.row_count() != len(self.left_partition.group_sizes):
+        if self.contingency.row_count().value != len(self.left_partition.group_sizes):
             raise ValueError("cluster contingency row count must match the left partition")
         if any(len(row) != len(self.right_partition.group_sizes) for row in self.contingency.rows):
             raise ValueError("cluster contingency column count must match the right partition")

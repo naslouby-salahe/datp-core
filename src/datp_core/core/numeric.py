@@ -255,6 +255,10 @@ class SourceRowIndex(NonNegativeIntegerValue):
     validation_name: ClassVar[str] = "source row index"
 
 
+class MatrixRowIndex(NonNegativeIntegerValue):
+    validation_name: ClassVar[str] = "matrix row index"
+
+
 class NanosecondTimestamp(NonNegativeIntegerValue):
     validation_name: ClassVar[str] = "nanosecond timestamp"
 

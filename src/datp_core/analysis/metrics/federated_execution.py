@@ -48,6 +48,7 @@ from datp_core.core.identifiers import (
     FederatedThresholdMethod,
     MetricId,
     PartitionRole,
+    ScoreArtifactPathText,
     ScoreFrameColumn,
     StableRowId,
     StageOperationId,
@@ -228,7 +229,7 @@ def _evaluate_score_record(
     if not record.path.is_file() or Checksum.from_file(record.path) != record.checksum:
         raise ArtifactIntegrityError(ErrorMessage("evaluation score artifact is incomplete or changed"))
 
-    scores, labels, rows = _score_arrays(str(record.path))
+    scores, labels, rows = _score_arrays(ScoreArtifactPathText(str(record.path)))
     confusion = calculate_confusion_counts(
         scores=scores,
         labels=labels,
@@ -444,7 +445,7 @@ def _threshold_coordinate(result: ThresholdConstructionResult) -> FederatedTrain
 
 
 def _score_arrays(
-    path: str,
+    path: ScoreArtifactPathText,
 ) -> tuple[tuple[ScoreValue, ...], tuple[PopulationOutcomeLabel, ...], tuple[StableRowId, ...]]:
     required = [
         ScoreFrameColumn.STABLE_ROW_ID.value,

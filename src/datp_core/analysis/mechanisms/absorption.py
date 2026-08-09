@@ -16,6 +16,7 @@ from datp_core.core.identifiers import (
     EvidenceRole,
     ExperimentId,
     FederatedThresholdMethod,
+    IntervalDescriptionText,
     PopulationId,
     TrainingModelId,
 )
@@ -444,15 +445,17 @@ def _blocked_cohort(
     return None
 
 
-def _cohort_interval_text(interval: BootstrapInterval | None) -> str:
+def _cohort_interval_text(interval: BootstrapInterval | None) -> IntervalDescriptionText:
     if (
         interval is not None
         and interval.outcome is BcaOutcome.AVAILABLE
         and interval.lower_bound is not None
         and interval.upper_bound is not None
     ):
-        return f"BCa=[{interval.lower_bound.value:.4g}, {interval.upper_bound.value:.4g}]"
-    return "BCa=unavailable"
+        return IntervalDescriptionText(
+            f"BCa=[{interval.lower_bound.value:.4g}, {interval.upper_bound.value:.4g}]"
+        )
+    return IntervalDescriptionText("BCa=unavailable")
 
 
 def _stress_decision_result(
@@ -460,14 +463,14 @@ def _stress_decision_result(
     decision: ScientificDecision,
     mean_retention: MetricValue,
     interval: BootstrapInterval | None,
-    rationale: str,
+    rationale: DecisionRationale,
 ) -> ScientificDecisionResult:
     return ScientificDecisionResult(
         evidence_role=EvidenceRole.TRAINING_STRESS_TEST,
         decision=decision,
         point_estimate=mean_retention,
         interval=interval,
-        rationale=DecisionRationale(rationale),
+        rationale=rationale,
     )
 
 
@@ -499,7 +502,7 @@ def _classify_cohort(
             decision=ScientificDecision.OPPOSITE_DIRECTION,
             mean_retention=mean_retention,
             interval=interval,
-            rationale=(
+            rationale=DecisionRationale(
                 "every seed reversed the reference CV(FPR) threshold-scope direction under personalization"
             ),
         )
@@ -508,7 +511,7 @@ def _classify_cohort(
             decision=ScientificDecision.OPPOSITE_DIRECTION,
             mean_retention=mean_retention,
             interval=interval,
-            rationale=(
+            rationale=DecisionRationale(
                 "absorption cohort contains opposite-direction CV(FPR) effects and cannot be classified "
                 f"as retained or absorbed {range_text}"
             ),
@@ -522,7 +525,7 @@ def _classify_cohort(
             decision=ScientificDecision.DIRECTIONAL_INCONCLUSIVE,
             mean_retention=mean_retention,
             interval=interval,
-            rationale=(
+            rationale=DecisionRationale(
                 "absorption retention classification requires an available BCa interval with finite bounds "
                 f"{range_text}"
             ),
@@ -534,7 +537,7 @@ def _classify_cohort(
             decision=ScientificDecision.SUPPORTED,
             mean_retention=mean_retention,
             interval=interval,
-            rationale=(
+            rationale=DecisionRationale(
                 f"paired seed-level CV(FPR) retention remains at or above the full-retention threshold {range_text}"
             ),
         )
@@ -546,7 +549,7 @@ def _classify_cohort(
             decision=ScientificDecision.FULL_ABSORPTION,
             mean_retention=mean_retention,
             interval=interval,
-            rationale=(
+            rationale=DecisionRationale(
                 f"paired seed-level CV(FPR) retention lies below the partial-retention threshold {range_text}"
             ),
         )
@@ -559,7 +562,7 @@ def _classify_cohort(
             decision=ScientificDecision.PARTIAL_ABSORPTION,
             mean_retention=mean_retention,
             interval=interval,
-            rationale=(
+            rationale=DecisionRationale(
                 f"paired seed-level CV(FPR) retention is partially absorbed with residual effect {range_text}"
             ),
         )
@@ -567,7 +570,7 @@ def _classify_cohort(
         decision=ScientificDecision.DIRECTIONAL_INCONCLUSIVE,
         mean_retention=mean_retention,
         interval=interval,
-        rationale=(
+        rationale=DecisionRationale(
             "absorption retention interval straddles declared retention boundaries and cannot support "
             f"a unique classification {range_text}"
         ),

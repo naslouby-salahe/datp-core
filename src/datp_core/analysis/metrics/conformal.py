@@ -147,7 +147,7 @@ def _coverage_metrics(
 ) -> tuple[MetricAvailability, ...]:
     if not scores:
         return (
-            available(MetricId.TARGET_COVERAGE, target_coverage.value),
+            available(MetricId.TARGET_COVERAGE, MetricValue(target_coverage.value)),
             *tuple(
                 unavailable(
                     metric,
@@ -166,20 +166,20 @@ def _coverage_metrics(
     achieved = sum(not item.score.exceeds(assignment.threshold) for item in scores) / denominator.value
     signed_error = achieved - target_coverage.value
     return (
-        available(MetricId.TARGET_COVERAGE, target_coverage.value),
+        available(MetricId.TARGET_COVERAGE, MetricValue(target_coverage.value)),
         available(
             MetricId.ACHIEVED_COVERAGE,
-            achieved,
+            MetricValue(achieved),
             denominator=denominator,
         ),
         available(
             MetricId.SIGNED_COVERAGE_ERROR,
-            signed_error,
+            MetricValue(signed_error),
             denominator=denominator,
         ),
         available(
             MetricId.ABSOLUTE_COVERAGE_ERROR,
-            abs(signed_error),
+            MetricValue(abs(signed_error)),
             denominator=denominator,
         ),
     )

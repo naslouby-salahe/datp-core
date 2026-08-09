@@ -15,7 +15,7 @@ from datp_core.core.identifiers import (
     MessageEndpoint,
     MetricId,
 )
-from datp_core.core.numeric import ByteCount, LogicalElementCount, Seed
+from datp_core.core.numeric import ByteCount, LogicalElementCount, MetricValue, Seed
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 
@@ -118,7 +118,7 @@ class CommunicationDiagnostic:
 
     @property
     def estimated_serialized_bytes_metric(self) -> AvailableMetric:
-        return available(MetricId.COMMUNICATION_BYTES, float(self.total_estimated_serialized_bytes.value))
+        return available(MetricId.COMMUNICATION_BYTES, MetricValue(float(self.total_estimated_serialized_bytes.value)))
 
 
 def summarize_communication(

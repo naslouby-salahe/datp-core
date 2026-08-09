@@ -91,7 +91,10 @@ def calculate_alert_burden(
         coordinate=coordinate,
         training_seed=training_seed,
         false_positive_rate=false_positive_rate,
-        metric=available(MetricId.ALERTS_PER_DAY, false_positive_rate.value * validated.rate_per_day.value),
+        metric=available(
+            MetricId.ALERTS_PER_DAY,
+            MetricValue(false_positive_rate.value * validated.rate_per_day.value),
+        ),
         suppression_reason=None,
         warning=None,
     )
