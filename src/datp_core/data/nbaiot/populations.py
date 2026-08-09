@@ -38,8 +38,10 @@ from datp_core.data.populations.contracts import (
     SOURCE_PATH_COLUMN,
     SOURCE_ROW_INDEX_COLUMN,
     STABLE_ROW_ID_COLUMN,
+    ClientIdentity,
     ControlledPartitionCondition,
     DirichletPartitionDiagnosticsDocument,
+    FamilyAssignment,
     PopulationConstructionResult,
     PopulationFrameColumn,
     PopulationOutcomeLabel,
@@ -80,8 +82,7 @@ def construct_nbaiot_natural_devices(
     frame = _load_identity_frame(canonical_root)
     candidates = tuple(ClientIdentityToken(str(device)) for device in sorted(NBAIOT_DEVICE_IDENTITIES))
     observed = tuple(
-        ClientIdentityToken(str(value))
-        for value in frame.get_column(CLIENT_ID_COLUMN).unique().sort().to_list()
+        ClientIdentityToken(str(value)) for value in frame.get_column(CLIENT_ID_COLUMN).unique().sort().to_list()
     )
     if observed != candidates:
         raise DataIntegrityError(
@@ -91,7 +92,14 @@ def construct_nbaiot_natural_devices(
         )
     membership = select_membership_frame(frame).sort([CLIENT_ID_COLUMN, STABLE_ROW_ID_COLUMN])
     family_by_client = tuple(
-        (ClientIdentityToken(str(client_id)), FamilyIdentity(str(family)))
+        FamilyAssignment(
+            client=ClientIdentity(
+                population=_NATURAL_POPULATION,
+                client_id=ClientIdentityToken(str(client_id)),
+                identity_kind=_NATURAL_IDENTITY,
+            ),
+            family=FamilyIdentity(str(family)),
+        )
         for client_id, family in frame.select([CLIENT_ID_COLUMN, FAMILY_ID_COLUMN])
         .unique()
         .sort(CLIENT_ID_COLUMN)

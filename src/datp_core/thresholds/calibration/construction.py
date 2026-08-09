@@ -13,14 +13,14 @@ from datp_core.core.errors import (
 )
 from datp_core.core.identifiers import EvidenceRole, FederatedThresholdMethod
 from datp_core.core.numeric import CalibrationSize, Quantile, ReplicateIndex, SubsampleReplicateCount
-from datp_core.data.populations.contracts import ClientIdentity, EligibleCohort
+from datp_core.data.populations.contracts import ClientIdentity, EligibleCohort, FamilyAssignment
 from datp_core.data.registry import population_capabilities
 from datp_core.detector.scoring.models import FederatedScoreArtifactManifest
 from datp_core.experiments.common.coordinates import ExternalTemporalExecutionIdentity
 from datp_core.thresholds.calibration.eligibility import EligibilityDecision
 from datp_core.thresholds.calibration.sampling import CalibrationReplicateManifest, CalibrationSubsample
 from datp_core.thresholds.calibration.service import CalibrationRequest, calibrate
-from datp_core.thresholds.contracts import FamilyAssignment, ThresholdUnavailableResult
+from datp_core.thresholds.contracts import ThresholdUnavailableResult
 from datp_core.thresholds.dispatch import ThresholdConstructionRequest, dispatch_federated_threshold
 from datp_core.thresholds.protocols import (
     CALIBRATION_ELIGIBILITY_PROTOCOL,

@@ -378,6 +378,16 @@ class ClientIdentity:
 
 
 @dataclass(frozen=True, slots=True)
+class FamilyAssignment:
+    client: ClientIdentity
+    family: FamilyIdentity
+
+    @property
+    def population(self) -> PopulationId:
+        return self.client.population
+
+
+@dataclass(frozen=True, slots=True)
 class EligibleCohort:
     clients: tuple[ClientIdentity, ...]
 
@@ -456,12 +466,28 @@ class PopulationManifest:
     document: PopulationManifestDocument
     clients: tuple[ClientIdentity, ...]
     feasibility: PopulationFeasibility
-    family_by_client: tuple[tuple[ClientIdentityToken, FamilyIdentity], ...]
+    family_by_client: tuple[FamilyAssignment, ...]
 
     def __post_init__(self) -> None:
-        client_ids = tuple(client.client_id for client in self.clients)
-        if client_ids != self.document.candidate_clients:
-            raise ValueError("manifest clients must match candidate client identities in order")
+        _require_manifest_clients(self.clients, self.document.candidate_clients)
+        _require_manifest_family_assignments(self.clients, self.family_by_client)
+
+
+def _require_manifest_clients(
+    clients: tuple[ClientIdentity, ...], candidate_client_ids: tuple[ClientIdentityToken, ...]
+) -> None:
+    if tuple(client.client_id for client in clients) != candidate_client_ids:
+        raise ValueError("manifest clients must match candidate client identities in order")
+
+
+def _require_manifest_family_assignments(
+    clients: tuple[ClientIdentity, ...], family_assignments: tuple[FamilyAssignment, ...]
+) -> None:
+    assigned_clients = tuple(assignment.client for assignment in family_assignments)
+    if len(assigned_clients) != len(frozenset(assigned_clients)):
+        raise ValueError("manifest family assignments must have unique clients")
+    if not frozenset(assigned_clients).issubset(frozenset(clients)):
+        raise ValueError("manifest family assignments must belong to manifest clients")
 
 
 @dataclass(frozen=True, slots=True)
@@ -572,7 +598,7 @@ def client_identities(
 def build_population_manifest(
     document: PopulationManifestDocument,
     feasibility: PopulationFeasibility,
-    family_by_client: tuple[tuple[ClientIdentityToken, FamilyIdentity], ...] = (),
+    family_by_client: tuple[FamilyAssignment, ...] = (),
 ) -> PopulationManifest:
     return PopulationManifest(
         document,

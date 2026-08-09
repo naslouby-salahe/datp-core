@@ -12,8 +12,8 @@ from datp_core.core.identifiers import (
     PopulationIdentityKind,
 )
 from datp_core.core.numeric import ClientCount, Quantile
-from datp_core.data.populations.contracts import CapabilityStatus, PopulationCapabilities
-from datp_core.thresholds.contracts import FamilyAssignment, ThresholdUnavailableResult
+from datp_core.data.populations.contracts import CapabilityStatus, FamilyAssignment, PopulationCapabilities
+from datp_core.thresholds.contracts import ThresholdUnavailableResult
 from datp_core.thresholds.dispatch import (
     ThresholdConstructionRequest,
     dispatch_federated_threshold,

@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, ClassVar
 
 from pydantic import TypeAdapter
 
+from datp_core.analysis.descriptive import summarize_cross_seed_metric_values
 from datp_core.analysis.metrics.models import metric_by_id
 from datp_core.analysis.metrics.semantics import metric_value
 from datp_core.app.planning import PlanReason, expand_experiment_plan
@@ -207,20 +208,6 @@ def _threshold_coordinate_for_seed(
     return matches[0]
 
 
-def _mean_metric(values: list[MetricValue]) -> MetricValue | None:
-    return MetricValue(sum(value.value for value in values) / len(values)) if values else None
-
-
-def _cv(values: list[MetricValue]) -> MetricValue | None:
-    if len(values) < 2:
-        return None
-    mean = sum(value.value for value in values) / len(values)
-    if mean == 0:
-        return None
-    variance = sum((value.value - mean) ** 2 for value in values) / len(values)
-    return MetricValue(variance**0.5 / mean)
-
-
 def _mean_absolute_threshold_error(values: list[AbsoluteThresholdError]) -> AbsoluteThresholdError | None:
     return AbsoluteThresholdError(sum(item.value for item in values) / len(values)) if values else None
 
@@ -345,16 +332,18 @@ def _estimation_summary(
     if not documents:
         return EstimationSummaryLoad(summary=None, missing_count=SeedObservationCount(missing))
 
-    cv_values = [
+    cv_values = tuple(
         value
         for document in documents
         if (value := metric_value(metric_by_id(document.population.metrics, MetricId.FPR_COEFFICIENT_OF_VARIATION)))
-    ]
-    worst_values = [
+    )
+    worst_values = tuple(
         value
         for document in documents
         if (value := metric_value(metric_by_id(document.population.metrics, MetricId.WORST_CLIENT_FPR)))
-    ]
+    )
+    cv_summary = summarize_cross_seed_metric_values(cv_values)
+    worst_summary = summarize_cross_seed_metric_values(worst_values)
     diagnostics = _collect_estimation_diagnostics(
         tuple(documents),
         families=families,
@@ -364,9 +353,9 @@ def _estimation_summary(
         summary=EstimationSummary(
             method=method,
             seed_count=SeedCount(len(documents)),
-            mean_cv_fpr=_mean_metric(cv_values),
-            mean_worst_client_fpr=_mean_metric(worst_values),
-            cv_fpr_across_seeds=_cv(cv_values),
+            mean_cv_fpr=cv_summary.mean,
+            mean_worst_client_fpr=worst_summary.mean,
+            cv_fpr_across_seeds=cv_summary.coefficient_of_variation,
             mean_absolute_threshold_error=_mean_absolute_threshold_error(diagnostics.threshold_errors),
             mean_absolute_attainment_error=(
                 MetricValue(

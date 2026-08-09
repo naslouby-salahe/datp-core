@@ -22,7 +22,7 @@ class NBaIoTReader:
     """Read one audited N-BaIoT source without inventing chronology."""
 
     def read(self, path: Path) -> pl.LazyFrame:
-        device, label, family, subtype = parse_source_identity(path)
+        source_identity = parse_source_identity(path)
         frame = pl.scan_csv(
             path,
             schema=pl.Schema(tuple((column, pl.Float64) for column in NBAIOT_FEATURE_COLUMNS)),
@@ -35,11 +35,13 @@ class NBaIoTReader:
             frame.with_row_index(CanonicalProvenanceColumn.SOURCE_ROW_INDEX)
             .with_columns(
                 pl.col(CanonicalProvenanceColumn.SOURCE_ROW_INDEX).cast(pl.UInt64),
-                pl.lit(device, dtype=pl.String).alias(NBaIoTCanonicalColumn.PHYSICAL_CLIENT_ID),
-                pl.lit(device_family(device), dtype=pl.String).alias(NBaIoTCanonicalColumn.PHYSICAL_DEVICE_FAMILY),
-                pl.lit(label, dtype=pl.String).alias(NBaIoTCanonicalColumn.RAW_LABEL),
-                pl.lit(family, dtype=pl.String).alias(NBaIoTCanonicalColumn.ATTACK_FAMILY),
-                pl.lit(subtype, dtype=pl.String).alias(NBaIoTCanonicalColumn.ATTACK_SUBTYPE),
+                pl.lit(source_identity.device, dtype=pl.String).alias(NBaIoTCanonicalColumn.PHYSICAL_CLIENT_ID),
+                pl.lit(device_family(source_identity.device), dtype=pl.String).alias(
+                    NBaIoTCanonicalColumn.PHYSICAL_DEVICE_FAMILY
+                ),
+                pl.lit(source_identity.source_label, dtype=pl.String).alias(NBaIoTCanonicalColumn.RAW_LABEL),
+                pl.lit(source_identity.attack_family, dtype=pl.String).alias(NBaIoTCanonicalColumn.ATTACK_FAMILY),
+                pl.lit(source_identity.attack_subtype, dtype=pl.String).alias(NBaIoTCanonicalColumn.ATTACK_SUBTYPE),
                 *provenance_expressions(path, source_relative_path),
             )
             .select(tuple(column.name for column in NBAIOT_SCHEMA.columns))

@@ -17,10 +17,9 @@ from datp_core.core.identifiers import (
     ValidationLabel,
 )
 from datp_core.core.numeric import Quantile, ThresholdValue
-from datp_core.data.populations.contracts import ClientIdentity
+from datp_core.data.populations.contracts import ClientIdentity, FamilyAssignment
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 from datp_core.thresholds.contracts import (
-    FamilyAssignment,
     LocalQuantile,
     ThresholdAssignment,
     mean_local_threshold,

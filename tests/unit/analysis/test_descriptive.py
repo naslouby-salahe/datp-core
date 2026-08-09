@@ -11,6 +11,7 @@ from datp_core.analysis.descriptive import (
     count_paired_differences,
     empirical_cdf_points,
     score_geometry_from_client_vectors,
+    summarize_cross_seed_metric_values,
     summarize_values,
 )
 from datp_core.artifacts.provenance import Checksum
@@ -57,6 +58,34 @@ def test_empty_summary_is_explicitly_unavailable() -> None:
     assert summary.availability is AvailabilityStatus.UNAVAILABLE
     assert summary.statistics is None
     assert summary.reason == "no available values"
+
+
+@pytest.mark.parametrize(
+    ("values", "mean", "coefficient_of_variation"),
+    (
+        ((), None, None),
+        ((MetricValue(0.4),), MetricValue(0.4), None),
+        ((MetricValue(0.0), MetricValue(0.0)), MetricValue(0.0), None),
+        ((MetricValue(0.2), MetricValue(0.4)), MetricValue(0.3), MetricValue(1 / 3)),
+    ),
+)
+def test_cross_seed_metric_summary_preserves_mean_and_cv_availability(
+    values: MetricSeries,
+    mean: MetricValue | None,
+    coefficient_of_variation: MetricValue | None,
+) -> None:
+    summary = summarize_cross_seed_metric_values(values)
+
+    if mean is None:
+        assert summary.mean is None
+    else:
+        assert summary.mean is not None
+        assert summary.mean.value == pytest.approx(mean.value)
+    if coefficient_of_variation is None:
+        assert summary.coefficient_of_variation is None
+    else:
+        assert summary.coefficient_of_variation is not None
+        assert summary.coefficient_of_variation.value == pytest.approx(coefficient_of_variation.value)
 
 
 def test_quantile_range_rejects_reversed_bounds() -> None:

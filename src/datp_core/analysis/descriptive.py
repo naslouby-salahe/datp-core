@@ -57,6 +57,11 @@ class DescriptiveStatistics(StrictModel):
         return MetricValue(self.maximum.value - self.minimum.value)
 
 
+class CrossSeedMetricSummary(StrictModel):
+    mean: MetricValue | None
+    coefficient_of_variation: MetricValue | None
+
+
 class DescriptiveSummary(StrictModel):
     evidence_role: EvidenceRole
     values: MetricSeries
@@ -130,6 +135,21 @@ def summarize_values(
             maximum=MetricValue(float(np.max(array))),
         ),
         reason=None,
+    )
+
+
+def summarize_cross_seed_metric_values(values: MetricSeries) -> CrossSeedMetricSummary:
+    if not values:
+        return CrossSeedMetricSummary(mean=None, coefficient_of_variation=None)
+    mean = MetricValue(sum(value.value for value in values) / len(values))
+    if len(values) < 2:
+        return CrossSeedMetricSummary(mean=mean, coefficient_of_variation=None)
+    if mean.value == 0:
+        return CrossSeedMetricSummary(mean=mean, coefficient_of_variation=None)
+    variance = sum((value.value - mean.value) ** 2 for value in values) / len(values)
+    return CrossSeedMetricSummary(
+        mean=mean,
+        coefficient_of_variation=MetricValue(variance**0.5 / mean.value),
     )
 
 
@@ -255,9 +275,7 @@ def client_score_geometry(
             unavailable_reason=AnalysisReasonText("no scores available for the declared role"),
         )
     array = _metric_array(scores)
-    quantile_values = tuple(
-        MetricValue(float(np.quantile(array, level.value, method="linear"))) for level in quantiles
-    )
+    quantile_values = tuple(MetricValue(float(np.quantile(array, level.value, method="linear"))) for level in quantiles)
     return ClientScoreGeometry(
         client=client,
         score_role=score_role,

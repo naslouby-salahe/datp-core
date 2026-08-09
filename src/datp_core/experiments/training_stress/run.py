@@ -70,7 +70,7 @@ from datp_core.core.numeric import (
     Seed,
     SeedObservationCount,
 )
-from datp_core.data.populations.contracts import ClientIdentity
+from datp_core.data.populations.contracts import ClientIdentity, FamilyAssignment
 from datp_core.data.populations.publication import ConstructDeclaredPopulationRequest, construct_declared_population
 from datp_core.data.preprocessing.models import FederatedPreprocessingOutcome, FederatedPreprocessingRequest
 from datp_core.data.preprocessing.service import preprocess_federated
@@ -115,7 +115,6 @@ from datp_core.experiments.execution import execute_declared_campaign
 from datp_core.experiments.execution.context import (
     client_training_inputs,
     client_with_id,
-    family_identities,
     training_feature_names,
 )
 from datp_core.experiments.execution.evidence import load_evaluation_document
@@ -131,7 +130,6 @@ from datp_core.experiments.registry import EXPERIMENTS
 from datp_core.presentation.export import export_mechanism_publication
 from datp_core.runtime.configuration import DATA_ROOT, OUTPUTS_ROOT
 from datp_core.runtime.filesystem import write_text_atomically
-from datp_core.thresholds.contracts import FamilyAssignment
 from datp_core.thresholds.dispatch import ThresholdConstructionRequest
 from datp_core.thresholds.policies.local import LocalThresholdResult
 from datp_core.thresholds.policies.shared import SharedThresholdResult
@@ -852,10 +850,7 @@ def _population_context(
     )
     return DittoPopulationContext(
         clients=clients,
-        family_by_client=family_identities(
-            clients,
-            population_result.construction.manifest.family_by_client,
-        ),
+        family_by_client=population_result.construction.manifest.family_by_client,
         preprocessing=preprocessing,
         split_manifest_checksum=population_result.split_manifest.assignment_checksum,
         preprocessing_state_set_checksum=state_set_checksum,

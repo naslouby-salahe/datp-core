@@ -33,7 +33,12 @@ from datp_core.core.numeric import (
     Seed,
     ThresholdValue,
 )
-from datp_core.data.populations.contracts import CapabilityStatus, EligibleCohort, PopulationCapabilities
+from datp_core.data.populations.contracts import (
+    CapabilityStatus,
+    EligibleCohort,
+    FamilyAssignment,
+    PopulationCapabilities,
+)
 from datp_core.thresholds.calibration.eligibility import (
     calibration_support,
     decide_eligibility,
@@ -44,7 +49,7 @@ from datp_core.thresholds.calibration.eligibility import (
     reject_score_coordinate_mismatch,
     require_common_eligible_cohort,
 )
-from datp_core.thresholds.contracts import FamilyAssignment, ThresholdUnavailableResult
+from datp_core.thresholds.contracts import ThresholdUnavailableResult
 from datp_core.thresholds.dispatch import (
     ThresholdConstructionRequest,
     dispatch_federated_threshold,

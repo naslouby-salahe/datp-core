@@ -16,13 +16,9 @@ from datp_core.core.identifiers import (
     FederatedThresholdMethod,
 )
 from datp_core.core.numeric import Quantile, RowCount
-from datp_core.data.populations.contracts import PopulationCapabilities
+from datp_core.data.populations.contracts import FamilyAssignment, PopulationCapabilities
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
-from datp_core.thresholds.contracts import (
-    FamilyAssignment,
-    ThresholdInfeasibilityReason,
-    ThresholdUnavailableResult,
-)
+from datp_core.thresholds.contracts import ThresholdInfeasibilityReason, ThresholdUnavailableResult
 from datp_core.thresholds.policies.cluster import GroupedThresholdResult, construct_grouped_threshold
 from datp_core.thresholds.policies.family import FamilyThresholdResult, construct_family_threshold
 from datp_core.thresholds.policies.local import LocalThresholdResult, construct_local_threshold

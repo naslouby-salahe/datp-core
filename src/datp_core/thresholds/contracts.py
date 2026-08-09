@@ -15,7 +15,6 @@ from datp_core.core.identifiers import (
     AnalysisReasonText,
     AvailabilityStatus,
     ContractSubject,
-    FamilyIdentity,
     FederatedThresholdMethod,
     NonEmptyString,
     QuantileInterpolationSemantics,
@@ -78,12 +77,6 @@ class LocalQuantile:
 class ThresholdAssignment:
     client: ClientIdentity
     threshold: ThresholdValue
-
-
-@dataclass(frozen=True, slots=True)
-class FamilyAssignment:
-    client: ClientIdentity
-    family: FamilyIdentity
 
 
 @runtime_checkable

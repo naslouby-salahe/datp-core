@@ -14,13 +14,12 @@ from datp_core.core.identifiers import (
     ClientIdentityToken,
     ContractSubject,
     DatasetId,
-    FamilyIdentity,
     FeatureName,
     FeatureNameSequence,
 )
 from datp_core.core.numeric import ProximalCoefficient
 from datp_core.data.edge_iiotset.schema import EDGE_NUMERIC_FEATURE_COLUMNS
-from datp_core.data.populations.contracts import ClientIdentity, ControlledPartitionCondition
+from datp_core.data.populations.contracts import ClientIdentity, ControlledPartitionCondition, FamilyAssignment
 from datp_core.data.populations.publication import (
     ConstructDeclaredPopulationRequest,
     ConstructPublishedPopulationRequest,
@@ -62,7 +61,6 @@ from datp_core.experiments.execution.layout import (
     federated_training_directory,
 )
 from datp_core.runtime.configuration import DATA_ROOT
-from datp_core.thresholds.contracts import FamilyAssignment
 
 EDGE_FEATURE_NAMES = FeatureNameSequence(tuple(FeatureName(name) for name in EDGE_NUMERIC_FEATURE_COLUMNS))
 
@@ -164,7 +162,7 @@ def resolve_execution_context(coordinate: ExperimentCoordinate, output_root: Pat
             )
         )
         clients = population_result.construction.manifest.clients
-        family_pairs = population_result.construction.manifest.family_by_client
+        family_assignments = population_result.construction.manifest.family_by_client
         split_checksum = population_result.split_manifest.assignment_checksum
         training_directory = federated_training_directory(training_coordinate, output_root)
     else:
@@ -205,7 +203,7 @@ def resolve_execution_context(coordinate: ExperimentCoordinate, output_root: Pat
             )
         )
         clients = population_result.population_manifest.clients
-        family_pairs = population_result.population_manifest.family_by_client
+        family_assignments = population_result.population_manifest.family_by_client
         split_checksum = split_result.manifest.assignment_checksum
         training_directory = root / ExecutionArtifactDirectory.TRAINING
     state_checksum = preprocessing_state_set_checksum(
@@ -221,7 +219,7 @@ def resolve_execution_context(coordinate: ExperimentCoordinate, output_root: Pat
         coordinate=training_coordinate,
         execution_identity=execution_identity,
         clients=clients,
-        family_by_client=family_identities(clients, family_pairs),
+        family_by_client=family_assignments,
         preprocessing=preprocessing,
         preprocessing_state_set_checksum=state_checksum,
         split_manifest_checksum=split_checksum,
@@ -261,16 +259,6 @@ def client_scoring_inputs(
             ),
         )
         for publication in publications
-    )
-
-
-def family_identities(
-    clients: tuple[ClientIdentity, ...],
-    family_by_client: tuple[tuple[ClientIdentityToken, FamilyIdentity], ...],
-) -> tuple[FamilyAssignment, ...]:
-    return tuple(
-        FamilyAssignment(client=client_with_id(clients, client_id), family=family)
-        for client_id, family in family_by_client
     )
 
 

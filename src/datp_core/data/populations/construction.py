@@ -15,7 +15,6 @@ from datp_core.core.identifiers import (
     ClientIdentityToken,
     ContractSubject,
     DatasetId,
-    FamilyIdentity,
     FeatureNameSequence,
     PartitionRole,
     PopulationId,
@@ -33,6 +32,7 @@ from .contracts import (
     ClientIdentity,
     ClientPartitionCounts,
     CohortAggregationColumn,
+    FamilyAssignment,
     PopulationCapabilities,
     PopulationFeasibility,
     PopulationFeasibilityReason,
@@ -84,7 +84,7 @@ class PopulationFinalizationRequest:
     chronology_required: bool
     membership: pl.DataFrame
     canonical_schema_checksum: Checksum
-    family_by_client: tuple[tuple[ClientIdentityToken, FamilyIdentity], ...] = ()
+    family_by_client: tuple[FamilyAssignment, ...] = ()
 
 
 def assess_declared_feasibility(
@@ -317,9 +317,7 @@ def _infeasible(
     observed: NonNegativeIntegerValue,
     evidence: ValidationReasonText,
 ) -> PopulationFeasibility:
-    return PopulationFeasibility(
-        PopulationFeasibilityStatus.INFEASIBLE, reason, expected, observed, evidence
-    )
+    return PopulationFeasibility(PopulationFeasibilityStatus.INFEASIBLE, reason, expected, observed, evidence)
 
 
 def _deployment_fallback_clients(

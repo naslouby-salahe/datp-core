@@ -93,7 +93,7 @@ class NBaIoTMaterializer:
                     DatasetId.NBAIOT,
                     path,
                     SourceFileRole.BENIGN
-                    if parse_source_identity(path)[1] == NBaIoTSourceLabel.BENIGN
+                    if parse_source_identity(path).source_label is NBaIoTSourceLabel.BENIGN
                     else SourceFileRole.ATTACK,
                     RowCount(row_count.value),
                     source_relative_path,

@@ -6,6 +6,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from datp_core.analysis.descriptive import summarize_cross_seed_metric_values
 from datp_core.analysis.metrics.models import metric_by_id
 from datp_core.analysis.metrics.population import calculate_population_metrics
 from datp_core.analysis.metrics.semantics import metric_value
@@ -259,31 +260,19 @@ def _run_robustness_seed(
     )
 
 
-def _mean(values: list[MetricValue]) -> MetricValue | None:
-    return MetricValue(sum(value.value for value in values) / len(values)) if values else None
-
-
-def _coefficient_of_variation(values: list[MetricValue]) -> MetricValue | None:
-    if len(values) < 2:
-        return None
-    mean = sum(value.value for value in values) / len(values)
-    if mean == 0:
-        return None
-    variance = sum((value.value - mean) ** 2 for value in values) / len(values)
-    return MetricValue(variance**0.5 / mean)
-
-
 def _method_summary(
     method: FederatedThresholdMethod, documents: tuple[FederatedEvaluationDocument, ...]
 ) -> MethodCvSummary:
-    cv_values = [population_metric(document, MetricId.FPR_COEFFICIENT_OF_VARIATION) for document in documents]
-    worst_values = [population_metric(document, MetricId.WORST_CLIENT_FPR) for document in documents]
+    cv_values = tuple(population_metric(document, MetricId.FPR_COEFFICIENT_OF_VARIATION) for document in documents)
+    worst_values = tuple(population_metric(document, MetricId.WORST_CLIENT_FPR) for document in documents)
+    cv_summary = summarize_cross_seed_metric_values(cv_values)
+    worst_summary = summarize_cross_seed_metric_values(worst_values)
     return MethodCvSummary(
         method=method,
         seed_count=SeedCount(len(documents)),
-        mean_cv_fpr=_mean(cv_values),
-        mean_worst_client_fpr=_mean(worst_values),
-        cv_fpr_across_seeds=_coefficient_of_variation(cv_values),
+        mean_cv_fpr=cv_summary.mean,
+        mean_worst_client_fpr=worst_summary.mean,
+        cv_fpr_across_seeds=cv_summary.coefficient_of_variation,
     )
 
 

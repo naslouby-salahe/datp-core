@@ -5,7 +5,11 @@ import pytest
 from datp_core.data.nbaiot.schema import (
     NBAIOT_DEVICE_IDENTITIES,
     NBAIOT_FEATURE_COLUMNS,
+    NBaIoTAttackFamily,
+    NBaIoTAttackSubtype,
     NBaIoTDevice,
+    NBaIoTSourceIdentity,
+    NBaIoTSourceLabel,
     parse_source_identity,
 )
 
@@ -21,11 +25,11 @@ def test_unknown_nbaio_path_is_rejected() -> None:
 
 
 def test_audited_attack_directory_is_interpreted_without_filename_inference() -> None:
-    assert parse_source_identity(Path("Danmini_Doorbell/gafgyt_attacks/udp.csv")) == (
-        NBaIoTDevice.DANMINI_DOORBELL.value,
-        "attack",
-        "gafgyt",
-        "udp",
+    assert parse_source_identity(Path("Danmini_Doorbell/gafgyt_attacks/udp.csv")) == NBaIoTSourceIdentity(
+        device=NBaIoTDevice.DANMINI_DOORBELL,
+        source_label=NBaIoTSourceLabel.ATTACK,
+        attack_family=NBaIoTAttackFamily.GAFGYT,
+        attack_subtype=NBaIoTAttackSubtype.UDP,
     )
 
 

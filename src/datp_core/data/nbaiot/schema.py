@@ -1,5 +1,6 @@
 """Audited N-BaIoT source schema and path identities."""
 
+from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
@@ -112,6 +113,50 @@ class NBaIoTAttackSubtype(StrEnum):
     TCP = "tcp"
     UDP = "udp"
     UDPPLAIN = "udpplain"
+
+
+@dataclass(frozen=True, slots=True)
+class NBaIoTSourceIdentity:
+    """Audited identity encoded by one extracted N-BaIoT source path."""
+
+    device: NBaIoTDevice
+    source_label: NBaIoTSourceLabel
+    attack_family: NBaIoTAttackFamily | None
+    attack_subtype: NBaIoTAttackSubtype | None
+
+    def __post_init__(self) -> None:
+        self._validate_device()
+        self._validate_source_label()
+        self._validate_attack_evidence_types()
+        self._validate_attack_evidence_consistency()
+
+    def _validate_device(self) -> None:
+        if type(self.device) is not NBaIoTDevice:
+            raise TypeError("N-BaIoT source identities require an audited device")
+
+    def _validate_source_label(self) -> None:
+        if type(self.source_label) is not NBaIoTSourceLabel:
+            raise TypeError("N-BaIoT source identities require an audited source label")
+
+    def _validate_attack_evidence_types(self) -> None:
+        if self.attack_family is not None and type(self.attack_family) is not NBaIoTAttackFamily:
+            raise TypeError("N-BaIoT source identities require an audited attack family")
+        if self.attack_subtype is not None and type(self.attack_subtype) is not NBaIoTAttackSubtype:
+            raise TypeError("N-BaIoT source identities require an audited attack subtype")
+
+    def _validate_attack_evidence_consistency(self) -> None:
+        if self.source_label is NBaIoTSourceLabel.BENIGN:
+            self._validate_benign_attack_evidence()
+            return
+        self._validate_attack_source_evidence()
+
+    def _validate_benign_attack_evidence(self) -> None:
+        if self.attack_family is not None or self.attack_subtype is not None:
+            raise ValueError("benign N-BaIoT sources cannot have attack evidence")
+
+    def _validate_attack_source_evidence(self) -> None:
+        if self.attack_family is None or self.attack_subtype is None:
+            raise ValueError("attack N-BaIoT sources require complete attack evidence")
 
 
 _WINDOWS: tuple[NBaIoTWindow, ...] = tuple(NBaIoTWindow)
@@ -240,7 +285,7 @@ NBAIOT_SCHEMA = CanonicalSchema(
 
 def parse_source_identity(
     path: Path,
-) -> tuple[NBaIoTDevice, NBaIoTSourceLabel, NBaIoTAttackFamily | None, NBaIoTAttackSubtype | None]:
+) -> NBaIoTSourceIdentity:
     parts = tuple(SourcePathPart(part) for part in path.parts)
     if path.suffix != NBaIoTArtifactName.CSV_SUFFIX or len(parts) < 2:
         raise ValueError("N-BaIoT sources must be extracted CSV files")
@@ -257,13 +302,11 @@ def source_relative_path(path: Path) -> Path:
 
 def _benign_source_identity(
     parts: tuple[SourcePathPart, ...],
-) -> tuple[NBaIoTDevice, NBaIoTSourceLabel, None, None]:
-    return _device(parts[-2]), NBaIoTSourceLabel.BENIGN, None, None
+) -> NBaIoTSourceIdentity:
+    return NBaIoTSourceIdentity(_device(parts[-2]), NBaIoTSourceLabel.BENIGN, None, None)
 
 
-def _attack_source_identity(
-    parts: tuple[SourcePathPart, ...], subtype: AttackSubtypeToken
-) -> tuple[NBaIoTDevice, NBaIoTSourceLabel, NBaIoTAttackFamily, NBaIoTAttackSubtype]:
+def _attack_source_identity(parts: tuple[SourcePathPart, ...], subtype: AttackSubtypeToken) -> NBaIoTSourceIdentity:
     device = _device(parts[-3])
     attack_directory = parts[-2]
     if not attack_directory.endswith(NBaIoTArtifactName.ATTACK_DIRECTORY_SUFFIX):
@@ -274,7 +317,7 @@ def _attack_source_identity(
         attack_subtype = NBaIoTAttackSubtype(subtype)
     except ValueError as error:
         raise ValueError("unrecognized N-BaIoT attack path") from error
-    return device, NBaIoTSourceLabel.ATTACK, family, attack_subtype
+    return NBaIoTSourceIdentity(device, NBaIoTSourceLabel.ATTACK, family, attack_subtype)
 
 
 def device_family(device: NBaIoTDevice) -> NBaIoTDeviceFamily:
