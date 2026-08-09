@@ -11,7 +11,7 @@ from datp_core.analysis.evidence import AnalysisAssetName
 from datp_core.analysis.metrics.models import AvailableMetric, metric_by_id
 from datp_core.app.contracts import AnchorRequirement, CampaignRole, OverwriteMode
 from datp_core.app.layout import ANCHOR_DIAGNOSTICS_DIRECTORY, ResearchArtifact, ResearchDirectory
-from datp_core.app.models import DetailText, DispatchOutcome, ThresholdMethodOutcome
+from datp_core.app.models import DetailText, DispatchOutcome, ReportResult, ThresholdMethodOutcome
 from datp_core.app.planning import PlanDisposition, PlanningEvidence, PlanReason, expand_experiment_plan
 from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
@@ -139,7 +139,7 @@ class ReportHandler(Protocol):
         self,
         experiment_id: ExperimentId,
         overwrite: OverwriteMode,
-    ) -> tuple[tuple[Path, ...], DetailText]: ...
+    ) -> ReportResult: ...
 
 
 class AnalysisMarker(Protocol):
@@ -430,16 +430,16 @@ def _dispatch_analysis(
             ),
             subject=experiment_id,
         )
-    paths, detail = _report_heterogeneity(experiment_id, overwrite)
+    report = _report_heterogeneity(experiment_id, overwrite)
     return DispatchOutcome(
-        detail=DetailText(f"analysis-only experiment validated frozen evidence: {detail}"),
+        detail=DetailText(f"analysis-only experiment validated frozen evidence: {report.detail}"),
         method_outcomes=tuple(
             ThresholdMethodOutcome(
                 method=method,
                 status=ThresholdMethodExecutionStatus.COMPLETED,
                 detail=DetailText(
                     "analysis artifact generated from validated frozen confirmatory score evidence: "
-                    + ",".join(str(path) for path in paths)
+                    + ",".join(str(path) for path in report.paths)
                 ),
             )
             for method in _declared_methods(experiment_id)
@@ -447,8 +447,7 @@ def _dispatch_analysis(
     )
 
 
-def _report_confirmatory(experiment_id: ExperimentId, overwrite: OverwriteMode) -> tuple[tuple[Path, ...], DetailText]:
-    del experiment_id
+def _report_confirmatory(experiment_id: ExperimentId, overwrite: OverwriteMode) -> ReportResult:
     from datp_core.experiments.centralized_reference import (
         NBAIOT_CENTRALIZED_REFERENCE,
         report_centralized_reference,
@@ -458,15 +457,21 @@ def _report_confirmatory(experiment_id: ExperimentId, overwrite: OverwriteMode) 
         NBAIOT_CENTRALIZED_REFERENCE, output_root=OUTPUTS_ROOT, overwrite=overwrite.requested
     )
     path = analyze_confirmatory_campaign(anchor_gate_diagnostics_directory=ANCHOR_DIAGNOSTICS_DIRECTORY)
-    return (centralized, path), DetailText(f"centralized_reference={centralized} confirmatory={path}")
+    return ReportResult(
+        experiment=experiment_id,
+        paths=(centralized, path),
+        detail=DetailText(f"centralized_reference={centralized} confirmatory={path}"),
+    )
 
 
-def _report_external(experiment_id: ExperimentId, overwrite: OverwriteMode) -> tuple[tuple[Path, ...], DetailText]:
+def _report_external(experiment_id: ExperimentId, overwrite: OverwriteMode) -> ReportResult:
     if experiment_id is ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION:
         result = analyze_external_validation_campaign(output_root=OUTPUTS_ROOT, overwrite=overwrite.requested)
         benign = analyze_external_benign_statistics(output_root=OUTPUTS_ROOT, overwrite=overwrite.requested)
-        return (result.output_directory, benign.output_directory), DetailText(
-            f"paired={result.output_directory} benign_statistics={benign.output_directory}"
+        return ReportResult(
+            experiment=experiment_id,
+            paths=(result.output_directory, benign.output_directory),
+            detail=DetailText(f"paired={result.output_directory} benign_statistics={benign.output_directory}"),
         )
     if experiment_id is ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY:
         from datp_core.experiments.centralized_reference import (
@@ -478,13 +483,15 @@ def _report_external(experiment_id: ExperimentId, overwrite: OverwriteMode) -> t
         centralized = report_centralized_reference(
             CIC_CENTRALIZED_REFERENCE, output_root=OUTPUTS_ROOT, overwrite=overwrite.requested
         )
-        return (result.output_directory, centralized), DetailText(
-            f"boundary={result.output_directory} centralized_reference={centralized}"
+        return ReportResult(
+            experiment=experiment_id,
+            paths=(result.output_directory, centralized),
+            detail=DetailText(f"boundary={result.output_directory} centralized_reference={centralized}"),
         )
     raise ReportEvidenceError(ErrorMessage(f"unsupported external report: {experiment_id.value}"))
 
 
-def _report_heterogeneity(experiment_id: ExperimentId, overwrite: OverwriteMode) -> tuple[tuple[Path, ...], DetailText]:
+def _report_heterogeneity(experiment_id: ExperimentId, overwrite: OverwriteMode) -> ReportResult:
     if experiment_id is ExperimentId.CONTROLLED_HETEROGENEITY_SWEEP:
         path = analyze_controlled_heterogeneity_sweep(overwrite=overwrite.requested)
     elif experiment_id is ExperimentId.PER_CLIENT_SCORE_GEOMETRY:
@@ -495,11 +502,10 @@ def _report_heterogeneity(experiment_id: ExperimentId, overwrite: OverwriteMode)
         path = analyze_threshold_movement_tradeoff(overwrite=overwrite.requested)
     else:
         raise ReportEvidenceError(ErrorMessage(f"unsupported heterogeneity report: {experiment_id.value}"))
-    return (path,), DetailText(str(path))
+    return ReportResult(experiment=experiment_id, paths=(path,), detail=DetailText(str(path)))
 
 
-def _report_fedprox(experiment_id: ExperimentId, overwrite: OverwriteMode) -> tuple[tuple[Path, ...], DetailText]:
-    del experiment_id
+def _report_fedprox(experiment_id: ExperimentId, overwrite: OverwriteMode) -> ReportResult:
     from datp_core.experiments.training_stress import (
         TrainingStressArtifactName,
         analyze_fedprox_absorption,
@@ -549,11 +555,14 @@ def _report_fedprox(experiment_id: ExperimentId, overwrite: OverwriteMode) -> tu
         raise ReportEvidenceError(
             ErrorMessage(str(error)), subject=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST
         ) from error
-    return tuple(paths), DetailText(f"coefficients={len(paths) - 1}")
+    return ReportResult(
+        experiment=experiment_id,
+        paths=tuple(paths),
+        detail=DetailText(f"coefficients={len(paths) - 1}"),
+    )
 
 
-def _report_ditto(experiment_id: ExperimentId, overwrite: OverwriteMode) -> tuple[tuple[Path, ...], DetailText]:
-    del experiment_id
+def _report_ditto(experiment_id: ExperimentId, overwrite: OverwriteMode) -> ReportResult:
     from datp_core.experiments.training_stress import (
         analyze_ditto_absorption,
         ditto_analysis_directory,
@@ -579,19 +588,22 @@ def _report_ditto(experiment_id: ExperimentId, overwrite: OverwriteMode) -> tupl
         for item in results
     )
     analyze_ditto_absorption(results, reference_evidence=references, output_directory=output)
-    return (output,), DetailText(f"analysis={output}")
+    return ReportResult(experiment=experiment_id, paths=(output,), detail=DetailText(f"analysis={output}"))
 
 
-def _report_temporal(experiment_id: ExperimentId, overwrite: OverwriteMode) -> tuple[tuple[Path, ...], DetailText]:
-    del experiment_id
+def _report_temporal(experiment_id: ExperimentId, overwrite: OverwriteMode) -> ReportResult:
     seeds = load_temporal_campaign_seeds(output_root=OUTPUTS_ROOT)
     campaign = TemporalCampaignResult(seeds=seeds, analyses=())
     analyses = analyze_temporal_campaign(campaign, output_root=OUTPUTS_ROOT, overwrite=overwrite.requested)
     paths = tuple(item.output_directory for item in analyses)
-    return paths, DetailText(f"temporal_methods={len(paths)}")
+    return ReportResult(
+        experiment=experiment_id,
+        paths=paths,
+        detail=DetailText(f"temporal_methods={len(paths)}"),
+    )
 
 
-def _report_robustness(experiment_id: ExperimentId, overwrite: OverwriteMode) -> tuple[tuple[Path, ...], DetailText]:
+def _report_robustness(experiment_id: ExperimentId, overwrite: OverwriteMode) -> ReportResult:
     if experiment_id is ExperimentId.SHARED_CONSTRUCTION_SENSITIVITY:
         result = report_shared_construction_sensitivity(experiment_id, overwrite.requested)
     elif experiment_id is ExperimentId.QUANTILE_SENSITIVITY:
@@ -606,10 +618,10 @@ def _report_robustness(experiment_id: ExperimentId, overwrite: OverwriteMode) ->
         result = report_local_conformal_coverage(experiment_id, overwrite.requested)
     else:
         raise ReportEvidenceError(ErrorMessage(f"unsupported threshold robustness report: {experiment_id.value}"))
-    return result.directories, DetailText(result.detail)
+    return ReportResult(experiment=experiment_id, paths=result.directories, detail=DetailText(result.detail))
 
 
-def _report_estimation(experiment_id: ExperimentId, overwrite: OverwriteMode) -> tuple[tuple[Path, ...], DetailText]:
+def _report_estimation(experiment_id: ExperimentId, overwrite: OverwriteMode) -> ReportResult:
     if experiment_id is ExperimentId.FEDERATED_BENIGN_STATISTICS_COMPARISON:
         result = report_federated_benign_statistics_comparison(experiment_id, overwrite.requested)
     elif experiment_id is ExperimentId.FEDERATED_QUANTILE_ESTIMATION:
@@ -618,14 +630,14 @@ def _report_estimation(experiment_id: ExperimentId, overwrite: OverwriteMode) ->
         result = report_fixed_coefficient_statistics_sensitivity(experiment_id, overwrite.requested)
     else:
         raise ReportEvidenceError(ErrorMessage(f"unsupported federated estimation report: {experiment_id.value}"))
-    return result.directories, DetailText(result.detail)
+    return ReportResult(experiment=experiment_id, paths=result.directories, detail=DetailText(result.detail))
 
 
 def _supplementary_directory(experiment_id: ExperimentId) -> Path:
     return OUTPUTS_ROOT / ResearchDirectory.SUPPLEMENTARY / experiment_id.value
 
 
-def _report_supplementary(experiment_id: ExperimentId, overwrite: OverwriteMode) -> tuple[tuple[Path, ...], DetailText]:
+def _report_supplementary(experiment_id: ExperimentId, overwrite: OverwriteMode) -> ReportResult:
     from datp_core.app.campaign import seed_cohort_for
 
     declaration = _declaration(experiment_id)
@@ -642,7 +654,7 @@ def _report_supplementary(experiment_id: ExperimentId, overwrite: OverwriteMode)
     )
     report_path = _supplementary_directory(experiment_id) / ResearchArtifact.EVIDENCE_REPORT
     if report_path.is_file() and not overwrite.requested:
-        return (report_path,), DetailText(f"reused {report_path}")
+        return ReportResult(experiment=experiment_id, paths=(report_path,), detail=DetailText(f"reused {report_path}"))
     lines = [
         "# DATP-Core Supplementary Evidence",
         "",
@@ -679,7 +691,7 @@ def _report_supplementary(experiment_id: ExperimentId, overwrite: OverwriteMode)
         )
     report_path.parent.mkdir(parents=True, exist_ok=True)
     write_text_atomically(report_path, FileContentText("\n".join(lines) + "\n"))
-    return (report_path,), DetailText(f"generated {report_path}")
+    return ReportResult(experiment=experiment_id, paths=(report_path,), detail=DetailText(f"generated {report_path}"))
 
 
 def _confirmatory_marker(experiment_id: ExperimentId) -> bool:

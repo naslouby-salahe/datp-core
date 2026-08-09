@@ -9,7 +9,12 @@ from datp_core.core.errors import (
     LeakageError,
     ScientificContractError,
 )
-from datp_core.core.identifiers import CentralizedThresholdMethod, ContractSubject, FederatedThresholdMethod
+from datp_core.core.identifiers import (
+    AnalysisReasonText,
+    CentralizedThresholdMethod,
+    ContractSubject,
+    FederatedThresholdMethod,
+)
 from datp_core.core.numeric import Quantile, RowCount
 from datp_core.data.populations.contracts import PopulationCapabilities
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
@@ -200,7 +205,7 @@ def _family_threshold_or_unavailable(request: ThresholdConstructionRequest) -> T
             method=FederatedThresholdMethod.FAMILY_THRESHOLD,
             coordinate=request.coordinate,
             reason=ThresholdInfeasibilityReason.FAMILY_TAXONOMY_UNAVAILABLE,
-            detail="No family taxonomy was supplied for this population.",
+            detail=AnalysisReasonText("No family taxonomy was supplied for this population."),
         )
     return construct_family_threshold(request.eligible, request.quantile, request.family_by_client)
 
@@ -211,7 +216,7 @@ def _cluster_threshold_or_unavailable(request: ThresholdConstructionRequest) -> 
             method=FederatedThresholdMethod.CLUSTER_THRESHOLD,
             coordinate=request.coordinate,
             reason=ThresholdInfeasibilityReason.GROUP_COUNT_EXCEEDS_ELIGIBLE_POPULATION,
-            detail="The eligible population does not exceed the locked cluster group count.",
+            detail=AnalysisReasonText("The eligible population does not exceed the locked cluster group count."),
         )
     match request.cluster_threshold_aggregation:
         case ClusterThresholdAggregation.ARITHMETIC_MEAN_OF_ELIGIBLE_LOCAL_THRESHOLDS:

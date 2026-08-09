@@ -8,7 +8,7 @@ from datp_core.core.errors import (
     ScientificContractError,
     require_contract,
 )
-from datp_core.core.identifiers import ContractSubject, FederatedThresholdMethod, ValidationLabel
+from datp_core.core.identifiers import AnalysisReasonText, ContractSubject, FederatedThresholdMethod, ValidationLabel
 from datp_core.core.numeric import Quantile, ShrinkageWeight, ThresholdValue, floats_exactly_equal
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
@@ -116,5 +116,7 @@ def construct_size_aware_shrinkage(coordinate: FederatedTrainingCoordinate) -> T
         method=FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE,
         coordinate=coordinate,
         reason=ThresholdInfeasibilityReason.SIZE_AWARE_SHRINKAGE_FUNCTION_UNRESOLVED,
-        detail=("Lambda(n_k) must be predeclared, but no size-aware function is scientifically locked."),
+        detail=AnalysisReasonText(
+            "Lambda(n_k) must be predeclared, but no size-aware function is scientifically locked."
+        ),
     )

@@ -8,7 +8,6 @@ from datp_core.core.errors import (
     ErrorMessage,
     ProtocolValidationError,
     ScientificContractError,
-    UnknownIdentifierError,
 )
 from datp_core.core.identifiers import ExperimentId, ExperimentReadiness
 from datp_core.data.populations.declarations import POPULATIONS
@@ -17,7 +16,7 @@ from datp_core.experiments.graph import (
     ResolvedProtocolGraph,
     validate_protocol_graph,
 )
-from datp_core.experiments.registry import EXPERIMENTS, ExperimentDeclaration
+from datp_core.experiments.registry import require_experiment_declaration
 from datp_core.thresholds.protocols import require_calibration_subsample_replicate_count
 
 
@@ -27,16 +26,6 @@ class ValidationResult:
     experiment_ids: tuple[ExperimentId, ...]
     registered_recipes: tuple[ExperimentId, ...]
     suppressed_experiments: tuple[ExperimentId, ...]
-
-
-def require_experiment_declaration(experiment_id: ExperimentId) -> ExperimentDeclaration:
-    matches = tuple(item for item in EXPERIMENTS if item.id is experiment_id)
-    if len(matches) != 1:
-        raise UnknownIdentifierError(
-            ErrorMessage(f"experiment must be declared exactly once: {experiment_id.value}"),
-            subject=experiment_id,
-        )
-    return matches[0]
 
 
 def reject_anchor_as_experiment(experiment_id: ExperimentId) -> None:

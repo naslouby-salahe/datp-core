@@ -11,7 +11,8 @@ from datp_core.analysis.contrasts import PairedContrast, SupplementaryPairedAnal
 from datp_core.analysis.evidence import AnalyzeExternalEvidenceRequest, analyze_external_evidence
 from datp_core.analysis.inference.contracts import PairedInferenceProtocol
 from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
-from datp_core.analysis.metrics.models import MetricStatus, metric_by_id
+from datp_core.analysis.metrics.models import metric_by_id
+from datp_core.analysis.metrics.semantics import metric_value
 from datp_core.app.planning import PlanReason, expand_experiment_plan
 from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.artifacts.provenance import Checksum
@@ -321,8 +322,7 @@ def _benign_statistics_client(summary: ClientBenignSummary) -> ExternalBenignSta
 
 
 def _optional_metric(document: FederatedEvaluationDocument, metric: MetricId) -> MetricValue | None:
-    result = metric_by_id(document.population.metrics, metric)
-    return result.value if result.status is MetricStatus.AVAILABLE else None
+    return metric_value(metric_by_id(document.population.metrics, metric))
 
 
 def _load_threshold_result(path: Path) -> ThresholdConstructionResult:

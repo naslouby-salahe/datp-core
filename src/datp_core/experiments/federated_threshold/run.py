@@ -9,7 +9,8 @@ from typing import TYPE_CHECKING, ClassVar
 
 from pydantic import TypeAdapter
 
-from datp_core.analysis.metrics.models import MetricStatus, metric_by_id
+from datp_core.analysis.metrics.models import metric_by_id
+from datp_core.analysis.metrics.semantics import metric_value
 from datp_core.app.planning import PlanReason, expand_experiment_plan
 from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.artifacts.provenance import Checksum
@@ -23,7 +24,7 @@ from datp_core.core.errors import (
 )
 from datp_core.core.identifiers import (
     AnalysisMarkerText,
-        ExperimentId,
+    ExperimentId,
     FederatedThresholdMethod,
     MetricId,
     PopulationId,
@@ -51,7 +52,7 @@ from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT, SeedCoh
 from datp_core.experiments.execution import execute_declared_experiment_seed
 from datp_core.experiments.execution.evidence import load_evaluation_document
 from datp_core.experiments.execution.layout import EvaluationRunAssetDirectory
-from datp_core.experiments.registry import EXPERIMENTS, ExperimentDeclaration
+from datp_core.experiments.registry import require_experiment_declaration
 from datp_core.runtime.configuration import OUTPUTS_ROOT
 
 if TYPE_CHECKING:
@@ -139,16 +140,6 @@ def _complete_marker(experiment_id: ExperimentId, population: PopulationId) -> P
     return _analysis_directory(experiment_id, population) / AnalysisAssetName.COMPLETE
 
 
-def _declaration_for(experiment_id: ExperimentId) -> ExperimentDeclaration:
-    matches = tuple(item for item in EXPERIMENTS if item.id is experiment_id)
-    if len(matches) != 1:
-        raise ScientificContractError(
-            ErrorMessage(f"experiment must be declared exactly once: {experiment_id.value}"),
-            subject=experiment_id,
-        )
-    return matches[0]
-
-
 def _evaluation_document_path(output_root: Path, coordinate: ExperimentCoordinate) -> Path:
     return (
         evaluation_run_directory(output_root, coordinate)
@@ -178,7 +169,7 @@ def _evaluation_document_for_seed(
     experiment_id: ExperimentId,
     output_root: Path,
 ) -> FederatedEvaluationDocument:
-    declaration = _declaration_for(experiment_id)
+    declaration = require_experiment_declaration(experiment_id)
     plan = expand_experiment_plan(declarations=(declaration,), seed_cohort=SeedCohort(values=(seed,)))
     matches = tuple(
         entry.coordinate
@@ -201,7 +192,7 @@ def _threshold_coordinate_for_seed(
     method: FederatedThresholdMethod,
     experiment_id: ExperimentId,
 ) -> ExperimentCoordinate:
-    declaration = _declaration_for(experiment_id)
+    declaration = require_experiment_declaration(experiment_id)
     plan = expand_experiment_plan(declarations=(declaration,), seed_cohort=SeedCohort(values=(seed,)))
     matches = tuple(
         entry.coordinate
@@ -214,11 +205,6 @@ def _threshold_coordinate_for_seed(
             ErrorMessage(f"threshold coordinate for {method.value} must resolve exactly once in {experiment_id.value}")
         )
     return matches[0]
-
-
-def _try_metric_value(document: FederatedEvaluationDocument, metric: MetricId) -> MetricValue | None:
-    result = metric_by_id(document.population.metrics, metric)
-    return result.value if result.status is MetricStatus.AVAILABLE else None
 
 
 def _mean_metric(values: list[MetricValue]) -> MetricValue | None:
@@ -257,7 +243,7 @@ def _run_estimation_seed(
     output_root: Path,
     overwrite: bool,
 ) -> FederatedEstimationSeedResult:
-    declaration = _declaration_for(experiment_id)
+    declaration = require_experiment_declaration(experiment_id)
     result = execute_declared_experiment_seed(
         declaration=declaration,
         seed_cohort=SeedCohort(values=(training_seed,)),
@@ -360,10 +346,14 @@ def _estimation_summary(
         return EstimationSummaryLoad(summary=None, missing_count=SeedObservationCount(missing))
 
     cv_values = [
-        value for document in documents if (value := _try_metric_value(document, MetricId.FPR_COEFFICIENT_OF_VARIATION))
+        value
+        for document in documents
+        if (value := metric_value(metric_by_id(document.population.metrics, MetricId.FPR_COEFFICIENT_OF_VARIATION)))
     ]
     worst_values = [
-        value for document in documents if (value := _try_metric_value(document, MetricId.WORST_CLIENT_FPR))
+        value
+        for document in documents
+        if (value := metric_value(metric_by_id(document.population.metrics, MetricId.WORST_CLIENT_FPR)))
     ]
     diagnostics = _collect_estimation_diagnostics(
         tuple(documents),
@@ -412,7 +402,7 @@ def report_federated_benign_statistics_comparison(
     overwrite: bool,
 ) -> AnalysisReportPublication:
     del overwrite
-    declaration = _declaration_for(experiment_id)
+    declaration = require_experiment_declaration(experiment_id)
     directory = _analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
     directory.mkdir(parents=True, exist_ok=True)
     rows: list[EstimationSummary] = []
@@ -458,7 +448,7 @@ def report_federated_quantile_estimation(
     overwrite: bool,
 ) -> AnalysisReportPublication:
     del overwrite
-    declaration = _declaration_for(experiment_id)
+    declaration = require_experiment_declaration(experiment_id)
     directory = _analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
     directory.mkdir(parents=True, exist_ok=True)
     rows: list[EstimationSummary] = []
@@ -512,8 +502,8 @@ def _fixed_coefficient_rows_for_seed(
 ) -> tuple[FixedCoefficientSummary, ...]:
     rows: list[FixedCoefficientSummary] = []
     document = _evaluation_document_for_seed(seed, method, experiment_id, OUTPUTS_ROOT)
-    cv_fpr = _try_metric_value(document, MetricId.FPR_COEFFICIENT_OF_VARIATION)
-    worst_fpr = _try_metric_value(document, MetricId.WORST_CLIENT_FPR)
+    cv_fpr = metric_value(metric_by_id(document.population.metrics, MetricId.FPR_COEFFICIENT_OF_VARIATION))
+    worst_fpr = metric_value(metric_by_id(document.population.metrics, MetricId.WORST_CLIENT_FPR))
     if method is FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS:
         coordinate = _threshold_coordinate_for_seed(seed, method, experiment_id)
         threshold_path = _threshold_result_path(OUTPUTS_ROOT, coordinate)
@@ -552,7 +542,7 @@ def report_fixed_coefficient_statistics_sensitivity(
     overwrite: bool,
 ) -> AnalysisReportPublication:
     del overwrite
-    declaration = _declaration_for(experiment_id)
+    declaration = require_experiment_declaration(experiment_id)
     directory = _analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
     directory.mkdir(parents=True, exist_ok=True)
     rows: list[FixedCoefficientSummary] = []

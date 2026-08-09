@@ -279,8 +279,7 @@ def generate_report(
         return _generate_campaign_report(overwrite)
     recipe = recipe_for(experiment_id)
     _enforce_anchor_gate(experiment_id, recipe.anchor_requirement)
-    paths, detail = recipe.report(experiment_id, overwrite)
-    return ReportResult(experiment=experiment_id, paths=paths, detail=detail)
+    return recipe.report(experiment_id, overwrite)
 
 
 def _generate_campaign_report(overwrite: OverwriteMode) -> ReportResult:

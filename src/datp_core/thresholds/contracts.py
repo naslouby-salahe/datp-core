@@ -12,6 +12,7 @@ from datp_core.core.errors import (
     require_contract,
 )
 from datp_core.core.identifiers import (
+    AnalysisReasonText,
     AvailabilityStatus,
     ContractSubject,
     FamilyIdentity,
@@ -44,14 +45,7 @@ class ThresholdUnavailableResult:
     method: FederatedThresholdMethod
     coordinate: FederatedTrainingCoordinate
     reason: ThresholdInfeasibilityReason
-    detail: str
-
-    def __post_init__(self) -> None:
-        require_contract(
-            bool(self.detail.strip()),
-            ErrorMessage("an unavailable threshold result requires a human-readable detail"),
-            ContractSubject.THRESHOLD,
-        )
+    detail: AnalysisReasonText
 
 
 @dataclass(frozen=True, slots=True)

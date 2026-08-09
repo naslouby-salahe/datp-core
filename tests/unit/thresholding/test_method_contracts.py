@@ -4,9 +4,9 @@ from tests.unit.thresholding.helpers import COORDINATE, identity
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import (
+    AnalysisReasonText,
     AvailabilityStatus,
     FamilyIdentity,
-    FederatedThresholdMethod,
 )
 from datp_core.core.numeric import (
     ClusterIndex,
@@ -28,8 +28,6 @@ from datp_core.thresholds.contracts import (
     LocalQuantile,
     ThresholdAssignment,
     ThresholdDiagnostic,
-    ThresholdInfeasibilityReason,
-    ThresholdUnavailableResult,
 )
 from datp_core.thresholds.policies.cluster import (
     ClusterFingerprint,
@@ -306,13 +304,5 @@ def test_federated_statistics_contracts_enforce_variance_identities() -> None:
 
 
 def test_unavailable_threshold_requires_human_readable_detail() -> None:
-    with pytest.raises(
-        ScientificContractError,
-        match="human-readable detail",
-    ):
-        ThresholdUnavailableResult(
-            method=FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE,
-            coordinate=COORDINATE,
-            reason=(ThresholdInfeasibilityReason.SIZE_AWARE_SHRINKAGE_FUNCTION_UNRESOLVED),
-            detail="   ",
-        )
+    with pytest.raises(ValueError, match="non-empty string"):
+        AnalysisReasonText("   ")

@@ -6,7 +6,7 @@ import pytest
 
 from datp_core.app.campaign import build_programme_plan, seed_cohort_for
 from datp_core.app.contracts import OverwriteMode
-from datp_core.app.models import DetailText
+from datp_core.app.models import DetailText, ReportResult
 from datp_core.app.planning import PlanDisposition
 from datp_core.app.recipes import recipe_for
 from datp_core.app.research import registered_experiment_ids
@@ -83,10 +83,14 @@ def test_analysis_only_recipe_generates_or_validates_its_publication_before_repo
 ) -> None:
     observed: list[ExperimentId] = []
 
-    def report(experiment_id: ExperimentId, overwrite: OverwriteMode) -> tuple[tuple[Path, ...], DetailText]:
+    def report(experiment_id: ExperimentId, overwrite: OverwriteMode) -> ReportResult:
         assert overwrite is OverwriteMode.KEEP_EXISTING
         observed.append(experiment_id)
-        return (tmp_path,), DetailText("validated mechanism publication")
+        return ReportResult(
+            experiment=experiment_id,
+            paths=(tmp_path,),
+            detail=DetailText("validated mechanism publication"),
+        )
 
     monkeypatch.setattr("datp_core.app.recipes._report_heterogeneity", report)
     recipe = recipe_for(ExperimentId.PER_CLIENT_SCORE_GEOMETRY)

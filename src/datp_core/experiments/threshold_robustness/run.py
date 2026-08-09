@@ -6,8 +6,9 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from datp_core.analysis.metrics.models import MetricStatus, metric_by_id
+from datp_core.analysis.metrics.models import metric_by_id
 from datp_core.analysis.metrics.population import calculate_population_metrics
+from datp_core.analysis.metrics.semantics import metric_value
 from datp_core.app.planning import PlanReason, expand_experiment_plan
 from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.artifacts.provenance import Checksum
@@ -20,7 +21,7 @@ from datp_core.core.errors import (
 )
 from datp_core.core.identifiers import (
     AnalysisMarkerText,
-        ExperimentId,
+    ExperimentId,
     FederatedThresholdMethod,
     MetricId,
     PopulationId,
@@ -49,7 +50,7 @@ from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT, SeedCoh
 from datp_core.experiments.execution import execute_declared_experiment_seed
 from datp_core.experiments.execution.evidence import load_evaluation_document, population_metric
 from datp_core.experiments.execution.layout import EvaluationRunAssetDirectory
-from datp_core.experiments.registry import EXPERIMENTS, ExperimentDeclaration
+from datp_core.experiments.registry import require_experiment_declaration
 from datp_core.experiments.threshold_robustness.cohorts import (
     compute_intersection_cohort,
     extract_feasible_clients_by_size,
@@ -66,7 +67,6 @@ from datp_core.thresholds.protocols import (
 
 if TYPE_CHECKING:
     from datp_core.analysis.metrics.federated import CalibrationSizeAblationCell, FederatedEvaluationDocument
-    from datp_core.analysis.metrics.models import MetricAvailability
 
 
 class ThresholdRobustnessArtifactName(StrEnum):
@@ -202,16 +202,6 @@ def _summary_path(experiment_id: ExperimentId, population: PopulationId) -> Path
     return _analysis_directory(experiment_id, population) / ThresholdRobustnessArtifactName.SUMMARY
 
 
-def _declaration_for(experiment_id: ExperimentId) -> ExperimentDeclaration:
-    matches = tuple(item for item in EXPERIMENTS if item.id is experiment_id)
-    if len(matches) != 1:
-        raise ScientificContractError(
-            ErrorMessage(f"experiment must be declared exactly once: {experiment_id.value}"),
-            subject=experiment_id,
-        )
-    return matches[0]
-
-
 def _evaluation_document_path(output_root: Path, coordinate: ExperimentCoordinate) -> Path:
     return (
         evaluation_run_directory(output_root, coordinate)
@@ -228,7 +218,7 @@ def _evaluation_document_for_seed(
     *,
     quantile: Quantile | None = None,
 ) -> FederatedEvaluationDocument:
-    declaration = _declaration_for(experiment_id)
+    declaration = require_experiment_declaration(experiment_id)
     plan = expand_experiment_plan(declarations=(declaration,), seed_cohort=SeedCohort(values=(seed,)))
     matches = tuple(
         entry.coordinate
@@ -254,7 +244,7 @@ def _run_robustness_seed(
     output_root: Path,
     overwrite: bool,
 ) -> ThresholdRobustnessSeedResult:
-    declaration = _declaration_for(experiment_id)
+    declaration = require_experiment_declaration(experiment_id)
     result = execute_declared_experiment_seed(
         declaration=declaration,
         seed_cohort=SeedCohort(values=(training_seed,)),
@@ -267,11 +257,6 @@ def _run_robustness_seed(
         campaign_digest=result.campaign_digest,
         completed_threshold_methods=result.completed_threshold_methods,
     )
-
-
-def _available_metric_value(metrics: tuple[MetricAvailability, ...], metric_id: MetricId) -> MetricValue | None:
-    result = metric_by_id(metrics, metric_id)
-    return result.value if result.status is MetricStatus.AVAILABLE else None
 
 
 def _mean(values: list[MetricValue]) -> MetricValue | None:
@@ -321,7 +306,7 @@ def report_shared_construction_sensitivity(
     overwrite: bool,
 ) -> AnalysisReportPublication:
     del overwrite
-    declaration = _declaration_for(experiment_id)
+    declaration = require_experiment_declaration(experiment_id)
     directory = _analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
     directory.mkdir(parents=True, exist_ok=True)
     rows: list[MethodCvSummary] = []
@@ -367,7 +352,7 @@ def report_quantile_sensitivity(
     overwrite: bool,
 ) -> AnalysisReportPublication:
     del overwrite
-    declaration = _declaration_for(experiment_id)
+    declaration = require_experiment_declaration(experiment_id)
     directory = _analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
     directory.mkdir(parents=True, exist_ok=True)
     rows: list[QuantileSummary] = []
@@ -430,7 +415,7 @@ def report_calibration_size_ablation(
 ) -> AnalysisReportPublication:
     del overwrite
     replicate_count = require_calibration_subsample_replicate_count()
-    declaration = _declaration_for(experiment_id)
+    declaration = require_experiment_declaration(experiment_id)
     directory = _analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
     directory.mkdir(parents=True, exist_ok=True)
     rows: list[CalibrationSizeAblationRow] = []
@@ -453,9 +438,9 @@ def report_calibration_size_ablation(
                         calibration_size=cell.calibration_size,
                         size_classification=classify_calibration_size(cell.calibration_size),
                         replicate=cell.replicate_index,
-                        cv_fpr=_available_metric_value(metrics, MetricId.FPR_COEFFICIENT_OF_VARIATION),
-                        worst_client_fpr=_available_metric_value(metrics, MetricId.WORST_CLIENT_FPR),
-                        p10_macro_f1=_available_metric_value(metrics, MetricId.P10_BINARY_MACRO_F1),
+                        cv_fpr=metric_value(metric_by_id(metrics, MetricId.FPR_COEFFICIENT_OF_VARIATION)),
+                        worst_client_fpr=metric_value(metric_by_id(metrics, MetricId.WORST_CLIENT_FPR)),
+                        p10_macro_f1=metric_value(metric_by_id(metrics, MetricId.P10_BINARY_MACRO_F1)),
                     )
                 )
             fixed_cohort_rows.extend(_fixed_cohort_rows_for_seed(seed, method, cells))
@@ -473,9 +458,9 @@ def report_calibration_size_ablation(
             marker=_complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
             missing_count=SeedObservationCount(missing),
             marker_text=AnalysisMarkerText(
-            "calibration_size_ablation_analysis_complete "
-            f"sizes={len(CALIBRATION_SIZES)} replicates={replicate_count.value}"
-        ),
+                "calibration_size_ablation_analysis_complete "
+                f"sizes={len(CALIBRATION_SIZES)} replicates={replicate_count.value}"
+            ),
         )
     )
 
@@ -511,9 +496,9 @@ def _fixed_cohort_rows_for_seed(
                     replicate=replicate_index,
                     intersection_client_count=ClientCount(intersection_cohort.intersection_count.value),
                     coverage=Ratio(intersection_cohort.intersection_count.value / total_eligible.value),
-                    cv_fpr=_available_metric_value(population.metrics, MetricId.FPR_COEFFICIENT_OF_VARIATION),
-                    worst_client_fpr=_available_metric_value(population.metrics, MetricId.WORST_CLIENT_FPR),
-                    p10_macro_f1=_available_metric_value(population.metrics, MetricId.P10_BINARY_MACRO_F1),
+                    cv_fpr=metric_value(metric_by_id(population.metrics, MetricId.FPR_COEFFICIENT_OF_VARIATION)),
+                    worst_client_fpr=metric_value(metric_by_id(population.metrics, MetricId.WORST_CLIENT_FPR)),
+                    p10_macro_f1=metric_value(metric_by_id(population.metrics, MetricId.P10_BINARY_MACRO_F1)),
                 )
 
     return tuple(_generate())
@@ -557,13 +542,11 @@ def report_fixed_shrinkage_curve(
                 ShrinkageCurveRow(
                     seed=seed,
                     lambda_weight=evaluation.lambda_weight,
-                    cv_fpr=_available_metric_value(
-                        evaluation.population.metrics,
-                        MetricId.FPR_COEFFICIENT_OF_VARIATION,
+                    cv_fpr=metric_value(
+                        metric_by_id(evaluation.population.metrics, MetricId.FPR_COEFFICIENT_OF_VARIATION)
                     ),
-                    worst_client_fpr=_available_metric_value(
-                        evaluation.population.metrics,
-                        MetricId.WORST_CLIENT_FPR,
+                    worst_client_fpr=metric_value(
+                        metric_by_id(evaluation.population.metrics, MetricId.WORST_CLIENT_FPR)
                     ),
                 )
             )
@@ -591,7 +574,7 @@ def run_size_aware_shrinkage_seed(
     output_root: Path,
     overwrite: bool,
 ) -> ThresholdRobustnessSeedResult:
-    declaration = _declaration_for(ExperimentId.SIZE_AWARE_SHRINKAGE)
+    declaration = require_experiment_declaration(ExperimentId.SIZE_AWARE_SHRINKAGE)
     filtered = declaration.model_copy(
         update={
             "federated_thresholds": (
@@ -678,8 +661,7 @@ def run_local_conformal_coverage_seed(
 def _client_fpr_for(document: FederatedEvaluationDocument, client: ClientIdentity) -> MetricValue | None:
     for client_result in document.clients:
         if client_result.client == client:
-            metric = metric_by_id(client_result.metrics, MetricId.FALSE_POSITIVE_RATE)
-            return metric.value if metric.status is MetricStatus.AVAILABLE else None
+            return metric_value(metric_by_id(client_result.metrics, MetricId.FALSE_POSITIVE_RATE))
     return None
 
 

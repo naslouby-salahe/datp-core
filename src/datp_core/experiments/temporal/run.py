@@ -22,6 +22,7 @@ from datp_core.analysis.metrics.federated_publication import (
 )
 from datp_core.analysis.metrics.fixed_score_construction import build_federated_evaluation_inputs
 from datp_core.analysis.metrics.models import ClientMetricResult, MetricStatus, metric_by_id
+from datp_core.analysis.metrics.semantics import metric_value
 from datp_core.analysis.temporal import (
     TemporalClientTrajectory,
     TemporalDeploymentProvenance,
@@ -862,8 +863,7 @@ def _client_threshold(client: ClientMetricResult | None) -> MetricValue | None:
 def _client_metric(client: ClientMetricResult | None, metric: MetricId) -> MetricValue | None:
     if client is None:
         return None
-    result = metric_by_id(client.metrics, metric)
-    return result.value if result.status is MetricStatus.AVAILABLE else None
+    return metric_value(metric_by_id(client.metrics, metric))
 
 
 def _cohort_unavailable_reasons(cohort: EvaluationCohortManifest) -> tuple[AnalysisReasonText, ...]:
@@ -873,14 +873,10 @@ def _cohort_unavailable_reasons(cohort: EvaluationCohortManifest) -> tuple[Analy
             continue
         client_id = record.client.client_id
         if record.exclusion_reasons:
-            reasons.extend(
-                AnalysisReasonText(f"{client_id}:{reason.value}") for reason in record.exclusion_reasons
-            )
+            reasons.extend(AnalysisReasonText(f"{client_id}:{reason.value}") for reason in record.exclusion_reasons)
         else:
             reasons.append(
-                AnalysisReasonText(
-                    f"{client_id.value}:{TemporalClientUnavailableReason.NOT_FPR_EVALUABLE.value}"
-                )
+                AnalysisReasonText(f"{client_id.value}:{TemporalClientUnavailableReason.NOT_FPR_EVALUABLE.value}")
             )
     return tuple(reasons)
 
