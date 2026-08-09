@@ -9,7 +9,7 @@ from datp_core.analysis.operational.communication import (
     summarize_communication,
 )
 from datp_core.core.identifiers import CommunicationEstimationMethod, MessageEndpoint
-from datp_core.core.numeric import LogicalElementCount, Seed
+from datp_core.core.numeric import ByteCount, LogicalElementCount, Seed
 
 
 def test_communication_totals_are_exact_serialized_byte_counts() -> None:
@@ -21,7 +21,7 @@ def test_communication_totals_are_exact_serialized_byte_counts() -> None:
         MessageEndpoint("coordinator"),
         MessageDirection.CLIENT_TO_COORDINATOR,
         ThresholdPayloadKind.THRESHOLD_TRANSMISSION,
-        SerializedPayloadEvidence(b"abc", LogicalElementCount(1)),
+        SerializedPayloadEvidence(ByteCount(3), LogicalElementCount(1)),
         None,
         None,
         CommunicationEstimationMethod.SERIALIZED_MESSAGE_SIZE_ESTIMATE,

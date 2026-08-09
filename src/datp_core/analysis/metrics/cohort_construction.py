@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from enum import StrEnum
 
 from datp_core.analysis.metrics.cohorts import (
@@ -45,9 +46,9 @@ def build_evaluation_cohort_manifest(
                 ErrorMessage("client support counts must match the cohort population identity contract"),
                 subject=ContractSubject.CLIENT_IDENTITY,
             )
-        record, client_memberships = _classify_client(client, support, counts, capabilities)
-        records.append(record)
-        memberships.extend(client_memberships)
+        classification = _classify_client(client, support, counts, capabilities)
+        records.append(classification.record)
+        memberships.extend(classification.memberships)
 
     return EvaluationCohortManifest(
         population=population,
@@ -95,12 +96,20 @@ def cohort_record_for_client(
     return match
 
 
+@dataclass(frozen=True, slots=True)
+class _ClientCohortClassification:
+    """Eligibility record and cohort memberships derived for one client."""
+
+    record: ClientEligibilityRecord
+    memberships: tuple[EvaluationCohortMembership, ...]
+
+
 def _classify_client(
     client: ClientIdentity,
     support: CalibrationSize,
     counts: ClientPartitionCounts,
     capabilities: PopulationCapabilities,
-) -> tuple[ClientEligibilityRecord, tuple[EvaluationCohortMembership, ...]]:
+) -> _ClientCohortClassification:
     reasons = _support_exclusion_reasons(counts, support, capabilities.fpr_evaluation)
     calibration_eligible = _is_calibration_eligible(counts, support)
     fpr_evaluable = _is_fpr_evaluable(calibration_eligible, reasons)
@@ -130,7 +139,7 @@ def _classify_client(
         deployment_fallback=counts.deployment_fallback,
         exclusion_reasons=combined_unique_reasons,
     )
-    return record, memberships
+    return _ClientCohortClassification(record=record, memberships=memberships)
 
 
 def _support_exclusion_reasons(

@@ -54,7 +54,7 @@ def test_preprocessing_handoff_requires_declared_split_checksum(nbaiot_canonical
         )
     )
     document = construction.manifest.document
-    _, split_manifest = split_membership(
+    split = split_membership(
         SplitConstructionRequest(
             construction.membership,
             document.population,
@@ -68,7 +68,7 @@ def test_preprocessing_handoff_requires_declared_split_checksum(nbaiot_canonical
         PreprocessingHandoffRequest(
             construction=construction,
             deployment_fallback_client_ids=frozenset(),
-            expected_split_manifest_checksum=split_manifest.assignment_checksum,
+            expected_split_manifest_checksum=split.manifest.assignment_checksum,
         )
     )
     assert handoff.assignments.height == construction.membership.height

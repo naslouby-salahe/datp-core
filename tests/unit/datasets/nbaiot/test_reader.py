@@ -1,6 +1,7 @@
 import pytest
 
-from datp_core.data.nbaiot.reader import NBaIoTReader
+from datp_core.core.numeric import LogicalElementCount, ValidationIssueCount
+from datp_core.data.nbaiot.reader import NBaIoTFiniteValueSummary, NBaIoTReader
 from datp_core.data.nbaiot.schema import NBAIOT_FEATURE_COLUMNS, NBaIoTDevice
 
 
@@ -24,5 +25,9 @@ def test_reader_preserves_relative_provenance_and_rejects_nonfinite_values(tmp_p
 
     assert frame.select("source_path").collect().item() == "Danmini_Doorbell/benign_traffic.csv"
     assert frame.select("physical_client_id").collect().item() == NBaIoTDevice.DANMINI_DOORBELL.value
+    assert reader.finite_value_summary(frame) == NBaIoTFiniteValueSummary(
+        total_rows=LogicalElementCount(1),
+        invalid_rows=ValidationIssueCount(1),
+    )
     with pytest.raises(ValueError, match="non-finite"):
         reader.validate_finite_values(frame)

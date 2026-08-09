@@ -16,7 +16,7 @@ def test_temporal_split_preserves_history_before_future(edge_temporal_eligible_r
         edge_temporal_eligible_root, partition_seed=Seed(0), split_protocol=SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE
     )
     manifest, membership = construction.manifest, construction.membership
-    assignments, split_manifest = split_membership(
+    split = split_membership(
         SplitConstructionRequest(
             membership=membership,
             population=PopulationId.EDGE_TEMPORAL_GROUPS,
@@ -27,13 +27,13 @@ def test_temporal_split_preserves_history_before_future(edge_temporal_eligible_r
             capture_timestamp_column=CaptureTimestampColumn("capture_timestamp"),
         )
     )
-    assert split_manifest.split_protocol is SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE
-    assert assignments.height == membership.height
-    validate_no_future_history_leakage(assignments, CaptureTimestampColumn("capture_timestamp"))
-    historical = assignments.filter(
+    assert split.manifest.split_protocol is SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE
+    assert split.assignments.height == membership.height
+    validate_no_future_history_leakage(split.assignments, CaptureTimestampColumn("capture_timestamp"))
+    historical = split.assignments.filter(
         pl.col("partition_role").is_in([PartitionRole.TRAIN.value, PartitionRole.CALIBRATION.value])
     )
-    future = assignments.filter(
+    future = split.assignments.filter(
         pl.col("partition_role").is_in([PartitionRole.FUTURE_RECALIBRATION.value, PartitionRole.EVALUATION.value])
     )
     assert historical.height > 0

@@ -42,6 +42,7 @@ from datp_core.detector.scoring.models import (
     CentralizedScoringResult,
     GenerateCentralizedScoresRequest,
     GenerateCentralizedScoresResult,
+    PersistedScoreFrame,
     PooledScoreArtifact,
     ScorePartitionBinding,
 )
@@ -277,6 +278,49 @@ def _score_partition(
         device=device,
         destination=destination,
     )
+    return _pooled_score_artifact(request, partition_role, persisted)
+
+
+def _score_artifact_result(
+    request: CentralizedScoringRequest,
+    directory: Path,
+    *,
+    calibration_row_count: RowCount,
+    evaluation_row_count: RowCount,
+) -> CentralizedScoringResult:
+    calibration_path = directory / CentralizedScoreAssetName.CALIBRATION_SCORES
+    evaluation_path = directory / CentralizedScoreAssetName.EVALUATION_SCORES
+    return CentralizedScoringResult(
+        calibration_scores=_pooled_score_artifact(
+            request,
+            PartitionRole.CALIBRATION,
+            PersistedScoreFrame(
+                path=calibration_path,
+                checksum=Checksum.from_file(calibration_path),
+                row_count=calibration_row_count,
+                feature_count=FeatureCount(len(request.feature_names)),
+            ),
+        ),
+        evaluation_scores=_pooled_score_artifact(
+            request,
+            PartitionRole.EVALUATION,
+            PersistedScoreFrame(
+                path=evaluation_path,
+                checksum=Checksum.from_file(evaluation_path),
+                row_count=evaluation_row_count,
+                feature_count=FeatureCount(len(request.feature_names)),
+            ),
+        ),
+        model_tensor_checksum=request.checkpoint.tensor_checksum,
+        preprocessing_state_checksum=request.preprocessing_state_checksum,
+    )
+
+
+def _pooled_score_artifact(
+    request: CentralizedScoringRequest,
+    partition_role: PartitionRole,
+    persisted: PersistedScoreFrame,
+) -> PooledScoreArtifact:
     return PooledScoreArtifact(
         coordinate=request.coordinate,
         partition_role=partition_role,
@@ -287,62 +331,6 @@ def _score_partition(
         row_count=persisted.row_count,
         feature_count=persisted.feature_count,
         serialization_format=SerializationFormat.PARQUET,
-    )
-
-
-def _score_artifact_result(
-    request: CentralizedScoringRequest,
-    directory: Path,
-    *,
-    calibration_row_count: RowCount,
-    evaluation_row_count: RowCount,
-) -> CentralizedScoringResult:
-    calibration, evaluation = _score_artifact_pair(
-        request,
-        directory,
-        calibration_row_count=calibration_row_count,
-        evaluation_row_count=evaluation_row_count,
-    )
-    return CentralizedScoringResult(
-        calibration_scores=calibration,
-        evaluation_scores=evaluation,
-        model_tensor_checksum=request.checkpoint.tensor_checksum,
-        preprocessing_state_checksum=request.preprocessing_state_checksum,
-    )
-
-
-def _score_artifact_pair(
-    request: CentralizedScoringRequest,
-    directory: Path,
-    *,
-    calibration_row_count: RowCount,
-    evaluation_row_count: RowCount,
-) -> tuple[PooledScoreArtifact, PooledScoreArtifact]:
-    calibration_path = directory / CentralizedScoreAssetName.CALIBRATION_SCORES
-    evaluation_path = directory / CentralizedScoreAssetName.EVALUATION_SCORES
-    return (
-        PooledScoreArtifact(
-            coordinate=request.coordinate,
-            partition_role=PartitionRole.CALIBRATION,
-            checkpoint_round=request.checkpoint.round_number,
-            checkpoint_checksum=request.checkpoint.tensor_checksum,
-            path=calibration_path,
-            checksum=Checksum.from_file(calibration_path),
-            row_count=calibration_row_count,
-            feature_count=FeatureCount(len(request.feature_names)),
-            serialization_format=SerializationFormat.PARQUET,
-        ),
-        PooledScoreArtifact(
-            coordinate=request.coordinate,
-            partition_role=PartitionRole.EVALUATION,
-            checkpoint_round=request.checkpoint.round_number,
-            checkpoint_checksum=request.checkpoint.tensor_checksum,
-            path=evaluation_path,
-            checksum=Checksum.from_file(evaluation_path),
-            row_count=evaluation_row_count,
-            feature_count=FeatureCount(len(request.feature_names)),
-            serialization_format=SerializationFormat.PARQUET,
-        ),
     )
 
 

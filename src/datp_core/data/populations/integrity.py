@@ -1,6 +1,7 @@
 """Population, split, cohort, and chronology integrity invariants."""
 
 from collections.abc import Iterable
+from dataclasses import dataclass
 from enum import StrEnum
 
 import polars as pl
@@ -68,6 +69,14 @@ class PopulationIntegrityViolation(StrEnum):
     MISSING_REQUIRED_COLUMNS = "missing_required_columns"
 
 
+@dataclass(frozen=True, slots=True)
+class PopulationOutcomeRowCounts:
+    """Observed membership rows grouped by population outcome."""
+
+    benign_row_count: RowCount
+    attack_row_count: RowCount
+
+
 def reject_non_benign_labels(
     labels: Iterable[PopulationOutcomeLabel],
     *,
@@ -86,9 +95,12 @@ def membership_frame_checksum(membership: pl.DataFrame) -> Checksum:
     )
 
 
-def outcome_row_counts(membership: pl.DataFrame) -> tuple[RowCount, RowCount]:
+def outcome_row_counts(membership: pl.DataFrame) -> PopulationOutcomeRowCounts:
     benign = int(membership.filter(pl.col(OUTCOME_LABEL_COLUMN) == _BENIGN).height)
-    return RowCount(benign), RowCount(membership.height - benign)
+    return PopulationOutcomeRowCounts(
+        benign_row_count=RowCount(benign),
+        attack_row_count=RowCount(membership.height - benign),
+    )
 
 
 def validate_population_manifest(
@@ -309,8 +321,8 @@ def _validate_label_counts(
     benign_count: RowCount,
     attack_count: RowCount,
 ) -> None:
-    observed_benign, observed_attack = outcome_row_counts(membership)
-    if observed_benign != benign_count or observed_attack != attack_count:
+    observed = outcome_row_counts(membership)
+    if observed.benign_row_count != benign_count or observed.attack_row_count != attack_count:
         raise DataIntegrityError(
             ErrorMessage("membership outcome counts disagree with the population manifest"),
             subject=PopulationFrameColumn.OUTCOME_LABEL,

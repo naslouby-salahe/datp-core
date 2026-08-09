@@ -121,7 +121,7 @@ def finalize_population(request: PopulationFinalizationRequest) -> PopulationMan
             reason=PopulationConstructionViolation.DECLARATION_MISMATCH,
         )
     membership = select_membership_frame(request.membership)
-    benign, attack = outcome_row_counts(membership)
+    outcome_counts = outcome_row_counts(membership)
     feasibility = assess_declared_feasibility(
         expected_count=declaration.client_count,
         candidate_ids=request.candidate_ids,
@@ -140,8 +140,8 @@ def finalize_population(request: PopulationFinalizationRequest) -> PopulationMan
             accepted_clients=request.accepted_ids,
             excluded_client_ids=request.excluded_ids,
             total_membership_rows=RowCount(membership.height),
-            benign_row_count=benign,
-            attack_row_count=attack,
+            benign_row_count=outcome_counts.benign_row_count,
+            attack_row_count=outcome_counts.attack_row_count,
             membership_checksum=membership_frame_checksum(membership),
             canonical_schema_checksum=request.canonical_schema_checksum,
             feasibility_status=feasibility.status,
@@ -235,7 +235,7 @@ def build_preprocessing_handoff(
             client_partition_counts=counts,
             deployment_fallback_client_ids=fallback_clients,
         )
-    assignments, split_manifest = split_membership(
+    split = split_membership(
         SplitConstructionRequest(
             membership=membership,
             population=document.population,
@@ -247,16 +247,16 @@ def build_preprocessing_handoff(
         )
     )
     _require_split_handoff_checksum(
-        split_manifest,
+        split.manifest,
         request.expected_split_manifest_checksum,
         document.population,
     )
     return PreprocessingHandoff(
         population_manifest=construction.manifest,
         membership=membership,
-        assignments=assignments,
+        assignments=split.assignments,
         client_partition_counts=_client_partition_counts(
-            assignments,
+            split.assignments,
             candidate_clients,
             deployment_fallback_clients=fallback_clients,
         ),

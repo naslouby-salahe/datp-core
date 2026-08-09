@@ -95,7 +95,7 @@ def select_checkpoint(
         preprocessing_state_set_checksum=preprocessing_state_set_checksum,
         split_manifest_checksum=split_manifest_checksum,
     )
-    statused, selected = select_terminal_checkpoint(
+    selection = select_terminal_checkpoint(
         ordered,
         protocol.maximum_round,
         rebuild=lambda candidate, status: replace(candidate, status=status),
@@ -103,8 +103,8 @@ def select_checkpoint(
     return CheckpointDecision(
         coordinate=coordinate,
         client=client,
-        selected=selected,
-        candidates=statused,
+        selected=selection.selected,
+        candidates=selection.candidates,
         checkpoint_protocol=protocol,
         status=CheckpointStatus.SELECTED_BY_NON_TEST_RULE,
     )

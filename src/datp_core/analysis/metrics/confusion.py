@@ -1,6 +1,7 @@
 """Strict held-out prediction and confusion-count semantics."""
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from math import isfinite
 
 from datp_core.analysis.metrics.models import ConfusionCounts
@@ -12,6 +13,14 @@ from datp_core.core.errors import (
 from datp_core.core.identifiers import ContractSubject, PartitionRole, StableRowId
 from datp_core.core.numeric import RowCount, ScoreValue, ThresholdValue
 from datp_core.data.populations.contracts import PopulationOutcomeLabel
+
+
+@dataclass(frozen=True, slots=True)
+class _PredictionsByOutcome:
+    """Held-out attack predictions partitioned by their observed outcome."""
+
+    benign: tuple[bool, ...]
+    attack: tuple[bool, ...]
 
 
 def predicted_attack(score: ScoreValue, threshold: ThresholdValue) -> bool:
@@ -47,24 +56,24 @@ def calculate_confusion_counts(
             )
         seen.add(row_id)
 
-    benign_predictions, attack_predictions = _partition_predictions(scores, labels, threshold)
-    if attack_predictions and not attack_assignment_valid:
+    predictions = _partition_predictions(scores, labels, threshold)
+    if predictions.attack and not attack_assignment_valid:
         raise ScientificContractError(
             ErrorMessage("attack rows cannot enter a client with invalid attack assignment"),
             subject=ContractSubject.ATTACK_LABELS,
         )
     return ConfusionCounts(
-        true_negative=RowCount(benign_predictions.count(False)),
-        false_positive=RowCount(benign_predictions.count(True)),
-        true_positive=RowCount(attack_predictions.count(True)),
-        false_negative=RowCount(attack_predictions.count(False)),
+        true_negative=RowCount(predictions.benign.count(False)),
+        false_positive=RowCount(predictions.benign.count(True)),
+        true_positive=RowCount(predictions.attack.count(True)),
+        false_negative=RowCount(predictions.attack.count(False)),
         attack_assignment_valid=attack_assignment_valid,
     )
 
 
 def _partition_predictions(
     scores: Sequence[ScoreValue], labels: Sequence[PopulationOutcomeLabel], threshold: ThresholdValue
-) -> tuple[tuple[bool, ...], tuple[bool, ...]]:
+) -> _PredictionsByOutcome:
     benign: list[bool] = []
     attack: list[bool] = []
     for score, label in zip(scores, labels, strict=True):
@@ -79,4 +88,4 @@ def _partition_predictions(
             attack.append(prediction)
         else:
             raise ScientificContractError(ErrorMessage("unrecognized evaluation label"), subject=ContractSubject.LABEL)
-    return tuple(benign), tuple(attack)
+    return _PredictionsByOutcome(benign=tuple(benign), attack=tuple(attack))

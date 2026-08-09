@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 import numpy as np
 
 from datp_core.analysis.metrics.cohorts import EvaluationCohortManifest
@@ -24,6 +26,18 @@ from datp_core.core.numeric import MetricValue, Quantile, RowCount
 from datp_core.data.populations.contracts import ClientIdentity
 
 
+@dataclass(frozen=True, slots=True)
+class _PopulationResultClassification:
+    """Partitioned client results and aggregate counts for one population evaluation."""
+
+    fpr_evaluable_results: tuple[ClientMetricResult, ...]
+    fpr_values: tuple[MetricValue, ...]
+    excluded_clients: tuple[ClientIdentity, ...]
+    attack_evaluable_count: RowCount
+    deployment_fallback_count: RowCount
+    unavailable_count: RowCount
+
+
 def calculate_population_metrics(
     results: tuple[ClientMetricResult, ...],
     *,
@@ -46,24 +60,17 @@ def calculate_population_metrics(
             ErrorMessage("population results require one fixed coordinate, threshold method, and evidence role")
         )
 
-    (
-        fpr_evaluable,
-        fpr_values,
-        excluded_clients,
-        attack_evaluable_count,
-        fallback_count,
-        unavailable_count,
-    ) = _classify_population_results(results)
-
-    fpr_evaluable_tuple = tuple(fpr_evaluable)
-    fpr_values_tuple = tuple(fpr_values)
+    classification = _classify_population_results(results)
 
     if cohort is None:
-        calibration_eligible_count = len(fpr_evaluable)
+        calibration_eligible_count = len(classification.fpr_evaluable_results)
     else:
         calibration_eligible_count = sum(1 for record in cohort.records if record.calibration_eligible)
 
-    aggregates = _population_metric_records(fpr_evaluable_tuple, fpr_values_tuple)
+    aggregates = _population_metric_records(
+        classification.fpr_evaluable_results,
+        classification.fpr_values,
+    )
 
     return PopulationMetricResult(
         coordinate=first.coordinate,
@@ -72,11 +79,11 @@ def calculate_population_metrics(
         metrics=aggregates.metrics,
         candidate_client_count=RowCount(len(results)),
         calibration_eligible_client_count=RowCount(calibration_eligible_count),
-        fpr_evaluable_client_count=RowCount(len(fpr_values)),
-        attack_evaluable_client_count=attack_evaluable_count,
-        deployment_fallback_count=fallback_count,
-        unavailable_client_count=unavailable_count,
-        excluded_clients=tuple(sorted(excluded_clients, key=lambda item: item.client_id.value)),
+        fpr_evaluable_client_count=RowCount(len(classification.fpr_values)),
+        attack_evaluable_client_count=classification.attack_evaluable_count,
+        deployment_fallback_count=classification.deployment_fallback_count,
+        unavailable_client_count=classification.unavailable_count,
+        excluded_clients=tuple(sorted(classification.excluded_clients, key=lambda item: item.client_id.value)),
         warnings=aggregates.warnings,
         evidence_role=first.evidence_role,
     )
@@ -84,7 +91,7 @@ def calculate_population_metrics(
 
 def _classify_population_results(
     results: tuple[ClientMetricResult, ...],
-) -> tuple[list[ClientMetricResult], list[MetricValue], list[ClientIdentity], RowCount, RowCount, RowCount]:
+) -> _PopulationResultClassification:
     fpr_evaluable: list[ClientMetricResult] = []
     fpr_values: list[MetricValue] = []
     excluded_clients: list[ClientIdentity] = []
@@ -105,13 +112,13 @@ def _classify_population_results(
             elif result.cohort is EvaluationCohort.UNAVAILABLE:
                 unavailable_count += 1
 
-    return (
-        fpr_evaluable,
-        fpr_values,
-        excluded_clients,
-        RowCount(attack_evaluable_count),
-        RowCount(fallback_count),
-        RowCount(unavailable_count),
+    return _PopulationResultClassification(
+        fpr_evaluable_results=tuple(fpr_evaluable),
+        fpr_values=tuple(fpr_values),
+        excluded_clients=tuple(excluded_clients),
+        attack_evaluable_count=RowCount(attack_evaluable_count),
+        deployment_fallback_count=RowCount(fallback_count),
+        unavailable_count=RowCount(unavailable_count),
     )
 
 

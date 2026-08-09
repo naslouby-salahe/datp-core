@@ -398,9 +398,8 @@ class ExperimentWorkspace:
         messages: list[CommunicationMessageDiagnostic] = []
         for round_result in self.training.training.history.rounds:
             comm = round_result.communication
-            payload_bytes = bytes(comm.state_bytes.value)
             payload = SerializedPayloadEvidence(
-                serialized_bytes=payload_bytes,
+                serialized_byte_count=comm.state_bytes,
                 logical_element_count=comm.logical_element_count,
             )
             for client_result in round_result.client_results:

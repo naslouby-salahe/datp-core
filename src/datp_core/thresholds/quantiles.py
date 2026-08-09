@@ -57,6 +57,14 @@ class ClientBenignCalibrationScores:
         return np.asarray(tuple(score.value for score in self.scores), dtype=np.float64)
 
 
+@dataclass(frozen=True, slots=True)
+class FiniteSampleConformalThresholdResult:
+    threshold: ThresholdValue
+    rank_index: ConformalRankIndex
+    effective_quantile: Quantile
+    tie_count: RowCount
+
+
 def calibration_scores_from_references(
     client: ClientIdentity,
     coordinate: FederatedTrainingCoordinate,
@@ -169,7 +177,7 @@ def conformal_rank_index(calibration_count: RowCount, coverage: CoverageTarget) 
 def finite_sample_conformal_threshold(
     scores: np.ndarray,
     coverage: CoverageTarget,
-) -> tuple[ThresholdValue, ConformalRankIndex, Quantile, RowCount]:
+) -> FiniteSampleConformalThresholdResult:
     _require_score_vector(scores)
     calibration_count = RowCount(int(scores.size))
     rank_index = conformal_rank_index(calibration_count, coverage)
@@ -181,7 +189,12 @@ def finite_sample_conformal_threshold(
     ordered = np.sort(scores)
     selected = float(ordered[rank_index.value - 1])
     tie_count = RowCount(int(np.count_nonzero(ordered == selected)) - 1)
-    return ThresholdValue(selected), rank_index, Quantile(rank_index.value / calibration_count.value), tie_count
+    return FiniteSampleConformalThresholdResult(
+        threshold=ThresholdValue(selected),
+        rank_index=rank_index,
+        effective_quantile=Quantile(rank_index.value / calibration_count.value),
+        tie_count=tie_count,
+    )
 
 
 def achieved_benign_exceedance(scores: np.ndarray, threshold: ThresholdValue) -> Ratio:

@@ -31,6 +31,62 @@ class BootstrapDistribution:
     degeneracy_reason: BcaReason | None
 
 
+@dataclass(frozen=True, slots=True)
+class BcaIntervalComputation:
+    """The available or degenerate result of applying BCa to a distribution."""
+
+    lower_bound: MetricValue | None
+    upper_bound: MetricValue | None
+    adjustment: BcaAdjustment | None
+    degeneracy_reason: BcaReason | None
+
+    def __post_init__(self) -> None:
+        interval_details = (self.lower_bound, self.upper_bound, self.adjustment)
+        if self.degeneracy_reason is None and any(detail is None for detail in interval_details):
+            raise ValueError("available BCa computation is missing interval details")
+        if self.degeneracy_reason is not None and any(detail is not None for detail in interval_details):
+            raise ValueError("BCa computation must be either available or degenerate")
+
+    @classmethod
+    def available(
+        cls,
+        *,
+        lower_bound: MetricValue,
+        upper_bound: MetricValue,
+        adjustment: BcaAdjustment,
+    ) -> "BcaIntervalComputation":
+        return cls(lower_bound, upper_bound, adjustment, None)
+
+    @classmethod
+    def degenerate(cls, reason: BcaReason) -> "BcaIntervalComputation":
+        return cls(None, None, None, reason)
+
+    def to_bootstrap_interval(
+        self,
+        *,
+        protocol: PairedInferenceProtocol,
+        analysis_seed: Seed,
+        point_estimate: MetricValue,
+    ) -> BootstrapInterval:
+        if self.degeneracy_reason is not None:
+            return BootstrapInterval.degenerate(
+                protocol=protocol,
+                analysis_seed=analysis_seed,
+                point_estimate=point_estimate,
+                reason=self.degeneracy_reason,
+            )
+        if self.lower_bound is None or self.upper_bound is None or self.adjustment is None:
+            raise RuntimeError("available BCa computation is missing interval details")
+        return BootstrapInterval.available(
+            protocol=protocol,
+            analysis_seed=analysis_seed,
+            point_estimate=point_estimate,
+            lower_bound=self.lower_bound,
+            upper_bound=self.upper_bound,
+            adjustment=self.adjustment,
+        )
+
+
 def paired_bca_interval(
     contrasts: PairedContrasts,
     *,
@@ -109,21 +165,10 @@ def _construct_bca_interval(
         distribution=bootstrap.values,
         confidence_level=protocol.confidence_level,
     )
-    if isinstance(interval, BcaReason):
-        return BootstrapInterval.degenerate(
-            protocol=protocol,
-            analysis_seed=analysis_seed,
-            point_estimate=bootstrap.estimate,
-            reason=interval,
-        )
-    lower_bound, upper_bound, adjustment = interval
-    return BootstrapInterval.available(
+    return interval.to_bootstrap_interval(
         protocol=protocol,
         analysis_seed=analysis_seed,
         point_estimate=bootstrap.estimate,
-        lower_bound=lower_bound,
-        upper_bound=upper_bound,
-        adjustment=adjustment,
     )
 
 
@@ -166,14 +211,14 @@ def _bca_interval_from_distribution(
     deltas: NDArray[np.float64],
     distribution: NDArray[np.float64],
     confidence_level: ConfidenceLevel,
-) -> tuple[MetricValue, MetricValue, BcaAdjustment] | BcaReason:
+) -> BcaIntervalComputation:
     proportion_less = float(np.mean(distribution < estimate.value))
     if not 0.0 < proportion_less < 1.0:
-        return BcaReason.INFINITE_BIAS_CORRECTION
+        return BcaIntervalComputation.degenerate(BcaReason.INFINITE_BIAS_CORRECTION)
     bias_correction = float(stats.norm.ppf(proportion_less))
     acceleration = _jackknife_acceleration(deltas)
     if acceleration is None:
-        return BcaReason.UNDEFINED_ACCELERATION
+        return BcaIntervalComputation.degenerate(BcaReason.UNDEFINED_ACCELERATION)
     alpha = (1.0 - confidence_level.value) / 2.0
     standard_quantiles = np.array(
         [stats.norm.ppf(alpha), stats.norm.ppf(1.0 - alpha)],
@@ -182,19 +227,19 @@ def _bca_interval_from_distribution(
     shifted = bias_correction + standard_quantiles
     denominator = 1.0 - acceleration.value * shifted
     if np.any(np.abs(denominator) <= np.finfo(np.float64).eps):
-        return BcaReason.INVALID_ADJUSTED_QUANTILES
+        return BcaIntervalComputation.degenerate(BcaReason.INVALID_ADJUSTED_QUANTILES)
     adjusted_quantiles = np.asarray(
         stats.norm.cdf(bias_correction + shifted / denominator),
         dtype=np.float64,
     )
     if np.any(~np.isfinite(adjusted_quantiles)) or np.any((adjusted_quantiles < 0.0) | (adjusted_quantiles > 1.0)):
-        return BcaReason.INVALID_ADJUSTED_QUANTILES
+        return BcaIntervalComputation.degenerate(BcaReason.INVALID_ADJUSTED_QUANTILES)
     lower = float(np.quantile(distribution, float(adjusted_quantiles[0]), method="linear"))
     upper = float(np.quantile(distribution, float(adjusted_quantiles[1]), method="linear"))
-    return (
-        MetricValue(lower),
-        MetricValue(upper),
-        BcaAdjustment(
+    return BcaIntervalComputation.available(
+        lower_bound=MetricValue(lower),
+        upper_bound=MetricValue(upper),
+        adjustment=BcaAdjustment(
             bias_correction=MetricValue(bias_correction),
             acceleration=acceleration,
         ),
@@ -272,19 +317,8 @@ def seed_level_bca_interval(
         distribution=distribution,
         confidence_level=protocol.confidence_level,
     )
-    if isinstance(interval, BcaReason):
-        return BootstrapInterval.degenerate(
-            protocol=protocol,
-            analysis_seed=analysis_seed,
-            point_estimate=estimate,
-            reason=interval,
-        )
-    lower_bound, upper_bound, adjustment = interval
-    return BootstrapInterval.available(
+    return interval.to_bootstrap_interval(
         protocol=protocol,
         analysis_seed=analysis_seed,
         point_estimate=estimate,
-        lower_bound=lower_bound,
-        upper_bound=upper_bound,
-        adjustment=adjustment,
     )

@@ -64,7 +64,7 @@ def test_published_temporal_resolution_enables_chronological_split() -> None:
     membership = _temporal_membership()
     column = _capture_timestamp_column_for_split(SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE, membership)
     assert column == CaptureTimestampColumn(EdgeCanonicalColumn.CAPTURE_TIMESTAMP.value)
-    assignments, manifest = split_membership(
+    split = split_membership(
         SplitConstructionRequest(
             membership=membership,
             population=PopulationId.EDGE_TEMPORAL_GROUPS,
@@ -75,5 +75,5 @@ def test_published_temporal_resolution_enables_chronological_split() -> None:
             capture_timestamp_column=column,
         )
     )
-    assert manifest.split_protocol is SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE
-    assert assignments.height == membership.height
+    assert split.manifest.split_protocol is SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE
+    assert split.assignments.height == membership.height

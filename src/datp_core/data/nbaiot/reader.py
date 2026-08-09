@@ -1,5 +1,6 @@
 """Lazy, provenance-preserving reader for extracted N-BaIoT CSV sources."""
 
+from dataclasses import dataclass
 from pathlib import Path
 
 import polars as pl
@@ -16,6 +17,14 @@ from .schema import (
     parse_source_identity,
     source_relative_path,
 )
+
+
+@dataclass(frozen=True, slots=True)
+class NBaIoTFiniteValueSummary:
+    """Audited row totals for the N-BaIoT finite-feature validation gate."""
+
+    total_rows: LogicalElementCount
+    invalid_rows: ValidationIssueCount
 
 
 class NBaIoTReader:
@@ -47,7 +56,7 @@ class NBaIoTReader:
             .select(tuple(column.name for column in NBAIOT_SCHEMA.columns))
         )
 
-    def finite_value_summary(self, frame: pl.LazyFrame) -> tuple[LogicalElementCount, ValidationIssueCount]:
+    def finite_value_summary(self, frame: pl.LazyFrame) -> NBaIoTFiniteValueSummary:
         summary = (
             frame.select(NBAIOT_FEATURE_COLUMNS)
             .select(
@@ -62,12 +71,13 @@ class NBaIoTReader:
             )
             .collect(engine="streaming")
         )
-        return LogicalElementCount(int(summary.item(0, AggregateCountColumn.TOTAL_ROWS))), ValidationIssueCount(
-            int(summary.item(0, AggregateCountColumn.INVALID_ROWS))
+        return NBaIoTFiniteValueSummary(
+            total_rows=LogicalElementCount(int(summary.item(0, AggregateCountColumn.TOTAL_ROWS))),
+            invalid_rows=ValidationIssueCount(int(summary.item(0, AggregateCountColumn.INVALID_ROWS))),
         )
 
     def validate_finite_values(self, frame: pl.LazyFrame) -> LogicalElementCount:
-        total_rows, invalid = self.finite_value_summary(frame)
-        if invalid.value:
+        summary = self.finite_value_summary(frame)
+        if summary.invalid_rows.value:
             raise ValueError("N-BaIoT contains non-finite feature values")
-        return total_rows
+        return summary.total_rows

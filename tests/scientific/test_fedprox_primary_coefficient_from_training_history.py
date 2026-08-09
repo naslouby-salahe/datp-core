@@ -6,7 +6,7 @@ import polars as pl
 import pytest
 
 from datp_core.core.errors import LeakageError, ScientificContractError
-from datp_core.core.numeric import MetricValue
+from datp_core.core.numeric import MetricValue, ProximalCoefficient
 from datp_core.detector.checkpoints.history import schema_pairs
 from datp_core.detector.checkpoints.identities import (
     ROUND_SUMMARY_SCHEMA,
@@ -21,6 +21,8 @@ from datp_core.detector.training.protocols import (
 from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT
 from datp_core.experiments.execution.layout import federated_training_directory
 from datp_core.experiments.training_stress.run import (
+    FedProxCoefficientTerminalLoss,
+    FedProxTerminalLossObservation,
     collect_fedprox_coefficient_terminal_losses,
     fedprox_training_coordinate,
     load_fedprox_primary_coefficient_decision,
@@ -88,6 +90,14 @@ def test_read_terminal_loss_uses_locked_maximum_round(tmp_path: Path) -> None:
 
 def test_primary_coefficient_is_lowest_mean_terminal_loss(tmp_path: Path) -> None:
     _populate_grid(tmp_path, (1.0, 0.1, 0.5, 0.8))
+    candidates = collect_fedprox_coefficient_terminal_losses(
+        output_root=tmp_path,
+        seed_cohort=CONFIRMATORY_SEED_COHORT,
+    )
+    observations = candidates[1].per_seed_terminal_losses
+    assert all(isinstance(observation, FedProxTerminalLossObservation) for observation in observations)
+    assert tuple(observation.seed for observation in observations) == CONFIRMATORY_SEED_COHORT.values
+    assert all(observation.terminal_training_loss == MetricValue(0.1) for observation in observations)
     decision = select_primary_fedprox_coefficient_from_artifacts(
         output_root=tmp_path,
         seed_cohort=CONFIRMATORY_SEED_COHORT,
@@ -101,6 +111,18 @@ def test_primary_coefficient_is_lowest_mean_terminal_loss(tmp_path: Path) -> Non
     loaded = load_fedprox_primary_coefficient_decision(path)
     assert loaded == decision
     assert str(FEDPROX_COEFFICIENTS[1].value) in path.read_text(encoding="utf-8")
+
+
+def test_terminal_loss_candidate_rejects_mean_that_disagrees_with_seed_observations() -> None:
+    with pytest.raises(ScientificContractError, match="mean terminal loss"):
+        FedProxCoefficientTerminalLoss(
+            coefficient=ProximalCoefficient(0.1),
+            mean_terminal_training_loss=MetricValue(0.2),
+            per_seed_terminal_losses=tuple(
+                FedProxTerminalLossObservation(seed=seed, terminal_training_loss=MetricValue(0.1))
+                for seed in CONFIRMATORY_SEED_COHORT.values
+            ),
+        )
 
 
 def test_primary_selection_breaks_ties_with_smallest_coefficient(tmp_path: Path) -> None:

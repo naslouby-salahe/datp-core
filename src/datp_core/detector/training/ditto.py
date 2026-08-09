@@ -124,8 +124,7 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
     global_state = {name: tensor.detach().clone() for name, tensor in initial_model.state_dict().items()}
 
     personalized_states = {
-        item.client: {name: tensor.detach().clone() for name, tensor in global_state.items()}
-        for item in prepared
+        item.client: {name: tensor.detach().clone() for name, tensor in global_state.items()} for item in prepared
     }
     personalized_snapshots: dict[ClientIdentity, list[RoundSnapshot]] = {item.client: [] for item in prepared}
 
@@ -187,14 +186,14 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
             global_updates.append(global_update)
             personalized_states[client_id] = personalized_update.state_dict
 
-            personalized_checksum, _, _ = serialize_and_checksum_state_dict(personalized_update.state_dict)
+            personalized_state = serialize_and_checksum_state_dict(personalized_update.state_dict)
             personalized_references.append(
                 PersonalizedModelStateReference(
                     coordinate=request.coordinates.personalized_coordinate,
                     client=client_id,
                     round_number=round_number,
                     local_loss=personalized_update.local_loss,
-                    state_checksum=personalized_checksum,
+                    state_checksum=personalized_state.checksum,
                     tensor_path=None,
                 )
             )
@@ -210,7 +209,7 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
 
         aggregated = aggregate_client_updates(global_updates)
         aggregate_loss = compute_weighted_aggregate_loss(global_updates)
-        global_checksum, state_size, logical_elements = serialize_and_checksum_state_dict(aggregated)
+        serialized_global_state = serialize_and_checksum_state_dict(aggregated)
 
         rounds.append(
             FederatedRoundResult(
@@ -219,15 +218,15 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
                 aggregate_loss=aggregate_loss,
                 communication=create_communication_record(
                     round_number,
-                    state_size,
-                    logical_elements,
+                    serialized_global_state.byte_count,
+                    serialized_global_state.logical_element_count,
                     upload_count=request.population_client_count,
                     download_count=request.population_client_count,
                 ),
                 global_state_reference=GlobalModelStateReference(
                     coordinate=request.coordinates.global_coordinate,
                     round_number=round_number,
-                    state_checksum=global_checksum,
+                    state_checksum=serialized_global_state.checksum,
                     tensor_path=None,
                 ),
                 personalized_state_references=tuple(personalized_references),

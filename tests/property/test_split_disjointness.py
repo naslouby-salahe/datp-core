@@ -16,7 +16,7 @@ def test_non_temporal_splits_are_disjoint_for_any_seed(seed: Seed, nbaiot_canoni
         nbaiot_canonical_root, partition_seed=seed, split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS
     )
     manifest, membership = construction.manifest, construction.membership
-    assignments, _ = split_membership(
+    split = split_membership(
         SplitConstructionRequest(
             membership=membership,
             population=PopulationId.NBAIOT_NATURAL_DEVICES,
@@ -26,7 +26,7 @@ def test_non_temporal_splits_are_disjoint_for_any_seed(seed: Seed, nbaiot_canoni
             population_manifest_checksum=manifest.document.membership_checksum,
         )
     )
-    assert assignments.get_column("stable_row_id").n_unique() == assignments.height
-    assert assignments.height == membership.height
-    train_cal = assignments.filter(pl.col("partition_role").is_in(["train", "calibration"]))
+    assert split.assignments.get_column("stable_row_id").n_unique() == split.assignments.height
+    assert split.assignments.height == membership.height
+    train_cal = split.assignments.filter(pl.col("partition_role").is_in(["train", "calibration"]))
     assert train_cal.filter(pl.col("outcome_label") == "attack").height == 0

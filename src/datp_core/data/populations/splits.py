@@ -1,5 +1,6 @@
 """Deterministic non-temporal, temporal, and static-reference splits on stable row identities."""
 
+from dataclasses import dataclass
 from enum import StrEnum
 from hashlib import sha256
 from math import floor, fsum
@@ -69,6 +70,14 @@ _BENIGN = PopulationOutcomeLabel.BENIGN
 _ATTACK = PopulationOutcomeLabel.ATTACK
 
 
+@dataclass(frozen=True, slots=True, eq=False)
+class SplitMembershipResult:
+    """Validated role assignments and their manifest for one population membership."""
+
+    assignments: pl.DataFrame
+    manifest: SplitManifestDocument
+
+
 def non_temporal_split_protocol() -> FractionalSplitProtocol:
     return NON_TEMPORAL_SPLIT
 
@@ -113,12 +122,15 @@ def hamilton_integer_counts(
 
 def split_membership(
     request: SplitConstructionRequest,
-) -> tuple[pl.DataFrame, SplitManifestDocument]:
+) -> SplitMembershipResult:
     frame = request.membership
     _require_membership_schema(frame)
     assignments = _assignments_for_protocol(frame, request)
     _assert_split_invariants(assignments, frame)
-    return assignments, _split_manifest(assignments, request)
+    return SplitMembershipResult(
+        assignments=assignments,
+        manifest=_split_manifest(assignments, request),
+    )
 
 
 def _assignments_for_protocol(

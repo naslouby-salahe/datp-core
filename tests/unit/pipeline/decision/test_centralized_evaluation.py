@@ -16,8 +16,9 @@ from tests.unit.learning.centralized.helpers import (
 from datp_core.analysis.metrics.models import ConfusionCounts
 from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import ScientificContractError
-from datp_core.core.identifiers import CentralizedThresholdMethod, EvidenceRole, MetricId
-from datp_core.core.numeric import RowCount, Seed
+from datp_core.core.identifiers import CentralizedThresholdMethod, EvidenceRole, MetricId, StableRowId
+from datp_core.core.numeric import RowCount, ScoreValue, Seed
+from datp_core.data.populations.contracts import PopulationOutcomeLabel
 from datp_core.detector.checkpoints.service import retain_centralized_checkpoint_candidates
 from datp_core.detector.scoring.centralized import score_centralized_reference
 from datp_core.detector.scoring.models import CentralizedScoringRequest
@@ -25,10 +26,20 @@ from datp_core.thresholds.centralized import (
     CENTRALIZED_POOLED_QUANTILE_PROTOCOL,
     CentralizedDecisionRule,
     CentralizedEvaluationResult,
+    CentralizedEvaluationScoreSet,
     construct_pooled_benign_quantile,
     evaluate_centralized_reference,
     threshold_result_checksum,
 )
+
+
+def test_centralized_evaluation_score_set_rejects_misaligned_records() -> None:
+    with pytest.raises(ScientificContractError, match="must align"):
+        CentralizedEvaluationScoreSet(
+            source_row_ids=(StableRowId("evaluation-0"),),
+            labels=(PopulationOutcomeLabel.BENIGN,),
+            scores=(ScoreValue(0.1), ScoreValue(0.2)),
+        )
 
 
 def test_centralized_evaluation_rejects_invalid_attack_assignment(tmp_path: Path) -> None:

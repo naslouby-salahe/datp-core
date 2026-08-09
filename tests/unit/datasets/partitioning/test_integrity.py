@@ -9,9 +9,26 @@ from datp_core.core.identifiers import DatasetId, PartitionRole, PopulationId, S
 from datp_core.core.numeric import RowCount, Seed
 from datp_core.data.nbaiot.populations import construct_nbaiot_natural_devices
 from datp_core.data.populations.contracts import SplitConstructionRequest, SplitManifestDocument
-from datp_core.data.populations.integrity import validate_population_manifest, validate_split_manifest
+from datp_core.data.populations.integrity import (
+    outcome_row_counts,
+    validate_population_manifest,
+    validate_split_manifest,
+)
 from datp_core.data.populations.splits import split_membership
 from datp_core.data.registry import population_capabilities, population_declaration
+
+
+def test_outcome_row_counts_preserves_outcome_semantics() -> None:
+    counts = outcome_row_counts(
+        pl.DataFrame(
+            {
+                "outcome_label": ["benign", "attack", "benign"],
+            }
+        )
+    )
+
+    assert counts.benign_row_count == RowCount(2)
+    assert counts.attack_row_count == RowCount(1)
 
 
 def test_integrity_accepts_valid_population_and_split(nbaiot_canonical_root: Path) -> None:
@@ -25,7 +42,7 @@ def test_integrity_accepts_valid_population_and_split(nbaiot_canonical_root: Pat
         population_declaration(PopulationId.NBAIOT_NATURAL_DEVICES),
         population_capabilities(PopulationId.NBAIOT_NATURAL_DEVICES),
     )
-    assignments, split_manifest = split_membership(
+    split = split_membership(
         SplitConstructionRequest(
             membership=membership,
             population=PopulationId.NBAIOT_NATURAL_DEVICES,
@@ -35,7 +52,7 @@ def test_integrity_accepts_valid_population_and_split(nbaiot_canonical_root: Pat
             population_manifest_checksum=manifest.document.membership_checksum,
         )
     )
-    validate_split_manifest(membership, assignments, split_manifest)
+    validate_split_manifest(membership, split.assignments, split.manifest)
 
 
 def test_integrity_detects_duplicate_split_assignment(nbaiot_canonical_root: Path) -> None:
@@ -43,7 +60,7 @@ def test_integrity_detects_duplicate_split_assignment(nbaiot_canonical_root: Pat
         nbaiot_canonical_root, partition_seed=Seed(0), split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS
     )
     manifest, membership = construction.manifest, construction.membership
-    assignments, split_manifest = split_membership(
+    split = split_membership(
         SplitConstructionRequest(
             membership=membership,
             population=PopulationId.NBAIOT_NATURAL_DEVICES,
@@ -53,9 +70,9 @@ def test_integrity_detects_duplicate_split_assignment(nbaiot_canonical_root: Pat
             population_manifest_checksum=manifest.document.membership_checksum,
         )
     )
-    poisoned = pl.concat([assignments, assignments.head(1)])
+    poisoned = pl.concat([split.assignments, split.assignments.head(1)])
     with pytest.raises(DataIntegrityError):
-        validate_split_manifest(membership, poisoned, split_manifest)
+        validate_split_manifest(membership, poisoned, split.manifest)
 
 
 def test_integrity_detects_attack_in_calibration() -> None:

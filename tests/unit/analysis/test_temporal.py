@@ -8,8 +8,10 @@ from datp_core.analysis.temporal import (
     TemporalDeploymentProvenance,
     TemporalInterpretation,
     TemporalSeedProvenance,
+    TemporalSeedSeriesIntervals,
     decide_temporal_campaign,
     temporal_recovery,
+    temporal_seed_series_intervals,
 )
 from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.serializers.json import canonical_checksum
@@ -172,6 +174,21 @@ def test_full_material_recovery_cohort_is_supported() -> None:
         for record in records
     )
     assert decide_temporal_campaign(records).decision is ScientificDecision.SUPPORTED
+
+
+def test_seed_series_intervals_are_named_by_temporal_quantity() -> None:
+    records = tuple(_recovery(seed.value, 0.10, 0.30, 0.15) for seed in BOUNDED_EVIDENCE_SEED_COHORT.values)
+
+    intervals = temporal_seed_series_intervals(records)
+
+    assert isinstance(intervals, TemporalSeedSeriesIntervals)
+    assert intervals.drift_excess.point_estimate is not None
+    assert intervals.drift_excess.point_estimate.value == pytest.approx(0.20)
+    assert intervals.recovered_amount.point_estimate is not None
+    assert intervals.recovered_amount.point_estimate.value == pytest.approx(0.15)
+    assert intervals.recovery_ratio is not None
+    assert intervals.recovery_ratio.point_estimate is not None
+    assert intervals.recovery_ratio.point_estimate.value == pytest.approx(0.75)
 
 
 def test_campaign_provenance_preserves_one_detector_per_seed() -> None:

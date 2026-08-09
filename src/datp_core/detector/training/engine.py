@@ -137,6 +137,20 @@ class ProximalTerm:
     coefficient: ProximalCoefficient | DittoRegularization
 
 
+@dataclass(frozen=True, slots=True)
+class LocalEpochResult:
+    state_dict: AutoencoderState
+    mean_reconstruction_loss: MetricValue
+    sample_count: RowCount
+
+
+@dataclass(frozen=True, slots=True)
+class SerializedStateEvidence:
+    checksum: Checksum
+    byte_count: ByteCount
+    logical_element_count: LogicalElementCount
+
+
 def reject_attack_rows_in_federated_training(labels: OutcomeLabelSequence) -> None:
     if any(label != PopulationOutcomeLabel.BENIGN.value for label in labels):
         raise LeakageError(
@@ -301,7 +315,7 @@ def run_local_epoch(
     device: torch.device,
     *,
     proximal_term: ProximalTerm | None = None,
-) -> tuple[AutoencoderState, MetricValue, RowCount]:
+) -> LocalEpochResult:
     reference_parameters = _reference_parameters(model, proximal_term, device)
     model.train()
     weighted_reconstruction_loss = torch.zeros((), device=device, dtype=TORCH_LEARNING_DTYPE)
@@ -329,10 +343,10 @@ def run_local_epoch(
             ErrorMessage("local training produced no samples"),
             subject=ContractSubject.BATCH_SIZE,
         )
-    return (
-        {name: tensor.detach().clone() for name, tensor in model.state_dict().items()},
-        MetricValue(float(weighted_reconstruction_loss.item()) / total_samples),
-        RowCount(total_samples),
+    return LocalEpochResult(
+        state_dict={name: tensor.detach().clone() for name, tensor in model.state_dict().items()},
+        mean_reconstruction_loss=MetricValue(float(weighted_reconstruction_loss.item()) / total_samples),
+        sample_count=RowCount(total_samples),
     )
 
 
@@ -359,7 +373,7 @@ def train_client_update(
         batch_size=batch_size,
         seed=seed,
     )
-    state, loss, sample_count = run_local_epoch(
+    local_epoch = run_local_epoch(
         model,
         optimizer,
         loader,
@@ -368,9 +382,9 @@ def train_client_update(
     )
     return ClientUpdate(
         client=client_data.client,
-        state_dict=state,
-        sample_count=sample_count,
-        local_loss=loss,
+        state_dict=local_epoch.state_dict,
+        sample_count=local_epoch.sample_count,
+        local_loss=local_epoch.mean_reconstruction_loss,
     )
 
 
@@ -451,10 +465,14 @@ def preprocessing_state_set_checksum(
 
 def serialize_and_checksum_state_dict(
     state_dict: AutoencoderStateView,
-) -> tuple[Checksum, ByteCount, LogicalElementCount]:
+) -> SerializedStateEvidence:
     cpu_state = to_cpu_contiguous_state(state_dict)
     payload = save(cpu_state)
-    return Checksum.from_bytes(payload), ByteCount(len(payload)), LogicalElementCount(len(cpu_state))
+    return SerializedStateEvidence(
+        checksum=Checksum.from_bytes(payload),
+        byte_count=ByteCount(len(payload)),
+        logical_element_count=LogicalElementCount(len(cpu_state)),
+    )
 
 
 def create_communication_record(
@@ -555,9 +573,7 @@ def _run_training_round[T: FedAvgProtocol | FedProxProtocol](
             client_data.client,
             TrainingStream.GLOBAL_CLIENT_UPDATE,
         )
-        proximal_term = (
-            ProximalTerm(global_state, proximal_coefficient) if proximal_coefficient is not None else None
-        )
+        proximal_term = ProximalTerm(global_state, proximal_coefficient) if proximal_coefficient is not None else None
         updates.append(
             train_client_update(
                 client_data=client_data,
@@ -574,12 +590,12 @@ def _run_training_round[T: FedAvgProtocol | FedProxProtocol](
 
     aggregated = aggregate_client_updates(updates)
     aggregate_loss = compute_weighted_aggregate_loss(updates)
-    state_checksum, state_size, logical_elements = serialize_and_checksum_state_dict(aggregated)
+    serialized_state = serialize_and_checksum_state_dict(aggregated)
 
     communication = create_communication_record(
         round_number,
-        state_size,
-        logical_elements,
+        serialized_state.byte_count,
+        serialized_state.logical_element_count,
         upload_count=request.population_client_count,
         download_count=request.population_client_count,
     )
@@ -592,7 +608,7 @@ def _run_training_round[T: FedAvgProtocol | FedProxProtocol](
         global_state_reference=GlobalModelStateReference(
             coordinate=request.coordinate,
             round_number=round_number,
-            state_checksum=state_checksum,
+            state_checksum=serialized_state.checksum,
             tensor_path=None,
         ),
         personalized_state_references=(),

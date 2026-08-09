@@ -191,6 +191,21 @@ class CentralizedEvaluationResult:
             )
 
 
+@dataclass(frozen=True, slots=True)
+class CentralizedEvaluationScoreSet:
+    """Held-out score records whose positions retain their row and outcome identity."""
+
+    source_row_ids: tuple[StableRowId, ...]
+    labels: tuple[PopulationOutcomeLabel, ...]
+    scores: tuple[ScoreValue, ...]
+
+    def __post_init__(self) -> None:
+        if len(self.scores) != len(self.labels) or len(self.scores) != len(self.source_row_ids):
+            raise ScientificContractError(
+                ErrorMessage("evaluation scores and labels must align"), subject=ContractSubject.ROWS
+            )
+
+
 class CentralizedEvaluationDocument(StrictModel):
     coordinate: CentralizedTrainingCoordinate
     threshold_method: CentralizedThresholdMethod
@@ -429,16 +444,16 @@ def evaluate_centralized_reference(
     threshold_result: PooledThresholdResult,
 ) -> CentralizedEvaluationResult:
     _validate_evaluation_inputs(coordinate, evaluation_scores, threshold_result)
-    row_ids, labels, scores = _evaluation_arrays(evaluation_scores)
+    evaluation = _evaluation_score_set(evaluation_scores)
     confusion = calculate_confusion_counts(
-        scores=scores,
-        labels=labels,
-        source_row_ids=row_ids,
+        scores=evaluation.scores,
+        labels=evaluation.labels,
+        source_row_ids=evaluation.source_row_ids,
         threshold=threshold_result.threshold,
         partition_role=PartitionRole.EVALUATION,
         attack_assignment_valid=True,
     )
-    metrics = _pooled_metrics(confusion=confusion, scores=scores, labels=labels)
+    metrics = _pooled_metrics(confusion=confusion, scores=evaluation.scores, labels=evaluation.labels)
     return CentralizedEvaluationResult(
         coordinate=coordinate,
         threshold_method=threshold_result.method,
@@ -592,24 +607,21 @@ def _validate_evaluation_inputs(
         )
 
 
-def _evaluation_arrays(
-    evaluation_scores: PooledScoreArtifact,
-) -> tuple[tuple[StableRowId, ...], tuple[PopulationOutcomeLabel, ...], tuple[ScoreValue, ...]]:
+def _evaluation_score_set(evaluation_scores: PooledScoreArtifact) -> CentralizedEvaluationScoreSet:
     frame = load_score_frame(evaluation_scores)
-    row_ids = tuple(
-        StableRowId(str(value)) for value in frame.get_column(ScoreFrameColumn.STABLE_ROW_ID.value).to_list()
+    return CentralizedEvaluationScoreSet(
+        source_row_ids=tuple(
+            StableRowId(str(value)) for value in frame.get_column(ScoreFrameColumn.STABLE_ROW_ID.value).to_list()
+        ),
+        labels=tuple(
+            PopulationOutcomeLabel(str(value))
+            for value in frame.get_column(ScoreFrameColumn.OUTCOME_LABEL.value).to_list()
+        ),
+        scores=tuple(
+            ScoreValue(float(value))
+            for value in frame.get_column(ScoreFrameColumn.RECONSTRUCTION_ERROR.value).to_list()
+        ),
     )
-    labels = tuple(
-        PopulationOutcomeLabel(str(value)) for value in frame.get_column(ScoreFrameColumn.OUTCOME_LABEL.value).to_list()
-    )
-    scores = tuple(
-        ScoreValue(float(value)) for value in frame.get_column(ScoreFrameColumn.RECONSTRUCTION_ERROR.value).to_list()
-    )
-    if len(scores) != len(labels) or len(scores) != len(row_ids):
-        raise ScientificContractError(
-            ErrorMessage("evaluation scores and labels must align"), subject=ContractSubject.ROWS
-        )
-    return row_ids, labels, scores
 
 
 def _pooled_metrics(

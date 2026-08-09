@@ -107,7 +107,7 @@ def construct_local_conformal_threshold(
         if rank_index.value > calibration_count.value:
             unavailable.append(client_scores.client)
             continue
-        threshold, _, effective_quantile, tie_count = finite_sample_conformal_threshold(
+        threshold_result = finite_sample_conformal_threshold(
             client_scores.as_array,
             coverage,
         )
@@ -115,11 +115,11 @@ def construct_local_conformal_threshold(
             ConformalAssignment(
                 client=client_scores.client,
                 calibration_count=calibration_count,
-                rank_index=rank_index,
-                effective_quantile=effective_quantile,
-                selected_score=ScoreValue(threshold.value),
-                tie_count=tie_count,
-                threshold=threshold,
+                rank_index=threshold_result.rank_index,
+                effective_quantile=threshold_result.effective_quantile,
+                selected_score=ScoreValue(threshold_result.threshold.value),
+                tie_count=threshold_result.tie_count,
+                threshold=threshold_result.threshold,
             )
         )
     if not assignments:

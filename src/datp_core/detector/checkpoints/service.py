@@ -137,15 +137,15 @@ def select_centralized_checkpoint(
                 subject=candidate.status,
             )
         validate_persisted_checkpoint_file(candidate.tensor_path, candidate.tensor_checksum)
-    statused, selected = select_terminal_checkpoint(
+    selection = select_terminal_checkpoint(
         ordered,
         protocol.maximum_round,
         rebuild=_rebuild_candidate_status,
     )
     return CentralizedCheckpointDecision(
-        coordinate=selected.coordinate,
-        selected=selected,
-        candidates=statused,
+        coordinate=selection.selected.coordinate,
+        selected=selection.selected,
+        candidates=selection.candidates,
         checkpoint_protocol=protocol,
         selection_rule=selection_rule,
         status=CheckpointStatus.SELECTED_BY_NON_TEST_RULE,

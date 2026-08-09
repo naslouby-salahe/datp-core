@@ -10,6 +10,7 @@ from datp_core.analysis.inference.bootstrap.contracts import (
     BootstrapInterval,
 )
 from datp_core.analysis.inference.bootstrap.estimation import (
+    _bca_interval_from_distribution,
     paired_bca_interval,
     supplementary_paired_bca_interval,
 )
@@ -139,6 +140,22 @@ def test_bca_handles_ties_with_identical_deltas_as_degenerate() -> None:
         analysis_seed=Seed(11),
     )
     assert result.outcome is BcaOutcome.DEGENERATE
+
+
+def test_distribution_bca_computation_preserves_its_degenerate_reason() -> None:
+    computation = _bca_interval_from_distribution(
+        estimate=MetricValue(1.0),
+        deltas=np.array([0.0, 1.0], dtype=np.float64),
+        distribution=np.array([0.0, 0.0], dtype=np.float64),
+        confidence_level=CONFIRMATORY_INFERENCE_PROTOCOL.confidence_level,
+    )
+    result = computation.to_bootstrap_interval(
+        protocol=CONFIRMATORY_INFERENCE_PROTOCOL,
+        analysis_seed=Seed(73),
+        point_estimate=MetricValue(1.0),
+    )
+    assert result.outcome is BcaOutcome.DEGENERATE
+    assert result.reason is BcaReason.INFINITE_BIAS_CORRECTION
 
 
 def contrasts() -> tuple[PairedContrast, ...]:

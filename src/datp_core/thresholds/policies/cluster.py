@@ -97,6 +97,14 @@ class ClusterMembership:
 
 
 @dataclass(frozen=True, slots=True)
+class ClusterConstruction:
+    """Cluster memberships and threshold assignments produced by one clustering pass."""
+
+    clusters: tuple[ClusterMembership, ...]
+    assignments: tuple[ThresholdAssignment, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class GroupedThresholdResult:
     coordinate: FederatedTrainingCoordinate
     fingerprints: tuple[ClusterFingerprint, ...]
@@ -206,7 +214,7 @@ def construct_grouped_threshold(
         for item, raw, standardized in zip(ordered, raw_features, standardized_matrix, strict=True)
     )
     local_quantiles = tuple(local_quantile(item, protocol.quantile) for item in ordered)
-    clusters, assignments = _build_clusters(
+    construction = _build_clusters(
         ordered,
         labels,
         protocol.group_count,
@@ -216,8 +224,8 @@ def construct_grouped_threshold(
     return GroupedThresholdResult(
         coordinate=ordered[0].coordinate,
         fingerprints=fingerprints,
-        clusters=clusters,
-        assignments=assignments,
+        clusters=construction.clusters,
+        assignments=construction.assignments,
         initialization=protocol.initialization,
         initialization_count=protocol.initialization_count,
         maximum_iterations=protocol.maximum_iterations,
@@ -261,7 +269,7 @@ def _build_clusters(
     group_count: GroupCount,
     local_quantiles: tuple[LocalQuantile, ...],
     aggregation: ClusterThresholdAggregation,
-) -> tuple[tuple[ClusterMembership, ...], tuple[ThresholdAssignment, ...]]:
+) -> ClusterConstruction:
     clusters: list[ClusterMembership] = []
     assignments: list[ThresholdAssignment] = []
     for index in range(group_count.value):
@@ -290,7 +298,7 @@ def _build_clusters(
             )
         )
         assignments.extend(ThresholdAssignment(client, cluster_value) for client in members)
-    return tuple(clusters), tuple(assignments)
+    return ClusterConstruction(clusters=tuple(clusters), assignments=tuple(assignments))
 
 
 def _aggregate_local_thresholds(

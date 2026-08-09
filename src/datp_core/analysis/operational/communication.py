@@ -35,12 +35,14 @@ class ThresholdPayloadKind(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class SerializedPayloadEvidence:
-    """Actual persisted or typed serialized payload bytes, never object-size estimates."""
+    """Exact serialized payload accounting, never object-size estimates."""
 
-    serialized_bytes: bytes
+    serialized_byte_count: ByteCount
     logical_element_count: LogicalElementCount
 
     def __post_init__(self) -> None:
+        if type(self.serialized_byte_count) is not ByteCount:
+            raise ScientificContractError(ErrorMessage("communication payloads require a typed serialized byte count"))
         if type(self.logical_element_count) is not LogicalElementCount:
             raise ScientificContractError(ErrorMessage("communication payloads require a typed logical element count"))
 
@@ -74,7 +76,7 @@ class CommunicationMessageDiagnostic:
 
     @property
     def estimated_serialized_bytes(self) -> ByteCount:
-        return ByteCount(len(self.payload.serialized_bytes))
+        return self.payload.serialized_byte_count
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,7 +110,7 @@ class CommunicationDiagnostic:
                 )
 
             expected_elements += message.payload.logical_element_count.value
-            expected_bytes += len(message.payload.serialized_bytes)
+            expected_bytes += message.estimated_serialized_bytes.value
 
         if (
             self.total_logical_element_count.value != expected_elements
@@ -132,7 +134,7 @@ def summarize_communication(
 
     for message in messages:
         expected_elements += message.payload.logical_element_count.value
-        expected_bytes += len(message.payload.serialized_bytes)
+        expected_bytes += message.estimated_serialized_bytes.value
 
     return CommunicationDiagnostic(
         training_seed=training_seed,

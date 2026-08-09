@@ -110,7 +110,7 @@ def construct_declared_population(
             request.controlled_condition,
         )
     )
-    assignments, manifest = split_membership(
+    split = split_membership(
         SplitConstructionRequest(
             construction.membership,
             request.population,
@@ -126,8 +126,8 @@ def construct_declared_population(
     )
     return ConstructDeclaredPopulationResult(
         construction=construction,
-        split_assignments=assignments,
-        split_manifest=manifest,
+        split_assignments=split.assignments,
+        split_manifest=split.manifest,
     )
 
 
@@ -307,7 +307,7 @@ def construct_published_split(request: ConstructPublishedSplitRequest) -> Constr
             subject=request.population,
             reason=PopulationPublicationViolation.MATCHED_REFERENCE_WITHOUT_MEMBERSHIP,
         )
-    assignments, manifest = split_membership(
+    split = split_membership(
         SplitConstructionRequest(
             membership=request.membership,
             population=request.population,
@@ -321,14 +321,14 @@ def construct_published_split(request: ConstructPublishedSplitRequest) -> Constr
             ),
         )
     )
-    validate_split_manifest(request.membership, assignments, manifest)
+    validate_split_manifest(request.membership, split.assignments, split.manifest)
     static_assignments: pl.DataFrame | None = None
     static_manifest: SplitManifestDocument | None = None
     if has_matched_reference:
         assert request.matched_static_reference_manifest is not None
         assert request.matched_static_reference_membership is not None
         _require_matching_reference_rows(request.membership, request.matched_static_reference_membership)
-        static_assignments, static_manifest = split_membership(
+        static_split = split_membership(
             SplitConstructionRequest(
                 membership=request.matched_static_reference_membership,
                 population=request.population,
@@ -340,10 +340,12 @@ def construct_published_split(request: ConstructPublishedSplitRequest) -> Constr
         )
         validate_split_manifest(
             request.matched_static_reference_membership,
-            static_assignments,
-            static_manifest,
+            static_split.assignments,
+            static_split.manifest,
         )
-    artifacts = _PopulationSplitArtifacts(assignments, manifest, static_assignments, static_manifest)
+        static_assignments = static_split.assignments
+        static_manifest = static_split.manifest
+    artifacts = _PopulationSplitArtifacts(split.assignments, split.manifest, static_assignments, static_manifest)
     sections = [canonical_json_text(request.execution_identity), canonical_json_text(artifacts.manifest)]
     if artifacts.matched_static_reference_manifest is not None:
         sections.append(canonical_json_text(artifacts.matched_static_reference_manifest))

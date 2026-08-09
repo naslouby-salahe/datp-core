@@ -353,7 +353,7 @@ def prepare_temporal_analysis(request: TemporalAnalysisRequest) -> TemporalAnaly
             )
         )
     records = tuple(temporal_analysis_record(item) for item in ordered)
-    drift_interval, recovered_interval, ratio_interval = temporal_seed_series_intervals(ordered)
+    intervals = temporal_seed_series_intervals(ordered)
     return TemporalAnalysisDocument(
         experiment=request.experiment,
         threshold_method=request.threshold_method,
@@ -366,9 +366,9 @@ def prepare_temporal_analysis(request: TemporalAnalysisRequest) -> TemporalAnaly
         paired_seed_identities=tuple(item.seed for item in ordered),
         excluded_seeds=(),
         unavailable_reason=None,
-        drift_excess_interval=drift_interval,
-        recovered_amount_interval=recovered_interval,
-        recovery_ratio_interval=ratio_interval,
+        drift_excess_interval=intervals.drift_excess,
+        recovered_amount_interval=intervals.recovered_amount,
+        recovery_ratio_interval=intervals.recovery_ratio,
     )
 
 

@@ -537,12 +537,20 @@ def _temporal_inference_protocol(seed_cohort: SeedCohort) -> PairedInferenceProt
     )
 
 
+class TemporalSeedSeriesIntervals(StrictModel):
+    """Bootstrap intervals for the three campaign-level temporal recovery quantities."""
+
+    drift_excess: BootstrapInterval
+    recovered_amount: BootstrapInterval
+    recovery_ratio: BootstrapInterval | None
+
+
 def temporal_seed_series_intervals(
     records: tuple[TemporalRecoveryResult, ...],
     *,
     required_seed_cohort: SeedCohort = BOUNDED_EVIDENCE_SEED_COHORT,
     analysis_seed: Seed = CONFIRMATORY_ANALYSIS_SEED,
-) -> tuple[BootstrapInterval, BootstrapInterval | None, BootstrapInterval | None]:
+) -> TemporalSeedSeriesIntervals:
     """BCa over seed-level drift excess, recovery amount, and recovery ratio when defined."""
     from datp_core.analysis.inference.bootstrap.estimation import seed_level_bca_interval
 
@@ -563,7 +571,11 @@ def temporal_seed_series_intervals(
         if len(ratios) == len(records)
         else None
     )
-    return drift, recovered, recovery_ratio
+    return TemporalSeedSeriesIntervals(
+        drift_excess=drift,
+        recovered_amount=recovered,
+        recovery_ratio=recovery_ratio,
+    )
 
 
 class TemporalFutureIdentity(StrictModel):

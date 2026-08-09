@@ -79,10 +79,10 @@ def test_run_local_epoch_returns_full_state_and_positive_sample_count(tmp_path) 
     client_input = build_client_input("client_a", tmp_path)
     prepared = prepare_federated_client_data(client_input, AUTOENCODER)
     loader = build_client_loader(prepared, batch_size=BatchSize(4), seed=Seed(1))
-    state, loss, sample_count = run_local_epoch(model, optimizer, loader, device)
-    assert set(state.keys()) == set(model.state_dict().keys())
-    assert sample_count.value == 16
-    assert loss.value >= 0.0
+    result = run_local_epoch(model, optimizer, loader, device)
+    assert set(result.state_dict.keys()) == set(model.state_dict().keys())
+    assert result.sample_count.value == 16
+    assert result.mean_reconstruction_loss.value >= 0.0
 
 
 def test_run_local_epoch_with_larger_proximal_coefficient_stays_closer_to_reference(tmp_path) -> None:
@@ -97,14 +97,17 @@ def test_run_local_epoch_with_larger_proximal_coefficient_stays_closer_to_refere
         model.load_state_dict({name: tensor.clone() for name, tensor in reference_state.items()})
         optimizer = torch.optim.SGD(model.parameters(), lr=0.001)
         loader = build_client_loader(prepared, batch_size=BatchSize(4), seed=Seed(1))
-        state, _loss, _count = run_local_epoch(
+        result = run_local_epoch(
             model,
             optimizer,
             loader,
             device,
             proximal_term=ProximalTerm(reference_state=reference_state, coefficient=ProximalCoefficient(coefficient)),
         )
-        return {name: torch.sum((tensor.cpu() - reference_state[name].cpu()) ** 2) for name, tensor in state.items()}
+        return {
+            name: torch.sum((tensor.cpu() - reference_state[name].cpu()) ** 2)
+            for name, tensor in result.state_dict.items()
+        }
 
     small_coefficient_drift = run_with_coefficient(1e-6)
     large_coefficient_drift = run_with_coefficient(100.0)
@@ -154,9 +157,9 @@ def test_aggregate_client_updates_requires_at_least_one_update() -> None:
 def test_serialize_and_checksum_state_dict_is_deterministic() -> None:
     first_state = {"w": torch.arange(4, dtype=torch.float32)}
     second_state = {"w": torch.arange(4, dtype=torch.float32)}
-    first_checksum, _first_bytes, _first_elements = serialize_and_checksum_state_dict(first_state)
-    second_checksum, _second_bytes, _second_elements = serialize_and_checksum_state_dict(second_state)
-    assert first_checksum == second_checksum
+    first_evidence = serialize_and_checksum_state_dict(first_state)
+    second_evidence = serialize_and_checksum_state_dict(second_state)
+    assert first_evidence.checksum == second_evidence.checksum
 
 
 def test_preprocessing_state_set_checksum_binds_client_identity() -> None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
@@ -63,6 +64,12 @@ class PersistedCheckpoint(Protocol):
     def status(self) -> CheckpointStatus: ...
 
 
+@dataclass(frozen=True, slots=True)
+class TerminalCheckpointSelection[CandidateT: PersistedCheckpoint]:
+    candidates: tuple[CandidateT, ...]
+    selected: CandidateT
+
+
 def validate_persisted_checkpoint_file(
     path: Path,
     checksum: Checksum,
@@ -108,7 +115,7 @@ def select_terminal_checkpoint[CandidateT: PersistedCheckpoint](
     maximum_round: RoundNumber,
     *,
     rebuild: Callable[[CandidateT, CheckpointStatus], CandidateT],
-) -> tuple[tuple[CandidateT, ...], CandidateT]:
+) -> TerminalCheckpointSelection[CandidateT]:
     statused: list[CandidateT] = []
     selected: CandidateT | None = None
     for candidate in candidates:
@@ -127,4 +134,4 @@ def select_terminal_checkpoint[CandidateT: PersistedCheckpoint](
             ErrorMessage("declared maximum-round checkpoint candidate is missing"),
             subject=ContractSubject.CHECKPOINT_CANDIDATES,
         )
-    return tuple(statused), selected
+    return TerminalCheckpointSelection(candidates=tuple(statused), selected=selected)

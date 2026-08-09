@@ -280,6 +280,23 @@ class FedProxCvFprCornerEvidence:
         return MetricValue(self.shared_cv.value - self.local_cv.value)
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class DittoCvFprEffectEvidence:
+    """Population CV(FPR) evidence for the paired Ditto threshold-scope comparison."""
+
+    shared_cv: MetricValue
+    local_cv: MetricValue
+    effect: MetricValue
+
+    def __post_init__(self) -> None:
+        expected_effect = self.shared_cv.value - self.local_cv.value
+        if abs(self.effect.value - expected_effect) > NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE.value:
+            raise ScientificContractError(
+                ErrorMessage("Ditto CV(FPR) effect must equal the shared-minus-local population difference"),
+                subject=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
+            )
+
+
 def run_ditto_stress_test_seed(
     *,
     training_seed: Seed,
@@ -459,8 +476,8 @@ def analyze_ditto_absorption(
                 ErrorMessage("Ditto absorption reference evidence must align seed-for-seed with stress results"),
                 subject=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
             )
-        shared_cv, local_cv, effect = _population_cv_fpr_effect(result)
-        if abs(shared_cv.value - reference.local_cv.value) <= DITTO_ALTERNATIVE_ROUTE_DIFFERENCE.value:
+        effect_evidence = _population_cv_fpr_effect(result)
+        if abs(effect_evidence.shared_cv.value - reference.local_cv.value) <= DITTO_ALTERNATIVE_ROUTE_DIFFERENCE.value:
             alternative_route += 1
         coefficient = result.personalized_coordinate.model_coefficient
         observations.append(
@@ -470,11 +487,11 @@ def analyze_ditto_absorption(
                 reference_model=TrainingModelId.FEDAVG_AUTOENCODER,
                 personalized_model=TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER,
                 reference_effect=reference.effect,
-                personalized_effect=effect,
+                personalized_effect=effect_evidence.effect,
                 reference_shared_cv=reference.shared_cv,
                 reference_local_cv=reference.local_cv,
-                personalized_shared_cv=shared_cv,
-                personalized_local_cv=local_cv,
+                personalized_shared_cv=effect_evidence.shared_cv,
+                personalized_local_cv=effect_evidence.local_cv,
                 model_coefficient=ModelCoefficientValue(coefficient.value) if coefficient is not None else None,
             )
         )
@@ -551,10 +568,18 @@ def run_fedprox_stress_test_seed(
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class FedProxTerminalLossObservation:
+    """Terminal aggregate training loss observed for one FedProx training seed."""
+
+    seed: Seed
+    terminal_training_loss: MetricValue
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class FedProxCoefficientTerminalLoss:
     coefficient: ProximalCoefficient
     mean_terminal_training_loss: MetricValue
-    per_seed_terminal_losses: tuple[tuple[Seed, MetricValue], ...]
+    per_seed_terminal_losses: tuple[FedProxTerminalLossObservation, ...]
 
     def __post_init__(self) -> None:
         if len(self.per_seed_terminal_losses) != CONFIRMATORY_SEED_COHORT.member_count.value:
@@ -562,10 +587,18 @@ class FedProxCoefficientTerminalLoss:
                 ErrorMessage("FedProx terminal-loss candidates require the full confirmatory seed cohort"),
                 subject=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST,
             )
-        seeds = tuple(seed for seed, _loss in self.per_seed_terminal_losses)
+        seeds = tuple(observation.seed for observation in self.per_seed_terminal_losses)
         if seeds != CONFIRMATORY_SEED_COHORT.values:
             raise ScientificContractError(
                 ErrorMessage("FedProx terminal-loss candidates must use the locked confirmatory seed order"),
+                subject=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST,
+            )
+        observed_mean = sum(
+            observation.terminal_training_loss.value for observation in self.per_seed_terminal_losses
+        ) / len(self.per_seed_terminal_losses)
+        if abs(self.mean_terminal_training_loss.value - observed_mean) > NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE.value:
+            raise ScientificContractError(
+                ErrorMessage("FedProx candidate mean terminal loss must equal its seed observations"),
                 subject=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST,
             )
 
@@ -619,13 +652,13 @@ def collect_fedprox_coefficient_terminal_losses(
 ) -> tuple[FedProxCoefficientTerminalLoss, ...]:
     candidates: list[FedProxCoefficientTerminalLoss] = []
     for coefficient in FEDPROX_COEFFICIENTS:
-        seed_losses: list[tuple[Seed, MetricValue]] = []
+        seed_losses: list[FedProxTerminalLossObservation] = []
         for seed in seed_cohort.values:
             directory = federated_training_directory(fedprox_training_coordinate(seed, coefficient), output_root)
             seed_losses.append(
-                (
-                    seed,
-                    read_terminal_aggregate_training_loss(
+                FedProxTerminalLossObservation(
+                    seed=seed,
+                    terminal_training_loss=read_terminal_aggregate_training_loss(
                         directory,
                         maximum_round=CHECKPOINT_PROTOCOL.maximum_round,
                     ),
@@ -635,7 +668,7 @@ def collect_fedprox_coefficient_terminal_losses(
             FedProxCoefficientTerminalLoss(
                 coefficient=coefficient,
                 mean_terminal_training_loss=MetricValue(
-                    sum(loss.value for _seed, loss in seed_losses) / len(seed_losses)
+                    sum(observation.terminal_training_loss.value for observation in seed_losses) / len(seed_losses)
                 ),
                 per_seed_terminal_losses=tuple(seed_losses),
             )
@@ -792,12 +825,16 @@ def _fedprox_evaluation_path(
     return path
 
 
-def _population_cv_fpr_effect(result: DittoStressTestEvidence) -> tuple[MetricValue, MetricValue, MetricValue]:
+def _population_cv_fpr_effect(result: DittoStressTestEvidence) -> DittoCvFprEffectEvidence:
     shared_population = calculate_population_metrics(result.shared_threshold_metrics, cohort=result.evaluation_cohort)
     local_population = calculate_population_metrics(result.local_threshold_metrics, cohort=result.evaluation_cohort)
     shared_cv = _required_population_cv(shared_population)
     local_cv = _required_population_cv(local_population)
-    return shared_cv, local_cv, MetricValue(shared_cv.value - local_cv.value)
+    return DittoCvFprEffectEvidence(
+        shared_cv=shared_cv,
+        local_cv=local_cv,
+        effect=MetricValue(shared_cv.value - local_cv.value),
+    )
 
 
 def _required_population_cv(population: PopulationMetricResult) -> MetricValue:

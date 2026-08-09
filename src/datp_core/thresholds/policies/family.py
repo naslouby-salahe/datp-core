@@ -79,6 +79,14 @@ class FamilyMembership:
 
 
 @dataclass(frozen=True, slots=True)
+class FamilyMembershipConstruction:
+    """Membership and threshold assignments produced for one device family."""
+
+    membership: FamilyMembership
+    assignments: tuple[ThresholdAssignment, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class FamilyThresholdResult:
     coordinate: FederatedTrainingCoordinate
     families: tuple[FamilyMembership, ...]
@@ -143,14 +151,14 @@ def construct_family_threshold(
     assignments: list[ThresholdAssignment] = []
     for family_id in family_ids:
         declared_members = tuple(item.client for item in family_by_client if item.family == family_id)
-        membership, family_assignments = _build_family_membership(
+        construction = _build_family_membership(
             family_id,
             declared_members,
             eligible,
             quantile,
         )
-        memberships.append(membership)
-        assignments.extend(family_assignments)
+        memberships.append(construction.membership)
+        assignments.extend(construction.assignments)
     return FamilyThresholdResult(
         coordinate=eligible[0].coordinate,
         families=tuple(memberships),
@@ -163,30 +171,30 @@ def _build_family_membership(
     declared_members: tuple[ClientIdentity, ...],
     eligible: tuple[ClientBenignCalibrationScores, ...],
     quantile: Quantile,
-) -> tuple[FamilyMembership, tuple[ThresholdAssignment, ...]]:
+) -> FamilyMembershipConstruction:
     eligible_members = tuple(client for client in declared_members if any(item.client == client for item in eligible))
     if not eligible_members:
-        return (
-            FamilyMembership(
+        return FamilyMembershipConstruction(
+            membership=FamilyMembership(
                 family_id=family_id,
                 members=(),
                 contributing_local_quantiles=(),
                 status=AvailabilityStatus.UNAVAILABLE,
                 family_threshold=None,
             ),
-            (),
+            assignments=(),
         )
     local_quantiles = tuple(local_quantile(_eligible_scores(eligible, client), quantile) for client in eligible_members)
     family_threshold = mean_local_threshold(local_quantiles)
-    return (
-        FamilyMembership(
+    return FamilyMembershipConstruction(
+        membership=FamilyMembership(
             family_id=family_id,
             members=eligible_members,
             contributing_local_quantiles=local_quantiles,
             status=AvailabilityStatus.AVAILABLE,
             family_threshold=family_threshold,
         ),
-        tuple(ThresholdAssignment(client, family_threshold) for client in eligible_members),
+        assignments=tuple(ThresholdAssignment(client, family_threshold) for client in eligible_members),
     )
 
 

@@ -56,6 +56,12 @@ class PublicationFileChecksum:
     checksum: Checksum
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PersonalizedCandidatePublication:
+    candidate_sets: tuple[PersonalizedCandidateSet, ...]
+    completion_digest: Checksum
+
+
 def build_manifest(
     *,
     kind: CandidateManifestKind,
@@ -297,7 +303,7 @@ def stage_personalized_candidates(
     preprocessing_state_set_checksum: Checksum,
     split_manifest_checksum: Checksum,
     output_directory: Path,
-) -> tuple[tuple[PersonalizedCandidateSet, ...], Checksum]:
+) -> PersonalizedCandidatePublication:
     candidate_sets = tuple(
         PersonalizedCandidateSet(
             client=snapshot_set.client,
@@ -325,10 +331,13 @@ def stage_personalized_candidates(
         split_manifest_checksum=split_manifest_checksum,
     )
     write_manifest(output_directory, manifest)
-    return candidate_sets, write_completion(
-        output_directory,
-        manifest,
-        include_history=False,
+    return PersonalizedCandidatePublication(
+        candidate_sets=candidate_sets,
+        completion_digest=write_completion(
+            output_directory,
+            manifest,
+            include_history=False,
+        ),
     )
 
 
@@ -386,7 +395,7 @@ def write_ditto_training(
     )
     require_empty_directory(global_output_directory)
     require_empty_directory(personalized_output_directory)
-    personalized_candidates, personalized_digest = stage_personalized_candidates(
+    personalized_publication = stage_personalized_candidates(
         coordinate=personalized_coordinate,
         snapshot_sets=personalized_snapshot_sets,
         checkpoint_protocol=global_result.checkpoint_protocol,
@@ -420,7 +429,7 @@ def write_ditto_training(
         batch_size=global_result.batch_size_used,
         preprocessing_state_set_checksum=global_result.preprocessing_state_set_checksum,
         split_manifest_checksum=global_result.split_manifest_checksum,
-        linked_personalized_digest=personalized_digest,
+        linked_personalized_digest=personalized_publication.completion_digest,
     )
     write_manifest(global_output_directory, global_manifest)
     write_completion(
@@ -431,7 +440,7 @@ def write_ditto_training(
     return DittoTrainingOutcome(
         global_training_result=global_result,
         global_candidates=global_candidates,
-        personalized_candidates=personalized_candidates,
+        personalized_candidates=personalized_publication.candidate_sets,
     )
 
 

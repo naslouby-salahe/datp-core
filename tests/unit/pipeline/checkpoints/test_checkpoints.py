@@ -7,10 +7,10 @@ from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import ArtifactIntegrityError
 from datp_core.core.identifiers import CheckpointStatus
 from datp_core.core.numeric import MetricValue, RoundNumber
-from datp_core.detector.checkpoints.contracts import validate_persisted_checkpoint_file
-from datp_core.detector.checkpoints.service import (
+from datp_core.detector.checkpoints.contracts import (
     select_terminal_checkpoint,
     validate_ordered_checkpoint_inventory,
+    validate_persisted_checkpoint_file,
 )
 
 
@@ -43,7 +43,7 @@ def test_shared_checkpoint_inventory_and_terminal_selection(tmp_path: Path) -> N
         candidates,
         (RoundNumber(1), RoundNumber(2)),
     )
-    statused, selected = select_terminal_checkpoint(
+    selection = select_terminal_checkpoint(
         ordered,
         RoundNumber(2),
         rebuild=lambda candidate, status: _Candidate(
@@ -54,8 +54,8 @@ def test_shared_checkpoint_inventory_and_terminal_selection(tmp_path: Path) -> N
             status=status,
         ),
     )
-    assert selected.round_number == RoundNumber(2)
-    assert tuple(candidate.status for candidate in statused) == (
+    assert selection.selected.round_number == RoundNumber(2)
+    assert tuple(candidate.status for candidate in selection.candidates) == (
         CheckpointStatus.STABILITY_EVIDENCE,
         CheckpointStatus.SELECTED_BY_NON_TEST_RULE,
     )

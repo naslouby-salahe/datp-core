@@ -21,9 +21,7 @@ def test_hamilton_allocation_conserves_rows_and_is_deterministic() -> None:
         RowCount(4),
         RowCount(3),
     )
-    temporal = hamilton_integer_counts(
-        RowCount(100), (Ratio(0.55), Ratio(0.15), Ratio(0.10), Ratio(0.20))
-    )
+    temporal = hamilton_integer_counts(RowCount(100), (Ratio(0.55), Ratio(0.15), Ratio(0.10), Ratio(0.20)))
     assert sum(count.value for count in temporal) == 100
     assert temporal == (RowCount(55), RowCount(15), RowCount(10), RowCount(20))
 
@@ -43,7 +41,7 @@ def test_non_temporal_equal_thirds_are_disjoint_and_benign_only_for_train_cal(
         nbaiot_canonical_root, partition_seed=Seed(0), split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS
     )
     manifest, membership = construction.manifest, construction.membership
-    assignments, split_manifest = split_membership(
+    split = split_membership(
         SplitConstructionRequest(
             membership=membership,
             population=PopulationId.NBAIOT_NATURAL_DEVICES,
@@ -53,17 +51,17 @@ def test_non_temporal_equal_thirds_are_disjoint_and_benign_only_for_train_cal(
             population_manifest_checksum=manifest.document.membership_checksum,
         )
     )
-    assert assignments.height == membership.height
-    assert assignments.get_column("stable_row_id").n_unique() == assignments.height
-    train_cal = assignments.filter(
+    assert split.assignments.height == membership.height
+    assert split.assignments.get_column("stable_row_id").n_unique() == split.assignments.height
+    train_cal = split.assignments.filter(
         pl.col("partition_role").is_in([PartitionRole.TRAIN.value, PartitionRole.CALIBRATION.value])
     )
     assert train_cal.filter(pl.col("outcome_label") == "attack").height == 0
     assert (
-        split_manifest.train_row_count.plus(split_manifest.calibration_row_count)
-        .plus(split_manifest.evaluation_row_count)
+        split.manifest.train_row_count.plus(split.manifest.calibration_row_count)
+        .plus(split.manifest.evaluation_row_count)
         .value
-        == assignments.height
+        == split.assignments.height
     )
 
 
@@ -72,7 +70,7 @@ def test_attack_rows_never_enter_training(nbaiot_canonical_root: Path) -> None:
         nbaiot_canonical_root, partition_seed=Seed(1), split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS
     )
     manifest, membership = construction.manifest, construction.membership
-    assignments, _ = split_membership(
+    split = split_membership(
         SplitConstructionRequest(
             membership=membership,
             population=PopulationId.NBAIOT_NATURAL_DEVICES,
@@ -82,7 +80,7 @@ def test_attack_rows_never_enter_training(nbaiot_canonical_root: Path) -> None:
             population_manifest_checksum=manifest.document.membership_checksum,
         )
     )
-    attacks_in_train = assignments.filter(
+    attacks_in_train = split.assignments.filter(
         (pl.col("partition_role") == PartitionRole.TRAIN.value) & (pl.col("outcome_label") == "attack")
     )
     assert attacks_in_train.height == 0
@@ -101,10 +99,10 @@ def test_split_is_deterministic_for_fixed_seed(nbaiot_canonical_root: Path) -> N
         split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
         population_manifest_checksum=manifest.document.membership_checksum,
     )
-    first, first_manifest = split_membership(request)
-    second, second_manifest = split_membership(request)
-    assert first.equals(second)
-    assert first_manifest.assignment_checksum == second_manifest.assignment_checksum
+    first = split_membership(request)
+    second = split_membership(request)
+    assert first.assignments.equals(second.assignments)
+    assert first.manifest.assignment_checksum == second.manifest.assignment_checksum
 
 
 def test_row_cannot_appear_in_two_splits(nbaiot_canonical_root: Path) -> None:
@@ -112,7 +110,7 @@ def test_row_cannot_appear_in_two_splits(nbaiot_canonical_root: Path) -> None:
         nbaiot_canonical_root, partition_seed=Seed(0), split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS
     )
     manifest, membership = construction.manifest, construction.membership
-    assignments, _ = split_membership(
+    split = split_membership(
         SplitConstructionRequest(
             membership=membership,
             population=PopulationId.NBAIOT_NATURAL_DEVICES,
@@ -122,5 +120,5 @@ def test_row_cannot_appear_in_two_splits(nbaiot_canonical_root: Path) -> None:
             population_manifest_checksum=manifest.document.membership_checksum,
         )
     )
-    duplicated = assignments.group_by("stable_row_id").len().filter(pl.col("len") > 1)
+    duplicated = split.assignments.group_by("stable_row_id").len().filter(pl.col("len") > 1)
     assert duplicated.height == 0
