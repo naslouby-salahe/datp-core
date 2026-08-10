@@ -393,6 +393,49 @@ def run_local_epoch(
     )
 
 
+def run_local_epoch_on_device(
+    model: ReconstructionAutoencoder,
+    optimizer: torch.optim.Optimizer,
+    features: torch.Tensor,
+    *,
+    batch_size: BatchSize,
+    seed: Seed,
+    device: torch.device,
+    proximal_term: ProximalTerm | None = None,
+) -> LocalEpochResult:
+    """Run one deterministic local epoch from a client tensor already on CUDA.
+
+    Federated clients are trained sequentially because their updates must be
+    aggregated in a stable order.  Keeping the active client's immutable input
+    tensor on the selected device avoids a host-to-device transfer for every
+    fixed-size batch; it does not change batching, shuffling, or optimization.
+    """
+    if features.device != device:
+        raise ScientificContractError(
+            ErrorMessage("device-local training features must be on the selected CUDA device"),
+            subject=ContractSubject.RUNTIME,
+        )
+    generator = torch.Generator(device=device)
+    generator.manual_seed(seed.value)
+    order = torch.randperm(features.shape[0], generator=generator, device=device)
+    reference_parameters = _reference_parameters(model, proximal_term, device)
+    model.train()
+    weighted_reconstruction_loss = torch.zeros((), device=device, dtype=TORCH_LEARNING_DTYPE)
+
+    for start in range(0, features.shape[0], batch_size.value):
+        batch_indices = order[start : start + batch_size.value]
+        batch = features.index_select(0, batch_indices)
+        loss = _train_one_batch(model, optimizer, batch, reference_parameters, proximal_term)
+        weighted_reconstruction_loss = weighted_reconstruction_loss + loss * batch.shape[0]
+
+    total_samples = features.shape[0]
+    return LocalEpochResult(
+        model_state=AutoencoderModelState.from_model(model),
+        mean_reconstruction_loss=MetricValue(float(weighted_reconstruction_loss.item()) / total_samples),
+        sample_count=RowCount(total_samples),
+    )
+
+
 def train_client_update(
     *,
     client_data: PreparedFederatedClientData,
@@ -412,28 +455,25 @@ def train_client_update(
         device=device,
     )
     optimizer = build_optimizer(model, optimizer_protocol, learning_rate)
-    local_epoch = run_local_epoch(
+    features = client_data.features_cpu.to(device=device, dtype=TORCH_LEARNING_DTYPE, non_blocking=False)
+    local_epoch = run_local_epoch_on_device(
         model,
         optimizer,
-        build_client_loader(
-            client_data,
-            batch_size=batch_size,
-            seed=seed,
-        ),
-        device,
+        features,
+        batch_size=batch_size,
+        seed=seed,
+        device=device,
         proximal_term=proximal_term,
     )
     for epoch in range(1, local_epochs.value):
         epoch_seed = derive_worker_seed(seed, SeedDerivationComponent(epoch))
-        local_epoch = run_local_epoch(
+        local_epoch = run_local_epoch_on_device(
             model,
             optimizer,
-            build_client_loader(
-                client_data,
-                batch_size=batch_size,
-                seed=epoch_seed,
-            ),
-            device,
+            features,
+            batch_size=batch_size,
+            seed=epoch_seed,
+            device=device,
             proximal_term=proximal_term,
         )
     return ClientUpdate(

@@ -46,6 +46,7 @@ _SHARED_AND_LOCAL_METHODS = (
     FederatedThresholdMethod.SHARED_THRESHOLD,
     FederatedThresholdMethod.LOCAL_THRESHOLD,
 )
+_HISTORICAL_ANCHOR_METRICS = (MetricId.FPR_COEFFICIENT_OF_VARIATION,)
 _SHARED_LOCAL_AND_GROUPED_METHODS = (
     FederatedThresholdMethod.SHARED_THRESHOLD,
     FederatedThresholdMethod.CLUSTER_THRESHOLD,
@@ -114,7 +115,7 @@ EXPERIMENTS = (
         TrainingModelId.FEDAVG_AUTOENCODER,
         PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
         _SHARED_AND_LOCAL_METHODS,
-        OPERATING_POINT_METRICS,
+        _HISTORICAL_ANCHOR_METRICS,
     ),
     _declare(
         ExperimentId.SHARED_VS_LOCAL_CONFIRMATION,

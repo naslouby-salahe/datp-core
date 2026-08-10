@@ -11,7 +11,7 @@ from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
 )
-from datp_core.core.identifiers import ExperimentId, StageExecutionEvidence
+from datp_core.core.identifiers import DatasetId, ExperimentId, StageExecutionEvidence
 from datp_core.core.numeric import CampaignCoordinateCount, ElapsedSeconds
 from datp_core.data.service import DatasetMaterializationRequest, materialize_datasets
 from datp_core.detector.training.models import FederatedTrainingCoordinate
@@ -134,6 +134,7 @@ def execute_campaign(
 class PipelineStageRunner:
     progress_hook: ProgressHook | None = None
     _workspace: ExperimentWorkspace | None = None
+    _materialized_datasets: set[DatasetId] = field(default_factory=lambda: set[DatasetId](), init=False, repr=False)
     _fixed_score_workspaces: dict[tuple[FederatedTrainingCoordinate, Path], ExperimentWorkspace] = field(
         default_factory=dict[tuple[FederatedTrainingCoordinate, Path], ExperimentWorkspace],
         init=False,
@@ -249,10 +250,17 @@ class PipelineStageRunner:
         )
 
     def _materialize_dataset(self, stage: PipelineStage, coordinate: ExperimentCoordinate) -> StageExecution:
+        if coordinate.dataset in self._materialized_datasets:
+            return StageExecution(
+                stage=stage,
+                outcome=StageOutcome.COMPLETED,
+                evidence=StageExecutionEvidence(f"{coordinate.dataset.value} canonical dataset reused"),
+            )
         result = materialize_datasets(
             DatasetMaterializationRequest(data_root=DATA_ROOT, datasets=(coordinate.dataset,), overwrite=False)
         )
         publication = result.publications[0]
+        self._materialized_datasets.add(coordinate.dataset)
         return StageExecution(
             stage=stage,
             outcome=StageOutcome.COMPLETED,
