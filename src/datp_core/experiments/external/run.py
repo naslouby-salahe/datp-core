@@ -56,6 +56,7 @@ from datp_core.experiments.confirmatory.spec import CONFIRMATORY_INFERENCE_PROTO
 from datp_core.experiments.execution import execute_declared_experiment_seed
 from datp_core.experiments.execution.evidence import load_evaluation_document, population_metric
 from datp_core.experiments.execution.layout import EvaluationRunAssetDirectory
+from datp_core.experiments.execution.models import ProgressHook
 from datp_core.experiments.registry import EXPERIMENTS, ExperimentDeclaration
 from datp_core.presentation.export import export_external_publication, format_publication_metric
 from datp_core.runtime.filesystem import write_text_atomically
@@ -93,7 +94,11 @@ class BoundedExternalCampaignAnalysisResult:
 
 
 def run_external_validation_seed(
-    partition_seed: Seed, *, output_root: Path, overwrite: bool
+    partition_seed: Seed,
+    *,
+    output_root: Path,
+    overwrite: bool,
+    progress: ProgressHook | None = None,
 ) -> BoundedExternalSeedResult:
     return _run_seed(
         ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION,
@@ -101,16 +106,24 @@ def run_external_validation_seed(
         BoundedExternalPlanningReason.EDGE_BENIGN_EQUITY_PREREQUISITES,
         output_root,
         overwrite,
+        progress,
     )
 
 
-def run_ciciot_boundary_seed(partition_seed: Seed, *, output_root: Path, overwrite: bool) -> BoundedExternalSeedResult:
+def run_ciciot_boundary_seed(
+    partition_seed: Seed,
+    *,
+    output_root: Path,
+    overwrite: bool,
+    progress: ProgressHook | None = None,
+) -> BoundedExternalSeedResult:
     return _run_seed(
         ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY,
         partition_seed,
         BoundedExternalPlanningReason.CICIOT_FILE_CLIENT_PREREQUISITES,
         output_root,
         overwrite,
+        progress,
     )
 
 
@@ -120,6 +133,7 @@ def _run_seed(
     reason: BoundedExternalPlanningReason,
     output_root: Path,
     overwrite: bool,
+    progress: ProgressHook | None,
 ) -> BoundedExternalSeedResult:
     declaration = _declaration(experiment)
     result = execute_declared_experiment_seed(
@@ -128,6 +142,7 @@ def _run_seed(
         reason=PlanReason(reason),
         output_root=output_root,
         overwrite=overwrite,
+        progress=progress,
     )
     return BoundedExternalSeedResult(
         experiment=declaration.id,

@@ -90,10 +90,10 @@ def test_non_historical_checkpoint_semantics_cannot_enter_reproduction() -> None
         reproduce_anchor(observations=tuple(observations))
 
 
-def test_protocol_references_use_metric_specific_absolute_tolerance() -> None:
+def test_protocol_references_use_diagnostic_tolerance_rule() -> None:
     references = references_from_protocol(ANCHOR_DECISION_PROTOCOL)
     assert len(references) == 10
-    assert all(item.tolerance_rule.strategy.value == "absolute_tolerance" for item in references)
+    assert all(item.tolerance_rule.strategy.value == "diagnostic" for item in references)
     assert all(item.metric is MetricId.FPR_COEFFICIENT_OF_VARIATION for item in references)
 
 

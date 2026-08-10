@@ -1,5 +1,5 @@
-from collections.abc import Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass, field
 from enum import IntEnum
 from pathlib import Path
 
@@ -127,6 +127,7 @@ class FederatedTrainingRequest[T: FedAvgProtocol | FedProxProtocol]:
     learning_rate: LearningRate
     split_manifest_checksum: Checksum
     output_directory: Path
+    progress_callback: Callable[[int, int], None] | None = field(default=None, compare=False, repr=False)
 
 
 @dataclass(frozen=True, slots=True)
@@ -615,6 +616,8 @@ def run_federated_training[T: FedAvgProtocol | FedProxProtocol](
 
     for round_value in range(1, request.checkpoint_protocol.maximum_round.value + 1):
         round_number = RoundNumber(round_value)
+        if request.progress_callback is not None:
+            request.progress_callback(round_value, request.checkpoint_protocol.maximum_round.value)
         round_result, global_model_state = _run_training_round(
             round_number=round_number,
             request=request,

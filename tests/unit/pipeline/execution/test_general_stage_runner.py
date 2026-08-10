@@ -1,6 +1,9 @@
 from dataclasses import replace
 from pathlib import Path
 
+import pytest
+
+import datp_core.experiments.execution.workspace as workspace_module
 from datp_core.artifacts.layout import experiment_output_directory
 from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.repositories.models import ArtifactKind, ArtifactRecord, ArtifactState
@@ -61,6 +64,63 @@ def test_preflight_completes_without_touching_disk() -> None:
     result = runner.run(PipelineStage.PREFLIGHT, coordinate(), provenance(), OUTPUT_ROOT)
     assert result.outcome is StageOutcome.COMPLETED
     assert coordinate().stable_key in result.evidence
+
+
+def test_context_resolved_once_across_metric_coordinates(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Coordinates sharing a training coordinate reuse one resolved context.
+
+    The federated execution context depends on the training coordinate, not the
+    threshold method or metric, so a campaign resolves it once per training group.
+    """
+    runner = PipelineStageRunner()
+    auroc_coordinate = replace(coordinate(), metric=MetricId.AUROC)
+    other_seed_coordinate = replace(coordinate(), training_seed=Seed(1))
+
+    resolved: list[str] = []
+
+    def fake_resolve(coordinate: ExperimentCoordinate, _output_root: Path) -> object:
+        resolved.append(coordinate.stable_key)
+        return object()
+
+    monkeypatch.setattr(workspace_module, "resolve_execution_context", fake_resolve)
+
+    first = runner._workspace_for(coordinate(), OUTPUT_ROOT)
+    second = runner._workspace_for(auroc_coordinate, OUTPUT_ROOT)
+    third = runner._workspace_for(other_seed_coordinate, OUTPUT_ROOT)
+
+    assert first.context is second.context
+    assert first.context is not third.context
+    assert len(resolved) == 2
+
+
+def test_evaluation_resolved_once_across_metric_coordinates(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Coordinates sharing a run directory reuse one evaluation result.
+
+    The federated evaluation document is metric-independent, so a campaign
+    evaluates once per metric-free run directory and reuses the result across
+    metric coordinates. Changing the threshold method resolves anew.
+    """
+    runner = PipelineStageRunner()
+    auroc_coordinate = replace(coordinate(), metric=MetricId.AUROC)
+    local_coordinate = replace(
+        coordinate(), metric=MetricId.AUROC, threshold_method=FederatedThresholdMethod.LOCAL_THRESHOLD
+    )
+
+    evaluated: list[str] = []
+
+    def fake_evaluate(self: workspace_module.ExperimentWorkspace) -> object:
+        evaluated.append(self.run_directory().as_posix())
+        return object()
+
+    monkeypatch.setattr(workspace_module.ExperimentWorkspace, "_evaluate", fake_evaluate)
+
+    first = runner._workspace_for(coordinate(), OUTPUT_ROOT)
+    second = runner._workspace_for(auroc_coordinate, OUTPUT_ROOT)
+    third = runner._workspace_for(local_coordinate, OUTPUT_ROOT)
+
+    assert first.evaluation is second.evaluation
+    assert first.evaluation is not third.evaluation
+    assert len(evaluated) == 2
 
 
 def test_temporal_coordinates_are_blocked_from_single_coordinate_stages() -> None:

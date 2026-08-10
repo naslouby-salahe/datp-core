@@ -53,6 +53,7 @@ from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT, SeedCoh
 from datp_core.experiments.execution import execute_declared_experiment_seed
 from datp_core.experiments.execution.evidence import load_evaluation_document
 from datp_core.experiments.execution.layout import EvaluationRunAssetDirectory
+from datp_core.experiments.execution.models import ProgressHook
 from datp_core.experiments.registry import require_experiment_declaration
 from datp_core.runtime.configuration import OUTPUTS_ROOT
 
@@ -229,6 +230,7 @@ def _run_estimation_seed(
     training_seed: Seed,
     output_root: Path,
     overwrite: bool,
+    progress: ProgressHook | None,
 ) -> FederatedEstimationSeedResult:
     declaration = require_experiment_declaration(experiment_id)
     result = execute_declared_experiment_seed(
@@ -237,6 +239,7 @@ def _run_estimation_seed(
         reason=PlanReason(f"federated threshold estimation entry point for {experiment_id.value}"),
         output_root=output_root,
         overwrite=overwrite,
+        progress=progress,
     )
     return FederatedEstimationSeedResult(
         training_seed=training_seed,
@@ -377,12 +380,14 @@ def run_federated_benign_statistics_comparison_seed(
     *,
     output_root: Path,
     overwrite: bool,
+    progress: ProgressHook | None = None,
 ) -> FederatedEstimationSeedResult:
     return _run_estimation_seed(
         ExperimentId.FEDERATED_BENIGN_STATISTICS_COMPARISON,
         training_seed,
         output_root,
         overwrite,
+        progress,
     )
 
 
@@ -428,8 +433,15 @@ def run_federated_quantile_estimation_seed(
     *,
     output_root: Path,
     overwrite: bool,
+    progress: ProgressHook | None = None,
 ) -> FederatedEstimationSeedResult:
-    return _run_estimation_seed(ExperimentId.FEDERATED_QUANTILE_ESTIMATION, training_seed, output_root, overwrite)
+    return _run_estimation_seed(
+        ExperimentId.FEDERATED_QUANTILE_ESTIMATION,
+        training_seed,
+        output_root,
+        overwrite,
+        progress,
+    )
 
 
 def report_federated_quantile_estimation(
@@ -474,12 +486,14 @@ def run_fixed_coefficient_statistics_sensitivity_seed(
     *,
     output_root: Path,
     overwrite: bool,
+    progress: ProgressHook | None = None,
 ) -> FederatedEstimationSeedResult:
     return _run_estimation_seed(
         ExperimentId.FIXED_COEFFICIENT_STATISTICS_SENSITIVITY,
         training_seed,
         output_root,
         overwrite,
+        progress,
     )
 
 

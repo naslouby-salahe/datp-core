@@ -64,6 +64,7 @@ from datp_core.experiments.execution.layout import (
     ExecutionArtifactDirectory,
     federated_training_directory,
 )
+from datp_core.experiments.execution.models import ProgressHook
 from datp_core.experiments.registry import EXPERIMENTS, ExperimentDeclaration
 from datp_core.presentation.export import export_mechanism_publication
 from datp_core.presentation.figures import FigureSpec, PairedMetricFigureSeries
@@ -87,6 +88,7 @@ def run_controlled_heterogeneity_sweep_seed(
     *,
     output_root: Path,
     overwrite: bool,
+    progress: ProgressHook | None = None,
 ) -> HeterogeneitySweepSeedResult:
     declaration = _require_declaration(ExperimentId.CONTROLLED_HETEROGENEITY_SWEEP)
     result = execute_declared_experiment_seed(
@@ -95,6 +97,7 @@ def run_controlled_heterogeneity_sweep_seed(
         reason=PlanReason("controlled heterogeneity sweep executes the locked Dirichlet population grid"),
         output_root=output_root,
         overwrite=overwrite,
+        progress=progress,
     )
     return HeterogeneitySweepSeedResult(
         training_seed=training_seed,

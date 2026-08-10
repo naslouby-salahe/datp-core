@@ -73,6 +73,32 @@ class StaticReferenceSplitProtocol(StrictModel):
         return self
 
 
+class HistoricalTemporalGapSplitProtocol(StrictModel):
+    """Chronological per-client row-order split with discarded guard gaps.
+
+    Mirrors the historical DATP N-BaIoT preparation (60% train, 1% gap,
+    20% calibration, 1% gap, remainder evaluation). The two guard gaps are
+    assigned a DISCARDED role so the split still conserves every membership
+    row exactly once, but the gap rows never enter model input, calibration,
+    scoring, or evaluation. Fractions legitimately sum below one; evaluation
+    absorbs the remainder of each client's benign row count.
+    """
+
+    training: Ratio
+    calibration: Ratio
+    gap1: Ratio
+    gap2: Ratio
+
+    @model_validator(mode="after")
+    def validate_fractions(self) -> "HistoricalTemporalGapSplitProtocol":
+        declared = fsum(
+            (self.training.value, self.calibration.value, self.gap1.value, self.gap2.value)
+        )
+        if not declared < UNIT_FRACTION_TOTAL:
+            raise ValueError("historical temporal-gap declared fractions must leave a positive evaluation remainder")
+        return self
+
+
 TEMPORAL_SPLIT = TemporalSplitProtocol(
     historical_training=Ratio(0.55),
     historical_calibration=Ratio(0.15),
@@ -91,4 +117,11 @@ NON_TEMPORAL_SPLIT = FractionalSplitProtocol(
     training=Ratio(1 / 3),
     calibration=Ratio(1 / 3),
     evaluation=Ratio(1 / 3),
+)
+
+HISTORICAL_TEMPORAL_GAP_SPLIT = HistoricalTemporalGapSplitProtocol(
+    training=Ratio(0.60),
+    calibration=Ratio(0.20),
+    gap1=Ratio(0.01),
+    gap2=Ratio(0.01),
 )

@@ -55,6 +55,7 @@ from datp_core.experiments.confirmatory.run import (
 from datp_core.experiments.execution import execute_declared_experiment_seed
 from datp_core.experiments.execution.evidence import load_evaluation_document
 from datp_core.experiments.execution.layout import EvaluationRunAssetDirectory, ExecutionRootDirectory
+from datp_core.experiments.execution.models import ProgressHook
 from datp_core.experiments.external import (
     BoundedExternalAssetDirectory,
     analyze_ciciot_boundary_campaign,
@@ -141,6 +142,7 @@ class RobustnessRunner(Protocol):
         *,
         output_root: Path,
         overwrite: bool,
+        progress: ProgressHook | None = None,
     ) -> ThresholdRobustnessSeedResult: ...
 
 
@@ -151,6 +153,7 @@ class FederatedEstimationRunner(Protocol):
         *,
         output_root: Path,
         overwrite: bool,
+        progress: ProgressHook | None = None,
     ) -> FederatedEstimationSeedResult: ...
 
 
@@ -160,6 +163,8 @@ class DispatchHandler(Protocol):
         seeds: tuple[Seed, ...],
         output_root: Path,
         overwrite: OverwriteMode,
+        *,
+        progress: ProgressHook | None = None,
     ) -> DispatchOutcome: ...
 
 
@@ -222,9 +227,16 @@ def _method_outcomes(
     )
 
 
-def _dispatch_confirmatory(seeds: tuple[Seed, ...], output_root: Path, overwrite: OverwriteMode) -> DispatchOutcome:
+def _dispatch_confirmatory(
+    seeds: tuple[Seed, ...],
+    output_root: Path,
+    overwrite: OverwriteMode,
+    *,
+    progress: ProgressHook | None = None,
+) -> DispatchOutcome:
     results = tuple(
-        run_confirmatory_seed(seed, output_root=output_root, overwrite=overwrite.requested) for seed in seeds
+        run_confirmatory_seed(seed, output_root=output_root, overwrite=overwrite.requested, progress=progress)
+        for seed in seeds
     )
     return DispatchOutcome(
         detail=DetailText(f"confirmatory seeds={len(seeds)}"),
@@ -235,9 +247,20 @@ def _dispatch_confirmatory(seeds: tuple[Seed, ...], output_root: Path, overwrite
     )
 
 
-def _dispatch_family(seeds: tuple[Seed, ...], output_root: Path, overwrite: OverwriteMode) -> DispatchOutcome:
+def _dispatch_family(
+    seeds: tuple[Seed, ...],
+    output_root: Path,
+    overwrite: OverwriteMode,
+    *,
+    progress: ProgressHook | None = None,
+) -> DispatchOutcome:
     results = tuple(
-        run_family_grouped_mechanism_seed(seed, output_root=output_root, overwrite=overwrite.requested)
+        run_family_grouped_mechanism_seed(
+            seed,
+            output_root=output_root,
+            overwrite=overwrite.requested,
+            progress=progress,
+        )
         for seed in seeds
     )
     return DispatchOutcome(
@@ -254,14 +277,20 @@ def _dispatch_external(
     seeds: tuple[Seed, ...],
     output_root: Path,
     overwrite: OverwriteMode,
+    *,
+    progress: ProgressHook | None = None,
 ) -> DispatchOutcome:
     if experiment_id is ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION:
         results = tuple(
-            run_external_validation_seed(seed, output_root=output_root, overwrite=overwrite.requested) for seed in seeds
+            run_external_validation_seed(
+                seed, output_root=output_root, overwrite=overwrite.requested, progress=progress
+            )
+            for seed in seeds
         )
     elif experiment_id is ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY:
         results = tuple(
-            run_ciciot_boundary_seed(seed, output_root=output_root, overwrite=overwrite.requested) for seed in seeds
+            run_ciciot_boundary_seed(seed, output_root=output_root, overwrite=overwrite.requested, progress=progress)
+            for seed in seeds
         )
     else:
         raise ScientificContractError(ErrorMessage(f"unsupported external experiment: {experiment_id.value}"))
@@ -271,13 +300,20 @@ def _dispatch_external(
     )
 
 
-def _dispatch_fedprox(seeds: tuple[Seed, ...], output_root: Path, overwrite: OverwriteMode) -> DispatchOutcome:
+def _dispatch_fedprox(
+    seeds: tuple[Seed, ...],
+    output_root: Path,
+    overwrite: OverwriteMode,
+    *,
+    progress: ProgressHook | None = None,
+) -> DispatchOutcome:
     results = tuple(
         run_fedprox_stress_test_seed(
             training_seed=seed,
             coefficient=coefficient,
             output_root=output_root,
             overwrite=overwrite.requested,
+            progress=progress,
         )
         for seed in seeds
         for coefficient in FEDPROX_COEFFICIENTS
@@ -293,13 +329,20 @@ def _dispatch_fedprox(seeds: tuple[Seed, ...], output_root: Path, overwrite: Ove
     )
 
 
-def _dispatch_ditto(seeds: tuple[Seed, ...], output_root: Path, overwrite: OverwriteMode) -> DispatchOutcome:
+def _dispatch_ditto(
+    seeds: tuple[Seed, ...],
+    output_root: Path,
+    overwrite: OverwriteMode,
+    *,
+    progress: ProgressHook | None = None,
+) -> DispatchOutcome:
     results = tuple(
         run_ditto_stress_test_seed(
             training_seed=seed,
             regularization=DITTO_PRIMARY_REGULARIZATION,
             output_root=output_root,
             overwrite=overwrite.requested,
+            progress=progress,
         )
         for seed in seeds
     )
@@ -323,8 +366,22 @@ def _temporal_unavailable(
     return None
 
 
-def _dispatch_temporal(seeds: tuple[Seed, ...], output_root: Path, overwrite: OverwriteMode) -> DispatchOutcome:
-    results = tuple(run_temporal_seed(seed, output_root=output_root, overwrite=overwrite.requested) for seed in seeds)
+def _dispatch_temporal(
+    seeds: tuple[Seed, ...],
+    output_root: Path,
+    overwrite: OverwriteMode,
+    *,
+    progress: ProgressHook | None = None,
+) -> DispatchOutcome:
+    results = tuple(
+        run_temporal_seed(
+            seed,
+            output_root=output_root,
+            overwrite=overwrite.requested,
+            progress=progress,
+        )
+        for seed in seeds
+    )
     declared = _declared_methods(ExperimentId.EDGE_ONE_SHOT_RECALIBRATION)
     completed = frozenset(declared)
     for result in results:
@@ -354,8 +411,12 @@ def _dispatch_robustness(
     seeds: tuple[Seed, ...],
     output_root: Path,
     overwrite: OverwriteMode,
+    *,
+    progress: ProgressHook | None = None,
 ) -> DispatchOutcome:
-    results = tuple(runner(seed, output_root=output_root, overwrite=overwrite.requested) for seed in seeds)
+    results = tuple(
+        runner(seed, output_root=output_root, overwrite=overwrite.requested, progress=progress) for seed in seeds
+    )
     if experiment_id is ExperimentId.SIZE_AWARE_SHRINKAGE:
         declared = _declared_methods(experiment_id)
         completed = frozenset(declared)
@@ -396,17 +457,29 @@ def _dispatch_estimation(
     seeds: tuple[Seed, ...],
     output_root: Path,
     overwrite: OverwriteMode,
+    *,
+    progress: ProgressHook | None = None,
 ) -> DispatchOutcome:
-    results = tuple(runner(seed, output_root=output_root, overwrite=overwrite.requested) for seed in seeds)
+    results = tuple(
+        runner(seed, output_root=output_root, overwrite=overwrite.requested, progress=progress) for seed in seeds
+    )
     return DispatchOutcome(
         detail=DetailText(f"{experiment_id.value} seeds={len(seeds)}"),
         method_outcomes=_method_outcomes(experiment_id, tuple(item.completed_threshold_methods for item in results)),
     )
 
 
-def _dispatch_heterogeneity(seeds: tuple[Seed, ...], output_root: Path, overwrite: OverwriteMode) -> DispatchOutcome:
+def _dispatch_heterogeneity(
+    seeds: tuple[Seed, ...],
+    output_root: Path,
+    overwrite: OverwriteMode,
+    *,
+    progress: ProgressHook | None = None,
+) -> DispatchOutcome:
     results = tuple(
-        run_controlled_heterogeneity_sweep_seed(seed, output_root=output_root, overwrite=overwrite.requested)
+        run_controlled_heterogeneity_sweep_seed(
+            seed, output_root=output_root, overwrite=overwrite.requested, progress=progress
+        )
         for seed in seeds
     )
     return DispatchOutcome(
@@ -423,6 +496,8 @@ def _dispatch_declared(
     seeds: tuple[Seed, ...],
     output_root: Path,
     overwrite: OverwriteMode,
+    *,
+    progress: ProgressHook | None = None,
 ) -> DispatchOutcome:
     declaration = _declaration(experiment_id)
     results = tuple(
@@ -432,6 +507,7 @@ def _dispatch_declared(
             reason=PlanReason(f"registered supplementary recipe for {experiment_id.value}"),
             output_root=output_root,
             overwrite=overwrite.requested,
+            progress=progress,
         )
         for seed in seeds
     )
@@ -819,36 +895,66 @@ def _supplementary_marker(experiment_id: ExperimentId) -> bool:
 
 
 def _external_recipe(experiment_id: ExperimentId) -> DispatchHandler:
-    def dispatch(seeds: tuple[Seed, ...], output_root: Path, overwrite: OverwriteMode) -> DispatchOutcome:
-        return _dispatch_external(experiment_id, seeds, output_root, overwrite)
+    def dispatch(
+        seeds: tuple[Seed, ...],
+        output_root: Path,
+        overwrite: OverwriteMode,
+        *,
+        progress: ProgressHook | None = None,
+    ) -> DispatchOutcome:
+        return _dispatch_external(experiment_id, seeds, output_root, overwrite, progress=progress)
 
     return dispatch
 
 
 def _robustness_recipe(experiment_id: ExperimentId, runner: RobustnessRunner) -> DispatchHandler:
-    def dispatch(seeds: tuple[Seed, ...], output_root: Path, overwrite: OverwriteMode) -> DispatchOutcome:
-        return _dispatch_robustness(experiment_id, runner, seeds, output_root, overwrite)
+    def dispatch(
+        seeds: tuple[Seed, ...],
+        output_root: Path,
+        overwrite: OverwriteMode,
+        *,
+        progress: ProgressHook | None = None,
+    ) -> DispatchOutcome:
+        return _dispatch_robustness(experiment_id, runner, seeds, output_root, overwrite, progress=progress)
 
     return dispatch
 
 
 def _estimation_recipe(experiment_id: ExperimentId, runner: FederatedEstimationRunner) -> DispatchHandler:
-    def dispatch(seeds: tuple[Seed, ...], output_root: Path, overwrite: OverwriteMode) -> DispatchOutcome:
-        return _dispatch_estimation(experiment_id, runner, seeds, output_root, overwrite)
+    def dispatch(
+        seeds: tuple[Seed, ...],
+        output_root: Path,
+        overwrite: OverwriteMode,
+        *,
+        progress: ProgressHook | None = None,
+    ) -> DispatchOutcome:
+        return _dispatch_estimation(experiment_id, runner, seeds, output_root, overwrite, progress=progress)
 
     return dispatch
 
 
 def _declared_recipe(experiment_id: ExperimentId) -> DispatchHandler:
-    def dispatch(seeds: tuple[Seed, ...], output_root: Path, overwrite: OverwriteMode) -> DispatchOutcome:
-        return _dispatch_declared(experiment_id, seeds, output_root, overwrite)
+    def dispatch(
+        seeds: tuple[Seed, ...],
+        output_root: Path,
+        overwrite: OverwriteMode,
+        *,
+        progress: ProgressHook | None = None,
+    ) -> DispatchOutcome:
+        return _dispatch_declared(experiment_id, seeds, output_root, overwrite, progress=progress)
 
     return dispatch
 
 
 def _analysis_recipe(experiment_id: ExperimentId) -> DispatchHandler:
-    def dispatch(seeds: tuple[Seed, ...], output_root: Path, overwrite: OverwriteMode) -> DispatchOutcome:
-        del seeds
+    def dispatch(
+        seeds: tuple[Seed, ...],
+        output_root: Path,
+        overwrite: OverwriteMode,
+        *,
+        progress: ProgressHook | None = None,
+    ) -> DispatchOutcome:
+        del seeds, progress
         return _dispatch_analysis(experiment_id, output_root, overwrite)
 
     return dispatch

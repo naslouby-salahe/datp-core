@@ -16,7 +16,7 @@ from datp_core.core.numeric import CampaignOrdinal
 from datp_core.experiments.common.coordinates import ExecutionRoute, execution_route_for
 from datp_core.experiments.common.seeds import SeedCohort
 from datp_core.experiments.execution.engine import CompletionRecordOutputStore, PipelineStageRunner, execute_campaign
-from datp_core.experiments.execution.models import CampaignEntry, CampaignPlan, campaign_digest
+from datp_core.experiments.execution.models import CampaignEntry, CampaignPlan, ProgressHook, campaign_digest
 from datp_core.experiments.registry import ExperimentDeclaration
 
 
@@ -47,6 +47,7 @@ def execute_declared_experiment_seed(
     reason: PlanReason,
     output_root: Path,
     overwrite: bool,
+    progress: ProgressHook | None = None,
 ) -> DeclaredExperimentSeedResult:
     plan = expand_experiment_plan(
         declarations=(declaration,),
@@ -58,6 +59,7 @@ def execute_declared_experiment_seed(
         declaration=declaration,
         output_root=output_root,
         overwrite=overwrite,
+        progress=progress,
     )
 
 
@@ -67,6 +69,7 @@ def execute_declared_campaign(
     declaration: ExperimentDeclaration,
     output_root: Path,
     overwrite: bool,
+    progress: ProgressHook | None = None,
 ) -> DeclaredExperimentSeedResult:
     if not campaign.entries:
         raise ScientificContractError(
@@ -75,10 +78,11 @@ def execute_declared_campaign(
         )
     execution = execute_campaign(
         campaign=campaign,
-        stage_runner=PipelineStageRunner(),
+        stage_runner=PipelineStageRunner(progress_hook=progress),
         output_store=CompletionRecordOutputStore(),
         output_root=output_root,
         overwrite=overwrite,
+        progress=progress,
     )
     failed = tuple(result for result in execution.experiments if not result.successful)
     if failed:

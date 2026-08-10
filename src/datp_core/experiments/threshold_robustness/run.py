@@ -51,6 +51,7 @@ from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT, SeedCoh
 from datp_core.experiments.execution import execute_declared_experiment_seed
 from datp_core.experiments.execution.evidence import load_evaluation_document, population_metric
 from datp_core.experiments.execution.layout import EvaluationRunAssetDirectory
+from datp_core.experiments.execution.models import ProgressHook
 from datp_core.experiments.registry import require_experiment_declaration
 from datp_core.experiments.threshold_robustness.cohorts import (
     compute_intersection_cohort,
@@ -244,6 +245,7 @@ def _run_robustness_seed(
     training_seed: Seed,
     output_root: Path,
     overwrite: bool,
+    progress: ProgressHook | None,
 ) -> ThresholdRobustnessSeedResult:
     declaration = require_experiment_declaration(experiment_id)
     result = execute_declared_experiment_seed(
@@ -252,6 +254,7 @@ def _run_robustness_seed(
         reason=PlanReason(f"threshold robustness entry point for {experiment_id.value}"),
         output_root=output_root,
         overwrite=overwrite,
+        progress=progress,
     )
     return ThresholdRobustnessSeedResult(
         training_seed=training_seed,
@@ -281,12 +284,14 @@ def run_shared_construction_sensitivity_seed(
     *,
     output_root: Path,
     overwrite: bool,
+    progress: ProgressHook | None = None,
 ) -> ThresholdRobustnessSeedResult:
     return _run_robustness_seed(
         ExperimentId.SHARED_CONSTRUCTION_SENSITIVITY,
         training_seed,
         output_root,
         overwrite,
+        progress,
     )
 
 
@@ -332,8 +337,9 @@ def run_quantile_sensitivity_seed(
     *,
     output_root: Path,
     overwrite: bool,
+    progress: ProgressHook | None = None,
 ) -> ThresholdRobustnessSeedResult:
-    return _run_robustness_seed(ExperimentId.QUANTILE_SENSITIVITY, training_seed, output_root, overwrite)
+    return _run_robustness_seed(ExperimentId.QUANTILE_SENSITIVITY, training_seed, output_root, overwrite, progress)
 
 
 def report_quantile_sensitivity(
@@ -393,9 +399,10 @@ def run_calibration_size_ablation_seed(
     *,
     output_root: Path,
     overwrite: bool,
+    progress: ProgressHook | None = None,
 ) -> ThresholdRobustnessSeedResult:
     require_calibration_subsample_replicate_count()
-    return _run_robustness_seed(ExperimentId.CALIBRATION_SIZE_ABLATION, training_seed, output_root, overwrite)
+    return _run_robustness_seed(ExperimentId.CALIBRATION_SIZE_ABLATION, training_seed, output_root, overwrite, progress)
 
 
 def report_calibration_size_ablation(
@@ -502,8 +509,9 @@ def run_fixed_shrinkage_curve_seed(
     *,
     output_root: Path,
     overwrite: bool,
+    progress: ProgressHook | None = None,
 ) -> ThresholdRobustnessSeedResult:
-    return _run_robustness_seed(ExperimentId.FIXED_SHRINKAGE_CURVE, training_seed, output_root, overwrite)
+    return _run_robustness_seed(ExperimentId.FIXED_SHRINKAGE_CURVE, training_seed, output_root, overwrite, progress)
 
 
 def report_fixed_shrinkage_curve(
@@ -562,6 +570,7 @@ def run_size_aware_shrinkage_seed(
     *,
     output_root: Path,
     overwrite: bool,
+    progress: ProgressHook | None = None,
 ) -> ThresholdRobustnessSeedResult:
     declaration = require_experiment_declaration(ExperimentId.SIZE_AWARE_SHRINKAGE)
     filtered = declaration.model_copy(
@@ -581,6 +590,7 @@ def run_size_aware_shrinkage_seed(
         ),
         output_root=output_root,
         overwrite=overwrite,
+        progress=progress,
     )
     return ThresholdRobustnessSeedResult(
         training_seed=training_seed,
@@ -643,8 +653,9 @@ def run_local_conformal_coverage_seed(
     *,
     output_root: Path,
     overwrite: bool,
+    progress: ProgressHook | None = None,
 ) -> ThresholdRobustnessSeedResult:
-    return _run_robustness_seed(ExperimentId.LOCAL_CONFORMAL_COVERAGE, training_seed, output_root, overwrite)
+    return _run_robustness_seed(ExperimentId.LOCAL_CONFORMAL_COVERAGE, training_seed, output_root, overwrite, progress)
 
 
 def _client_fpr_for(document: FederatedEvaluationDocument, client: ClientIdentity) -> MetricValue | None:

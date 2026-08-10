@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from shutil import rmtree
 
+from datp_core.analysis.metrics.federated_publication import EvaluateFederatedDetectorResult
 from datp_core.analysis.metrics.models import metric_by_id
 from datp_core.artifacts.layout import experiment_output_directory
 from datp_core.artifacts.provenance import Checksum
@@ -27,6 +29,7 @@ from datp_core.core.numeric import ByteCount
 from datp_core.data.service import DatasetMaterializationRequest, materialize_datasets
 from datp_core.detector.scoring.contracts import FixedScoreInvariant
 from datp_core.experiments.common.coordinates import ExecutionRoute, ExperimentCoordinate, execution_route_for
+from datp_core.experiments.execution.context import FederatedExecutionContext
 from datp_core.experiments.execution.evidence import load_evaluation_document
 from datp_core.experiments.execution.layout import EvaluationRunAssetDirectory
 from datp_core.experiments.execution.models import (
@@ -40,6 +43,9 @@ from datp_core.experiments.execution.models import (
     ExperimentExecution,
     ExperimentOutputStore,
     PipelineStage,
+    ProgressEvent,
+    ProgressEventKind,
+    ProgressHook,
     StageExecution,
     StageOutcome,
     StageRunner,
@@ -103,6 +109,11 @@ def execute_experiment(
     return ExperimentExecution(coordinate=coordinate, recipe=recipe, stages=tuple(executions))
 
 
+def _emit_progress(progress: ProgressHook | None, event: ProgressEvent) -> None:
+    if progress is not None:
+        progress.emit(event)
+
+
 def execute_campaign(
     *,
     campaign: CampaignPlan,
@@ -110,14 +121,28 @@ def execute_campaign(
     output_store: ExperimentOutputStore,
     output_root: Path,
     overwrite: bool,
+    progress: ProgressHook | None = None,
 ) -> CampaignExecution:
     provenance = ExecutionProvenance(
         plan_digest=campaign.plan_digest,
         campaign_digest=campaign.digest,
         protocol_digest=protocol_digest(),
     )
-    experiments = tuple(
-        execute_experiment(
+    total = len(campaign.entries)
+    _emit_progress(progress, ProgressEvent(kind=ProgressEventKind.CAMPAIGN_BEGIN, total=total))
+    experiments: list[ExperimentExecution] = []
+    for entry in campaign.entries:
+        _emit_progress(
+            progress,
+            ProgressEvent(
+                kind=ProgressEventKind.COORDINATE_BEGIN,
+                coordinate=entry.coordinate,
+                ordinal=entry.ordinal.value,
+                total=total,
+            ),
+        )
+        started = time.monotonic()
+        result = execute_experiment(
             coordinate=entry.coordinate,
             provenance=provenance,
             stage_runner=stage_runner,
@@ -125,9 +150,33 @@ def execute_campaign(
             output_root=output_root,
             overwrite=overwrite,
         )
-        for entry in campaign.entries
+        _emit_progress(
+            progress,
+            ProgressEvent(
+                kind=ProgressEventKind.COORDINATE_END,
+                coordinate=entry.coordinate,
+                ordinal=entry.ordinal.value,
+                total=total,
+                outcome=StageOutcome.COMPLETED if result.successful else StageOutcome.BLOCKED,
+                reused=result.reused_complete_experiment,
+                detail=(
+                    "reused complete experiment"
+                    if result.reused_complete_experiment
+                    else f"stages={len(result.stages)}"
+                ),
+                elapsed_seconds=time.monotonic() - started,
+            ),
+        )
+        experiments.append(result)
+    _emit_progress(
+        progress,
+        ProgressEvent(
+            kind=ProgressEventKind.CAMPAIGN_END,
+            total=total,
+            detail=f"experiments={len(experiments)}",
+        ),
     )
-    return CampaignExecution(campaign_digest=campaign.digest, experiments=experiments)
+    return CampaignExecution(campaign_digest=campaign.digest, experiments=tuple(experiments))
 
 
 @dataclass(frozen=True, slots=True)
@@ -179,7 +228,25 @@ class PipelineStageRunner:
     """Execute lower-level capability stages for one coordinate at a time."""
 
     observation_hook: ObservationHook | None = None
+    progress_hook: ProgressHook | None = None
     _workspace: ExperimentWorkspace | None = field(default=None, init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self._context_cache: dict[tuple[object, ...], FederatedExecutionContext] = {}
+        self._evaluation_cache: dict[Path, EvaluateFederatedDetectorResult] = {}
+
+    def _workspace_for(self, coordinate: ExperimentCoordinate, output_root: Path) -> ExperimentWorkspace:
+        workspace = self._workspace
+        if workspace is None or workspace.coordinate != coordinate or workspace.output_root != output_root:
+            workspace = ExperimentWorkspace(
+                coordinate=coordinate,
+                output_root=output_root,
+                progress=self.progress_hook,
+                shared_context_cache=self._context_cache,
+                shared_evaluation_cache=self._evaluation_cache,
+            )
+            self._workspace = workspace
+        return workspace
 
     def run(
         self,
@@ -188,21 +255,31 @@ class PipelineStageRunner:
         provenance: ExecutionProvenance,
         output_root: Path,
     ) -> StageExecution:
+        _emit_progress(
+            self.progress_hook,
+            ProgressEvent(kind=ProgressEventKind.STAGE_BEGIN, coordinate=coordinate, stage=stage),
+        )
+        started = time.monotonic()
         try:
-            return self._run(stage, coordinate, provenance, output_root)
+            execution = self._run(stage, coordinate, provenance, output_root)
         except ScientificContractError as error:
-            return StageExecution(
+            execution = StageExecution(
                 stage=stage,
                 outcome=StageOutcome.BLOCKED,
                 evidence=StageExecutionEvidence(str(error)),
             )
-
-    def _workspace_for(self, coordinate: ExperimentCoordinate, output_root: Path) -> ExperimentWorkspace:
-        workspace = self._workspace
-        if workspace is None or workspace.coordinate != coordinate or workspace.output_root != output_root:
-            workspace = ExperimentWorkspace(coordinate=coordinate, output_root=output_root)
-            self._workspace = workspace
-        return workspace
+        _emit_progress(
+            self.progress_hook,
+            ProgressEvent(
+                kind=ProgressEventKind.STAGE_END,
+                coordinate=coordinate,
+                stage=stage,
+                outcome=execution.outcome,
+                reused=execution.outcome is StageOutcome.REUSED,
+                elapsed_seconds=time.monotonic() - started,
+            ),
+        )
+        return execution
 
     def _run(
         self,

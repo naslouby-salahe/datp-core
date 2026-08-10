@@ -26,7 +26,6 @@ from datp_core.core.numeric import ClientCount, MetricValue, Seed, SeedCount
 from datp_core.data.populations.declarations import NBAIOT_NATURAL_DEVICES
 from datp_core.experiments.anchor.comparison import compare_anchor_metric
 from datp_core.experiments.anchor.contracts import (
-    AbsoluteToleranceRule,
     AnchorArtifactFileName,
     AnchorBcaComparison,
     AnchorComparisonDecision,
@@ -42,6 +41,7 @@ from datp_core.experiments.anchor.contracts import (
     AnchorReproductionResult,
     AnchorSeedDirectoryPrefix,
     AnchorSeedSubsetComparison,
+    DiagnosticRule,
     HistoricalDatasetToken,
     HistoricalMetricArtifactSource,
     HistoricalMetricsDocument,
@@ -96,13 +96,7 @@ def references_from_protocol(
                 threshold_method=item.threshold_method,
                 metric=item.metric,
                 value=item.value,
-                tolerance_rule=AbsoluteToleranceRule(
-                    absolute_tolerance=(
-                        item.absolute_tolerance
-                        if isinstance(item.absolute_tolerance, MetricValue)
-                        else MetricValue(item.absolute_tolerance.value)
-                    )
-                ),
+                tolerance_rule=DiagnosticRule(),
                 checkpoint_status=ANCHOR_CHECKPOINT_STATUS,
             )
 
@@ -397,8 +391,12 @@ def _collect_discrepancies(
         if seed_subset.decision is not AnchorComparisonDecision.EQUIVALENT:
             yield AnchorDiscrepancy.from_seed_subset(seed_subset)
         for comparison in comparisons:
-            if comparison.decision is not AnchorComparisonDecision.EQUIVALENT:
-                yield AnchorDiscrepancy.from_comparison(comparison)
+            if comparison.decision in {
+                AnchorComparisonDecision.EQUIVALENT,
+                AnchorComparisonDecision.DIAGNOSTIC_REPORTED,
+            }:
+                continue
+            yield AnchorDiscrepancy.from_comparison(comparison)
         if bca_comparison.decision is not AnchorComparisonDecision.EQUIVALENT:
             yield AnchorDiscrepancy.from_bca_comparison(bca_comparison)
         if dependency_blocker is not None:

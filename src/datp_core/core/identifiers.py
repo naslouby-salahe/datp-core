@@ -161,7 +161,7 @@ class MetricId(StrEnum):
     BINARY_MACRO_F1 = "binary_macro_f1"
     AUROC = "auroc"
     MEAN_FPR = "mean_fpr"
-    FPR_POPULATION_STANDARD_DEVIATION = "fpr_population_standard_deviation"
+    FPR_SAMPLE_STANDARD_DEVIATION = "fpr_sample_standard_deviation"
     FPR_COEFFICIENT_OF_VARIATION = "fpr_coefficient_of_variation"
     FPR_IQR = "fpr_iqr"
     FPR_RANGE = "fpr_range"
@@ -298,12 +298,14 @@ class PartitionRole(StrEnum):
     EVALUATION = "evaluation"
     FUTURE_RECALIBRATION = "future_recalibration"
     STATIC_REFERENCE_RESERVE = "static_reference_reserve"
+    DISCARDED = "discarded"
 
 
 class SplitProtocolId(StrEnum):
     NON_TEMPORAL_EQUAL_THIRDS = "non_temporal_equal_thirds"
     TEMPORAL_HISTORICAL_FUTURE = "temporal_historical_future"
     RANDOM_FRACTIONAL_STATIC_REFERENCE = "random_fractional_static_reference"
+    HISTORICAL_TEMPORAL_GAP = "historical_temporal_gap"
 
 
 class PreprocessingProtocolId(StrEnum):

@@ -20,8 +20,6 @@ from datp_core.core.identifiers import (
     StatisticalTestId,
 )
 from datp_core.core.numeric import (
-    NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
-    AbsoluteTolerance,
     BootstrapReplicateCount,
     ConfidenceLevel,
     MetricValue,
@@ -33,6 +31,13 @@ from datp_core.experiments.common.seeds import SeedCohort
 
 
 class AnchorReference(StrictModel):
+    """One per-seed historical CV(FPR) constant, reported as a diagnostic.
+
+    Per-seed values are diagnostic only (see DiagnosticRule); the roadmap gate
+    confirms the cohort-level BCa interval on the five-seed cohort, not any
+    per-seed value equality.
+    """
+
     seed: Seed
     threshold_method: Literal[
         FederatedThresholdMethod.SHARED_THRESHOLD,
@@ -40,7 +45,6 @@ class AnchorReference(StrictModel):
     ]
     metric: MetricId
     value: MetricValue
-    absolute_tolerance: AbsoluteTolerance | MetricValue
 
 
 class AnchorDecisionProtocol(StrictModel):
@@ -86,7 +90,6 @@ ANCHOR_DECISION_PROTOCOL = AnchorDecisionProtocol(
             threshold_method=FederatedThresholdMethod.SHARED_THRESHOLD,
             metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
             value=value,
-            absolute_tolerance=NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
         )
         for seed, value in zip(
             HISTORICAL_ANCHOR_SEED_COHORT.values,
@@ -100,7 +103,6 @@ ANCHOR_DECISION_PROTOCOL = AnchorDecisionProtocol(
             threshold_method=FederatedThresholdMethod.LOCAL_THRESHOLD,
             metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
             value=value,
-            absolute_tolerance=NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
         )
         for seed, value in zip(
             HISTORICAL_ANCHOR_SEED_COHORT.values,

@@ -25,6 +25,7 @@ from datp_core.experiments.anchor.run import (
 from datp_core.experiments.anchor.spec import ANCHOR_DECISION_PROTOCOL, HISTORICAL_ANCHOR_SEED_COHORT
 from datp_core.experiments.common.seeds import SeedCohort
 from datp_core.experiments.execution import execute_declared_experiment_seed
+from datp_core.experiments.execution.models import ProgressHook
 from datp_core.runtime.configuration import OUTPUTS_ROOT
 
 
@@ -32,7 +33,12 @@ def _output_root(mode: ProgrammeExecutionMode) -> Path:
     return SMOKE_OUTPUT_ROOT if mode is ProgrammeExecutionMode.SMOKE else OUTPUTS_ROOT
 
 
-def reproduce_anchor(*, overwrite: OverwriteMode, mode: ProgrammeExecutionMode) -> AnchorCommandResult:
+def reproduce_anchor(
+    *,
+    overwrite: OverwriteMode,
+    mode: ProgrammeExecutionMode,
+    progress: ProgressHook | None = None,
+) -> AnchorCommandResult:
     preprocess_datasets(DatasetId.NBAIOT, overwrite=OverwriteMode.KEEP_EXISTING)
     output_root = _output_root(mode)
     diagnostics = default_anchor_diagnostics_directory(output_root)
@@ -52,6 +58,7 @@ def reproduce_anchor(*, overwrite: OverwriteMode, mode: ProgrammeExecutionMode) 
         reason=PlanReason("independent anchor reproduction supplies locked historical-seed execution prerequisites"),
         output_root=output_root,
         overwrite=overwrite.requested,
+        progress=progress,
     )
     try:
         observations = collect_independent_observations_from_evaluations(

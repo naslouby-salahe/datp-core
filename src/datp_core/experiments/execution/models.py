@@ -90,6 +90,44 @@ class ExistingExperimentState(StrEnum):
     INCOMPLETE = "incomplete"
 
 
+class ProgressEventKind(StrEnum):
+    CAMPAIGN_BEGIN = "campaign_begin"
+    CAMPAIGN_END = "campaign_end"
+    COORDINATE_BEGIN = "coordinate_begin"
+    COORDINATE_END = "coordinate_end"
+    STAGE_BEGIN = "stage_begin"
+    STAGE_END = "stage_end"
+    TRAINING_ROUND = "training_round"
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ProgressEvent:
+    """Observation-only execution progress, emitted by the kernel and consumed by adapters."""
+
+    kind: ProgressEventKind
+    coordinate: ExperimentCoordinate | None = None
+    stage: PipelineStage | None = None
+    ordinal: int | None = None
+    total: int | None = None
+    round_number: int | None = None
+    maximum_round: int | None = None
+    outcome: StageOutcome | None = None
+    reused: bool = False
+    detail: str | None = None
+    elapsed_seconds: float | None = None
+
+    def __post_init__(self) -> None:
+        if self.kind is ProgressEventKind.TRAINING_ROUND and (self.round_number is None or self.maximum_round is None):
+            raise ValueError("training round progress requires round_number and maximum_round")
+        campaign_events = {ProgressEventKind.CAMPAIGN_BEGIN, ProgressEventKind.CAMPAIGN_END}
+        if self.coordinate is None and self.kind not in campaign_events:
+            raise ValueError("coordinate progress events require a coordinate")
+
+
+class ProgressHook(Protocol):
+    def emit(self, event: ProgressEvent) -> None: ...
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ExecutionProvenance:
     plan_digest: Checksum

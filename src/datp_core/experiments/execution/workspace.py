@@ -84,12 +84,14 @@ from datp_core.experiments.execution.context import (
     FederatedExecutionContext,
     client_scoring_inputs,
     client_training_inputs,
+    execution_context_cache_key,
     resolve_execution_context,
     training_autoencoder,
     training_feature_names,
 )
 from datp_core.experiments.execution.evidence import eligible_calibration_scores, load_evaluation_document
 from datp_core.experiments.execution.layout import EvaluationRunAssetDirectory, ExecutionArtifactDirectory
+from datp_core.experiments.execution.models import ProgressEvent, ProgressEventKind, ProgressHook
 from datp_core.experiments.execution.score_generation import score_selected_checkpoint
 from datp_core.thresholds.calibration.construction import (
     BuildCalibrationResult,
@@ -131,10 +133,24 @@ class ExperimentWorkspace:
 
     coordinate: ExperimentCoordinate
     output_root: Path
+    progress: ProgressHook | None = None
+    shared_context_cache: dict[tuple[object, ...], FederatedExecutionContext] | None = None
+    shared_evaluation_cache: dict[Path, EvaluateFederatedDetectorResult] | None = None
 
     @cached_property
     def context(self) -> FederatedExecutionContext:
-        return resolve_execution_context(self.coordinate, self.output_root)
+        return self._resolve_shared_context()
+
+    def _resolve_shared_context(self) -> FederatedExecutionContext:
+        cache = self.shared_context_cache
+        if cache is None:
+            return resolve_execution_context(self.coordinate, self.output_root)
+        key = execution_context_cache_key(self.coordinate, self.output_root)
+        context = cache.get(key)
+        if context is None:
+            context = resolve_execution_context(self.coordinate, self.output_root)
+            cache[key] = context
+        return context
 
     @cached_property
     def autoencoder(self) -> AutoencoderProtocol:
@@ -168,10 +184,22 @@ class ExperimentWorkspace:
                     learning_rate=LEARNING_RATE,
                     split_manifest_checksum=self.context.split_manifest_checksum,
                     output_directory=self.context.training_directory,
+                    progress_callback=self._round_progress_callback,
                 ),
                 overwrite=False,
             )
         )
+
+    def _round_progress_callback(self, round_number: int, maximum_round: int) -> None:
+        if self.progress is not None:
+            self.progress.emit(
+                ProgressEvent(
+                    kind=ProgressEventKind.TRAINING_ROUND,
+                    coordinate=self.coordinate,
+                    round_number=round_number,
+                    maximum_round=maximum_round,
+                )
+            )
 
     @cached_property
     def selection(self) -> CheckpointDecision:
@@ -456,6 +484,20 @@ class ExperimentWorkspace:
 
     @cached_property
     def evaluation(self) -> EvaluateFederatedDetectorResult:
+        return self._resolve_shared_evaluation()
+
+    def _resolve_shared_evaluation(self) -> EvaluateFederatedDetectorResult:
+        cache = self.shared_evaluation_cache
+        if cache is None:
+            return self._evaluate()
+        key = self.run_directory()
+        result = cache.get(key)
+        if result is None:
+            result = self._evaluate()
+            cache[key] = result
+        return result
+
+    def _evaluate(self) -> EvaluateFederatedDetectorResult:
         inputs = build_federated_evaluation_inputs(self.scores, self.coordinate.threshold_method)
         return evaluate_federated_detector(
             EvaluateFederatedDetectorRequest(

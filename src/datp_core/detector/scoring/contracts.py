@@ -169,6 +169,8 @@ class ScoreArtifactManifest[
                 raise ScientificContractError(
                     ErrorMessage("static-reference reserve is not a score artifact"), subject=role
                 )
+            case PartitionRole.DISCARDED:
+                raise ScientificContractError(ErrorMessage("discarded rows are never scored"), subject=role)
 
     def score_set_checksum(self, role: PartitionRole) -> Checksum:
         return record_set_checksum(self.records_for(role))
@@ -356,6 +358,8 @@ class ClientScoringInput:
                 raise ScientificContractError(
                     ErrorMessage("static-reference reserve rows are never scored"), subject=role
                 )
+            case PartitionRole.DISCARDED:
+                raise ScientificContractError(ErrorMessage("discarded rows are never scored"), subject=role)
 
 
 @dataclass(frozen=True, slots=True)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from shutil import rmtree
 
@@ -36,6 +37,7 @@ from datp_core.app.models import (
     ReportResult,
 )
 from datp_core.app.planning import seed_cohort_for
+from datp_core.app.progress import progress_hook
 from datp_core.app.recipes import (
     EXPERIMENT_RECIPES,
     anchor_gated_experiment_ids,
@@ -98,6 +100,10 @@ def _output_root(mode: ProgrammeExecutionMode) -> Path:
     return SMOKE_OUTPUT_ROOT if mode is ProgrammeExecutionMode.SMOKE else OUTPUTS_ROOT
 
 
+def progress_log_path(output_root: Path, name: str) -> Path:
+    return output_root / "logs" / f"{name}.progress.log"
+
+
 def canonical_smoke_seed(experiment_id: ExperimentId) -> Seed:
     return seed_cohort_for(experiment_id).values[0]
 
@@ -134,7 +140,8 @@ def run_experiment(
             rmtree(scoped)
     cohort = seed_cohort_for(experiment_id)
     seeds = (canonical_smoke_seed(experiment_id),) if mode is ProgrammeExecutionMode.SMOKE else cohort.values
-    outcome = recipe.dispatch(seeds, output_root, overwrite)
+    hook = progress_hook(sys.stdout, progress_log_path(output_root, experiment_id.value))
+    outcome = recipe.dispatch(seeds, output_root, overwrite, progress=hook)
     return ExperimentRunResult(
         experiment=experiment_id,
         seeds=seeds,
@@ -173,7 +180,11 @@ def run_smoke(
         )
     anchor_failure: DetailText | None = None
     try:
-        reproduced = reproduce_anchor(overwrite=overwrite, mode=ProgrammeExecutionMode.SMOKE)
+        reproduced = reproduce_anchor(
+            overwrite=overwrite,
+            mode=ProgrammeExecutionMode.SMOKE,
+            progress=progress_hook(sys.stdout, progress_log_path(SMOKE_OUTPUT_ROOT, "anchor")),
+        )
         verified = verify_anchor_programme(mode=ProgrammeExecutionMode.SMOKE)
         non_pass = tuple(
             result.gate_status
@@ -234,7 +245,11 @@ def run_campaign(*, overwrite: OverwriteMode) -> CampaignRunResult:
     for recipe in EXPERIMENT_RECIPES:
         require_experiment_execution_ready(recipe.experiment)
     preprocess_datasets(None, overwrite=OverwriteMode.KEEP_EXISTING)
-    reproduced = reproduce_anchor(overwrite=overwrite, mode=ProgrammeExecutionMode.FULL)
+    reproduced = reproduce_anchor(
+        overwrite=overwrite,
+        mode=ProgrammeExecutionMode.FULL,
+        progress=progress_hook(sys.stdout, progress_log_path(OUTPUTS_ROOT, "anchor")),
+    )
     verified = verify_anchor_programme(mode=ProgrammeExecutionMode.FULL)
     for result in (reproduced, verified):
         if result.gate_status not in {AnchorGateStatus.PASS, AnchorGateStatus.PASS_WITH_DECLARED_DISCREPANCY}:

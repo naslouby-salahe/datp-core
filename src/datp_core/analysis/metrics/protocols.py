@@ -6,7 +6,7 @@ from datp_core.core.numeric import MetricValue, Ratio
 OPERATING_POINT_METRICS = (
     MetricId.FALSE_POSITIVE_RATE,
     MetricId.FPR_COEFFICIENT_OF_VARIATION,
-    MetricId.FPR_POPULATION_STANDARD_DEVIATION,
+    MetricId.FPR_SAMPLE_STANDARD_DEVIATION,
     MetricId.FPR_IQR,
     MetricId.FPR_RANGE,
     MetricId.WORST_CLIENT_FPR,

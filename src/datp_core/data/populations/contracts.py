@@ -347,6 +347,7 @@ class SplitManifestDocument(StrictModel):
     evaluation_row_count: RowCount
     future_recalibration_row_count: RowCount
     static_reference_reserve_row_count: RowCount
+    discarded_row_count: RowCount
     assignment_checksum: Checksum
     population_manifest_checksum: Checksum
 
@@ -358,6 +359,7 @@ class SplitManifestDocument(StrictModel):
             self.evaluation_row_count,
             self.future_recalibration_row_count,
             self.static_reference_reserve_row_count,
+            self.discarded_row_count,
         )
         if reduce(RowCount.plus, counts) != self.assignment_row_count:
             raise ValueError("partition role counts must sum to assignment rows")

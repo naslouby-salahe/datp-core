@@ -78,6 +78,8 @@ class ClientScoringInput:
                 raise ScientificContractError(
                     ErrorMessage("static-reference reserve rows are never scored"), subject=role
                 )
+            case PartitionRole.DISCARDED:
+                raise ScientificContractError(ErrorMessage("discarded rows are never scored"), subject=role)
 
 
 @dataclass(frozen=True, slots=True)

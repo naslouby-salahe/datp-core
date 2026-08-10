@@ -75,11 +75,20 @@ EXPECTED_MEMBERS = (
     (RawDatasetDirectory, frozenset(("NBAIOT", "CICIOT2023", "EDGE_IIOTSET"))),
     (
         PartitionRole,
-        frozenset(("TRAIN", "CALIBRATION", "EVALUATION", "FUTURE_RECALIBRATION", "STATIC_REFERENCE_RESERVE")),
+        frozenset(
+            ("TRAIN", "CALIBRATION", "EVALUATION", "FUTURE_RECALIBRATION", "STATIC_REFERENCE_RESERVE", "DISCARDED")
+        ),
     ),
     (
         SplitProtocolId,
-        frozenset(("NON_TEMPORAL_EQUAL_THIRDS", "TEMPORAL_HISTORICAL_FUTURE", "RANDOM_FRACTIONAL_STATIC_REFERENCE")),
+        frozenset(
+            (
+                "NON_TEMPORAL_EQUAL_THIRDS",
+                "TEMPORAL_HISTORICAL_FUTURE",
+                "RANDOM_FRACTIONAL_STATIC_REFERENCE",
+                "HISTORICAL_TEMPORAL_GAP",
+            )
+        ),
     ),
     (
         PreprocessingProtocolId,
@@ -190,7 +199,7 @@ EXPECTED_MEMBERS = (
                 "BINARY_MACRO_F1",
                 "AUROC",
                 "MEAN_FPR",
-                "FPR_POPULATION_STANDARD_DEVIATION",
+                "FPR_SAMPLE_STANDARD_DEVIATION",
                 "FPR_COEFFICIENT_OF_VARIATION",
                 "FPR_IQR",
                 "FPR_RANGE",

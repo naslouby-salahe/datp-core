@@ -31,9 +31,9 @@ from datp_core.core.identifiers import (
     MetricId,
     PopulationId,
     PreprocessingProtocolId,
-    SplitProtocolId,
 )
 from datp_core.core.numeric import Seed
+from datp_core.data.populations.declarations import split_protocol_for_population
 from datp_core.data.populations.publication import ConstructDeclaredPopulationRequest, construct_declared_population
 from datp_core.data.preprocessing.centralized import (
     CentralizedPopulationPreprocessingRequest,
@@ -152,7 +152,7 @@ def run_centralized_reference_seed(
     training_seed: Seed,
 ) -> EvaluateCentralizedDetectorResult:
     population = scope.population
-    split_protocol = SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS
+    split_protocol = split_protocol_for_population(population)
     population_result = construct_declared_population(
         ConstructDeclaredPopulationRequest(
             population=population,
@@ -327,7 +327,7 @@ def _validate_centralized_reference_coordinate(
     expected = CentralizedTrainingCoordinate(
         population=scope.population,
         training_seed=seed,
-        split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
+        split_protocol=split_protocol_for_population(scope.population),
         preprocessing_identity=PreprocessingProtocolId.CENTRALIZED_POOLED_MIN_MAX,
         model=CentralizedModelId.CENTRALIZED_AUTOENCODER,
     )

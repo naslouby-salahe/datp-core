@@ -26,11 +26,13 @@ from datp_core.core.identifiers import (
 from datp_core.core.numeric import Ratio, RowCount, Seed, floats_absolutely_close
 from datp_core.data.populations.protocols import (
     FRACTION_TOTAL_ABSOLUTE_TOLERANCE,
+    HISTORICAL_TEMPORAL_GAP_SPLIT,
     NON_TEMPORAL_SPLIT,
     STATIC_REFERENCE_SPLIT,
     TEMPORAL_SPLIT,
     UNIT_FRACTION_TOTAL,
     FractionalSplitProtocol,
+    HistoricalTemporalGapSplitProtocol,
     StaticReferenceSplitProtocol,
     TemporalSplitProtocol,
 )
@@ -88,6 +90,10 @@ def temporal_split_protocol() -> TemporalSplitProtocol:
 
 def static_reference_split_protocol() -> StaticReferenceSplitProtocol:
     return STATIC_REFERENCE_SPLIT
+
+
+def historical_temporal_gap_split_protocol() -> HistoricalTemporalGapSplitProtocol:
+    return HISTORICAL_TEMPORAL_GAP_SPLIT
 
 
 def hamilton_integer_counts(
@@ -159,6 +165,8 @@ def _assignments_for_protocol(
                 membership,
                 request.partition_seed,
             )
+        case SplitProtocolId.HISTORICAL_TEMPORAL_GAP:
+            return _historical_gap_assignments(membership)
         case _:
             raise ScientificContractError(
                 ErrorMessage("unsupported split protocol"),
@@ -320,6 +328,79 @@ def _static_reference_assignments(
     )
 
 
+def _historical_gap_assignments(membership: pl.DataFrame) -> pl.DataFrame:
+    """Legacy-exact chronological 60/1/20/1/18 split with discarded guard gaps.
+
+    Reproduces the historical DATP N-BaIoT preparation: per client, benign rows
+    are ordered by their canonical source-row index (file row order) and sliced
+    into train, a 1% guard gap, calibration, a second 1% guard gap, and the
+    evaluation remainder. Guard gaps receive the DISCARDED role so the split
+    conserves every membership row, but never enter model input, calibration,
+    scoring, or evaluation. Attack rows are assigned to evaluation.
+    """
+    protocol = historical_temporal_gap_split_protocol()
+    pieces: list[pl.DataFrame] = []
+    for client_id in membership.get_column(CLIENT_ID_COLUMN).unique().sort().to_list():
+        client_rows = membership.filter(pl.col(CLIENT_ID_COLUMN) == client_id)
+        benign = client_rows.filter(pl.col(OUTCOME_LABEL_COLUMN) == _BENIGN)
+        attack = client_rows.filter(pl.col(OUTCOME_LABEL_COLUMN) == _ATTACK)
+        pieces.append(_historical_gap_role_frame(benign, protocol))
+        if attack.height > 0:
+            pieces.append(attack.with_columns(pl.lit(PartitionRole.EVALUATION.value).alias(PARTITION_ROLE_COLUMN)))
+    if not pieces:
+        return membership.clear().with_columns(pl.lit(None, dtype=pl.String).alias(PARTITION_ROLE_COLUMN))
+    return (
+        pl.concat(pieces, how="vertical_relaxed")
+        .select(assignment_column_names())
+        .sort(
+            [
+                CLIENT_ID_COLUMN,
+                PARTITION_ROLE_COLUMN,
+                STABLE_ROW_ID_COLUMN,
+            ]
+        )
+    )
+
+
+def _historical_gap_role_frame(
+    benign: pl.DataFrame,
+    protocol: HistoricalTemporalGapSplitProtocol,
+) -> pl.DataFrame:
+    if benign.height == 0:
+        return benign.with_columns(pl.lit(None, dtype=pl.String).alias(PARTITION_ROLE_COLUMN))
+    ordered = benign.sort([SOURCE_ROW_INDEX_COLUMN, STABLE_ROW_ID_COLUMN])
+    count = ordered.height
+    n_train = floor(count * protocol.training.value)
+    n_gap1 = floor(count * protocol.gap1.value)
+    n_cal = floor(count * protocol.calibration.value)
+    n_gap2 = floor(count * protocol.gap2.value)
+    declared = n_train + n_gap1 + n_cal + n_gap2
+    if declared > count:
+        raise DataIntegrityError(
+            ErrorMessage("historical temporal-gap split declared rows exceed client row count"),
+            subject=StageOperationId.SPLIT,
+            reason=SplitConstructionViolation.HAMILTON_ROWS_NOT_CONSERVED,
+        )
+    counts = (n_train, n_gap1, n_cal, n_gap2, count - declared)
+    roles = (
+        PartitionRole.TRAIN,
+        PartitionRole.DISCARDED,
+        PartitionRole.CALIBRATION,
+        PartitionRole.DISCARDED,
+        PartitionRole.EVALUATION,
+    )
+    role_values: list[str] = []
+    for role, role_count in zip(roles, counts, strict=True):
+        role_values.extend([role.value] * role_count)
+    if sum(counts) != count:
+        raise DataIntegrityError(
+            ErrorMessage("historical temporal-gap allocation failed to conserve rows"),
+            subject=StageOperationId.SPLIT,
+            reason=SplitConstructionViolation.HAMILTON_ROWS_NOT_CONSERVED,
+        )
+    return ordered.with_columns(pl.Series(PARTITION_ROLE_COLUMN, role_values))
+
+
 def _require_sorted_client_rows(
     membership: pl.DataFrame,
     client_id: ClientIdentityToken,
@@ -470,6 +551,7 @@ def _split_manifest(
         evaluation_row_count=count(PartitionRole.EVALUATION),
         future_recalibration_row_count=count(PartitionRole.FUTURE_RECALIBRATION),
         static_reference_reserve_row_count=count(PartitionRole.STATIC_REFERENCE_RESERVE),
+        discarded_row_count=count(PartitionRole.DISCARDED),
         assignment_checksum=Checksum.from_text(payload),
         population_manifest_checksum=request.population_manifest_checksum,
     )

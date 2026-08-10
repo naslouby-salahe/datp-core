@@ -69,6 +69,7 @@ from datp_core.experiments.execution.layout import (
     ExecutionArtifactDirectory,
     federated_training_directory,
 )
+from datp_core.experiments.execution.models import ProgressHook
 from datp_core.experiments.registry import EXPERIMENTS, ExperimentDeclaration
 from datp_core.presentation.export import export_confirmatory_publication, export_mechanism_publication
 from datp_core.presentation.figures import FigureSpec, score_geometry_figure
@@ -128,6 +129,7 @@ def run_confirmatory_seed(
     *,
     output_root: Path,
     overwrite: bool,
+    progress: ProgressHook | None = None,
 ) -> ConfirmatorySeedResult:
     declaration = _confirmatory_declaration()
     result = execute_declared_experiment_seed(
@@ -136,6 +138,7 @@ def run_confirmatory_seed(
         reason=PlanReason("the confirmatory entry point supplies the locked natural-device execution prerequisites"),
         output_root=output_root,
         overwrite=overwrite,
+        progress=progress,
     )
     return ConfirmatorySeedResult(
         training_seed=training_seed,
@@ -149,6 +152,7 @@ def run_family_grouped_mechanism_seed(
     *,
     output_root: Path,
     overwrite: bool,
+    progress: ProgressHook | None = None,
 ) -> ConfirmatorySeedResult:
     """Execute the family/grouped mechanism ladder for one seed under the fixed FedAvg detector."""
     matches = tuple(item for item in EXPERIMENTS if item.id is ExperimentId.FAMILY_AND_GROUPED_GRANULARITY)
@@ -164,6 +168,7 @@ def run_family_grouped_mechanism_seed(
         ),
         output_root=output_root,
         overwrite=overwrite,
+        progress=progress,
     )
     return ConfirmatorySeedResult(
         training_seed=training_seed,

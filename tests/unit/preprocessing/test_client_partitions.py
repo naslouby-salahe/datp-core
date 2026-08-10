@@ -2,8 +2,22 @@ from pathlib import Path
 
 import polars as pl
 
-from datp_core.core.identifiers import DatasetId, FeatureName, FeatureNameSequence, PopulationId, StableRowId
+from datp_core.core.identifiers import (
+    DatasetId,
+    FeatureName,
+    FeatureNameSequence,
+    PopulationId,
+    SplitProtocolId,
+    StableRowId,
+)
+from datp_core.data.populations.contracts import (
+    CLIENT_ID_COLUMN,
+    OUTCOME_LABEL_COLUMN,
+    PARTITION_ROLE_COLUMN,
+    STABLE_ROW_ID_COLUMN,
+)
 from datp_core.data.preprocessing.client_partitions import (
+    client_partitions,
     exclude_nonfinite_model_input_rows,
     write_model_input_exclusion_evidence,
 )
@@ -11,6 +25,36 @@ from datp_core.data.preprocessing.client_partitions import (
 
 def _feature_names(*names: str) -> FeatureNameSequence:
     return FeatureNameSequence(tuple(FeatureName(name) for name in names))
+
+
+def test_client_partitions_emit_bare_manifest_client_tokens() -> None:
+    rows = pl.DataFrame(
+        {
+            CLIENT_ID_COLUMN: [
+                "danmini_doorbell",
+                "danmini_doorbell",
+                "danmini_doorbell",
+                "ecobee_thermostat",
+                "ecobee_thermostat",
+                "ecobee_thermostat",
+            ],
+            STABLE_ROW_ID_COLUMN: ["a", "b", "c", "d", "e", "f"],
+            PARTITION_ROLE_COLUMN: ["train", "calibration", "evaluation", "train", "calibration", "evaluation"],
+            OUTCOME_LABEL_COLUMN: ["benign", "benign", "benign", "benign", "benign", "benign"],
+            "feature_one": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        }
+    )
+
+    partitions = client_partitions(
+        rows,
+        _feature_names("feature_one"),
+        split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
+    )
+
+    assert tuple(item.client.value for item in partitions.items) == (
+        "danmini_doorbell",
+        "ecobee_thermostat",
+    )
 
 
 def test_excludes_row_with_null_numeric_model_input_feature() -> None:

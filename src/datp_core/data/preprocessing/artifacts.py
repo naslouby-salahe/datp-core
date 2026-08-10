@@ -108,6 +108,7 @@ class ProcessedAssetName(StrEnum):
     EVALUATION = f"{PartitionRole.EVALUATION}.parquet"
     FUTURE_RECALIBRATION = f"{PartitionRole.FUTURE_RECALIBRATION}.parquet"
     STATIC_REFERENCE_RESERVE = f"{PartitionRole.STATIC_REFERENCE_RESERVE}.parquet"
+    DISCARDED = f"{PartitionRole.DISCARDED}.parquet"
     STATE = "state.skops"
     SCHEMA = "schema.json"
     SPLIT_MANIFEST = "split_manifest.parquet"
@@ -160,6 +161,7 @@ _ASSET_FOR_PARTITION = {
     PartitionRole.EVALUATION: ProcessedAssetName.EVALUATION,
     PartitionRole.FUTURE_RECALIBRATION: ProcessedAssetName.FUTURE_RECALIBRATION,
     PartitionRole.STATIC_REFERENCE_RESERVE: ProcessedAssetName.STATIC_REFERENCE_RESERVE,
+    PartitionRole.DISCARDED: ProcessedAssetName.DISCARDED,
 }
 
 
@@ -185,6 +187,12 @@ _PARTITION_ROLES = {
         PartitionRole.STATIC_REFERENCE_RESERVE,
         PartitionRole.EVALUATION,
     ),
+    SplitProtocolId.HISTORICAL_TEMPORAL_GAP: (
+        PartitionRole.TRAIN,
+        PartitionRole.CALIBRATION,
+        PartitionRole.EVALUATION,
+        PartitionRole.DISCARDED,
+    ),
 }
 
 
@@ -192,7 +200,9 @@ def partition_roles(split_protocol: SplitProtocolId) -> tuple[PartitionRole, ...
     return _PARTITION_ROLES[split_protocol]
 
 
-_UNSCORED_ROLES = frozenset({PartitionRole.TRAIN, PartitionRole.STATIC_REFERENCE_RESERVE})
+_UNSCORED_ROLES = frozenset(
+    {PartitionRole.TRAIN, PartitionRole.STATIC_REFERENCE_RESERVE, PartitionRole.DISCARDED}
+)
 
 
 def scored_partition_roles(split_protocol: SplitProtocolId) -> tuple[PartitionRole, ...]:

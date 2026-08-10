@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import torch
@@ -65,6 +66,7 @@ class DittoTrainingRequest:
     split_manifest_checksum: Checksum
     global_output_directory: Path
     personalized_output_directory: Path
+    progress_callback: Callable[[int, int], None] | None = field(default=None, compare=False, repr=False)
 
 
 def _require_client_entry[T](mapping: dict[ClientIdentity, T], client: ClientIdentity) -> T:
@@ -133,6 +135,8 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
 
     for round_value in range(1, request.checkpoint_protocol.maximum_round.value + 1):
         round_number = RoundNumber(round_value)
+        if request.progress_callback is not None:
+            request.progress_callback(round_value, request.checkpoint_protocol.maximum_round.value)
         global_updates: list[ClientUpdate] = []
         personalized_references: list[PersonalizedModelStateReference] = []
 

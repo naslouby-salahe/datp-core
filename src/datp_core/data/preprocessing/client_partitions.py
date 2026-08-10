@@ -86,20 +86,24 @@ def client_partitions(
     feature_names: FeatureNameSequence,
     split_protocol: SplitProtocolId,
 ) -> ClientCollection[ClientPathToken, PreprocessingPartitions]:
-    partitions_dict = joined.partition_by(CLIENT_ID_COLUMN, as_dict=True)
+    # Derive the client identity from each partition's own rows rather than the
+    # partition_by dict key: `as_dict=True` keys are 1-tuples such as
+    # `('danmini_doorbell',)`, whose str() form would not match the manifest's
+    # bare client tokens. `partition_by` preserves the input sort, so groups
+    # appear in CLIENT_ID order and remain deterministic.
     return ClientCollection(
         tuple(
             ClientOwned(
-                ClientPathToken(str(client_val)),
+                ClientPathToken(str(partition.get_column(CLIENT_ID_COLUMN)[0])),
                 extract_partitions(
-                    df,
+                    partition,
                     feature_names,
                     split_protocol=split_protocol,
                     branch=ProcessedDataBranch.FEDERATED,
                     ordering=PartitionOrdering.PRESERVE_SOURCE_ORDER,
                 ),
             )
-            for client_val, df in sorted(partitions_dict.items())
+            for partition in joined.partition_by(CLIENT_ID_COLUMN)
         )
     )
 

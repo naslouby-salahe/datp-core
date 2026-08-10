@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -74,6 +75,12 @@ from datp_core.experiments.execution.layout import (
     bounded_evidence_seed_directory,
 )
 from datp_core.experiments.execution.matched_reference import matched_static_reference_inputs
+from datp_core.experiments.execution.models import (
+    ProgressEvent,
+    ProgressEventKind,
+    ProgressHook,
+    StageOutcome,
+)
 from datp_core.experiments.execution.score_generation import score_selected_checkpoint
 from datp_core.experiments.registry import EXPERIMENTS, ExperimentDeclaration
 from datp_core.presentation.export import export_temporal_publication
@@ -216,7 +223,13 @@ class TemporalCoordinateSet:
                 return self.recalibrated_future
 
 
-def run_temporal_seed(partition_seed: Seed, *, output_root: Path, overwrite: bool) -> TemporalSeedResult:
+def run_temporal_seed(
+    partition_seed: Seed,
+    *,
+    output_root: Path,
+    overwrite: bool,
+    progress: ProgressHook | None = None,
+) -> TemporalSeedResult:
     declaration = _temporal_declaration()
     coordinates = _temporal_coordinates(partition_seed, declaration)
     if overwrite:
@@ -226,6 +239,7 @@ def run_temporal_seed(partition_seed: Seed, *, output_root: Path, overwrite: boo
         coordinates,
         output_root=output_root,
         overwrite=overwrite,
+        progress=progress,
     )
     methods = _common_completed_methods(static, frozen, recalibrated)
     result = TemporalSeedResult(
@@ -425,6 +439,7 @@ def _execute_temporal_states(
     *,
     output_root: Path,
     overwrite: bool,
+    progress: ProgressHook | None = None,
 ) -> tuple[TemporalStateResult, TemporalStateResult, TemporalStateResult]:
     frozen_coordinate = coordinates.frozen_future
     context = resolve_execution_context(frozen_coordinate, output_root)
@@ -463,35 +478,65 @@ def _execute_temporal_states(
     validate_frozen_recalibrated_pair(frozen_provenance, recalibrated_provenance)
     _validate_shared_temporal_detector(static_provenance, frozen_provenance)
     _require_common_temporal_eligibility_cohort(static_scores, future_scores)
-    static = _evaluate_state(
-        context=context,
-        identity=static_identity,
-        scores=static_scores,
-        calibration_role=PartitionRole.CALIBRATION,
-        threshold_methods=declaration.federated_thresholds,
-        provenance=static_provenance,
-        output_root=output_root,
-        overwrite=overwrite,
+
+    def _run_state(
+        identity: ExternalTemporalExecutionIdentity,
+        coordinate: ExperimentCoordinate,
+        scores: FederatedScoreArtifactManifest,
+        calibration_role: PartitionRole,
+        provenance: TemporalDeploymentProvenance,
+    ) -> TemporalStateResult:
+        if progress is not None:
+            progress.emit(
+                ProgressEvent(
+                    kind=ProgressEventKind.COORDINATE_BEGIN,
+                    coordinate=coordinate,
+                    detail=f"temporal state {identity.temporal_state.value if identity.temporal_state else 'unknown'}",
+                )
+            )
+        started = time.monotonic()
+        result = _evaluate_state(
+            context=context,
+            identity=identity,
+            scores=scores,
+            calibration_role=calibration_role,
+            threshold_methods=declaration.federated_thresholds,
+            provenance=provenance,
+            output_root=output_root,
+            overwrite=overwrite,
+        )
+        if progress is not None:
+            progress.emit(
+                ProgressEvent(
+                    kind=ProgressEventKind.COORDINATE_END,
+                    coordinate=coordinate,
+                    outcome=StageOutcome.COMPLETED,
+                    detail=f"temporal state {identity.temporal_state.value if identity.temporal_state else 'unknown'}",
+                    elapsed_seconds=time.monotonic() - started,
+                )
+            )
+        return result
+
+    static = _run_state(
+        static_identity,
+        static_coordinate,
+        static_scores,
+        PartitionRole.CALIBRATION,
+        static_provenance,
     )
-    frozen = _evaluate_state(
-        context=context,
-        identity=_execution_identity(frozen_coordinate),
-        scores=future_scores,
-        calibration_role=PartitionRole.CALIBRATION,
-        threshold_methods=declaration.federated_thresholds,
-        provenance=frozen_provenance,
-        output_root=output_root,
-        overwrite=overwrite,
+    frozen = _run_state(
+        _execution_identity(frozen_coordinate),
+        frozen_coordinate,
+        future_scores,
+        PartitionRole.CALIBRATION,
+        frozen_provenance,
     )
-    recalibrated = _evaluate_state(
-        context=context,
-        identity=_execution_identity(coordinates.recalibrated_future),
-        scores=future_scores,
-        calibration_role=PartitionRole.FUTURE_RECALIBRATION,
-        threshold_methods=declaration.federated_thresholds,
-        provenance=recalibrated_provenance,
-        output_root=output_root,
-        overwrite=overwrite,
+    recalibrated = _run_state(
+        _execution_identity(coordinates.recalibrated_future),
+        coordinates.recalibrated_future,
+        future_scores,
+        PartitionRole.FUTURE_RECALIBRATION,
+        recalibrated_provenance,
     )
     return static, frozen, recalibrated
 

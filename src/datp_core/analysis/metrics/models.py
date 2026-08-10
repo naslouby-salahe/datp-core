@@ -74,6 +74,7 @@ class MetricReason(StrEnum):
     UNDEFINED_CLASS_F1 = "undefined_class_f1"
     ZERO_MEAN = "zero_mean"
     NO_EVALUABLE_CLIENTS = "no_evaluable_clients"
+    INSUFFICIENT_CLIENT_COUNT = "insufficient_client_count"
     MISSING_CAPABILITY = "missing_capability"
     UNRESOLVED_PROTOCOL_VALUE = "unresolved_protocol_value"
 
@@ -90,7 +91,7 @@ CLIENT_METRIC_IDS: frozenset[MetricId] = frozenset(
 
 FPR_POPULATION_METRIC_IDS: tuple[MetricId, ...] = (
     MetricId.MEAN_FPR,
-    MetricId.FPR_POPULATION_STANDARD_DEVIATION,
+    MetricId.FPR_SAMPLE_STANDARD_DEVIATION,
     MetricId.FPR_COEFFICIENT_OF_VARIATION,
     MetricId.FPR_IQR,
     MetricId.FPR_RANGE,
@@ -106,12 +107,17 @@ POPULATION_METRIC_IDS: frozenset[MetricId] = frozenset(
     (
         *FPR_POPULATION_METRIC_IDS,
         *EQUITY_INDEX_METRIC_IDS,
+        MetricId.FALSE_POSITIVE_RATE,
         MetricId.TPR_COEFFICIENT_OF_VARIATION,
+        MetricId.TRUE_POSITIVE_RATE,
+        MetricId.BALANCED_ACCURACY,
+        MetricId.BINARY_MACRO_F1,
         MetricId.P10_BINARY_MACRO_F1,
         MetricId.WORST_CLIENT_BALANCED_ACCURACY,
         MetricId.MEAN_CLIENT_MACRO_F1,
         MetricId.POOLED_MACRO_F1,
         MetricId.MEAN_CLIENT_BALANCED_ACCURACY,
+        MetricId.AUROC,
     )
 )
 

@@ -1764,7 +1764,8 @@ The conference result used five seeds. The journal extension must reproduce that
 - checkpoint-selection rule;
 - quantile `q = 0.95`;
 - test records;
-- metric implementation.
+- metric implementation;
+- historical temporal-gap data partition (per-device chronological source-row order, `60 / 1 / 20 / 1 / 18`, guard gaps discarded, scaler fit on training rows only).
 
 **Experimental factor**
 
@@ -3145,13 +3146,13 @@ Let \(K_e\) be the eligible FPR-evaluable client count.
 
 The primary equity calculation is unweighted by client row count.
 
-**5.2 Population standard deviation**
+**5.2 Sample standard deviation**
 
 \[
 \sigma_{FPR}
 =
 \sqrt{
-\frac{1}{K_e}
+\frac{1}{K_e-1}
 \sum_{k=1}^{K_e}
 (FPR_k-\mu_{FPR})^2
 }
@@ -3160,10 +3161,15 @@ The primary equity calculation is unweighted by client row count.
 Use:
 
 ```text
-ddof = 0
+ddof = 1
 ```
 
-The executed clients are the complete descriptive population for that cell.
+Bessel's correction is locked so that the estimator convention matches the
+historical DATP metric definition and the locked anchor reference
+`[0.647, 0.769]`, which was derived with `ddof = 1`. Reproduction compares the
+re-implemented pipeline to that historical reference, so both sides must share
+the same estimator; the `sqrt(K_e / (K_e - 1)) = 1.061` convention mismatch
+would otherwise bias every reproduction comparison.
 
 **5.3 Coefficient of variation**
 
@@ -3212,7 +3218,7 @@ Where attack evaluation is valid:
 \[
 CV(TPR)
 =
-\frac{\operatorname{std}(TPR_k,ddof=0)}
+\frac{\operatorname{std}(TPR_k,ddof=1)}
 {\operatorname{mean}(TPR_k)}
 \]
 

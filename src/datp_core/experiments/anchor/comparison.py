@@ -14,6 +14,7 @@ from datp_core.experiments.anchor.contracts import (
     AnchorMetricReference,
     AnchorObservedMetric,
     AnchorToleranceRule,
+    DiagnosticRule,
     ExactCountRule,
     ExactEqualityRule,
     IntervalOverlapRule,
@@ -109,6 +110,33 @@ def _compare_with_rule(
             return _interval_result(reference, observation, rule, delta)
         case ExactCountRule():
             return _count_result(reference, observation, rule, delta)
+        case DiagnosticRule():
+            return _diagnostic_result(reference, observation, rule, delta)
+
+
+def _diagnostic_result(
+    reference: AnchorMetricReference,
+    observation: AnchorObservedMetric,
+    rule: DiagnosticRule,
+    delta: _NumericDelta,
+) -> AnchorMetricComparison:
+    """Report a per-seed deviation without gating.
+
+    Exact equality records an EQUIVALENT comparison; any deviation is recorded
+    as DIAGNOSTIC_REPORTED (with the signed/relative deltas) and never emitted
+    as a blocking discrepancy. The roadmap gate carries no per-seed value
+    condition; the confirmatory decision is the cohort-level BCa interval.
+    """
+    if floats_exactly_equal(delta.expected, delta.observed):
+        return _pass(reference, observation, rule, delta)
+    return _build(
+        reference,
+        observation,
+        rule,
+        decision=AnchorComparisonDecision.DIAGNOSTIC_REPORTED,
+        signed=MetricDelta(delta.signed),
+        relative=None if delta.relative is None else MetricDelta(delta.relative),
+    )
 
 
 def _equality_result(

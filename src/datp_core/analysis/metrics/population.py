@@ -151,29 +151,58 @@ def _fpr_aggregates(
             unavailable(metric, MetricStatus.UNAVAILABLE, MetricReason.NO_EVALUABLE_CLIENTS)
             for metric in (*FPR_POPULATION_METRIC_IDS, *EQUITY_INDEX_METRIC_IDS)
         )
-        return PopulationMetricAggregates(metrics=absent, warnings=())
+        return PopulationMetricAggregates(
+            metrics=(
+                *absent,
+                unavailable(MetricId.FALSE_POSITIVE_RATE, MetricStatus.UNAVAILABLE, MetricReason.NO_EVALUABLE_CLIENTS),
+            ),
+            warnings=(),
+        )
     array = np.fromiter((v.value for v in values), dtype=np.float64, count=len(values))
     mean = float(np.mean(array))
-    std = float(np.std(array, ddof=0))
     metrics: list[MetricAvailability] = [
         available(MetricId.MEAN_FPR, MetricValue(mean), denominator=RowCount(len(values))),
-        available(MetricId.FPR_POPULATION_STANDARD_DEVIATION, MetricValue(std), denominator=RowCount(len(values))),
+        available(MetricId.FALSE_POSITIVE_RATE, MetricValue(mean), denominator=RowCount(len(values))),
     ]
     warnings: tuple[MetricWarning, ...] = ()
-    if is_numeric_zero(mean):
-        metrics.append(
-            unavailable(MetricId.FPR_COEFFICIENT_OF_VARIATION, MetricStatus.UNDEFINED, MetricReason.ZERO_MEAN)
-        )
-    else:
-        metrics.append(
-            available(
-                MetricId.FPR_COEFFICIENT_OF_VARIATION,
-                MetricValue(std / mean),
-                denominator=RowCount(len(values)),
+    if len(values) < 2:
+        # The sample standard deviation (ddof=1) is undefined for a single
+        # evaluable client; reported as an explicit unavailable result.
+        metrics.extend(
+            (
+                unavailable(
+                    MetricId.FPR_SAMPLE_STANDARD_DEVIATION,
+                    MetricStatus.UNAVAILABLE,
+                    MetricReason.INSUFFICIENT_CLIENT_COUNT,
+                ),
+                unavailable(
+                    MetricId.FPR_COEFFICIENT_OF_VARIATION,
+                    MetricStatus.UNAVAILABLE,
+                    MetricReason.INSUFFICIENT_CLIENT_COUNT,
+                ),
             )
         )
-        if mean < NEAR_ZERO_MEAN_FPR_WARNING_CUTOFF.value:
-            warnings = (MetricWarning(WarningCode.NEAR_ZERO_MEAN_FPR, MetricId.FPR_COEFFICIENT_OF_VARIATION),)
+    else:
+        # Sample standard deviation (Bessel's correction), matching the historical
+        # DATP metric definition and the locked anchor reference estimator.
+        std = float(np.std(array, ddof=1))
+        metrics.append(
+            available(MetricId.FPR_SAMPLE_STANDARD_DEVIATION, MetricValue(std), denominator=RowCount(len(values)))
+        )
+        if is_numeric_zero(mean):
+            metrics.append(
+                unavailable(MetricId.FPR_COEFFICIENT_OF_VARIATION, MetricStatus.UNDEFINED, MetricReason.ZERO_MEAN)
+            )
+        else:
+            metrics.append(
+                available(
+                    MetricId.FPR_COEFFICIENT_OF_VARIATION,
+                    MetricValue(std / mean),
+                    denominator=RowCount(len(values)),
+                )
+            )
+            if mean < NEAR_ZERO_MEAN_FPR_WARNING_CUTOFF.value:
+                warnings = (MetricWarning(WarningCode.NEAR_ZERO_MEAN_FPR, MetricId.FPR_COEFFICIENT_OF_VARIATION),)
     q25, q75 = np.quantile(array, (0.25, 0.75), method="linear")
     metrics.extend(
         (
@@ -213,6 +242,7 @@ def _attack_aggregates(results: tuple[ClientMetricResult, ...]) -> tuple[MetricA
     tpr_vals: list[MetricValue] = []
     macro_vals: list[MetricValue] = []
     balanced_vals: list[MetricValue] = []
+    auroc_vals: list[MetricValue] = []
 
     for result in results:
         metric_map = {m.metric: m for m in result.metrics}
@@ -221,6 +251,7 @@ def _attack_aggregates(results: tuple[ClientMetricResult, ...]) -> tuple[MetricA
             (MetricId.TRUE_POSITIVE_RATE, tpr_vals),
             (MetricId.BINARY_MACRO_F1, macro_vals),
             (MetricId.BALANCED_ACCURACY, balanced_vals),
+            (MetricId.AUROC, auroc_vals),
         ):
             record = metric_map.get(metric_id)
             if not record:
@@ -231,25 +262,34 @@ def _attack_aggregates(results: tuple[ClientMetricResult, ...]) -> tuple[MetricA
     tpr_tuple = tuple(tpr_vals)
     macro_tuple = tuple(macro_vals)
     balanced_tuple = tuple(balanced_vals)
+    auroc_tuple = tuple(auroc_vals)
 
     return (
         _coefficient_of_variation(MetricId.TPR_COEFFICIENT_OF_VARIATION, tpr_tuple),
+        _mean_or_unavailable(MetricId.TRUE_POSITIVE_RATE, tpr_tuple),
+        _mean_or_unavailable(MetricId.BALANCED_ACCURACY, balanced_tuple),
+        _mean_or_unavailable(MetricId.BINARY_MACRO_F1, macro_tuple),
         _quantile_or_unavailable(MetricId.P10_BINARY_MACRO_F1, macro_tuple, Quantile(0.10)),
         _minimum_or_unavailable(MetricId.WORST_CLIENT_BALANCED_ACCURACY, balanced_tuple),
         _mean_or_unavailable(MetricId.MEAN_CLIENT_MACRO_F1, macro_tuple),
         _pooled_macro_f1_or_unavailable(results),
         _mean_or_unavailable(MetricId.MEAN_CLIENT_BALANCED_ACCURACY, balanced_tuple),
+        _mean_or_unavailable(MetricId.AUROC, auroc_tuple),
     )
 
 
 def _coefficient_of_variation(metric: MetricId, values: tuple[MetricValue, ...]) -> MetricAvailability:
     if not values:
         return unavailable(metric, MetricStatus.UNAVAILABLE, MetricReason.NO_EVALUABLE_CLIENTS)
+    if len(values) < 2:
+        return unavailable(metric, MetricStatus.UNAVAILABLE, MetricReason.INSUFFICIENT_CLIENT_COUNT)
     raw = np.fromiter((v.value for v in values), dtype=np.float64, count=len(values))
     mean = float(np.mean(raw))
     if is_numeric_zero(mean):
         return unavailable(metric, MetricStatus.UNDEFINED, MetricReason.ZERO_MEAN)
-    return available(metric, MetricValue(float(np.std(raw, ddof=0)) / mean), denominator=RowCount(len(values)))
+    # Sample standard deviation (ddof=1), matching the historical DATP CV(FPR)
+    # definition and the locked anchor reference estimator.
+    return available(metric, MetricValue(float(np.std(raw, ddof=1)) / mean), denominator=RowCount(len(values)))
 
 
 def _quantile_or_unavailable(

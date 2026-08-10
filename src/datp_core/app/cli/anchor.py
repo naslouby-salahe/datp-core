@@ -5,14 +5,22 @@
 
 from __future__ import annotations
 
+import sys
 from typing import Annotated
 
 import typer
 
 from datp_core.app.cli.validation import fail
 from datp_core.app.contracts import OverwriteMode, ProgrammeExecutionMode
-from datp_core.app.research import anchor_status, reproduce_anchor, verify_anchor_programme
+from datp_core.app.progress import progress_hook
+from datp_core.app.research import (
+    anchor_status,
+    progress_log_path,
+    reproduce_anchor,
+    verify_anchor_programme,
+)
 from datp_core.core.errors import DatpCoreError
+from datp_core.runtime.configuration import OUTPUTS_ROOT
 
 app = typer.Typer(no_args_is_help=True, help="Historical anchor equivalence gate.")
 
@@ -33,6 +41,7 @@ def reproduce_command(
         result = reproduce_anchor(
             overwrite=_overwrite_mode(overwrite),
             mode=ProgrammeExecutionMode.FULL,
+            progress=progress_hook(sys.stdout, progress_log_path(OUTPUTS_ROOT, "anchor")),
         )
     except (DatpCoreError, ValueError) as error:
         fail(error)

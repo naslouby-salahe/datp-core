@@ -49,6 +49,7 @@ class AnchorComparisonStrategy(StrEnum):
     INTERVAL_OVERLAP = "interval_overlap"
     EXACT_COUNT = "exact_count"
     SOURCE_DEFINED = "source_defined"
+    DIAGNOSTIC = "diagnostic"
 
 
 class AnchorComparisonDecision(StrEnum):
@@ -57,6 +58,7 @@ class AnchorComparisonDecision(StrEnum):
     MATERIAL_DISCREPANCY = "material_discrepancy"
     UNAVAILABLE = "unavailable"
     BLOCKED_INVALID_INPUT = "blocked_invalid_input"
+    DIAGNOSTIC_REPORTED = "diagnostic_reported"
 
 
 class AnchorObservationSourceKind(StrEnum):
@@ -130,13 +132,27 @@ class SourceDefinedRule(StrictModel):
     strategy: Literal[AnchorComparisonStrategy.SOURCE_DEFINED] = AnchorComparisonStrategy.SOURCE_DEFINED
 
 
+class DiagnosticRule(StrictModel):
+    """Per-seed historical value reference, reported but never gated.
+
+    The roadmap gate's identity conditions (cohort, population, preprocessing,
+    training, checkpoint, scoring, threshold, eligibility, metric definition)
+    are checked structurally; the reproduced per-seed CV(FPR) values are
+    reported against the historical constants as diagnostics only. The sole
+    confirmatory decision is the BCa interval on the five-seed cohort.
+    """
+
+    strategy: Literal[AnchorComparisonStrategy.DIAGNOSTIC] = AnchorComparisonStrategy.DIAGNOSTIC
+
+
 AnchorToleranceRule = Annotated[
     ExactEqualityRule
     | AbsoluteToleranceRule
     | RelativeToleranceRule
     | IntervalOverlapRule
     | ExactCountRule
-    | SourceDefinedRule,
+    | SourceDefinedRule
+    | DiagnosticRule,
     Field(discriminator="strategy"),
 ]
 

@@ -274,6 +274,7 @@ def _require_role_counts(assignments: pl.DataFrame, document: SplitManifestDocum
         (PartitionRole.EVALUATION, document.evaluation_row_count),
         (PartitionRole.FUTURE_RECALIBRATION, document.future_recalibration_row_count),
         (PartitionRole.STATIC_REFERENCE_RESERVE, document.static_reference_reserve_row_count),
+        (PartitionRole.DISCARDED, document.discarded_row_count),
     ):
         observed = int(assignments.filter(pl.col(PARTITION_ROLE_COLUMN) == role).height)
         if observed != expected.value:

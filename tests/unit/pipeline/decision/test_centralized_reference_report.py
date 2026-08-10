@@ -12,9 +12,9 @@ from datp_core.core.identifiers import (
     EvidenceRole,
     PopulationId,
     PreprocessingProtocolId,
-    SplitProtocolId,
 )
 from datp_core.core.numeric import MetricValue, RowCount, Seed, ThresholdValue
+from datp_core.data.populations.declarations import split_protocol_for_population
 from datp_core.detector.training.centralized import CentralizedTrainingCoordinate
 from datp_core.experiments.centralized_reference import (
     CIC_CENTRALIZED_REFERENCE,
@@ -38,7 +38,7 @@ def _evaluation_document(
     coordinate = CentralizedTrainingCoordinate(
         population=population,
         training_seed=Seed(seed_value),
-        split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
+        split_protocol=split_protocol_for_population(population),
         preprocessing_identity=PreprocessingProtocolId.CENTRALIZED_POOLED_MIN_MAX,
         model=CentralizedModelId.CENTRALIZED_AUTOENCODER,
     )

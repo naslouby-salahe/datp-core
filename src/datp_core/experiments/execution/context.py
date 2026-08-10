@@ -116,6 +116,29 @@ def execution_identity_for(coordinate: ExperimentCoordinate) -> ExternalTemporal
     )
 
 
+def execution_context_cache_key(coordinate: ExperimentCoordinate, output_root: Path) -> tuple[object, ...]:
+    """Deterministic identity of the resolved federated execution context.
+
+    The resolved context depends on the population, training coordinate, execution
+    identity, and output root only; it never depends on the threshold method or
+    metric. Coordinates sharing this key resolve to an identical context, so a
+    campaign may resolve it once and reuse it across all of its coordinates.
+    """
+    return (
+        coordinate.population,
+        coordinate.dataset,
+        coordinate.training_seed,
+        coordinate.split_protocol,
+        coordinate.preprocessing_protocol,
+        coordinate.training_model,
+        federated_model_coefficient(coordinate),
+        coordinate.controlled_partition_kind,
+        coordinate.dirichlet_concentration,
+        execution_identity_for(coordinate),
+        output_root,
+    )
+
+
 def resolve_execution_context(coordinate: ExperimentCoordinate, output_root: Path) -> FederatedExecutionContext:
     declared_dataset = population_capabilities(coordinate.population).dataset
     if coordinate.dataset is not declared_dataset:

@@ -78,6 +78,10 @@ class _ScoreRecordInventory:
                 raise ScientificContractError(
                     ErrorMessage("static-reference reserve rows are never score artifacts"), subject=role
                 )
+            case PartitionRole.DISCARDED:
+                raise ScientificContractError(
+                    ErrorMessage("discarded rows are never score artifacts"), subject=role
+                )
 
     def append(self, role: PartitionRole, record: FederatedScoreRecord) -> None:
         self.records_for(role).append(record)
@@ -383,3 +387,5 @@ def _asset_name_for_partition(role: PartitionRole) -> FederatedScoreAssetName:
             raise ScientificContractError(ErrorMessage("training rows are never scored"), subject=role)
         case PartitionRole.STATIC_REFERENCE_RESERVE:
             raise ScientificContractError(ErrorMessage("static-reference reserve rows are never scored"), subject=role)
+        case PartitionRole.DISCARDED:
+            raise ScientificContractError(ErrorMessage("discarded rows are never scored"), subject=role)

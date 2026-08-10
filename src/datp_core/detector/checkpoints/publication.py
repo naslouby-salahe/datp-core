@@ -197,6 +197,17 @@ def write_completion(
     return digest
 
 
+def _is_publication_coordination_entry(name: str) -> bool:
+    """Identify coordination entries that are not publication content.
+
+    A parent directory may host sibling atomic publications (for example the
+    per-client score artifacts published under the shared training root). Their
+    ``FileLock`` siblings and staging/backup entries live beside the declared
+    publication files and must not invalidate an otherwise complete one.
+    """
+    return name.startswith(".") or name.endswith(".lock")
+
+
 def verify_completion(
     directory: Path,
     manifest: CandidateManifest,
@@ -208,7 +219,11 @@ def verify_completion(
         include_history=include_history,
     )
     expected_all = frozenset((*expected_without_complete, FederatedHistoryAssetName.COMPLETE.value))
-    actual_files = frozenset(path.name for path in directory.iterdir() if path.is_file())
+    actual_files = frozenset(
+        path.name
+        for path in directory.iterdir()
+        if path.is_file() and not _is_publication_coordination_entry(path.name)
+    )
     if actual_files != expected_all:
         raise ArtifactIntegrityError(
             ErrorMessage("publication files do not match the exact declared artifact set"),

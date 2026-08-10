@@ -71,6 +71,7 @@ from datp_core.core.numeric import (
     SeedObservationCount,
 )
 from datp_core.data.populations.contracts import ClientIdentity, FamilyAssignment
+from datp_core.data.populations.declarations import split_protocol_for_population
 from datp_core.data.populations.publication import ConstructDeclaredPopulationRequest, construct_declared_population
 from datp_core.data.preprocessing.models import FederatedPreprocessingOutcome, FederatedPreprocessingRequest
 from datp_core.data.preprocessing.service import preprocess_federated
@@ -109,6 +110,7 @@ from datp_core.detector.training.protocols import (
     resolve_ditto_protocol,
     select_primary_fedprox_coefficient,
 )
+from datp_core.experiments.common.coordinates import ExperimentCoordinate
 from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.experiments.confirmatory.run import FedAvgCvFprEffectEvidence, absorption_corner_from_evaluation_document
 from datp_core.experiments.execution import execute_declared_campaign
@@ -124,7 +126,14 @@ from datp_core.experiments.execution.layout import (
     ExecutionRootDirectory,
     federated_training_directory,
 )
-from datp_core.experiments.execution.models import CampaignEntry, CampaignPlan, campaign_digest
+from datp_core.experiments.execution.models import (
+    CampaignEntry,
+    CampaignPlan,
+    ProgressEvent,
+    ProgressEventKind,
+    ProgressHook,
+    campaign_digest,
+)
 from datp_core.experiments.personalized_scoring import client_metric, client_scoring_input, score_record_for_client
 from datp_core.experiments.registry import EXPERIMENTS
 from datp_core.presentation.export import export_mechanism_publication
@@ -297,15 +306,50 @@ class DittoCvFprEffectEvidence:
             )
 
 
+def _ditto_personalized_coordinate(training_seed: Seed, regularization: DittoRegularization) -> ExperimentCoordinate:
+    declaration = next(item for item in EXPERIMENTS if item.id is ExperimentId.DITTO_ABSORPTION_STRESS_TEST)
+    plan = expand_experiment_plan(
+        declarations=(declaration,),
+        seed_cohort=SeedCohort(values=(training_seed,)),
+        evidence=(
+            PlanningEvidence(
+                experiment=declaration.id,
+                disposition=PlanDisposition.EXECUTABLE,
+                reason=PlanReason(
+                    "the Ditto stress-test entry point supplies the locked natural-device execution prerequisites"
+                ),
+            ),
+        ),
+    )
+    tolerance = NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE.value
+    matches = tuple(
+        entry.coordinate
+        for entry in plan.entries
+        if entry.disposition is PlanDisposition.EXECUTABLE
+        and entry.coordinate.training_model is TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER
+        and entry.coordinate.model_coefficient is not None
+        and abs(entry.coordinate.model_coefficient.value - regularization.value) <= tolerance
+    )
+    if len(matches) != 1:
+        raise ScientificContractError(
+            ErrorMessage(
+                f"Ditto planning produced no unique personalized coordinate for regularization={regularization.value}"
+            ),
+            subject=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
+        )
+    return matches[0]
+
+
 def run_ditto_stress_test_seed(
     *,
     training_seed: Seed,
     regularization: DittoRegularization,
     output_root: Path,
     overwrite: bool,
+    progress: ProgressHook | None = None,
 ) -> DittoStressTestResult:
     population = PopulationId.NBAIOT_NATURAL_DEVICES
-    split_protocol = SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS
+    split_protocol = split_protocol_for_population(population)
     preprocessing_identity = PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD
     context = _population_context(
         training_seed=training_seed,
@@ -321,6 +365,7 @@ def run_ditto_stress_test_seed(
         regularization=regularization,
     )
     personalized_coordinate = coordinates.personalized_coordinate
+    progress_coordinate = _ditto_personalized_coordinate(training_seed, regularization)
     feature_names = training_feature_names(DatasetId.NBAIOT)
     training = train_ditto_detector(
         TrainDittoDetectorRequest(
@@ -350,6 +395,20 @@ def run_ditto_stress_test_seed(
                     regularization,
                     DittoArtifactBranch.PERSONALIZED_MODELS,
                     output_root,
+                ),
+                progress_callback=(
+                    (
+                        lambda round_value, maximum_round: progress.emit(
+                            ProgressEvent(
+                                kind=ProgressEventKind.TRAINING_ROUND,
+                                coordinate=progress_coordinate,
+                                round_number=round_value,
+                                maximum_round=maximum_round,
+                            )
+                        )
+                    )
+                    if progress is not None
+                    else None
                 ),
             ),
             overwrite=overwrite,
@@ -516,6 +575,7 @@ def run_fedprox_stress_test_seed(
     coefficient: ProximalCoefficient,
     output_root: Path,
     overwrite: bool,
+    progress: ProgressHook | None = None,
 ) -> FedProxStressTestResult:
     declaration = next(item for item in EXPERIMENTS if item.id is ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST)
     plan = expand_experiment_plan(
@@ -558,6 +618,7 @@ def run_fedprox_stress_test_seed(
         declaration=declaration,
         output_root=output_root,
         overwrite=overwrite,
+        progress=progress,
     )
     return FedProxStressTestResult(
         training_seed=training_seed,
@@ -615,7 +676,7 @@ def fedprox_training_coordinate(training_seed: Seed, coefficient: ProximalCoeffi
     return FederatedTrainingCoordinate(
         population=PopulationId.NBAIOT_NATURAL_DEVICES,
         training_seed=training_seed,
-        split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
+        split_protocol=split_protocol_for_population(PopulationId.NBAIOT_NATURAL_DEVICES),
         preprocessing_identity=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
         model=TrainingModelId.FEDPROX_AUTOENCODER,
         model_coefficient=coefficient,

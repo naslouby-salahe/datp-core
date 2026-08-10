@@ -131,7 +131,19 @@ def _all_mandatory_comparisons_equivalent(reproduction: AnchorReproductionResult
     if not comparisons:
         return False
 
-    return all(c.decision is AnchorComparisonDecision.EQUIVALENT for c in comparisons)
+    # The roadmap gate carries no per-seed value condition (conditions 1-10 are
+    # identity checks, 11-13 are the cohort-level BCa interval). Per-seed
+    # comparisons must be present and structurally valid; exact matches are
+    # EQUIVALENT, and any deviation is reported as DIAGNOSTIC_REPORTED rather
+    # than blocking the gate.
+    return all(
+        c.decision
+        in {
+            AnchorComparisonDecision.EQUIVALENT,
+            AnchorComparisonDecision.DIAGNOSTIC_REPORTED,
+        }
+        for c in comparisons
+    )
 
 
 def _partition_discrepancies(

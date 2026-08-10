@@ -134,7 +134,9 @@ def _document(
     checkpoint_status: CheckpointStatus,
 ) -> FederatedEvaluationDocument:
     client = client_identity("device_a")
-    client_result = _client_result("device_a")
+    # CV(FPR) uses the sample standard deviation (ddof=1), which requires at
+    # least two FPR-evaluable clients; the anchor observation reads CV(FPR).
+    client_results = (_client_result("device_a"), _client_result("device_b"))
     return FederatedEvaluationDocument(
         stage=StageOperationId.EVALUATE_FEDERATED,
         score_coordinate=fedavg_coordinate(_SEED),
@@ -147,8 +149,8 @@ def _document(
         evidence_role=EvidenceRole.CONFIRMATORY,
         fixed_score_evidence=_fixed_score_evidence(),
         cohort=_cohort_manifest(client),
-        clients=(client_result,),
-        population=calculate_population_metrics((client_result,)),
+        clients=client_results,
+        population=calculate_population_metrics(client_results),
         diagnostics=EvaluationDiagnostics(
             conformal_coverage=(),
             threshold_estimation=(),
