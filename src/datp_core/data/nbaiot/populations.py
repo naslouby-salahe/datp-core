@@ -22,7 +22,6 @@ from datp_core.data.contracts import CanonicalProvenanceColumn
 from datp_core.data.nbaiot.capabilities import NBAIOT_CAPABILITIES
 from datp_core.data.nbaiot.schema import (
     NBAIOT_DEVICE_IDENTITIES,
-    NBAIOT_SCHEMA,
     NBaIoTCanonicalColumn,
     NBaIoTSourceLabel,
 )
@@ -51,10 +50,7 @@ from datp_core.data.populations.contracts import (
     select_membership_frame,
     synthetic_client_ids,
 )
-from datp_core.data.populations.controlled import (
-    ControlledPartitionAllocator,
-    controlled_allocation_checksum,
-)
+from datp_core.data.populations.controlled import ControlledPartitionAllocator
 from datp_core.data.populations.integrity import validate_dirichlet_conservation
 from datp_core.data.populations.paths import canonical_data_glob
 
@@ -124,7 +120,6 @@ def construct_nbaiot_natural_devices(
             expected_identities=candidates,
             chronology_required=False,
             membership=membership,
-            canonical_schema_checksum=NBAIOT_SCHEMA.checksum,
             family_by_client=family_by_client,
         )
     )
@@ -183,7 +178,6 @@ def construct_nbaiot_dirichlet_clients(
             expected_identities=client_ids,
             chronology_required=False,
             membership=membership,
-            canonical_schema_checksum=NBAIOT_SCHEMA.checksum,
         )
     )
     return PopulationConstructionResult(manifest, membership, diagnostics)
@@ -283,12 +277,6 @@ def _build_diagnostics(
         attack_row_counts=attack_counts,
         empty_client_ids=empty_ids,
         insufficient_benign_client_ids=insufficient,
-        allocation_checksum=controlled_allocation_checksum(
-            client_ids,
-            client_row_counts,
-            condition,
-            partition_seed,
-        ),
     )
 
 

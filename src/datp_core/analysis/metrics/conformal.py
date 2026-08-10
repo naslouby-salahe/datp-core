@@ -18,7 +18,6 @@ from datp_core.analysis.metrics.semantics import (
     available,
     unavailable,
 )
-from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
@@ -226,7 +225,7 @@ def _verify_record_rows(
         ScoreFrameColumn.OUTCOME_LABEL.value,
         ScoreFrameColumn.RECONSTRUCTION_ERROR.value,
     )
-    if not record.path.is_file() or Checksum.from_file(record.path) != record.checksum:
+    if not record.path.is_file():
         raise ScientificContractError(ErrorMessage("held-out coverage score provenance is unavailable or changed"))
     frame = pl.read_parquet(record.path)
     if any(column not in frame.columns for column in required) or frame.height != record.row_count.value:

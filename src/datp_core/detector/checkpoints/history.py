@@ -8,7 +8,6 @@ from pathlib import Path
 import polars as pl
 from polars.exceptions import PolarsError
 
-from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import (
     ArtifactIntegrityError,
     ErrorMessage,
@@ -25,7 +24,7 @@ from datp_core.core.identifiers import (
 )
 from datp_core.core.numeric import ByteCount, LogicalElementCount, MetricValue, RoundNumber, RowCount
 from datp_core.data.populations.contracts import ClientIdentity
-from datp_core.detector.checkpoints.contracts import CheckpointProtocol
+from datp_core.detector.checkpoints.contracts import DiagnosticSnapshotProtocol
 from datp_core.detector.checkpoints.identities import (
     CLIENT_ROUNDS_SCHEMA,
     PERSONALIZED_ROUNDS_SCHEMA,
@@ -61,7 +60,6 @@ class _ClientRoundRow:
 class _PersonalizedRoundRow:
     client: ClientIdentity
     local_loss: MetricValue
-    state_checksum: Checksum
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -70,7 +68,6 @@ class RoundSummaryRecord:
     aggregate_loss: MetricValue
     upload_bytes: ByteCount
     download_bytes: ByteCount
-    global_state_checksum: Checksum
     state_bytes: ByteCount
     logical_element_count: LogicalElementCount
 
@@ -218,7 +215,6 @@ def persist_federated_training_history(
     d_bytes: list[int] = []
     s_bytes: list[int] = []
     l_counts: list[int] = []
-    g_sums: list[str] = []
     c_rounds: list[int] = []
     c_ids: list[str] = []
     c_samples: list[int] = []
@@ -226,7 +222,6 @@ def persist_federated_training_history(
     p_rounds: list[int] = []
     p_ids: list[str] = []
     p_losses: list[float] = []
-    p_sums: list[str] = []
 
     for item in history.rounds:
         r_nums.append(item.round_number.value)
@@ -235,7 +230,6 @@ def persist_federated_training_history(
         d_bytes.append(item.communication.estimated_download_bytes.value)
         s_bytes.append(item.communication.state_bytes.value)
         l_counts.append(item.communication.logical_element_count.value)
-        g_sums.append(item.global_state_reference.state_checksum.value)
 
         for result in item.client_results:
             c_rounds.append(item.round_number.value)
@@ -247,7 +241,6 @@ def persist_federated_training_history(
             p_rounds.append(item.round_number.value)
             p_ids.append(reference.client.client_id.value)
             p_losses.append(reference.local_loss.value)
-            p_sums.append(reference.state_checksum.value)
 
     directory.mkdir(parents=True, exist_ok=True)
 
@@ -257,7 +250,6 @@ def persist_federated_training_history(
             FederatedHistoryColumn.AGGREGATE_LOSS.value: a_losses,
             FederatedHistoryColumn.UPLOAD_BYTES.value: u_bytes,
             FederatedHistoryColumn.DOWNLOAD_BYTES.value: d_bytes,
-            FederatedHistoryColumn.GLOBAL_STATE_CHECKSUM.value: g_sums,
             FederatedHistoryColumn.STATE_BYTES.value: s_bytes,
             FederatedHistoryColumn.LOGICAL_ELEMENT_COUNT.value: l_counts,
         },
@@ -280,7 +272,6 @@ def persist_federated_training_history(
                 FederatedHistoryColumn.ROUND_NUMBER.value: p_rounds,
                 FederatedHistoryColumn.CLIENT_ID.value: p_ids,
                 FederatedHistoryColumn.LOCAL_LOSS.value: p_losses,
-                FederatedHistoryColumn.STATE_CHECKSUM.value: p_sums,
             },
             schema=schema_pairs(PERSONALIZED_ROUNDS_SCHEMA),
         ).write_parquet(directory / FederatedHistoryAssetName.PERSONALIZED_ROUNDS.value)
@@ -323,7 +314,7 @@ def load_federated_training_history(
     identity_kind: PopulationIdentityKind,
     *,
     clients: tuple[ClientIdentity, ...],
-    checkpoint_protocol: CheckpointProtocol,
+    diagnostic_snapshot_protocol: DiagnosticSnapshotProtocol,
     personalized_coordinate: FederatedTrainingCoordinate | None = None,
 ) -> FederatedTrainingHistory:
     frames = history_frames(directory)
@@ -337,7 +328,7 @@ def load_federated_training_history(
             subject=ContractSubject.SCHEMA,
         )
     final_round = RoundNumber(int(observed_round_values[-1]))
-    if final_round.value < 1 or final_round.value > checkpoint_protocol.maximum_round.value:
+    if final_round.value < 1 or final_round.value > diagnostic_snapshot_protocol.maximum_round.value:
         raise ArtifactIntegrityError(
             ErrorMessage("round summary terminal round must lie within the checkpoint protocol"),
             subject=ContractSubject.CHECKPOINT_CANDIDATES,
@@ -390,14 +381,13 @@ def load_federated_training_history(
 
     personalized_dict_by_round: dict[RoundNumber, list[_PersonalizedRoundRow]] = {}
     if personalized_frame is not None:
-        for round_val, client_val, loss_val, checksum_val in personalized_frame.select(
-            (column.ROUND_NUMBER.value, column.CLIENT_ID.value, column.LOCAL_LOSS.value, column.STATE_CHECKSUM.value)
+        for round_val, client_val, loss_val in personalized_frame.select(
+            (column.ROUND_NUMBER.value, column.CLIENT_ID.value, column.LOCAL_LOSS.value)
         ).iter_rows():
             personalized_dict_by_round.setdefault(RoundNumber(int(round_val)), []).append(
                 _PersonalizedRoundRow(
                     client=ClientIdentity(coordinate.population, ClientIdentityToken(str(client_val)), identity_kind),
                     local_loss=MetricValue(float(loss_val)),
-                    state_checksum=Checksum(str(checksum_val)),
                 )
             )
 
@@ -422,7 +412,6 @@ def _round_summaries(frame: pl.DataFrame) -> tuple[RoundSummaryRecord, ...]:
             aggregate_loss=MetricValue(float(aggregate_loss)),
             upload_bytes=ByteCount(int(upload_bytes)),
             download_bytes=ByteCount(int(download_bytes)),
-            global_state_checksum=Checksum(str(global_state_checksum)),
             state_bytes=ByteCount(int(state_bytes)),
             logical_element_count=LogicalElementCount(int(logical_element_count)),
         )
@@ -431,7 +420,6 @@ def _round_summaries(frame: pl.DataFrame) -> tuple[RoundSummaryRecord, ...]:
             aggregate_loss,
             upload_bytes,
             download_bytes,
-            global_state_checksum,
             state_bytes,
             logical_element_count,
         ) in frame.select(
@@ -440,7 +428,6 @@ def _round_summaries(frame: pl.DataFrame) -> tuple[RoundSummaryRecord, ...]:
                 column.AGGREGATE_LOSS.value,
                 column.UPLOAD_BYTES.value,
                 column.DOWNLOAD_BYTES.value,
-                column.GLOBAL_STATE_CHECKSUM.value,
                 column.STATE_BYTES.value,
                 column.LOGICAL_ELEMENT_COUNT.value,
             )
@@ -484,7 +471,6 @@ def _round_result(
         global_state_reference=GlobalModelStateReference(
             coordinate=coordinate,
             round_number=summary.round_number,
-            state_checksum=summary.global_state_checksum,
             tensor_path=None,
         ),
         personalized_state_references=personalized_references,
@@ -510,7 +496,6 @@ def _personalized_references(
             client=row.client,
             round_number=round_number,
             local_loss=row.local_loss,
-            state_checksum=row.state_checksum,
             tensor_path=None,
         )
         for row in personalized_data

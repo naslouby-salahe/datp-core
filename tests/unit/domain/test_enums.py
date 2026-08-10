@@ -6,8 +6,6 @@ from datp_core.core.identifiers import (
     AvailabilityStatus,
     CentralizedModelId,
     CentralizedThresholdMethod,
-    CheckpointSelectionRule,
-    CheckpointStatus,
     CommunicationEstimationMethod,
     ContractSubject,
     DatasetId,
@@ -25,11 +23,11 @@ from datp_core.core.identifiers import (
     PartitionRole,
     PopulationId,
     PopulationIdentityKind,
+    PreparedDataCoordinateKind,
     PreprocessingProtocolId,
     ProcessedDataBranch,
     PublicationStatus,
     RawDatasetDirectory,
-    ReusableDataCoordinateKind,
     ScoreFrameColumn,
     SerializationFormat,
     SplitProtocolId,
@@ -71,7 +69,7 @@ EXPECTED_MEMBERS = (
         frozenset(("DECLARED", "EXECUTABLE", "SUPPRESSED", "INFEASIBLE", "BLOCKED")),
     ),
     (ProcessedDataBranch, frozenset(("FEDERATED", "CENTRALIZED_REFERENCE"))),
-    (ReusableDataCoordinateKind, frozenset(("CANONICAL", "PROCESSED", "RAW"))),
+    (PreparedDataCoordinateKind, frozenset(("CANONICAL", "PROCESSED", "RAW"))),
     (RawDatasetDirectory, frozenset(("NBAIOT", "CICIOT2023", "EDGE_IIOTSET"))),
     (
         PartitionRole,
@@ -241,11 +239,6 @@ EXPECTED_MEMBERS = (
         ),
     ),
     (TrafficRateEvidenceType, frozenset(("MEASURED", "DATASET_DERIVED", "EXTERNALLY_CITED", "UNAVAILABLE"))),
-    (
-        CheckpointStatus,
-        frozenset(("HISTORICAL_ENDPOINT", "CANDIDATE", "SELECTED_BY_NON_TEST_RULE", "STABILITY_EVIDENCE")),
-    ),
-    (CheckpointSelectionRule, frozenset(("FIXED_TERMINAL_MAXIMUM_ROUND", "FINAL_COMPLETED_ROUND"))),
     (FedProxCoefficientSelectionRule, frozenset(("FEDPROX_MINIMUM_TERMINAL_TRAINING_LOSS",))),
     (
         ContractSubject,
@@ -291,7 +284,7 @@ EXPECTED_MEMBERS = (
         ),
     ),
     (TrainingHistoryColumn, frozenset(("EPOCH", "MEAN_TRAINING_LOSS"))),
-    (PublicationStatus, frozenset(("PUBLISHED", "REUSED"))),
+    (PublicationStatus, frozenset(("PUBLISHED",))),
     (ScoreFrameColumn, frozenset(("STABLE_ROW_ID", "OUTCOME_LABEL", "RECONSTRUCTION_ERROR"))),
 )
 

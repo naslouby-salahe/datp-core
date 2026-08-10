@@ -20,10 +20,9 @@ from datp_core.analysis.metrics.models import metric_by_id
 from datp_core.analysis.metrics.semantics import metric_value
 from datp_core.app.planning import PlanReason, expand_experiment_plan
 from datp_core.artifacts.layout import evaluation_run_directory
-from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
 from datp_core.artifacts.repositories.thresholds import FederatedThresholdAssetName
-from datp_core.artifacts.serializers.json import canonical_checksum, serialize_json_model
+from datp_core.artifacts.serializers.json import serialize_json_model
 from datp_core.core.contracts import StrictModel
 from datp_core.core.errors import (
     ErrorMessage,
@@ -82,7 +81,6 @@ class BoundedExternalSeedResult:
     evidence_role: EvidenceRole
     population: PopulationId
     partition_seed: Seed
-    campaign_digest: Checksum
     completed_threshold_methods: tuple[FederatedThresholdMethod, ...]
 
 
@@ -90,7 +88,6 @@ class BoundedExternalSeedResult:
 class BoundedExternalCampaignAnalysisResult:
     experiment: ExperimentId
     output_directory: Path
-    complete_digest: Checksum
 
 
 def run_external_validation_seed(
@@ -149,7 +146,6 @@ def _run_seed(
         evidence_role=declaration.role,
         population=declaration.population,
         partition_seed=partition_seed,
-        campaign_digest=result.campaign_digest,
         completed_threshold_methods=result.completed_threshold_methods,
     )
 
@@ -210,14 +206,12 @@ def _analyze(experiment: ExperimentId, output_root: Path, overwrite: bool) -> Bo
             plan=plan,
             analysis_seed=CONFIRMATORY_ANALYSIS_SEED,
             output_directory=output,
-            overwrite=overwrite,
         )
     )
     export_external_publication(result.document, output)
     return BoundedExternalCampaignAnalysisResult(
         experiment=declaration.id,
         output_directory=output,
-        complete_digest=result.complete_digest,
     )
 
 
@@ -225,7 +219,6 @@ class ExternalBenignStatisticsAssetName(StrEnum):
     ROOT = "external_benign_statistics"
     SUMMARY = "external_benign_statistics_summary.json"
     PUBLICATION = "external_benign_statistics.md"
-    COMPLETE = "COMPLETE"
 
 
 class ExternalBenignStatisticsClient(StrictModel):
@@ -264,7 +257,6 @@ class ExternalBenignStatisticsReport(StrictModel):
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ExternalBenignStatisticsReportResult:
     output_directory: Path
-    complete_digest: Checksum
 
 
 def analyze_external_benign_statistics(*, output_root: Path, overwrite: bool) -> ExternalBenignStatisticsReportResult:
@@ -288,9 +280,7 @@ def analyze_external_benign_statistics(*, output_root: Path, overwrite: bool) ->
         output / ExternalBenignStatisticsAssetName.PUBLICATION,
         FileContentText(_external_benign_statistics_markdown(manifest)),
     )
-    digest = canonical_checksum(manifest)
-    write_text_atomically(output / ExternalBenignStatisticsAssetName.COMPLETE, FileContentText(digest.value + "\n"))
-    return ExternalBenignStatisticsReportResult(output_directory=output, complete_digest=digest)
+    return ExternalBenignStatisticsReportResult(output_directory=output)
 
 
 def _benign_statistics_summary(

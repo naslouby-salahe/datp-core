@@ -1,7 +1,6 @@
 import pytest
 from tests.unit.thresholding.helpers import COORDINATE, identity
 
-from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import (
     AnalysisReasonText,
@@ -62,8 +61,6 @@ QUANTILE = Quantile(0.95)
 def _diagnostic() -> ThresholdDiagnostic:
     return ThresholdDiagnostic(
         quantile_interpolation=None,
-        score_set_checksum=Checksum("a" * 64),
-        calibration_manifest_checksum=Checksum("b" * 64),
         tie_count=RowCount(0),
         availability=AvailabilityStatus.AVAILABLE,
     )

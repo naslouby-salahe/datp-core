@@ -6,8 +6,8 @@ from pydantic import model_validator
 
 from datp_core.analysis.inference.contracts import PairedInferenceProtocol
 from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
+from datp_core.analysis.metrics.fixed_score import FixedScoreEvidence
 from datp_core.analysis.metrics.fixed_score_validation import validate_fixed_score_controls
-from datp_core.artifacts.provenance import Checksum
 from datp_core.core.contracts import StrictModel
 from datp_core.core.errors import (
     ErrorMessage,
@@ -75,22 +75,6 @@ class FederatedDesignIdentity(StrictModel):
         )
 
 
-class FixedScorePairProvenance(StrictModel):
-    """Fixed-score invariants proven identical across paired threshold policies."""
-
-    model_checksum: Checksum
-    preprocessing_checksum: Checksum
-    selected_checkpoint_checksum: Checksum
-    split_manifest_checksum: Checksum
-    calibration_score_checksum: Checksum
-    evaluation_score_checksum: Checksum
-    evaluation_label_checksum: Checksum
-    source_row_checksum: Checksum
-    score_order_checksum: Checksum
-    client_inventory_checksum: Checksum
-    eligibility_cohort_checksum: Checksum
-
-
 class PairedContrast(StrictModel):
     coordinate: FederatedTrainingCoordinate
     evidence_role: EvidenceRole
@@ -99,7 +83,7 @@ class PairedContrast(StrictModel):
     right_method: FederatedThresholdMethod
     left_value: MetricValue
     right_value: MetricValue
-    fixed_score: FixedScorePairProvenance
+    fixed_score: FixedScoreEvidence
 
     @model_validator(mode="after")
     def validate_distinct_methods(self) -> "PairedContrast":
@@ -197,17 +181,6 @@ def build_paired_contrast(
         raise ScientificContractError(
             ErrorMessage("paired evaluation documents must share the requested evidence role")
         )
-    if left.split_manifest_checksum != right.split_manifest_checksum:
-        raise ScientificContractError(
-            ErrorMessage("paired evaluation documents use different split-manifest checksums")
-        )
-    if (
-        left.score_checkpoint_checksum != right.score_checkpoint_checksum
-        or left.preprocessing_state_set_checksum != right.preprocessing_state_set_checksum
-    ):
-        raise ScientificContractError(
-            ErrorMessage("paired evaluation documents use different detector or preprocessing state")
-        )
     validate_fixed_score_controls(
         left.fixed_score_evidence,
         right.fixed_score_evidence,
@@ -222,17 +195,5 @@ def build_paired_contrast(
         right_method=right.threshold_method,
         left_value=left_value,
         right_value=right_value,
-        fixed_score=FixedScorePairProvenance(
-            model_checksum=left_evidence.detector.model_checksum,
-            preprocessing_checksum=left_evidence.detector.preprocessing_checksum,
-            selected_checkpoint_checksum=left_evidence.detector.selected_checkpoint_checksum,
-            split_manifest_checksum=left.split_manifest_checksum,
-            calibration_score_checksum=left_evidence.calibration.score_checksum,
-            evaluation_score_checksum=left_evidence.evaluation.score_checksum,
-            evaluation_label_checksum=left_evidence.evaluation.label_checksum,
-            source_row_checksum=left_evidence.evaluation.source_row_checksum,
-            score_order_checksum=left_evidence.evaluation.score_order_checksum,
-            client_inventory_checksum=left_evidence.population.client_inventory_checksum,
-            eligibility_cohort_checksum=left_evidence.population.eligibility_cohort_checksum,
-        ),
+        fixed_score=left_evidence,
     )

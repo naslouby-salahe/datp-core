@@ -5,7 +5,6 @@ from pathlib import Path
 
 import polars as pl
 
-from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
@@ -37,15 +36,13 @@ from datp_core.data.preprocessing.models import (
 )
 from datp_core.data.preprocessing.service import preprocess_federated, preprocess_published_federated
 from datp_core.data.registry import dataset_binding, population_capabilities
-from datp_core.detector.checkpoints.contracts import CheckpointProtocol
-from datp_core.detector.checkpoints.protocols import ANCHOR_CHECKPOINT_PROTOCOL, CHECKPOINT_PROTOCOL
+from datp_core.detector.checkpoints.contracts import DiagnosticSnapshotProtocol
+from datp_core.detector.checkpoints.protocols import ANCHOR_DIAGNOSTIC_SNAPSHOT_PROTOCOL, DIAGNOSTIC_SNAPSHOT_PROTOCOL
 from datp_core.detector.scoring.models import ClientScoringInput
 from datp_core.detector.training.contracts import AutoencoderProtocol, FedAvgProtocol, FedProxProtocol
-from datp_core.detector.training.engine import preprocessing_state_set_checksum
 from datp_core.detector.training.models import (
     ClientTrainingInput,
     FederatedTrainingCoordinate,
-    PreparedClientProvenance,
 )
 from datp_core.detector.training.protocols import (
     ANCHOR_FEDAVG_TRAINING_PROTOCOL,
@@ -77,8 +74,6 @@ class FederatedExecutionContext:
     clients: tuple[ClientIdentity, ...]
     family_by_client: tuple[FamilyAssignment, ...]
     preprocessing: FederatedPreprocessingOutcome
-    preprocessing_state_set_checksum: Checksum
-    split_manifest_checksum: Checksum
     training_directory: Path
 
 
@@ -113,10 +108,10 @@ def training_protocol_for(coordinate: ExperimentCoordinate) -> FedAvgProtocol | 
     )
 
 
-def checkpoint_protocol_for(coordinate: ExperimentCoordinate) -> CheckpointProtocol:
+def diagnostic_snapshot_protocol_for(coordinate: ExperimentCoordinate) -> DiagnosticSnapshotProtocol:
     if coordinate.experiment is ExperimentId.HISTORICAL_DATP_REPRODUCTION:
-        return ANCHOR_CHECKPOINT_PROTOCOL
-    return CHECKPOINT_PROTOCOL
+        return ANCHOR_DIAGNOSTIC_SNAPSHOT_PROTOCOL
+    return DIAGNOSTIC_SNAPSHOT_PROTOCOL
 
 
 def federated_model_coefficient(coordinate: ExperimentCoordinate) -> ProximalCoefficient | None:
@@ -200,12 +195,10 @@ def resolve_execution_context(coordinate: ExperimentCoordinate, output_root: Pat
                 data_root=DATA_ROOT,
                 dirichlet_condition=controlled_condition,
                 capture_timestamp_column=None,
-                expected_split_manifest_checksum=population_result.split_manifest.assignment_checksum,
             )
         )
         clients = population_result.construction.manifest.clients
         family_assignments = population_result.construction.manifest.family_by_client
-        split_checksum = population_result.split_manifest.assignment_checksum
         training_directory = federated_training_directory(training_coordinate, output_root)
     else:
         root = bounded_evidence_seed_directory(execution_identity, coordinate.training_seed, output_root)
@@ -222,7 +215,7 @@ def resolve_execution_context(coordinate: ExperimentCoordinate, output_root: Pat
                 overwrite=False,
             )
         )
-        split_result = construct_published_split(
+        construct_published_split(
             ConstructPublishedSplitRequest(
                 population=coordinate.population,
                 execution_identity=execution_identity,
@@ -246,25 +239,13 @@ def resolve_execution_context(coordinate: ExperimentCoordinate, output_root: Pat
         )
         clients = population_result.population_manifest.clients
         family_assignments = population_result.population_manifest.family_by_client
-        split_checksum = split_result.manifest.assignment_checksum
         training_directory = root / ExecutionArtifactDirectory.TRAINING
-    state_checksum = preprocessing_state_set_checksum(
-        tuple(
-            PreparedClientProvenance(
-                client=client_with_id(clients, ClientIdentityToken(publication.client_identity.value)),
-                preprocessing_checksum=publication.fitted_state.estimator_checksum,
-            )
-            for publication in preprocessing.client_publications
-        )
-    )
     return FederatedExecutionContext(
         coordinate=training_coordinate,
         execution_identity=execution_identity,
         clients=clients,
         family_by_client=family_assignments,
         preprocessing=preprocessing,
-        preprocessing_state_set_checksum=state_checksum,
-        split_manifest_checksum=split_checksum,
         training_directory=training_directory,
     )
 

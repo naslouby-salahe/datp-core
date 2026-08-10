@@ -4,11 +4,6 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-import pyarrow as pa
-from pydantic import ConfigDict
-
-import datp_core.core.identifiers as domain_enums
-from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.serializers.json import canonical_json_text, canonical_mapping
 from datp_core.core.contracts import StrictModel
 from datp_core.core.identifiers import (
@@ -32,7 +27,6 @@ from datp_core.core.numeric import (
     ByteCount,
     CanonicalColumnPosition,
     MicrosecondOffset,
-    NanosecondTimestamp,
     RowCount,
     SourceFileCount,
     SourceRowIndex,
@@ -88,13 +82,6 @@ class CanonicalProvenanceColumn(StrEnum):
     STABLE_ROW_ID = "stable_row_id"
 
 
-class CanonicalPublicationArtifact(StrEnum):
-    COMPLETE = "COMPLETE"
-    MANIFEST = "dataset_manifest.json"
-    SCHEMA = "schema.json"
-    SOURCE_STATE = "source_state.json"
-
-
 class ValidationSeverity(StrEnum):
     ERROR = "error"
     WARNING = "warning"
@@ -116,7 +103,6 @@ class RawSourceFile:
     dataset: DatasetId
     relative_path: Path
     size_bytes: ByteCount
-    checksum: Checksum
     role: SourceFileRole
     observed_row_count: RowCount | None
 
@@ -125,8 +111,6 @@ class RawSourceFile:
             raise TypeError("raw sources require a typed dataset")
         if type(self.size_bytes) is not ByteCount:
             raise TypeError("raw sources require a typed byte count")
-        if type(self.checksum) is not Checksum:
-            raise TypeError("raw sources require a typed checksum")
         if type(self.role) is not SourceFileRole:
             raise TypeError("raw sources require a typed role")
         if self.observed_row_count is not None and type(self.observed_row_count) is not RowCount:
@@ -158,7 +142,6 @@ class RawDatasetInventory:
     excluded_source_count: SourceFileCount
     excluded_sources: tuple[ExcludedSourceFile, ...]
     accepted_row_count: RowCount | None
-    checksum: Checksum
 
     def __post_init__(self) -> None:
         _validate_inventory_sources(self.sources, self.accepted_source_count)
@@ -194,7 +177,6 @@ class CanonicalSchema:
     label_columns: tuple[ColumnName, ...]
     provenance_columns: tuple[ColumnName, ...]
     physical_schema: PhysicalSchemaText
-    checksum: Checksum
 
     def __post_init__(self) -> None:
         _validate_canonical_columns(self.columns, self.physical_schema)
@@ -390,8 +372,6 @@ class MaterializedDataset[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum]:
     manifest_path: Path
     schema: CanonicalSchema
     row_count: RowCount
-    source_inventory_checksum: Checksum
-    publication_status: domain_enums.PublicationStatus
     inventory: RawDatasetInventory
     validation_report: DatasetValidationReport
     chronology: tuple["ChronologyValidation", ...] = ()
@@ -476,16 +456,7 @@ def _validate_chronology_counts(validation: ChronologyValidation) -> None:
         raise ValueError("parseable and invalid chronology rows must total all rows")
 
 
-class SchemaChecksumDocument(StrictModel):
-    model_config = ConfigDict(revalidate_instances="never")
-    canonicalization_contract: CanonicalizationContractName
-    columns: tuple[CanonicalColumn, ...]
-    dataset: DatasetId
-    physical_schema: PhysicalSchemaText
-
-
 class ManifestAssetEntry(StrictModel):
-    checksum: Checksum
     columns: tuple[ColumnName, ...]
     path: CanonicalSourcePath
     row_count: RowCount
@@ -515,7 +486,6 @@ class ManifestRawSourceEntry(StrictModel):
     dataset: DatasetId
     relative_path: CanonicalSourcePath
     size_bytes: ByteCount
-    checksum: Checksum
     role: SourceFileRole
     observed_row_count: RowCount | None = None
 
@@ -533,7 +503,6 @@ class ManifestInventoryEntry(StrictModel):
     excluded_source_count: SourceFileCount
     excluded_sources: tuple[ManifestExcludedSourceEntry, ...]
     accepted_row_count: RowCount | None = None
-    checksum: Checksum
 
 
 class ManifestSourceRowEntry(StrictModel):
@@ -584,54 +553,17 @@ class CanonicalManifestDocument(StrictModel):
     dataset: DatasetId
     eligibility_policy: ManifestEligibilityPolicyEntry | None = None
     inventory: ManifestInventoryEntry
-    schema_checksum: Checksum
     validation_report: ManifestValidationReportEntry
-
-
-_CANONICAL_PUBLICATION_CONTRACT = CanonicalizationContractName("canonical_publication_contract")
-_COMPLETE_NAME = CanonicalPublicationArtifact.COMPLETE
-_MANIFEST_NAME = CanonicalPublicationArtifact.MANIFEST
-_SCHEMA_NAME = CanonicalPublicationArtifact.SCHEMA
-_SOURCE_STATE_NAME = CanonicalPublicationArtifact.SOURCE_STATE
-
-
-def complete_digest(manifest_payload: SerializedDocumentText, schema_payload: SerializedDocumentText) -> Checksum:
-    return Checksum.from_text(f"{manifest_payload}\n{schema_payload}")
 
 
 def schema_content(schema: CanonicalSchema) -> SerializedDocumentText:
     return canonical_json_text(schema)
 
 
-def schema_checksum_document_json(
-    dataset: DatasetId, columns: tuple[CanonicalColumn, ...], physical_schema: pa.Schema
-) -> SerializedDocumentText:
-    return canonical_json_text(
-        SchemaChecksumDocument(
-            canonicalization_contract=_CANONICAL_PUBLICATION_CONTRACT,
-            columns=columns,
-            dataset=dataset,
-            physical_schema=PhysicalSchemaText(
-                physical_schema.to_string(show_field_metadata=True, show_schema_metadata=True)
-            ),
-        )
-    )
-
-
-def publication_artifact_names() -> tuple[
-    CanonicalPublicationArtifact,
-    CanonicalPublicationArtifact,
-    CanonicalPublicationArtifact,
-    CanonicalPublicationArtifact,
-]:
-    return _COMPLETE_NAME, _MANIFEST_NAME, _SCHEMA_NAME, _SOURCE_STATE_NAME
-
-
 @dataclass(frozen=True, slots=True)
 class ManifestSerializationRequest[EligibilityReasonT: StrEnum]:
     dataset: DatasetId
     canonicalization_contract: CanonicalizationContractName
-    schema_checksum: Checksum
     inventory: RawDatasetInventory
     validation_report: DatasetValidationReport
     chronology: tuple[ChronologyValidation, ...] = ()
@@ -654,16 +586,3 @@ def manifest_inventory_entry(value: RawDatasetInventory) -> ManifestInventoryEnt
 
 def manifest_validation_report_entry(value: DatasetValidationReport) -> ManifestValidationReportEntry:
     return ManifestValidationReportEntry.model_validate(canonical_mapping(value))
-
-
-class SourceStateEntryDocument(StrictModel):
-    modified_time_nanoseconds: NanosecondTimestamp
-    path: CanonicalSourcePath
-    size_bytes: ByteCount
-
-
-class SourceStateDocument(StrictModel):
-    content_checksum_verified: bool = False
-    dataset: DatasetId
-    manifest_checksum: Checksum
-    sources: tuple[SourceStateEntryDocument, ...]

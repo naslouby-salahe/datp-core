@@ -6,7 +6,6 @@ from pathlib import Path
 
 import polars as pl
 
-from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
@@ -44,19 +43,16 @@ from .contracts import (
     PreprocessingHandoff,
     PreprocessingHandoffRequest,
     SplitConstructionRequest,
-    SplitManifestDocument,
     build_population_manifest,
     select_membership_frame,
 )
-from .integrity import membership_frame_checksum, outcome_row_counts, validate_population_manifest
+from .integrity import outcome_row_counts, validate_population_manifest
 from .paths import canonical_data_glob
 from .splits import split_membership
 
 
 class PopulationConstructionViolation(StrEnum):
     DECLARATION_MISMATCH = "declaration_mismatch"
-    EMPTY_MEMBERSHIP_WITH_EXPECTED_CHECKSUM = "empty_membership_with_expected_checksum"
-    SPLIT_HANDOFF_CHECKSUM_MISMATCH = "split_handoff_checksum_mismatch"
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,7 +79,6 @@ class PopulationFinalizationRequest:
     expected_identities: tuple[ClientIdentityToken, ...] | None
     chronology_required: bool
     membership: pl.DataFrame
-    canonical_schema_checksum: Checksum
     family_by_client: tuple[FamilyAssignment, ...] = ()
 
 
@@ -142,8 +137,6 @@ def finalize_population(request: PopulationFinalizationRequest) -> PopulationMan
             total_membership_rows=RowCount(membership.height),
             benign_row_count=outcome_counts.benign_row_count,
             attack_row_count=outcome_counts.attack_row_count,
-            membership_checksum=membership_frame_checksum(membership),
-            canonical_schema_checksum=request.canonical_schema_checksum,
             feasibility_status=feasibility.status,
             feasibility_reason=feasibility.reason,
         ),
@@ -210,12 +203,6 @@ def build_preprocessing_handoff(
     )
     role_column = PopulationFrameColumn.PARTITION_ROLE
     if membership.height == 0:
-        if request.expected_split_manifest_checksum is not None:
-            raise ScientificContractError(
-                ErrorMessage("expected split checksum cannot be validated against an empty membership"),
-                subject=document.population,
-                reason=PopulationConstructionViolation.EMPTY_MEMBERSHIP_WITH_EXPECTED_CHECKSUM,
-            )
         assignments = membership.clear().with_columns(pl.lit(None, dtype=pl.String).alias(role_column))
         counts = tuple(
             ClientPartitionCounts(
@@ -242,14 +229,8 @@ def build_preprocessing_handoff(
             dataset=document.dataset,
             partition_seed=document.partition_seed,
             split_protocol=document.split_protocol,
-            population_manifest_checksum=document.membership_checksum,
             capture_timestamp_column=request.capture_timestamp_column,
         )
-    )
-    _require_split_handoff_checksum(
-        split.manifest,
-        request.expected_split_manifest_checksum,
-        document.population,
     )
     return PreprocessingHandoff(
         population_manifest=construction.manifest,
@@ -262,21 +243,6 @@ def build_preprocessing_handoff(
         ),
         deployment_fallback_client_ids=fallback_clients,
     )
-
-
-def _require_split_handoff_checksum(
-    split_manifest: SplitManifestDocument,
-    expected: Checksum | None,
-    population: PopulationId,
-) -> None:
-    if expected is None:
-        return
-    if split_manifest.assignment_checksum != expected:
-        raise ScientificContractError(
-            ErrorMessage("recomputed split handoff does not match the declared split checksum"),
-            subject=population,
-            reason=PopulationConstructionViolation.SPLIT_HANDOFF_CHECKSUM_MISMATCH,
-        )
 
 
 def join_handoff_with_canonical_features(

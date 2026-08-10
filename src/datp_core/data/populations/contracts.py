@@ -8,7 +8,6 @@ from pathlib import Path
 import polars as pl
 from pydantic import model_validator
 
-from datp_core.artifacts.provenance import Checksum
 from datp_core.core.contracts import StrictModel
 from datp_core.core.errors import (
     CapabilityError,
@@ -272,7 +271,6 @@ class ModelInputExclusionEvidence(StrictModel):
     total_row_count: RowCount
     excluded_row_count: RowCount
     excluded_stable_row_ids: tuple[StableRowId, ...]
-    evidence_checksum: Checksum
 
     @model_validator(mode="after")
     def validate_exclusion_evidence(self) -> "ModelInputExclusionEvidence":
@@ -284,29 +282,7 @@ class ModelInputExclusionEvidence(StrictModel):
             raise ValueError("excluded stable-row identities must be sorted")
         if len(set(self.excluded_stable_row_ids)) != len(self.excluded_stable_row_ids):
             raise ValueError("excluded stable-row identities must be unique")
-        if self.evidence_checksum != model_input_exclusion_checksum(
-            dataset=self.dataset,
-            population=self.population,
-            reason=self.reason,
-            total_row_count=self.total_row_count,
-            excluded_stable_row_ids=self.excluded_stable_row_ids,
-        ):
-            raise ValueError("model-input exclusion checksum does not bind its provenance")
         return self
-
-
-def model_input_exclusion_checksum(
-    *,
-    dataset: DatasetId,
-    population: PopulationId,
-    reason: ModelInputExclusionReason,
-    total_row_count: RowCount,
-    excluded_stable_row_ids: tuple[StableRowId, ...],
-) -> Checksum:
-    ordered_ids = ",".join(map(str, excluded_stable_row_ids))
-    return Checksum.from_text(
-        f"{dataset.value}|{population.value}|{reason.value}|{total_row_count.value}|{ordered_ids}"
-    )
 
 
 class PopulationManifestDocument(StrictModel):
@@ -321,8 +297,6 @@ class PopulationManifestDocument(StrictModel):
     total_membership_rows: RowCount
     benign_row_count: RowCount
     attack_row_count: RowCount
-    membership_checksum: Checksum
-    canonical_schema_checksum: Checksum
     feasibility_status: PopulationFeasibilityStatus
     feasibility_reason: PopulationFeasibilityReason
 
@@ -348,8 +322,6 @@ class SplitManifestDocument(StrictModel):
     future_recalibration_row_count: RowCount
     static_reference_reserve_row_count: RowCount
     discarded_row_count: RowCount
-    assignment_checksum: Checksum
-    population_manifest_checksum: Checksum
 
     @model_validator(mode="after")
     def validate_manifest(self) -> "SplitManifestDocument":
@@ -379,7 +351,6 @@ class DirichletPartitionDiagnosticsDocument(StrictModel):
     attack_row_counts: tuple[RowCount, ...]
     empty_client_ids: tuple[ClientIdentityToken, ...]
     insufficient_benign_client_ids: tuple[ClientIdentityToken, ...]
-    allocation_checksum: Checksum
 
     @model_validator(mode="after")
     def validate_diagnostics(self) -> "DirichletPartitionDiagnosticsDocument":
@@ -566,7 +537,6 @@ class SplitConstructionRequest:
     dataset: DatasetId
     partition_seed: Seed
     split_protocol: SplitProtocolId
-    population_manifest_checksum: Checksum
     capture_timestamp_column: CaptureTimestampColumn | None = None
 
 
@@ -610,7 +580,6 @@ class PreprocessingHandoffRequest:
     construction: PopulationConstructionResult
     deployment_fallback_client_ids: frozenset[ClientIdentityToken]
     capture_timestamp_column: CaptureTimestampColumn | None = None
-    expected_split_manifest_checksum: Checksum | None = None
 
 
 @dataclass(slots=True, eq=False)
@@ -666,12 +635,6 @@ def build_population_manifest(
 def synthetic_client_ids(client_count: ClientCount) -> tuple[ClientIdentityToken, ...]:
     width = max(2, len(str(client_count.value - 1)))
     return tuple(ClientIdentityToken(f"synthetic_client_{index:0{width}d}") for index in range(client_count.value))
-
-
-def membership_checksum(
-    client_ids: tuple[ClientIdentityToken, ...], stable_row_ids: tuple[StableRowId, ...]
-) -> Checksum:
-    return Checksum.from_text("\n".join((*(c.value for c in client_ids), *stable_row_ids)))
 
 
 def population_evidence_role(population_id: PopulationId) -> EvidenceRole:
@@ -742,7 +705,7 @@ class PopulationCapabilityViolation(StrEnum):
 
 
 class TemporalSplitViolation(StrEnum):
-    """Shared temporal-construction discriminant reused by split and publication validation."""
+    """Shared temporal-construction discriminant for split and publication validation."""
 
     CAPTURE_TIMESTAMP_UNAVAILABLE = "capture_timestamp_unavailable"
 

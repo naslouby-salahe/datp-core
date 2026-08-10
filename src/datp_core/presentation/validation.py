@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import ClassVar
 
-from datp_core.artifacts.provenance import Checksum
 from datp_core.core.identifiers import (
     AvailabilityStatus,
     ClaimWording,
@@ -114,7 +113,6 @@ class ClaimDecision:
     status: ClaimStatus
     wording: ClaimWording | None
     reason: ClaimReason
-    anchor_gate_checksum: Checksum | None = None
 
     def __post_init__(self) -> None:
         if self.wording is not None and not isinstance(self.wording, ClaimWording):
@@ -178,7 +176,7 @@ def _suppressed_failure(request: ClaimRequest) -> ClaimDecision | None:
 def _confirmatory_anchor_gate_failure(request: ClaimRequest) -> ClaimDecision | None:
     if request.kind is ClaimKind.CONFIRMATORY:
         if request.verified_anchor_gate is None:
-            return _blocked(ClaimReason("confirmatory claims require a checksum-verified anchor-gate artifact"))
+            return _blocked(ClaimReason("confirmatory claims require a verified anchor-gate artifact"))
         if not request.verified_anchor_gate.permits_confirmatory_claims:
             return _blocked(ClaimReason("the anchor gate blocks dependent journal claims"))
     return None
@@ -261,9 +259,6 @@ def _confirmatory_result(request: ClaimRequest) -> ClaimDecision:
                 "not the confirmatory FPR equity endpoint."
             ),
             reason=ClaimReason("non-primary metrics are controls or trade-off evidence"),
-            anchor_gate_checksum=(
-                None if request.verified_anchor_gate is None else request.verified_anchor_gate.artifact_checksum
-            ),
         )
     if request.evidence_decision is not EvidenceDecision.SUPPORTED:
         return ClaimDecision(
@@ -275,17 +270,11 @@ def _confirmatory_result(request: ClaimRequest) -> ClaimDecision:
             reason=ClaimReason(
                 f"confirmatory evidence is {request.evidence_decision.value} and cannot support a positive claim"
             ),
-            anchor_gate_checksum=(
-                None if request.verified_anchor_gate is None else request.verified_anchor_gate.artifact_checksum
-            ),
         )
     return ClaimDecision(
         status=ClaimStatus.PERMITTED,
         wording=request.wording,
         reason=ClaimReason("claim matches evidence scope"),
-        anchor_gate_checksum=request.verified_anchor_gate.artifact_checksum
-        if request.verified_anchor_gate is not None
-        else None,
     )
 
 

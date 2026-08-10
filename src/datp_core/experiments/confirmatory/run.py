@@ -34,9 +34,7 @@ from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
 from datp_core.analysis.metrics.models import MetricStatus, metric_by_id
 from datp_core.app.planning import PlanReason, expand_experiment_plan
 from datp_core.artifacts.layout import evaluation_run_directory
-from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
-from datp_core.artifacts.serializers.json import canonical_checksum
 from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
@@ -87,7 +85,6 @@ class ConfirmatoryAssetDirectory(StrEnum):
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ConfirmatorySeedResult:
     training_seed: Seed
-    campaign_digest: Checksum
     completed_threshold_methods: tuple[FederatedThresholdMethod, ...]
 
 
@@ -142,7 +139,6 @@ def run_confirmatory_seed(
     )
     return ConfirmatorySeedResult(
         training_seed=training_seed,
-        campaign_digest=result.campaign_digest,
         completed_threshold_methods=result.completed_threshold_methods,
     )
 
@@ -172,7 +168,6 @@ def run_family_grouped_mechanism_seed(
     )
     return ConfirmatorySeedResult(
         training_seed=training_seed,
-        campaign_digest=result.campaign_digest,
         completed_threshold_methods=result.completed_threshold_methods,
     )
 
@@ -201,7 +196,6 @@ def analyze_confirmatory_campaign(*, anchor_gate_diagnostics_directory: Path | N
             inference_protocol=CONFIRMATORY_INFERENCE_PROTOCOL,
             analysis_seed=CONFIRMATORY_ANALYSIS_SEED,
             output_directory=output,
-            overwrite=False,
             mechanisms=all_mechanisms,
         )
     )
@@ -241,8 +235,8 @@ def _confirmatory_mechanisms() -> tuple[MechanismEvidence, ...]:
         shared_cv = population_metric(shared, MetricId.FPR_COEFFICIENT_OF_VARIATION)
         local_cv = population_metric(local, MetricId.FPR_COEFFICIENT_OF_VARIATION)
         benefit = MetricValue(shared_cv.value - local_cv.value)
-        vectors, score_checksum = _client_score_vectors(shared)
-        divergence = jensen_shannon_from_client_scores(vectors, source_score_checksum=score_checksum)
+        vectors = _client_score_vectors(shared)
+        divergence = jensen_shannon_from_client_scores(vectors)
         mechanisms.append(divergence)
         if divergence.aggregate is not None:
             association_observations.append(
@@ -291,7 +285,6 @@ def build_confirmatory_score_geometry() -> tuple[tuple[ScoreGeometryResult, ...]
         attack_available = any(item.scores for item in attack_eval)
         geometry = score_geometry_from_client_vectors(
             seed=seed,
-            source_score_checksum=shared.fixed_score_evidence.evaluation.score_checksum,
             benign_evaluation=benign_eval,
             attack_evaluation=attack_eval,
             threshold_overlays=_score_geometry_threshold_overlays(seed, expected_clients),
@@ -449,7 +442,7 @@ def _confirmatory_cluster_mechanisms() -> tuple[MechanismEvidence, ...]:
         raise ScientificContractError(
             ErrorMessage(
                 "cluster threshold cohort has corrupt publications; "
-                f"available={[seed.value for seed, _, _ in available]} "
+                f"available={[seed.value for seed, _ in available]} "
                 f"unavailable={[seed.value for seed in unavailable]} "
                 f"corrupt={[seed.value for seed in corrupt]}"
             )
@@ -460,14 +453,14 @@ def _confirmatory_cluster_mechanisms() -> tuple[MechanismEvidence, ...]:
         raise ScientificContractError(
             ErrorMessage(
                 "cluster threshold cohort is partial and must cover every confirmatory seed or none; "
-                f"available={[seed.value for seed, _, _ in available]} "
+                f"available={[seed.value for seed, _ in available]} "
                 f"unavailable={[seed.value for seed in unavailable]} "
                 f"corrupt={[seed.value for seed in corrupt]}"
             )
         )
 
     mechanisms: list[MechanismEvidence] = []
-    for seed, result, checksum in available:
+    for seed, result in available:
         shared_cv = population_metric(
             load_evaluation_document(_evaluation_path(seed, FederatedThresholdMethod.SHARED_THRESHOLD)),
             MetricId.FPR_COEFFICIENT_OF_VARIATION,
@@ -481,7 +474,6 @@ def _confirmatory_cluster_mechanisms() -> tuple[MechanismEvidence, ...]:
         mechanisms.append(
             cluster_evidence_from_grouped_result(
                 result,
-                source_threshold_checksum=checksum,
                 local_dispersion=local_dispersion,
                 shared_cv_fpr=shared_cv,
                 local_cv_fpr=local_cv,
@@ -494,8 +486,6 @@ def _confirmatory_cluster_mechanisms() -> tuple[MechanismEvidence, ...]:
             cluster_stability(
                 left[1].clusters,
                 right[1].clusters,
-                left_source_checksum=left[2],
-                right_source_checksum=right[2],
                 left_declared_group_count=left[1].group_count,
                 right_declared_group_count=right[1].group_count,
             )
@@ -504,41 +494,31 @@ def _confirmatory_cluster_mechanisms() -> tuple[MechanismEvidence, ...]:
 
 
 def _load_cluster_threshold_results() -> tuple[
-    list[tuple[Seed, GroupedThresholdResult, Checksum]],
+    list[tuple[Seed, GroupedThresholdResult]],
     list[Seed],
     list[Seed],
 ]:
     from pydantic import TypeAdapter, ValidationError
 
-    from datp_core.artifacts.repositories.thresholds import (
-        FederatedThresholdAssetName,
-        federated_threshold_publication_checksum,
-        threshold_result_checksum,
-    )
+    from datp_core.artifacts.repositories.thresholds import FederatedThresholdAssetName
 
     adapter: TypeAdapter[GroupedThresholdResult] = TypeAdapter(GroupedThresholdResult)
-    available: list[tuple[Seed, GroupedThresholdResult, Checksum]] = []
+    available: list[tuple[Seed, GroupedThresholdResult]] = []
     unavailable: list[Seed] = []
     corrupt: list[Seed] = []
     for seed in CONFIRMATORY_SEED_COHORT.values:
         coordinate = _confirmatory_coordinate(seed, FederatedThresholdMethod.CLUSTER_THRESHOLD)
         directory = evaluation_run_directory(OUTPUTS_ROOT, coordinate) / EvaluationRunAssetDirectory.THRESHOLD
         result_path = directory / FederatedThresholdAssetName.RESULT
-        complete_path = directory / FederatedThresholdAssetName.COMPLETE
-        if not result_path.is_file() or not complete_path.is_file():
+        if not result_path.is_file():
             unavailable.append(seed)
             continue
         try:
             result = adapter.validate_json(result_path.read_text(encoding="utf-8"))
-            complete_marker = complete_path.read_text(encoding="utf-8").strip()
-            expected_marker = federated_threshold_publication_checksum(result, None).value
-            if complete_marker != expected_marker:
-                corrupt.append(seed)
-                continue
         except (OSError, ValueError, TypeError, ValidationError):
             corrupt.append(seed)
             continue
-        available.append((seed, result, threshold_result_checksum(result)))
+        available.append((seed, result))
     return available, unavailable, corrupt
 
 
@@ -575,7 +555,7 @@ def _grouped_dispersion_evidence(
     return grouped_dispersion(tuple(observations))
 
 
-def _client_score_vectors(document: FederatedEvaluationDocument) -> tuple[tuple[ClientScoreVector, ...], Checksum]:
+def _client_score_vectors(document: FederatedEvaluationDocument) -> tuple[ClientScoreVector, ...]:
     score_root = (
         federated_training_directory(document.score_coordinate, OUTPUTS_ROOT) / ExecutionArtifactDirectory.SCORES
     )
@@ -601,7 +581,7 @@ def _client_score_vectors(document: FederatedEvaluationDocument) -> tuple[tuple[
         raise ScientificContractError(
             ErrorMessage("Jensen-Shannon construction requires at least two client score vectors")
         )
-    return tuple(vectors), document.fixed_score_evidence.calibration.score_checksum
+    return tuple(vectors)
 
 
 def _confirmatory_declaration() -> ExperimentDeclaration:
@@ -676,7 +656,6 @@ def absorption_corner_from_evaluation_document(
     experiment: ExperimentId,
 ) -> AbsorptionCornerEvidence:
     coordinate = document.score_coordinate
-    evidence = document.fixed_score_evidence
     coefficient = (
         ModelCoefficientValue(coordinate.model_coefficient.value) if coordinate.model_coefficient is not None else None
     )
@@ -687,14 +666,6 @@ def absorption_corner_from_evaluation_document(
         model=coordinate.model,
         threshold_method=document.threshold_method,
         coefficient=coefficient,
-        checkpoint_checksum=document.score_checkpoint_checksum,
-        preprocessing_checksum=document.preprocessing_state_set_checksum,
-        split_checksum=document.split_manifest_checksum,
-        calibration_score_checksum=evidence.calibration.score_checksum,
-        evaluation_score_checksum=evidence.evaluation.score_checksum,
-        evaluation_checksum=canonical_checksum(document),
-        client_inventory_checksum=evidence.population.client_inventory_checksum,
-        eligibility_checksum=evidence.population.eligibility_cohort_checksum,
         population_cv_fpr=population_metric(document, MetricId.FPR_COEFFICIENT_OF_VARIATION),
     )
 

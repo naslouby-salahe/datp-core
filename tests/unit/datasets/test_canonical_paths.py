@@ -4,9 +4,10 @@ import pytest
 
 from datp_core.core.identifiers import SourceIdentity
 from datp_core.core.numeric import LogicalElementCount
-from datp_core.data.canonical_cache import CanonicalAssetLayout, canonical_asset_path
 from datp_core.data.contracts import CanonicalAssetRole
 from datp_core.data.materialization import (
+    CanonicalAssetLayout,
+    canonical_asset_path,
     canonical_data_partition_assets,
     empty_asset,
     named_assets,

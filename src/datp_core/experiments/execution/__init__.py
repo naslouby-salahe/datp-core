@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from datp_core.app.planning import ExperimentPlan, PlanDisposition, PlanningEvidence, PlanReason, expand_experiment_plan
-from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
@@ -15,14 +14,13 @@ from datp_core.core.identifiers import FederatedThresholdMethod
 from datp_core.core.numeric import CampaignOrdinal
 from datp_core.experiments.common.coordinates import ExecutionRoute, execution_route_for
 from datp_core.experiments.common.seeds import SeedCohort
-from datp_core.experiments.execution.engine import CompletionRecordOutputStore, PipelineStageRunner, execute_campaign
-from datp_core.experiments.execution.models import CampaignEntry, CampaignPlan, ProgressHook, campaign_digest
+from datp_core.experiments.execution.engine import PipelineStageRunner, execute_campaign
+from datp_core.experiments.execution.models import CampaignEntry, CampaignPlan, ProgressHook
 from datp_core.experiments.registry import ExperimentDeclaration
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class DeclaredExperimentSeedResult:
-    campaign_digest: Checksum
     completed_threshold_methods: tuple[FederatedThresholdMethod, ...]
 
 
@@ -37,7 +35,7 @@ def build_campaign(plan: ExperimentPlan) -> CampaignPlan:
         CampaignEntry(ordinal=CampaignOrdinal(index), coordinate=coordinate)
         for index, coordinate in enumerate(coordinates)
     )
-    return CampaignPlan(entries=entries, digest=campaign_digest(entries), plan_digest=plan.digest)
+    return CampaignPlan(entries=entries)
 
 
 def execute_declared_experiment_seed(
@@ -79,7 +77,6 @@ def execute_declared_campaign(
     execution = execute_campaign(
         campaign=campaign,
         stage_runner=PipelineStageRunner(progress_hook=progress),
-        output_store=CompletionRecordOutputStore(),
         output_root=output_root,
         overwrite=overwrite,
         progress=progress,
@@ -94,6 +91,5 @@ def execute_declared_campaign(
     available_methods = frozenset(entry.coordinate.threshold_method for entry in campaign.entries)
     methods = tuple(method for method in declaration.federated_thresholds if method in available_methods)
     return DeclaredExperimentSeedResult(
-        campaign_digest=campaign.digest,
         completed_threshold_methods=methods,
     )

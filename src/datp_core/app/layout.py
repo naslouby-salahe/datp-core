@@ -16,7 +16,7 @@ class ResearchDirectory(StrEnum):
 
 
 class ResearchArtifact(StrEnum):
-    COMPLETE = "COMPLETE"
+    SMOKE_SUMMARY = "smoke_summary.txt"
     EVIDENCE_REPORT = "evidence_report.md"
     EXECUTION = "EXECUTION"
     PUBLICATION = "PUBLICATION"

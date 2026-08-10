@@ -12,7 +12,6 @@ from datp_core.analysis.metrics.population import calculate_population_metrics
 from datp_core.analysis.metrics.semantics import metric_value
 from datp_core.app.planning import PlanReason, expand_experiment_plan
 from datp_core.artifacts.layout import evaluation_run_directory
-from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
 from datp_core.artifacts.serializers.json import serialize_json_model
 from datp_core.core.contracts import StrictModel
@@ -87,7 +86,6 @@ class ThresholdRobustnessAnalysisMarker(StrEnum):
 
 class ThresholdRobustnessSeedResult(StrictModel):
     training_seed: Seed
-    campaign_digest: Checksum
     completed_threshold_methods: tuple[FederatedThresholdMethod, ...]
 
 
@@ -195,9 +193,7 @@ def _analysis_directory(experiment_id: ExperimentId, population: PopulationId) -
 
 
 def _complete_marker(experiment_id: ExperimentId, population: PopulationId) -> Path:
-    from datp_core.analysis.evidence import AnalysisAssetName
-
-    return _analysis_directory(experiment_id, population) / AnalysisAssetName.COMPLETE.value
+    return _summary_path(experiment_id, population)
 
 
 def _summary_path(experiment_id: ExperimentId, population: PopulationId) -> Path:
@@ -258,7 +254,6 @@ def _run_robustness_seed(
     )
     return ThresholdRobustnessSeedResult(
         training_seed=training_seed,
-        campaign_digest=result.campaign_digest,
         completed_threshold_methods=result.completed_threshold_methods,
     )
 
@@ -594,7 +589,6 @@ def run_size_aware_shrinkage_seed(
     )
     return ThresholdRobustnessSeedResult(
         training_seed=training_seed,
-        campaign_digest=result.campaign_digest,
         completed_threshold_methods=result.completed_threshold_methods,
     )
 

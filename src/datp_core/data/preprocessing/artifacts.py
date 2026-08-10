@@ -13,9 +13,9 @@ from datp_core.core.identifiers import (
     DatasetId,
     PartitionRole,
     PopulationId,
+    PreparedDataCoordinateKind,
     PreprocessingProtocolId,
     ProcessedDataBranch,
-    ReusableDataCoordinateKind,
     SplitProtocolId,
 )
 from datp_core.core.numeric import DirichletConcentration, Seed
@@ -40,7 +40,7 @@ class PartitionOrdering(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
-class ReusableDataCoordinate:
+class PreparedDataCoordinate:
     dataset: DatasetId
     population: PopulationId
     partition_seed: Seed
@@ -53,7 +53,7 @@ class ReusableDataCoordinate:
 
     def __post_init__(self) -> None:
         if self.branch is ProcessedDataBranch.CENTRALIZED_REFERENCE and self.client_identity is not None:
-            raise ValueError("centralized reusable coordinates cannot include client identity")
+            raise ValueError("centralized prepared-data coordinates cannot include client identity")
         if self.controlled_partition_kind is ControlledPartitionKind.DIRICHLET and self.dirichlet_concentration is None:
             raise ValueError("Dirichlet controlled partitions require a concentration")
         if self.controlled_partition_kind is ControlledPartitionKind.IID and self.dirichlet_concentration is not None:
@@ -70,7 +70,7 @@ class RelativeAssetPath(str):
         if not path_text:
             raise ValueError("relative asset path must be a non-empty string")
         if "=" in path_text:
-            raise ValueError("reusable data paths must not contain key=value segments")
+            raise ValueError("prepared-data paths must not contain key=value segments")
         if Path(path_text).is_absolute():
             raise ValueError("relative asset path must not be absolute")
         return super().__new__(cls, path_text)
@@ -113,7 +113,6 @@ class ProcessedAssetName(StrEnum):
     SCHEMA = "schema.json"
     SPLIT_MANIFEST = "split_manifest.parquet"
     PREPROCESSING_MANIFEST = "preprocessing_manifest.json"
-    COMPLETE = "COMPLETE"
     VALIDATION_REPORT = "validation_report.json"
 
 
@@ -128,9 +127,9 @@ def controlled_partition_path_segment(
     return ControlledPartitionPathSegment(kind.value)
 
 
-def processed_root_under(data_root: Path, coordinate: ReusableDataCoordinate) -> Path:
+def processed_root_under(data_root: Path, coordinate: PreparedDataCoordinate) -> Path:
     return data_root.joinpath(
-        ReusableDataCoordinateKind.PROCESSED,
+        PreparedDataCoordinateKind.PROCESSED,
         coordinate.dataset.value,
         coordinate.population.value,
         str(coordinate.partition_seed.value),
@@ -143,11 +142,11 @@ def processed_root_under(data_root: Path, coordinate: ReusableDataCoordinate) ->
     )
 
 
-def processed_branch_coordinate(data_root: Path, coordinate: ReusableDataCoordinate) -> Path:
+def processed_branch_coordinate(data_root: Path, coordinate: PreparedDataCoordinate) -> Path:
     return processed_root_under(data_root, coordinate).joinpath(coordinate.branch.value)
 
 
-def federated_client_coordinate(data_root: Path, coordinate: ReusableDataCoordinate) -> Path:
+def federated_client_coordinate(data_root: Path, coordinate: PreparedDataCoordinate) -> Path:
     if coordinate.branch is not ProcessedDataBranch.FEDERATED:
         raise ValueError("only federated coordinates may include client identity")
     if coordinate.client_identity is None:
@@ -200,9 +199,7 @@ def partition_roles(split_protocol: SplitProtocolId) -> tuple[PartitionRole, ...
     return _PARTITION_ROLES[split_protocol]
 
 
-_UNSCORED_ROLES = frozenset(
-    {PartitionRole.TRAIN, PartitionRole.STATIC_REFERENCE_RESERVE, PartitionRole.DISCARDED}
-)
+_UNSCORED_ROLES = frozenset({PartitionRole.TRAIN, PartitionRole.STATIC_REFERENCE_RESERVE, PartitionRole.DISCARDED})
 
 
 def scored_partition_roles(split_protocol: SplitProtocolId) -> tuple[PartitionRole, ...]:
@@ -214,7 +211,6 @@ _STATIC_PROCESSED_ASSETS = (
     ProcessedAssetName.SCHEMA,
     ProcessedAssetName.PREPROCESSING_MANIFEST,
     ProcessedAssetName.VALIDATION_REPORT,
-    ProcessedAssetName.COMPLETE,
 )
 
 
@@ -222,13 +218,13 @@ def processed_asset_names(split_protocol: SplitProtocolId) -> tuple[ProcessedAss
     return tuple(_ASSET_FOR_PARTITION[role] for role in _PARTITION_ROLES[split_protocol]) + _STATIC_PROCESSED_ASSETS
 
 
-def centralized_branch_directory(data_root: Path, coordinate: ReusableDataCoordinate) -> Path:
+def centralized_branch_directory(data_root: Path, coordinate: PreparedDataCoordinate) -> Path:
     if coordinate.branch is not ProcessedDataBranch.CENTRALIZED_REFERENCE:
         raise ValueError("centralized branch directory requires the centralized-reference branch")
     return processed_branch_coordinate(data_root, coordinate)
 
 
-def federated_client_directory(data_root: Path, coordinate: ReusableDataCoordinate) -> Path:
+def federated_client_directory(data_root: Path, coordinate: PreparedDataCoordinate) -> Path:
     return federated_client_coordinate(data_root, coordinate)
 
 

@@ -8,7 +8,6 @@ import numpy as np
 from pydantic import model_validator
 
 from datp_core.analysis.contrasts import MetricSeries, PairedDifferenceCounts
-from datp_core.artifacts.provenance import Checksum
 from datp_core.core.contracts import StrictModel
 from datp_core.core.identifiers import AnalysisReasonText, AvailabilityStatus, EvidenceRole, FederatedThresholdMethod
 from datp_core.core.numeric import MetricValue, PairedObservationCount, Quantile, Ratio, Seed, is_numeric_zero
@@ -216,7 +215,6 @@ class ScoreGeometryThresholdOverlay(StrictModel):
 
 class ScoreGeometryResult(StrictModel):
     seed: Seed
-    source_score_checksum: Checksum
     common_support_lower: MetricValue | None
     common_support_upper: MetricValue | None
     clients: tuple[ClientScoreGeometry, ...]
@@ -298,7 +296,6 @@ class ClientEvaluationScoreSeries:
 def score_geometry_from_client_vectors(
     *,
     seed: Seed,
-    source_score_checksum: Checksum,
     benign_evaluation: tuple[ClientEvaluationScoreSeries, ...],
     attack_evaluation: tuple[ClientEvaluationScoreSeries, ...] | None,
     threshold_overlays: tuple[ScoreGeometryThresholdOverlay, ...],
@@ -326,7 +323,6 @@ def score_geometry_from_client_vectors(
         lower = upper = None
     return ScoreGeometryResult(
         seed=seed,
-        source_score_checksum=source_score_checksum,
         common_support_lower=lower,
         common_support_upper=upper,
         clients=clients,

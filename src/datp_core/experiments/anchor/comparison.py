@@ -240,8 +240,6 @@ def _coordinate_mismatch_reason(
         return AnchorDiscrepancyReason.WRONG_THRESHOLD_METHOD
     if observation.metric is not reference.metric:
         return AnchorDiscrepancyReason.WRONG_METRIC
-    if observation.checkpoint_status is not reference.checkpoint_status:
-        return AnchorDiscrepancyReason.WRONG_CHECKPOINT_SEMANTICS
     return None
 
 

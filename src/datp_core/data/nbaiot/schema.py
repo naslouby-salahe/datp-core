@@ -25,7 +25,6 @@ from datp_core.data.contracts import (
 from datp_core.data.materialization import (
     canonical_provenance_arrow_field,
     canonical_provenance_column,
-    canonical_schema_checksum,
 )
 
 
@@ -279,7 +278,6 @@ NBAIOT_SCHEMA = CanonicalSchema(
     physical_schema=PhysicalSchemaText(
         NBAIOT_ARROW_SCHEMA.to_string(show_field_metadata=True, show_schema_metadata=True)
     ),
-    checksum=canonical_schema_checksum(DatasetId.NBAIOT, NBAIOT_CANONICAL_COLUMNS, NBAIOT_ARROW_SCHEMA),
 )
 
 

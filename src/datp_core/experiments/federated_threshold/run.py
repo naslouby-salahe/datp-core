@@ -14,7 +14,6 @@ from datp_core.analysis.metrics.models import metric_by_id
 from datp_core.analysis.metrics.semantics import metric_value
 from datp_core.app.planning import PlanReason, expand_experiment_plan
 from datp_core.artifacts.layout import evaluation_run_directory
-from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
 from datp_core.artifacts.repositories.thresholds import FederatedThresholdAssetName
 from datp_core.artifacts.serializers.json import serialize_json_model
@@ -80,7 +79,6 @@ class FederatedEstimationAnalysisMarker(StrEnum):
 
 class FederatedEstimationSeedResult(StrictModel):
     training_seed: Seed
-    campaign_digest: Checksum
     completed_threshold_methods: tuple[FederatedThresholdMethod, ...]
 
 
@@ -137,9 +135,7 @@ def _summary_path(experiment_id: ExperimentId, population: PopulationId) -> Path
 
 
 def _complete_marker(experiment_id: ExperimentId, population: PopulationId) -> Path:
-    from datp_core.analysis.evidence import AnalysisAssetName
-
-    return _analysis_directory(experiment_id, population) / AnalysisAssetName.COMPLETE
+    return _summary_path(experiment_id, population)
 
 
 def _evaluation_document_path(output_root: Path, coordinate: ExperimentCoordinate) -> Path:
@@ -243,7 +239,6 @@ def _run_estimation_seed(
     )
     return FederatedEstimationSeedResult(
         training_seed=training_seed,
-        campaign_digest=result.campaign_digest,
         completed_threshold_methods=result.completed_threshold_methods,
     )
 

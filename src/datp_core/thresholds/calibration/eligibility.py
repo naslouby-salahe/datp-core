@@ -5,7 +5,6 @@ from enum import StrEnum
 
 import polars as pl
 
-from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import (
     ErrorMessage,
     LeakageError,
@@ -43,7 +42,6 @@ class CalibrationSupport:
     client: ClientIdentity
     coordinate: FederatedTrainingCoordinate
     benign_calibration_count: RowCount
-    calibration_score_set_checksum: Checksum
 
 
 @dataclass(frozen=True, slots=True)
@@ -156,13 +154,11 @@ def load_benign_calibration_references(
 def calibration_support(
     record: FederatedScoreRecord,
     references: tuple[CalibrationSampleReference, ...],
-    calibration_score_set_checksum: Checksum,
 ) -> CalibrationSupport:
     return CalibrationSupport(
         client=record.scored_client,
         coordinate=record.coordinate,
         benign_calibration_count=RowCount(len(references)),
-        calibration_score_set_checksum=calibration_score_set_checksum,
     )
 
 

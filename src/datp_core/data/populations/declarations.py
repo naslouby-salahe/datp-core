@@ -110,8 +110,5 @@ def split_protocol_for_population(population: PopulationId) -> SplitProtocolId:
             return SplitProtocolId.RANDOM_FRACTIONAL_STATIC_REFERENCE
         case PopulationId.NBAIOT_NATURAL_DEVICES:
             return SplitProtocolId.HISTORICAL_TEMPORAL_GAP
-        case (
-            PopulationId.NBAIOT_DIRICHLET_CLIENTS
-            | PopulationId.CICIOT_FILE_CLIENTS
-        ):
+        case PopulationId.NBAIOT_DIRICHLET_CLIENTS | PopulationId.CICIOT_FILE_CLIENTS:
             return SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS

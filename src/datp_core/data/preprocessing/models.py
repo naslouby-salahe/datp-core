@@ -8,7 +8,6 @@ import numpy as np
 import polars as pl
 from pydantic import model_validator
 
-from datp_core.artifacts.provenance import Checksum
 from datp_core.core.contracts import ClientCollection, StrictModel
 from datp_core.core.errors import (
     ErrorMessage,
@@ -26,7 +25,6 @@ from datp_core.core.identifiers import (
     PopulationId,
     PreprocessingProtocolId,
     ProcessedDataBranch,
-    PublicationStatus,
     SerializationFormat,
     SplitProtocolId,
     StableRowId,
@@ -137,7 +135,6 @@ type FederatedFittedEstimators = ClientCollection[ClientPathToken, TrustedScaler
 class _FittedPreprocessingStateBase:
     protocol: PreprocessingProtocol
     estimator_path: Path
-    estimator_checksum: Checksum
     fit_row_count: RowCount
 
     def __post_init__(self) -> None:
@@ -176,7 +173,6 @@ class ClientPreprocessingResult:
     client_identity: ClientPathToken
     paths: PreprocessedPartitionPaths
     fitted_state: FederatedFittedPreprocessingState
-    publication_status: PublicationStatus
     train_row_count: RowCount
     calibration_row_count: RowCount
     evaluation_row_count: RowCount
@@ -188,7 +184,6 @@ class ClientPreprocessingResult:
 class PooledPreprocessingResult:
     paths: PreprocessedPartitionPaths
     fitted_state: CentralizedFittedPreprocessingState
-    publication_status: PublicationStatus
 
 
 class PreprocessingManifest(StrictModel):
@@ -198,8 +193,6 @@ class PreprocessingManifest(StrictModel):
     split_protocol_identity: SplitProtocolId
     preprocessing_identity: PreprocessingProtocolId
     branch: ProcessedDataBranch
-    protocol_checksum: Checksum
-    canonical_schema_checksum: Checksum
     input_feature_names: FeatureNameSequence
     transformed_feature_names: FeatureNameSequence
     estimator_class_name: TrustedEstimatorClassName
@@ -265,7 +258,6 @@ class PreprocessingPublishContext:
     partition_seed: Seed
     split_protocol_identity: SplitProtocolId
     protocol: PreprocessingProtocol
-    canonical_schema_checksum: Checksum
     data_root: Path
     execution_identity: ExternalTemporalExecutionIdentity | None = None
     dirichlet_condition: ControlledPartitionCondition | None = None
@@ -347,7 +339,6 @@ class FederatedPreprocessingRequest:
     data_root: Path
     dirichlet_condition: ControlledPartitionCondition | None
     capture_timestamp_column: CaptureTimestampColumn | None
-    expected_split_manifest_checksum: Checksum | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -369,12 +360,11 @@ class FederatedPreprocessingOutcome:
     preprocessing_identity: PreprocessingProtocolId
     client_publications: tuple[ClientPreprocessingResult, ...]
     published_count: ClientPublicationCount
-    reused_count: ClientPublicationCount
     execution_identity: ExternalTemporalExecutionIdentity | None = None
 
     def __post_init__(self) -> None:
-        if self.published_count.value + self.reused_count.value != len(self.client_publications):
-            raise ValueError("published and reused counts must cover every client publication")
+        if self.published_count.value != len(self.client_publications):
+            raise ValueError("published count must cover every client publication")
 
 
 def build_preprocessing_protocol(

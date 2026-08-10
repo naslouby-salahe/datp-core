@@ -20,7 +20,6 @@ from datp_core.core.identifiers import (
 from datp_core.core.numeric import Seed
 from datp_core.data.ciciot2023.capabilities import CICIOT2023_CAPABILITIES
 from datp_core.data.ciciot2023.schema import (
-    CICIOT2023_SCHEMA,
     CICIoT2023ArtifactName,
     CICIoT2023Column,
     CICIoT2023EligibilityReason,
@@ -106,7 +105,6 @@ def construct_ciciot_file_clients(
             expected_identities=candidates,
             chronology_required=False,
             membership=membership,
-            canonical_schema_checksum=CICIOT2023_SCHEMA.checksum,
         )
     )
     excluded_rows = _ciciot_excluded_row_evidence(canonical_root)

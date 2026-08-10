@@ -4,7 +4,6 @@ from pathlib import Path
 import polars as pl
 import structlog
 
-from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.serializers.json import canonical_json_text
 from datp_core.core.contracts import ClientCollection, ClientOwned
 from datp_core.core.errors import (
@@ -19,7 +18,6 @@ from datp_core.core.identifiers import (
     FileContentText,
     PopulationId,
     ProcessedDataBranch,
-    PublicationStatus,
     SplitProtocolId,
     StableRowId,
 )
@@ -33,7 +31,6 @@ from datp_core.data.populations.contracts import (
     ModelInputExclusionEvidence,
     ModelInputExclusionReason,
     PreprocessingHandoff,
-    model_input_exclusion_checksum,
 )
 from datp_core.data.preprocessing.artifact_validation import extract_partitions
 from datp_core.data.preprocessing.artifacts import PartitionOrdering
@@ -112,7 +109,6 @@ def client_partitions(
 class ClientPublicationsResult:
     publications: tuple[ClientPreprocessingResult, ...]
     published_count: ClientPublicationCount
-    reused_count: ClientPublicationCount
 
 
 def publish_client_partitions(
@@ -137,11 +133,9 @@ def publish_client_partitions(
         )
         for item in partitions.items
     )
-    reused = sum(item.publication_status is PublicationStatus.REUSED for item in publications)
     return ClientPublicationsResult(
         publications=publications,
-        published_count=ClientPublicationCount(len(publications) - reused),
-        reused_count=ClientPublicationCount(reused),
+        published_count=ClientPublicationCount(len(publications)),
     )
 
 
@@ -245,13 +239,6 @@ def exclude_nonfinite_model_input_rows(
         excluded_stable_row_ids=excluded_ids,
         total_row_count=RowCount(joined.height),
         excluded_row_count=RowCount(len(excluded_ids)),
-        evidence_checksum=model_input_exclusion_checksum(
-            dataset=dataset,
-            population=population,
-            reason=MODEL_INPUT_EXCLUSION_REASON,
-            total_row_count=RowCount(joined.height),
-            excluded_stable_row_ids=excluded_ids,
-        ),
     )
 
     if evidence.excluded_row_count.value:
@@ -261,7 +248,6 @@ def exclude_nonfinite_model_input_rows(
             population=population.value,
             excluded_row_count=evidence.excluded_row_count.value,
             total_row_count=joined.height,
-            exclusion_evidence_checksum=evidence.evidence_checksum.value,
         )
     return ModelInputEligibilityResult(
         eligible_rows=eligible,
@@ -269,7 +255,7 @@ def exclude_nonfinite_model_input_rows(
     )
 
 
-def write_model_input_exclusion_evidence(destination: Path, evidence: ModelInputExclusionEvidence) -> Checksum:
+def write_model_input_exclusion_evidence(destination: Path, evidence: ModelInputExclusionEvidence) -> None:
     payload = {
         "dataset": evidence.dataset.value,
         "population": evidence.population.value,
@@ -277,10 +263,8 @@ def write_model_input_exclusion_evidence(destination: Path, evidence: ModelInput
         "total_row_count": evidence.total_row_count.value,
         "excluded_row_count": evidence.excluded_row_count.value,
         "excluded_stable_row_ids": tuple(map(str, evidence.excluded_stable_row_ids)),
-        "evidence_checksum": evidence.evidence_checksum.value,
     }
     write_text_atomically(destination, FileContentText(canonical_json_text(payload)))
-    return evidence.evidence_checksum
 
 
 def model_feature_names(

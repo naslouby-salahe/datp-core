@@ -3,7 +3,6 @@
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
@@ -230,9 +229,6 @@ class ClientMetricResult(MetricResultHeader):
     client: ClientIdentity
     threshold: ThresholdValue
     confusion: ConfusionCounts
-    evaluation_score_checksum: Checksum
-    evaluation_label_checksum: Checksum
-    source_row_checksum: Checksum
 
     def __post_init__(self) -> None:
         if self.client.population != self.coordinate.population:

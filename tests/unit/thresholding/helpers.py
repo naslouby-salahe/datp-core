@@ -2,15 +2,12 @@
 
 from tests.unit.learning.federated.helpers import client_identity, fedavg_coordinate
 
-from datp_core.artifacts.provenance import Checksum
 from datp_core.core.numeric import ScoreValue, Seed
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 from datp_core.thresholds.quantiles import ClientBenignCalibrationScores
 
 COORDINATE = fedavg_coordinate(Seed(0))
-DEFAULT_CALIBRATION_MANIFEST_CHECKSUM = Checksum("c" * 64)
-DEFAULT_SCORE_SET_CHECKSUM = Checksum("d" * 64)
 
 
 def client_scores(
@@ -18,15 +15,11 @@ def client_scores(
     scores: tuple[float, ...],
     *,
     coordinate: FederatedTrainingCoordinate = COORDINATE,
-    calibration_manifest_checksum: Checksum = DEFAULT_CALIBRATION_MANIFEST_CHECKSUM,
-    score_set_checksum: Checksum = DEFAULT_SCORE_SET_CHECKSUM,
 ) -> ClientBenignCalibrationScores:
     return ClientBenignCalibrationScores(
         client=client_identity(client_id),
         coordinate=coordinate,
         scores=tuple(ScoreValue(value) for value in scores),
-        calibration_manifest_checksum=calibration_manifest_checksum,
-        score_set_checksum=score_set_checksum,
     )
 
 

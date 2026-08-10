@@ -18,7 +18,6 @@ from datp_core.data.contracts import (
 from datp_core.data.materialization import (
     canonical_provenance_arrow_field,
     canonical_provenance_column,
-    canonical_schema_checksum,
 )
 
 
@@ -235,7 +234,6 @@ CICIOT2023_SCHEMA = CanonicalSchema(
     physical_schema=PhysicalSchemaText(
         CICIOT2023_ARROW_SCHEMA.to_string(show_field_metadata=True, show_schema_metadata=True)
     ),
-    checksum=canonical_schema_checksum(DatasetId.CICIOT2023, CICIOT2023_CANONICAL_COLUMNS, CICIOT2023_ARROW_SCHEMA),
 )
 
 

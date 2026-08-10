@@ -1,17 +1,16 @@
-"""Reusable deterministic allocation for controlled Dirichlet and IID populations."""
+"""Deterministic allocation for controlled Dirichlet and IID populations."""
 
 from dataclasses import dataclass, field
 from enum import StrEnum
 
 import numpy as np
 
-from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import (
     DataIntegrityError,
     ErrorMessage,
     ScientificContractError,
 )
-from datp_core.core.identifiers import ClientIdentityToken, PopulationId
+from datp_core.core.identifiers import PopulationId
 from datp_core.core.numeric import ClientCount, Ratio, RowCount, Seed
 from datp_core.data.populations.contracts import ControlledPartitionKind
 
@@ -76,24 +75,3 @@ class ControlledPartitionAllocator:
             subject=self.condition.kind,
             reason=ControlledAllocationViolation.UNSUPPORTED_PARTITION_KIND,
         )
-
-
-def controlled_allocation_checksum(
-    client_ids: tuple[ClientIdentityToken, ...],
-    counts: tuple[RowCount, ...],
-    condition: ControlledPartitionCondition,
-    seed: Seed,
-) -> Checksum:
-    """Checksum the complete controlled allocation identity and resulting counts."""
-    concentration = condition.kind.value if condition.concentration is None else str(condition.concentration.value)
-    return Checksum.from_text(
-        "\n".join(
-            (
-                condition.kind.value,
-                concentration,
-                str(seed.value),
-                *(c.value for c in client_ids),
-                *(str(count.value) for count in counts),
-            )
-        )
-    )

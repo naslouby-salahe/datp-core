@@ -1,47 +1,22 @@
-"""Ditto personalized detector training publication."""
-
 from dataclasses import dataclass
-from enum import StrEnum
 
-from datp_core.artifacts.repositories.publication import (
-    FunctionalRelatedArtifactCodec,
-    RelatedArtifactPublication,
-    RelatedPublicationMember,
-    publish_related_artifacts,
-)
 from datp_core.core.contracts import ClientCollection, ClientOwned
-from datp_core.core.identifiers import PublicationStatus, RelatedPublicationMemberIdentity
 from datp_core.core.numeric import FeatureCount
 from datp_core.data.populations.contracts import ClientIdentity
-from datp_core.detector.training.common import (
-    DittoTrainingArtifacts,
-    ditto_training_is_reusable,
-    load_reused_ditto_artifacts,
-    rebase_ditto_training,
-    validate_federated_training_inputs,
-    write_ditto_training,
-)
+from datp_core.detector.training.common import materialize_ditto_training, validate_federated_training_inputs
 from datp_core.detector.training.ditto import DittoTrainingRequest
-from datp_core.detector.training.models import CheckpointCandidate, FederatedTrainingResult
-
-
-class DittoPublicationMember(StrEnum):
-    GLOBAL = "global"
-    PERSONALIZED = "personalized"
+from datp_core.detector.training.models import FederatedTrainingResult, PersonalizedTerminalModel
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class TrainDittoDetectorRequest:
     request: DittoTrainingRequest
-    overwrite: bool
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class TrainDittoDetectorResult:
-    publication_status: PublicationStatus
     global_training: FederatedTrainingResult
-    global_candidates: tuple[CheckpointCandidate, ...]
-    personalized_candidates: ClientCollection[ClientIdentity, tuple[CheckpointCandidate, ...]]
+    personalized_terminal_models: ClientCollection[ClientIdentity, PersonalizedTerminalModel]
 
 
 def train_ditto_detector(request: TrainDittoDetectorRequest) -> TrainDittoDetectorResult:
@@ -50,34 +25,10 @@ def train_ditto_detector(request: TrainDittoDetectorRequest) -> TrainDittoDetect
         training_request.clients,
         FeatureCount(training_request.autoencoder.widths[0].value),
     )
-    publication = publish_related_artifacts(
-        RelatedArtifactPublication(
-            request=training_request,
-            members=(
-                RelatedPublicationMember(
-                    identity=RelatedPublicationMemberIdentity(DittoPublicationMember.GLOBAL.value),
-                    target=training_request.global_output_directory,
-                ),
-                RelatedPublicationMember(
-                    identity=RelatedPublicationMemberIdentity(DittoPublicationMember.PERSONALIZED.value),
-                    target=training_request.personalized_output_directory,
-                ),
-            ),
-            codec=FunctionalRelatedArtifactCodec(
-                writer=write_ditto_training,
-                validator=ditto_training_is_reusable,
-                loader=load_reused_ditto_artifacts,
-                rebaser=rebase_ditto_training,
-            ),
-            overwrite=request.overwrite,
-        )
-    )
-    artifacts: DittoTrainingArtifacts = publication.value
+    outcome = materialize_ditto_training(training_request)
     return TrainDittoDetectorResult(
-        publication_status=publication.status,
-        global_training=artifacts.global_training,
-        global_candidates=artifacts.global_candidates,
-        personalized_candidates=ClientCollection(
-            tuple(ClientOwned(item.client, item.candidates) for item in artifacts.personalized_candidates)
+        global_training=outcome.global_training_result,
+        personalized_terminal_models=ClientCollection(
+            tuple(ClientOwned(item.client, item) for item in outcome.personalized_terminal_models)
         ),
     )

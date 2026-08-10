@@ -3,7 +3,7 @@ from pathlib import Path
 import polars as pl
 import pyarrow.parquet as pq
 
-from datp_core.core.identifiers import DatasetId, PublicationStatus
+from datp_core.core.identifiers import DatasetId
 from datp_core.data.contracts import ExclusionReason
 from datp_core.data.nbaiot.materialize import NBaIoTMaterializer
 from datp_core.data.nbaiot.schema import NBAIOT_ARROW_SCHEMA, NBAIOT_FEATURE_COLUMNS, NBaIoTArtifactName
@@ -16,7 +16,7 @@ def _write_source(path: Path, value: str) -> None:
     )
 
 
-def test_nbaio_materialization_streams_complete_reusable_partitions(tmp_path, monkeypatch) -> None:
+def test_nbaio_materialization_streams_complete_partitions(tmp_path, monkeypatch) -> None:
     benign = tmp_path / "Danmini_Doorbell" / "benign_traffic.csv"
     attack = tmp_path / "Danmini_Doorbell" / "gafgyt_attacks" / "ack.csv"
     _write_source(benign, "1")
@@ -28,36 +28,15 @@ def test_nbaio_materialization_streams_complete_reusable_partitions(tmp_path, mo
     monkeypatch.setattr(pl.DataFrame, "to_arrow", reject_arrow_conversion)
     materializer = NBaIoTMaterializer()
     published = materializer.materialize((attack, benign), tmp_path / "canonical")
-    reused = materializer.materialize((benign, attack), tmp_path / "canonical")
 
     assert published.canonical_root == tmp_path / "canonical" / "nbaiot"
-    assert (published.canonical_root / "COMPLETE").is_file()
     assert (published.canonical_root / "dataset_manifest.json").is_file()
     assert (published.canonical_root / "schema.json").is_file()
     assert len(published.assets) == 2
-    assert reused.publication_status is PublicationStatus.REUSED
     assert all(pq.ParquetFile(asset.path).schema_arrow.equals(NBAIOT_ARROW_SCHEMA) for asset in published.assets)
     assert all(
         "/tmp/" not in pl.read_parquet(asset.path, columns=["source_path"]).item(0, 0) for asset in published.assets
     )
-
-
-def test_nbaio_rebuilds_incomplete_and_source_changed_publications(tmp_path) -> None:
-    source = tmp_path / "Danmini_Doorbell" / "benign_traffic.csv"
-    _write_source(source, "1")
-    materializer = NBaIoTMaterializer()
-    first = materializer.materialize((source,), tmp_path / "canonical")
-    first_checksum = first.source_inventory_checksum
-    (first.canonical_root / "COMPLETE").unlink()
-
-    rebuilt = materializer.materialize((source,), tmp_path / "canonical")
-    assert rebuilt.publication_status is PublicationStatus.PUBLISHED
-    assert (rebuilt.canonical_root / "COMPLETE").is_file()
-
-    _write_source(source, "3")
-    changed = materializer.materialize((source,), tmp_path / "canonical")
-    assert changed.publication_status is PublicationStatus.PUBLISHED
-    assert changed.source_inventory_checksum != first_checksum
 
 
 def test_nbaiot_publish_records_excluded_raw_file_with_provenance(tmp_path: Path) -> None:

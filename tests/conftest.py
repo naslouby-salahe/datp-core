@@ -6,7 +6,6 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from datp_core.artifacts.provenance import Checksum
 from datp_core.data.edge_iiotset.schema import (
     EDGE_BENIGN_SENSOR_GROUPS,
     EDGE_NUMERIC_FEATURE_COLUMNS,
@@ -147,13 +146,11 @@ def edge_canonical_root(tmp_path: Path) -> Path:
         "inventory": {
             "accepted_row_count": 0,
             "accepted_source_count": 0,
-            "checksum": "0" * 64,
             "dataset": "edge_iiotset",
             "excluded_source_count": 0,
             "excluded_sources": [],
             "sources": [],
         },
-        "schema_checksum": EDGE_SCHEMA_CHECKSUM.value,
         "validation_report": {
             "accepted_rows": 0,
             "dataset": "edge_iiotset",
@@ -234,13 +231,11 @@ def edge_temporal_eligible_root(tmp_path: Path) -> Path:
         "inventory": {
             "accepted_row_count": 0,
             "accepted_source_count": 0,
-            "checksum": "0" * 64,
             "dataset": "edge_iiotset",
             "excluded_source_count": 0,
             "excluded_sources": [],
             "sources": [],
         },
-        "schema_checksum": EDGE_SCHEMA_CHECKSUM.value,
         "validation_report": {
             "accepted_rows": 0,
             "dataset": "edge_iiotset",
@@ -256,6 +251,4 @@ def edge_temporal_eligible_root(tmp_path: Path) -> Path:
     return root
 
 
-# Schema checksum is validated only as opaque string in population manifests for Edge tests.
-EDGE_SCHEMA_CHECKSUM = Checksum("a" * 64)
 _ = NBAIOT_DEVICE_FAMILIES

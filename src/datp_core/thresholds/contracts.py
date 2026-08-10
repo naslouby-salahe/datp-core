@@ -5,7 +5,6 @@ from enum import StrEnum
 from statistics import fmean
 from typing import ClassVar, Protocol, runtime_checkable
 
-from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
@@ -50,8 +49,6 @@ class ThresholdUnavailableResult:
 @dataclass(frozen=True, slots=True)
 class ThresholdDiagnostic:
     quantile_interpolation: QuantileInterpolationSemantics | None
-    score_set_checksum: Checksum
-    calibration_manifest_checksum: Checksum
     tie_count: RowCount
     availability: AvailabilityStatus
 
@@ -113,8 +110,6 @@ class ThresholdAssignmentSet[AssignmentT: ThresholdAssignmentLike]:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ThresholdConstructionContext:
     coordinate: FederatedTrainingCoordinate
-    calibration_manifest_checksum: Checksum
-    score_set_checksum: Checksum
     quantile: Quantile
 
 

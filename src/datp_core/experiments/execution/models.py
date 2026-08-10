@@ -7,7 +7,6 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Protocol
 
-from datp_core.artifacts.provenance import Checksum
 from datp_core.core.identifiers import StageExecutionEvidence
 from datp_core.core.numeric import CampaignOrdinal
 from datp_core.experiments.common.coordinates import ExperimentCoordinate
@@ -19,7 +18,6 @@ class PipelineStage(StrEnum):
     CONSTRUCT_POPULATION = "construct_population"
     FIT_PREPROCESSING = "fit_preprocessing"
     TRAIN_DETECTOR = "train_detector"
-    SELECT_CHECKPOINT = "select_checkpoint"
     GENERATE_SCORES = "generate_scores"
     BUILD_CALIBRATION = "build_calibration"
     CONSTRUCT_THRESHOLDS = "construct_thresholds"
@@ -53,7 +51,6 @@ _POPULATION_FRAGMENT: tuple[PipelineStage, ...] = (
 )
 _TRAINING_FRAGMENT: tuple[PipelineStage, ...] = (
     PipelineStage.TRAIN_DETECTOR,
-    PipelineStage.SELECT_CHECKPOINT,
     PipelineStage.GENERATE_SCORES,
 )
 _THRESHOLD_EVALUATION_FRAGMENT: tuple[PipelineStage, ...] = (
@@ -78,16 +75,8 @@ ANCHOR_REPRODUCTION_RECIPE = ExecutionRecipe(
 
 class StageOutcome(StrEnum):
     COMPLETED = "completed"
-    REUSED = "reused"
     BLOCKED = "blocked"
     FAILED = "failed"
-
-
-class ExistingExperimentState(StrEnum):
-    ABSENT = "absent"
-    COMPLETE_VALID = "complete_valid"
-    COMPLETE_INVALID = "complete_invalid"
-    INCOMPLETE = "incomplete"
 
 
 class ProgressEventKind(StrEnum):
@@ -112,7 +101,6 @@ class ProgressEvent:
     round_number: int | None = None
     maximum_round: int | None = None
     outcome: StageOutcome | None = None
-    reused: bool = False
     detail: str | None = None
     elapsed_seconds: float | None = None
 
@@ -129,13 +117,6 @@ class ProgressHook(Protocol):
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class ExecutionProvenance:
-    plan_digest: Checksum
-    campaign_digest: Checksum
-    protocol_digest: Checksum
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
 class StageExecution:
     stage: PipelineStage
     outcome: StageOutcome
@@ -147,24 +128,19 @@ class ExperimentExecution:
     coordinate: ExperimentCoordinate
     recipe: ExecutionRecipe
     stages: tuple[StageExecution, ...]
-    reused_complete_experiment: bool = False
 
     def __post_init__(self) -> None:
         completed_stage_ids = tuple(item.stage for item in self.stages)
         expected_prefix = self.recipe.stages[: len(completed_stage_ids)]
         if completed_stage_ids != expected_prefix:
             raise ValueError("pipeline stages must execute in the selected recipe's order")
-        if self.reused_complete_experiment and self.stages:
-            raise ValueError("a reused complete experiment must not execute stages")
 
     @property
     def successful(self) -> bool:
-        if self.reused_complete_experiment:
-            return True
         return (
             bool(self.stages)
             and len(self.stages) == len(self.recipe.stages)
-            and all(item.outcome in {StageOutcome.COMPLETED, StageOutcome.REUSED} for item in self.stages)
+            and all(item.outcome is StageOutcome.COMPLETED for item in self.stages)
         )
 
 
@@ -173,20 +149,8 @@ class StageRunner(Protocol):
         self,
         stage: PipelineStage,
         coordinate: ExperimentCoordinate,
-        provenance: ExecutionProvenance,
         output_root: Path,
     ) -> StageExecution: ...
-
-
-class ExperimentOutputStore(Protocol):
-    def state(
-        self,
-        coordinate: ExperimentCoordinate,
-        output_root: Path,
-        provenance: ExecutionProvenance | None = None,
-    ) -> ExistingExperimentState: ...
-
-    def delete(self, coordinate: ExperimentCoordinate, output_root: Path) -> None: ...
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -195,24 +159,15 @@ class CampaignEntry:
     coordinate: ExperimentCoordinate
 
 
-def campaign_digest(entries: tuple[CampaignEntry, ...]) -> Checksum:
-    return Checksum.from_text("\n".join(f"{entry.ordinal.value}|{entry.coordinate.stable_key}" for entry in entries))
-
-
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CampaignPlan:
     entries: tuple[CampaignEntry, ...]
-    digest: Checksum
-    plan_digest: Checksum
 
     def __post_init__(self) -> None:
         if tuple(item.ordinal.value for item in self.entries) != tuple(range(len(self.entries))):
             raise ValueError("campaign entries must use contiguous deterministic ordinals")
-        if self.digest != campaign_digest(self.entries):
-            raise ValueError("campaign digest does not match campaign entries")
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CampaignExecution:
-    campaign_digest: Checksum
     experiments: tuple[ExperimentExecution, ...]

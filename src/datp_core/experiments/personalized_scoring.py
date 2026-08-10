@@ -7,7 +7,6 @@ import polars as pl
 from datp_core.analysis.metrics.client import calculate_client_metrics
 from datp_core.analysis.metrics.cohorts import EvaluationCohortManifest
 from datp_core.analysis.metrics.confusion import calculate_confusion_counts
-from datp_core.analysis.metrics.fixed_score_checksums import evaluation_label_checksum, source_row_checksum
 from datp_core.analysis.metrics.models import ClientMetricResult
 from datp_core.core.errors import (
     ErrorMessage,
@@ -92,9 +91,6 @@ def client_metric(
         metrics=calculate_client_metrics(confusion=confusion, scores=scores, labels=labels),
         warnings=(),
         evidence_role=EvidenceRole.TRAINING_STRESS_TEST,
-        evaluation_score_checksum=record.checksum,
-        evaluation_label_checksum=evaluation_label_checksum(labels),
-        source_row_checksum=source_row_checksum(rows),
     )
 
 

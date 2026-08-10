@@ -8,7 +8,6 @@ import skops.io as skops_io
 from sklearn.base import BaseEstimator
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
-from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import (
     ArtifactIntegrityError,
     ErrorMessage,
@@ -89,7 +88,7 @@ def resolve_trusted_estimator_type(class_name: TrustedEstimatorClassName) -> typ
     return _definition_for(class_name).estimator_type
 
 
-def serialize_estimator(estimator: BaseEstimator | TrustedScaler, destination: Path) -> Checksum:
+def serialize_estimator(estimator: BaseEstimator | TrustedScaler, destination: Path) -> None:
     estimator_type = type(estimator)
     if estimator_type not in _TRUSTED_TYPES:
         raise SerializationSafetyError(
@@ -100,7 +99,6 @@ def serialize_estimator(estimator: BaseEstimator | TrustedScaler, destination: P
         )
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_bytes(skops_io.dumps(estimator))
-    return Checksum.from_file(destination)
 
 
 def load_estimator(path: Path, class_name: TrustedEstimatorClassName) -> TrustedScaler:

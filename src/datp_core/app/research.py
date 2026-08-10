@@ -72,7 +72,6 @@ from datp_core.experiments.anchor.gate import (
 from datp_core.experiments.centralized_reference import (
     CIC_CENTRALIZED_REFERENCE,
     NBAIOT_CENTRALIZED_REFERENCE,
-    centralized_reference_completion_marker,
     centralized_reference_directory,
     run_centralized_reference_seed,
 )
@@ -218,26 +217,18 @@ def _publish_smoke_summary(results: tuple[ExperimentRunResult, ...]) -> None:
         *(f"{item.experiment.value}:seeds={','.join(str(seed.value) for seed in item.seeds)}" for item in results),
     )
     write_text_atomically(
-        SMOKE_SUMMARY_DIRECTORY / ResearchArtifact.COMPLETE,
+        SMOKE_SUMMARY_DIRECTORY / ResearchArtifact.SMOKE_SUMMARY,
         FileContentText("\n".join(lines) + "\n"),
     )
 
 
 def _run_centralized_reference(overwrite: OverwriteMode) -> None:
     for scope in (NBAIOT_CENTRALIZED_REFERENCE, CIC_CENTRALIZED_REFERENCE):
-        marker = centralized_reference_completion_marker(scope)
-        if marker.is_file() and not overwrite.requested:
-            continue
         for seed in scope.seed_cohort.values:
             directory = centralized_reference_directory(scope, seed)
             if overwrite.requested and directory.exists():
                 rmtree(directory)
             run_centralized_reference_seed(scope, seed)
-        marker.parent.mkdir(parents=True, exist_ok=True)
-        write_text_atomically(
-            marker,
-            FileContentText("\n".join(str(seed.value) for seed in scope.seed_cohort.values) + "\n"),
-        )
 
 
 def run_campaign(*, overwrite: OverwriteMode) -> CampaignRunResult:
@@ -377,7 +368,7 @@ def _status_for_experiment(
         )
     population = next(item for item in POPULATIONS if item.id is declaration.population)
     canonical = canonical_root_under(DATA_ROOT, population.dataset)
-    if not (canonical / ResearchArtifact.COMPLETE).is_file():
+    if not (canonical / "manifest.json").is_file():
         return ExperimentStatusRecord(
             experiment=experiment_id,
             status=ProgrammeStatus.NOT_STARTED,

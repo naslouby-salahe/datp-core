@@ -30,7 +30,6 @@ from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
 from datp_core.analysis.metrics.protocols import FIXED_SCORE_AUROC_INVARIANCE_TOLERANCE
 from datp_core.app.planning import PlanReason, expand_experiment_plan
 from datp_core.artifacts.layout import evaluation_run_directory
-from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
 from datp_core.core.errors import (
     ErrorMessage,
@@ -79,7 +78,6 @@ class MechanismAnalysisDirectory(StrEnum):
 @dataclass(frozen=True, slots=True, kw_only=True)
 class HeterogeneitySweepSeedResult:
     training_seed: Seed
-    campaign_digest: Checksum
     completed_threshold_methods: tuple[FederatedThresholdMethod, ...]
 
 
@@ -101,7 +99,6 @@ def run_controlled_heterogeneity_sweep_seed(
     )
     return HeterogeneitySweepSeedResult(
         training_seed=training_seed,
-        campaign_digest=result.campaign_digest,
         completed_threshold_methods=result.completed_threshold_methods,
     )
 
@@ -128,8 +125,7 @@ def _collect_heterogeneity_mechanisms() -> tuple[MechanismEvidence, ...]:
                 experiment=ExperimentId.CONTROLLED_HETEROGENEITY_SWEEP,
             )
             mechanisms.append(movement)
-            vectors, score_checksum = _client_score_vectors(shared)
-            mechanisms.append(jensen_shannon_from_client_scores(vectors, source_score_checksum=score_checksum))
+            mechanisms.append(jensen_shannon_from_client_scores(_client_score_vectors(shared)))
         iid_shared = _load_heterogeneity_evaluation(
             seed,
             FederatedThresholdMethod.SHARED_THRESHOLD,
@@ -149,8 +145,7 @@ def _collect_heterogeneity_mechanisms() -> tuple[MechanismEvidence, ...]:
                 experiment=ExperimentId.CONTROLLED_HETEROGENEITY_SWEEP,
             )
         )
-        iid_vectors, iid_score_checksum = _client_score_vectors(iid_shared)
-        mechanisms.append(jensen_shannon_from_client_scores(iid_vectors, source_score_checksum=iid_score_checksum))
+        mechanisms.append(jensen_shannon_from_client_scores(_client_score_vectors(iid_shared)))
     return tuple(mechanisms)
 
 
@@ -172,8 +167,7 @@ def _collect_heterogeneity_associations() -> tuple[AssociationObservation, ...]:
             )
             shared_cv = population_metric(shared, MetricId.FPR_COEFFICIENT_OF_VARIATION)
             local_cv = population_metric(local, MetricId.FPR_COEFFICIENT_OF_VARIATION)
-            vectors, score_checksum = _client_score_vectors(shared)
-            divergence = jensen_shannon_from_client_scores(vectors, source_score_checksum=score_checksum)
+            divergence = jensen_shannon_from_client_scores(_client_score_vectors(shared))
             if divergence.aggregate is not None:
                 association_observations.append(
                     AssociationObservation(
@@ -197,8 +191,7 @@ def _collect_heterogeneity_associations() -> tuple[AssociationObservation, ...]:
             ControlledPartitionKind.IID,
             None,
         )
-        iid_vectors, iid_score_checksum = _client_score_vectors(iid_shared)
-        iid_divergence = jensen_shannon_from_client_scores(iid_vectors, source_score_checksum=iid_score_checksum)
+        iid_divergence = jensen_shannon_from_client_scores(_client_score_vectors(iid_shared))
         if iid_divergence.aggregate is not None:
             association_observations.append(
                 AssociationObservation(
@@ -525,8 +518,7 @@ def analyze_heterogeneity_benefit_association(*, overwrite: bool) -> Path:
         local = _load_confirmatory_evaluation(seed, FederatedThresholdMethod.LOCAL_THRESHOLD)
         shared_cv = population_metric(shared, MetricId.FPR_COEFFICIENT_OF_VARIATION)
         local_cv = population_metric(local, MetricId.FPR_COEFFICIENT_OF_VARIATION)
-        vectors, score_checksum = _client_score_vectors(shared)
-        divergence = jensen_shannon_from_client_scores(vectors, source_score_checksum=score_checksum)
+        divergence = jensen_shannon_from_client_scores(_client_score_vectors(shared))
         mechanisms.append(divergence)
         if divergence.aggregate is not None:
             association_observations.append(
@@ -696,7 +688,7 @@ def _load_heterogeneity_evaluation(
 
 def _client_score_vectors(
     document: FederatedEvaluationDocument,
-) -> tuple[tuple[ClientScoreVector, ...], Checksum]:
+) -> tuple[ClientScoreVector, ...]:
     score_root = (
         federated_training_directory(document.score_coordinate, OUTPUTS_ROOT) / ExecutionArtifactDirectory.SCORES
     )
@@ -721,4 +713,4 @@ def _client_score_vectors(
         raise ScientificContractError(
             ErrorMessage("Jensen-Shannon construction requires at least two client score vectors")
         )
-    return tuple(vectors), document.fixed_score_evidence.calibration.score_checksum
+    return tuple(vectors)

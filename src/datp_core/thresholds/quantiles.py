@@ -7,7 +7,6 @@ from typing import Literal
 import numpy as np
 from scipy.stats import norm
 
-from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
@@ -42,8 +41,6 @@ class ClientBenignCalibrationScores:
     client: ClientIdentity
     coordinate: FederatedTrainingCoordinate
     scores: tuple[ScoreValue, ...]
-    calibration_manifest_checksum: Checksum
-    score_set_checksum: Checksum
 
     def __post_init__(self) -> None:
         if not self.scores:
@@ -69,20 +66,16 @@ def calibration_scores_from_references(
     client: ClientIdentity,
     coordinate: FederatedTrainingCoordinate,
     references: tuple[CalibrationSampleReference, ...],
-    score_set_checksum: Checksum,
 ) -> ClientBenignCalibrationScores:
     if any(reference.client != client for reference in references):
         raise ScientificContractError(
             ErrorMessage("calibration score references must belong to one declared client"),
             subject=ContractSubject.CLIENT_IDENTITY,
         )
-    manifest_checksum = Checksum.from_text("|".join(sorted(reference.stable_row_id for reference in references)))
     return ClientBenignCalibrationScores(
         client=client,
         coordinate=coordinate,
         scores=tuple(reference.score for reference in references),
-        calibration_manifest_checksum=manifest_checksum,
-        score_set_checksum=score_set_checksum,
     )
 
 
@@ -107,8 +100,6 @@ def local_quantile(client_scores: ClientBenignCalibrationScores, quantile: Quant
         calibration_count=RowCount(len(client_scores.scores)),
         diagnostic=ThresholdDiagnostic(
             quantile_interpolation=quantile_interpolation_semantics(),
-            score_set_checksum=client_scores.score_set_checksum,
-            calibration_manifest_checksum=client_scores.calibration_manifest_checksum,
             tie_count=RowCount(0),
             availability=AvailabilityStatus.AVAILABLE,
         ),

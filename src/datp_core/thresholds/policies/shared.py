@@ -5,7 +5,6 @@ from typing import ClassVar
 
 import numpy as np
 
-from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
@@ -189,8 +188,6 @@ def construct_pooled_shared_quantile(
     )
     diagnostic = ThresholdDiagnostic(
         quantile_interpolation=quantile_interpolation_semantics(),
-        score_set_checksum=_require_common_score_set_checksum(eligible),
-        calibration_manifest_checksum=_pooled_calibration_manifest_checksum(eligible),
         tie_count=RowCount(0),
         availability=AvailabilityStatus.AVAILABLE,
     )
@@ -224,21 +221,4 @@ def construct_sample_weighted_shared_threshold(
         normalized_weights=weights.normalized,
         shared_threshold=shared_value,
         assignments=tuple(ThresholdAssignment(item.client, shared_value) for item in local_quantiles),
-    )
-
-
-def _require_common_score_set_checksum(eligible: tuple[ClientBenignCalibrationScores, ...]) -> Checksum:
-    checksums = frozenset(item.score_set_checksum for item in eligible)
-    if len(checksums) != 1:
-        raise ScientificContractError(
-            ErrorMessage("pooled shared quantile construction requires one common score-set checksum"),
-            subject=ContractSubject.SCORES,
-        )
-    return next(iter(checksums))
-
-
-def _pooled_calibration_manifest_checksum(eligible: tuple[ClientBenignCalibrationScores, ...]) -> Checksum:
-    ordered = sorted(eligible, key=lambda item: item.client)
-    return Checksum.from_text(
-        "|".join(f"{item.client.client_id.value}:{item.calibration_manifest_checksum.value}" for item in ordered)
     )

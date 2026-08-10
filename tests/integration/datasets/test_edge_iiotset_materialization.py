@@ -33,7 +33,6 @@ def test_edge_materialization_separates_static_temporal_and_unassigned_attack(tm
     published = EdgeIIoTsetMaterializer().materialize((benign,), (attack,), tmp_path / "canonical")
 
     assert published.canonical_root == tmp_path / "canonical" / "edge_iiotset"
-    assert (published.canonical_root / "COMPLETE").is_file()
     assert len(published.assets) == 3
     assert published.row_count.value == 2
     assert all(pq.ParquetFile(asset.path).schema_arrow.equals(EDGE_ARROW_SCHEMA) for asset in published.assets)

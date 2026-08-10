@@ -471,18 +471,8 @@ def _validate_temporal_provenance(request: TemporalAnalysisRequest) -> None:
     validate_frozen_recalibrated_pair(frozen, request.recalibrated_provenance)
     bindings = (
         (
-            static.checkpoint_checksum,
-            frozen.checkpoint_checksum,
-            "all temporal states must share one fitted detector",
-        ),
-        (
-            static.preprocessing_state_set_checksum,
-            frozen.preprocessing_state_set_checksum,
-            "all temporal states must share one fitted preprocessing state",
-        ),
-        (
-            static.coordinate_checksum,
-            frozen.coordinate_checksum,
+            static.coordinate,
+            frozen.coordinate,
             "all temporal states must share one training coordinate",
         ),
     )

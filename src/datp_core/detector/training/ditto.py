@@ -4,7 +4,6 @@ from pathlib import Path
 
 import torch
 
-from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
@@ -16,7 +15,7 @@ from datp_core.detector.autoencoder import (
     AutoencoderModelState,
     build_reconstruction_autoencoder,
 )
-from datp_core.detector.checkpoints.contracts import CheckpointProtocol
+from datp_core.detector.checkpoints.contracts import DiagnosticSnapshotProtocol
 from datp_core.detector.checkpoints.publication import write_ditto_training
 from datp_core.detector.training.contracts import AutoencoderProtocol, DittoProtocol
 from datp_core.detector.training.engine import (
@@ -25,11 +24,9 @@ from datp_core.detector.training.engine import (
     aggregate_client_updates,
     compute_weighted_aggregate_loss,
     create_communication_record,
-    create_round_snapshot,
     derive_client_stream_seed,
     prepare_federated_client_data,
-    preprocessing_state_set_checksum,
-    serialize_and_checksum_model_state,
+    serialize_model_state,
     train_client_update,
     validate_common_request,
 )
@@ -44,9 +41,7 @@ from datp_core.detector.training.models import (
     FederatedTrainingResult,
     GlobalModelStateReference,
     PersonalizedModelStateReference,
-    PersonalizedSnapshotSet,
-    PreparedClientProvenance,
-    RoundSnapshot,
+    PersonalizedTerminalModel,
 )
 from datp_core.runtime.compute import resolve_cuda_device
 from datp_core.runtime.determinism import configure_deterministic_execution
@@ -59,11 +54,10 @@ class DittoTrainingRequest:
     population_client_count: ClientCount
     autoencoder: AutoencoderProtocol
     training_protocol: DittoProtocol
-    checkpoint_protocol: CheckpointProtocol
+    diagnostic_snapshot_protocol: DiagnosticSnapshotProtocol
     training_seed: Seed
     batch_size: BatchSize
     learning_rate: LearningRate
-    split_manifest_checksum: Checksum
     global_output_directory: Path
     personalized_output_directory: Path
     progress_callback: Callable[[int, int], None] | None = field(default=None, compare=False, repr=False)
@@ -111,15 +105,6 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
     ordered_inputs = tuple(sorted(request.clients, key=lambda item: item.client))
     prepared = tuple(prepare_federated_client_data(item, request.autoencoder) for item in ordered_inputs)
 
-    provenance = tuple(
-        PreparedClientProvenance(
-            client=item.client,
-            preprocessing_checksum=item.preprocessing_checksum,
-        )
-        for item in prepared
-    )
-    preprocessing_checksum = preprocessing_state_set_checksum(provenance)
-
     initial_model = build_reconstruction_autoencoder(
         request.autoencoder,
         initialization_seed=request.training_seed,
@@ -127,16 +112,12 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
     global_model_state = AutoencoderModelState.from_model(initial_model)
 
     personalized_model_states = {item.client: global_model_state for item in prepared}
-    personalized_snapshots: dict[ClientIdentity, list[RoundSnapshot]] = {item.client: [] for item in prepared}
-
-    candidate_rounds = frozenset(request.checkpoint_protocol.candidates)
     rounds: list[FederatedRoundResult] = []
-    global_snapshots: list[RoundSnapshot] = []
 
-    for round_value in range(1, request.checkpoint_protocol.maximum_round.value + 1):
+    for round_value in range(1, request.diagnostic_snapshot_protocol.maximum_round.value + 1):
         round_number = RoundNumber(round_value)
         if request.progress_callback is not None:
-            request.progress_callback(round_value, request.checkpoint_protocol.maximum_round.value)
+            request.progress_callback(round_value, request.diagnostic_snapshot_protocol.maximum_round.value)
         global_updates: list[ClientUpdate] = []
         personalized_references: list[PersonalizedModelStateReference] = []
 
@@ -191,30 +172,19 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
             global_updates.append(global_update)
             personalized_model_states[client_id] = personalized_update.model_state
 
-            personalized_state = serialize_and_checksum_model_state(personalized_update.model_state)
             personalized_references.append(
                 PersonalizedModelStateReference(
                     coordinate=request.coordinates.personalized_coordinate,
                     client=client_id,
                     round_number=round_number,
                     local_loss=personalized_update.local_loss,
-                    state_checksum=personalized_state.checksum,
                     tensor_path=None,
                 )
             )
 
-            if round_number in candidate_rounds:
-                _require_client_entry(personalized_snapshots, client_id).append(
-                    create_round_snapshot(
-                        round_number,
-                        personalized_update.model_state,
-                        personalized_update.local_loss,
-                    )
-                )
-
         aggregated = aggregate_client_updates(global_updates)
         aggregate_loss = compute_weighted_aggregate_loss(global_updates)
-        serialized_global_state = serialize_and_checksum_model_state(aggregated)
+        serialized_global_state = serialize_model_state(aggregated)
 
         rounds.append(
             FederatedRoundResult(
@@ -231,7 +201,6 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
                 global_state_reference=GlobalModelStateReference(
                     coordinate=request.coordinates.global_coordinate,
                     round_number=round_number,
-                    state_checksum=serialized_global_state.checksum,
                     tensor_path=None,
                 ),
                 personalized_state_references=tuple(personalized_references),
@@ -239,30 +208,29 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
         )
         global_model_state = aggregated
 
-        if round_number in candidate_rounds:
-            global_snapshots.append(create_round_snapshot(round_number, global_model_state, aggregate_loss))
-
     global_result = FederatedTrainingResult(
         coordinate=request.coordinates.global_coordinate,
         autoencoder=request.autoencoder,
-        checkpoint_protocol=request.checkpoint_protocol,
+        diagnostic_snapshot_protocol=request.diagnostic_snapshot_protocol,
         history=FederatedTrainingHistory(
             coordinate=request.coordinates.global_coordinate,
             rounds=tuple(rounds),
         ),
-        preprocessing_state_set_checksum=preprocessing_checksum,
-        split_manifest_checksum=request.split_manifest_checksum,
+        terminal_model_state=global_model_state.on_cpu_with_contiguous_tensors(),
         device_name=CudaDeviceName(torch.cuda.get_device_name(device).strip()),
         batch_size_used=request.batch_size,
     )
 
     return write_ditto_training(
         global_result=global_result,
-        global_snapshots=tuple(global_snapshots),
-        personalized_coordinate=request.coordinates.personalized_coordinate,
-        personalized_snapshot_sets=tuple(
-            PersonalizedSnapshotSet(client=client, snapshots=tuple(snapshots))
-            for client, snapshots in personalized_snapshots.items()
+        personalized_terminal_models=tuple(
+            PersonalizedTerminalModel(
+                coordinate=request.coordinates.personalized_coordinate,
+                client=client,
+                model_state=model_state.on_cpu_with_contiguous_tensors(),
+                final_round=rounds[-1].round_number,
+            )
+            for client, model_state in personalized_model_states.items()
         ),
         global_output_directory=request.global_output_directory,
         personalized_output_directory=request.personalized_output_directory,

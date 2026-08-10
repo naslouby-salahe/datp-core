@@ -10,8 +10,6 @@ from pydantic import model_validator
 from datp_core.analysis.inference.bootstrap.contracts import BootstrapInterval
 from datp_core.analysis.inference.contracts import PairedInferenceProtocol
 from datp_core.analysis.scientific_decision import ScientificDecision, ScientificDecisionResult
-from datp_core.artifacts.provenance import Checksum
-from datp_core.artifacts.serializers.json import canonical_checksum
 from datp_core.core.contracts import StrictModel
 from datp_core.core.errors import (
     ErrorMessage,
@@ -64,16 +62,6 @@ class TemporalSeedProvenance(StrictModel):
     static_reference: TemporalDeploymentProvenance
     frozen_future: TemporalDeploymentProvenance
     recalibrated_future: TemporalDeploymentProvenance
-    static_threshold_checksum: Checksum
-    frozen_threshold_checksum: Checksum
-    recalibrated_threshold_checksum: Checksum
-    static_evaluation_checksum: Checksum
-    frozen_evaluation_checksum: Checksum
-    recalibrated_evaluation_checksum: Checksum
-    client_inventory_checksum: Checksum
-    eligibility_checksum: Checksum
-    source_row_checksum: Checksum
-    row_order_checksum: Checksum
     excluded_clients: tuple[ClientIdentity, ...] = ()
     unavailable_reasons: tuple[AnalysisReasonText, ...] = ()
 
@@ -85,11 +73,7 @@ class TemporalSeedProvenance(StrictModel):
             raise ValueError("frozen_future provenance must use the frozen_future state")
         if self.recalibrated_future.state is not TemporalState.RECALIBRATED_FUTURE:
             raise ValueError("recalibrated_future provenance must use the recalibrated_future state")
-        if (
-            self.static_reference.checkpoint_checksum != self.frozen_future.checkpoint_checksum
-            or self.static_reference.preprocessing_state_set_checksum
-            != self.frozen_future.preprocessing_state_set_checksum
-        ):
+        if self.static_reference.coordinate != self.frozen_future.coordinate:
             raise ValueError("static and frozen temporal states must share detector and preprocessing identity")
         if self.frozen_future.future_identity != self.recalibrated_future.future_identity:
             raise ValueError("frozen and recalibrated future must share detector, split, and evaluation scores")
@@ -483,27 +467,6 @@ def _blocked_temporal_campaign(
         return _blocked_temporal_decision(
             DecisionRationale("temporal provenance records must share one population identity")
         )
-    checksum_keys = tuple(
-        (
-            item.static_reference.checkpoint_checksum,
-            item.static_reference.split_manifest_checksum,
-            item.frozen_future.evaluation_score_set_checksum,
-            item.recalibrated_future.calibration_score_set_checksum,
-            item.static_threshold_checksum,
-            item.frozen_threshold_checksum,
-            item.recalibrated_threshold_checksum,
-            item.static_evaluation_checksum,
-            item.frozen_evaluation_checksum,
-            item.recalibrated_evaluation_checksum,
-            item.client_inventory_checksum,
-            item.eligibility_checksum,
-            item.source_row_checksum,
-            item.row_order_checksum,
-        )
-        for item in provenances
-    )
-    if len(frozenset(checksum_keys)) != len(checksum_keys):
-        return _blocked_temporal_decision(DecisionRationale("temporal provenance must not be cloned across seeds"))
     return None
 
 
@@ -569,11 +532,8 @@ def temporal_seed_series_intervals(
 class TemporalFutureIdentity(StrictModel):
     split_protocol: SplitProtocolId
     evaluation_role: PartitionRole
-    coordinate_checksum: Checksum
-    checkpoint_checksum: Checksum
-    preprocessing_state_set_checksum: Checksum
-    split_manifest_checksum: Checksum
-    evaluation_score_set_checksum: Checksum
+    coordinate: object
+    evaluation_records: tuple[object, ...]
 
 
 class TemporalDeploymentProvenance(StrictModel):
@@ -583,12 +543,9 @@ class TemporalDeploymentProvenance(StrictModel):
     split_protocol: SplitProtocolId
     calibration_role: PartitionRole
     evaluation_role: PartitionRole
-    coordinate_checksum: Checksum
-    checkpoint_checksum: Checksum
-    preprocessing_state_set_checksum: Checksum
-    split_manifest_checksum: Checksum
-    calibration_score_set_checksum: Checksum
-    evaluation_score_set_checksum: Checksum
+    coordinate: object
+    calibration_records: tuple[object, ...]
+    evaluation_records: tuple[object, ...]
 
     @model_validator(mode="after")
     def validate_binding(self) -> TemporalDeploymentProvenance:
@@ -603,11 +560,8 @@ class TemporalDeploymentProvenance(StrictModel):
         return TemporalFutureIdentity(
             split_protocol=self.split_protocol,
             evaluation_role=self.evaluation_role,
-            coordinate_checksum=self.coordinate_checksum,
-            checkpoint_checksum=self.checkpoint_checksum,
-            preprocessing_state_set_checksum=self.preprocessing_state_set_checksum,
-            split_manifest_checksum=self.split_manifest_checksum,
-            evaluation_score_set_checksum=self.evaluation_score_set_checksum,
+            coordinate=self.coordinate,
+            evaluation_records=self.evaluation_records,
         )
 
     @classmethod
@@ -627,12 +581,9 @@ class TemporalDeploymentProvenance(StrictModel):
             split_protocol=manifest.scored_split_protocol,
             calibration_role=calibration_role,
             evaluation_role=evaluation_role,
-            coordinate_checksum=canonical_checksum(manifest.coordinate),
-            checkpoint_checksum=manifest.checkpoint_checksum,
-            preprocessing_state_set_checksum=manifest.preprocessing_state_set_checksum,
-            split_manifest_checksum=manifest.split_manifest_checksum,
-            calibration_score_set_checksum=manifest.score_set_checksum(calibration_role),
-            evaluation_score_set_checksum=manifest.score_set_checksum(evaluation_role),
+            coordinate=manifest.coordinate,
+            calibration_records=tuple(manifest.records_for(calibration_role)),
+            evaluation_records=tuple(manifest.records_for(evaluation_role)),
         )
 
     def validate_score_manifest[

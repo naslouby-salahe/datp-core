@@ -15,7 +15,6 @@ from datp_core.core.identifiers import (
     ValidationSourceContext,
 )
 from datp_core.core.numeric import RowCount, ValidationIssueCount
-from datp_core.data.canonical_cache import CanonicalAsset, CanonicalAssetLayout, canonical_directory
 from datp_core.data.contracts import (
     CanonicalProvenanceColumn,
     ChronologyValidation,
@@ -28,14 +27,17 @@ from datp_core.data.contracts import (
     ValidationSeverity,
 )
 from datp_core.data.materialization import (
+    CanonicalAsset,
+    CanonicalAssetLayout,
     CanonicalPublication,
+    canonical_directory,
     empty_asset,
     named_assets,
+    publish_canonical,
     raw_inventory,
     raw_source_file,
     stream_parquet,
 )
-from datp_core.data.materialization_lifecycle import CanonicalMaterializationRequest, materialize_canonical
 
 from .chronology import PcapChronology, paired_capture_path, write_capture_timeline
 from .reader import EdgeIIoTsetReader
@@ -74,11 +76,6 @@ _UNASSIGNED_ATTACK_BRANCH = Path(EdgeAssetRole.UNASSIGNED_ATTACK)
 _EDGE_CANONICALIZATION_CONTRACT = CanonicalizationContractName("pcap_verified_source_order_and_typed_asset_roles")
 
 
-def _source_paths(benign_paths: tuple[Path, ...], attack_paths: tuple[Path, ...]) -> tuple[Path, ...]:
-    evidence_paths = tuple(path for path in (paired_capture_path(path) for path in benign_paths) if path.is_file())
-    return tuple(sorted(benign_paths + evidence_paths + attack_paths))
-
-
 class EdgeIIoTsetMaterializer:
     """Publish static benign, chronology-eligible benign, and unassigned attack partitions."""
 
@@ -109,30 +106,13 @@ class EdgeIIoTsetMaterializer:
         ordered_attack = tuple(sorted(attack_paths))
         if not ordered_benign or not ordered_attack:
             raise ValueError("Edge materialization requires benign and attack sources")
-        source_paths = _source_paths(ordered_benign, ordered_attack)
-        return materialize_canonical(
-            CanonicalMaterializationRequest(
-                canonical_root=canonical_root,
-                schema=EDGE_SCHEMA,
-                canonicalization_contract=_EDGE_CANONICALIZATION_CONTRACT,
-                source_paths=source_paths,
-                source_path_resolver=source_relative_path,
-                asset_role_type=EdgeAssetRole,
-                prepare_publication=lambda: self._prepare_canonical_publication(
-                    ordered_benign,
-                    ordered_attack,
-                    canonical_root,
-                    source_paths,
-                ),
-            )
-        )
+        return publish_canonical(self._prepare_canonical_publication(ordered_benign, ordered_attack, canonical_root))
 
     def _prepare_canonical_publication(
         self,
         benign_paths: tuple[Path, ...],
         attack_paths: tuple[Path, ...],
         canonical_root: Path,
-        source_paths: tuple[Path, ...],
     ) -> CanonicalPublication[EdgeAssetRole, EdgeAssetRole]:
         publication = self._prepare_publication(benign_paths, attack_paths)
 
@@ -147,8 +127,6 @@ class EdgeIIoTsetMaterializer:
             validation_report=publication.report,
             expected_assets=publication.inputs.expected_assets,
             writer=write_assets,
-            source_paths=source_paths,
-            source_path_resolver=source_relative_path,
             chronology=publication.validations,
         )
 

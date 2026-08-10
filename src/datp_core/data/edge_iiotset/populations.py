@@ -24,14 +24,12 @@ from datp_core.core.numeric import NonNegativeIntegerValue, RowCount, Seed, Vali
 from datp_core.data.contracts import (
     CanonicalManifestDocument,
     CanonicalProvenanceColumn,
-    CanonicalPublicationArtifact,
     ManifestChronologyEntry,
 )
 from datp_core.data.edge_iiotset.capabilities import EDGE_IIOTSET_CAPABILITIES, EDGE_TEMPORAL_SENSOR_GROUPS
 from datp_core.data.edge_iiotset.schema import (
     EDGE_BENIGN_SENSOR_GROUPS,
     EDGE_NUMERIC_FEATURE_COLUMNS,
-    EDGE_SCHEMA,
     EdgeAssetRole,
     EdgeCanonicalColumn,
     EdgeSensorGroup,
@@ -54,7 +52,6 @@ from datp_core.data.populations.contracts import (
     PopulationManifest,
     PopulationOutcomeLabel,
     build_population_capabilities,
-    model_input_exclusion_checksum,
     population_evidence_role,
     select_membership_frame,
 )
@@ -127,7 +124,6 @@ def construct_edge_sensor_groups(
             expected_identities=expected,
             chronology_required=False,
             membership=select_membership_frame(membership),
-            canonical_schema_checksum=EDGE_SCHEMA.checksum,
         )
     )
     return PopulationConstructionResult(
@@ -223,7 +219,6 @@ def _finalize_temporal_manifest(
             expected_identities=tuple(ClientIdentityToken(str(group)) for group in programme_candidates),
             chronology_required=True,
             membership=select_membership_frame(membership),
-            canonical_schema_checksum=EDGE_SCHEMA.checksum,
         )
     )
 
@@ -236,7 +231,7 @@ def _chronology_eligibility(
     tuple[ChronologyExclusionReason, ...],
     ValidationIssueCount,
 ]:
-    manifest_path = Path(canonical_root) / CanonicalPublicationArtifact.MANIFEST
+    manifest_path = Path(canonical_root) / "dataset_manifest.json"
     if not manifest_path.is_file():
         raise DataIntegrityError(
             ErrorMessage("Edge canonical manifest is required for temporal eligibility"),
@@ -369,13 +364,6 @@ def _model_input_eligible_membership(
         total_row_count=total_rows,
         excluded_row_count=RowCount(len(excluded_ids)),
         excluded_stable_row_ids=excluded_ids,
-        evidence_checksum=model_input_exclusion_checksum(
-            dataset=DatasetId.EDGE_IIOTSET,
-            population=population,
-            reason=reason,
-            total_row_count=total_rows,
-            excluded_stable_row_ids=excluded_ids,
-        ),
     )
     membership = select_membership_frame(eligible) if membership_only else eligible
     return membership.sort(sort_columns), evidence
@@ -392,13 +380,6 @@ def _empty_model_input_exclusions(population: PopulationId) -> ModelInputExclusi
         total_row_count=total_rows,
         excluded_row_count=RowCount(0),
         excluded_stable_row_ids=empty_ids,
-        evidence_checksum=model_input_exclusion_checksum(
-            dataset=DatasetId.EDGE_IIOTSET,
-            population=population,
-            reason=reason,
-            total_row_count=total_rows,
-            excluded_stable_row_ids=empty_ids,
-        ),
     )
 
 
@@ -444,7 +425,6 @@ def _matched_static_reference(
             expected_identities=tuple(ClientIdentityToken(str(group)) for group in programme_candidates),
             chronology_required=True,
             membership=membership,
-            canonical_schema_checksum=EDGE_SCHEMA.checksum,
         )
     )
     return manifest, membership

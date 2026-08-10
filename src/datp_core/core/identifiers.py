@@ -206,7 +206,6 @@ class ThresholdMethodExecutionStatus(StrEnum):
 
 class PublicationStatus(StrEnum):
     PUBLISHED = "published"
-    REUSED = "reused"
 
 
 class StageOperationId(StrEnum):
@@ -255,18 +254,6 @@ class TrafficRateEvidenceType(StrEnum):
     UNAVAILABLE = "unavailable"
 
 
-class CheckpointStatus(StrEnum):
-    HISTORICAL_ENDPOINT = "historical_endpoint"
-    CANDIDATE = "candidate"
-    SELECTED_BY_NON_TEST_RULE = "selected_by_non_test_rule"
-    STABILITY_EVIDENCE = "stability_evidence"
-
-
-class CheckpointSelectionRule(StrEnum):
-    FIXED_TERMINAL_MAXIMUM_ROUND = "fixed_terminal_maximum_round"
-    FINAL_COMPLETED_ROUND = "final_completed_round"
-
-
 class FedProxCoefficientSelectionRule(StrEnum):
     FEDPROX_MINIMUM_TERMINAL_TRAINING_LOSS = "fedprox_minimum_terminal_training_loss"
 
@@ -281,7 +268,7 @@ class ProcessedDataBranch(StrEnum):
     CENTRALIZED_REFERENCE = "centralized_reference"
 
 
-class ReusableDataCoordinateKind(StrEnum):
+class PreparedDataCoordinateKind(StrEnum):
     CANONICAL = "canonical"
     PROCESSED = "processed"
     RAW = "raw"

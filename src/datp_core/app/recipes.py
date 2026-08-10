@@ -21,7 +21,6 @@ from datp_core.app.planning import (
 )
 from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
-from datp_core.artifacts.serializers.json import canonical_checksum
 from datp_core.core.errors import (
     ErrorMessage,
     ReportEvidenceError,
@@ -41,10 +40,10 @@ from datp_core.detector.training.protocols import DITTO_PRIMARY_REGULARIZATION, 
 from datp_core.experiments.centralized_reference import (
     CIC_CENTRALIZED_REFERENCE,
     NBAIOT_CENTRALIZED_REFERENCE,
-    centralized_reference_report_complete,
+    centralized_reference_directory,
     report_centralized_reference,
 )
-from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
+from datp_core.experiments.common.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.experiments.confirmatory.run import (
     ConfirmatoryAssetDirectory,
     analyze_confirmatory_campaign,
@@ -91,7 +90,6 @@ from datp_core.experiments.temporal import (
     TemporalCampaignResult,
     TemporalSeedResult,
     analyze_temporal_campaign,
-    load_temporal_campaign_seeds,
     run_temporal_seed,
 )
 from datp_core.experiments.threshold_robustness import (
@@ -665,7 +663,10 @@ def _report_ditto(experiment_id: ExperimentId, overwrite: OverwriteMode) -> Repo
 
 
 def _report_temporal(experiment_id: ExperimentId, overwrite: OverwriteMode) -> ReportResult:
-    seeds = load_temporal_campaign_seeds(output_root=OUTPUTS_ROOT)
+    seeds = tuple(
+        run_temporal_seed(seed, output_root=OUTPUTS_ROOT, overwrite=overwrite.requested)
+        for seed in BOUNDED_EVIDENCE_SEED_COHORT.values
+    )
     campaign = TemporalCampaignResult(seeds=seeds, analyses=())
     analyses = analyze_temporal_campaign(campaign, output_root=OUTPUTS_ROOT, overwrite=overwrite.requested)
     paths = tuple(item.output_directory for item in analyses)
@@ -724,8 +725,6 @@ def _report_supplementary(experiment_id: ExperimentId, overwrite: OverwriteMode)
         ),
     )
     report_path = _supplementary_directory(experiment_id) / ResearchArtifact.EVIDENCE_REPORT
-    if report_path.is_file() and not overwrite.requested:
-        return ReportResult(experiment=experiment_id, paths=(report_path,), detail=DetailText(f"reused {report_path}"))
     lines = [
         "# DATP-Core Supplementary Evidence",
         "",
@@ -733,8 +732,8 @@ def _report_supplementary(experiment_id: ExperimentId, overwrite: OverwriteMode)
         f"Evidence role: `{declaration.role.value}`",
         f"Population: `{declaration.population.value}`",
         "",
-        "| Seed | Threshold method | Metric | Status | Value | Evidence checksum |",
-        "|---:|---|---|---|---:|---|",
+        "| Seed | Threshold method | Metric | Status | Value |",
+        "|---:|---|---|---|---:|",
     ]
     seen: set[tuple[Seed, FederatedThresholdMethod, str]] = set()
     for entry in plan.executable:
@@ -758,7 +757,7 @@ def _report_supplementary(experiment_id: ExperimentId, overwrite: OverwriteMode)
         value = f"{metric.value.value:.12g}" if isinstance(metric, AvailableMetric) else "—"
         lines.append(
             f"| {coordinate.training_seed.value} | {coordinate.threshold_method.value} | "
-            f"{coordinate.metric.value} | {metric.status.value} | {value} | {canonical_checksum(document).value} |"
+            f"{coordinate.metric.value} | {metric.status.value} | {value} |"
         )
     report_path.parent.mkdir(parents=True, exist_ok=True)
     write_text_atomically(report_path, FileContentText("\n".join(lines) + "\n"))
@@ -772,7 +771,7 @@ def _confirmatory_marker(experiment_id: ExperimentId) -> bool:
         / ConfirmatoryAssetDirectory.ROOT
         / PopulationId.NBAIOT_NATURAL_DEVICES.value
         / ConfirmatoryAssetDirectory.ANALYSIS
-        / AnalysisAssetName.COMPLETE
+        / AnalysisAssetName.DOCUMENT
     ).is_file()
 
 
@@ -783,7 +782,7 @@ def _external_marker(experiment_id: ExperimentId) -> bool:
         / BoundedExternalAssetDirectory.ANALYSIS
         / experiment_id.value
         / declaration.population.value
-        / AnalysisAssetName.COMPLETE
+        / AnalysisAssetName.EXTERNAL_DOCUMENT
     ).is_file()
     if not paired_complete:
         return False
@@ -793,10 +792,12 @@ def _external_marker(experiment_id: ExperimentId) -> bool:
             / ExternalBenignStatisticsAssetName.ROOT
             / experiment_id.value
             / declaration.population.value
-            / ExternalBenignStatisticsAssetName.COMPLETE
+            / ExternalBenignStatisticsAssetName.SUMMARY
         ).is_file()
     if experiment_id is ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY:
-        return centralized_reference_report_complete(CIC_CENTRALIZED_REFERENCE).is_file()
+        return (
+            centralized_reference_directory(CIC_CENTRALIZED_REFERENCE, CONFIRMATORY_SEED_COHORT.values[0]) / "report"
+        ).is_dir()
     raise ReportEvidenceError(ErrorMessage(f"unsupported external marker: {experiment_id.value}"))
 
 
@@ -840,7 +841,7 @@ def _temporal_marker(experiment_id: ExperimentId) -> bool:
             / declaration.role.value
             / TemporalArtifactDirectory.ANALYSIS
             / method.value
-            / AnalysisAssetName.COMPLETE
+            / AnalysisAssetName.TEMPORAL_DOCUMENT
         ).is_file()
         for method in declaration.federated_thresholds
     )

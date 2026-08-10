@@ -2,7 +2,6 @@ import pytest
 from tests.unit.anchor.helpers import make_observation, make_reference
 
 from datp_core.core.identifiers import (
-    CheckpointStatus,
     FederatedThresholdMethod,
     PopulationId,
     TrainingModelId,
@@ -96,14 +95,6 @@ def test_wrong_model_identity_blocks() -> None:
         make_observation(training_model=TrainingModelId.FEDPROX_AUTOENCODER),
     )
     assert comparison.reason is AnchorDiscrepancyReason.WRONG_TRAINING_MODEL
-
-
-def test_wrong_checkpoint_semantics_block() -> None:
-    comparison = compare_anchor_metric(
-        make_reference(),
-        make_observation(checkpoint_status=CheckpointStatus.SELECTED_BY_NON_TEST_RULE),
-    )
-    assert comparison.reason is AnchorDiscrepancyReason.WRONG_CHECKPOINT_SEMANTICS
 
 
 def test_relative_comparison_against_zero_is_unavailable() -> None:

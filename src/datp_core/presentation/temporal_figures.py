@@ -8,8 +8,7 @@ from io import StringIO
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from datp_core.artifacts.provenance import Checksum
-from datp_core.artifacts.serializers.json import canonical_checksum, canonical_json_text
+from datp_core.artifacts.serializers.json import canonical_json_text
 from datp_core.core.identifiers import (
     AnalysisReasonText,
     AvailabilityStatus,
@@ -46,8 +45,6 @@ class TemporalFigureSourceExports:
     fpr_trajectory_source: Path
     threshold_movement_source: Path
     manifest: Path
-    fpr_trajectory_checksum: Checksum
-    threshold_movement_checksum: Checksum
 
 
 def temporal_publication_figures(document: TemporalAnalysisDocument) -> tuple[FigureSpec, FigureSpec]:
@@ -111,17 +108,14 @@ def export_temporal_figure_sources(
     document: TemporalAnalysisDocument,
     output_directory: Path,
 ) -> TemporalFigureSourceExports:
-    """Write source records for both mandatory temporal figures and a checksum manifest.
+    """Write source records for both mandatory temporal figures.
 
     CSV rows are one observation per client, seed, and displayed temporal state.
     Each row repeats the state-specific artifact identities needed to reproduce the
     observation without relying on a human-readable report.
     """
-    analysis_checksum = canonical_checksum(document)
-    fpr_rows = _fpr_source_rows(document, analysis_checksum)
-    threshold_rows = _threshold_source_rows(document, analysis_checksum)
-    fpr_checksum = canonical_checksum(tuple(fpr_rows))
-    threshold_checksum = canonical_checksum(tuple(threshold_rows))
+    fpr_rows = _fpr_source_rows(document)
+    threshold_rows = _threshold_source_rows(document)
     fpr_path = output_directory / FIGURE_011_SOURCE_FILENAME
     threshold_path = output_directory / FIGURE_012_SOURCE_FILENAME
     manifest_path = output_directory / TEMPORAL_FIGURE_SOURCES_MANIFEST_FILENAME
@@ -133,13 +127,11 @@ def export_temporal_figure_sources(
         "population": PopulationId.EDGE_TEMPORAL_GROUPS.value,
         "evidence_role": EvidenceRole.TEMPORAL_BOUNDARY.value,
         "threshold_method": document.threshold_method.value,
-        "analysis_checksum": analysis_checksum.value,
         "sources": (
             {
                 "figure_id": "FIGURE-011",
                 "filename": FIGURE_011_SOURCE_FILENAME,
                 "row_count": len(fpr_rows),
-                "source_checksum": fpr_checksum.value,
                 "metric": MetricId.FALSE_POSITIVE_RATE.value,
                 "states": tuple(state.value for state in TemporalState),
                 "unit": "client_x_seed_x_state",
@@ -148,7 +140,6 @@ def export_temporal_figure_sources(
                 "figure_id": "FIGURE-012",
                 "filename": FIGURE_012_SOURCE_FILENAME,
                 "row_count": len(threshold_rows),
-                "source_checksum": threshold_checksum.value,
                 "metric": "threshold_value",
                 "states": (TemporalState.FROZEN_FUTURE.value, TemporalState.RECALIBRATED_FUTURE.value),
                 "unit": "client_x_seed_x_policy_x_state",
@@ -160,12 +151,10 @@ def export_temporal_figure_sources(
         fpr_trajectory_source=fpr_path,
         threshold_movement_source=threshold_path,
         manifest=manifest_path,
-        fpr_trajectory_checksum=fpr_checksum,
-        threshold_movement_checksum=threshold_checksum,
     )
 
 
-def _fpr_source_rows(document: TemporalAnalysisDocument, analysis_checksum: Checksum) -> list[dict[str, str]]:
+def _fpr_source_rows(document: TemporalAnalysisDocument) -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
     for recovery in _ordered_recoveries(document):
         for trajectory in _ordered_trajectories(recovery):
@@ -177,7 +166,6 @@ def _fpr_source_rows(document: TemporalAnalysisDocument, analysis_checksum: Chec
                         trajectory=trajectory,
                         state=state,
                         value=value,
-                        analysis_checksum=analysis_checksum,
                         figure_id="FIGURE-011",
                         window_order=window_order,
                         threshold_movement=None,
@@ -186,7 +174,7 @@ def _fpr_source_rows(document: TemporalAnalysisDocument, analysis_checksum: Chec
     return rows
 
 
-def _threshold_source_rows(document: TemporalAnalysisDocument, analysis_checksum: Checksum) -> list[dict[str, str]]:
+def _threshold_source_rows(document: TemporalAnalysisDocument) -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
     for recovery in _ordered_recoveries(document):
         for trajectory in _ordered_trajectories(recovery):
@@ -201,7 +189,6 @@ def _threshold_source_rows(document: TemporalAnalysisDocument, analysis_checksum
                         trajectory=trajectory,
                         state=state,
                         value=value,
-                        analysis_checksum=analysis_checksum,
                         figure_id="FIGURE-012",
                         window_order=window_order,
                         threshold_movement=movement,
@@ -217,14 +204,12 @@ def _source_row(
     trajectory: TemporalClientTrajectory,
     state: TemporalState,
     value: MetricValue | None,
-    analysis_checksum: Checksum,
     figure_id: str,
     window_order: int,
     threshold_movement: MetricValue | None,
 ) -> dict[str, str]:
     deployment = _deployment_for_state(recovery, state)
     provenance = recovery.provenance
-    state_threshold_checksum, state_evaluation_checksum = _state_result_checksums(recovery, state)
     available = trajectory.eligible and value is not None
     return {
         "figure_id": figure_id,
@@ -243,19 +228,9 @@ def _source_row(
         "eligible_for_fpr": str(trajectory.eligible).lower(),
         "unavailable_reason": "" if available else _trajectory_reason(trajectory),
         "threshold_movement_from_historical": _metric_text(threshold_movement) if available else "",
-        "analysis_checksum": analysis_checksum.value,
-        "coordinate_checksum": deployment.coordinate_checksum.value,
-        "checkpoint_checksum": deployment.checkpoint_checksum.value,
-        "preprocessing_state_set_checksum": deployment.preprocessing_state_set_checksum.value,
-        "split_manifest_checksum": deployment.split_manifest_checksum.value,
-        "calibration_score_set_checksum": deployment.calibration_score_set_checksum.value,
-        "evaluation_score_set_checksum": deployment.evaluation_score_set_checksum.value,
-        "threshold_checksum": state_threshold_checksum.value,
-        "evaluation_checksum": state_evaluation_checksum.value,
-        "client_inventory_checksum": provenance.client_inventory_checksum.value,
-        "eligibility_checksum": provenance.eligibility_checksum.value,
-        "source_row_checksum": provenance.source_row_checksum.value,
-        "row_order_checksum": provenance.row_order_checksum.value,
+        "coordinate": str(deployment.coordinate),
+        "calibration_score_record_count": str(len(deployment.calibration_records)),
+        "evaluation_score_record_count": str(len(deployment.evaluation_records)),
     }
 
 
@@ -264,23 +239,6 @@ def _deployment_for_state(recovery: TemporalRecoveryResult, state: TemporalState
         TemporalState.STATIC_REFERENCE: recovery.provenance.static_reference,
         TemporalState.FROZEN_FUTURE: recovery.provenance.frozen_future,
         TemporalState.RECALIBRATED_FUTURE: recovery.provenance.recalibrated_future,
-    }[state]
-
-
-def _state_result_checksums(recovery: TemporalRecoveryResult, state: TemporalState) -> tuple[Checksum, Checksum]:
-    return {
-        TemporalState.STATIC_REFERENCE: (
-            recovery.provenance.static_threshold_checksum,
-            recovery.provenance.static_evaluation_checksum,
-        ),
-        TemporalState.FROZEN_FUTURE: (
-            recovery.provenance.frozen_threshold_checksum,
-            recovery.provenance.frozen_evaluation_checksum,
-        ),
-        TemporalState.RECALIBRATED_FUTURE: (
-            recovery.provenance.recalibrated_threshold_checksum,
-            recovery.provenance.recalibrated_evaluation_checksum,
-        ),
     }[state]
 
 

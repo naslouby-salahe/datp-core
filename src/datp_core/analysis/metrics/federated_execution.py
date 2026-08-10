@@ -17,11 +17,7 @@ from datp_core.analysis.metrics.federated import (
     ThresholdEstimationStageInput,
 )
 from datp_core.analysis.metrics.fixed_score import FederatedEvaluationScoreArrays
-from datp_core.analysis.metrics.fixed_score_checksums import evaluation_label_checksum, source_row_checksum
-from datp_core.analysis.metrics.fixed_score_validation import (
-    validate_evaluation_evidence,
-    validate_fixed_score_controls,
-)
+from datp_core.analysis.metrics.fixed_score_validation import validate_evaluation_evidence
 from datp_core.analysis.metrics.models import (
     ClientMetricResult,
     FederatedScoreRecord,
@@ -37,8 +33,6 @@ from datp_core.analysis.metrics.threshold_estimation import (
 from datp_core.analysis.operational.alert_burden import AlertBurdenDiagnostic, calculate_alert_burden
 from datp_core.analysis.operational.communication import summarize_communication
 from datp_core.analysis.operational.traffic_rates import ValidatedTrafficRateEvidence
-from datp_core.artifacts.provenance import Checksum
-from datp_core.artifacts.serializers.json import canonical_checksum
 from datp_core.core.errors import (
     ArtifactIntegrityError,
     ErrorMessage,
@@ -57,7 +51,6 @@ from datp_core.core.identifiers import (
     StageOperationId,
 )
 from datp_core.core.numeric import (
-    NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
     Ratio,
     ScoreValue,
     ShrinkageWeight,
@@ -105,12 +98,6 @@ def prepare_federated_evaluation(request: FederatedEvaluationRequest) -> Federat
         request.cohort,
         metrics.clients,
     )
-    if request.comparison_fixed_score_evidence is not None:
-        validate_fixed_score_controls(
-            request.fixed_score_evidence,
-            request.comparison_fixed_score_evidence,
-            auroc_absolute_tolerance=NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
-        )
     artifacts = FederatedEvaluationArtifacts(
         clients=metrics.clients,
         population=metrics.population,
@@ -119,11 +106,6 @@ def prepare_federated_evaluation(request: FederatedEvaluationRequest) -> Federat
     document = FederatedEvaluationDocument(
         stage=StageOperationId.EVALUATE_FEDERATED,
         score_coordinate=request.score_manifest.coordinate,
-        score_checkpoint_round=request.score_manifest.checkpoint_round,
-        score_checkpoint_checksum=request.score_manifest.checkpoint_checksum,
-        score_checkpoint_status=request.score_manifest.checkpoint_status,
-        preprocessing_state_set_checksum=request.score_manifest.preprocessing_state_set_checksum,
-        split_manifest_checksum=request.score_manifest.split_manifest_checksum,
         threshold_method=_threshold_method(request.threshold_result),
         evidence_role=request.evidence_role,
         fixed_score_evidence=request.fixed_score_evidence,
@@ -136,7 +118,6 @@ def prepare_federated_evaluation(request: FederatedEvaluationRequest) -> Federat
     return FederatedEvaluationPublication(
         artifacts=artifacts,
         document=document,
-        digest=canonical_checksum(document),
     )
 
 
@@ -244,7 +225,7 @@ def _evaluate_score_record(
                 ErrorMessage("threshold assignment missing for evaluation client without a deployment fallback"),
                 subject=ContractSubject.THRESHOLD,
             )
-    if not record.path.is_file() or Checksum.from_file(record.path) != record.checksum:
+    if not record.path.is_file():
         raise ArtifactIntegrityError(ErrorMessage("evaluation score artifact is incomplete or changed"))
 
     score_arrays = _score_arrays(ScoreArtifactPathText(str(record.path)))
@@ -266,9 +247,6 @@ def _evaluate_score_record(
         metrics=calculate_metrics_for_evaluation_score_arrays(confusion=confusion, score_arrays=score_arrays),
         warnings=(),
         evidence_role=request.evidence_role,
-        evaluation_score_checksum=record.checksum,
-        evaluation_label_checksum=evaluation_label_checksum(score_arrays.labels),
-        source_row_checksum=source_row_checksum(score_arrays.row_ids),
     )
 
 

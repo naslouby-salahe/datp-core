@@ -4,7 +4,6 @@ from typing import ClassVar
 
 from pydantic import model_validator
 
-from datp_core.artifacts.provenance import Checksum
 from datp_core.core.contracts import StrictModel
 from datp_core.core.identifiers import (
     AnalysisReasonText,
@@ -58,9 +57,6 @@ class ThresholdMovement(StrictModel):
     delta_tpr: MetricValue | None
     delta_balanced_accuracy: MetricValue | None
     delta_macro_f1: MetricValue | None
-    score_checksum: Checksum | None = None
-    evaluation_checksum: Checksum | None = None
-
     evidence_role: ClassVar[EvidenceRole] = EvidenceRole.MECHANISM
 
     @model_validator(mode="after")
@@ -133,8 +129,6 @@ def threshold_movement(
     experiment: ExperimentId,
     coordinate: FederatedTrainingCoordinate,
     method_comparison: ThresholdMethodComparison = DEFAULT_THRESHOLD_METHOD_COMPARISON,
-    score_checksum: Checksum | None = None,
-    evaluation_checksum: Checksum | None = None,
 ) -> ThresholdMovement:
     if (shared.tpr is None) != (local.tpr is None):
         raise ValueError("TPR movement requires both operating points or neither")
@@ -167,8 +161,6 @@ def threshold_movement(
         delta_tpr=delta_tpr,
         delta_balanced_accuracy=delta_ba,
         delta_macro_f1=delta_f1,
-        score_checksum=score_checksum,
-        evaluation_checksum=evaluation_checksum,
     )
 
 

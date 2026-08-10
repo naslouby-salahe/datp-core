@@ -10,7 +10,6 @@ from datp_core.core.errors import (
 )
 from datp_core.core.identifiers import (
     CaptureTimestampColumn,
-    ContractSubject,
     DatasetId,
     FeatureName,
     FeatureNameSequence,
@@ -18,11 +17,10 @@ from datp_core.core.identifiers import (
     PopulationId,
     PreprocessingProtocolId,
     ProcessedDataBranch,
-    PublicationStatus,
     SplitProtocolId,
 )
 from datp_core.core.numeric import RowCount, Seed
-from datp_core.data.canonical_cache import require_canonical_publication_complete
+from datp_core.data.materialization import require_canonical_dataset
 from datp_core.data.paths import canonical_root_under
 from datp_core.data.populations.construction import (
     build_preprocessing_handoff,
@@ -41,10 +39,10 @@ from datp_core.data.preprocessing.artifact_validation import (
 )
 from datp_core.data.preprocessing.artifacts import (
     PartitionOrdering,
+    PreparedDataCoordinate,
     PreprocessingFitScope,
     ProcessedAssetName,
     RelativeAssetPathSequence,
-    ReusableDataCoordinate,
     branch_asset_path,
     canonical_relative_asset_path,
     centralized_branch_directory,
@@ -97,7 +95,6 @@ class CentralizedPreprocessingOutcome:
     population: PopulationId
     partition_seed: Seed
     preprocessing_identity: PreprocessingProtocolId
-    publication_status: PublicationStatus
     dataset: DatasetId
 
 
@@ -114,7 +111,7 @@ def publish_pooled_preprocessing(request: PooledPublishRequest) -> PooledPreproc
 
     branch_coordinate_directory = centralized_branch_directory(
         context.data_root,
-        ReusableDataCoordinate(
+        PreparedDataCoordinate(
             dataset=context.dataset,
             population=context.population,
             partition_seed=context.partition_seed,
@@ -156,14 +153,13 @@ def publish_pooled_preprocessing(request: PooledPublishRequest) -> PooledPreproc
     return PooledPreprocessingResult(
         paths=build_preprocessed_partition_paths(result.coordinate_directory, context.split_protocol_identity),
         fitted_state=state,
-        publication_status=result.publication_status,
     )
 
 
 def reject_federated_state_for_pooled(state: FittedPreprocessingState) -> None:
     if isinstance(state, FederatedFittedPreprocessingState):
         raise LeakageError(
-            ErrorMessage("federated client fitted state cannot be reused by the centralized reference"),
+            ErrorMessage("federated client fitted state cannot be used by the centralized reference"),
             subject=ProcessedDataBranch.FEDERATED,
         )
 
@@ -203,7 +199,6 @@ def preprocess_centralized(
         population=context.population,
         partition_seed=context.partition_seed,
         preprocessing_identity=context.protocol.identity,
-        publication_status=published.publication_status,
         dataset=context.dataset,
     )
 
@@ -222,11 +217,7 @@ def preprocess_centralized_population(
     dataset = resolve_population(request.population).declaration.dataset
     canonical_root = canonical_root_under(request.data_root, dataset)
 
-    require_canonical_publication_complete(
-        canonical_root,
-        dataset,
-        ContractSubject.PREPROCESSING,
-    )
+    require_canonical_dataset(canonical_root, dataset)
 
     construction = construct_population(
         PopulationConstructionRequest(
@@ -275,7 +266,6 @@ def preprocess_centralized_population(
                 partition_seed=document.partition_seed,
                 split_protocol_identity=document.split_protocol,
                 protocol=protocol,
-                canonical_schema_checksum=schema.checksum,
                 data_root=request.data_root,
                 dirichlet_condition=request.dirichlet_condition,
             ),

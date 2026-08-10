@@ -10,8 +10,6 @@ from typing import Annotated, Literal
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from datp_core.analysis.inference.bootstrap.contracts import BootstrapInterval
-from datp_core.artifacts.provenance import Checksum
-from datp_core.artifacts.serializers.json import canonical_checksum, canonical_json_text
 from datp_core.core.contracts import StrictModel, str_enum_schema
 from datp_core.core.errors import (
     ErrorMessage,
@@ -19,7 +17,6 @@ from datp_core.core.errors import (
 )
 from datp_core.core.identifiers import (
     ArtifactDirectoryPathText,
-    CheckpointStatus,
     ContractSubject,
     EvidenceRole,
     ExperimentId,
@@ -81,7 +78,6 @@ class AnchorDiscrepancyReason(StrEnum):
     WRONG_TRAINING_MODEL = "wrong_training_model"
     WRONG_THRESHOLD_METHOD = "wrong_threshold_method"
     WRONG_METRIC = "wrong_metric"
-    WRONG_CHECKPOINT_SEMANTICS = "wrong_checkpoint_semantics"
     STALE_OR_MISMATCHED_ARTIFACT = "stale_or_mismatched_artifact"
     UNSUPPORTED_GLOBAL_TOLERANCE = "unsupported_global_tolerance"
     MISSING_TOLERANCE_RULE = "missing_tolerance_rule"
@@ -136,8 +132,8 @@ class DiagnosticRule(StrictModel):
     """Per-seed historical value reference, reported but never gated.
 
     The roadmap gate's identity conditions (cohort, population, preprocessing,
-    training, checkpoint, scoring, threshold, eligibility, metric definition)
-    are checked structurally; the reproduced per-seed CV(FPR) values are
+    training, scoring, threshold, eligibility, metric definition) are checked
+    structurally; the reproduced per-seed CV(FPR) values are
     reported against the historical constants as diagnostics only. The sole
     confirmatory decision is the BCa interval on the five-seed cohort.
     """
@@ -174,7 +170,6 @@ class AnchorScientificCoordinates:
     training_model: TrainingModelId
     threshold_method: FederatedThresholdMethod
     metric: MetricId
-    checkpoint_status: CheckpointStatus
 
 
 _HISTORICAL_THRESHOLDS = frozenset(
@@ -206,11 +201,6 @@ def _require_anchor_coordinates(coordinates: AnchorScientificCoordinates) -> Non
         ErrorMessage("historical anchor coordinates require CV(FPR)"),
         ContractSubject.COORDINATE,
     )
-    require_contract(
-        coordinates.checkpoint_status is CheckpointStatus.HISTORICAL_ENDPOINT,
-        ErrorMessage("historical anchor coordinates require historical endpoint checkpoint semantics"),
-        ContractSubject.COORDINATE,
-    )
 
 
 class AnchorMetricReference(StrictModel):
@@ -221,7 +211,6 @@ class AnchorMetricReference(StrictModel):
     metric: MetricId
     value: MetricValue
     tolerance_rule: AnchorToleranceRule
-    checkpoint_status: CheckpointStatus
     interval: MetricInterval | None = None
     count: ClientCount | None = None
 
@@ -233,7 +222,6 @@ class AnchorMetricReference(StrictModel):
                 training_model=self.training_model,
                 threshold_method=self.threshold_method,
                 metric=self.metric,
-                checkpoint_status=self.checkpoint_status,
             )
         )
         return self
@@ -243,7 +231,7 @@ class AnchorObservedMetric(StrictModel):
     """Observed metric candidate.
 
     Coordinates are not pre-forced to the historical identity so mismatched
-    population, model, threshold, metric, or checkpoint semantics can be recorded
+    population, model, threshold, or metric can be recorded
     as explicit comparison failures rather than construction-time silence.
     """
 
@@ -253,11 +241,8 @@ class AnchorObservedMetric(StrictModel):
     threshold_method: FederatedThresholdMethod
     metric: MetricId
     value: MetricValue
-    checkpoint_status: CheckpointStatus
     source_kind: AnchorObservationSourceKind
     artifact_path: Path
-    artifact_checksum: Checksum
-    model_checkpoint_identity: Checksum
     evidence_role: EvidenceRole
     interval: MetricInterval | None = None
     count: ClientCount | None = None
@@ -330,7 +315,6 @@ class AnchorDiscrepancy(StrictModel):
     relative_difference: MetricDelta | None = None
     tolerance_rule: AnchorToleranceRule | None = None
     artifact_path: Path | None = None
-    artifact_checksum: Checksum | None = None
     detail: AnchorDetail
 
     @classmethod
@@ -358,7 +342,6 @@ class AnchorDiscrepancy(StrictModel):
             relative_difference=comparison.relative_difference,
             tolerance_rule=comparison.tolerance_rule,
             artifact_path=None if observation is None else observation.artifact_path,
-            artifact_checksum=None if observation is None else observation.artifact_checksum,
             detail=comparison.detail,
         )
 
@@ -439,25 +422,14 @@ def _require_blocked_gate(decision: AnchorGateDecision) -> None:
         raise ValueError("blocked anchor gate must block dependent readiness")
 
 
-class AnchorGateCompletionMarker(StrictModel):
-    artifact_checksum: Checksum
-    status: AnchorGateStatus
-
-
 class VerifiedAnchorGateArtifact(StrictModel):
-    """Checksum-verified anchor-gate artifact that claim export must consume."""
-
     decision: AnchorGateDecision
-    artifact_checksum: Checksum
     diagnostics_directory: ArtifactDirectoryPathText
 
     @model_validator(mode="after")
     def validate_passed_gate(self) -> VerifiedAnchorGateArtifact:
         if self.decision.status is AnchorGateStatus.ANCHOR_REPRODUCTION_FAILED:
             raise ValueError("verified anchor-gate artifact cannot be blocked")
-        recomputed = Checksum.from_text(canonical_json_text(self.decision))
-        if recomputed != self.artifact_checksum:
-            raise ValueError("anchor-gate artifact checksum does not match the decision payload")
         return self
 
     @property
@@ -468,26 +440,16 @@ class VerifiedAnchorGateArtifact(StrictModel):
 class AnchorConfirmatoryHandoff(StrictModel):
     """Typed anchor→confirmatory binding artifact that locks programme identity."""
 
-    creation_identity: Checksum
     anchor_experiment: ExperimentId
     anchor_seed_cohort: SeedCohort
-    anchor_protocol_checksum: Checksum
-    anchor_references_observations_checksum: Checksum
-    anchor_gate_decision_checksum: Checksum
     dependent_confirmatory_experiment: ExperimentId
     dependent_population: PopulationId
     dependent_model: TrainingModelId
     dependent_seed_cohort: SeedCohort
     split_protocol_identity: SplitProtocolId
     preprocessing_protocol_identity: PreprocessingProtocolId
-    checkpoint_protocol_identity: Checksum
-    scoring_protocol_identity: Checksum
     threshold_protocol_identities: tuple[FederatedThresholdMethod, ...]
-    evaluation_protocol_identity: Checksum
-    confirmatory_inference_protocol_identity: Checksum
-    complete_artifact_inventory_checksum: Checksum
     verified_gate_status: AnchorGateStatus
-    verified_gate_artifact_checksum: Checksum
     diagnostics_directory: ArtifactDirectoryPathText
 
     @model_validator(mode="after")
@@ -500,26 +462,13 @@ class AnchorConfirmatoryHandoff(StrictModel):
             raise ValueError("confirmatory handoff cannot bind a blocked gate")
         if self.verified_gate_status not in _PERMITTING_GATE_STATUSES:
             raise ValueError("confirmatory handoff requires a permitting gate status")
-        if self.anchor_gate_decision_checksum != self.verified_gate_artifact_checksum:
-            raise ValueError("handoff gate decision checksum must match verified gate artifact checksum")
         if not self.threshold_protocol_identities:
             raise ValueError("handoff requires at least one threshold protocol identity")
-        recomputed = _handoff_creation_identity(self)
-        if recomputed != self.creation_identity:
-            raise ValueError("handoff creation identity does not match the binding payload")
         return self
 
 
-_HANDOFF_PAYLOAD_FIELDS = tuple(name for name in AnchorConfirmatoryHandoff.model_fields if name != "creation_identity")
-
-
-def _handoff_creation_identity(handoff: AnchorConfirmatoryHandoff) -> Checksum:
-    payload = {name: getattr(handoff, name) for name in _HANDOFF_PAYLOAD_FIELDS}
-    return canonical_checksum(payload)
-
-
 class AnchorDependencyKind(StrEnum):
-    FEDERATED_TRAINING_CHECKPOINTING_AND_SCORING = "federated_training_checkpointing_and_scoring"
+    FEDERATED_TRAINING_AND_SCORING = "federated_training_and_scoring"
     HISTORICAL_ARTIFACT_ROOT = "historical_artifact_root"
 
 
@@ -555,7 +504,6 @@ class AnchorArtifactFileName(StrEnum):
     METRICS = "metrics.json"
     GATE_DECISION = "anchor_gate_decision.json"
     DISCREPANCIES = "anchor_discrepancies.json"
-    GATE_COMPLETION = "anchor_gate_complete.json"
     CONFIRMATORY_HANDOFF = "anchor_confirmatory_handoff.json"
 
 
@@ -570,13 +518,6 @@ class HistoricalBoundaryModel(StrictModel):
 
 
 class HistoricalArtifactProvenanceDocument(HistoricalBoundaryModel):
-    model_checkpoint_identity: Checksum
-    score_artifact_identity: Checksum
-    split_manifest_identity: Checksum
-    config_identity: Checksum
-    metric_code_version: Checksum
-    threshold_code_version: Checksum
-    package_version: Checksum
     generated_at_utc: UtcInstantText
 
 

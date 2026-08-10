@@ -8,7 +8,6 @@ from datp_core.core.contracts import ClientCollection, ClientOwned
 from datp_core.core.identifiers import ScoreFrameColumn, StableRowId
 from datp_core.core.numeric import CalibrationSize, ReplicateIndex, SubsampleReplicateCount
 from datp_core.data.populations.contracts import ClientIdentity, EligibleCohort
-from datp_core.detector.scoring.contracts import FixedScoreInvariant
 from datp_core.detector.scoring.models import FederatedScoreArtifactManifest, FederatedScoreRecord
 from datp_core.thresholds.calibration.eligibility import (
     CalibrationSampleReference,
@@ -43,8 +42,6 @@ def calibrate(request: CalibrationRequest) -> CalibrationResult:
     score_manifest = request.score_manifest
     reject_score_coordinate_mismatch(score_manifest.calibration_records)
 
-    invariant = FixedScoreInvariant.from_manifest(score_manifest)
-
     evaluation_row_ids_by_client = ClientCollection(
         items=tuple(
             ClientOwned(client=record.scored_client, value=_evaluation_stable_row_ids(record))
@@ -72,7 +69,7 @@ def calibrate(request: CalibrationRequest) -> CalibrationResult:
 
         references_items.append(ClientOwned(client=client, value=references))
 
-        support = calibration_support(record, references, invariant.calibration_score_set_checksum)
+        support = calibration_support(record, references)
         decisions.append(decide_eligibility(support, request.protocol))
 
     references_collection: ClientCollection[ClientIdentity, tuple[CalibrationSampleReference, ...]] = ClientCollection(

@@ -14,9 +14,9 @@ from datp_core.core.identifiers import (
 from datp_core.core.numeric import Seed
 from datp_core.data.preprocessing.artifacts import (
     PartitionOrdering,
+    PreparedDataCoordinate,
     PreprocessingFitScope,
     ProcessedAssetName,
-    ReusableDataCoordinate,
     TrustedEstimatorClassName,
     centralized_branch_directory,
     federated_client_coordinate,
@@ -42,8 +42,8 @@ def test_preprocessing_identity_enum_member_sets_are_exact_and_unique() -> None:
 def _coordinate(
     branch: ProcessedDataBranch = ProcessedDataBranch.FEDERATED,
     client: ClientPathToken | None = None,
-) -> ReusableDataCoordinate:
-    return ReusableDataCoordinate(
+) -> PreparedDataCoordinate:
+    return PreparedDataCoordinate(
         dataset=DatasetId.NBAIOT,
         population=PopulationId.NBAIOT_NATURAL_DEVICES,
         partition_seed=Seed(1),

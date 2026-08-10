@@ -94,9 +94,6 @@ def test_pipeline_loads_historical_artifacts_and_passes_gate(tmp_path: Path) -> 
     sources = historical_sources_for_seed_directories(shared_root, local_root)
     observations = load_historical_observations(sources)
     assert len(observations) == 10
-    for shared, local in zip(observations[0::2], observations[1::2], strict=True):
-        assert shared.model_checkpoint_identity == local.model_checkpoint_identity
-
     diagnostics = tmp_path / "diag"
     result = verify_anchor(
         VerifyAnchorStageRequest(
@@ -113,7 +110,6 @@ def test_pipeline_loads_historical_artifacts_and_passes_gate(tmp_path: Path) -> 
     verified = load_verified_anchor_gate_artifact(diagnostics)
     handoff = load_anchor_confirmatory_handoff(diagnostics, verified_gate=verified)
     assert handoff.dependent_confirmatory_experiment is ExperimentId.SHARED_VS_LOCAL_CONFIRMATION
-    assert handoff.verified_gate_artifact_checksum == verified.artifact_checksum
 
 
 def test_pipeline_blocks_stale_mismatched_value(tmp_path: Path) -> None:

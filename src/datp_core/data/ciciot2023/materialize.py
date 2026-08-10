@@ -13,7 +13,6 @@ from datp_core.core.identifiers import (
     ValidationSourceContext,
 )
 from datp_core.core.numeric import LogicalElementCount, RowCount, ValidationIssueCount
-from datp_core.data.canonical_cache import CanonicalAsset, canonical_directory
 from datp_core.data.contracts import (
     CanonicalAssetRole,
     DatasetValidationCode,
@@ -26,14 +25,16 @@ from datp_core.data.contracts import (
     ValidationSeverity,
 )
 from datp_core.data.materialization import (
+    CanonicalAsset,
     CanonicalPublication,
     canonical_data_partition_assets,
+    canonical_directory,
     excluded_source_file,
+    publish_canonical,
     raw_inventory,
     raw_source_file,
     stream_parquet,
 )
-from datp_core.data.materialization_lifecycle import CanonicalMaterializationRequest, materialize_canonical
 
 from .reader import CICIoT2023AuditSummary, CICIoT2023Reader
 from .schema import (
@@ -89,21 +90,8 @@ class CICIoT2023Materializer:
         excluded_paths: tuple[Path, ...] = (),
     ) -> MaterializedDataset[CanonicalAssetRole, CICIoT2023EligibilityReason]:
         ordered_paths = tuple(sorted(source_paths))
-        return materialize_canonical(
-            CanonicalMaterializationRequest(
-                canonical_root=canonical_root,
-                schema=CICIOT2023_SCHEMA,
-                canonicalization_contract=_CICIOT2023_CANONICALIZATION_CONTRACT,
-                source_paths=ordered_paths,
-                source_path_resolver=source_relative_path,
-                asset_role_type=CanonicalAssetRole,
-                eligibility_policy=CICIOT2023_MODEL_INPUT_ELIGIBILITY_POLICY,
-                prepare_publication=lambda: self._prepare_publication(
-                    ordered_paths,
-                    canonical_root,
-                    excluded_paths=excluded_paths,
-                ),
-            )
+        return publish_canonical(
+            self._prepare_publication(ordered_paths, canonical_root, excluded_paths=excluded_paths)
         )
 
     @staticmethod
@@ -133,8 +121,6 @@ class CICIoT2023Materializer:
             validation_report=audit.validation_report,
             expected_assets=expected_assets,
             writer=write_assets,
-            source_paths=source_paths,
-            source_path_resolver=source_relative_path,
             eligibility_policy=CICIOT2023_MODEL_INPUT_ELIGIBILITY_POLICY,
         )
 

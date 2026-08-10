@@ -1,8 +1,9 @@
 """Scientific design validation for paired bootstrap inference."""
 
-from datp_core.analysis.contrasts import FixedScorePairProvenance, PairedContrasts, SupplementaryPairedAnalysisPlan
+from datp_core.analysis.contrasts import PairedContrasts, SupplementaryPairedAnalysisPlan
 from datp_core.analysis.inference.bootstrap.contracts import BcaReason
 from datp_core.analysis.inference.contracts import PairedInferenceProtocol
+from datp_core.analysis.metrics.fixed_score import FixedScoreEvidence
 from datp_core.core.identifiers import EvidenceRole, FederatedThresholdMethod
 from datp_core.experiments.common.seeds import SeedCohort
 from datp_core.experiments.graph import CANONICAL_PROTOCOL_GRAPH
@@ -96,19 +97,6 @@ def _require_fixed_score_identity(contrasts: PairedContrasts) -> None:
         raise PairedAnalysisContractError(BcaReason.FIXED_COORDINATE_MISMATCH)
 
 
-def _require_complete_provenance(provenance: FixedScorePairProvenance) -> None:
-    fields = (
-        provenance.model_checksum,
-        provenance.preprocessing_checksum,
-        provenance.selected_checkpoint_checksum,
-        provenance.split_manifest_checksum,
-        provenance.calibration_score_checksum,
-        provenance.evaluation_score_checksum,
-        provenance.evaluation_label_checksum,
-        provenance.source_row_checksum,
-        provenance.score_order_checksum,
-        provenance.client_inventory_checksum,
-        provenance.eligibility_cohort_checksum,
-    )
-    if any(not field.value for field in fields):
+def _require_complete_provenance(provenance: FixedScoreEvidence) -> None:
+    if not provenance.score_manifest.calibration_records or not provenance.score_manifest.evaluation_records:
         raise PairedAnalysisContractError(BcaReason.FIXED_COORDINATE_MISMATCH)

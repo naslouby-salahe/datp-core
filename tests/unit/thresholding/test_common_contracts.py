@@ -2,7 +2,6 @@ from dataclasses import dataclass
 
 import pytest
 
-from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import (
     ClientIdentityToken,
@@ -64,8 +63,6 @@ def test_existing_result_shape_satisfies_shared_protocol() -> None:
 def test_threshold_context_binds_coordinate_scores_and_quantile() -> None:
     context = ThresholdConstructionContext(
         coordinate=COORDINATE,
-        calibration_manifest_checksum=Checksum("a" * 64),
-        score_set_checksum=Checksum("b" * 64),
         quantile=Quantile(0.95),
     )
     assert context.coordinate == COORDINATE

@@ -18,9 +18,7 @@ from datp_core.analysis.metrics.federated_publication import (
     EvaluateFederatedDetectorResult,
     evaluate_federated_detector,
 )
-from datp_core.analysis.metrics.fixed_score import FixedScoreEvidence
 from datp_core.analysis.metrics.fixed_score_construction import build_federated_evaluation_inputs
-from datp_core.analysis.metrics.fixed_score_validation import validate_fixed_score_controls
 from datp_core.analysis.metrics.models import HeldOutBenignScore
 from datp_core.analysis.metrics.threshold_estimation import ThresholdEstimationProvenance
 from datp_core.analysis.metrics.threshold_evidence import verify_held_out_benign_scores
@@ -32,8 +30,6 @@ from datp_core.analysis.operational.communication import (
 )
 from datp_core.analysis.operational.traffic_rates import traffic_rate_evidence_for_population
 from datp_core.artifacts.layout import evaluation_run_directory
-from datp_core.artifacts.provenance import Checksum
-from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
 from datp_core.artifacts.repositories.thresholds import (
     FederatedThresholdConstructionRequest,
     construct_and_publish_federated_thresholds,
@@ -52,7 +48,6 @@ from datp_core.core.identifiers import (
     StableRowId,
 )
 from datp_core.core.numeric import (
-    NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
     CalibrationSize,
     ClientCount,
     Quantile,
@@ -62,8 +57,6 @@ from datp_core.core.numeric import (
 )
 from datp_core.data.populations.contracts import ClientIdentity, PopulationOutcomeLabel
 from datp_core.data.registry import population_capabilities
-from datp_core.detector.checkpoints.selection import CheckpointDecision
-from datp_core.detector.checkpoints.service import SelectFederatedCheckpointRequest, select_federated_primary_checkpoint
 from datp_core.detector.scoring.models import FederatedScoreArtifactManifest, FederatedScoreRecord
 from datp_core.detector.training.contracts import AutoencoderProtocol
 from datp_core.detector.training.engine import FederatedTrainingRequest
@@ -72,14 +65,13 @@ from datp_core.detector.training.federated_publication import (
     TrainFederatedDetectorResult,
     train_federated_detector,
 )
-from datp_core.detector.training.models import CheckpointCandidate
 from datp_core.detector.training.protocols import BATCH_SIZE, LEARNING_RATE
 from datp_core.experiments.common.coordinates import ExperimentCoordinate
 from datp_core.experiments.execution.context import (
     FederatedExecutionContext,
-    checkpoint_protocol_for,
     client_scoring_inputs,
     client_training_inputs,
+    diagnostic_snapshot_protocol_for,
     execution_context_cache_key,
     resolve_execution_context,
     training_autoencoder_for,
@@ -89,7 +81,7 @@ from datp_core.experiments.execution.context import (
 from datp_core.experiments.execution.evidence import eligible_calibration_scores, load_evaluation_document
 from datp_core.experiments.execution.layout import EvaluationRunAssetDirectory, ExecutionArtifactDirectory
 from datp_core.experiments.execution.models import ProgressEvent, ProgressEventKind, ProgressHook
-from datp_core.experiments.execution.score_generation import score_selected_checkpoint
+from datp_core.experiments.execution.score_generation import score_terminal_model
 from datp_core.thresholds.calibration.construction import (
     BuildCalibrationResult,
     ConstructCalibrationSizeAblationRequest,
@@ -133,6 +125,8 @@ class ExperimentWorkspace:
     progress: ProgressHook | None = None
     shared_context_cache: dict[tuple[object, ...], FederatedExecutionContext] | None = None
     shared_evaluation_cache: dict[Path, EvaluateFederatedDetectorResult] | None = None
+    shared_training_cache: dict[tuple[object, ...], TrainFederatedDetectorResult] | None = None
+    shared_score_cache: dict[tuple[object, ...], FederatedScoreArtifactManifest] | None = None
 
     @cached_property
     def context(self) -> FederatedExecutionContext:
@@ -159,8 +153,11 @@ class ExperimentWorkspace:
 
     @cached_property
     def training(self) -> TrainFederatedDetectorResult:
+        key = execution_context_cache_key(self.coordinate, self.output_root)
+        if self.shared_training_cache is not None and (cached := self.shared_training_cache.get(key)) is not None:
+            return cached
         protocol = training_protocol_for(self.coordinate)
-        return train_federated_detector(
+        result = train_federated_detector(
             TrainFederatedDetectorRequest(
                 request=FederatedTrainingRequest(
                     coordinate=self.context.coordinate,
@@ -172,17 +169,18 @@ class ExperimentWorkspace:
                     population_client_count=ClientCount(len(self.context.clients)),
                     autoencoder=self.autoencoder,
                     training_protocol=protocol,
-                    checkpoint_protocol=checkpoint_protocol_for(self.coordinate),
+                    diagnostic_snapshot_protocol=diagnostic_snapshot_protocol_for(self.coordinate),
                     training_seed=self.context.coordinate.training_seed,
                     batch_size=BATCH_SIZE,
                     learning_rate=LEARNING_RATE,
-                    split_manifest_checksum=self.context.split_manifest_checksum,
                     output_directory=self.context.training_directory,
                     progress_callback=self._round_progress_callback,
                 ),
-                overwrite=False,
             )
         )
+        if self.shared_training_cache is not None:
+            self.shared_training_cache[key] = result
+        return result
 
     def _round_progress_callback(self, round_number: int, maximum_round: int) -> None:
         if self.progress is not None:
@@ -196,36 +194,21 @@ class ExperimentWorkspace:
             )
 
     @cached_property
-    def selection(self) -> CheckpointDecision:
-        return select_federated_primary_checkpoint(
-            SelectFederatedCheckpointRequest(
-                coordinate=self.context.coordinate,
-                client=None,
-                candidates=self.training.candidates,
-                checkpoint_protocol=checkpoint_protocol_for(self.coordinate),
-                preprocessing_state_set_checksum=self.context.preprocessing_state_set_checksum,
-                split_manifest_checksum=self.context.split_manifest_checksum,
-                held_out_metrics=None,
-                attack_labels_present=False,
-            )
-        )
-
-    @cached_property
-    def selected_checkpoint(self) -> CheckpointCandidate:
-        return self.selection.selected
-
-    @cached_property
     def scores(self) -> FederatedScoreArtifactManifest:
-        return score_selected_checkpoint(
-            checkpoint=self.selected_checkpoint,
+        key = execution_context_cache_key(self.coordinate, self.output_root)
+        if self.shared_score_cache is not None and (cached := self.shared_score_cache.get(key)) is not None:
+            return cached
+        scores = score_terminal_model(
+            training=self.training.training,
             scored_split_protocol=self.context.coordinate.split_protocol,
             autoencoder=self.autoencoder,
             feature_names=self.feature_names,
             clients=client_scoring_inputs(self.context.preprocessing.client_publications, self.context.clients),
             output_directory=self.context.training_directory / ExecutionArtifactDirectory.SCORES,
-            preprocessing_state_set_checksum=self.context.preprocessing_state_set_checksum,
-            split_manifest_checksum=self.context.split_manifest_checksum,
         )
+        if self.shared_score_cache is not None:
+            self.shared_score_cache[key] = scores
+        return scores
 
     def eligible_calibration_scores(self) -> tuple[ClientBenignCalibrationScores, ...]:
         return eligible_calibration_scores(self.scores, PartitionRole.CALIBRATION)
@@ -277,46 +260,6 @@ class ExperimentWorkspace:
             )
         return result
 
-    def comparison_fixed_score_evidence(self) -> FixedScoreEvidence | None:
-        reference: FixedScoreEvidence | None = None
-        for method in population_capabilities(self.coordinate.population).valid_threshold_methods:
-            if method is self.coordinate.threshold_method:
-                continue
-            comparison_coordinate = ExperimentCoordinate(
-                experiment=self.coordinate.experiment,
-                evidence_role=self.coordinate.evidence_role,
-                dataset=self.coordinate.dataset,
-                population=self.coordinate.population,
-                training_model=self.coordinate.training_model,
-                training_seed=self.coordinate.training_seed,
-                split_protocol=self.coordinate.split_protocol,
-                preprocessing_protocol=self.coordinate.preprocessing_protocol,
-                model_coefficient=self.coordinate.model_coefficient,
-                threshold_method=method,
-                metric=self.coordinate.metric,
-                temporal_state=self.coordinate.temporal_state,
-                threshold_quantile=self.coordinate.threshold_quantile,
-                controlled_partition_kind=self.coordinate.controlled_partition_kind,
-                dirichlet_concentration=self.coordinate.dirichlet_concentration,
-            )
-            path = (
-                evaluation_run_directory(self.output_root, comparison_coordinate)
-                / EvaluationRunAssetDirectory.EVALUATION
-                / FederatedEvaluationAssetName.DOCUMENT
-            )
-            if not path.is_file():
-                continue
-            evidence = load_evaluation_document(path).fixed_score_evidence
-            if reference is None:
-                reference = evidence
-            else:
-                validate_fixed_score_controls(
-                    reference,
-                    evidence,
-                    auroc_absolute_tolerance=NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
-                )
-        return reference
-
     @cached_property
     def calibration_size_ablation(self) -> tuple[CalibrationSizeAblationCell, ...]:
         if self.coordinate.experiment is not ExperimentId.CALIBRATION_SIZE_ABLATION:
@@ -343,8 +286,8 @@ class ExperimentWorkspace:
         record: FederatedScoreRecord,
         client: ClientIdentity,
     ) -> tuple[HeldOutBenignScore, ...]:
-        if not record.path.is_file() or Checksum.from_file(record.path) != record.checksum:
-            raise ScientificContractError(ErrorMessage("evaluation score provenance is unavailable or changed"))
+        if not record.path.is_file():
+            raise ScientificContractError(ErrorMessage("evaluation score evidence is unavailable"))
         frame = pl.read_parquet(record.path).filter(
             pl.col(ScoreFrameColumn.OUTCOME_LABEL.value) == PopulationOutcomeLabel.BENIGN.value
         )
@@ -499,7 +442,6 @@ class ExperimentWorkspace:
                 threshold_result=self.threshold,
                 cohort=inputs.cohort,
                 fixed_score_evidence=inputs.fixed_score_evidence,
-                comparison_fixed_score_evidence=self.comparison_fixed_score_evidence(),
                 evidence_role=self.coordinate.evidence_role,
                 conformal_coverage_inputs=self._conformal_coverage_inputs(),
                 threshold_estimation_inputs=self._threshold_estimation_inputs(),
@@ -514,5 +456,5 @@ class ExperimentWorkspace:
 
     def evaluation_document(self) -> FederatedEvaluationDocument:
         return load_evaluation_document(
-            self.run_directory() / EvaluationRunAssetDirectory.EVALUATION / FederatedEvaluationAssetName.DOCUMENT
+            self.run_directory() / EvaluationRunAssetDirectory.EVALUATION / "evaluation.json"
         )

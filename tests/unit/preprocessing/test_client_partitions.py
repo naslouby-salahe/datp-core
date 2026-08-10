@@ -76,7 +76,6 @@ def test_excludes_row_with_null_numeric_model_input_feature() -> None:
     assert result.eligible_rows.get_column("stable_row_id").to_list() == ["a", "c"]
     assert result.exclusion_evidence.excluded_stable_row_ids == (StableRowId("b"),)
     assert result.exclusion_evidence.excluded_row_count.value == 1
-    assert result.exclusion_evidence.evidence_checksum.value
 
 
 def test_excludes_row_with_non_finite_numeric_model_input_feature() -> None:
@@ -150,8 +149,7 @@ def test_exclusion_evidence_is_persisted_with_stable_row_identities(tmp_path: Pa
         population=PopulationId.EDGE_SENSOR_GROUPS,
     )
     destination = tmp_path / "model_input_exclusions.json"
-    checksum = write_model_input_exclusion_evidence(destination, result.exclusion_evidence)
+    write_model_input_exclusion_evidence(destination, result.exclusion_evidence)
     payload = destination.read_text(encoding="utf-8")
     assert "row_b" in payload
-    assert checksum == result.exclusion_evidence.evidence_checksum
     assert "nonfinite_or_null_numeric_model_input_feature" in payload

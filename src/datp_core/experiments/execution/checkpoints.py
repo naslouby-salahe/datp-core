@@ -1,14 +1,12 @@
-"""Federated training execution and primary checkpoint selection."""
+"""Federated training execution."""
 
 from datp_core.core.identifiers import FeatureNameSequence
 from datp_core.core.numeric import ClientCount
-from datp_core.detector.checkpoints.protocols import CHECKPOINT_PROTOCOL
-from datp_core.detector.checkpoints.selection import CheckpointDecision
-from datp_core.detector.checkpoints.service import SelectFederatedCheckpointRequest, select_federated_primary_checkpoint
+from datp_core.detector.checkpoints.protocols import DIAGNOSTIC_SNAPSHOT_PROTOCOL
 from datp_core.detector.training.contracts import AutoencoderProtocol
 from datp_core.detector.training.engine import FederatedTrainingRequest
 from datp_core.detector.training.federated_publication import TrainFederatedDetectorRequest, train_federated_detector
-from datp_core.detector.training.models import CheckpointCandidate
+from datp_core.detector.training.models import FederatedTrainingResult
 from datp_core.detector.training.protocols import (
     BATCH_SIZE,
     LEARNING_RATE,
@@ -17,12 +15,12 @@ from datp_core.detector.training.protocols import (
 from datp_core.experiments.execution.context import FederatedExecutionContext, client_training_inputs
 
 
-def select_execution_checkpoint(
+def train_execution_model(
     context: FederatedExecutionContext,
     *,
     autoencoder: AutoencoderProtocol,
     feature_names: FeatureNameSequence,
-) -> CheckpointCandidate:
+) -> FederatedTrainingResult:
     protocol = resolve_single_model_federated_training_protocol(
         model=context.coordinate.model,
         coefficient=context.coordinate.model_coefficient,
@@ -39,26 +37,12 @@ def select_execution_checkpoint(
                 population_client_count=ClientCount(len(context.clients)),
                 autoencoder=autoencoder,
                 training_protocol=protocol,
-                checkpoint_protocol=CHECKPOINT_PROTOCOL,
+                diagnostic_snapshot_protocol=DIAGNOSTIC_SNAPSHOT_PROTOCOL,
                 training_seed=context.coordinate.training_seed,
                 batch_size=BATCH_SIZE,
                 learning_rate=LEARNING_RATE,
-                split_manifest_checksum=context.split_manifest_checksum,
                 output_directory=context.training_directory,
             ),
-            overwrite=False,
         )
     )
-    decision: CheckpointDecision = select_federated_primary_checkpoint(
-        SelectFederatedCheckpointRequest(
-            coordinate=context.coordinate,
-            client=None,
-            candidates=training.candidates,
-            checkpoint_protocol=CHECKPOINT_PROTOCOL,
-            preprocessing_state_set_checksum=context.preprocessing_state_set_checksum,
-            split_manifest_checksum=context.split_manifest_checksum,
-            held_out_metrics=None,
-            attack_labels_present=False,
-        )
-    )
-    return decision.selected
+    return training.training

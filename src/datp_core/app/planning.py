@@ -1,11 +1,10 @@
-"""Deterministic experiment-plan expansion and digesting."""
+"""Deterministic experiment-plan expansion."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
 
-from datp_core.artifacts.provenance import Checksum
 from datp_core.core.identifiers import (
     ExperimentId,
     ExperimentReadiness,
@@ -75,7 +74,6 @@ class PlannedExperiment:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ExperimentPlan:
     entries: tuple[PlannedExperiment, ...]
-    digest: Checksum
 
     def __post_init__(self) -> None:
         keys = tuple(entry.coordinate.stable_key for entry in self.entries)
@@ -83,8 +81,6 @@ class ExperimentPlan:
             raise ValueError("experiment-plan entries must be in deterministic order")
         if len(keys) != len(frozenset(keys)):
             raise ValueError("experiment-plan coordinates must be unique")
-        if self.digest != _digest_entries(self.entries):
-            raise ValueError("experiment-plan digest does not match its entries")
 
     @property
     def executable(self) -> tuple[PlannedExperiment, ...]:
@@ -98,7 +94,7 @@ def merge_experiment_plans(plans: tuple[ExperimentPlan, ...]) -> ExperimentPlan:
             key=lambda entry: entry.coordinate.stable_key,
         )
     )
-    return ExperimentPlan(entries=entries, digest=_digest_entries(entries))
+    return ExperimentPlan(entries=entries)
 
 
 def expand_experiment_plan(
@@ -118,7 +114,7 @@ def expand_experiment_plan(
             key=lambda entry: entry.coordinate.stable_key,
         )
     )
-    return ExperimentPlan(entries=entries, digest=_digest_entries(entries))
+    return ExperimentPlan(entries=entries)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -270,8 +266,3 @@ def _validated_evidence(evidence: tuple[PlanningEvidence, ...]) -> tuple[Plannin
     if len(experiments) != len(frozenset(experiments)):
         raise ValueError("planning evidence must be unique by experiment")
     return evidence
-
-
-def _digest_entries(entries: tuple[PlannedExperiment, ...]) -> Checksum:
-    payload = "\n".join(f"{entry.coordinate.stable_key}|{entry.disposition.value}|{entry.reason}" for entry in entries)
-    return Checksum.from_text(payload)

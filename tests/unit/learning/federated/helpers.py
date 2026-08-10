@@ -6,7 +6,6 @@ import numpy as np
 import polars as pl
 import torch
 
-from datp_core.artifacts.provenance import Checksum
 from datp_core.core.identifiers import (
     ClientIdentityToken,
     FeatureName,
@@ -29,7 +28,6 @@ from datp_core.core.numeric import (
     LearningRate,
     LocalEpochCount,
     ProximalCoefficient,
-    RoundNumber,
     RowCount,
     Seed,
 )
@@ -44,7 +42,6 @@ from datp_core.data.preprocessing.models import (
     FederatedFittedPreprocessingState,
     PreprocessingProtocol,
 )
-from datp_core.detector.checkpoints.contracts import CheckpointProtocol
 from datp_core.detector.training.contracts import (
     AutoencoderArchitecture,
     AutoencoderProtocol,
@@ -69,7 +66,6 @@ AUTOENCODER = AutoencoderProtocol(
         (FeatureCount(4), FeatureCount(3), FeatureCount(2), FeatureCount(3), FeatureCount(4))
     )
 )
-CHECKPOINT = CheckpointProtocol(candidates=(RoundNumber(1), RoundNumber(2)), maximum_round=RoundNumber(2))
 LEARNING_RATE = LearningRate(0.01)
 BATCH_SIZE = BatchSize(4)
 POPULATION = PopulationId.NBAIOT_NATURAL_DEVICES
@@ -156,7 +152,7 @@ def client_identity(client_id: str) -> ClientIdentity:
     return ClientIdentity(POPULATION, ClientIdentityToken(client_id), PopulationIdentityKind.PHYSICAL_DEVICES)
 
 
-def fitted_state(path: Path, client_id: str, *, checksum_suffix: str = "a") -> FederatedFittedPreprocessingState:
+def fitted_state(path: Path, client_id: str) -> FederatedFittedPreprocessingState:
     protocol = feature_protocol()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(b"placeholder")
@@ -164,7 +160,6 @@ def fitted_state(path: Path, client_id: str, *, checksum_suffix: str = "a") -> F
         protocol=protocol,
         client_identity=PreprocessingClientIdentity(client_id),
         estimator_path=path,
-        estimator_checksum=Checksum((checksum_suffix * 64)[:64]),
         fit_row_count=RowCount(32),
     )
 
@@ -193,7 +188,7 @@ def build_client_input(
     row_count: RowCount = DEFAULT_CLIENT_ROW_COUNT,
     seed: Seed = DEFAULT_FRAME_SEED,
 ) -> ClientTrainingInput:
-    state = fitted_state(output_directory / f"{client_id}_state.skops", client_id, checksum_suffix=client_id[-1])
+    state = fitted_state(output_directory / f"{client_id}_state.skops", client_id)
     return ClientTrainingInput(
         client=client_identity(client_id),
         training_features=benign_frame(row_count, seed=seed),

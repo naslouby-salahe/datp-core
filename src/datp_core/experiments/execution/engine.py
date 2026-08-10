@@ -10,38 +10,23 @@ from shutil import rmtree
 from datp_core.analysis.metrics.federated_publication import EvaluateFederatedDetectorResult
 from datp_core.analysis.metrics.models import metric_by_id
 from datp_core.artifacts.layout import experiment_output_directory
-from datp_core.artifacts.provenance import Checksum
-from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
-from datp_core.artifacts.repositories.models import ArtifactKind, ArtifactRecord, ArtifactState, CompletionState
-from datp_core.artifacts.repositories.publication import (
-    build_completion_record,
-    read_completion_record,
-    validate_reload,
-    write_completion_record,
-)
-from datp_core.artifacts.serializers.json import canonical_checksum
 from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
 )
-from datp_core.core.identifiers import ExperimentId, PublicationStatus, StageExecutionEvidence
-from datp_core.core.numeric import ByteCount
+from datp_core.core.identifiers import ExperimentId, StageExecutionEvidence
 from datp_core.data.service import DatasetMaterializationRequest, materialize_datasets
-from datp_core.detector.scoring.contracts import FixedScoreInvariant
+from datp_core.detector.scoring.models import FederatedScoreArtifactManifest
+from datp_core.detector.training.federated_publication import TrainFederatedDetectorResult
 from datp_core.experiments.common.coordinates import ExecutionRoute, ExperimentCoordinate, execution_route_for
 from datp_core.experiments.execution.context import FederatedExecutionContext
-from datp_core.experiments.execution.evidence import load_evaluation_document
-from datp_core.experiments.execution.layout import EvaluationRunAssetDirectory
 from datp_core.experiments.execution.models import (
     ANCHOR_REPRODUCTION_RECIPE,
     STANDARD_FEDERATED_RECIPE,
     CampaignExecution,
     CampaignPlan,
-    ExecutionProvenance,
     ExecutionRecipe,
-    ExistingExperimentState,
     ExperimentExecution,
-    ExperimentOutputStore,
     PipelineStage,
     ProgressEvent,
     ProgressEventKind,
@@ -51,8 +36,6 @@ from datp_core.experiments.execution.models import (
     StageRunner,
 )
 from datp_core.experiments.execution.workspace import ExperimentWorkspace
-from datp_core.experiments.graph import ObservationBoundary, ObservationContext, ObservationHook, observe_graph_boundary
-from datp_core.experiments.registry import EXPERIMENTS
 from datp_core.runtime.configuration import DATA_ROOT
 
 
@@ -68,39 +51,23 @@ def resolve_execution_recipe(coordinate: ExperimentCoordinate) -> ExecutionRecip
     return STANDARD_FEDERATED_RECIPE
 
 
-def protocol_digest() -> Checksum:
-    return canonical_checksum(EXPERIMENTS)
-
-
 def execute_experiment(
     *,
     coordinate: ExperimentCoordinate,
-    provenance: ExecutionProvenance,
     stage_runner: StageRunner,
-    output_store: ExperimentOutputStore,
     output_root: Path,
     overwrite: bool,
 ) -> ExperimentExecution:
     recipe = resolve_execution_recipe(coordinate)
-    existing_state = output_store.state(coordinate, output_root, provenance)
-    if overwrite:
-        if existing_state is not ExistingExperimentState.ABSENT:
-            output_store.delete(coordinate, output_root)
-    elif existing_state is ExistingExperimentState.COMPLETE_VALID:
-        return ExperimentExecution(
-            coordinate=coordinate,
-            recipe=recipe,
-            stages=(),
-            reused_complete_experiment=True,
-        )
-    elif existing_state is ExistingExperimentState.COMPLETE_INVALID:
-        raise ValueError("completed experiment failed publication validation")
-    elif existing_state is ExistingExperimentState.INCOMPLETE:
-        output_store.delete(coordinate, output_root)
+    directory = experiment_output_directory(output_root, coordinate)
+    if directory.exists():
+        if not overwrite:
+            raise FileExistsError(f"experiment output already exists: {directory}")
+        rmtree(directory)
 
     executions: list[StageExecution] = []
     for stage in recipe.stages:
-        result = stage_runner.run(stage, coordinate, provenance, output_root)
+        result = stage_runner.run(stage, coordinate, output_root)
         if result.stage is not stage:
             raise ValueError("stage runner returned a result for the wrong stage")
         executions.append(result)
@@ -118,16 +85,10 @@ def execute_campaign(
     *,
     campaign: CampaignPlan,
     stage_runner: StageRunner,
-    output_store: ExperimentOutputStore,
     output_root: Path,
     overwrite: bool,
     progress: ProgressHook | None = None,
 ) -> CampaignExecution:
-    provenance = ExecutionProvenance(
-        plan_digest=campaign.plan_digest,
-        campaign_digest=campaign.digest,
-        protocol_digest=protocol_digest(),
-    )
     total = len(campaign.entries)
     _emit_progress(progress, ProgressEvent(kind=ProgressEventKind.CAMPAIGN_BEGIN, total=total))
     experiments: list[ExperimentExecution] = []
@@ -144,9 +105,7 @@ def execute_campaign(
         started = time.monotonic()
         result = execute_experiment(
             coordinate=entry.coordinate,
-            provenance=provenance,
             stage_runner=stage_runner,
-            output_store=output_store,
             output_root=output_root,
             overwrite=overwrite,
         )
@@ -158,12 +117,7 @@ def execute_campaign(
                 ordinal=entry.ordinal.value,
                 total=total,
                 outcome=StageOutcome.COMPLETED if result.successful else StageOutcome.BLOCKED,
-                reused=result.reused_complete_experiment,
-                detail=(
-                    "reused complete experiment"
-                    if result.reused_complete_experiment
-                    else f"stages={len(result.stages)}"
-                ),
+                detail=f"stages={len(result.stages)}",
                 elapsed_seconds=time.monotonic() - started,
             ),
         )
@@ -176,64 +130,21 @@ def execute_campaign(
             detail=f"experiments={len(experiments)}",
         ),
     )
-    return CampaignExecution(campaign_digest=campaign.digest, experiments=tuple(experiments))
-
-
-@dataclass(frozen=True, slots=True)
-class CompletionRecordOutputStore:
-    def state(
-        self,
-        coordinate: ExperimentCoordinate,
-        output_root: Path,
-        provenance: ExecutionProvenance | None = None,
-    ) -> ExistingExperimentState:
-        directory = experiment_output_directory(output_root, coordinate)
-        if not directory.is_dir():
-            return ExistingExperimentState.ABSENT
-        record = read_completion_record(directory)
-        if record is None or record.state is not CompletionState.COMPLETE:
-            return ExistingExperimentState.INCOMPLETE
-        if provenance is not None and (
-            record.plan_digest != provenance.plan_digest
-            or record.campaign_digest != provenance.campaign_digest
-            or record.protocol_digest != provenance.protocol_digest
-        ):
-            return ExistingExperimentState.COMPLETE_INVALID
-        observed = _observed_artifacts(output_root, record.artifacts)
-        validation = validate_reload(root=output_root, completion=record, observed=observed)
-        return ExistingExperimentState.COMPLETE_VALID if validation.valid else ExistingExperimentState.COMPLETE_INVALID
-
-    def delete(self, coordinate: ExperimentCoordinate, output_root: Path) -> None:
-        directory = experiment_output_directory(output_root, coordinate)
-        if directory.exists():
-            rmtree(directory)
-
-
-def _observed_artifacts(output_root: Path, declared: tuple[ArtifactRecord, ...]) -> tuple[ArtifactRecord, ...]:
-    return tuple(
-        ArtifactRecord(
-            kind=item.kind,
-            relative_path=item.relative_path,
-            checksum=Checksum.from_file(output_root / item.relative_path),
-            byte_count=ByteCount((output_root / item.relative_path).stat().st_size),
-            state=ArtifactState.PUBLISHED,
-        )
-        for item in declared
-        if (output_root / item.relative_path).is_file()
-    )
+    return CampaignExecution(experiments=tuple(experiments))
 
 
 @dataclass
 class PipelineStageRunner:
     """Execute lower-level capability stages for one coordinate at a time."""
 
-    observation_hook: ObservationHook | None = None
     progress_hook: ProgressHook | None = None
     _workspace: ExperimentWorkspace | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
         self._context_cache: dict[tuple[object, ...], FederatedExecutionContext] = {}
         self._evaluation_cache: dict[Path, EvaluateFederatedDetectorResult] = {}
+        self._training_cache: dict[tuple[object, ...], TrainFederatedDetectorResult] = {}
+        self._score_cache: dict[tuple[object, ...], FederatedScoreArtifactManifest] = {}
 
     def _workspace_for(self, coordinate: ExperimentCoordinate, output_root: Path) -> ExperimentWorkspace:
         workspace = self._workspace
@@ -244,6 +155,8 @@ class PipelineStageRunner:
                 progress=self.progress_hook,
                 shared_context_cache=self._context_cache,
                 shared_evaluation_cache=self._evaluation_cache,
+                shared_training_cache=self._training_cache,
+                shared_score_cache=self._score_cache,
             )
             self._workspace = workspace
         return workspace
@@ -252,7 +165,6 @@ class PipelineStageRunner:
         self,
         stage: PipelineStage,
         coordinate: ExperimentCoordinate,
-        provenance: ExecutionProvenance,
         output_root: Path,
     ) -> StageExecution:
         _emit_progress(
@@ -261,7 +173,7 @@ class PipelineStageRunner:
         )
         started = time.monotonic()
         try:
-            execution = self._run(stage, coordinate, provenance, output_root)
+            execution = self._run(stage, coordinate, output_root)
         except ScientificContractError as error:
             execution = StageExecution(
                 stage=stage,
@@ -275,7 +187,6 @@ class PipelineStageRunner:
                 coordinate=coordinate,
                 stage=stage,
                 outcome=execution.outcome,
-                reused=execution.outcome is StageOutcome.REUSED,
                 elapsed_seconds=time.monotonic() - started,
             ),
         )
@@ -285,7 +196,6 @@ class PipelineStageRunner:
         self,
         stage: PipelineStage,
         coordinate: ExperimentCoordinate,
-        provenance: ExecutionProvenance,
         output_root: Path,
     ) -> StageExecution:
         if coordinate.temporal_state is not None:
@@ -307,29 +217,18 @@ class PipelineStageRunner:
                 return StageExecution(
                     stage=stage,
                     outcome=StageOutcome.COMPLETED,
-                    evidence=StageExecutionEvidence(
-                        f"clients={len(workspace.context.clients)} "
-                        f"split_checksum={workspace.context.split_manifest_checksum.value}"
-                    ),
+                    evidence=StageExecutionEvidence(f"clients={len(workspace.context.clients)}"),
                 )
             case PipelineStage.FIT_PREPROCESSING:
                 return StageExecution(
                     stage=stage,
                     outcome=StageOutcome.COMPLETED,
                     evidence=StageExecutionEvidence(
-                        f"state_set={workspace.context.preprocessing_state_set_checksum.value}"
+                        f"preprocessed_clients={len(workspace.context.preprocessing.client_publications)}"
                     ),
                 )
             case PipelineStage.TRAIN_DETECTOR:
                 return self._train_detector(stage, workspace)
-            case PipelineStage.SELECT_CHECKPOINT:
-                return StageExecution(
-                    stage=stage,
-                    outcome=StageOutcome.COMPLETED,
-                    evidence=StageExecutionEvidence(
-                        f"selected_round={workspace.selected_checkpoint.round_number.value}"
-                    ),
-                )
             case PipelineStage.GENERATE_SCORES:
                 return self._generate_scores(stage, coordinate, workspace)
             case PipelineStage.BUILD_CALIBRATION:
@@ -341,7 +240,7 @@ class PipelineStageRunner:
             case PipelineStage.ANALYZE_EVIDENCE:
                 return self._analyze_evidence(stage, coordinate, workspace)
             case PipelineStage.FINALIZE_PUBLICATION:
-                return self._finalize_publication(stage, coordinate, provenance, output_root, workspace)
+                return self._finalize_publication(stage, workspace)
         raise ScientificContractError(
             ErrorMessage(f"unsupported execution stage: {stage.value}"), subject=coordinate.experiment
         )
@@ -354,28 +253,15 @@ class PipelineStageRunner:
         return StageExecution(
             stage=stage,
             outcome=StageOutcome.COMPLETED,
-            evidence=StageExecutionEvidence(
-                f"{publication.dataset.value} status={publication.publication_status.value}"
-            ),
+            evidence=StageExecutionEvidence(f"{publication.dataset.value} assets={len(publication.assets)}"),
         )
 
     def _train_detector(self, stage: PipelineStage, workspace: ExperimentWorkspace) -> StageExecution:
         result = workspace.training
-        outcome = (
-            StageOutcome.COMPLETED if result.publication_status is PublicationStatus.PUBLISHED else StageOutcome.REUSED
-        )
         return StageExecution(
             stage=stage,
-            outcome=outcome,
-            evidence=StageExecutionEvidence(
-                f"rounds={len(result.candidates)} status={result.publication_status.value}"
-            ),
-        )
-
-    def _observe(self, boundary: ObservationBoundary, coordinate: ExperimentCoordinate, checksum: Checksum) -> None:
-        observe_graph_boundary(
-            ObservationContext(boundary=boundary, coordinate=coordinate, input_checksum=checksum),
-            self.observation_hook,
+            outcome=StageOutcome.COMPLETED,
+            evidence=StageExecutionEvidence(f"rounds={len(result.training.history.rounds)}"),
         )
 
     def _generate_scores(
@@ -384,12 +270,10 @@ class PipelineStageRunner:
         coordinate: ExperimentCoordinate,
         workspace: ExperimentWorkspace,
     ) -> StageExecution:
-        checksum = canonical_checksum(FixedScoreInvariant.from_manifest(workspace.scores))
-        self._observe(ObservationBoundary.AFTER_SCORE_GENERATION_BEFORE_CALIBRATION, coordinate, checksum)
         return StageExecution(
             stage=stage,
             outcome=StageOutcome.COMPLETED,
-            evidence=StageExecutionEvidence(f"score_invariant={checksum.value}"),
+            evidence=StageExecutionEvidence(f"scored_clients={len(workspace.scores.evaluation_records)}"),
         )
 
     def _build_calibration(
@@ -399,15 +283,13 @@ class PipelineStageRunner:
         workspace: ExperimentWorkspace,
     ) -> StageExecution:
         eligible = workspace.eligible_calibration_scores()
-        checksum = canonical_checksum(eligible)
-        evidence = f"eligible_clients={len(eligible)} checksum={checksum.value}"
+        evidence = f"eligible_clients={len(eligible)}"
         if workspace.calibration is not None:
             lattice = workspace.calibration
             evidence = (
                 f"{evidence} ablation_clients={len(lattice.eligible_clients)} "
                 f"replicates={len(lattice.replicate_manifests)}"
             )
-        self._observe(ObservationBoundary.AFTER_CALIBRATION_BEFORE_THRESHOLD_CONSTRUCTION, coordinate, checksum)
         return StageExecution(stage=stage, outcome=StageOutcome.COMPLETED, evidence=StageExecutionEvidence(evidence))
 
     def _construct_thresholds(
@@ -416,12 +298,10 @@ class PipelineStageRunner:
         coordinate: ExperimentCoordinate,
         workspace: ExperimentWorkspace,
     ) -> StageExecution:
-        checksum = canonical_checksum(workspace.threshold)
-        self._observe(ObservationBoundary.AFTER_THRESHOLD_CONSTRUCTION_BEFORE_EVALUATION, coordinate, checksum)
         return StageExecution(
             stage=stage,
             outcome=StageOutcome.COMPLETED,
-            evidence=StageExecutionEvidence(f"threshold_checksum={checksum.value}"),
+            evidence=StageExecutionEvidence(f"threshold_method={coordinate.threshold_method.value}"),
         )
 
     def _evaluate_detector(
@@ -430,12 +310,11 @@ class PipelineStageRunner:
         coordinate: ExperimentCoordinate,
         workspace: ExperimentWorkspace,
     ) -> StageExecution:
-        evaluation = workspace.evaluation
-        self._observe(ObservationBoundary.AFTER_EVALUATION_BEFORE_ANALYSIS, coordinate, evaluation.complete_digest)
+        _ = workspace.evaluation
         return StageExecution(
             stage=stage,
             outcome=StageOutcome.COMPLETED,
-            evidence=StageExecutionEvidence(f"complete_digest={evaluation.complete_digest.value}"),
+            evidence=StageExecutionEvidence("evaluation completed"),
         )
 
     def _analyze_evidence(
@@ -454,49 +333,11 @@ class PipelineStageRunner:
     def _finalize_publication(
         self,
         stage: PipelineStage,
-        coordinate: ExperimentCoordinate,
-        provenance: ExecutionProvenance,
-        output_root: Path,
         workspace: ExperimentWorkspace,
     ) -> StageExecution:
-        selected = workspace.selection.selected
-        evaluation_directory = workspace.run_directory() / EvaluationRunAssetDirectory.EVALUATION
-        evaluation_document_path = evaluation_directory / FederatedEvaluationAssetName.DOCUMENT
-        evaluation_complete_path = evaluation_directory / FederatedEvaluationAssetName.COMPLETE
-        load_evaluation_document(evaluation_document_path)
-        artifacts = (
-            ArtifactRecord(
-                kind=ArtifactKind.MODEL_TENSORS,
-                relative_path=selected.tensor_path.relative_to(output_root),
-                checksum=selected.tensor_checksum,
-                byte_count=ByteCount(selected.tensor_path.stat().st_size),
-                state=ArtifactState.PUBLISHED,
-            ),
-            ArtifactRecord(
-                kind=ArtifactKind.MANIFEST,
-                relative_path=evaluation_document_path.relative_to(output_root),
-                checksum=Checksum.from_file(evaluation_document_path),
-                byte_count=ByteCount(evaluation_document_path.stat().st_size),
-                state=ArtifactState.PUBLISHED,
-            ),
-            ArtifactRecord(
-                kind=ArtifactKind.MANIFEST,
-                relative_path=evaluation_complete_path.relative_to(output_root),
-                checksum=Checksum.from_file(evaluation_complete_path),
-                byte_count=ByteCount(evaluation_complete_path.stat().st_size),
-                state=ArtifactState.PUBLISHED,
-            ),
-        )
-        directory = experiment_output_directory(output_root, coordinate)
-        record = build_completion_record(
-            plan_digest=provenance.plan_digest,
-            campaign_digest=provenance.campaign_digest,
-            protocol_digest=provenance.protocol_digest,
-            artifacts=artifacts,
-        )
-        write_completion_record(directory, record)
+        workspace.evaluation_document()
         return StageExecution(
             stage=stage,
             outcome=StageOutcome.COMPLETED,
-            evidence=StageExecutionEvidence(f"completion_state={record.state.value} artifacts={len(record.artifacts)}"),
+            evidence=StageExecutionEvidence("publication written"),
         )

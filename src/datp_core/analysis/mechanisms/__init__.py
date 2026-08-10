@@ -56,7 +56,6 @@ from datp_core.analysis.mechanisms.movement import (
 from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
 from datp_core.analysis.metrics.models import MetricStatus, metric_by_id
 from datp_core.analysis.scientific_decision import ScientificDecisionResult
-from datp_core.artifacts.provenance import Checksum
 from datp_core.core.identifiers import ExperimentId, MetricId
 from datp_core.core.numeric import Ratio
 
@@ -177,8 +176,6 @@ def threshold_movements_from_evaluations(
                 ),
                 experiment=experiment,
                 coordinate=shared.score_coordinate,
-                score_checksum=shared.fixed_score_evidence.evaluation.score_checksum,
-                evaluation_checksum=shared.fixed_score_evidence.evaluation.label_checksum,
             )
         )
     return summarize_threshold_movements(tuple(movements))
@@ -186,7 +183,5 @@ def threshold_movements_from_evaluations(
 
 def jensen_shannon_from_client_scores(
     vectors: tuple[ClientScoreVector, ...],
-    *,
-    source_score_checksum: Checksum,
 ) -> DivergenceResult:
-    return jensen_shannon_divergence(vectors, source_score_checksum=source_score_checksum)
+    return jensen_shannon_divergence(vectors)

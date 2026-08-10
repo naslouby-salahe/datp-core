@@ -9,7 +9,6 @@ from datp_core.analysis.inference.bootstrap.estimation import seed_level_bca_int
 from datp_core.analysis.inference.contracts import PairedInferenceProtocol
 from datp_core.analysis.metrics.protocols import ABSORPTION_REFERENCE_EFFECT_MATERIALITY_CUTOFF
 from datp_core.analysis.scientific_decision import ScientificDecision, ScientificDecisionResult
-from datp_core.artifacts.provenance import Checksum
 from datp_core.core.contracts import StrictModel
 from datp_core.core.identifiers import (
     DecisionRationale,
@@ -51,14 +50,6 @@ class AbsorptionCornerEvidence(StrictModel):
     model: TrainingModelId
     threshold_method: FederatedThresholdMethod
     coefficient: ModelCoefficientValue | None
-    checkpoint_checksum: Checksum
-    preprocessing_checksum: Checksum
-    split_checksum: Checksum
-    calibration_score_checksum: Checksum
-    evaluation_score_checksum: Checksum
-    evaluation_checksum: Checksum
-    client_inventory_checksum: Checksum
-    eligibility_checksum: Checksum
     population_cv_fpr: MetricValue
 
     @model_validator(mode="after")
@@ -113,19 +104,6 @@ class AbsorptionFourCornerEvidence(StrictModel):
             raise ValueError("personalized shared corner must use SHARED_THRESHOLD")
         if self.personalized_local.threshold_method is not FederatedThresholdMethod.LOCAL_THRESHOLD:
             raise ValueError("personalized local corner must use LOCAL_THRESHOLD")
-        identities = tuple(
-            (
-                item.checkpoint_checksum,
-                item.preprocessing_checksum,
-                item.split_checksum,
-                item.calibration_score_checksum,
-                item.evaluation_score_checksum,
-                item.evaluation_checksum,
-            )
-            for item in corners
-        )
-        if len(frozenset(identities)) != 4:
-            raise ValueError("absorption corners must not clone identical artifact identities")
         return self
 
     @property

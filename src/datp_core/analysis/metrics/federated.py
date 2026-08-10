@@ -18,18 +18,16 @@ from datp_core.analysis.operational.alert_burden import AlertBurdenDiagnostic
 from datp_core.analysis.operational.communication import CommunicationDiagnostic, CommunicationMessageDiagnostic
 from datp_core.analysis.operational.traffic_rates import ValidatedTrafficRateEvidence
 from datp_core.analysis.temporal import TemporalDeploymentProvenance
-from datp_core.artifacts.provenance import Checksum
 from datp_core.core.contracts import StrictModel
 from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
 )
-from datp_core.core.identifiers import CheckpointStatus, EvidenceRole, FederatedThresholdMethod, StageOperationId
+from datp_core.core.identifiers import EvidenceRole, FederatedThresholdMethod, StageOperationId
 from datp_core.core.numeric import (
     CalibrationSize,
     CoverageTarget,
     ReplicateIndex,
-    RoundNumber,
     ShrinkageWeight,
     ThresholdValue,
 )
@@ -115,7 +113,6 @@ class FederatedEvaluationRequest:
     threshold_result: ThresholdConstructionResult
     cohort: EvaluationCohortManifest
     fixed_score_evidence: FixedScoreEvidence
-    comparison_fixed_score_evidence: FixedScoreEvidence | None
     evidence_role: EvidenceRole
     conformal_coverage_inputs: tuple[ConformalCoverageStageInput, ...]
     threshold_estimation_inputs: tuple[ThresholdEstimationStageInput, ...]
@@ -131,11 +128,6 @@ class FederatedEvaluationDocument(StrictModel):
     model_config = ConfigDict(revalidate_instances="never")
     stage: StageOperationId
     score_coordinate: FederatedTrainingCoordinate
-    score_checkpoint_round: RoundNumber
-    score_checkpoint_checksum: Checksum
-    score_checkpoint_status: CheckpointStatus
-    preprocessing_state_set_checksum: Checksum
-    split_manifest_checksum: Checksum
     threshold_method: FederatedThresholdMethod
     evidence_role: EvidenceRole
     fixed_score_evidence: FixedScoreEvidence
@@ -157,4 +149,3 @@ class FederatedEvaluationArtifacts:
 class FederatedEvaluationPublication:
     artifacts: FederatedEvaluationArtifacts
     document: FederatedEvaluationDocument
-    digest: Checksum

@@ -4,7 +4,6 @@ from datp_core.core.errors import (
 )
 from datp_core.core.identifiers import (
     CaptureTimestampColumn,
-    ContractSubject,
     DatasetId,
     FeatureName,
     FeatureNameSequence,
@@ -12,8 +11,8 @@ from datp_core.core.identifiers import (
     PreprocessingProtocolId,
     SplitProtocolId,
 )
-from datp_core.data.canonical_cache import require_canonical_publication_complete
 from datp_core.data.edge_iiotset.schema import EdgeCanonicalColumn
+from datp_core.data.materialization import require_canonical_dataset
 from datp_core.data.paths import canonical_root_under
 from datp_core.data.populations.construction import (
     build_preprocessing_handoff,
@@ -75,11 +74,7 @@ def preprocess_federated(
     dataset = binding.declaration.dataset
     canonical_root = canonical_root_under(request.data_root, dataset)
 
-    require_canonical_publication_complete(
-        canonical_root,
-        dataset,
-        ContractSubject.PREPROCESSING,
-    )
+    require_canonical_dataset(canonical_root, dataset)
 
     construction = construct_population(
         PopulationConstructionRequest(
@@ -96,7 +91,6 @@ def preprocess_federated(
             construction=construction,
             deployment_fallback_client_ids=frozenset(),
             capture_timestamp_column=_capture_timestamp_column(request),
-            expected_split_manifest_checksum=request.expected_split_manifest_checksum,
         )
     )
 
@@ -117,7 +111,6 @@ def preprocess_federated(
         partition_seed=document.partition_seed,
         split_protocol_identity=document.split_protocol,
         protocol=protocol,
-        canonical_schema_checksum=schema.checksum,
         data_root=request.data_root,
         dirichlet_condition=request.dirichlet_condition,
     )
@@ -142,7 +135,6 @@ def preprocess_federated(
         preprocessing_identity=request.preprocessing_identity,
         client_publications=result.publications,
         published_count=result.published_count,
-        reused_count=result.reused_count,
     )
 
 
@@ -163,11 +155,7 @@ def preprocess_published_federated(
     dataset = document.dataset
     canonical_root = canonical_root_under(request.data_root, dataset)
 
-    require_canonical_publication_complete(
-        canonical_root,
-        dataset,
-        ContractSubject.PREPROCESSING,
-    )
+    require_canonical_dataset(canonical_root, dataset)
 
     schema = dataset_binding(dataset).schema
     feature_names = model_feature_names(dataset, FeatureNameSequence(tuple(map(FeatureName, schema.feature_columns))))
@@ -179,7 +167,6 @@ def preprocess_published_federated(
         partition_seed=document.partition_seed,
         split_protocol_identity=published.split_manifest.split_protocol,
         protocol=protocol,
-        canonical_schema_checksum=schema.checksum,
         data_root=request.data_root,
         execution_identity=identity,
     )
@@ -234,7 +221,6 @@ def preprocess_published_federated(
         preprocessing_identity=request.preprocessing_identity,
         client_publications=result.publications,
         published_count=result.published_count,
-        reused_count=result.reused_count,
         execution_identity=identity,
     )
 

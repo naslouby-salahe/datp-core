@@ -1,43 +1,28 @@
-"""Typed, streaming-safe canonical dataset publication."""
-
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from shutil import rmtree
 
 import polars as pl
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from datp_core.artifacts.provenance import Checksum
-from datp_core.artifacts.repositories.publication import publish_atomically
+from datp_core.artifacts.serializers.json import canonical_json_text
 from datp_core.core.identifiers import (
-    ArtifactFileName,
+    CanonicalAssetRoleToken,
     CanonicalizationContractName,
+    CanonicalSourcePath,
     ColumnName,
     DatasetId,
     PhysicalSchemaText,
-    PublicationStatus,
-    SerializedDocumentText,
     SourceIdentity,
 )
 from datp_core.core.numeric import ByteCount, CanonicalColumnPosition, LogicalElementCount, RowCount, SourceFileCount
-from datp_core.data.canonical_cache import (
-    CanonicalAsset,
-    CanonicalAssetLayout,
-    PublicationMatchRequest,
-    SourcePathResolver,
-    canonical_asset_path,
-    canonical_directory,
-    completed_publication_is_reusable,
-    serialized_manifest_json,
-    write_source_state,
-)
 from datp_core.data.contracts import (
     CanonicalAssetRole,
     CanonicalColumn,
     CanonicalColumnRole,
+    CanonicalManifestDocument,
     CanonicalProvenanceColumn,
     CanonicalSchema,
     ChronologyValidation,
@@ -45,46 +30,46 @@ from datp_core.data.contracts import (
     DatasetValidationReport,
     ExcludedSourceFile,
     ExclusionReason,
-    ManifestSerializationRequest,
+    ManifestAssetEntry,
     MaterializedCanonicalAsset,
     MaterializedDataset,
     ModelInputEligibilityPolicy,
     RawDatasetInventory,
     RawSourceFile,
     SourceFileRole,
-    complete_digest,
-    publication_artifact_names,
-    schema_checksum_document_json,
+    manifest_chronology_entry,
+    manifest_eligibility_entry,
+    manifest_inventory_entry,
+    manifest_validation_report_entry,
     schema_content,
 )
-
-_COMPLETE_NAME, _MANIFEST_NAME, _SCHEMA_NAME, _SOURCE_STATE_NAME = publication_artifact_names()
+from datp_core.runtime.filesystem import cleanup_staging_on_failure, create_staging_directory, replace_directory
 
 
 @dataclass(frozen=True, slots=True)
-class CanonicalManifest[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum]:
-    dataset: DatasetId
-    canonicalization_contract: CanonicalizationContractName
-    schema_checksum: Checksum
-    inventory: RawDatasetInventory
-    validation_report: DatasetValidationReport
-    assets: tuple[CanonicalAsset[AssetRoleT], ...]
-    chronology: tuple[ChronologyValidation, ...] = ()
-    eligibility_policy: ModelInputEligibilityPolicy[EligibilityReasonT] | None = None
+class CanonicalAssetLayout[AssetRoleT: StrEnum]:
+    relative_path: Path
+    role: AssetRoleT
+    source_identity: SourceIdentity | None = None
 
-    def content(self) -> SerializedDocumentText:
-        return serialized_manifest_json(
-            ManifestSerializationRequest(
-                dataset=self.dataset,
-                canonicalization_contract=self.canonicalization_contract,
-                schema_checksum=self.schema_checksum,
-                inventory=self.inventory,
-                validation_report=self.validation_report,
-                chronology=self.chronology,
-                eligibility_policy=self.eligibility_policy,
-            ),
-            self.assets,
-        )
+    def __post_init__(self) -> None:
+        if not _is_relative_path(self.relative_path):
+            raise ValueError("canonical assets must use publication-root-relative paths")
+
+
+@dataclass(frozen=True, slots=True)
+class CanonicalAsset[AssetRoleT: StrEnum]:
+    relative_path: Path
+    row_count: RowCount
+    columns: tuple[ColumnName, ...]
+    role: AssetRoleT
+    source_identity: SourceIdentity | None = None
+
+    def __post_init__(self) -> None:
+        if not _is_relative_path(self.relative_path):
+            raise ValueError("canonical assets must use publication-root-relative paths")
+        if not self.columns:
+            raise ValueError("canonical assets require columns")
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,64 +81,42 @@ class CanonicalPublication[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum]:
     validation_report: DatasetValidationReport
     expected_assets: tuple[CanonicalAssetLayout[AssetRoleT], ...]
     writer: Callable[[Path], tuple[CanonicalAsset[AssetRoleT], ...]]
-    source_paths: tuple[Path, ...]
-    source_path_resolver: SourcePathResolver
     chronology: tuple[ChronologyValidation, ...] = ()
     eligibility_policy: ModelInputEligibilityPolicy[EligibilityReasonT] | None = None
 
     def __post_init__(self) -> None:
-        _validate_publication_records(self)
-        _validate_publication_contract(self)
-        _validate_publication_eligibility_policy(self)
-
-    def match_request(self) -> PublicationMatchRequest[AssetRoleT, EligibilityReasonT]:
-        return PublicationMatchRequest(
-            schema=self.schema,
-            canonicalization_contract=self.canonicalization_contract,
-            inventory=self.inventory,
-            validation_report=self.validation_report,
-            expected_assets=self.expected_assets,
-            chronology=self.chronology,
-            eligibility_policy=self.eligibility_policy,
-        )
+        if self.inventory.dataset is not self.schema.dataset:
+            raise ValueError("canonical inventory must match the schema dataset")
+        if self.validation_report.dataset is not self.schema.dataset:
+            raise ValueError("canonical validation report must match the schema dataset")
+        if not self.expected_assets:
+            raise ValueError("canonical publication requires expected assets")
 
 
-def _validate_publication_records[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
-    publication: CanonicalPublication[AssetRoleT, EligibilityReasonT],
-) -> None:
-    if publication.inventory.dataset is not publication.schema.dataset:
-        raise ValueError("canonical inventory must match the schema dataset")
-    if publication.validation_report.dataset is not publication.schema.dataset:
-        raise ValueError("canonical validation report must match the schema dataset")
-    if not publication.expected_assets:
-        raise ValueError("canonical publication requires expected assets")
+def canonical_directory(canonical_root: Path, schema: CanonicalSchema) -> Path:
+    return canonical_root / schema.dataset.value
 
 
-def _validate_publication_contract[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
-    publication: CanonicalPublication[AssetRoleT, EligibilityReasonT],
-) -> None:
-    if not publication.canonicalization_contract:
-        raise ValueError("canonical publication requires an explicit semantic contract")
+def canonical_asset_path(root: Path, relative_path: Path) -> Path:
+    if not _is_relative_path(relative_path):
+        raise ValueError("canonical asset path escapes its publication root")
+    path = root / relative_path
+    if not path.resolve().is_relative_to(root.resolve()):
+        raise ValueError("canonical asset path escapes its publication root")
+    return path
 
 
-def _validate_publication_eligibility_policy[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
-    publication: CanonicalPublication[AssetRoleT, EligibilityReasonT],
-) -> None:
-    policy = publication.eligibility_policy
-    if policy is not None and policy.dataset is not publication.schema.dataset:
-        raise ValueError("canonical eligibility policy must match the published dataset")
+def require_canonical_dataset(root: Path, dataset: DatasetId) -> None:
+    if not (root / "dataset_manifest.json").is_file():
+        raise FileNotFoundError(f"canonical dataset is unavailable: {dataset.value}")
 
 
-def provenance_expressions(path: Path, source_path_resolver: SourcePathResolver) -> tuple[pl.Expr, ...]:
+def provenance_expressions(path: Path, source_path_resolver: Callable[[Path], Path]) -> tuple[pl.Expr, ...]:
     relative_path = source_path_resolver(path).as_posix()
     return (
         pl.lit(relative_path).alias(CanonicalProvenanceColumn.SOURCE_PATH),
         pl.concat_str(
-            (
-                pl.lit(relative_path),
-                pl.lit(":"),
-                pl.col(CanonicalProvenanceColumn.SOURCE_ROW_INDEX).cast(pl.String),
-            )
+            (pl.lit(relative_path), pl.lit(":"), pl.col(CanonicalProvenanceColumn.SOURCE_ROW_INDEX).cast(pl.String))
         ).alias(CanonicalProvenanceColumn.STABLE_ROW_ID),
     )
 
@@ -163,29 +126,15 @@ def raw_source_file(
     path: Path,
     role: SourceFileRole,
     observed_row_count: RowCount | None,
-    source_path_resolver: SourcePathResolver,
+    source_path_resolver: Callable[[Path], Path],
 ) -> RawSourceFile:
-    return RawSourceFile(
-        dataset=dataset,
-        relative_path=source_path_resolver(path),
-        size_bytes=ByteCount(path.stat().st_size),
-        checksum=Checksum.from_file(path),
-        role=role,
-        observed_row_count=observed_row_count,
-    )
+    return RawSourceFile(dataset, source_path_resolver(path), ByteCount(path.stat().st_size), role, observed_row_count)
 
 
 def excluded_source_file(
-    dataset: DatasetId,
-    path: Path,
-    reason: ExclusionReason,
-    source_path_resolver: SourcePathResolver,
+    dataset: DatasetId, path: Path, reason: ExclusionReason, source_path_resolver: Callable[[Path], Path]
 ) -> ExcludedSourceFile:
-    return ExcludedSourceFile(
-        dataset=dataset,
-        relative_path=source_path_resolver(path),
-        reason=reason,
-    )
+    return ExcludedSourceFile(dataset, source_path_resolver(path), reason)
 
 
 def raw_inventory(
@@ -197,75 +146,28 @@ def raw_inventory(
     if not sources:
         raise ValueError("raw inventories require at least one accepted source")
     ordered_sources = tuple(sorted(sources, key=lambda source: source.relative_path.as_posix()))
-    if tuple(source.dataset for source in ordered_sources) != (dataset,) * len(ordered_sources):
-        raise ValueError("raw inventory sources must belong to its dataset")
-    if tuple(source.dataset for source in excluded_sources) != (dataset,) * len(excluded_sources):
-        raise ValueError("raw inventory excluded sources must belong to its dataset")
     ordered_excluded = tuple(sorted(excluded_sources, key=lambda source: source.relative_path.as_posix()))
-    total_rows = _inventory_row_count(ordered_sources)
     return RawDatasetInventory(
-        dataset=dataset,
-        sources=ordered_sources,
-        accepted_source_count=SourceFileCount(len(ordered_sources)),
-        excluded_source_count=SourceFileCount(len(ordered_excluded)),
-        excluded_sources=ordered_excluded,
-        accepted_row_count=total_rows,
-        checksum=_inventory_checksum(ordered_sources),
+        dataset,
+        ordered_sources,
+        SourceFileCount(len(ordered_sources)),
+        SourceFileCount(len(ordered_excluded)),
+        ordered_excluded,
+        _inventory_row_count(ordered_sources),
     )
-
-
-def _inventory_row_count(sources: tuple[RawSourceFile, ...]) -> RowCount | None:
-    representation_sources = tuple(
-        source for source in sources if source.role is not SourceFileRole.CHRONOLOGY_EVIDENCE
-    )
-    if not all(source.observed_row_count is not None for source in representation_sources):
-        return None
-    return RowCount(
-        sum(
-            source.observed_row_count.value
-            for source in representation_sources
-            if source.observed_row_count is not None
-        )
-    )
-
-
-def _inventory_checksum(sources: tuple[RawSourceFile, ...]) -> Checksum:
-    joined = "".join(
-        "\t".join(
-            (
-                source.relative_path.as_posix(),
-                str(source.size_bytes.value),
-                source.checksum.value,
-                source.role.value,
-                "" if source.observed_row_count is None else str(source.observed_row_count),
-            )
-        )
-        + "\n"
-        for source in sources
-    )
-    return Checksum.from_text(joined)
-
-
-def canonical_schema_checksum(
-    dataset: DatasetId, columns: tuple[CanonicalColumn, ...], physical_schema: pa.Schema
-) -> Checksum:
-    if tuple(column.nullable for column in columns) != tuple(field.nullable for field in physical_schema):
-        raise ValueError("canonical column nullability must match the physical schema")
-    return Checksum.from_text(schema_checksum_document_json(dataset, columns, physical_schema))
 
 
 def canonical_provenance_column(
     column: CanonicalProvenanceColumn, position: CanonicalColumnPosition
 ) -> CanonicalColumn:
-    source_name, dtype = _provenance_column_details(column)
-    return CanonicalColumn(
-        ColumnName(column),
-        source_name,
-        dtype,
-        CanonicalColumnRole.PROVENANCE,
-        True,
-        position,
-    )
+    match column:
+        case CanonicalProvenanceColumn.SOURCE_ROW_INDEX:
+            name, dtype = ColumnName("source row index"), ColumnLogicalType.UINT64
+        case CanonicalProvenanceColumn.SOURCE_PATH:
+            name, dtype = ColumnName("raw-root-relative source path"), ColumnLogicalType.STRING
+        case CanonicalProvenanceColumn.STABLE_ROW_ID:
+            name, dtype = ColumnName("source path and zero-based row index"), ColumnLogicalType.STRING
+    return CanonicalColumn(ColumnName(column), name, dtype, CanonicalColumnRole.PROVENANCE, True, position)
 
 
 def canonical_provenance_arrow_field(column: CanonicalProvenanceColumn) -> pa.Field:
@@ -276,20 +178,8 @@ def canonical_provenance_arrow_field(column: CanonicalProvenanceColumn) -> pa.Fi
             return pa.field(column, pa.large_string())
 
 
-def _provenance_column_details(column: CanonicalProvenanceColumn) -> tuple[ColumnName, ColumnLogicalType]:
-    match column:
-        case CanonicalProvenanceColumn.SOURCE_ROW_INDEX:
-            return ColumnName("source row index"), ColumnLogicalType.UINT64
-        case CanonicalProvenanceColumn.SOURCE_PATH:
-            return ColumnName("raw-root-relative source path"), ColumnLogicalType.STRING
-        case CanonicalProvenanceColumn.STABLE_ROW_ID:
-            return ColumnName("source path and zero-based row index"), ColumnLogicalType.STRING
-
-
 def partition_assets[AssetRoleT: StrEnum](
-    partition_count: LogicalElementCount,
-    branch: Path,
-    role: AssetRoleT,
+    partition_count: LogicalElementCount, branch: Path, role: AssetRoleT
 ) -> tuple[CanonicalAssetLayout[AssetRoleT], ...]:
     return tuple(
         CanonicalAssetLayout(branch / f"part-{index:05d}.parquet", role) for index in range(partition_count.value)
@@ -299,7 +189,6 @@ def partition_assets[AssetRoleT: StrEnum](
 def canonical_data_partition_assets(
     partition_count: LogicalElementCount,
 ) -> tuple[CanonicalAssetLayout[CanonicalAssetRole], ...]:
-    """Layout partitions under the canonical ``data/`` branch consumed by population construction."""
     return partition_assets(partition_count, Path("data"), CanonicalAssetRole.CANONICAL_DATA)
 
 
@@ -319,10 +208,7 @@ def empty_asset[AssetRoleT: StrEnum](branch: Path, role: AssetRoleT) -> Canonica
 
 
 def stream_parquet[AssetRoleT: StrEnum](
-    frame: pl.LazyFrame,
-    canonical_root: Path,
-    layout: CanonicalAssetLayout[AssetRoleT],
-    expected_schema: pa.Schema,
+    frame: pl.LazyFrame, canonical_root: Path, layout: CanonicalAssetLayout[AssetRoleT], expected_schema: pa.Schema
 ) -> CanonicalAsset[AssetRoleT]:
     destination = canonical_asset_path(canonical_root, layout.relative_path)
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -332,12 +218,11 @@ def stream_parquet[AssetRoleT: StrEnum](
     if not actual_schema.equals(expected_schema, check_metadata=False):
         raise ValueError("written Parquet schema differs from the declared canonical schema")
     return CanonicalAsset(
-        relative_path=layout.relative_path,
-        checksum=Checksum.from_file(destination),
-        row_count=RowCount(parquet.metadata.num_rows),
-        columns=tuple(ColumnName(name) for name in actual_schema.names),
-        role=layout.role,
-        source_identity=layout.source_identity,
+        layout.relative_path,
+        RowCount(parquet.metadata.num_rows),
+        tuple(ColumnName(name) for name in actual_schema.names),
+        layout.role,
+        layout.source_identity,
     )
 
 
@@ -345,95 +230,31 @@ def publish_canonical[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
     publication: CanonicalPublication[AssetRoleT, EligibilityReasonT],
 ) -> MaterializedDataset[AssetRoleT, EligibilityReasonT]:
     target = canonical_directory(publication.canonical_root, publication.schema)
-
-    def write(temporary: Path) -> Path:
-        _write_canonical(temporary, publication)
-        return target
-
-    outcome = publish_atomically(
-        target=target,
-        overwrite=False,
-        is_reusable=lambda directory: completed_publication_is_reusable(directory, publication.match_request()),
-        write=write,
-        reusable_value=lambda directory: directory,
-        remove_target=lambda directory: _remove_target(directory, publication.canonical_root),
-        complete_marker=ArtifactFileName(_COMPLETE_NAME),
-    )
-    if outcome.status is PublicationStatus.REUSED:
-        write_source_state(
-            target,
-            publication.schema.dataset,
-            publication.source_paths,
-            publication.source_path_resolver,
+    temporary = create_staging_directory(target)
+    with cleanup_staging_on_failure(temporary):
+        assets = publication.writer(temporary)
+        _validate_written_assets(temporary, assets, publication.expected_assets, publication.schema.physical_schema)
+        (temporary / "schema.json").write_text(schema_content(publication.schema), encoding="utf-8")
+        manifest = CanonicalManifestDocument(
+            assets=tuple(
+                ManifestAssetEntry(
+                    columns=asset.columns,
+                    path=CanonicalSourcePath(asset.relative_path.as_posix()),
+                    row_count=asset.row_count,
+                    role=CanonicalAssetRoleToken(asset.role.value),
+                    source_identity=asset.source_identity,
+                )
+                for asset in assets
+            ),
+            canonicalization_contract=publication.canonicalization_contract,
+            chronology=tuple(manifest_chronology_entry(item) for item in publication.chronology),
+            dataset=publication.schema.dataset,
+            eligibility_policy=manifest_eligibility_entry(publication.eligibility_policy),
+            inventory=manifest_inventory_entry(publication.inventory),
+            validation_report=manifest_validation_report_entry(publication.validation_report),
         )
-    return _materialized_dataset(outcome.value, publication, outcome.status)
-
-
-def _write_canonical[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
-    temporary: Path, publication: CanonicalPublication[AssetRoleT, EligibilityReasonT]
-) -> None:
-    assets = publication.writer(temporary)
-    _validate_written_assets(temporary, assets, publication.expected_assets, publication.schema.physical_schema)
-    serialized_schema = schema_content(publication.schema)
-    (temporary / _SCHEMA_NAME).write_text(serialized_schema, encoding="utf-8")
-    serialized_manifest = CanonicalManifest(
-        publication.schema.dataset,
-        publication.canonicalization_contract,
-        publication.schema.checksum,
-        publication.inventory,
-        publication.validation_report,
-        assets,
-        publication.chronology,
-        publication.eligibility_policy,
-    ).content()
-    (temporary / _MANIFEST_NAME).write_text(serialized_manifest, encoding="utf-8")
-    write_source_state(
-        temporary,
-        publication.schema.dataset,
-        publication.source_paths,
-        publication.source_path_resolver,
-    )
-    (temporary / _COMPLETE_NAME).write_text(
-        complete_digest(serialized_manifest, serialized_schema).value,
-        encoding="utf-8",
-    )
-    if not completed_publication_is_reusable(temporary, publication.match_request()):
-        raise ValueError("canonical publication did not pass complete-asset validation")
-
-
-def _validate_written_assets[AssetRoleT: StrEnum](
-    temporary: Path,
-    assets: tuple[CanonicalAsset[AssetRoleT], ...],
-    expected_assets: tuple[CanonicalAssetLayout[AssetRoleT], ...],
-    expected_physical_schema: PhysicalSchemaText,
-) -> None:
-    if not _asset_paths_match(assets, expected_assets):
-        raise ValueError("canonical writer returned unexpected assets")
-    if not _asset_paths_are_unique(assets):
-        raise ValueError("canonical writer returned duplicate asset paths")
-    from datp_core.data.canonical_cache import asset_is_valid, serialized_asset
-
-    if not all(asset_is_valid(temporary, serialized_asset(asset), expected_physical_schema) for asset in assets):
-        raise ValueError("canonical writer returned an invalid Parquet asset")
-
-
-def _asset_paths_match[AssetRoleT: StrEnum](
-    assets: tuple[CanonicalAsset[AssetRoleT], ...], expected_assets: tuple[CanonicalAssetLayout[AssetRoleT], ...]
-) -> bool:
-    return tuple((asset.relative_path, asset.role, asset.source_identity) for asset in assets) == tuple(
-        (layout.relative_path, layout.role, layout.source_identity) for layout in expected_assets
-    )
-
-
-def _asset_paths_are_unique[AssetRoleT: StrEnum](assets: tuple[CanonicalAsset[AssetRoleT], ...]) -> bool:
-    return len(assets) == len(frozenset(asset.relative_path for asset in assets))
-
-
-def _materialized_dataset[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
-    target: Path,
-    publication: CanonicalPublication[AssetRoleT, EligibilityReasonT],
-    status: PublicationStatus,
-) -> MaterializedDataset[AssetRoleT, EligibilityReasonT]:
+        (temporary / "dataset_manifest.json").write_text(canonical_json_text(manifest), encoding="utf-8")
+        replace_directory(temporary, target)
     assets = tuple(
         MaterializedCanonicalAsset(
             canonical_asset_path(target, layout.relative_path).resolve(),
@@ -444,19 +265,51 @@ def _materialized_dataset[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
         for layout in publication.expected_assets
     )
     return MaterializedDataset(
-        dataset=publication.schema.dataset,
-        canonical_root=target,
-        assets=assets,
-        manifest_path=target / _MANIFEST_NAME,
-        schema=publication.schema,
-        row_count=_logical_row_count(publication, assets),
-        source_inventory_checksum=publication.inventory.checksum,
-        publication_status=status,
-        inventory=publication.inventory,
-        validation_report=publication.validation_report,
-        chronology=publication.chronology,
-        eligibility_policy=publication.eligibility_policy,
+        publication.schema.dataset,
+        target,
+        assets,
+        target / "dataset_manifest.json",
+        publication.schema,
+        _logical_row_count(publication, assets),
+        publication.inventory,
+        publication.validation_report,
+        publication.chronology,
+        publication.eligibility_policy,
     )
+
+
+def _is_relative_path(path: Path) -> bool:
+    return bool(path.parts) and not path.is_absolute() and ".." not in path.parts
+
+
+def _inventory_row_count(sources: tuple[RawSourceFile, ...]) -> RowCount | None:
+    sources = tuple(source for source in sources if source.role is not SourceFileRole.CHRONOLOGY_EVIDENCE)
+    if not all(source.observed_row_count is not None for source in sources):
+        return None
+    return RowCount(sum(source.observed_row_count.value for source in sources if source.observed_row_count is not None))
+
+
+def _validate_written_assets[AssetRoleT: StrEnum](
+    root: Path,
+    assets: tuple[CanonicalAsset[AssetRoleT], ...],
+    expected_assets: tuple[CanonicalAssetLayout[AssetRoleT], ...],
+    expected_schema: PhysicalSchemaText,
+) -> None:
+    if tuple((asset.relative_path, asset.role, asset.source_identity) for asset in assets) != tuple(
+        (asset.relative_path, asset.role, asset.source_identity) for asset in expected_assets
+    ):
+        raise ValueError("canonical writer returned unexpected assets")
+    if len(assets) != len(frozenset(asset.relative_path for asset in assets)):
+        raise ValueError("canonical writer returned duplicate asset paths")
+    for asset in assets:
+        parquet = pq.ParquetFile(canonical_asset_path(root, asset.relative_path))
+        if parquet.metadata.num_rows != asset.row_count.value:
+            raise ValueError("canonical asset row count does not match its Parquet data")
+        if (
+            PhysicalSchemaText(parquet.schema_arrow.to_string(show_field_metadata=True, show_schema_metadata=True))
+            != expected_schema
+        ):
+            raise ValueError("canonical asset schema does not match its declared schema")
 
 
 def _asset_row_count[AssetRoleT: StrEnum](target: Path, layout: CanonicalAssetLayout[AssetRoleT]) -> RowCount:
@@ -467,13 +320,6 @@ def _logical_row_count[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
     publication: CanonicalPublication[AssetRoleT, EligibilityReasonT],
     assets: tuple[MaterializedCanonicalAsset[AssetRoleT], ...],
 ) -> RowCount:
-    accepted = publication.inventory.accepted_row_count
-    return accepted if accepted is not None else RowCount(sum(asset.row_count.value for asset in assets))
-
-
-def _remove_target(target: Path, canonical_root: Path) -> None:
-    root = canonical_root.resolve()
-    resolved_target = target.resolve()
-    if root not in resolved_target.parents or resolved_target == root:
-        raise ValueError("refusing to remove a target outside the canonical root")
-    rmtree(resolved_target)
+    if publication.inventory.accepted_row_count is not None:
+        return publication.inventory.accepted_row_count
+    return RowCount(sum(asset.row_count.value for asset in assets))

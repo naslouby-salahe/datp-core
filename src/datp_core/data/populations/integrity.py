@@ -6,7 +6,6 @@ from enum import StrEnum
 
 import polars as pl
 
-from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import (
     DataIntegrityError,
     ErrorMessage,
@@ -20,7 +19,6 @@ from datp_core.core.identifiers import (
     ContractSubject,
     PartitionRole,
     PopulationId,
-    StableRowId,
     StageOperationId,
     ValidationReasonText,
 )
@@ -38,7 +36,6 @@ from datp_core.data.populations.contracts import (
     SplitManifestDocument,
     WorkingFrameColumn,
     assignment_column_names,
-    membership_checksum,
     membership_column_names,
 )
 
@@ -86,13 +83,6 @@ def reject_non_benign_labels(
 ) -> None:
     if any(label != benign_label for label in labels):
         raise LeakageError(ErrorMessage(message), subject=subject)
-
-
-def membership_frame_checksum(membership: pl.DataFrame) -> Checksum:
-    return membership_checksum(
-        tuple(ClientIdentityToken(c) for c in membership.get_column(CLIENT_ID_COLUMN).to_list()),
-        tuple(StableRowId(row) for row in membership.get_column(STABLE_ROW_ID_COLUMN).to_list()),
-    )
 
 
 def outcome_row_counts(membership: pl.DataFrame) -> PopulationOutcomeRowCounts:

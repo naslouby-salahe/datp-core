@@ -8,7 +8,6 @@ from math import floor, fsum
 import numpy as np
 import polars as pl
 
-from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import (
     DataIntegrityError,
     ErrorMessage,
@@ -529,17 +528,6 @@ def _split_manifest(
     def count(role: PartitionRole) -> RowCount:
         return RowCount(int(assignments.filter(pl.col(PARTITION_ROLE_COLUMN) == role).height))
 
-    ordered = assignments.sort([CLIENT_ID_COLUMN, STABLE_ROW_ID_COLUMN])
-    payload = "\n".join(
-        (
-            request.population.value,
-            request.dataset.value,
-            str(request.partition_seed.value),
-            request.split_protocol.value,
-            *ordered.get_column(STABLE_ROW_ID_COLUMN).to_list(),
-            *ordered.get_column(PARTITION_ROLE_COLUMN).to_list(),
-        )
-    )
     return SplitManifestDocument(
         population=request.population,
         dataset=request.dataset,
@@ -552,8 +540,6 @@ def _split_manifest(
         future_recalibration_row_count=count(PartitionRole.FUTURE_RECALIBRATION),
         static_reference_reserve_row_count=count(PartitionRole.STATIC_REFERENCE_RESERVE),
         discarded_row_count=count(PartitionRole.DISCARDED),
-        assignment_checksum=Checksum.from_text(payload),
-        population_manifest_checksum=request.population_manifest_checksum,
     )
 
 

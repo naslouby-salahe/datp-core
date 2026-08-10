@@ -7,7 +7,6 @@ import numpy as np
 from numpy.random import default_rng
 from numpy.typing import NDArray
 
-from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
@@ -101,7 +100,10 @@ class CalibrationReplicateManifest:
 
 def replicate_seed(training_seed: Seed, client: ClientIdentity, replicate_index: ReplicateIndex) -> Seed:
     payload = f"{training_seed.value}|{client.population.value}|{client.client_id.value}|{replicate_index.value}"
-    return Seed(int(Checksum.from_text(payload).value, 16))
+    value = training_seed.value
+    for character in payload:
+        value = (value * 131 + ord(character)) % (2**63 - 1)
+    return Seed(value)
 
 
 def build_calibration_replicate(

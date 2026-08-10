@@ -53,14 +53,6 @@ _CUDA_ONLY_TESTS = frozenset().union(
     ),
     _tests(
         "tests/unit/learning/federated/test_checkpointing.py",
-        "test_retain_checkpoint_candidates_persists_and_reloads",
-        "test_select_checkpoint_chooses_maximum_round",
-        "test_select_checkpoint_rejects_held_out_metrics",
-        "test_select_checkpoint_rejects_attack_labels",
-        "test_retain_checkpoint_candidates_rejects_missing_declared_round",
-        "test_select_checkpoint_rejects_missing_tensor_file",
-        "test_validate_candidate_coordinates_rejects_mismatched_client",
-        "test_rebase_checkpoint_candidates_rejects_target_checksum_mismatch",
     ),
     _tests(
         "tests/unit/learning/federated/test_ditto.py",
@@ -69,12 +61,10 @@ _CUDA_ONLY_TESTS = frozenset().union(
         "test_train_ditto_personalized_states_differ_by_client",
         "test_train_ditto_personalized_states_persist_across_rounds",
         "test_train_ditto_records_personalized_state_references_every_round",
-        "test_ditto_markers_without_valid_artifacts_are_not_reusable",
     ),
     _tests(
         "tests/unit/learning/federated/test_fedavg.py",
         "test_train_fedavg_produces_history_with_full_participation_every_round",
-        "test_train_fedavg_produces_one_checkpoint_candidate_per_declared_round",
         "test_train_fedavg_is_deterministic_given_the_same_seed",
         "test_train_fedavg_never_trains_on_attack_labelled_rows",
     ),

@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from pathlib import Path
 
 import polars as pl
 from pydantic import TypeAdapter, ValidationError
 
-from datp_core.analysis.evidence import AnalysisAssetName, SeedEvidenceAssetName
+from datp_core.analysis.evidence import SeedEvidenceAssetName
 from datp_core.analysis.mechanisms import (
     AbsorptionCohortResult,
     AbsorptionCornerEvidence,
@@ -24,13 +24,12 @@ from datp_core.analysis.metrics.models import ClientMetricResult, MetricStatus, 
 from datp_core.analysis.metrics.population import calculate_population_metrics
 from datp_core.app.planning import PlanDisposition, PlanningEvidence, PlanReason, expand_experiment_plan
 from datp_core.artifacts.layout import evaluation_run_directory
-from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
 from datp_core.artifacts.repositories.thresholds import (
     FederatedThresholdConstructionRequest,
     construct_and_publish_federated_thresholds,
 )
-from datp_core.artifacts.serializers.json import canonical_checksum, canonical_json_text
+from datp_core.artifacts.serializers.json import canonical_json_text
 from datp_core.core.contracts import ClientCollection, ClientOwned
 from datp_core.core.errors import (
     ArtifactIntegrityError,
@@ -38,7 +37,6 @@ from datp_core.core.errors import (
     ScientificContractError,
 )
 from datp_core.core.identifiers import (
-    ClientIdentityToken,
     ContractSubject,
     DatasetId,
     EvidenceRole,
@@ -78,9 +76,7 @@ from datp_core.data.preprocessing.service import preprocess_federated
 from datp_core.data.registry import population_capabilities
 from datp_core.detector.checkpoints.history import history_frames
 from datp_core.detector.checkpoints.identities import FederatedHistoryColumn
-from datp_core.detector.checkpoints.protocols import CHECKPOINT_PROTOCOL
-from datp_core.detector.checkpoints.service import SelectFederatedCheckpointRequest, select_federated_primary_checkpoint
-from datp_core.detector.scoring.contracts import FixedScoreInvariant
+from datp_core.detector.checkpoints.protocols import DIAGNOSTIC_SNAPSHOT_PROTOCOL
 from datp_core.detector.scoring.federated import publish_federated_scores
 from datp_core.detector.scoring.models import FederatedScoreArtifactManifest, GenerateFederatedScoresRequest
 from datp_core.detector.training.contracts import (
@@ -92,11 +88,9 @@ from datp_core.detector.training.ditto_publication import (
     TrainDittoDetectorResult,
     train_ditto_detector,
 )
-from datp_core.detector.training.engine import preprocessing_state_set_checksum
 from datp_core.detector.training.models import (
     DittoTrainingCoordinates,
     FederatedTrainingCoordinate,
-    PreparedClientProvenance,
 )
 from datp_core.detector.training.protocols import (
     BATCH_SIZE,
@@ -116,7 +110,6 @@ from datp_core.experiments.confirmatory.run import FedAvgCvFprEffectEvidence, ab
 from datp_core.experiments.execution import execute_declared_campaign
 from datp_core.experiments.execution.context import (
     client_training_inputs,
-    client_with_id,
     training_feature_names,
 )
 from datp_core.experiments.execution.evidence import load_evaluation_document
@@ -132,7 +125,6 @@ from datp_core.experiments.execution.models import (
     ProgressEvent,
     ProgressEventKind,
     ProgressHook,
-    campaign_digest,
 )
 from datp_core.experiments.personalized_scoring import client_metric, client_scoring_input, score_record_for_client
 from datp_core.experiments.registry import EXPERIMENTS
@@ -193,8 +185,10 @@ def _persist_ditto_evidence(
 ) -> None:
     directory = ditto_directory(training_seed, regularization, DittoArtifactBranch.EVIDENCE, output_root)
     directory.mkdir(parents=True, exist_ok=True)
-    (directory / SeedEvidenceAssetName.DOCUMENT).write_text(canonical_json_text(evidence), encoding="utf-8")
-    (directory / AnalysisAssetName.COMPLETE).write_text(canonical_checksum(evidence).value, encoding="utf-8")
+    write_text_atomically(
+        directory / SeedEvidenceAssetName.DOCUMENT,
+        FileContentText(canonical_json_text(evidence)),
+    )
 
 
 def load_ditto_stress_test_evidence(
@@ -205,11 +199,10 @@ def load_ditto_stress_test_evidence(
 ) -> DittoStressTestEvidence:
     directory = ditto_directory(training_seed, regularization, DittoArtifactBranch.EVIDENCE, output_root)
     document = directory / SeedEvidenceAssetName.DOCUMENT
-    complete = directory / AnalysisAssetName.COMPLETE
-    if not document.is_file() or not complete.is_file():
+    if not document.is_file():
         raise ScientificContractError(
             ErrorMessage(
-                f"missing completed Ditto stress-test evidence: {directory} "
+                f"missing Ditto stress-test evidence: {directory} "
                 f"(seed={training_seed.value} regularization={regularization.value})"
             ),
             subject=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
@@ -222,11 +215,6 @@ def load_ditto_stress_test_evidence(
             ErrorMessage(f"Ditto stress-test evidence is unreadable or invalid: {document}"),
             subject=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
         ) from error
-    if complete.read_text(encoding="utf-8").strip() != canonical_checksum(evidence).value:
-        raise ScientificContractError(
-            ErrorMessage(f"Ditto stress-test evidence checksum does not match its completion marker: {document}"),
-            subject=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
-        )
     return evidence
 
 
@@ -235,8 +223,6 @@ class DittoPopulationContext:
     clients: tuple[ClientIdentity, ...]
     family_by_client: tuple[FamilyAssignment, ...]
     preprocessing: FederatedPreprocessingOutcome
-    split_manifest_checksum: Checksum
-    preprocessing_state_set_checksum: Checksum
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -249,7 +235,6 @@ class PersonalizedScoreCollection:
 class FedProxStressTestResult:
     training_seed: Seed
     coefficient: ProximalCoefficient
-    campaign_digest: Checksum
     completed_threshold_methods: tuple[FederatedThresholdMethod, ...]
 
 
@@ -379,11 +364,10 @@ def run_ditto_stress_test_seed(
                 population_client_count=ClientCount(len(context.clients)),
                 autoencoder=NBAIOT_AUTOENCODER,
                 training_protocol=resolve_ditto_protocol(regularization),
-                checkpoint_protocol=CHECKPOINT_PROTOCOL,
+                diagnostic_snapshot_protocol=DIAGNOSTIC_SNAPSHOT_PROTOCOL,
                 training_seed=training_seed,
                 batch_size=BATCH_SIZE,
                 learning_rate=LEARNING_RATE,
-                split_manifest_checksum=context.split_manifest_checksum,
                 global_output_directory=ditto_directory(
                     training_seed,
                     regularization,
@@ -411,7 +395,6 @@ def run_ditto_stress_test_seed(
                     else None
                 ),
             ),
-            overwrite=overwrite,
         )
     )
     scores = _personalized_scores(
@@ -608,11 +591,7 @@ def run_fedprox_stress_test_seed(
         CampaignEntry(ordinal=CampaignOrdinal(index), coordinate=coordinate)
         for index, coordinate in enumerate(coordinates)
     )
-    campaign = CampaignPlan(
-        entries=campaign_entries,
-        digest=campaign_digest(campaign_entries),
-        plan_digest=plan.digest,
-    )
+    campaign = CampaignPlan(entries=campaign_entries)
     result = execute_declared_campaign(
         campaign=campaign,
         declaration=declaration,
@@ -623,7 +602,6 @@ def run_fedprox_stress_test_seed(
     return FedProxStressTestResult(
         training_seed=training_seed,
         coefficient=coefficient,
-        campaign_digest=result.campaign_digest,
         completed_threshold_methods=result.completed_threshold_methods,
     )
 
@@ -669,7 +647,6 @@ class FedProxPrimaryCoefficientDecision:
     selection_rule: FedProxCoefficientSelectionRule
     primary_coefficient: ProximalCoefficient
     candidates: tuple[FedProxCoefficientTerminalLoss, ...]
-    decision_checksum: Checksum
 
 
 def fedprox_training_coordinate(training_seed: Seed, coefficient: ProximalCoefficient) -> FederatedTrainingCoordinate:
@@ -721,7 +698,7 @@ def collect_fedprox_coefficient_terminal_losses(
                     seed=seed,
                     terminal_training_loss=read_terminal_aggregate_training_loss(
                         directory,
-                        maximum_round=CHECKPOINT_PROTOCOL.maximum_round,
+                        maximum_round=DIAGNOSTIC_SNAPSHOT_PROTOCOL.maximum_round,
                     ),
                 )
             )
@@ -749,12 +726,10 @@ def select_primary_fedprox_coefficient_from_artifacts(
     )
     candidates = collect_fedprox_coefficient_terminal_losses(output_root=output_root, seed_cohort=seed_cohort)
     selected = select_primary_fedprox_coefficient(candidates)
-    decision_checksum = canonical_checksum((FEDPROX_COEFFICIENT_SELECTION_RULE, selected.coefficient, candidates))
     return FedProxPrimaryCoefficientDecision(
         selection_rule=FEDPROX_COEFFICIENT_SELECTION_RULE,
         primary_coefficient=selected.coefficient,
         candidates=candidates,
-        decision_checksum=decision_checksum,
     )
 
 
@@ -933,25 +908,13 @@ def _population_context(
             data_root=DATA_ROOT,
             dirichlet_condition=None,
             capture_timestamp_column=None,
-            expected_split_manifest_checksum=population_result.split_manifest.assignment_checksum,
         )
     )
     clients = population_result.construction.manifest.clients
-    state_set_checksum = preprocessing_state_set_checksum(
-        tuple(
-            PreparedClientProvenance(
-                client=client_with_id(clients, ClientIdentityToken(item.client_identity.value)),
-                preprocessing_checksum=item.fitted_state.estimator_checksum,
-            )
-            for item in preprocessing.client_publications
-        )
-    )
     return DittoPopulationContext(
         clients=clients,
         family_by_client=population_result.construction.manifest.family_by_client,
         preprocessing=preprocessing,
-        split_manifest_checksum=population_result.split_manifest.assignment_checksum,
-        preprocessing_state_set_checksum=state_set_checksum,
     )
 
 
@@ -974,36 +937,26 @@ def _personalized_scores(
         DittoArtifactBranch.PERSONALIZED_MODELS,
         output_root,
     )
-    for owned in sorted(training.personalized_candidates.items, key=lambda item: item.client):
+    for owned in sorted(training.personalized_terminal_models.items, key=lambda item: item.client):
         client = owned.client
-        selection = select_federated_primary_checkpoint(
-            SelectFederatedCheckpointRequest(
-                coordinate=personalized_coordinate,
-                client=client,
-                candidates=owned.value,
-                checkpoint_protocol=CHECKPOINT_PROTOCOL,
-                preprocessing_state_set_checksum=context.preprocessing_state_set_checksum,
-                split_manifest_checksum=context.split_manifest_checksum,
-                held_out_metrics=None,
-                attack_labels_present=False,
-            )
+        terminal_training = replace(
+            training.global_training,
+            coordinate=owned.value.coordinate,
+            terminal_model_state=owned.value.model_state,
         )
         manifest = publish_federated_scores(
             GenerateFederatedScoresRequest(
-                checkpoint=selection.selected,
-                scored_split_protocol=selection.selected.coordinate.split_protocol,
+                training=terminal_training,
+                scored_split_protocol=terminal_training.coordinate.split_protocol,
                 autoencoder=NBAIOT_AUTOENCODER,
                 feature_names=feature_names,
                 clients=(client_scoring_input(context.preprocessing.client_publications, client),),
                 batch_size=BATCH_SIZE,
                 output_directory=personalized_directory / client.client_id.value / ExecutionArtifactDirectory.SCORES,
-                preprocessing_state_set_checksum=context.preprocessing_state_set_checksum,
-                split_manifest_checksum=context.split_manifest_checksum,
                 overwrite=overwrite,
             )
         ).manifest
         manifests.append(ClientOwned(client=client, value=manifest))
-        invariant = FixedScoreInvariant.from_manifest(manifest)
         record = score_record_for_client(manifest.calibration_records, client, PartitionRole.CALIBRATION)
         scores = tuple(
             ScoreValue(float(value))
@@ -1016,8 +969,6 @@ def _personalized_scores(
                 client,
                 personalized_coordinate,
                 scores,
-                Checksum.from_file(record.path),
-                invariant.calibration_score_set_checksum,
             )
         )
     if not eligible:

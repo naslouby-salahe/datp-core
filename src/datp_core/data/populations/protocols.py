@@ -91,9 +91,7 @@ class HistoricalTemporalGapSplitProtocol(StrictModel):
 
     @model_validator(mode="after")
     def validate_fractions(self) -> "HistoricalTemporalGapSplitProtocol":
-        declared = fsum(
-            (self.training.value, self.calibration.value, self.gap1.value, self.gap2.value)
-        )
+        declared = fsum((self.training.value, self.calibration.value, self.gap1.value, self.gap2.value))
         if not declared < UNIT_FRACTION_TOTAL:
             raise ValueError("historical temporal-gap declared fractions must leave a positive evaluation remainder")
         return self

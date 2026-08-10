@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from datp_core.analysis.descriptive import ScoreGeometryResult, ScoreRole
-from datp_core.artifacts.provenance import Checksum
 from datp_core.core.identifiers import (
     AnalysisReasonText,
     AvailabilityStatus,
@@ -55,7 +54,6 @@ class EmpiricalCdfFigureSeries:
     seed: Seed | None
     score_role: ScoreRole | None
     threshold_overlays: tuple[ThresholdOverlay, ...]
-    source_checksum: Checksum | None
     unavailable_reason: AnalysisReasonText | None = None
 
     def __post_init__(self) -> None:
@@ -171,7 +169,6 @@ def empirical_cdf_series_from_points(
     seed: Seed | None,
     score_role: ScoreRole | None,
     threshold_overlays: tuple[ThresholdOverlay, ...] = (),
-    source_checksum: Checksum | None,
     unavailable_reason: AnalysisReasonText | None = None,
 ) -> EmpiricalCdfFigureSeries:
     if unavailable_reason is not None:
@@ -186,7 +183,6 @@ def empirical_cdf_series_from_points(
             seed=seed,
             score_role=score_role,
             threshold_overlays=(),
-            source_checksum=source_checksum,
             unavailable_reason=unavailable_reason,
         )
     return EmpiricalCdfFigureSeries(
@@ -200,7 +196,6 @@ def empirical_cdf_series_from_points(
         seed=seed,
         score_role=score_role,
         threshold_overlays=threshold_overlays,
-        source_checksum=source_checksum,
         unavailable_reason=None,
     )
 
@@ -237,7 +232,6 @@ def score_geometry_figure(
                     seed=geometry.seed,
                     score_role=client_geometry.score_role,
                     threshold_overlays=(),
-                    source_checksum=geometry.source_score_checksum,
                     unavailable_reason=AnalysisReasonText(client_geometry.unavailable_reason),
                 )
             )
@@ -253,7 +247,6 @@ def score_geometry_figure(
                 seed=geometry.seed,
                 score_role=client_geometry.score_role,
                 threshold_overlays=overlays,
-                source_checksum=geometry.source_score_checksum,
             )
         )
     if not series:

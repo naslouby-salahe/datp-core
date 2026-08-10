@@ -17,7 +17,6 @@ from datp_core.core.identifiers import (
     DatasetId,
     FeatureNameSequence,
     ProcessedDataBranch,
-    PublicationStatus,
 )
 from datp_core.core.numeric import ClientPublicationCount
 from datp_core.data.populations.contracts import (
@@ -121,7 +120,6 @@ def preprocess_ciciot_client_local(
 
     publications: list[ClientPreprocessingResult] = []
     published_count = 0
-    reused_count = 0
     feature_cache: dict[CanonicalSourcePath, pl.DataFrame] = {}
 
     for client_str in client_id_vals:
@@ -173,10 +171,7 @@ def preprocess_ciciot_client_local(
             )
         )
 
-        if publication.publication_status is PublicationStatus.REUSED:
-            reused_count += 1
-        else:
-            published_count += 1
+        published_count += 1
         publications.append(publication)
 
     return FederatedPreprocessingOutcome(
@@ -187,6 +182,5 @@ def preprocess_ciciot_client_local(
         preprocessing_identity=context.protocol.identity,
         client_publications=tuple(publications),
         published_count=ClientPublicationCount(published_count),
-        reused_count=ClientPublicationCount(reused_count),
         execution_identity=identity,
     )

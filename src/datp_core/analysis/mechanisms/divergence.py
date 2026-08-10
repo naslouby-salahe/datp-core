@@ -8,7 +8,6 @@ from numpy.typing import NDArray
 from pydantic import model_validator
 from scipy.spatial.distance import jensenshannon
 
-from datp_core.artifacts.provenance import Checksum
 from datp_core.core.contracts import StrictModel
 from datp_core.core.identifiers import AnalysisReasonText, AvailabilityStatus, EvidenceRole
 from datp_core.core.numeric import MetricValue, PairedObservationCount, PositiveIntegerValue, ScoreValue
@@ -113,7 +112,6 @@ class PairwiseJensenShannonDistance(StrictModel):
 class DivergenceResult(StrictModel):
     clients: tuple[ClientIdentity, ...]
     protocol: JensenShannonProtocol
-    source_score_checksum: Checksum | None
     pairwise_distances: tuple[PairwiseJensenShannonDistance, ...]
     aggregate: MetricValue | None
     blocker: DivergenceBlocker | None
@@ -131,8 +129,6 @@ class DivergenceResult(StrictModel):
         if available:
             if len(self.pairwise_distances) != expected_pairs or self.aggregate is None:
                 raise ValueError("available divergence requires complete pairwise distances and an aggregate")
-            if self.source_score_checksum is None:
-                raise ValueError("available divergence requires a source-score checksum")
             expected_client_pairs = tuple(
                 (left_client, right_client)
                 for left_index, left_client in enumerate(self.clients)
@@ -161,7 +157,6 @@ def blocked_jensen_shannon_divergence(
     blocker: DivergenceBlocker,
     *,
     protocol: JensenShannonProtocol = LOCKED_JENSEN_SHANNON_PROTOCOL,
-    source_score_checksum: Checksum | None = None,
 ) -> DivergenceResult:
     ordered = tuple(sorted(clients))
     if len(ordered) < MINIMUM_DIVERGENCE_CLIENTS.value:
@@ -169,7 +164,6 @@ def blocked_jensen_shannon_divergence(
     return DivergenceResult(
         clients=ordered,
         protocol=protocol,
-        source_score_checksum=source_score_checksum,
         pairwise_distances=(),
         aggregate=None,
         blocker=blocker,
@@ -180,7 +174,6 @@ def jensen_shannon_divergence(
     vectors: tuple[ClientScoreVector, ...],
     *,
     protocol: JensenShannonProtocol = LOCKED_JENSEN_SHANNON_PROTOCOL,
-    source_score_checksum: Checksum,
 ) -> DivergenceResult:
     if len(vectors) < MINIMUM_DIVERGENCE_CLIENTS.value:
         raise ValueError("Jensen-Shannon divergence requires at least two client score vectors")
@@ -194,7 +187,6 @@ def jensen_shannon_divergence(
             clients,
             DivergenceBlocker.NON_FINITE_SCORE,
             protocol=protocol,
-            source_score_checksum=source_score_checksum,
         )
     support_min = ScoreValue(float(min(float(array.min()) for array in arrays)))
     support_max = ScoreValue(float(max(float(array.max()) for array in arrays)))
@@ -203,7 +195,6 @@ def jensen_shannon_divergence(
             clients,
             DivergenceBlocker.COMMON_SUPPORT_UNRESOLVED,
             protocol=protocol,
-            source_score_checksum=source_score_checksum,
         )
     if support_max.value <= support_min.value:
         support_max = ScoreValue(support_min.value + protocol.smoothing_constant.value)
@@ -226,7 +217,6 @@ def jensen_shannon_divergence(
                     clients,
                     DivergenceBlocker.ZERO_MASS_UNRESOLVED,
                     protocol=protocol,
-                    source_score_checksum=source_score_checksum,
                 )
             pairwise.append(
                 PairwiseJensenShannonDistance(
@@ -240,13 +230,11 @@ def jensen_shannon_divergence(
             clients,
             DivergenceBlocker.AGGREGATION_UNRESOLVED,
             protocol=protocol,
-            source_score_checksum=source_score_checksum,
         )
     aggregate = MetricValue(float(np.mean([distance.value.value for distance in pairwise])))
     return DivergenceResult(
         clients=clients,
         protocol=protocol,
-        source_score_checksum=source_score_checksum,
         pairwise_distances=tuple(pairwise),
         aggregate=aggregate,
         blocker=None,

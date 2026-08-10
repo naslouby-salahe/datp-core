@@ -3,13 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import StrEnum
-from typing import Protocol
 
 from datp_core.analysis.inference.contracts import PairedInferenceProtocol
 from datp_core.analysis.metrics.protocols import ATTACK_SENSITIVE_METRICS, SUPPRESSED_OPERATIONAL_METRICS
 from datp_core.analysis.operational.traffic_rates import TRAFFIC_RATE_EVIDENCE, TrafficRateEvidence
-from datp_core.artifacts.provenance import Checksum
 from datp_core.core.contracts import StrictModel
 from datp_core.core.errors import (
     ErrorMessage,
@@ -18,18 +15,14 @@ from datp_core.core.errors import (
 )
 from datp_core.core.identifiers import (
     ContractSubject,
-    DatasetId,
     EvidenceRole,
     ExperimentId,
     ExperimentReadiness,
     FederatedThresholdMethod,
-    MetricId,
     PopulationId,
-    SplitProtocolId,
-    TemporalState,
     TrainingModelId,
 )
-from datp_core.core.numeric import CalibrationSize, Seed
+from datp_core.core.numeric import CalibrationSize
 from datp_core.data.populations.contracts import POPULATIONS, PopulationDeclaration
 from datp_core.data.populations.protocols import (
     NON_TEMPORAL_SPLIT,
@@ -39,8 +32,6 @@ from datp_core.data.populations.protocols import (
     StaticReferenceSplitProtocol,
     TemporalSplitProtocol,
 )
-from datp_core.detector.checkpoints.contracts import CheckpointProtocol
-from datp_core.detector.checkpoints.protocols import CHECKPOINT_PROTOCOL
 from datp_core.detector.training.contracts import FedAvgProtocol
 from datp_core.detector.training.protocols import FEDAVG_TRAINING_PROTOCOL
 from datp_core.experiments.anchor.spec import ANCHOR_DECISION_PROTOCOL, AnchorDecisionProtocol
@@ -65,7 +56,6 @@ class ResolvedProtocolGraph(StrictModel):
     temporal_split: TemporalSplitProtocol
     static_reference_split: StaticReferenceSplitProtocol
     non_temporal_split: FractionalSplitProtocol
-    checkpoint: CheckpointProtocol
     calibration: CalibrationEligibilityProtocol
     confirmatory_endpoint: ConfirmatoryEndpoint
     confirmatory_inference: PairedInferenceProtocol
@@ -75,94 +65,6 @@ class ResolvedProtocolGraph(StrictModel):
     fedavg_training: FedAvgProtocol
 
 
-class GraphCoordinate(Protocol):
-    """Scientific identity exposed to observation-only graph extensions."""
-
-    @property
-    def experiment(self) -> ExperimentId: ...
-
-    @property
-    def evidence_role(self) -> EvidenceRole: ...
-
-    @property
-    def dataset(self) -> DatasetId: ...
-
-    @property
-    def population(self) -> PopulationId: ...
-
-    @property
-    def training_model(self) -> TrainingModelId: ...
-
-    @property
-    def training_seed(self) -> Seed: ...
-
-    @property
-    def split_protocol(self) -> SplitProtocolId: ...
-
-    @property
-    def threshold_method(self) -> FederatedThresholdMethod: ...
-
-    @property
-    def metric(self) -> MetricId: ...
-
-    @property
-    def temporal_state(self) -> TemporalState | None: ...
-
-
-class ObservationBoundary(StrEnum):
-    AFTER_SCORE_GENERATION_BEFORE_CALIBRATION = "after_score_generation_before_calibration"
-    AFTER_CALIBRATION_BEFORE_THRESHOLD_CONSTRUCTION = "after_calibration_before_threshold_construction"
-    AFTER_THRESHOLD_CONSTRUCTION_BEFORE_EVALUATION = "after_threshold_construction_before_evaluation"
-    AFTER_EVALUATION_BEFORE_ANALYSIS = "after_evaluation_before_analysis"
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ObservationContext:
-    boundary: ObservationBoundary
-    coordinate: GraphCoordinate
-    input_checksum: Checksum
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ObservationResult:
-    boundary: ObservationBoundary
-    coordinate: GraphCoordinate
-    input_checksum: Checksum
-    output_checksum: Checksum
-
-    def __post_init__(self) -> None:
-        if self.input_checksum != self.output_checksum:
-            raise ValueError("observation hooks cannot alter scientific artifacts")
-
-
-class ObservationHook(Protocol):
-    def observe(self, context: ObservationContext) -> ObservationResult: ...
-
-
-@dataclass(frozen=True, slots=True)
-class IdentityObservationHook:
-    def observe(self, context: ObservationContext) -> ObservationResult:
-        return ObservationResult(
-            boundary=context.boundary,
-            coordinate=context.coordinate,
-            input_checksum=context.input_checksum,
-            output_checksum=context.input_checksum,
-        )
-
-
-def observe_graph_boundary(
-    context: ObservationContext,
-    hook: ObservationHook | None,
-) -> ObservationResult:
-    selected_hook = hook if hook is not None else IdentityObservationHook()
-    result = selected_hook.observe(context)
-    if result.boundary is not context.boundary or result.coordinate != context.coordinate:
-        raise ValueError("observation hook changed its scientific boundary or coordinate")
-    if result.input_checksum != context.input_checksum or result.output_checksum != context.input_checksum:
-        raise ValueError("observation hook changed a scientific artifact identity")
-    return result
-
-
 @dataclass(frozen=True, slots=True)
 class ProtocolGraphInputs:
     populations: tuple[PopulationDeclaration, ...]
@@ -170,7 +72,6 @@ class ProtocolGraphInputs:
     temporal_split: TemporalSplitProtocol
     static_reference_split: StaticReferenceSplitProtocol
     non_temporal_split: FractionalSplitProtocol
-    checkpoint: CheckpointProtocol
     minimum_support: CalibrationSize
     traffic_rate_evidence: tuple[TrafficRateEvidence, ...]
     confirmatory_endpoint: ConfirmatoryEndpoint
@@ -186,7 +87,6 @@ CANONICAL_PROTOCOL_GRAPH = ProtocolGraphInputs(
     temporal_split=TEMPORAL_SPLIT,
     static_reference_split=STATIC_REFERENCE_SPLIT,
     non_temporal_split=NON_TEMPORAL_SPLIT,
-    checkpoint=CHECKPOINT_PROTOCOL,
     minimum_support=MINIMUM_BENIGN_SUPPORT,
     traffic_rate_evidence=TRAFFIC_RATE_EVIDENCE,
     confirmatory_endpoint=CONFIRMATORY_ENDPOINT,
@@ -225,7 +125,6 @@ def validate_protocol_graph(inputs: ProtocolGraphInputs) -> ResolvedProtocolGrap
         temporal_split=inputs.temporal_split,
         static_reference_split=inputs.static_reference_split,
         non_temporal_split=inputs.non_temporal_split,
-        checkpoint=inputs.checkpoint,
         calibration=CalibrationEligibilityProtocol(minimum_support=inputs.minimum_support),
         confirmatory_endpoint=inputs.confirmatory_endpoint,
         confirmatory_inference=inputs.confirmatory_inference,

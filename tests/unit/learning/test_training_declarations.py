@@ -5,7 +5,7 @@ import pytest
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import CentralizedModelId, CentralizedThresholdMethod, OptimizerId, TrainingModelId
 from datp_core.core.numeric import DittoRegularization, FeatureCount, ModelCoefficientValue, Quantile
-from datp_core.detector.checkpoints.protocols import CHECKPOINT_PROTOCOL
+from datp_core.detector.checkpoints.protocols import DIAGNOSTIC_SNAPSHOT_PROTOCOL
 from datp_core.detector.training.protocols import (
     BATCH_SIZE,
     CENTRALIZED_TRAINING_PROTOCOL,
@@ -35,7 +35,7 @@ def _width_values(protocol) -> tuple[int, ...]:
 
 
 def test_training_grids_are_locked() -> None:
-    assert CHECKPOINT_PROTOCOL.maximum_round.value == 200
+    assert DIAGNOSTIC_SNAPSHOT_PROTOCOL.maximum_round.value == 200
     assert FEDAVG_LOCAL_EPOCHS.value == 1
     assert tuple(value.value for value in FEDPROX_COEFFICIENTS) == (0.001, 0.01, 0.1, 1)
     assert DITTO_RETAINED_EFFECT_MINIMUM.value == 0.75

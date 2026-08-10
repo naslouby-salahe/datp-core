@@ -1,65 +1,82 @@
 from pathlib import Path
 
 import polars as pl
-from tests.unit.learning.federated.helpers import AUTOENCODER, BATCH_SIZE, FEATURE_NAMES, benign_frame, client_identity
-from tests.unit.scoring.helpers import selected_checkpoint
+from tests.unit.learning.federated.helpers import client_identity, fedavg_coordinate
 
-from datp_core.core.numeric import RowCount, Seed
-from datp_core.detector.scoring.federated import publish_federated_scores
-from datp_core.detector.scoring.models import ClientScoringInput, GenerateFederatedScoresRequest
+from datp_core.analysis.metrics.fixed_score_construction import build_federated_evaluation_inputs
+from datp_core.core.identifiers import (
+    FederatedThresholdMethod,
+    PartitionRole,
+    ScoreFrameColumn,
+    SerializationFormat,
+    StableRowId,
+)
+from datp_core.core.numeric import FeatureCount, RowCount, Seed
+from datp_core.data.populations.contracts import PopulationOutcomeLabel
+from datp_core.detector.scoring.contracts import ScoreArtifactManifest, ScoreRecord
 
 
-def _mean_reconstruction_error(path: Path) -> float:
-    frame = pl.read_parquet(path)
-    mean_value = frame.get_column("reconstruction_error").mean()
-    assert isinstance(mean_value, int | float)
-    return float(mean_value)
-
-
-def _scores(tmp_path: Path):
-    checkpoint = selected_checkpoint(tmp_path / "checkpoint")
-    clients = (
-        ClientScoringInput(
-            client=client_identity("client_a"),
-            calibration_features=benign_frame(RowCount(8), seed=Seed(1)),
-            evaluation_features=benign_frame(RowCount(8), seed=Seed(2)),
-        ),
+def _score_manifest(directory: Path) -> ScoreArtifactManifest:
+    coordinate = fedavg_coordinate(Seed(0))
+    client = client_identity("client_a")
+    calibration_path = directory / "calibration.parquet"
+    evaluation_path = directory / "evaluation.parquet"
+    directory.mkdir(parents=True, exist_ok=True)
+    pl.DataFrame(
+        {
+            ScoreFrameColumn.STABLE_ROW_ID.value: [str(StableRowId("calibration-0"))],
+            ScoreFrameColumn.OUTCOME_LABEL.value: [PopulationOutcomeLabel.BENIGN.value],
+            ScoreFrameColumn.RECONSTRUCTION_ERROR.value: [0.2],
+        }
+    ).write_parquet(calibration_path)
+    pl.DataFrame(
+        {
+            ScoreFrameColumn.STABLE_ROW_ID.value: [
+                str(StableRowId("evaluation-0")),
+                str(StableRowId("evaluation-1")),
+            ],
+            ScoreFrameColumn.OUTCOME_LABEL.value: [
+                PopulationOutcomeLabel.BENIGN.value,
+                PopulationOutcomeLabel.ATTACK.value,
+            ],
+            ScoreFrameColumn.RECONSTRUCTION_ERROR.value: [0.3, 0.8],
+        }
+    ).write_parquet(evaluation_path)
+    calibration = ScoreRecord(
+        coordinate=coordinate,
+        partition_role=PartitionRole.CALIBRATION,
+        path=calibration_path,
+        row_count=RowCount(1),
+        feature_count=FeatureCount(4),
+        serialization_format=SerializationFormat.PARQUET,
+        scored_client=client,
     )
-    return publish_federated_scores(
-        GenerateFederatedScoresRequest(
-            checkpoint=checkpoint,
-            scored_split_protocol=checkpoint.coordinate.split_protocol,
-            autoencoder=AUTOENCODER,
-            feature_names=FEATURE_NAMES,
-            clients=clients,
-            batch_size=BATCH_SIZE,
-            output_directory=tmp_path / "scores",
-            preprocessing_state_set_checksum=checkpoint.preprocessing_state_set_checksum,
-            split_manifest_checksum=checkpoint.split_manifest_checksum,
-            overwrite=False,
-        )
+    evaluation = ScoreRecord(
+        coordinate=coordinate,
+        partition_role=PartitionRole.EVALUATION,
+        path=evaluation_path,
+        row_count=RowCount(2),
+        feature_count=FeatureCount(4),
+        serialization_format=SerializationFormat.PARQUET,
+        scored_client=client,
+    )
+    return ScoreArtifactManifest(
+        coordinate=coordinate,
+        scored_split_protocol=coordinate.split_protocol,
+        calibration_records=(calibration,),
+        evaluation_records=(evaluation,),
     )
 
 
-def test_one_score_artifact_is_reusable_across_every_simulated_threshold_method(tmp_path: Path) -> None:
-    """A frozen score artifact yields identical values for every threshold method."""
-    calibration_path = _scores(tmp_path).manifest.calibration_records[0].path
-    simulated_threshold_methods = (
-        "shared_threshold",
-        "local_threshold",
-        "cluster_threshold",
-        "local_conformal_threshold",
+def test_threshold_policies_receive_one_shared_terminal_score_manifest(tmp_path: Path) -> None:
+    manifest = _score_manifest(tmp_path)
+    methods = (
+        FederatedThresholdMethod.SHARED_THRESHOLD,
+        FederatedThresholdMethod.LOCAL_THRESHOLD,
+        FederatedThresholdMethod.CLUSTER_THRESHOLD,
+        FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD,
     )
-    observed_means = {method: _mean_reconstruction_error(calibration_path) for method in simulated_threshold_methods}
-    assert len(set(observed_means.values())) == 1
 
+    inputs = tuple(build_federated_evaluation_inputs(manifest, method) for method in methods)
 
-def test_auroc_style_separability_over_the_same_score_artifact_is_invariant_across_reads(tmp_path: Path) -> None:
-    """A quality control statistic over one score artifact is read-invariant."""
-    evaluation_path = _scores(tmp_path).manifest.evaluation_records[0].path
-
-    def quality_control_statistic() -> float:
-        return _mean_reconstruction_error(evaluation_path)
-
-    readings = [quality_control_statistic() for _ in range(3)]
-    assert readings[0] == readings[1] == readings[2]
+    assert all(item.fixed_score_evidence.score_manifest is manifest for item in inputs)

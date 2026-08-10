@@ -15,7 +15,7 @@ def test_temporal_split_preserves_history_before_future(edge_temporal_eligible_r
     construction = construct_edge_temporal_groups(
         edge_temporal_eligible_root, partition_seed=Seed(0), split_protocol=SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE
     )
-    manifest, membership = construction.manifest, construction.membership
+    membership = construction.membership
     split = split_membership(
         SplitConstructionRequest(
             membership=membership,
@@ -23,7 +23,6 @@ def test_temporal_split_preserves_history_before_future(edge_temporal_eligible_r
             dataset=DatasetId.EDGE_IIOTSET,
             partition_seed=Seed(0),
             split_protocol=SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE,
-            population_manifest_checksum=manifest.document.membership_checksum,
             capture_timestamp_column=CaptureTimestampColumn("capture_timestamp"),
         )
     )

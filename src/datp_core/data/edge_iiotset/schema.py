@@ -17,7 +17,6 @@ from datp_core.data.contracts import (
 from datp_core.data.materialization import (
     canonical_provenance_arrow_field,
     canonical_provenance_column,
-    canonical_schema_checksum,
 )
 
 
@@ -280,7 +279,6 @@ EDGE_SCHEMA = CanonicalSchema(
     physical_schema=PhysicalSchemaText(
         EDGE_ARROW_SCHEMA.to_string(show_field_metadata=True, show_schema_metadata=True)
     ),
-    checksum=canonical_schema_checksum(DatasetId.EDGE_IIOTSET, EDGE_CANONICAL_COLUMNS, EDGE_ARROW_SCHEMA),
 )
 
 

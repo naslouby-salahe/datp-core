@@ -4,11 +4,10 @@ import pytest
 from tests.unit.anchor.helpers import make_observation, matching_anchor_observations
 
 from datp_core.core.errors import AnchorReproductionError
-from datp_core.core.identifiers import CheckpointStatus, FederatedThresholdMethod, MetricId
+from datp_core.core.identifiers import FederatedThresholdMethod, MetricId
 from datp_core.core.numeric import Seed
 from datp_core.experiments.anchor.contracts import HistoricalMetricArtifactSource
 from datp_core.experiments.anchor.reproduction import (
-    ANCHOR_CHECKPOINT_STATUS,
     ANCHOR_METRIC,
     ANCHOR_POPULATION,
     ANCHOR_TRAINING_MODEL,
@@ -62,7 +61,6 @@ def test_wrong_seed_subset_blocks() -> None:
             training_model=ANCHOR_TRAINING_MODEL,
             threshold_method=FederatedThresholdMethod.SHARED_THRESHOLD,
             metric=ANCHOR_METRIC,
-            checkpoint_status=ANCHOR_CHECKPOINT_STATUS,
         )
         for seed in (0, 1, 2)
     )
@@ -75,19 +73,6 @@ def test_confirmatory_only_seeds_raise() -> None:
     observation = make_observation(seed=Seed(9))
     with pytest.raises(AnchorReproductionError, match="confirmatory-only"):
         reproduce_anchor(observations=(observation,))
-
-
-def test_non_historical_checkpoint_semantics_cannot_enter_reproduction() -> None:
-    observations = list(matching_anchor_observations())
-    first = observations[0]
-    observations[0] = make_observation(
-        seed=first.seed,
-        value=first.value.value,
-        threshold_method=first.threshold_method,
-        checkpoint_status=CheckpointStatus.CANDIDATE,
-    )
-    with pytest.raises(AnchorReproductionError, match="checkpoint"):
-        reproduce_anchor(observations=tuple(observations))
 
 
 def test_protocol_references_use_diagnostic_tolerance_rule() -> None:

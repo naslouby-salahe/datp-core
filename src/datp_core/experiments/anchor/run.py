@@ -12,9 +12,8 @@ from pydantic import ValidationError
 
 from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
 from datp_core.artifacts.layout import evaluation_run_directory
-from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
-from datp_core.artifacts.serializers.json import canonical_checksum, canonical_json_text
+from datp_core.artifacts.serializers.json import canonical_json_text
 from datp_core.core.contracts import StrictModel
 from datp_core.core.errors import (
     AnchorReproductionError,
@@ -22,8 +21,6 @@ from datp_core.core.errors import (
     ScientificContractError,
 )
 from datp_core.core.identifiers import (
-    CheckpointStatus,
-    ContractSubject,
     ExperimentId,
     ExperimentReadiness,
     FederatedThresholdMethod,
@@ -31,7 +28,6 @@ from datp_core.core.identifiers import (
     StageOperationId,
 )
 from datp_core.core.numeric import NonNegativeIntegerValue
-from datp_core.detector.checkpoints.protocols import ANCHOR_CHECKPOINT_PROTOCOL
 from datp_core.experiments.anchor.contracts import (
     AnchorDependencyBlocker,
     AnchorDetail,
@@ -48,7 +44,6 @@ from datp_core.experiments.anchor.gate import (
     persist_anchor_gate_diagnostics,
 )
 from datp_core.experiments.anchor.reproduction import (
-    ANCHOR_CHECKPOINT_STATUS,
     ANCHOR_EVIDENCE_ROLE,
     ANCHOR_METRIC,
     ANCHOR_POPULATION,
@@ -72,7 +67,6 @@ class AnchorLayoutDirectory(StrEnum):
 class IndependentAnchorAssetName(StrEnum):
     ROOT = "independent"
     OBSERVATIONS = "independent_observations.json"
-    COMPLETE = "COMPLETE"
 
 
 class IndependentObservationPackage(StrictModel):
@@ -98,7 +92,6 @@ class VerifyAnchorStageStatus:
     observation_count: NonNegativeIntegerValue
     reference_count: NonNegativeIntegerValue
     dependency_blocker: AnchorDetail | None
-    diagnostics_checksum: Checksum
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,7 +117,7 @@ def verify_anchor(request: VerifyAnchorStageRequest) -> VerifyAnchorStageResult:
         dependency_blocker=dependency_blocker,
     )
     decision = assert_gate_not_bypassable(decide_anchor_gate(reproduction))
-    diagnostics_checksum = persist_anchor_gate_diagnostics(decision, request.diagnostics_directory)
+    persist_anchor_gate_diagnostics(decision, request.diagnostics_directory)
     blocker_detail = (
         None if decision.reproduction.dependency_blocker is None else decision.reproduction.dependency_blocker.detail
     )
@@ -135,7 +128,6 @@ def verify_anchor(request: VerifyAnchorStageRequest) -> VerifyAnchorStageResult:
         observation_count=NonNegativeIntegerValue(len(decision.reproduction.observations)),
         reference_count=NonNegativeIntegerValue(len(decision.reproduction.references)),
         dependency_blocker=blocker_detail,
-        diagnostics_checksum=diagnostics_checksum,
     )
     return VerifyAnchorStageResult(status=status, gate=decision)
 
@@ -165,7 +157,6 @@ def observation_from_evaluation_document(
             ErrorMessage("independent anchor observation model must be FedAvg autoencoder"),
             subject=coordinate.model,
         )
-    _require_historical_endpoint_checkpoint(document)
     value = population_metric(document, ANCHOR_METRIC)
     return AnchorObservedMetric(
         seed=coordinate.training_seed,
@@ -174,60 +165,19 @@ def observation_from_evaluation_document(
         threshold_method=document.threshold_method,
         metric=ANCHOR_METRIC,
         value=value,
-        checkpoint_status=ANCHOR_CHECKPOINT_STATUS,
         source_kind=AnchorObservationSourceKind.INDEPENDENT_REPRODUCTION,
         artifact_path=document_path.resolve(),
-        artifact_checksum=Checksum.from_file(document_path),
-        model_checkpoint_identity=document.score_checkpoint_checksum,
         evidence_role=ANCHOR_EVIDENCE_ROLE,
     )
-
-
-def _require_historical_endpoint_checkpoint(document: FederatedEvaluationDocument) -> None:
-    """Validate the scored checkpoint is the historical endpoint from artifact provenance.
-
-    The historical endpoint semantics are earned from the recorded selection identity and
-    status, never asserted: the scored checkpoint must be the final-completed-round
-    non-test checkpoint declared by the anchor convergence protocol (early-stopped within
-    ``rounds_initial`` and ``maximum_round``, or the maximum round when no convergence fired).
-    """
-    convergence = ANCHOR_CHECKPOINT_PROTOCOL.convergence
-    if convergence is None:
-        raise AnchorReproductionError(
-            ErrorMessage("anchor checkpoint protocol must declare convergence"),
-            subject=ContractSubject.CHECKPOINT_CANDIDATES,
-            reason=AnchorDiscrepancyReason.WRONG_CHECKPOINT_SEMANTICS,
-        )
-    minimum = convergence.rounds_initial
-    maximum = ANCHOR_CHECKPOINT_PROTOCOL.maximum_round
-    if not (minimum.value <= document.score_checkpoint_round.value <= maximum.value):
-        raise AnchorReproductionError(
-            ErrorMessage("independent anchor observations require a completed historical endpoint checkpoint"),
-            subject=ContractSubject.CHECKPOINT_CANDIDATES,
-            reason=AnchorDiscrepancyReason.WRONG_CHECKPOINT_SEMANTICS,
-        )
-    if document.score_checkpoint_status is not CheckpointStatus.SELECTED_BY_NON_TEST_RULE:
-        raise AnchorReproductionError(
-            ErrorMessage("independent anchor observations require final-completed-round non-test checkpoint selection"),
-            subject=ContractSubject.CHECKPOINT_SELECTION_RULE,
-            reason=AnchorDiscrepancyReason.WRONG_CHECKPOINT_SEMANTICS,
-        )
 
 
 def load_independent_observations(package_directory: Path) -> tuple[AnchorObservedMetric, ...] | None:
     """Load a completed independent observation package, or None when absent."""
     document_path = package_directory / IndependentAnchorAssetName.OBSERVATIONS.value
-    complete_path = package_directory / IndependentAnchorAssetName.COMPLETE.value
-    if not document_path.is_file() or not complete_path.is_file():
+    if not document_path.is_file():
         return None
     try:
         package = IndependentObservationPackage.model_validate_json(document_path.read_text(encoding="utf-8"))
-        marker = complete_path.read_text(encoding="utf-8").strip()
-        if marker != canonical_checksum(package).value:
-            raise AnchorReproductionError(
-                ErrorMessage("independent observation package COMPLETE digest does not match payload"),
-                reason=AnchorDiscrepancyReason.STALE_OR_MISMATCHED_ARTIFACT,
-            )
     except AnchorReproductionError:
         raise
     except (OSError, ValueError, TypeError, ValidationError) as error:
@@ -241,8 +191,7 @@ def load_independent_observations(package_directory: Path) -> tuple[AnchorObserv
 def publish_independent_observations(
     package_directory: Path,
     observations: tuple[AnchorObservedMetric, ...],
-) -> Checksum:
-    """Atomically publish the independent observation package with a COMPLETE digest."""
+) -> None:
     if not observations:
         raise AnchorReproductionError(
             ErrorMessage("independent observation package requires at least one observation"),
@@ -251,11 +200,7 @@ def publish_independent_observations(
     package = IndependentObservationPackage(observations=observations)
     package_directory.mkdir(parents=True, exist_ok=True)
     document_path = package_directory / IndependentAnchorAssetName.OBSERVATIONS.value
-    complete_path = package_directory / IndependentAnchorAssetName.COMPLETE.value
-    digest = canonical_checksum(package)
     document_path.write_text(canonical_json_text(package), encoding="utf-8")
-    complete_path.write_text(digest.value, encoding="utf-8")
-    return digest
 
 
 def collect_independent_observations_from_evaluations(

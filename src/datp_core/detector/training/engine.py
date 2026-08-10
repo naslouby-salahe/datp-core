@@ -10,8 +10,6 @@ from safetensors.torch import save
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
-from datp_core.artifacts.provenance import Checksum
-from datp_core.artifacts.serializers.json import canonical_json_text
 from datp_core.core.errors import (
     ErrorMessage,
     LeakageError,
@@ -53,7 +51,7 @@ from datp_core.detector.autoencoder import (
     build_optimizer,
     build_reconstruction_autoencoder,
 )
-from datp_core.detector.checkpoints.contracts import CheckpointProtocol
+from datp_core.detector.checkpoints.contracts import DiagnosticSnapshotProtocol
 from datp_core.detector.training.contracts import (
     AutoencoderProtocol,
     FedAvgProtocol,
@@ -72,8 +70,6 @@ from datp_core.detector.training.models import (
     FederatedTrainingHistory,
     FederatedTrainingResult,
     GlobalModelStateReference,
-    PreparedClientProvenance,
-    RoundSnapshot,
 )
 from datp_core.detector.training.protocols import (
     FEDERATED_DATALOADER_WORKER_COUNT,
@@ -92,7 +88,6 @@ class PreparedFederatedClientData:
     client: ClientIdentity
     features_cpu: torch.Tensor
     validation_features_cpu: torch.Tensor
-    preprocessing_checksum: Checksum
 
     def __post_init__(self) -> None:
         if self.features_cpu.ndim != 2:
@@ -149,11 +144,10 @@ class FederatedTrainingRequest[T: FedAvgProtocol | FedProxProtocol]:
     population_client_count: ClientCount
     autoencoder: AutoencoderProtocol
     training_protocol: T
-    checkpoint_protocol: CheckpointProtocol
+    diagnostic_snapshot_protocol: DiagnosticSnapshotProtocol
     training_seed: Seed
     batch_size: BatchSize
     learning_rate: LearningRate
-    split_manifest_checksum: Checksum
     output_directory: Path
     progress_callback: Callable[[int, int], None] | None = field(default=None, compare=False, repr=False)
 
@@ -173,7 +167,6 @@ class LocalEpochResult:
 
 @dataclass(frozen=True, slots=True)
 class SerializedStateEvidence:
-    checksum: Checksum
     byte_count: ByteCount
     logical_element_count: LogicalElementCount
 
@@ -201,9 +194,7 @@ def prepare_federated_client_data(
             tuple(OutcomeLabel(str(value)) for value in validation_frame.get_column(OUTCOME_LABEL_COLUMN).to_list())
         )
         matrix = frame.select(feature_names).to_numpy().astype(LEARNING_DTYPE, copy=False)
-        validation_matrix = (
-            validation_frame.select(feature_names).to_numpy().astype(LEARNING_DTYPE, copy=False)
-        )
+        validation_matrix = validation_frame.select(feature_names).to_numpy().astype(LEARNING_DTYPE, copy=False)
     except (pl.exceptions.ColumnNotFoundError, pl.exceptions.SchemaError) as exc:
         raise ScientificContractError(
             ErrorMessage("federated training input is missing its declared label or feature schema"),
@@ -255,22 +246,14 @@ def prepare_federated_client_data(
             dtype=TORCH_LEARNING_DTYPE,
             device="cpu",
         ),
-        preprocessing_checksum=client_input.preprocessing_state.estimator_checksum,
     )
 
 
 def _client_seed_component(
     client: ClientIdentity,
 ) -> SeedDerivationComponent:
-    payload = canonical_json_text(
-        {
-            "population": client.population.value,
-            "client_id": client.client_id.value,
-            "identity_kind": client.identity_kind.value,
-        }
-    )
-    digest = Checksum.from_text(payload).value
-    return SeedDerivationComponent(int(digest[:16], 16) & 0x7FFF_FFFF)
+    payload = f"{client.population.value}|{client.client_id.value}|{client.identity_kind.value}"
+    return SeedDerivationComponent(sum((index + 1) * ord(value) for index, value in enumerate(payload)) & 0x7FFF_FFFF)
 
 
 def derive_client_stream_seed(
@@ -519,30 +502,12 @@ def compute_weighted_validation_loss(
     return MetricValue(weighted_loss / total_rows)
 
 
-def preprocessing_state_set_checksum(
-    provenance: Sequence[PreparedClientProvenance],
-) -> Checksum:
-    payload = canonical_json_text(
-        [
-            {
-                "population": item.client.population.value,
-                "client_id": item.client.client_id.value,
-                "identity_kind": item.client.identity_kind.value,
-                "preprocessing_checksum": item.preprocessing_checksum.value,
-            }
-            for item in sorted(provenance, key=lambda value: value.client)
-        ]
-    )
-    return Checksum.from_text(payload)
-
-
-def serialize_and_checksum_model_state(
+def serialize_model_state(
     model_state: AutoencoderModelState,
 ) -> SerializedStateEvidence:
     cpu_state = model_state.on_cpu_with_contiguous_tensors().to_torch_state_dict()
     payload = save(cpu_state)
     return SerializedStateEvidence(
-        checksum=Checksum.from_bytes(payload),
         byte_count=ByteCount(len(payload)),
         logical_element_count=LogicalElementCount(len(cpu_state)),
     )
@@ -563,18 +528,6 @@ def create_communication_record(
         estimation_basis=CommunicationEstimationMethod.SERIALIZED_MESSAGE_SIZE_ESTIMATE,
         state_bytes=state_bytes,
         logical_element_count=logical_element_count,
-    )
-
-
-def create_round_snapshot(
-    round_number: RoundNumber,
-    model_state: AutoencoderModelState,
-    loss: MetricValue,
-) -> RoundSnapshot:
-    return RoundSnapshot(
-        round_number=round_number,
-        model_state=model_state,
-        mean_training_loss=loss,
     )
 
 
@@ -679,7 +632,7 @@ def _run_training_round[T: FedAvgProtocol | FedProxProtocol](
         if convergence_enabled
         else None
     )
-    serialized_state = serialize_and_checksum_model_state(aggregated)
+    serialized_state = serialize_model_state(aggregated)
 
     communication = create_communication_record(
         round_number,
@@ -697,7 +650,6 @@ def _run_training_round[T: FedAvgProtocol | FedProxProtocol](
         global_state_reference=GlobalModelStateReference(
             coordinate=request.coordinate,
             round_number=round_number,
-            state_checksum=serialized_state.checksum,
             tensor_path=None,
         ),
         personalized_state_references=(),
@@ -721,26 +673,17 @@ def run_federated_training[T: FedAvgProtocol | FedProxProtocol](
     ordered_inputs = tuple(sorted(request.clients, key=lambda item: item.client))
     prepared = tuple(prepare_federated_client_data(item, request.autoencoder) for item in ordered_inputs)
 
-    provenance = tuple(
-        PreparedClientProvenance(
-            client=item.client,
-            preprocessing_checksum=item.preprocessing_checksum,
-        )
-        for item in prepared
-    )
-
     initial_model = build_reconstruction_autoencoder(
         request.autoencoder,
         initialization_seed=request.training_seed,
     )
     global_model_state = AutoencoderModelState.from_model(initial_model)
 
-    candidate_rounds = frozenset(request.checkpoint_protocol.candidates)
-    convergence = request.checkpoint_protocol.convergence
+    convergence = request.diagnostic_snapshot_protocol.convergence
     monitor = (
         ConvergenceMonitor(
             rounds_initial=convergence.rounds_initial.value,
-            rounds_max=request.checkpoint_protocol.maximum_round.value,
+            rounds_max=request.diagnostic_snapshot_protocol.maximum_round.value,
             relative_threshold=convergence.relative_threshold,
             window=convergence.window,
         )
@@ -749,12 +692,11 @@ def run_federated_training[T: FedAvgProtocol | FedProxProtocol](
     )
     proximal_coefficient = _proximal_coefficient(request.training_protocol)
     rounds: list[FederatedRoundResult] = []
-    snapshots: list[RoundSnapshot] = []
 
-    for round_value in range(1, request.checkpoint_protocol.maximum_round.value + 1):
+    for round_value in range(1, request.diagnostic_snapshot_protocol.maximum_round.value + 1):
         round_number = RoundNumber(round_value)
         if request.progress_callback is not None:
-            request.progress_callback(round_value, request.checkpoint_protocol.maximum_round.value)
+            request.progress_callback(round_value, request.diagnostic_snapshot_protocol.maximum_round.value)
         round_result, global_model_state = _run_training_round(
             round_number=round_number,
             request=request,
@@ -765,15 +707,6 @@ def run_federated_training[T: FedAvgProtocol | FedProxProtocol](
             convergence_enabled=monitor is not None,
         )
         rounds.append(round_result)
-
-        if round_number in candidate_rounds:
-            snapshots.append(
-                create_round_snapshot(
-                    round_number,
-                    global_model_state,
-                    round_result.aggregate_loss,
-                )
-            )
 
         if monitor is not None:
             validation_loss = round_result.aggregate_validation_loss
@@ -786,16 +719,6 @@ def run_federated_training[T: FedAvgProtocol | FedProxProtocol](
             if monitor.should_stop(round_number):
                 break
 
-    final_round = rounds[-1].round_number
-    if final_round not in candidate_rounds:
-        snapshots.append(
-            create_round_snapshot(
-                final_round,
-                global_model_state,
-                rounds[-1].aggregate_loss,
-            )
-        )
-
     history = FederatedTrainingHistory(
         coordinate=request.coordinate,
         rounds=tuple(rounds),
@@ -803,15 +726,11 @@ def run_federated_training[T: FedAvgProtocol | FedProxProtocol](
     result = FederatedTrainingResult(
         coordinate=request.coordinate,
         autoencoder=request.autoencoder,
-        checkpoint_protocol=request.checkpoint_protocol,
+        diagnostic_snapshot_protocol=request.diagnostic_snapshot_protocol,
         history=history,
-        preprocessing_state_set_checksum=preprocessing_state_set_checksum(provenance),
-        split_manifest_checksum=request.split_manifest_checksum,
+        terminal_model_state=global_model_state.on_cpu_with_contiguous_tensors(),
         device_name=CudaDeviceName(torch.cuda.get_device_name(device).strip()),
         batch_size_used=request.batch_size,
     )
 
-    return FederatedTrainingExecution(
-        training_result=result,
-        snapshots=tuple(snapshots),
-    )
+    return FederatedTrainingExecution(training_result=result)

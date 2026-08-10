@@ -1,86 +1,49 @@
-"""Generic population construction, splitting, and deterministic publication.
-
-This module publishes population and split artifacts without interpreting
-dataset columns or branching on dataset-specific implementation details: it
-only reacts to the generic, typed presence of optional construction results
-(diagnostics, a matched reference population, typed evidence).
-"""
-
-from __future__ import annotations
-
 from dataclasses import dataclass
-from enum import StrEnum
 from pathlib import Path
 
 import polars as pl
+from pydantic import BaseModel
 
-from datp_core.artifacts.provenance import Checksum
-from datp_core.artifacts.repositories.publication import (
-    ArtifactPublication,
-    FunctionalArtifactCodec,
-    publish_artifact,
-    serialize_json_model,
-)
 from datp_core.artifacts.serializers.json import canonical_json_text
-from datp_core.core.errors import (
-    ErrorMessage,
-    ScientificContractError,
-)
+from datp_core.core.errors import ErrorMessage, ScientificContractError
 from datp_core.core.identifiers import (
-    ArtifactFileName,
     CaptureTimestampColumn,
-    ContractSubject,
     DatasetId,
     PopulationId,
-    PublicationStatus,
     SplitProtocolId,
+    ValidationReasonText,
 )
-from datp_core.core.numeric import Seed
-from datp_core.data.edge_iiotset.schema import EdgeCanonicalColumn
+from datp_core.core.numeric import ClientCount, NonNegativeIntegerValue, Seed
 from datp_core.data.populations.contracts import (
     ChronologicalPartitionDiagnosticsDocument,
     ControlledPartitionCondition,
     ModelInputExclusionEvidence,
     PopulationConstructionRequest,
     PopulationConstructionResult,
+    PopulationFeasibility,
     PopulationFrameColumn,
     PopulationManifest,
     PopulationManifestDocument,
     SplitConstructionRequest,
     SplitManifestDocument,
-    TemporalSplitViolation,
+    client_identities,
 )
-from datp_core.data.populations.integrity import membership_frame_checksum, validate_split_manifest
+from datp_core.data.populations.integrity import validate_split_manifest
 from datp_core.data.populations.splits import split_membership
 from datp_core.data.registry import construct_population
 from datp_core.experiments.common.coordinates import ExternalTemporalExecutionIdentity, require_execution_identity
+from datp_core.runtime.filesystem import cleanup_staging_on_failure, create_staging_directory, replace_directory
 
-
-class PopulationPublicationViolation(StrEnum):
-    SPLIT_POPULATION_MANIFEST_MISMATCH = "split_population_manifest_mismatch"
-    MATCHED_REFERENCE_WITHOUT_MEMBERSHIP = "matched_reference_without_membership"
-
-
-class PopulationPublicationAsset(StrEnum):
-    EXECUTION_IDENTITY = "execution_identity.json"
-    POPULATION_MANIFEST = "population_manifest.json"
-    MEMBERSHIP = "membership.parquet"
-    CHRONOLOGY = "chronology.json"
-    MATCHED_STATIC_MANIFEST = "matched_static_reference_manifest.json"
-    MATCHED_STATIC_MEMBERSHIP = "matched_static_reference_membership.parquet"
-    CICIOT_EXCLUDED_ROWS = "ciciot_excluded_rows.parquet"
-    CICIOT_CLIENT_ELIGIBILITY = "ciciot_client_eligibility.parquet"
-    MODEL_INPUT_EXCLUSIONS = "model_input_exclusions.json"
-    COMPLETE = "COMPLETE"
-
-
-class SplitPublicationAsset(StrEnum):
-    EXECUTION_IDENTITY = "execution_identity.json"
-    ASSIGNMENTS = "split_assignments.parquet"
-    MANIFEST = "split_manifest.json"
-    MATCHED_STATIC_ASSIGNMENTS = "matched_static_reference_assignments.parquet"
-    MATCHED_STATIC_MANIFEST = "matched_static_reference_split_manifest.json"
-    COMPLETE = "COMPLETE"
+_POPULATION_MANIFEST = "population_manifest.json"
+_MEMBERSHIP = "membership.parquet"
+_SPLIT_MANIFEST = "split_manifest.json"
+_ASSIGNMENTS = "split_assignments.parquet"
+_STATIC_POPULATION_MANIFEST = "matched_static_reference_manifest.json"
+_STATIC_MEMBERSHIP = "matched_static_reference_membership.parquet"
+_STATIC_SPLIT_MANIFEST = "matched_static_reference_split_manifest.json"
+_STATIC_ASSIGNMENTS = "matched_static_reference_split_assignments.parquet"
+_CHRONOLOGY = "chronology.json"
+_EXCLUSIONS = "model_input_exclusions.json"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -100,9 +63,7 @@ class ConstructDeclaredPopulationResult:
     split_manifest: SplitManifestDocument
 
 
-def construct_declared_population(
-    request: ConstructDeclaredPopulationRequest,
-) -> ConstructDeclaredPopulationResult:
+def construct_declared_population(request: ConstructDeclaredPopulationRequest) -> ConstructDeclaredPopulationResult:
     construction = construct_population(
         PopulationConstructionRequest(
             request.population,
@@ -114,12 +75,11 @@ def construct_declared_population(
     )
     split = split_membership(
         SplitConstructionRequest(
-            construction.membership,
-            request.population,
-            request.dataset,
-            request.partition_seed,
-            request.split_protocol,
-            construction.manifest.document.membership_checksum,
+            membership=construction.membership,
+            population=request.population,
+            dataset=request.dataset,
+            partition_seed=request.partition_seed,
+            split_protocol=request.split_protocol,
             capture_timestamp_column=_capture_timestamp_column_for_split(
                 request.split_protocol,
                 construction.membership,
@@ -130,38 +90,6 @@ def construct_declared_population(
         construction=construction,
         split_assignments=split.assignments,
         split_manifest=split.manifest,
-    )
-
-
-@dataclass(slots=True, eq=False)
-class PopulationMembershipArtifacts:
-    population_manifest: PopulationManifest
-    membership: pl.DataFrame
-    chronology: ChronologicalPartitionDiagnosticsDocument | None
-    matched_static_reference_manifest: PopulationManifest | None
-    matched_static_reference_membership: pl.DataFrame | None
-    ciciot_excluded_rows: pl.DataFrame | None = None
-    ciciot_client_eligibility: pl.DataFrame | None = None
-    model_input_exclusions: ModelInputExclusionEvidence | None = None
-
-
-def _population_membership_artifacts(construction: PopulationConstructionResult) -> PopulationMembershipArtifacts:
-    chronology = (
-        construction.diagnostics
-        if isinstance(construction.diagnostics, ChronologicalPartitionDiagnosticsDocument)
-        else None
-    )
-    matched_reference = construction.matched_reference
-    evidence = construction.evidence
-    return PopulationMembershipArtifacts(
-        population_manifest=construction.manifest,
-        membership=construction.membership,
-        chronology=chronology,
-        matched_static_reference_manifest=matched_reference.manifest if matched_reference is not None else None,
-        matched_static_reference_membership=matched_reference.membership if matched_reference is not None else None,
-        ciciot_excluded_rows=evidence.excluded_rows if evidence is not None else None,
-        ciciot_client_eligibility=evidence.client_eligibility if evidence is not None else None,
-        model_input_exclusions=construction.model_input_exclusions,
     )
 
 
@@ -178,29 +106,20 @@ class ConstructPublishedPopulationRequest:
 
 @dataclass(slots=True, eq=False, kw_only=True)
 class ConstructPublishedPopulationResult:
-    publication_status: PublicationStatus
     population_manifest: PopulationManifest
     membership: pl.DataFrame
     chronology: ChronologicalPartitionDiagnosticsDocument | None
     matched_static_reference_manifest: PopulationManifest | None
     matched_static_reference_membership: pl.DataFrame | None
-    complete_digest: Checksum
     ciciot_excluded_rows: pl.DataFrame | None = None
     ciciot_client_eligibility: pl.DataFrame | None = None
     model_input_exclusions: ModelInputExclusionEvidence | None = None
 
 
-@dataclass(slots=True, eq=False)
-class _PopulationMembershipPublication:
-    execution_identity: ExternalTemporalExecutionIdentity
-    artifacts: PopulationMembershipArtifacts
-    digest: Checksum
-
-
-def construct_published_population(
-    request: ConstructPublishedPopulationRequest,
-) -> ConstructPublishedPopulationResult:
+def construct_published_population(request: ConstructPublishedPopulationRequest) -> ConstructPublishedPopulationResult:
     require_execution_identity(request.execution_identity, request.population)
+    if request.output_directory.exists() and not request.overwrite:
+        return _load_population(request.output_directory)
     construction = construct_population(
         PopulationConstructionRequest(
             request.population,
@@ -210,56 +129,11 @@ def construct_published_population(
             None,
         )
     )
-    artifacts = _population_membership_artifacts(construction)
-    prepared = _PopulationMembershipPublication(
-        execution_identity=request.execution_identity,
-        artifacts=artifacts,
-        digest=_population_membership_digest(artifacts, request.execution_identity),
-    )
-    publication = publish_artifact(
-        ArtifactPublication(
-            target=request.output_directory,
-            request=prepared,
-            codec=FunctionalArtifactCodec(
-                writer=_write_population_membership,
-                validator=_population_membership_is_reusable,
-                loader=_load_reused_population_membership,
-                rebaser=_rebase_population_membership,
-            ),
-            overwrite=request.overwrite,
-            complete_marker=ArtifactFileName(PopulationPublicationAsset.COMPLETE),
-        )
-    )
-    published = publication.value
-    return ConstructPublishedPopulationResult(
-        publication_status=publication.status,
-        population_manifest=published.population_manifest,
-        membership=published.membership,
-        chronology=published.chronology,
-        matched_static_reference_manifest=published.matched_static_reference_manifest,
-        matched_static_reference_membership=published.matched_static_reference_membership,
-        complete_digest=publication.complete_digest,
-        ciciot_excluded_rows=published.ciciot_excluded_rows,
-        ciciot_client_eligibility=published.ciciot_client_eligibility,
-        model_input_exclusions=published.model_input_exclusions,
-    )
-
-
-def _population_membership_digest(
-    artifacts: PopulationMembershipArtifacts,
-    identity: ExternalTemporalExecutionIdentity,
-) -> Checksum:
-    sections = [
-        canonical_json_text(identity),
-        canonical_json_text(artifacts.population_manifest.document),
-    ]
-    if artifacts.chronology is not None:
-        sections.append(canonical_json_text(artifacts.chronology))
-    if artifacts.matched_static_reference_manifest is not None:
-        sections.append(canonical_json_text(artifacts.matched_static_reference_manifest.document))
-    if artifacts.model_input_exclusions is not None:
-        sections.append(canonical_json_text(artifacts.model_input_exclusions))
-    return Checksum.from_text("\n".join(sections))
+    temporary = create_staging_directory(request.output_directory)
+    with cleanup_staging_on_failure(temporary):
+        _write_population(temporary, construction)
+        replace_directory(temporary, request.output_directory)
+    return _population_result(construction)
 
 
 @dataclass(slots=True, eq=False, kw_only=True)
@@ -277,44 +151,18 @@ class ConstructPublishedSplitRequest:
 
 @dataclass(slots=True, eq=False, kw_only=True)
 class ConstructPublishedSplitResult:
-    publication_status: PublicationStatus
     assignments: pl.DataFrame
     manifest: SplitManifestDocument
     matched_static_reference_assignments: pl.DataFrame | None
     matched_static_reference_manifest: SplitManifestDocument | None
-    complete_digest: Checksum
-
-
-@dataclass(slots=True, eq=False)
-class _PopulationSplitArtifacts:
-    assignments: pl.DataFrame
-    manifest: SplitManifestDocument
-    matched_static_reference_assignments: pl.DataFrame | None
-    matched_static_reference_manifest: SplitManifestDocument | None
-
-
-@dataclass(slots=True, eq=False)
-class _PopulationSplitPublication:
-    request: ConstructPublishedSplitRequest
-    artifacts: _PopulationSplitArtifacts
-    digest: Checksum
 
 
 def construct_published_split(request: ConstructPublishedSplitRequest) -> ConstructPublishedSplitResult:
+    if request.output_directory.exists() and not request.overwrite:
+        return _load_split(request.output_directory)
     document = request.population_manifest.document
     if document.population is not request.population:
-        raise ScientificContractError(
-            ErrorMessage("split request population must match its manifest"),
-            subject=request.population,
-            reason=PopulationPublicationViolation.SPLIT_POPULATION_MANIFEST_MISMATCH,
-        )
-    has_matched_reference = request.matched_static_reference_manifest is not None
-    if has_matched_reference and request.matched_static_reference_membership is None:
-        raise ScientificContractError(
-            ErrorMessage("a matched reference manifest requires its matched reference membership"),
-            subject=request.population,
-            reason=PopulationPublicationViolation.MATCHED_REFERENCE_WITHOUT_MEMBERSHIP,
-        )
+        raise ScientificContractError(ErrorMessage("split request population must match its manifest"))
     split = split_membership(
         SplitConstructionRequest(
             membership=request.membership,
@@ -322,7 +170,6 @@ def construct_published_split(request: ConstructPublishedSplitRequest) -> Constr
             dataset=document.dataset,
             partition_seed=request.partition_seed,
             split_protocol=document.split_protocol,
-            population_manifest_checksum=document.membership_checksum,
             capture_timestamp_column=_capture_timestamp_column_for_split(
                 document.split_protocol,
                 request.membership,
@@ -332,349 +179,162 @@ def construct_published_split(request: ConstructPublishedSplitRequest) -> Constr
     validate_split_manifest(request.membership, split.assignments, split.manifest)
     static_assignments: pl.DataFrame | None = None
     static_manifest: SplitManifestDocument | None = None
-    if has_matched_reference:
-        assert request.matched_static_reference_manifest is not None
-        assert request.matched_static_reference_membership is not None
-        _require_matching_reference_rows(request.membership, request.matched_static_reference_membership)
-        static_split = split_membership(
+    if request.matched_static_reference_manifest is not None:
+        static_membership = request.matched_static_reference_membership
+        if static_membership is None:
+            raise ScientificContractError(ErrorMessage("matched reference membership is required"))
+        _require_matching_reference_rows(request.membership, static_membership)
+        static = split_membership(
             SplitConstructionRequest(
-                membership=request.matched_static_reference_membership,
+                membership=static_membership,
                 population=request.population,
                 dataset=document.dataset,
                 partition_seed=request.partition_seed,
                 split_protocol=SplitProtocolId.RANDOM_FRACTIONAL_STATIC_REFERENCE,
-                population_manifest_checksum=request.matched_static_reference_manifest.document.membership_checksum,
             )
         )
-        validate_split_manifest(
-            request.matched_static_reference_membership,
-            static_split.assignments,
-            static_split.manifest,
-        )
-        static_assignments = static_split.assignments
-        static_manifest = static_split.manifest
-    artifacts = _PopulationSplitArtifacts(split.assignments, split.manifest, static_assignments, static_manifest)
-    sections = [canonical_json_text(request.execution_identity), canonical_json_text(artifacts.manifest)]
-    if artifacts.matched_static_reference_manifest is not None:
-        sections.append(canonical_json_text(artifacts.matched_static_reference_manifest))
-    prepared = _PopulationSplitPublication(
-        request=request,
-        artifacts=artifacts,
-        digest=Checksum.from_text("\n".join(sections)),
-    )
-    publication = publish_artifact(
-        ArtifactPublication(
-            target=request.output_directory,
-            request=prepared,
-            codec=FunctionalArtifactCodec(
-                writer=_write_population_split,
-                validator=_population_split_is_reusable,
-                loader=_load_reused_population_split,
-                rebaser=_rebase_population_split,
-            ),
-            overwrite=request.overwrite,
-            complete_marker=ArtifactFileName(SplitPublicationAsset.COMPLETE),
-        )
-    )
-    published = publication.value
+        static_assignments, static_manifest = static.assignments, static.manifest
+    temporary = create_staging_directory(request.output_directory)
+    with cleanup_staging_on_failure(temporary):
+        split.assignments.write_parquet(temporary / _ASSIGNMENTS)
+        _write_json(temporary / _SPLIT_MANIFEST, split.manifest)
+        if static_assignments is not None and static_manifest is not None:
+            static_assignments.write_parquet(temporary / _STATIC_ASSIGNMENTS)
+            _write_json(temporary / _STATIC_SPLIT_MANIFEST, static_manifest)
+        replace_directory(temporary, request.output_directory)
     return ConstructPublishedSplitResult(
-        publication_status=publication.status,
-        assignments=published.assignments,
-        manifest=published.manifest,
-        matched_static_reference_assignments=published.matched_static_reference_assignments,
-        matched_static_reference_manifest=published.matched_static_reference_manifest,
-        complete_digest=publication.complete_digest,
+        assignments=split.assignments,
+        manifest=split.manifest,
+        matched_static_reference_assignments=static_assignments,
+        matched_static_reference_manifest=static_manifest,
     )
 
 
-def _require_matching_reference_rows(temporal: pl.DataFrame, static: pl.DataFrame) -> None:
-    row_columns = (
-        PopulationFrameColumn.CLIENT_ID.value,
-        PopulationFrameColumn.STABLE_ROW_ID.value,
-    )
-    temporal_rows = temporal.select(row_columns).sort(row_columns)
-    static_rows = static.select(row_columns).sort(row_columns)
-    if not temporal_rows.equals(static_rows):
-        raise ScientificContractError(
-            ErrorMessage("matched static reference must use the same client rows"),
-            subject=PopulationId.EDGE_TEMPORAL_GROUPS,
-        )
-
-
-def _write_population_membership(
-    publication: _PopulationMembershipPublication,
-    directory: Path,
-) -> PopulationMembershipArtifacts:
-    artifacts = publication.artifacts
-    serialize_json_model(
-        publication.execution_identity,
-        directory / PopulationPublicationAsset.EXECUTION_IDENTITY,
-    )
-    serialize_json_model(
-        artifacts.population_manifest.document,
-        directory / PopulationPublicationAsset.POPULATION_MANIFEST,
-    )
-    artifacts.membership.write_parquet(directory / PopulationPublicationAsset.MEMBERSHIP)
-    if artifacts.chronology is not None:
-        serialize_json_model(artifacts.chronology, directory / PopulationPublicationAsset.CHRONOLOGY)
-    if (
-        artifacts.matched_static_reference_manifest is not None
-        and artifacts.matched_static_reference_membership is not None
-    ):
-        serialize_json_model(
-            artifacts.matched_static_reference_manifest.document,
-            directory / PopulationPublicationAsset.MATCHED_STATIC_MANIFEST,
-        )
-        artifacts.matched_static_reference_membership.write_parquet(
-            directory / PopulationPublicationAsset.MATCHED_STATIC_MEMBERSHIP
-        )
-    if artifacts.ciciot_excluded_rows is not None and artifacts.ciciot_client_eligibility is not None:
-        artifacts.ciciot_excluded_rows.write_parquet(directory / PopulationPublicationAsset.CICIOT_EXCLUDED_ROWS)
-        artifacts.ciciot_client_eligibility.write_parquet(
-            directory / PopulationPublicationAsset.CICIOT_CLIENT_ELIGIBILITY
-        )
-    if artifacts.model_input_exclusions is not None:
-        serialize_json_model(
-            artifacts.model_input_exclusions,
-            directory / PopulationPublicationAsset.MODEL_INPUT_EXCLUSIONS,
-        )
-    (directory / PopulationPublicationAsset.COMPLETE).write_text(publication.digest.value, encoding="utf-8")
-    return artifacts
-
-
-def _population_membership_is_reusable(
-    publication: _PopulationMembershipPublication,
-    directory: Path,
-) -> bool:
-    complete = directory / PopulationPublicationAsset.COMPLETE
-    identity_path = directory / PopulationPublicationAsset.EXECUTION_IDENTITY
-    manifest_path = directory / PopulationPublicationAsset.POPULATION_MANIFEST
-    membership_path = directory / PopulationPublicationAsset.MEMBERSHIP
-    if not (complete.is_file() and identity_path.is_file() and manifest_path.is_file() and membership_path.is_file()):
-        return False
-    try:
-        if complete.read_text(encoding="utf-8").strip() != publication.digest.value:
-            return False
-        persisted_identity = ExternalTemporalExecutionIdentity.model_validate_json(
-            identity_path.read_text(encoding="utf-8")
-        )
-        if persisted_identity != publication.execution_identity:
-            return False
-        persisted = PopulationManifestDocument.model_validate_json(manifest_path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return False
-    return _matches_population_artifacts(directory, publication.artifacts, persisted, membership_path)
-
-
-def _load_reused_population_membership(
-    publication: _PopulationMembershipPublication,
-    directory: Path,
-) -> PopulationMembershipArtifacts:
-    del directory
-    return publication.artifacts
-
-
-def _rebase_population_membership(
-    artifacts: PopulationMembershipArtifacts,
-    directory: Path,
-) -> PopulationMembershipArtifacts:
-    del directory
-    return artifacts
-
-
-def _matches_population_artifacts(
-    directory: Path,
-    expected: PopulationMembershipArtifacts,
-    persisted: PopulationManifestDocument,
-    membership: Path,
-) -> bool:
-    if persisted != expected.population_manifest.document:
-        return False
-    try:
-        if membership_frame_checksum(pl.read_parquet(membership)) != persisted.membership_checksum:
-            return False
-    except (OSError, pl.exceptions.PolarsError):
-        return False
-    if expected.chronology is not None and not _matches_chronology(directory, expected.chronology):
-        return False
-    if expected.model_input_exclusions is not None and not _matches_model_input_exclusions(
-        directory,
-        expected.model_input_exclusions,
-    ):
-        return False
-    if expected.matched_static_reference_manifest is None:
-        return _matches_ciciot_evidence(directory, expected)
-    return _matches_static_reference(directory, expected.matched_static_reference_manifest)
-
-
-def _matches_ciciot_evidence(directory: Path, expected: PopulationMembershipArtifacts) -> bool:
-    if expected.ciciot_excluded_rows is None or expected.ciciot_client_eligibility is None:
-        return True
-    try:
-        excluded_rows = pl.read_parquet(directory / PopulationPublicationAsset.CICIOT_EXCLUDED_ROWS)
-        client_evidence = pl.read_parquet(directory / PopulationPublicationAsset.CICIOT_CLIENT_ELIGIBILITY)
-    except (OSError, pl.exceptions.PolarsError):
-        return False
-    return excluded_rows.equals(expected.ciciot_excluded_rows) and client_evidence.equals(
-        expected.ciciot_client_eligibility
+def _population_result(construction: PopulationConstructionResult) -> ConstructPublishedPopulationResult:
+    matched = construction.matched_reference
+    evidence = construction.evidence
+    return ConstructPublishedPopulationResult(
+        population_manifest=construction.manifest,
+        membership=construction.membership,
+        chronology=construction.diagnostics
+        if isinstance(construction.diagnostics, ChronologicalPartitionDiagnosticsDocument)
+        else None,
+        matched_static_reference_manifest=matched.manifest if matched is not None else None,
+        matched_static_reference_membership=matched.membership if matched is not None else None,
+        ciciot_excluded_rows=evidence.excluded_rows if evidence is not None else None,
+        ciciot_client_eligibility=evidence.client_eligibility if evidence is not None else None,
+        model_input_exclusions=construction.model_input_exclusions,
     )
 
 
-def _matches_model_input_exclusions(
-    directory: Path,
-    expected: ModelInputExclusionEvidence,
-) -> bool:
-    try:
-        persisted = ModelInputExclusionEvidence.model_validate_json(
-            (directory / PopulationPublicationAsset.MODEL_INPUT_EXCLUSIONS).read_text(encoding="utf-8")
-        )
-    except (OSError, ValueError):
-        return False
-    return persisted == expected
+def _write_population(directory: Path, construction: PopulationConstructionResult) -> None:
+    _write_json(directory / _POPULATION_MANIFEST, construction.manifest.document)
+    construction.membership.write_parquet(directory / _MEMBERSHIP)
+    if isinstance(construction.diagnostics, ChronologicalPartitionDiagnosticsDocument):
+        _write_json(directory / _CHRONOLOGY, construction.diagnostics)
+    if construction.matched_reference is not None:
+        _write_json(directory / _STATIC_POPULATION_MANIFEST, construction.matched_reference.manifest.document)
+        construction.matched_reference.membership.write_parquet(directory / _STATIC_MEMBERSHIP)
+    if construction.model_input_exclusions is not None:
+        _write_json(directory / _EXCLUSIONS, construction.model_input_exclusions)
 
 
-def _matches_chronology(
-    directory: Path,
-    expected: ChronologicalPartitionDiagnosticsDocument,
-) -> bool:
-    try:
-        persisted = ChronologicalPartitionDiagnosticsDocument.model_validate_json(
-            (directory / PopulationPublicationAsset.CHRONOLOGY).read_text(encoding="utf-8")
-        )
-    except (OSError, ValueError):
-        return False
-    return persisted == expected
-
-
-def _matches_static_reference(directory: Path, expected: PopulationManifest) -> bool:
-    try:
-        persisted = PopulationManifestDocument.model_validate_json(
-            (directory / PopulationPublicationAsset.MATCHED_STATIC_MANIFEST).read_text(encoding="utf-8")
-        )
-        membership = directory / PopulationPublicationAsset.MATCHED_STATIC_MEMBERSHIP
-        return (
-            membership.is_file()
-            and persisted == expected.document
-            and membership_frame_checksum(pl.read_parquet(membership)) == persisted.membership_checksum
-        )
-    except (OSError, ValueError, pl.exceptions.PolarsError):
-        return False
-
-
-def _write_population_split(
-    publication: _PopulationSplitPublication,
-    directory: Path,
-) -> _PopulationSplitArtifacts:
-    artifacts = publication.artifacts
-    serialize_json_model(
-        publication.request.execution_identity,
-        directory / SplitPublicationAsset.EXECUTION_IDENTITY,
+def _load_population(directory: Path) -> ConstructPublishedPopulationResult:
+    document = _read_json(directory / _POPULATION_MANIFEST, PopulationManifestDocument)
+    manifest = _manifest(document)
+    membership = _read_parquet(directory / _MEMBERSHIP)
+    chronology = (
+        _read_json(directory / _CHRONOLOGY, ChronologicalPartitionDiagnosticsDocument)
+        if (directory / _CHRONOLOGY).is_file()
+        else None
     )
-    artifacts.assignments.write_parquet(directory / SplitPublicationAsset.ASSIGNMENTS)
-    serialize_json_model(artifacts.manifest, directory / SplitPublicationAsset.MANIFEST)
-    if (
-        artifacts.matched_static_reference_assignments is not None
-        and artifacts.matched_static_reference_manifest is not None
-    ):
-        artifacts.matched_static_reference_assignments.write_parquet(
-            directory / SplitPublicationAsset.MATCHED_STATIC_ASSIGNMENTS
-        )
-        serialize_json_model(
-            artifacts.matched_static_reference_manifest,
-            directory / SplitPublicationAsset.MATCHED_STATIC_MANIFEST,
-        )
-    (directory / SplitPublicationAsset.COMPLETE).write_text(publication.digest.value, encoding="utf-8")
-    return artifacts
+    static_manifest = (
+        _manifest(_read_json(directory / _STATIC_POPULATION_MANIFEST, PopulationManifestDocument))
+        if (directory / _STATIC_POPULATION_MANIFEST).is_file()
+        else None
+    )
+    static_membership = (
+        _read_parquet(directory / _STATIC_MEMBERSHIP) if (directory / _STATIC_MEMBERSHIP).is_file() else None
+    )
+    exclusions = (
+        _read_json(directory / _EXCLUSIONS, ModelInputExclusionEvidence)
+        if (directory / _EXCLUSIONS).is_file()
+        else None
+    )
+    return ConstructPublishedPopulationResult(
+        population_manifest=manifest,
+        membership=membership,
+        chronology=chronology,
+        matched_static_reference_manifest=static_manifest,
+        matched_static_reference_membership=static_membership,
+        model_input_exclusions=exclusions,
+    )
 
 
-def _population_split_is_reusable(
-    publication: _PopulationSplitPublication,
-    directory: Path,
-) -> bool:
-    complete = directory / SplitPublicationAsset.COMPLETE
-    identity_path = directory / SplitPublicationAsset.EXECUTION_IDENTITY
-    manifest_path = directory / SplitPublicationAsset.MANIFEST
-    assignments_path = directory / SplitPublicationAsset.ASSIGNMENTS
-    if not (complete.is_file() and identity_path.is_file() and manifest_path.is_file() and assignments_path.is_file()):
-        return False
+def _load_split(directory: Path) -> ConstructPublishedSplitResult:
+    assignments = _read_parquet(directory / _ASSIGNMENTS)
+    manifest = _read_json(directory / _SPLIT_MANIFEST, SplitManifestDocument)
+    static_assignments = (
+        _read_parquet(directory / _STATIC_ASSIGNMENTS) if (directory / _STATIC_ASSIGNMENTS).is_file() else None
+    )
+    static_manifest = (
+        _read_json(directory / _STATIC_SPLIT_MANIFEST, SplitManifestDocument)
+        if (directory / _STATIC_SPLIT_MANIFEST).is_file()
+        else None
+    )
+    return ConstructPublishedSplitResult(
+        assignments=assignments,
+        manifest=manifest,
+        matched_static_reference_assignments=static_assignments,
+        matched_static_reference_manifest=static_manifest,
+    )
+
+
+def _manifest(document: PopulationManifestDocument) -> PopulationManifest:
+    return PopulationManifest(
+        document,
+        client_identities(document.population, document.candidate_clients, document.identity_kind),
+        PopulationFeasibility(
+            document.feasibility_status,
+            document.feasibility_reason,
+            ClientCount(len(document.candidate_clients)),
+            NonNegativeIntegerValue(len(document.accepted_clients)),
+            ValidationReasonText("prepared population"),
+        ),
+        (),
+    )
+
+
+def _write_json(path: Path, value: object) -> None:
+    path.write_text(canonical_json_text(value), encoding="utf-8")
+
+
+def _read_json[ModelT: BaseModel](path: Path, model_type: type[ModelT]) -> ModelT:
     try:
-        if complete.read_text(encoding="utf-8").strip() != publication.digest.value:
-            return False
-        persisted_identity = ExternalTemporalExecutionIdentity.model_validate_json(
-            identity_path.read_text(encoding="utf-8")
-        )
-        if persisted_identity != publication.request.execution_identity:
-            return False
-        persisted = SplitManifestDocument.model_validate_json(manifest_path.read_text(encoding="utf-8"))
-        if persisted != publication.artifacts.manifest:
-            return False
-        validate_split_manifest(publication.request.membership, pl.read_parquet(assignments_path), persisted)
-        expected_static = publication.artifacts.matched_static_reference_manifest
-        if expected_static is not None and not _matches_split_static_reference(
-            publication.request,
-            directory,
-            expected_static,
-        ):
-            return False
-    except (OSError, ValueError, pl.exceptions.PolarsError):
-        return False
-    return True
+        return model_type.model_validate_json(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise ScientificContractError(ErrorMessage("prepared data artifact is missing or invalid")) from error
 
 
-def _load_reused_population_split(
-    publication: _PopulationSplitPublication,
-    directory: Path,
-) -> _PopulationSplitArtifacts:
-    del directory
-    return publication.artifacts
-
-
-def _rebase_population_split(
-    artifacts: _PopulationSplitArtifacts,
-    directory: Path,
-) -> _PopulationSplitArtifacts:
-    del directory
-    return artifacts
+def _read_parquet(path: Path) -> pl.DataFrame:
+    try:
+        return pl.read_parquet(path)
+    except (OSError, pl.exceptions.PolarsError) as error:
+        raise ScientificContractError(ErrorMessage("prepared data artifact is missing or invalid")) from error
 
 
 def _capture_timestamp_column_for_split(
-    split_protocol: SplitProtocolId,
-    membership: pl.DataFrame,
+    split_protocol: SplitProtocolId, membership: pl.DataFrame
 ) -> CaptureTimestampColumn | None:
-    """Resolve the audited capture-time column required for chronological splits.
-
-    Temporal partitioning is locked to verified Edge capture timestamps.
-    Non-temporal protocols never invent a time column.
-    """
     if split_protocol is not SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE:
         return None
-    column = CaptureTimestampColumn(EdgeCanonicalColumn.CAPTURE_TIMESTAMP.value)
+    column = CaptureTimestampColumn("capture_timestamp")
     if column not in membership.columns:
-        raise ScientificContractError(
-            ErrorMessage("temporal splits require a capture-timestamp column in membership"),
-            subject=ContractSubject.SPLIT,
-            reason=TemporalSplitViolation.CAPTURE_TIMESTAMP_UNAVAILABLE,
-        )
+        raise ScientificContractError(ErrorMessage("temporal split requires capture timestamps"))
     return column
 
 
-def _matches_split_static_reference(
-    request: ConstructPublishedSplitRequest,
-    directory: Path,
-    expected: SplitManifestDocument,
-) -> bool:
-    manifest_path = directory / SplitPublicationAsset.MATCHED_STATIC_MANIFEST
-    assignments_path = directory / SplitPublicationAsset.MATCHED_STATIC_ASSIGNMENTS
-    if not manifest_path.is_file() or not assignments_path.is_file():
-        return False
-    if request.matched_static_reference_membership is None:
-        return False
-    static_manifest = SplitManifestDocument.model_validate_json(manifest_path.read_text(encoding="utf-8"))
-    if static_manifest != expected:
-        return False
-    validate_split_manifest(
-        request.matched_static_reference_membership,
-        pl.read_parquet(assignments_path),
-        static_manifest,
-    )
-    return True
+def _require_matching_reference_rows(temporal: pl.DataFrame, static: pl.DataFrame) -> None:
+    columns = (PopulationFrameColumn.CLIENT_ID.value, PopulationFrameColumn.STABLE_ROW_ID.value)
+    if not temporal.select(columns).sort(columns).equals(static.select(columns).sort(columns)):
+        raise ScientificContractError(ErrorMessage("matched static reference must use the same client rows"))

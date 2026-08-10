@@ -50,11 +50,9 @@ def format_progress_event(event: ProgressEvent) -> str:
         return f"coordinate {_require_int(event.ordinal, event.kind.value)}/{total} begin {identity}"
     if event.kind is ProgressEventKind.COORDINATE_END:
         total = _require_int(event.total, event.kind.value)
-        reuse = " reused" if event.reused else ""
         elapsed = f" elapsed={event.elapsed_seconds:.1f}s" if event.elapsed_seconds is not None else ""
         return (
-            f"coordinate {_require_int(event.ordinal, event.kind.value)}/{total} end {identity}{reuse}"
-            f"{elapsed} {event.detail}"
+            f"coordinate {_require_int(event.ordinal, event.kind.value)}/{total} end {identity}{elapsed} {event.detail}"
         )
     if event.kind is ProgressEventKind.STAGE_BEGIN:
         return f"  stage {_require_stage(event.stage, event.kind.value).value} begin {identity}"

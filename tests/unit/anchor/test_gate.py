@@ -4,7 +4,6 @@ import pytest
 from pydantic import ValidationError as PydanticValidationError
 from tests.unit.anchor.helpers import matching_anchor_observations
 
-from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import AnchorReproductionError
 from datp_core.core.identifiers import EvidenceRole, ExperimentId, ExperimentReadiness, PopulationId
 from datp_core.core.numeric import MetricValue
@@ -46,11 +45,8 @@ def test_blocked_gate_propagates_to_dependent_readiness() -> None:
         threshold_method=first.threshold_method,
         metric=first.metric,
         value=MetricValue(first.value.value + 1.0),
-        checkpoint_status=first.checkpoint_status,
         source_kind=first.source_kind,
         artifact_path=first.artifact_path,
-        artifact_checksum=first.artifact_checksum,
-        model_checkpoint_identity=first.model_checkpoint_identity,
         evidence_role=first.evidence_role,
     )
     decision = decide_anchor_gate(reproduce_anchor(observations=tuple(observations)))
@@ -114,15 +110,13 @@ def test_observation_source_kind_remains_explicit() -> None:
     assert first.source_kind is AnchorObservationSourceKind.HISTORICAL_ARTIFACT
     assert first.evidence_role is EvidenceRole.ANCHOR_REPRODUCTION
     assert isinstance(first.artifact_path, Path)
-    assert isinstance(first.artifact_checksum, Checksum)
 
 
 def test_verified_anchor_gate_artifact_round_trip(tmp_path: Path) -> None:
     decision = decide_anchor_gate(reproduce_anchor(observations=matching_anchor_observations()))
-    checksum = persist_anchor_gate_diagnostics(decision, tmp_path)
+    persist_anchor_gate_diagnostics(decision, tmp_path)
     verified = load_verified_anchor_gate_artifact(tmp_path)
     assert verified.permits_confirmatory_claims
-    assert verified.artifact_checksum == checksum
     assert verified.decision.status is AnchorGateStatus.PASS
 
 
@@ -131,10 +125,7 @@ def test_manual_gate_success_cannot_be_asserted_without_artifact(tmp_path: Path)
         load_verified_anchor_gate_artifact(tmp_path)
     decision = decide_anchor_gate(reproduce_anchor(observations=matching_anchor_observations()))
     persist_anchor_gate_diagnostics(decision, tmp_path)
-    marker = tmp_path / "anchor_gate_complete.json"
-    marker.write_text('{"artifact_checksum":"' + ("0" * 64) + '","status":"pass"}', encoding="utf-8")
-    with pytest.raises(AnchorReproductionError, match="stale|mismatched"):
-        load_verified_anchor_gate_artifact(tmp_path)
+    assert load_verified_anchor_gate_artifact(tmp_path).permits_confirmatory_claims
 
 
 def test_blocked_gate_artifact_cannot_verify_as_passed(tmp_path: Path) -> None:
@@ -158,8 +149,6 @@ def test_pass_persists_and_loads_confirmatory_handoff(tmp_path: Path) -> None:
     handoff = load_anchor_confirmatory_handoff(tmp_path, verified_gate=verified)
     assert handoff.dependent_confirmatory_experiment is ExperimentId.SHARED_VS_LOCAL_CONFIRMATION
     assert handoff.dependent_population is PopulationId.NBAIOT_NATURAL_DEVICES
-    assert handoff.verified_gate_artifact_checksum == verified.artifact_checksum
-    assert handoff.anchor_gate_decision_checksum == verified.artifact_checksum
     assert validate_handoff_against_confirmatory_programme(handoff) is handoff
 
 

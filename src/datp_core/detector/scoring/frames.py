@@ -8,8 +8,6 @@ import numpy.typing as npt
 import polars as pl
 import torch
 
-from datp_core.artifacts.provenance import Checksum
-from datp_core.artifacts.serializers.safetensors import load_state_dict_tensors
 from datp_core.core.errors import (
     ArtifactIntegrityError,
     ErrorMessage,
@@ -38,10 +36,8 @@ from datp_core.detector.autoencoder import (
     ReconstructionAutoencoder,
     reconstruction_errors,
 )
-from datp_core.detector.checkpoints.contracts import validate_persisted_checkpoint_file
 from datp_core.detector.scoring.models import PersistedScoreFrame
 from datp_core.detector.training.contracts import AutoencoderProtocol
-from datp_core.detector.training.models import CheckpointCandidate
 
 SCORE_FRAME_COLUMNS = (
     ScoreFrameColumn.STABLE_ROW_ID.value,
@@ -121,17 +117,11 @@ def score_frame(
 
 def validate_persisted_score_frame(
     path: Path,
-    checksum: Checksum,
     row_count: RowCount,
 ) -> pl.DataFrame:
     if not path.is_file():
         raise ArtifactIntegrityError(
             ErrorMessage("score artifact is missing"),
-            subject=ContractSubject.ARTIFACT_PATH,
-        )
-    if Checksum.from_file(path) != checksum:
-        raise ArtifactIntegrityError(
-            ErrorMessage("score checksum changed after write"),
             subject=ContractSubject.ARTIFACT_PATH,
         )
     frame = pl.read_parquet(path)
@@ -182,13 +172,11 @@ def score_and_persist_autoencoder_frame(
     output.write_parquet(destination)
     persisted = PersistedScoreFrame(
         path=destination,
-        checksum=Checksum.from_file(destination),
         row_count=RowCount(output.height),
         feature_count=FeatureCount(len(feature_names)),
     )
     reloaded = validate_persisted_score_frame(
         persisted.path,
-        persisted.checksum,
         persisted.row_count,
     )
     if output.shape != reloaded.shape:
@@ -204,8 +192,8 @@ def score_and_persist_autoencoder_frame(
     return persisted
 
 
-def load_checkpoint_model(
-    checkpoint: CheckpointCandidate,
+def model_from_terminal_state(
+    model_state: AutoencoderModelState,
     autoencoder: AutoencoderProtocol,
     device: torch.device,
 ) -> ReconstructionAutoencoder:
@@ -214,9 +202,7 @@ def load_checkpoint_model(
             ErrorMessage("scoring requires a CUDA device"),
             subject=ContractSubject.CUDA,
         )
-    validate_persisted_checkpoint_file(checkpoint.tensor_path, checkpoint.tensor_checksum)
     model = ReconstructionAutoencoder(autoencoder.widths).to(device)
-    model_state = AutoencoderModelState.from_torch_state_dict(load_state_dict_tensors(checkpoint.tensor_path, device))
     model_state.apply_to(model)
     model.eval()
     return model

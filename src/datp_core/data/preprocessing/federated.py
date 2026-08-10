@@ -26,10 +26,10 @@ from datp_core.data.preprocessing.artifact_validation import (
     require_columns,
 )
 from datp_core.data.preprocessing.artifacts import (
+    PreparedDataCoordinate,
     PreprocessingFitScope,
     ProcessedAssetName,
     RelativeAssetPathSequence,
-    ReusableDataCoordinate,
     canonical_relative_asset_path,
     client_asset_path,
     federated_client_directory,
@@ -143,7 +143,7 @@ def publish_client_preprocessing(request: ClientPublishRequest) -> ClientPreproc
 
     coordinate_directory = federated_client_directory(
         context.data_root,
-        ReusableDataCoordinate(
+        PreparedDataCoordinate(
             dataset=context.dataset,
             population=context.population,
             partition_seed=context.partition_seed,
@@ -190,7 +190,6 @@ def publish_client_preprocessing(request: ClientPublishRequest) -> ClientPreproc
         client_identity=request.client_identity,
         paths=build_preprocessed_partition_paths(publication.coordinate_directory, context.split_protocol_identity),
         fitted_state=state,
-        publication_status=publication.publication_status,
         train_row_count=row_count(PartitionRole.TRAIN),
         calibration_row_count=row_count(PartitionRole.CALIBRATION),
         evaluation_row_count=row_count(PartitionRole.EVALUATION),

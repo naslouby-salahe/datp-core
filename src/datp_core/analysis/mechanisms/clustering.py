@@ -7,7 +7,6 @@ from pydantic import model_validator
 from sklearn.metrics import adjusted_rand_score
 
 from datp_core.analysis.inference.wilcoxon import CorrelationCoefficient
-from datp_core.artifacts.provenance import Checksum
 from datp_core.core.contracts import ClientOwned, StrictModel
 from datp_core.core.identifiers import AnalysisReasonText, AvailabilityStatus, EvidenceRole, FederatedThresholdMethod
 from datp_core.core.numeric import (
@@ -94,7 +93,6 @@ class ClusterEvidenceRecord(StrictModel):
 
     seed: Seed
     method: FederatedThresholdMethod
-    source_threshold_checksum: Checksum
     fingerprints: tuple[ClusterFingerprint, ...]
     memberships: tuple[ClusterMembership, ...]
     partition: ClusterPartitionSummary
@@ -156,8 +154,6 @@ class ClusterStabilityResult(StrictModel):
     left_partition: ClusterPartitionSummary
     right_partition: ClusterPartitionSummary
     contingency: ClusterContingencyMatrix
-    left_source_checksum: Checksum | None = None
-    right_source_checksum: Checksum | None = None
 
     evidence_role: ClassVar[EvidenceRole] = EvidenceRole.MECHANISM
 
@@ -190,7 +186,6 @@ class ClusterStabilityResult(StrictModel):
 def cluster_evidence_from_grouped_result(
     result: GroupedThresholdResult,
     *,
-    source_threshold_checksum: Checksum,
     local_dispersion: MetricValue | None,
     shared_cv_fpr: MetricValue | None = None,
     local_cv_fpr: MetricValue | None = None,
@@ -235,7 +230,6 @@ def cluster_evidence_from_grouped_result(
     return ClusterEvidenceRecord(
         seed=result.coordinate.training_seed,
         method=FederatedThresholdMethod.CLUSTER_THRESHOLD,
-        source_threshold_checksum=source_threshold_checksum,
         fingerprints=result.fingerprints,
         memberships=result.clusters,
         partition=partition,
@@ -254,7 +248,6 @@ def cluster_evidence_from_grouped_result(
 def empty_cluster_evidence_record(
     *,
     seed: Seed,
-    source_threshold_checksum: Checksum,
     declared_group_count: GroupCount,
     filled_memberships: tuple[ClusterMembership, ...],
     fingerprints: tuple[ClusterFingerprint, ...] = (),
@@ -291,7 +284,6 @@ def empty_cluster_evidence_record(
     return ClusterEvidenceRecord(
         seed=seed,
         method=FederatedThresholdMethod.CLUSTER_THRESHOLD,
-        source_threshold_checksum=source_threshold_checksum,
         fingerprints=fingerprints,
         memberships=filled_memberships,
         partition=partition,
@@ -331,8 +323,6 @@ def cluster_stability(
     left: tuple[ClusterMembership, ...],
     right: tuple[ClusterMembership, ...],
     *,
-    left_source_checksum: Checksum | None = None,
-    right_source_checksum: Checksum | None = None,
     left_declared_group_count: GroupCount | None = None,
     right_declared_group_count: GroupCount | None = None,
 ) -> ClusterStabilityResult:
@@ -368,8 +358,6 @@ def cluster_stability(
             GroupCount(len(left_partition.group_sizes)),
             GroupCount(len(right_partition.group_sizes)),
         ),
-        left_source_checksum=left_source_checksum,
-        right_source_checksum=right_source_checksum,
     )
 
 

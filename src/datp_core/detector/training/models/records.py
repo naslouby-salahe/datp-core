@@ -3,7 +3,6 @@ from pathlib import Path
 
 import polars as pl
 
-from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
@@ -66,12 +65,6 @@ class ClientTrainingInput:
 
 
 @dataclass(frozen=True, slots=True)
-class PreparedClientProvenance:
-    client: ClientIdentity
-    preprocessing_checksum: Checksum
-
-
-@dataclass(frozen=True, slots=True)
 class ClientUpdate:
     client: ClientIdentity
     model_state: AutoencoderModelState
@@ -131,7 +124,6 @@ _GLOBAL_MODELS = frozenset(
 class GlobalModelStateReference:
     coordinate: FederatedTrainingCoordinate
     round_number: RoundNumber
-    state_checksum: Checksum
     tensor_path: Path | None
 
     def __post_init__(self) -> None:
@@ -148,7 +140,6 @@ class PersonalizedModelStateReference:
     client: ClientIdentity
     round_number: RoundNumber
     local_loss: MetricValue
-    state_checksum: Checksum
     tensor_path: Path | None
 
     def __post_init__(self) -> None:

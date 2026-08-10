@@ -5,7 +5,6 @@ from pathlib import Path
 
 import polars as pl
 
-from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
@@ -45,7 +44,6 @@ from datp_core.runtime.configuration import DATA_ROOT
 @dataclass(frozen=True, slots=True, kw_only=True)
 class MatchedStaticReferenceInputs:
     clients: tuple[ClientScoringInput, ...]
-    split_manifest_checksum: Checksum
 
 
 def matched_static_reference_inputs(
@@ -118,7 +116,6 @@ def matched_static_reference_inputs(
             )
             for client in sorted(context.clients)
         ),
-        split_manifest_checksum=split_manifest.assignment_checksum,
     )
 
 

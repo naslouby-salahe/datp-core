@@ -144,7 +144,6 @@ def format_plan(
     presentation: PlanPresentation,
 ) -> DetailText:
     lines = [
-        f"plan_digest={presentation.plan.digest.value}",
         f"entries={len(presentation.plan.entries)}",
         f"executable={len(presentation.plan.executable)}",
         f"experiments={','.join(item.value for item in presentation.experiment_ids)}",

@@ -7,8 +7,6 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
-from datp_core.artifacts.provenance import Checksum
-from datp_core.artifacts.serializers.json import canonical_checksum
 from datp_core.core.errors import (
     ErrorMessage,
     LeakageError,
@@ -191,10 +189,6 @@ def transform_feature_matrix(
     return transformed
 
 
-def protocol_content_checksum(protocol: PreprocessingProtocol) -> Checksum:
-    return canonical_checksum(protocol)
-
-
 def build_preprocessing_manifest(
     context: PreprocessingPublishContext,
     *,
@@ -209,8 +203,6 @@ def build_preprocessing_manifest(
         split_protocol_identity=context.split_protocol_identity,
         preprocessing_identity=protocol.identity,
         branch=branch,
-        protocol_checksum=protocol_content_checksum(protocol),
-        canonical_schema_checksum=context.canonical_schema_checksum,
         input_feature_names=protocol.input_feature_names,
         transformed_feature_names=protocol.input_feature_names,
         estimator_class_name=protocol.estimator_class_name,
@@ -233,7 +225,6 @@ def centralized_fitted_state_after_publish(
     return CentralizedFittedPreprocessingState(
         protocol=spec.protocol,
         estimator_path=spec.estimator_path,
-        estimator_checksum=Checksum.from_file(spec.estimator_path),
         fit_row_count=spec.fit_row_count,
     )
 
@@ -244,7 +235,6 @@ def federated_fitted_state_after_publish(
     return FederatedFittedPreprocessingState(
         protocol=spec.protocol,
         estimator_path=spec.estimator_path,
-        estimator_checksum=Checksum.from_file(spec.estimator_path),
         fit_row_count=spec.fit_row_count,
         client_identity=spec.owner,
     )
@@ -327,7 +317,6 @@ def publish_preprocessed_partitions(
                 split_protocol=context.split_protocol_identity,
             ),
             required_assets=processed_asset_names(context.split_protocol_identity),
-            overwrite=False,
             manifest_type=PreprocessingManifest,
             schema_type=TransformedSchema,
             report_type=PreprocessingValidationReport,

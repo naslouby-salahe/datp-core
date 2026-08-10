@@ -32,11 +32,8 @@ def test_blocked_anchor_prevents_claim_permitted_dependent_readiness() -> None:
         threshold_method=first.threshold_method,
         metric=first.metric,
         value=MetricValue(0.0),
-        checkpoint_status=first.checkpoint_status,
         source_kind=first.source_kind,
         artifact_path=first.artifact_path,
-        artifact_checksum=first.artifact_checksum,
-        model_checkpoint_identity=first.model_checkpoint_identity,
         evidence_role=first.evidence_role,
     )
     decision = decide_anchor_gate(reproduce_anchor(observations=tuple(observations)))

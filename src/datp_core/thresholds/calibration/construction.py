@@ -6,7 +6,6 @@ from datp_core.analysis.metrics.cohorts import EvaluationCohortManifest
 from datp_core.analysis.metrics.federated import CalibrationSizeAblationCell, FederatedEvaluationRequest
 from datp_core.analysis.metrics.federated_execution import prepare_federated_evaluation
 from datp_core.analysis.metrics.fixed_score import FixedScoreEvidence
-from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
@@ -18,7 +17,7 @@ from datp_core.data.registry import population_capabilities
 from datp_core.detector.scoring.models import FederatedScoreArtifactManifest
 from datp_core.experiments.common.coordinates import ExternalTemporalExecutionIdentity
 from datp_core.thresholds.calibration.eligibility import EligibilityDecision
-from datp_core.thresholds.calibration.sampling import CalibrationReplicateManifest, CalibrationSubsample
+from datp_core.thresholds.calibration.sampling import CalibrationReplicateManifest
 from datp_core.thresholds.calibration.service import CalibrationRequest, calibrate
 from datp_core.thresholds.contracts import ThresholdUnavailableResult
 from datp_core.thresholds.dispatch import ThresholdConstructionRequest, dispatch_federated_threshold
@@ -153,7 +152,6 @@ def construct_calibration_size_ablation(
                     threshold_result=threshold,
                     cohort=request.cohort,
                     fixed_score_evidence=request.fixed_score_evidence,
-                    comparison_fixed_score_evidence=None,
                     evidence_role=request.evidence_role,
                     conformal_coverage_inputs=(),
                     threshold_estimation_inputs=(),
@@ -202,19 +200,6 @@ def _eligible_scores_for_size(
                 client=client,
                 coordinate=manifest.coordinate,
                 references=subsample.references,
-                score_set_checksum=_subsample_checksum(manifest, subsample),
             )
         )
     return tuple(scores)
-
-
-def _subsample_checksum(manifest: CalibrationReplicateManifest, subsample: CalibrationSubsample) -> Checksum:
-    payload = "|".join(
-        (
-            manifest.client.client_id.value,
-            str(manifest.replicate_index.value),
-            str(subsample.size.value),
-            *sorted(str(item.stable_row_id) for item in subsample.references),
-        )
-    )
-    return Checksum.from_text(payload)

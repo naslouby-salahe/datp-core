@@ -2,13 +2,10 @@
 
 from datp_core.detector.training.contracts import DittoTrainingCoordinates, FederatedTrainingCoordinate
 from datp_core.detector.training.models.checkpoints import (
-    CheckpointCandidate,
-    CheckpointDecision,
     DittoTrainingOutcome,
     FederatedTrainingExecution,
-    FederatedTrainingOutcome,
     FederatedTrainingResult,
-    PersonalizedCandidateSet,
+    PersonalizedTerminalModel,
 )
 from datp_core.detector.training.models.records import (
     ClientTrainingInput,
@@ -19,14 +16,10 @@ from datp_core.detector.training.models.records import (
     FederatedTrainingHistory,
     GlobalModelStateReference,
     PersonalizedModelStateReference,
-    PreparedClientProvenance,
     validate_client_preprocessing_match,
 )
-from datp_core.detector.training.models.snapshots import PersonalizedSnapshotSet, RoundSnapshot
 
 __all__ = (
-    "CheckpointCandidate",
-    "CheckpointDecision",
     "ClientTrainingInput",
     "ClientTrainingResult",
     "ClientUpdate",
@@ -37,13 +30,9 @@ __all__ = (
     "FederatedTrainingCoordinate",
     "FederatedTrainingExecution",
     "FederatedTrainingHistory",
-    "FederatedTrainingOutcome",
     "FederatedTrainingResult",
     "GlobalModelStateReference",
-    "PersonalizedCandidateSet",
+    "PersonalizedTerminalModel",
     "PersonalizedModelStateReference",
-    "PersonalizedSnapshotSet",
-    "PreparedClientProvenance",
-    "RoundSnapshot",
     "validate_client_preprocessing_match",
 )

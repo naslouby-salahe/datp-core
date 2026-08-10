@@ -6,24 +6,22 @@ from pathlib import Path
 
 import polars as pl
 
-from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
 )
-from datp_core.core.identifiers import FeatureNameSequence, PartitionRole, PublicationStatus, SplitProtocolId
-from datp_core.core.numeric import BatchSize, FeatureCount, RoundNumber, RowCount
+from datp_core.core.identifiers import FeatureNameSequence, PartitionRole, SplitProtocolId
+from datp_core.core.numeric import BatchSize, FeatureCount, RowCount
 from datp_core.data.populations.contracts import ClientIdentity
-from datp_core.detector.checkpoints.models import CentralizedCheckpointCandidate
 from datp_core.detector.scoring.contracts import (
     ScoreArtifact,
     ScoreArtifactManifest,
     ScoreGenerationResult,
     ScoreRecord,
 )
-from datp_core.detector.training.centralized import CentralizedTrainingCoordinate
+from datp_core.detector.training.centralized import CentralizedTrainingCoordinate, CentralizedTrainingResult
 from datp_core.detector.training.contracts import AutoencoderProtocol
-from datp_core.detector.training.models import CheckpointCandidate, FederatedTrainingCoordinate
+from datp_core.detector.training.models import FederatedTrainingCoordinate, FederatedTrainingResult
 
 type FederatedScoreRecord = ScoreRecord[FederatedTrainingCoordinate, ClientIdentity]
 type FederatedScoreArtifactManifest = ScoreArtifactManifest[FederatedTrainingCoordinate, ClientIdentity]
@@ -34,20 +32,16 @@ class FederatedScoreAssetName(StrEnum):
     CALIBRATION = "calibration.parquet"
     EVALUATION = "evaluation.parquet"
     FUTURE_RECALIBRATION = "future_recalibration.parquet"
-    COMPLETE = "COMPLETE"
 
 
 class CentralizedScoreAssetName(StrEnum):
     CALIBRATION_SCORES = "calibration_scores.parquet"
     EVALUATION_SCORES = "evaluation_scores.parquet"
-    SCORE_MANIFEST = "score_manifest.json"
-    COMPLETE = "COMPLETE"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PersistedScoreFrame:
     path: Path
-    checksum: Checksum
     row_count: RowCount
     feature_count: FeatureCount
 
@@ -84,28 +78,24 @@ class ClientScoringInput:
 
 @dataclass(frozen=True, slots=True)
 class ScoreGenerationRequest:
-    checkpoint: CheckpointCandidate
+    training: FederatedTrainingResult
     scored_split_protocol: SplitProtocolId
     autoencoder: AutoencoderProtocol
     feature_names: FeatureNameSequence
     clients: tuple[ClientScoringInput, ...]
     batch_size: BatchSize
     output_directory: Path
-    preprocessing_state_set_checksum: Checksum
-    split_manifest_checksum: Checksum
 
 
 @dataclass(slots=True, eq=False, kw_only=True)
 class GenerateFederatedScoresRequest:
-    checkpoint: CheckpointCandidate
+    training: FederatedTrainingResult
     scored_split_protocol: SplitProtocolId
     autoencoder: AutoencoderProtocol
     feature_names: FeatureNameSequence
     clients: tuple[ClientScoringInput, ...]
     batch_size: BatchSize
     output_directory: Path
-    preprocessing_state_set_checksum: Checksum
-    split_manifest_checksum: Checksum
     overwrite: bool
 
 
@@ -114,65 +104,36 @@ class PooledScoreArtifact(ScoreArtifact[CentralizedTrainingCoordinate]):
     pass
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ScorePartitionBinding:
-    partition_role: PartitionRole
-    row_count: RowCount
-    ordered_identity_checksum: Checksum
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class CentralizedScoringPublicationBinding:
-    coordinate: CentralizedTrainingCoordinate
-    checkpoint_round: RoundNumber
-    checkpoint_checksum: Checksum
-    preprocessing_state_checksum: Checksum
-    split_manifest_checksum: Checksum
-    feature_names: FeatureNameSequence
-    batch_size: BatchSize
-    calibration_input: ScorePartitionBinding
-    evaluation_input: ScorePartitionBinding
-    calibration_score_checksum: Checksum
-    evaluation_score_checksum: Checksum
-
-
 @dataclass(frozen=True, slots=True)
 class CentralizedScoringResult:
     calibration_scores: PooledScoreArtifact
     evaluation_scores: PooledScoreArtifact
-    model_tensor_checksum: Checksum
-    preprocessing_state_checksum: Checksum
 
 
 @dataclass(frozen=True, slots=True, eq=False)
 class CentralizedScoringRequest:
     coordinate: CentralizedTrainingCoordinate
-    checkpoint: CentralizedCheckpointCandidate
+    training: CentralizedTrainingResult
     autoencoder: AutoencoderProtocol
     feature_names: FeatureNameSequence
     calibration_features: pl.DataFrame
     evaluation_features: pl.DataFrame
     batch_size: BatchSize
     output_directory: Path
-    preprocessing_state_checksum: Checksum
 
 
 @dataclass(slots=True, eq=False, kw_only=True)
 class GenerateCentralizedScoresRequest:
     coordinate: CentralizedTrainingCoordinate
-    checkpoint: CentralizedCheckpointCandidate
+    training: CentralizedTrainingResult
     autoencoder: AutoencoderProtocol
     feature_names: FeatureNameSequence
     calibration_features: pl.DataFrame
     evaluation_features: pl.DataFrame
     batch_size: BatchSize
     output_directory: Path
-    preprocessing_state_checksum: Checksum
-    overwrite: bool
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class GenerateCentralizedScoresResult:
-    publication_status: PublicationStatus
     scoring: CentralizedScoringResult
-    complete_digest: Checksum

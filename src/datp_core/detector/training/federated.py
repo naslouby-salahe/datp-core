@@ -6,7 +6,7 @@ from datp_core.core.identifiers import ContractSubject
 from datp_core.detector.checkpoints.publication import write_federated_training as persist_federated_training
 from datp_core.detector.training.contracts import FedAvgProtocol, FedProxProtocol
 from datp_core.detector.training.engine import FederatedTrainingRequest, run_federated_training
-from datp_core.detector.training.models import FederatedTrainingOutcome
+from datp_core.detector.training.models import FederatedTrainingResult
 from datp_core.detector.training.protocols import DECLARED_FEDAVG_LOCAL_EPOCHS
 
 type GlobalFederatedProtocol = FedAvgProtocol | FedProxProtocol
@@ -14,7 +14,7 @@ type GlobalFederatedProtocol = FedAvgProtocol | FedProxProtocol
 
 def train_global_federated(
     request: FederatedTrainingRequest[GlobalFederatedProtocol],
-) -> FederatedTrainingOutcome:
+) -> FederatedTrainingResult:
     _validate_protocol_binding(request)
     outcome = run_federated_training(request)
     return persist_federated_training(outcome, request.output_directory)

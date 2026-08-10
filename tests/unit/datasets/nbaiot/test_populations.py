@@ -86,7 +86,6 @@ def test_iid_is_separate_typed_condition_and_is_deterministic(nbaiot_canonical_r
     assert first.diagnostics.partition_kind is ControlledPartitionKind.IID
     assert first.diagnostics.concentration is None
     assert first.membership.equals(second.membership)
-    assert first.manifest.document.membership_checksum == second.manifest.document.membership_checksum
     assert first.diagnostics.client_row_counts == second.diagnostics.client_row_counts
 
 

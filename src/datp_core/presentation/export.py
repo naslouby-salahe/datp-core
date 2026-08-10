@@ -25,8 +25,6 @@ from datp_core.analysis.mechanisms.movement import (
 )
 from datp_core.analysis.preparation import AnalysisDocument, ExternalAnalysisDocument, TemporalAnalysisDocument
 from datp_core.analysis.scientific_decision import ScientificDecision, ScientificDecisionResult
-from datp_core.artifacts.provenance import Checksum
-from datp_core.artifacts.serializers.json import canonical_checksum
 from datp_core.core.identifiers import (
     AvailabilityStatus,
     ClaimWording,
@@ -86,11 +84,6 @@ class ReportProvenance:
     experiment: ExperimentId
     population: PopulationId
     evidence_role: EvidenceRole
-    analysis_checksum: Checksum
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.analysis_checksum, Checksum):
-            raise TypeError("report provenance requires a typed analysis checksum")
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -123,7 +116,6 @@ def export_markdown(bundle: PublicationBundle, destination: Path) -> Path:
         f"Experiment: `{provenance.experiment.value}`  ",
         f"Population: `{provenance.population.value}`  ",
         f"Evidence role: `{provenance.evidence_role.value}`  ",
-        f"Analysis checksum: `{provenance.analysis_checksum.value}`",
         "",
     )
     blocked_section = (
@@ -182,7 +174,6 @@ def export_confirmatory_publication(
             experiment=ExperimentId.SHARED_VS_LOCAL_CONFIRMATION,
             population=PopulationId.NBAIOT_NATURAL_DEVICES,
             evidence_role=EvidenceRole.CONFIRMATORY,
-            analysis_checksum=canonical_checksum(document),
         ),
         claims=(claim,),
         tables=tables,
@@ -227,7 +218,6 @@ def export_external_publication(document: ExternalAnalysisDocument, output_direc
                 else ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY,
                 population=document.plan.population,
                 evidence_role=document.plan.evidence_role,
-                analysis_checksum=canonical_checksum(document),
             ),
             claims=(claim,),
             tables=(_interval_table(document.interval),),
@@ -306,16 +296,9 @@ def export_temporal_publication(document: TemporalAnalysisDocument, output_direc
                 "missing provenance cannot be exported"
             )
         lines.append(
-            f"- seed `{recovery.seed.value}`: checkpoint=`{provenance.frozen_future.checkpoint_checksum.value}` "
-            f"preprocess=`{provenance.frozen_future.preprocessing_state_set_checksum.value}` "
-            f"split=`{provenance.frozen_future.split_manifest_checksum.value}` "
-            f"eval_scores=`{provenance.frozen_future.evaluation_score_set_checksum.value}` "
-            f"static_threshold=`{provenance.static_threshold_checksum.value}` "
-            f"frozen_threshold=`{provenance.frozen_threshold_checksum.value}` "
-            f"recalibrated_threshold=`{provenance.recalibrated_threshold_checksum.value}` "
-            f"static_evaluation=`{provenance.static_evaluation_checksum.value}` "
-            f"frozen_evaluation=`{provenance.frozen_evaluation_checksum.value}` "
-            f"recalibrated_evaluation=`{provenance.recalibrated_evaluation_checksum.value}`"
+            f"- seed `{recovery.seed.value}`: coordinate=`{provenance.frozen_future.coordinate}` "
+            f"calibration_score_records={len(provenance.frozen_future.calibration_records)} "
+            f"evaluation_score_records={len(provenance.frozen_future.evaluation_records)}"
         )
         for trajectory in recovery.client_trajectories:
             lines.append(
@@ -329,15 +312,9 @@ def export_temporal_publication(document: TemporalAnalysisDocument, output_direc
         [
             "## Figure reproduction sources",
             "",
-            (
-                f"- `FIGURE-011`: `{figure_sources.fpr_trajectory_source.name}` "
-                f"(checksum=`{figure_sources.fpr_trajectory_checksum.value}`)"
-            ),
-            (
-                f"- `FIGURE-012`: `{figure_sources.threshold_movement_source.name}` "
-                f"(checksum=`{figure_sources.threshold_movement_checksum.value}`)"
-            ),
-            f"- provenance manifest: `{figure_sources.manifest.name}`",
+            f"- `FIGURE-011`: `{figure_sources.fpr_trajectory_source.name}`",
+            f"- `FIGURE-012`: `{figure_sources.threshold_movement_source.name}`",
+            f"- source manifest: `{figure_sources.manifest.name}`",
             "",
         ]
     )
@@ -348,7 +325,6 @@ def export_temporal_publication(document: TemporalAnalysisDocument, output_direc
                 experiment=document.experiment,
                 population=PopulationId.EDGE_TEMPORAL_GROUPS,
                 evidence_role=EvidenceRole.TEMPORAL_BOUNDARY,
-                analysis_checksum=canonical_checksum(document),
             ),
             claims=(claim,),
             tables=(
@@ -392,7 +368,6 @@ def export_mechanism_publication(
                 experiment=experiment,
                 population=population,
                 evidence_role=evidence_role,
-                analysis_checksum=canonical_checksum(mechanisms),
             ),
             claims=(
                 ClaimDecision(
@@ -591,16 +566,14 @@ def _render_paired_contrasts(contrasts: PairedContrasts) -> list[ReportLine]:
     lines = [
         "## Paired Seed Values",
         "",
-        "| Seed | Shared | Local | Delta | Model checksum | Checkpoint |",
-        "|---|---:|---:|---:|---|---|",
+        "| Seed | Shared | Local | Delta |",
+        "|---|---:|---:|---:|",
     ]
     for contrast in contrasts.values:
         lines.append(
             f"| {contrast.seed.value} | {_format_publication_metric(contrast.left_value.value)} | "
             f"{_format_publication_metric(contrast.right_value.value)} | "
-            f"{_format_publication_metric(contrast.delta.value)} | "
-            f"`{contrast.fixed_score.model_checksum.value[:12]}` | "
-            f"`{contrast.fixed_score.selected_checkpoint_checksum.value[:12]}` |"
+            f"{_format_publication_metric(contrast.delta.value)} |"
         )
     return [ReportLine(line) for line in [*lines, ""]]
 
@@ -797,8 +770,6 @@ def _render_divergence_result(mechanism: DivergenceResult) -> list[ReportLine]:
         f"Log base: `{mechanism.protocol.logarithm_base.value}`",
         f"Aggregation: `{mechanism.protocol.aggregation.value}`",
     ]
-    if mechanism.source_score_checksum is not None:
-        lines.append(f"Source score checksum: `{mechanism.source_score_checksum.value}`")
     if mechanism.aggregate is not None:
         lines.append(f"Aggregate JS distance: {_format_publication_metric(mechanism.aggregate.value)}")
         lines.append(

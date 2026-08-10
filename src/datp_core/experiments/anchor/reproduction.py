@@ -7,13 +7,11 @@ from pydantic import ValidationError
 
 from datp_core.analysis.inference.bootstrap.contracts import BcaOutcome, BcaReason, BootstrapInterval
 from datp_core.analysis.inference.bootstrap.estimation import seed_level_bca_interval
-from datp_core.artifacts.provenance import Checksum
 from datp_core.core.errors import (
     AnchorReproductionError,
     ErrorMessage,
 )
 from datp_core.core.identifiers import (
-    CheckpointStatus,
     ContractSubject,
     EvidenceRole,
     ExperimentId,
@@ -61,7 +59,6 @@ ANCHOR_EXPERIMENT: ExperimentId = ExperimentId.HISTORICAL_DATP_REPRODUCTION
 ANCHOR_POPULATION: PopulationId = PopulationId.NBAIOT_NATURAL_DEVICES
 ANCHOR_TRAINING_MODEL: TrainingModelId = TrainingModelId.FEDAVG_AUTOENCODER
 ANCHOR_METRIC: MetricId = MetricId.FPR_COEFFICIENT_OF_VARIATION
-ANCHOR_CHECKPOINT_STATUS: CheckpointStatus = CheckpointStatus.HISTORICAL_ENDPOINT
 ANCHOR_EVIDENCE_ROLE: EvidenceRole = EvidenceRole.ANCHOR_REPRODUCTION
 ANCHOR_HISTORICAL_SEED_COUNT: SeedCount = HISTORICAL_ANCHOR_SEED_COHORT.member_count
 CONFIRMATORY_PAIRED_SEED_COUNT: SeedCount = CONFIRMATORY_SEED_COHORT.member_count
@@ -97,7 +94,6 @@ def references_from_protocol(
                 metric=item.metric,
                 value=item.value,
                 tolerance_rule=DiagnosticRule(),
-                checkpoint_status=ANCHOR_CHECKPOINT_STATUS,
             )
 
     return tuple(_generate())
@@ -136,9 +132,9 @@ def validate_historical_seed_cohort(seed_cohort: SeedCohort) -> SeedCohort:
 
 def independent_reproduction_dependency_blocker() -> AnchorDependencyBlocker:
     return AnchorDependencyBlocker(
-        kind=AnchorDependencyKind.FEDERATED_TRAINING_CHECKPOINTING_AND_SCORING,
+        kind=AnchorDependencyKind.FEDERATED_TRAINING_AND_SCORING,
         detail=AnchorDetail(
-            "Independent re-execution of historical training, checkpointing, and scoring "
+            "Independent re-execution of historical training and scoring "
             "requires the federated training and scoring workflow"
         ),
     )
@@ -156,11 +152,8 @@ def load_historical_observation(source: HistoricalMetricArtifactSource) -> Ancho
         threshold_method=source.threshold_method,
         metric=ANCHOR_METRIC,
         value=document.cv_fpr,
-        checkpoint_status=ANCHOR_CHECKPOINT_STATUS,
         source_kind=AnchorObservationSourceKind.HISTORICAL_ARTIFACT,
         artifact_path=path.resolve(),
-        artifact_checksum=Checksum.from_file(path),
-        model_checkpoint_identity=document.provenance.model_checkpoint_identity,
         evidence_role=ANCHOR_EVIDENCE_ROLE,
     )
 
@@ -280,7 +273,6 @@ def reproduce_anchor(
     resolved_observations = observations or ()
 
     _reject_confirmatory_only_artifacts(resolved_observations)
-    _reject_non_historical_checkpoint(resolved_observations)
 
     seed_subset = _compare_seed_subsets(seed_cohort, resolved_observations)
 
@@ -368,16 +360,6 @@ def _reject_confirmatory_only_artifacts(observations: tuple[AnchorObservedMetric
         raise AnchorReproductionError(
             ErrorMessage("observations include confirmatory-only seeds outside the historical five-seed cohort"),
             reason=AnchorDiscrepancyReason.CONFIRMATORY_TEN_SEED_COHORT_REJECTED,
-        )
-
-
-def _reject_non_historical_checkpoint(observations: tuple[AnchorObservedMetric, ...]) -> None:
-    """Reject non-historical checkpoint candidates as a cohort-level structural failure."""
-    if any(item.checkpoint_status is not ANCHOR_CHECKPOINT_STATUS for item in observations):
-        raise AnchorReproductionError(
-            ErrorMessage("non-historical checkpoint selection cannot enter historical anchor reproduction"),
-            subject=ANCHOR_CHECKPOINT_STATUS,
-            reason=AnchorDiscrepancyReason.WRONG_CHECKPOINT_SEMANTICS,
         )
 
 

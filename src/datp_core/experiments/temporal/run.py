@@ -8,12 +8,8 @@ from enum import StrEnum
 from pathlib import Path
 from shutil import rmtree
 
-from pydantic import TypeAdapter, ValidationError
-
 from datp_core.analysis.evidence import (
-    AnalysisAssetName,
     AnalyzeTemporalEvidenceRequest,
-    SeedEvidenceAssetName,
     analyze_temporal_evidence,
 )
 from datp_core.analysis.metrics.cohorts import EvaluationCohortManifest
@@ -34,13 +30,10 @@ from datp_core.analysis.temporal import (
     validate_frozen_recalibrated_pair,
 )
 from datp_core.app.planning import ExperimentPlan, expand_experiment_plan
-from datp_core.artifacts.provenance import Checksum
 from datp_core.artifacts.repositories.thresholds import (
     FederatedThresholdConstructionRequest,
     construct_and_publish_federated_thresholds,
-    threshold_result_checksum,
 )
-from datp_core.artifacts.serializers.json import canonical_checksum, canonical_json_text
 from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
@@ -60,7 +53,7 @@ from datp_core.data.registry import population_capabilities
 from datp_core.detector.scoring.models import FederatedScoreArtifactManifest
 from datp_core.experiments.common.coordinates import ExperimentCoordinate, ExternalTemporalExecutionIdentity
 from datp_core.experiments.common.seeds import BOUNDED_EVIDENCE_SEED_COHORT, SeedCohort
-from datp_core.experiments.execution.checkpoints import select_execution_checkpoint
+from datp_core.experiments.execution.checkpoints import train_execution_model
 from datp_core.experiments.execution.context import (
     FederatedExecutionContext,
     client_scoring_inputs,
@@ -81,7 +74,7 @@ from datp_core.experiments.execution.models import (
     ProgressHook,
     StageOutcome,
 )
-from datp_core.experiments.execution.score_generation import score_selected_checkpoint
+from datp_core.experiments.execution.score_generation import score_terminal_model
 from datp_core.experiments.registry import EXPERIMENTS, ExperimentDeclaration
 from datp_core.presentation.export import export_temporal_publication
 from datp_core.thresholds.contracts import ThresholdInfeasibilityReason, ThresholdUnavailableResult
@@ -119,12 +112,6 @@ class TemporalMethodOutcome:
     method: FederatedThresholdMethod
     fpr_coefficient_of_variation: MetricValue
     mean_fpr: MetricValue | None
-    threshold_checksum: Checksum
-    evaluation_checksum: Checksum
-    client_inventory_checksum: Checksum
-    eligibility_checksum: Checksum
-    source_row_checksum: Checksum
-    row_order_checksum: Checksum
     clients: tuple[ClientMetricResult, ...]
     excluded_clients: tuple[ClientIdentity, ...]
     unavailable_reasons: tuple[AnalysisReasonText, ...]
@@ -157,7 +144,6 @@ class TemporalMethodRecovery:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class TemporalMethodCampaignAnalysis:
     method: FederatedThresholdMethod
-    complete_digest: Checksum
     output_directory: Path
 
 
@@ -262,15 +248,7 @@ def run_temporal_seed(
             for method in methods
         ),
     )
-    _persist_temporal_seed_evidence(result, output_root=output_root)
     return result
-
-
-def load_temporal_campaign_seeds(*, output_root: Path) -> tuple[TemporalSeedResult, ...]:
-    declaration = _temporal_declaration()
-    return tuple(
-        _load_temporal_seed_evidence(declaration, seed, output_root) for seed in BOUNDED_EVIDENCE_SEED_COHORT.values
-    )
 
 
 def analyze_temporal_campaign(
@@ -308,59 +286,6 @@ def _clear_temporal_seed_outputs(
             rmtree(directory)
 
 
-def _temporal_seed_evidence_directory(
-    declaration: ExperimentDeclaration,
-    partition_seed: Seed,
-    output_root: Path,
-) -> Path:
-    return (
-        output_root
-        / ExecutionRootDirectory.BOUNDED_EVIDENCE.value
-        / declaration.id.value
-        / declaration.population.value
-        / declaration.role.value
-        / str(partition_seed.value)
-        / TemporalArtifactDirectory.EVIDENCE.value
-    )
-
-
-def _persist_temporal_seed_evidence(result: TemporalSeedResult, *, output_root: Path) -> None:
-    declaration = _temporal_declaration()
-    directory = _temporal_seed_evidence_directory(declaration, result.partition_seed, output_root)
-    directory.mkdir(parents=True, exist_ok=True)
-    (directory / SeedEvidenceAssetName.DOCUMENT.value).write_text(canonical_json_text(result), encoding="utf-8")
-    (directory / AnalysisAssetName.COMPLETE.value).write_text(canonical_checksum(result).value, encoding="utf-8")
-
-
-def _load_temporal_seed_evidence(
-    declaration: ExperimentDeclaration,
-    partition_seed: Seed,
-    output_root: Path,
-) -> TemporalSeedResult:
-    directory = _temporal_seed_evidence_directory(declaration, partition_seed, output_root)
-    document = directory / SeedEvidenceAssetName.DOCUMENT.value
-    complete = directory / AnalysisAssetName.COMPLETE.value
-    if not document.is_file() or not complete.is_file():
-        raise ScientificContractError(
-            ErrorMessage(f"missing completed temporal seed evidence: {directory} (seed={partition_seed.value})"),
-            subject=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
-        )
-    adapter: TypeAdapter[TemporalSeedResult] = TypeAdapter(TemporalSeedResult)
-    try:
-        result = adapter.validate_json(document.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, ValidationError) as error:
-        raise ScientificContractError(
-            ErrorMessage(f"temporal seed evidence is unreadable or invalid: {document}"),
-            subject=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
-        ) from error
-    if complete.read_text(encoding="utf-8").strip() != canonical_checksum(result).value:
-        raise ScientificContractError(
-            ErrorMessage(f"temporal seed evidence checksum does not match its completion marker: {document}"),
-            subject=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
-        )
-    return result
-
-
 def _recovery_for_method(
     *,
     partition_seed: Seed,
@@ -396,16 +321,6 @@ def _recovery_for_method(
         static_reference=static.provenance,
         frozen_future=frozen.provenance,
         recalibrated_future=recalibrated.provenance,
-        static_threshold_checksum=static_outcome.threshold_checksum,
-        frozen_threshold_checksum=frozen_outcome.threshold_checksum,
-        recalibrated_threshold_checksum=recalibrated_outcome.threshold_checksum,
-        static_evaluation_checksum=static_outcome.evaluation_checksum,
-        frozen_evaluation_checksum=frozen_outcome.evaluation_checksum,
-        recalibrated_evaluation_checksum=recalibrated_outcome.evaluation_checksum,
-        client_inventory_checksum=frozen_outcome.client_inventory_checksum,
-        eligibility_checksum=frozen_outcome.eligibility_checksum,
-        source_row_checksum=frozen_outcome.source_row_checksum,
-        row_order_checksum=frozen_outcome.row_order_checksum,
         excluded_clients=_union_clients(
             static_outcome.excluded_clients,
             frozen_outcome.excluded_clients,
@@ -445,30 +360,26 @@ def _execute_temporal_states(
     context = resolve_execution_context(frozen_coordinate, output_root)
     autoencoder = training_autoencoder(frozen_coordinate.dataset)
     feature_names = training_feature_names(frozen_coordinate.dataset)
-    checkpoint = select_execution_checkpoint(context, autoencoder=autoencoder, feature_names=feature_names)
-    future_scores = score_selected_checkpoint(
-        checkpoint=checkpoint,
+    training = train_execution_model(context, autoencoder=autoencoder, feature_names=feature_names)
+    future_scores = score_terminal_model(
+        training=training,
         scored_split_protocol=frozen_coordinate.split_protocol,
         autoencoder=autoencoder,
         feature_names=feature_names,
         clients=client_scoring_inputs(context.preprocessing.client_publications, context.clients),
         output_directory=context.training_directory / ExecutionArtifactDirectory.SCORES.value,
-        preprocessing_state_set_checksum=context.preprocessing_state_set_checksum,
-        split_manifest_checksum=context.split_manifest_checksum,
     )
     static_inputs = matched_static_reference_inputs(context, output_root)
     static_coordinate = coordinates.static_reference
     static_identity = _execution_identity(static_coordinate)
     static_root = bounded_evidence_seed_directory(static_identity, static_coordinate.training_seed, output_root)
-    static_scores = score_selected_checkpoint(
-        checkpoint=checkpoint,
+    static_scores = score_terminal_model(
+        training=training,
         scored_split_protocol=static_coordinate.split_protocol,
         autoencoder=autoencoder,
         feature_names=feature_names,
         clients=static_inputs.clients,
         output_directory=static_root / TemporalArtifactDirectory.SCORES.value,
-        preprocessing_state_set_checksum=context.preprocessing_state_set_checksum,
-        split_manifest_checksum=static_inputs.split_manifest_checksum,
     )
     static_provenance = TemporalDeploymentProvenance.from_score_manifest(TemporalState.STATIC_REFERENCE, static_scores)
     frozen_provenance = TemporalDeploymentProvenance.from_score_manifest(TemporalState.FROZEN_FUTURE, future_scores)
@@ -573,17 +484,11 @@ def _require_matching_temporal_evaluation_cohorts(
             frozen.outcome_for(method),
             recalibrated.outcome_for(method),
         )
-        inventories = tuple(item.client_inventory_checksum for item in outcomes)
         cohorts = tuple(
             tuple(client.client for client in outcome.clients if client.cohort is EvaluationCohort.FPR_EVALUABLE)
             for outcome in outcomes
         )
-        if (
-            inventories[0] != inventories[1]
-            or inventories[1] != inventories[2]
-            or cohorts[0] != cohorts[1]
-            or cohorts[1] != cohorts[2]
-        ):
+        if cohorts[0] != cohorts[1] or cohorts[1] != cohorts[2]:
             raise ScientificContractError(
                 ErrorMessage("temporal recovery requires identical FPR-evaluable client cohorts across all states"),
                 subject=method,
@@ -650,7 +555,6 @@ def _evaluate_state(
                 threshold_result=threshold,
                 cohort=evaluation_inputs.cohort,
                 fixed_score_evidence=evaluation_inputs.fixed_score_evidence,
-                comparison_fixed_score_evidence=reference_evidence,
                 evidence_role=identity.evidence_role,
                 conformal_coverage_inputs=(),
                 threshold_estimation_inputs=(),
@@ -676,7 +580,6 @@ def _evaluate_state(
             )
         if reference_evidence is None:
             reference_evidence = evaluation_inputs.fixed_score_evidence
-        evidence = evaluation_inputs.fixed_score_evidence
         unavailable_reasons = _cohort_unavailable_reasons(evaluation_inputs.cohort)
         completed.append(method)
         outcomes.append(
@@ -684,12 +587,6 @@ def _evaluate_state(
                 method=method,
                 fpr_coefficient_of_variation=cv_fpr.value,
                 mean_fpr=mean_fpr,
-                threshold_checksum=threshold_result_checksum(threshold),
-                evaluation_checksum=evaluation.complete_digest,
-                client_inventory_checksum=evidence.population.client_inventory_checksum,
-                eligibility_checksum=evidence.population.eligibility_cohort_checksum,
-                source_row_checksum=evidence.evaluation.source_row_checksum,
-                row_order_checksum=evidence.evaluation.score_order_checksum,
                 clients=evaluation.clients,
                 excluded_clients=evaluation.population.excluded_clients,
                 unavailable_reasons=unavailable_reasons,
@@ -735,13 +632,11 @@ def _publish_temporal_method_campaign(
             recalibrated_provenance=recalibrated_provenance,
             records=records,
             output_directory=output_directory,
-            overwrite=overwrite,
         )
     )
     export_temporal_publication(analysis.document, output_directory)
     return TemporalMethodCampaignAnalysis(
         method=method,
-        complete_digest=analysis.complete_digest,
         output_directory=output_directory,
     )
 
@@ -749,11 +644,7 @@ def _publish_temporal_method_campaign(
 def _validate_shared_temporal_detector(
     static: TemporalDeploymentProvenance, frozen: TemporalDeploymentProvenance
 ) -> None:
-    if (
-        static.checkpoint_checksum != frozen.checkpoint_checksum
-        or static.preprocessing_state_set_checksum != frozen.preprocessing_state_set_checksum
-        or static.coordinate_checksum != frozen.coordinate_checksum
-    ):
+    if static.coordinate != frozen.coordinate:
         raise ScientificContractError(
             ErrorMessage(
                 "static reference and future states must share one historical detector and preprocessing state"
@@ -804,23 +695,12 @@ def _document_level_deployment_provenance(
         split_protocol=static_template.split_protocol,
         calibration_role=static_template.calibration_role,
         evaluation_role=static_template.evaluation_role,
-        coordinate_checksum=_aggregate_checksums(
-            tuple(item.provenance.static_reference.coordinate_checksum for item in records)
+        coordinate=tuple(item.provenance.static_reference.coordinate for item in records),
+        calibration_records=tuple(
+            record for item in records for record in item.provenance.static_reference.calibration_records
         ),
-        checkpoint_checksum=_aggregate_checksums(
-            tuple(item.provenance.static_reference.checkpoint_checksum for item in records)
-        ),
-        preprocessing_state_set_checksum=_aggregate_checksums(
-            tuple(item.provenance.static_reference.preprocessing_state_set_checksum for item in records)
-        ),
-        split_manifest_checksum=_aggregate_checksums(
-            tuple(item.provenance.static_reference.split_manifest_checksum for item in records)
-        ),
-        calibration_score_set_checksum=_aggregate_checksums(
-            tuple(item.provenance.static_reference.calibration_score_set_checksum for item in records)
-        ),
-        evaluation_score_set_checksum=_aggregate_checksums(
-            tuple(item.provenance.static_reference.evaluation_score_set_checksum for item in records)
+        evaluation_records=tuple(
+            record for item in records for record in item.provenance.static_reference.evaluation_records
         ),
     )
     frozen = TemporalDeploymentProvenance(
@@ -828,23 +708,12 @@ def _document_level_deployment_provenance(
         split_protocol=frozen_template.split_protocol,
         calibration_role=frozen_template.calibration_role,
         evaluation_role=frozen_template.evaluation_role,
-        coordinate_checksum=_aggregate_checksums(
-            tuple(item.provenance.frozen_future.coordinate_checksum for item in records)
+        coordinate=tuple(item.provenance.frozen_future.coordinate for item in records),
+        calibration_records=tuple(
+            record for item in records for record in item.provenance.frozen_future.calibration_records
         ),
-        checkpoint_checksum=_aggregate_checksums(
-            tuple(item.provenance.frozen_future.checkpoint_checksum for item in records)
-        ),
-        preprocessing_state_set_checksum=_aggregate_checksums(
-            tuple(item.provenance.frozen_future.preprocessing_state_set_checksum for item in records)
-        ),
-        split_manifest_checksum=_aggregate_checksums(
-            tuple(item.provenance.frozen_future.split_manifest_checksum for item in records)
-        ),
-        calibration_score_set_checksum=_aggregate_checksums(
-            tuple(item.provenance.frozen_future.calibration_score_set_checksum for item in records)
-        ),
-        evaluation_score_set_checksum=_aggregate_checksums(
-            tuple(item.provenance.frozen_future.evaluation_score_set_checksum for item in records)
+        evaluation_records=tuple(
+            record for item in records for record in item.provenance.frozen_future.evaluation_records
         ),
     )
     recalibrated = TemporalDeploymentProvenance(
@@ -852,28 +721,15 @@ def _document_level_deployment_provenance(
         split_protocol=recalibrated_template.split_protocol,
         calibration_role=recalibrated_template.calibration_role,
         evaluation_role=recalibrated_template.evaluation_role,
-        coordinate_checksum=_aggregate_checksums(
-            tuple(item.provenance.recalibrated_future.coordinate_checksum for item in records)
+        coordinate=frozen.coordinate,
+        calibration_records=tuple(
+            record for item in records for record in item.provenance.recalibrated_future.calibration_records
         ),
-        checkpoint_checksum=_aggregate_checksums(
-            tuple(item.provenance.recalibrated_future.checkpoint_checksum for item in records)
-        ),
-        preprocessing_state_set_checksum=_aggregate_checksums(
-            tuple(item.provenance.recalibrated_future.preprocessing_state_set_checksum for item in records)
-        ),
-        split_manifest_checksum=frozen.split_manifest_checksum,
-        calibration_score_set_checksum=_aggregate_checksums(
-            tuple(item.provenance.recalibrated_future.calibration_score_set_checksum for item in records)
-        ),
-        evaluation_score_set_checksum=frozen.evaluation_score_set_checksum,
+        evaluation_records=frozen.evaluation_records,
     )
     validate_frozen_recalibrated_pair(frozen, recalibrated)
     _validate_shared_temporal_detector(static, frozen)
     return static, frozen, recalibrated
-
-
-def _aggregate_checksums(checksums: tuple[Checksum, ...]) -> Checksum:
-    return canonical_checksum(checksums)
 
 
 def _build_client_trajectories(
