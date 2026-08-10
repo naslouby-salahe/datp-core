@@ -23,6 +23,7 @@ from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.autoencoder import AutoencoderModelState, build_autoencoder_for_state
 from datp_core.detector.checkpoints.contracts import (
     CheckpointProtocol,
+    realized_candidate_rounds,
     validate_ordered_checkpoint_inventory,
     validate_persisted_checkpoint_file,
 )
@@ -91,10 +92,16 @@ def retain_checkpoint_candidates(
     split_manifest_checksum: Checksum,
     client: ClientIdentity | None,
 ) -> tuple[CheckpointCandidate, ...]:
-    observed = tuple(snapshot.round_number for snapshot in snapshots)
-    if observed != checkpoint_protocol.candidates:
+    if not snapshots:
         raise ScientificContractError(
-            ErrorMessage("checkpoint snapshots must equal the exact ordered protocol candidates"),
+            ErrorMessage("checkpoint retention requires snapshots"),
+            subject=ContractSubject.CHECKPOINT_CANDIDATES,
+        )
+    observed = tuple(snapshot.round_number for snapshot in snapshots)
+    realized = realized_candidate_rounds(checkpoint_protocol, observed[-1])
+    if observed != realized:
+        raise ScientificContractError(
+            ErrorMessage("checkpoint snapshots must equal the realized protocol candidates"),
             subject=ContractSubject.CHECKPOINT_CANDIDATES,
         )
     candidates = tuple(
@@ -111,7 +118,7 @@ def retain_checkpoint_candidates(
     )
     return validate_ordered_checkpoint_inventory(
         candidates,
-        checkpoint_protocol.candidates,
+        realized,
     )
 
 

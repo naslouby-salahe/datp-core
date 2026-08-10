@@ -14,13 +14,23 @@ from datp_core.core.identifiers import (
     ProcessedDataBranch,
 )
 from datp_core.core.numeric import MetricValue, RoundNumber
-from datp_core.detector.checkpoints.contracts import CheckpointProtocol
+from datp_core.detector.checkpoints.contracts import CheckpointProtocol, ConvergenceProtocol
 
 CHECKPOINT_PROTOCOL = CheckpointProtocol(
     candidates=tuple(RoundNumber(value) for value in (25, 50, 75, 100, 125, 150, 200)),
     maximum_round=RoundNumber(200),
 )
 CHECKPOINT_SELECTION_RULE = CheckpointSelectionRule.FIXED_TERMINAL_MAXIMUM_ROUND
+ANCHOR_CHECKPOINT_PROTOCOL = CheckpointProtocol(
+    candidates=(RoundNumber(150),),
+    maximum_round=RoundNumber(150),
+    convergence=ConvergenceProtocol(
+        rounds_initial=RoundNumber(40),
+        relative_threshold=0.005,
+        window=10,
+    ),
+)
+ANCHOR_CHECKPOINT_SELECTION_RULE = CheckpointSelectionRule.FINAL_COMPLETED_ROUND
 RETAINED_CHECKPOINT_STATUSES = frozenset(
     {
         CheckpointStatus.CANDIDATE,
@@ -48,18 +58,11 @@ def require_non_test_checkpoint_selection_inputs(
             ErrorMessage(f"attack labels cannot influence {branch.value} checkpoint selection"),
             subject=ContractSubject.ATTACK_LABELS,
         )
-    if selection_rule is not CheckpointSelectionRule.FIXED_TERMINAL_MAXIMUM_ROUND:
+    if selection_rule not in (
+        CheckpointSelectionRule.FIXED_TERMINAL_MAXIMUM_ROUND,
+        CheckpointSelectionRule.FINAL_COMPLETED_ROUND,
+    ):
         raise ScientificContractError(
             ErrorMessage(f"unsupported {branch.value} checkpoint selection rule"),
             subject=ContractSubject.CHECKPOINT_SELECTION_RULE,
         )
-
-
-def fixed_terminal_checkpoint_status(
-    round_number: RoundNumber,
-    maximum_round: RoundNumber,
-) -> CheckpointStatus:
-    """Map a candidate round onto FIXED_TERMINAL_MAXIMUM_ROUND statuses."""
-    if round_number == maximum_round:
-        return CheckpointStatus.SELECTED_BY_NON_TEST_RULE
-    return CheckpointStatus.STABILITY_EVIDENCE

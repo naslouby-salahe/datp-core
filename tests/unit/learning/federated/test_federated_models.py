@@ -208,7 +208,7 @@ def test_checkpoint_candidate_requires_client_only_for_ditto_personalized() -> N
         )
 
 
-def test_checkpoint_decision_requires_selected_round_equal_maximum_round() -> None:
+def test_checkpoint_decision_requires_candidates_to_match_realized_rounds() -> None:
     coordinate = fedavg_coordinate(SEED)
     candidate_one = CheckpointCandidate(
         coordinate=coordinate,
@@ -221,15 +221,28 @@ def test_checkpoint_decision_requires_selected_round_equal_maximum_round() -> No
         preprocessing_state_set_checksum=Checksum("b" * 64),
         split_manifest_checksum=Checksum("c" * 64),
     )
+    candidate_two = CheckpointCandidate(
+        coordinate=coordinate,
+        round_number=RoundNumber(2),
+        client=None,
+        tensor_path=Path("round_2.safetensors"),
+        tensor_checksum=Checksum("d" * 64),
+        mean_training_loss=MetricValue(0.1),
+        status=CheckpointStatus.CANDIDATE,
+        preprocessing_state_set_checksum=Checksum("b" * 64),
+        split_manifest_checksum=Checksum("c" * 64),
+    )
     checkpoint_protocol = CheckpointProtocol(candidates=(RoundNumber(1), RoundNumber(2)), maximum_round=RoundNumber(2))
     with pytest.raises(
-        ScientificContractError, match="checkpoint decision candidates must equal the declared ordered rounds"
+        ScientificContractError, match="checkpoint decision candidates must equal the realized ordered rounds"
     ):
+        # A decision whose selected round (1) stops the run at round 1 realizes only
+        # (1,), so retaining candidate round 2 must be rejected.
         CheckpointDecision(
             coordinate=coordinate,
             client=None,
             selected=candidate_one,
-            candidates=(candidate_one,),
+            candidates=(candidate_one, candidate_two),
             checkpoint_protocol=checkpoint_protocol,
             status=CheckpointStatus.SELECTED_BY_NON_TEST_RULE,
         )

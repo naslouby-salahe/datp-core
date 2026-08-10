@@ -37,7 +37,7 @@ from datp_core.core.identifiers import (
 )
 from datp_core.core.numeric import MetricValue, RoundNumber, RowCount, ScoreValue, Seed, ThresholdValue
 from datp_core.data.populations.contracts import PopulationOutcomeLabel
-from datp_core.detector.checkpoints.protocols import CHECKPOINT_PROTOCOL
+from datp_core.detector.checkpoints.protocols import ANCHOR_CHECKPOINT_PROTOCOL
 from datp_core.experiments.anchor.contracts import (
     AnchorDiscrepancyReason,
     AnchorObservationSourceKind,
@@ -169,7 +169,7 @@ def _write_document(tmp_path: Path, document: FederatedEvaluationDocument) -> Pa
 
 def test_terminal_non_test_checkpoint_derives_historical_endpoint_observation(tmp_path: Path) -> None:
     document = _document(
-        checkpoint_round=CHECKPOINT_PROTOCOL.maximum_round,
+        checkpoint_round=ANCHOR_CHECKPOINT_PROTOCOL.maximum_round,
         checkpoint_status=CheckpointStatus.SELECTED_BY_NON_TEST_RULE,
     )
     path = _write_document(tmp_path, document)
@@ -183,8 +183,10 @@ def test_terminal_non_test_checkpoint_derives_historical_endpoint_observation(tm
 
 
 def test_non_terminal_checkpoint_round_is_rejected(tmp_path: Path) -> None:
+    # Round 200 lies outside the anchor convergence bounds (rounds_initial=40,
+    # maximum_round=150), so it can never be the final-completed-round endpoint.
     document = _document(
-        checkpoint_round=RoundNumber(150),
+        checkpoint_round=RoundNumber(200),
         checkpoint_status=CheckpointStatus.SELECTED_BY_NON_TEST_RULE,
     )
     path = _write_document(tmp_path, document)
@@ -196,7 +198,7 @@ def test_non_terminal_checkpoint_round_is_rejected(tmp_path: Path) -> None:
 
 def test_stability_evidence_checkpoint_status_is_rejected(tmp_path: Path) -> None:
     document = _document(
-        checkpoint_round=CHECKPOINT_PROTOCOL.maximum_round,
+        checkpoint_round=ANCHOR_CHECKPOINT_PROTOCOL.maximum_round,
         checkpoint_status=CheckpointStatus.STABILITY_EVIDENCE,
     )
     path = _write_document(tmp_path, document)

@@ -197,6 +197,7 @@ def build_client_input(
     return ClientTrainingInput(
         client=client_identity(client_id),
         training_features=benign_frame(row_count, seed=seed),
+        validation_features=benign_frame(row_count, seed=seed),
         feature_names=FEATURE_NAMES,
         preprocessing_state=state,
     )

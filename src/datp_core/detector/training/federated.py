@@ -7,7 +7,7 @@ from datp_core.detector.checkpoints.publication import write_federated_training 
 from datp_core.detector.training.contracts import FedAvgProtocol, FedProxProtocol
 from datp_core.detector.training.engine import FederatedTrainingRequest, run_federated_training
 from datp_core.detector.training.models import FederatedTrainingOutcome
-from datp_core.detector.training.protocols import FEDAVG_LOCAL_EPOCHS
+from datp_core.detector.training.protocols import DECLARED_FEDAVG_LOCAL_EPOCHS
 
 type GlobalFederatedProtocol = FedAvgProtocol | FedProxProtocol
 
@@ -29,9 +29,9 @@ def _validate_protocol_binding(request: FederatedTrainingRequest[GlobalFederated
             subject=request.coordinate.model,
         )
 
-    if protocol.local_epochs != FEDAVG_LOCAL_EPOCHS:
+    if protocol.local_epochs not in DECLARED_FEDAVG_LOCAL_EPOCHS:
         raise ScientificContractError(
-            ErrorMessage("global federated training requires the locked single local epoch"),
+            ErrorMessage("global federated training requires a declared local epoch count"),
             subject=ContractSubject.TRAINING,
         )
 

@@ -14,6 +14,7 @@ from datp_core.core.identifiers import (
     ClientIdentityToken,
     ContractSubject,
     DatasetId,
+    ExperimentId,
     FeatureName,
     FeatureNameSequence,
 )
@@ -36,6 +37,8 @@ from datp_core.data.preprocessing.models import (
 )
 from datp_core.data.preprocessing.service import preprocess_federated, preprocess_published_federated
 from datp_core.data.registry import dataset_binding, population_capabilities
+from datp_core.detector.checkpoints.contracts import CheckpointProtocol
+from datp_core.detector.checkpoints.protocols import ANCHOR_CHECKPOINT_PROTOCOL, CHECKPOINT_PROTOCOL
 from datp_core.detector.scoring.models import ClientScoringInput
 from datp_core.detector.training.contracts import AutoencoderProtocol, FedAvgProtocol, FedProxProtocol
 from datp_core.detector.training.engine import preprocessing_state_set_checksum
@@ -45,6 +48,8 @@ from datp_core.detector.training.models import (
     PreparedClientProvenance,
 )
 from datp_core.detector.training.protocols import (
+    ANCHOR_FEDAVG_TRAINING_PROTOCOL,
+    ANCHOR_NBAIOT_AUTOENCODER,
     CICIOT2023_AUTOENCODER,
     EDGE_IIOTSET_NUMERIC_AUTOENCODER,
     NBAIOT_AUTOENCODER,
@@ -87,6 +92,12 @@ def training_autoencoder(dataset: DatasetId) -> AutoencoderProtocol:
             return CICIOT2023_AUTOENCODER
 
 
+def training_autoencoder_for(coordinate: ExperimentCoordinate) -> AutoencoderProtocol:
+    if coordinate.experiment is ExperimentId.HISTORICAL_DATP_REPRODUCTION:
+        return ANCHOR_NBAIOT_AUTOENCODER
+    return training_autoencoder(coordinate.dataset)
+
+
 def training_feature_names(dataset: DatasetId) -> FeatureNameSequence:
     if dataset is DatasetId.EDGE_IIOTSET:
         return EDGE_FEATURE_NAMES
@@ -94,10 +105,18 @@ def training_feature_names(dataset: DatasetId) -> FeatureNameSequence:
 
 
 def training_protocol_for(coordinate: ExperimentCoordinate) -> FedAvgProtocol | FedProxProtocol:
+    if coordinate.experiment is ExperimentId.HISTORICAL_DATP_REPRODUCTION:
+        return ANCHOR_FEDAVG_TRAINING_PROTOCOL
     return resolve_single_model_federated_training_protocol(
         model=coordinate.training_model,
         coefficient=coordinate.model_coefficient,
     )
+
+
+def checkpoint_protocol_for(coordinate: ExperimentCoordinate) -> CheckpointProtocol:
+    if coordinate.experiment is ExperimentId.HISTORICAL_DATP_REPRODUCTION:
+        return ANCHOR_CHECKPOINT_PROTOCOL
+    return CHECKPOINT_PROTOCOL
 
 
 def federated_model_coefficient(coordinate: ExperimentCoordinate) -> ProximalCoefficient | None:
@@ -259,6 +278,7 @@ def client_training_inputs(
         ClientTrainingInput(
             client=client_with_id(clients, ClientIdentityToken(publication.client_identity.value)),
             training_features=pl.read_parquet(publication.paths.train),
+            validation_features=pl.read_parquet(publication.paths.calibration),
             feature_names=feature_names,
             preprocessing_state=publication.fitted_state,
         )

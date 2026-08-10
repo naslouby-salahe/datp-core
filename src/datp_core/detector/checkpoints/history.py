@@ -330,7 +330,19 @@ def load_federated_training_history(
     round_frame = frames.round_summary
     client_frame = frames.client_rounds
     personalized_frame = frames.personalized_rounds
-    training_rounds = tuple(RoundNumber(value) for value in range(1, checkpoint_protocol.maximum_round.value + 1))
+    observed_round_values = round_frame.get_column(FederatedHistoryColumn.ROUND_NUMBER.value).to_list()
+    if not observed_round_values:
+        raise ArtifactIntegrityError(
+            ErrorMessage("round summary must contain training rounds"),
+            subject=ContractSubject.SCHEMA,
+        )
+    final_round = RoundNumber(int(observed_round_values[-1]))
+    if final_round.value < 1 or final_round.value > checkpoint_protocol.maximum_round.value:
+        raise ArtifactIntegrityError(
+            ErrorMessage("round summary terminal round must lie within the checkpoint protocol"),
+            subject=ContractSubject.CHECKPOINT_CANDIDATES,
+        )
+    training_rounds = tuple(RoundNumber(value) for value in range(1, final_round.value + 1))
     validate_round_summary(round_frame, training_rounds)
     validate_client_history(client_frame, expected_rounds=training_rounds, expected_clients=clients)
 

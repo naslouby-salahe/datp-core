@@ -45,7 +45,7 @@ def test_shared_checkpoint_inventory_and_terminal_selection(tmp_path: Path) -> N
     )
     selection = select_terminal_checkpoint(
         ordered,
-        RoundNumber(2),
+        terminal_round=RoundNumber(2),
         rebuild=lambda candidate, status: _Candidate(
             round_number=candidate.round_number,
             tensor_path=candidate.tensor_path,

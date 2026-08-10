@@ -17,8 +17,8 @@ from datp_core.core.identifiers import (
     ScoreFrameColumn,
 )
 from datp_core.data.populations.declarations import split_protocol_for_population
-from datp_core.detector.checkpoints.protocols import CHECKPOINT_PROTOCOL, CHECKPOINT_SELECTION_RULE
-from datp_core.detector.training.protocols import NBAIOT_AUTOENCODER
+from datp_core.detector.checkpoints.protocols import ANCHOR_CHECKPOINT_PROTOCOL, ANCHOR_CHECKPOINT_SELECTION_RULE
+from datp_core.detector.training.protocols import ANCHOR_NBAIOT_AUTOENCODER
 from datp_core.experiments.anchor.contracts import (
     AnchorArtifactFileName,
     AnchorComparisonDecision,
@@ -457,8 +457,8 @@ def _load_gate_decision_and_checksum(diagnostics_directory: Path) -> tuple[Ancho
 def _checkpoint_protocol_identity() -> Checksum:
     return canonical_checksum(
         {
-            "checkpoint_protocol": CHECKPOINT_PROTOCOL,
-            "selection_rule": CHECKPOINT_SELECTION_RULE,
+            "checkpoint_protocol": ANCHOR_CHECKPOINT_PROTOCOL,
+            "selection_rule": ANCHOR_CHECKPOINT_SELECTION_RULE,
         }
     )
 
@@ -467,7 +467,7 @@ def _scoring_protocol_identity() -> Checksum:
     return canonical_checksum(
         {
             "score_column": ScoreFrameColumn.RECONSTRUCTION_ERROR,
-            "autoencoder": NBAIOT_AUTOENCODER,
+            "autoencoder": ANCHOR_NBAIOT_AUTOENCODER,
         }
     )
 

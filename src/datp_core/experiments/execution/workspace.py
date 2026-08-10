@@ -62,7 +62,6 @@ from datp_core.core.numeric import (
 )
 from datp_core.data.populations.contracts import ClientIdentity, PopulationOutcomeLabel
 from datp_core.data.registry import population_capabilities
-from datp_core.detector.checkpoints.protocols import CHECKPOINT_PROTOCOL
 from datp_core.detector.checkpoints.selection import CheckpointDecision
 from datp_core.detector.checkpoints.service import SelectFederatedCheckpointRequest, select_federated_primary_checkpoint
 from datp_core.detector.scoring.models import FederatedScoreArtifactManifest, FederatedScoreRecord
@@ -74,20 +73,18 @@ from datp_core.detector.training.federated_publication import (
     train_federated_detector,
 )
 from datp_core.detector.training.models import CheckpointCandidate
-from datp_core.detector.training.protocols import (
-    BATCH_SIZE,
-    LEARNING_RATE,
-    resolve_single_model_federated_training_protocol,
-)
+from datp_core.detector.training.protocols import BATCH_SIZE, LEARNING_RATE
 from datp_core.experiments.common.coordinates import ExperimentCoordinate
 from datp_core.experiments.execution.context import (
     FederatedExecutionContext,
+    checkpoint_protocol_for,
     client_scoring_inputs,
     client_training_inputs,
     execution_context_cache_key,
     resolve_execution_context,
-    training_autoencoder,
+    training_autoencoder_for,
     training_feature_names,
+    training_protocol_for,
 )
 from datp_core.experiments.execution.evidence import eligible_calibration_scores, load_evaluation_document
 from datp_core.experiments.execution.layout import EvaluationRunAssetDirectory, ExecutionArtifactDirectory
@@ -154,7 +151,7 @@ class ExperimentWorkspace:
 
     @cached_property
     def autoencoder(self) -> AutoencoderProtocol:
-        return training_autoencoder(self.coordinate.dataset)
+        return training_autoencoder_for(self.coordinate)
 
     @cached_property
     def feature_names(self) -> FeatureNameSequence:
@@ -162,10 +159,7 @@ class ExperimentWorkspace:
 
     @cached_property
     def training(self) -> TrainFederatedDetectorResult:
-        protocol = resolve_single_model_federated_training_protocol(
-            model=self.context.coordinate.model,
-            coefficient=self.context.coordinate.model_coefficient,
-        )
+        protocol = training_protocol_for(self.coordinate)
         return train_federated_detector(
             TrainFederatedDetectorRequest(
                 request=FederatedTrainingRequest(
@@ -178,7 +172,7 @@ class ExperimentWorkspace:
                     population_client_count=ClientCount(len(self.context.clients)),
                     autoencoder=self.autoencoder,
                     training_protocol=protocol,
-                    checkpoint_protocol=CHECKPOINT_PROTOCOL,
+                    checkpoint_protocol=checkpoint_protocol_for(self.coordinate),
                     training_seed=self.context.coordinate.training_seed,
                     batch_size=BATCH_SIZE,
                     learning_rate=LEARNING_RATE,
@@ -208,7 +202,7 @@ class ExperimentWorkspace:
                 coordinate=self.context.coordinate,
                 client=None,
                 candidates=self.training.candidates,
-                checkpoint_protocol=CHECKPOINT_PROTOCOL,
+                checkpoint_protocol=checkpoint_protocol_for(self.coordinate),
                 preprocessing_state_set_checksum=self.context.preprocessing_state_set_checksum,
                 split_manifest_checksum=self.context.split_manifest_checksum,
                 held_out_metrics=None,

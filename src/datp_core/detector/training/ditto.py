@@ -151,6 +151,7 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
                 optimizer_protocol=request.training_protocol.optimizer,
                 learning_rate=request.learning_rate,
                 batch_size=request.batch_size,
+                local_epochs=request.training_protocol.local_epochs,
                 seed=derive_client_stream_seed(
                     request.training_seed,
                     round_number,
@@ -167,6 +168,7 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
                 optimizer_protocol=request.training_protocol.optimizer,
                 learning_rate=request.learning_rate,
                 batch_size=request.batch_size,
+                local_epochs=request.training_protocol.local_epochs,
                 seed=derive_client_stream_seed(
                     request.training_seed,
                     round_number,

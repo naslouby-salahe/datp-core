@@ -142,11 +142,13 @@ def test_retain_checkpoint_candidates_rejects_missing_declared_round(tmp_path: P
 
     model = ReconstructionAutoencoder(AUTOENCODER.widths).to(device)
     model_state = AutoencoderModelState.from_model(model)
-    only_one_snapshot = (RoundSnapshot(CHECKPOINT.candidates[0], model_state, MetricValue(0.1)),)
+    # A single snapshot that skips a declared round (only round 2 of (1, 2)) must
+    # be rejected: the realized inventory for a run stopping at round 2 is (1, 2).
+    only_one_snapshot = (RoundSnapshot(CHECKPOINT.candidates[1], model_state, MetricValue(0.1)),)
     preprocessing_state_set_checksum = Checksum("a" * 64)
     split_manifest_checksum = Checksum("b" * 64)
     with pytest.raises(
-        ScientificContractError, match="checkpoint snapshots must equal the exact ordered protocol candidates"
+        ScientificContractError, match="checkpoint snapshots must equal the realized protocol candidates"
     ):
         retain_checkpoint_candidates(
             coordinate,

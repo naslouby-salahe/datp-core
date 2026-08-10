@@ -24,9 +24,27 @@ from datp_core.core.identifiers import (
 from datp_core.core.numeric import MetricValue, RoundNumber
 
 
+@dataclass(frozen=True, slots=True)
+class ConvergenceProtocol:
+    """Convergence early-stop on the relative change of weighted benign validation loss."""
+
+    rounds_initial: RoundNumber
+    relative_threshold: float
+    window: int
+
+    def __post_init__(self) -> None:
+        if self.rounds_initial.value < 1:
+            raise ValueError("rounds_initial must be >= 1")
+        if self.window < 2:
+            raise ValueError("window must be >= 2")
+        if self.relative_threshold <= 0.0:
+            raise ValueError("relative_threshold must be positive")
+
+
 class CheckpointProtocol(StrictModel):
     candidates: tuple[RoundNumber, ...]
     maximum_round: RoundNumber
+    convergence: ConvergenceProtocol | None = None
 
     @model_validator(mode="after")
     def validate_candidates(self) -> CheckpointProtocol:
@@ -35,13 +53,35 @@ class CheckpointProtocol(StrictModel):
             raise ValueError("checkpoint candidates must be unique and ordered")
         if values[-1] != self.maximum_round.value:
             raise ValueError("maximum round must be the final checkpoint candidate")
+        if self.convergence is not None and self.convergence.rounds_initial.value > self.maximum_round.value:
+            raise ValueError("rounds_initial cannot exceed the maximum round")
         return self
 
 
-def fixed_terminal_checkpoint_status(round_number: RoundNumber, maximum_round: RoundNumber) -> CheckpointStatus:
+def realized_candidate_rounds(
+    protocol: CheckpointProtocol,
+    final_round: RoundNumber,
+) -> tuple[RoundNumber, ...]:
+    """Declare the realized checkpoint inventory for a training run that stopped at ``final_round``.
+
+    The declared grid candidates at or below the final completed round are retained as
+    stability evidence, and the final completed round itself is the terminal candidate.
+    """
+    if final_round.value < 1 or final_round.value > protocol.maximum_round.value:
+        raise ScientificContractError(
+            ErrorMessage("final completed round must lie within the declared checkpoint protocol"),
+            subject=ContractSubject.CHECKPOINT_CANDIDATES,
+        )
+    retained = tuple(candidate for candidate in protocol.candidates if candidate.value < final_round.value)
+    if final_round in retained:
+        return retained
+    return retained + (final_round,)
+
+
+def terminal_checkpoint_status(round_number: RoundNumber, terminal_round: RoundNumber) -> CheckpointStatus:
     return (
         CheckpointStatus.SELECTED_BY_NON_TEST_RULE
-        if round_number == maximum_round
+        if round_number == terminal_round
         else CheckpointStatus.STABILITY_EVIDENCE
     )
 
@@ -112,26 +152,26 @@ def validate_ordered_checkpoint_inventory[CandidateT: PersistedCheckpoint](
 
 def select_terminal_checkpoint[CandidateT: PersistedCheckpoint](
     candidates: Sequence[CandidateT],
-    maximum_round: RoundNumber,
     *,
+    terminal_round: RoundNumber,
     rebuild: Callable[[CandidateT, CheckpointStatus], CandidateT],
 ) -> TerminalCheckpointSelection[CandidateT]:
     statused: list[CandidateT] = []
     selected: CandidateT | None = None
     for candidate in candidates:
-        status = fixed_terminal_checkpoint_status(candidate.round_number, maximum_round)
+        status = terminal_checkpoint_status(candidate.round_number, terminal_round)
         rebuilt = rebuild(candidate, status)
         statused.append(rebuilt)
         if status is CheckpointStatus.SELECTED_BY_NON_TEST_RULE:
             if selected is not None:
                 raise ScientificContractError(
-                    ErrorMessage("fixed-terminal selection produced multiple selected candidates"),
+                    ErrorMessage("terminal selection produced multiple selected candidates"),
                     subject=ContractSubject.CHECKPOINT_SELECTION_RULE,
                 )
             selected = rebuilt
     if selected is None:
         raise ArtifactIntegrityError(
-            ErrorMessage("declared maximum-round checkpoint candidate is missing"),
+            ErrorMessage("declared terminal-round checkpoint candidate is missing"),
             subject=ContractSubject.CHECKPOINT_CANDIDATES,
         )
     return TerminalCheckpointSelection(candidates=tuple(statused), selected=selected)

@@ -30,6 +30,7 @@ from datp_core.core.numeric import (
     ClientCount,
     DittoRegularization,
     LearningRate,
+    LocalEpochCount,
     LogicalElementCount,
     MetricValue,
     ProximalCoefficient,
@@ -59,6 +60,7 @@ from datp_core.detector.training.contracts import (
     FedProxProtocol,
     OptimizerProtocol,
 )
+from datp_core.detector.training.convergence import ConvergenceMonitor
 from datp_core.detector.training.models import (
     ClientTrainingInput,
     ClientTrainingResult,
@@ -89,6 +91,7 @@ class TrainingStream(IntEnum):
 class PreparedFederatedClientData:
     client: ClientIdentity
     features_cpu: torch.Tensor
+    validation_features_cpu: torch.Tensor
     preprocessing_checksum: Checksum
 
     def __post_init__(self) -> None:
@@ -110,6 +113,31 @@ class PreparedFederatedClientData:
         if self.features_cpu.shape[0] < 1:
             raise ScientificContractError(
                 ErrorMessage("prepared client data requires at least one row"),
+                subject=ContractSubject.ROWS,
+            )
+        if self.validation_features_cpu.ndim != 2:
+            raise ScientificContractError(
+                ErrorMessage("prepared validation features must be a two-dimensional tensor"),
+                subject=ContractSubject.FEATURES,
+            )
+        if self.validation_features_cpu.device.type != "cpu":
+            raise ScientificContractError(
+                ErrorMessage("prepared validation features must remain on CPU"),
+                subject=ContractSubject.RUNTIME,
+            )
+        if self.validation_features_cpu.dtype != TORCH_LEARNING_DTYPE:
+            raise ScientificContractError(
+                ErrorMessage("prepared validation features must use the canonical learning dtype"),
+                subject=ContractSubject.FEATURES,
+            )
+        if self.validation_features_cpu.shape[1] != self.features_cpu.shape[1]:
+            raise ScientificContractError(
+                ErrorMessage("prepared validation features must match the training feature width"),
+                subject=ContractSubject.FEATURES,
+            )
+        if self.validation_features_cpu.shape[0] < 1:
+            raise ScientificContractError(
+                ErrorMessage("prepared client data requires at least one validation row"),
                 subject=ContractSubject.ROWS,
             )
 
@@ -162,12 +190,20 @@ def prepare_federated_client_data(
     client_input: ClientTrainingInput,
     autoencoder: AutoencoderProtocol,
 ) -> PreparedFederatedClientData:
+    feature_names = client_input.feature_names.as_list()
     frame = client_input.training_features
+    validation_frame = client_input.validation_features
     try:
         labels = OutcomeLabelSequence(
             tuple(OutcomeLabel(str(value)) for value in frame.get_column(OUTCOME_LABEL_COLUMN).to_list())
         )
-        matrix = frame.select(client_input.feature_names.as_list()).to_numpy().astype(LEARNING_DTYPE, copy=False)
+        validation_labels = OutcomeLabelSequence(
+            tuple(OutcomeLabel(str(value)) for value in validation_frame.get_column(OUTCOME_LABEL_COLUMN).to_list())
+        )
+        matrix = frame.select(feature_names).to_numpy().astype(LEARNING_DTYPE, copy=False)
+        validation_matrix = (
+            validation_frame.select(feature_names).to_numpy().astype(LEARNING_DTYPE, copy=False)
+        )
     except (pl.exceptions.ColumnNotFoundError, pl.exceptions.SchemaError) as exc:
         raise ScientificContractError(
             ErrorMessage("federated training input is missing its declared label or feature schema"),
@@ -175,9 +211,15 @@ def prepare_federated_client_data(
         ) from exc
 
     reject_attack_rows_in_federated_training(labels)
+    reject_attack_rows_in_federated_training(validation_labels)
     if len(labels) != matrix.shape[0]:
         raise ScientificContractError(
             ErrorMessage("federated labels and features must align by row"),
+            subject=ContractSubject.ROWS,
+        )
+    if len(validation_labels) != validation_matrix.shape[0]:
+        raise ScientificContractError(
+            ErrorMessage("federated validation labels and features must align by row"),
             subject=ContractSubject.ROWS,
         )
     if matrix.shape[1] != autoencoder.widths[0].value:
@@ -185,9 +227,19 @@ def prepare_federated_client_data(
             ErrorMessage("feature width does not match the autoencoder input width"),
             subject=ContractSubject.FEATURES,
         )
+    if validation_matrix.shape[1] != autoencoder.widths[0].value:
+        raise ScientificContractError(
+            ErrorMessage("validation feature width does not match the autoencoder input width"),
+            subject=ContractSubject.FEATURES,
+        )
     if not np.isfinite(matrix).all():
         raise ScientificContractError(
             ErrorMessage("federated training features must be finite"),
+            subject=ContractSubject.FEATURES,
+        )
+    if not np.isfinite(validation_matrix).all():
+        raise ScientificContractError(
+            ErrorMessage("federated validation features must be finite"),
             subject=ContractSubject.FEATURES,
         )
 
@@ -195,6 +247,11 @@ def prepare_federated_client_data(
         client=client_input.client,
         features_cpu=torch.as_tensor(
             matrix,
+            dtype=TORCH_LEARNING_DTYPE,
+            device="cpu",
+        ),
+        validation_features_cpu=torch.as_tensor(
+            validation_matrix,
             dtype=TORCH_LEARNING_DTYPE,
             device="cpu",
         ),
@@ -357,6 +414,7 @@ def train_client_update(
     optimizer_protocol: OptimizerProtocol,
     learning_rate: LearningRate,
     batch_size: BatchSize,
+    local_epochs: LocalEpochCount,
     seed: Seed,
     device: torch.device,
     proximal_term: ProximalTerm | None = None,
@@ -367,18 +425,30 @@ def train_client_update(
         device=device,
     )
     optimizer = build_optimizer(model, optimizer_protocol, learning_rate)
-    loader = build_client_loader(
-        client_data,
-        batch_size=batch_size,
-        seed=seed,
-    )
     local_epoch = run_local_epoch(
         model,
         optimizer,
-        loader,
+        build_client_loader(
+            client_data,
+            batch_size=batch_size,
+            seed=seed,
+        ),
         device,
         proximal_term=proximal_term,
     )
+    for epoch in range(1, local_epochs.value):
+        epoch_seed = derive_worker_seed(seed, SeedDerivationComponent(epoch))
+        local_epoch = run_local_epoch(
+            model,
+            optimizer,
+            build_client_loader(
+                client_data,
+                batch_size=batch_size,
+                seed=epoch_seed,
+            ),
+            device,
+            proximal_term=proximal_term,
+        )
     return ClientUpdate(
         client=client_data.client,
         model_state=local_epoch.model_state,
@@ -404,6 +474,49 @@ def compute_weighted_aggregate_loss(updates: Sequence[ClientUpdate]) -> MetricVa
             subject=ContractSubject.ROWS,
         )
     return MetricValue(sum([update.local_loss.value * update.sample_count.value for update in updates]) / total_samples)
+
+
+def compute_weighted_validation_loss(
+    *,
+    model_state: AutoencoderModelState,
+    prepared: Sequence[PreparedFederatedClientData],
+    autoencoder: AutoencoderProtocol,
+    device: torch.device,
+) -> MetricValue:
+    """Full-batch benign validation MSE of the aggregated model, weighted by client rows.
+
+    Mirrors the historical datp evaluation: each client's benign calibration rows
+    are reconstructed in full and the mean-over-elements MSE is weighted by the
+    client's validation row count. The aggregation never consumes attack labels
+    or held-out evaluation outcomes.
+    """
+    if not prepared:
+        raise ScientificContractError(
+            ErrorMessage("validation loss requires at least one client"),
+            subject=ContractSubject.CLIENT,
+        )
+    model = build_autoencoder_for_state(autoencoder, model_state, device=device)
+    model.eval()
+    weighted_loss = 0.0
+    total_rows = 0
+    with torch.no_grad():
+        for client_data in prepared:
+            validation_rows = client_data.validation_features_cpu.shape[0]
+            if validation_rows < 1:
+                raise ScientificContractError(
+                    ErrorMessage("validation loss requires positive client validation rows"),
+                    subject=ContractSubject.ROWS,
+                )
+            features = client_data.validation_features_cpu.to(
+                device=device,
+                dtype=TORCH_LEARNING_DTYPE,
+                non_blocking=False,
+            )
+            reconstruction = model(features)
+            loss = nn.functional.mse_loss(reconstruction, features)
+            weighted_loss += float(loss.item()) * validation_rows
+            total_rows += validation_rows
+    return MetricValue(weighted_loss / total_rows)
 
 
 def preprocessing_state_set_checksum(
@@ -524,6 +637,7 @@ def _run_training_round[T: FedAvgProtocol | FedProxProtocol](
     global_model_state: AutoencoderModelState,
     device: torch.device,
     proximal_coefficient: ProximalCoefficient | None,
+    convergence_enabled: bool,
 ) -> tuple[FederatedRoundResult, AutoencoderModelState]:
     updates: list[ClientUpdate] = []
     for client_data in prepared:
@@ -546,6 +660,7 @@ def _run_training_round[T: FedAvgProtocol | FedProxProtocol](
                 optimizer_protocol=request.training_protocol.optimizer,
                 learning_rate=request.learning_rate,
                 batch_size=request.batch_size,
+                local_epochs=request.training_protocol.local_epochs,
                 seed=seed,
                 device=device,
                 proximal_term=proximal_term,
@@ -554,6 +669,16 @@ def _run_training_round[T: FedAvgProtocol | FedProxProtocol](
 
     aggregated = aggregate_client_updates(updates)
     aggregate_loss = compute_weighted_aggregate_loss(updates)
+    aggregate_validation_loss = (
+        compute_weighted_validation_loss(
+            model_state=aggregated,
+            prepared=prepared,
+            autoencoder=request.autoencoder,
+            device=device,
+        )
+        if convergence_enabled
+        else None
+    )
     serialized_state = serialize_and_checksum_model_state(aggregated)
 
     communication = create_communication_record(
@@ -576,6 +701,7 @@ def _run_training_round[T: FedAvgProtocol | FedProxProtocol](
             tensor_path=None,
         ),
         personalized_state_references=(),
+        aggregate_validation_loss=aggregate_validation_loss,
     )
     return round_result, aggregated
 
@@ -610,6 +736,17 @@ def run_federated_training[T: FedAvgProtocol | FedProxProtocol](
     global_model_state = AutoencoderModelState.from_model(initial_model)
 
     candidate_rounds = frozenset(request.checkpoint_protocol.candidates)
+    convergence = request.checkpoint_protocol.convergence
+    monitor = (
+        ConvergenceMonitor(
+            rounds_initial=convergence.rounds_initial.value,
+            rounds_max=request.checkpoint_protocol.maximum_round.value,
+            relative_threshold=convergence.relative_threshold,
+            window=convergence.window,
+        )
+        if convergence is not None
+        else None
+    )
     proximal_coefficient = _proximal_coefficient(request.training_protocol)
     rounds: list[FederatedRoundResult] = []
     snapshots: list[RoundSnapshot] = []
@@ -625,6 +762,7 @@ def run_federated_training[T: FedAvgProtocol | FedProxProtocol](
             global_model_state=global_model_state,
             device=device,
             proximal_coefficient=proximal_coefficient,
+            convergence_enabled=monitor is not None,
         )
         rounds.append(round_result)
 
@@ -636,6 +774,27 @@ def run_federated_training[T: FedAvgProtocol | FedProxProtocol](
                     round_result.aggregate_loss,
                 )
             )
+
+        if monitor is not None:
+            validation_loss = round_result.aggregate_validation_loss
+            if validation_loss is None:
+                raise ScientificContractError(
+                    ErrorMessage("convergence requires an aggregate benign validation loss"),
+                    subject=ContractSubject.TRAINING,
+                )
+            monitor.record(validation_loss)
+            if monitor.should_stop(round_number):
+                break
+
+    final_round = rounds[-1].round_number
+    if final_round not in candidate_rounds:
+        snapshots.append(
+            create_round_snapshot(
+                final_round,
+                global_model_state,
+                rounds[-1].aggregate_loss,
+            )
+        )
 
     history = FederatedTrainingHistory(
         coordinate=request.coordinate,

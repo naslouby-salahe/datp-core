@@ -31,7 +31,7 @@ from datp_core.core.identifiers import (
     StageOperationId,
 )
 from datp_core.core.numeric import NonNegativeIntegerValue
-from datp_core.detector.checkpoints.protocols import CHECKPOINT_PROTOCOL
+from datp_core.detector.checkpoints.protocols import ANCHOR_CHECKPOINT_PROTOCOL
 from datp_core.experiments.anchor.contracts import (
     AnchorDependencyBlocker,
     AnchorDetail,
@@ -184,21 +184,31 @@ def observation_from_evaluation_document(
 
 
 def _require_historical_endpoint_checkpoint(document: FederatedEvaluationDocument) -> None:
-    """Validate the scored checkpoint is the terminal historical endpoint from artifact provenance.
+    """Validate the scored checkpoint is the historical endpoint from artifact provenance.
 
     The historical endpoint semantics are earned from the recorded selection identity and
-    status, never asserted: the scored checkpoint must be the fixed-terminal non-test round
-    selected by the declared protocol.
+    status, never asserted: the scored checkpoint must be the final-completed-round
+    non-test checkpoint declared by the anchor convergence protocol (early-stopped within
+    ``rounds_initial`` and ``maximum_round``, or the maximum round when no convergence fired).
     """
-    if document.score_checkpoint_round != CHECKPOINT_PROTOCOL.maximum_round:
+    convergence = ANCHOR_CHECKPOINT_PROTOCOL.convergence
+    if convergence is None:
         raise AnchorReproductionError(
-            ErrorMessage("independent anchor observations require the terminal-round historical endpoint checkpoint"),
+            ErrorMessage("anchor checkpoint protocol must declare convergence"),
+            subject=ContractSubject.CHECKPOINT_CANDIDATES,
+            reason=AnchorDiscrepancyReason.WRONG_CHECKPOINT_SEMANTICS,
+        )
+    minimum = convergence.rounds_initial
+    maximum = ANCHOR_CHECKPOINT_PROTOCOL.maximum_round
+    if not (minimum.value <= document.score_checkpoint_round.value <= maximum.value):
+        raise AnchorReproductionError(
+            ErrorMessage("independent anchor observations require a completed historical endpoint checkpoint"),
             subject=ContractSubject.CHECKPOINT_CANDIDATES,
             reason=AnchorDiscrepancyReason.WRONG_CHECKPOINT_SEMANTICS,
         )
     if document.score_checkpoint_status is not CheckpointStatus.SELECTED_BY_NON_TEST_RULE:
         raise AnchorReproductionError(
-            ErrorMessage("independent anchor observations require fixed-terminal non-test checkpoint selection"),
+            ErrorMessage("independent anchor observations require final-completed-round non-test checkpoint selection"),
             subject=ContractSubject.CHECKPOINT_SELECTION_RULE,
             reason=AnchorDiscrepancyReason.WRONG_CHECKPOINT_SEMANTICS,
         )

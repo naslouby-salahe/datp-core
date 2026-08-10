@@ -18,6 +18,7 @@ from datp_core.core.numeric import MetricValue
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.checkpoints.contracts import (
     CheckpointProtocol,
+    realized_candidate_rounds,
     select_terminal_checkpoint,
     validate_ordered_checkpoint_inventory,
     validate_persisted_checkpoint_file,
@@ -84,9 +85,15 @@ def select_checkpoint(
         attack_labels_present=attack_labels_present,
         branch=ProcessedDataBranch.FEDERATED,
     )
+    if not candidates:
+        raise ScientificContractError(
+            ErrorMessage("checkpoint selection requires candidates"),
+            subject=ContractSubject.CHECKPOINT_CANDIDATES,
+        )
+    realized = realized_candidate_rounds(protocol, candidates[-1].round_number)
     ordered = validate_ordered_checkpoint_inventory(
         candidates,
-        protocol.candidates,
+        realized,
     )
     validate_candidate_coordinates(
         ordered,
@@ -95,9 +102,19 @@ def select_checkpoint(
         preprocessing_state_set_checksum=preprocessing_state_set_checksum,
         split_manifest_checksum=split_manifest_checksum,
     )
+    match selection_rule:
+        case CheckpointSelectionRule.FINAL_COMPLETED_ROUND:
+            terminal_round = realized[-1]
+        case CheckpointSelectionRule.FIXED_TERMINAL_MAXIMUM_ROUND:
+            terminal_round = protocol.maximum_round
+        case _:
+            raise ScientificContractError(
+                ErrorMessage("unsupported checkpoint selection rule"),
+                subject=ContractSubject.CHECKPOINT_SELECTION_RULE,
+            )
     selection = select_terminal_checkpoint(
         ordered,
-        protocol.maximum_round,
+        terminal_round=terminal_round,
         rebuild=lambda candidate, status: replace(candidate, status=status),
     )
     return CheckpointDecision(

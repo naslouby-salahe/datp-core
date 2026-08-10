@@ -264,6 +264,7 @@ class CheckpointStatus(StrEnum):
 
 class CheckpointSelectionRule(StrEnum):
     FIXED_TERMINAL_MAXIMUM_ROUND = "fixed_terminal_maximum_round"
+    FINAL_COMPLETED_ROUND = "final_completed_round"
 
 
 class FedProxCoefficientSelectionRule(StrEnum):

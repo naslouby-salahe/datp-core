@@ -20,7 +20,11 @@ from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.checkpoints.candidates import (
     candidate_tensor_name,
 )
-from datp_core.detector.checkpoints.contracts import CheckpointProtocol, validate_persisted_checkpoint_file
+from datp_core.detector.checkpoints.contracts import (
+    CheckpointProtocol,
+    realized_candidate_rounds,
+    validate_persisted_checkpoint_file,
+)
 from datp_core.detector.checkpoints.documents import (
     CandidateManifest,
     CandidateManifestEntry,
@@ -121,9 +125,15 @@ def validated_global_manifest(
         split_manifest_checksum=request.split_manifest_checksum,
     )
     verify_completion(request.directory, manifest, include_history=True)
+    if not manifest.entries:
+        raise ArtifactIntegrityError(
+            ErrorMessage("global candidate manifest requires entries"),
+            subject=ContractSubject.CHECKPOINT_CANDIDATES,
+        )
+    realized = realized_candidate_rounds(request.checkpoint_protocol, manifest.entries[-1].round_number)
     expected_entries = tuple(
         (round_number, None, candidate_tensor_name(round_number))
-        for round_number in request.checkpoint_protocol.candidates
+        for round_number in realized
     )
     observed_entries = tuple((entry.round_number, entry.client_id, entry.tensor_name) for entry in manifest.entries)
     if observed_entries != expected_entries:
@@ -139,13 +149,19 @@ def load_reused_global_candidates(
 ) -> tuple[CheckpointCandidate, ...]:
     manifest = validated_global_manifest(request)
     round_frame = history_frames(request.directory).round_summary
-    expected_rounds = tuple(
-        RoundNumber(value)
-        for value in range(
-            1,
-            request.checkpoint_protocol.maximum_round.value + 1,
+    observed_round_values = round_frame.get_column(FederatedHistoryColumn.ROUND_NUMBER.value).to_list()
+    if not observed_round_values:
+        raise ArtifactIntegrityError(
+            ErrorMessage("round summary must contain training rounds"),
+            subject=ContractSubject.SCHEMA,
         )
-    )
+    final_round = RoundNumber(int(observed_round_values[-1]))
+    if final_round.value > request.checkpoint_protocol.maximum_round.value:
+        raise ArtifactIntegrityError(
+            ErrorMessage("round summary terminal round exceeds the checkpoint protocol"),
+            subject=ContractSubject.CHECKPOINT_CANDIDATES,
+        )
+    expected_rounds = tuple(RoundNumber(value) for value in range(1, final_round.value + 1))
     validate_round_summary(round_frame, expected_rounds)
     losses_by_round: dict[RoundNumber, MetricValue] = {
         RoundNumber(int(round_number)): MetricValue(float(loss))
@@ -205,6 +221,12 @@ def validated_personalized_manifest(
         manifest,
         include_history=False,
     )
+    if not manifest.entries:
+        raise ArtifactIntegrityError(
+            ErrorMessage("personalized candidate manifest requires entries"),
+            subject=ContractSubject.CHECKPOINT_CANDIDATES,
+        )
+    realized = realized_candidate_rounds(request.checkpoint_protocol, manifest.entries[-1].round_number)
     expected_entries = tuple(
         (
             round_number,
@@ -212,7 +234,7 @@ def validated_personalized_manifest(
             candidate_tensor_name(round_number, client),
         )
         for client in request.clients
-        for round_number in request.checkpoint_protocol.candidates
+        for round_number in realized
     )
     observed_entries = tuple((entry.round_number, entry.client_id, entry.tensor_name) for entry in manifest.entries)
     if observed_entries != expected_entries:
@@ -230,13 +252,21 @@ def load_reused_personalized_candidates(
     personalized_frame = read_parquet(
         request.global_history_directory / FederatedHistoryAssetName.PERSONALIZED_ROUNDS.value
     )
-    training_rounds = tuple(
-        RoundNumber(value)
-        for value in range(
-            1,
-            request.checkpoint_protocol.maximum_round.value + 1,
+    observed_round_values = personalized_frame.get_column(
+        FederatedHistoryColumn.ROUND_NUMBER.value
+    ).to_list()
+    if not observed_round_values:
+        raise ArtifactIntegrityError(
+            ErrorMessage("personalized history must contain training rounds"),
+            subject=ContractSubject.SCHEMA,
         )
-    )
+    final_round = RoundNumber(int(observed_round_values[-1]))
+    if final_round.value > request.checkpoint_protocol.maximum_round.value:
+        raise ArtifactIntegrityError(
+            ErrorMessage("personalized history terminal round exceeds the checkpoint protocol"),
+            subject=ContractSubject.CHECKPOINT_CANDIDATES,
+        )
+    training_rounds = tuple(RoundNumber(value) for value in range(1, final_round.value + 1))
     validate_personalized_history(
         personalized_frame,
         expected_rounds=training_rounds,

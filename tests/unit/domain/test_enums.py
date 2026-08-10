@@ -245,7 +245,7 @@ EXPECTED_MEMBERS = (
         CheckpointStatus,
         frozenset(("HISTORICAL_ENDPOINT", "CANDIDATE", "SELECTED_BY_NON_TEST_RULE", "STABILITY_EVIDENCE")),
     ),
-    (CheckpointSelectionRule, frozenset(("FIXED_TERMINAL_MAXIMUM_ROUND",))),
+    (CheckpointSelectionRule, frozenset(("FIXED_TERMINAL_MAXIMUM_ROUND", "FINAL_COMPLETED_ROUND"))),
     (FedProxCoefficientSelectionRule, frozenset(("FEDPROX_MINIMUM_TERMINAL_TRAINING_LOSS",))),
     (
         ContractSubject,

@@ -31,6 +31,8 @@ from datp_core.core.numeric import (
 from datp_core.detector.training import contracts as training_contracts
 
 FEDAVG_LOCAL_EPOCHS = LocalEpochCount(1)
+ANCHOR_LOCAL_EPOCHS = LocalEpochCount(5)
+DECLARED_FEDAVG_LOCAL_EPOCHS = frozenset({FEDAVG_LOCAL_EPOCHS, ANCHOR_LOCAL_EPOCHS})
 FEDPROX_COEFFICIENTS = tuple(ProximalCoefficient(value) for value in (0.001, 0.01, 0.1, 1.0))
 FEDPROX_COEFFICIENT_SELECTION_RULE = FedProxCoefficientSelectionRule.FEDPROX_MINIMUM_TERMINAL_TRAINING_LOSS
 
@@ -101,6 +103,11 @@ NBAIOT_AUTOENCODER = training_contracts.AutoencoderProtocol(
         tuple(FeatureCount(value) for value in (115, 86, 58, 38, 29, 38, 58, 86, 115))
     )
 )
+ANCHOR_NBAIOT_AUTOENCODER = training_contracts.AutoencoderProtocol(
+    widths=training_contracts.AutoencoderArchitecture(
+        tuple(FeatureCount(value) for value in (115, 80, 40, 20, 40, 80, 115))
+    )
+)
 EDGE_IIOTSET_NUMERIC_AUTOENCODER = training_contracts.AutoencoderProtocol(
     widths=training_contracts.AutoencoderArchitecture(
         tuple(FeatureCount(value) for value in (33, 25, 17, 11, 8, 11, 17, 25, 33))
@@ -129,6 +136,11 @@ CENTRALIZED_TRAINING_PROTOCOL = training_contracts.CentralizedTrainingProtocol(
 FEDAVG_TRAINING_PROTOCOL = training_contracts.FedAvgProtocol(
     kind=TrainingModelId.FEDAVG_AUTOENCODER,
     local_epochs=FEDAVG_LOCAL_EPOCHS,
+    optimizer=OPTIMIZER,
+)
+ANCHOR_FEDAVG_TRAINING_PROTOCOL = training_contracts.FedAvgProtocol(
+    kind=TrainingModelId.FEDAVG_AUTOENCODER,
+    local_epochs=ANCHOR_LOCAL_EPOCHS,
     optimizer=OPTIMIZER,
 )
 FEDPROX_TRAINING_PROTOCOLS = tuple(

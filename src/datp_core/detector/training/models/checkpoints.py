@@ -9,7 +9,7 @@ from datp_core.core.errors import (
 from datp_core.core.identifiers import CheckpointStatus, ContractSubject, CudaDeviceName, TrainingModelId
 from datp_core.core.numeric import BatchSize, MetricValue, RoundNumber
 from datp_core.data.populations.contracts import ClientIdentity
-from datp_core.detector.checkpoints.contracts import CheckpointProtocol
+from datp_core.detector.checkpoints.contracts import CheckpointProtocol, realized_candidate_rounds
 from datp_core.detector.training.contracts import AutoencoderProtocol, FederatedTrainingCoordinate
 from datp_core.detector.training.models.records import FederatedTrainingHistory
 from datp_core.detector.training.models.snapshots import RoundSnapshot
@@ -117,14 +117,15 @@ class CheckpointDecision:
                 ErrorMessage("checkpoint decision status must be SELECTED_BY_NON_TEST_RULE"),
                 subject=self.status,
             )
-        if tuple(candidate.round_number for candidate in self.candidates) != tuple(self.checkpoint_protocol.candidates):
+        realized = realized_candidate_rounds(self.checkpoint_protocol, self.selected.round_number)
+        if tuple(candidate.round_number for candidate in self.candidates) != realized:
             raise ScientificContractError(
-                ErrorMessage("checkpoint decision candidates must equal the declared ordered rounds"),
+                ErrorMessage("checkpoint decision candidates must equal the realized ordered rounds"),
                 subject=ContractSubject.CHECKPOINT_CANDIDATES,
             )
-        if self.selected.round_number != self.checkpoint_protocol.maximum_round:
+        if self.selected.round_number != realized[-1]:
             raise ScientificContractError(
-                ErrorMessage("the selected checkpoint must be the declared maximum round"),
+                ErrorMessage("the selected checkpoint must be the final realized round"),
                 subject=ContractSubject.CHECKPOINT_SELECTION_RULE,
             )
 
@@ -165,14 +166,21 @@ class FederatedTrainingResult:
                 subject=ContractSubject.CUDA,
             )
         final_round = self.history.rounds[-1].round_number
-        if final_round != self.checkpoint_protocol.maximum_round:
+        realized_candidate_rounds(self.checkpoint_protocol, final_round)
+        if self.checkpoint_protocol.convergence is None:
+            if final_round != self.checkpoint_protocol.maximum_round:
+                raise ScientificContractError(
+                    ErrorMessage("history terminal round must equal the checkpoint maximum round"),
+                    subject=ContractSubject.CHECKPOINT_CANDIDATES,
+                )
+            if any(candidate.value > final_round.value for candidate in self.checkpoint_protocol.candidates):
+                raise ScientificContractError(
+                    ErrorMessage("checkpoint candidates cannot exceed the training history"),
+                    subject=ContractSubject.CHECKPOINT_CANDIDATES,
+                )
+        elif final_round.value < self.checkpoint_protocol.convergence.rounds_initial.value:
             raise ScientificContractError(
-                ErrorMessage("history terminal round must equal the checkpoint maximum round"),
-                subject=ContractSubject.CHECKPOINT_CANDIDATES,
-            )
-        if any(candidate.value > final_round.value for candidate in self.checkpoint_protocol.candidates):
-            raise ScientificContractError(
-                ErrorMessage("checkpoint candidates cannot exceed the training history"),
+                ErrorMessage("convergence terminal round must follow the initial rounds"),
                 subject=ContractSubject.CHECKPOINT_CANDIDATES,
             )
 
@@ -183,11 +191,13 @@ class FederatedTrainingExecution:
     snapshots: tuple[RoundSnapshot, ...]
 
     def __post_init__(self) -> None:
-        if tuple(snapshot.round_number for snapshot in self.snapshots) != tuple(
-            self.training_result.checkpoint_protocol.candidates
-        ):
+        realized = realized_candidate_rounds(
+            self.training_result.checkpoint_protocol,
+            self.training_result.history.rounds[-1].round_number,
+        )
+        if tuple(snapshot.round_number for snapshot in self.snapshots) != realized:
             raise ScientificContractError(
-                ErrorMessage("training execution snapshots must equal the declared checkpoint rounds"),
+                ErrorMessage("training execution snapshots must equal the realized checkpoint rounds"),
                 subject=ContractSubject.CHECKPOINT_CANDIDATES,
             )
 
@@ -203,10 +213,13 @@ class FederatedTrainingOutcome:
                 ErrorMessage("federated training outcome requires candidates"),
                 subject=ContractSubject.CHECKPOINT_CANDIDATES,
             )
-        expected_rounds = tuple(self.training_result.checkpoint_protocol.candidates)
-        if tuple(candidate.round_number for candidate in self.candidates) != expected_rounds:
+        realized = realized_candidate_rounds(
+            self.training_result.checkpoint_protocol,
+            self.training_result.history.rounds[-1].round_number,
+        )
+        if tuple(candidate.round_number for candidate in self.candidates) != realized:
             raise ScientificContractError(
-                ErrorMessage("outcome candidate rounds must equal the checkpoint protocol"),
+                ErrorMessage("outcome candidate rounds must equal the realized checkpoint rounds"),
                 subject=ContractSubject.CHECKPOINT_CANDIDATES,
             )
         if len({candidate.tensor_path for candidate in self.candidates}) != len(self.candidates):

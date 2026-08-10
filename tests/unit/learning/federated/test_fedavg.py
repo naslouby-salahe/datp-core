@@ -119,6 +119,7 @@ def test_train_fedavg_never_trains_on_attack_labelled_rows(tmp_path: Path) -> No
     poisoned = poisoned.__class__(
         client=client_identity("client_a"),
         training_features=attack_frame,
+        validation_features=benign_frame(RowCount(16), seed=Seed(99)),
         feature_names=FEATURE_NAMES,
         preprocessing_state=poisoned_state,
     )

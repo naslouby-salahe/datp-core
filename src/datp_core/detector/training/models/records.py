@@ -43,6 +43,7 @@ def validate_client_preprocessing_match(
 class ClientTrainingInput:
     client: ClientIdentity
     training_features: pl.DataFrame
+    validation_features: pl.DataFrame
     feature_names: FeatureNameSequence
     preprocessing_state: FederatedFittedPreprocessingState
 
@@ -50,6 +51,11 @@ class ClientTrainingInput:
         if self.training_features.height < 1:
             raise ScientificContractError(
                 ErrorMessage("client training input requires at least one benign training row"),
+                subject=ContractSubject.ROWS,
+            )
+        if self.validation_features.height < 1:
+            raise ScientificContractError(
+                ErrorMessage("client training input requires at least one benign calibration validation row"),
                 subject=ContractSubject.ROWS,
             )
         validate_client_preprocessing_match(
@@ -217,6 +223,7 @@ class FederatedRoundResult:
     communication: CommunicationRecord
     global_state_reference: GlobalModelStateReference
     personalized_state_references: tuple[PersonalizedModelStateReference, ...]
+    aggregate_validation_loss: MetricValue | None = None
 
     def __post_init__(self) -> None:
         if not self.client_results:

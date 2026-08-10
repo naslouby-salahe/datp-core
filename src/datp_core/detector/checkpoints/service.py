@@ -139,7 +139,7 @@ def select_centralized_checkpoint(
         validate_persisted_checkpoint_file(candidate.tensor_path, candidate.tensor_checksum)
     selection = select_terminal_checkpoint(
         ordered,
-        protocol.maximum_round,
+        terminal_round=protocol.maximum_round,
         rebuild=_rebuild_candidate_status,
     )
     return CentralizedCheckpointDecision(
@@ -198,12 +198,17 @@ def select_federated_primary_checkpoint(request: SelectFederatedCheckpointReques
         preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
         split_manifest_checksum=request.split_manifest_checksum,
     )
+    selection_rule = (
+        CheckpointSelectionRule.FINAL_COMPLETED_ROUND
+        if request.checkpoint_protocol.convergence is not None
+        else CHECKPOINT_SELECTION_RULE
+    )
     return select_checkpoint(
         request.candidates,
         request.checkpoint_protocol,
         coordinate=request.coordinate,
         client=request.client,
-        selection_rule=CHECKPOINT_SELECTION_RULE,
+        selection_rule=selection_rule,
         held_out_metrics=request.held_out_metrics,
         attack_labels_present=request.attack_labels_present,
         preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
