@@ -1,5 +1,3 @@
-"""Shared score-artifact contracts, persisted frames, and typed bindings."""
-
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path

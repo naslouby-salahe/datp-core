@@ -1,5 +1,3 @@
-"""External benign-equity validation and CICIoT applicability-boundary experiments."""
-
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -260,7 +258,7 @@ class ExternalBenignStatisticsReportResult:
 
 
 def analyze_external_benign_statistics(*, output_root: Path, overwrite: bool) -> ExternalBenignStatisticsReportResult:
-    """Publish the Edge benign-only federated-statistics comparator evidence."""
+
     declaration = _declaration(ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION)
     output = output_root / ExternalBenignStatisticsAssetName.ROOT / declaration.id.value / declaration.population.value
     if overwrite and output.exists():
@@ -313,7 +311,9 @@ def _benign_statistics_summary(
         between_client_variance=threshold_result.decomposition.between_client_variance,
         full_pooled_variance=threshold_result.decomposition.full_pooled_variance,
         between_ratio=threshold_result.decomposition.between_ratio,
-        absolute_threshold_error=threshold_result.centralized_attainment_diagnostic.absolute_threshold_error_vs_pooled_quantile,
+        absolute_threshold_error=(
+            threshold_result.centralized_attainment_diagnostic.absolute_threshold_error_vs_pooled_quantile
+        ),
         achieved_benign_exceedance=threshold_result.centralized_attainment_diagnostic.achieved_exceedance,
         estimated_communication_bytes=threshold_result.estimated_communication_bytes,
         clients=tuple(_benign_statistics_client(summary) for summary in threshold_result.client_summaries),

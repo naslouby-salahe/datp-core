@@ -1,5 +1,3 @@
-"""Exhaustive typed dispatch over federated threshold methods."""
-
 from dataclasses import dataclass
 from typing import assert_never
 

@@ -20,7 +20,7 @@ The study asks whether the scope of benign threshold calibration changes the dis
 
 DATP-Core is a controlled study of **threshold-calibration scope** in federated IoT anomaly detection.
 
-For each seed and dataset regime, a federated autoencoder is trained and selected under one locked training protocol. The selected detector is then frozen. The same per-client calibration and test scores are reused across the core threshold ladder. The ladder changes only the scope at which a benign anomaly threshold is estimated: one shared threshold, one threshold per physical-device family, one threshold per data-driven client cluster, or one threshold per client.
+For each seed and dataset regime, a federated autoencoder is trained to one fixed terminal scientific model under one locked training protocol. The terminal detector is fixed before score generation. Compared policies consume the same execution-scoped per-client calibration and test-score evidence. The ladder changes only the scope at which a benign anomaly threshold is estimated: one shared threshold, one threshold per physical-device family, one threshold per data-driven client cluster, or one threshold per client.
 
 The scientific question is therefore not:
 
@@ -67,8 +67,7 @@ Within a core dataset ladder, the following remain fixed:
 - optimizer and training hyperparameters;
 - preprocessing and normalization semantics;
 - split semantics;
-- round budget and checkpoint candidates;
-- checkpoint-selection rule;
+- round budget and terminal scientific-model rule;
 - seed cohort;
 - scoring procedure;
 - client eligibility;
@@ -127,7 +126,7 @@ These locks are prospective research amendments that complete the fixed-detector
 
 Two distinct notions of score equality apply within DATP-Core and must never be conflated.
 
-**Scientific fixed-score identity.** Within any fixed-detector threshold comparison, calibration scores and evaluation scores are immutable scientific inputs. Every compared threshold policy must reference the same score-artifact identity, ordered row identities, client identities, split identities, detector identity, checkpoint identity, preprocessing identity, and evaluation labels. Policy-level score equality is proven by scientific artifact identity and provenance, never by two independently generated floating-point arrays being numerically close. A threshold policy must never independently regenerate scores when the scientific contract requires reuse of one score artifact.
+**Scientific fixed-score identity.** Within any fixed-detector threshold comparison, calibration scores and evaluation scores are immutable scientific inputs. Every compared threshold policy must reference the same score-artifact identity, ordered row identities, client identities, split identities, terminal-detector identity, preprocessing identity, and evaluation labels. Policy-level score equality is proven by scientific artifact identity and provenance, never by two independently generated floating-point arrays being numerically close. A threshold policy must never independently regenerate scores when the scientific contract requires one fixed score artifact.
 
 **Serialization/reload equivalence.** The `1e-12` absolute tolerance defined in §2.2.1 applies only to serialization/reload numerical equivalence (for example, confirming a persisted and reloaded preprocessing state reproduces the same transform). It must not be silently redefined as the threshold-policy score-identity criterion.
 
@@ -150,14 +149,14 @@ data_driven_client_cluster
 individual_client
 ```
 
-A policy-specific model, policy-specific checkpoint, policy-specific feature transformation, or policy-specific test population invalidates the controlled comparison.
+A policy-specific terminal detector, feature transformation, or test population invalidates the controlled comparison.
 
 **2.4 Prohibited causal contamination**
 
 The following are forbidden inside the core ladder:
 
 - retraining the autoencoder separately for B1, B2, B3, or B4;
-- selecting a checkpoint independently for each threshold policy;
+- using a non-terminal detector state for a scientific result;
 - selecting thresholds from attack-labelled data;
 - choosing a policy parameter using held-out test F1, TPR, AUROC, balanced accuracy, or `CV(FPR)`;
 - changing eligible clients between compared policies;
@@ -178,7 +177,7 @@ Attack-labelled records are reserved for held-out evaluation and may not influen
 - threshold values;
 - quantile selection;
 - client eligibility;
-- checkpoint selection;
+- terminal-detector identity;
 - comparator tuning;
 - shrinkage strength;
 - conformal significance level;
@@ -1239,7 +1238,7 @@ Attack-labelled data may be used only for held-out evaluation when the regime su
 
 - determine a threshold;
 - select a quantile;
-- select a checkpoint;
+- alter the terminal detector;
 - select a FedProx coefficient;
 - select a personalization coefficient;
 - decide which clients are included;
@@ -1283,26 +1282,19 @@ Every result must report:
 
 Eligibility cannot be changed after examining test outcomes.
 
-**2.5 Checkpoint discipline**
+**2.5 Terminal scientific-model discipline**
 
-The journal protocol trains to a maximum of 200 rounds and evaluates checkpoints at:
+The journal protocol trains to the fixed terminal round of 200. Every training execution produces exactly one terminal scientific detector.
 
-```text
-25, 50, 75, 100, 125, 150, 200
-```
-
-Regime A selects one global primary checkpoint using the locked non-test selection rule. That checkpoint is used for every main Regime A result.
+Recovery checkpoints may resume interrupted training only. Diagnostic checkpoints are observational only. Neither can alter the terminal detector, score generation, threshold construction, evaluation, or analysis.
 
 Forbidden practices include:
 
-- selecting checkpoints independently for B1 and B2;
-- selecting by test AUROC;
-- selecting by attack labels;
-- choosing a checkpoint that maximizes the DATP effect;
-- selecting a different main checkpoint for a supportive experiment;
-- suppressing weak checkpoint trajectories.
-
-Other checkpoints are stability evidence only.
+- using a non-terminal detector state for B1 or B2;
+- using test AUROC or attack labels to alter the terminal detector;
+- using the DATP effect to alter the terminal detector;
+- using a different terminal detector for a supportive experiment that declares the same training coordinate;
+- suppressing diagnostic trajectories.
 
 **2.6 Negative-result discipline**
 
@@ -1749,7 +1741,7 @@ The conference result used five seeds. The journal extension must reproduce that
 - Regime A;
 - nine physical-device clients;
 - ten paired training seeds;
-- one locked primary checkpoint per seed;
+- one terminal scientific detector per seed;
 - benign calibration scores;
 - held-out benign and attack test scores;
 - unchanged eligibility.
@@ -1761,7 +1753,7 @@ The conference result used five seeds. The journal extension must reproduce that
 - local epochs `E = 1`;
 - full participation;
 - preprocessing;
-- checkpoint-selection rule;
+- terminal scientific-model rule;
 - quantile `q = 0.95`;
 - test records;
 - metric implementation;
@@ -1836,7 +1828,7 @@ Every outcome becomes the main ten-seed result. The five-seed result is labelled
 
 **Prohibited uses**
 
-- no checkpoint selection from this result;
+- no alteration of the terminal detector from this result;
 - no replacement by B4, shrinkage, or B2-conf if the endpoint fails;
 - no removal of unfavorable seeds;
 - no claim that B2 improves overall detection performance.
@@ -1866,7 +1858,7 @@ The reproduced five-seed anchor passes only when all of the following hold:
 3. the historical client population is preserved;
 4. the historical preprocessing identity is preserved;
 5. the historical training protocol is preserved;
-6. the historical checkpoint-selection semantics are preserved;
+6. the historical terminal-model semantics are preserved;
 7. the historical scoring semantics are preserved;
 8. the historical threshold semantics are preserved;
 9. the historical eligibility semantics are preserved;
@@ -2026,7 +2018,7 @@ For every seed and severity:
 
 1. construct the partition using the locked seed and partition rule;
 2. retain the pre-specified partition;
-3. train a separate `FEDAVG` detector for this `(training seed, heterogeneity severity)` cell under the fixed training protocol below — this includes IID as one severity condition in this grid; never reuse another severity's fitted preprocessing state, detector weights, checkpoint, calibration scores, or evaluation scores;
+3. train a separate terminal `FEDAVG` detector for this `(training seed, heterogeneity severity)` cell under the fixed training protocol below — this includes IID as one severity condition in this grid; never share another severity's fitted preprocessing state, detector state, calibration scores, or evaluation scores;
 4. compute B1, B2, and B4;
 5. report heterogeneity diagnostics;
 6. compute the B1–B2 `CV(FPR)` difference;
@@ -2035,11 +2027,11 @@ For every seed and severity:
 
 **Detector training discipline**
 
-For every `(training seed, heterogeneity severity)` cell, including IID, a separate `FEDAVG` detector is trained. The training **protocol** remains fixed across severities: model family; architecture apart from feature-schema-driven input dimension; optimizer; loss; training hyperparameters; local epoch count; participation; aggregation semantics; round budget; checkpoint candidates; checkpoint-selection rule; training-seed semantics; and named preprocessing protocol identity.
+For every `(training seed, heterogeneity severity)` cell, including IID, a separate terminal `FEDAVG` detector is trained. The training **protocol** remains fixed across severities: model family; architecture apart from feature-schema-driven input dimension; optimizer; loss; training hyperparameters; local epoch count; participation; aggregation semantics; round budget; terminal scientific-model rule; training-seed semantics; and named preprocessing protocol identity.
 
-The following scientific states must never be reused between different severity/population cells: population-dependent fitted preprocessing state; detector weights; detector checkpoint; calibration scores; evaluation scores.
+The following scientific states must never be shared between different severity/population cells: population-dependent fitted preprocessing state; terminal detector state; calibration scores; evaluation scores.
 
-Within one fixed `(seed, heterogeneity severity)` cell, B1, B2, and B4 reuse exactly the same frozen detector, checkpoint, fitted preprocessing state, calibration scores, evaluation scores, evaluation labels, and eligibility state.
+Within one fixed `(seed, heterogeneity severity)` cell, B1, B2, and B4 use the same terminal detector, fitted preprocessing state, calibration scores, evaluation scores, evaluation labels, and eligibility state.
 
 **Required heterogeneity diagnostics**
 
@@ -2644,18 +2636,14 @@ FedProx was designed to address systems and statistical heterogeneity by adding 
   - `1.0`;
 - B1, B2, B3 where valid, and B4.
 
-**Coefficient-selection rule**
+**Coefficient grid**
 
-The primary FedProx coefficient must be selected using the pre-registered, non-test rule on Regime A. The test set, attack labels, `CV(FPR)` advantage, and Regime D outcomes cannot choose `mu`.
-
-**Locked non-test rule (`FEDPROX_MINIMUM_TERMINAL_TRAINING_LOSS`, prospective research amendment).** Among the frozen coefficient grid, the primary FedProx coefficient is the value of `mu` whose population-weighted aggregate federated training loss at the fixed terminal checkpoint round (`200`, the same round `FIXED_TERMINAL_MAXIMUM_ROUND` locks for checkpoint selection) is lowest, averaged across the confirmatory seed cohort on Regime A. Ties are broken by selecting the smallest candidate `mu`. This rule uses only benign federated training-loss trajectories already produced during FedProx training; it never inspects held-out test data, attack labels, `CV(FPR)`, threshold outcomes, or Regime D results. The rule mirrors the original FedProx proposal's own training-loss-driven coefficient behavior and standard benchmark practice of tuning `mu` against training-time convergence signals rather than held-out task performance.[^fedprox]
-
-The complete grid remains reportable regardless of which coefficient is selected as primary.
+Each declared FedProx coefficient is an independent stress-test condition. Every condition trains its own terminal detector and reports its own outcomes. No coefficient is designated as primary or selected from training, calibration, evaluation, external, or stress-test results.
 
 **Procedure**
 
 1. train FedProx models independently from FedAvg;
-2. apply the same checkpoint protocol;
+2. train to the same fixed terminal round;
 3. produce separate score sets;
 4. evaluate the complete threshold ladder on each trained model;
 5. calculate the B1–B2 threshold-scope difference under FedAvg and FedProx;
@@ -3594,29 +3582,19 @@ Adjusted Rand index is descriptive and must be accompanied by memberships, clust
 
 ---
 
-### 13. Checkpoint protocol
+### 13. Terminal scientific-model protocol
 
-**13.1 Anchor checkpoint**
+**13.1 Terminal detector**
 
-The conference anchor preserves its historical endpoint and checkpoint semantics; it is not retrofitted with journal checkpoint selection merely to improve reproduction. Historical checkpoint-selection semantics are one of the fourteen acceptance conditions of the anchor reproduction gate (03 — Experiment Catalogue, §5.2); a violation of this rule produces `ANCHOR_REPRODUCTION_FAILED` rather than a retrofitted selection.
+Every training execution has one terminal scientific detector at its declared fixed round. Detector weights remain seed-, population-, dataset-, and training-method-specific. The centralized reference remains independent from federated detectors.
 
-**13.2 Primary journal round**
+**13.2 Recovery and diagnostic checkpoints**
 
-Regime A selects one primary **round number** using a non-test rule specified before journal outcomes are inspected.
+Recovery checkpoints may resume interrupted training only. Diagnostic checkpoints record training observations only. Neither provides a scientific detector, score source, threshold input, evaluation input, or analysis input.
 
-**Locked non-test rule (`FIXED_TERMINAL_MAXIMUM_ROUND`, prospective research amendment).** Among the declared candidates, the primary checkpoint is the candidate at the declared maximum round (`200`). No metric, label, score artifact, threshold outcome, or cross-policy contrast may enter selection. Non-terminal retained candidates are stability evidence only. The same primary **round number** is applied consistently across main regimes and policies where the checkpoint exists; model weights remain seed-, population-, and model-specific. The independent centralized reference (B0) applies the same rule to its own candidate set and never consumes federated checkpoints. Historical early-stopping practice is superseded by this fixed-budget protocol.
+**13.3 Fixed-detector restrictions**
 
-**13.3 Forbidden selectors**
-
-The round cannot be chosen using:
-
-- test AUROC;
-- test FPR or `CV(FPR)`;
-- Macro-F1 or balanced accuracy;
-- attack labels;
-- the B1-versus-B2 effect;
-- external or stress-test results;
-- policy-specific best performance.
+No test metric, attack label, threshold outcome, B1-versus-B2 effect, external result, stress-test result, or policy-specific performance may alter the terminal detector or cause policy-specific retraining.
 
 ### 14. Temporal recalibration quantities
 

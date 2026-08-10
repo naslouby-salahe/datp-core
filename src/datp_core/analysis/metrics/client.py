@@ -1,5 +1,3 @@
-"""Per-client held-out metrics with no implicit undefined-to-zero conversion."""
-
 from collections.abc import Sequence
 from math import isfinite
 
@@ -31,7 +29,7 @@ def calculate_client_metrics(
     scores: Sequence[ScoreValue],
     labels: Sequence[PopulationOutcomeLabel],
 ) -> tuple[MetricAvailability, ...]:
-    """Evaluate one client; AUROC uses continuous scores, never threshold predictions."""
+
     if len(scores) != len(labels) or len(scores) != confusion.evaluation_row_count.value:
         raise ScientificContractError(
             ErrorMessage("client scores, labels, and confusion counts must align"), subject=ContractSubject.ROWS
@@ -61,7 +59,7 @@ def calculate_metrics_for_evaluation_score_arrays(
     confusion: ConfusionCounts,
     score_arrays: FederatedEvaluationScoreArrays,
 ) -> tuple[MetricAvailability, ...]:
-    """Evaluate client metrics from one validated federated score artifact."""
+
     return calculate_client_metrics(
         confusion=confusion,
         scores=score_arrays.scores,

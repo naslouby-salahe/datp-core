@@ -37,7 +37,7 @@ def compare_anchor_metric(
     reference: AnchorMetricReference,
     observation: AnchorObservedMetric | None,
 ) -> AnchorMetricComparison:
-    """Compare one mandatory reference against an optional observation at full precision."""
+
     rule = reference.tolerance_rule
     if observation is None:
         return _build(
@@ -65,7 +65,7 @@ def compare_anchor_metric(
 
 
 def reject_global_floating_point_tolerance() -> None:
-    """Explicit rejection of an undifferentiated global floating-point tolerance."""
+
     raise ValueError("global floating-point tolerance is unsupported; declare a metric-specific rule")
 
 
@@ -76,7 +76,7 @@ def full_precision_failure_stands_despite_rounded_equality(
     expected: MetricValue,
     observed: MetricValue,
 ) -> bool:
-    """Return True when rounded presentation equality must not rescue a full-precision failure."""
+
     if full_precision_decision is AnchorComparisonDecision.EQUIVALENT:
         return False
     return floats_exactly_equal(
@@ -120,13 +120,7 @@ def _diagnostic_result(
     rule: DiagnosticRule,
     delta: _NumericDelta,
 ) -> AnchorMetricComparison:
-    """Report a per-seed deviation without gating.
 
-    Exact equality records an EQUIVALENT comparison; any deviation is recorded
-    as DIAGNOSTIC_REPORTED (with the signed/relative deltas) and never emitted
-    as a blocking discrepancy. The roadmap gate carries no per-seed value
-    condition; the confirmatory decision is the cohort-level BCa interval.
-    """
     if floats_exactly_equal(delta.expected, delta.observed):
         return _pass(reference, observation, rule, delta)
     return _build(

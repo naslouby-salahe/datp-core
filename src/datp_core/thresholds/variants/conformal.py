@@ -1,5 +1,3 @@
-"""Finite-sample local conformal threshold construction."""
-
 from dataclasses import dataclass
 from typing import ClassVar
 

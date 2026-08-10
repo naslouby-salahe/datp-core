@@ -1,5 +1,3 @@
-"""Closed DATP-Core identities and validated string identifiers."""
-
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import ClassVar
@@ -221,8 +219,6 @@ class StageOperationId(StrEnum):
     PREPROCESS_FEDERATED = "preprocess_federated"
     SCORE_CENTRALIZED_REFERENCE = "score_centralized_reference"
     SCORE_FEDERATED = "score_federated"
-    SELECT_CENTRALIZED_REFERENCE_CHECKPOINT = "select_centralized_reference_checkpoint"
-    SELECT_FEDERATED_CHECKPOINT = "select_federated_checkpoint"
     SPLIT = "split"
     TRAIN_CENTRALIZED_REFERENCE = "train_centralized_reference"
     TRAIN_FEDERATED = "train_federated"
@@ -252,15 +248,6 @@ class TrafficRateEvidenceType(StrEnum):
     DATASET_DERIVED = "dataset_derived"
     EXTERNALLY_CITED = "externally_cited"
     UNAVAILABLE = "unavailable"
-
-
-class FedProxCoefficientSelectionRule(StrEnum):
-    FEDPROX_MINIMUM_TERMINAL_TRAINING_LOSS = "fedprox_minimum_terminal_training_loss"
-
-
-class FedProxRoleDirectory(StrEnum):
-    PRIMARY = "primary"
-    SENSITIVITY = "sensitivity"
 
 
 class ProcessedDataBranch(StrEnum):
@@ -309,16 +296,12 @@ class ContractSubject(StrEnum):
     AUTOENCODER = "autoencoder"
     BATCH_SIZE = "batch_size"
     CALIBRATION = "calibration"
-    CANDIDATES = "candidates"
-    CHECKPOINT_CANDIDATES = "checkpoint_candidates"
-    CHECKPOINT_SELECTION_RULE = "checkpoint_selection_rule"
     CLIENT = "client"
     CLIENT_IDENTITY = "client_identity"
     CONFIRMATORY_LADDER = "confirmatory_ladder"
     COORDINATE = "coordinate"
     CUDA = "cuda"
     FEATURES = "features"
-    FEDPROX_COEFFICIENT_SELECTION_RULE = "fedprox_coefficient_selection_rule"
     HELD_OUT_METRICS = "held_out_metrics"
     LABEL = "label"
     LOCAL_QUANTILE_MEAN = "local_quantile_mean"
@@ -519,11 +502,11 @@ class NormalizedClaimWording(NonEmptyString):
 
 
 class ReportLine(str):
-    """One rendered line of report output; may be blank for paragraph separation."""
+    pass
 
 
 class FileContentText(str):
-    """Textual body of a file written to the artifact tree; allows empty content."""
+    pass
 
 
 class MessageEndpoint(NonEmptyString):

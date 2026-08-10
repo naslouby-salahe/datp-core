@@ -1,5 +1,3 @@
-"""Per-client threshold and operating-point movement evidence."""
-
 from typing import ClassVar
 
 from pydantic import model_validator
@@ -77,8 +75,6 @@ class ThresholdMovement(StrictModel):
 
 
 class ThresholdMovementCohort(StrictModel):
-    """Client-level movements for one seed (or one explicitly assembled cohort)."""
-
     movements: tuple[ThresholdMovement, ...]
     mean_delta_threshold: MetricValue | None
     mean_delta_fpr: MetricValue | None
@@ -99,8 +95,6 @@ class ThresholdMovementCohort(StrictModel):
 
 
 class ThresholdMovementSeedSummary(StrictModel):
-    """One seed's summary of client-level threshold movements."""
-
     seed: Seed
     experiment: ExperimentId
     mean_delta_threshold: MetricValue
@@ -110,8 +104,6 @@ class ThresholdMovementSeedSummary(StrictModel):
 
 
 class ThresholdMovementMultiSeedUncertainty(StrictModel):
-    """Uncertainty of seed-level movement summaries across the declared seed cohort."""
-
     seed_summaries: tuple[ThresholdMovementSeedSummary, ...]
     mean_of_seed_mean_delta_fpr: MetricValue | None
     across_seed_dispersion_delta_fpr: MetricValue | None
@@ -195,7 +187,7 @@ def summarize_threshold_movements_across_seeds(
     *,
     required_seed_count: SeedCount | None = None,
 ) -> ThresholdMovementMultiSeedUncertainty:
-    """Aggregate per-seed movement summaries; dispersion is across seeds, not clients."""
+
     summaries: list[ThresholdMovementSeedSummary] = []
     for cohort in cohorts:
         if (

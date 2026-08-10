@@ -28,8 +28,6 @@ from datp_core.data.populations.contracts import ClientIdentity
 
 @dataclass(frozen=True, slots=True)
 class _PopulationResultClassification:
-    """Partitioned client results and aggregate counts for one population evaluation."""
-
     fpr_evaluable_results: tuple[ClientMetricResult, ...]
     fpr_values: tuple[MetricValue, ...]
     excluded_clients: tuple[ClientIdentity, ...]
@@ -166,8 +164,6 @@ def _fpr_aggregates(
     ]
     warnings: tuple[MetricWarning, ...] = ()
     if len(values) < 2:
-        # The sample standard deviation (ddof=1) is undefined for a single
-        # evaluable client; reported as an explicit unavailable result.
         metrics.extend(
             (
                 unavailable(
@@ -183,8 +179,6 @@ def _fpr_aggregates(
             )
         )
     else:
-        # Sample standard deviation (Bessel's correction), matching the historical
-        # DATP metric definition and the locked anchor reference estimator.
         std = float(np.std(array, ddof=1))
         metrics.append(
             available(MetricId.FPR_SAMPLE_STANDARD_DEVIATION, MetricValue(std), denominator=RowCount(len(values)))
@@ -287,8 +281,7 @@ def _coefficient_of_variation(metric: MetricId, values: tuple[MetricValue, ...])
     mean = float(np.mean(raw))
     if is_numeric_zero(mean):
         return unavailable(metric, MetricStatus.UNDEFINED, MetricReason.ZERO_MEAN)
-    # Sample standard deviation (ddof=1), matching the historical DATP CV(FPR)
-    # definition and the locked anchor reference estimator.
+
     return available(metric, MetricValue(float(np.std(raw, ddof=1)) / mean), denominator=RowCount(len(values)))
 
 

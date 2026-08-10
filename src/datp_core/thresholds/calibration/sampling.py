@@ -1,5 +1,3 @@
-"""Deterministic nested without-replacement calibration subsampling."""
-
 from dataclasses import dataclass
 from typing import cast
 

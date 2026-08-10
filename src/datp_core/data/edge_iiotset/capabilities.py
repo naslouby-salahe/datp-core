@@ -1,5 +1,3 @@
-"""Capability declaration for the audited Edge-IIoTset artifact."""
-
 from datp_core.core.identifiers import (
     ChronologyGroupIdentity,
     ClientIdentityToken,

@@ -1,5 +1,3 @@
-"""Separate lazy readers for audited Edge-IIoTset benign and attack sources."""
-
 from pathlib import Path
 
 import polars as pl
@@ -20,8 +18,6 @@ from .schema import (
 
 
 class EdgeIIoTsetReader:
-    """Preserve mixed raw fields without inferring sensor identity for attacks."""
-
     def read_benign(self, path: Path) -> pl.LazyFrame:
         sensor_group = benign_sensor_group(path)
         return self._read(path, sensor_group)

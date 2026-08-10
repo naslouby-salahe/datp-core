@@ -1,5 +1,3 @@
-"""Physical-device-family threshold construction and result contracts."""
-
 from dataclasses import dataclass
 from typing import ClassVar
 
@@ -80,8 +78,6 @@ class FamilyMembership:
 
 @dataclass(frozen=True, slots=True)
 class FamilyMembershipConstruction:
-    """Membership and threshold assignments produced for one device family."""
-
     membership: FamilyMembership
     assignments: tuple[ThresholdAssignment, ...]
 

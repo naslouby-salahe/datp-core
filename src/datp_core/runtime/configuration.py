@@ -1,5 +1,3 @@
-"""Executable repository layout and runtime limits."""
-
 from dataclasses import dataclass
 from pathlib import Path
 

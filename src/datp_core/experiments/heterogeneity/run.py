@@ -1,10 +1,3 @@
-"""Controlled heterogeneity sweep and mechanism experiment execution.
-
-The controlled heterogeneity sweep executes training on the declared Dirichlet
-populations. Score geometry, heterogeneity-benefit association, and threshold
-movement analyses reuse frozen confirmatory score artifacts.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -236,7 +229,7 @@ def _collect_heterogeneity_movement_cohorts() -> tuple[ThresholdMovementCohort, 
 def _controlled_heterogeneity_figures(
     observations: tuple[AssociationObservation, ...],
 ) -> tuple[FigureSpec, ...]:
-    """Publish every declared severity/seed value, rather than a smoothed summary."""
+
     x_label = FigureLabel("locked benign-calibration Jensen-Shannon divergence")
     y_label = FigureLabel("shared-local CV(FPR) gain")
     by_regime: dict[RegimeLabel, list[AssociationObservation]] = {}
@@ -483,7 +476,6 @@ def analyze_per_client_score_geometry(*, overwrite: bool) -> Path:
         from shutil import rmtree
 
         rmtree(output)
-
     geometries, figures = build_confirmatory_score_geometry()
     persist_score_geometry(geometries, output / "score_geometry")
     if geometries:
@@ -510,7 +502,6 @@ def analyze_heterogeneity_benefit_association(*, overwrite: bool) -> Path:
         from shutil import rmtree
 
         rmtree(output)
-
     mechanisms: list[MechanismEvidence] = []
     association_observations: list[AssociationObservation] = []
     for seed in CONFIRMATORY_SEED_COHORT.values:
@@ -533,7 +524,6 @@ def analyze_heterogeneity_benefit_association(*, overwrite: bool) -> Path:
             )
     association = heterogeneity_benefit_association(tuple(association_observations))
     mechanisms.append(association)
-
     if mechanisms:
         export_mechanism_publication(
             tuple(mechanisms),
@@ -558,7 +548,6 @@ def analyze_threshold_movement_tradeoff(*, overwrite: bool) -> Path:
         from shutil import rmtree
 
         rmtree(output)
-
     mechanisms: list[MechanismEvidence] = []
     movement_cohorts: list[ThresholdMovementCohort] = []
     for seed in CONFIRMATORY_SEED_COHORT.values:
@@ -572,14 +561,12 @@ def analyze_threshold_movement_tradeoff(*, overwrite: bool) -> Path:
         movement_cohorts.append(movement)
         mechanisms.append(movement)
         _verify_auroc_invariance(shared, local)
-
     mechanisms.append(
         summarize_threshold_movements_across_seeds(
             tuple(movement_cohorts),
             required_seed_count=CONFIRMATORY_SEED_COHORT.member_count,
         )
     )
-
     export_mechanism_publication(
         tuple(mechanisms),
         experiment=ExperimentId.THRESHOLD_MOVEMENT_TRADEOFF,

@@ -1,5 +1,3 @@
-"""Federated checkpoint artifact identities and exact Parquet schemas."""
-
 from dataclasses import dataclass
 from enum import StrEnum
 

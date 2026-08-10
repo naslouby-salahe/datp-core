@@ -1,5 +1,3 @@
-"""Shared PreprocessedPartitionPaths construction for federated and centralized publication."""
-
 from pathlib import Path
 
 from datp_core.core.identifiers import PartitionRole, SplitProtocolId

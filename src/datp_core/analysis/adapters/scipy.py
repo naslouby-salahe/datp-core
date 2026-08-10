@@ -1,5 +1,3 @@
-"""Typed extraction boundaries for SciPy result objects."""
-
 from dataclasses import dataclass
 from math import isfinite
 from typing import Protocol, SupportsFloat

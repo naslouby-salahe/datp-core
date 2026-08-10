@@ -1,5 +1,3 @@
-"""Scientific leakage and schema validation for preprocessing."""
-
 from collections.abc import Iterable
 from itertools import combinations
 from pathlib import Path
@@ -128,7 +126,7 @@ def extract_partitions(
     keep = (STABLE_ROW_ID_COLUMN, OUTCOME_LABEL_COLUMN, *feat_cols)
     selected = normalized.select(PARTITION_ROLE_COLUMN, *keep)
     extracted: list[PreprocessingPartition] = []
-    total_extracted_rows: int = 0
+    total_extracted_rows = RowCount(0)
     for role in expected_roles:
         role_frame = selected.filter(pl.col(PARTITION_ROLE_COLUMN) == role.value).select(keep)
         if ordering is PartitionOrdering.STABLE_ROW_ID:
@@ -137,9 +135,9 @@ def extract_partitions(
         if not height:
             raise ScientificContractError(ErrorMessage(f"{branch.value} partition {role.value} is empty"), subject=role)
         extracted.append(PreprocessingPartition(role, role_frame))
-        total_extracted_rows += height
+        total_extracted_rows = total_extracted_rows.plus(RowCount(height))
     partitions = PreprocessingPartitions(tuple(extracted))
-    if total_extracted_rows != normalized.height:
+    if total_extracted_rows.value != normalized.height:
         raise ScientificContractError(ErrorMessage("partition extraction lost rows"), subject=ContractSubject.ROWS)
     return partitions
 

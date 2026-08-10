@@ -1,5 +1,3 @@
-"""Quantile and finite-sample rank computations for benign thresholds."""
-
 from dataclasses import dataclass
 from math import ceil, sqrt
 from typing import Literal

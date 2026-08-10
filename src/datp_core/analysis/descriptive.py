@@ -1,5 +1,3 @@
-"""Deterministic descriptive summaries for seed- and client-level evidence."""
-
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import ClassVar

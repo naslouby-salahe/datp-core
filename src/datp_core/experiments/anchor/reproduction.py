@@ -1,5 +1,3 @@
-"""Historical five-seed anchor reproduction without confirmatory-cohort substitution."""
-
 from json import loads
 from pathlib import Path
 
@@ -241,7 +239,7 @@ def historical_sources_for_seed_directories(
     local_root: Path,
     seed_cohort: SeedCohort = HISTORICAL_ANCHOR_SEED_COHORT,
 ) -> tuple[HistoricalMetricArtifactSource, ...]:
-    """Build typed sources from descriptive shared/local result directories."""
+
     validate_historical_seed_cohort(seed_cohort)
 
     def _generate():
@@ -267,7 +265,7 @@ def reproduce_anchor(
     observations: tuple[AnchorObservedMetric, ...] | None = None,
     dependency_blocker: AnchorDependencyBlocker | None = None,
 ) -> AnchorReproductionResult:
-    """Compare protocol references to observations for the historical five-seed cohort."""
+
     seed_cohort = validate_historical_seed_cohort(protocol.seed_cohort)
     references = references_from_protocol(protocol)
     resolved_observations = observations or ()
@@ -391,7 +389,7 @@ def _anchor_bca_comparison(
     observations: tuple[AnchorObservedMetric, ...],
     seed_cohort: SeedCohort,
 ) -> AnchorBcaComparison:
-    """Reproduced shared-minus-local CV(FPR) BCa interval over the historical five-seed cohort."""
+
     shared = {
         item.seed: item.value
         for item in observations

@@ -1,5 +1,3 @@
-"""Dataset-independent population feasibility, finalization, and handoff construction."""
-
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -90,7 +88,7 @@ def assess_declared_feasibility(
     expected_identities: tuple[ClientIdentityToken, ...] | None,
     chronology_required: bool,
 ) -> PopulationFeasibility:
-    """Shared feasibility gate used by every population builder."""
+
     return feasibility_from_candidates(
         FeasibilityAssessmentRequest(
             expected_count=expected_count,
@@ -103,7 +101,7 @@ def assess_declared_feasibility(
 
 
 def finalize_population(request: PopulationFinalizationRequest) -> PopulationManifest:
-    """Build and validate a complete immutable population result from one typed request."""
+
     declaration = request.declaration
     if (
         declaration.id is not request.population

@@ -1,5 +1,3 @@
-"""CLI presentation helpers and typed exit-code mapping."""
-
 from __future__ import annotations
 
 from typing import Never

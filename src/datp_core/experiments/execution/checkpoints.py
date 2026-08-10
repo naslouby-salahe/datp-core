@@ -1,5 +1,3 @@
-"""Federated training execution."""
-
 from datp_core.core.identifiers import FeatureNameSequence
 from datp_core.core.numeric import ClientCount
 from datp_core.detector.checkpoints.protocols import DIAGNOSTIC_SNAPSHOT_PROTOCOL

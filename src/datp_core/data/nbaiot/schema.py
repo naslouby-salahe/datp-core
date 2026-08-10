@@ -1,5 +1,3 @@
-"""Audited N-BaIoT source schema and path identities."""
-
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -116,8 +114,6 @@ class NBaIoTAttackSubtype(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class NBaIoTSourceIdentity:
-    """Audited identity encoded by one extracted N-BaIoT source path."""
-
     device: NBaIoTDevice
     source_label: NBaIoTSourceLabel
     attack_family: NBaIoTAttackFamily | None

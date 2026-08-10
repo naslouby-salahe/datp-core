@@ -1,5 +1,3 @@
-"""Execution recipes, provenance, and deterministic campaign contracts."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -8,7 +6,7 @@ from pathlib import Path
 from typing import Protocol
 
 from datp_core.core.identifiers import StageExecutionEvidence
-from datp_core.core.numeric import CampaignOrdinal
+from datp_core.core.numeric import CampaignCoordinateCount, CampaignOrdinal, ElapsedSeconds, RoundNumber
 from datp_core.experiments.common.coordinates import ExperimentCoordinate
 
 
@@ -91,18 +89,16 @@ class ProgressEventKind(StrEnum):
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ProgressEvent:
-    """Observation-only execution progress, emitted by the kernel and consumed by adapters."""
-
     kind: ProgressEventKind
     coordinate: ExperimentCoordinate | None = None
     stage: PipelineStage | None = None
-    ordinal: int | None = None
-    total: int | None = None
-    round_number: int | None = None
-    maximum_round: int | None = None
+    ordinal: CampaignOrdinal | None = None
+    total: CampaignCoordinateCount | None = None
+    round_number: RoundNumber | None = None
+    maximum_round: RoundNumber | None = None
     outcome: StageOutcome | None = None
-    detail: str | None = None
-    elapsed_seconds: float | None = None
+    detail: StageExecutionEvidence | None = None
+    elapsed_seconds: ElapsedSeconds | None = None
 
     def __post_init__(self) -> None:
         if self.kind is ProgressEventKind.TRAINING_ROUND and (self.round_number is None or self.maximum_round is None):

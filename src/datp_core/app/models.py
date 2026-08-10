@@ -1,5 +1,3 @@
-"""Immutable application result models for DATP-Core research execution."""
-
 from dataclasses import dataclass
 from pathlib import Path
 

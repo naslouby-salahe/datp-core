@@ -1,5 +1,3 @@
-"""Miniature deterministic population fixtures."""
-
 from datetime import UTC
 from pathlib import Path
 
@@ -168,7 +166,7 @@ def edge_canonical_root(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def edge_temporal_eligible_root(tmp_path: Path) -> Path:
-    """Edge corpus with nine chronology-eligible groups and capture timestamps."""
+
     root = tmp_path / "edge_temporal_ok"
     static = root / "data" / "static_benign"
     temporal = root / "data" / "temporal_benign"

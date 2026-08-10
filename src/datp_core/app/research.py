@@ -1,5 +1,3 @@
-"""Programme execution, campaign lifecycle, reporting orchestration, and status."""
-
 from __future__ import annotations
 
 import sys
@@ -261,7 +259,7 @@ def run_campaign(*, overwrite: OverwriteMode) -> CampaignRunResult:
     execution_marker_lines = "\n".join(item.experiment.value for item in results) + "\n"
     CAMPAIGN_EXECUTION_MARKER.parent.mkdir(parents=True, exist_ok=True)
     write_text_atomically(CAMPAIGN_EXECUTION_MARKER, FileContentText(execution_marker_lines))
-    report = generate_report(None, overwrite=overwrite)
+    report = _generate_campaign_report()
     CAMPAIGN_PUBLICATION_MARKER.parent.mkdir(parents=True, exist_ok=True)
     write_text_atomically(CAMPAIGN_PUBLICATION_MARKER, FileContentText(execution_marker_lines))
     return CampaignRunResult(
@@ -271,24 +269,27 @@ def run_campaign(*, overwrite: OverwriteMode) -> CampaignRunResult:
     )
 
 
-def generate_report(
-    experiment_id: ExperimentId | None,
-    *,
-    overwrite: OverwriteMode,
-) -> ReportResult:
+def generate_report(experiment_id: ExperimentId | None) -> ReportResult:
     if experiment_id is None:
-        return _generate_campaign_report(overwrite)
+        run_campaign(overwrite=OverwriteMode.REBUILD)
+        return _generate_campaign_report()
+    run_experiment(
+        experiment_id,
+        overwrite=OverwriteMode.REBUILD,
+        mode=ProgrammeExecutionMode.FULL,
+    )
     recipe = recipe_for(experiment_id)
     _enforce_anchor_gate(experiment_id, recipe.anchor_requirement)
-    return recipe.report(experiment_id, overwrite)
+    return recipe.report(experiment_id)
 
 
-def _generate_campaign_report(overwrite: OverwriteMode) -> ReportResult:
+def _generate_campaign_report() -> ReportResult:
     paths: list[Path] = []
     details: list[str] = []
     for recipe in EXPERIMENT_RECIPES:
         try:
-            report = generate_report(recipe.experiment, overwrite=overwrite)
+            _enforce_anchor_gate(recipe.experiment, recipe.anchor_requirement)
+            report = recipe.report(recipe.experiment)
         except (
             AnchorReproductionError,
             MissingPrerequisiteError,

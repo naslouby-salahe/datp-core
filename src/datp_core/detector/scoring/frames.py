@@ -1,5 +1,3 @@
-"""Score-frame schema validation, construction, and persisted-frame integrity."""
-
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -65,7 +63,7 @@ def validate_score_input_frame(
     partition_role: PartitionRole,
     feature_names: FeatureNameSequence,
 ) -> None:
-    """Validate score inputs without materializing complete columns in Python."""
+
     if frame.height == 0 and partition_role in CALIBRATION_PARTITIONS:
         raise ScientificContractError(
             ErrorMessage(f"{partition_role.value} partition must not be empty"),

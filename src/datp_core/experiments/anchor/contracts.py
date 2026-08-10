@@ -1,5 +1,3 @@
-"""Typed anchor-domain models: comparison records, gate decision records, and historical reproduction records."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -36,7 +34,7 @@ from datp_core.experiments.common.seeds import SeedCohort
 
 
 class AnchorDetail(NonEmptyString):
-    """Human-readable detail text for an anchor comparison outcome."""
+    pass
 
 
 class AnchorComparisonStrategy(StrEnum):
@@ -129,15 +127,6 @@ class SourceDefinedRule(StrictModel):
 
 
 class DiagnosticRule(StrictModel):
-    """Per-seed historical value reference, reported but never gated.
-
-    The roadmap gate's identity conditions (cohort, population, preprocessing,
-    training, scoring, threshold, eligibility, metric definition) are checked
-    structurally; the reproduced per-seed CV(FPR) values are
-    reported against the historical constants as diagnostics only. The sole
-    confirmatory decision is the BCa interval on the five-seed cohort.
-    """
-
     strategy: Literal[AnchorComparisonStrategy.DIAGNOSTIC] = AnchorComparisonStrategy.DIAGNOSTIC
 
 
@@ -228,13 +217,6 @@ class AnchorMetricReference(StrictModel):
 
 
 class AnchorObservedMetric(StrictModel):
-    """Observed metric candidate.
-
-    Coordinates are not pre-forced to the historical identity so mismatched
-    population, model, threshold, or metric can be recorded
-    as explicit comparison failures rather than construction-time silence.
-    """
-
     seed: Seed
     population: PopulationId
     training_model: TrainingModelId
@@ -289,8 +271,6 @@ class AnchorSeedSubsetComparison(StrictModel):
 
 
 class AnchorBcaComparison(StrictModel):
-    """Reproduced five-seed shared-minus-local CV(FPR) BCa interval versus the locked historical reference."""
-
     interval: BootstrapInterval
     reference_interval: MetricInterval
     maximum_operative_width: MetricValue
@@ -438,8 +418,6 @@ class VerifiedAnchorGateArtifact(StrictModel):
 
 
 class AnchorConfirmatoryHandoff(StrictModel):
-    """Typed anchor→confirmatory binding artifact that locks programme identity."""
-
     anchor_experiment: ExperimentId
     anchor_seed_cohort: SeedCohort
     dependent_confirmatory_experiment: ExperimentId
@@ -473,8 +451,6 @@ class AnchorDependencyKind(StrEnum):
 
 
 class HistoricalThresholdScopeToken(StrEnum):
-    """Semantic threshold-scope tokens stored in historical metrics artifacts."""
-
     ELIGIBLE_CLIENT_ARITHMETIC_MEAN = "eligible_client_arithmetic_mean"
     PER_CLIENT_PERCENTILE = "per_client_percentile"
 
@@ -499,8 +475,6 @@ class HistoricalRegimeToken(StrEnum):
 
 
 class AnchorArtifactFileName(StrEnum):
-    """On-disk artifact file names used by historical load and stage diagnostics."""
-
     METRICS = "metrics.json"
     GATE_DECISION = "anchor_gate_decision.json"
     DISCREPANCIES = "anchor_discrepancies.json"
@@ -512,8 +486,6 @@ class AnchorSeedDirectoryPrefix(StrEnum):
 
 
 class HistoricalBoundaryModel(StrictModel):
-    """External historical-artifact boundary. Extra legacy fields are ignored, never trusted."""
-
     model_config = ConfigDict(frozen=True, extra="ignore", strict=True)
 
 
@@ -522,8 +494,6 @@ class HistoricalArtifactProvenanceDocument(HistoricalBoundaryModel):
 
 
 class HistoricalMetricsDocument(HistoricalBoundaryModel):
-    """Boundary model for historical seed-level metrics artifacts."""
-
     seed: Seed
     dataset: HistoricalDatasetToken
     regime: HistoricalRegimeToken

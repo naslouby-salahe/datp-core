@@ -1,8 +1,3 @@
-"""Thin research-facing Typer CLI for DATP-Core."""
-
-# Typer's public command-decorator overloads intentionally return Any.
-# pyright: reportUnknownMemberType=false
-
 from __future__ import annotations
 
 from typing import Annotated
@@ -32,7 +27,7 @@ def _overwrite_mode(overwrite: bool) -> OverwriteMode:
 def validate_command(
     experiment_id: Annotated[ExperimentId | None, typer.Argument(case_sensitive=False)] = None,
 ) -> None:
-    """Validate the scientific programme or one experiment and its dependencies."""
+
     try:
         result = validate_programme(experiment_id)
     except (DatpCoreError, ValueError) as error:
@@ -47,7 +42,7 @@ def validate_command(
 def plan_command(
     experiment_id: Annotated[ExperimentId | None, typer.Argument(case_sensitive=False)] = None,
 ) -> None:
-    """Display the deterministic campaign or experiment plan without execution."""
+
     try:
         presentation = build_programme_plan(experiment_id)
     except (DatpCoreError, ValueError) as error:
@@ -63,7 +58,7 @@ def preprocess_command(
         typer.Option("--overwrite", help="Rebuild dataset-level canonical artifacts"),
     ] = False,
 ) -> None:
-    """Materialize one dataset's canonical artifacts."""
+
     try:
         result = preprocess_datasets(dataset_id, overwrite=_overwrite_mode(overwrite))
     except (DatpCoreError, ValueError) as error:
@@ -80,7 +75,7 @@ def smoke_command(
         typer.Option("--overwrite", help="Rebuild smoke-owned artifacts"),
     ] = False,
 ) -> None:
-    """Smoke-test one experiment or the full programme with one canonical seed each."""
+
     try:
         result = run_smoke(experiment_id, overwrite=_overwrite_mode(overwrite))
     except (DatpCoreError, ValueError) as error:
@@ -99,14 +94,10 @@ def smoke_command(
 @app.command("report")
 def report_command(
     experiment_id: Annotated[ExperimentId | None, typer.Argument(case_sensitive=False)] = None,
-    overwrite: Annotated[
-        bool,
-        typer.Option("--overwrite", help="Regenerate report-owned artifacts"),
-    ] = False,
 ) -> None:
-    """Generate report packages from existing validated evidence."""
+
     try:
-        result = generate_report(experiment_id, overwrite=_overwrite_mode(overwrite))
+        result = generate_report(experiment_id)
     except (DatpCoreError, ValueError) as error:
         fail(error)
     typer.echo(result.detail)
@@ -118,7 +109,7 @@ def report_command(
 def status_command(
     experiment_id: Annotated[ExperimentId | None, typer.Argument(case_sensitive=False)] = None,
 ) -> None:
-    """Show campaign or experiment status derived from validated artifacts."""
+
     try:
         report = programme_status(experiment_id)
     except (DatpCoreError, ValueError) as error:

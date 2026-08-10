@@ -1,5 +1,3 @@
-"""Heterogeneity-benefit association mechanism evidence."""
-
 from enum import StrEnum
 from typing import ClassVar, cast
 

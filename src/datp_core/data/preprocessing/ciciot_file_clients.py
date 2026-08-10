@@ -1,5 +1,3 @@
-"""CICIoT2023 file-defined pseudo-client preprocessing."""
-
 from dataclasses import dataclass
 from pathlib import Path
 

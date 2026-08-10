@@ -1,5 +1,3 @@
-"""Validated scientific numeric value objects and exact comparison semantics."""
-
 from dataclasses import dataclass
 from functools import total_ordering
 from math import isclose, isfinite
@@ -292,6 +290,14 @@ class PresentationDecimalCount(NonNegativeIntegerValue):
 
 class CampaignOrdinal(NonNegativeIntegerValue):
     validation_name: ClassVar[str] = "campaign ordinal"
+
+
+class CampaignCoordinateCount(NonNegativeIntegerValue):
+    validation_name: ClassVar[str] = "campaign coordinate count"
+
+
+class ElapsedSeconds(NonNegativeFiniteFloatValue):
+    validation_name: ClassVar[str] = "elapsed seconds"
 
 
 class LogicalElementCount(PositiveIntegerValue):

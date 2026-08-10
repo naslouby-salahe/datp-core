@@ -1,5 +1,3 @@
-"""Typed split protocols and locked split declarations."""
-
 from math import fsum
 
 from pydantic import model_validator
@@ -54,8 +52,6 @@ class TemporalSplitProtocol(StrictModel):
 
 
 class StaticReferenceSplitProtocol(StrictModel):
-    """Randomized counterpart to the temporal 55/15/10/20 inventory."""
-
     training: Ratio
     calibration: Ratio
     reserve: Ratio
@@ -74,16 +70,6 @@ class StaticReferenceSplitProtocol(StrictModel):
 
 
 class HistoricalTemporalGapSplitProtocol(StrictModel):
-    """Chronological per-client row-order split with discarded guard gaps.
-
-    Mirrors the historical DATP N-BaIoT preparation (60% train, 1% gap,
-    20% calibration, 1% gap, remainder evaluation). The two guard gaps are
-    assigned a DISCARDED role so the split still conserves every membership
-    row exactly once, but the gap rows never enter model input, calibration,
-    scoring, or evaluation. Fractions legitimately sum below one; evaluation
-    absorbs the remainder of each client's benign row count.
-    """
-
     training: Ratio
     calibration: Ratio
     gap1: Ratio

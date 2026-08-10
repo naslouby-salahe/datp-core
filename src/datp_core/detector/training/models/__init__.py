@@ -1,5 +1,3 @@
-"""Typed immutable contracts for federated autoencoder training."""
-
 from datp_core.detector.training.contracts import DittoTrainingCoordinates, FederatedTrainingCoordinate
 from datp_core.detector.training.models.checkpoints import (
     DittoTrainingOutcome,

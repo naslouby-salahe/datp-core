@@ -275,5 +275,9 @@ def _benign_calibration_scores(scores: PooledScoreArtifact) -> np.ndarray:
         benign_label=PopulationOutcomeLabel.BENIGN,
     )
     values = np.asarray(frame.get_column(ScoreFrameColumn.RECONSTRUCTION_ERROR.value).to_list(), dtype=np.float64)
-    reject_non_finite_scores(values, message="calibration scores must be finite", subject=ContractSubject.CALIBRATION)
+    reject_non_finite_scores(
+        values,
+        message=ErrorMessage("calibration scores must be finite"),
+        subject=ContractSubject.CALIBRATION,
+    )
     return values

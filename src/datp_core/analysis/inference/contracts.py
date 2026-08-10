@@ -1,5 +1,3 @@
-"""Protocol declarations shared by paired inference implementations."""
-
 from enum import StrEnum
 
 from pydantic import model_validator
@@ -27,8 +25,6 @@ class WilcoxonComputationPreference(StrEnum):
 
 
 class PairedInferenceProtocol(StrictModel):
-    """Pre-declared numerical and procedural choices for paired analyses."""
-
     confidence_level: ConfidenceLevel
     paired_seed_count: SeedCount
     interval_method: IntervalMethod

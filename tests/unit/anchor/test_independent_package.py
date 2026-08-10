@@ -1,5 +1,3 @@
-"""Independent observation package load/publish and gate verification."""
-
 from pathlib import Path
 
 from tests.unit.anchor.helpers import matching_anchor_observations

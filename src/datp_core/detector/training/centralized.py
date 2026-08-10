@@ -1,5 +1,3 @@
-"""Independent centralized autoencoder training for the privacy-incompatible reference."""
-
 from dataclasses import dataclass
 
 import numpy as np
@@ -100,8 +98,6 @@ class CentralizedOptimizerSummary:
 
 @dataclass(frozen=True, slots=True)
 class CentralizedTrainingDefaults:
-    """Declared scientific values used by centralized detector training."""
-
     training_protocol: CentralizedTrainingProtocol
     autoencoder: AutoencoderProtocol
     learning_rate: LearningRate
@@ -191,7 +187,7 @@ def reject_attack_rows_in_centralized_training(
 
 
 def train_centralized_autoencoder(request: CentralizedTrainingRequest) -> CentralizedTrainingExecution:
-    """Train the independent pooled autoencoder on CUDA with declared hyperparameters."""
+
     _validate_training_request(request)
     reject_federated_preprocessing_for_training(request.preprocessing_state)
     configure_deterministic_execution(request.training_seed)
@@ -273,7 +269,7 @@ def training_history_frame(result: CentralizedTrainingResult) -> pl.DataFrame:
 
 
 def require_no_hidden_scientific_defaults() -> None:
-    """Fail if mandatory centralized training values are absent from declarations."""
+
     if CENTRALIZED_TRAINING_PROTOCOL.optimizer.identity is not OptimizerId.ADAM:
         raise UnresolvedScientificValueError(
             ErrorMessage("centralized optimizer identity is not the declared Adam protocol"),

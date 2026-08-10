@@ -1,5 +1,3 @@
-"""Deterministic non-temporal, temporal, and static-reference splits on stable row identities."""
-
 from dataclasses import dataclass
 from enum import StrEnum
 from hashlib import sha256
@@ -73,8 +71,6 @@ _ATTACK = PopulationOutcomeLabel.ATTACK
 
 @dataclass(frozen=True, slots=True, eq=False)
 class SplitMembershipResult:
-    """Validated role assignments and their manifest for one population membership."""
-
     assignments: pl.DataFrame
     manifest: SplitManifestDocument
 
@@ -99,17 +95,7 @@ def hamilton_integer_counts(
     total: RowCount,
     ratios: tuple[Ratio, ...],
 ) -> tuple[RowCount, ...]:
-    """Largest-remainder (Hamilton) integer allocation.
 
-    For non-negative integer ``total`` and ratios that sum to one:
-
-    1. compute raw shares ``total * ratio_i``;
-    2. assign each role ``floor(raw_i)``;
-    3. distribute the residual ``total - sum(floors)`` by descending fractional part;
-    4. break fractional ties by ascending role index.
-
-    The result conserves every row exactly once and never depends on library defaults.
-    """
     _require_hamilton_inputs(total, ratios)
     total_value = total.value
     raw = tuple(total_value * ratio.value for ratio in ratios)
@@ -283,7 +269,7 @@ def _static_reference_assignments(
     membership: pl.DataFrame,
     partition_seed: Seed,
 ) -> pl.DataFrame:
-    """Randomize the same temporal inventory without temporal ordering."""
+
     if membership.filter(pl.col(OUTCOME_LABEL_COLUMN) == _ATTACK).height > 0:
         raise LeakageError(
             ErrorMessage("the matched static reference is benign-only"),
@@ -328,15 +314,7 @@ def _static_reference_assignments(
 
 
 def _historical_gap_assignments(membership: pl.DataFrame) -> pl.DataFrame:
-    """Legacy-exact chronological 60/1/20/1/18 split with discarded guard gaps.
 
-    Reproduces the historical DATP N-BaIoT preparation: per client, benign rows
-    are ordered by their canonical source-row index (file row order) and sliced
-    into train, a 1% guard gap, calibration, a second 1% guard gap, and the
-    evaluation remainder. Guard gaps receive the DISCARDED role so the split
-    conserves every membership row, but never enter model input, calibration,
-    scoring, or evaluation. Attack rows are assigned to evaluation.
-    """
     protocol = historical_temporal_gap_split_protocol()
     pieces: list[pl.DataFrame] = []
     for client_id in membership.get_column(CLIENT_ID_COLUMN).unique().sort().to_list():

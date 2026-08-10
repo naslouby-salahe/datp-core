@@ -1,5 +1,3 @@
-"""Typed paired-contrast identities and supplementary analysis plans."""
-
 from typing import overload
 
 from pydantic import model_validator
@@ -23,8 +21,6 @@ from datp_core.core.identifiers import (
     TrainingModelId,
 )
 from datp_core.core.numeric import (
-    NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
-    AbsoluteTolerance,
     DittoRegularization,
     MetricValue,
     PairedObservationCount,
@@ -53,8 +49,6 @@ class PairedDifferenceCounts(StrictModel):
 
 
 class FederatedDesignIdentity(StrictModel):
-    """Seed-independent detector design fixed across paired contrasts."""
-
     population: PopulationId
     split_protocol: SplitProtocolId
     preprocessing_identity: PreprocessingProtocolId
@@ -105,8 +99,6 @@ class PairedContrast(StrictModel):
 
 
 class PairedContrasts(StrictModel):
-    """Immutable, seed-unique observations for one paired analysis."""
-
     values: tuple[PairedContrast, ...]
 
     @model_validator(mode="after")
@@ -170,9 +162,8 @@ def build_paired_contrast(
     left_value: MetricValue,
     right_value: MetricValue,
     evidence_role: EvidenceRole,
-    auroc_absolute_tolerance: AbsoluteTolerance = NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
 ) -> PairedContrast:
-    """Build a typed paired contrast only after full fixed-score control validation."""
+
     if left.score_coordinate != right.score_coordinate:
         raise ScientificContractError(ErrorMessage("paired evaluation documents use different training coordinates"))
     if left.threshold_method is right.threshold_method:
@@ -181,11 +172,7 @@ def build_paired_contrast(
         raise ScientificContractError(
             ErrorMessage("paired evaluation documents must share the requested evidence role")
         )
-    validate_fixed_score_controls(
-        left.fixed_score_evidence,
-        right.fixed_score_evidence,
-        auroc_absolute_tolerance=auroc_absolute_tolerance,
-    )
+    validate_fixed_score_controls(left.fixed_score_evidence, right.fixed_score_evidence)
     left_evidence = left.fixed_score_evidence
     return PairedContrast(
         coordinate=left.score_coordinate,

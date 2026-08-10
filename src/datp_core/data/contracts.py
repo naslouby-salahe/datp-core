@@ -1,5 +1,3 @@
-"""Immutable records for audited dataset ingestion and publication, and their canonical serialization."""
-
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path

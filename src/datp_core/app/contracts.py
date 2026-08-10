@@ -1,5 +1,3 @@
-"""Typed application-lifecycle contracts for DATP-Core programme execution."""
-
 from enum import StrEnum
 
 

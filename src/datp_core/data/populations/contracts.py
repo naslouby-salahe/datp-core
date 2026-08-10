@@ -1,5 +1,3 @@
-"""Population, capability, split, feasibility, and construction contracts."""
-
 from dataclasses import dataclass
 from enum import StrEnum
 from functools import reduce, total_ordering
@@ -257,14 +255,10 @@ class ChronologyExclusionReason(StrEnum):
 
 
 class ModelInputExclusionReason(StrEnum):
-    """Immutable reason for rows excluded before population membership exists."""
-
     NONFINITE_OR_NULL_NUMERIC_MODEL_INPUT_FEATURE = "nonfinite_or_null_numeric_model_input_feature"
 
 
 class ModelInputExclusionEvidence(StrictModel):
-    """Stable-row provenance for a population's immutable model-input eligibility gate."""
-
     dataset: DatasetId
     population: PopulationId
     reason: ModelInputExclusionReason
@@ -705,8 +699,6 @@ class PopulationCapabilityViolation(StrEnum):
 
 
 class TemporalSplitViolation(StrEnum):
-    """Shared temporal-construction discriminant for split and publication validation."""
-
     CAPTURE_TIMESTAMP_UNAVAILABLE = "capture_timestamp_unavailable"
 
 

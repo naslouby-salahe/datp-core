@@ -1,5 +1,3 @@
-"""Canonical materialization for audited N-BaIoT sources."""
-
 from pathlib import Path
 
 from datp_core.core.identifiers import AvailabilityStatus, CanonicalizationContractName, DatasetId
@@ -37,8 +35,6 @@ _NBAIOT_CANONICALIZATION_CONTRACT = CanonicalizationContractName("normalized_phy
 
 
 class NBaIoTMaterializer:
-    """Publish independently streamed source partitions with complete provenance."""
-
     def canonical_directory(self, canonical_root: Path) -> Path:
         return canonical_directory(canonical_root, NBAIOT_SCHEMA)
 

@@ -1,5 +1,3 @@
-"""Benign-only calibration eligibility and deterministic subsampling service."""
-
 from dataclasses import dataclass
 
 import polars as pl

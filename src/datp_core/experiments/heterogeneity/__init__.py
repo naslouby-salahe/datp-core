@@ -1,5 +1,3 @@
-"""Controlled-heterogeneity and mechanism experiment ownership."""
-
 from .run import (
     MechanismAnalysisDirectory,
     analyze_controlled_heterogeneity_sweep,

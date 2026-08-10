@@ -1,5 +1,3 @@
-"""Typed experiment specifications, execution identities, and scientific coordinates."""
-
 from dataclasses import dataclass
 from enum import StrEnum
 

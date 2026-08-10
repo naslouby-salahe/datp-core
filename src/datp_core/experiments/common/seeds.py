@@ -1,5 +1,3 @@
-"""Locked experiment seed cohorts."""
-
 from pydantic import model_validator
 
 from datp_core.core.contracts import StrictModel

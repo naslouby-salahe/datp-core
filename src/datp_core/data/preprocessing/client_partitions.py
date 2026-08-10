@@ -64,16 +64,12 @@ _EDGE_PUBLISHED_POPULATIONS = frozenset(
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ModelInputEligibilityResult:
-    """Rows eligible for model input and evidence for the rejected rows."""
-
     eligible_rows: pl.DataFrame
     exclusion_evidence: ModelInputExclusionEvidence
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PublishedHandoffJoin:
-    """Canonical feature join with any model-input exclusion evidence."""
-
     joined_rows: pl.DataFrame
     exclusion_evidence: ModelInputExclusionEvidence | None
 
@@ -83,11 +79,7 @@ def client_partitions(
     feature_names: FeatureNameSequence,
     split_protocol: SplitProtocolId,
 ) -> ClientCollection[ClientPathToken, PreprocessingPartitions]:
-    # Derive the client identity from each partition's own rows rather than the
-    # partition_by dict key: `as_dict=True` keys are 1-tuples such as
-    # `('danmini_doorbell',)`, whose str() form would not match the manifest's
-    # bare client tokens. `partition_by` preserves the input sort, so groups
-    # appear in CLIENT_ID order and remain deterministic.
+
     return ClientCollection(
         tuple(
             ClientOwned(

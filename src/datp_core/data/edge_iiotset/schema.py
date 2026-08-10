@@ -1,5 +1,3 @@
-"""Audited Edge-IIoTset CSV schema and source identity rules."""
-
 from enum import StrEnum
 from pathlib import Path
 
@@ -61,8 +59,6 @@ class EdgeCanonicalColumn(StrEnum):
 
 
 class EdgeRawColumn(StrEnum):
-    """Every audited raw CSV column, in the exact on-disk header order."""
-
     TIMESTAMP = "frame.time"
     IP_SRC_HOST = "ip.src_host"
     IP_DST_HOST = "ip.dst_host"

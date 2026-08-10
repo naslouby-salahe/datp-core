@@ -1,5 +1,3 @@
-"""Typed experiment catalogue."""
-
 from pydantic import model_validator
 
 from datp_core.analysis.metrics.protocols import (

@@ -1,5 +1,3 @@
-"""Typed filesystem layout for coordinate-bound execution artifacts."""
-
 from enum import StrEnum
 from pathlib import Path
 

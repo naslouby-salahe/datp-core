@@ -1,5 +1,3 @@
-"""Claim-control and final publication validation."""
-
 from __future__ import annotations
 
 from collections.abc import Iterator
@@ -136,7 +134,7 @@ def validate_claim(request: ClaimRequest) -> ClaimDecision:
 def _claim_failures(
     request: ClaimRequest, normalized_wording: NormalizedClaimWording
 ) -> Iterator[ClaimDecision | None]:
-    """Yield claim guards in publication order, stopping at the first failure."""
+
     yield _availability_failure(request)
     yield _suppressed_failure(request)
     yield _kind_role_mismatch(request)
@@ -321,7 +319,7 @@ _KIND_ROLE_MISMATCH_REASONS: dict[tuple[ClaimKind, EvidenceRole | None], ClaimRe
 
 
 def _kind_role_mismatch(request: ClaimRequest) -> ClaimDecision | None:
-    """Reject claim kinds that do not match the evidence role they cite."""
+
     blocked_roles = _KIND_ROLE_BLOCKED_ROLES.get(request.kind, frozenset())
     if request.evidence_role not in blocked_roles:
         return None

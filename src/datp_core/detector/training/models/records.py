@@ -269,7 +269,7 @@ class FederatedTrainingHistory:
             if item.round_number.value != expected_val:
                 raise ScientificContractError(
                     ErrorMessage("federated history rounds must be consecutive from one"),
-                    subject=ContractSubject.CHECKPOINT_CANDIDATES,
+                    subject=ContractSubject.TRAINING,
                 )
             if item.global_state_reference.coordinate != self.coordinate:
                 raise ScientificContractError(

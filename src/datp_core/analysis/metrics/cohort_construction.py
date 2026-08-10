@@ -98,8 +98,6 @@ def cohort_record_for_client(
 
 @dataclass(frozen=True, slots=True)
 class _ClientCohortClassification:
-    """Eligibility record and cohort memberships derived for one client."""
-
     record: ClientEligibilityRecord
     memberships: tuple[EvaluationCohortMembership, ...]
 

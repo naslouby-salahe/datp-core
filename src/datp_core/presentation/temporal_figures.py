@@ -1,5 +1,3 @@
-"""Temporal boundary figures and lossless, provenance-bearing source exports."""
-
 from __future__ import annotations
 
 import csv
@@ -40,15 +38,13 @@ TEMPORAL_FIGURE_SOURCES_MANIFEST_FILENAME = "temporal_figure_sources.json"
 
 @dataclass(frozen=True, slots=True)
 class TemporalFigureSourceExports:
-    """Publication source files linked to their exact lossless row payloads."""
-
     fpr_trajectory_source: Path
     threshold_movement_source: Path
     manifest: Path
 
 
 def temporal_publication_figures(document: TemporalAnalysisDocument) -> tuple[FigureSpec, FigureSpec]:
-    """Build FIGURE-011 and FIGURE-012 from every per-client paired-seed record."""
+
     fpr_series: list[FigureSeries] = []
     threshold_series: list[FigureSeries] = []
     for recovery in _ordered_recoveries(document):
@@ -64,9 +60,7 @@ def temporal_publication_figures(document: TemporalAnalysisDocument) -> tuple[Fi
                         trajectory=trajectory,
                     )
                 )
-            # The temporal threshold display deliberately excludes the matched static
-            # reference: it contrasts the historical threshold used on future data
-            # with the one-shot future-recalibrated threshold.
+
             for state, value in _threshold_values(trajectory):
                 threshold_series.append(
                     _metric_series(
@@ -84,8 +78,7 @@ def temporal_publication_figures(document: TemporalAnalysisDocument) -> tuple[Fi
         threshold_series.append(
             _unavailable_series("no temporal historical/future-recalibrated thresholds", MetricId.THRESHOLD_VALUE)
         )
-    # FigureSeries has no reason field; the accompanying source rows retain the
-    # client/seed-specific reason and the fallback figure remains explicitly unavailable.
+
     return (
         FigureSpec(
             title=FigureTitle(
@@ -108,12 +101,7 @@ def export_temporal_figure_sources(
     document: TemporalAnalysisDocument,
     output_directory: Path,
 ) -> TemporalFigureSourceExports:
-    """Write source records for both mandatory temporal figures.
 
-    CSV rows are one observation per client, seed, and displayed temporal state.
-    Each row repeats the state-specific artifact identities needed to reproduce the
-    observation without relying on a human-readable report.
-    """
     fpr_rows = _fpr_source_rows(document)
     threshold_rows = _threshold_source_rows(document)
     fpr_path = output_directory / FIGURE_011_SOURCE_FILENAME

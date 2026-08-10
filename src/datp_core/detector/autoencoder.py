@@ -1,5 +1,3 @@
-"""Protocol-driven reconstruction autoencoder construction, optimization, and scoring."""
-
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from types import MappingProxyType
@@ -23,8 +21,6 @@ TORCH_LEARNING_DTYPE = torch.float32
 
 
 class AutoencoderStateContribution(Protocol):
-    """A client update that contributes a fitted model state to FedAvg aggregation."""
-
     @property
     def model_state(self) -> "AutoencoderModelState": ...
 
@@ -34,8 +30,6 @@ class AutoencoderStateContribution(Protocol):
 
 @dataclass(frozen=True, slots=True, eq=False, init=False)
 class AutoencoderModelState:
-    """A detached, owned parameter artifact for one fitted reconstruction autoencoder."""
-
     _parameters: Mapping[str, torch.Tensor] = field(repr=False)
 
     @classmethod
@@ -68,30 +62,30 @@ class AutoencoderModelState:
 
     @classmethod
     def from_model(cls, model: "ReconstructionAutoencoder") -> "AutoencoderModelState":
-        """Capture PyTorch module parameters as a detached domain artifact."""
+
         return cls.from_torch_state_dict(model.state_dict())
 
     @classmethod
     def from_torch_state_dict(cls, state_dict: Mapping[str, torch.Tensor]) -> "AutoencoderModelState":
-        """Adapt a PyTorch or SafeTensors tensor mapping at the framework boundary."""
+
         return cls._from_tensor_mapping(state_dict)
 
     def to_torch_state_dict(self) -> dict[str, torch.Tensor]:
-        """Adapt this artifact for PyTorch and SafeTensors APIs that require tensor mappings."""
+
         return {name: tensor.detach().clone() for name, tensor in self._parameters.items()}
 
     def on_cpu_with_contiguous_tensors(self) -> "AutoencoderModelState":
-        """Create the representation required by SafeTensors persistence."""
+
         return AutoencoderModelState._from_tensor_mapping(
             {name: tensor.detach().cpu().contiguous() for name, tensor in self._parameters.items()}
         )
 
     def apply_to(self, model: "ReconstructionAutoencoder") -> None:
-        """Load this fitted-state artifact into a PyTorch autoencoder module."""
+
         model.load_state_dict(self.to_torch_state_dict(), strict=True)
 
     def is_equivalent_to(self, other: "AutoencoderModelState") -> bool:
-        """Report exact parameter-name, shape, dtype, and value equality."""
+
         if self._parameters.keys() != other._parameters.keys():
             return False
         return all(torch.equal(tensor, other._parameters[name]) for name, tensor in self._parameters.items())
@@ -101,7 +95,7 @@ class AutoencoderModelState:
         cls,
         contributions: Sequence[AutoencoderStateContribution],
     ) -> "AutoencoderModelState":
-        """Aggregate client model-state artifacts using their processed-row counts."""
+
         if not contributions:
             raise ScientificContractError(
                 ErrorMessage("aggregation requires at least one client update"),
@@ -150,8 +144,6 @@ class AutoencoderModelState:
 
 
 class ReconstructionAutoencoder(nn.Module):
-    """Symmetric feed-forward autoencoder defined by the declared widths."""
-
     def __init__(self, widths: AutoencoderArchitecture) -> None:
         super().__init__()
         final_layer_index = len(widths) - 2

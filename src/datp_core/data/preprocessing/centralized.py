@@ -1,5 +1,3 @@
-"""Independent pooled preprocessing workflow for the centralized reference."""
-
 from dataclasses import dataclass
 from pathlib import Path
 

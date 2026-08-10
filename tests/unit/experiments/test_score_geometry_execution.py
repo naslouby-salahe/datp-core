@@ -1,5 +1,3 @@
-"""Execution guards for confirmatory score-geometry publication."""
-
 from types import SimpleNamespace
 
 import pytest

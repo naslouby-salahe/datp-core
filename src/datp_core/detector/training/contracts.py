@@ -1,5 +1,3 @@
-"""Training declarations, protocol resolution, and typed federated coordinates."""
-
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Annotated, Literal, cast, overload

@@ -1,5 +1,3 @@
-"""Publication figure specifications that cannot invent unavailable series."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -42,8 +40,6 @@ class FigureSeries:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class EmpiricalCdfFigureSeries:
-    """Typed empirical CDF series: x = reconstruction score, y = cumulative probability."""
-
     label: FigureLabel
     x_metric: MetricId
     y_metric: MetricId
@@ -70,8 +66,6 @@ class EmpiricalCdfFigureSeries:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PairedMetricFigureSeries:
-    """Reproducibility data for a labelled scatter or fitted paired-metric line."""
-
     label: FigureLabel
     x_label: FigureLabel
     y_label: FigureLabel
@@ -206,11 +200,7 @@ def score_geometry_figure(
     title: FigureTitle,
     client_id: ClientIdentityToken | None = None,
 ) -> FigureSpec:
-    """Build one validated empirical-CDF figure from a frozen score-geometry record.
 
-    A client filter is used only for the pre-specified deep-dive panel; callers
-    otherwise receive every declared client and score role in the geometry.
-    """
     series: list[EmpiricalCdfFigureSeries] = []
     for client_geometry in geometry.clients:
         if client_id is not None and client_geometry.client.client_id != client_id:
@@ -256,7 +246,7 @@ def score_geometry_figure(
 
 
 def render_markdown_figure(figure: FigureSpec) -> ReportLine:
-    """Render every validated figure series as explicit publication evidence."""
+
     rows = [
         f"### {figure.title}",
         "",

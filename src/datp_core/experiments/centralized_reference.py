@@ -1,11 +1,3 @@
-"""Privacy-incompatible centralized reference execution and report consumption.
-
-The centralized reference is a pooled-data autoencoder baseline with a pooled benign quantile
-threshold. It provides context for the cost of federation and is never part of the
-federated threshold-scope causal ladder. Every scope uses its own pooled
-preprocessing, model, and scores; federated state remains isolated.
-"""
-
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -230,7 +222,7 @@ def report_centralized_reference(
     output_root: Path,
     overwrite: bool,
 ) -> Path:
-    """Validate every independent centralized-reference artifact and publish the contextual reference."""
+
     root = output_root / CentralizedReferenceArtifactDirectory.ROOT / scope.population.value
     evaluations: list[CentralizedEvaluationDocument] = []
     for seed in scope.seed_cohort.values:

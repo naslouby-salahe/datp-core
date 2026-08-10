@@ -1,5 +1,3 @@
-"""Capability declaration for the audited N-BaIoT artifact."""
-
 from datp_core.core.identifiers import (
     ClientIdentityToken,
     EvidenceRole,

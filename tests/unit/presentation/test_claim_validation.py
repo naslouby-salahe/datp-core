@@ -176,7 +176,7 @@ def test_physical_device_claim_blocked_by_literal_wording() -> None:
 
 
 def test_physical_device_claim_blocked_by_population_identity_kind_even_when_reworded() -> None:
-    """A pseudo-client population must be blocked by its typed identity kind, not by phrase-matching alone."""
+
     decision = validate_claim(
         claim_request(
             kind=ClaimKind.EXTERNAL,

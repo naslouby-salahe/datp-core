@@ -1,5 +1,3 @@
-"""Model-personalization absorption decisions from paired seed CV(FPR) evidence."""
-
 from enum import StrEnum
 
 from pydantic import model_validator
@@ -42,8 +40,6 @@ class AbsorptionRatioUnavailableReason(StrEnum):
 
 
 class AbsorptionCornerEvidence(StrictModel):
-    """One artifact-bound corner of the four-corner absorption estimand."""
-
     seed: Seed
     experiment: ExperimentId
     population: PopulationId
@@ -63,8 +59,6 @@ class AbsorptionCornerEvidence(StrictModel):
 
 
 class AbsorptionFourCornerEvidence(StrictModel):
-    """Typed four-corner evidence for one seed under reference vs personalized training."""
-
     seed: Seed
     experiment: ExperimentId
     reference_model: TrainingModelId
@@ -118,13 +112,6 @@ class AbsorptionFourCornerEvidence(StrictModel):
 
 
 class AbsorptionSeedObservation(StrictModel):
-    """One seed of paired threshold-scope effects under reference vs personalized training.
-
-    Four-corner estimand:
-    Δ_ref = CV(FPR)_SHARED_ref − CV(FPR)_LOCAL_ref
-    Δ_pers = CV(FPR)_SHARED_pers − CV(FPR)_LOCAL_pers
-    """
-
     seed: Seed
     experiment: ExperimentId
     reference_model: TrainingModelId
@@ -222,7 +209,7 @@ def decide_model_absorption(
     personalized_effect: MetricValue | None,
     protocol: ModelAbsorptionDecisionProtocol,
 ) -> ScientificDecisionResult:
-    """Point-estimate absorption rule for single-seed diagnostics only."""
+
     if reference_effect is None or personalized_effect is None or reference_effect.value <= 0.0:
         return ScientificDecisionResult(
             evidence_role=EvidenceRole.TRAINING_STRESS_TEST,
@@ -269,7 +256,7 @@ def decide_absorption_cohort(
     inference_protocol: PairedInferenceProtocol | None = None,
     analysis_seed: Seed = CONFIRMATORY_ANALYSIS_SEED,
 ) -> AbsorptionCohortResult:
-    """Cohort-level absorption using paired seed-level CV(FPR) retention ratios."""
+
     route_count = alternative_route_seed_count
     blocked = _blocked_cohort(observations, required_seed_cohort)
     if blocked is not None:

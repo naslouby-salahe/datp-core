@@ -1,5 +1,3 @@
-"""Shared immutable contracts and Pydantic integration helpers."""
-
 from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import StrEnum
@@ -9,14 +7,10 @@ from pydantic_core import CoreSchema, core_schema
 
 
 class StrictModel(BaseModel):
-    """Immutable strict model for serialized scientific boundaries."""
-
     model_config = ConfigDict(frozen=True, extra="forbid", strict=True, revalidate_instances="never")
 
 
 def pydantic_value_schema(cls, _source_type, _handler):
-    """Validate scalar-backed value objects and serialize their scalar value."""
-    from pydantic_core import core_schema
 
     def validate(value):
         return value if isinstance(value, cls) else cls(value)
@@ -28,8 +22,6 @@ def pydantic_value_schema(cls, _source_type, _handler):
 
 
 def str_subclass_schema(cls: type, _source_type: object, _handler: object) -> object:
-    """Validate immutable string identities and serialize them as strings."""
-    from pydantic_core import core_schema
 
     def validate(value: object) -> object:
         return value if isinstance(value, cls) else cls(value)
@@ -43,7 +35,6 @@ def str_subclass_schema(cls: type, _source_type: object, _handler: object) -> ob
 def str_enum_schema[EnumT: StrEnum](
     cls: type[EnumT], _source_type: object, _handler: GetCoreSchemaHandler
 ) -> CoreSchema:
-    """Validate a raw string into one member of a closed string enum."""
 
     def validate(value: object) -> EnumT:
         if isinstance(value, cls):
@@ -56,7 +47,6 @@ def str_enum_schema[EnumT: StrEnum](
 
 
 def sequence_pydantic_schema(cls: type, _source_type: object, _handler: GetCoreSchemaHandler) -> CoreSchema:
-    """Validate immutable typed sequences and serialize their scalar members."""
 
     def validate(value: object) -> object:
         if isinstance(value, cls):
@@ -88,16 +78,12 @@ def validate_unique(values: tuple[object, ...], field_name: str) -> None:
 
 @dataclass(frozen=True, slots=True)
 class ClientOwned[ClientT, ValueT]:
-    """One value with exactly one authoritative client owner."""
-
     client: ClientT
     value: ValueT
 
 
 @dataclass(frozen=True, slots=True)
 class ClientCollection[ClientT, ValueT]:
-    """A non-empty, uniquely owned client collection."""
-
     items: tuple[ClientOwned[ClientT, ValueT], ...]
 
     def __post_init__(self) -> None:

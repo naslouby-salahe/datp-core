@@ -1,5 +1,3 @@
-"""Federated training-history persistence and trusted reload."""
-
 from dataclasses import dataclass
 from enum import StrEnum
 from os import replace as atomic_replace
@@ -74,8 +72,6 @@ class RoundSummaryRecord:
 
 @dataclass(frozen=True, slots=True)
 class FederatedHistoryFrames:
-    """Persisted federated-history frames grouped by their artifact roles."""
-
     round_summary: pl.DataFrame
     client_rounds: pl.DataFrame
     personalized_rounds: pl.DataFrame | None
@@ -331,7 +327,7 @@ def load_federated_training_history(
     if final_round.value < 1 or final_round.value > diagnostic_snapshot_protocol.maximum_round.value:
         raise ArtifactIntegrityError(
             ErrorMessage("round summary terminal round must lie within the checkpoint protocol"),
-            subject=ContractSubject.CHECKPOINT_CANDIDATES,
+            subject=ContractSubject.TRAINING,
         )
     training_rounds = tuple(RoundNumber(value) for value in range(1, final_round.value + 1))
     validate_round_summary(round_frame, training_rounds)

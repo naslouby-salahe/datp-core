@@ -1,5 +1,3 @@
-"""Federated threshold-estimation experiment ownership."""
-
 from .run import (
     FederatedEstimationSeedResult,
     federated_benign_statistics_comparison_analysis_marker_present,

@@ -1,5 +1,3 @@
-"""Public command-surface tests for the single DATP-Core CLI adapter."""
-
 from typer.testing import CliRunner
 
 from datp_core.app.cli.app import app

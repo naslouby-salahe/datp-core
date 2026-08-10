@@ -1,5 +1,3 @@
-"""Confirmatory campaign execution and paired evidence analysis."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -90,8 +88,6 @@ class ConfirmatorySeedResult:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class FedAvgCvFprEffectEvidence:
-    """Artifact-bound FedAvg shared/local CV(FPR) corners and paired effect for one seed."""
-
     seed: Seed
     shared: AbsorptionCornerEvidence
     local: AbsorptionCornerEvidence
@@ -150,7 +146,7 @@ def run_family_grouped_mechanism_seed(
     overwrite: bool,
     progress: ProgressHook | None = None,
 ) -> ConfirmatorySeedResult:
-    """Execute the family/grouped mechanism ladder for one seed under the fixed FedAvg detector."""
+
     matches = tuple(item for item in EXPERIMENTS if item.id is ExperimentId.FAMILY_AND_GROUPED_GRANULARITY)
     if len(matches) != 1:
         raise ScientificContractError(ErrorMessage("family/grouped mechanism experiment must be declared exactly once"))
@@ -526,7 +522,7 @@ def _grouped_dispersion_evidence(
     result: GroupedThresholdResult,
     cluster_document: FederatedEvaluationDocument,
 ) -> GroupedDispersionResult:
-    """Build within/across-group threshold and FPR dispersion from group memberships and cluster evaluations."""
+
     fpr_by_client = {
         item.client: metric_by_id(item.metrics, MetricId.FALSE_POSITIVE_RATE) for item in cluster_document.clients
     }

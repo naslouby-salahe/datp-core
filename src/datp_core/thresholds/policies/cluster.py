@@ -1,5 +1,3 @@
-"""Data-driven client-cluster threshold construction."""
-
 from dataclasses import dataclass
 from typing import ClassVar, Literal
 
@@ -99,8 +97,6 @@ class ClusterMembership:
 
 @dataclass(frozen=True, slots=True)
 class ClusterConstruction:
-    """Cluster memberships and threshold assignments produced by one clustering pass."""
-
     clusters: tuple[ClusterMembership, ...]
     assignments: tuple[ThresholdAssignment, ...]
 

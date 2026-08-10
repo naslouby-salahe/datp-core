@@ -1,5 +1,3 @@
-"""Deterministic JSON serialization for typed scientific artifacts."""
-
 import json
 from collections.abc import Mapping
 from dataclasses import fields, is_dataclass

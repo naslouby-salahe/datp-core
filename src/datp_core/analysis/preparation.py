@@ -1,5 +1,3 @@
-"""Preparation of confirmatory, external, and temporal analysis documents."""
-
 from dataclasses import dataclass
 
 from pydantic import model_validator

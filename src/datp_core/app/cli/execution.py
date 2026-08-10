@@ -1,8 +1,3 @@
-"""Generic experiment and campaign execution commands."""
-
-# Typer's public command-decorator overloads intentionally return Any.
-# pyright: reportUnknownMemberType=false
-
 from __future__ import annotations
 
 from typing import Annotated
@@ -30,7 +25,7 @@ def experiment_command(
         typer.Option("--overwrite", help="Rebuild this experiment's owned artifacts"),
     ] = False,
 ) -> None:
-    """Run one experiment's complete declared recipe and full seed cohort."""
+
     try:
         result = run_experiment(
             experiment_id,
@@ -53,7 +48,7 @@ def campaign_command(
         typer.Option("--overwrite", help="Rebuild campaign-owned execution and analysis artifacts"),
     ] = False,
 ) -> None:
-    """Run the complete scientific programme in deterministic dependency order."""
+
     try:
         result = run_campaign(overwrite=_overwrite_mode(overwrite))
     except (DatpCoreError, ValueError) as error:

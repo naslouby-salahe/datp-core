@@ -1,5 +1,3 @@
-"""Deterministic stage execution over already-planned experiment coordinates."""
-
 from __future__ import annotations
 
 import time
@@ -7,7 +5,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from shutil import rmtree
 
-from datp_core.analysis.metrics.federated_publication import EvaluateFederatedDetectorResult
 from datp_core.analysis.metrics.models import metric_by_id
 from datp_core.artifacts.layout import experiment_output_directory
 from datp_core.core.errors import (
@@ -15,11 +12,11 @@ from datp_core.core.errors import (
     ScientificContractError,
 )
 from datp_core.core.identifiers import ExperimentId, StageExecutionEvidence
+from datp_core.core.numeric import CampaignCoordinateCount, ElapsedSeconds
 from datp_core.data.service import DatasetMaterializationRequest, materialize_datasets
-from datp_core.detector.scoring.models import FederatedScoreArtifactManifest
-from datp_core.detector.training.federated_publication import TrainFederatedDetectorResult
+from datp_core.detector.training.models import FederatedTrainingCoordinate
 from datp_core.experiments.common.coordinates import ExecutionRoute, ExperimentCoordinate, execution_route_for
-from datp_core.experiments.execution.context import FederatedExecutionContext
+from datp_core.experiments.execution.context import training_coordinate_for
 from datp_core.experiments.execution.models import (
     ANCHOR_REPRODUCTION_RECIPE,
     STANDARD_FEDERATED_RECIPE,
@@ -89,7 +86,7 @@ def execute_campaign(
     overwrite: bool,
     progress: ProgressHook | None = None,
 ) -> CampaignExecution:
-    total = len(campaign.entries)
+    total = CampaignCoordinateCount(len(campaign.entries))
     _emit_progress(progress, ProgressEvent(kind=ProgressEventKind.CAMPAIGN_BEGIN, total=total))
     experiments: list[ExperimentExecution] = []
     for entry in campaign.entries:
@@ -98,7 +95,7 @@ def execute_campaign(
             ProgressEvent(
                 kind=ProgressEventKind.COORDINATE_BEGIN,
                 coordinate=entry.coordinate,
-                ordinal=entry.ordinal.value,
+                ordinal=entry.ordinal,
                 total=total,
             ),
         )
@@ -114,11 +111,11 @@ def execute_campaign(
             ProgressEvent(
                 kind=ProgressEventKind.COORDINATE_END,
                 coordinate=entry.coordinate,
-                ordinal=entry.ordinal.value,
+                ordinal=entry.ordinal,
                 total=total,
                 outcome=StageOutcome.COMPLETED if result.successful else StageOutcome.BLOCKED,
-                detail=f"stages={len(result.stages)}",
-                elapsed_seconds=time.monotonic() - started,
+                detail=StageExecutionEvidence(f"stages={len(result.stages)}"),
+                elapsed_seconds=ElapsedSeconds(time.monotonic() - started),
             ),
         )
         experiments.append(result)
@@ -127,7 +124,7 @@ def execute_campaign(
         ProgressEvent(
             kind=ProgressEventKind.CAMPAIGN_END,
             total=total,
-            detail=f"experiments={len(experiments)}",
+            detail=StageExecutionEvidence(f"experiments={len(experiments)}"),
         ),
     )
     return CampaignExecution(experiments=tuple(experiments))
@@ -135,29 +132,35 @@ def execute_campaign(
 
 @dataclass
 class PipelineStageRunner:
-    """Execute lower-level capability stages for one coordinate at a time."""
-
     progress_hook: ProgressHook | None = None
-    _workspace: ExperimentWorkspace | None = field(default=None, init=False, repr=False)
-
-    def __post_init__(self) -> None:
-        self._context_cache: dict[tuple[object, ...], FederatedExecutionContext] = {}
-        self._evaluation_cache: dict[Path, EvaluateFederatedDetectorResult] = {}
-        self._training_cache: dict[tuple[object, ...], TrainFederatedDetectorResult] = {}
-        self._score_cache: dict[tuple[object, ...], FederatedScoreArtifactManifest] = {}
+    _workspace: ExperimentWorkspace | None = None
+    _fixed_score_workspaces: dict[tuple[FederatedTrainingCoordinate, Path], ExperimentWorkspace] = field(
+        default_factory=dict[tuple[FederatedTrainingCoordinate, Path], ExperimentWorkspace],
+        init=False,
+        repr=False,
+    )
 
     def _workspace_for(self, coordinate: ExperimentCoordinate, output_root: Path) -> ExperimentWorkspace:
         workspace = self._workspace
         if workspace is None or workspace.coordinate != coordinate or workspace.output_root != output_root:
-            workspace = ExperimentWorkspace(
-                coordinate=coordinate,
-                output_root=output_root,
-                progress=self.progress_hook,
-                shared_context_cache=self._context_cache,
-                shared_evaluation_cache=self._evaluation_cache,
-                shared_training_cache=self._training_cache,
-                shared_score_cache=self._score_cache,
-            )
+            key = (training_coordinate_for(coordinate), output_root)
+            fixed_workspace = self._fixed_score_workspaces.get(key)
+            if fixed_workspace is None:
+                workspace = ExperimentWorkspace(
+                    coordinate=coordinate,
+                    output_root=output_root,
+                    progress=self.progress_hook,
+                )
+                self._fixed_score_workspaces[key] = workspace
+            else:
+                workspace = ExperimentWorkspace(
+                    coordinate=coordinate,
+                    output_root=output_root,
+                    progress=self.progress_hook,
+                    fixed_context=fixed_workspace.context,
+                    fixed_training=fixed_workspace.training,
+                    fixed_scores=fixed_workspace.scores,
+                )
             self._workspace = workspace
         return workspace
 
@@ -187,7 +190,7 @@ class PipelineStageRunner:
                 coordinate=coordinate,
                 stage=stage,
                 outcome=execution.outcome,
-                elapsed_seconds=time.monotonic() - started,
+                elapsed_seconds=ElapsedSeconds(time.monotonic() - started),
             ),
         )
         return execution
@@ -230,13 +233,13 @@ class PipelineStageRunner:
             case PipelineStage.TRAIN_DETECTOR:
                 return self._train_detector(stage, workspace)
             case PipelineStage.GENERATE_SCORES:
-                return self._generate_scores(stage, coordinate, workspace)
+                return self._generate_scores(stage, workspace)
             case PipelineStage.BUILD_CALIBRATION:
-                return self._build_calibration(stage, coordinate, workspace)
+                return self._build_calibration(stage, workspace)
             case PipelineStage.CONSTRUCT_THRESHOLDS:
-                return self._construct_thresholds(stage, coordinate, workspace)
+                return self._construct_thresholds(stage, coordinate)
             case PipelineStage.EVALUATE_DETECTOR:
-                return self._evaluate_detector(stage, coordinate, workspace)
+                return self._evaluate_detector(stage, workspace)
             case PipelineStage.ANALYZE_EVIDENCE:
                 return self._analyze_evidence(stage, coordinate, workspace)
             case PipelineStage.FINALIZE_PUBLICATION:
@@ -267,7 +270,6 @@ class PipelineStageRunner:
     def _generate_scores(
         self,
         stage: PipelineStage,
-        coordinate: ExperimentCoordinate,
         workspace: ExperimentWorkspace,
     ) -> StageExecution:
         return StageExecution(
@@ -279,7 +281,6 @@ class PipelineStageRunner:
     def _build_calibration(
         self,
         stage: PipelineStage,
-        coordinate: ExperimentCoordinate,
         workspace: ExperimentWorkspace,
     ) -> StageExecution:
         eligible = workspace.eligible_calibration_scores()
@@ -296,7 +297,6 @@ class PipelineStageRunner:
         self,
         stage: PipelineStage,
         coordinate: ExperimentCoordinate,
-        workspace: ExperimentWorkspace,
     ) -> StageExecution:
         return StageExecution(
             stage=stage,
@@ -307,7 +307,6 @@ class PipelineStageRunner:
     def _evaluate_detector(
         self,
         stage: PipelineStage,
-        coordinate: ExperimentCoordinate,
         workspace: ExperimentWorkspace,
     ) -> StageExecution:
         _ = workspace.evaluation
@@ -323,7 +322,7 @@ class PipelineStageRunner:
         coordinate: ExperimentCoordinate,
         workspace: ExperimentWorkspace,
     ) -> StageExecution:
-        result = metric_by_id(workspace.evaluation_document().population.metrics, coordinate.metric)
+        result = metric_by_id(workspace.evaluation.population.metrics, coordinate.metric)
         return StageExecution(
             stage=stage,
             outcome=StageOutcome.COMPLETED,
@@ -335,7 +334,7 @@ class PipelineStageRunner:
         stage: PipelineStage,
         workspace: ExperimentWorkspace,
     ) -> StageExecution:
-        workspace.evaluation_document()
+        _ = workspace.evaluation
         return StageExecution(
             stage=stage,
             outcome=StageOutcome.COMPLETED,

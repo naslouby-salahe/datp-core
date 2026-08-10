@@ -1,5 +1,3 @@
-"""Federated threshold-estimation experiment runners and typed reports."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass

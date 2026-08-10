@@ -1,5 +1,3 @@
-"""Audited CICIoT2023 merged-file schema."""
-
 from enum import StrEnum
 from pathlib import Path
 
@@ -29,8 +27,6 @@ class CICIoT2023Column(StrEnum):
 
 
 class CICIoT2023RawColumn(StrEnum):
-    """Audited raw merged-file header, in on-disk column order."""
-
     HEADER_LENGTH = "Header_Length"
     PROTOCOL_TYPE = "Protocol Type"
     TIME_TO_LIVE = "Time_To_Live"
@@ -74,8 +70,6 @@ class CICIoT2023RawColumn(StrEnum):
 
 
 class CICIoT2023NormalizedLabel(StrEnum):
-    """Normalized label vocabulary retained on the audited merged artifact."""
-
     BENIGN = "BENIGN"
     BACKDOOR_MALWARE = "BACKDOOR_MALWARE"
     BROWSERHIJACKING = "BROWSERHIJACKING"

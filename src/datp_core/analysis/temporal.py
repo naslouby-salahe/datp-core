@@ -1,5 +1,3 @@
-"""Typed temporal recovery quantities and campaign-level scientific interpretation."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -31,12 +29,14 @@ from datp_core.core.identifiers import (
 from datp_core.core.numeric import MetricValue, Ratio, Seed, SeedCount, SeedObservationCount
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.scoring.contracts import (
-    ClientIdentityContract,
     ScoreArtifactManifest,
-    TrainingCoordinateContract,
 )
+from datp_core.detector.scoring.models import FederatedScoreRecord
+from datp_core.detector.training.models import FederatedTrainingCoordinate
 from datp_core.experiments.common.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_ANALYSIS_SEED, SeedCohort
 from datp_core.experiments.confirmatory.spec import CONFIRMATORY_INFERENCE_PROTOCOL
+
+type TemporalTrainingCoordinate = FederatedTrainingCoordinate | tuple[FederatedTrainingCoordinate, ...]
 
 
 class TemporalProvenanceViolation(StrEnum):
@@ -53,8 +53,6 @@ class TemporalInterpretation(StrEnum):
 
 
 class TemporalSeedProvenance(StrictModel):
-    """Exact one-seed temporal artifact provenance for campaign identity."""
-
     seed: Seed
     experiment: ExperimentId
     population: PopulationId
@@ -85,8 +83,6 @@ class TemporalSeedProvenance(StrictModel):
 
 
 class TemporalClientTrajectory(StrictModel):
-    """Per-client temporal state trajectory for one seed and threshold method."""
-
     seed: Seed
     client: ClientIdentity
     threshold_method: FederatedThresholdMethod
@@ -236,8 +232,6 @@ class TemporalRecoveryResult(StrictModel):
 
 
 class TemporalAnalysisRecord(StrictModel):
-    """Per-seed temporal quantities. Never carries a publication-level SUPPORTED decision."""
-
     recovery: TemporalRecoveryResult
     interpretation: TemporalInterpretation
 
@@ -295,7 +289,7 @@ def decide_temporal_campaign(
     analysis_seed: Seed = CONFIRMATORY_ANALYSIS_SEED,
     inference_protocol: PairedInferenceProtocol | None = None,
 ) -> ScientificDecisionResult:
-    """One campaign-level decision over the complete declared temporal seed cohort."""
+
     from datp_core.analysis.inference.bootstrap.estimation import seed_level_bca_interval
 
     blocked = _blocked_temporal_campaign(records, required_seed_cohort)
@@ -489,8 +483,6 @@ def _temporal_inference_protocol(seed_cohort: SeedCohort) -> PairedInferenceProt
 
 
 class TemporalSeedSeriesIntervals(StrictModel):
-    """Bootstrap intervals for the three campaign-level temporal recovery quantities."""
-
     drift_excess: BootstrapInterval
     recovered_amount: BootstrapInterval
     recovery_ratio: BootstrapInterval | None
@@ -502,7 +494,7 @@ def temporal_seed_series_intervals(
     required_seed_cohort: SeedCohort = BOUNDED_EVIDENCE_SEED_COHORT,
     analysis_seed: Seed = CONFIRMATORY_ANALYSIS_SEED,
 ) -> TemporalSeedSeriesIntervals:
-    """BCa over seed-level drift excess, recovery amount, and recovery ratio when defined."""
+
     from datp_core.analysis.inference.bootstrap.estimation import seed_level_bca_interval
 
     protocol = _temporal_inference_protocol(required_seed_cohort)
@@ -532,20 +524,18 @@ def temporal_seed_series_intervals(
 class TemporalFutureIdentity(StrictModel):
     split_protocol: SplitProtocolId
     evaluation_role: PartitionRole
-    coordinate: object
-    evaluation_records: tuple[object, ...]
+    coordinate: TemporalTrainingCoordinate
+    evaluation_records: tuple[FederatedScoreRecord, ...]
 
 
 class TemporalDeploymentProvenance(StrictModel):
-    """Immutable calibration/evaluation binding for one temporal deployment state."""
-
     state: TemporalState
     split_protocol: SplitProtocolId
     calibration_role: PartitionRole
     evaluation_role: PartitionRole
-    coordinate: object
-    calibration_records: tuple[object, ...]
-    evaluation_records: tuple[object, ...]
+    coordinate: TemporalTrainingCoordinate
+    calibration_records: tuple[FederatedScoreRecord, ...]
+    evaluation_records: tuple[FederatedScoreRecord, ...]
 
     @model_validator(mode="after")
     def validate_binding(self) -> TemporalDeploymentProvenance:
@@ -565,10 +555,10 @@ class TemporalDeploymentProvenance(StrictModel):
         )
 
     @classmethod
-    def from_score_manifest[CoordinateT: TrainingCoordinateContract, ClientT: ClientIdentityContract](
+    def from_score_manifest(
         cls,
         state: TemporalState,
-        manifest: ScoreArtifactManifest[CoordinateT, ClientT],
+        manifest: ScoreArtifactManifest[FederatedTrainingCoordinate, ClientIdentity],
     ) -> TemporalDeploymentProvenance:
         calibration_role, evaluation_role = temporal_partition_roles(state)
         if not manifest.records_for(calibration_role) or not manifest.records_for(evaluation_role):
@@ -586,12 +576,9 @@ class TemporalDeploymentProvenance(StrictModel):
             evaluation_records=tuple(manifest.records_for(evaluation_role)),
         )
 
-    def validate_score_manifest[
-        CoordinateT: TrainingCoordinateContract,
-        ClientT: ClientIdentityContract,
-    ](
+    def validate_score_manifest(
         self,
-        manifest: ScoreArtifactManifest[CoordinateT, ClientT],
+        manifest: ScoreArtifactManifest[FederatedTrainingCoordinate, ClientIdentity],
     ) -> None:
         if TemporalDeploymentProvenance.from_score_manifest(self.state, manifest) != self:
             raise ScientificContractError(
@@ -605,7 +592,7 @@ def validate_frozen_recalibrated_pair(
     frozen: TemporalDeploymentProvenance,
     recalibrated: TemporalDeploymentProvenance,
 ) -> None:
-    """Require identical future detector and evaluation evidence across recalibration states."""
+
     if frozen.state is not TemporalState.FROZEN_FUTURE or recalibrated.state is not TemporalState.RECALIBRATED_FUTURE:
         raise ScientificContractError(
             ErrorMessage("temporal comparison requires frozen and recalibrated future states"),
@@ -636,9 +623,11 @@ def temporal_split_protocol(state: TemporalState) -> SplitProtocolId:
     raise ValueError(f"unsupported temporal state: {state}")
 
 
-class TemporalDecisionProtocol(StrictModel):
-    """Explicit temporal interpretation thresholds and publication guards."""
+def training_coordinates(coordinate: TemporalTrainingCoordinate) -> tuple[FederatedTrainingCoordinate, ...]:
+    return coordinate if isinstance(coordinate, tuple) else (coordinate,)
 
+
+class TemporalDecisionProtocol(StrictModel):
     drift_excess_materiality_threshold: MetricValue
     material_recovery_ratio_minimum: Ratio
     seed_cohort: SeedCohort
@@ -664,7 +653,6 @@ class TemporalDecisionProtocol(StrictModel):
         return self
 
 
-# drift_excess_materiality_threshold reuses the CV(FPR) indistinguishability magnitude used for Ditto absorption.
 LOCKED_TEMPORAL_DECISION_PROTOCOL = TemporalDecisionProtocol(
     drift_excess_materiality_threshold=MetricValue(0.05),
     material_recovery_ratio_minimum=Ratio(0.5),

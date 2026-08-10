@@ -76,9 +76,9 @@ def load_score_frame(artifact: PooledScoreArtifact) -> pl.DataFrame:
     return frame
 
 
-def reject_non_finite_scores(scores: np.ndarray, *, message: str, subject: ContractSubject) -> None:
+def reject_non_finite_scores(scores: np.ndarray, *, message: ErrorMessage, subject: ContractSubject) -> None:
     if not np.isfinite(scores).all():
-        raise ScientificContractError(ErrorMessage(message), subject=subject)
+        raise ScientificContractError(message, subject=subject)
 
 
 def _validate_request(request: CentralizedScoringRequest) -> None:

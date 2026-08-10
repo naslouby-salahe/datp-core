@@ -1,5 +1,3 @@
-"""CUDA device resolution and compute provenance for GPU-appropriate work."""
-
 from dataclasses import dataclass
 
 import torch

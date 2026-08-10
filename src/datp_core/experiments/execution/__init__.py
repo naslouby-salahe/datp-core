@@ -1,5 +1,3 @@
-"""Shared deterministic execution primitive for declared experiment families."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass

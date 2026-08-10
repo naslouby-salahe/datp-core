@@ -1,5 +1,3 @@
-"""Edge-IIoTset static sensor-group and chronology-verified temporal-group population construction."""
-
 from enum import StrEnum
 from pathlib import Path
 
@@ -140,7 +138,7 @@ def construct_edge_temporal_groups(
     partition_seed: Seed,
     split_protocol: SplitProtocolId,
 ) -> PopulationConstructionResult:
-    """Return the temporal population plus its matched random-fractional static reference."""
+
     if split_protocol is not SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE:
         raise ScientificContractError(
             ErrorMessage("Edge temporal groups require the locked chronological split protocol"),
@@ -345,7 +343,7 @@ def _model_input_eligible_membership(
     sort_columns: tuple[str, ...],
     membership_only: bool,
 ) -> tuple[pl.DataFrame, ModelInputExclusionEvidence]:
-    """Apply the immutable feature gate before a row can enter membership or a split."""
+
     annotated = candidate_rows.collect(engine="streaming")
     eligible = annotated.filter(pl.col("__model_input_eligible")).drop("__model_input_eligible")
     excluded_ids = tuple(

@@ -1,5 +1,3 @@
-"""External and applicability-boundary experiment ownership."""
-
 from .run import (
     BoundedExternalAssetDirectory,
     analyze_ciciot_boundary_campaign,

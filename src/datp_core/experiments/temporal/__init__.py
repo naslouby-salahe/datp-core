@@ -1,5 +1,3 @@
-"""One-shot temporal recalibration experiment ownership."""
-
 from .run import (
     TemporalArtifactDirectory,
     TemporalCampaignResult,

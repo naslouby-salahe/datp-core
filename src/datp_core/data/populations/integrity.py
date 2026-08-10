@@ -1,5 +1,3 @@
-"""Population, split, cohort, and chronology integrity invariants."""
-
 from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import StrEnum
@@ -68,8 +66,6 @@ class PopulationIntegrityViolation(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class PopulationOutcomeRowCounts:
-    """Observed membership rows grouped by population outcome."""
-
     benign_row_count: RowCount
     attack_row_count: RowCount
 

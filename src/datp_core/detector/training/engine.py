@@ -149,7 +149,11 @@ class FederatedTrainingRequest[T: FedAvgProtocol | FedProxProtocol]:
     batch_size: BatchSize
     learning_rate: LearningRate
     output_directory: Path
-    progress_callback: Callable[[int, int], None] | None = field(default=None, compare=False, repr=False)
+    progress_callback: Callable[[RoundNumber, RoundNumber], None] | None = field(
+        default=None,
+        compare=False,
+        repr=False,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -450,13 +454,13 @@ def compute_weighted_aggregate_loss(updates: Sequence[ClientUpdate]) -> MetricVa
             ErrorMessage("aggregate loss requires at least one client update"),
             subject=ContractSubject.CLIENT,
         )
-    total_samples = sum([update.sample_count.value for update in updates])
+    total_samples = sum(update.sample_count.value for update in updates)
     if total_samples < 1:
         raise ScientificContractError(
             ErrorMessage("aggregate loss requires a positive total sample count"),
             subject=ContractSubject.ROWS,
         )
-    return MetricValue(sum([update.local_loss.value * update.sample_count.value for update in updates]) / total_samples)
+    return MetricValue(sum(update.local_loss.value * update.sample_count.value for update in updates) / total_samples)
 
 
 def compute_weighted_validation_loss(
@@ -466,13 +470,7 @@ def compute_weighted_validation_loss(
     autoencoder: AutoencoderProtocol,
     device: torch.device,
 ) -> MetricValue:
-    """Full-batch benign validation MSE of the aggregated model, weighted by client rows.
 
-    Mirrors the historical datp evaluation: each client's benign calibration rows
-    are reconstructed in full and the mean-over-elements MSE is weighted by the
-    client's validation row count. The aggregation never consumes attack labels
-    or held-out evaluation outcomes.
-    """
     if not prepared:
         raise ScientificContractError(
             ErrorMessage("validation loss requires at least one client"),
@@ -680,23 +678,14 @@ def run_federated_training[T: FedAvgProtocol | FedProxProtocol](
     global_model_state = AutoencoderModelState.from_model(initial_model)
 
     convergence = request.diagnostic_snapshot_protocol.convergence
-    monitor = (
-        ConvergenceMonitor(
-            rounds_initial=convergence.rounds_initial.value,
-            rounds_max=request.diagnostic_snapshot_protocol.maximum_round.value,
-            relative_threshold=convergence.relative_threshold,
-            window=convergence.window,
-        )
-        if convergence is not None
-        else None
-    )
+    monitor = ConvergenceMonitor(request.diagnostic_snapshot_protocol) if convergence is not None else None
     proximal_coefficient = _proximal_coefficient(request.training_protocol)
     rounds: list[FederatedRoundResult] = []
 
     for round_value in range(1, request.diagnostic_snapshot_protocol.maximum_round.value + 1):
         round_number = RoundNumber(round_value)
         if request.progress_callback is not None:
-            request.progress_callback(round_value, request.diagnostic_snapshot_protocol.maximum_round.value)
+            request.progress_callback(round_number, request.diagnostic_snapshot_protocol.maximum_round)
         round_result, global_model_state = _run_training_round(
             round_number=round_number,
             request=request,

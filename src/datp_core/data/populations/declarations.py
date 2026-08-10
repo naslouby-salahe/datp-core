@@ -1,5 +1,3 @@
-"""Population declarations owned by the scientific protocol layer."""
-
 from pydantic import model_validator
 
 from datp_core.core.contracts import StrictModel
@@ -102,7 +100,7 @@ POPULATIONS = (
 
 
 def split_protocol_for_population(population: PopulationId) -> SplitProtocolId:
-    """Resolve the single declared split protocol for one population identity."""
+
     match population:
         case PopulationId.EDGE_TEMPORAL_GROUPS:
             return SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE

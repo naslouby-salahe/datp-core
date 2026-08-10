@@ -1,5 +1,3 @@
-"""Historical anchor verification and independent-reproduction workflow."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -109,7 +107,7 @@ def default_anchor_diagnostics_directory(output_root: Path = OUTPUTS_ROOT) -> Pa
 
 
 def verify_anchor(request: VerifyAnchorStageRequest) -> VerifyAnchorStageResult:
-    """Compare supplied or package-resolved observations against locked historical references."""
+
     observations, dependency_blocker = _resolve_observations(request)
     reproduction = reproduce_anchor(
         protocol=request.protocol,
@@ -137,7 +135,7 @@ def observation_from_evaluation_document(
     *,
     document_path: Path,
 ) -> AnchorObservedMetric:
-    """Map one completed federated evaluation into an independent anchor observation."""
+
     if document.threshold_method not in {
         FederatedThresholdMethod.SHARED_THRESHOLD,
         FederatedThresholdMethod.LOCAL_THRESHOLD,
@@ -172,14 +170,12 @@ def observation_from_evaluation_document(
 
 
 def load_independent_observations(package_directory: Path) -> tuple[AnchorObservedMetric, ...] | None:
-    """Load a completed independent observation package, or None when absent."""
+
     document_path = package_directory / IndependentAnchorAssetName.OBSERVATIONS.value
     if not document_path.is_file():
         return None
     try:
         package = IndependentObservationPackage.model_validate_json(document_path.read_text(encoding="utf-8"))
-    except AnchorReproductionError:
-        raise
     except (OSError, ValueError, TypeError, ValidationError) as error:
         raise AnchorReproductionError(
             ErrorMessage("independent observation package is unreadable or invalid"),
@@ -208,7 +204,7 @@ def collect_independent_observations_from_evaluations(
     output_root: Path,
     seed_cohort: SeedCohort = HISTORICAL_ANCHOR_SEED_COHORT,
 ) -> tuple[AnchorObservedMetric, ...]:
-    """Load SHARED/LOCAL CV(FPR) evaluations for every historical seed as independent observations."""
+
     from datp_core.app.planning import PlanDisposition, PlanningEvidence, PlanReason, expand_experiment_plan
     from datp_core.experiments.registry import EXPERIMENTS
 

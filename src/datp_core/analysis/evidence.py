@@ -1,5 +1,3 @@
-"""Confirmatory, external, and temporal evidence analysis publication."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass

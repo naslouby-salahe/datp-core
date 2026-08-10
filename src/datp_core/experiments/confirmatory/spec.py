@@ -1,5 +1,3 @@
-"""Sole confirmatory DATP-Core endpoint and paired-inference specification."""
-
 from enum import StrEnum
 from typing import Literal
 

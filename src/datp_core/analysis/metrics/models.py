@@ -1,5 +1,3 @@
-"""Typed records shared by held-out federated evaluation."""
-
 from dataclasses import dataclass, field
 from enum import StrEnum
 

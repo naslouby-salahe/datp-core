@@ -15,7 +15,6 @@ from datp_core.core.identifiers import (
     ExperimentId,
     ExperimentReadiness,
     FederatedThresholdMethod,
-    FedProxCoefficientSelectionRule,
     IntervalMethod,
     MetricId,
     MultiplicityCorrectionId,
@@ -239,7 +238,6 @@ EXPECTED_MEMBERS = (
         ),
     ),
     (TrafficRateEvidenceType, frozenset(("MEASURED", "DATASET_DERIVED", "EXTERNALLY_CITED", "UNAVAILABLE"))),
-    (FedProxCoefficientSelectionRule, frozenset(("FEDPROX_MINIMUM_TERMINAL_TRAINING_LOSS",))),
     (
         ContractSubject,
         frozenset(
@@ -249,16 +247,12 @@ EXPECTED_MEMBERS = (
                 "AUTOENCODER",
                 "BATCH_SIZE",
                 "CALIBRATION",
-                "CANDIDATES",
-                "CHECKPOINT_CANDIDATES",
-                "CHECKPOINT_SELECTION_RULE",
                 "CLIENT",
                 "CLIENT_IDENTITY",
                 "CONFIRMATORY_LADDER",
                 "COORDINATE",
                 "CUDA",
                 "FEATURES",
-                "FEDPROX_COEFFICIENT_SELECTION_RULE",
                 "HELD_OUT_METRICS",
                 "LABEL",
                 "LOCAL_QUANTILE_MEAN",
@@ -289,7 +283,6 @@ EXPECTED_MEMBERS = (
 )
 
 
-# External vendor corpus directories preserve audited on-disk case; all other domain enums stay lowercase.
 _EXTERNAL_CORPUS_PATH_ENUMS = frozenset({RawDatasetDirectory})
 
 

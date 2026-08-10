@@ -1,5 +1,3 @@
-"""Contracts for held-out federated evaluation and its diagnostics."""
-
 from dataclasses import dataclass, field
 
 from pydantic import ConfigDict
@@ -43,8 +41,6 @@ type FederatedScoreArtifactManifest = ScoreArtifactManifest[FederatedTrainingCoo
 
 @dataclass(frozen=True, slots=True)
 class ShrinkageLambdaEvaluation:
-    """Population operating point for one predeclared shrinkage weight."""
-
     lambda_weight: ShrinkageWeight
     clients: tuple[ClientMetricResult, ...]
     population: PopulationMetricResult
@@ -58,8 +54,6 @@ class ShrinkageLambdaEvaluation:
 
 @dataclass(frozen=True, slots=True)
 class CalibrationSizeAblationCell:
-    """One nested calibration-size × subsample-replicate evaluation cell."""
-
     calibration_size: CalibrationSize
     replicate_index: ReplicateIndex
     method: FederatedThresholdMethod

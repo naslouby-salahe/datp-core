@@ -1,5 +1,3 @@
-"""Benign-only threshold protocols, assignments, and validation contracts."""
-
 from dataclasses import dataclass
 from enum import StrEnum
 from statistics import fmean

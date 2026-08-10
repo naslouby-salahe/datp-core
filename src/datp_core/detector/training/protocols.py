@@ -1,17 +1,9 @@
-"""Federated training declarations and authoritative protocol resolution."""
-
-from collections.abc import Sequence
-from typing import Protocol
-
 from datp_core.core.errors import (
     ErrorMessage,
-    LeakageError,
     ScientificContractError,
 )
 from datp_core.core.identifiers import (
     CentralizedModelId,
-    ContractSubject,
-    FedProxCoefficientSelectionRule,
     OptimizerId,
     TrainingModelId,
 )
@@ -34,63 +26,6 @@ FEDAVG_LOCAL_EPOCHS = LocalEpochCount(1)
 ANCHOR_LOCAL_EPOCHS = LocalEpochCount(5)
 DECLARED_FEDAVG_LOCAL_EPOCHS = frozenset({FEDAVG_LOCAL_EPOCHS, ANCHOR_LOCAL_EPOCHS})
 FEDPROX_COEFFICIENTS = tuple(ProximalCoefficient(value) for value in (0.001, 0.01, 0.1, 1.0))
-FEDPROX_COEFFICIENT_SELECTION_RULE = FedProxCoefficientSelectionRule.FEDPROX_MINIMUM_TERMINAL_TRAINING_LOSS
-
-
-def require_non_test_fedprox_coefficient_selection_inputs(
-    *,
-    selection_rule: FedProxCoefficientSelectionRule,
-    held_out_metrics: Sequence[MetricValue] | None,
-    attack_labels_present: bool,
-) -> None:
-    """Reject test leakage and unsupported selection rules before FedProx coefficient selection."""
-    if held_out_metrics is not None:
-        raise LeakageError(
-            ErrorMessage("held-out evaluation outcomes cannot influence FedProx coefficient selection"),
-            subject=ContractSubject.HELD_OUT_METRICS,
-        )
-    if attack_labels_present:
-        raise LeakageError(
-            ErrorMessage("attack labels cannot influence FedProx coefficient selection"),
-            subject=ContractSubject.ATTACK_LABELS,
-        )
-    if selection_rule is not FEDPROX_COEFFICIENT_SELECTION_RULE:
-        raise ScientificContractError(
-            ErrorMessage("unsupported FedProx coefficient selection rule"),
-            subject=ContractSubject.FEDPROX_COEFFICIENT_SELECTION_RULE,
-        )
-
-
-class FedProxCoefficientTrainingLossContract(Protocol):
-    @property
-    def coefficient(self) -> ProximalCoefficient: ...
-
-    @property
-    def mean_terminal_training_loss(self) -> MetricValue: ...
-
-
-def select_primary_fedprox_coefficient[CandidateT: FedProxCoefficientTrainingLossContract](
-    candidates: Sequence[CandidateT],
-) -> CandidateT:
-    """Select the FedProx coefficient with the lowest mean terminal training loss.
-
-    Implements FEDPROX_MINIMUM_TERMINAL_TRAINING_LOSS: candidates carry only benign
-    federated training-loss information at the fixed terminal checkpoint round,
-    averaged across the confirmatory seed cohort. Ties are broken by the smallest
-    coefficient value.
-    """
-    observed = tuple(candidate.coefficient for candidate in candidates)
-    if observed != FEDPROX_COEFFICIENTS:
-        raise ScientificContractError(
-            ErrorMessage("FedProx coefficient candidates must equal the declared frozen grid"),
-            subject=ContractSubject.FEDPROX_COEFFICIENT_SELECTION_RULE,
-        )
-    return min(
-        candidates,
-        key=lambda candidate: (candidate.mean_terminal_training_loss.value, candidate.coefficient.value),
-    )
-
-
 DITTO_RETAINED_EFFECT_MINIMUM = Ratio(0.75)
 DITTO_PARTIAL_EFFECT_MINIMUM = Ratio(0.25)
 DITTO_ALTERNATIVE_ROUTE_DIFFERENCE = MetricValue(0.05)
@@ -194,7 +129,7 @@ def resolve_single_model_federated_training_protocol(
     model: TrainingModelId,
     coefficient: ModelCoefficientValue | ProximalCoefficient | DittoRegularization | None,
 ) -> training_contracts.FedAvgProtocol | training_contracts.FedProxProtocol:
-    """Resolve the only supported single-model federated training protocol for a typed identity."""
+
     match model:
         case TrainingModelId.FEDAVG_AUTOENCODER:
             if coefficient is not None:

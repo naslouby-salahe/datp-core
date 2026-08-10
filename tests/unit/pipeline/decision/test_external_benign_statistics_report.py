@@ -1,5 +1,3 @@
-"""Edge benign-only federated-statistics report consumer contract (WL-05)."""
-
 from datp_core.core.identifiers import ClientIdentityToken, EvidenceRole, ExperimentId, PopulationId
 from datp_core.core.numeric import (
     AbsoluteThresholdError,
@@ -70,15 +68,15 @@ def test_external_benign_statistics_markdown_publishes_estimator_variance_and_co
     assert "Seed 1" in markdown
     assert "Disclosed per-client benign summary" in markdown
     assert "| client_a | 10 |" in markdown
-    assert "| 1 |" in markdown  # per-client benign exceedance count
-    assert "| 32 |" in markdown  # per-client disclosed bytes
+    assert "| 1 |" in markdown
+    assert "| 32 |" in markdown
 
 
 def test_external_benign_statistics_markdown_types_unavailable_attack_outcome() -> None:
     markdown = _external_benign_statistics_markdown(_report())
 
-    assert "| 0.250 |" in markdown  # available CV(FPR) rendered for seed 0
-    assert "unavailable" in markdown  # seed 1 CV(FPR) is a typed unavailable attack outcome
+    assert "| 0.250 |" in markdown
+    assert "unavailable" in markdown
     assert "Attack outcomes are typed unavailable" in markdown
 
 

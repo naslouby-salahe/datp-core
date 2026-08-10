@@ -1,5 +1,3 @@
-"""Threshold-robustness experiment ownership."""
-
 from .run import (
     ThresholdRobustnessSeedResult,
     calibration_size_ablation_analysis_marker_present,

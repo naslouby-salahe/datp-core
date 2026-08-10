@@ -1,5 +1,3 @@
-"""Numerical paired BCa interval estimation."""
-
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -33,8 +31,6 @@ class BootstrapDistribution:
 
 @dataclass(frozen=True, slots=True)
 class BcaIntervalComputation:
-    """The available or degenerate result of applying BCa to a distribution."""
-
     lower_bound: MetricValue | None
     upper_bound: MetricValue | None
     adjustment: BcaAdjustment | None
@@ -226,7 +222,7 @@ def _bca_interval_from_distribution(
     )
     shifted = bias_correction + standard_quantiles
     denominator = 1.0 - acceleration.value * shifted
-    if np.any(np.abs(denominator) <= np.finfo(np.float64).eps):
+    if np.any(np.abs(denominator) <= np.spacing(np.float64(1.0))):
         return BcaIntervalComputation.degenerate(BcaReason.INVALID_ADJUSTED_QUANTILES)
     adjusted_quantiles = np.asarray(
         stats.norm.cdf(bias_correction + shifted / denominator),
@@ -270,7 +266,7 @@ def seed_level_bca_interval(
     analysis_seed: Seed,
     require_full_cohort: bool = True,
 ) -> BootstrapInterval:
-    """BCa bootstrap over seed-level scalar records (temporal/supportive series)."""
+
     if not values:
         return BootstrapInterval.blocked(
             protocol=protocol,

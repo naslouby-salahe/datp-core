@@ -1,5 +1,3 @@
-"""Persisted cluster-partition stability and recovery mechanism evidence."""
-
 from enum import StrEnum
 from typing import ClassVar
 
@@ -37,11 +35,7 @@ class ClusterPartitionSummary(StrictModel):
         declared_group_count: GroupCount | None = None,
         observed_empty_cluster_indexes: tuple[ClusterIndex, ...] = (),
     ) -> "ClusterPartitionSummary":
-        """Build partition sizes preserving actual observed cluster indexes.
 
-        When empty clusters are supplied, their declared IDs are retained. Missing
-        cluster ID ``1`` is never silently renumbered as missing cluster ID ``2``.
-        """
         size_by_index = {item.cluster_index.value: len(item.members) for item in memberships}
         for empty_index in observed_empty_cluster_indexes:
             size_by_index.setdefault(empty_index.value, 0)
@@ -89,8 +83,6 @@ class RecoveryAssessment(StrictModel):
 
 
 class ClusterEvidenceRecord(StrictModel):
-    """Full cluster evidence derived from a persisted grouped-threshold result."""
-
     seed: Seed
     method: FederatedThresholdMethod
     fingerprints: tuple[ClusterFingerprint, ...]
@@ -254,11 +246,7 @@ def empty_cluster_evidence_record(
     reason: AnalysisReasonText,
     observed_empty_cluster_indexes: tuple[ClusterIndex, ...] = (),
 ) -> ClusterEvidenceRecord:
-    """Preserve empty-cluster negative evidence without fabricating memberships or zero metrics.
 
-    Missing declared cluster IDs remain explicit. Dispersion values that cannot be computed
-    stay unavailable rather than MetricValue(0.0).
-    """
     partition = ClusterPartitionSummary.from_memberships(
         filled_memberships,
         declared_group_count=declared_group_count,

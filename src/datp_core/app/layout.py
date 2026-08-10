@@ -1,5 +1,3 @@
-"""Application-owned output layout for campaign, smoke, anchor, and supplementary evidence."""
-
 from enum import StrEnum
 
 from datp_core.runtime.configuration import OUTPUTS_ROOT

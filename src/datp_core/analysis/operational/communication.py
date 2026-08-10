@@ -1,5 +1,3 @@
-"""Exact logical serialized-payload accounting for threshold communication."""
-
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -35,8 +33,6 @@ class ThresholdPayloadKind(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class SerializedPayloadEvidence:
-    """Exact serialized payload accounting, never object-size estimates."""
-
     serialized_byte_count: ByteCount
     logical_element_count: LogicalElementCount
 
@@ -49,8 +45,6 @@ class SerializedPayloadEvidence:
 
 @dataclass(frozen=True, slots=True)
 class CommunicationMessageDiagnostic:
-    """One directed serialized-message estimate at an exact evaluation coordinate."""
-
     training_seed: Seed
     coordinate: FederatedTrainingCoordinate
     sender: MessageEndpoint
@@ -81,8 +75,6 @@ class CommunicationMessageDiagnostic:
 
 @dataclass(frozen=True, slots=True)
 class CommunicationDiagnostic:
-    """Complete estimated serialized payload accounting for one evaluation cell."""
-
     training_seed: Seed
     coordinate: FederatedTrainingCoordinate
     messages: tuple[CommunicationMessageDiagnostic, ...]
@@ -128,7 +120,7 @@ def summarize_communication(
     coordinate: FederatedTrainingCoordinate,
     messages: tuple[CommunicationMessageDiagnostic, ...],
 ) -> CommunicationDiagnostic:
-    """Return exact payload totals; values are serialized-size estimates, not network measurements."""
+
     expected_elements = 0
     expected_bytes = 0
 

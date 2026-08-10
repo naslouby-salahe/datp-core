@@ -1,5 +1,3 @@
-"""Generic paired-inference contracts, Wilcoxon testing, and rank-biserial effect size."""
-
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import ClassVar, cast
@@ -32,7 +30,7 @@ from datp_core.core.numeric import (
 
 
 def _nonzero_differences(deltas: NDArray[np.float64]) -> NDArray[np.float64]:
-    """Keep exact-zero semantics without directly comparing floating point values."""
+
     return deltas[~np.isclose(deltas, 0.0, rtol=0.0, atol=0.0)]
 
 

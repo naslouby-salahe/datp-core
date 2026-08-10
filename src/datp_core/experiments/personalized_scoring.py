@@ -1,5 +1,3 @@
-"""Shared scoring and metric extraction for personalized training stress tests."""
-
 from __future__ import annotations
 
 import polars as pl

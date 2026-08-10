@@ -1,5 +1,3 @@
-"""Benign-only calibration eligibility, subsampling, and size-ablation construction."""
-
 from dataclasses import dataclass
 
 from datp_core.analysis.metrics.cohorts import EvaluationCohortManifest
@@ -34,8 +32,6 @@ from datp_core.thresholds.quantiles import ClientBenignCalibrationScores, calibr
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CalibrationReplicateLookup:
-    """Typed lookup for calibration replicate manifests by (client, replicate_index) coordinate."""
-
     manifests: tuple[CalibrationReplicateManifest, ...]
 
     def __post_init__(self) -> None:
@@ -98,7 +94,7 @@ def build_calibration(request: BuildCalibrationRequest) -> BuildCalibrationResul
 
 
 def build_declared_calibration(score_manifest: FederatedScoreArtifactManifest) -> BuildCalibrationResult:
-    """Construct the declared calibration-size ablation lattice once replication is specified."""
+
     return build_calibration(
         BuildCalibrationRequest(
             score_manifest=score_manifest,
@@ -112,7 +108,7 @@ def build_declared_calibration(score_manifest: FederatedScoreArtifactManifest) -
 def construct_calibration_size_ablation(
     request: ConstructCalibrationSizeAblationRequest,
 ) -> tuple[CalibrationSizeAblationCell, ...]:
-    """Evaluate the declared size × replicate grid on the unchanged held-out test set."""
+
     cells: list[CalibrationSizeAblationCell] = []
     capabilities = population_capabilities(request.score_manifest.coordinate.population)
     replicate_count = require_calibration_subsample_replicate_count()

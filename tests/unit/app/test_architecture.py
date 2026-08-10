@@ -1,5 +1,3 @@
-"""Final architecture boundaries: deleted ownership must not return."""
-
 from ast import Import, ImportFrom, parse, walk
 from pathlib import Path
 

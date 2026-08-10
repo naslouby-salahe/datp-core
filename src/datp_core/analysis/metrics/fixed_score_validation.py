@@ -1,14 +1,16 @@
 from datp_core.analysis.metrics.cohorts import EvaluationCohortManifest
 from datp_core.analysis.metrics.fixed_score import FixedScoreEvidence
+from datp_core.analysis.metrics.models import ClientMetricResult
 from datp_core.core.errors import ErrorMessage, ScientificContractError
 from datp_core.core.identifiers import ContractSubject
+from datp_core.detector.scoring.models import FederatedScoreArtifactManifest
 
 
 def validate_evaluation_evidence(
     evidence: FixedScoreEvidence,
-    manifest: object,
+    manifest: FederatedScoreArtifactManifest,
     cohort: EvaluationCohortManifest,
-    clients: tuple[object, ...],
+    clients: tuple[ClientMetricResult, ...],
 ) -> None:
     del cohort, clients
     if evidence.score_manifest is not manifest:
@@ -18,7 +20,7 @@ def validate_evaluation_evidence(
         )
 
 
-def validate_fixed_score_controls(first: FixedScoreEvidence, second: FixedScoreEvidence, **_: object) -> None:
+def validate_fixed_score_controls(first: FixedScoreEvidence, second: FixedScoreEvidence) -> None:
     if first.threshold_method is second.threshold_method:
         raise ScientificContractError(ErrorMessage("fixed-score comparison requires distinct threshold methods"))
     if first.calibration_role is not second.calibration_role:

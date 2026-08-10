@@ -1,5 +1,3 @@
-"""Federated benign-summary-statistics threshold comparator and diagnostics."""
-
 import math
 from dataclasses import dataclass
 from typing import ClassVar

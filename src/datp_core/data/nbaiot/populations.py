@@ -1,5 +1,3 @@
-"""N-BaIoT natural physical-device and controlled Dirichlet/IID population construction."""
-
 from enum import StrEnum
 from pathlib import Path
 

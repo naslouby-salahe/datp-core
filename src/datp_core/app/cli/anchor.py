@@ -1,8 +1,3 @@
-"""Anchor reproduction, verification, and status commands."""
-
-# Typer's public command-decorator overloads intentionally return Any.
-# pyright: reportUnknownMemberType=false
-
 from __future__ import annotations
 
 import sys
@@ -36,7 +31,7 @@ def reproduce_command(
         typer.Option("--overwrite", help="Rebuild independent anchor reproduction only"),
     ] = False,
 ) -> None:
-    """Run independent anchor reproduction for the declared historical seed cohort."""
+
     try:
         result = reproduce_anchor(
             overwrite=_overwrite_mode(overwrite),
@@ -50,7 +45,7 @@ def reproduce_command(
 
 @app.command("verify")
 def verify_command() -> None:
-    """Verify independent anchor reproduction against locked historical references."""
+
     try:
         result = verify_anchor_programme(mode=ProgrammeExecutionMode.FULL)
     except (DatpCoreError, ValueError) as error:
@@ -60,7 +55,7 @@ def verify_command() -> None:
 
 @app.command("status")
 def status_command() -> None:
-    """Show anchor reference, reproduction, comparison, and dependent readiness."""
+
     try:
         result = anchor_status()
     except (DatpCoreError, ValueError) as error:

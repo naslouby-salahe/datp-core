@@ -1,5 +1,3 @@
-"""Threshold-robustness experiment runners and typed evidence summaries."""
-
 from __future__ import annotations
 
 from enum import StrEnum
@@ -125,12 +123,6 @@ class CalibrationSizeAblationRow(StrictModel):
 
 
 class CalibrationSizeFixedCohortRow(StrictModel):
-    """Population-level cross-size row restricted to the intersection of feasible clients.
-
-    Descriptive per-size rows (`CalibrationSizeAblationRow`) independently include every client
-    feasible at that one size and must never be mixed with this fixed-cohort comparison.
-    """
-
     seed: Seed
     method: FederatedThresholdMethod
     calibration_size: CalibrationSize
@@ -461,7 +453,7 @@ def _fixed_cohort_rows_for_seed(
     method: FederatedThresholdMethod,
     cells: tuple[CalibrationSizeAblationCell, ...],
 ) -> tuple[CalibrationSizeFixedCohortRow, ...]:
-    """Restrict each replicate's cells to the intersection of clients feasible at every locked size."""
+
     by_replicate: dict[ReplicateIndex, list[CalibrationSizeAblationCell]] = {}
     for cell in cells:
         by_replicate.setdefault(cell.replicate_index, []).append(cell)

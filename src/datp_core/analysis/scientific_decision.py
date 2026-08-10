@@ -1,5 +1,3 @@
-"""Shared scientific decision contract and confirmatory decision rule."""
-
 from enum import StrEnum
 
 from pydantic import model_validator
@@ -47,7 +45,7 @@ _UNAVAILABLE_DECISIONS = frozenset({ScientificDecision.BLOCKED, ScientificDecisi
 
 
 def decide_confirmatory(interval: BootstrapInterval) -> ScientificDecisionResult:
-    """CONFIRMATORY_INFERENCE_UNAVAILABLE yields NOT_ESTABLISHED, distinct from a valid interval crossing zero."""
+
     if (
         interval.availability is not AvailabilityStatus.AVAILABLE
         or interval.point_estimate is None

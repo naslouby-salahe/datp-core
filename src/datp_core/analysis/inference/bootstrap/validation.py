@@ -1,5 +1,3 @@
-"""Scientific design validation for paired bootstrap inference."""
-
 from datp_core.analysis.contrasts import PairedContrasts, SupplementaryPairedAnalysisPlan
 from datp_core.analysis.inference.bootstrap.contracts import BcaReason
 from datp_core.analysis.inference.contracts import PairedInferenceProtocol
@@ -87,7 +85,7 @@ def _require_fixed_design(contrasts: PairedContrasts) -> None:
 
 
 def _require_fixed_score_identity(contrasts: PairedContrasts) -> None:
-    """Reject pairs that only share a training coordinate without fixed-score provenance."""
+
     if not contrasts:
         raise PairedAnalysisContractError(BcaReason.SEED_COHORT_MISMATCH)
     for contrast in contrasts.values:

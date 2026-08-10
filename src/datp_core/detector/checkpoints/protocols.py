@@ -1,4 +1,4 @@
-from datp_core.core.numeric import RoundNumber
+from datp_core.core.numeric import RelativeThresholdError, RoundNumber
 from datp_core.detector.checkpoints.contracts import ConvergenceProtocol, DiagnosticSnapshotProtocol
 
 DIAGNOSTIC_SNAPSHOT_PROTOCOL = DiagnosticSnapshotProtocol(
@@ -10,7 +10,7 @@ ANCHOR_DIAGNOSTIC_SNAPSHOT_PROTOCOL = DiagnosticSnapshotProtocol(
     maximum_round=RoundNumber(150),
     convergence=ConvergenceProtocol(
         rounds_initial=RoundNumber(40),
-        relative_threshold=0.005,
-        window=10,
+        relative_threshold=RelativeThresholdError(0.005),
+        window=RoundNumber(10),
     ),
 )

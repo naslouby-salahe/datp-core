@@ -67,8 +67,6 @@ def validate_traffic_rate_evidence(evidence: ValidatedTrafficRateEvidence) -> Va
 
 
 class TrafficRateLocatorScheme(StrEnum):
-    """Fixed shape of a traffic-rate evidence reference (not free-form prose)."""
-
     DATASET_PATH = "dataset_path"
     EXTERNAL_URL = "external_url"
     EXTERNAL_DOI = "external_doi"
@@ -76,8 +74,6 @@ class TrafficRateLocatorScheme(StrEnum):
 
 
 class TrafficRateSourceLocator(StrictModel):
-    """A structured reference to one traffic-rate evidence source."""
-
     scheme: TrafficRateLocatorScheme
     reference: TrafficRateReference
 

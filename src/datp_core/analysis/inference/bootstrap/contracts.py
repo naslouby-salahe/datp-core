@@ -1,5 +1,3 @@
-"""Typed BCa interval outcomes and persisted adjustment contracts."""
-
 from enum import StrEnum
 
 from pydantic import model_validator

@@ -1,5 +1,3 @@
-"""Locked Jensen–Shannon divergence estimator for client score heterogeneity."""
-
 from enum import StrEnum
 from typing import ClassVar
 

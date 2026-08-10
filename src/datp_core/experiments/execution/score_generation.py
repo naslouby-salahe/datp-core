@@ -1,5 +1,3 @@
-"""Federated score generation from terminal models."""
-
 from pathlib import Path
 
 from datp_core.core.identifiers import FeatureNameSequence, SplitProtocolId

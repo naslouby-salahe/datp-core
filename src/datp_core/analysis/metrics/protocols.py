@@ -1,5 +1,3 @@
-"""Metric declarations and explicit undefined-result policy."""
-
 from datp_core.core.identifiers import AvailabilityStatus, MetricId
 from datp_core.core.numeric import MetricValue, Ratio
 

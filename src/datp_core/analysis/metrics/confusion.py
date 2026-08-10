@@ -1,5 +1,3 @@
-"""Strict held-out prediction and confusion-count semantics."""
-
 from collections.abc import Sequence
 from dataclasses import dataclass
 from math import isfinite
@@ -17,8 +15,6 @@ from datp_core.data.populations.contracts import PopulationOutcomeLabel
 
 @dataclass(frozen=True, slots=True)
 class _PredictionsByOutcome:
-    """Held-out attack predictions partitioned by their observed outcome."""
-
     benign: tuple[bool, ...]
     attack: tuple[bool, ...]
 

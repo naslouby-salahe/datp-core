@@ -1,5 +1,3 @@
-"""Pytest plugin that skips only CUDA-dependent tests on CPU-only runners."""
-
 from pathlib import PurePosixPath
 
 import pytest
@@ -28,13 +26,6 @@ _CUDA_ONLY_TESTS = frozenset().union(
         "tests/scientific/test_fixed_detector_contract.py",
         "test_every_threshold_method_receives_identical_detector_provenance",
         "test_auroc_is_identical_across_independently_generated_score_artifacts",
-        "test_rescoring_the_same_frozen_checkpoint_reproduces_byte_identical_score_artifacts",
-    ),
-    _tests(
-        "tests/unit/pipeline/checkpoints/test_centralized_checkpoints.py",
-        "test_retains_declared_checkpoint_candidates",
-        "test_selection_uses_fixed_terminal_maximum_round",
-        "test_selection_rejects_held_out_metrics",
     ),
     _tests(
         "tests/unit/pipeline/scoring/test_centralized_scoring.py",

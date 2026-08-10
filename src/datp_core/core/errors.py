@@ -1,5 +1,3 @@
-"""DATP-Core typed errors."""
-
 from enum import Enum, StrEnum
 from typing import ClassVar
 
@@ -11,8 +9,6 @@ class ErrorMessage(NonEmptyString):
 
 
 class MissingPrerequisiteReason(StrEnum):
-    """Controlled discriminants for :class:`MissingPrerequisiteError` callers that branch on cause."""
-
     ANCHOR_GATE = "anchor_gate"
 
 
@@ -92,8 +88,6 @@ class ReportEvidenceError(DatpCoreError):
 
 
 class CliExitCode(Enum):
-    """Stable CLI exit codes for typed domain failures."""
-
     SUCCESS = 0
     USAGE = 2
     INVALID_DECLARATION = 10

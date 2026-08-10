@@ -1,5 +1,3 @@
-"""Authoritative typed dataset and population bindings: resolution, composition, and dispatch."""
-
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum

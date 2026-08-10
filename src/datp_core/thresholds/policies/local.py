@@ -1,5 +1,3 @@
-"""Local threshold construction and result contract."""
-
 from dataclasses import dataclass
 from typing import ClassVar
 

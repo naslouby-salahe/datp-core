@@ -1,5 +1,3 @@
-"""Matched static-reference scoring inputs for temporal experiments."""
-
 from dataclasses import dataclass
 from pathlib import Path
 

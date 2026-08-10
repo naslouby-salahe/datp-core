@@ -1,5 +1,3 @@
-"""Programme validation contracts and application-level scientific checks."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass

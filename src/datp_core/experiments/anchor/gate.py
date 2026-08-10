@@ -44,7 +44,7 @@ class AnchorArtifactValidationFailure(StrEnum):
 
 
 def decide_anchor_gate(reproduction: AnchorReproductionResult) -> AnchorGateDecision:
-    """Derive an irreversible gate decision from a typed reproduction result."""
+
     blocking, declared = _partition_discrepancies(reproduction.discrepancies)
     mandatory_ok = _all_mandatory_comparisons_equivalent(reproduction)
 
@@ -76,7 +76,7 @@ def decide_anchor_gate(reproduction: AnchorReproductionResult) -> AnchorGateDeci
 
 
 def dependent_readiness_from_gate(decision: AnchorGateDecision) -> ExperimentReadiness:
-    """Map gate status to dependent-experiment readiness. No caller override is accepted."""
+
     if decision.status is AnchorGateStatus.ANCHOR_REPRODUCTION_FAILED:
         return ExperimentReadiness.BLOCKED
     if decision.status in {AnchorGateStatus.PASS, AnchorGateStatus.PASS_WITH_DECLARED_DISCREPANCY}:
@@ -88,7 +88,7 @@ def dependent_readiness_from_gate(decision: AnchorGateDecision) -> ExperimentRea
 
 
 def assert_gate_not_bypassable(decision: AnchorGateDecision) -> AnchorGateDecision:
-    """Structural guard: blocked gates never expose claim-permitted dependent readiness."""
+
     if decision.dependent_readiness is ExperimentReadiness.EXECUTABLE:
         raise AnchorReproductionError(
             ErrorMessage("anchor gate cannot mark dependent experiments executable"),
@@ -124,11 +124,6 @@ def _all_mandatory_comparisons_equivalent(reproduction: AnchorReproductionResult
     if not comparisons:
         return False
 
-    # The roadmap gate carries no per-seed value condition (conditions 1-10 are
-    # identity checks, 11-13 are the cohort-level BCa interval). Per-seed
-    # comparisons must be present and structurally valid; exact matches are
-    # EQUIVALENT, and any deviation is reported as DIAGNOSTIC_REPORTED rather
-    # than blocking the gate.
     return all(
         c.decision
         in {
@@ -142,7 +137,7 @@ def _all_mandatory_comparisons_equivalent(reproduction: AnchorReproductionResult
 def _partition_discrepancies(
     discrepancies: tuple[AnchorDiscrepancy, ...],
 ) -> tuple[tuple[AnchorDiscrepancy, ...], tuple[AnchorDiscrepancy, ...]]:
-    """Split discrepancies into blocking vs declared non-blocking classes."""
+
     if not _DECLARED_REASONS_SET:
         return discrepancies, ()
 
@@ -184,7 +179,7 @@ def build_anchor_confirmatory_handoff(
     decision: AnchorGateDecision,
     diagnostics_directory: Path,
 ) -> AnchorConfirmatoryHandoff:
-    """Construct the typed programme-binding handoff for a permitting gate decision."""
+
     if decision.status is AnchorGateStatus.ANCHOR_REPRODUCTION_FAILED:
         raise AnchorReproductionError(
             ErrorMessage("blocked anchor gate cannot produce a confirmatory handoff"),
@@ -210,7 +205,7 @@ def build_anchor_confirmatory_handoff(
 
 
 def load_verified_anchor_gate_artifact(diagnostics_directory: Path) -> VerifiedAnchorGateArtifact:
-    """Load and validate a persisted anchor-gate decision."""
+
     decision = _load_gate_decision(diagnostics_directory)
     decision = assert_gate_not_bypassable(decision)
 
@@ -227,7 +222,7 @@ def load_verified_anchor_gate_artifact(diagnostics_directory: Path) -> VerifiedA
 
 
 def load_anchor_gate_decision(diagnostics_directory: Path) -> AnchorGateDecision:
-    """Load a persisted gate decision without claim-permit filtering (inspect path)."""
+
     return assert_gate_not_bypassable(_load_gate_decision(diagnostics_directory))
 
 
@@ -236,7 +231,7 @@ def load_anchor_confirmatory_handoff(
     *,
     verified_gate: VerifiedAnchorGateArtifact,
 ) -> AnchorConfirmatoryHandoff:
-    """Load and validate the typed confirmatory handoff bound to a verified gate."""
+
     if not diagnostics_directory.is_dir():
         raise AnchorReproductionError(
             ErrorMessage(f"anchor-gate diagnostics directory is missing: {diagnostics_directory}"),
@@ -277,7 +272,7 @@ def load_anchor_confirmatory_handoff(
 def validate_handoff_against_confirmatory_programme(
     handoff: AnchorConfirmatoryHandoff,
 ) -> AnchorConfirmatoryHandoff:
-    """Fail closed when the handoff no longer matches the locked confirmatory programme."""
+
     endpoint = CONFIRMATORY_ENDPOINT
     mismatches: list[str] = []
 

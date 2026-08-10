@@ -1,5 +1,3 @@
-"""Typed multiplicity plans and Holm-adjusted decisions."""
-
 from collections.abc import Iterable
 from typing import ClassVar
 

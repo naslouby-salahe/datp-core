@@ -1,5 +1,3 @@
-"""Typed publication-table construction with explicit unavailable cells."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -17,7 +15,7 @@ class EvidenceText(NonEmptyString):
 
 
 class TableCellRenderedValue(str):
-    """Rendered table-cell value; may be blank for unavailable cells."""
+    pass
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

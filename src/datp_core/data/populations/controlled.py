@@ -1,5 +1,3 @@
-"""Deterministic allocation for controlled Dirichlet and IID populations."""
-
 from dataclasses import dataclass, field
 from enum import StrEnum
 
@@ -26,8 +24,6 @@ class ControlledAllocationViolation(StrEnum):
 
 @dataclass(slots=True)
 class ControlledPartitionAllocator:
-    """Stateful deterministic allocator shared by controlled population builders."""
-
     population: PopulationId
     client_count: ClientCount
     condition: ControlledPartitionCondition
@@ -38,7 +34,7 @@ class ControlledPartitionAllocator:
         self._generator = np.random.Generator(np.random.PCG64(self.seed.value))
 
     def allocate(self, row_count: RowCount) -> tuple[RowCount, ...]:
-        """Allocate one stratum while conserving every row exactly once."""
+
         if row_count.value == 0:
             return tuple(RowCount(0) for _ in range(self.client_count.value))
         proportions = self._proportions()
@@ -52,7 +48,7 @@ class ControlledPartitionAllocator:
         return counts
 
     def permutation(self, row_count: RowCount) -> np.ndarray:
-        """Return a deterministic permutation for one ordered source stratum."""
+
         return self._generator.permutation(row_count.value)
 
     def _proportions(self) -> tuple[Ratio, ...]:

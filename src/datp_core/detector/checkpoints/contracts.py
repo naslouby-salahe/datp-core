@@ -3,21 +3,21 @@ from dataclasses import dataclass
 from pydantic import model_validator
 
 from datp_core.core.contracts import StrictModel
-from datp_core.core.numeric import RoundNumber
+from datp_core.core.numeric import RelativeThresholdError, RoundNumber
 
 
 @dataclass(frozen=True, slots=True)
 class ConvergenceProtocol:
     rounds_initial: RoundNumber
-    relative_threshold: float
-    window: int
+    relative_threshold: RelativeThresholdError
+    window: RoundNumber
 
     def __post_init__(self) -> None:
         if self.rounds_initial.value < 1:
             raise ValueError("rounds_initial must be >= 1")
-        if self.window < 2:
+        if self.window.value < 2:
             raise ValueError("window must be >= 2")
-        if self.relative_threshold <= 0.0:
+        if self.relative_threshold.value <= 0.0:
             raise ValueError("relative_threshold must be positive")
 
 

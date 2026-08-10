@@ -1,5 +1,3 @@
-"""Lazy reader for the audited CICIoT2023 merged artifacts."""
-
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -39,8 +37,6 @@ class CICIoT2023AuditSummary:
 
 
 class CICIoT2023Reader:
-    """Read only merged labelled files while retaining file and row provenance."""
-
     def read(self, path: Path) -> pl.LazyFrame:
         self._validate_source_path(path)
         return self._canonical_frame(self._source_frame(path), path)

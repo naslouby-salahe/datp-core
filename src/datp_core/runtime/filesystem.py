@@ -1,5 +1,3 @@
-"""Filesystem primitives shared by artifact-owning packages."""
-
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path

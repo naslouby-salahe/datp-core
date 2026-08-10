@@ -1,5 +1,3 @@
-"""Shared threshold constructions and result contracts."""
-
 from dataclasses import dataclass
 from typing import ClassVar
 

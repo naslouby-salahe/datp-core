@@ -60,7 +60,11 @@ class DittoTrainingRequest:
     learning_rate: LearningRate
     global_output_directory: Path
     personalized_output_directory: Path
-    progress_callback: Callable[[int, int], None] | None = field(default=None, compare=False, repr=False)
+    progress_callback: Callable[[RoundNumber, RoundNumber], None] | None = field(
+        default=None,
+        compare=False,
+        repr=False,
+    )
 
 
 def _require_client_entry[T](mapping: dict[ClientIdentity, T], client: ClientIdentity) -> T:
@@ -117,7 +121,7 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
     for round_value in range(1, request.diagnostic_snapshot_protocol.maximum_round.value + 1):
         round_number = RoundNumber(round_value)
         if request.progress_callback is not None:
-            request.progress_callback(round_value, request.diagnostic_snapshot_protocol.maximum_round.value)
+            request.progress_callback(round_number, request.diagnostic_snapshot_protocol.maximum_round)
         global_updates: list[ClientUpdate] = []
         personalized_references: list[PersonalizedModelStateReference] = []
 

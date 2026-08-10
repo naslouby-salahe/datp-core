@@ -1,5 +1,3 @@
-"""Canonical materialization for audited Edge-IIoTset sources."""
-
 from dataclasses import dataclass
 from pathlib import Path
 from shutil import rmtree
@@ -77,8 +75,6 @@ _EDGE_CANONICALIZATION_CONTRACT = CanonicalizationContractName("pcap_verified_so
 
 
 class EdgeIIoTsetMaterializer:
-    """Publish static benign, chronology-eligible benign, and unassigned attack partitions."""
-
     def canonical_directory(self, canonical_root: Path) -> Path:
         return canonical_directory(canonical_root, EDGE_SCHEMA)
 

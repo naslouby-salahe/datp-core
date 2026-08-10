@@ -1,5 +1,3 @@
-"""Benign-only calibration eligibility decided before held-out evaluation."""
-
 from dataclasses import dataclass
 from enum import StrEnum
 

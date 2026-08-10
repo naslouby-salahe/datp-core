@@ -1,5 +1,3 @@
-"""Lazy, provenance-preserving reader for extracted N-BaIoT CSV sources."""
-
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -21,15 +19,11 @@ from .schema import (
 
 @dataclass(frozen=True, slots=True)
 class NBaIoTFiniteValueSummary:
-    """Audited row totals for the N-BaIoT finite-feature validation gate."""
-
     total_rows: LogicalElementCount
     invalid_rows: ValidationIssueCount
 
 
 class NBaIoTReader:
-    """Read one audited N-BaIoT source without inventing chronology."""
-
     def read(self, path: Path) -> pl.LazyFrame:
         source_identity = parse_source_identity(path)
         frame = pl.scan_csv(

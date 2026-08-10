@@ -22,7 +22,7 @@ def test_ciciot_builds_exactly_sixty_three_file_clients(ciciot_canonical_root: P
     manifest, membership = construction.manifest, construction.membership
     assert len(manifest.document.accepted_clients) == 63
     assert membership.get_column("client_id").n_unique() == 63
-    # ineligible row from Merged01 local=8 is excluded
+
     assert membership.height == 63 * 9 - 1
 
 

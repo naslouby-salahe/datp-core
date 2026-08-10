@@ -1,5 +1,3 @@
-"""PCAP-backed chronology evidence for Edge benign sensor groups."""
-
 import csv
 import re
 import struct
@@ -45,8 +43,6 @@ _TIMELINE_SCHEMA = pa.schema(
 
 
 class _PcapByteOrder(StrEnum):
-    """The two libpcap global-header byte orderings, keyed by their `struct` format prefix."""
-
     LITTLE_ENDIAN = "<"
     BIG_ENDIAN = ">"
 
@@ -106,7 +102,7 @@ class _PcapAligner:
         self.trailing_evidence_rows = sum(1 for _ in records)
 
     def align_all(self) -> RowCount:
-        """Exhaust the verified CSV↔PCAP alignment and return the matched row count."""
+
         return RowCount(sum(1 for _ in self.matches()))
 
     def validation(self, group_identity: ChronologyGroupIdentity) -> ChronologyValidation:

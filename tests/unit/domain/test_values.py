@@ -1,5 +1,3 @@
-"""Tests for semantic value-object validation and isolation."""
-
 import pytest
 from pydantic import BaseModel
 

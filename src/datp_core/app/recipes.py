@@ -1,5 +1,3 @@
-"""Exact experiment recipe registry, dispatch, reporting, and evidence markers."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -30,8 +28,8 @@ from datp_core.core.identifiers import (
     ExperimentId,
     ExperimentReadiness,
     FederatedThresholdMethod,
-    FedProxRoleDirectory,
     FileContentText,
+    MetricId,
     PopulationId,
     ThresholdMethodExecutionStatus,
 )
@@ -114,19 +112,14 @@ from datp_core.experiments.threshold_robustness import (
     size_aware_shrinkage_analysis_marker_present,
 )
 from datp_core.experiments.training_stress import (
-    TrainingStressArtifactName,
     analyze_ditto_absorption,
     analyze_fedprox_absorption,
     build_fedprox_absorption_observation,
     ditto_analysis_directory,
     fedprox_analysis_directory,
-    fedprox_stress_test_root,
     load_ditto_stress_test_evidence,
-    load_fedprox_primary_coefficient_decision,
     run_ditto_stress_test_seed,
     run_fedprox_stress_test_seed,
-    select_primary_fedprox_coefficient_from_artifacts,
-    write_fedprox_primary_coefficient_decision,
 )
 from datp_core.presentation.export import MECHANISM_REPORT_FILENAME, PUBLICATION_FILENAME
 from datp_core.runtime.configuration import OUTPUTS_ROOT
@@ -167,11 +160,7 @@ class DispatchHandler(Protocol):
 
 
 class ReportHandler(Protocol):
-    def __call__(
-        self,
-        experiment_id: ExperimentId,
-        overwrite: OverwriteMode,
-    ) -> ReportResult: ...
+    def __call__(self, experiment_id: ExperimentId) -> ReportResult: ...
 
 
 class AnalysisMarker(Protocol):
@@ -515,39 +504,28 @@ def _dispatch_declared(
     )
 
 
-def _dispatch_analysis(
-    experiment_id: ExperimentId,
-    output_root: Path,
-    overwrite: OverwriteMode,
-) -> DispatchOutcome:
+def _dispatch_analysis(experiment_id: ExperimentId, output_root: Path) -> DispatchOutcome:
     if output_root != OUTPUTS_ROOT:
         raise ScientificContractError(
-            ErrorMessage(
-                "analysis-only experiments require the full frozen confirmatory evidence and cannot run in smoke mode"
-            ),
+            ErrorMessage("analysis-only experiments require full confirmatory evidence and cannot run in smoke mode"),
             subject=experiment_id,
         )
-    report = _report_heterogeneity(experiment_id, overwrite)
+    report = _report_heterogeneity(experiment_id)
     return DispatchOutcome(
-        detail=DetailText(f"analysis-only experiment validated frozen evidence: {report.detail}"),
+        detail=DetailText(f"analysis experiment rendered current scientific evidence: {report.detail}"),
         method_outcomes=tuple(
             ThresholdMethodOutcome(
                 method=method,
                 status=ThresholdMethodExecutionStatus.COMPLETED,
-                detail=DetailText(
-                    "analysis artifact generated from validated frozen confirmatory score evidence: "
-                    + ",".join(str(path) for path in report.paths)
-                ),
+                detail=DetailText("analysis artifact generated from its declared scientific evidence"),
             )
             for method in _declared_methods(experiment_id)
         ),
     )
 
 
-def _report_confirmatory(experiment_id: ExperimentId, overwrite: OverwriteMode) -> ReportResult:
-    centralized = report_centralized_reference(
-        NBAIOT_CENTRALIZED_REFERENCE, output_root=OUTPUTS_ROOT, overwrite=overwrite.requested
-    )
+def _report_confirmatory(experiment_id: ExperimentId) -> ReportResult:
+    centralized = report_centralized_reference(NBAIOT_CENTRALIZED_REFERENCE, output_root=OUTPUTS_ROOT, overwrite=True)
     path = analyze_confirmatory_campaign(anchor_gate_diagnostics_directory=ANCHOR_DIAGNOSTICS_DIRECTORY)
     return ReportResult(
         experiment=experiment_id,
@@ -556,20 +534,18 @@ def _report_confirmatory(experiment_id: ExperimentId, overwrite: OverwriteMode) 
     )
 
 
-def _report_external(experiment_id: ExperimentId, overwrite: OverwriteMode) -> ReportResult:
+def _report_external(experiment_id: ExperimentId) -> ReportResult:
     if experiment_id is ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION:
-        result = analyze_external_validation_campaign(output_root=OUTPUTS_ROOT, overwrite=overwrite.requested)
-        benign = analyze_external_benign_statistics(output_root=OUTPUTS_ROOT, overwrite=overwrite.requested)
+        result = analyze_external_validation_campaign(output_root=OUTPUTS_ROOT, overwrite=True)
+        benign = analyze_external_benign_statistics(output_root=OUTPUTS_ROOT, overwrite=True)
         return ReportResult(
             experiment=experiment_id,
             paths=(result.output_directory, benign.output_directory),
             detail=DetailText(f"paired={result.output_directory} benign_statistics={benign.output_directory}"),
         )
     if experiment_id is ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY:
-        result = analyze_ciciot_boundary_campaign(output_root=OUTPUTS_ROOT, overwrite=overwrite.requested)
-        centralized = report_centralized_reference(
-            CIC_CENTRALIZED_REFERENCE, output_root=OUTPUTS_ROOT, overwrite=overwrite.requested
-        )
+        result = analyze_ciciot_boundary_campaign(output_root=OUTPUTS_ROOT, overwrite=True)
+        centralized = report_centralized_reference(CIC_CENTRALIZED_REFERENCE, output_root=OUTPUTS_ROOT, overwrite=True)
         return ReportResult(
             experiment=experiment_id,
             paths=(result.output_directory, centralized),
@@ -578,33 +554,23 @@ def _report_external(experiment_id: ExperimentId, overwrite: OverwriteMode) -> R
     raise ReportEvidenceError(ErrorMessage(f"unsupported external report: {experiment_id.value}"))
 
 
-def _report_heterogeneity(experiment_id: ExperimentId, overwrite: OverwriteMode) -> ReportResult:
+def _report_heterogeneity(experiment_id: ExperimentId) -> ReportResult:
     if experiment_id is ExperimentId.CONTROLLED_HETEROGENEITY_SWEEP:
-        path = analyze_controlled_heterogeneity_sweep(overwrite=overwrite.requested)
+        path = analyze_controlled_heterogeneity_sweep(overwrite=True)
     elif experiment_id is ExperimentId.PER_CLIENT_SCORE_GEOMETRY:
-        path = analyze_per_client_score_geometry(overwrite=overwrite.requested)
+        path = analyze_per_client_score_geometry(overwrite=True)
     elif experiment_id is ExperimentId.HETEROGENEITY_BENEFIT_ASSOCIATION:
-        path = analyze_heterogeneity_benefit_association(overwrite=overwrite.requested)
+        path = analyze_heterogeneity_benefit_association(overwrite=True)
     elif experiment_id is ExperimentId.THRESHOLD_MOVEMENT_TRADEOFF:
-        path = analyze_threshold_movement_tradeoff(overwrite=overwrite.requested)
+        path = analyze_threshold_movement_tradeoff(overwrite=True)
     else:
         raise ReportEvidenceError(ErrorMessage(f"unsupported heterogeneity report: {experiment_id.value}"))
     return ReportResult(experiment=experiment_id, paths=(path,), detail=DetailText(str(path)))
 
 
-def _report_fedprox(experiment_id: ExperimentId, overwrite: OverwriteMode) -> ReportResult:
+def _report_fedprox(experiment_id: ExperimentId) -> ReportResult:
     try:
-        primary = select_primary_fedprox_coefficient_from_artifacts(
-            output_root=OUTPUTS_ROOT,
-            seed_cohort=CONFIRMATORY_SEED_COHORT,
-        )
-        root = fedprox_stress_test_root(output_root=OUTPUTS_ROOT)
-        paths: list[Path] = [
-            write_fedprox_primary_coefficient_decision(
-                primary,
-                root / TrainingStressArtifactName.PRIMARY_COEFFICIENT_DECISION,
-            )
-        ]
+        paths: list[Path] = []
         for coefficient in FEDPROX_COEFFICIENTS:
             observations = tuple(
                 build_fedprox_absorption_observation(
@@ -619,12 +585,9 @@ def _report_fedprox(experiment_id: ExperimentId, overwrite: OverwriteMode) -> Re
             )
             output = fedprox_analysis_directory(
                 coefficient,
-                FedProxRoleDirectory.PRIMARY
-                if coefficient == primary.primary_coefficient
-                else FedProxRoleDirectory.SENSITIVITY,
                 output_root=OUTPUTS_ROOT,
             )
-            if overwrite.requested and output.exists():
+            if output.exists():
                 rmtree(output)
             analyze_fedprox_absorption(observations, output_directory=output)
             paths.append(output)
@@ -635,13 +598,13 @@ def _report_fedprox(experiment_id: ExperimentId, overwrite: OverwriteMode) -> Re
     return ReportResult(
         experiment=experiment_id,
         paths=tuple(paths),
-        detail=DetailText(f"coefficients={len(paths) - 1}"),
+        detail=DetailText(f"coefficients={len(paths)}"),
     )
 
 
-def _report_ditto(experiment_id: ExperimentId, overwrite: OverwriteMode) -> ReportResult:
+def _report_ditto(experiment_id: ExperimentId) -> ReportResult:
     output = ditto_analysis_directory(DITTO_PRIMARY_REGULARIZATION, output_root=OUTPUTS_ROOT)
-    if overwrite.requested and output.exists():
+    if output.exists():
         rmtree(output)
     results = tuple(
         load_ditto_stress_test_evidence(
@@ -662,13 +625,13 @@ def _report_ditto(experiment_id: ExperimentId, overwrite: OverwriteMode) -> Repo
     return ReportResult(experiment=experiment_id, paths=(output,), detail=DetailText(f"analysis={output}"))
 
 
-def _report_temporal(experiment_id: ExperimentId, overwrite: OverwriteMode) -> ReportResult:
+def _report_temporal(experiment_id: ExperimentId) -> ReportResult:
     seeds = tuple(
-        run_temporal_seed(seed, output_root=OUTPUTS_ROOT, overwrite=overwrite.requested)
+        run_temporal_seed(seed, output_root=OUTPUTS_ROOT, overwrite=True)
         for seed in BOUNDED_EVIDENCE_SEED_COHORT.values
     )
     campaign = TemporalCampaignResult(seeds=seeds, analyses=())
-    analyses = analyze_temporal_campaign(campaign, output_root=OUTPUTS_ROOT, overwrite=overwrite.requested)
+    analyses = analyze_temporal_campaign(campaign, output_root=OUTPUTS_ROOT, overwrite=True)
     paths = tuple(item.output_directory for item in analyses)
     return ReportResult(
         experiment=experiment_id,
@@ -677,31 +640,31 @@ def _report_temporal(experiment_id: ExperimentId, overwrite: OverwriteMode) -> R
     )
 
 
-def _report_robustness(experiment_id: ExperimentId, overwrite: OverwriteMode) -> ReportResult:
+def _report_robustness(experiment_id: ExperimentId) -> ReportResult:
     if experiment_id is ExperimentId.SHARED_CONSTRUCTION_SENSITIVITY:
-        result = report_shared_construction_sensitivity(experiment_id, overwrite.requested)
+        result = report_shared_construction_sensitivity(experiment_id, True)
     elif experiment_id is ExperimentId.QUANTILE_SENSITIVITY:
-        result = report_quantile_sensitivity(experiment_id, overwrite.requested)
+        result = report_quantile_sensitivity(experiment_id, True)
     elif experiment_id is ExperimentId.CALIBRATION_SIZE_ABLATION:
-        result = report_calibration_size_ablation(experiment_id, overwrite.requested)
+        result = report_calibration_size_ablation(experiment_id, True)
     elif experiment_id is ExperimentId.FIXED_SHRINKAGE_CURVE:
-        result = report_fixed_shrinkage_curve(experiment_id, overwrite.requested)
+        result = report_fixed_shrinkage_curve(experiment_id, True)
     elif experiment_id is ExperimentId.SIZE_AWARE_SHRINKAGE:
-        result = report_size_aware_shrinkage(experiment_id, overwrite.requested)
+        result = report_size_aware_shrinkage(experiment_id, True)
     elif experiment_id is ExperimentId.LOCAL_CONFORMAL_COVERAGE:
-        result = report_local_conformal_coverage(experiment_id, overwrite.requested)
+        result = report_local_conformal_coverage(experiment_id, True)
     else:
         raise ReportEvidenceError(ErrorMessage(f"unsupported threshold robustness report: {experiment_id.value}"))
     return ReportResult(experiment=experiment_id, paths=result.directories, detail=DetailText(result.detail))
 
 
-def _report_estimation(experiment_id: ExperimentId, overwrite: OverwriteMode) -> ReportResult:
+def _report_estimation(experiment_id: ExperimentId) -> ReportResult:
     if experiment_id is ExperimentId.FEDERATED_BENIGN_STATISTICS_COMPARISON:
-        result = report_federated_benign_statistics_comparison(experiment_id, overwrite.requested)
+        result = report_federated_benign_statistics_comparison(experiment_id, True)
     elif experiment_id is ExperimentId.FEDERATED_QUANTILE_ESTIMATION:
-        result = report_federated_quantile_estimation(experiment_id, overwrite.requested)
+        result = report_federated_quantile_estimation(experiment_id, True)
     elif experiment_id is ExperimentId.FIXED_COEFFICIENT_STATISTICS_SENSITIVITY:
-        result = report_fixed_coefficient_statistics_sensitivity(experiment_id, overwrite.requested)
+        result = report_fixed_coefficient_statistics_sensitivity(experiment_id, True)
     else:
         raise ReportEvidenceError(ErrorMessage(f"unsupported federated estimation report: {experiment_id.value}"))
     return ReportResult(experiment=experiment_id, paths=result.directories, detail=DetailText(result.detail))
@@ -711,7 +674,7 @@ def _supplementary_directory(experiment_id: ExperimentId) -> Path:
     return OUTPUTS_ROOT / ResearchDirectory.SUPPLEMENTARY / experiment_id.value
 
 
-def _report_supplementary(experiment_id: ExperimentId, overwrite: OverwriteMode) -> ReportResult:
+def _report_supplementary(experiment_id: ExperimentId) -> ReportResult:
     declaration = _declaration(experiment_id)
     plan = expand_experiment_plan(
         declarations=(declaration,),
@@ -735,10 +698,10 @@ def _report_supplementary(experiment_id: ExperimentId, overwrite: OverwriteMode)
         "| Seed | Threshold method | Metric | Status | Value |",
         "|---:|---|---|---|---:|",
     ]
-    seen: set[tuple[Seed, FederatedThresholdMethod, str]] = set()
+    seen: set[tuple[Seed, FederatedThresholdMethod, MetricId]] = set()
     for entry in plan.executable:
         coordinate = entry.coordinate
-        key = (coordinate.training_seed, coordinate.threshold_method, coordinate.metric.value)
+        key = (coordinate.training_seed, coordinate.threshold_method, coordinate.metric)
         if key in seen:
             continue
         seen.add(key)
@@ -803,19 +766,10 @@ def _external_marker(experiment_id: ExperimentId) -> bool:
 
 def _fedprox_marker(experiment_id: ExperimentId) -> bool:
     del experiment_id
-    decision_path = (
-        fedprox_stress_test_root(output_root=OUTPUTS_ROOT) / TrainingStressArtifactName.PRIMARY_COEFFICIENT_DECISION
-    )
-    if not decision_path.is_file():
-        return False
-    decision = load_fedprox_primary_coefficient_decision(decision_path)
     return all(
         (
             fedprox_analysis_directory(
                 coefficient,
-                FedProxRoleDirectory.PRIMARY
-                if coefficient == decision.primary_coefficient
-                else FedProxRoleDirectory.SENSITIVITY,
                 output_root=OUTPUTS_ROOT,
             )
             / PUBLICATION_FILENAME
@@ -955,8 +909,8 @@ def _analysis_recipe(experiment_id: ExperimentId) -> DispatchHandler:
         *,
         progress: ProgressHook | None = None,
     ) -> DispatchOutcome:
-        del seeds, progress
-        return _dispatch_analysis(experiment_id, output_root, overwrite)
+        del seeds, overwrite, progress
+        return _dispatch_analysis(experiment_id, output_root)
 
     return dispatch
 

@@ -1,5 +1,3 @@
-"""Held-out benign coverage diagnostics for persisted conformal thresholds."""
-
 from dataclasses import dataclass
 from math import isfinite
 

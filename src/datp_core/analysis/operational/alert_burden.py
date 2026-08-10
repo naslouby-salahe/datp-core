@@ -1,5 +1,3 @@
-"""Operational diagnostics derived from validated evaluation evidence."""
-
 from dataclasses import dataclass
 from enum import StrEnum
 

@@ -1,5 +1,3 @@
-"""Benign-only calibration declarations."""
-
 from enum import StrEnum
 from typing import Literal
 
@@ -190,7 +188,7 @@ class ClusterThresholdProtocol(StrictModel):
 CANONICAL_QUANTILE = Quantile(0.95)
 QUANTILE_GRID = tuple(Quantile(value) for value in (0.90, 0.95, 0.975, 0.99))
 MINIMUM_BENIGN_SUPPORT = CalibrationSize(100)
-# Ten nested replicates per (seed, client); summarized within seed, never treated as an independent sample.
+
 LOCKED_CALIBRATION_SUBSAMPLE_REPLICATE_COUNT = SubsampleReplicateCount(10)
 CALIBRATION_SIZES = tuple(CalibrationSize(value) for value in (50, 100, 250, 500, 1000, 5000))
 SAMPLE_STARVED_CALIBRATION_SIZE = CalibrationSize(50)

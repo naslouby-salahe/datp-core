@@ -1,5 +1,3 @@
-"""Whole-graph scientific declarations, observation contracts, and validation."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass

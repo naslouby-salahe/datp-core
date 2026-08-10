@@ -1,5 +1,3 @@
-"""Deterministic experiment-plan expansion."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -44,7 +42,7 @@ class PlanDisposition(StrEnum):
 
 
 def seed_cohort_for(experiment_id: ExperimentId) -> SeedCohort:
-    """Resolve the protocol-declared seed cohort for one experiment."""
+
     declaration = require_experiment_declaration(experiment_id)
     if declaration.population in {
         PopulationId.EDGE_SENSOR_GROUPS,

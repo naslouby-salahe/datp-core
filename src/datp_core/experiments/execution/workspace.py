@@ -1,5 +1,3 @@
-"""Cached orchestration for one federated experiment coordinate."""
-
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
@@ -10,7 +8,6 @@ import polars as pl
 from datp_core.analysis.metrics.federated import (
     CalibrationSizeAblationCell,
     ConformalCoverageStageInput,
-    FederatedEvaluationDocument,
     ThresholdEstimationStageInput,
 )
 from datp_core.analysis.metrics.federated_publication import (
@@ -52,6 +49,7 @@ from datp_core.core.numeric import (
     ClientCount,
     Quantile,
     ReplicateIndex,
+    RoundNumber,
     ScoreValue,
     ThresholdValue,
 )
@@ -72,13 +70,12 @@ from datp_core.experiments.execution.context import (
     client_scoring_inputs,
     client_training_inputs,
     diagnostic_snapshot_protocol_for,
-    execution_context_cache_key,
     resolve_execution_context,
     training_autoencoder_for,
     training_feature_names,
     training_protocol_for,
 )
-from datp_core.experiments.execution.evidence import eligible_calibration_scores, load_evaluation_document
+from datp_core.experiments.execution.evidence import eligible_calibration_scores
 from datp_core.experiments.execution.layout import EvaluationRunAssetDirectory, ExecutionArtifactDirectory
 from datp_core.experiments.execution.models import ProgressEvent, ProgressEventKind, ProgressHook
 from datp_core.experiments.execution.score_generation import score_terminal_model
@@ -104,11 +101,7 @@ def _pooled_calibration_quantile(
     calibration_by_client: dict[ClientIdentity, ClientBenignCalibrationScores],
     quantile: Quantile,
 ) -> ThresholdValue:
-    """Exact pooled benign quantile oracle from eligible calibration scores only.
 
-    The threshold-estimation oracle must never consume held-out evaluation scores;
-    calibration and evaluation evidence stay isolated.
-    """
     pooled_values = np.asarray(
         tuple(score.value for scores in calibration_by_client.values() for score in scores.scores),
         dtype=np.float64,
@@ -118,30 +111,18 @@ def _pooled_calibration_quantile(
 
 @dataclass(kw_only=True)
 class ExperimentWorkspace:
-    """Resolve each expensive coordinate-bound operation once and cache its result."""
-
     coordinate: ExperimentCoordinate
     output_root: Path
     progress: ProgressHook | None = None
-    shared_context_cache: dict[tuple[object, ...], FederatedExecutionContext] | None = None
-    shared_evaluation_cache: dict[Path, EvaluateFederatedDetectorResult] | None = None
-    shared_training_cache: dict[tuple[object, ...], TrainFederatedDetectorResult] | None = None
-    shared_score_cache: dict[tuple[object, ...], FederatedScoreArtifactManifest] | None = None
+    fixed_context: FederatedExecutionContext | None = None
+    fixed_training: TrainFederatedDetectorResult | None = None
+    fixed_scores: FederatedScoreArtifactManifest | None = None
 
     @cached_property
     def context(self) -> FederatedExecutionContext:
-        return self._resolve_shared_context()
-
-    def _resolve_shared_context(self) -> FederatedExecutionContext:
-        cache = self.shared_context_cache
-        if cache is None:
-            return resolve_execution_context(self.coordinate, self.output_root)
-        key = execution_context_cache_key(self.coordinate, self.output_root)
-        context = cache.get(key)
-        if context is None:
-            context = resolve_execution_context(self.coordinate, self.output_root)
-            cache[key] = context
-        return context
+        if self.fixed_context is not None:
+            return self.fixed_context
+        return resolve_execution_context(self.coordinate, self.output_root)
 
     @cached_property
     def autoencoder(self) -> AutoencoderProtocol:
@@ -153,11 +134,10 @@ class ExperimentWorkspace:
 
     @cached_property
     def training(self) -> TrainFederatedDetectorResult:
-        key = execution_context_cache_key(self.coordinate, self.output_root)
-        if self.shared_training_cache is not None and (cached := self.shared_training_cache.get(key)) is not None:
-            return cached
+        if self.fixed_training is not None:
+            return self.fixed_training
         protocol = training_protocol_for(self.coordinate)
-        result = train_federated_detector(
+        return train_federated_detector(
             TrainFederatedDetectorRequest(
                 request=FederatedTrainingRequest(
                     coordinate=self.context.coordinate,
@@ -178,11 +158,8 @@ class ExperimentWorkspace:
                 ),
             )
         )
-        if self.shared_training_cache is not None:
-            self.shared_training_cache[key] = result
-        return result
 
-    def _round_progress_callback(self, round_number: int, maximum_round: int) -> None:
+    def _round_progress_callback(self, round_number: RoundNumber, maximum_round: RoundNumber) -> None:
         if self.progress is not None:
             self.progress.emit(
                 ProgressEvent(
@@ -195,10 +172,9 @@ class ExperimentWorkspace:
 
     @cached_property
     def scores(self) -> FederatedScoreArtifactManifest:
-        key = execution_context_cache_key(self.coordinate, self.output_root)
-        if self.shared_score_cache is not None and (cached := self.shared_score_cache.get(key)) is not None:
-            return cached
-        scores = score_terminal_model(
+        if self.fixed_scores is not None:
+            return self.fixed_scores
+        return score_terminal_model(
             training=self.training.training,
             scored_split_protocol=self.context.coordinate.split_protocol,
             autoencoder=self.autoencoder,
@@ -206,9 +182,6 @@ class ExperimentWorkspace:
             clients=client_scoring_inputs(self.context.preprocessing.client_publications, self.context.clients),
             output_directory=self.context.training_directory / ExecutionArtifactDirectory.SCORES,
         )
-        if self.shared_score_cache is not None:
-            self.shared_score_cache[key] = scores
-        return scores
 
     def eligible_calibration_scores(self) -> tuple[ClientBenignCalibrationScores, ...]:
         return eligible_calibration_scores(self.scores, PartitionRole.CALIBRATION)
@@ -421,18 +394,7 @@ class ExperimentWorkspace:
 
     @cached_property
     def evaluation(self) -> EvaluateFederatedDetectorResult:
-        return self._resolve_shared_evaluation()
-
-    def _resolve_shared_evaluation(self) -> EvaluateFederatedDetectorResult:
-        cache = self.shared_evaluation_cache
-        if cache is None:
-            return self._evaluate()
-        key = self.run_directory()
-        result = cache.get(key)
-        if result is None:
-            result = self._evaluate()
-            cache[key] = result
-        return result
+        return self._evaluate()
 
     def _evaluate(self) -> EvaluateFederatedDetectorResult:
         inputs = build_federated_evaluation_inputs(self.scores, self.coordinate.threshold_method)
@@ -452,9 +414,4 @@ class ExperimentWorkspace:
                 overwrite=False,
                 calibration_size_ablation=self.calibration_size_ablation,
             )
-        )
-
-    def evaluation_document(self) -> FederatedEvaluationDocument:
-        return load_evaluation_document(
-            self.run_directory() / EvaluationRunAssetDirectory.EVALUATION / "evaluation.json"
         )

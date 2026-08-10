@@ -1,5 +1,3 @@
-"""Canonical materialization for audited CICIoT2023 merged sources."""
-
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -52,8 +50,6 @@ _CICIOT2023_CANONICALIZATION_CONTRACT = CanonicalizationContractName("lossless_m
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CICIoT2023AuditResult:
-    """Canonical frames and their source-level validation evidence."""
-
     frames: tuple[pl.LazyFrame, ...]
     inventory: RawDatasetInventory
     validation_report: DatasetValidationReport
@@ -61,16 +57,12 @@ class CICIoT2023AuditResult:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class _AuditedCICIoT2023Sources:
-    """Ordered source paths paired with their frames and audit summaries."""
-
     paths: tuple[Path, ...]
     frames: tuple[pl.LazyFrame, ...]
     summaries: tuple[CICIoT2023AuditSummary, ...]
 
 
 class CICIoT2023Materializer:
-    """Publish lossless merged-file partitions with their eligibility audit."""
-
     def canonical_directory(self, canonical_root: Path) -> Path:
         return canonical_directory(canonical_root, CICIOT2023_SCHEMA)
 

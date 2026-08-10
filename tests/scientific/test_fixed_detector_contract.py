@@ -64,7 +64,7 @@ def _manifest() -> ScoreArtifactManifest[FederatedTrainingCoordinate, ClientIden
     )
 
 
-def test_terminal_training_has_no_checkpoint_selection_contract() -> None:
+def test_terminal_training_has_one_scientific_model_contract() -> None:
     fields = frozenset(field.name for field in dataclasses.fields(FederatedTrainingResult))
     assert "terminal_model_state" in fields
     assert "candidate" not in " ".join(fields)

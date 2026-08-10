@@ -1,5 +1,3 @@
-"""One-shot temporal reference, frozen-future, recalibration, and recovery analysis."""
-
 from __future__ import annotations
 
 import time
@@ -27,6 +25,7 @@ from datp_core.analysis.temporal import (
     TemporalSeedProvenance,
     require_temporal_decision_protocol,
     temporal_recovery,
+    training_coordinates,
     validate_frozen_recalibrated_pair,
 )
 from datp_core.app.planning import ExperimentPlan, expand_experiment_plan
@@ -45,9 +44,10 @@ from datp_core.core.identifiers import (
     FederatedThresholdMethod,
     MetricId,
     PartitionRole,
+    StageExecutionEvidence,
     TemporalState,
 )
-from datp_core.core.numeric import MetricValue, Seed
+from datp_core.core.numeric import ElapsedSeconds, MetricValue, Seed
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.data.registry import population_capabilities
 from datp_core.detector.scoring.models import FederatedScoreArtifactManifest
@@ -402,7 +402,9 @@ def _execute_temporal_states(
                 ProgressEvent(
                     kind=ProgressEventKind.COORDINATE_BEGIN,
                     coordinate=coordinate,
-                    detail=f"temporal state {identity.temporal_state.value if identity.temporal_state else 'unknown'}",
+                    detail=StageExecutionEvidence(
+                        f"temporal state {identity.temporal_state.value if identity.temporal_state else 'unknown'}"
+                    ),
                 )
             )
         started = time.monotonic()
@@ -422,8 +424,10 @@ def _execute_temporal_states(
                     kind=ProgressEventKind.COORDINATE_END,
                     coordinate=coordinate,
                     outcome=StageOutcome.COMPLETED,
-                    detail=f"temporal state {identity.temporal_state.value if identity.temporal_state else 'unknown'}",
-                    elapsed_seconds=time.monotonic() - started,
+                    detail=StageExecutionEvidence(
+                        f"temporal state {identity.temporal_state.value if identity.temporal_state else 'unknown'}"
+                    ),
+                    elapsed_seconds=ElapsedSeconds(time.monotonic() - started),
                 )
             )
         return result
@@ -695,7 +699,11 @@ def _document_level_deployment_provenance(
         split_protocol=static_template.split_protocol,
         calibration_role=static_template.calibration_role,
         evaluation_role=static_template.evaluation_role,
-        coordinate=tuple(item.provenance.static_reference.coordinate for item in records),
+        coordinate=tuple(
+            coordinate
+            for item in records
+            for coordinate in training_coordinates(item.provenance.static_reference.coordinate)
+        ),
         calibration_records=tuple(
             record for item in records for record in item.provenance.static_reference.calibration_records
         ),
@@ -708,7 +716,11 @@ def _document_level_deployment_provenance(
         split_protocol=frozen_template.split_protocol,
         calibration_role=frozen_template.calibration_role,
         evaluation_role=frozen_template.evaluation_role,
-        coordinate=tuple(item.provenance.frozen_future.coordinate for item in records),
+        coordinate=tuple(
+            coordinate
+            for item in records
+            for coordinate in training_coordinates(item.provenance.frozen_future.coordinate)
+        ),
         calibration_records=tuple(
             record for item in records for record in item.provenance.frozen_future.calibration_records
         ),

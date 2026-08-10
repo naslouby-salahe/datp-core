@@ -12,6 +12,6 @@ def test_every_datp_core_module_imports() -> None:
     for module_name in module_names:
         try:
             import_module(module_name)
-        except Exception as error:  # noqa: BLE001 - the smoke test reports every import failure together
+        except Exception as error:
             failures.append(f"{module_name}: {type(error).__name__}: {error}")
     assert not failures, "package import failures:\n" + "\n".join(failures)

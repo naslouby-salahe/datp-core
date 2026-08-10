@@ -1,5 +1,3 @@
-"""Capability declaration for CICIoT2023's processed merged artifact."""
-
 from datp_core.core.identifiers import (
     EvidenceRole,
     FederatedThresholdMethod,

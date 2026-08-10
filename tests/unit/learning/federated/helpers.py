@@ -1,5 +1,3 @@
-"""Shared miniature fixtures for federated learning unit tests."""
-
 from pathlib import Path
 
 import numpy as np

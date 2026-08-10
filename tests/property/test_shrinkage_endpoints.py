@@ -1,5 +1,3 @@
-"""Fixed, predeclared shrinkage weights preserve their declared endpoints."""
-
 from tests.unit.thresholding.helpers import client_scores
 
 from datp_core.core.identifiers import FederatedThresholdMethod

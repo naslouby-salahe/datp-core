@@ -82,8 +82,6 @@ from datp_core.thresholds.variants.shrinkage import FixedShrinkageCurveResult
 
 @dataclass(frozen=True, slots=True)
 class FederatedEvaluationMetrics:
-    """Client and population metrics produced from one federated evaluation."""
-
     clients: tuple[ClientMetricResult, ...]
     population: PopulationMetricResult
 

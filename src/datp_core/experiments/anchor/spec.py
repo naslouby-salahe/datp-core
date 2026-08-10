@@ -1,5 +1,3 @@
-"""Historical DATP anchor specification and reference decision protocol."""
-
 from typing import Literal
 
 from pydantic import model_validator
@@ -31,13 +29,6 @@ from datp_core.experiments.common.seeds import SeedCohort
 
 
 class AnchorReference(StrictModel):
-    """One per-seed historical CV(FPR) constant, reported as a diagnostic.
-
-    Per-seed values are diagnostic only (see DiagnosticRule); the roadmap gate
-    confirms the cohort-level BCa interval on the five-seed cohort, not any
-    per-seed value equality.
-    """
-
     seed: Seed
     threshold_method: Literal[
         FederatedThresholdMethod.SHARED_THRESHOLD,

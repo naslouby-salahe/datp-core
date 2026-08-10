@@ -1,5 +1,3 @@
-"""Central availability semantics for evaluation metrics."""
-
 from datp_core.analysis.metrics.models import (
     AvailableMetric,
     MetricAvailability,
@@ -17,10 +15,9 @@ def available(
     *,
     denominator: RowCount | None = None,
 ) -> AvailableMetric:
-    metric_value = value
     return AvailableMetric(
         metric=metric,
-        value=metric_value,
+        value=value,
         denominator=denominator,
     )
 

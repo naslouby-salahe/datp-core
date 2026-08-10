@@ -1,5 +1,3 @@
-"""Canonical dataset publication service."""
-
 from dataclasses import dataclass
 from pathlib import Path
 from shutil import rmtree
@@ -26,7 +24,7 @@ class DatasetMaterializationResult:
 
 
 def materialize_datasets(request: DatasetMaterializationRequest) -> DatasetMaterializationResult:
-    """Publish every requested dataset through its authoritative binding."""
+
     publications: list[DatasetPublication] = []
     for dataset in request.datasets:
         canonical_root = canonical_root_under(request.data_root, dataset)

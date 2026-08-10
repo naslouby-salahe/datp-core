@@ -1,5 +1,3 @@
-"""Matrix-required mechanism figure reproducibility data."""
-
 from types import SimpleNamespace
 from typing import cast
 

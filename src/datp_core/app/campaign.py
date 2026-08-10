@@ -1,5 +1,3 @@
-"""Generic programme validation, planning, and dataset preparation services."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass

@@ -1,5 +1,3 @@
-"""Ditto and FedProx training-side threshold-scope stress experiments."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
@@ -32,7 +30,6 @@ from datp_core.artifacts.repositories.thresholds import (
 from datp_core.artifacts.serializers.json import canonical_json_text
 from datp_core.core.contracts import ClientCollection, ClientOwned
 from datp_core.core.errors import (
-    ArtifactIntegrityError,
     ErrorMessage,
     ScientificContractError,
 )
@@ -43,8 +40,6 @@ from datp_core.core.identifiers import (
     ExperimentId,
     FeatureNameSequence,
     FederatedThresholdMethod,
-    FedProxCoefficientSelectionRule,
-    FedProxRoleDirectory,
     FileContentText,
     MetricId,
     PartitionRole,
@@ -62,7 +57,6 @@ from datp_core.core.numeric import (
     MetricValue,
     ModelCoefficientValue,
     ProximalCoefficient,
-    RoundNumber,
     RowCount,
     ScoreValue,
     Seed,
@@ -74,8 +68,6 @@ from datp_core.data.populations.publication import ConstructDeclaredPopulationRe
 from datp_core.data.preprocessing.models import FederatedPreprocessingOutcome, FederatedPreprocessingRequest
 from datp_core.data.preprocessing.service import preprocess_federated
 from datp_core.data.registry import population_capabilities
-from datp_core.detector.checkpoints.history import history_frames
-from datp_core.detector.checkpoints.identities import FederatedHistoryColumn
 from datp_core.detector.checkpoints.protocols import DIAGNOSTIC_SNAPSHOT_PROTOCOL
 from datp_core.detector.scoring.federated import publish_federated_scores
 from datp_core.detector.scoring.models import FederatedScoreArtifactManifest, GenerateFederatedScoresRequest
@@ -95,17 +87,13 @@ from datp_core.detector.training.models import (
 from datp_core.detector.training.protocols import (
     BATCH_SIZE,
     DITTO_ALTERNATIVE_ROUTE_DIFFERENCE,
-    FEDPROX_COEFFICIENT_SELECTION_RULE,
-    FEDPROX_COEFFICIENTS,
     LEARNING_RATE,
     MODEL_ABSORPTION_DECISION_PROTOCOL,
     NBAIOT_AUTOENCODER,
-    require_non_test_fedprox_coefficient_selection_inputs,
     resolve_ditto_protocol,
-    select_primary_fedprox_coefficient,
 )
 from datp_core.experiments.common.coordinates import ExperimentCoordinate
-from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
+from datp_core.experiments.common.seeds import SeedCohort
 from datp_core.experiments.confirmatory.run import FedAvgCvFprEffectEvidence, absorption_corner_from_evaluation_document
 from datp_core.experiments.execution import execute_declared_campaign
 from datp_core.experiments.execution.context import (
@@ -117,7 +105,6 @@ from datp_core.experiments.execution.layout import (
     EvaluationRunAssetDirectory,
     ExecutionArtifactDirectory,
     ExecutionRootDirectory,
-    federated_training_directory,
 )
 from datp_core.experiments.execution.models import (
     CampaignEntry,
@@ -152,10 +139,6 @@ class DittoArtifactBranch(StrEnum):
 
 class FedProxArtifactDirectory(StrEnum):
     ANALYSIS = "analysis"
-
-
-class TrainingStressArtifactName(StrEnum):
-    PRIMARY_COEFFICIENT_DECISION = "primary_coefficient_decision.json"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -276,8 +259,6 @@ class FedProxCvFprCornerEvidence:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class DittoCvFprEffectEvidence:
-    """Population CV(FPR) evidence for the paired Ditto threshold-scope comparison."""
-
     shared_cv: MetricValue
     local_cv: MetricValue
     effect: MetricValue
@@ -606,149 +587,6 @@ def run_fedprox_stress_test_seed(
     )
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
-class FedProxTerminalLossObservation:
-    """Terminal aggregate training loss observed for one FedProx training seed."""
-
-    seed: Seed
-    terminal_training_loss: MetricValue
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class FedProxCoefficientTerminalLoss:
-    coefficient: ProximalCoefficient
-    mean_terminal_training_loss: MetricValue
-    per_seed_terminal_losses: tuple[FedProxTerminalLossObservation, ...]
-
-    def __post_init__(self) -> None:
-        if len(self.per_seed_terminal_losses) != CONFIRMATORY_SEED_COHORT.member_count.value:
-            raise ScientificContractError(
-                ErrorMessage("FedProx terminal-loss candidates require the full confirmatory seed cohort"),
-                subject=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST,
-            )
-        seeds = tuple(observation.seed for observation in self.per_seed_terminal_losses)
-        if seeds != CONFIRMATORY_SEED_COHORT.values:
-            raise ScientificContractError(
-                ErrorMessage("FedProx terminal-loss candidates must use the locked confirmatory seed order"),
-                subject=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST,
-            )
-        observed_mean = sum(
-            observation.terminal_training_loss.value for observation in self.per_seed_terminal_losses
-        ) / len(self.per_seed_terminal_losses)
-        if abs(self.mean_terminal_training_loss.value - observed_mean) > NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE.value:
-            raise ScientificContractError(
-                ErrorMessage("FedProx candidate mean terminal loss must equal its seed observations"),
-                subject=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST,
-            )
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class FedProxPrimaryCoefficientDecision:
-    selection_rule: FedProxCoefficientSelectionRule
-    primary_coefficient: ProximalCoefficient
-    candidates: tuple[FedProxCoefficientTerminalLoss, ...]
-
-
-def fedprox_training_coordinate(training_seed: Seed, coefficient: ProximalCoefficient) -> FederatedTrainingCoordinate:
-    return FederatedTrainingCoordinate(
-        population=PopulationId.NBAIOT_NATURAL_DEVICES,
-        training_seed=training_seed,
-        split_protocol=split_protocol_for_population(PopulationId.NBAIOT_NATURAL_DEVICES),
-        preprocessing_identity=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
-        model=TrainingModelId.FEDPROX_AUTOENCODER,
-        model_coefficient=coefficient,
-    )
-
-
-def read_terminal_aggregate_training_loss(
-    training_directory: Path,
-    *,
-    maximum_round: RoundNumber,
-) -> MetricValue:
-    try:
-        round_frame = history_frames(training_directory).round_summary
-    except ArtifactIntegrityError as error:
-        raise ScientificContractError(
-            ErrorMessage(f"FedProx terminal training loss unavailable under {training_directory}: {error}"),
-            subject=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST,
-        ) from error
-    matching = round_frame.filter(pl.col(FederatedHistoryColumn.ROUND_NUMBER.value) == maximum_round.value)
-    if matching.height != 1:
-        raise ScientificContractError(
-            ErrorMessage(
-                f"FedProx training history must contain exactly one row for terminal round {maximum_round.value}"
-            ),
-            subject=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST,
-        )
-    return MetricValue(float(matching.get_column(FederatedHistoryColumn.AGGREGATE_LOSS.value).item()))
-
-
-def collect_fedprox_coefficient_terminal_losses(
-    *,
-    output_root: Path,
-    seed_cohort: SeedCohort,
-) -> tuple[FedProxCoefficientTerminalLoss, ...]:
-    candidates: list[FedProxCoefficientTerminalLoss] = []
-    for coefficient in FEDPROX_COEFFICIENTS:
-        seed_losses: list[FedProxTerminalLossObservation] = []
-        for seed in seed_cohort.values:
-            directory = federated_training_directory(fedprox_training_coordinate(seed, coefficient), output_root)
-            seed_losses.append(
-                FedProxTerminalLossObservation(
-                    seed=seed,
-                    terminal_training_loss=read_terminal_aggregate_training_loss(
-                        directory,
-                        maximum_round=DIAGNOSTIC_SNAPSHOT_PROTOCOL.maximum_round,
-                    ),
-                )
-            )
-        candidates.append(
-            FedProxCoefficientTerminalLoss(
-                coefficient=coefficient,
-                mean_terminal_training_loss=MetricValue(
-                    sum(observation.terminal_training_loss.value for observation in seed_losses) / len(seed_losses)
-                ),
-                per_seed_terminal_losses=tuple(seed_losses),
-            )
-        )
-    return tuple(candidates)
-
-
-def select_primary_fedprox_coefficient_from_artifacts(
-    *,
-    output_root: Path,
-    seed_cohort: SeedCohort,
-) -> FedProxPrimaryCoefficientDecision:
-    require_non_test_fedprox_coefficient_selection_inputs(
-        selection_rule=FEDPROX_COEFFICIENT_SELECTION_RULE,
-        held_out_metrics=None,
-        attack_labels_present=False,
-    )
-    candidates = collect_fedprox_coefficient_terminal_losses(output_root=output_root, seed_cohort=seed_cohort)
-    selected = select_primary_fedprox_coefficient(candidates)
-    return FedProxPrimaryCoefficientDecision(
-        selection_rule=FEDPROX_COEFFICIENT_SELECTION_RULE,
-        primary_coefficient=selected.coefficient,
-        candidates=candidates,
-    )
-
-
-def write_fedprox_primary_coefficient_decision(decision: FedProxPrimaryCoefficientDecision, destination: Path) -> Path:
-    write_text_atomically(destination, FileContentText(canonical_json_text(decision)))
-    return destination
-
-
-def load_fedprox_primary_coefficient_decision(destination: Path) -> FedProxPrimaryCoefficientDecision:
-    try:
-        adapter: TypeAdapter[FedProxPrimaryCoefficientDecision] = TypeAdapter(FedProxPrimaryCoefficientDecision)
-        return adapter.validate_json(destination.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, ValidationError) as error:
-        raise ScientificContractError(
-            ErrorMessage(f"FedProx primary-coefficient decision is unreadable or invalid: {destination}"),
-            subject=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST,
-        ) from error
-
-
 def load_fedprox_cv_fpr_corners(
     training_seed: Seed,
     coefficient: ProximalCoefficient,
@@ -1014,13 +852,9 @@ def fedprox_stress_test_root(*, output_root: Path) -> Path:
 
 def fedprox_analysis_directory(
     coefficient: ProximalCoefficient,
-    role: FedProxRoleDirectory,
     *,
     output_root: Path,
 ) -> Path:
     return (
-        fedprox_stress_test_root(output_root=output_root)
-        / FedProxArtifactDirectory.ANALYSIS
-        / role.value
-        / str(coefficient.value)
+        fedprox_stress_test_root(output_root=output_root) / FedProxArtifactDirectory.ANALYSIS / str(coefficient.value)
     )

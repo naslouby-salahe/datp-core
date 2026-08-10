@@ -1,5 +1,3 @@
-"""Fixed local-global shrinkage and explicitly unavailable size-aware variant."""
-
 from dataclasses import dataclass
 from typing import ClassVar
 
@@ -79,8 +77,6 @@ class ShrinkageThresholdResult:
 
 @dataclass(frozen=True, slots=True)
 class FixedShrinkageCurveResult:
-    """The complete set of predeclared fixed-shrinkage threshold points."""
-
     coordinate: FederatedTrainingCoordinate
     quantile: Quantile
     points: tuple[ShrinkageThresholdResult, ...]

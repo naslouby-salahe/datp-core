@@ -1,5 +1,3 @@
-"""Shared typed experiment analysis report publication outcomes."""
-
 from dataclasses import dataclass
 from pathlib import Path
 

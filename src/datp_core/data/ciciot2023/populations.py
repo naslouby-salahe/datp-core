@@ -1,5 +1,3 @@
-"""CICIoT2023 file-defined pseudo-client population construction."""
-
 from enum import StrEnum
 from pathlib import Path
 
@@ -51,7 +49,7 @@ _CSV_SUFFIX_PATTERN = CICIoT2023ArtifactName.CSV_SUFFIX.value.replace(".", r"\."
 
 
 def _client_id_from_source_path_expression() -> pl.Expr:
-    """Derive the file-defined client identity from the canonical source-path provenance column."""
+
     return (
         pl.col(SOURCE_PATH_COLUMN)
         .str.split("/")
@@ -116,7 +114,7 @@ def construct_ciciot_file_clients(
 
 
 def _ciciot_excluded_row_evidence(canonical_root: Path) -> pl.DataFrame:
-    """Return canonical rows rejected by the immutable model-input eligibility policy."""
+
     return (
         pl.scan_parquet(canonical_data_glob(canonical_root))
         .select(
@@ -144,7 +142,7 @@ def _ciciot_excluded_row_evidence(canonical_root: Path) -> pl.DataFrame:
 
 
 def _ciciot_client_eligibility_evidence(excluded_rows: pl.DataFrame) -> pl.DataFrame:
-    """Aggregate typed canonical exclusion reasons by audited file-defined client."""
+
     return (
         excluded_rows.group_by(CLIENT_ID_COLUMN)
         .agg(
@@ -192,7 +190,7 @@ def _load_eligible_membership(canonical_root: Path) -> pl.DataFrame:
 
 
 def _candidate_ids(canonical_root: Path) -> tuple[ClientIdentityToken, ...]:
-    """Discover the file-defined client identities present in the canonical source-path provenance."""
+
     candidates = tuple(
         ClientIdentityToken(value)
         for value in (

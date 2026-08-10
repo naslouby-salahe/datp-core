@@ -1,5 +1,3 @@
-"""Threshold calibration and persisted evaluation evidence loading."""
-
 from pathlib import Path
 
 import polars as pl
@@ -22,13 +20,7 @@ def eligible_calibration_scores(
     score_manifest: FederatedScoreArtifactManifest,
     role: PartitionRole = PartitionRole.CALIBRATION,
 ) -> tuple[ClientBenignCalibrationScores, ...]:
-    """Load benign calibration scores for clients that meet the locked support floor.
 
-    Threshold construction must receive only the eligible cohort (``n_k >= 100``).
-    Clients below the floor remain present in score artifacts and evaluation
-    cohorts, but they must not contribute local quantiles to shared, local,
-    family, cluster, or comparator constructions.
-    """
     if role not in {PartitionRole.CALIBRATION, PartitionRole.FUTURE_RECALIBRATION}:
         raise ScientificContractError(
             ErrorMessage("threshold calibration scores require a calibration partition role"),
@@ -55,7 +47,7 @@ def eligible_calibration_scores(
 
 
 def load_evaluation_document(path: Path) -> FederatedEvaluationDocument:
-    """Load the current federated evaluation document."""
+
     try:
         if not path.is_file():
             raise ScientificContractError(
@@ -64,8 +56,6 @@ def load_evaluation_document(path: Path) -> FederatedEvaluationDocument:
             )
         document = FederatedEvaluationDocument.model_validate_json(path.read_text(encoding="utf-8"))
         return document
-    except ScientificContractError:
-        raise
     except (OSError, ValidationError, ValueError) as error:
         raise ScientificContractError(
             ErrorMessage(f"completed evaluation document is unreadable or invalid: {path}"),

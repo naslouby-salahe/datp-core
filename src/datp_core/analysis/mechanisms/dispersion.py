@@ -1,5 +1,3 @@
-"""Within- and across-group threshold/FPR dispersion evidence."""
-
 import numpy as np
 from pydantic import model_validator
 

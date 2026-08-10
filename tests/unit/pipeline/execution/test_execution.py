@@ -90,7 +90,7 @@ def test_overwrite_replaces_existing_experiment(tmp_path: Path) -> None:
     assert not output.joinpath("old").exists()
 
 
-def test_standard_recipe_has_no_checkpoint_selection_stage() -> None:
+def test_standard_recipe_has_terminal_training_and_scoring_stages() -> None:
     assert resolve_execution_recipe(coordinate()) == STANDARD_FEDERATED_RECIPE
 
 
