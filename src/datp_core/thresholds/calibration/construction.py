@@ -1,6 +1,10 @@
 from dataclasses import dataclass
 
-from datp_core.analysis.metrics.cohorts import EvaluationCohortManifest
+from datp_core.analysis.metrics.cohorts import (
+    ClientExclusionReason,
+    EvaluationCohortManifest,
+    EvaluationCohortMembership,
+)
 from datp_core.analysis.metrics.federated import CalibrationSizeAblationCell, FederatedEvaluationRequest
 from datp_core.analysis.metrics.federated_execution import prepare_federated_evaluation
 from datp_core.analysis.metrics.fixed_score import FixedScoreEvidence
@@ -8,7 +12,7 @@ from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
 )
-from datp_core.core.identifiers import EvidenceRole, FederatedThresholdMethod
+from datp_core.core.identifiers import EvaluationCohort, EvidenceRole, FederatedThresholdMethod
 from datp_core.core.numeric import CalibrationSize, Quantile, ReplicateIndex, SubsampleReplicateCount
 from datp_core.data.populations.contracts import ClientIdentity, EligibleCohort, FamilyAssignment
 from datp_core.data.registry import population_capabilities
@@ -146,7 +150,7 @@ def construct_calibration_size_ablation(
                 FederatedEvaluationRequest(
                     score_manifest=request.score_manifest,
                     threshold_result=threshold,
-                    cohort=request.cohort,
+                    cohort=_cell_cohort(request.cohort, tuple(item.client for item in eligible)),
                     fixed_score_evidence=request.fixed_score_evidence,
                     evidence_role=request.evidence_role,
                     conformal_coverage_inputs=(),
@@ -199,3 +203,37 @@ def _eligible_scores_for_size(
             )
         )
     return tuple(scores)
+
+
+def _cell_cohort(
+    cohort: EvaluationCohortManifest,
+    feasible_clients: tuple[ClientIdentity, ...],
+) -> EvaluationCohortManifest:
+    feasible = frozenset(feasible_clients)
+    records = tuple(
+        record
+        if record.client in feasible
+        else record.model_copy(
+            update={
+                "calibration_eligible": False,
+                "fpr_evaluable": False,
+                "deployment_fallback": True,
+                "exclusion_reasons": (*record.exclusion_reasons, ClientExclusionReason.INSUFFICIENT_CALIBRATION_SIZE),
+            }
+        )
+        for record in cohort.records
+    )
+    memberships = tuple(
+        membership
+        for membership in cohort.memberships
+        if membership.client in feasible or membership.cohort is EvaluationCohort.ATTACK_EVALUABLE
+    ) + tuple(
+        EvaluationCohortMembership(
+            client=record.client,
+            cohort=EvaluationCohort.DEPLOYMENT_FALLBACK,
+            reasons=(ClientExclusionReason.INSUFFICIENT_CALIBRATION_SIZE,),
+        )
+        for record in records
+        if record.client not in feasible
+    )
+    return cohort.model_copy(update={"records": records, "memberships": memberships})

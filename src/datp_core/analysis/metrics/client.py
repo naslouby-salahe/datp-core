@@ -20,6 +20,8 @@ def calculate_client_metrics(
     confusion: ConfusionCounts,
     scores: Sequence[ScoreValue],
     labels: Sequence[PopulationOutcomeLabel],
+    fixed_auroc: MetricAvailability | None = None,
+    score_values: np.ndarray | None = None,
 ) -> tuple[MetricAvailability, ...]:
 
     if len(scores) != len(labels) or len(scores) != confusion.evaluation_row_count.value:
@@ -27,9 +29,13 @@ def calculate_client_metrics(
             ErrorMessage("client scores, labels, and confusion counts must align"), subject=ContractSubject.ROWS
         )
 
-    score_values = np.fromiter((score.value for score in scores), dtype=np.float64, count=len(scores))
+    numeric_scores = (
+        np.fromiter((score.value for score in scores), dtype=np.float64, count=len(scores))
+        if score_values is None
+        else score_values
+    )
 
-    if not np.isfinite(score_values).all():
+    if numeric_scores.ndim != 1 or numeric_scores.size != len(scores) or not np.isfinite(numeric_scores).all():
         raise ScientificContractError(
             ErrorMessage("client evaluation scores must be finite"), subject=ContractSubject.SCORES
         )
@@ -42,7 +48,9 @@ def calculate_client_metrics(
         tpr,
         _balanced_accuracy(fpr, tpr),
         _binary_macro_f1(confusion),
-        _auroc(score_values, labels, confusion.attack_assignment_valid),
+        fixed_auroc
+        if fixed_auroc is not None
+        else calculate_auroc(numeric_scores, labels, confusion.attack_assignment_valid),
     )
 
 
@@ -50,12 +58,14 @@ def calculate_metrics_for_evaluation_score_arrays(
     *,
     confusion: ConfusionCounts,
     score_arrays: FederatedEvaluationScoreArrays,
+    fixed_auroc: MetricAvailability | None = None,
 ) -> tuple[MetricAvailability, ...]:
-
     return calculate_client_metrics(
         confusion=confusion,
         scores=score_arrays.scores,
         labels=score_arrays.labels,
+        fixed_auroc=fixed_auroc,
+        score_values=score_arrays.score_values,
     )
 
 
@@ -130,7 +140,7 @@ def _binary_macro_f1(confusion: ConfusionCounts) -> MetricAvailability:
     return available(MetricId.BINARY_MACRO_F1, MetricValue((attack_f1 + benign_f1) / 2.0))
 
 
-def _auroc(
+def calculate_auroc(
     score_values: np.ndarray, labels: Sequence[PopulationOutcomeLabel], attack_assignment_valid: bool
 ) -> MetricAvailability:
     if not attack_assignment_valid:

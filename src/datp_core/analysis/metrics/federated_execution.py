@@ -1,12 +1,14 @@
 from dataclasses import dataclass
+from functools import lru_cache
 
+import numpy as np
 import polars as pl
 
-from datp_core.analysis.metrics.client import calculate_metrics_for_evaluation_score_arrays
+from datp_core.analysis.metrics.client import calculate_auroc, calculate_metrics_for_evaluation_score_arrays
 from datp_core.analysis.metrics.cohort_construction import cohort_record_for_client
 from datp_core.analysis.metrics.cohorts import ClientEligibilityRecord
 from datp_core.analysis.metrics.conformal import evaluate_held_out_conformal_coverage
-from datp_core.analysis.metrics.confusion import calculate_confusion_counts
+from datp_core.analysis.metrics.confusion import calculate_confusion_counts_for_evaluation_arrays
 from datp_core.analysis.metrics.federated import (
     EvaluationDiagnostics,
     FederatedEvaluationArtifacts,
@@ -21,6 +23,7 @@ from datp_core.analysis.metrics.fixed_score_validation import validate_evaluatio
 from datp_core.analysis.metrics.models import (
     ClientMetricResult,
     FederatedScoreRecord,
+    MetricAvailability,
     PopulationMetricResult,
     metric_by_id,
 )
@@ -44,7 +47,6 @@ from datp_core.core.identifiers import (
     EvidenceRole,
     FederatedThresholdMethod,
     MetricId,
-    PartitionRole,
     ScoreArtifactPathText,
     ScoreFrameColumn,
     StableRowId,
@@ -227,12 +229,10 @@ def _evaluate_score_record(
         raise ArtifactIntegrityError(ErrorMessage("evaluation score artifact is incomplete or changed"))
 
     score_arrays = _score_arrays(ScoreArtifactPathText(str(record.path)))
-    confusion = calculate_confusion_counts(
-        scores=score_arrays.scores,
-        labels=score_arrays.labels,
-        source_row_ids=score_arrays.row_ids,
+    confusion = calculate_confusion_counts_for_evaluation_arrays(
+        score_values=score_arrays.score_values,
+        attack_mask=score_arrays.attack_mask,
         threshold=threshold,
-        partition_role=PartitionRole.EVALUATION,
         attack_assignment_valid=eligibility.attack_evaluable,
     )
     return ClientMetricResult(
@@ -242,7 +242,11 @@ def _evaluate_score_record(
         cohort=_evaluation_cohort(eligibility),
         threshold=threshold,
         confusion=confusion,
-        metrics=calculate_metrics_for_evaluation_score_arrays(confusion=confusion, score_arrays=score_arrays),
+        metrics=calculate_metrics_for_evaluation_score_arrays(
+            confusion=confusion,
+            score_arrays=score_arrays,
+            fixed_auroc=_score_auroc(ScoreArtifactPathText(str(record.path)), eligibility.attack_evaluable),
+        ),
         warnings=(),
         evidence_role=request.evidence_role,
     )
@@ -438,6 +442,7 @@ def _threshold_coordinate(result: ThresholdConstructionResult) -> FederatedTrain
     return result.coordinate
 
 
+@lru_cache(maxsize=9)
 def _score_arrays(
     path: ScoreArtifactPathText,
 ) -> FederatedEvaluationScoreArrays:
@@ -452,8 +457,33 @@ def _score_arrays(
         raise ArtifactIntegrityError(ErrorMessage("evaluation score artifact has an invalid schema")) from err
 
     data = frame.to_dict(as_series=False)
-    return FederatedEvaluationScoreArrays(
-        scores=tuple(ScoreValue(float(value)) for value in data[required[2]]),
-        labels=tuple(PopulationOutcomeLabel(str(value)) for value in data[required[1]]),
-        row_ids=tuple(StableRowId(str(value)) for value in data[required[0]]),
+    scores = tuple(ScoreValue(float(value)) for value in data[required[2]])
+    labels = tuple(PopulationOutcomeLabel(str(value)) for value in data[required[1]])
+    row_ids = tuple(StableRowId(str(value)) for value in data[required[0]])
+    if len(frozenset(row_ids)) != len(row_ids):
+        raise ScientificContractError(
+            ErrorMessage("evaluation source rows must be unique and stable"), subject=ContractSubject.ROWS
+        )
+    score_values = np.fromiter((score.value for score in scores), dtype=np.float64, count=len(scores))
+    if not np.isfinite(score_values).all():
+        raise ScientificContractError(
+            ErrorMessage("scores and thresholds must be finite"), subject=ContractSubject.SCORES
+        )
+    score_values.setflags(write=False)
+    attack_mask = np.fromiter(
+        (label is PopulationOutcomeLabel.ATTACK for label in labels), dtype=np.bool_, count=len(labels)
     )
+    attack_mask.setflags(write=False)
+    return FederatedEvaluationScoreArrays(
+        scores=scores,
+        labels=labels,
+        row_ids=row_ids,
+        score_values=score_values,
+        attack_mask=attack_mask,
+    )
+
+
+@lru_cache(maxsize=9)
+def _score_auroc(path: ScoreArtifactPathText, attack_assignment_valid: bool) -> MetricAvailability:
+    score_arrays = _score_arrays(path)
+    return calculate_auroc(score_arrays.score_values, score_arrays.labels, attack_assignment_valid)

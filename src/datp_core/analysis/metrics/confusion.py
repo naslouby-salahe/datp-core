@@ -2,6 +2,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from math import isfinite
 
+import numpy as np
+
 from datp_core.analysis.metrics.models import ConfusionCounts
 from datp_core.core.errors import (
     ErrorMessage,
@@ -63,6 +65,35 @@ def calculate_confusion_counts(
         false_positive=RowCount(predictions.benign.count(True)),
         true_positive=RowCount(predictions.attack.count(True)),
         false_negative=RowCount(predictions.attack.count(False)),
+        attack_assignment_valid=attack_assignment_valid,
+    )
+
+
+def calculate_confusion_counts_for_evaluation_arrays(
+    *,
+    score_values: np.ndarray,
+    attack_mask: np.ndarray,
+    threshold: ThresholdValue,
+    attack_assignment_valid: bool,
+) -> ConfusionCounts:
+    if score_values.ndim != 1 or attack_mask.ndim != 1 or score_values.size != attack_mask.size:
+        raise ScientificContractError(ErrorMessage("evaluation score arrays must align"), subject=ContractSubject.ROWS)
+    if not isfinite(threshold.value) or not np.isfinite(score_values).all():
+        raise ScientificContractError(
+            ErrorMessage("scores and thresholds must be finite"), subject=ContractSubject.SCORES
+        )
+    predicted_attack_mask = score_values > threshold.value
+    benign_mask = ~attack_mask
+    if attack_mask.any() and not attack_assignment_valid:
+        raise ScientificContractError(
+            ErrorMessage("attack rows cannot enter a client with invalid attack assignment"),
+            subject=ContractSubject.ATTACK_LABELS,
+        )
+    return ConfusionCounts(
+        true_negative=RowCount(int(np.count_nonzero(benign_mask & ~predicted_attack_mask))),
+        false_positive=RowCount(int(np.count_nonzero(benign_mask & predicted_attack_mask))),
+        true_positive=RowCount(int(np.count_nonzero(attack_mask & predicted_attack_mask))),
+        false_negative=RowCount(int(np.count_nonzero(attack_mask & ~predicted_attack_mask))),
         attack_assignment_valid=attack_assignment_valid,
     )
 

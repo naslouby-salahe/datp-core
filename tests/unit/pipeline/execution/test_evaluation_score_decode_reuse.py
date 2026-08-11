@@ -4,7 +4,8 @@ import polars as pl
 import pytest
 from tests.unit.learning.federated.helpers import client_identity, fedavg_coordinate
 
-from datp_core.core.identifiers import PartitionRole, ScoreFrameColumn, SerializationFormat
+from datp_core.analysis.metrics.federated_execution import _score_arrays
+from datp_core.core.identifiers import PartitionRole, ScoreArtifactPathText, ScoreFrameColumn, SerializationFormat
 from datp_core.core.numeric import FeatureCount, RowCount, Seed
 from datp_core.data.populations.contracts import PopulationOutcomeLabel
 from datp_core.detector.scoring.contracts import ScoreRecord
@@ -14,8 +15,10 @@ from datp_core.experiments.execution.workspace import _load_benign_evaluation_sc
 @pytest.fixture(autouse=True)
 def _clear_evaluation_score_cache():
     _load_benign_evaluation_scores.cache_clear()
+    _score_arrays.cache_clear()
     yield
     _load_benign_evaluation_scores.cache_clear()
+    _score_arrays.cache_clear()
 
 
 def _record(tmp_path: Path) -> ScoreRecord:
@@ -50,7 +53,7 @@ def test_load_benign_evaluation_scores_decodes_the_parquet_file_only_once(
     read_calls: list[Path] = []
     original_read_parquet = pl.read_parquet
 
-    def _counting_read_parquet(path, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003
+    def _counting_read_parquet(path, *args, **kwargs):
         read_calls.append(Path(path))
         return original_read_parquet(path, *args, **kwargs)
 
@@ -62,6 +65,26 @@ def test_load_benign_evaluation_scores_decodes_the_parquet_file_only_once(
     assert first == second
     assert len(first) == 1
     assert first[0].stable_row_id == "row-0"
+    assert len(read_calls) == 1
+
+
+def test_federated_evaluation_decodes_fixed_score_arrays_only_once(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    record = _record(tmp_path)
+    read_calls: list[Path] = []
+    original_read_parquet = pl.read_parquet
+
+    def _counting_read_parquet(path, *args, **kwargs):
+        read_calls.append(Path(path))
+        return original_read_parquet(path, *args, **kwargs)
+
+    monkeypatch.setattr("datp_core.analysis.metrics.federated_execution.pl.read_parquet", _counting_read_parquet)
+
+    first = _score_arrays(ScoreArtifactPathText(str(record.path)))
+    second = _score_arrays(ScoreArtifactPathText(str(record.path)))
+
+    assert first == second
     assert len(read_calls) == 1
 
 

@@ -11,6 +11,7 @@ from datp_core.thresholds.protocols import MINIMUM_BENIGN_SUPPORT
 
 class ClientExclusionReason(StrEnum):
     INSUFFICIENT_BENIGN_CALIBRATION = "insufficient_benign_calibration"
+    INSUFFICIENT_CALIBRATION_SIZE = "insufficient_calibration_size"
     EMPTY_BENIGN_EVALUATION = "empty_benign_evaluation"
     INVALID_ATTACK_ASSIGNMENT = "invalid_attack_assignment"
     NO_HELD_OUT_ATTACK_ROWS = "no_held_out_attack_rows"
