@@ -4,6 +4,7 @@ from datp_core.detector.training.models.checkpoints import (
     FederatedTrainingExecution,
     FederatedTrainingResult,
     PersonalizedTerminalModel,
+    TrainingTerminationReason,
 )
 from datp_core.detector.training.models.records import (
     ClientTrainingInput,
@@ -32,5 +33,6 @@ __all__ = (
     "GlobalModelStateReference",
     "PersonalizedTerminalModel",
     "PersonalizedModelStateReference",
+    "TrainingTerminationReason",
     "validate_client_preprocessing_match",
 )

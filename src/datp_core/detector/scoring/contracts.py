@@ -1,7 +1,10 @@
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import Protocol, cast
+
+from pydantic import TypeAdapter
 
 from datp_core.core.errors import ErrorMessage, ScientificContractError
 from datp_core.core.identifiers import (
@@ -31,6 +34,19 @@ class ClientIdentityContract(Protocol):
 
     @property
     def population(self) -> PopulationId: ...
+
+
+def _normalize_serialized_mapping(mapping: Mapping[str, object]) -> dict[str, object]:
+    return {key: _normalize_serialized_value(value) for key, value in mapping.items()}
+
+
+def _normalize_serialized_value(value: object) -> object:
+    normalized_value = value
+    if isinstance(normalized_value, Mapping):
+        serialized_value = cast(Mapping[str, object], normalized_value)
+        if tuple(serialized_value) == ("value",):
+            return serialized_value["value"]
+    return cast(object, normalized_value)
 
 
 def _validate_score_artifact(partition_role: PartitionRole, serialization_format: SerializationFormat) -> None:
@@ -63,8 +79,28 @@ class ScoreRecord[CoordinateT, ClientT](ScoreArtifact[CoordinateT]):
 
     def __post_init__(self) -> None:
         _validate_score_artifact(self.partition_role, self.serialization_format)
-        coordinate = cast(TrainingCoordinateContract, self.coordinate)
-        client = cast(ClientIdentityContract, self.scored_client)
+        coordinate_value = cast(object, self.coordinate)
+        if isinstance(coordinate_value, Mapping):
+            coordinate_value = TypeAdapter(FederatedTrainingCoordinate).validate_python(
+                _normalize_serialized_mapping(cast(Mapping[str, object], coordinate_value))
+            )
+            object.__setattr__(
+                self,
+                "coordinate",
+                coordinate_value,
+            )
+        client_value = cast(object, self.scored_client)
+        if isinstance(client_value, Mapping):
+            client_value = TypeAdapter(ClientIdentity).validate_python(
+                _normalize_serialized_mapping(cast(Mapping[str, object], client_value))
+            )
+            object.__setattr__(
+                self,
+                "scored_client",
+                client_value,
+            )
+        coordinate = cast(TrainingCoordinateContract, coordinate_value)
+        client = cast(ClientIdentityContract, client_value)
         if client.population is not coordinate.population:
             raise ScientificContractError(
                 ErrorMessage("scored client population must match the training coordinate"),

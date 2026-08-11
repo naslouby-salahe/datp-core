@@ -1,4 +1,5 @@
 from enum import StrEnum
+from math import ceil
 from pathlib import Path
 
 import polars as pl
@@ -51,6 +52,7 @@ from datp_core.data.populations.contracts import (
 from datp_core.data.populations.controlled import ControlledPartitionAllocator
 from datp_core.data.populations.integrity import validate_dirichlet_conservation
 from datp_core.data.populations.paths import canonical_data_glob
+from datp_core.data.populations.splits import non_temporal_split_protocol
 
 _SOURCE_CLIENT = NBaIoTCanonicalColumn.PHYSICAL_CLIENT_ID
 _SOURCE_FAMILY = NBaIoTCanonicalColumn.PHYSICAL_DEVICE_FAMILY
@@ -145,6 +147,7 @@ def construct_nbaiot_dirichlet_clients(
         source,
         client_ids=client_identities,
         allocator=allocator,
+        minimum_benign_rows=_minimum_benign_rows(source, minimum_benign_support),
     )
     validate_dirichlet_conservation(membership, RowCount(source.height), NBAIOT_DIRICHLET_CLIENTS.client_count)
     diagnostics = _build_diagnostics(
@@ -216,6 +219,7 @@ def _partition_source(
     *,
     client_ids: tuple[ClientIdentityToken, ...],
     allocator: ControlledPartitionAllocator,
+    minimum_benign_rows: RowCount,
 ) -> tuple[pl.DataFrame, tuple[RowCount, ...], tuple[RowCount, ...]]:
     membership_parts: list[pl.DataFrame] = []
     benign_counts: list[RowCount] = [RowCount(0)] * allocator.client_count.value
@@ -226,7 +230,10 @@ def _partition_source(
     ):
         stratum = source.filter(pl.col(_SOURCE_LABEL) == label).sort(STABLE_ROW_ID_COLUMN)
         stratum = _permute_stratum(stratum, allocator)
-        counts = allocator.allocate(RowCount(stratum.height))
+        counts = allocator.allocate(
+            RowCount(stratum.height),
+            minimum_per_client=minimum_benign_rows if outcome is PopulationOutcomeLabel.BENIGN else None,
+        )
         membership_parts.append(
             _assign_stratum(
                 stratum,
@@ -240,6 +247,13 @@ def _partition_source(
             target[index] = target[index].plus(row_count)
     membership = pl.concat(membership_parts, how="vertical_relaxed").sort([CLIENT_ID_COLUMN, STABLE_ROW_ID_COLUMN])
     return membership, tuple(benign_counts), tuple(attack_counts)
+
+
+def _minimum_benign_rows(source: pl.DataFrame, minimum_benign_support: CalibrationSize) -> RowCount:
+    required = RowCount(ceil(minimum_benign_support.value / non_temporal_split_protocol().calibration.value))
+    required_total = required.value * NBAIOT_DIRICHLET_CLIENTS.client_count.value
+    benign_rows = source.filter(pl.col(_SOURCE_LABEL) == NBaIoTSourceLabel.BENIGN).height
+    return required if benign_rows >= required_total else RowCount(0)
 
 
 def _build_diagnostics(

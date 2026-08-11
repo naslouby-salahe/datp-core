@@ -8,7 +8,7 @@ from typing import Protocol
 from datp_core.analysis.evidence import AnalysisAssetName
 from datp_core.analysis.metrics.models import AvailableMetric, metric_by_id
 from datp_core.app.contracts import AnchorRequirement, CampaignRole, OverwriteMode
-from datp_core.app.layout import ANCHOR_DIAGNOSTICS_DIRECTORY, ResearchArtifact, ResearchDirectory
+from datp_core.app.layout import ResearchArtifact, ResearchDirectory
 from datp_core.app.models import DetailText, DispatchOutcome, ReportResult, ThresholdMethodOutcome
 from datp_core.app.planning import (
     PlanDisposition,
@@ -526,7 +526,7 @@ def _dispatch_analysis(experiment_id: ExperimentId, output_root: Path) -> Dispat
 
 def _report_confirmatory(experiment_id: ExperimentId) -> ReportResult:
     centralized = report_centralized_reference(NBAIOT_CENTRALIZED_REFERENCE, output_root=OUTPUTS_ROOT, overwrite=True)
-    path = analyze_confirmatory_campaign(anchor_gate_diagnostics_directory=ANCHOR_DIAGNOSTICS_DIRECTORY)
+    path = analyze_confirmatory_campaign()
     return ReportResult(
         experiment=experiment_id,
         paths=(centralized, path),

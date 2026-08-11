@@ -15,7 +15,7 @@ from datp_core.core.identifiers import (
     FeatureName,
     FeatureNameSequence,
 )
-from datp_core.core.numeric import ProximalCoefficient
+from datp_core.core.numeric import BatchSize, ProximalCoefficient
 from datp_core.data.edge_iiotset.schema import EDGE_NUMERIC_FEATURE_COLUMNS
 from datp_core.data.populations.contracts import ClientIdentity, ControlledPartitionCondition, FamilyAssignment
 from datp_core.data.populations.publication import (
@@ -37,14 +37,21 @@ from datp_core.data.registry import dataset_binding, population_capabilities
 from datp_core.detector.checkpoints.contracts import DiagnosticSnapshotProtocol
 from datp_core.detector.checkpoints.protocols import ANCHOR_DIAGNOSTIC_SNAPSHOT_PROTOCOL, DIAGNOSTIC_SNAPSHOT_PROTOCOL
 from datp_core.detector.scoring.models import ClientScoringInput
-from datp_core.detector.training.contracts import AutoencoderProtocol, FedAvgProtocol, FedProxProtocol
+from datp_core.detector.training.contracts import (
+    AutoencoderProtocol,
+    FedAvgProtocol,
+    FederatedClientDataResidency,
+    FedProxProtocol,
+)
 from datp_core.detector.training.models import (
     ClientTrainingInput,
     FederatedTrainingCoordinate,
 )
 from datp_core.detector.training.protocols import (
+    ANCHOR_BATCH_SIZE,
     ANCHOR_FEDAVG_TRAINING_PROTOCOL,
     ANCHOR_NBAIOT_AUTOENCODER,
+    BATCH_SIZE,
     CICIOT2023_AUTOENCODER,
     EDGE_IIOTSET_NUMERIC_AUTOENCODER,
     NBAIOT_AUTOENCODER,
@@ -68,11 +75,19 @@ EDGE_FEATURE_NAMES = FeatureNameSequence(tuple(FeatureName(name) for name in EDG
 @dataclass(frozen=True, slots=True, kw_only=True)
 class FederatedExecutionContext:
     coordinate: FederatedTrainingCoordinate
+    batch_size: BatchSize
+    client_data_residency: FederatedClientDataResidency
     execution_identity: ExternalTemporalExecutionIdentity | None
     clients: tuple[ClientIdentity, ...]
     family_by_client: tuple[FamilyAssignment, ...]
     preprocessing: FederatedPreprocessingOutcome
     training_directory: Path
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ClientExecutionInputs:
+    training: ClientTrainingInput
+    scoring: ClientScoringInput
 
 
 def training_autoencoder(dataset: DatasetId) -> AutoencoderProtocol:
@@ -110,6 +125,18 @@ def diagnostic_snapshot_protocol_for(coordinate: ExperimentCoordinate) -> Diagno
     if coordinate.experiment is ExperimentId.HISTORICAL_DATP_REPRODUCTION:
         return ANCHOR_DIAGNOSTIC_SNAPSHOT_PROTOCOL
     return DIAGNOSTIC_SNAPSHOT_PROTOCOL
+
+
+def training_batch_size_for(coordinate: ExperimentCoordinate) -> BatchSize:
+    if coordinate.experiment is ExperimentId.HISTORICAL_DATP_REPRODUCTION:
+        return ANCHOR_BATCH_SIZE
+    return BATCH_SIZE
+
+
+def client_data_residency_for(coordinate: ExperimentCoordinate) -> FederatedClientDataResidency:
+    if coordinate.experiment is ExperimentId.HISTORICAL_DATP_REPRODUCTION:
+        return FederatedClientDataResidency.STREAMING
+    return FederatedClientDataResidency.GPU_RESIDENT_COHORT
 
 
 def federated_model_coefficient(coordinate: ExperimentCoordinate) -> ProximalCoefficient | None:
@@ -208,6 +235,8 @@ def resolve_execution_context(coordinate: ExperimentCoordinate, output_root: Pat
         training_directory = root / ExecutionArtifactDirectory.TRAINING
     return FederatedExecutionContext(
         coordinate=training_coordinate,
+        batch_size=training_batch_size_for(coordinate),
+        client_data_residency=client_data_residency_for(coordinate),
         execution_identity=execution_identity,
         clients=clients,
         family_by_client=family_assignments,
@@ -244,6 +273,39 @@ def client_training_inputs(
         )
         for publication in publications
     )
+
+
+def client_execution_inputs(
+    publications: tuple[ClientPreprocessingResult, ...],
+    clients: tuple[ClientIdentity, ...],
+    feature_names: FeatureNameSequence,
+) -> tuple[ClientExecutionInputs, ...]:
+    inputs: list[ClientExecutionInputs] = []
+    for publication in publications:
+        client = client_with_id(clients, ClientIdentityToken(publication.client_identity.value))
+        calibration_features = pl.read_parquet(publication.paths.calibration)
+        inputs.append(
+            ClientExecutionInputs(
+                training=ClientTrainingInput(
+                    client=client,
+                    training_features=pl.read_parquet(publication.paths.train),
+                    validation_features=calibration_features,
+                    feature_names=feature_names,
+                    preprocessing_state=publication.fitted_state,
+                ),
+                scoring=ClientScoringInput(
+                    client=client,
+                    calibration_features=calibration_features,
+                    evaluation_features=pl.read_parquet(publication.paths.evaluation),
+                    future_recalibration_features=(
+                        pl.read_parquet(publication.paths.future_recalibration)
+                        if publication.paths.future_recalibration is not None
+                        else None
+                    ),
+                ),
+            )
+        )
+    return tuple(inputs)
 
 
 def client_scoring_inputs(

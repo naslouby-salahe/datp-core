@@ -127,6 +127,7 @@ def require_execution_identity(
 
 
 class CoordinateIdentitySegment(StrEnum):
+    ALL_METRICS = "all_metrics"
     NO_MODEL_COEFFICIENT = "no_model_coefficient"
     NON_TEMPORAL = "non_temporal"
     CANONICAL_QUANTILE = "canonical_quantile"
@@ -174,6 +175,13 @@ class ExperimentCoordinate:
 
     @property
     def stable_key(self) -> CoordinateStableKey:
+        return self._key_for_metric(self.metric.value)
+
+    @property
+    def execution_key(self) -> CoordinateStableKey:
+        return self._key_for_metric(CoordinateIdentitySegment.ALL_METRICS.value)
+
+    def _key_for_metric(self, metric: str) -> CoordinateStableKey:
         temporal = (
             self.temporal_state.value
             if self.temporal_state is not None
@@ -211,7 +219,7 @@ class ExperimentCoordinate:
                     self.preprocessing_protocol.value,
                     coefficient,
                     self.threshold_method.value,
-                    self.metric.value,
+                    metric,
                     temporal,
                     quantile,
                     partition,

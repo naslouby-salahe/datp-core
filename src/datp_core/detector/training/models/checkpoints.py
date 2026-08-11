@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from enum import StrEnum
 
 from datp_core.core.errors import ErrorMessage, ScientificContractError
 from datp_core.core.identifiers import ContractSubject, CudaDeviceName, TrainingModelId
@@ -10,12 +11,19 @@ from datp_core.detector.training.contracts import AutoencoderProtocol, Federated
 from datp_core.detector.training.models.records import FederatedTrainingHistory
 
 
+class TrainingTerminationReason(StrEnum):
+    CONVERGED = "converged"
+    MAXIMUM_ROUNDS_WITHOUT_CONVERGENCE = "maximum_rounds_without_convergence"
+    FIXED_ROUND_BUDGET_COMPLETED = "fixed_round_budget_completed"
+
+
 @dataclass(frozen=True, slots=True)
 class FederatedTrainingResult:
     coordinate: FederatedTrainingCoordinate
     autoencoder: AutoencoderProtocol
     diagnostic_snapshot_protocol: DiagnosticSnapshotProtocol
     history: FederatedTrainingHistory
+    termination_reason: TrainingTerminationReason
     terminal_model_state: AutoencoderModelState
     device_name: CudaDeviceName
     batch_size_used: BatchSize
@@ -34,6 +42,18 @@ class FederatedTrainingResult:
         if self.history.rounds[-1].round_number.value > self.diagnostic_snapshot_protocol.maximum_round.value:
             raise ScientificContractError(
                 ErrorMessage("training terminal round cannot exceed the declared maximum"),
+                subject=ContractSubject.TRAINING,
+            )
+        terminal_round = self.history.rounds[-1].round_number
+        maximum_round = self.diagnostic_snapshot_protocol.maximum_round
+        if self.termination_reason is TrainingTerminationReason.CONVERGED and terminal_round == maximum_round:
+            raise ScientificContractError(
+                ErrorMessage("converged training must stop before the maximum round"),
+                subject=ContractSubject.TRAINING,
+            )
+        if self.termination_reason is not TrainingTerminationReason.CONVERGED and terminal_round != maximum_round:
+            raise ScientificContractError(
+                ErrorMessage("non-converged training must complete its declared round budget"),
                 subject=ContractSubject.TRAINING,
             )
 

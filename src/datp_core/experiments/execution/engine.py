@@ -1,25 +1,30 @@
 from __future__ import annotations
 
 import time
+from _thread import LockType, allocate_lock
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 from shutil import rmtree
 
 from datp_core.analysis.metrics.models import metric_by_id
-from datp_core.artifacts.layout import experiment_output_directory
+from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
 )
 from datp_core.core.identifiers import DatasetId, ExperimentId, StageExecutionEvidence
-from datp_core.core.numeric import CampaignCoordinateCount, ElapsedSeconds
+from datp_core.core.numeric import CampaignCoordinateCount, ElapsedSeconds, ParallelEvaluationWorkerCount
+from datp_core.data.paths import canonical_root_under
 from datp_core.data.service import DatasetMaterializationRequest, materialize_datasets
 from datp_core.detector.training.models import FederatedTrainingCoordinate
 from datp_core.experiments.common.coordinates import ExecutionRoute, ExperimentCoordinate, execution_route_for
 from datp_core.experiments.execution.context import training_coordinate_for
+from datp_core.experiments.execution.layout import federated_training_directory
 from datp_core.experiments.execution.models import (
     ANCHOR_REPRODUCTION_RECIPE,
     STANDARD_FEDERATED_RECIPE,
+    CampaignEntry,
     CampaignExecution,
     CampaignPlan,
     ExecutionRecipe,
@@ -34,6 +39,12 @@ from datp_core.experiments.execution.models import (
 )
 from datp_core.experiments.execution.workspace import ExperimentWorkspace
 from datp_core.runtime.configuration import DATA_ROOT
+
+MAXIMUM_PARALLEL_THRESHOLD_EVALUATIONS = ParallelEvaluationWorkerCount(5)
+
+
+def _empty_dataset_ids() -> set[DatasetId]:
+    return set()
 
 
 def resolve_execution_recipe(coordinate: ExperimentCoordinate) -> ExecutionRecipe:
@@ -56,7 +67,7 @@ def execute_experiment(
     overwrite: bool,
 ) -> ExperimentExecution:
     recipe = resolve_execution_recipe(coordinate)
-    directory = experiment_output_directory(output_root, coordinate)
+    directory = evaluation_run_directory(output_root, coordinate)
     if directory.exists():
         if not overwrite:
             raise FileExistsError(f"experiment output already exists: {directory}")
@@ -78,6 +89,75 @@ def _emit_progress(progress: ProgressHook | None, event: ProgressEvent) -> None:
         progress.emit(event)
 
 
+@dataclass(kw_only=True)
+class _SerializedProgressHook:
+    delegate: ProgressHook
+    _lock: LockType = field(default_factory=allocate_lock, init=False, repr=False)
+
+    def emit(self, event: ProgressEvent) -> None:
+        with self._lock:
+            self.delegate.emit(event)
+
+
+def _execute_campaign_entry(
+    *,
+    entry: CampaignEntry,
+    total: CampaignCoordinateCount,
+    stage_runner: StageRunner,
+    output_root: Path,
+    overwrite: bool,
+    progress: ProgressHook | None,
+) -> ExperimentExecution:
+    _emit_progress(
+        progress,
+        ProgressEvent(
+            kind=ProgressEventKind.COORDINATE_BEGIN,
+            coordinate=entry.coordinate,
+            ordinal=entry.ordinal,
+            total=total,
+        ),
+    )
+    started = time.monotonic()
+    result = execute_experiment(
+        coordinate=entry.coordinate,
+        stage_runner=stage_runner,
+        output_root=output_root,
+        overwrite=overwrite,
+    )
+    _emit_progress(
+        progress,
+        ProgressEvent(
+            kind=ProgressEventKind.COORDINATE_END,
+            coordinate=entry.coordinate,
+            ordinal=entry.ordinal,
+            total=total,
+            outcome=StageOutcome.COMPLETED if result.successful else StageOutcome.BLOCKED,
+            detail=StageExecutionEvidence(f"stages={len(result.stages)}"),
+            elapsed_seconds=ElapsedSeconds(time.monotonic() - started),
+        ),
+    )
+    return result
+
+
+def _training_coordinate_batches(campaign: CampaignPlan) -> tuple[tuple[CampaignEntry, ...], ...]:
+    batches: dict[FederatedTrainingCoordinate, list[CampaignEntry]] = {}
+    for entry in campaign.entries:
+        training_coordinate = training_coordinate_for(entry.coordinate)
+        batches.setdefault(training_coordinate, []).append(entry)
+    return tuple(tuple(batch) for batch in batches.values())
+
+
+def _can_parallelize_threshold_evaluations(
+    batch: tuple[CampaignEntry, ...],
+    stage_runner: StageRunner,
+) -> bool:
+    return (
+        len(batch) > 1
+        and isinstance(stage_runner, PipelineStageRunner)
+        and batch[0].coordinate.experiment is not ExperimentId.HISTORICAL_DATP_REPRODUCTION
+    )
+
+
 def execute_campaign(
     *,
     campaign: CampaignPlan,
@@ -86,60 +166,107 @@ def execute_campaign(
     overwrite: bool,
     progress: ProgressHook | None = None,
 ) -> CampaignExecution:
+    if overwrite:
+        _remove_rebuilt_training_artifacts(campaign, output_root)
     total = CampaignCoordinateCount(len(campaign.entries))
-    _emit_progress(progress, ProgressEvent(kind=ProgressEventKind.CAMPAIGN_BEGIN, total=total))
+    synchronized_progress = _SerializedProgressHook(delegate=progress) if progress is not None else None
+    _emit_progress(synchronized_progress, ProgressEvent(kind=ProgressEventKind.CAMPAIGN_BEGIN, total=total))
     experiments: list[ExperimentExecution] = []
-    for entry in campaign.entries:
-        _emit_progress(
-            progress,
-            ProgressEvent(
-                kind=ProgressEventKind.COORDINATE_BEGIN,
-                coordinate=entry.coordinate,
-                ordinal=entry.ordinal,
-                total=total,
-            ),
-        )
-        started = time.monotonic()
-        result = execute_experiment(
-            coordinate=entry.coordinate,
+    for batch in _training_coordinate_batches(campaign):
+        first, *remaining = batch
+        first_result = _execute_campaign_entry(
+            entry=first,
+            total=total,
             stage_runner=stage_runner,
             output_root=output_root,
             overwrite=overwrite,
+            progress=synchronized_progress,
         )
-        _emit_progress(
-            progress,
-            ProgressEvent(
-                kind=ProgressEventKind.COORDINATE_END,
-                coordinate=entry.coordinate,
-                ordinal=entry.ordinal,
-                total=total,
-                outcome=StageOutcome.COMPLETED if result.successful else StageOutcome.BLOCKED,
-                detail=StageExecutionEvidence(f"stages={len(result.stages)}"),
-                elapsed_seconds=ElapsedSeconds(time.monotonic() - started),
-            ),
-        )
-        experiments.append(result)
+        experiments.append(first_result)
+        if (
+            not remaining
+            or not first_result.successful
+            or not _can_parallelize_threshold_evaluations(batch, stage_runner)
+        ):
+            for entry in remaining:
+                experiments.append(
+                    _execute_campaign_entry(
+                        entry=entry,
+                        total=total,
+                        stage_runner=stage_runner,
+                        output_root=output_root,
+                        overwrite=overwrite,
+                        progress=synchronized_progress,
+                    )
+                )
+            if isinstance(stage_runner, PipelineStageRunner):
+                stage_runner.release_completed_training_coordinate()
+            continue
+        if not isinstance(stage_runner, PipelineStageRunner):
+            raise AssertionError("parallel threshold evaluation requires a pipeline stage runner")
+        runners = tuple(stage_runner.with_fixed_evidence(progress=synchronized_progress) for _ in remaining)
+        worker_count = min(MAXIMUM_PARALLEL_THRESHOLD_EVALUATIONS.value, len(remaining))
+        with ThreadPoolExecutor(max_workers=worker_count) as executor:
+            futures = tuple(
+                executor.submit(
+                    _execute_campaign_entry,
+                    entry=entry,
+                    total=total,
+                    stage_runner=runner,
+                    output_root=output_root,
+                    overwrite=overwrite,
+                    progress=synchronized_progress,
+                )
+                for entry, runner in zip(remaining, runners, strict=True)
+            )
+            experiments.extend(future.result() for future in futures)
+        stage_runner.release_completed_training_coordinate()
     _emit_progress(
-        progress,
+        synchronized_progress,
         ProgressEvent(
             kind=ProgressEventKind.CAMPAIGN_END,
             total=total,
             detail=StageExecutionEvidence(f"experiments={len(experiments)}"),
         ),
     )
-    return CampaignExecution(experiments=tuple(experiments))
+    ordinal_by_coordinate = {entry.coordinate.stable_key: entry.ordinal.value for entry in campaign.entries}
+    ordered_experiments = tuple(sorted(experiments, key=lambda item: ordinal_by_coordinate[item.coordinate.stable_key]))
+    return CampaignExecution(experiments=ordered_experiments)
+
+
+def _remove_rebuilt_training_artifacts(campaign: CampaignPlan, output_root: Path) -> None:
+    directories = {
+        federated_training_directory(training_coordinate_for(entry.coordinate), output_root)
+        for entry in campaign.entries
+    }
+    for directory in directories:
+        if directory.exists():
+            rmtree(directory)
 
 
 @dataclass
 class PipelineStageRunner:
     progress_hook: ProgressHook | None = None
     _workspace: ExperimentWorkspace | None = None
-    _materialized_datasets: set[DatasetId] = field(default_factory=lambda: set[DatasetId](), init=False, repr=False)
+    _materialized_datasets: set[DatasetId] = field(default_factory=_empty_dataset_ids, init=False, repr=False)
     _fixed_score_workspaces: dict[tuple[FederatedTrainingCoordinate, Path], ExperimentWorkspace] = field(
         default_factory=dict[tuple[FederatedTrainingCoordinate, Path], ExperimentWorkspace],
         init=False,
         repr=False,
     )
+
+    def with_fixed_evidence(self, *, progress: ProgressHook | None) -> PipelineStageRunner:
+        fixed_workspace = self._workspace
+        if fixed_workspace is None:
+            raise ValueError("fixed evidence requires a prepared pipeline workspace")
+        key = (training_coordinate_for(fixed_workspace.coordinate), fixed_workspace.output_root)
+        runner = PipelineStageRunner(progress_hook=progress)
+        runner._fixed_score_workspaces[key] = fixed_workspace
+        return runner
+
+    def release_completed_training_coordinate(self) -> None:
+        self._workspace = None
+        self._fixed_score_workspaces.clear()
 
     def _workspace_for(self, coordinate: ExperimentCoordinate, output_root: Path) -> ExperimentWorkspace:
         workspace = self._workspace
@@ -192,6 +319,7 @@ class PipelineStageRunner:
                 stage=stage,
                 outcome=execution.outcome,
                 elapsed_seconds=ElapsedSeconds(time.monotonic() - started),
+                detail=execution.evidence,
             ),
         )
         return execution
@@ -256,6 +384,14 @@ class PipelineStageRunner:
                 outcome=StageOutcome.COMPLETED,
                 evidence=StageExecutionEvidence(f"{coordinate.dataset.value} canonical dataset reused"),
             )
+        canonical_root = canonical_root_under(DATA_ROOT, coordinate.dataset)
+        if (canonical_root / "dataset_manifest.json").is_file():
+            self._materialized_datasets.add(coordinate.dataset)
+            return StageExecution(
+                stage=stage,
+                outcome=StageOutcome.COMPLETED,
+                evidence=StageExecutionEvidence(f"{coordinate.dataset.value} canonical dataset reused"),
+            )
         result = materialize_datasets(
             DatasetMaterializationRequest(data_root=DATA_ROOT, datasets=(coordinate.dataset,), overwrite=False)
         )
@@ -272,7 +408,9 @@ class PipelineStageRunner:
         return StageExecution(
             stage=stage,
             outcome=StageOutcome.COMPLETED,
-            evidence=StageExecutionEvidence(f"rounds={len(result.training.history.rounds)}"),
+            evidence=StageExecutionEvidence(
+                f"rounds={len(result.training.history.rounds)} termination={result.training.termination_reason.value}"
+            ),
         )
 
     def _generate_scores(

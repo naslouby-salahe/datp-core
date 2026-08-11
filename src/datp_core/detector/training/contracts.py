@@ -1,5 +1,6 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Annotated, Literal, cast, overload
 
 from pydantic import ConfigDict, Field, GetCoreSchemaHandler, model_validator
@@ -114,6 +115,11 @@ TrainingProtocol = Annotated[FedAvgProtocol | FedProxProtocol | DittoProtocol, F
 class CentralizedTrainingProtocol(StrictModel):
     kind: Literal[CentralizedModelId.CENTRALIZED_AUTOENCODER]
     optimizer: OptimizerProtocol
+
+
+class FederatedClientDataResidency(StrEnum):
+    STREAMING = "streaming"
+    GPU_RESIDENT_COHORT = "gpu_resident_cohort"
 
 
 class ModelAbsorptionDecisionProtocol(StrictModel):

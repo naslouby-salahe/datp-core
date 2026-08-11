@@ -36,6 +36,7 @@ from datp_core.data.materialization import (
     raw_source_file,
     stream_parquet,
 )
+from datp_core.data.populations.paths import PartitioningArtifactDirectory
 
 from .chronology import PcapChronology, paired_capture_path, write_capture_timeline
 from .reader import EdgeIIoTsetReader
@@ -68,9 +69,10 @@ class _EdgePublication:
     validations: tuple[ChronologyValidation, ...]
 
 
-_STATIC_BENIGN_BRANCH = Path(EdgeAssetRole.STATIC_BENIGN)
-_TEMPORAL_BENIGN_BRANCH = Path(EdgeAssetRole.TEMPORAL_BENIGN)
-_UNASSIGNED_ATTACK_BRANCH = Path(EdgeAssetRole.UNASSIGNED_ATTACK)
+_CANONICAL_DATA_BRANCH = Path(PartitioningArtifactDirectory.CANONICAL_DATA)
+_STATIC_BENIGN_BRANCH = _CANONICAL_DATA_BRANCH / EdgeAssetRole.STATIC_BENIGN
+_TEMPORAL_BENIGN_BRANCH = _CANONICAL_DATA_BRANCH / EdgeAssetRole.TEMPORAL_BENIGN
+_UNASSIGNED_ATTACK_BRANCH = _CANONICAL_DATA_BRANCH / EdgeAssetRole.UNASSIGNED_ATTACK
 _EDGE_CANONICALIZATION_CONTRACT = CanonicalizationContractName("pcap_verified_source_order_and_typed_asset_roles")
 
 

@@ -9,7 +9,6 @@ from datp_core.detector.scoring.models import (
 )
 from datp_core.detector.training.contracts import AutoencoderProtocol
 from datp_core.detector.training.models import FederatedTrainingResult
-from datp_core.detector.training.protocols import BATCH_SIZE
 
 
 def score_terminal_model(
@@ -28,7 +27,7 @@ def score_terminal_model(
             autoencoder=autoencoder,
             feature_names=feature_names,
             clients=clients,
-            batch_size=BATCH_SIZE,
+            batch_size=training.batch_size_used,
             output_directory=output_directory,
             overwrite=False,
         )

@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import polars as pl
+from pydantic import TypeAdapter
 from tests.unit.learning.federated.helpers import client_identity, fedavg_coordinate
 
 from datp_core.analysis.metrics.fixed_score_construction import build_federated_evaluation_inputs
@@ -80,3 +81,13 @@ def test_threshold_policies_receive_one_shared_terminal_score_manifest(tmp_path:
     inputs = tuple(build_federated_evaluation_inputs(manifest, method) for method in methods)
 
     assert all(item.fixed_score_evidence.score_manifest is manifest for item in inputs)
+
+
+def test_unparameterized_score_record_deserialization_reconstructs_domain_values(tmp_path: Path) -> None:
+    record = _score_manifest(tmp_path).calibration_records[0]
+    adapter = TypeAdapter(ScoreRecord)
+
+    restored = adapter.validate_python(adapter.dump_python(record, mode="json"))
+
+    assert restored.coordinate == record.coordinate
+    assert restored.scored_client == record.scored_client

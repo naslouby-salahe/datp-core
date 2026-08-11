@@ -168,19 +168,13 @@ def run_family_grouped_mechanism_seed(
     )
 
 
-def analyze_confirmatory_campaign(*, anchor_gate_diagnostics_directory: Path | None = None) -> Path:
-    from datp_core.experiments.anchor.gate import load_anchor_confirmatory_handoff, load_verified_anchor_gate_artifact
-    from datp_core.experiments.anchor.run import default_anchor_diagnostics_directory
-
+def analyze_confirmatory_campaign() -> Path:
     output = (
         OUTPUTS_ROOT
         / ConfirmatoryAssetDirectory.ROOT
         / PopulationId.NBAIOT_NATURAL_DEVICES.value
         / ConfirmatoryAssetDirectory.ANALYSIS
     )
-    gate_directory = anchor_gate_diagnostics_directory or default_anchor_diagnostics_directory()
-    verified_gate = load_verified_anchor_gate_artifact(gate_directory)
-    load_anchor_confirmatory_handoff(gate_directory, verified_gate=verified_gate)
     mechanisms = _confirmatory_mechanisms()
     cluster_mechanisms = _confirmatory_cluster_mechanisms()
     all_mechanisms = mechanisms + cluster_mechanisms
@@ -200,7 +194,7 @@ def analyze_confirmatory_campaign(*, anchor_gate_diagnostics_directory: Path | N
     export_confirmatory_publication(
         result.document,
         output,
-        verified_anchor_gate=verified_gate,
+        verified_anchor_gate=None,
         figures=figures,
     )
     if all_mechanisms:

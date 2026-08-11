@@ -7,6 +7,7 @@ from datp_core.core.identifiers import CentralizedModelId, CentralizedThresholdM
 from datp_core.core.numeric import DittoRegularization, FeatureCount, ModelCoefficientValue, Quantile
 from datp_core.detector.checkpoints.protocols import DIAGNOSTIC_SNAPSHOT_PROTOCOL
 from datp_core.detector.training.protocols import (
+    ANCHOR_BATCH_SIZE,
     BATCH_SIZE,
     CENTRALIZED_TRAINING_PROTOCOL,
     CICIOT2023_AUTOENCODER,
@@ -49,7 +50,8 @@ def test_training_grids_are_locked() -> None:
     assert all(isinstance(width, FeatureCount) for width in NBAIOT_AUTOENCODER.widths)
     assert OPTIMIZER.identity is OptimizerId.ADAM
     assert LEARNING_RATE.value == 0.001
-    assert BATCH_SIZE.value == 256
+    assert ANCHOR_BATCH_SIZE.value == 256
+    assert BATCH_SIZE.value == 8192
     assert tuple(value.value for value in DITTO_REGULARIZATION_GRID) == (0.05, 0.1, 0.2)
     assert DITTO_PRIMARY_REGULARIZATION.value == 0.1
     assert CENTRALIZED_TRAINING_PROTOCOL.optimizer == OPTIMIZER

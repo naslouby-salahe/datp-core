@@ -7,9 +7,12 @@ from datp_core.app.campaign import build_programme_plan
 from datp_core.app.contracts import AnchorRequirement, OverwriteMode, ProgrammeExecutionMode
 from datp_core.app.models import DetailText, ReportResult
 from datp_core.app.planning import PlanDisposition, seed_cohort_for
-from datp_core.app.research import generate_report, registered_experiment_ids
+from datp_core.app.research import generate_report, registered_experiment_ids, run_campaign, run_smoke
 from datp_core.app.validation import require_experiment_execution_ready, validate_programme
-from datp_core.core.identifiers import ExperimentId, ExperimentReadiness, FederatedThresholdMethod
+from datp_core.core.identifiers import ExperimentId, ExperimentReadiness, FederatedThresholdMethod, ProgrammeStatus
+from datp_core.core.numeric import Seed
+from datp_core.data.paths import canonical_root_under
+from datp_core.data.registry import population_capabilities
 from datp_core.experiments.common.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_SEED_COHORT
 from datp_core.experiments.registry import EXPERIMENTS
 
@@ -102,3 +105,81 @@ def test_report_rebuilds_current_experiment_before_rendering(monkeypatch: pytest
 
     assert generate_report(experiment) is report
     assert observed == [(experiment, OverwriteMode.REBUILD, ProgrammeExecutionMode.FULL)]
+
+
+def test_campaign_execution_and_publication_do_not_depend_on_anchor(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    experiment = ExperimentId.OPTIONAL_EQUITY_INDICES
+    recipe = SimpleNamespace(experiment=experiment)
+    observed_anchor_requirements: list[bool] = []
+    result = SimpleNamespace(experiment=experiment)
+    report = ReportResult(experiment=None, paths=(), detail=DetailText("published"))
+
+    monkeypatch.setattr("datp_core.app.research.EXPERIMENT_RECIPES", (recipe,))
+    monkeypatch.setattr("datp_core.app.research.validate_programme", lambda _: None)
+    monkeypatch.setattr("datp_core.app.research.require_experiment_execution_ready", lambda _: None)
+    monkeypatch.setattr("datp_core.app.research.preprocess_datasets", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("datp_core.app.research._run_centralized_reference", lambda _: None)
+    monkeypatch.setattr(
+        "datp_core.app.research._dispatch_experiment",
+        lambda *_args, require_anchor, **_kwargs: (
+            observed_anchor_requirements.append(require_anchor),
+            result,
+        )[1],
+    )
+    monkeypatch.setattr("datp_core.app.research._generate_campaign_report", lambda *, require_anchor: report)
+    monkeypatch.setattr("datp_core.app.research.CAMPAIGN_EXECUTION_MARKER", tmp_path / "execution.txt")
+    monkeypatch.setattr("datp_core.app.research.CAMPAIGN_PUBLICATION_MARKER", tmp_path / "publication.txt")
+    monkeypatch.setattr(
+        "datp_core.app.research._enforce_anchor_gate",
+        lambda *_: pytest.fail("campaign must not enforce the anchor gate"),
+    )
+
+    campaign = run_campaign(overwrite=OverwriteMode.KEEP_EXISTING)
+
+    assert campaign.experiments == (result,)
+    assert campaign.anchor_failure is None
+    assert observed_anchor_requirements == [False]
+
+
+def test_status_recognizes_dataset_manifest(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    from datp_core.app import research
+
+    experiment = ExperimentId.SHARED_VS_LOCAL_CONFIRMATION
+    dataset = population_capabilities(next(item for item in EXPERIMENTS if item.id is experiment).population).dataset
+    canonical = canonical_root_under(tmp_path, dataset)
+    canonical.mkdir(parents=True)
+    (canonical / "dataset_manifest.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(research, "DATA_ROOT", tmp_path)
+    monkeypatch.setattr(
+        research,
+        "recipe_for",
+        lambda _: SimpleNamespace(
+            anchor_requirement=AnchorRequirement.NOT_REQUIRED,
+            analysis_marker=lambda _: False,
+        ),
+    )
+
+    status = research._status_for_experiment(experiment, research.AnchorGateStatus.PASS)
+
+    assert status.status is ProgrammeStatus.DATASET_READY
+
+
+def test_single_smoke_overwrite_clears_shared_smoke_artifacts(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    from datp_core.app import research
+
+    experiment = ExperimentId.SHARED_VS_LOCAL_CONFIRMATION
+    smoke_root = tmp_path / "smoke"
+    stale_training = smoke_root / "federated" / "stale"
+    stale_training.mkdir(parents=True)
+    (stale_training / "artifact.txt").write_text("stale", encoding="utf-8")
+    result = SimpleNamespace(experiment=experiment, seeds=(Seed(0),))
+    monkeypatch.setattr(research, "SMOKE_OUTPUT_ROOT", smoke_root)
+    monkeypatch.setattr(research, "SMOKE_SUMMARY_DIRECTORY", smoke_root / "summary")
+    monkeypatch.setattr(research, "run_experiment", lambda *_args, **_kwargs: result)
+
+    run_smoke(experiment, overwrite=OverwriteMode.REBUILD)
+
+    assert not stale_training.exists()

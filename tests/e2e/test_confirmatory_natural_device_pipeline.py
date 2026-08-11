@@ -28,6 +28,8 @@ def test_confirmatory_campaign_changes_threshold_scope_only() -> None:
     campaign = build_campaign(plan)
 
     assert campaign == build_campaign(plan)
+    assert len(campaign.entries) == 4
+    assert len(frozenset(entry.coordinate.execution_key for entry in campaign.entries)) == len(campaign.entries)
     assert declaration.role is EvidenceRole.CONFIRMATORY
     assert declaration.population is PopulationId.NBAIOT_NATURAL_DEVICES
     assert declaration.training_model is TrainingModelId.FEDAVG_AUTOENCODER

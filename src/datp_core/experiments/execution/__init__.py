@@ -8,9 +8,9 @@ from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
 )
-from datp_core.core.identifiers import FederatedThresholdMethod
+from datp_core.core.identifiers import CoordinateStableKey, FederatedThresholdMethod
 from datp_core.core.numeric import CampaignOrdinal
-from datp_core.experiments.common.coordinates import ExecutionRoute, execution_route_for
+from datp_core.experiments.common.coordinates import ExecutionRoute, ExperimentCoordinate, execution_route_for
 from datp_core.experiments.common.seeds import SeedCohort
 from datp_core.experiments.execution.engine import PipelineStageRunner, execute_campaign
 from datp_core.experiments.execution.models import CampaignEntry, CampaignPlan, ProgressHook
@@ -23,12 +23,18 @@ class DeclaredExperimentSeedResult:
 
 
 def build_campaign(plan: ExperimentPlan) -> CampaignPlan:
-    coordinates = tuple(
-        entry.coordinate
-        for entry in plan.entries
-        if entry.disposition is PlanDisposition.EXECUTABLE
-        and execution_route_for(entry.coordinate) is ExecutionRoute.SINGLE_COORDINATE
-    )
+    coordinates: list[ExperimentCoordinate] = []
+    execution_keys: set[CoordinateStableKey] = set()
+    for entry in plan.entries:
+        coordinate = entry.coordinate
+        if (
+            entry.disposition is not PlanDisposition.EXECUTABLE
+            or execution_route_for(coordinate) is not ExecutionRoute.SINGLE_COORDINATE
+            or coordinate.execution_key in execution_keys
+        ):
+            continue
+        execution_keys.add(coordinate.execution_key)
+        coordinates.append(coordinate)
     entries = tuple(
         CampaignEntry(ordinal=CampaignOrdinal(index), coordinate=coordinate)
         for index, coordinate in enumerate(coordinates)

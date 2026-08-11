@@ -63,15 +63,16 @@ from datp_core.detector.training.federated_publication import (
     TrainFederatedDetectorResult,
     train_federated_detector,
 )
-from datp_core.detector.training.protocols import BATCH_SIZE, LEARNING_RATE
+from datp_core.detector.training.protocols import LEARNING_RATE
 from datp_core.experiments.common.coordinates import ExperimentCoordinate
 from datp_core.experiments.execution.context import (
+    ClientExecutionInputs,
     FederatedExecutionContext,
-    client_scoring_inputs,
-    client_training_inputs,
+    client_execution_inputs,
     diagnostic_snapshot_protocol_for,
     resolve_execution_context,
     training_autoencoder_for,
+    training_batch_size_for,
     training_feature_names,
     training_protocol_for,
 )
@@ -133,6 +134,14 @@ class ExperimentWorkspace:
         return training_feature_names(self.coordinate.dataset)
 
     @cached_property
+    def client_inputs(self) -> tuple[ClientExecutionInputs, ...]:
+        return client_execution_inputs(
+            self.context.preprocessing.client_publications,
+            self.context.clients,
+            self.feature_names,
+        )
+
+    @cached_property
     def training(self) -> TrainFederatedDetectorResult:
         if self.fixed_training is not None:
             return self.fixed_training
@@ -141,19 +150,16 @@ class ExperimentWorkspace:
             TrainFederatedDetectorRequest(
                 request=FederatedTrainingRequest(
                     coordinate=self.context.coordinate,
-                    clients=client_training_inputs(
-                        self.context.preprocessing.client_publications,
-                        self.context.clients,
-                        self.feature_names,
-                    ),
+                    clients=tuple(inputs.training for inputs in self.client_inputs),
                     population_client_count=ClientCount(len(self.context.clients)),
                     autoencoder=self.autoencoder,
                     training_protocol=protocol,
                     diagnostic_snapshot_protocol=diagnostic_snapshot_protocol_for(self.coordinate),
                     training_seed=self.context.coordinate.training_seed,
-                    batch_size=BATCH_SIZE,
+                    batch_size=training_batch_size_for(self.coordinate),
                     learning_rate=LEARNING_RATE,
                     output_directory=self.context.training_directory,
+                    client_data_residency=self.context.client_data_residency,
                     progress_callback=self._round_progress_callback,
                 ),
             )
@@ -179,7 +185,7 @@ class ExperimentWorkspace:
             scored_split_protocol=self.context.coordinate.split_protocol,
             autoencoder=self.autoencoder,
             feature_names=self.feature_names,
-            clients=client_scoring_inputs(self.context.preprocessing.client_publications, self.context.clients),
+            clients=tuple(inputs.scoring for inputs in self.client_inputs),
             output_directory=self.context.training_directory / ExecutionArtifactDirectory.SCORES,
         )
 

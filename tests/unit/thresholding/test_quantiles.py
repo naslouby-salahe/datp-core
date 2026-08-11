@@ -54,11 +54,12 @@ def test_unweighted_mean_matches_arithmetic_mean() -> None:
 
 
 def test_sample_weighted_mean_matches_manual_computation() -> None:
+    weights = CalibrationSampleWeights((RowCount(1), RowCount(3)))
     result = sample_weighted_mean(
         tuple(ThresholdValue(v) for v in (1.0, 3.0)),
-        CalibrationSampleWeights((RowCount(1), RowCount(3))),
+        weights,
     )
-    assert result == ThresholdValue((1.0 * 1.0 + 3.0 * 3.0) / 4.0)
+    assert result == ThresholdValue(1.0 * weights.normalized[0].value + 3.0 * weights.normalized[1].value)
 
 
 def test_conformal_rank_index_matches_classical_split_conformal_formula() -> None:

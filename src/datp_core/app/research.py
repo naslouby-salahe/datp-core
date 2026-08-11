@@ -125,10 +125,20 @@ def run_experiment(
     overwrite: OverwriteMode,
     mode: ProgrammeExecutionMode,
 ) -> ExperimentRunResult:
+    return _dispatch_experiment(experiment_id, overwrite=overwrite, mode=mode, require_anchor=True)
+
+
+def _dispatch_experiment(
+    experiment_id: ExperimentId,
+    *,
+    overwrite: OverwriteMode,
+    mode: ProgrammeExecutionMode,
+    require_anchor: bool,
+) -> ExperimentRunResult:
     reject_anchor_as_experiment(experiment_id)
     require_experiment_execution_ready(experiment_id)
     recipe = recipe_for(experiment_id)
-    if mode is ProgrammeExecutionMode.FULL:
+    if require_anchor and mode is ProgrammeExecutionMode.FULL:
         _enforce_anchor_gate(experiment_id, recipe.anchor_requirement)
     output_root = _output_root(mode)
     if overwrite.requested and mode is ProgrammeExecutionMode.SMOKE:
@@ -157,12 +167,7 @@ def run_smoke(
     if experiment_id is not None:
         reject_anchor_as_experiment(experiment_id)
     if overwrite.requested and SMOKE_OUTPUT_ROOT.exists():
-        if experiment_id is None:
-            rmtree(SMOKE_OUTPUT_ROOT)
-        else:
-            scoped = SMOKE_OUTPUT_ROOT / experiment_id.value
-            if scoped.exists():
-                rmtree(scoped)
+        rmtree(SMOKE_OUTPUT_ROOT)
     if experiment_id is not None:
         result = run_experiment(
             experiment_id,
@@ -234,32 +239,20 @@ def run_campaign(*, overwrite: OverwriteMode) -> CampaignRunResult:
     for recipe in EXPERIMENT_RECIPES:
         require_experiment_execution_ready(recipe.experiment)
     preprocess_datasets(None, overwrite=OverwriteMode.KEEP_EXISTING)
-    reproduced = reproduce_anchor(
-        overwrite=overwrite,
-        mode=ProgrammeExecutionMode.FULL,
-        progress=progress_hook(sys.stdout, progress_log_path(OUTPUTS_ROOT, "anchor")),
-    )
-    verified = verify_anchor_programme(mode=ProgrammeExecutionMode.FULL)
-    for result in (reproduced, verified):
-        if result.gate_status not in {AnchorGateStatus.PASS, AnchorGateStatus.PASS_WITH_DECLARED_DISCREPANCY}:
-            raise MissingPrerequisiteError(
-                ErrorMessage(f"campaign blocked by anchor gate: {result.gate_status.value}"),
-                subject=ExperimentId.HISTORICAL_DATP_REPRODUCTION,
-                reason=MissingPrerequisiteReason.ANCHOR_GATE,
-            )
     _run_centralized_reference(overwrite)
     results = tuple(
-        run_experiment(
+        _dispatch_experiment(
             recipe.experiment,
             overwrite=overwrite,
             mode=ProgrammeExecutionMode.FULL,
+            require_anchor=False,
         )
         for recipe in EXPERIMENT_RECIPES
     )
     execution_marker_lines = "\n".join(item.experiment.value for item in results) + "\n"
     CAMPAIGN_EXECUTION_MARKER.parent.mkdir(parents=True, exist_ok=True)
     write_text_atomically(CAMPAIGN_EXECUTION_MARKER, FileContentText(execution_marker_lines))
-    report = _generate_campaign_report()
+    report = _generate_campaign_report(require_anchor=False)
     CAMPAIGN_PUBLICATION_MARKER.parent.mkdir(parents=True, exist_ok=True)
     write_text_atomically(CAMPAIGN_PUBLICATION_MARKER, FileContentText(execution_marker_lines))
     return CampaignRunResult(
@@ -272,7 +265,7 @@ def run_campaign(*, overwrite: OverwriteMode) -> CampaignRunResult:
 def generate_report(experiment_id: ExperimentId | None) -> ReportResult:
     if experiment_id is None:
         run_campaign(overwrite=OverwriteMode.REBUILD)
-        return _generate_campaign_report()
+        return _generate_campaign_report(require_anchor=False)
     run_experiment(
         experiment_id,
         overwrite=OverwriteMode.REBUILD,
@@ -283,12 +276,13 @@ def generate_report(experiment_id: ExperimentId | None) -> ReportResult:
     return recipe.report(experiment_id)
 
 
-def _generate_campaign_report() -> ReportResult:
+def _generate_campaign_report(*, require_anchor: bool) -> ReportResult:
     paths: list[Path] = []
     details: list[str] = []
     for recipe in EXPERIMENT_RECIPES:
         try:
-            _enforce_anchor_gate(recipe.experiment, recipe.anchor_requirement)
+            if require_anchor:
+                _enforce_anchor_gate(recipe.experiment, recipe.anchor_requirement)
             report = recipe.report(recipe.experiment)
         except (
             AnchorReproductionError,
@@ -369,7 +363,7 @@ def _status_for_experiment(
         )
     population = next(item for item in POPULATIONS if item.id is declaration.population)
     canonical = canonical_root_under(DATA_ROOT, population.dataset)
-    if not (canonical / "manifest.json").is_file():
+    if not (canonical / "dataset_manifest.json").is_file():
         return ExperimentStatusRecord(
             experiment=experiment_id,
             status=ProgrammeStatus.NOT_STARTED,

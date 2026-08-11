@@ -18,11 +18,13 @@ from datp_core.detector.autoencoder import (
 from datp_core.detector.checkpoints.contracts import DiagnosticSnapshotProtocol
 from datp_core.detector.checkpoints.publication import write_ditto_training
 from datp_core.detector.training.contracts import AutoencoderProtocol, DittoProtocol
+from datp_core.detector.training.convergence import ConvergenceMonitor
 from datp_core.detector.training.engine import (
     ProximalTerm,
     TrainingStream,
     aggregate_client_updates,
     compute_weighted_aggregate_loss,
+    compute_weighted_validation_loss,
     create_communication_record,
     derive_client_stream_seed,
     prepare_federated_client_data,
@@ -42,6 +44,7 @@ from datp_core.detector.training.models import (
     GlobalModelStateReference,
     PersonalizedModelStateReference,
     PersonalizedTerminalModel,
+    TrainingTerminationReason,
 )
 from datp_core.runtime.compute import resolve_cuda_device
 from datp_core.runtime.determinism import configure_deterministic_execution
@@ -116,6 +119,8 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
     global_model_state = AutoencoderModelState.from_model(initial_model)
 
     personalized_model_states = {item.client: global_model_state for item in prepared}
+    convergence = request.diagnostic_snapshot_protocol.convergence
+    monitor = ConvergenceMonitor(request.diagnostic_snapshot_protocol) if convergence is not None else None
     rounds: list[FederatedRoundResult] = []
 
     for round_value in range(1, request.diagnostic_snapshot_protocol.maximum_round.value + 1):
@@ -188,6 +193,16 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
 
         aggregated = aggregate_client_updates(global_updates)
         aggregate_loss = compute_weighted_aggregate_loss(global_updates)
+        aggregate_validation_loss = (
+            compute_weighted_validation_loss(
+                model_state=aggregated,
+                prepared=prepared,
+                autoencoder=request.autoencoder,
+                device=device,
+            )
+            if monitor is not None
+            else None
+        )
         serialized_global_state = serialize_model_state(aggregated)
 
         rounds.append(
@@ -208,9 +223,19 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
                     tensor_path=None,
                 ),
                 personalized_state_references=tuple(personalized_references),
+                aggregate_validation_loss=aggregate_validation_loss,
             )
         )
         global_model_state = aggregated
+        if monitor is not None:
+            if aggregate_validation_loss is None:
+                raise ScientificContractError(
+                    ErrorMessage("convergence requires an aggregate benign validation loss"),
+                    subject=ContractSubject.TRAINING,
+                )
+            monitor.record(aggregate_validation_loss)
+            if monitor.should_stop(round_number):
+                break
 
     global_result = FederatedTrainingResult(
         coordinate=request.coordinates.global_coordinate,
@@ -219,6 +244,15 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
         history=FederatedTrainingHistory(
             coordinate=request.coordinates.global_coordinate,
             rounds=tuple(rounds),
+        ),
+        termination_reason=(
+            TrainingTerminationReason.CONVERGED
+            if monitor is not None and monitor.converged_round is not None
+            else (
+                TrainingTerminationReason.MAXIMUM_ROUNDS_WITHOUT_CONVERGENCE
+                if monitor is not None
+                else TrainingTerminationReason.FIXED_ROUND_BUDGET_COMPLETED
+            )
         ),
         terminal_model_state=global_model_state.on_cpu_with_contiguous_tensors(),
         device_name=CudaDeviceName(torch.cuda.get_device_name(device).strip()),

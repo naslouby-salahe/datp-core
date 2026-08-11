@@ -59,9 +59,9 @@ OPTIMIZER = training_contracts.OptimizerProtocol(
     weight_decay=WEIGHT_DECAY,
 )
 LEARNING_RATE = LearningRate(0.001)
-BATCH_SIZE = BatchSize(256)
+ANCHOR_BATCH_SIZE = BatchSize(256)
+BATCH_SIZE = BatchSize(8192)
 CENTRALIZED_DATALOADER_WORKER_COUNT = DataLoaderWorkerCount(0)
-FEDERATED_DATALOADER_WORKER_COUNT = DataLoaderWorkerCount(0)
 DITTO_REGULARIZATION_GRID = tuple(DittoRegularization(value) for value in (0.05, 0.1, 0.2))
 DITTO_PRIMARY_REGULARIZATION = DittoRegularization(0.1)
 CENTRALIZED_TRAINING_PROTOCOL = training_contracts.CentralizedTrainingProtocol(

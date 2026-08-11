@@ -316,6 +316,10 @@ class DataLoaderWorkerCount(NonNegativeIntegerValue):
     validation_name: ClassVar[str] = "data loader worker count"
 
 
+class ParallelEvaluationWorkerCount(PositiveIntegerValue):
+    validation_name: ClassVar[str] = "parallel evaluation worker count"
+
+
 class FeatureCount(PositiveIntegerValue):
     validation_name: ClassVar[str] = "feature count"
 

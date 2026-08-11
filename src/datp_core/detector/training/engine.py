@@ -8,7 +8,6 @@ import polars as pl
 import torch
 from safetensors.torch import save
 from torch import nn
-from torch.utils.data import DataLoader, TensorDataset
 
 from datp_core.core.errors import (
     ErrorMessage,
@@ -32,6 +31,7 @@ from datp_core.core.numeric import (
     LogicalElementCount,
     MetricValue,
     ProximalCoefficient,
+    Ratio,
     RoundNumber,
     RowCount,
     Seed,
@@ -55,6 +55,7 @@ from datp_core.detector.checkpoints.contracts import DiagnosticSnapshotProtocol
 from datp_core.detector.training.contracts import (
     AutoencoderProtocol,
     FedAvgProtocol,
+    FederatedClientDataResidency,
     FedProxProtocol,
     OptimizerProtocol,
 )
@@ -70,9 +71,7 @@ from datp_core.detector.training.models import (
     FederatedTrainingHistory,
     FederatedTrainingResult,
     GlobalModelStateReference,
-)
-from datp_core.detector.training.protocols import (
-    FEDERATED_DATALOADER_WORKER_COUNT,
+    TrainingTerminationReason,
 )
 from datp_core.runtime.compute import resolve_cuda_device
 from datp_core.runtime.determinism import configure_deterministic_execution, derive_worker_seed
@@ -81,6 +80,9 @@ from datp_core.runtime.determinism import configure_deterministic_execution, der
 class TrainingStream(IntEnum):
     GLOBAL_CLIENT_UPDATE = 1
     PERSONALIZED_CLIENT_UPDATE = 2
+
+
+GPU_RESIDENT_DATA_MEMORY_FRACTION = Ratio(0.8)
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -137,6 +139,44 @@ class PreparedFederatedClientData:
             )
 
 
+@dataclass(frozen=True, slots=True, eq=False)
+class DeviceResidentFederatedClientData:
+    client: ClientIdentity
+    features_cuda: torch.Tensor
+    validation_features_cuda: torch.Tensor
+
+    def __post_init__(self) -> None:
+        tensors = (self.features_cuda, self.validation_features_cuda)
+        if any(tensor.ndim != 2 for tensor in tensors):
+            raise ScientificContractError(
+                ErrorMessage("device-resident features must be two-dimensional"),
+                subject=ContractSubject.FEATURES,
+            )
+        if any(tensor.device.type != "cuda" for tensor in tensors):
+            raise ScientificContractError(
+                ErrorMessage("device-resident features must remain on CUDA"),
+                subject=ContractSubject.RUNTIME,
+            )
+        if any(tensor.dtype != TORCH_LEARNING_DTYPE for tensor in tensors):
+            raise ScientificContractError(
+                ErrorMessage("device-resident features must use the canonical learning dtype"),
+                subject=ContractSubject.FEATURES,
+            )
+        if self.features_cuda.shape[0] < 1 or self.validation_features_cuda.shape[0] < 1:
+            raise ScientificContractError(
+                ErrorMessage("device-resident client data requires positive training and validation rows"),
+                subject=ContractSubject.ROWS,
+            )
+        if self.features_cuda.shape[1] != self.validation_features_cuda.shape[1]:
+            raise ScientificContractError(
+                ErrorMessage("device-resident training and validation feature widths must match"),
+                subject=ContractSubject.FEATURES,
+            )
+
+
+type FederatedClientData = PreparedFederatedClientData | DeviceResidentFederatedClientData
+
+
 @dataclass(frozen=True, slots=True)
 class FederatedTrainingRequest[T: FedAvgProtocol | FedProxProtocol]:
     coordinate: FederatedTrainingCoordinate
@@ -149,6 +189,7 @@ class FederatedTrainingRequest[T: FedAvgProtocol | FedProxProtocol]:
     batch_size: BatchSize
     learning_rate: LearningRate
     output_directory: Path
+    client_data_residency: FederatedClientDataResidency
     progress_callback: Callable[[RoundNumber, RoundNumber], None] | None = field(
         default=None,
         compare=False,
@@ -253,6 +294,31 @@ def prepare_federated_client_data(
     )
 
 
+def prepare_device_resident_client_data(
+    prepared: tuple[PreparedFederatedClientData, ...],
+    device: torch.device,
+) -> tuple[FederatedClientData, ...]:
+    required_bytes = ByteCount(
+        sum(
+            tensor.numel() * tensor.element_size()
+            for client_data in prepared
+            for tensor in (client_data.features_cpu, client_data.validation_features_cpu)
+        )
+    )
+    free_bytes, _ = torch.cuda.mem_get_info(device)
+    available_bytes = ByteCount(int(free_bytes * GPU_RESIDENT_DATA_MEMORY_FRACTION.value))
+    if required_bytes.value > available_bytes.value:
+        return prepared
+    return tuple(
+        DeviceResidentFederatedClientData(
+            client=client_data.client,
+            features_cuda=client_data.features_cpu.to(device=device, dtype=TORCH_LEARNING_DTYPE),
+            validation_features_cuda=client_data.validation_features_cpu.to(device=device, dtype=TORCH_LEARNING_DTYPE),
+        )
+        for client_data in prepared
+    )
+
+
 def _client_seed_component(
     client: ClientIdentity,
 ) -> SeedDerivationComponent:
@@ -269,24 +335,6 @@ def derive_client_stream_seed(
     round_seed = derive_worker_seed(training_seed, SeedDerivationComponent(round_number.value))
     client_seed = derive_worker_seed(round_seed, _client_seed_component(client))
     return derive_worker_seed(client_seed, SeedDerivationComponent(stream.value))
-
-
-def build_client_loader(
-    data: PreparedFederatedClientData,
-    *,
-    batch_size: BatchSize,
-    seed: Seed,
-) -> DataLoader[tuple[torch.Tensor, ...]]:
-    generator = torch.Generator(device="cpu")
-    generator.manual_seed(seed.value)
-    return DataLoader(
-        TensorDataset(data.features_cpu),
-        batch_size=batch_size.value,
-        shuffle=True,
-        drop_last=False,
-        generator=generator,
-        num_workers=FEDERATED_DATALOADER_WORKER_COUNT.value,
-    )
 
 
 def proximal_penalty(
@@ -351,48 +399,6 @@ def _train_one_batch(
     return reconstruction_loss.detach()
 
 
-def run_local_epoch(
-    model: ReconstructionAutoencoder,
-    optimizer: torch.optim.Optimizer,
-    loader: DataLoader[tuple[torch.Tensor, ...]],
-    device: torch.device,
-    *,
-    proximal_term: ProximalTerm | None = None,
-) -> LocalEpochResult:
-    reference_parameters = _reference_parameters(model, proximal_term, device)
-    model.train()
-    weighted_reconstruction_loss = torch.zeros((), device=device, dtype=TORCH_LEARNING_DTYPE)
-    total_samples = 0
-
-    for (batch_cpu,) in loader:
-        batch_size = batch_cpu.shape[0]
-        batch = batch_cpu.to(
-            device=device,
-            dtype=TORCH_LEARNING_DTYPE,
-            non_blocking=False,
-        )
-        batch_loss = _train_one_batch(
-            model,
-            optimizer,
-            batch,
-            reference_parameters,
-            proximal_term,
-        )
-        weighted_reconstruction_loss = weighted_reconstruction_loss + batch_loss * batch_size
-        total_samples += batch_size
-
-    if total_samples < 1:
-        raise ScientificContractError(
-            ErrorMessage("local training produced no samples"),
-            subject=ContractSubject.BATCH_SIZE,
-        )
-    return LocalEpochResult(
-        model_state=AutoencoderModelState.from_model(model),
-        mean_reconstruction_loss=MetricValue(float(weighted_reconstruction_loss.item()) / total_samples),
-        sample_count=RowCount(total_samples),
-    )
-
-
 def run_local_epoch_on_device(
     model: ReconstructionAutoencoder,
     optimizer: torch.optim.Optimizer,
@@ -403,13 +409,6 @@ def run_local_epoch_on_device(
     device: torch.device,
     proximal_term: ProximalTerm | None = None,
 ) -> LocalEpochResult:
-    """Run one deterministic local epoch from a client tensor already on CUDA.
-
-    Federated clients are trained sequentially because their updates must be
-    aggregated in a stable order.  Keeping the active client's immutable input
-    tensor on the selected device avoids a host-to-device transfer for every
-    fixed-size batch; it does not change batching, shuffling, or optimization.
-    """
     if features.device != device:
         raise ScientificContractError(
             ErrorMessage("device-local training features must be on the selected CUDA device"),
@@ -436,9 +435,21 @@ def run_local_epoch_on_device(
     )
 
 
+def _training_features_on_device(client_data: FederatedClientData, device: torch.device) -> torch.Tensor:
+    if isinstance(client_data, DeviceResidentFederatedClientData):
+        return client_data.features_cuda
+    return client_data.features_cpu.to(device=device, dtype=TORCH_LEARNING_DTYPE, non_blocking=False)
+
+
+def _validation_features_on_device(client_data: FederatedClientData, device: torch.device) -> torch.Tensor:
+    if isinstance(client_data, DeviceResidentFederatedClientData):
+        return client_data.validation_features_cuda
+    return client_data.validation_features_cpu.to(device=device, dtype=TORCH_LEARNING_DTYPE, non_blocking=False)
+
+
 def train_client_update(
     *,
-    client_data: PreparedFederatedClientData,
+    client_data: FederatedClientData,
     initial_model_state: AutoencoderModelState,
     autoencoder: AutoencoderProtocol,
     optimizer_protocol: OptimizerProtocol,
@@ -455,7 +466,7 @@ def train_client_update(
         device=device,
     )
     optimizer = build_optimizer(model, optimizer_protocol, learning_rate)
-    features = client_data.features_cpu.to(device=device, dtype=TORCH_LEARNING_DTYPE, non_blocking=False)
+    features = _training_features_on_device(client_data, device)
     local_epoch = run_local_epoch_on_device(
         model,
         optimizer,
@@ -506,7 +517,7 @@ def compute_weighted_aggregate_loss(updates: Sequence[ClientUpdate]) -> MetricVa
 def compute_weighted_validation_loss(
     *,
     model_state: AutoencoderModelState,
-    prepared: Sequence[PreparedFederatedClientData],
+    prepared: Sequence[FederatedClientData],
     autoencoder: AutoencoderProtocol,
     device: torch.device,
 ) -> MetricValue:
@@ -522,17 +533,13 @@ def compute_weighted_validation_loss(
     total_rows = 0
     with torch.no_grad():
         for client_data in prepared:
-            validation_rows = client_data.validation_features_cpu.shape[0]
+            features = _validation_features_on_device(client_data, device)
+            validation_rows = features.shape[0]
             if validation_rows < 1:
                 raise ScientificContractError(
                     ErrorMessage("validation loss requires positive client validation rows"),
                     subject=ContractSubject.ROWS,
                 )
-            features = client_data.validation_features_cpu.to(
-                device=device,
-                dtype=TORCH_LEARNING_DTYPE,
-                non_blocking=False,
-            )
             reconstruction = model(features)
             loss = nn.functional.mse_loss(reconstruction, features)
             weighted_loss += float(loss.item()) * validation_rows
@@ -624,7 +631,7 @@ def _run_training_round[T: FedAvgProtocol | FedProxProtocol](
     *,
     round_number: RoundNumber,
     request: FederatedTrainingRequest[T],
-    prepared: tuple[PreparedFederatedClientData, ...],
+    prepared: tuple[FederatedClientData, ...],
     global_model_state: AutoencoderModelState,
     device: torch.device,
     proximal_coefficient: ProximalCoefficient | None,
@@ -709,7 +716,12 @@ def run_federated_training[T: FedAvgProtocol | FedProxProtocol](
     device = resolve_cuda_device()
 
     ordered_inputs = tuple(sorted(request.clients, key=lambda item: item.client))
-    prepared = tuple(prepare_federated_client_data(item, request.autoencoder) for item in ordered_inputs)
+    prepared_cpu = tuple(prepare_federated_client_data(item, request.autoencoder) for item in ordered_inputs)
+    match request.client_data_residency:
+        case FederatedClientDataResidency.STREAMING:
+            prepared = prepared_cpu
+        case FederatedClientDataResidency.GPU_RESIDENT_COHORT:
+            prepared = prepare_device_resident_client_data(prepared_cpu, device)
 
     initial_model = build_reconstruction_autoencoder(
         request.autoencoder,
@@ -757,6 +769,15 @@ def run_federated_training[T: FedAvgProtocol | FedProxProtocol](
         autoencoder=request.autoencoder,
         diagnostic_snapshot_protocol=request.diagnostic_snapshot_protocol,
         history=history,
+        termination_reason=(
+            TrainingTerminationReason.CONVERGED
+            if monitor is not None and monitor.converged_round is not None
+            else (
+                TrainingTerminationReason.MAXIMUM_ROUNDS_WITHOUT_CONVERGENCE
+                if monitor is not None
+                else TrainingTerminationReason.FIXED_ROUND_BUDGET_COMPLETED
+            )
+        ),
         terminal_model_state=global_model_state.on_cpu_with_contiguous_tensors(),
         device_name=CudaDeviceName(torch.cuda.get_device_name(device).strip()),
         batch_size_used=request.batch_size,

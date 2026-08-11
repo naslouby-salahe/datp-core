@@ -5,12 +5,11 @@ from datp_core.detector.training.contracts import AutoencoderProtocol
 from datp_core.detector.training.engine import FederatedTrainingRequest
 from datp_core.detector.training.federated_publication import TrainFederatedDetectorRequest, train_federated_detector
 from datp_core.detector.training.models import FederatedTrainingResult
-from datp_core.detector.training.protocols import (
-    BATCH_SIZE,
-    LEARNING_RATE,
-    resolve_single_model_federated_training_protocol,
+from datp_core.detector.training.protocols import LEARNING_RATE, resolve_single_model_federated_training_protocol
+from datp_core.experiments.execution.context import (
+    FederatedExecutionContext,
+    client_training_inputs,
 )
-from datp_core.experiments.execution.context import FederatedExecutionContext, client_training_inputs
 
 
 def train_execution_model(
@@ -37,9 +36,10 @@ def train_execution_model(
                 training_protocol=protocol,
                 diagnostic_snapshot_protocol=DIAGNOSTIC_SNAPSHOT_PROTOCOL,
                 training_seed=context.coordinate.training_seed,
-                batch_size=BATCH_SIZE,
+                batch_size=context.batch_size,
                 learning_rate=LEARNING_RATE,
                 output_directory=context.training_directory,
+                client_data_residency=context.client_data_residency,
             ),
         )
     )

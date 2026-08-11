@@ -45,9 +45,10 @@ def format_progress_event(event: ProgressEvent) -> str:
         return f"  stage {_require_value(event.stage, event.kind).value} begin {identity}"
     if event.kind is ProgressEventKind.STAGE_END:
         elapsed = f" elapsed={event.elapsed_seconds.value:.1f}s" if event.elapsed_seconds is not None else ""
+        detail = f" detail={event.detail}" if event.detail is not None else ""
         return (
             f"  stage {_require_value(event.stage, event.kind).value} end "
-            f"outcome={_require_value(event.outcome, event.kind).value}{elapsed}"
+            f"outcome={_require_value(event.outcome, event.kind).value}{elapsed}{detail}"
         )
     round_number = _require_value(event.round_number, event.kind)
     maximum_round = _require_value(event.maximum_round, event.kind)
