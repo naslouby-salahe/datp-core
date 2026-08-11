@@ -4,17 +4,70 @@ from types import SimpleNamespace
 import pytest
 
 from datp_core.app.campaign import build_programme_plan
-from datp_core.app.contracts import AnchorRequirement, OverwriteMode, ProgrammeExecutionMode
+from datp_core.app.contracts import AnchorRequirement, OverwriteMode
 from datp_core.app.models import DetailText, ReportResult
 from datp_core.app.planning import PlanDisposition, seed_cohort_for
 from datp_core.app.research import generate_report, registered_experiment_ids, run_campaign, run_smoke
 from datp_core.app.validation import require_experiment_execution_ready, validate_programme
-from datp_core.core.identifiers import ExperimentId, ExperimentReadiness, FederatedThresholdMethod, ProgrammeStatus
-from datp_core.core.numeric import Seed
+from datp_core.artifacts.serializers.json import canonical_json_text
+from datp_core.core.errors import ErrorMessage, ReportEvidenceError
+from datp_core.core.identifiers import (
+    AvailabilityStatus,
+    CanonicalAssetRoleToken,
+    CanonicalizationContractName,
+    CanonicalSourcePath,
+    ColumnName,
+    DatasetId,
+    ExperimentId,
+    ExperimentReadiness,
+    FederatedThresholdMethod,
+    ProgrammeStatus,
+)
+from datp_core.core.numeric import RowCount, Seed, SourceFileCount, ValidationIssueCount
+from datp_core.data.contracts import (
+    CanonicalManifestDocument,
+    ManifestAssetEntry,
+    ManifestInventoryEntry,
+    ManifestValidationReportEntry,
+)
+from datp_core.data.materialization import DATASET_MANIFEST_FILENAME
 from datp_core.data.paths import canonical_root_under
 from datp_core.data.registry import population_capabilities
 from datp_core.experiments.common.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_SEED_COHORT
 from datp_core.experiments.registry import EXPERIMENTS
+
+
+def _valid_canonical_manifest(dataset: DatasetId) -> CanonicalManifestDocument:
+    return CanonicalManifestDocument(
+        assets=(
+            ManifestAssetEntry(
+                columns=(ColumnName("feature_0"),),
+                path=CanonicalSourcePath("data/part-0.parquet"),
+                row_count=RowCount(1),
+                role=CanonicalAssetRoleToken("primary"),
+            ),
+        ),
+        canonicalization_contract=CanonicalizationContractName("fixture_contract"),
+        chronology=(),
+        dataset=dataset,
+        inventory=ManifestInventoryEntry(
+            dataset=dataset,
+            sources=(),
+            accepted_source_count=SourceFileCount(0),
+            excluded_source_count=SourceFileCount(0),
+            excluded_sources=(),
+        ),
+        validation_report=ManifestValidationReportEntry(
+            dataset=dataset,
+            issues=(),
+            exclusions=(),
+            accepted_rows=RowCount(1),
+            excluded_rows=RowCount(0),
+            invalid_rows=RowCount(0),
+            warning_count=ValidationIssueCount(0),
+            status=AvailabilityStatus.AVAILABLE,
+        ),
+    )
 
 
 def test_every_non_suppressed_experiment_has_exactly_one_recipe() -> None:
@@ -83,20 +136,17 @@ def test_scientific_mechanism_analyses_remain_registered() -> None:
     assert ExperimentId.THRESHOLD_MOVEMENT_TRADEOFF in registered
 
 
-def test_report_rebuilds_current_experiment_before_rendering(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    observed: list[tuple[ExperimentId, OverwriteMode, ProgrammeExecutionMode]] = []
+def test_report_never_executes_and_consumes_existing_evidence_only(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     experiment = ExperimentId.OPTIONAL_EQUITY_INDICES
-    report = ReportResult(experiment=experiment, paths=(tmp_path,), detail=DetailText("fresh report"))
+    report = ReportResult(experiment=experiment, paths=(tmp_path,), detail=DetailText("existing evidence"))
 
-    def rebuild(
-        experiment_id: ExperimentId,
-        *,
-        overwrite: OverwriteMode,
-        mode: ProgrammeExecutionMode,
-    ) -> None:
-        observed.append((experiment_id, overwrite, mode))
+    def _fail_if_executed(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("generate_report must never execute an experiment or campaign")
 
-    monkeypatch.setattr("datp_core.app.research.run_experiment", rebuild)
+    monkeypatch.setattr("datp_core.app.research.run_experiment", _fail_if_executed)
+    monkeypatch.setattr("datp_core.app.research.run_campaign", _fail_if_executed)
     monkeypatch.setattr("datp_core.app.research._enforce_anchor_gate", lambda *_: None)
     monkeypatch.setattr(
         "datp_core.app.research.recipe_for",
@@ -104,7 +154,27 @@ def test_report_rebuilds_current_experiment_before_rendering(monkeypatch: pytest
     )
 
     assert generate_report(experiment) is report
-    assert observed == [(experiment, OverwriteMode.REBUILD, ProgrammeExecutionMode.FULL)]
+
+
+def test_report_propagates_missing_evidence_instead_of_computing_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    experiment = ExperimentId.OPTIONAL_EQUITY_INDICES
+
+    def _fail_if_executed(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("generate_report must never execute an experiment or campaign")
+
+    def _missing_evidence(_experiment_id: ExperimentId) -> ReportResult:
+        raise ReportEvidenceError(ErrorMessage("evaluation evidence is missing"), subject=experiment)
+
+    monkeypatch.setattr("datp_core.app.research.run_experiment", _fail_if_executed)
+    monkeypatch.setattr("datp_core.app.research.run_campaign", _fail_if_executed)
+    monkeypatch.setattr("datp_core.app.research._enforce_anchor_gate", lambda *_: None)
+    monkeypatch.setattr(
+        "datp_core.app.research.recipe_for",
+        lambda _: SimpleNamespace(anchor_requirement=AnchorRequirement.NOT_REQUIRED, report=_missing_evidence),
+    )
+
+    with pytest.raises(ReportEvidenceError):
+        generate_report(experiment)
 
 
 def test_campaign_execution_and_publication_do_not_depend_on_anchor(
@@ -151,7 +221,9 @@ def test_status_recognizes_dataset_manifest(monkeypatch: pytest.MonkeyPatch, tmp
     dataset = population_capabilities(next(item for item in EXPERIMENTS if item.id is experiment).population).dataset
     canonical = canonical_root_under(tmp_path, dataset)
     canonical.mkdir(parents=True)
-    (canonical / "dataset_manifest.json").write_text("{}", encoding="utf-8")
+    (canonical / DATASET_MANIFEST_FILENAME).write_text(
+        canonical_json_text(_valid_canonical_manifest(dataset)), encoding="utf-8"
+    )
     monkeypatch.setattr(research, "DATA_ROOT", tmp_path)
     monkeypatch.setattr(
         research,

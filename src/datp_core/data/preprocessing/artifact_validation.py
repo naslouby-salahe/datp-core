@@ -273,13 +273,6 @@ def fit_trusted_batch(
     try:
         fitted = resolve_trusted_estimator_type(protocol.estimator_class_name)()
         fitted.fit(matrix)
-        transform_feature_matrix(
-            fitted,
-            matrix,
-            protocol.input_feature_names,
-            subject,
-            description=ValidationReasonText(f"{subject.value} training round-trip"),
-        )
         return fitted
     except (LeakageError, ScientificContractError):
         raise

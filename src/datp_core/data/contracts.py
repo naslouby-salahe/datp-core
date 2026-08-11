@@ -558,16 +558,6 @@ def schema_content(schema: CanonicalSchema) -> SerializedDocumentText:
     return canonical_json_text(schema)
 
 
-@dataclass(frozen=True, slots=True)
-class ManifestSerializationRequest[EligibilityReasonT: StrEnum]:
-    dataset: DatasetId
-    canonicalization_contract: CanonicalizationContractName
-    inventory: RawDatasetInventory
-    validation_report: DatasetValidationReport
-    chronology: tuple[ChronologyValidation, ...] = ()
-    eligibility_policy: ModelInputEligibilityPolicy[EligibilityReasonT] | None = None
-
-
 def manifest_chronology_entry(value: ChronologyValidation) -> ManifestChronologyEntry:
     return ManifestChronologyEntry.model_validate(canonical_mapping(value))
 

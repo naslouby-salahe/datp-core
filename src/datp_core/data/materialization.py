@@ -8,11 +8,13 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from datp_core.artifacts.serializers.json import canonical_json_text
+from datp_core.core.errors import ArtifactIntegrityError, ErrorMessage
 from datp_core.core.identifiers import (
     CanonicalAssetRoleToken,
     CanonicalizationContractName,
     CanonicalSourcePath,
     ColumnName,
+    ContractSubject,
     DatasetId,
     PhysicalSchemaText,
     SourceIdentity,
@@ -44,6 +46,8 @@ from datp_core.data.contracts import (
     schema_content,
 )
 from datp_core.runtime.filesystem import cleanup_staging_on_failure, create_staging_directory, replace_directory
+
+DATASET_MANIFEST_FILENAME = "dataset_manifest.json"
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,9 +110,41 @@ def canonical_asset_path(root: Path, relative_path: Path) -> Path:
     return path
 
 
+def load_canonical_manifest(root: Path, dataset: DatasetId) -> CanonicalManifestDocument:
+    manifest_path = root / DATASET_MANIFEST_FILENAME
+    if not manifest_path.is_file():
+        raise ArtifactIntegrityError(
+            ErrorMessage(f"canonical dataset is unavailable: {dataset.value}"),
+            subject=dataset,
+        )
+    try:
+        document = CanonicalManifestDocument.model_validate_json(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValueError) as error:
+        raise ArtifactIntegrityError(
+            ErrorMessage(f"canonical dataset manifest is unreadable or invalid: {dataset.value}"),
+            subject=dataset,
+        ) from error
+    if document.dataset is not dataset:
+        raise ArtifactIntegrityError(
+            ErrorMessage(
+                f"canonical dataset manifest at {manifest_path} declares {document.dataset.value}, "
+                f"expected {dataset.value}"
+            ),
+            subject=ContractSubject.ARTIFACT_PATH,
+        )
+    return document
+
+
+def canonical_dataset_is_materialized(root: Path, dataset: DatasetId) -> bool:
+    try:
+        load_canonical_manifest(root, dataset)
+    except ArtifactIntegrityError:
+        return False
+    return True
+
+
 def require_canonical_dataset(root: Path, dataset: DatasetId) -> None:
-    if not (root / "dataset_manifest.json").is_file():
-        raise FileNotFoundError(f"canonical dataset is unavailable: {dataset.value}")
+    load_canonical_manifest(root, dataset)
 
 
 def provenance_expressions(path: Path, source_path_resolver: Callable[[Path], Path]) -> tuple[pl.Expr, ...]:
@@ -253,7 +289,7 @@ def publish_canonical[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
             inventory=manifest_inventory_entry(publication.inventory),
             validation_report=manifest_validation_report_entry(publication.validation_report),
         )
-        (temporary / "dataset_manifest.json").write_text(canonical_json_text(manifest), encoding="utf-8")
+        (temporary / DATASET_MANIFEST_FILENAME).write_text(canonical_json_text(manifest), encoding="utf-8")
         replace_directory(temporary, target)
     assets = tuple(
         MaterializedCanonicalAsset(
@@ -268,7 +304,7 @@ def publish_canonical[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
         publication.schema.dataset,
         target,
         assets,
-        target / "dataset_manifest.json",
+        target / DATASET_MANIFEST_FILENAME,
         publication.schema,
         _logical_row_count(publication, assets),
         publication.inventory,

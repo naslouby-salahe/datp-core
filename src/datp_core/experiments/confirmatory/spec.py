@@ -24,7 +24,6 @@ from datp_core.core.identifiers import (
 )
 from datp_core.core.numeric import BootstrapReplicateCount, ConfidenceLevel, Ratio
 from datp_core.experiments.common.seeds import (
-    CONFIRMATORY_ANALYSIS_SEED,
     CONFIRMATORY_PAIRED_SEED_COUNT,
     CONFIRMATORY_SEED_COHORT,
     SeedCohort,
@@ -84,5 +83,3 @@ CONFIRMATORY_ENDPOINT = ConfirmatoryEndpoint(
     positive_direction=ConfirmatoryDeltaDirection.SHARED_MINUS_LOCAL,
     inference_protocol=CONFIRMATORY_INFERENCE_PROTOCOL,
 )
-
-CONFIRMATORY_BOOTSTRAP_SEED = CONFIRMATORY_ANALYSIS_SEED

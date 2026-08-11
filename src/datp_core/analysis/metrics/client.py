@@ -14,14 +14,6 @@ from datp_core.core.identifiers import ContractSubject, MetricId
 from datp_core.core.numeric import MetricValue, RowCount, ScoreValue
 from datp_core.data.populations.contracts import PopulationOutcomeLabel
 
-CLIENT_METRICS: tuple[MetricId, ...] = (
-    MetricId.FALSE_POSITIVE_RATE,
-    MetricId.TRUE_POSITIVE_RATE,
-    MetricId.BALANCED_ACCURACY,
-    MetricId.BINARY_MACRO_F1,
-    MetricId.AUROC,
-)
-
 
 def calculate_client_metrics(
     *,

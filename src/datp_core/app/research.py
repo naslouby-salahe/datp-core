@@ -60,6 +60,7 @@ from datp_core.core.errors import (
 )
 from datp_core.core.identifiers import ExperimentId, ExperimentReadiness, FileContentText, ProgrammeStatus
 from datp_core.core.numeric import Seed
+from datp_core.data.materialization import canonical_dataset_is_materialized
 from datp_core.data.paths import canonical_root_under
 from datp_core.data.populations.declarations import POPULATIONS
 from datp_core.experiments.anchor.contracts import AnchorGateStatus
@@ -264,13 +265,9 @@ def run_campaign(*, overwrite: OverwriteMode) -> CampaignRunResult:
 
 def generate_report(experiment_id: ExperimentId | None) -> ReportResult:
     if experiment_id is None:
-        run_campaign(overwrite=OverwriteMode.REBUILD)
         return _generate_campaign_report(require_anchor=False)
-    run_experiment(
-        experiment_id,
-        overwrite=OverwriteMode.REBUILD,
-        mode=ProgrammeExecutionMode.FULL,
-    )
+    reject_anchor_as_experiment(experiment_id)
+    require_experiment_declaration(experiment_id)
     recipe = recipe_for(experiment_id)
     _enforce_anchor_gate(experiment_id, recipe.anchor_requirement)
     return recipe.report(experiment_id)
@@ -363,7 +360,7 @@ def _status_for_experiment(
         )
     population = next(item for item in POPULATIONS if item.id is declaration.population)
     canonical = canonical_root_under(DATA_ROOT, population.dataset)
-    if not (canonical / "dataset_manifest.json").is_file():
+    if not canonical_dataset_is_materialized(canonical, population.dataset):
         return ExperimentStatusRecord(
             experiment=experiment_id,
             status=ProgrammeStatus.NOT_STARTED,

@@ -43,7 +43,6 @@ from datp_core.data.populations.contracts import (
     PopulationOutcomeLabel,
 )
 from datp_core.detector.autoencoder import (
-    LEARNING_DTYPE,
     TORCH_LEARNING_DTYPE,
     AutoencoderModelState,
     ReconstructionAutoencoder,
@@ -238,8 +237,10 @@ def prepare_federated_client_data(
         validation_labels = OutcomeLabelSequence(
             tuple(OutcomeLabel(str(value)) for value in validation_frame.get_column(OUTCOME_LABEL_COLUMN).to_list())
         )
-        matrix = frame.select(feature_names).to_numpy().astype(LEARNING_DTYPE, copy=False)
-        validation_matrix = validation_frame.select(feature_names).to_numpy().astype(LEARNING_DTYPE, copy=False)
+        matrix = frame.select([pl.col(name).cast(pl.Float32) for name in feature_names]).to_numpy(writable=True)
+        validation_matrix = validation_frame.select([pl.col(name).cast(pl.Float32) for name in feature_names]).to_numpy(
+            writable=True
+        )
     except (pl.exceptions.ColumnNotFoundError, pl.exceptions.SchemaError) as exc:
         raise ScientificContractError(
             ErrorMessage("federated training input is missing its declared label or feature schema"),
@@ -285,12 +286,12 @@ def prepare_federated_client_data(
             matrix,
             dtype=TORCH_LEARNING_DTYPE,
             device="cpu",
-        ),
+        ).pin_memory(),
         validation_features_cpu=torch.as_tensor(
             validation_matrix,
             dtype=TORCH_LEARNING_DTYPE,
             device="cpu",
-        ),
+        ).pin_memory(),
     )
 
 
@@ -312,8 +313,10 @@ def prepare_device_resident_client_data(
     return tuple(
         DeviceResidentFederatedClientData(
             client=client_data.client,
-            features_cuda=client_data.features_cpu.to(device=device, dtype=TORCH_LEARNING_DTYPE),
-            validation_features_cuda=client_data.validation_features_cpu.to(device=device, dtype=TORCH_LEARNING_DTYPE),
+            features_cuda=client_data.features_cpu.to(device=device, dtype=TORCH_LEARNING_DTYPE, non_blocking=True),
+            validation_features_cuda=client_data.validation_features_cpu.to(
+                device=device, dtype=TORCH_LEARNING_DTYPE, non_blocking=True
+            ),
         )
         for client_data in prepared
     )
@@ -438,13 +441,13 @@ def run_local_epoch_on_device(
 def _training_features_on_device(client_data: FederatedClientData, device: torch.device) -> torch.Tensor:
     if isinstance(client_data, DeviceResidentFederatedClientData):
         return client_data.features_cuda
-    return client_data.features_cpu.to(device=device, dtype=TORCH_LEARNING_DTYPE, non_blocking=False)
+    return client_data.features_cpu.to(device=device, dtype=TORCH_LEARNING_DTYPE, non_blocking=True)
 
 
 def _validation_features_on_device(client_data: FederatedClientData, device: torch.device) -> torch.Tensor:
     if isinstance(client_data, DeviceResidentFederatedClientData):
         return client_data.validation_features_cuda
-    return client_data.validation_features_cpu.to(device=device, dtype=TORCH_LEARNING_DTYPE, non_blocking=False)
+    return client_data.validation_features_cpu.to(device=device, dtype=TORCH_LEARNING_DTYPE, non_blocking=True)
 
 
 def train_client_update(
@@ -636,6 +639,7 @@ def _run_training_round[T: FedAvgProtocol | FedProxProtocol](
     device: torch.device,
     proximal_coefficient: ProximalCoefficient | None,
     convergence_enabled: bool,
+    serialized_state_evidence: SerializedStateEvidence,
 ) -> tuple[FederatedRoundResult, AutoencoderModelState]:
     updates: list[ClientUpdate] = []
     for client_data in prepared:
@@ -677,12 +681,10 @@ def _run_training_round[T: FedAvgProtocol | FedProxProtocol](
         if convergence_enabled
         else None
     )
-    serialized_state = serialize_model_state(aggregated)
-
     communication = create_communication_record(
         round_number,
-        serialized_state.byte_count,
-        serialized_state.logical_element_count,
+        serialized_state_evidence.byte_count,
+        serialized_state_evidence.logical_element_count,
         upload_count=request.population_client_count,
         download_count=request.population_client_count,
     )
@@ -728,6 +730,7 @@ def run_federated_training[T: FedAvgProtocol | FedProxProtocol](
         initialization_seed=request.training_seed,
     )
     global_model_state = AutoencoderModelState.from_model(initial_model)
+    serialized_state_evidence = serialize_model_state(global_model_state)
 
     convergence = request.diagnostic_snapshot_protocol.convergence
     monitor = ConvergenceMonitor(request.diagnostic_snapshot_protocol) if convergence is not None else None
@@ -746,6 +749,7 @@ def run_federated_training[T: FedAvgProtocol | FedProxProtocol](
             device=device,
             proximal_coefficient=proximal_coefficient,
             convergence_enabled=monitor is not None,
+            serialized_state_evidence=serialized_state_evidence,
         )
         rounds.append(round_result)
 

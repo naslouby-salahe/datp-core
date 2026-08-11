@@ -1,8 +1,10 @@
 from dataclasses import dataclass
+from pathlib import Path
 
+import polars as pl
 import torch
 
-from datp_core.core.errors import ErrorMessage, ScientificContractError
+from datp_core.core.errors import ArtifactIntegrityError, ErrorMessage, ScientificContractError
 from datp_core.core.identifiers import (
     ContractSubject,
     PartitionRole,
@@ -10,10 +12,18 @@ from datp_core.core.identifiers import (
     SerializationFormat,
     SplitProtocolId,
 )
+from datp_core.core.numeric import FeatureCount, RowCount
+from datp_core.data.populations.contracts import STABLE_ROW_ID_COLUMN, ClientIdentity
 from datp_core.data.preprocessing.artifacts import scored_partition_roles
 from datp_core.detector.scoring.contracts import ScoreArtifactManifest, ScoreGenerationResult, ScoreRecord
-from datp_core.detector.scoring.frames import model_from_terminal_state, score_and_persist_autoencoder_frame
+from datp_core.detector.scoring.frames import (
+    SCORE_FRAME_COLUMNS,
+    model_from_terminal_state,
+    score_and_persist_autoencoder_frame,
+    validate_persisted_score_frame,
+)
 from datp_core.detector.scoring.models import (
+    ClientScoringInput,
     FederatedScoreAssetName,
     FederatedScoreGenerationResult,
     FederatedScoreRecord,
@@ -57,6 +67,10 @@ class _ScoreRecordInventory:
 
 
 def publish_federated_scores(request: GenerateFederatedScoresRequest) -> FederatedScoreGenerationResult:
+    if not request.overwrite:
+        reused = load_federated_scores(request)
+        if reused is not None:
+            return reused
     if request.output_directory.exists() and not request.overwrite:
         raise FileExistsError(f"score output already exists: {request.output_directory}")
     return _generate_federated_scores(
@@ -71,6 +85,66 @@ def publish_federated_scores(request: GenerateFederatedScoresRequest) -> Federat
         ),
         resolve_cuda_device(),
     )
+
+
+def load_federated_scores(request: GenerateFederatedScoresRequest) -> FederatedScoreGenerationResult | None:
+    roles = scored_partition_roles(request.scored_split_protocol)
+    ordered_clients = tuple(sorted(request.clients, key=lambda item: item.client))
+    expected_paths = tuple(
+        _score_path(request.output_directory, client_input, role) for client_input in ordered_clients for role in roles
+    )
+    if not any(path.is_file() for path in expected_paths):
+        return None
+    records = _ScoreRecordInventory.empty()
+    for client_input in ordered_clients:
+        for role in roles:
+            path = _score_path(request.output_directory, client_input, role)
+            expected_frame = client_input.features_for(role)
+            persisted_frame = validate_persisted_score_frame(path, RowCount(expected_frame.height))
+            _require_matching_row_identity(persisted_frame, expected_frame, client_input.client, role)
+            records.append(
+                role,
+                ScoreRecord(
+                    coordinate=request.training.coordinate,
+                    partition_role=role,
+                    path=path,
+                    row_count=RowCount(persisted_frame.height),
+                    feature_count=FeatureCount(len(request.feature_names)),
+                    serialization_format=SerializationFormat.PARQUET,
+                    scored_client=client_input.client,
+                ),
+            )
+    return ScoreGenerationResult(
+        manifest=ScoreArtifactManifest(
+            coordinate=request.training.coordinate,
+            scored_split_protocol=request.scored_split_protocol,
+            calibration_records=records.records_for(PartitionRole.CALIBRATION),
+            evaluation_records=records.records_for(PartitionRole.EVALUATION),
+            future_recalibration_records=records.records_for(PartitionRole.FUTURE_RECALIBRATION),
+        )
+    )
+
+
+def _score_path(output_directory: Path, client_input: ClientScoringInput, role: PartitionRole) -> Path:
+    return output_directory / client_input.client.client_id.value / _asset_name_for_partition(role).value
+
+
+def _require_matching_row_identity(
+    persisted_frame: pl.DataFrame,
+    expected_frame: pl.DataFrame,
+    client: ClientIdentity,
+    role: PartitionRole,
+) -> None:
+    persisted_ids = tuple(persisted_frame.get_column(SCORE_FRAME_COLUMNS[0]).to_list())
+    expected_ids = tuple(str(value) for value in expected_frame.get_column(STABLE_ROW_ID_COLUMN).to_list())
+    if persisted_ids != expected_ids:
+        raise ArtifactIntegrityError(
+            ErrorMessage(
+                f"persisted {role.value} score artifact row identities do not match the current "
+                f"partition for client {client.client_id.value}"
+            ),
+            subject=ContractSubject.ARTIFACT_PATH,
+        )
 
 
 def _generate_federated_scores(request: ScoreGenerationRequest, device: torch.device) -> FederatedScoreGenerationResult:

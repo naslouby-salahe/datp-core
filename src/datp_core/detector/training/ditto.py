@@ -117,6 +117,7 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
         initialization_seed=request.training_seed,
     )
     global_model_state = AutoencoderModelState.from_model(initial_model)
+    serialized_global_state_evidence = serialize_model_state(global_model_state)
 
     personalized_model_states = {item.client: global_model_state for item in prepared}
     convergence = request.diagnostic_snapshot_protocol.convergence
@@ -203,8 +204,6 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
             if monitor is not None
             else None
         )
-        serialized_global_state = serialize_model_state(aggregated)
-
         rounds.append(
             FederatedRoundResult(
                 round_number=round_number,
@@ -212,8 +211,8 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
                 aggregate_loss=aggregate_loss,
                 communication=create_communication_record(
                     round_number,
-                    serialized_global_state.byte_count,
-                    serialized_global_state.logical_element_count,
+                    serialized_global_state_evidence.byte_count,
+                    serialized_global_state_evidence.logical_element_count,
                     upload_count=request.population_client_count,
                     download_count=request.population_client_count,
                 ),

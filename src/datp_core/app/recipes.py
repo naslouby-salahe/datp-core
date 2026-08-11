@@ -88,6 +88,7 @@ from datp_core.experiments.temporal import (
     TemporalCampaignResult,
     TemporalSeedResult,
     analyze_temporal_campaign,
+    load_temporal_seed_result,
     run_temporal_seed,
 )
 from datp_core.experiments.threshold_robustness import (
@@ -627,8 +628,7 @@ def _report_ditto(experiment_id: ExperimentId) -> ReportResult:
 
 def _report_temporal(experiment_id: ExperimentId) -> ReportResult:
     seeds = tuple(
-        run_temporal_seed(seed, output_root=OUTPUTS_ROOT, overwrite=True)
-        for seed in BOUNDED_EVIDENCE_SEED_COHORT.values
+        load_temporal_seed_result(seed, output_root=OUTPUTS_ROOT) for seed in BOUNDED_EVIDENCE_SEED_COHORT.values
     )
     campaign = TemporalCampaignResult(seeds=seeds, analyses=())
     analyses = analyze_temporal_campaign(campaign, output_root=OUTPUTS_ROOT, overwrite=True)

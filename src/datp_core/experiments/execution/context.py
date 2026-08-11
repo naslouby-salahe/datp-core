@@ -84,12 +84,6 @@ class FederatedExecutionContext:
     training_directory: Path
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ClientExecutionInputs:
-    training: ClientTrainingInput
-    scoring: ClientScoringInput
-
-
 def training_autoencoder(dataset: DatasetId) -> AutoencoderProtocol:
     match dataset:
         case DatasetId.NBAIOT:
@@ -273,39 +267,6 @@ def client_training_inputs(
         )
         for publication in publications
     )
-
-
-def client_execution_inputs(
-    publications: tuple[ClientPreprocessingResult, ...],
-    clients: tuple[ClientIdentity, ...],
-    feature_names: FeatureNameSequence,
-) -> tuple[ClientExecutionInputs, ...]:
-    inputs: list[ClientExecutionInputs] = []
-    for publication in publications:
-        client = client_with_id(clients, ClientIdentityToken(publication.client_identity.value))
-        calibration_features = pl.read_parquet(publication.paths.calibration)
-        inputs.append(
-            ClientExecutionInputs(
-                training=ClientTrainingInput(
-                    client=client,
-                    training_features=pl.read_parquet(publication.paths.train),
-                    validation_features=calibration_features,
-                    feature_names=feature_names,
-                    preprocessing_state=publication.fitted_state,
-                ),
-                scoring=ClientScoringInput(
-                    client=client,
-                    calibration_features=calibration_features,
-                    evaluation_features=pl.read_parquet(publication.paths.evaluation),
-                    future_recalibration_features=(
-                        pl.read_parquet(publication.paths.future_recalibration)
-                        if publication.paths.future_recalibration is not None
-                        else None
-                    ),
-                ),
-            )
-        )
-    return tuple(inputs)
 
 
 def client_scoring_inputs(

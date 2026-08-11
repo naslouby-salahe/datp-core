@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import time
 from _thread import LockType, allocate_lock
 from concurrent.futures import ThreadPoolExecutor
@@ -15,6 +16,7 @@ from datp_core.core.errors import (
 )
 from datp_core.core.identifiers import DatasetId, ExperimentId, StageExecutionEvidence
 from datp_core.core.numeric import CampaignCoordinateCount, ElapsedSeconds, ParallelEvaluationWorkerCount
+from datp_core.data.materialization import canonical_dataset_is_materialized
 from datp_core.data.paths import canonical_root_under
 from datp_core.data.service import DatasetMaterializationRequest, materialize_datasets
 from datp_core.detector.training.models import FederatedTrainingCoordinate
@@ -41,6 +43,11 @@ from datp_core.experiments.execution.workspace import ExperimentWorkspace
 from datp_core.runtime.configuration import DATA_ROOT
 
 MAXIMUM_PARALLEL_THRESHOLD_EVALUATIONS = ParallelEvaluationWorkerCount(5)
+
+
+def _resource_aware_worker_cap(pending_count: int) -> int:
+    available_cpus = os.cpu_count() or 1
+    return max(1, min(MAXIMUM_PARALLEL_THRESHOLD_EVALUATIONS.value, available_cpus, pending_count))
 
 
 def _empty_dataset_ids() -> set[DatasetId]:
@@ -205,7 +212,7 @@ def execute_campaign(
         if not isinstance(stage_runner, PipelineStageRunner):
             raise AssertionError("parallel threshold evaluation requires a pipeline stage runner")
         runners = tuple(stage_runner.with_fixed_evidence(progress=synchronized_progress) for _ in remaining)
-        worker_count = min(MAXIMUM_PARALLEL_THRESHOLD_EVALUATIONS.value, len(remaining))
+        worker_count = _resource_aware_worker_cap(len(remaining))
         with ThreadPoolExecutor(max_workers=worker_count) as executor:
             futures = tuple(
                 executor.submit(
@@ -385,7 +392,7 @@ class PipelineStageRunner:
                 evidence=StageExecutionEvidence(f"{coordinate.dataset.value} canonical dataset reused"),
             )
         canonical_root = canonical_root_under(DATA_ROOT, coordinate.dataset)
-        if (canonical_root / "dataset_manifest.json").is_file():
+        if canonical_dataset_is_materialized(canonical_root, coordinate.dataset):
             self._materialized_datasets.add(coordinate.dataset)
             return StageExecution(
                 stage=stage,

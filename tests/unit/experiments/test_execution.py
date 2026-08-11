@@ -6,15 +6,65 @@ from typing import cast
 import pytest
 
 from datp_core.app.planning import PlanDisposition, PlanningEvidence, PlanReason, expand_experiment_plan
+from datp_core.artifacts.serializers.json import canonical_json_text
 from datp_core.core.errors import ScientificContractError
-from datp_core.core.identifiers import ExperimentId, FederatedThresholdMethod
-from datp_core.core.numeric import Seed
+from datp_core.core.identifiers import (
+    AvailabilityStatus,
+    CanonicalAssetRoleToken,
+    CanonicalizationContractName,
+    CanonicalSourcePath,
+    ColumnName,
+    DatasetId,
+    ExperimentId,
+    FederatedThresholdMethod,
+)
+from datp_core.core.numeric import RowCount, Seed, SourceFileCount, ValidationIssueCount
+from datp_core.data.contracts import (
+    CanonicalManifestDocument,
+    ManifestAssetEntry,
+    ManifestInventoryEntry,
+    ManifestValidationReportEntry,
+)
+from datp_core.data.materialization import DATASET_MANIFEST_FILENAME
 from datp_core.data.paths import canonical_root_under
 from datp_core.experiments.common.seeds import SeedCohort
 from datp_core.experiments.execution import build_campaign, engine, execute_declared_experiment_seed
 from datp_core.experiments.execution.context import training_coordinate_for
 from datp_core.experiments.execution.layout import federated_training_directory
 from datp_core.experiments.registry import EXPERIMENTS
+
+
+def _valid_canonical_manifest(dataset: DatasetId) -> CanonicalManifestDocument:
+    return CanonicalManifestDocument(
+        assets=(
+            ManifestAssetEntry(
+                columns=(ColumnName("feature_0"),),
+                path=CanonicalSourcePath("data/part-0.parquet"),
+                row_count=RowCount(1),
+                role=CanonicalAssetRoleToken("primary"),
+            ),
+        ),
+        canonicalization_contract=CanonicalizationContractName("fixture_contract"),
+        chronology=(),
+        dataset=dataset,
+        inventory=ManifestInventoryEntry(
+            dataset=dataset,
+            sources=(),
+            accepted_source_count=SourceFileCount(0),
+            excluded_source_count=SourceFileCount(0),
+            excluded_sources=(),
+        ),
+        validation_report=ManifestValidationReportEntry(
+            dataset=dataset,
+            issues=(),
+            exclusions=(),
+            accepted_rows=RowCount(1),
+            excluded_rows=RowCount(0),
+            invalid_rows=RowCount(0),
+            warning_count=ValidationIssueCount(0),
+            status=AvailabilityStatus.AVAILABLE,
+        ),
+    )
 
 
 def _declaration(experiment_id: ExperimentId):
@@ -144,7 +194,9 @@ def test_pipeline_runner_reuses_existing_canonical_dataset(monkeypatch: pytest.M
     coordinate = plan.executable[0].coordinate
     canonical_root = canonical_root_under(tmp_path, coordinate.dataset)
     canonical_root.mkdir(parents=True)
-    (canonical_root / "dataset_manifest.json").write_text("{}", encoding="utf-8")
+    (canonical_root / DATASET_MANIFEST_FILENAME).write_text(
+        canonical_json_text(_valid_canonical_manifest(coordinate.dataset)), encoding="utf-8"
+    )
     monkeypatch.setattr(engine, "DATA_ROOT", tmp_path)
     monkeypatch.setattr(engine, "materialize_datasets", lambda _: pytest.fail("canonical data must be reused"))
 
@@ -236,3 +288,24 @@ def test_campaign_parallelizes_threshold_evaluations_after_shared_evidence(
     assert len(result.experiments) == len(campaign.entries)
     assert threads[0] == "MainThread"
     assert all(thread.startswith("ThreadPoolExecutor") for thread in threads[1:])
+
+
+def test_resource_aware_worker_cap_never_exceeds_available_cpus(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(engine.os, "cpu_count", lambda: 2)
+
+    assert engine._resource_aware_worker_cap(100) == 2
+    assert engine._resource_aware_worker_cap(1) == 1
+
+
+def test_resource_aware_worker_cap_never_exceeds_declared_maximum(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(engine.os, "cpu_count", lambda: 64)
+
+    assert engine._resource_aware_worker_cap(100) == engine.MAXIMUM_PARALLEL_THRESHOLD_EVALUATIONS.value
+
+
+def test_resource_aware_worker_cap_is_at_least_one_when_cpu_count_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(engine.os, "cpu_count", lambda: None)
+
+    assert engine._resource_aware_worker_cap(5) == 1

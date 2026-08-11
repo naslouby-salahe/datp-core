@@ -3,6 +3,7 @@ from datp_core.core.errors import (
     ScientificContractError,
 )
 from datp_core.core.identifiers import ContractSubject
+from datp_core.detector.checkpoints.publication import load_federated_training
 from datp_core.detector.checkpoints.publication import write_federated_training as persist_federated_training
 from datp_core.detector.training.contracts import FedAvgProtocol, FedProxProtocol
 from datp_core.detector.training.engine import FederatedTrainingRequest, run_federated_training
@@ -16,6 +17,16 @@ def train_global_federated(
     request: FederatedTrainingRequest[GlobalFederatedProtocol],
 ) -> FederatedTrainingResult:
     _validate_protocol_binding(request)
+    reused = load_federated_training(
+        request.coordinate,
+        request.output_directory,
+        clients=tuple(client_input.client for client_input in request.clients),
+        diagnostic_snapshot_protocol=request.diagnostic_snapshot_protocol,
+        autoencoder=request.autoencoder,
+        batch_size=request.batch_size,
+    )
+    if reused is not None:
+        return reused
     outcome = run_federated_training(request)
     return persist_federated_training(outcome, request.output_directory)
 

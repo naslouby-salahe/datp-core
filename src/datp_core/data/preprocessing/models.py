@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 
@@ -78,6 +78,8 @@ class PreprocessingProtocol(StrictModel):
 class PreprocessingPartition:
     role: PartitionRole
     frame: pl.DataFrame
+    _row_ids: StableRowIdSequence | None = field(default=None, init=False, repr=False)
+    _outcome_labels: OutcomeLabelSequence | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
         if self.frame.height == 0:
@@ -94,15 +96,19 @@ class PreprocessingPartition:
 
     @property
     def row_ids(self) -> StableRowIdSequence:
-        return StableRowIdSequence(
-            tuple(StableRowId(str(value)) for value in self.frame.get_column(STABLE_ROW_ID_COLUMN).to_list())
-        )
+        if self._row_ids is None:
+            self._row_ids = StableRowIdSequence(
+                tuple(StableRowId(str(value)) for value in self.frame.get_column(STABLE_ROW_ID_COLUMN).to_list())
+            )
+        return self._row_ids
 
     @property
     def outcome_labels(self) -> OutcomeLabelSequence:
-        return OutcomeLabelSequence(
-            tuple(OutcomeLabel(str(value)) for value in self.frame.get_column(OUTCOME_LABEL_COLUMN).to_list())
-        )
+        if self._outcome_labels is None:
+            self._outcome_labels = OutcomeLabelSequence(
+                tuple(OutcomeLabel(str(value)) for value in self.frame.get_column(OUTCOME_LABEL_COLUMN).to_list())
+            )
+        return self._outcome_labels
 
 
 @dataclass(slots=True, eq=False)

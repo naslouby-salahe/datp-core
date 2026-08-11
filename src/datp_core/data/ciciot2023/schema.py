@@ -4,7 +4,7 @@ from pathlib import Path
 import pyarrow as pa
 
 from datp_core.core.identifiers import ColumnName, DatasetId, PhysicalSchemaText, RawSourceFilename
-from datp_core.core.numeric import CanonicalColumnPosition, ClientCount
+from datp_core.core.numeric import CanonicalColumnPosition
 from datp_core.data.contracts import (
     CanonicalColumn,
     CanonicalColumnRole,
@@ -124,9 +124,6 @@ class CICIoT2023ArtifactName(StrEnum):
     MERGED_CSV_DIRECTORY = "MERGED_CSV"
     MERGED_FILE_PREFIX = "Merged"
     CSV_SUFFIX = ".csv"
-
-
-CICIOT2023_AUDITED_FILE_CLIENT_COUNT = ClientCount(63)
 
 
 CICIOT2023_RAW_COLUMNS: tuple[CICIoT2023RawColumn, ...] = tuple(CICIoT2023RawColumn)

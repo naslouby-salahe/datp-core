@@ -32,6 +32,7 @@ from datp_core.data.edge_iiotset.schema import (
     EdgeCanonicalColumn,
     EdgeSensorGroup,
 )
+from datp_core.data.materialization import DATASET_MANIFEST_FILENAME
 from datp_core.data.populations.construction import PopulationFinalizationRequest, finalize_population
 from datp_core.data.populations.contracts import (
     CLIENT_ID_COLUMN,
@@ -229,7 +230,7 @@ def _chronology_eligibility(
     tuple[ChronologyExclusionReason, ...],
     ValidationIssueCount,
 ]:
-    manifest_path = Path(canonical_root) / "dataset_manifest.json"
+    manifest_path = Path(canonical_root) / DATASET_MANIFEST_FILENAME
     if not manifest_path.is_file():
         raise DataIntegrityError(
             ErrorMessage("Edge canonical manifest is required for temporal eligibility"),

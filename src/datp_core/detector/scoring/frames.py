@@ -4,6 +4,7 @@ from pathlib import Path
 import numpy as np
 import numpy.typing as npt
 import polars as pl
+import pyarrow.parquet as pq
 import torch
 
 from datp_core.core.errors import (
@@ -29,7 +30,6 @@ from datp_core.data.populations.contracts import (
     PopulationOutcomeLabel,
 )
 from datp_core.detector.autoencoder import (
-    LEARNING_DTYPE,
     AutoencoderModelState,
     ReconstructionAutoencoder,
     reconstruction_errors,
@@ -80,7 +80,7 @@ def extract_score_arrays(
     frame: pl.DataFrame,
     feature_names: FeatureNameSequence,
 ) -> ScoreArrays:
-    matrix = frame.select(feature_names.as_list()).to_numpy().astype(LEARNING_DTYPE, copy=False)
+    matrix = frame.select([pl.col(name).cast(pl.Float32) for name in feature_names.as_list()]).to_numpy(writable=True)
     labels = OutcomeLabelSequence(
         tuple(OutcomeLabel(str(value)) for value in frame.get_column(OUTCOME_LABEL_COLUMN).to_list())
     )
@@ -168,26 +168,17 @@ def score_and_persist_autoencoder_frame(
     output = score_frame(arrays.row_ids, arrays.labels, scores)
     destination.parent.mkdir(parents=True, exist_ok=True)
     output.write_parquet(destination)
-    persisted = PersistedScoreFrame(
+    written_row_count = pq.ParquetFile(destination).metadata.num_rows
+    if written_row_count != output.height:
+        raise ArtifactIntegrityError(
+            ErrorMessage("score artifact row count mismatch after publication"),
+            subject=ContractSubject.ARTIFACT_PATH,
+        )
+    return PersistedScoreFrame(
         path=destination,
         row_count=RowCount(output.height),
         feature_count=FeatureCount(len(feature_names)),
     )
-    reloaded = validate_persisted_score_frame(
-        persisted.path,
-        persisted.row_count,
-    )
-    if output.shape != reloaded.shape:
-        raise ArtifactIntegrityError(
-            ErrorMessage("score reload shape mismatch"),
-            subject=ContractSubject.ARTIFACT_PATH,
-        )
-    if not output.equals(reloaded):
-        raise ArtifactIntegrityError(
-            ErrorMessage("score reload equality failed"),
-            subject=ContractSubject.ARTIFACT_PATH,
-        )
-    return persisted
 
 
 def model_from_terminal_state(

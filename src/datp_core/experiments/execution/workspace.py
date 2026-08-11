@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from functools import cached_property
+from functools import cache, cached_property
 from pathlib import Path
 
 import numpy as np
@@ -55,7 +55,7 @@ from datp_core.core.numeric import (
 )
 from datp_core.data.populations.contracts import ClientIdentity, PopulationOutcomeLabel
 from datp_core.data.registry import population_capabilities
-from datp_core.detector.scoring.models import FederatedScoreArtifactManifest, FederatedScoreRecord
+from datp_core.detector.scoring.models import ClientScoringInput, FederatedScoreArtifactManifest, FederatedScoreRecord
 from datp_core.detector.training.contracts import AutoencoderProtocol
 from datp_core.detector.training.engine import FederatedTrainingRequest
 from datp_core.detector.training.federated_publication import (
@@ -63,12 +63,13 @@ from datp_core.detector.training.federated_publication import (
     TrainFederatedDetectorResult,
     train_federated_detector,
 )
+from datp_core.detector.training.models import ClientTrainingInput
 from datp_core.detector.training.protocols import LEARNING_RATE
 from datp_core.experiments.common.coordinates import ExperimentCoordinate
 from datp_core.experiments.execution.context import (
-    ClientExecutionInputs,
     FederatedExecutionContext,
-    client_execution_inputs,
+    client_scoring_inputs,
+    client_training_inputs,
     diagnostic_snapshot_protocol_for,
     resolve_execution_context,
     training_autoencoder_for,
@@ -110,6 +111,32 @@ def _pooled_calibration_quantile(
     return exact_empirical_quantile(pooled_values, quantile)
 
 
+@cache
+def _load_benign_evaluation_scores(record: FederatedScoreRecord) -> tuple[HeldOutBenignScore, ...]:
+    if not record.path.is_file():
+        raise ScientificContractError(ErrorMessage("evaluation score evidence is unavailable"))
+    frame = pl.read_parquet(record.path).filter(
+        pl.col(ScoreFrameColumn.OUTCOME_LABEL.value) == PopulationOutcomeLabel.BENIGN.value
+    )
+    return tuple(
+        HeldOutBenignScore(
+            client=record.scored_client,
+            stable_row_id=StableRowId(str(row[0])),
+            score=ScoreValue(float(row[1])),
+            partition_role=record.partition_role,
+            outcome_label=PopulationOutcomeLabel(str(row[2])),
+            score_record=record,
+        )
+        for row in frame.select(
+            (
+                ScoreFrameColumn.STABLE_ROW_ID.value,
+                ScoreFrameColumn.RECONSTRUCTION_ERROR.value,
+                ScoreFrameColumn.OUTCOME_LABEL.value,
+            )
+        ).iter_rows()
+    )
+
+
 @dataclass(kw_only=True)
 class ExperimentWorkspace:
     coordinate: ExperimentCoordinate
@@ -134,23 +161,36 @@ class ExperimentWorkspace:
         return training_feature_names(self.coordinate.dataset)
 
     @cached_property
-    def client_inputs(self) -> tuple[ClientExecutionInputs, ...]:
-        return client_execution_inputs(
+    def training_client_inputs(self) -> tuple[ClientTrainingInput, ...]:
+        return client_training_inputs(
             self.context.preprocessing.client_publications,
             self.context.clients,
             self.feature_names,
         )
 
     @cached_property
+    def scoring_client_inputs(self) -> tuple[ClientScoringInput, ...]:
+        return client_scoring_inputs(
+            self.context.preprocessing.client_publications,
+            self.context.clients,
+        )
+
+    def _release_training_client_inputs(self) -> None:
+        self.__dict__.pop("training_client_inputs", None)
+
+    def _release_scoring_client_inputs(self) -> None:
+        self.__dict__.pop("scoring_client_inputs", None)
+
+    @cached_property
     def training(self) -> TrainFederatedDetectorResult:
         if self.fixed_training is not None:
             return self.fixed_training
         protocol = training_protocol_for(self.coordinate)
-        return train_federated_detector(
+        result = train_federated_detector(
             TrainFederatedDetectorRequest(
                 request=FederatedTrainingRequest(
                     coordinate=self.context.coordinate,
-                    clients=tuple(inputs.training for inputs in self.client_inputs),
+                    clients=self.training_client_inputs,
                     population_client_count=ClientCount(len(self.context.clients)),
                     autoencoder=self.autoencoder,
                     training_protocol=protocol,
@@ -164,6 +204,8 @@ class ExperimentWorkspace:
                 ),
             )
         )
+        self._release_training_client_inputs()
+        return result
 
     def _round_progress_callback(self, round_number: RoundNumber, maximum_round: RoundNumber) -> None:
         if self.progress is not None:
@@ -180,14 +222,16 @@ class ExperimentWorkspace:
     def scores(self) -> FederatedScoreArtifactManifest:
         if self.fixed_scores is not None:
             return self.fixed_scores
-        return score_terminal_model(
+        result = score_terminal_model(
             training=self.training.training,
             scored_split_protocol=self.context.coordinate.split_protocol,
             autoencoder=self.autoencoder,
             feature_names=self.feature_names,
-            clients=tuple(inputs.scoring for inputs in self.client_inputs),
+            clients=self.scoring_client_inputs,
             output_directory=self.context.training_directory / ExecutionArtifactDirectory.SCORES,
         )
+        self._release_scoring_client_inputs()
+        return result
 
     def eligible_calibration_scores(self) -> tuple[ClientBenignCalibrationScores, ...]:
         return eligible_calibration_scores(self.scores, PartitionRole.CALIBRATION)
@@ -260,41 +304,13 @@ class ExperimentWorkspace:
             )
         )
 
-    def _read_benign_evaluation_scores(
-        self,
-        record: FederatedScoreRecord,
-        client: ClientIdentity,
-    ) -> tuple[HeldOutBenignScore, ...]:
-        if not record.path.is_file():
-            raise ScientificContractError(ErrorMessage("evaluation score evidence is unavailable"))
-        frame = pl.read_parquet(record.path).filter(
-            pl.col(ScoreFrameColumn.OUTCOME_LABEL.value) == PopulationOutcomeLabel.BENIGN.value
-        )
-        return tuple(
-            HeldOutBenignScore(
-                client=client,
-                stable_row_id=StableRowId(str(row[0])),
-                score=ScoreValue(float(row[1])),
-                partition_role=record.partition_role,
-                outcome_label=PopulationOutcomeLabel(str(row[2])),
-                score_record=record,
-            )
-            for row in frame.select(
-                (
-                    ScoreFrameColumn.STABLE_ROW_ID.value,
-                    ScoreFrameColumn.RECONSTRUCTION_ERROR.value,
-                    ScoreFrameColumn.OUTCOME_LABEL.value,
-                )
-            ).iter_rows()
-        )
-
     def _conformal_coverage_inputs(self) -> tuple[ConformalCoverageStageInput, ...]:
         if not isinstance(self.threshold, ConformalThresholdResult):
             return ()
         threshold_result = self.threshold
         client_scores: dict[ClientIdentity, list[HeldOutBenignScore]] = {}
         for record in self.scores.evaluation_records:
-            scores = self._read_benign_evaluation_scores(record, record.scored_client)
+            scores = _load_benign_evaluation_scores(record)
             client_scores.setdefault(record.scored_client, []).extend(scores)
         inputs: list[ConformalCoverageStageInput] = []
         for assignment in threshold_result.assignments:
@@ -319,7 +335,7 @@ class ExperimentWorkspace:
         pooled_quantile = _pooled_calibration_quantile(calibration_by_client, self.threshold_quantile)
         client_scores: dict[ClientIdentity, list[HeldOutBenignScore]] = {}
         for record in self.scores.evaluation_records:
-            scores = self._read_benign_evaluation_scores(record, record.scored_client)
+            scores = _load_benign_evaluation_scores(record)
             client_scores.setdefault(record.scored_client, []).extend(scores)
         inputs: list[ThresholdEstimationStageInput] = []
         coordinate = self.scores.coordinate

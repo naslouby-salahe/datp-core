@@ -29,12 +29,14 @@ from datp_core.analysis.temporal import (
     validate_frozen_recalibrated_pair,
 )
 from datp_core.app.planning import ExperimentPlan, expand_experiment_plan
+from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
 from datp_core.artifacts.repositories.thresholds import (
     FederatedThresholdConstructionRequest,
     construct_and_publish_federated_thresholds,
 )
 from datp_core.core.errors import (
     ErrorMessage,
+    ReportEvidenceError,
     ScientificContractError,
 )
 from datp_core.core.identifiers import (
@@ -61,7 +63,7 @@ from datp_core.experiments.execution.context import (
     training_autoencoder,
     training_feature_names,
 )
-from datp_core.experiments.execution.evidence import eligible_calibration_scores
+from datp_core.experiments.execution.evidence import eligible_calibration_scores, load_evaluation_document
 from datp_core.experiments.execution.layout import (
     ExecutionArtifactDirectory,
     ExecutionRootDirectory,
@@ -249,6 +251,125 @@ def run_temporal_seed(
         ),
     )
     return result
+
+
+def load_temporal_seed_result(
+    partition_seed: Seed,
+    *,
+    output_root: Path,
+) -> TemporalSeedResult:
+    declaration = _temporal_declaration()
+    coordinates = _temporal_coordinates(partition_seed, declaration)
+    static = _load_state(
+        _execution_identity(coordinates.static_reference),
+        partition_seed,
+        declaration.federated_thresholds,
+        output_root,
+    )
+    frozen = _load_state(
+        _execution_identity(coordinates.frozen_future),
+        partition_seed,
+        declaration.federated_thresholds,
+        output_root,
+    )
+    recalibrated = _load_state(
+        _execution_identity(coordinates.recalibrated_future),
+        partition_seed,
+        declaration.federated_thresholds,
+        output_root,
+    )
+    methods = _common_completed_methods(static, frozen, recalibrated)
+    return TemporalSeedResult(
+        partition_seed=partition_seed,
+        static_reference=static,
+        frozen_future=frozen,
+        recalibrated_future=recalibrated,
+        recoveries=tuple(
+            TemporalMethodRecovery(
+                method=method,
+                recovery=_recovery_for_method(
+                    partition_seed=partition_seed,
+                    declaration=declaration,
+                    method=method,
+                    static=static,
+                    frozen=frozen,
+                    recalibrated=recalibrated,
+                ),
+            )
+            for method in methods
+        ),
+    )
+
+
+def _load_state(
+    identity: ExternalTemporalExecutionIdentity,
+    partition_seed: Seed,
+    threshold_methods: tuple[FederatedThresholdMethod, ...],
+    output_root: Path,
+) -> TemporalStateResult:
+    if identity.temporal_state is None:
+        raise ScientificContractError(ErrorMessage("temporal result requires an explicit state"))
+    state_root = bounded_evidence_seed_directory(identity, partition_seed, output_root)
+    completed: list[FederatedThresholdMethod] = []
+    outcomes: list[TemporalMethodOutcome] = []
+    provenance: TemporalDeploymentProvenance | None = None
+    for method in threshold_methods:
+        document_path = (
+            state_root
+            / TemporalArtifactDirectory.EVALUATIONS.value
+            / method.value
+            / FederatedEvaluationAssetName.DOCUMENT.value
+        )
+        if not document_path.is_file():
+            continue
+        document = load_evaluation_document(document_path)
+        if document.temporal_provenance is None:
+            raise ReportEvidenceError(
+                ErrorMessage("persisted temporal evaluation is missing its temporal provenance"), subject=method
+            )
+        if provenance is None:
+            provenance = document.temporal_provenance
+        elif provenance != document.temporal_provenance:
+            raise ReportEvidenceError(
+                ErrorMessage("persisted temporal evaluations for one state must share one provenance"),
+                subject=method,
+            )
+        cv_fpr = metric_by_id(document.population.metrics, MetricId.FPR_COEFFICIENT_OF_VARIATION)
+        if cv_fpr.status is not MetricStatus.AVAILABLE or cv_fpr.value is None:
+            raise ReportEvidenceError(
+                ErrorMessage("persisted temporal evaluation requires available population CV(FPR)"), subject=method
+            )
+        mean_metric = metric_by_id(document.population.metrics, MetricId.MEAN_FPR)
+        mean_fpr = mean_metric.value if mean_metric.status is MetricStatus.AVAILABLE else None
+        if not document.clients:
+            raise ReportEvidenceError(
+                ErrorMessage("persisted temporal evaluation requires non-empty client metrics"), subject=method
+            )
+        completed.append(method)
+        outcomes.append(
+            TemporalMethodOutcome(
+                method=method,
+                fpr_coefficient_of_variation=cv_fpr.value,
+                mean_fpr=mean_fpr,
+                clients=document.clients,
+                excluded_clients=document.population.excluded_clients,
+                unavailable_reasons=_cohort_unavailable_reasons(document.cohort),
+            )
+        )
+    if not completed:
+        raise ReportEvidenceError(
+            ErrorMessage(f"no persisted temporal evaluation evidence for {identity.temporal_state.value}"),
+            subject=identity.temporal_state,
+        )
+    if provenance is None:
+        raise ReportEvidenceError(ErrorMessage("temporal state requires provenance"), subject=identity.temporal_state)
+    return TemporalStateResult(
+        state=identity.temporal_state,
+        completed_threshold_methods=tuple(completed),
+        provenance=provenance,
+        outcomes=tuple(outcomes),
+        unavailable_methods=(),
+    )
 
 
 def analyze_temporal_campaign(

@@ -22,6 +22,16 @@ from datp_core.detector.training.engine import (
 )
 
 
+def test_prepared_client_data_is_pinned_for_fast_repeated_host_to_device_transfer(tmp_path) -> None:
+    require_cuda()
+    prepared = tuple(
+        prepare_federated_client_data(client_input, AUTOENCODER) for client_input in build_all_client_inputs(tmp_path)
+    )
+
+    assert all(client_data.features_cpu.is_pinned() for client_data in prepared)
+    assert all(client_data.validation_features_cpu.is_pinned() for client_data in prepared)
+
+
 def test_device_resident_client_data_moves_the_full_cohort_to_cuda(tmp_path) -> None:
     device = require_cuda()
     prepared = tuple(

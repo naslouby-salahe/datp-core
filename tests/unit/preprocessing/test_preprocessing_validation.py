@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import numpy as np
 import polars as pl
 import pytest
@@ -135,6 +137,28 @@ def test_fit_trusted_batch_validation_rules() -> None:
         fit_trusted_batch(protocol, non_finite_batch, subject=PreprocessingFitScope.CLIENT_LOCAL_TRAINING)
 
 
+def test_fit_trusted_batch_does_not_redundantly_transform_training_matrix() -> None:
+    protocol = _protocol()
+    matrix = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
+    batch = PreprocessingFitBatch(
+        training_matrix=matrix,
+        training_row_ids=StableRowIdSequence((StableRowId("r0"), StableRowId("r1"), StableRowId("r2"))),
+        training_labels=OutcomeLabelSequence((OutcomeLabel("benign"),) * 3),
+    )
+
+    with patch.object(StandardScaler, "transform", autospec=True, wraps=StandardScaler.transform) as spy:
+        fitted = fit_trusted_batch(protocol, batch, subject=PreprocessingFitScope.CLIENT_LOCAL_TRAINING)
+
+    assert spy.call_count == 0
+
+    reference = StandardScaler().fit(matrix)
+    np.testing.assert_allclose(
+        fitted.transform(matrix),
+        reference.transform(matrix),
+        atol=NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE.value,
+    )
+
+
 def test_transform_feature_matrix_validations() -> None:
     protocol = _protocol()
     fitted = StandardScaler().fit(np.array([[1.0, 2.0], [3.0, 4.0]]))
@@ -157,3 +181,17 @@ def test_transform_feature_matrix_validations() -> None:
     test_description = ValidationReasonText("test matrix")
     with pytest.raises(ScientificContractError):
         require_finite_matrix(non_finite_matrix, subject=ContractSubject.FEATURES, description=test_description)
+
+
+def test_partition_row_ids_and_outcome_labels_are_memoized() -> None:
+    partition = PreprocessingPartition(PartitionRole.TRAIN, _partition_frame(["r0", "r1"], ["benign", "benign"]))
+
+    first_row_ids = partition.row_ids
+    second_row_ids = partition.row_ids
+    first_labels = partition.outcome_labels
+    second_labels = partition.outcome_labels
+
+    assert first_row_ids is second_row_ids
+    assert first_labels is second_labels
+    assert first_row_ids == StableRowIdSequence((StableRowId("r0"), StableRowId("r1")))
+    assert first_labels == OutcomeLabelSequence((OutcomeLabel("benign"), OutcomeLabel("benign")))

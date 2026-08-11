@@ -105,11 +105,6 @@ class FixedShrinkageProtocol(StrictModel):
     weights: tuple[ShrinkageWeight, ...]
 
 
-class SizeAwareShrinkageProtocol(StrictModel):
-    method: Literal[FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE]
-    minimum_support: CalibrationSize
-
-
 class ConformalProtocol(StrictModel):
     method: Literal[FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD]
     coverage: CoverageTarget
@@ -205,21 +200,9 @@ LOCAL_THRESHOLD_PROTOCOL = QuantileProtocol(
     method=FederatedThresholdMethod.LOCAL_THRESHOLD,
     quantile=CANONICAL_QUANTILE,
 )
-POOLED_SHARED_QUANTILE_PROTOCOL = QuantileProtocol(
-    method=FederatedThresholdMethod.POOLED_SHARED_QUANTILE,
-    quantile=CANONICAL_QUANTILE,
-)
-SAMPLE_WEIGHTED_SHARED_THRESHOLD_PROTOCOL = QuantileProtocol(
-    method=FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD,
-    quantile=CANONICAL_QUANTILE,
-)
 FIXED_SHRINKAGE_PROTOCOL = FixedShrinkageProtocol(
     method=FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE,
     weights=FIXED_SHRINKAGE_WEIGHTS,
-)
-SIZE_AWARE_SHRINKAGE_PROTOCOL = SizeAwareShrinkageProtocol(
-    method=FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE,
-    minimum_support=MINIMUM_BENIGN_SUPPORT,
 )
 CONFORMAL_PROTOCOL = ConformalProtocol(
     method=FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD,

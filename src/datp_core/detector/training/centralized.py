@@ -24,7 +24,6 @@ from datp_core.core.identifiers import (
     PreprocessingProtocolId,
     ProcessedDataBranch,
     SplitProtocolId,
-    TrainingHistoryColumn,
 )
 from datp_core.core.numeric import (
     BatchSize,
@@ -250,21 +249,6 @@ def declared_centralized_training_values() -> CentralizedTrainingDefaults:
         learning_rate=LEARNING_RATE,
         batch_size=BATCH_SIZE,
         weight_decay=WEIGHT_DECAY,
-    )
-
-
-def training_history_frame(result: CentralizedTrainingResult) -> pl.DataFrame:
-    return pl.DataFrame(
-        (
-            pl.Series(
-                TrainingHistoryColumn.EPOCH.value,
-                tuple(item.epoch.value for item in result.epoch_losses),
-            ),
-            pl.Series(
-                TrainingHistoryColumn.MEAN_TRAINING_LOSS.value,
-                tuple(item.mean_training_loss.value for item in result.epoch_losses),
-            ),
-        )
     )
 
 
