@@ -54,6 +54,10 @@ class CalibrationSizeClassification(StrEnum):
     FEASIBLE_ABLATION_SIZE = "feasible_ablation_size"
 
 
+class SizeAwareShrinkageRule(StrEnum):
+    USED_SUPPORT_OVER_USED_PLUS_CANONICAL_MINIMUM = "used_support_over_used_plus_canonical_minimum"
+
+
 REQUIRED_CLUSTER_FINGERPRINT_FEATURES = (
     ClusterFingerprintFeature.BENIGN_ERROR_MEAN,
     ClusterFingerprintFeature.BENIGN_ERROR_STANDARD_DEVIATION,
@@ -103,6 +107,20 @@ class CalibrationSizeProtocol(StrictModel):
 class FixedShrinkageProtocol(StrictModel):
     method: Literal[FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE]
     weights: tuple[ShrinkageWeight, ...]
+
+
+class SizeAwareShrinkageProtocol(StrictModel):
+    method: Literal[FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE]
+    rule: SizeAwareShrinkageRule
+    half_weight_support: CalibrationSize
+
+    @model_validator(mode="after")
+    def validate_locked_rule(self) -> "SizeAwareShrinkageProtocol":
+        if self.rule is not SizeAwareShrinkageRule.USED_SUPPORT_OVER_USED_PLUS_CANONICAL_MINIMUM:
+            raise ValueError("size-aware shrinkage must use the locked used-support rule")
+        if self.half_weight_support != MINIMUM_BENIGN_SUPPORT:
+            raise ValueError("size-aware shrinkage must use canonical minimum benign support")
+        return self
 
 
 class ConformalProtocol(StrictModel):
@@ -203,6 +221,11 @@ LOCAL_THRESHOLD_PROTOCOL = QuantileProtocol(
 FIXED_SHRINKAGE_PROTOCOL = FixedShrinkageProtocol(
     method=FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE,
     weights=FIXED_SHRINKAGE_WEIGHTS,
+)
+SIZE_AWARE_SHRINKAGE_PROTOCOL = SizeAwareShrinkageProtocol(
+    method=FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE,
+    rule=SizeAwareShrinkageRule.USED_SUPPORT_OVER_USED_PLUS_CANONICAL_MINIMUM,
+    half_weight_support=MINIMUM_BENIGN_SUPPORT,
 )
 CONFORMAL_PROTOCOL = ConformalProtocol(
     method=FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD,

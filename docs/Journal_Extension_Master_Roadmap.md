@@ -431,21 +431,23 @@ A favorable intermediate lambda cannot be presented as the primary policy unless
 
 **5.3 Calibration-size-aware shrinkage**
 
-A size-aware fallback may set:
+The size-aware rule is fixed prospectively before experiment execution. `n_k_source` is client `k`'s complete benign calibration support before experimental subsampling and is used only for eligibility and feasibility. `n_k_used` is the benign calibration support actually supplied to estimate client `k`'s local threshold in the current experimental cell.
 
-```text
-lambda = lambda(n_k)
-```
+\[
+\lambda_k = \lambda(n_{k,\mathrm{used}}) = \frac{n_{k,\mathrm{used}}}{n_{k,\mathrm{used}} + n_{\min}}
+\]
 
-The function must be:
+where `n_min = 100`, the existing canonical minimum benign support. The deployed threshold is:
 
-- fixed before evaluation;
-- identical across clients apart from `n_k`;
-- bounded in `[0, 1]`;
-- explicitly reported;
-- compared against fixed-lambda endpoints.
+\[
+\tau_k^{SA} = \lambda_k\tau_{k,\mathrm{local}} + (1-\lambda_k)\tau_{\mathrm{shared}}
+\]
 
-It is a calibration-robustness mechanism, not a novel statistical-theory claim.
+This deterministic rule never depends on evaluation or test labels, metrics, F1, FPR, `CV(FPR)`, AUROC, balanced accuracy, or downstream results. It is bounded in `[0, 1]` and strictly increases with positive `n_k_used`. `lambda = 0` is the conceptual shared endpoint and `lambda -> 1` approaches the local endpoint as calibration support grows. `n_min = 100` is neither fitted nor selected from experiment results; it is inherited from the canonical calibration-support contract.
+
+In ordinary full-calibration execution, `n_k_used` is the exact benign calibration count supplied to threshold construction. In calibration-size ablations, `n_k_used = m`; a cell exists only when `n_k_source >= m`, and `n_k_source` must never replace `m` in the weight. The locked grid therefore has weights `m=50 -> 50/150`, `m=100 -> 100/200`, `m=250 -> 250/350`, `m=500 -> 500/600`, `m=1000 -> 1000/1100`, and `m=5000 -> 5000/5100`. Values are never rounded internally.
+
+Size-aware shrinkage is compared with the shared threshold, the local threshold, and the complete locked fixed-lambda curve `{0, 0.25, 0.50, 0.75, 1.00}` without post-hoc fixed-lambda selection. It is a calibration-robustness mechanism, not a novel statistical-theory claim or confirmatory endpoint.
 
 **5.4 Split-conformal local threshold: B2-conf**
 
@@ -1421,7 +1423,7 @@ Interpretation:
 - `lambda = 1` is the local-threshold endpoint;
 - intermediate values trade personalization against estimation stability.
 
-A calibration-size-aware variant may replace a fixed `lambda` with a pre-specified function `lambda(n_k)`. That function must be fixed before test evaluation.
+A calibration-size-aware variant uses the prospectively locked `lambda(n_k_used) = n_k_used / (n_k_used + 100)` rule in §5.3. `n_k_source` governs eligibility and ablation feasibility only; it is never substituted for `n_k_used` in a subsampled cell.
 
 **3.8 Split-conformal local threshold: B2-conf**
 
@@ -2273,7 +2275,8 @@ Each subsample size must use multiple deterministic subsampling replicates neste
 - B1;
 - B2;
 - B4;
-- shrinkage overlay where defined;
+- complete fixed-lambda shrinkage curve `{0, 0.25, 0.50, 0.75, 1.00}`;
+- prospectively locked size-aware shrinkage;
 - B2-conf where its finite-sample rule is valid.
 
 **Procedure**
@@ -2349,14 +2352,7 @@ Can personalization weight depend on available benign calibration size without u
 
 **Requirements**
 
-The function `lambda(n_k)` must be:
-
-- specified before evaluation;
-- monotone unless a scientific reason justifies otherwise;
-- bounded in `[0, 1]`;
-- identical across clients apart from `n_k`;
-- compared with fixed-lambda curves;
-- evaluated over the same calibration-size subsamples.
+The fixed rule is `lambda(n_k_used) = n_k_used / (n_k_used + 100)`, with 100 inherited from canonical minimum benign support. `n_k_source` remains the complete pre-subsampling support used for eligibility and feasibility, while `n_k_used` is the exact score count used in the local threshold construction. The rule is deterministic, bounded in `[0,1]`, strictly increasing in positive `n_k_used`, independent of all evaluation evidence and downstream metrics, evaluated over the same calibration-size subsamples, and compared with the full fixed-lambda curve and its shared/local endpoints without selection by test outcome.
 
 **Interpretation**
 

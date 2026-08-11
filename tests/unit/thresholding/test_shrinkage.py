@@ -1,11 +1,12 @@
+import pytest
 from tests.unit.thresholding.helpers import client_scores
 
-from datp_core.core.numeric import Quantile, ShrinkageWeight
-from datp_core.thresholds.contracts import ThresholdInfeasibilityReason
-from datp_core.thresholds.protocols import FIXED_SHRINKAGE_PROTOCOL
+from datp_core.core.numeric import CalibrationSize, Quantile, ShrinkageWeight
+from datp_core.thresholds.protocols import FIXED_SHRINKAGE_PROTOCOL, SIZE_AWARE_SHRINKAGE_PROTOCOL
 from datp_core.thresholds.variants.shrinkage import (
     construct_fixed_shrinkage,
     construct_size_aware_shrinkage,
+    size_aware_shrinkage_weight,
 )
 
 QUANTILE = Quantile(0.5)
@@ -49,10 +50,38 @@ def test_fixed_shrinkage_covers_the_complete_declared_curve_for_every_client() -
     assert all(len(item.assignments) == 2 for item in result.points)
 
 
-def test_construct_size_aware_shrinkage_is_typed_unavailability() -> None:
-    result = construct_size_aware_shrinkage(CLIENT_A.coordinate)
-    assert result.reason is ThresholdInfeasibilityReason.SIZE_AWARE_SHRINKAGE_FUNCTION_UNRESOLVED
-    assert result.detail
+def test_construct_size_aware_shrinkage_uses_exact_calibration_support() -> None:
+    result = construct_size_aware_shrinkage((CLIENT_A, CLIENT_B), SIZE_AWARE_SHRINKAGE_PROTOCOL, QUANTILE)
+    assignment_a = next(item for item in result.assignments if item.client == CLIENT_A.client)
+    assignment_b = next(item for item in result.assignments if item.client == CLIENT_B.client)
+    assert assignment_a.used_support == CalibrationSize(len(CLIENT_A.scores))
+    assert assignment_b.used_support == CalibrationSize(len(CLIENT_B.scores))
+    assert assignment_a.weight == ShrinkageWeight(5 / 105)
+    assert assignment_b.weight == ShrinkageWeight(3 / 103)
+
+
+@pytest.mark.parametrize(
+    ("used_support", "expected_weight"),
+    (
+        (50, 50 / 150),
+        (100, 100 / 200),
+        (250, 250 / 350),
+        (500, 500 / 600),
+        (1000, 1000 / 1100),
+        (5000, 5000 / 5100),
+    ),
+)
+def test_size_aware_weight_matches_the_locked_formula(used_support: int, expected_weight: float) -> None:
+    assert size_aware_shrinkage_weight(CalibrationSize(used_support), SIZE_AWARE_SHRINKAGE_PROTOCOL) == ShrinkageWeight(
+        expected_weight
+    )
+
+
+def test_size_aware_weight_is_bounded_and_strictly_increases_with_support() -> None:
+    supports = tuple(CalibrationSize(value) for value in (1, 50, 100, 250, 500, 1000, 5000))
+    weights = tuple(size_aware_shrinkage_weight(item, SIZE_AWARE_SHRINKAGE_PROTOCOL) for item in supports)
+    assert all(0.0 <= item.value <= 1.0 for item in weights)
+    assert all(left.value < right.value for left, right in zip(weights[:-1], weights[1:], strict=True))
 
 
 def test_fixed_shrinkage_curve_preserves_unique_clients_per_lambda() -> None:

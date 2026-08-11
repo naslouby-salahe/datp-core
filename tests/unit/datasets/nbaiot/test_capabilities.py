@@ -23,7 +23,7 @@ def test_nbaiot_declares_threshold_variants_as_supported() -> None:
     ):
         assert methods[method] is CapabilityStatus.SUPPORTED
     assert methods[FederatedThresholdMethod.CLUSTER_THRESHOLD] is CapabilityStatus.CONDITIONAL
-    assert methods[FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE] is CapabilityStatus.UNSUPPORTED
+    assert methods[FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE] is CapabilityStatus.SUPPORTED
     valid = population_capabilities(PopulationId.NBAIOT_NATURAL_DEVICES).valid_threshold_methods
     assert FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE in valid
-    assert FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE not in valid
+    assert FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE in valid

@@ -157,13 +157,12 @@ NBAIOT_CAPABILITIES = DatasetCapabilities(
             method=FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS,
         ),
         ThresholdMethodCapability(
-            status=CapabilityStatus.UNSUPPORTED,
+            status=CapabilityStatus.SUPPORTED,
             evidence=ValidationReasonText(
-                "No pre-declared monotone lambda(n_k) function is frozen for this programme.",
+                "Eligible clients supply the exact benign calibration support used for local quantiles.",
             ),
             reason=ValidationReasonText(
-                "Size-aware shrinkage remains intentionally unavailable until a bounded "
-                "lambda(n_k) is declared before evaluation; inventing a formula is forbidden."
+                "Size-aware shrinkage uses the prospectively locked calibration-support rule.",
             ),
             method=FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE,
         ),

@@ -77,7 +77,7 @@ from datp_core.thresholds.policies.shared import (
 from datp_core.thresholds.quantiles import unweighted_mean
 from datp_core.thresholds.variants.conformal import ConformalThresholdResult
 from datp_core.thresholds.variants.federated_statistics import FederatedStatisticsThresholdResult
-from datp_core.thresholds.variants.shrinkage import FixedShrinkageCurveResult
+from datp_core.thresholds.variants.shrinkage import FixedShrinkageCurveResult, SizeAwareShrinkageThresholdResult
 
 
 @dataclass(frozen=True, slots=True)
@@ -395,6 +395,8 @@ def _assignments(result: ThresholdConstructionResult) -> tuple[ThresholdAssignme
             | FederatedStatisticsThresholdResult()
         ):
             return result.assignments
+        case SizeAwareShrinkageThresholdResult():
+            return tuple(ThresholdAssignment(item.client, item.threshold) for item in result.assignments)
         case FixedShrinkageCurveResult():
             raise ScientificContractError(
                 ErrorMessage("multi-lambda shrinkage cannot flatten to one assignment set; use curve evaluation")
@@ -412,7 +414,13 @@ def _deployment_fallback_threshold(
             return result.shared_threshold
         case FederatedStatisticsThresholdResult():
             return result.matched_threshold
-        case LocalThresholdResult() | FamilyThresholdResult() | GroupedThresholdResult() | ConformalThresholdResult():
+        case (
+            LocalThresholdResult()
+            | FamilyThresholdResult()
+            | GroupedThresholdResult()
+            | ConformalThresholdResult()
+            | SizeAwareShrinkageThresholdResult()
+        ):
             if not assignments:
                 return None
             return unweighted_mean(tuple(item.threshold for item in assignments))

@@ -55,9 +55,9 @@ from datp_core.experiments.threshold_robustness.cohorts import (
     extract_feasible_clients_by_size,
 )
 from datp_core.runtime.configuration import OUTPUTS_ROOT
-from datp_core.thresholds.contracts import ThresholdInfeasibilityReason
 from datp_core.thresholds.protocols import (
     CALIBRATION_SIZES,
+    MINIMUM_BENIGN_SUPPORT,
     QUANTILE_GRID,
     CalibrationSizeClassification,
     classify_calibration_size,
@@ -72,6 +72,7 @@ class ThresholdRobustnessArtifactName(StrEnum):
     ROOT = "threshold_robustness"
     ANALYSIS = "analysis"
     SUMMARY = "summary.json"
+    COMPLETE = "complete.marker"
 
 
 class ThresholdRobustnessAnalysisMarker(StrEnum):
@@ -169,9 +170,23 @@ class ConformalCoverageReport(StrictModel):
 
 class SizeAwareShrinkageReport(StrictModel):
     experiment: ExperimentId
-    unavailable_reason: ThresholdInfeasibilityReason
-    shared_threshold: MethodCvSummary
-    local_threshold: MethodCvSummary
+    methods: tuple[MethodCvSummary, ...]
+    clients: tuple[SizeAwareShrinkageClientRow, ...]
+
+
+class SizeAwareShrinkageClientRow(StrictModel):
+    seed: Seed
+    client: ClientIdentity
+    source_support: CalibrationSize
+    used_support: CalibrationSize
+    lambda_weight: ShrinkageWeight
+    shared_threshold: MetricValue
+    local_threshold: MetricValue
+    size_aware_threshold: MetricValue
+    fpr: MetricValue | None
+    tpr: MetricValue | None
+    macro_f1: MetricValue | None
+    balanced_accuracy: MetricValue | None
 
 
 def _analysis_directory(experiment_id: ExperimentId, population: PopulationId) -> Path:
@@ -185,7 +200,7 @@ def _analysis_directory(experiment_id: ExperimentId, population: PopulationId) -
 
 
 def _complete_marker(experiment_id: ExperimentId, population: PopulationId) -> Path:
-    return _summary_path(experiment_id, population)
+    return _analysis_directory(experiment_id, population) / ThresholdRobustnessArtifactName.COMPLETE
 
 
 def _summary_path(experiment_id: ExperimentId, population: PopulationId) -> Path:
@@ -559,22 +574,10 @@ def run_size_aware_shrinkage_seed(
     overwrite: bool,
     progress: ProgressHook | None = None,
 ) -> ThresholdRobustnessSeedResult:
-    declaration = require_experiment_declaration(ExperimentId.SIZE_AWARE_SHRINKAGE)
-    filtered = declaration.model_copy(
-        update={
-            "federated_thresholds": (
-                FederatedThresholdMethod.SHARED_THRESHOLD,
-                FederatedThresholdMethod.LOCAL_THRESHOLD,
-            )
-        }
-    )
     result = execute_declared_experiment_seed(
-        declaration=filtered,
+        declaration=require_experiment_declaration(ExperimentId.SIZE_AWARE_SHRINKAGE),
         seed_cohort=SeedCohort(values=(training_seed,)),
-        reason=PlanReason(
-            "size-aware shrinkage executes its declared reference corners only because "
-            "no lambda(n_k) function is declared"
-        ),
+        reason=PlanReason("execute the declared prospective size-aware shrinkage comparison"),
         output_root=output_root,
         overwrite=overwrite,
         progress=progress,
@@ -594,7 +597,12 @@ def report_size_aware_shrinkage(
     directory.mkdir(parents=True, exist_ok=True)
     missing = 0
     summaries: list[MethodCvSummary] = []
-    for method in (FederatedThresholdMethod.SHARED_THRESHOLD, FederatedThresholdMethod.LOCAL_THRESHOLD):
+    documents_by_method: dict[FederatedThresholdMethod, tuple[FederatedEvaluationDocument, ...]] = {}
+    for method in (
+        FederatedThresholdMethod.SHARED_THRESHOLD,
+        FederatedThresholdMethod.LOCAL_THRESHOLD,
+        FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE,
+    ):
         documents: list[FederatedEvaluationDocument] = []
         for seed in CONFIRMATORY_SEED_COHORT.values:
             try:
@@ -602,21 +610,58 @@ def report_size_aware_shrinkage(
             except ScientificContractError:
                 missing += 1
         if documents:
+            documents_by_method[method] = tuple(documents)
             summaries.append(_method_summary(method, tuple(documents)))
     summary_by_method = {summary.method: summary for summary in summaries}
     if set(summary_by_method) != {
         FederatedThresholdMethod.SHARED_THRESHOLD,
         FederatedThresholdMethod.LOCAL_THRESHOLD,
+        FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE,
     }:
         raise ScientificContractError(
-            ErrorMessage("size-aware shrinkage report requires both executable reference corners")
+            ErrorMessage("size-aware shrinkage report requires all declared comparison methods")
         )
+    rows: list[SizeAwareShrinkageClientRow] = []
+    shared_by_seed = {
+        document.score_coordinate.training_seed: document
+        for document in documents_by_method[FederatedThresholdMethod.SHARED_THRESHOLD]
+    }
+    local_by_seed = {
+        document.score_coordinate.training_seed: document
+        for document in documents_by_method[FederatedThresholdMethod.LOCAL_THRESHOLD]
+    }
+    for document in documents_by_method[FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE]:
+        seed = document.score_coordinate.training_seed
+        shared_clients = {client.client: client for client in shared_by_seed[seed].clients}
+        local_clients = {client.client: client for client in local_by_seed[seed].clients}
+        cohort_records = {record.client: record for record in document.cohort.records}
+        for client in document.clients:
+            local = local_clients[client.client]
+            shared = shared_clients[client.client]
+            used_support = CalibrationSize(cohort_records[client.client].benign_calibration_count.value)
+            rows.append(
+                SizeAwareShrinkageClientRow(
+                    seed=seed,
+                    client=client.client,
+                    source_support=used_support,
+                    used_support=used_support,
+                    lambda_weight=ShrinkageWeight(
+                        used_support.value / (used_support.value + MINIMUM_BENIGN_SUPPORT.value)
+                    ),
+                    shared_threshold=MetricValue(shared.threshold.value),
+                    local_threshold=MetricValue(local.threshold.value),
+                    size_aware_threshold=MetricValue(client.threshold.value),
+                    fpr=metric_value(metric_by_id(client.metrics, MetricId.FALSE_POSITIVE_RATE)),
+                    tpr=metric_value(metric_by_id(client.metrics, MetricId.TRUE_POSITIVE_RATE)),
+                    macro_f1=metric_value(metric_by_id(client.metrics, MetricId.BINARY_MACRO_F1)),
+                    balanced_accuracy=metric_value(metric_by_id(client.metrics, MetricId.BALANCED_ACCURACY)),
+                )
+            )
     serialize_json_model(
         SizeAwareShrinkageReport(
             experiment=experiment_id,
-            unavailable_reason=ThresholdInfeasibilityReason.SIZE_AWARE_SHRINKAGE_FUNCTION_UNRESOLVED,
-            shared_threshold=summary_by_method[FederatedThresholdMethod.SHARED_THRESHOLD],
-            local_threshold=summary_by_method[FederatedThresholdMethod.LOCAL_THRESHOLD],
+            methods=tuple(summaries),
+            clients=tuple(rows),
         ),
         _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
     )

@@ -34,6 +34,7 @@ from datp_core.thresholds.protocols import (
     FEDERATED_STATISTICS_PROTOCOL,
     FIXED_SHRINKAGE_PROTOCOL,
     MINIMUM_BENIGN_SUPPORT,
+    SIZE_AWARE_SHRINKAGE_PROTOCOL,
     CalibrationSupportRule,
     ClusterThresholdAggregation,
     QuantileProtocol,
@@ -46,6 +47,7 @@ from datp_core.thresholds.variants.federated_statistics import (
 )
 from datp_core.thresholds.variants.shrinkage import (
     FixedShrinkageCurveResult,
+    SizeAwareShrinkageThresholdResult,
     construct_fixed_shrinkage,
     construct_size_aware_shrinkage,
 )
@@ -58,6 +60,7 @@ type ThresholdConstructionResult = (
     | FamilyThresholdResult
     | GroupedThresholdResult
     | FixedShrinkageCurveResult
+    | SizeAwareShrinkageThresholdResult
     | ConformalThresholdResult
     | FederatedStatisticsThresholdResult
     | ThresholdUnavailableResult
@@ -163,7 +166,7 @@ def dispatch_federated_threshold(request: ThresholdConstructionRequest) -> Thres
         case FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE:
             return construct_fixed_shrinkage(request.eligible, FIXED_SHRINKAGE_PROTOCOL, request.quantile)
         case FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE:
-            return construct_size_aware_shrinkage(request.coordinate)
+            return construct_size_aware_shrinkage(request.eligible, SIZE_AWARE_SHRINKAGE_PROTOCOL, request.quantile)
         case FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD:
             return construct_local_conformal_threshold(request.eligible, request.quantile)
         case FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS:

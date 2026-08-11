@@ -405,37 +405,7 @@ def _dispatch_robustness(
     results = tuple(
         runner(seed, output_root=output_root, overwrite=overwrite.requested, progress=progress) for seed in seeds
     )
-    if experiment_id is ExperimentId.SIZE_AWARE_SHRINKAGE:
-        declared = _declared_methods(experiment_id)
-        completed = frozenset(declared)
-        for result in results:
-            completed = completed.intersection(result.completed_threshold_methods)
-        outcomes = tuple(
-            ThresholdMethodOutcome(
-                method=method,
-                status=(
-                    ThresholdMethodExecutionStatus.UNAVAILABLE
-                    if method is FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE
-                    else (
-                        ThresholdMethodExecutionStatus.COMPLETED
-                        if method in completed
-                        else ThresholdMethodExecutionStatus.INFEASIBLE
-                    )
-                ),
-                detail=DetailText(
-                    "no lambda(n_k) function is declared; inventing one is scientifically forbidden"
-                    if method is FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE
-                    else (
-                        f"executed across all {len(results)} runs"
-                        if method in completed
-                        else _METHOD_NOT_COMPLETED_DETAIL
-                    )
-                ),
-            )
-            for method in declared
-        )
-    else:
-        outcomes = _method_outcomes(experiment_id, tuple(item.completed_threshold_methods for item in results))
+    outcomes = _method_outcomes(experiment_id, tuple(item.completed_threshold_methods for item in results))
     return DispatchOutcome(detail=DetailText(f"{experiment_id.value} seeds={len(seeds)}"), method_outcomes=outcomes)
 
 
