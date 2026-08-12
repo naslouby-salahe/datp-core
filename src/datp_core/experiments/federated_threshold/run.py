@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from importlib.metadata import version
 from pathlib import Path
-from platform import platform
+from platform import machine, platform, processor
 from sys import version as python_version
 from typing import TYPE_CHECKING, ClassVar
 
@@ -114,6 +114,7 @@ class RuntimeTimingSummary(StrictModel):
 
 
 class RuntimeEnvironmentEvidence(StrictModel):
+    hardware: ValidationReasonText
     operating_system: ValidationReasonText
     python: ValidationReasonText
     datasketches: ValidationReasonText
@@ -430,11 +431,16 @@ def _runtime_timing_summary(values: tuple[ElapsedSeconds, ...]) -> RuntimeTiming
         p95_milliseconds=MetricValue(float(np.quantile(milliseconds, 0.95, method="linear"))),
         observation_count=SeedObservationCount(len(values)),
         environment=RuntimeEnvironmentEvidence(
+            hardware=_hardware_identity(),
             operating_system=ValidationReasonText(platform()),
             python=ValidationReasonText(python_version),
             datasketches=ValidationReasonText(version("datasketches")),
         ),
     )
+
+
+def _hardware_identity() -> ValidationReasonText:
+    return ValidationReasonText(processor() or machine() or "UNAVAILABLE_HARDWARE_IDENTITY")
 
 
 def run_federated_benign_statistics_comparison_seed(
