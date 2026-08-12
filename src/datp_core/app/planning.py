@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from datp_core.core.identifiers import (
+    CoordinateStableKey,
     ExperimentId,
     ExperimentReadiness,
     FederatedThresholdMethod,
@@ -84,6 +85,28 @@ class ExperimentPlan:
     @property
     def executable(self) -> tuple[PlannedExperiment, ...]:
         return tuple(entry for entry in self.entries if entry.disposition is PlanDisposition.EXECUTABLE)
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class CoordinateCompleteness:
+    missing_execution_keys: tuple[CoordinateStableKey, ...]
+    unauthorized_execution_keys: tuple[CoordinateStableKey, ...]
+
+    @property
+    def complete(self) -> bool:
+        return not self.missing_execution_keys and not self.unauthorized_execution_keys
+
+
+def compare_materialized_execution_keys(
+    plan: ExperimentPlan,
+    materialized_execution_keys: tuple[CoordinateStableKey, ...],
+) -> CoordinateCompleteness:
+    expected = frozenset(entry.coordinate.execution_key for entry in plan.executable)
+    materialized = frozenset(materialized_execution_keys)
+    return CoordinateCompleteness(
+        missing_execution_keys=tuple(sorted(expected - materialized)),
+        unauthorized_execution_keys=tuple(sorted(materialized - expected)),
+    )
 
 
 def merge_experiment_plans(plans: tuple[ExperimentPlan, ...]) -> ExperimentPlan:
