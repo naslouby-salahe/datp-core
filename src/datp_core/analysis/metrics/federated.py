@@ -6,6 +6,7 @@ from datp_core.analysis.metrics.cohorts import EvaluationCohortManifest
 from datp_core.analysis.metrics.conformal import ConformalCoverageDiagnostic
 from datp_core.analysis.metrics.fixed_score import FixedScoreEvidence
 from datp_core.analysis.metrics.models import ClientMetricResult, HeldOutBenignScore, PopulationMetricResult
+from datp_core.analysis.metrics.operating_point import HeldOutOperatingPointDiagnostic, HeldOutOperatingPointSummary
 from datp_core.analysis.metrics.threshold_estimation import (
     SampleEfficiencyPoint,
     ThresholdEstimationDiagnostic,
@@ -25,6 +26,7 @@ from datp_core.core.identifiers import CoordinateStableKey, EvidenceRole, Federa
 from datp_core.core.numeric import (
     CalibrationSize,
     CoverageTarget,
+    Quantile,
     ReplicateIndex,
     ShrinkageWeight,
     ThresholdValue,
@@ -34,6 +36,7 @@ from datp_core.detector.scoring.contracts import ScoreArtifactManifest
 from datp_core.detector.training.models import FederatedTrainingCoordinate
 from datp_core.experiments.common.coordinates import ExternalTemporalExecutionIdentity
 from datp_core.thresholds.dispatch import ThresholdConstructionResult
+from datp_core.thresholds.quantiles import ClientBenignCalibrationScores
 from datp_core.thresholds.variants.conformal import ConformalAssignment
 
 type FederatedScoreArtifactManifest = ScoreArtifactManifest[FederatedTrainingCoordinate, ClientIdentity]
@@ -96,6 +99,8 @@ class EvaluationDiagnostics:
     threshold_estimation: tuple[ThresholdEstimationDiagnostic, ...]
     communication: CommunicationDiagnostic | None
     alert_burden: tuple[AlertBurdenDiagnostic, ...]
+    held_out_operating_points: tuple[HeldOutOperatingPointDiagnostic, ...]
+    held_out_operating_point_summary: HeldOutOperatingPointSummary | None
     shrinkage_curve: tuple[ShrinkageLambdaEvaluation, ...] = field(default_factory=tuple)
     calibration_size_ablation: tuple[CalibrationSizeAblationCell, ...] = field(default_factory=tuple)
     sample_efficiency: tuple[SampleEfficiencyPoint, ...] = field(default_factory=tuple)
@@ -109,6 +114,8 @@ class FederatedEvaluationRequest:
     cohort: EvaluationCohortManifest
     fixed_score_evidence: FixedScoreEvidence
     evidence_role: EvidenceRole
+    calibration_scores: tuple[ClientBenignCalibrationScores, ...]
+    target_quantile: Quantile
     conformal_coverage_inputs: tuple[ConformalCoverageStageInput, ...]
     threshold_estimation_inputs: tuple[ThresholdEstimationStageInput, ...]
     communication_messages: tuple[CommunicationMessageDiagnostic, ...]

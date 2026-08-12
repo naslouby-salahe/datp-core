@@ -431,6 +431,8 @@ class ExperimentWorkspace:
                 cohort=inputs.cohort,
                 fixed_score_evidence=inputs.fixed_score_evidence,
                 evidence_role=self.coordinate.evidence_role,
+                calibration_scores=self.eligible_calibration_scores(),
+                target_quantile=self.threshold_quantile,
                 conformal_coverage_inputs=self._conformal_coverage_inputs(),
                 threshold_estimation_inputs=self._threshold_estimation_inputs(),
                 communication_messages=self._communication_messages(),

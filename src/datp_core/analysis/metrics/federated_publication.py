@@ -17,9 +17,11 @@ from datp_core.analysis.operational.traffic_rates import ValidatedTrafficRateEvi
 from datp_core.analysis.temporal import TemporalDeploymentProvenance
 from datp_core.artifacts.repositories.evaluations import write_federated_evaluation
 from datp_core.core.identifiers import EvidenceRole
+from datp_core.core.numeric import Quantile
 from datp_core.detector.scoring.models import FederatedScoreArtifactManifest
 from datp_core.experiments.common.coordinates import ExperimentCoordinate, ExternalTemporalExecutionIdentity
 from datp_core.thresholds.dispatch import ThresholdConstructionResult
+from datp_core.thresholds.quantiles import ClientBenignCalibrationScores
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -30,6 +32,8 @@ class EvaluateFederatedDetectorRequest:
     cohort: EvaluationCohortManifest
     fixed_score_evidence: FixedScoreEvidence
     evidence_role: EvidenceRole
+    calibration_scores: tuple[ClientBenignCalibrationScores, ...]
+    target_quantile: Quantile
     conformal_coverage_inputs: tuple[ConformalCoverageStageInput, ...]
     threshold_estimation_inputs: tuple[ThresholdEstimationStageInput, ...]
     communication_messages: tuple[CommunicationMessageDiagnostic, ...]
@@ -60,6 +64,8 @@ def evaluate_federated_detector(request: EvaluateFederatedDetectorRequest) -> Ev
             cohort=request.cohort,
             fixed_score_evidence=request.fixed_score_evidence,
             evidence_role=request.evidence_role,
+            calibration_scores=request.calibration_scores,
+            target_quantile=request.target_quantile,
             conformal_coverage_inputs=request.conformal_coverage_inputs,
             threshold_estimation_inputs=request.threshold_estimation_inputs,
             communication_messages=request.communication_messages,

@@ -685,6 +685,8 @@ def _evaluate_state(
                 cohort=evaluation_inputs.cohort,
                 fixed_score_evidence=evaluation_inputs.fixed_score_evidence,
                 evidence_role=identity.evidence_role,
+                calibration_scores=eligible,
+                target_quantile=CANONICAL_QUANTILE,
                 conformal_coverage_inputs=(),
                 threshold_estimation_inputs=(),
                 communication_messages=(),

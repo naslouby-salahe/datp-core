@@ -155,6 +155,8 @@ def construct_calibration_size_ablation(
                     cohort=_cell_cohort(request.cohort, tuple(item.client for item in eligible)),
                     fixed_score_evidence=request.fixed_score_evidence,
                     evidence_role=request.evidence_role,
+                    calibration_scores=eligible,
+                    target_quantile=request.quantile,
                     conformal_coverage_inputs=(),
                     threshold_estimation_inputs=(),
                     communication_messages=(),
