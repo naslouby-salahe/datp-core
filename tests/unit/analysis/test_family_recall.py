@@ -6,14 +6,21 @@ import polars as pl
 import pytest
 from tests.unit.learning.federated.helpers import client_identity, fedavg_coordinate
 
+from datp_core.analysis.mechanisms.family_recall import compare_family_recall_policies
 from datp_core.analysis.metrics.family_recall import (
     FamilyRecallApplicability,
+    FamilyRecallDiagnostics,
+    FamilyRecallRecord,
+    FamilyRecallSummary,
+    WorstFamilyClientRecall,
     evaluate_nbaiot_family_recall,
 )
+from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
 from datp_core.analysis.metrics.models import ClientMetricResult
 from datp_core.core.errors import ScientificContractError
-from datp_core.core.identifiers import PartitionRole, ScoreFrameColumn, SerializationFormat
-from datp_core.core.numeric import FeatureCount, RowCount, Seed, ThresholdValue
+from datp_core.core.identifiers import FederatedThresholdMethod, PartitionRole, ScoreFrameColumn, SerializationFormat
+from datp_core.core.numeric import FeatureCount, Ratio, RowCount, Seed, ThresholdValue
+from datp_core.data.nbaiot.schema import NBaIoTAttackFamily
 from datp_core.data.populations.contracts import ClientIdentity, PopulationOutcomeLabel
 from datp_core.detector.scoring.contracts import ScoreArtifactManifest, ScoreRecord
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
@@ -51,6 +58,70 @@ def test_nbaiot_family_recall_rejects_attack_rows_without_family_provenance(tmp_
             manifest,
             (cast(ClientMetricResult, SimpleNamespace(client=client, threshold=ThresholdValue(0.5))),),
         )
+
+
+def test_family_recall_compares_each_policy_to_shared_on_the_fixed_client_family_cohort() -> None:
+    client = client_identity("client_a")
+    documents = tuple(
+        cast(
+            FederatedEvaluationDocument,
+            SimpleNamespace(
+                threshold_method=method,
+                score_coordinate=SimpleNamespace(
+                    population=fedavg_coordinate(Seed(0)).population,
+                    training_seed=Seed(0),
+                ),
+                diagnostics=SimpleNamespace(family_recall=_diagnostics(client, rate)),
+            ),
+        )
+        for method, rate in (
+            (FederatedThresholdMethod.SHARED_THRESHOLD, 0.5),
+            (FederatedThresholdMethod.LOCAL_THRESHOLD, 1.0),
+            (FederatedThresholdMethod.FAMILY_THRESHOLD, 0.0),
+            (FederatedThresholdMethod.CLUSTER_THRESHOLD, 0.5),
+        )
+    )
+
+    comparison = compare_family_recall_policies(documents)
+
+    assert len(comparison.policies) == 4
+    differences = [
+        (item.compared_method, item.compared_minus_shared_true_positive_rate.value)
+        for item in comparison.shared_differences
+    ]
+    assert differences == [
+        (FederatedThresholdMethod.CLUSTER_THRESHOLD, 0.0),
+        (FederatedThresholdMethod.FAMILY_THRESHOLD, -0.5),
+        (FederatedThresholdMethod.LOCAL_THRESHOLD, 0.5),
+    ]
+
+
+def _diagnostics(client: ClientIdentity, rate: float) -> FamilyRecallDiagnostics:
+    record = FamilyRecallRecord(
+        client=client,
+        family=NBaIoTAttackFamily.MIRAI,
+        support_count=RowCount(2),
+        true_positive_count=RowCount(int(rate * 2)),
+        false_negative_count=RowCount(2 - int(rate * 2)),
+        true_positive_rate=Ratio(rate),
+        false_negative_rate=Ratio(1.0 - rate),
+    )
+    return FamilyRecallDiagnostics(
+        applicability=FamilyRecallApplicability.APPLICABLE,
+        records=(record,),
+        summaries=(
+            FamilyRecallSummary(
+                family=record.family,
+                supported_client_count=RowCount(1),
+                macro_family_true_positive_rate=record.true_positive_rate,
+            ),
+        ),
+        worst_family_client=WorstFamilyClientRecall(
+            client=client,
+            family=record.family,
+            true_positive_rate=record.true_positive_rate,
+        ),
+    )
 
 
 def _manifest(

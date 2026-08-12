@@ -59,6 +59,12 @@ from datp_core.analysis.mechanisms.equity_utility import (
     EquityUtilitySeedObservation,
     confirmatory_equity_utility_bundle,
 )
+from datp_core.analysis.mechanisms.family_recall import (
+    FamilyRecallDifference,
+    FamilyRecallPolicyComparison,
+    FamilyRecallPolicyEvidence,
+    compare_family_recall_policies,
+)
 from datp_core.analysis.mechanisms.model_alignment import (
     AlignmentActivationLabel,
     AlignmentActivationSummary,
@@ -128,6 +134,7 @@ type MechanismEvidence = (
     | ClientImpactSeedSummary
     | DivergenceResult
     | ConfirmatoryEquityUtilityBundle
+    | FamilyRecallPolicyComparison
     | GroupedDispersionResult
     | ModelAlignmentResult
     | ScientificDecisionResult
@@ -183,6 +190,9 @@ __all__ = (
     "SupportCorrelationDirectionSummary",
     "ConfirmatoryEquityUtilityBundle",
     "ConfirmatoryEquityUtilityMeasure",
+    "FamilyRecallDifference",
+    "FamilyRecallPolicyComparison",
+    "FamilyRecallPolicyEvidence",
     "DivergenceBlocker",
     "DivergenceResult",
     "EquityUtilityMeasureSummary",
@@ -218,6 +228,7 @@ __all__ = (
     "cluster_evidence_from_grouped_result",
     "cluster_stability",
     "confirmatory_equity_utility_bundle",
+    "compare_family_recall_policies",
     "decide_absorption_cohort",
     "decide_model_absorption",
     "empty_cluster_evidence_record",

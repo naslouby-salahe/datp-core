@@ -25,6 +25,7 @@ from datp_core.analysis.mechanisms.clustering import ClusterEvidenceRecord, Clus
 from datp_core.analysis.mechanisms.dispersion import GroupedDispersionResult
 from datp_core.analysis.mechanisms.divergence import DivergenceResult
 from datp_core.analysis.mechanisms.equity_utility import ConfirmatoryEquityUtilityBundle
+from datp_core.analysis.mechanisms.family_recall import FamilyRecallPolicyComparison
 from datp_core.analysis.mechanisms.movement import (
     ThresholdMovement,
     ThresholdMovementCohort,
@@ -665,6 +666,7 @@ _MECHANISM_TITLES: dict[type[object], ReportLine] = {
     ClientImpactSeedSummary: ReportLine("natural_device_client_impact"),
     ClientImpactCampaignSummary: ReportLine("natural_device_client_impact_campaign_summary"),
     ConfirmatoryEquityUtilityBundle: ReportLine("confirmatory_equity_utility_bundle"),
+    FamilyRecallPolicyComparison: ReportLine("nbaiot_malware_family_sensitivity"),
     CampaignFixedSupportStrata: ReportLine("campaign_fixed_calibration_support_strata"),
     SupportStratumOutcomeReport: ReportLine("support_stratum_seed_outcomes"),
     SupportStratumCampaignSummary: ReportLine("support_stratum_cross_seed_summary"),
@@ -772,6 +774,37 @@ def _mechanism_tables(mechanisms: tuple[MechanismEvidence, ...]) -> tuple[Public
 @singledispatch
 def _render_one_mechanism(_mechanism: MechanismEvidence) -> list[ReportLine]:
     return [ReportLine("Unhandled mechanism evidence kind")]
+
+
+@_render_one_mechanism.register
+def _render_family_recall_policy_comparison(mechanism: FamilyRecallPolicyComparison) -> list[ReportLine]:
+    lines = [f"Seed: {mechanism.seed.value}"]
+    for policy in mechanism.policies:
+        lines.append(f"Policy: `{policy.threshold_method.value}`")
+        for summary in policy.summaries:
+            macro_tpr = _format_publication_metric(summary.macro_family_true_positive_rate.value)
+            lines.append(
+                f"  {summary.family.name} macro TPR={macro_tpr} "
+                f"supported_clients={summary.supported_client_count.value}"
+            )
+        lines.extend(
+            f"  client={record.client.client_id.value} family={record.family.name} "
+            f"support={record.support_count.value} TPR={_format_publication_metric(record.true_positive_rate.value)} "
+            f"FNR={_format_publication_metric(record.false_negative_rate.value)}"
+            for record in policy.records
+        )
+        worst = policy.worst_family_client
+        lines.append(
+            f"  worst client-family={worst.client.client_id.value}/{worst.family.name} "
+            f"TPR={_format_publication_metric(worst.true_positive_rate.value)}"
+        )
+    for difference in mechanism.shared_differences:
+        difference_value = _format_publication_metric(difference.compared_minus_shared_true_positive_rate.value)
+        lines.append(
+            f"Shared difference: client={difference.client.client_id.value} family={difference.family.name} "
+            f"policy={difference.compared_method.value} ΔTPR={difference_value}"
+        )
+    return [ReportLine(line) for line in lines]
 
 
 @_render_one_mechanism.register

@@ -25,6 +25,7 @@ from datp_core.analysis.mechanisms import (
     ThresholdMovementCohort,
     calibration_support_burden_evidence,
     campaign_fixed_support_strata,
+    compare_family_recall_policies,
     confirmatory_equity_utility_bundle,
     grouped_dispersion,
     heterogeneity_benefit_association,
@@ -227,6 +228,8 @@ def _confirmatory_mechanisms() -> tuple[MechanismEvidence, ...]:
     for seed in CONFIRMATORY_SEED_COHORT.values:
         shared = load_evaluation_document(_evaluation_path(seed, FederatedThresholdMethod.SHARED_THRESHOLD))
         local = load_evaluation_document(_evaluation_path(seed, FederatedThresholdMethod.LOCAL_THRESHOLD))
+        family = load_evaluation_document(_evaluation_path(seed, FederatedThresholdMethod.FAMILY_THRESHOLD))
+        cluster = load_evaluation_document(_evaluation_path(seed, FederatedThresholdMethod.CLUSTER_THRESHOLD))
         policy_pairs.append((shared, local))
         movement = threshold_movements_from_evaluations(
             shared=shared,
@@ -239,6 +242,7 @@ def _confirmatory_mechanisms() -> tuple[MechanismEvidence, ...]:
         mechanisms.append(burden)
         support_burden_evidence.append(burden)
         mechanisms.append(summarize_client_impact(movement))
+        mechanisms.append(compare_family_recall_policies((shared, local, family, cluster)))
         shared_cv = population_metric(shared, MetricId.FPR_COEFFICIENT_OF_VARIATION)
         local_cv = population_metric(local, MetricId.FPR_COEFFICIENT_OF_VARIATION)
         benefit = MetricValue(shared_cv.value - local_cv.value)
@@ -610,7 +614,7 @@ def _confirmatory_declaration() -> ExperimentDeclaration:
 def _declaration_for_threshold_method(method: FederatedThresholdMethod) -> ExperimentDeclaration:
     if method in {FederatedThresholdMethod.SHARED_THRESHOLD, FederatedThresholdMethod.LOCAL_THRESHOLD}:
         return _confirmatory_declaration()
-    if method is FederatedThresholdMethod.CLUSTER_THRESHOLD:
+    if method in {FederatedThresholdMethod.FAMILY_THRESHOLD, FederatedThresholdMethod.CLUSTER_THRESHOLD}:
         matches = tuple(item for item in EXPERIMENTS if item.id is ExperimentId.FAMILY_AND_GROUPED_GRANULARITY)
         if len(matches) != 1:
             raise ScientificContractError(
