@@ -6,7 +6,11 @@ from shutil import rmtree
 from typing import Protocol
 
 from datp_core.analysis.evidence import AnalysisAssetName
-from datp_core.analysis.mechanisms.model_alignment import summarize_alignment_activation
+from datp_core.analysis.mechanisms.model_alignment import (
+    AlignmentReductionOutcome,
+    ModelAlignmentResult,
+    summarize_alignment_activation,
+)
 from datp_core.analysis.metrics.models import AvailableMetric, metric_by_id
 from datp_core.app.contracts import AnchorRequirement, CampaignRole, OverwriteMode
 from datp_core.app.layout import ResearchArtifact, ResearchDirectory
@@ -20,7 +24,6 @@ from datp_core.app.planning import (
 )
 from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
-from datp_core.artifacts.serializers.json import canonical_json_text
 from datp_core.core.errors import (
     ErrorMessage,
     ReportEvidenceError,
@@ -601,7 +604,16 @@ def _report_fedprox(experiment_id: ExperimentId) -> ReportResult:
             )
             write_text_atomically(
                 output / ResearchArtifact.EVIDENCE_REPORT,
-                FileContentText(canonical_json_text(alignment)),
+                FileContentText(
+                    _alignment_report(
+                        title=f"FedProx alignment evidence (coefficient={coefficient.value:.12g})",
+                        condition_name="FedProx",
+                        observations=tuple(
+                            (item.training_seed, item.reference_alignment, item.alignment, item.alignment_reductions)
+                            for item in alignment
+                        ),
+                    )
+                ),
             )
             paths.append(output)
     except ScientificContractError as error:
@@ -635,6 +647,24 @@ def _report_ditto(experiment_id: ExperimentId) -> ReportResult:
         for item in results
     )
     analyze_ditto_absorption(results, reference_evidence=references, output_directory=output)
+    write_text_atomically(
+        output / ResearchArtifact.EVIDENCE_REPORT,
+        FileContentText(
+            _alignment_report(
+                title="Ditto alignment evidence",
+                condition_name="Ditto",
+                observations=tuple(
+                    (
+                        item.personalized_coordinate.training_seed,
+                        item.reference_alignment,
+                        item.alignment,
+                        item.alignment_reductions,
+                    )
+                    for item in results
+                ),
+            )
+        ),
+    )
     return ReportResult(experiment=experiment_id, paths=(output,), detail=DetailText(f"analysis={output}"))
 
 
@@ -736,6 +766,53 @@ def _alignment_value(value: MetricValue | None) -> str:
     if value is None:
         return "—"
     return f"{value.value:.12g}"
+
+
+def _alignment_report(
+    *,
+    title: str,
+    condition_name: str,
+    observations: tuple[
+        tuple[Seed, ModelAlignmentResult, ModelAlignmentResult, tuple[AlignmentReductionOutcome, ...]], ...
+    ],
+) -> str:
+    activation = summarize_alignment_activation(tuple(item[3] for item in observations))
+    rows = [f"# {title}", "", "## Per-seed alignment reductions", ""]
+    rows.extend(
+        (
+            "| Seed | Alignment quantity | FedAvg reference | "
+            f"{condition_name} model | Alignment reduction | Availability |",
+            "|---:|---|---:|---:|---:|---|",
+        )
+    )
+    for seed, reference_alignment, condition_alignment, reductions in observations:
+        reference = {item.metric: item for item in reference_alignment.metrics}
+        condition = {item.metric: item for item in condition_alignment.metrics}
+        for reduction in reductions:
+            availability = (
+                reduction.unavailable_reason.value if reduction.unavailable_reason is not None else "available"
+            )
+            rows.append(
+                f"| {seed.value} | {reduction.metric.value} | "
+                f"{_alignment_value(reference[reduction.metric].value)} | "
+                f"{_alignment_value(condition[reduction.metric].value)} | "
+                f"{_alignment_value(reduction.value)} | {availability} |"
+            )
+    rows.extend(
+        (
+            "",
+            "## Campaign alignment activation",
+            "",
+            "| Alignment quantity | Valid seeds | Mean alignment reduction |",
+            "|---|---:|---:|",
+        )
+    )
+    rows.extend(
+        f"| {item.metric.value} | {item.valid_seed_count.value} | {_alignment_value(item.value)} |"
+        for item in activation.reductions
+    )
+    rows.extend(("", f"Campaign activation label: `{activation.label.value}`.", ""))
+    return "\n".join(rows)
 
 
 def _report_temporal(experiment_id: ExperimentId) -> ReportResult:
