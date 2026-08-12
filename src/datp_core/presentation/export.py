@@ -783,6 +783,7 @@ def _mechanism_title(mechanism: MechanismEvidence) -> ReportLine:
 
 def _mechanism_tables(mechanisms: tuple[MechanismEvidence, ...]) -> tuple[PublicationTable, ...]:
     cells: list[TableCell] = []
+    tables: list[PublicationTable] = []
     for mechanism in mechanisms:
         match mechanism:
             case AssociationResult() if mechanism.statistics is not None:
@@ -797,6 +798,43 @@ def _mechanism_tables(mechanisms: tuple[MechanismEvidence, ...]) -> tuple[Public
                             f"slope={_format_publication_metric(stats.regression_slope.value)}; "
                             f"R²={_format_publication_metric(stats.r_squared.value)}; "
                             f"sufficient={stats.evidentiary_sufficient}"
+                        ),
+                    )
+                )
+            case ConfirmatoryEquityUtilityBundle():
+                tables.append(
+                    PublicationTable(
+                        title=TableTitle("Confirmatory equity–utility companion table"),
+                        cells=tuple(
+                            TableCell(
+                                metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
+                                availability=(
+                                    AvailabilityStatus.AVAILABLE
+                                    if summary.paired_difference_mean is not None
+                                    else AvailabilityStatus.UNAVAILABLE
+                                ),
+                                rendered_value=TableCellRenderedValue(
+                                    ""
+                                    if summary.paired_difference_mean is None
+                                    else _format_publication_metric(summary.paired_difference_mean.value)
+                                ),
+                                evidence=EvidenceText(
+                                    f"{summary.measure.value}: shared="
+                                    + (
+                                        "unavailable"
+                                        if summary.shared_mean is None
+                                        else _format_publication_metric(summary.shared_mean.value)
+                                    )
+                                    + "; local="
+                                    + (
+                                        "unavailable"
+                                        if summary.local_mean is None
+                                        else _format_publication_metric(summary.local_mean.value)
+                                    )
+                                    + f"; local-minus-shared; paired seeds={summary.paired_seed_count.value}"
+                                ),
+                            )
+                            for summary in mechanism.measures
                         ),
                     )
                 )
@@ -861,7 +899,6 @@ def _mechanism_tables(mechanisms: tuple[MechanismEvidence, ...]) -> tuple[Public
                 )
             case _:
                 continue
-    tables: list[PublicationTable] = []
     if cells:
         tables.append(PublicationTable(title=TableTitle("Mechanism scientific values"), cells=tuple(cells)))
     return tuple(tables)
