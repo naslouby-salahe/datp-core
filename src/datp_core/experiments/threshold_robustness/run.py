@@ -207,6 +207,11 @@ class ConformalCoverageRow(StrictModel):
     signed_coverage_error: MetricDelta | None
     absolute_coverage_error: MetricValue | None
     client_fpr: MetricValue | None
+    local_client_fpr: MetricValue | None
+    shared_client_fpr: MetricValue | None
+    threshold_difference_from_local: MetricDelta | None
+    auroc: MetricValue | None
+    average_precision: MetricValue | None
 
 
 class ConformalCoverageReport(StrictModel):
@@ -920,9 +925,22 @@ def run_local_conformal_coverage_seed(
 
 
 def _client_fpr_for(document: FederatedEvaluationDocument, client: ClientIdentity) -> MetricValue | None:
+    return _client_metric_for(document, client, MetricId.FALSE_POSITIVE_RATE)
+
+
+def _client_metric_for(
+    document: FederatedEvaluationDocument, client: ClientIdentity, metric: MetricId
+) -> MetricValue | None:
     for client_result in document.clients:
         if client_result.client == client:
-            return metric_value(metric_by_id(client_result.metrics, MetricId.FALSE_POSITIVE_RATE))
+            return metric_value(metric_by_id(client_result.metrics, metric))
+    return None
+
+
+def _client_threshold_for(document: FederatedEvaluationDocument, client: ClientIdentity) -> MetricValue | None:
+    for client_result in document.clients:
+        if client_result.client == client:
+            return MetricValue(client_result.threshold.value)
     return None
 
 
@@ -946,7 +964,15 @@ def report_local_conformal_coverage(
         except ScientificContractError:
             missing += 1
             continue
+        local = _evaluation_document_for_seed(
+            seed, FederatedThresholdMethod.LOCAL_THRESHOLD, experiment_id, OUTPUTS_ROOT
+        )
+        shared = _evaluation_document_for_seed(
+            seed, FederatedThresholdMethod.SHARED_THRESHOLD, experiment_id, OUTPUTS_ROOT
+        )
         for diagnostic in document.diagnostics.conformal_coverage:
+            conformal_threshold = _client_threshold_for(document, diagnostic.client)
+            local_threshold = _client_threshold_for(local, diagnostic.client)
             rows.append(
                 ConformalCoverageRow(
                     seed=seed,
@@ -964,6 +990,15 @@ def report_local_conformal_coverage(
                     ),
                     absolute_coverage_error=diagnostic.absolute_coverage_error,
                     client_fpr=_client_fpr_for(document, diagnostic.client),
+                    local_client_fpr=_client_fpr_for(local, diagnostic.client),
+                    shared_client_fpr=_client_fpr_for(shared, diagnostic.client),
+                    threshold_difference_from_local=(
+                        None
+                        if conformal_threshold is None or local_threshold is None
+                        else MetricDelta(conformal_threshold.value - local_threshold.value)
+                    ),
+                    auroc=_client_metric_for(document, diagnostic.client, MetricId.AUROC),
+                    average_precision=_client_metric_for(document, diagnostic.client, MetricId.AVERAGE_PRECISION),
                 )
             )
     serialize_json_model(
