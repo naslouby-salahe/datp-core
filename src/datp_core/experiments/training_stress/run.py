@@ -178,6 +178,9 @@ class FineTuningArtifactBranch(StrEnum):
 @dataclass(frozen=True, slots=True, kw_only=True)
 class DittoStressTestResult:
     personalized_coordinate: FederatedTrainingCoordinate
+    alignment: ModelAlignmentResult
+    reference_alignment: ModelAlignmentResult
+    alignment_reductions: tuple[AlignmentReductionOutcome, ...]
     shared_threshold: SharedThresholdResult
     local_threshold: LocalThresholdResult
     shared_threshold_metrics: tuple[ClientMetricResult, ...]
@@ -188,6 +191,9 @@ class DittoStressTestResult:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class DittoStressTestEvidence:
     personalized_coordinate: FederatedTrainingCoordinate
+    alignment: ModelAlignmentResult
+    reference_alignment: ModelAlignmentResult
+    alignment_reductions: tuple[AlignmentReductionOutcome, ...]
     shared_threshold_metrics: tuple[ClientMetricResult, ...]
     local_threshold_metrics: tuple[ClientMetricResult, ...]
     evaluation_cohort: EvaluationCohortManifest
@@ -538,8 +544,38 @@ def run_ditto_stress_test_seed(
         client_counts=client_partition_counts_from_scores(reference_manifest),
         methods=(FederatedThresholdMethod.SHARED_THRESHOLD, FederatedThresholdMethod.LOCAL_THRESHOLD),
     )
+    source_coordinate = FederatedTrainingCoordinate(
+        population=population,
+        training_seed=training_seed,
+        split_protocol=split_protocol,
+        preprocessing_identity=preprocessing_identity,
+        model=TrainingModelId.FEDAVG_AUTOENCODER,
+        model_coefficient=None,
+    )
+    source_score_directory = (
+        federated_training_directory(source_coordinate, output_root) / ExecutionArtifactDirectory.SCORES
+    )
+    source_alignment_clients = _alignment_clients_from_scores(
+        score_directory=source_score_directory,
+        clients=context.clients,
+    )
+    grid = fedavg_alignment_grid_for_scores(source_alignment_clients)
+    reference_alignment = model_alignment(
+        ModelAlignmentCondition(
+            client_scores=source_alignment_clients,
+            shared_threshold=_shared_type7_threshold(source_alignment_clients),
+        ),
+        grid=grid,
+    )
+    alignment = model_alignment(
+        _alignment_condition_from_eligible(scores.eligible_calibration, shared.assignments[0].threshold),
+        grid=grid,
+    )
     result = DittoStressTestResult(
         personalized_coordinate=personalized_coordinate,
+        alignment=alignment,
+        reference_alignment=reference_alignment,
+        alignment_reductions=alignment_reductions(reference_alignment, alignment),
         shared_threshold=shared,
         local_threshold=local,
         shared_threshold_metrics=tuple(
@@ -567,6 +603,9 @@ def run_ditto_stress_test_seed(
     _persist_ditto_evidence(
         DittoStressTestEvidence(
             personalized_coordinate=result.personalized_coordinate,
+            alignment=result.alignment,
+            reference_alignment=result.reference_alignment,
+            alignment_reductions=result.alignment_reductions,
             shared_threshold_metrics=result.shared_threshold_metrics,
             local_threshold_metrics=result.local_threshold_metrics,
             evaluation_cohort=result.evaluation_cohort,
@@ -1220,6 +1259,19 @@ def _alignment_condition_from_scores(
 ) -> ModelAlignmentCondition:
     return ModelAlignmentCondition(
         client_scores=_alignment_clients_from_scores(score_directory=score_directory, clients=clients),
+        shared_threshold=shared_threshold,
+    )
+
+
+def _alignment_condition_from_eligible(
+    eligible: tuple[ClientBenignCalibrationScores, ...],
+    shared_threshold: ThresholdValue,
+) -> ModelAlignmentCondition:
+    return ModelAlignmentCondition(
+        client_scores=tuple(
+            ModelAlignmentClientScores(client=item.client, calibration_scores=item.scores)
+            for item in sorted(eligible, key=lambda item: item.client)
+        ),
         shared_threshold=shared_threshold,
     )
 
