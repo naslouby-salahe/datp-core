@@ -41,9 +41,12 @@ from datp_core.analysis.mechanisms.divergence import (
     jensen_shannon_divergence,
 )
 from datp_core.analysis.mechanisms.model_alignment import (
+    AlignmentActivationLabel,
+    AlignmentActivationSummary,
     AlignmentReductionOutcome,
     AlignmentReductionUnavailableReason,
     FedAvgAlignmentGrid,
+    MeanAlignmentReduction,
     ModelAlignmentClientScores,
     ModelAlignmentCondition,
     ModelAlignmentMetric,
@@ -53,6 +56,7 @@ from datp_core.analysis.mechanisms.model_alignment import (
     alignment_reductions,
     fedavg_alignment_grid,
     model_alignment,
+    summarize_alignment_activation,
 )
 from datp_core.analysis.mechanisms.movement import (
     ThresholdMethodComparison,
@@ -95,6 +99,8 @@ __all__ = (
     "AssociationStatistics",
     "AlignmentReductionOutcome",
     "AlignmentReductionUnavailableReason",
+    "AlignmentActivationLabel",
+    "AlignmentActivationSummary",
     "ClientScoreVector",
     "ClusterEvidenceAvailability",
     "ClusterEvidenceRecord",
@@ -111,6 +117,7 @@ __all__ = (
     "GroupDispersionSummary",
     "GroupedDispersionResult",
     "MechanismEvidence",
+    "MeanAlignmentReduction",
     "FedAvgAlignmentGrid",
     "ModelAlignmentClientScores",
     "ModelAlignmentCondition",
@@ -138,6 +145,7 @@ __all__ = (
     "jensen_shannon_from_client_scores",
     "local_threshold_dispersion",
     "model_alignment",
+    "summarize_alignment_activation",
     "summarize_threshold_movements",
     "summarize_threshold_movements_across_seeds",
     "threshold_movement",

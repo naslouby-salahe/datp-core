@@ -5,7 +5,7 @@ from pydantic import model_validator
 from scipy.spatial.distance import jensenshannon
 
 from datp_core.core.contracts import StrictModel
-from datp_core.core.numeric import MetricValue, ScoreValue, ThresholdValue
+from datp_core.core.numeric import MetricValue, ScoreValue, SeedObservationCount, ThresholdValue
 from datp_core.data.populations.contracts import ClientIdentity
 
 _DENOMINATOR_MINIMUM = 1e-12
@@ -29,6 +29,12 @@ class ModelAlignmentUnavailableReason(StrEnum):
 class AlignmentReductionUnavailableReason(StrEnum):
     NO_POSITIVE_FEDAVG_REFERENCE = "unavailable_no_positive_fedavg_reference"
     CONDITION_METRIC_UNAVAILABLE = "unavailable_condition_metric"
+
+
+class AlignmentActivationLabel(StrEnum):
+    OBSERVED_ALIGNMENT_ACTIVATION = "OBSERVED_ALIGNMENT_ACTIVATION"
+    NO_OBSERVED_ALIGNMENT_ACTIVATION = "NO_OBSERVED_ALIGNMENT_ACTIVATION"
+    ALIGNMENT_ACTIVATION_UNAVAILABLE = "ALIGNMENT_ACTIVATION_UNAVAILABLE"
 
 
 class ModelAlignmentMetricOutcome(StrictModel):
@@ -101,6 +107,41 @@ class AlignmentReductionOutcome(StrictModel):
         return self
 
 
+class MeanAlignmentReduction(StrictModel):
+    metric: ModelAlignmentMetric
+    value: MetricValue | None
+    valid_seed_count: SeedObservationCount
+
+    @model_validator(mode="after")
+    def validate_availability(self) -> "MeanAlignmentReduction":
+        if (self.value is None) != (self.valid_seed_count.value == 0):
+            raise ValueError("mean alignment reduction availability must match valid seed count")
+        return self
+
+
+class AlignmentActivationSummary(StrictModel):
+    reductions: tuple[MeanAlignmentReduction, ...]
+    label: AlignmentActivationLabel
+
+    @model_validator(mode="after")
+    def validate_reductions(self) -> "AlignmentActivationSummary":
+        if tuple(item.metric for item in self.reductions) != tuple(ModelAlignmentMetric):
+            raise ValueError("activation summary must report every metric in canonical order")
+        available = tuple(item.value for item in self.reductions if item.value is not None)
+        expected = (
+            AlignmentActivationLabel.ALIGNMENT_ACTIVATION_UNAVAILABLE
+            if not available
+            else (
+                AlignmentActivationLabel.OBSERVED_ALIGNMENT_ACTIVATION
+                if any(item.value > 0.0 for item in available)
+                else AlignmentActivationLabel.NO_OBSERVED_ALIGNMENT_ACTIVATION
+            )
+        )
+        if self.label is not expected:
+            raise ValueError("alignment activation label must follow the valid mean reductions")
+        return self
+
+
 def fedavg_alignment_grid(condition: ModelAlignmentCondition) -> FedAvgAlignmentGrid:
     return fedavg_alignment_grid_for_scores(condition.client_scores)
 
@@ -161,6 +202,48 @@ def alignment_reductions(
             condition_by_metric[metric],
         )
         for metric in ModelAlignmentMetric
+    )
+
+
+def summarize_alignment_activation(
+    reductions_by_seed: tuple[tuple[AlignmentReductionOutcome, ...], ...],
+) -> AlignmentActivationSummary:
+    if not reductions_by_seed:
+        raise ValueError("alignment activation requires at least one seed")
+    for reductions in reductions_by_seed:
+        if tuple(item.metric for item in reductions) != tuple(ModelAlignmentMetric):
+            raise ValueError("each seed must report every alignment reduction in canonical order")
+    reductions = tuple(
+        _mean_alignment_reduction(metric, reductions_by_seed)
+        for metric in ModelAlignmentMetric
+    )
+    available = tuple(item.value for item in reductions if item.value is not None)
+    label = (
+        AlignmentActivationLabel.ALIGNMENT_ACTIVATION_UNAVAILABLE
+        if not available
+        else (
+            AlignmentActivationLabel.OBSERVED_ALIGNMENT_ACTIVATION
+            if any(item.value > 0.0 for item in available)
+            else AlignmentActivationLabel.NO_OBSERVED_ALIGNMENT_ACTIVATION
+        )
+    )
+    return AlignmentActivationSummary(reductions=reductions, label=label)
+
+
+def _mean_alignment_reduction(
+    metric: ModelAlignmentMetric,
+    reductions_by_seed: tuple[tuple[AlignmentReductionOutcome, ...], ...],
+) -> MeanAlignmentReduction:
+    values = tuple(
+        outcome.value.value
+        for reductions in reductions_by_seed
+        for outcome in reductions
+        if outcome.metric is metric and outcome.value is not None
+    )
+    return MeanAlignmentReduction(
+        metric=metric,
+        value=MetricValue(float(np.mean(values))) if values else None,
+        valid_seed_count=SeedObservationCount(len(values)),
     )
 
 

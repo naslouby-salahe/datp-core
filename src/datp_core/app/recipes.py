@@ -6,6 +6,7 @@ from shutil import rmtree
 from typing import Protocol
 
 from datp_core.analysis.evidence import AnalysisAssetName
+from datp_core.analysis.mechanisms.model_alignment import summarize_alignment_activation
 from datp_core.analysis.metrics.models import AvailableMetric, metric_by_id
 from datp_core.app.contracts import AnchorRequirement, CampaignRole, OverwriteMode
 from datp_core.app.layout import ResearchArtifact, ResearchDirectory
@@ -34,7 +35,7 @@ from datp_core.core.identifiers import (
     PopulationId,
     ThresholdMethodExecutionStatus,
 )
-from datp_core.core.numeric import Seed
+from datp_core.core.numeric import MetricValue, Seed
 from datp_core.detector.training.protocols import DITTO_PRIMARY_REGULARIZATION, FEDPROX_COEFFICIENTS
 from datp_core.experiments.centralized_reference import (
     CIC_CENTRALIZED_REFERENCE,
@@ -666,6 +667,50 @@ def _report_fine_tuning(experiment_id: ExperimentId) -> ReportResult:
                 f"| {seed.value} | {model.client.client_id.value} | "
                 f"{model.serialized_state_evidence.byte_count.value} | {model.wall_time.value:.12g} |"
             )
+    activation = summarize_alignment_activation(
+        tuple(item.alignment_reductions for item in evidence_by_seed)
+    )
+    rows.extend(
+        (
+            "",
+            "## Per-seed alignment reductions",
+            "",
+            "| Seed | Alignment quantity | FedAvg reference | Fine-tuned model | Alignment reduction | Availability |",
+            "|---:|---|---:|---:|---:|---|",
+        )
+    )
+    for seed, evidence in zip(CONFIRMATORY_SEED_COHORT.values, evidence_by_seed, strict=True):
+        reference = {item.metric: item for item in evidence.reference_alignment.metrics}
+        condition = {item.metric: item for item in evidence.alignment.metrics}
+        for reduction in evidence.alignment_reductions:
+            reference_value = reference[reduction.metric].value
+            condition_value = condition[reduction.metric].value
+            availability = (
+                reduction.unavailable_reason.value if reduction.unavailable_reason is not None else "available"
+            )
+            rows.append(
+                f"| {seed.value} | {reduction.metric.value} | "
+                f"{_alignment_value(reference_value)} | {_alignment_value(condition_value)} | "
+                f"{_alignment_value(reduction.value)} | {availability} |"
+            )
+    rows.extend(
+        (
+            "",
+            "## Campaign alignment activation",
+            "",
+            "This descriptive sign-based label is not a significance or materiality test; "
+            "raw seed-level quantities above remain primary.",
+            "",
+            "| Alignment quantity | Valid seeds | Mean alignment reduction |",
+            "|---|---:|---:|",
+            *(
+                f"| {item.metric.value} | {item.valid_seed_count.value} | {_alignment_value(item.value)} |"
+                for item in activation.reductions
+            ),
+            "",
+            f"Campaign activation label: `{activation.label.value}`.",
+        )
+    )
     output = _fine_tuning_analysis_path()
     if output.parent.exists():
         rmtree(output.parent)
@@ -685,6 +730,12 @@ def _report_fine_tuning(experiment_id: ExperimentId) -> ReportResult:
         paths=(output.parent,),
         detail=DetailText(f"analysis={output.parent}"),
     )
+
+
+def _alignment_value(value: MetricValue | None) -> str:
+    if value is None:
+        return "—"
+    return f"{value.value:.12g}"
 
 
 def _report_temporal(experiment_id: ExperimentId) -> ReportResult:
