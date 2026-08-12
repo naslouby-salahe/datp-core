@@ -1122,8 +1122,7 @@ def _render_calibration_support_burden_devices(
 def _render_correlation_summary(summary: SupportCorrelationDirectionSummary) -> str:
     if summary.median is None or summary.minimum is None or summary.maximum is None:
         return (
-            f"unavailable; valid={summary.valid_seed_count.value}, "
-            f"unavailable={summary.unavailable_seed_count.value}"
+            f"unavailable; valid={summary.valid_seed_count.value}, unavailable={summary.unavailable_seed_count.value}"
         )
     return (
         f"median={_format_publication_metric(summary.median.value)}, "
