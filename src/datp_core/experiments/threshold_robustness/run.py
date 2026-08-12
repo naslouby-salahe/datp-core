@@ -193,6 +193,26 @@ class CalibrationSizeAblationReport(StrictModel):
     threshold_order_rows: tuple[CalibrationThresholdOrderRow, ...] = ()
 
 
+class OnboardingCalibrationRow(StrictModel):
+    seed: Seed
+    target_client: ClientIdentity
+    calibration_size: NonNegativeIntegerValue
+    replicate: ReplicateIndex
+    method: FederatedThresholdMethod
+    target_threshold: MetricValue | None
+    threshold_delta_from_full_local: MetricDelta | None
+    target_fpr: MetricValue | None
+    target_tpr: MetricValue | None
+    target_macro_f1: MetricValue | None
+    unavailable_reason: str | None
+    family_fallback: bool
+
+
+class OnboardingCalibrationReport(StrictModel):
+    experiment: ExperimentId
+    rows: tuple[OnboardingCalibrationRow, ...]
+
+
 class ShrinkageCurveRow(StrictModel):
     seed: Seed
     lambda_weight: ShrinkageWeight
@@ -578,6 +598,93 @@ def run_calibration_size_ablation_seed(
 ) -> ThresholdRobustnessSeedResult:
     require_calibration_subsample_replicate_count()
     return _run_robustness_seed(ExperimentId.CALIBRATION_SIZE_ABLATION, training_seed, output_root, overwrite, progress)
+
+
+def run_calibration_cold_start_onboarding_seed(
+    training_seed: Seed,
+    *,
+    output_root: Path,
+    overwrite: bool,
+    progress: ProgressHook | None = None,
+) -> ThresholdRobustnessSeedResult:
+    return _run_robustness_seed(
+        ExperimentId.CALIBRATION_COLD_START_ONBOARDING,
+        training_seed,
+        output_root,
+        overwrite,
+        progress,
+    )
+
+
+def report_calibration_cold_start_onboarding(
+    experiment_id: ExperimentId,
+    overwrite: bool,
+) -> AnalysisReportPublication:
+    del overwrite
+    declaration = require_experiment_declaration(experiment_id)
+    directory = _analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
+    directory.mkdir(parents=True, exist_ok=True)
+    rows: list[OnboardingCalibrationRow] = []
+    missing = 0
+    for seed in CONFIRMATORY_SEED_COHORT.values:
+        for method in declaration.federated_thresholds:
+            try:
+                document = _evaluation_document_for_seed(seed, method, experiment_id, OUTPUTS_ROOT)
+            except ScientificContractError:
+                missing += 1
+                continue
+            for cell in document.diagnostics.onboarding_calibration:
+                metrics = cell.target_metrics
+                rows.append(
+                    OnboardingCalibrationRow(
+                        seed=seed,
+                        target_client=cell.target_client,
+                        calibration_size=NonNegativeIntegerValue(cell.calibration_size.value),
+                        replicate=cell.replicate_index,
+                        method=cell.method,
+                        target_threshold=(
+                            None if cell.target_threshold is None else MetricValue(cell.target_threshold.value)
+                        ),
+                        threshold_delta_from_full_local=(
+                            None
+                            if cell.target_threshold is None
+                            else MetricDelta(cell.target_threshold.value - cell.full_calibration_local_threshold.value)
+                        ),
+                        target_fpr=(
+                            None
+                            if metrics is None
+                            else metric_value(metric_by_id(metrics.metrics, MetricId.FALSE_POSITIVE_RATE))
+                        ),
+                        target_tpr=(
+                            None
+                            if metrics is None
+                            else metric_value(metric_by_id(metrics.metrics, MetricId.TRUE_POSITIVE_RATE))
+                        ),
+                        target_macro_f1=(
+                            None
+                            if metrics is None
+                            else metric_value(metric_by_id(metrics.metrics, MetricId.BINARY_MACRO_F1))
+                        ),
+                        unavailable_reason=None if cell.unavailable_reason is None else cell.unavailable_reason.value,
+                        family_fallback=cell.family_fallback,
+                    )
+                )
+    serialize_json_model(
+        OnboardingCalibrationReport(experiment=experiment_id, rows=tuple(rows)),
+        _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
+    )
+    return finalize_analysis_report(
+        AnalysisReportFinalizationInput(
+            directory=directory,
+            marker=_complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
+            missing_count=SeedObservationCount(missing),
+            marker_text=AnalysisMarkerText("calibration_cold_start_onboarding_analysis_complete"),
+        )
+    )
+
+
+def calibration_cold_start_onboarding_analysis_marker_present(experiment_id: ExperimentId) -> bool:
+    return _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES).is_file()
 
 
 def report_calibration_size_ablation(

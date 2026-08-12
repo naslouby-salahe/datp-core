@@ -98,11 +98,13 @@ from datp_core.experiments.temporal import (
 )
 from datp_core.experiments.threshold_robustness import (
     ThresholdRobustnessSeedResult,
+    calibration_cold_start_onboarding_analysis_marker_present,
     calibration_size_ablation_analysis_marker_present,
     fixed_shrinkage_curve_analysis_marker_present,
     local_conformal_coverage_analysis_marker_present,
     preprocessing_geometry_sensitivity_analysis_marker_present,
     quantile_sensitivity_analysis_marker_present,
+    report_calibration_cold_start_onboarding,
     report_calibration_size_ablation,
     report_fixed_shrinkage_curve,
     report_local_conformal_coverage,
@@ -111,6 +113,7 @@ from datp_core.experiments.threshold_robustness import (
     report_shared_construction_sensitivity,
     report_size_aware_shrinkage,
     report_threshold_estimator_scope_sensitivity,
+    run_calibration_cold_start_onboarding_seed,
     run_calibration_size_ablation_seed,
     run_fixed_shrinkage_curve_seed,
     run_local_conformal_coverage_seed,
@@ -849,6 +852,8 @@ def _report_robustness(experiment_id: ExperimentId) -> ReportResult:
         result = report_threshold_estimator_scope_sensitivity(experiment_id, True)
     elif experiment_id is ExperimentId.CALIBRATION_SIZE_ABLATION:
         result = report_calibration_size_ablation(experiment_id, True)
+    elif experiment_id is ExperimentId.CALIBRATION_COLD_START_ONBOARDING:
+        result = report_calibration_cold_start_onboarding(experiment_id, True)
     elif experiment_id is ExperimentId.FIXED_SHRINKAGE_CURVE:
         result = report_fixed_shrinkage_curve(experiment_id, True)
     elif experiment_id is ExperimentId.SIZE_AWARE_SHRINKAGE:
@@ -1040,6 +1045,8 @@ def _robustness_marker(experiment_id: ExperimentId) -> bool:
         return threshold_estimator_scope_sensitivity_analysis_marker_present(experiment_id)
     if experiment_id is ExperimentId.CALIBRATION_SIZE_ABLATION:
         return calibration_size_ablation_analysis_marker_present(experiment_id)
+    if experiment_id is ExperimentId.CALIBRATION_COLD_START_ONBOARDING:
+        return calibration_cold_start_onboarding_analysis_marker_present(experiment_id)
     if experiment_id is ExperimentId.FIXED_SHRINKAGE_CURVE:
         return fixed_shrinkage_curve_analysis_marker_present(experiment_id)
     if experiment_id is ExperimentId.SIZE_AWARE_SHRINKAGE:
@@ -1260,6 +1267,17 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
         anchor_requirement=AnchorRequirement.REQUIRED,
         campaign_role=CampaignRole.MANDATORY,
         dispatch=_robustness_recipe(ExperimentId.CALIBRATION_SIZE_ABLATION, run_calibration_size_ablation_seed),
+        report=_report_robustness,
+        analysis_marker=_robustness_marker,
+    ),
+    ExperimentRecipe(
+        experiment=ExperimentId.CALIBRATION_COLD_START_ONBOARDING,
+        anchor_requirement=AnchorRequirement.REQUIRED,
+        campaign_role=CampaignRole.MANDATORY,
+        dispatch=_robustness_recipe(
+            ExperimentId.CALIBRATION_COLD_START_ONBOARDING,
+            run_calibration_cold_start_onboarding_seed,
+        ),
         report=_report_robustness,
         analysis_marker=_robustness_marker,
     ),
