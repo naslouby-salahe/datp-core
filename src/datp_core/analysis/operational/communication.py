@@ -13,7 +13,7 @@ from datp_core.core.identifiers import (
     MessageEndpoint,
     MetricId,
 )
-from datp_core.core.numeric import ByteCount, LogicalElementCount, MetricValue, Seed
+from datp_core.core.numeric import ByteCount, LogicalElementCount, MetricValue, NonNegativeIntegerValue, Seed
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 
@@ -29,6 +29,7 @@ class ThresholdPayloadKind(StrEnum):
     LOCAL_QUANTILE_TRANSMISSION = "local_quantile_transmission"
     GROUPED_THRESHOLD_ASSIGNMENT = "grouped_threshold_assignment"
     BENIGN_SUMMARY_STATISTICS = "benign_summary_statistics"
+    KLL_SKETCH_TRANSMISSION = "kll_sketch_transmission"
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,6 +114,34 @@ class CommunicationDiagnostic:
     @property
     def estimated_serialized_bytes_metric(self) -> AvailableMetric:
         return available(MetricId.COMMUNICATION_BYTES, MetricValue(float(self.total_estimated_serialized_bytes.value)))
+
+
+@dataclass(frozen=True, slots=True)
+class ThresholdStageCommunicationDiagnostic:
+    """Threshold-only disclosure and transport, excluding federated model-update traffic."""
+
+    training_seed: Seed
+    coordinate: FederatedTrainingCoordinate
+    messages: tuple[CommunicationMessageDiagnostic, ...]
+    total_logical_element_count: NonNegativeIntegerValue
+    total_serialized_bytes: ByteCount
+
+    def __post_init__(self) -> None:
+        expected_elements = sum(item.payload.logical_element_count.value for item in self.messages)
+        expected_bytes = sum(item.estimated_serialized_bytes.value for item in self.messages)
+        if self.total_logical_element_count.value != expected_elements:
+            raise ScientificContractError(ErrorMessage("threshold-stage logical elements must equal message totals"))
+        if self.total_serialized_bytes.value != expected_bytes:
+            raise ScientificContractError(ErrorMessage("threshold-stage bytes must equal message totals"))
+        for message in self.messages:
+            if message.training_seed != self.training_seed or message.coordinate != self.coordinate:
+                raise ScientificContractError(
+                    ErrorMessage("threshold-stage messages must match the evaluated coordinate")
+                )
+            if message.payload_kind is ThresholdPayloadKind.MODEL_TRANSMISSION:
+                raise ScientificContractError(
+                    ErrorMessage("threshold-stage accounting cannot contain model transmission")
+                )
 
 
 def summarize_communication(

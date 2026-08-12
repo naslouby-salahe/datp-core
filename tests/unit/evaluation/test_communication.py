@@ -6,10 +6,11 @@ from datp_core.analysis.operational.communication import (
     MessageDirection,
     SerializedPayloadEvidence,
     ThresholdPayloadKind,
+    ThresholdStageCommunicationDiagnostic,
     summarize_communication,
 )
 from datp_core.core.identifiers import CommunicationEstimationMethod, MessageEndpoint
-from datp_core.core.numeric import ByteCount, LogicalElementCount, Seed
+from datp_core.core.numeric import ByteCount, LogicalElementCount, NonNegativeIntegerValue, Seed
 
 
 def test_communication_totals_are_exact_serialized_byte_counts() -> None:
@@ -36,3 +37,17 @@ def test_communication_totals_are_exact_serialized_byte_counts() -> None:
 def test_logical_element_count_rejects_zero() -> None:
     with pytest.raises(ValueError, match="greater than or equal to 1"):
         LogicalElementCount(0)
+
+
+def test_threshold_stage_accounting_explicitly_represents_local_zero_payload() -> None:
+    coordinate = fedavg_coordinate(Seed(6))
+
+    result = ThresholdStageCommunicationDiagnostic(
+        training_seed=Seed(6),
+        coordinate=coordinate,
+        messages=(),
+        total_logical_element_count=NonNegativeIntegerValue(0),
+        total_serialized_bytes=ByteCount(0),
+    )
+
+    assert result.messages == ()
