@@ -6,7 +6,11 @@ from datp_core.analysis.metrics.cohorts import (
     EvaluationCohortManifest,
     EvaluationCohortMembership,
 )
-from datp_core.analysis.metrics.federated import CalibrationSizeAblationCell, FederatedEvaluationRequest
+from datp_core.analysis.metrics.federated import (
+    CalibrationSizeAblationCell,
+    FederatedEvaluationRequest,
+    OnboardingCalibrationCell,
+)
 from datp_core.analysis.metrics.federated_execution import prepare_federated_evaluation
 from datp_core.analysis.metrics.fixed_score import FixedScoreEvidence
 from datp_core.core.errors import (
@@ -55,7 +59,11 @@ from datp_core.thresholds.protocols import (
     ClusterThresholdAggregation,
     require_calibration_subsample_replicate_count,
 )
-from datp_core.thresholds.quantiles import ClientBenignCalibrationScores, calibration_scores_from_references
+from datp_core.thresholds.quantiles import (
+    ClientBenignCalibrationScores,
+    calibration_scores_from_references,
+    local_quantile,
+)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -151,6 +159,67 @@ class OnboardingThresholdConstruction:
     result: ThresholdConstructionResult | None
     unavailable_reason: ThresholdInfeasibilityReason | None
     family_fallback: bool
+
+
+def construct_onboarding_calibration_cell(
+    *,
+    target_calibration: OnboardingTargetCalibration,
+    size: OnboardingCalibrationSize,
+    replicate_index: ReplicateIndex,
+    method: FederatedThresholdMethod,
+    quantile: Quantile,
+    capabilities: PopulationCapabilities,
+    family_by_client: tuple[FamilyAssignment, ...],
+    request: ConstructCalibrationSizeAblationRequest,
+) -> OnboardingCalibrationCell:
+    construction = construct_onboarding_threshold(
+        target_calibration, size, replicate_index, method, quantile, capabilities, family_by_client
+    )
+    full_local = local_quantile(target_calibration.full_target_scores, quantile).value
+    if construction.result is None:
+        return OnboardingCalibrationCell(
+            target_client=target_calibration.target,
+            calibration_size=size,
+            replicate_index=replicate_index,
+            method=method,
+            target_metrics=None,
+            target_threshold=None,
+            full_calibration_local_threshold=full_local,
+            unavailable_reason=construction.unavailable_reason,
+            family_fallback=construction.family_fallback,
+        )
+    calibration_scores = target_calibration.scores_for_cell(size, replicate_index)
+    publication = prepare_federated_evaluation(
+        FederatedEvaluationRequest(
+            execution_key=request.execution_key,
+            score_manifest=request.score_manifest,
+            threshold_result=construction.result,
+            cohort=request.cohort,
+            fixed_score_evidence=request.fixed_score_evidence,
+            evidence_role=request.evidence_role,
+            calibration_scores=calibration_scores,
+            target_quantile=quantile,
+            conformal_coverage_inputs=(),
+            threshold_estimation_inputs=(),
+            communication_messages=(),
+            traffic_rate_evidence=None,
+            temporal_provenance=None,
+            temporal_threshold_provenance=None,
+            execution_identity=request.execution_identity,
+        )
+    )
+    target_metrics = next(item for item in publication.artifacts.clients if item.client == target_calibration.target)
+    return OnboardingCalibrationCell(
+        target_client=target_calibration.target,
+        calibration_size=size,
+        replicate_index=replicate_index,
+        method=method,
+        target_metrics=target_metrics,
+        target_threshold=target_metrics.threshold,
+        full_calibration_local_threshold=full_local,
+        unavailable_reason=None,
+        family_fallback=construction.family_fallback,
+    )
 
 
 def construct_onboarding_threshold(

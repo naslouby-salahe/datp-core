@@ -8,6 +8,7 @@ import polars as pl
 from datp_core.analysis.metrics.federated import (
     CalibrationSizeAblationCell,
     ConformalCoverageStageInput,
+    OnboardingCalibrationCell,
     ThresholdEstimationStageInput,
 )
 from datp_core.analysis.metrics.federated_publication import (
@@ -87,12 +88,14 @@ from datp_core.thresholds.calibration.construction import (
     build_declared_calibration,
     build_onboarding_target_calibration,
     construct_calibration_size_ablation,
+    construct_onboarding_calibration_cell,
 )
 from datp_core.thresholds.calibration.service import eligible_calibration_scores
 from datp_core.thresholds.contracts import ThresholdUnavailableResult
 from datp_core.thresholds.dispatch import ThresholdConstructionRequest, ThresholdConstructionResult
 from datp_core.thresholds.protocols import (
     CANONICAL_QUANTILE,
+    ONBOARDING_CALIBRATION_PROTOCOL,
     CalibrationSupportRule,
     ClusterThresholdAggregation,
 )
@@ -318,6 +321,48 @@ class ExperimentWorkspace:
             for client in sorted(item.client for item in self.eligible_calibration_scores())
         )
 
+    @cached_property
+    def onboarding_calibration(self) -> tuple[OnboardingCalibrationCell, ...]:
+        if self.coordinate.experiment is not ExperimentId.CALIBRATION_COLD_START_ONBOARDING:
+            return ()
+        inputs = build_federated_evaluation_inputs(self.scores, self.coordinate.threshold_method)
+        request = ConstructCalibrationSizeAblationRequest(
+            execution_key=self.coordinate.execution_key,
+            score_manifest=self.scores,
+            method=self.coordinate.threshold_method,
+            quantile=self.threshold_quantile,
+            cohort=inputs.cohort,
+            fixed_score_evidence=inputs.fixed_score_evidence,
+            evidence_role=self.coordinate.evidence_role,
+            family_by_client=self.context.family_by_client,
+            calibration=build_declared_calibration(self.scores),
+            execution_identity=self.context.execution_identity,
+        )
+        cells: list[OnboardingCalibrationCell] = []
+        for target in self.onboarding_target_calibrations:
+            for size in ONBOARDING_CALIBRATION_PROTOCOL.sizes:
+                replicate_indices = (
+                    (ReplicateIndex(0),)
+                    if size.value == 0
+                    else tuple(
+                        ReplicateIndex(index) for index in range(ONBOARDING_CALIBRATION_PROTOCOL.replicate_count.value)
+                    )
+                )
+                for replicate_index in replicate_indices:
+                    cells.append(
+                        construct_onboarding_calibration_cell(
+                            target_calibration=target,
+                            size=size,
+                            replicate_index=replicate_index,
+                            method=self.coordinate.threshold_method,
+                            quantile=self.threshold_quantile,
+                            capabilities=population_capabilities(self.coordinate.population),
+                            family_by_client=self.context.family_by_client,
+                            request=request,
+                        )
+                    )
+        return tuple(cells)
+
     def _conformal_coverage_inputs(self) -> tuple[ConformalCoverageStageInput, ...]:
         if not isinstance(self.threshold, ConformalThresholdResult):
             return ()
@@ -452,6 +497,6 @@ class ExperimentWorkspace:
                 output_directory=self.run_directory() / EvaluationRunAssetDirectory.EVALUATION,
                 overwrite=False,
                 calibration_size_ablation=self.calibration_size_ablation,
-                onboarding_calibration=(),
+                onboarding_calibration=self.onboarding_calibration,
             )
         )
