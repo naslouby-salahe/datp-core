@@ -31,6 +31,7 @@ from datp_core.core.identifiers import CoordinateStableKey, EvidenceRole, Federa
 from datp_core.core.numeric import (
     CalibrationSize,
     CoverageTarget,
+    OnboardingCalibrationSize,
     Quantile,
     ReplicateIndex,
     ShrinkageWeight,
@@ -40,6 +41,7 @@ from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.scoring.contracts import ScoreArtifactManifest
 from datp_core.detector.training.models import FederatedTrainingCoordinate
 from datp_core.experiments.common.coordinates import ExternalTemporalExecutionIdentity
+from datp_core.thresholds.contracts import ThresholdInfeasibilityReason
 from datp_core.thresholds.dispatch import ThresholdConstructionResult
 from datp_core.thresholds.quantiles import ClientBenignCalibrationScores
 from datp_core.thresholds.variants.conformal import ConformalAssignment
@@ -80,6 +82,33 @@ class CalibrationSizeAblationCell:
 
 
 @dataclass(frozen=True, slots=True)
+class OnboardingCalibrationCell:
+    target_client: ClientIdentity
+    calibration_size: OnboardingCalibrationSize
+    replicate_index: ReplicateIndex
+    method: FederatedThresholdMethod
+    target_metrics: ClientMetricResult | None
+    target_threshold: ThresholdValue | None
+    full_calibration_local_threshold: ThresholdValue
+    unavailable_reason: ThresholdInfeasibilityReason | None
+    family_fallback: bool = False
+
+    def __post_init__(self) -> None:
+        if self.target_metrics is not None and self.target_metrics.client != self.target_client:
+            raise ScientificContractError(ErrorMessage("onboarding target metrics must belong to the target client"))
+        if (self.target_metrics is None) != (self.target_threshold is None):
+            raise ScientificContractError(
+                ErrorMessage("onboarding target metrics and threshold must be available together")
+            )
+        if self.target_metrics is not None and self.unavailable_reason is not None:
+            raise ScientificContractError(
+                ErrorMessage("available onboarding target cannot carry an unavailable reason")
+            )
+        if self.target_metrics is None and self.unavailable_reason is None:
+            raise ScientificContractError(ErrorMessage("unavailable onboarding target requires a typed reason"))
+
+
+@dataclass(frozen=True, slots=True)
 class ConformalCoverageStageInput:
     assignment: ConformalAssignment
     target_coverage: CoverageTarget
@@ -114,6 +143,7 @@ class EvaluationDiagnostics:
     family_recall: FamilyRecallDiagnostics
     shrinkage_curve: tuple[ShrinkageLambdaEvaluation, ...] = field(default_factory=tuple)
     calibration_size_ablation: tuple[CalibrationSizeAblationCell, ...] = field(default_factory=tuple)
+    onboarding_calibration: tuple[OnboardingCalibrationCell, ...] = field(default_factory=tuple)
     sample_efficiency: tuple[SampleEfficiencyPoint, ...] = field(default_factory=tuple)
 
 
@@ -135,6 +165,7 @@ class FederatedEvaluationRequest:
     temporal_threshold_provenance: TemporalDeploymentProvenance | None
     execution_identity: ExternalTemporalExecutionIdentity | None
     calibration_size_ablation: tuple[CalibrationSizeAblationCell, ...] = ()
+    onboarding_calibration: tuple[OnboardingCalibrationCell, ...] = ()
 
 
 class FederatedEvaluationDocument(StrictModel):

@@ -441,5 +441,6 @@ class ExperimentWorkspace:
                 output_directory=self.run_directory() / EvaluationRunAssetDirectory.EVALUATION,
                 overwrite=False,
                 calibration_size_ablation=self.calibration_size_ablation,
+                onboarding_calibration=(),
             )
         )

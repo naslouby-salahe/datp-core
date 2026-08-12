@@ -52,7 +52,10 @@ def require_experiment_execution_ready(experiment_id: ExperimentId) -> None:
             ErrorMessage(f"experiment is blocked by its declaration: {experiment_id.value}"),
             subject=experiment_id,
         )
-    if experiment_id is ExperimentId.CALIBRATION_SIZE_ABLATION:
+    if experiment_id in {
+        ExperimentId.CALIBRATION_SIZE_ABLATION,
+        ExperimentId.CALIBRATION_COLD_START_ONBOARDING,
+    }:
         require_calibration_subsample_replicate_count()
 
 

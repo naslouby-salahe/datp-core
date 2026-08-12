@@ -85,6 +85,12 @@ _CALIBRATION_SIZE_METHODS = _SHARED_LOCAL_AND_GROUPED_METHODS + (
     FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE,
     FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD,
 )
+_ONBOARDING_CALIBRATION_METHODS = (
+    FederatedThresholdMethod.SHARED_THRESHOLD,
+    FederatedThresholdMethod.LOCAL_THRESHOLD,
+    FederatedThresholdMethod.FAMILY_THRESHOLD,
+    FederatedThresholdMethod.CLUSTER_THRESHOLD,
+)
 _TEMPORAL_METHODS = _SHARED_LOCAL_AND_GROUPED_METHODS + (FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE,)
 
 
@@ -221,6 +227,15 @@ EXPERIMENTS = (
         PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
         _CALIBRATION_SIZE_METHODS,
         CONFIRMATORY_METRICS,
+    ),
+    _declare(
+        ExperimentId.CALIBRATION_COLD_START_ONBOARDING,
+        EvidenceRole.SUPPORTIVE,
+        PopulationId.NBAIOT_NATURAL_DEVICES,
+        TrainingModelId.FEDAVG_AUTOENCODER,
+        PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
+        _ONBOARDING_CALIBRATION_METHODS,
+        CONFIRMATORY_METRICS + (MetricId.AVERAGE_PRECISION,),
     ),
     _declare(
         ExperimentId.FIXED_SHRINKAGE_CURVE,

@@ -315,6 +315,7 @@ def _evaluate_diagnostics(
         family_recall=evaluate_nbaiot_family_recall(request.score_manifest, clients),
         shrinkage_curve=shrinkage_curve,
         calibration_size_ablation=request.calibration_size_ablation,
+        onboarding_calibration=request.onboarding_calibration,
         sample_efficiency=sample_efficiency_curve(threshold_estimation) if threshold_estimation else (),
     )
 
