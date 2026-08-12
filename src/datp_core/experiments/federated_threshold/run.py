@@ -5,6 +5,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
+import numpy as np
 from pydantic import TypeAdapter
 
 from datp_core.analysis.descriptive import summarize_cross_seed_metric_values
@@ -92,8 +93,15 @@ class EstimationSummary(StrictModel):
     mean_achieved_exceedance: Ratio | None
     mean_threshold_variance: ThresholdVariance | None
     mean_estimated_communication_bytes: AverageByteCount | None
-    mean_kll_client_build_serialization_seconds: MetricValue | None
-    mean_kll_server_deserialize_merge_query_seconds: MetricValue | None
+    kll_client_build_serialization_timing: RuntimeTimingSummary | None
+    kll_server_deserialize_merge_query_timing: RuntimeTimingSummary | None
+
+
+class RuntimeTimingSummary(StrictModel):
+    median_milliseconds: MetricValue
+    interquartile_range_milliseconds: MetricValue
+    p95_milliseconds: MetricValue
+    observation_count: SeedObservationCount
 
 
 class EstimationSummaryReport(StrictModel):
@@ -367,8 +375,8 @@ def _estimation_summary(
             mean_achieved_exceedance=_mean_ratio(diagnostics.exceedances),
             mean_threshold_variance=_mean_threshold_variance(diagnostics.variances),
             mean_estimated_communication_bytes=_mean_bytes(diagnostics.communication),
-            mean_kll_client_build_serialization_seconds=_mean_elapsed(client_timings),
-            mean_kll_server_deserialize_merge_query_seconds=_mean_elapsed(server_timings),
+            kll_client_build_serialization_timing=_runtime_timing_summary(client_timings),
+            kll_server_deserialize_merge_query_timing=_runtime_timing_summary(server_timings),
         ),
         missing_count=SeedObservationCount(missing),
     )
@@ -396,8 +404,17 @@ def _kll_endpoint_timings(
     return tuple(client), tuple(server)
 
 
-def _mean_elapsed(values: tuple[ElapsedSeconds, ...]) -> MetricValue | None:
-    return MetricValue(sum(item.value for item in values) / len(values)) if values else None
+def _runtime_timing_summary(values: tuple[ElapsedSeconds, ...]) -> RuntimeTimingSummary | None:
+    if not values:
+        return None
+    milliseconds = np.asarray(tuple(item.value * 1000.0 for item in values), dtype=np.float64)
+    lower, upper = np.quantile(milliseconds, (0.25, 0.75), method="linear")
+    return RuntimeTimingSummary(
+        median_milliseconds=MetricValue(float(np.quantile(milliseconds, 0.5, method="linear"))),
+        interquartile_range_milliseconds=MetricValue(float(upper - lower)),
+        p95_milliseconds=MetricValue(float(np.quantile(milliseconds, 0.95, method="linear"))),
+        observation_count=SeedObservationCount(len(values)),
+    )
 
 
 def run_federated_benign_statistics_comparison_seed(
