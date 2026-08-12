@@ -509,7 +509,12 @@ def report_federated_benign_statistics_comparison(
         loaded = _estimation_summary(
             experiment_id=experiment_id,
             method=method,
-            families=frozenset((EstimationDiagnosticFamily.THRESHOLD_ERROR,)),
+            families=frozenset(
+                (
+                    EstimationDiagnosticFamily.THRESHOLD_ERROR,
+                    EstimationDiagnosticFamily.EXCEEDANCE_AND_VARIANCE,
+                )
+            ),
         )
         missing += loaded.missing_count.value
         if loaded.summary is not None:
