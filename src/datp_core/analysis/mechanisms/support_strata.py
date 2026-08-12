@@ -64,6 +64,37 @@ class SupportStratumOutcomeReport(StrictModel):
         return self
 
 
+class SupportStratumCrossSeedMetricSummary(StrictModel):
+    arithmetic_mean: MetricValue
+    median: MetricValue
+    minimum: MetricValue
+    maximum: MetricValue
+
+
+class SupportStratumCrossSeedSummary(StrictModel):
+    stratum: CalibrationSupportStratum
+    mean_fpr_relief: SupportStratumCrossSeedMetricSummary
+    fpr_helped_fraction: SupportStratumCrossSeedMetricSummary
+    fpr_harmed_fraction: SupportStratumCrossSeedMetricSummary
+    shared_mean_absolute_target_error: SupportStratumCrossSeedMetricSummary
+    local_mean_absolute_target_error: SupportStratumCrossSeedMetricSummary
+
+
+class SupportStratumCampaignSummary(StrictModel):
+    summaries: tuple[SupportStratumCrossSeedSummary, ...]
+    availability: AvailabilityStatus
+    reason: AnalysisReasonText | None
+
+    @model_validator(mode="after")
+    def validate_summary(self) -> "SupportStratumCampaignSummary":
+        if self.availability is AvailabilityStatus.AVAILABLE:
+            if len(self.summaries) != len(CalibrationSupportStratum) or self.reason is not None:
+                raise ValueError("available support-stratum campaign summary requires all fixed strata")
+        elif self.summaries or self.reason is None:
+            raise ValueError("unavailable support-stratum campaign summary requires no rows and a reason")
+        return self
+
+
 def campaign_fixed_support_strata(
     documents: tuple[FederatedEvaluationDocument, ...],
 ) -> CampaignFixedSupportStrata:
@@ -79,9 +110,8 @@ def campaign_fixed_support_strata(
         for support in supports:
             counts_by_client.setdefault(support.client, []).append(support.source_benign_calibration_count.value)
     expected_seed_count = len(documents)
-    if (
-        len(counts_by_client) != len(NBaIoTDevice)
-        or any(len(counts) != expected_seed_count for counts in counts_by_client.values())
+    if len(counts_by_client) != len(NBaIoTDevice) or any(
+        len(counts) != expected_seed_count for counts in counts_by_client.values()
     ):
         return _unavailable("expected exactly nine eligible N-BaIoT devices across every declared seed")
     ordered = tuple(sorted(counts_by_client.items(), key=lambda item: (_median(item[1]), item[0].client_id.value)))
@@ -118,9 +148,7 @@ def support_stratum_seed_outcomes(
         shared_errors = {
             item.client: item.absolute_target_error for item in shared.diagnostics.held_out_operating_points
         }
-        local_errors = {
-            item.client: item.absolute_target_error for item in local.diagnostics.held_out_operating_points
-        }
+        local_errors = {item.client: item.absolute_target_error for item in local.diagnostics.held_out_operating_points}
         for stratum, clients in members.items():
             if any(
                 client not in movements or client not in shared_errors or client not in local_errors
@@ -148,6 +176,41 @@ def support_stratum_seed_outcomes(
     return SupportStratumOutcomeReport(outcomes=tuple(outcomes), availability=AvailabilityStatus.AVAILABLE, reason=None)
 
 
+def summarize_support_stratum_campaign(
+    report: SupportStratumOutcomeReport,
+) -> SupportStratumCampaignSummary:
+    if report.availability is AvailabilityStatus.UNAVAILABLE:
+        return SupportStratumCampaignSummary(
+            summaries=(), availability=AvailabilityStatus.UNAVAILABLE, reason=report.reason
+        )
+    summaries: list[SupportStratumCrossSeedSummary] = []
+    for stratum in CalibrationSupportStratum:
+        rows = tuple(item for item in report.outcomes if item.stratum is stratum)
+        if not rows:
+            return SupportStratumCampaignSummary(
+                summaries=(),
+                availability=AvailabilityStatus.UNAVAILABLE,
+                reason=AnalysisReasonText("support-stratum campaign summary lacks a fixed stratum"),
+            )
+        summaries.append(
+            SupportStratumCrossSeedSummary(
+                stratum=stratum,
+                mean_fpr_relief=_cross_seed_summary(tuple(item.mean_fpr_relief.value for item in rows)),
+                fpr_helped_fraction=_cross_seed_summary(tuple(item.fpr_helped_fraction.value for item in rows)),
+                fpr_harmed_fraction=_cross_seed_summary(tuple(item.fpr_harmed_fraction.value for item in rows)),
+                shared_mean_absolute_target_error=_cross_seed_summary(
+                    tuple(item.shared_mean_absolute_target_error.value for item in rows)
+                ),
+                local_mean_absolute_target_error=_cross_seed_summary(
+                    tuple(item.local_mean_absolute_target_error.value for item in rows)
+                ),
+            )
+        )
+    return SupportStratumCampaignSummary(
+        summaries=tuple(summaries), availability=AvailabilityStatus.AVAILABLE, reason=None
+    )
+
+
 def _median(values: list[int]) -> float:
     ordered = tuple(sorted(values))
     middle = len(ordered) // 2
@@ -170,3 +233,15 @@ def _unavailable(reason: str) -> CampaignFixedSupportStrata:
 
 def _unavailable_outcomes(reason: AnalysisReasonText) -> SupportStratumOutcomeReport:
     return SupportStratumOutcomeReport(outcomes=(), availability=AvailabilityStatus.UNAVAILABLE, reason=reason)
+
+
+def _cross_seed_summary(values: tuple[float, ...]) -> SupportStratumCrossSeedMetricSummary:
+    ordered = tuple(sorted(values))
+    middle = len(ordered) // 2
+    median = ordered[middle] if len(ordered) % 2 else (ordered[middle - 1] + ordered[middle]) / 2.0
+    return SupportStratumCrossSeedMetricSummary(
+        arithmetic_mean=MetricValue(sum(ordered) / len(ordered)),
+        median=MetricValue(median),
+        minimum=MetricValue(ordered[0]),
+        maximum=MetricValue(ordered[-1]),
+    )

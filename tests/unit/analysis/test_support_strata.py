@@ -8,6 +8,7 @@ from datp_core.analysis.mechanisms import ThresholdMovementCohort
 from datp_core.analysis.mechanisms.support_strata import (
     CalibrationSupportStratum,
     campaign_fixed_support_strata,
+    summarize_support_stratum_campaign,
     support_stratum_seed_outcomes,
 )
 from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
@@ -63,6 +64,11 @@ def test_support_stratum_outcomes_use_fixed_three_client_membership() -> None:
     assert len(report.outcomes) == 3
     assert report.outcomes[0].mean_fpr_relief.value == pytest.approx(0.1)
     assert report.outcomes[0].shared_mean_absolute_target_error.value == pytest.approx(0.2)
+
+    summary = summarize_support_stratum_campaign(report)
+
+    assert summary.availability is AvailabilityStatus.AVAILABLE
+    assert summary.summaries[0].mean_fpr_relief.arithmetic_mean.value == pytest.approx(0.1)
 
 
 def _document(

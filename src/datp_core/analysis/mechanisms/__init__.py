@@ -92,9 +92,13 @@ from datp_core.analysis.mechanisms.support_strata import (
     CalibrationSupportStratum,
     CampaignFixedSupportStrata,
     CampaignFixedSupportStratum,
+    SupportStratumCampaignSummary,
+    SupportStratumCrossSeedMetricSummary,
+    SupportStratumCrossSeedSummary,
     SupportStratumOutcomeReport,
     SupportStratumSeedOutcome,
     campaign_fixed_support_strata,
+    summarize_support_stratum_campaign,
     support_stratum_seed_outcomes,
 )
 from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
@@ -120,6 +124,7 @@ type MechanismEvidence = (
     | ThresholdMovementMultiSeedUncertainty
     | CampaignFixedSupportStrata
     | SupportStratumOutcomeReport
+    | SupportStratumCampaignSummary
 )
 
 __all__ = (
@@ -150,6 +155,9 @@ __all__ = (
     "CampaignFixedSupportStrata",
     "CampaignFixedSupportStratum",
     "SupportStratumOutcomeReport",
+    "SupportStratumCampaignSummary",
+    "SupportStratumCrossSeedMetricSummary",
+    "SupportStratumCrossSeedSummary",
     "SupportStratumSeedOutcome",
     "ConfirmatoryEquityUtilityBundle",
     "ConfirmatoryEquityUtilityMeasure",
@@ -202,6 +210,7 @@ __all__ = (
     "summarize_client_impact_campaign",
     "summarize_threshold_movements",
     "summarize_threshold_movements_across_seeds",
+    "summarize_support_stratum_campaign",
     "support_stratum_seed_outcomes",
     "threshold_movement",
     "threshold_movements_from_evaluations",

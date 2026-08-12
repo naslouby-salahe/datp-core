@@ -30,7 +30,12 @@ from datp_core.analysis.mechanisms.movement import (
     ThresholdMovementCohort,
     ThresholdMovementMultiSeedUncertainty,
 )
-from datp_core.analysis.mechanisms.support_strata import CampaignFixedSupportStrata, SupportStratumOutcomeReport
+from datp_core.analysis.mechanisms.support_strata import (
+    CampaignFixedSupportStrata,
+    SupportStratumCampaignSummary,
+    SupportStratumCrossSeedMetricSummary,
+    SupportStratumOutcomeReport,
+)
 from datp_core.analysis.preparation import AnalysisDocument, ExternalAnalysisDocument, TemporalAnalysisDocument
 from datp_core.analysis.scientific_decision import ScientificDecision, ScientificDecisionResult
 from datp_core.core.identifiers import (
@@ -656,6 +661,7 @@ _MECHANISM_TITLES: dict[type[object], ReportLine] = {
     ConfirmatoryEquityUtilityBundle: ReportLine("confirmatory_equity_utility_bundle"),
     CampaignFixedSupportStrata: ReportLine("campaign_fixed_calibration_support_strata"),
     SupportStratumOutcomeReport: ReportLine("support_stratum_seed_outcomes"),
+    SupportStratumCampaignSummary: ReportLine("support_stratum_cross_seed_summary"),
     AbsorptionCohortResult: ReportLine("model_personalization_absorption"),
     ScientificDecisionResult: ReportLine("scientific_decision"),
 }
@@ -1036,6 +1042,33 @@ def _render_support_stratum_outcome_report(mechanism: SupportStratumOutcomeRepor
         for item in mechanism.outcomes
     )
     return [ReportLine(line) for line in lines]
+
+
+@_render_one_mechanism.register
+def _render_support_stratum_campaign_summary(mechanism: SupportStratumCampaignSummary) -> list[ReportLine]:
+    if mechanism.availability is AvailabilityStatus.UNAVAILABLE:
+        return [ReportLine(f"Unavailable: {mechanism.reason}")]
+    lines = [
+        "| Stratum | Measure | Mean | Median | Min | Max |",
+        "|---|---|---:|---:|---:|---:|",
+    ]
+    for summary in mechanism.summaries:
+        for label, values in (
+            ("mean_fpr_relief", summary.mean_fpr_relief),
+            ("fpr_helped_fraction", summary.fpr_helped_fraction),
+            ("fpr_harmed_fraction", summary.fpr_harmed_fraction),
+            ("shared_mean_absolute_target_error", summary.shared_mean_absolute_target_error),
+            ("local_mean_absolute_target_error", summary.local_mean_absolute_target_error),
+        ):
+            lines.append(f"| `{summary.stratum.value}` | {label} | {_render_cross_seed_metric(values)} |")
+    return [ReportLine(line) for line in lines]
+
+
+def _render_cross_seed_metric(summary: SupportStratumCrossSeedMetricSummary) -> str:
+    return " | ".join(
+        _format_publication_metric(value.value)
+        for value in (summary.arithmetic_mean, summary.median, summary.minimum, summary.maximum)
+    )
 
 
 def _render_client_impact_fraction(fraction: ClientImpactFraction) -> str:
