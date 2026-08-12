@@ -29,6 +29,12 @@ def test_equity_pareto_uses_mean_coordinates_and_does_not_scalarize() -> None:
         (FederatedThresholdMethod.LOCAL_THRESHOLD, True),
         (FederatedThresholdMethod.SHARED_THRESHOLD, False),
     ]
+    shared = next(
+        row for row in result.target_attainment if row.threshold_method is FederatedThresholdMethod.SHARED_THRESHOLD
+    )
+    assert shared.mean_absolute_target_error.value == pytest.approx(0.15)
+    assert shared.worst_absolute_target_error.value == pytest.approx(0.3)
+    assert shared.mean_absolute_calibration_generalization_gap.value == pytest.approx(0.075)
 
 
 def test_equity_pareto_rejects_methods_with_different_seed_cohorts() -> None:
@@ -55,5 +61,12 @@ def _document(
             threshold_method=method,
             score_coordinate=coordinate,
             population=SimpleNamespace(metrics=metrics),
+            diagnostics=SimpleNamespace(
+                held_out_operating_point_summary=SimpleNamespace(
+                    mean_absolute_target_error=MetricValue(0.1 + seed.value * 0.1),
+                    worst_absolute_target_error=MetricValue(0.2 + seed.value * 0.2),
+                    mean_absolute_calibration_generalization_gap=MetricValue(0.05 + seed.value * 0.05),
+                )
+            ),
         ),
     )

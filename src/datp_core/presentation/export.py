@@ -781,7 +781,7 @@ def _render_one_mechanism(_mechanism: MechanismEvidence) -> list[ReportLine]:
 
 @_render_one_mechanism.register
 def _render_equity_utility_pareto(mechanism: EquityUtilityParetoView) -> list[ReportLine]:
-    return [
+    lines = [
         ReportLine(
             f"{point.threshold_method.value}: mean CV(FPR)={_format_publication_metric(point.mean_x.value)} "
             f"mean {mechanism.utility_metric.value}={_format_publication_metric(point.mean_y.value)} "
@@ -789,6 +789,17 @@ def _render_equity_utility_pareto(mechanism: EquityUtilityParetoView) -> list[Re
         )
         for point in mechanism.points
     ]
+    lines.extend(
+        ReportLine(
+            f"{row.threshold_method.value}: MeanAbsoluteTargetError="
+            f"{_format_publication_metric(row.mean_absolute_target_error.value)} "
+            f"WorstAbsoluteTargetError={_format_publication_metric(row.worst_absolute_target_error.value)} "
+            f"MeanAbsoluteCalibrationGeneralizationGap="
+            f"{_format_publication_metric(row.mean_absolute_calibration_generalization_gap.value)}"
+        )
+        for row in mechanism.target_attainment
+    )
+    return lines
 
 
 @_render_one_mechanism.register

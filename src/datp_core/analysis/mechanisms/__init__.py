@@ -54,6 +54,7 @@ from datp_core.analysis.mechanisms.divergence import (
 )
 from datp_core.analysis.mechanisms.equity_pareto import (
     EquityParetoPoint,
+    EquityTargetAttainmentRow,
     EquityUtilityParetoView,
     equity_utility_pareto,
 )
@@ -200,6 +201,7 @@ __all__ = (
     "ConfirmatoryEquityUtilityBundle",
     "ConfirmatoryEquityUtilityMeasure",
     "EquityParetoPoint",
+    "EquityTargetAttainmentRow",
     "EquityUtilityParetoView",
     "FamilyRecallDifference",
     "FamilyRecallPolicyComparison",
