@@ -3,7 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
+import numpy as np
+import polars as pl
 from pydantic import model_validator
+from scipy.stats import spearmanr
 
 from datp_core.analysis.inference.bootstrap.contracts import BootstrapInterval
 from datp_core.analysis.inference.contracts import PairedInferenceProtocol
@@ -23,6 +26,7 @@ from datp_core.core.identifiers import (
     FederatedThresholdMethod,
     PartitionRole,
     PopulationId,
+    ScoreFrameColumn,
     SplitProtocolId,
     TemporalState,
 )
@@ -50,6 +54,18 @@ class TemporalInterpretation(StrEnum):
     NO_DETECTABLE_TEMPORAL_DEGRADATION = "no_detectable_temporal_degradation"
     OPPOSITE_TEMPORAL_MOVEMENT = "opposite_temporal_movement"
     BLOCKED_OR_UNAVAILABLE = "blocked_or_unavailable"
+
+
+class TemporalSpearmanAvailability(StrEnum):
+    AVAILABLE = "available"
+    INSUFFICIENT_EVIDENCE_N_LT_5 = "insufficient_evidence_n_lt_5"
+    UNDEFINED_ZERO_VARIATION = "undefined_zero_variation"
+
+
+class TemporalSpearmanDiagnostic(StrictModel):
+    availability: TemporalSpearmanAvailability
+    valid_pair_count: SeedObservationCount
+    value: MetricValue | None
 
 
 class TemporalSeedProvenance(StrictModel):
@@ -103,6 +119,7 @@ class TemporalClientTrajectory(StrictModel):
     macro_f1_static: MetricValue | None = None
     macro_f1_frozen: MetricValue | None = None
     macro_f1_recalibrated: MetricValue | None = None
+    drift_js: MetricValue | None = None
 
     @property
     def client_id(self) -> ClientIdentityToken:
@@ -139,6 +156,72 @@ class TemporalClientTrajectory(StrictModel):
         return MetricValue(self.fpr_frozen.value - self.fpr_recalibrated.value)
 
 
+TEMPORAL_DRIFT_JSD_BIN_COUNT = 64
+TEMPORAL_DRIFT_JSD_SMOOTHING = 1e-12
+
+
+def temporal_drift_js(
+    historical_calibration: FederatedScoreRecord,
+    future_recalibration: FederatedScoreRecord,
+) -> MetricValue:
+    if historical_calibration.scored_client != future_recalibration.scored_client:
+        raise ScientificContractError(ErrorMessage("temporal drift JSD requires score records for one client"))
+    historical = _score_values(historical_calibration)
+    future = _score_values(future_recalibration)
+    lower = min(float(historical.min()), float(future.min()))
+    upper = max(float(historical.max()), float(future.max()))
+    if upper <= lower:
+        upper = lower + TEMPORAL_DRIFT_JSD_SMOOTHING
+    historical_histogram, _ = np.histogram(
+        historical, bins=TEMPORAL_DRIFT_JSD_BIN_COUNT, range=(lower, upper)
+    )
+    future_histogram, _ = np.histogram(future, bins=TEMPORAL_DRIFT_JSD_BIN_COUNT, range=(lower, upper))
+    left = historical_histogram.astype(np.float64) + TEMPORAL_DRIFT_JSD_SMOOTHING
+    right = future_histogram.astype(np.float64) + TEMPORAL_DRIFT_JSD_SMOOTHING
+    left /= left.sum()
+    right /= right.sum()
+    midpoint = (left + right) / 2.0
+    divergence = 0.5 * (np.sum(left * np.log2(left / midpoint)) + np.sum(right * np.log2(right / midpoint)))
+    return MetricValue(float(divergence))
+
+
+def temporal_drift_fpr_spearman(
+    trajectories: tuple[TemporalClientTrajectory, ...],
+) -> TemporalSpearmanDiagnostic:
+    pairs = tuple(
+        (trajectory.drift_js.value, trajectory.fpr_movement_frozen.value)
+        for trajectory in trajectories
+        if trajectory.eligible and trajectory.drift_js is not None and trajectory.fpr_movement_frozen is not None
+    )
+    count = SeedObservationCount(len(pairs))
+    if count.value < 5:
+        return TemporalSpearmanDiagnostic(
+            availability=TemporalSpearmanAvailability.INSUFFICIENT_EVIDENCE_N_LT_5,
+            valid_pair_count=count,
+            value=None,
+        )
+    statistic = spearmanr(tuple(pair[0] for pair in pairs), tuple(pair[1] for pair in pairs)).statistic
+    if not np.isfinite(statistic):
+        return TemporalSpearmanDiagnostic(
+            availability=TemporalSpearmanAvailability.UNDEFINED_ZERO_VARIATION,
+            valid_pair_count=count,
+            value=None,
+        )
+    return TemporalSpearmanDiagnostic(
+        availability=TemporalSpearmanAvailability.AVAILABLE,
+        valid_pair_count=count,
+        value=MetricValue(float(statistic)),
+    )
+
+
+def _score_values(record: FederatedScoreRecord) -> np.ndarray:
+    values = pl.scan_parquet(record.path).select(ScoreFrameColumn.RECONSTRUCTION_ERROR.value).collect().to_series()
+    array = values.to_numpy().astype(np.float64, copy=False)
+    if array.size == 0 or not np.isfinite(array).all():
+        raise ScientificContractError(ErrorMessage("temporal drift JSD requires finite non-empty score artifacts"))
+    return array
+
+
 class TemporalRecoveryResult(StrictModel):
     seed: Seed
     experiment: ExperimentId
@@ -152,6 +235,7 @@ class TemporalRecoveryResult(StrictModel):
     mean_fpr_frozen: MetricValue | None = None
     mean_fpr_recalibrated: MetricValue | None = None
     client_trajectories: tuple[TemporalClientTrajectory, ...] = ()
+    drift_js_frozen_fpr_spearman: TemporalSpearmanDiagnostic | None = None
     unavailable_reason: AnalysisReasonText | None = None
 
     @model_validator(mode="after")
@@ -302,6 +386,7 @@ def temporal_recovery(
     mean_fpr_frozen: MetricValue | None = None,
     mean_fpr_recalibrated: MetricValue | None = None,
     client_trajectories: tuple[TemporalClientTrajectory, ...] = (),
+    drift_js_frozen_fpr_spearman: TemporalSpearmanDiagnostic | None = None,
     unavailable_reason: AnalysisReasonText | None = None,
 ) -> TemporalRecoveryResult:
     return TemporalRecoveryResult(
@@ -317,6 +402,11 @@ def temporal_recovery(
         mean_fpr_recalibrated=mean_fpr_recalibrated,
         provenance=provenance,
         client_trajectories=client_trajectories,
+        drift_js_frozen_fpr_spearman=(
+            temporal_drift_fpr_spearman(client_trajectories)
+            if drift_js_frozen_fpr_spearman is None
+            else drift_js_frozen_fpr_spearman
+        ),
         unavailable_reason=unavailable_reason,
     )
 

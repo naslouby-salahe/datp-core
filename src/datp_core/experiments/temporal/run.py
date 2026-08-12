@@ -24,6 +24,7 @@ from datp_core.analysis.temporal import (
     TemporalRecoveryResult,
     TemporalSeedProvenance,
     require_temporal_decision_protocol,
+    temporal_drift_js,
     temporal_recovery,
     training_coordinates,
     validate_frozen_recalibrated_pair,
@@ -52,7 +53,7 @@ from datp_core.core.identifiers import (
 from datp_core.core.numeric import ElapsedSeconds, MetricValue, Seed
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.data.registry import population_capabilities
-from datp_core.detector.scoring.models import FederatedScoreArtifactManifest
+from datp_core.detector.scoring.models import FederatedScoreArtifactManifest, FederatedScoreRecord
 from datp_core.experiments.common.coordinates import ExperimentCoordinate, ExternalTemporalExecutionIdentity
 from datp_core.experiments.common.seeds import BOUNDED_EVIDENCE_SEED_COHORT, SeedCohort
 from datp_core.experiments.execution.checkpoints import train_execution_model
@@ -426,6 +427,8 @@ def _recovery_for_method(
         static_outcome=static_outcome,
         frozen_outcome=frozen_outcome,
         recalibrated_outcome=recalibrated_outcome,
+        static_calibration_records=static.provenance.calibration_records,
+        future_recalibration_records=recalibrated.provenance.calibration_records,
     )
     if not trajectories:
         raise ScientificContractError(
@@ -878,6 +881,8 @@ def _build_client_trajectories(
     static_outcome: TemporalMethodOutcome,
     frozen_outcome: TemporalMethodOutcome,
     recalibrated_outcome: TemporalMethodOutcome,
+    static_calibration_records: tuple[FederatedScoreRecord, ...],
+    future_recalibration_records: tuple[FederatedScoreRecord, ...],
 ) -> tuple[TemporalClientTrajectory, ...]:
     clients = tuple(
         sorted(
@@ -918,9 +923,20 @@ def _build_client_trajectories(
                 macro_f1_static=_client_metric(static_client, MetricId.BINARY_MACRO_F1),
                 macro_f1_frozen=_client_metric(frozen_client, MetricId.BINARY_MACRO_F1),
                 macro_f1_recalibrated=_client_metric(recalibrated_client, MetricId.BINARY_MACRO_F1),
+                drift_js=_client_drift_js(client, static_calibration_records, future_recalibration_records),
             )
         )
     return tuple(trajectories)
+
+
+def _client_drift_js(
+    client: ClientIdentity,
+    static_records: tuple[FederatedScoreRecord, ...],
+    future_records: tuple[FederatedScoreRecord, ...],
+) -> MetricValue | None:
+    historical = next((record for record in static_records if record.scored_client == client), None)
+    future = next((record for record in future_records if record.scored_client == client), None)
+    return None if historical is None or future is None else temporal_drift_js(historical, future)
 
 
 def _client_by_identity(clients: tuple[ClientMetricResult, ...], identity: ClientIdentity) -> ClientMetricResult | None:

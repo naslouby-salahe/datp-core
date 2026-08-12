@@ -333,6 +333,17 @@ def export_temporal_publication(document: TemporalAnalysisDocument, output_direc
             f"calibration_score_records={len(provenance.frozen_future.calibration_records)} "
             f"evaluation_score_records={len(provenance.frozen_future.evaluation_records)}"
         )
+        spearman = recovery.drift_js_frozen_fpr_spearman
+        if spearman is not None:
+            lines.append(
+                "  - DriftJS→FrozenFPRDeterioration Spearman: "
+                + (
+                    _format_publication_metric(spearman.value.value)
+                    if spearman.value is not None
+                    else spearman.availability.value
+                )
+                + f" (n={spearman.valid_pair_count.value})"
+            )
         for trajectory in recovery.client_trajectories:
             lines.append(
                 f"  - client `{trajectory.client_id.value}` eligible={trajectory.eligible} "
@@ -342,6 +353,7 @@ def export_temporal_publication(document: TemporalAnalysisDocument, output_direc
                 f"threshold_drift={_optional_metric(trajectory.threshold_movement_recalibrated)} "
                 f"frozen_fpr_deterioration={_optional_metric(trajectory.fpr_movement_frozen)} "
                 f"fpr_recovery={_optional_metric(trajectory.fpr_recovery)}"
+                f" drift_js={_optional_metric(trajectory.drift_js)}"
             )
     lines.append("")
     lines.extend(
