@@ -28,6 +28,7 @@ class ThresholdPayloadKind(StrEnum):
     THRESHOLD_TRANSMISSION = "threshold_transmission"
     LOCAL_QUANTILE_TRANSMISSION = "local_quantile_transmission"
     GROUPED_THRESHOLD_ASSIGNMENT = "grouped_threshold_assignment"
+    CLUSTER_FINGERPRINT_TRANSMISSION = "cluster_fingerprint_transmission"
     BENIGN_SUMMARY_STATISTICS = "benign_summary_statistics"
     KLL_SKETCH_TRANSMISSION = "kll_sketch_transmission"
 

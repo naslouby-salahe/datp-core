@@ -101,6 +101,7 @@ from datp_core.thresholds.calibration.construction import (
 from datp_core.thresholds.calibration.service import eligible_calibration_scores
 from datp_core.thresholds.contracts import ThresholdUnavailableResult
 from datp_core.thresholds.dispatch import ThresholdConstructionRequest, ThresholdConstructionResult
+from datp_core.thresholds.policies.cluster import GroupedThresholdResult
 from datp_core.thresholds.protocols import (
     CANONICAL_QUANTILE,
     ONBOARDING_CALIBRATION_PROTOCOL,
@@ -568,6 +569,39 @@ class ExperimentWorkspace:
                     )
                 )
                 receive_shared_threshold(sketch.client)
+        elif isinstance(threshold, GroupedThresholdResult):
+            fingerprint_bytes = ByteCount(len(pack("<ddddd", 0.0, 0.0, 0.0, 0.0, 0.0)))
+            assignment_bytes = ByteCount(len(pack("<id", 0, 0.0)))
+            for fingerprint in threshold.fingerprints:
+                client = fingerprint.client
+                messages.append(
+                    CommunicationMessageDiagnostic(
+                        training_seed=coordinate.training_seed,
+                        coordinate=coordinate,
+                        sender=MessageEndpoint(f"client:{client.client_id.value}"),
+                        receiver=MessageEndpoint("coordinator"),
+                        direction=MessageDirection.CLIENT_TO_COORDINATOR,
+                        payload_kind=ThresholdPayloadKind.CLUSTER_FINGERPRINT_TRANSMISSION,
+                        payload=SerializedPayloadEvidence(fingerprint_bytes, LogicalElementCount(5)),
+                        client=client,
+                        group_identity=None,
+                        estimation_basis=CommunicationEstimationMethod.SERIALIZED_MESSAGE_SIZE_ESTIMATE,
+                    )
+                )
+                messages.append(
+                    CommunicationMessageDiagnostic(
+                        training_seed=coordinate.training_seed,
+                        coordinate=coordinate,
+                        sender=MessageEndpoint("coordinator"),
+                        receiver=MessageEndpoint(f"client:{client.client_id.value}"),
+                        direction=MessageDirection.COORDINATOR_TO_CLIENT,
+                        payload_kind=ThresholdPayloadKind.GROUPED_THRESHOLD_ASSIGNMENT,
+                        payload=SerializedPayloadEvidence(assignment_bytes, LogicalElementCount(2)),
+                        client=client,
+                        group_identity=None,
+                        estimation_basis=CommunicationEstimationMethod.SERIALIZED_MESSAGE_SIZE_ESTIMATE,
+                    )
+                )
         else:
             for calibration in self.eligible_calibration_scores():
                 client = calibration.client
