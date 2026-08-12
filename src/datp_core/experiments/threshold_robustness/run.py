@@ -31,6 +31,7 @@ from datp_core.core.numeric import (
     ClientCount,
     MetricDelta,
     MetricValue,
+    NonNegativeIntegerValue,
     Quantile,
     Ratio,
     ReplicateIndex,
@@ -162,11 +163,22 @@ class CalibrationThresholdStabilityRow(StrictModel):
     rmse_threshold: MetricValue
 
 
+class CalibrationThresholdOrderRow(StrictModel):
+    seed: Seed
+    method: FederatedThresholdMethod
+    calibration_size: CalibrationSize
+    replicate: ReplicateIndex
+    inverted_pair_count: NonNegativeIntegerValue
+    comparable_pair_count: NonNegativeIntegerValue
+    tied_pair_count: NonNegativeIntegerValue
+
+
 class CalibrationSizeAblationReport(StrictModel):
     experiment: ExperimentId
     rows: tuple[CalibrationSizeAblationRow, ...]
     fixed_cohort_rows: tuple[CalibrationSizeFixedCohortRow, ...] = ()
     threshold_stability_rows: tuple[CalibrationThresholdStabilityRow, ...] = ()
+    threshold_order_rows: tuple[CalibrationThresholdOrderRow, ...] = ()
 
 
 class ShrinkageCurveRow(StrictModel):
@@ -520,6 +532,7 @@ def report_calibration_size_ablation(
     rows: list[CalibrationSizeAblationRow] = []
     fixed_cohort_rows: list[CalibrationSizeFixedCohortRow] = []
     threshold_stability_rows: list[CalibrationThresholdStabilityRow] = []
+    threshold_order_rows: list[CalibrationThresholdOrderRow] = []
     missing = 0
     for method in declaration.federated_thresholds:
         for seed in CONFIRMATORY_SEED_COHORT.values:
@@ -562,12 +575,14 @@ def report_calibration_size_ablation(
             threshold_stability_rows.extend(
                 _threshold_stability_rows_for_seed(seed, method, cells, local_reference)
             )
+            threshold_order_rows.extend(_threshold_order_rows_for_seed(seed, method, cells, local_reference))
     serialize_json_model(
         CalibrationSizeAblationReport(
             experiment=experiment_id,
             rows=tuple(rows),
             fixed_cohort_rows=tuple(fixed_cohort_rows),
             threshold_stability_rows=tuple(threshold_stability_rows),
+            threshold_order_rows=tuple(threshold_order_rows),
         ),
         _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
     )
@@ -649,6 +664,45 @@ def _threshold_stability_rows_for_seed(
                 full_calibration_local_threshold=full,
                 bias_threshold=MetricValue(sum(differences) / len(differences)),
                 rmse_threshold=MetricValue(sqrt(sum(value**2 for value in differences) / len(differences))),
+            )
+        )
+    return tuple(rows)
+
+
+def _threshold_order_rows_for_seed(
+    seed: Seed,
+    method: FederatedThresholdMethod,
+    cells: tuple[CalibrationSizeAblationCell, ...],
+    local_reference: FederatedEvaluationDocument,
+) -> tuple[CalibrationThresholdOrderRow, ...]:
+    reference = {item.client: item.threshold.value for item in local_reference.clients}
+    rows: list[CalibrationThresholdOrderRow] = []
+    for cell in cells:
+        clients = tuple(sorted(cell.clients, key=lambda item: item.client))
+        inverted = comparable = tied = 0
+        for index, left in enumerate(clients):
+            for right in clients[index + 1 :]:
+                if left.client not in reference or right.client not in reference:
+                    raise ScientificContractError(
+                        ErrorMessage("full-calibration local reference omits an ablation client")
+                    )
+                full_difference = reference[left.client] - reference[right.client]
+                replicate_difference = left.threshold.value - right.threshold.value
+                if full_difference == 0.0 or replicate_difference == 0.0:
+                    tied += 1
+                else:
+                    comparable += 1
+                    if full_difference * replicate_difference < 0.0:
+                        inverted += 1
+        rows.append(
+            CalibrationThresholdOrderRow(
+                seed=seed,
+                method=method,
+                calibration_size=cell.calibration_size,
+                replicate=cell.replicate_index,
+                inverted_pair_count=NonNegativeIntegerValue(inverted),
+                comparable_pair_count=NonNegativeIntegerValue(comparable),
+                tied_pair_count=NonNegativeIntegerValue(tied),
             )
         )
     return tuple(rows)
