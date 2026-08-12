@@ -4,7 +4,8 @@
 
 ## 0. Matrix lock, authority, and usage
 
-- **Authoritative roadmap snapshot:** `Journal_Extension_Master_Roadmap).md`
+- **Authoritative roadmap snapshot:** `Journal_Extension_Master_Roadmap.md`
+- **Authoritative roadmap SHA-256:** `b3f43353081eae89862d42315da7cc1cb13a7ff9d9a9d17d981c3b91dc84c83c`
 - **Roadmap size:** `335741` bytes; `6484` lines
 - **Matrix generation principle:** define once in the roadmap; map, verify, and implement here.
 - **Repository policy:** no backwards compatibility. Obsolete APIs, aliases, wrappers, experiment identities, artifact layouts, and tests must be replaced at their callers and removed unless needed solely to ingest immutable historical provenance.
