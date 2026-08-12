@@ -10,7 +10,7 @@ from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
 from datp_core.analysis.metrics.models import AvailableMetric
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import ExperimentId, FederatedThresholdMethod, FigureTitle, MetricId
-from datp_core.core.numeric import MetricValue, Seed
+from datp_core.core.numeric import MetricValue, Seed, ShrinkageWeight
 from datp_core.experiments.confirmatory.run import _declaration_for_threshold_method
 from datp_core.presentation.figures import equity_utility_pareto_figure
 
@@ -78,12 +78,63 @@ def test_equity_pareto_exposes_descriptive_bca_intervals_for_full_seed_cohort() 
         (FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD, ExperimentId.SHARED_CONSTRUCTION_SENSITIVITY),
         (FederatedThresholdMethod.FEDERATED_KLL_SHARED_THRESHOLD, ExperimentId.FEDERATED_QUANTILE_ESTIMATION),
         (FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS, ExperimentId.FEDERATED_QUANTILE_ESTIMATION),
+        (FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE, ExperimentId.SIZE_AWARE_SHRINKAGE),
     ),
 )
 def test_pareto_policy_coordinates_use_their_declared_canonical_experiment(
     method: FederatedThresholdMethod, experiment: ExperimentId
 ) -> None:
     assert _declaration_for_threshold_method(method).id is experiment
+
+
+def test_equity_pareto_keeps_each_fixed_shrinkage_lambda_as_a_distinct_policy() -> None:
+    shared = tuple(
+        _document(FederatedThresholdMethod.SHARED_THRESHOLD, Seed(seed), 0.3, 0.6) for seed in range(10)
+    )
+    shrinkage = tuple(
+        _fixed_shrinkage_document(Seed(seed)) for seed in range(10)
+    )
+
+    result = equity_utility_pareto(
+        shared,
+        utility_metric=MetricId.P10_BINARY_MACRO_F1,
+        fixed_shrinkage_documents=shrinkage,
+    )
+
+    assert {(point.threshold_method, point.shrinkage_weight) for point in result.points} == {
+        (FederatedThresholdMethod.SHARED_THRESHOLD, None),
+        (FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE, ShrinkageWeight(0.0)),
+        (FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE, ShrinkageWeight(1.0)),
+    }
+
+
+def _fixed_shrinkage_document(seed: Seed) -> FederatedEvaluationDocument:
+    coordinate = fedavg_coordinate(seed)
+    def evaluation(weight: float, cv_fpr: float, utility: float) -> SimpleNamespace:
+        return SimpleNamespace(
+            lambda_weight=ShrinkageWeight(weight),
+            population=SimpleNamespace(
+                metrics=(
+                    AvailableMetric(MetricId.FPR_COEFFICIENT_OF_VARIATION, MetricValue(cv_fpr)),
+                    AvailableMetric(MetricId.P10_BINARY_MACRO_F1, MetricValue(utility)),
+                )
+            ),
+            held_out_operating_point_summary=SimpleNamespace(
+                mean_absolute_target_error=MetricValue(0.1),
+                worst_absolute_target_error=MetricValue(0.2),
+                mean_absolute_calibration_generalization_gap=MetricValue(0.05),
+            ),
+        )
+    return cast(
+        FederatedEvaluationDocument,
+        SimpleNamespace(
+            threshold_method=FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE,
+            score_coordinate=coordinate,
+            diagnostics=SimpleNamespace(
+                shrinkage_curve=(evaluation(0.0, 0.2, 0.7), evaluation(1.0, 0.1, 0.8))
+            ),
+        ),
+    )
 
 
 def _document(
@@ -105,7 +156,8 @@ def _document(
                     mean_absolute_target_error=MetricValue(0.1 + seed.value * 0.1),
                     worst_absolute_target_error=MetricValue(0.2 + seed.value * 0.2),
                     mean_absolute_calibration_generalization_gap=MetricValue(0.05 + seed.value * 0.05),
-                )
+                ),
+                shrinkage_curve=(),
             ),
         ),
     )

@@ -127,12 +127,22 @@ def equity_utility_pareto_figure(
         x_values=tuple(point.mean_x for point in view.points),
         y_values=tuple(point.mean_y for point in view.points),
         point_labels=tuple(
-            FigureLabel(f"{point.threshold_method.value}; nondominated={point.nondominated}") for point in view.points
+            FigureLabel(
+                f"{_pareto_policy_label(point.threshold_method.value, point.shrinkage_weight.value)}; "
+                f"nondominated={point.nondominated}"
+                if point.shrinkage_weight is not None
+                else f"{point.threshold_method.value}; nondominated={point.nondominated}"
+            )
+            for point in view.points
         ),
     )
     seed_series = tuple(
         PairedMetricFigureSeries(
-            label=FigureLabel(f"{point.threshold_method.value} seed-level points"),
+            label=FigureLabel(
+                f"{_pareto_policy_label(point.threshold_method.value, point.shrinkage_weight.value)} seed-level points"
+                if point.shrinkage_weight is not None
+                else f"{point.threshold_method.value} seed-level points"
+            ),
             x_label=FigureLabel("CV(FPR), lower is better"),
             y_label=FigureLabel(f"{view.utility_metric.value}, higher is better"),
             availability=AvailabilityStatus.AVAILABLE,
@@ -142,6 +152,10 @@ def equity_utility_pareto_figure(
         for point in view.points
     )
     return FigureSpec(title=title, paired_metric_series=(mean_series, *seed_series))
+
+
+def _pareto_policy_label(method: str, shrinkage_weight: float) -> str:
+    return f"{method}(lambda={shrinkage_weight:g})"
 
 
 def _validate_empirical_cdf_axes(series: EmpiricalCdfFigureSeries) -> None:

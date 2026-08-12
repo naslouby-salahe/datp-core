@@ -24,7 +24,11 @@ from datp_core.analysis.mechanisms.client_impact import (
 from datp_core.analysis.mechanisms.clustering import ClusterEvidenceRecord, ClusterStabilityResult
 from datp_core.analysis.mechanisms.dispersion import GroupedDispersionResult
 from datp_core.analysis.mechanisms.divergence import DivergenceResult
-from datp_core.analysis.mechanisms.equity_pareto import EquityUtilityParetoView
+from datp_core.analysis.mechanisms.equity_pareto import (
+    EquityParetoPoint,
+    EquityTargetAttainmentRow,
+    EquityUtilityParetoView,
+)
 from datp_core.analysis.mechanisms.equity_utility import ConfirmatoryEquityUtilityBundle
 from datp_core.analysis.mechanisms.family_recall import FamilyRecallPolicyCampaignSummary, FamilyRecallPolicyComparison
 from datp_core.analysis.mechanisms.movement import (
@@ -783,7 +787,8 @@ def _render_one_mechanism(_mechanism: MechanismEvidence) -> list[ReportLine]:
 def _render_equity_utility_pareto(mechanism: EquityUtilityParetoView) -> list[ReportLine]:
     lines = [
         ReportLine(
-            f"{point.threshold_method.value}: mean CV(FPR)={_format_publication_metric(point.mean_x.value)} "
+            f"{_pareto_point_label(point)}: "
+            f"mean CV(FPR)={_format_publication_metric(point.mean_x.value)} "
             f"mean {mechanism.utility_metric.value}={_format_publication_metric(point.mean_y.value)} "
             f"CV(FPR) BCa={_format_bca_interval(point.x_interval)} "
             f"{mechanism.utility_metric.value} BCa={_format_bca_interval(point.y_interval)} "
@@ -793,7 +798,8 @@ def _render_equity_utility_pareto(mechanism: EquityUtilityParetoView) -> list[Re
     ]
     lines.extend(
         ReportLine(
-            f"{row.threshold_method.value}: MeanAbsoluteTargetError="
+            f"{_pareto_target_attainment_label(row)}: "
+            f"MeanAbsoluteTargetError="
             f"{_format_publication_metric(row.mean_absolute_target_error.value)} "
             f"WorstAbsoluteTargetError={_format_publication_metric(row.worst_absolute_target_error.value)} "
             f"MeanAbsoluteCalibrationGeneralizationGap="
@@ -815,6 +821,24 @@ def _format_bca_interval(interval: BootstrapInterval) -> str:
             f"{_format_publication_metric(interval.upper_bound.value)}]"
         )
     return interval.outcome.value
+
+
+def _pareto_policy_label(method: str, shrinkage_weight: float | None) -> str:
+    return method if shrinkage_weight is None else f"{method}(lambda={shrinkage_weight:g})"
+
+
+def _pareto_point_label(point: EquityParetoPoint) -> str:
+    return _pareto_policy_label(
+        point.threshold_method.value,
+        point.shrinkage_weight.value if point.shrinkage_weight else None,
+    )
+
+
+def _pareto_target_attainment_label(row: EquityTargetAttainmentRow) -> str:
+    return _pareto_policy_label(
+        row.threshold_method.value,
+        row.shrinkage_weight.value if row.shrinkage_weight else None,
+    )
 
 
 @_render_one_mechanism.register

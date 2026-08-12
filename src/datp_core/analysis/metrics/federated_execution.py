@@ -396,11 +396,18 @@ def _shrinkage_curve_evaluations(request: FederatedEvaluationRequest) -> tuple[S
             _evaluate_score_record(request, assignment_map, fallback_threshold, record)
             for record in sorted(request.score_manifest.evaluation_records, key=lambda item: item.scored_client)
         )
+        held_out_operating_points, held_out_operating_point_summary = evaluate_held_out_operating_points(
+            clients,
+            request.calibration_scores,
+            request.target_quantile,
+        )
         evaluations.append(
             ShrinkageLambdaEvaluation(
                 lambda_weight=result.weight,
                 clients=clients,
                 population=calculate_population_metrics(clients, cohort=request.cohort),
+                held_out_operating_points=held_out_operating_points,
+                held_out_operating_point_summary=held_out_operating_point_summary,
             )
         )
     return tuple(evaluations)

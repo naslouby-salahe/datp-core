@@ -364,11 +364,24 @@ def _confirmatory_pareto_views() -> tuple[EquityUtilityParetoView, ...]:
             FederatedThresholdMethod.FAMILY_THRESHOLD,
             FederatedThresholdMethod.CLUSTER_THRESHOLD,
             FederatedThresholdMethod.LOCAL_THRESHOLD,
+            FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE,
         )
     )
+    fixed_shrinkage_documents = tuple(
+        load_evaluation_document(_evaluation_path(seed, FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE))
+        for seed in CONFIRMATORY_SEED_COHORT.values
+    )
     return (
-        equity_utility_pareto(documents, utility_metric=MetricId.P10_BINARY_MACRO_F1),
-        equity_utility_pareto(documents, utility_metric=MetricId.WORST_CLIENT_BALANCED_ACCURACY),
+        equity_utility_pareto(
+            documents,
+            utility_metric=MetricId.P10_BINARY_MACRO_F1,
+            fixed_shrinkage_documents=fixed_shrinkage_documents,
+        ),
+        equity_utility_pareto(
+            documents,
+            utility_metric=MetricId.WORST_CLIENT_BALANCED_ACCURACY,
+            fixed_shrinkage_documents=fixed_shrinkage_documents,
+        ),
     )
 
 
@@ -666,6 +679,10 @@ def _declaration_for_threshold_method(method: FederatedThresholdMethod) -> Exper
         FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS,
     }:
         return _declaration_by_id(ExperimentId.FEDERATED_QUANTILE_ESTIMATION)
+    if method is FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE:
+        return _declaration_by_id(ExperimentId.FIXED_SHRINKAGE_CURVE)
+    if method is FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE:
+        return _declaration_by_id(ExperimentId.SIZE_AWARE_SHRINKAGE)
     if method in {FederatedThresholdMethod.FAMILY_THRESHOLD, FederatedThresholdMethod.CLUSTER_THRESHOLD}:
         return _declaration_by_id(ExperimentId.FAMILY_AND_GROUPED_GRANULARITY)
     raise ScientificContractError(
