@@ -19,7 +19,11 @@ from datp_core.analysis.metrics.threshold_estimation import (
 )
 from datp_core.analysis.metrics.threshold_evidence import VerifiedHeldOutBenignScores
 from datp_core.analysis.operational.alert_burden import AlertBurdenDiagnostic
-from datp_core.analysis.operational.communication import CommunicationDiagnostic, CommunicationMessageDiagnostic
+from datp_core.analysis.operational.communication import (
+    CommunicationDiagnostic,
+    CommunicationMessageDiagnostic,
+    ThresholdStageCommunicationDiagnostic,
+)
 from datp_core.analysis.operational.traffic_rates import ValidatedTrafficRateEvidence
 from datp_core.analysis.temporal import TemporalDeploymentProvenance
 from datp_core.core.contracts import StrictModel
@@ -172,6 +176,7 @@ class EvaluationDiagnostics:
     onboarding_calibration: tuple[OnboardingCalibrationCell, ...] = field(default_factory=tuple)
     contributor_omission: tuple[SharedContributorOmissionCell, ...] = field(default_factory=tuple)
     sample_efficiency: tuple[SampleEfficiencyPoint, ...] = field(default_factory=tuple)
+    threshold_stage_communication: ThresholdStageCommunicationDiagnostic | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -194,6 +199,7 @@ class FederatedEvaluationRequest:
     calibration_size_ablation: tuple[CalibrationSizeAblationCell, ...] = ()
     onboarding_calibration: tuple[OnboardingCalibrationCell, ...] = ()
     contributor_omission: tuple[SharedContributorOmissionCell, ...] = ()
+    threshold_stage_communication: ThresholdStageCommunicationDiagnostic | None = None
 
 
 class FederatedEvaluationDocument(StrictModel):

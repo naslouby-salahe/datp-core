@@ -14,7 +14,10 @@ from datp_core.analysis.metrics.federated import (
 from datp_core.analysis.metrics.federated_execution import prepare_federated_evaluation
 from datp_core.analysis.metrics.fixed_score import FixedScoreEvidence
 from datp_core.analysis.metrics.models import ClientMetricResult, PopulationMetricResult
-from datp_core.analysis.operational.communication import CommunicationMessageDiagnostic
+from datp_core.analysis.operational.communication import (
+    CommunicationMessageDiagnostic,
+    ThresholdStageCommunicationDiagnostic,
+)
 from datp_core.analysis.operational.traffic_rates import ValidatedTrafficRateEvidence
 from datp_core.analysis.temporal import TemporalDeploymentProvenance
 from datp_core.artifacts.repositories.evaluations import write_federated_evaluation
@@ -48,6 +51,7 @@ class EvaluateFederatedDetectorRequest:
     calibration_size_ablation: tuple[CalibrationSizeAblationCell, ...] = ()
     onboarding_calibration: tuple[OnboardingCalibrationCell, ...] = ()
     contributor_omission: tuple[SharedContributorOmissionCell, ...] = ()
+    threshold_stage_communication: ThresholdStageCommunicationDiagnostic | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -73,6 +77,7 @@ def evaluate_federated_detector(request: EvaluateFederatedDetectorRequest) -> Ev
             conformal_coverage_inputs=request.conformal_coverage_inputs,
             threshold_estimation_inputs=request.threshold_estimation_inputs,
             communication_messages=request.communication_messages,
+            threshold_stage_communication=request.threshold_stage_communication,
             traffic_rate_evidence=request.traffic_rate_evidence,
             temporal_provenance=request.temporal_provenance,
             temporal_threshold_provenance=request.temporal_threshold_provenance,

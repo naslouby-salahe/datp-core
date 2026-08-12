@@ -314,6 +314,7 @@ def _evaluate_diagnostics(
         conformal_coverage=conformal_coverage,
         threshold_estimation=threshold_estimation,
         communication=communication,
+        threshold_stage_communication=request.threshold_stage_communication,
         alert_burden=_evaluate_alert_burden(request.traffic_rate_evidence, clients, coordinate),
         held_out_operating_points=held_out_operating_points,
         held_out_operating_point_summary=held_out_operating_point_summary,

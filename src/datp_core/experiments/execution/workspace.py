@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from functools import cache, cached_property
 from pathlib import Path
+from struct import pack
 
 import numpy as np
 import polars as pl
@@ -26,6 +27,7 @@ from datp_core.analysis.operational.communication import (
     MessageDirection,
     SerializedPayloadEvidence,
     ThresholdPayloadKind,
+    ThresholdStageCommunicationDiagnostic,
 )
 from datp_core.analysis.operational.traffic_rates import traffic_rate_evidence_for_population
 from datp_core.artifacts.layout import evaluation_run_directory
@@ -38,6 +40,7 @@ from datp_core.core.errors import (
     ScientificContractError,
 )
 from datp_core.core.identifiers import (
+    CommunicationEstimationMethod,
     ExperimentId,
     FeatureNameSequence,
     FederatedThresholdMethod,
@@ -47,8 +50,11 @@ from datp_core.core.identifiers import (
     StableRowId,
 )
 from datp_core.core.numeric import (
+    ByteCount,
     CalibrationSize,
     ClientCount,
+    LogicalElementCount,
+    NonNegativeIntegerValue,
     Quantile,
     ReplicateIndex,
     RoundNumber,
@@ -496,6 +502,61 @@ class ExperimentWorkspace:
                 )
         return tuple(messages)
 
+    def _threshold_stage_communication(self) -> ThresholdStageCommunicationDiagnostic | None:
+        coordinate = self.scores.coordinate
+        if self.coordinate.threshold_method in (
+            FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS,
+            FederatedThresholdMethod.FEDERATED_KLL_SHARED_THRESHOLD,
+        ):
+            return None
+        if self.coordinate.threshold_method is FederatedThresholdMethod.LOCAL_THRESHOLD:
+            return ThresholdStageCommunicationDiagnostic(
+                training_seed=coordinate.training_seed,
+                coordinate=coordinate,
+                messages=(),
+                total_logical_element_count=NonNegativeIntegerValue(0),
+                total_serialized_bytes=ByteCount(0),
+            )
+        messages: list[CommunicationMessageDiagnostic] = []
+        for calibration in self.eligible_calibration_scores():
+            client = calibration.client
+            scalar = SerializedPayloadEvidence(ByteCount(len(pack("<d", 0.0))), LogicalElementCount(1))
+            messages.extend(
+                (
+                    CommunicationMessageDiagnostic(
+                        training_seed=coordinate.training_seed,
+                        coordinate=coordinate,
+                        sender=MessageEndpoint(f"client:{client.client_id.value}"),
+                        receiver=MessageEndpoint("coordinator"),
+                        direction=MessageDirection.CLIENT_TO_COORDINATOR,
+                        payload_kind=ThresholdPayloadKind.LOCAL_QUANTILE_TRANSMISSION,
+                        payload=scalar,
+                        client=client,
+                        group_identity=None,
+                        estimation_basis=CommunicationEstimationMethod.SERIALIZED_MESSAGE_SIZE_ESTIMATE,
+                    ),
+                    CommunicationMessageDiagnostic(
+                        training_seed=coordinate.training_seed,
+                        coordinate=coordinate,
+                        sender=MessageEndpoint("coordinator"),
+                        receiver=MessageEndpoint(f"client:{client.client_id.value}"),
+                        direction=MessageDirection.COORDINATOR_TO_CLIENT,
+                        payload_kind=ThresholdPayloadKind.THRESHOLD_TRANSMISSION,
+                        payload=scalar,
+                        client=client,
+                        group_identity=None,
+                        estimation_basis=CommunicationEstimationMethod.SERIALIZED_MESSAGE_SIZE_ESTIMATE,
+                    ),
+                )
+            )
+        return ThresholdStageCommunicationDiagnostic(
+            training_seed=coordinate.training_seed,
+            coordinate=coordinate,
+            messages=tuple(messages),
+            total_logical_element_count=NonNegativeIntegerValue(len(messages)),
+            total_serialized_bytes=ByteCount(len(pack("<d", 0.0)) * len(messages)),
+        )
+
     @cached_property
     def evaluation(self) -> EvaluateFederatedDetectorResult:
         return self._evaluate()
@@ -515,6 +576,7 @@ class ExperimentWorkspace:
                 conformal_coverage_inputs=self._conformal_coverage_inputs(),
                 threshold_estimation_inputs=self._threshold_estimation_inputs(),
                 communication_messages=self._communication_messages(),
+                threshold_stage_communication=self._threshold_stage_communication(),
                 traffic_rate_evidence=traffic_rate_evidence_for_population(self.coordinate.population),
                 execution_identity=self.context.execution_identity,
                 output_directory=self.run_directory() / EvaluationRunAssetDirectory.EVALUATION,
