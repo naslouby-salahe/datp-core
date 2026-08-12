@@ -97,7 +97,7 @@ class NBaIoTChannelStatistic(StrEnum):
 
 
 class NBaIoTAttackFamily(StrEnum):
-    GAFGYT = "gafgyt"
+    BASHLITE = "gafgyt"
     MIRAI = "mirai"
 
 

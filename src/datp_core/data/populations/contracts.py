@@ -175,6 +175,7 @@ class PopulationFrameColumn(StrEnum):
     OUTCOME_LABEL = "outcome_label"
     PARTITION_ROLE = "partition_role"
     FAMILY_ID = "family_id"
+    ATTACK_FAMILY = "attack_family"
     STABLE_ROW_ID = CanonicalProvenanceColumn.STABLE_ROW_ID.value
     SOURCE_PATH = CanonicalProvenanceColumn.SOURCE_PATH.value
     SOURCE_ROW_INDEX = CanonicalProvenanceColumn.SOURCE_ROW_INDEX.value
@@ -209,6 +210,7 @@ PARTITION_ROLE_COLUMN = PopulationFrameColumn.PARTITION_ROLE
 SOURCE_PATH_COLUMN = PopulationFrameColumn.SOURCE_PATH
 SOURCE_ROW_INDEX_COLUMN = PopulationFrameColumn.SOURCE_ROW_INDEX
 FAMILY_ID_COLUMN = PopulationFrameColumn.FAMILY_ID
+ATTACK_FAMILY_COLUMN = PopulationFrameColumn.ATTACK_FAMILY
 ORDER_COLUMN = WorkingFrameColumn.ORDER
 PERM_COLUMN = WorkingFrameColumn.PERM
 

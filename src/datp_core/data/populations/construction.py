@@ -23,6 +23,7 @@ from datp_core.core.numeric import ClientCount, NonNegativeIntegerValue, RowCoun
 from datp_core.data.populations.contracts import PopulationDeclaration
 
 from .contracts import (
+    ATTACK_FAMILY_COLUMN,
     CLIENT_ID_COLUMN,
     PARTITION_ROLE_COLUMN,
     STABLE_ROW_ID_COLUMN,
@@ -254,7 +255,11 @@ def join_handoff_with_canonical_features(
             ErrorMessage("preprocessing handoff produced empty split assignments"),
             subject=handoff.population_manifest.document.population,
         )
-    feature_scan = pl.scan_parquet(canonical_data_glob(canonical_root)).select([STABLE_ROW_ID_COLUMN, *feature_names])
+    canonical_scan = pl.scan_parquet(canonical_data_glob(canonical_root))
+    selected_columns = [STABLE_ROW_ID_COLUMN, *feature_names]
+    if ATTACK_FAMILY_COLUMN.value in canonical_scan.collect_schema().names():
+        selected_columns.append(ATTACK_FAMILY_COLUMN)
+    feature_scan = canonical_scan.select(selected_columns)
     joined = (
         assignments.lazy()
         .join(feature_scan, on=STABLE_ROW_ID_COLUMN, how="inner")

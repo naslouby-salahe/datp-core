@@ -13,6 +13,7 @@ from datp_core.analysis.metrics.cohort_construction import cohort_record_for_cli
 from datp_core.analysis.metrics.cohorts import ClientEligibilityRecord
 from datp_core.analysis.metrics.conformal import evaluate_held_out_conformal_coverage
 from datp_core.analysis.metrics.confusion import calculate_confusion_counts_for_evaluation_arrays
+from datp_core.analysis.metrics.family_recall import evaluate_nbaiot_family_recall
 from datp_core.analysis.metrics.federated import (
     EvaluationDiagnostics,
     FederatedEvaluationArtifacts,
@@ -311,6 +312,7 @@ def _evaluate_diagnostics(
         held_out_operating_points=held_out_operating_points,
         held_out_operating_point_summary=held_out_operating_point_summary,
         calibration_support=calibration_support_evidence(request.calibration_scores),
+        family_recall=evaluate_nbaiot_family_recall(request.score_manifest, clients),
         shrinkage_curve=shrinkage_curve,
         calibration_size_ablation=request.calibration_size_ablation,
         sample_efficiency=sample_efficiency_curve(threshold_estimation) if threshold_estimation else (),

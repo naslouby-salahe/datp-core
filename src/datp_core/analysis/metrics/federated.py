@@ -4,6 +4,7 @@ from pydantic import ConfigDict
 
 from datp_core.analysis.metrics.cohorts import EvaluationCohortManifest
 from datp_core.analysis.metrics.conformal import ConformalCoverageDiagnostic
+from datp_core.analysis.metrics.family_recall import FamilyRecallDiagnostics
 from datp_core.analysis.metrics.fixed_score import FixedScoreEvidence
 from datp_core.analysis.metrics.models import ClientMetricResult, HeldOutBenignScore, PopulationMetricResult
 from datp_core.analysis.metrics.operating_point import (
@@ -106,6 +107,7 @@ class EvaluationDiagnostics:
     held_out_operating_points: tuple[HeldOutOperatingPointDiagnostic, ...]
     held_out_operating_point_summary: HeldOutOperatingPointSummary | None
     calibration_support: tuple[CalibrationSupportEvidence, ...]
+    family_recall: FamilyRecallDiagnostics
     shrinkage_curve: tuple[ShrinkageLambdaEvaluation, ...] = field(default_factory=tuple)
     calibration_size_ablation: tuple[CalibrationSizeAblationCell, ...] = field(default_factory=tuple)
     sample_efficiency: tuple[SampleEfficiencyPoint, ...] = field(default_factory=tuple)

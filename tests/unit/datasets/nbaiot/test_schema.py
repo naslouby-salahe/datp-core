@@ -28,7 +28,7 @@ def test_audited_attack_directory_is_interpreted_without_filename_inference() ->
     assert parse_source_identity(Path("Danmini_Doorbell/gafgyt_attacks/udp.csv")) == NBaIoTSourceIdentity(
         device=NBaIoTDevice.DANMINI_DOORBELL,
         source_label=NBaIoTSourceLabel.ATTACK,
-        attack_family=NBaIoTAttackFamily.GAFGYT,
+        attack_family=NBaIoTAttackFamily.BASHLITE,
         attack_subtype=NBaIoTAttackSubtype.UDP,
     )
 
