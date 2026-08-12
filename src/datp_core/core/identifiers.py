@@ -167,6 +167,7 @@ class MetricId(StrEnum):
     BALANCED_ACCURACY = "balanced_accuracy"
     BINARY_MACRO_F1 = "binary_macro_f1"
     AUROC = "auroc"
+    AVERAGE_PRECISION = "average_precision"
     MEAN_FPR = "mean_fpr"
     FPR_SAMPLE_STANDARD_DEVIATION = "fpr_sample_standard_deviation"
     FPR_COEFFICIENT_OF_VARIATION = "fpr_coefficient_of_variation"

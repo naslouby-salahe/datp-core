@@ -21,6 +21,7 @@ def calculate_client_metrics(
     scores: Sequence[ScoreValue],
     labels: Sequence[PopulationOutcomeLabel],
     fixed_auroc: MetricAvailability | None = None,
+    fixed_average_precision: MetricAvailability | None = None,
     score_values: np.ndarray | None = None,
 ) -> tuple[MetricAvailability, ...]:
 
@@ -51,6 +52,9 @@ def calculate_client_metrics(
         fixed_auroc
         if fixed_auroc is not None
         else calculate_auroc(numeric_scores, labels, confusion.attack_assignment_valid),
+        fixed_average_precision
+        if fixed_average_precision is not None
+        else calculate_average_precision(numeric_scores, labels, confusion.attack_assignment_valid),
     )
 
 
@@ -59,12 +63,14 @@ def calculate_metrics_for_evaluation_score_arrays(
     confusion: ConfusionCounts,
     score_arrays: FederatedEvaluationScoreArrays,
     fixed_auroc: MetricAvailability | None = None,
+    fixed_average_precision: MetricAvailability | None = None,
 ) -> tuple[MetricAvailability, ...]:
     return calculate_client_metrics(
         confusion=confusion,
         scores=score_arrays.scores,
         labels=score_arrays.labels,
         fixed_auroc=fixed_auroc,
+        fixed_average_precision=fixed_average_precision,
         score_values=score_arrays.score_values,
     )
 
@@ -169,6 +175,25 @@ def calculate_auroc(
     if not isfinite(value):
         return unavailable(MetricId.AUROC, MetricStatus.UNDEFINED, MetricReason.MISSING_CAPABILITY)
     return available(MetricId.AUROC, MetricValue(value), denominator=RowCount(binary.size))
+
+
+def calculate_average_precision(
+    score_values: np.ndarray, labels: Sequence[PopulationOutcomeLabel], attack_assignment_valid: bool
+) -> MetricAvailability:
+    if not attack_assignment_valid:
+        return unavailable(MetricId.AVERAGE_PRECISION, MetricStatus.UNAVAILABLE, MetricReason.INVALID_ATTACK_ASSIGNMENT)
+    binary = np.fromiter(
+        (1 if label is PopulationOutcomeLabel.ATTACK else 0 for label in labels), dtype=np.int64, count=len(labels)
+    )
+    positives = int(binary.sum())
+    if positives == 0:
+        return unavailable(MetricId.AVERAGE_PRECISION, MetricStatus.UNAVAILABLE, MetricReason.EMPTY_ATTACK_DENOMINATOR)
+    descending = np.argsort(-score_values, kind="mergesort")
+    ordered = binary[descending]
+    cumulative_positives = np.cumsum(ordered)
+    ranks = np.arange(1, ordered.size + 1, dtype=np.float64)
+    value = float(np.sum((cumulative_positives / ranks)[ordered == 1]) / positives)
+    return available(MetricId.AVERAGE_PRECISION, MetricValue(value), denominator=RowCount(binary.size))
 
 
 def _average_ranks(sorted_scores: np.ndarray) -> np.ndarray:

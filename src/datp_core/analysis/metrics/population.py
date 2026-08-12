@@ -237,6 +237,7 @@ def _attack_aggregates(results: tuple[ClientMetricResult, ...]) -> tuple[MetricA
     macro_vals: list[MetricValue] = []
     balanced_vals: list[MetricValue] = []
     auroc_vals: list[MetricValue] = []
+    average_precision_vals: list[MetricValue] = []
 
     for result in results:
         metric_map = {m.metric: m for m in result.metrics}
@@ -246,6 +247,7 @@ def _attack_aggregates(results: tuple[ClientMetricResult, ...]) -> tuple[MetricA
             (MetricId.BINARY_MACRO_F1, macro_vals),
             (MetricId.BALANCED_ACCURACY, balanced_vals),
             (MetricId.AUROC, auroc_vals),
+            (MetricId.AVERAGE_PRECISION, average_precision_vals),
         ):
             record = metric_map.get(metric_id)
             if not record:
@@ -257,6 +259,7 @@ def _attack_aggregates(results: tuple[ClientMetricResult, ...]) -> tuple[MetricA
     macro_tuple = tuple(macro_vals)
     balanced_tuple = tuple(balanced_vals)
     auroc_tuple = tuple(auroc_vals)
+    average_precision_tuple = tuple(average_precision_vals)
 
     return (
         _coefficient_of_variation(MetricId.TPR_COEFFICIENT_OF_VARIATION, tpr_tuple),
@@ -269,6 +272,7 @@ def _attack_aggregates(results: tuple[ClientMetricResult, ...]) -> tuple[MetricA
         _pooled_macro_f1_or_unavailable(results),
         _mean_or_unavailable(MetricId.MEAN_CLIENT_BALANCED_ACCURACY, balanced_tuple),
         _mean_or_unavailable(MetricId.AUROC, auroc_tuple),
+        _mean_or_unavailable(MetricId.AVERAGE_PRECISION, average_precision_tuple),
     )
 
 

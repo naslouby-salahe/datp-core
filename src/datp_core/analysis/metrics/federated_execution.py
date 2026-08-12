@@ -4,7 +4,11 @@ from functools import lru_cache
 import numpy as np
 import polars as pl
 
-from datp_core.analysis.metrics.client import calculate_auroc, calculate_metrics_for_evaluation_score_arrays
+from datp_core.analysis.metrics.client import (
+    calculate_auroc,
+    calculate_average_precision,
+    calculate_metrics_for_evaluation_score_arrays,
+)
 from datp_core.analysis.metrics.cohort_construction import cohort_record_for_client
 from datp_core.analysis.metrics.cohorts import ClientEligibilityRecord
 from datp_core.analysis.metrics.conformal import evaluate_held_out_conformal_coverage
@@ -250,6 +254,9 @@ def _evaluate_score_record(
             confusion=confusion,
             score_arrays=score_arrays,
             fixed_auroc=_score_auroc(ScoreArtifactPathText(str(record.path)), eligibility.attack_evaluable),
+            fixed_average_precision=_score_average_precision(
+                ScoreArtifactPathText(str(record.path)), eligibility.attack_evaluable
+            ),
         ),
         warnings=(),
         evidence_role=request.evidence_role,
@@ -509,3 +516,9 @@ def _score_arrays(
 def _score_auroc(path: ScoreArtifactPathText, attack_assignment_valid: bool) -> MetricAvailability:
     score_arrays = _score_arrays(path)
     return calculate_auroc(score_arrays.score_values, score_arrays.labels, attack_assignment_valid)
+
+
+@lru_cache(maxsize=9)
+def _score_average_precision(path: ScoreArtifactPathText, attack_assignment_valid: bool) -> MetricAvailability:
+    score_arrays = _score_arrays(path)
+    return calculate_average_precision(score_arrays.score_values, score_arrays.labels, attack_assignment_valid)

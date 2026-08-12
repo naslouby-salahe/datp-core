@@ -83,6 +83,7 @@ CLIENT_METRIC_IDS: frozenset[MetricId] = frozenset(
         MetricId.BALANCED_ACCURACY,
         MetricId.BINARY_MACRO_F1,
         MetricId.AUROC,
+        MetricId.AVERAGE_PRECISION,
     )
 )
 
@@ -115,6 +116,7 @@ POPULATION_METRIC_IDS: frozenset[MetricId] = frozenset(
         MetricId.POOLED_MACRO_F1,
         MetricId.MEAN_CLIENT_BALANCED_ACCURACY,
         MetricId.AUROC,
+        MetricId.AVERAGE_PRECISION,
     )
 )
 
