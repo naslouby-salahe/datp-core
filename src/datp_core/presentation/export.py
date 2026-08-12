@@ -12,6 +12,7 @@ from datp_core.analysis.inference.multiplicity import MultiplicityResult
 from datp_core.analysis.inference.precision import ConfirmatoryPrecisionDiagnostics
 from datp_core.analysis.inference.sign_test import ExactPairedSignTestResult
 from datp_core.analysis.inference.wilcoxon import RankBiserialResult, WilcoxonResult
+from datp_core.analysis.influence import LeaveOneDeviceOutDiagnostics
 from datp_core.analysis.mechanisms import MechanismEvidence
 from datp_core.analysis.mechanisms.absorption import AbsorptionCohortResult
 from datp_core.analysis.mechanisms.association import AssociationResult
@@ -194,6 +195,7 @@ def export_confirmatory_publication(
         _wilcoxon_table(document.wilcoxon, document.rank_biserial),
         _paired_values_table(document),
         _precision_diagnostics_table(document.precision_diagnostics),
+        _leave_one_device_out_table(document.leave_one_device_out),
         *_mechanism_tables(document.mechanisms),
     )
     bundle = PublicationBundle(
@@ -445,6 +447,8 @@ def _render_analysis_sections(
     sections.extend(_render_paired_contrasts(document.contrasts))
     if document.precision_diagnostics is not None:
         sections.extend(_render_precision_diagnostics(document.precision_diagnostics))
+    if document.leave_one_device_out is not None:
+        sections.extend(_render_leave_one_device_out(document.leave_one_device_out))
     if document.multiplicity_result is not None:
         sections.extend(_render_multiplicity(document.multiplicity_result))
     if document.mechanisms:
@@ -657,6 +661,41 @@ def _render_precision_diagnostics(diagnostics: ConfirmatoryPrecisionDiagnostics)
     lines.extend(
         f"| {item.omitted_seed.value} | {_format_publication_metric(item.mean_delta.value)} |"
         for item in diagnostics.leave_one_seed_out_means
+    )
+    return [ReportLine(line) for line in [*lines, ""]]
+
+
+def _render_leave_one_device_out(diagnostics: LeaveOneDeviceOutDiagnostics) -> list[ReportLine]:
+    relative_shift = (
+        "UNAVAILABLE_NEAR_ZERO_FULL_EFFECT"
+        if diagnostics.relative_maximum_lodo_shift is None
+        else _format_publication_metric(diagnostics.relative_maximum_lodo_shift.value)
+    )
+    nonpositive = ", ".join(device.client_id.value for device in diagnostics.nonpositive_omissions) or "none"
+    lines = [
+        "## Leave-One-Device-Out Influence",
+        "",
+        f"Minimum LODO mean: {_format_publication_metric(diagnostics.minimum_lodo_mean.value)}",
+        f"Maximum LODO mean: {_format_publication_metric(diagnostics.maximum_lodo_mean.value)}",
+        f"Maximum LODO shift: {_format_publication_metric(diagnostics.maximum_lodo_shift.value)}",
+        f"Relative maximum LODO shift: {relative_shift}",
+        "Positive-direction retention: "
+        + _format_publication_metric(diagnostics.positive_direction_retention.value),
+        f"Nonpositive omissions: {nonpositive}",
+        f"LODO_HIGH_INFLUENCE: {'yes' if diagnostics.high_influence else 'no'}",
+        "",
+        "| Omitted device | Mean delta | Seed deltas |",
+        "|---|---:|---|",
+    ]
+    lines.extend(
+        "| "
+        + summary.omitted_device.client_id.value
+        + " | "
+        + _format_publication_metric(summary.mean_delta.value)
+        + " | "
+        + ", ".join(_format_publication_metric(delta.value) for delta in summary.seed_deltas)
+        + " |"
+        for summary in diagnostics.device_summaries
     )
     return [ReportLine(line) for line in [*lines, ""]]
 
@@ -1505,6 +1544,41 @@ def _precision_diagnostics_table(
                         if diagnostics.bca_width is None
                         else _format_publication_metric(diagnostics.bca_width.value)
                     )
+                ),
+            ),
+        ),
+    )
+
+
+def _leave_one_device_out_table(
+    diagnostics: LeaveOneDeviceOutDiagnostics | None,
+) -> PublicationTable:
+    if diagnostics is None:
+        return PublicationTable(
+            title=TableTitle("Leave-one-device-out influence"),
+            cells=(
+                TableCell(
+                    metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
+                    availability=AvailabilityStatus.UNAVAILABLE,
+                    rendered_value=TableCellRenderedValue(""),
+                    evidence=EvidenceText("leave-one-device-out diagnostic unavailable"),
+                ),
+            ),
+        )
+    return PublicationTable(
+        title=TableTitle("Leave-one-device-out influence"),
+        cells=(
+            TableCell(
+                metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
+                availability=AvailabilityStatus.AVAILABLE,
+                rendered_value=TableCellRenderedValue(
+                    _format_publication_metric(diagnostics.maximum_lodo_shift.value)
+                ),
+                evidence=EvidenceText(
+                    "positive-direction retention="
+                    + _format_publication_metric(diagnostics.positive_direction_retention.value)
+                    + "; high influence="
+                    + ("yes" if diagnostics.high_influence else "no")
                 ),
             ),
         ),

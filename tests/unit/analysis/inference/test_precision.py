@@ -5,7 +5,13 @@ import pytest
 from datp_core.analysis.contrasts import PairedContrast, PairedContrasts
 from datp_core.analysis.inference.bootstrap.contracts import BootstrapInterval
 from datp_core.analysis.inference.precision import confirmatory_precision_diagnostics
+from datp_core.analysis.influence import (
+    LeaveOneDeviceEffect,
+    RelativeLodoShiftStatus,
+    summarize_leave_one_device_out_effects,
+)
 from datp_core.core.identifiers import (
+    ClientIdentityToken,
     EvidenceRole,
     FederatedThresholdMethod,
     MetricId,
@@ -14,7 +20,8 @@ from datp_core.core.identifiers import (
     SplitProtocolId,
     TrainingModelId,
 )
-from datp_core.core.numeric import MetricValue, Seed
+from datp_core.core.numeric import MetricValue, Ratio, Seed, ThresholdValue
+from datp_core.data.populations.contracts import ClientIdentity, PopulationIdentityKind
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 
 
@@ -57,4 +64,48 @@ def _contrast(seed: int, delta: int) -> PairedContrast:
         left_value=MetricValue(delta),
         right_value=MetricValue(0.0),
         fixed_score=None,
+    )
+
+
+def test_lodo_summary_uses_only_device_level_seed_means() -> None:
+    first = ClientIdentity(
+        PopulationId.NBAIOT_NATURAL_DEVICES,
+        ClientIdentityToken("first"),
+        PopulationIdentityKind.PHYSICAL_DEVICES,
+    )
+    second = ClientIdentity(
+        PopulationId.NBAIOT_NATURAL_DEVICES,
+        ClientIdentityToken("second"),
+        PopulationIdentityKind.PHYSICAL_DEVICES,
+    )
+    effects = (
+        _lodo_effect(Seed(1), first, 0.4),
+        _lodo_effect(Seed(2), first, 0.2),
+        _lodo_effect(Seed(1), second, -0.1),
+        _lodo_effect(Seed(2), second, 0.1),
+    )
+
+    diagnostics = summarize_leave_one_device_out_effects(
+        effects,
+        full_mean_delta=MetricValue(0.2),
+        required_seed_count=2,
+    )
+
+    assert diagnostics.minimum_lodo_mean == MetricValue(0.0)
+    assert diagnostics.maximum_lodo_mean.value == pytest.approx(0.3)
+    assert diagnostics.maximum_lodo_shift == MetricValue(0.2)
+    assert diagnostics.positive_direction_retention == Ratio(0.5)
+    assert diagnostics.nonpositive_omissions == (second,)
+    assert diagnostics.relative_maximum_lodo_shift == MetricValue(1.0)
+    assert diagnostics.relative_shift_status is RelativeLodoShiftStatus.AVAILABLE
+    assert diagnostics.high_influence
+
+
+def _lodo_effect(seed: Seed, device: ClientIdentity, delta: float) -> LeaveOneDeviceEffect:
+    return LeaveOneDeviceEffect(
+        seed=seed,
+        omitted_device=device,
+        shared_threshold=ThresholdValue(0.0),
+        shared_cv_fpr=MetricValue(delta),
+        local_cv_fpr=MetricValue(0.0),
     )

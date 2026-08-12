@@ -14,6 +14,7 @@ from datp_core.analysis.descriptive import (
     score_geometry_from_client_vectors,
 )
 from datp_core.analysis.evidence import AnalyzeConfirmatoryEvidenceRequest, analyze_confirmatory_evidence
+from datp_core.analysis.influence import leave_one_device_out_effects, summarize_leave_one_device_out_effects
 from datp_core.analysis.mechanisms import (
     AbsorptionCornerEvidence,
     AssociationObservation,
@@ -193,15 +194,29 @@ def analyze_confirmatory_campaign() -> Path:
     mechanisms = _confirmatory_mechanisms()
     cluster_mechanisms = _confirmatory_cluster_mechanisms()
     all_mechanisms = mechanisms + cluster_mechanisms
+    contrasts = PairedContrasts(
+        values=tuple(_confirmatory_contrast(seed) for seed in CONFIRMATORY_SEED_COHORT.values)
+    )
+    lodo_effects = tuple(
+        effect
+        for seed in CONFIRMATORY_SEED_COHORT.values
+        for effect in leave_one_device_out_effects(
+            shared=load_evaluation_document(_evaluation_path(seed, FederatedThresholdMethod.SHARED_THRESHOLD)),
+            local=load_evaluation_document(_evaluation_path(seed, FederatedThresholdMethod.LOCAL_THRESHOLD)),
+        )
+    )
     result = analyze_confirmatory_evidence(
         AnalyzeConfirmatoryEvidenceRequest(
-            contrasts=PairedContrasts(
-                values=tuple(_confirmatory_contrast(seed) for seed in CONFIRMATORY_SEED_COHORT.values)
-            ),
+            contrasts=contrasts,
             inference_protocol=CONFIRMATORY_INFERENCE_PROTOCOL,
             analysis_seed=CONFIRMATORY_ANALYSIS_SEED,
             output_directory=output,
             mechanisms=all_mechanisms,
+            leave_one_device_out=summarize_leave_one_device_out_effects(
+                lodo_effects,
+                full_mean_delta=MetricValue(sum(delta.value for delta in contrasts.deltas) / len(contrasts)),
+                required_seed_count=len(CONFIRMATORY_SEED_COHORT.values),
+            ),
         )
     )
     geometries, figures = build_confirmatory_score_geometry()

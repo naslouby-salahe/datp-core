@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from datp_core.analysis.contrasts import PairedContrasts, SupplementaryPairedAnalysisPlan
 from datp_core.analysis.inference.contracts import PairedInferenceProtocol
 from datp_core.analysis.inference.multiplicity import MultiplicityPlan
+from datp_core.analysis.influence import LeaveOneDeviceOutDiagnostics
 from datp_core.analysis.preparation import (
     AnalysisDocument,
     ConfirmatoryAnalysisRequest,
@@ -53,6 +54,7 @@ class AnalyzeConfirmatoryEvidenceRequest:
     output_directory: Path
     multiplicity_plan: MultiplicityPlan | None = None
     mechanisms: tuple[MechanismEvidence, ...] = ()
+    leave_one_device_out: LeaveOneDeviceOutDiagnostics | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -104,6 +106,7 @@ def analyze_confirmatory_evidence(
             analysis_seed=request.analysis_seed,
             multiplicity_plan=request.multiplicity_plan,
             mechanisms=request.mechanisms,
+            leave_one_device_out=request.leave_one_device_out,
         )
     )
     _write_analysis_document(request.output_directory, AnalysisAssetName.DOCUMENT, document)

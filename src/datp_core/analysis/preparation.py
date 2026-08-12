@@ -32,6 +32,7 @@ from datp_core.analysis.inference.wilcoxon import (
     matched_pairs_rank_biserial,
     paired_wilcoxon,
 )
+from datp_core.analysis.influence import LeaveOneDeviceOutDiagnostics
 from datp_core.analysis.mechanisms import MechanismEvidence
 from datp_core.analysis.scientific_decision import ScientificDecision, ScientificDecisionResult, decide_confirmatory
 from datp_core.analysis.temporal import (
@@ -69,6 +70,7 @@ class ConfirmatoryAnalysisRequest:
     analysis_seed: Seed
     multiplicity_plan: MultiplicityPlan | None = None
     mechanisms: tuple[MechanismEvidence, ...] = ()
+    leave_one_device_out: LeaveOneDeviceOutDiagnostics | None = None
     unavailable_reason: AnalysisReasonText | None = None
     excluded_seeds: tuple[Seed, ...] = ()
 
@@ -84,6 +86,7 @@ class AnalysisDocument(StrictModel):
     wilcoxon: WilcoxonResult
     rank_biserial: RankBiserialResult
     precision_diagnostics: ConfirmatoryPrecisionDiagnostics | None
+    leave_one_device_out: LeaveOneDeviceOutDiagnostics | None
     multiplicity_plan: MultiplicityPlan | None
     multiplicity_result: MultiplicityResult | None
     mechanisms: tuple[MechanismEvidence, ...]
@@ -221,6 +224,7 @@ def prepare_confirmatory_analysis(request: ConfirmatoryAnalysisRequest) -> Analy
             wilcoxon=blocked_wilcoxon(AnalysisReasonText(f"dependent Wilcoxon blocked: {reason_text}")),
             rank_biserial=blocked_rank_biserial(AnalysisReasonText(f"dependent rank-biserial blocked: {reason_text}")),
             precision_diagnostics=None,
+            leave_one_device_out=request.leave_one_device_out,
             multiplicity_plan=None,
             multiplicity_result=None,
             mechanisms=request.mechanisms,
@@ -245,6 +249,7 @@ def prepare_confirmatory_analysis(request: ConfirmatoryAnalysisRequest) -> Analy
         wilcoxon=paired_wilcoxon(contrasts, protocol),
         rank_biserial=matched_pairs_rank_biserial(contrasts, protocol),
         precision_diagnostics=confirmatory_precision_diagnostics(contrasts, interval),
+        leave_one_device_out=request.leave_one_device_out,
         multiplicity_plan=request.multiplicity_plan,
         multiplicity_result=multiplicity,
         mechanisms=request.mechanisms,
@@ -415,6 +420,7 @@ def _blocked_confirmatory_document(
             AnalysisReasonText(f"dependent rank-biserial blocked: {unavailable_reason}")
         ),
         precision_diagnostics=None,
+        leave_one_device_out=request.leave_one_device_out,
         multiplicity_plan=None,
         multiplicity_result=None,
         mechanisms=request.mechanisms,
