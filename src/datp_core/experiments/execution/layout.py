@@ -19,6 +19,7 @@ class ExecutionRootDirectory(StrEnum):
     BOUNDED_EVIDENCE = "bounded_evidence"
     DITTO_STRESS_TEST = "ditto_stress_test"
     FEDPROX_STRESS_TEST = "fedprox_stress_test"
+    FEDAVG_LOCAL_FINE_TUNING = "fedavg_local_fine_tuning"
 
 
 class EvaluationRunAssetDirectory(StrEnum):
