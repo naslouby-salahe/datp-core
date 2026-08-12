@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from importlib.metadata import version
 from pathlib import Path
+from platform import platform
+from sys import version as python_version
 from typing import TYPE_CHECKING, ClassVar
 
 import numpy as np
@@ -27,6 +30,7 @@ from datp_core.core.identifiers import (
     FederatedThresholdMethod,
     MetricId,
     PopulationId,
+    ValidationReasonText,
 )
 from datp_core.core.numeric import (
     AbsoluteThresholdError,
@@ -102,6 +106,17 @@ class RuntimeTimingSummary(StrictModel):
     interquartile_range_milliseconds: MetricValue
     p95_milliseconds: MetricValue
     observation_count: SeedObservationCount
+    environment: RuntimeEnvironmentEvidence
+    peak_server_rss: MetricValue | None = None
+    peak_server_rss_unavailable_reason: ValidationReasonText = ValidationReasonText(
+        "UNAVAILABLE_MEASUREMENT_NOT_SUPPORTED"
+    )
+
+
+class RuntimeEnvironmentEvidence(StrictModel):
+    operating_system: ValidationReasonText
+    python: ValidationReasonText
+    datasketches: ValidationReasonText
 
 
 class EstimationSummaryReport(StrictModel):
@@ -414,6 +429,11 @@ def _runtime_timing_summary(values: tuple[ElapsedSeconds, ...]) -> RuntimeTiming
         interquartile_range_milliseconds=MetricValue(float(upper - lower)),
         p95_milliseconds=MetricValue(float(np.quantile(milliseconds, 0.95, method="linear"))),
         observation_count=SeedObservationCount(len(values)),
+        environment=RuntimeEnvironmentEvidence(
+            operating_system=ValidationReasonText(platform()),
+            python=ValidationReasonText(python_version),
+            datasketches=ValidationReasonText(version("datasketches")),
+        ),
     )
 
 
