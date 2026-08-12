@@ -2,6 +2,7 @@ from .run import (
     FineTuningArtifactBranch,
     analyze_ditto_absorption,
     analyze_fedprox_absorption,
+    analyze_fine_tuning_absorption,
     build_fedprox_absorption_observation,
     ditto_analysis_directory,
     fedprox_analysis_directory,
@@ -16,6 +17,7 @@ from .run import (
 
 __all__ = (
     "analyze_ditto_absorption",
+    "analyze_fine_tuning_absorption",
     "analyze_fedprox_absorption",
     "build_fedprox_absorption_observation",
     "ditto_analysis_directory",

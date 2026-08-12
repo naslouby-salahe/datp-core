@@ -119,6 +119,7 @@ from datp_core.experiments.training_stress import (
     FineTuningArtifactBranch,
     analyze_ditto_absorption,
     analyze_fedprox_absorption,
+    analyze_fine_tuning_absorption,
     build_fedprox_absorption_observation,
     ditto_analysis_directory,
     fedprox_analysis_directory,
@@ -646,17 +647,35 @@ def _report_fine_tuning(experiment_id: ExperimentId) -> ReportResult:
         "| Seed | Client | Serialized bytes | Fine-tuning wall time (s) |",
         "|---:|---|---:|---:|",
     ]
-    for seed in CONFIRMATORY_SEED_COHORT.values:
-        evidence = load_fine_tuning_stress_test_evidence(training_seed=seed, output_root=OUTPUTS_ROOT)
+    evidence_by_seed = tuple(
+        load_fine_tuning_stress_test_evidence(training_seed=seed, output_root=OUTPUTS_ROOT)
+        for seed in CONFIRMATORY_SEED_COHORT.values
+    )
+    for seed, evidence in zip(CONFIRMATORY_SEED_COHORT.values, evidence_by_seed, strict=True):
         for model in evidence.model_evidence:
             rows.append(
                 f"| {seed.value} | {model.client.client_id.value} | "
                 f"{model.serialized_state_evidence.byte_count.value} | {model.wall_time.value:.12g} |"
             )
     output = _fine_tuning_analysis_path()
+    if output.parent.exists():
+        rmtree(output.parent)
     output.parent.mkdir(parents=True, exist_ok=True)
+    references = tuple(
+        load_fedavg_cv_fpr_effect(seed, experiment=ExperimentId.FEDAVG_LOCAL_FINE_TUNING)
+        for seed in CONFIRMATORY_SEED_COHORT.values
+    )
+    analyze_fine_tuning_absorption(
+        evidence_by_seed,
+        reference_evidence=references,
+        output_directory=output.parent,
+    )
     write_text_atomically(output, FileContentText("\n".join(rows) + "\n"))
-    return ReportResult(experiment=experiment_id, paths=(output,), detail=DetailText(f"evidence={output}"))
+    return ReportResult(
+        experiment=experiment_id,
+        paths=(output.parent,),
+        detail=DetailText(f"analysis={output.parent}"),
+    )
 
 
 def _report_temporal(experiment_id: ExperimentId) -> ReportResult:
@@ -821,7 +840,12 @@ def _ditto_marker(experiment_id: ExperimentId) -> bool:
 
 def _fine_tuning_marker(experiment_id: ExperimentId) -> bool:
     del experiment_id
-    return _fine_tuning_analysis_path().is_file()
+    output = _fine_tuning_analysis_path()
+    return (
+        output.is_file()
+        and (output.parent / PUBLICATION_FILENAME).is_file()
+        and (output.parent / MECHANISM_REPORT_FILENAME).is_file()
+    )
 
 
 def _temporal_marker(experiment_id: ExperimentId) -> bool:

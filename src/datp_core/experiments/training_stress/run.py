@@ -776,6 +776,61 @@ def analyze_ditto_absorption(
     return cohort
 
 
+def analyze_fine_tuning_absorption(
+    results: tuple[FineTuningStressTestEvidence, ...],
+    *,
+    reference_evidence: tuple[FedAvgCvFprEffectEvidence, ...],
+    output_directory: Path,
+) -> AbsorptionCohortResult:
+    if len(results) != len(reference_evidence):
+        raise ScientificContractError(
+            ErrorMessage("absorption analysis requires one FedAvg corner-evidence record per fine-tuning seed result"),
+            subject=ExperimentId.FEDAVG_LOCAL_FINE_TUNING,
+        )
+    observations: list[AbsorptionSeedObservation] = []
+    for result, reference in zip(results, reference_evidence, strict=True):
+        seed = result.personalized_coordinate.training_seed
+        if reference.seed != seed:
+            raise ScientificContractError(
+                ErrorMessage("fine-tuning absorption reference evidence must align seed-for-seed with stress results"),
+                subject=ExperimentId.FEDAVG_LOCAL_FINE_TUNING,
+            )
+        shared_population = calculate_population_metrics(
+            result.shared_threshold_metrics,
+            cohort=result.evaluation_cohort,
+        )
+        local_population = calculate_population_metrics(
+            result.local_threshold_metrics,
+            cohort=result.evaluation_cohort,
+        )
+        shared_cv = _required_population_cv(shared_population)
+        local_cv = _required_population_cv(local_population)
+        observations.append(
+            AbsorptionSeedObservation(
+                seed=seed,
+                experiment=ExperimentId.FEDAVG_LOCAL_FINE_TUNING,
+                reference_model=TrainingModelId.FEDAVG_AUTOENCODER,
+                personalized_model=TrainingModelId.FEDAVG_LOCAL_FINE_TUNING,
+                reference_effect=reference.effect,
+                personalized_effect=MetricValue(shared_cv.value - local_cv.value),
+                reference_shared_cv=reference.shared_cv,
+                reference_local_cv=reference.local_cv,
+                personalized_shared_cv=shared_cv,
+                personalized_local_cv=local_cv,
+                model_coefficient=None,
+            )
+        )
+    cohort = decide_absorption_cohort(tuple(observations), _MODEL_ABSORPTION_DECISION_PROTOCOL)
+    export_mechanism_publication(
+        (cohort,),
+        experiment=ExperimentId.FEDAVG_LOCAL_FINE_TUNING,
+        population=PopulationId.NBAIOT_NATURAL_DEVICES,
+        output_directory=output_directory,
+        evidence_role=EvidenceRole.TRAINING_STRESS_TEST,
+    )
+    return cohort
+
+
 def run_fedprox_stress_test_seed(
     *,
     training_seed: Seed,
