@@ -1,17 +1,21 @@
 from dataclasses import dataclass
+from pathlib import Path
 
 from datp_core.core.contracts import ClientCollection, ClientOwned
 from datp_core.core.errors import ErrorMessage, ScientificContractError
+from datp_core.core.identifiers import TrainingModelId
 from datp_core.core.numeric import BatchSize, LearningRate, Seed
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.autoencoder import AutoencoderModelState
+from datp_core.detector.checkpoints.contracts import DiagnosticSnapshotProtocol
+from datp_core.detector.checkpoints.publication import load_federated_training
 from datp_core.detector.training.contracts import AutoencoderProtocol, FedAvgLocalFineTuningProtocol
 from datp_core.detector.training.engine import (
     derive_fedavg_local_fine_tuning_seed,
     prepare_federated_client_data,
     train_client_update,
 )
-from datp_core.detector.training.models import ClientTrainingInput
+from datp_core.detector.training.models import ClientTrainingInput, FederatedTrainingCoordinate
 from datp_core.runtime.compute import resolve_cuda_device
 
 
@@ -33,6 +37,19 @@ class FineTuneFedAvgClientsRequest:
     training_seed: Seed
 
 
+@dataclass(frozen=True, slots=True)
+class PersistedFedAvgFineTuningRequest:
+    source_coordinate: FederatedTrainingCoordinate
+    source_directory: Path
+    clients: tuple[ClientTrainingInput, ...]
+    autoencoder: AutoencoderProtocol
+    diagnostic_snapshot_protocol: DiagnosticSnapshotProtocol
+    protocol: FedAvgLocalFineTuningProtocol
+    batch_size: BatchSize
+    learning_rate: LearningRate
+    training_seed: Seed
+
+
 def fine_tune_fedavg_clients(
     request: FineTuneFedAvgClientsRequest,
 ) -> ClientCollection[ClientIdentity, FineTunedTerminalModel]:
@@ -42,6 +59,38 @@ def fine_tune_fedavg_clients(
         _fine_tune_client(request, client) for client in sorted(request.clients, key=lambda item: item.client)
     )
     return ClientCollection(items=tuple(ClientOwned(client=item.client, value=item) for item in models))
+
+
+def fine_tune_from_persisted_fedavg(
+    request: PersistedFedAvgFineTuningRequest,
+) -> ClientCollection[ClientIdentity, FineTunedTerminalModel]:
+    if request.source_coordinate.model is not TrainingModelId.FEDAVG_AUTOENCODER:
+        raise ScientificContractError(
+            ErrorMessage("fine-tuning source coordinate must be the FedAvg terminal detector")
+        )
+    source = load_federated_training(
+        request.source_coordinate,
+        request.source_directory,
+        clients=tuple(client.client for client in request.clients),
+        diagnostic_snapshot_protocol=request.diagnostic_snapshot_protocol,
+        autoencoder=request.autoencoder,
+        batch_size=request.batch_size,
+    )
+    if source is None:
+        raise ScientificContractError(
+            ErrorMessage("FedAvg terminal scientific detector is unavailable for fine-tuning")
+        )
+    return fine_tune_fedavg_clients(
+        FineTuneFedAvgClientsRequest(
+            source_fedavg_state=source.terminal_model_state,
+            clients=request.clients,
+            autoencoder=request.autoencoder,
+            protocol=request.protocol,
+            batch_size=request.batch_size,
+            learning_rate=request.learning_rate,
+            training_seed=request.training_seed,
+        )
+    )
 
 
 def _fine_tune_client(
