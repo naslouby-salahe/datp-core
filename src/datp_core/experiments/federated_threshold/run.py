@@ -622,25 +622,20 @@ def _fixed_coefficient_rows_for_seed(
     cv_fpr = metric_value(metric_by_id(document.population.metrics, MetricId.FPR_COEFFICIENT_OF_VARIATION))
     worst_fpr = metric_value(metric_by_id(document.population.metrics, MetricId.WORST_CLIENT_FPR))
     if method is FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS:
-        coordinate = _threshold_coordinate_for_seed(seed, method, experiment_id)
-        threshold_path = _threshold_result_path(OUTPUTS_ROOT, coordinate)
-        if threshold_path.is_file():
-            threshold_result = _load_threshold_result(threshold_path)
-            from datp_core.thresholds.variants.federated_statistics import FederatedStatisticsThresholdResult
-
-            if isinstance(threshold_result, FederatedStatisticsThresholdResult):
-                rows.extend(
-                    FixedCoefficientSummary(
-                        seed=seed,
-                        coefficient=entry.coefficient,
-                        method=method,
-                        threshold_value=entry.threshold,
-                        cv_fpr=cv_fpr,
-                        worst_client_fpr=worst_fpr,
-                    )
-                    for entry in threshold_result.fixed_coefficient_curve
-                )
-                return tuple(rows)
+        rows.extend(
+            FixedCoefficientSummary(
+                seed=seed,
+                coefficient=evaluation.coefficient,
+                method=method,
+                threshold_value=evaluation.threshold,
+                cv_fpr=metric_value(metric_by_id(evaluation.population.metrics, MetricId.FPR_COEFFICIENT_OF_VARIATION)),
+                worst_client_fpr=metric_value(metric_by_id(evaluation.population.metrics, MetricId.WORST_CLIENT_FPR)),
+            )
+            for evaluation in document.diagnostics.fixed_coefficient_curve
+        )
+        if rows:
+            return tuple(rows)
+        raise ScientificContractError(ErrorMessage("fixed-coefficient statistics evaluation is missing its curve"))
     rows.append(
         FixedCoefficientSummary(
             seed=seed,

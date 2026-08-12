@@ -35,6 +35,7 @@ from datp_core.core.numeric import (
     Quantile,
     ReplicateIndex,
     ShrinkageWeight,
+    SummaryCoefficient,
     ThresholdValue,
 )
 from datp_core.data.populations.contracts import ClientIdentity
@@ -62,6 +63,15 @@ class ShrinkageLambdaEvaluation:
             raise ScientificContractError(ErrorMessage("shrinkage lambda evaluation requires client metrics"))
         if len({item.client for item in self.clients}) != len(self.clients):
             raise ScientificContractError(ErrorMessage("shrinkage lambda evaluation cannot repeat clients"))
+
+
+@dataclass(frozen=True, slots=True)
+class FixedCoefficientEvaluation:
+    coefficient: SummaryCoefficient
+    threshold: ThresholdValue
+    clients: tuple[ClientMetricResult, ...]
+    population: PopulationMetricResult
+    held_out_operating_point_summary: HeldOutOperatingPointSummary | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -157,6 +167,7 @@ class EvaluationDiagnostics:
     calibration_support: tuple[CalibrationSupportEvidence, ...]
     family_recall: FamilyRecallDiagnostics
     shrinkage_curve: tuple[ShrinkageLambdaEvaluation, ...] = field(default_factory=tuple)
+    fixed_coefficient_curve: tuple[FixedCoefficientEvaluation, ...] = field(default_factory=tuple)
     calibration_size_ablation: tuple[CalibrationSizeAblationCell, ...] = field(default_factory=tuple)
     onboarding_calibration: tuple[OnboardingCalibrationCell, ...] = field(default_factory=tuple)
     contributor_omission: tuple[SharedContributorOmissionCell, ...] = field(default_factory=tuple)

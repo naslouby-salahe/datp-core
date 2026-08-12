@@ -20,6 +20,7 @@ from datp_core.analysis.metrics.federated import (
     FederatedEvaluationDocument,
     FederatedEvaluationPublication,
     FederatedEvaluationRequest,
+    FixedCoefficientEvaluation,
     ShrinkageLambdaEvaluation,
     ThresholdEstimationStageInput,
 )
@@ -299,6 +300,11 @@ def _evaluate_diagnostics(
     shrinkage_curve = (
         _shrinkage_curve_evaluations(request) if isinstance(request.threshold_result, FixedShrinkageCurveResult) else ()
     )
+    fixed_coefficient_curve = (
+        _fixed_coefficient_evaluations(request)
+        if isinstance(request.threshold_result, FederatedStatisticsThresholdResult)
+        else ()
+    )
     held_out_operating_points, held_out_operating_point_summary = evaluate_held_out_operating_points(
         clients,
         request.calibration_scores,
@@ -314,6 +320,7 @@ def _evaluate_diagnostics(
         calibration_support=calibration_support_evidence(request.calibration_scores),
         family_recall=evaluate_nbaiot_family_recall(request.score_manifest, clients),
         shrinkage_curve=shrinkage_curve,
+        fixed_coefficient_curve=fixed_coefficient_curve,
         calibration_size_ablation=request.calibration_size_ablation,
         onboarding_calibration=request.onboarding_calibration,
         contributor_omission=request.contributor_omission,
@@ -410,6 +417,32 @@ def _shrinkage_curve_evaluations(request: FederatedEvaluationRequest) -> tuple[S
                 population=calculate_population_metrics(clients, cohort=request.cohort),
                 held_out_operating_points=held_out_operating_points,
                 held_out_operating_point_summary=held_out_operating_point_summary,
+            )
+        )
+    return tuple(evaluations)
+
+
+def _fixed_coefficient_evaluations(
+    request: FederatedEvaluationRequest,
+) -> tuple[FixedCoefficientEvaluation, ...]:
+    result = request.threshold_result
+    if not isinstance(result, FederatedStatisticsThresholdResult):
+        raise ScientificContractError(ErrorMessage("fixed-coefficient evaluation requires federated statistics"))
+    evaluations: list[FixedCoefficientEvaluation] = []
+    for point in result.fixed_coefficient_curve:
+        assignments = {record.scored_client: point.threshold for record in request.score_manifest.evaluation_records}
+        clients = tuple(
+            _evaluate_score_record(request, assignments, point.threshold, record)
+            for record in sorted(request.score_manifest.evaluation_records, key=lambda item: item.scored_client)
+        )
+        _, operating = evaluate_held_out_operating_points(clients, request.calibration_scores, request.target_quantile)
+        evaluations.append(
+            FixedCoefficientEvaluation(
+                coefficient=point.coefficient,
+                threshold=point.threshold,
+                clients=clients,
+                population=calculate_population_metrics(clients, cohort=request.cohort),
+                held_out_operating_point_summary=operating,
             )
         )
     return tuple(evaluations)
