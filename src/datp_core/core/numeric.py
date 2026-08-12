@@ -181,6 +181,10 @@ class CalibrationSize(PositiveIntegerValue):
         return self.value <= count.value
 
 
+class OnboardingCalibrationSize(NonNegativeIntegerValue):
+    validation_name: ClassVar[str] = "onboarding calibration size"
+
+
 class ClientCount(PositiveIntegerValue):
     validation_name: ClassVar[str] = "client count"
 

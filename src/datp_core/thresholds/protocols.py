@@ -13,6 +13,7 @@ from datp_core.core.numeric import (
     KllSketchSize,
     KMeansInitializationCount,
     KMeansMaximumIterationCount,
+    OnboardingCalibrationSize,
     Quantile,
     Ratio,
     Seed,
@@ -103,6 +104,20 @@ class CalibrationSizeProtocol(StrictModel):
         ordered = tuple(sorted(self.sizes, key=lambda item: item.value))
         if self.sizes != ordered:
             raise ValueError("calibration-size protocol sizes must be ascending")
+        return self
+
+
+class OnboardingCalibrationProtocol(StrictModel):
+    sizes: tuple[OnboardingCalibrationSize, ...]
+    replicated_sizes: tuple[OnboardingCalibrationSize, ...]
+    replicate_count: SubsampleReplicateCount
+
+    @model_validator(mode="after")
+    def validate_protocol(self) -> "OnboardingCalibrationProtocol":
+        if not self.sizes or self.sizes[0].value != 0:
+            raise ValueError("onboarding protocol must start with its m=0 boundary")
+        if self.replicated_sizes != tuple(size for size in self.sizes if size.value > 0):
+            raise ValueError("onboarding protocol replicates every and only positive calibration size")
         return self
 
 
@@ -229,6 +244,11 @@ CONFORMAL_COVERAGE = CoverageTarget(0.95)
 SUMMARY_COEFFICIENTS = tuple(SummaryCoefficient(value) for value in (2, 2.5, 3))
 CALIBRATION_ELIGIBILITY_PROTOCOL = CalibrationEligibilityProtocol(minimum_support=MINIMUM_BENIGN_SUPPORT)
 CALIBRATION_SIZE_PROTOCOL = CalibrationSizeProtocol(sizes=CALIBRATION_SIZES)
+ONBOARDING_CALIBRATION_PROTOCOL = OnboardingCalibrationProtocol(
+    sizes=tuple(OnboardingCalibrationSize(value) for value in (0, 10, 25, 50, 100)),
+    replicated_sizes=tuple(OnboardingCalibrationSize(value) for value in (10, 25, 50, 100)),
+    replicate_count=LOCKED_CALIBRATION_SUBSAMPLE_REPLICATE_COUNT,
+)
 SHARED_THRESHOLD_PROTOCOL = QuantileProtocol(
     method=FederatedThresholdMethod.SHARED_THRESHOLD,
     quantile=CANONICAL_QUANTILE,

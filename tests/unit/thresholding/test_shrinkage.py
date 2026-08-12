@@ -2,7 +2,11 @@ import pytest
 from tests.unit.thresholding.helpers import client_scores
 
 from datp_core.core.numeric import CalibrationSize, Quantile, ShrinkageWeight
-from datp_core.thresholds.protocols import FIXED_SHRINKAGE_PROTOCOL, SIZE_AWARE_SHRINKAGE_PROTOCOL
+from datp_core.thresholds.protocols import (
+    FIXED_SHRINKAGE_PROTOCOL,
+    ONBOARDING_CALIBRATION_PROTOCOL,
+    SIZE_AWARE_SHRINKAGE_PROTOCOL,
+)
 from datp_core.thresholds.variants.shrinkage import (
     construct_fixed_shrinkage,
     construct_size_aware_shrinkage,
@@ -12,6 +16,12 @@ from datp_core.thresholds.variants.shrinkage import (
 QUANTILE = Quantile(0.5)
 CLIENT_A = client_scores("client_a", (1.0, 2.0, 3.0, 4.0, 5.0))
 CLIENT_B = client_scores("client_b", (10.0, 20.0, 30.0))
+
+
+def test_onboarding_protocol_preserves_the_zero_support_boundary() -> None:
+    assert tuple(size.value for size in ONBOARDING_CALIBRATION_PROTOCOL.sizes) == (0, 10, 25, 50, 100)
+    assert tuple(size.value for size in ONBOARDING_CALIBRATION_PROTOCOL.replicated_sizes) == (10, 25, 50, 100)
+    assert ONBOARDING_CALIBRATION_PROTOCOL.replicate_count.value == 10
 
 
 def test_fixed_shrinkage_lambda_zero_reproduces_the_shared_threshold_exactly() -> None:
