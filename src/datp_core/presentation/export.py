@@ -9,6 +9,7 @@ from datp_core.analysis.contrasts import PairedContrasts
 from datp_core.analysis.descriptive import DescriptiveSummary, PairedDifferenceCounts
 from datp_core.analysis.inference.bootstrap.contracts import BootstrapInterval
 from datp_core.analysis.inference.multiplicity import MultiplicityResult
+from datp_core.analysis.inference.sign_test import ExactPairedSignTestResult
 from datp_core.analysis.inference.wilcoxon import RankBiserialResult, WilcoxonResult
 from datp_core.analysis.mechanisms import MechanismEvidence
 from datp_core.analysis.mechanisms.absorption import AbsorptionCohortResult
@@ -405,6 +406,7 @@ def _render_analysis_sections(
     sections.extend(_render_wilcoxon(document.wilcoxon))
     sections.extend(_render_rank_biserial(document.rank_biserial))
     sections.extend(_render_sign_consistency(document.sign_consistency))
+    sections.extend(_render_exact_sign_test(document.exact_sign_test))
     sections.extend(_render_paired_contrasts(document.contrasts))
     if document.multiplicity_result is not None:
         sections.extend(_render_multiplicity(document.multiplicity_result))
@@ -558,6 +560,25 @@ def _render_sign_consistency(
             "",
         ]
     ]
+
+
+def _render_exact_sign_test(result: ExactPairedSignTestResult | None) -> list[ReportLine]:
+    lines = ["## Exact Paired Sign Test", ""]
+    if result is None:
+        lines.append("Unavailable: confirmatory paired contrasts are unavailable")
+    else:
+        lines.extend(
+            (
+                f"Positive nonzero pairs: {result.positive_pair_count.value}/{result.nonzero_pair_count.value}",
+                "Two-sided exact p-value: "
+                + (
+                    "unavailable"
+                    if result.two_sided_p_value is None
+                    else _format_publication_metric(result.two_sided_p_value.value)
+                ),
+            )
+        )
+    return [ReportLine(line) for line in [*lines, ""]]
 
 
 def _render_paired_contrasts(contrasts: PairedContrasts) -> list[ReportLine]:
