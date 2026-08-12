@@ -22,6 +22,7 @@ from datp_core.analysis.mechanisms import (
     GroupedDispersionResult,
     MechanismEvidence,
     ThresholdMovementCohort,
+    calibration_support_burden_evidence,
     campaign_fixed_support_strata,
     confirmatory_equity_utility_bundle,
     grouped_dispersion,
@@ -230,6 +231,7 @@ def _confirmatory_mechanisms() -> tuple[MechanismEvidence, ...]:
         )
         movement_cohorts.append(movement)
         mechanisms.append(movement)
+        mechanisms.append(calibration_support_burden_evidence(shared, local, movement))
         mechanisms.append(summarize_client_impact(movement))
         shared_cv = population_metric(shared, MetricId.FPR_COEFFICIENT_OF_VARIATION)
         local_cv = population_metric(local, MetricId.FPR_COEFFICIENT_OF_VARIATION)

@@ -88,6 +88,12 @@ from datp_core.analysis.mechanisms.movement import (
     summarize_threshold_movements_across_seeds,
     threshold_movement,
 )
+from datp_core.analysis.mechanisms.support_burden import (
+    CalibrationSupportBurdenClient,
+    CalibrationSupportBurdenSeedEvidence,
+    SupportAssociationAvailability,
+    calibration_support_burden_evidence,
+)
 from datp_core.analysis.mechanisms.support_strata import (
     CalibrationSupportStratum,
     CampaignFixedSupportStrata,
@@ -125,6 +131,7 @@ type MechanismEvidence = (
     | CampaignFixedSupportStrata
     | SupportStratumOutcomeReport
     | SupportStratumCampaignSummary
+    | CalibrationSupportBurdenSeedEvidence
 )
 
 __all__ = (
@@ -152,6 +159,8 @@ __all__ = (
     "ClusterContingencyRow",
     "ClusterStabilityResult",
     "CalibrationSupportStratum",
+    "CalibrationSupportBurdenClient",
+    "CalibrationSupportBurdenSeedEvidence",
     "CampaignFixedSupportStrata",
     "CampaignFixedSupportStratum",
     "SupportStratumOutcomeReport",
@@ -159,6 +168,7 @@ __all__ = (
     "SupportStratumCrossSeedMetricSummary",
     "SupportStratumCrossSeedSummary",
     "SupportStratumSeedOutcome",
+    "SupportAssociationAvailability",
     "ConfirmatoryEquityUtilityBundle",
     "ConfirmatoryEquityUtilityMeasure",
     "DivergenceBlocker",
@@ -190,6 +200,7 @@ __all__ = (
     "ThresholdMethodComparison",
     "ThresholdOperatingPoint",
     "blocked_jensen_shannon_divergence",
+    "calibration_support_burden_evidence",
     "campaign_fixed_support_strata",
     "alignment_reductions",
     "cluster_evidence_from_grouped_result",

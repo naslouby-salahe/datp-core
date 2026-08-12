@@ -30,6 +30,7 @@ from datp_core.analysis.mechanisms.movement import (
     ThresholdMovementCohort,
     ThresholdMovementMultiSeedUncertainty,
 )
+from datp_core.analysis.mechanisms.support_burden import CalibrationSupportBurdenSeedEvidence
 from datp_core.analysis.mechanisms.support_strata import (
     CampaignFixedSupportStrata,
     SupportStratumCampaignSummary,
@@ -662,6 +663,7 @@ _MECHANISM_TITLES: dict[type[object], ReportLine] = {
     CampaignFixedSupportStrata: ReportLine("campaign_fixed_calibration_support_strata"),
     SupportStratumOutcomeReport: ReportLine("support_stratum_seed_outcomes"),
     SupportStratumCampaignSummary: ReportLine("support_stratum_cross_seed_summary"),
+    CalibrationSupportBurdenSeedEvidence: ReportLine("calibration_support_burden"),
     AbsorptionCohortResult: ReportLine("model_personalization_absorption"),
     ScientificDecisionResult: ReportLine("scientific_decision"),
 }
@@ -1062,6 +1064,20 @@ def _render_support_stratum_campaign_summary(mechanism: SupportStratumCampaignSu
         ):
             lines.append(f"| `{summary.stratum.value}` | {label} | {_render_cross_seed_metric(values)} |")
     return [ReportLine(line) for line in lines]
+
+
+@_render_one_mechanism.register
+def _render_calibration_support_burden(mechanism: CalibrationSupportBurdenSeedEvidence) -> list[ReportLine]:
+    if mechanism.support_fpr_spearman is None or mechanism.support_relief_spearman is None:
+        return [ReportLine(f"Seed {mechanism.seed.value}: unavailable ({mechanism.reason})")]
+    return [
+        ReportLine(
+            f"Seed {mechanism.seed.value}: support→FPR Spearman="
+            f"{_format_publication_metric(mechanism.support_fpr_spearman.value)}; "
+            f"support→relief Spearman={_format_publication_metric(mechanism.support_relief_spearman.value)}; "
+            f"clients={len(mechanism.clients)}"
+        )
+    ]
 
 
 def _render_cross_seed_metric(summary: SupportStratumCrossSeedMetricSummary) -> str:
