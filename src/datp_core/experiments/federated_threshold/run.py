@@ -95,6 +95,7 @@ class EstimationSummary(StrictModel):
     cv_fpr_across_seeds: MetricValue | None
     mean_absolute_threshold_error: AbsoluteThresholdError | None
     mean_relative_threshold_error: RelativeThresholdError | None
+    mean_kll_empirical_rank_error: Ratio | None
     mean_absolute_attainment_error: MetricValue | None
     mean_achieved_exceedance: Ratio | None
     mean_threshold_variance: ThresholdVariance | None
@@ -394,6 +395,9 @@ def _estimation_summary(
             cv_fpr_across_seeds=cv_summary.coefficient_of_variation,
             mean_absolute_threshold_error=_mean_absolute_threshold_error(diagnostics.threshold_errors),
             mean_relative_threshold_error=_mean_relative_threshold_error(diagnostics.relative_threshold_errors),
+            mean_kll_empirical_rank_error=_kll_mean_empirical_rank_error(
+                experiment_id, method, tuple(documents)
+            ),
             mean_absolute_attainment_error=(
                 MetricValue(
                     sum(item.value for item in diagnostics.attainment_errors) / len(diagnostics.attainment_errors)
@@ -431,6 +435,25 @@ def _kll_endpoint_timings(
             client.extend(item.build_serialization_elapsed for item in reconstruction.client_sketches)
             server.append(reconstruction.server_deserialize_merge_query_elapsed)
     return tuple(client), tuple(server)
+
+
+def _kll_mean_empirical_rank_error(
+    experiment_id: ExperimentId,
+    method: FederatedThresholdMethod,
+    documents: tuple[FederatedEvaluationDocument, ...],
+) -> Ratio | None:
+    if method is not FederatedThresholdMethod.FEDERATED_KLL_SHARED_THRESHOLD:
+        return None
+    from datp_core.thresholds.variants.kll import FederatedKllSharedThresholdResult
+
+    values: list[Ratio] = []
+    for document in documents:
+        coordinate = _threshold_coordinate_for_seed(document.score_coordinate.training_seed, method, experiment_id)
+        threshold_result = _load_threshold_result(_threshold_result_path(OUTPUTS_ROOT, coordinate))
+        if not isinstance(threshold_result, FederatedKllSharedThresholdResult):
+            raise ScientificContractError(ErrorMessage("KLL evaluation has a non-KLL threshold result"))
+        values.extend(item.empirical_rank_error for item in threshold_result.reconstructions)
+    return _mean_ratio(values)
 
 
 def _runtime_timing_summary(values: tuple[ElapsedSeconds, ...]) -> RuntimeTimingSummary | None:
