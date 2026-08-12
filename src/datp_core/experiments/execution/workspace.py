@@ -83,7 +83,9 @@ from datp_core.experiments.execution.score_generation import score_terminal_mode
 from datp_core.thresholds.calibration.construction import (
     BuildCalibrationResult,
     ConstructCalibrationSizeAblationRequest,
+    OnboardingTargetCalibration,
     build_declared_calibration,
+    build_onboarding_target_calibration,
     construct_calibration_size_ablation,
 )
 from datp_core.thresholds.calibration.service import eligible_calibration_scores
@@ -305,6 +307,15 @@ class ExperimentWorkspace:
                 calibration=self.calibration,
                 execution_identity=self.context.execution_identity,
             )
+        )
+
+    @cached_property
+    def onboarding_target_calibrations(self) -> tuple[OnboardingTargetCalibration, ...]:
+        if self.coordinate.experiment is not ExperimentId.CALIBRATION_COLD_START_ONBOARDING:
+            return ()
+        return tuple(
+            build_onboarding_target_calibration(self.scores, client)
+            for client in sorted(item.client for item in self.eligible_calibration_scores())
         )
 
     def _conformal_coverage_inputs(self) -> tuple[ConformalCoverageStageInput, ...]:

@@ -13,19 +13,26 @@ from datp_core.core.errors import (
     ScientificContractError,
 )
 from datp_core.core.identifiers import CoordinateStableKey, EvaluationCohort, EvidenceRole, FederatedThresholdMethod
-from datp_core.core.numeric import CalibrationSize, Quantile, ReplicateIndex, SubsampleReplicateCount
+from datp_core.core.numeric import (
+    CalibrationSize,
+    OnboardingCalibrationSize,
+    Quantile,
+    ReplicateIndex,
+    SubsampleReplicateCount,
+)
 from datp_core.data.populations.contracts import ClientIdentity, EligibleCohort, FamilyAssignment
 from datp_core.data.registry import population_capabilities
 from datp_core.detector.scoring.models import FederatedScoreArtifactManifest
 from datp_core.experiments.common.coordinates import ExternalTemporalExecutionIdentity
-from datp_core.thresholds.calibration.eligibility import EligibilityDecision
-from datp_core.thresholds.calibration.sampling import CalibrationReplicateManifest
-from datp_core.thresholds.calibration.service import CalibrationRequest, calibrate
+from datp_core.thresholds.calibration.eligibility import EligibilityDecision, load_benign_calibration_references
+from datp_core.thresholds.calibration.sampling import CalibrationReplicateManifest, build_calibration_replicate
+from datp_core.thresholds.calibration.service import CalibrationRequest, calibrate, eligible_calibration_scores
 from datp_core.thresholds.contracts import ThresholdUnavailableResult
 from datp_core.thresholds.dispatch import ThresholdConstructionRequest, dispatch_federated_threshold
 from datp_core.thresholds.protocols import (
     CALIBRATION_ELIGIBILITY_PROTOCOL,
     CALIBRATION_SIZE_PROTOCOL,
+    ONBOARDING_CALIBRATION_PROTOCOL,
     CalibrationEligibilityProtocol,
     CalibrationSupportRule,
     ClusterThresholdAggregation,
@@ -82,6 +89,35 @@ class ConstructCalibrationSizeAblationRequest:
     execution_identity: ExternalTemporalExecutionIdentity | None
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class OnboardingTargetCalibration:
+    target: ClientIdentity
+    full_target_scores: ClientBenignCalibrationScores
+    other_full_scores: tuple[ClientBenignCalibrationScores, ...]
+    replicate_manifests: tuple[CalibrationReplicateManifest, ...]
+
+    def subsample(
+        self,
+        size: OnboardingCalibrationSize,
+        replicate_index: ReplicateIndex,
+    ) -> ClientBenignCalibrationScores | None:
+        if size.value == 0:
+            return None
+        matches = tuple(
+            manifest for manifest in self.replicate_manifests if manifest.replicate_index == replicate_index
+        )
+        if len(matches) != 1:
+            raise ScientificContractError(ErrorMessage("onboarding target replicate must resolve exactly once"))
+        samples = tuple(item for item in matches[0].subsamples if item.size.value == size.value)
+        if len(samples) != 1:
+            raise ScientificContractError(ErrorMessage("onboarding target subsample must resolve exactly once"))
+        return calibration_scores_from_references(
+            client=self.target,
+            coordinate=matches[0].coordinate,
+            references=samples[0].references,
+        )
+
+
 def build_calibration(request: BuildCalibrationRequest) -> BuildCalibrationResult:
     result = calibrate(
         CalibrationRequest(
@@ -107,6 +143,39 @@ def build_declared_calibration(score_manifest: FederatedScoreArtifactManifest) -
             calibration_sizes=CALIBRATION_SIZE_PROTOCOL.sizes,
             replicate_count=require_calibration_subsample_replicate_count(),
         )
+    )
+
+
+def build_onboarding_target_calibration(
+    score_manifest: FederatedScoreArtifactManifest,
+    target: ClientIdentity,
+) -> OnboardingTargetCalibration:
+    full_scores = eligible_calibration_scores(score_manifest)
+    by_client = {item.client: item for item in full_scores}
+    target_full = by_client.get(target)
+    if target_full is None:
+        raise ScientificContractError(ErrorMessage("onboarding target lacks canonical eligible calibration support"))
+    record = next((item for item in score_manifest.calibration_records if item.scored_client == target), None)
+    if record is None:
+        raise ScientificContractError(ErrorMessage("onboarding target lacks a calibration score artifact"))
+    references = load_benign_calibration_references(record)
+    positive_sizes = tuple(CalibrationSize(size.value) for size in ONBOARDING_CALIBRATION_PROTOCOL.replicated_sizes)
+    manifests = tuple(
+        build_calibration_replicate(
+            client=target,
+            coordinate=score_manifest.coordinate,
+            training_seed=score_manifest.coordinate.training_seed,
+            replicate_index=ReplicateIndex(index),
+            references=references,
+            sizes=positive_sizes,
+        )
+        for index in range(ONBOARDING_CALIBRATION_PROTOCOL.replicate_count.value)
+    )
+    return OnboardingTargetCalibration(
+        target=target,
+        full_target_scores=target_full,
+        other_full_scores=tuple(item for item in full_scores if item.client != target),
+        replicate_manifests=manifests,
     )
 
 
