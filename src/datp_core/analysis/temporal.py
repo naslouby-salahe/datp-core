@@ -181,6 +181,46 @@ class TemporalRecoveryResult(StrictModel):
         return MetricValue(self.frozen_future_cv.value - self.recalibrated_future_cv.value)
 
     @property
+    def _eligible_recovery_deltas(self) -> tuple[MetricValue, ...]:
+        return tuple(
+            MetricValue(item.fpr_frozen.value - item.fpr_recalibrated.value)
+            for item in self.client_trajectories
+            if item.eligible and item.fpr_frozen is not None and item.fpr_recalibrated is not None
+        )
+
+    @property
+    def helped_fraction(self) -> Ratio | None:
+        deltas = self._eligible_recovery_deltas
+        return None if not deltas else Ratio(sum(item.value > 0.0 for item in deltas) / len(deltas))
+
+    @property
+    def harmed_fraction(self) -> Ratio | None:
+        deltas = self._eligible_recovery_deltas
+        return None if not deltas else Ratio(sum(item.value < 0.0 for item in deltas) / len(deltas))
+
+    @property
+    def unchanged_fraction(self) -> Ratio | None:
+        deltas = self._eligible_recovery_deltas
+        return None if not deltas else Ratio(sum(item.value == 0.0 for item in deltas) / len(deltas))
+
+    @property
+    def worst_client_fpr_recovery(self) -> MetricValue | None:
+        eligible = tuple(
+            item
+            for item in self.client_trajectories
+            if item.eligible and item.fpr_frozen is not None and item.fpr_recalibrated is not None
+        )
+        if not eligible:
+            return None
+        frozen = tuple(item.fpr_frozen for item in eligible)
+        recalibrated = tuple(item.fpr_recalibrated for item in eligible)
+        if any(item is None for item in frozen) or any(item is None for item in recalibrated):
+            raise ScientificContractError(ErrorMessage("eligible temporal recovery requires available FPRs"))
+        frozen_values = tuple(item.value for item in frozen if item is not None)
+        recalibrated_values = tuple(item.value for item in recalibrated if item is not None)
+        return MetricValue(max(frozen_values) - max(recalibrated_values))
+
+    @property
     def drift_excess_materiality_threshold(self) -> MetricValue:
         return self.decision_protocol.drift_excess_materiality_threshold
 

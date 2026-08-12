@@ -60,7 +60,7 @@ from datp_core.core.identifiers import (
     PopulationId,
     ReportLine,
 )
-from datp_core.core.numeric import MetricValue
+from datp_core.core.numeric import MetricValue, Ratio
 from datp_core.experiments.anchor.contracts import VerifiedAnchorGateArtifact
 from datp_core.presentation.figures import FigureSpec, render_markdown_figure
 from datp_core.presentation.tables import (
@@ -280,9 +280,10 @@ def export_temporal_publication(document: TemporalAnalysisDocument, output_direc
         "",
         (
             "| Seed | Static CV | Frozen CV | Recalibrated CV | Mean FPR static | "
-            "Mean FPR frozen | Mean FPR recal | Drift excess | Recovered | Ratio | Interpretation |"
+            "Mean FPR frozen | Mean FPR recal | Drift excess | Recovered | Ratio | Helped | Harmed | Unchanged | "
+            "Worst FPR recovery | Interpretation |"
         ),
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|",
     ]
     for record in document.records:
         recovery = record.recovery
@@ -309,7 +310,10 @@ def export_temporal_publication(document: TemporalAnalysisDocument, output_direc
             f"{mean_static} | {mean_frozen} | {mean_recal} | "
             f"{_format_publication_metric(recovery.drift_excess.value)} | "
             f"{_format_publication_metric(recovery.recovered_amount.value)} | "
-            f"{ratio} | `{record.interpretation.value}` |"
+            f"{ratio} | {_optional_ratio(recovery.helped_fraction)} | "
+            f"{_optional_ratio(recovery.harmed_fraction)} | {_optional_ratio(recovery.unchanged_fraction)} | "
+            f"{_optional_metric(recovery.worst_client_fpr_recovery)} | "
+            f"`{record.interpretation.value}` |"
         )
     lines.extend(["", "## Per-seed provenance", ""])
     for record in document.records:
@@ -1435,6 +1439,10 @@ def _paired_values_table(document: AnalysisDocument) -> PublicationTable:
 def _optional_metric(
     value: MetricValue | None,
 ) -> ReportLine:
+    return ReportLine("—" if value is None else _format_publication_metric(value.value))
+
+
+def _optional_ratio(value: Ratio | None) -> ReportLine:
     return ReportLine("—" if value is None else _format_publication_metric(value.value))
 
 
