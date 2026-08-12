@@ -79,6 +79,8 @@ class ClientImpactSeedSummary(StrictModel):
     tpr_loss: ClientImpactFraction
     macro_f1_loss: ClientImpactFraction
     balanced_accuracy_loss: ClientImpactFraction
+    fpr_harm_magnitude: ClientImpactMagnitudeSummary
+    tpr_loss_magnitude: ClientImpactMagnitudeSummary
     pareto: ParetoClientImpactFractions
     availability: AvailabilityStatus
     reason: AnalysisReasonText | None
@@ -90,6 +92,22 @@ class ClientImpactSeedSummary(StrictModel):
                 raise ValueError("available client-impact summary requires FPR fractions and no reason")
         elif self.reason is None:
             raise ValueError("unavailable client-impact summary requires a reason")
+        return self
+
+
+class ClientImpactMagnitudeSummary(StrictModel):
+    median: MetricValue | None
+    maximum: MetricValue | None
+    reason: AnalysisReasonText | None
+
+    @model_validator(mode="after")
+    def validate_availability(self) -> ClientImpactMagnitudeSummary:
+        available = self.median is not None or self.maximum is not None
+        if available:
+            if self.median is None or self.maximum is None or self.reason is not None:
+                raise ValueError("available harm-magnitude summary requires median and maximum only")
+        elif self.reason is None:
+            raise ValueError("unavailable harm-magnitude summary requires a reason")
         return self
 
 
@@ -170,6 +188,8 @@ def summarize_client_impact(cohort: ThresholdMovementCohort) -> ClientImpactSeed
             tpr_loss=unavailable,
             macro_f1_loss=unavailable,
             balanced_accuracy_loss=unavailable,
+            fpr_harm_magnitude=_unavailable_magnitude(reason),
+            tpr_loss_magnitude=_unavailable_magnitude(reason),
             pareto=ParetoClientImpactFractions(
                 pareto_improved=unavailable,
                 pareto_harmed=unavailable,
@@ -200,6 +220,10 @@ def summarize_client_impact(cohort: ThresholdMovementCohort) -> ClientImpactSeed
             tpr_loss=unavailable,
             macro_f1_loss=unavailable,
             balanced_accuracy_loss=unavailable,
+            fpr_harm_magnitude=_magnitude_summary(
+                tuple(-value for value in fpr_relief if value < 0.0), "no FPR-harmed clients"
+            ),
+            tpr_loss_magnitude=_unavailable_magnitude(AnalysisReasonText("no common FPR/TPR-evaluable clients")),
             pareto=ParetoClientImpactFractions(
                 pareto_improved=unavailable,
                 pareto_harmed=unavailable,
@@ -230,6 +254,12 @@ def summarize_client_impact(cohort: ThresholdMovementCohort) -> ClientImpactSeed
         tpr_loss=_fraction(sum(value < 0.0 for value in tpr_changes), len(tpr_changes)),
         macro_f1_loss=_loss_fraction(macro_f1_changes, "no common FPR/Macro-F1-evaluable clients"),
         balanced_accuracy_loss=_loss_fraction(ba_changes, "no common FPR/balanced-accuracy-evaluable clients"),
+        fpr_harm_magnitude=_magnitude_summary(
+            tuple(-value for value in fpr_relief if value < 0.0), "no FPR-harmed clients"
+        ),
+        tpr_loss_magnitude=_magnitude_summary(
+            tuple(-value for value in tpr_changes if value < 0.0), "no TPR-loss clients"
+        ),
         pareto=ParetoClientImpactFractions(
             pareto_improved=_fraction(pareto_counts[ParetoClientImpact.PARETO_IMPROVED], len(attack_movements)),
             pareto_harmed=_fraction(pareto_counts[ParetoClientImpact.PARETO_HARMED], len(attack_movements)),
@@ -306,6 +336,19 @@ def _loss_fraction(values: tuple[float, ...], reason: str) -> ClientImpactFracti
 
 def _unavailable_fraction(reason: AnalysisReasonText) -> ClientImpactFraction:
     return ClientImpactFraction(numerator=None, denominator=None, value=None, reason=reason)
+
+
+def _magnitude_summary(values: tuple[float, ...], reason: str) -> ClientImpactMagnitudeSummary:
+    if not values:
+        return _unavailable_magnitude(AnalysisReasonText(reason))
+    ordered = tuple(sorted(values))
+    middle = len(ordered) // 2
+    median = ordered[middle] if len(ordered) % 2 else (ordered[middle - 1] + ordered[middle]) / 2.0
+    return ClientImpactMagnitudeSummary(median=MetricValue(median), maximum=MetricValue(ordered[-1]), reason=None)
+
+
+def _unavailable_magnitude(reason: AnalysisReasonText) -> ClientImpactMagnitudeSummary:
+    return ClientImpactMagnitudeSummary(median=None, maximum=None, reason=reason)
 
 
 def _summarize_fractions(values: tuple[ClientImpactFraction, ...]) -> ClientImpactFractionSummary:

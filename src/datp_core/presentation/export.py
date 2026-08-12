@@ -18,6 +18,7 @@ from datp_core.analysis.mechanisms.client_impact import (
     ClientImpactCampaignSummary,
     ClientImpactFraction,
     ClientImpactFractionSummary,
+    ClientImpactMagnitudeSummary,
     ClientImpactSeedSummary,
 )
 from datp_core.analysis.mechanisms.clustering import ClusterEvidenceRecord, ClusterStabilityResult
@@ -933,6 +934,8 @@ def _render_client_impact_seed_summary(mechanism: ClientImpactSeedSummary) -> li
             f"TPR loss: {_render_client_impact_fraction(mechanism.tpr_loss)}",
             f"Macro-F1 loss: {_render_client_impact_fraction(mechanism.macro_f1_loss)}",
             f"Balanced-accuracy loss: {_render_client_impact_fraction(mechanism.balanced_accuracy_loss)}",
+            f"FPR-harm magnitude: {_render_client_impact_magnitude(mechanism.fpr_harm_magnitude)}",
+            f"TPR-loss magnitude: {_render_client_impact_magnitude(mechanism.tpr_loss_magnitude)}",
             f"Pareto improved: {_render_client_impact_fraction(mechanism.pareto.pareto_improved)}",
             f"Pareto harmed: {_render_client_impact_fraction(mechanism.pareto.pareto_harmed)}",
             "Trade-off FPR better / TPR worse: "
@@ -995,6 +998,15 @@ def _render_client_impact_summary(summary: ClientImpactFractionSummary) -> str:
         f"min={_format_publication_metric(summary.minimum.value) if summary.minimum is not None else 'unavailable'}, "
         f"max={_format_publication_metric(summary.maximum.value) if summary.maximum is not None else 'unavailable'}; "
         f"valid={summary.valid_seed_count.value}, unavailable={summary.unavailable_seed_count.value}"
+    )
+
+
+def _render_client_impact_magnitude(summary: ClientImpactMagnitudeSummary) -> str:
+    if summary.median is None or summary.maximum is None:
+        return f"unavailable ({summary.reason})"
+    return (
+        f"median={_format_publication_metric(summary.median.value)}, "
+        f"max={_format_publication_metric(summary.maximum.value)}"
     )
 
 

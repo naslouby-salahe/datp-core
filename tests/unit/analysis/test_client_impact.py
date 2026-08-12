@@ -42,6 +42,10 @@ def test_client_impact_preserves_exact_fpr_help_harm_and_pareto_partition() -> N
     assert summary.pareto.pareto_harmed.numerator.value == 1
     assert summary.pareto.no_fpr_change.numerator is not None
     assert summary.pareto.no_fpr_change.numerator.value == 1
+    assert summary.fpr_harm_magnitude.median is not None
+    assert summary.fpr_harm_magnitude.median.value == 0.1
+    assert summary.tpr_loss_magnitude.maximum is not None
+    assert summary.tpr_loss_magnitude.maximum.value == 0.1
 
 
 def test_client_impact_marks_attack_fractions_unavailable_without_common_tpr() -> None:
@@ -60,6 +64,8 @@ def test_client_impact_marks_attack_fractions_unavailable_without_common_tpr() -
     assert summary.tpr_loss.value is None
     assert summary.tpr_loss.reason is not None
     assert summary.pareto.pareto_improved.value is None
+    assert summary.tpr_loss_magnitude.median is None
+    assert summary.tpr_loss_magnitude.reason is not None
 
 
 def test_client_impact_campaign_retains_each_seed_and_uses_seed_as_the_summary_unit() -> None:
