@@ -54,7 +54,8 @@ def test_threshold_methods_keep_distinct_evaluation_runs() -> None:
 
 
 def test_every_non_metric_coordinate_dimension_changes_the_run_identity() -> None:
-    from datp_core.core.numeric import DirichletConcentration, Quantile
+    from datp_core.core.identifiers import ThresholdEstimator
+    from datp_core.core.numeric import DirichletConcentration, KllSketchSize, Quantile
     from datp_core.data.populations.contracts import ControlledPartitionKind
 
     root = Path("outputs")
@@ -74,6 +75,8 @@ def test_every_non_metric_coordinate_dimension_changes_the_run_identity() -> Non
         replace(primary, preprocessing_protocol=PreprocessingProtocolId.FEDERATED_POOLED_MIN_MAX),
         replace(primary, threshold_method=FederatedThresholdMethod.LOCAL_THRESHOLD),
         replace(primary, threshold_quantile=Quantile(0.90)),
+        replace(primary, kll_sketch_size=KllSketchSize(400)),
+        replace(primary, threshold_estimator=ThresholdEstimator.MEAN_PLUS_STANDARD_DEVIATION_ESTIMATOR),
         replace(
             primary,
             population=PopulationId.NBAIOT_DIRICHLET_CLIENTS,

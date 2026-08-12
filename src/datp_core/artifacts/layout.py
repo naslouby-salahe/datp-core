@@ -25,6 +25,11 @@ def evaluation_run_directory(root: Path, coordinate: ExperimentCoordinate) -> Pa
         if coordinate.threshold_quantile is not None
         else CoordinateIdentitySegment.CANONICAL_QUANTILE.value
     )
+    kll_sketch_size = (
+        f"k{coordinate.kll_sketch_size.value}"
+        if coordinate.kll_sketch_size is not None
+        else "no_kll"
+    )
     if coordinate.controlled_partition_kind is None:
         partition = CoordinateIdentitySegment.NO_CONTROLLED_PARTITION.value
     elif coordinate.dirichlet_concentration is not None:
@@ -46,6 +51,8 @@ def evaluation_run_directory(root: Path, coordinate: ExperimentCoordinate) -> Pa
         / temporal
         / quantile
         / partition
+        / kll_sketch_size
+        / coordinate.threshold_estimator.value
     )
 
 
