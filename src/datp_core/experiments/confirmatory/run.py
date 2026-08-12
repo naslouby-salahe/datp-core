@@ -30,6 +30,7 @@ from datp_core.analysis.mechanisms import (
     heterogeneity_benefit_association,
     jensen_shannon_from_client_scores,
     summarize_calibration_support_burden,
+    summarize_calibration_support_burden_devices,
     summarize_client_impact,
     summarize_client_impact_campaign,
     summarize_support_stratum_campaign,
@@ -263,6 +264,7 @@ def _confirmatory_mechanisms() -> tuple[MechanismEvidence, ...]:
     )
     mechanisms.append(summarize_client_impact_campaign(tuple(movement_cohorts)))
     mechanisms.append(summarize_calibration_support_burden(tuple(support_burden_evidence)))
+    mechanisms.append(summarize_calibration_support_burden_devices(tuple(support_burden_evidence)))
     mechanisms.append(confirmatory_equity_utility_bundle(tuple(policy_pairs)))
     strata = campaign_fixed_support_strata(tuple(shared for shared, _ in policy_pairs))
     mechanisms.append(strata)

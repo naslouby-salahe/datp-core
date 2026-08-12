@@ -7,6 +7,7 @@ from datp_core.core.contracts import StrictModel
 from datp_core.core.identifiers import AnalysisReasonText, MetricId
 from datp_core.core.numeric import MetricValue, PairedObservationCount, RowCount, Seed, SeedObservationCount
 from datp_core.data.populations.contracts import ClientIdentity
+from datp_core.thresholds.protocols import CANONICAL_QUANTILE
 
 
 class SupportAssociationAvailability(StrEnum):
@@ -46,6 +47,21 @@ class CalibrationSupportBurdenCampaignSummary(StrictModel):
     seed_evidence: tuple[CalibrationSupportBurdenSeedEvidence, ...]
     support_fpr: SupportCorrelationDirectionSummary
     support_relief: SupportCorrelationDirectionSummary
+
+
+class CalibrationSupportBurdenDeviceSummary(StrictModel):
+    client: ClientIdentity
+    median_source_benign_calibration_count: MetricValue
+    mean_shared_false_positive_rate: MetricValue
+    median_shared_false_positive_rate: MetricValue
+    mean_shared_target_burden: MetricValue
+    median_shared_target_burden: MetricValue
+    mean_personalization_relief: MetricValue
+    median_personalization_relief: MetricValue
+
+
+class CalibrationSupportBurdenDeviceReport(StrictModel):
+    devices: tuple[CalibrationSupportBurdenDeviceSummary, ...]
 
 
 def calibration_support_burden_evidence(
@@ -110,6 +126,20 @@ def summarize_calibration_support_burden(
         seed_evidence=evidence,
         support_fpr=_summarize_correlation(tuple(item.support_fpr_spearman for item in evidence)),
         support_relief=_summarize_correlation(tuple(item.support_relief_spearman for item in evidence)),
+    )
+
+
+def summarize_calibration_support_burden_devices(
+    evidence: tuple[CalibrationSupportBurdenSeedEvidence, ...],
+) -> CalibrationSupportBurdenDeviceReport:
+    clients: dict[ClientIdentity, list[CalibrationSupportBurdenClient]] = {}
+    for seed in evidence:
+        for client in seed.clients:
+            clients.setdefault(client.client, []).append(client)
+    return CalibrationSupportBurdenDeviceReport(
+        devices=tuple(
+            _device_summary(client, values) for client, values in sorted(clients.items())
+        )
     )
 
 
@@ -181,3 +211,29 @@ def _summarize_correlation(values: tuple[MetricValue | None, ...]) -> SupportCor
         zero_count=PairedObservationCount(sum(value == 0.0 for value in available)),
         positive_count=PairedObservationCount(sum(value > 0.0 for value in available)),
     )
+
+
+def _device_summary(
+    client: ClientIdentity, values: list[CalibrationSupportBurdenClient]
+) -> CalibrationSupportBurdenDeviceSummary:
+    support = tuple(float(item.source_benign_calibration_count.value) for item in values)
+    fpr = tuple(item.shared_false_positive_rate.value for item in values)
+    relief = tuple(item.personalization_relief.value for item in values)
+    target = 1.0 - CANONICAL_QUANTILE.value
+    burden = tuple(value - target for value in fpr)
+    return CalibrationSupportBurdenDeviceSummary(
+        client=client,
+        median_source_benign_calibration_count=MetricValue(_median(support)),
+        mean_shared_false_positive_rate=MetricValue(sum(fpr) / len(fpr)),
+        median_shared_false_positive_rate=MetricValue(_median(fpr)),
+        mean_shared_target_burden=MetricValue(sum(burden) / len(burden)),
+        median_shared_target_burden=MetricValue(_median(burden)),
+        mean_personalization_relief=MetricValue(sum(relief) / len(relief)),
+        median_personalization_relief=MetricValue(_median(relief)),
+    )
+
+
+def _median(values: tuple[float, ...]) -> float:
+    ordered = tuple(sorted(values))
+    middle = len(ordered) // 2
+    return ordered[middle] if len(ordered) % 2 else (ordered[middle - 1] + ordered[middle]) / 2.0

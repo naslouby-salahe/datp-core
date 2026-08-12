@@ -32,6 +32,7 @@ from datp_core.analysis.mechanisms.movement import (
 )
 from datp_core.analysis.mechanisms.support_burden import (
     CalibrationSupportBurdenCampaignSummary,
+    CalibrationSupportBurdenDeviceReport,
     CalibrationSupportBurdenSeedEvidence,
     SupportCorrelationDirectionSummary,
 )
@@ -669,6 +670,7 @@ _MECHANISM_TITLES: dict[type[object], ReportLine] = {
     SupportStratumCampaignSummary: ReportLine("support_stratum_cross_seed_summary"),
     CalibrationSupportBurdenSeedEvidence: ReportLine("calibration_support_burden"),
     CalibrationSupportBurdenCampaignSummary: ReportLine("calibration_support_burden_campaign_summary"),
+    CalibrationSupportBurdenDeviceReport: ReportLine("calibration_support_burden_per_device"),
     AbsorptionCohortResult: ReportLine("model_personalization_absorption"),
     ScientificDecisionResult: ReportLine("scientific_decision"),
 }
@@ -1093,6 +1095,28 @@ def _render_calibration_support_burden_campaign(
         ReportLine(f"Support→FPR: {_render_correlation_summary(mechanism.support_fpr)}"),
         ReportLine(f"Support→relief: {_render_correlation_summary(mechanism.support_relief)}"),
     ]
+
+
+@_render_one_mechanism.register
+def _render_calibration_support_burden_devices(
+    mechanism: CalibrationSupportBurdenDeviceReport,
+) -> list[ReportLine]:
+    lines = [
+        "| Client | Support median | Shared FPR mean/median | Burden mean/median | Relief mean/median |",
+        "|---|---:|---:|---:|---:|",
+    ]
+    lines.extend(
+        f"| `{item.client.client_id.value}` | "
+        f"{_format_publication_metric(item.median_source_benign_calibration_count.value)} | "
+        f"{_format_publication_metric(item.mean_shared_false_positive_rate.value)}/"
+        f"{_format_publication_metric(item.median_shared_false_positive_rate.value)} | "
+        f"{_format_publication_metric(item.mean_shared_target_burden.value)}/"
+        f"{_format_publication_metric(item.median_shared_target_burden.value)} | "
+        f"{_format_publication_metric(item.mean_personalization_relief.value)}/"
+        f"{_format_publication_metric(item.median_personalization_relief.value)} |"
+        for item in mechanism.devices
+    )
+    return [ReportLine(line) for line in lines]
 
 
 def _render_correlation_summary(summary: SupportCorrelationDirectionSummary) -> str:
