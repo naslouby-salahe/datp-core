@@ -30,6 +30,7 @@ from datp_core.analysis.mechanisms import (
     summarize_client_impact,
     summarize_client_impact_campaign,
     summarize_threshold_movements_across_seeds,
+    support_stratum_seed_outcomes,
     threshold_movements_from_evaluations,
 )
 from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
@@ -254,7 +255,9 @@ def _confirmatory_mechanisms() -> tuple[MechanismEvidence, ...]:
     )
     mechanisms.append(summarize_client_impact_campaign(tuple(movement_cohorts)))
     mechanisms.append(confirmatory_equity_utility_bundle(tuple(policy_pairs)))
-    mechanisms.append(campaign_fixed_support_strata(tuple(shared for shared, _ in policy_pairs)))
+    strata = campaign_fixed_support_strata(tuple(shared for shared, _ in policy_pairs))
+    mechanisms.append(strata)
+    mechanisms.append(support_stratum_seed_outcomes(strata, tuple(policy_pairs), tuple(movement_cohorts)))
     if association_observations:
         mechanisms.append(heterogeneity_benefit_association(tuple(association_observations)))
     return tuple(mechanisms)

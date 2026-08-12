@@ -30,7 +30,7 @@ from datp_core.analysis.mechanisms.movement import (
     ThresholdMovementCohort,
     ThresholdMovementMultiSeedUncertainty,
 )
-from datp_core.analysis.mechanisms.support_strata import CampaignFixedSupportStrata
+from datp_core.analysis.mechanisms.support_strata import CampaignFixedSupportStrata, SupportStratumOutcomeReport
 from datp_core.analysis.preparation import AnalysisDocument, ExternalAnalysisDocument, TemporalAnalysisDocument
 from datp_core.analysis.scientific_decision import ScientificDecision, ScientificDecisionResult
 from datp_core.core.identifiers import (
@@ -655,6 +655,7 @@ _MECHANISM_TITLES: dict[type[object], ReportLine] = {
     ClientImpactCampaignSummary: ReportLine("natural_device_client_impact_campaign_summary"),
     ConfirmatoryEquityUtilityBundle: ReportLine("confirmatory_equity_utility_bundle"),
     CampaignFixedSupportStrata: ReportLine("campaign_fixed_calibration_support_strata"),
+    SupportStratumOutcomeReport: ReportLine("support_stratum_seed_outcomes"),
     AbsorptionCohortResult: ReportLine("model_personalization_absorption"),
     ScientificDecisionResult: ReportLine("scientific_decision"),
 }
@@ -1014,6 +1015,25 @@ def _render_campaign_fixed_support_strata(mechanism: CampaignFixedSupportStrata)
         f"| `{entry.client.client_id.value}` | {_format_publication_metric(entry.support_score.value)} | "
         f"{entry.ascending_rank.value} | `{entry.stratum.value}` |"
         for entry in mechanism.entries
+    )
+    return [ReportLine(line) for line in lines]
+
+
+@_render_one_mechanism.register
+def _render_support_stratum_outcome_report(mechanism: SupportStratumOutcomeReport) -> list[ReportLine]:
+    if mechanism.availability is AvailabilityStatus.UNAVAILABLE:
+        return [ReportLine(f"Unavailable: {mechanism.reason}")]
+    lines = [
+        "| Seed | Stratum | Mean FPR relief | FPR helped | FPR harmed | Shared MATE | Local MATE |",
+        "|---:|---|---:|---:|---:|---:|---:|",
+    ]
+    lines.extend(
+        f"| {item.seed.value} | `{item.stratum.value}` | {_format_publication_metric(item.mean_fpr_relief.value)} | "
+        f"{_format_publication_metric(item.fpr_helped_fraction.value)} | "
+        f"{_format_publication_metric(item.fpr_harmed_fraction.value)} | "
+        f"{_format_publication_metric(item.shared_mean_absolute_target_error.value)} | "
+        f"{_format_publication_metric(item.local_mean_absolute_target_error.value)} |"
+        for item in mechanism.outcomes
     )
     return [ReportLine(line) for line in lines]
 
