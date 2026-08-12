@@ -28,6 +28,7 @@ from datp_core.analysis.mechanisms import (
     campaign_fixed_support_strata,
     compare_family_recall_policies,
     confirmatory_equity_utility_bundle,
+    equity_utility_pareto,
     grouped_dispersion,
     heterogeneity_benefit_association,
     jensen_shannon_from_client_scores,
@@ -228,11 +229,13 @@ def _confirmatory_mechanisms() -> tuple[MechanismEvidence, ...]:
     association_observations: list[AssociationObservation] = []
     mechanisms: list[MechanismEvidence] = []
     family_comparisons: list[FamilyRecallPolicyComparison] = []
+    pareto_documents: list[FederatedEvaluationDocument] = []
     for seed in CONFIRMATORY_SEED_COHORT.values:
         shared = load_evaluation_document(_evaluation_path(seed, FederatedThresholdMethod.SHARED_THRESHOLD))
         local = load_evaluation_document(_evaluation_path(seed, FederatedThresholdMethod.LOCAL_THRESHOLD))
         family = load_evaluation_document(_evaluation_path(seed, FederatedThresholdMethod.FAMILY_THRESHOLD))
         cluster = load_evaluation_document(_evaluation_path(seed, FederatedThresholdMethod.CLUSTER_THRESHOLD))
+        pareto_documents.extend((shared, local, family, cluster))
         policy_pairs.append((shared, local))
         movement = threshold_movements_from_evaluations(
             shared=shared,
@@ -281,6 +284,18 @@ def _confirmatory_mechanisms() -> tuple[MechanismEvidence, ...]:
     mechanisms.append(summarize_calibration_support_burden(tuple(support_burden_evidence)))
     mechanisms.append(summarize_calibration_support_burden_devices(tuple(support_burden_evidence)))
     mechanisms.append(confirmatory_equity_utility_bundle(tuple(policy_pairs)))
+    mechanisms.append(
+        equity_utility_pareto(
+            tuple(pareto_documents),
+            utility_metric=MetricId.P10_BINARY_MACRO_F1,
+        )
+    )
+    mechanisms.append(
+        equity_utility_pareto(
+            tuple(pareto_documents),
+            utility_metric=MetricId.WORST_CLIENT_BALANCED_ACCURACY,
+        )
+    )
     strata = campaign_fixed_support_strata(tuple(shared for shared, _ in policy_pairs))
     mechanisms.append(strata)
     stratum_outcomes = support_stratum_seed_outcomes(strata, tuple(policy_pairs), tuple(movement_cohorts))

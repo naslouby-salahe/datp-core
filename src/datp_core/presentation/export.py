@@ -7,7 +7,7 @@ from pathlib import Path
 
 from datp_core.analysis.contrasts import PairedContrasts
 from datp_core.analysis.descriptive import DescriptiveSummary, PairedDifferenceCounts
-from datp_core.analysis.inference.bootstrap.contracts import BootstrapInterval
+from datp_core.analysis.inference.bootstrap.contracts import BcaOutcome, BootstrapInterval
 from datp_core.analysis.inference.multiplicity import MultiplicityResult
 from datp_core.analysis.inference.sign_test import ExactPairedSignTestResult
 from datp_core.analysis.inference.wilcoxon import RankBiserialResult, WilcoxonResult
@@ -785,6 +785,8 @@ def _render_equity_utility_pareto(mechanism: EquityUtilityParetoView) -> list[Re
         ReportLine(
             f"{point.threshold_method.value}: mean CV(FPR)={_format_publication_metric(point.mean_x.value)} "
             f"mean {mechanism.utility_metric.value}={_format_publication_metric(point.mean_y.value)} "
+            f"CV(FPR) BCa={_format_bca_interval(point.x_interval)} "
+            f"{mechanism.utility_metric.value} BCa={_format_bca_interval(point.y_interval)} "
             f"nondominated={point.nondominated}"
         )
         for point in mechanism.points
@@ -800,6 +802,19 @@ def _render_equity_utility_pareto(mechanism: EquityUtilityParetoView) -> list[Re
         for row in mechanism.target_attainment
     )
     return lines
+
+
+def _format_bca_interval(interval: BootstrapInterval) -> str:
+    if (
+        interval.outcome is BcaOutcome.AVAILABLE
+        and interval.lower_bound is not None
+        and interval.upper_bound is not None
+    ):
+        return (
+            f"[{_format_publication_metric(interval.lower_bound.value)}, "
+            f"{_format_publication_metric(interval.upper_bound.value)}]"
+        )
+    return interval.outcome.value
 
 
 @_render_one_mechanism.register

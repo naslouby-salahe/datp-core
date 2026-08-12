@@ -4,6 +4,7 @@ from typing import cast
 import pytest
 from tests.unit.learning.federated.helpers import fedavg_coordinate
 
+from datp_core.analysis.inference.bootstrap.contracts import BcaOutcome
 from datp_core.analysis.mechanisms.equity_pareto import equity_utility_pareto
 from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
 from datp_core.analysis.metrics.models import AvailableMetric
@@ -45,6 +46,23 @@ def test_equity_pareto_rejects_methods_with_different_seed_cohorts() -> None:
 
     with pytest.raises(ScientificContractError, match="common seed cohort"):
         equity_utility_pareto(documents, utility_metric=MetricId.P10_BINARY_MACRO_F1)
+
+
+def test_equity_pareto_exposes_descriptive_bca_intervals_for_full_seed_cohort() -> None:
+    documents = tuple(
+        _document(
+            FederatedThresholdMethod.SHARED_THRESHOLD,
+            Seed(seed),
+            0.1 + seed / 100,
+            0.6 + seed / 100,
+        )
+        for seed in range(10)
+    )
+
+    result = equity_utility_pareto(documents, utility_metric=MetricId.P10_BINARY_MACRO_F1)
+
+    assert result.points[0].x_interval.outcome is BcaOutcome.AVAILABLE
+    assert result.points[0].y_interval.outcome is BcaOutcome.AVAILABLE
 
 
 def _document(

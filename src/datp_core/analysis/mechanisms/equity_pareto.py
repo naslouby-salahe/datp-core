@@ -1,9 +1,14 @@
+from datp_core.analysis.inference.bootstrap.contracts import BootstrapInterval
+from datp_core.analysis.inference.bootstrap.estimation import seed_level_bca_interval
+from datp_core.analysis.inference.contracts import PairedInferenceProtocol
 from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
 from datp_core.analysis.metrics.models import MetricStatus, metric_by_id
 from datp_core.core.contracts import StrictModel
 from datp_core.core.errors import ErrorMessage, ScientificContractError
 from datp_core.core.identifiers import FederatedThresholdMethod, MetricId, PopulationId
-from datp_core.core.numeric import MetricValue
+from datp_core.core.numeric import MetricValue, Seed
+from datp_core.experiments.common.seeds import CONFIRMATORY_ANALYSIS_SEED
+from datp_core.experiments.confirmatory.spec import CONFIRMATORY_INFERENCE_PROTOCOL
 
 
 class EquityParetoPoint(StrictModel):
@@ -12,6 +17,8 @@ class EquityParetoPoint(StrictModel):
     seed_values_y: tuple[MetricValue, ...]
     mean_x: MetricValue
     mean_y: MetricValue
+    x_interval: BootstrapInterval
+    y_interval: BootstrapInterval
     nondominated: bool
 
 
@@ -34,7 +41,11 @@ class EquityUtilityParetoView(StrictModel):
 
 
 def equity_utility_pareto(
-    documents: tuple[FederatedEvaluationDocument, ...], *, utility_metric: MetricId
+    documents: tuple[FederatedEvaluationDocument, ...],
+    *,
+    utility_metric: MetricId,
+    inference_protocol: PairedInferenceProtocol = CONFIRMATORY_INFERENCE_PROTOCOL,
+    analysis_seed: Seed = CONFIRMATORY_ANALYSIS_SEED,
 ) -> EquityUtilityParetoView:
     by_method: dict[FederatedThresholdMethod, list[FederatedEvaluationDocument]] = {}
     for document in documents:
@@ -63,8 +74,18 @@ def equity_utility_pareto(
             threshold_method=method,
             seed_values_x=x,
             seed_values_y=y,
-            mean_x=MetricValue(sum(value.value for value in x) / len(x)),
-            mean_y=MetricValue(sum(value.value for value in y) / len(y)),
+            mean_x=_mean(x),
+            mean_y=_mean(y),
+            x_interval=seed_level_bca_interval(
+                x,
+                protocol=inference_protocol,
+                analysis_seed=analysis_seed,
+            ),
+            y_interval=seed_level_bca_interval(
+                y,
+                protocol=inference_protocol,
+                analysis_seed=analysis_seed,
+            ),
             nondominated=not any(
                 _dominates(other_x, other_y, x, y)
                 for other_method, other_x, other_y in preliminary
