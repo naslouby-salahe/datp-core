@@ -323,8 +323,8 @@ def _collect_communication_diagnostics(
 ) -> list[ByteCount]:
     communication: list[ByteCount] = []
     for document in documents:
-        if document.diagnostics.communication is not None:
-            communication.append(document.diagnostics.communication.total_estimated_serialized_bytes)
+        if document.diagnostics.threshold_stage_communication is not None:
+            communication.append(document.diagnostics.threshold_stage_communication.total_serialized_bytes)
     return communication
 
 
