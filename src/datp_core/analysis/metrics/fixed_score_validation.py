@@ -13,7 +13,7 @@ def validate_evaluation_evidence(
     clients: tuple[ClientMetricResult, ...],
 ) -> None:
     del cohort, clients
-    if evidence.score_manifest is not manifest:
+    if evidence.score_manifest != manifest:
         raise ScientificContractError(
             ErrorMessage("evaluation must consume the score evidence created for this execution"),
             subject=ContractSubject.SCORES,
@@ -25,5 +25,5 @@ def validate_fixed_score_controls(first: FixedScoreEvidence, second: FixedScoreE
         raise ScientificContractError(ErrorMessage("fixed-score comparison requires distinct threshold methods"))
     if first.calibration_role is not second.calibration_role:
         raise ScientificContractError(ErrorMessage("fixed-score control failed: calibration partition role differs"))
-    if first.score_manifest is not second.score_manifest:
+    if first.score_manifest != second.score_manifest:
         raise ScientificContractError(ErrorMessage("fixed-score comparison requires the same score evidence"))

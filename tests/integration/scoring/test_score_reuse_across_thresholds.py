@@ -5,6 +5,7 @@ from pydantic import TypeAdapter
 from tests.unit.learning.federated.helpers import client_identity, fedavg_coordinate
 
 from datp_core.analysis.metrics.fixed_score_construction import build_federated_evaluation_inputs
+from datp_core.analysis.metrics.fixed_score_validation import validate_fixed_score_controls
 from datp_core.core.identifiers import (
     FederatedThresholdMethod,
     PartitionRole,
@@ -91,3 +92,14 @@ def test_unparameterized_score_record_deserialization_reconstructs_domain_values
 
     assert restored.coordinate == record.coordinate
     assert restored.scored_client == record.scored_client
+
+
+def test_fixed_score_controls_survive_serialization_reload(tmp_path: Path) -> None:
+    manifest = _score_manifest(tmp_path)
+    shared = build_federated_evaluation_inputs(manifest, FederatedThresholdMethod.SHARED_THRESHOLD).fixed_score_evidence
+    local = build_federated_evaluation_inputs(manifest, FederatedThresholdMethod.LOCAL_THRESHOLD).fixed_score_evidence
+    adapter = TypeAdapter(type(shared))
+    restored_local = adapter.validate_python(adapter.dump_python(local, mode="json"))
+
+    assert restored_local.score_manifest is not shared.score_manifest
+    validate_fixed_score_controls(shared, restored_local)
