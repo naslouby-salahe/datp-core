@@ -79,6 +79,7 @@ from datp_core.runtime.determinism import configure_deterministic_execution, der
 class TrainingStream(IntEnum):
     GLOBAL_CLIENT_UPDATE = 1
     PERSONALIZED_CLIENT_UPDATE = 2
+    FEDAVG_LOCAL_FINE_TUNING = 3
 
 
 GPU_RESIDENT_DATA_MEMORY_FRACTION = Ratio(0.8)
@@ -338,6 +339,15 @@ def derive_client_stream_seed(
     round_seed = derive_worker_seed(training_seed, SeedDerivationComponent(round_number.value))
     client_seed = derive_worker_seed(round_seed, _client_seed_component(client))
     return derive_worker_seed(client_seed, SeedDerivationComponent(stream.value))
+
+
+def derive_fedavg_local_fine_tuning_seed(training_seed: Seed, client: ClientIdentity) -> Seed:
+    return derive_client_stream_seed(
+        training_seed,
+        RoundNumber(200),
+        client,
+        TrainingStream.FEDAVG_LOCAL_FINE_TUNING,
+    )
 
 
 def proximal_penalty(

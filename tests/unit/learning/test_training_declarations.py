@@ -19,6 +19,8 @@ from datp_core.detector.training.protocols import (
     DITTO_TRAINING_PROTOCOLS,
     EDGE_IIOTSET_NUMERIC_AUTOENCODER,
     FEDAVG_LOCAL_EPOCHS,
+    FEDAVG_LOCAL_FINE_TUNING_EPOCHS,
+    FEDAVG_LOCAL_FINE_TUNING_PROTOCOL,
     FEDAVG_TRAINING_PROTOCOL,
     FEDPROX_COEFFICIENTS,
     FEDPROX_TRAINING_PROTOCOLS,
@@ -39,6 +41,7 @@ def test_training_grids_are_locked() -> None:
     assert DIAGNOSTIC_SNAPSHOT_PROTOCOL.maximum_round.value == 200
     assert DIAGNOSTIC_SNAPSHOT_PROTOCOL.convergence is None
     assert FEDAVG_LOCAL_EPOCHS.value == 1
+    assert FEDAVG_LOCAL_FINE_TUNING_EPOCHS.value == 10
     assert tuple(value.value for value in FEDPROX_COEFFICIENTS) == (0.001, 0.01, 0.1, 1)
     assert DITTO_RETAINED_EFFECT_MINIMUM.value == 0.75
     assert DITTO_PARTIAL_EFFECT_MINIMUM.value == 0.25
@@ -57,6 +60,7 @@ def test_training_grids_are_locked() -> None:
     assert DITTO_PRIMARY_REGULARIZATION.value == 0.1
     assert CENTRALIZED_TRAINING_PROTOCOL.optimizer == OPTIMIZER
     assert FEDAVG_TRAINING_PROTOCOL.local_epochs == FEDAVG_LOCAL_EPOCHS
+    assert FEDAVG_LOCAL_FINE_TUNING_PROTOCOL.local_epochs == FEDAVG_LOCAL_FINE_TUNING_EPOCHS
     assert tuple(item.coefficient for item in FEDPROX_TRAINING_PROTOCOLS) == FEDPROX_COEFFICIENTS
     assert tuple(item.regularization for item in DITTO_TRAINING_PROTOCOLS) == DITTO_REGULARIZATION_GRID
 

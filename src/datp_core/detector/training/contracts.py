@@ -109,6 +109,18 @@ class DittoProtocol(StrictModel):
     regularization: DittoRegularization
 
 
+class FedAvgLocalFineTuningProtocol(StrictModel):
+    source_model: Literal[TrainingModelId.FEDAVG_AUTOENCODER]
+    local_epochs: LocalEpochCount
+    optimizer: OptimizerProtocol
+
+    @model_validator(mode="after")
+    def validate_locked_depth(self) -> "FedAvgLocalFineTuningProtocol":
+        if self.local_epochs.value != 10:
+            raise ValueError("FedAvg local fine-tuning requires exactly 10 local epochs")
+        return self
+
+
 TrainingProtocol = Annotated[FedAvgProtocol | FedProxProtocol | DittoProtocol, Field(discriminator="kind")]
 
 

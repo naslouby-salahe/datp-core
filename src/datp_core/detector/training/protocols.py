@@ -23,6 +23,7 @@ from datp_core.core.numeric import (
 from datp_core.detector.training import contracts as training_contracts
 
 FEDAVG_LOCAL_EPOCHS = LocalEpochCount(1)
+FEDAVG_LOCAL_FINE_TUNING_EPOCHS = LocalEpochCount(10)
 ANCHOR_LOCAL_EPOCHS = LocalEpochCount(5)
 DECLARED_FEDAVG_LOCAL_EPOCHS = frozenset({FEDAVG_LOCAL_EPOCHS, ANCHOR_LOCAL_EPOCHS})
 FEDPROX_COEFFICIENTS = tuple(ProximalCoefficient(value) for value in (0.001, 0.01, 0.1, 1.0))
@@ -71,6 +72,11 @@ CENTRALIZED_TRAINING_PROTOCOL = training_contracts.CentralizedTrainingProtocol(
 FEDAVG_TRAINING_PROTOCOL = training_contracts.FedAvgProtocol(
     kind=TrainingModelId.FEDAVG_AUTOENCODER,
     local_epochs=FEDAVG_LOCAL_EPOCHS,
+    optimizer=OPTIMIZER,
+)
+FEDAVG_LOCAL_FINE_TUNING_PROTOCOL = training_contracts.FedAvgLocalFineTuningProtocol(
+    source_model=TrainingModelId.FEDAVG_AUTOENCODER,
+    local_epochs=FEDAVG_LOCAL_FINE_TUNING_EPOCHS,
     optimizer=OPTIMIZER,
 )
 ANCHOR_FEDAVG_TRAINING_PROTOCOL = training_contracts.FedAvgProtocol(
