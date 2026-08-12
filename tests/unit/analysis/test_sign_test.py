@@ -4,8 +4,9 @@ from typing import cast
 import pytest
 
 from datp_core.analysis.contrasts import PairedContrasts
-from datp_core.analysis.inference.sign_test import exact_paired_sign_test
-from datp_core.core.numeric import MetricValue
+from datp_core.analysis.inference.sign_test import ExactPairedSignTestResult, exact_paired_sign_test
+from datp_core.analysis.inference.wilcoxon import PValue
+from datp_core.core.numeric import MetricValue, PairedObservationCount
 
 
 def test_exact_paired_sign_test_excludes_zeros_from_the_binomial_null() -> None:
@@ -20,3 +21,19 @@ def test_exact_paired_sign_test_excludes_zeros_from_the_binomial_null() -> None:
     assert result.nonzero_pair_count.value == 3
     assert result.two_sided_p_value is not None
     assert result.two_sided_p_value.value == pytest.approx(1.0)
+
+
+def test_exact_paired_sign_test_rejects_an_impossible_availability_state() -> None:
+    with pytest.raises(ValueError, match="p-value"):
+        ExactPairedSignTestResult(
+            positive_pair_count=PairedObservationCount(0),
+            nonzero_pair_count=PairedObservationCount(1),
+            two_sided_p_value=None,
+        )
+
+    with pytest.raises(ValueError, match="cannot exceed"):
+        ExactPairedSignTestResult(
+            positive_pair_count=PairedObservationCount(2),
+            nonzero_pair_count=PairedObservationCount(1),
+            two_sided_p_value=PValue(1.0),
+        )

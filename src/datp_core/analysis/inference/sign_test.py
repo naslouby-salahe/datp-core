@@ -1,5 +1,7 @@
 from math import comb
 
+from pydantic import model_validator
+
 from datp_core.analysis.contrasts import PairedContrasts
 from datp_core.analysis.inference.wilcoxon import PValue
 from datp_core.core.contracts import StrictModel
@@ -10,6 +12,14 @@ class ExactPairedSignTestResult(StrictModel):
     positive_pair_count: PairedObservationCount
     nonzero_pair_count: PairedObservationCount
     two_sided_p_value: PValue | None
+
+    @model_validator(mode="after")
+    def validate_result(self) -> "ExactPairedSignTestResult":
+        if self.positive_pair_count > self.nonzero_pair_count:
+            raise ValueError("positive sign-test pairs cannot exceed nonzero pairs")
+        if (self.nonzero_pair_count.value == 0) != (self.two_sided_p_value is None):
+            raise ValueError("sign-test p-value is unavailable exactly when every paired delta is zero")
+        return self
 
 
 def exact_paired_sign_test(contrasts: PairedContrasts) -> ExactPairedSignTestResult:
