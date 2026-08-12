@@ -76,6 +76,26 @@ class ThresholdAssignment:
     threshold: ThresholdValue
 
 
+@dataclass(frozen=True, slots=True)
+class OnboardingThresholdResult:
+    """Target-cell threshold assignments that may include a documented no-local-support fallback."""
+
+    coordinate: FederatedTrainingCoordinate
+    threshold_method: FederatedThresholdMethod
+    assignments: tuple[ThresholdAssignment, ...]
+
+    def __post_init__(self) -> None:
+        require_contract(
+            bool(self.assignments),
+            ErrorMessage("onboarding threshold result requires at least one assignment"),
+            ContractSubject.THRESHOLD,
+        )
+        require_unique_clients(
+            tuple(item.client for item in self.assignments),
+            NonEmptyString("onboarding assignments"),
+        )
+
+
 @runtime_checkable
 class ThresholdAssignmentLike(Protocol):
     @property

@@ -17,7 +17,11 @@ from datp_core.core.identifiers import (
 from datp_core.core.numeric import KllSketchSize, Quantile, RowCount
 from datp_core.data.populations.contracts import FamilyAssignment, PopulationCapabilities
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
-from datp_core.thresholds.contracts import ThresholdInfeasibilityReason, ThresholdUnavailableResult
+from datp_core.thresholds.contracts import (
+    OnboardingThresholdResult,
+    ThresholdInfeasibilityReason,
+    ThresholdUnavailableResult,
+)
 from datp_core.thresholds.policies.cluster import GroupedThresholdResult, construct_grouped_threshold
 from datp_core.thresholds.policies.family import FamilyThresholdResult, construct_family_threshold
 from datp_core.thresholds.policies.local import LocalThresholdResult, construct_local_threshold
@@ -78,6 +82,7 @@ type ThresholdConstructionResult = (
     | FederatedKllSharedThresholdResult
     | MomentSharedThresholdResult
     | MomentLocalThresholdResult
+    | OnboardingThresholdResult
     | ThresholdUnavailableResult
 )
 

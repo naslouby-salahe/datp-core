@@ -72,7 +72,7 @@ from datp_core.data.populations.contracts import (
 from datp_core.data.registry import population_capabilities
 from datp_core.detector.training.models import FederatedTrainingCoordinate
 from datp_core.experiments.common.coordinates import require_execution_identity
-from datp_core.thresholds.contracts import ThresholdAssignment, ThresholdUnavailableResult
+from datp_core.thresholds.contracts import OnboardingThresholdResult, ThresholdAssignment, ThresholdUnavailableResult
 from datp_core.thresholds.dispatch import ThresholdConstructionResult
 from datp_core.thresholds.policies.cluster import GroupedThresholdResult
 from datp_core.thresholds.policies.family import FamilyThresholdResult
@@ -429,6 +429,7 @@ def _assignments(result: ThresholdConstructionResult) -> tuple[ThresholdAssignme
             | FederatedKllSharedThresholdResult()
             | MomentSharedThresholdResult()
             | MomentLocalThresholdResult()
+            | OnboardingThresholdResult()
         ):
             return result.assignments
         case SizeAwareShrinkageThresholdResult():
@@ -470,11 +471,15 @@ def _deployment_fallback_threshold(
             return unweighted_mean(tuple(item.threshold for item in assignments))
         case ThresholdUnavailableResult():
             return None
+        case OnboardingThresholdResult():
+            return None
         case FixedShrinkageCurveResult():
             raise ScientificContractError(ErrorMessage("multi-lambda shrinkage requires per-weight evaluation"))
 
 
 def _threshold_method(result: ThresholdConstructionResult) -> FederatedThresholdMethod:
+    if isinstance(result, OnboardingThresholdResult):
+        return result.threshold_method
     return result.method
 
 
