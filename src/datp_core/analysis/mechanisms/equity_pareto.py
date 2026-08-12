@@ -36,6 +36,15 @@ def equity_utility_pareto(
         x = tuple(_metric(item, MetricId.FPR_COEFFICIENT_OF_VARIATION) for item in ordered)
         y = tuple(_metric(item, utility_metric) for item in ordered)
         preliminary.append((method, x, y))
+    seed_cohorts = {
+        tuple(
+            record.score_coordinate.training_seed
+            for record in sorted(records, key=lambda item: item.score_coordinate.training_seed)
+        )
+        for records in by_method.values()
+    }
+    if len(seed_cohorts) != 1:
+        raise ScientificContractError(ErrorMessage("equity Pareto methods must use one common seed cohort"))
     points = tuple(
         EquityParetoPoint(
             threshold_method=method,
