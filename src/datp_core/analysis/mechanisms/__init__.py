@@ -52,6 +52,11 @@ from datp_core.analysis.mechanisms.divergence import (
     blocked_jensen_shannon_divergence,
     jensen_shannon_divergence,
 )
+from datp_core.analysis.mechanisms.equity_pareto import (
+    EquityParetoPoint,
+    EquityUtilityParetoView,
+    equity_utility_pareto,
+)
 from datp_core.analysis.mechanisms.equity_utility import (
     ConfirmatoryEquityUtilityBundle,
     ConfirmatoryEquityUtilityMeasure,
@@ -136,6 +141,7 @@ type MechanismEvidence = (
     | ClientImpactSeedSummary
     | DivergenceResult
     | ConfirmatoryEquityUtilityBundle
+    | EquityUtilityParetoView
     | FamilyRecallPolicyComparison
     | FamilyRecallPolicyCampaignSummary
     | GroupedDispersionResult
@@ -193,6 +199,8 @@ __all__ = (
     "SupportCorrelationDirectionSummary",
     "ConfirmatoryEquityUtilityBundle",
     "ConfirmatoryEquityUtilityMeasure",
+    "EquityParetoPoint",
+    "EquityUtilityParetoView",
     "FamilyRecallDifference",
     "FamilyRecallPolicyComparison",
     "FamilyRecallPolicyCampaignSummary",
@@ -232,6 +240,7 @@ __all__ = (
     "cluster_evidence_from_grouped_result",
     "cluster_stability",
     "confirmatory_equity_utility_bundle",
+    "equity_utility_pareto",
     "compare_family_recall_policies",
     "decide_absorption_cohort",
     "decide_model_absorption",

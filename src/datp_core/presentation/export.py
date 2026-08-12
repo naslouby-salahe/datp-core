@@ -24,6 +24,7 @@ from datp_core.analysis.mechanisms.client_impact import (
 from datp_core.analysis.mechanisms.clustering import ClusterEvidenceRecord, ClusterStabilityResult
 from datp_core.analysis.mechanisms.dispersion import GroupedDispersionResult
 from datp_core.analysis.mechanisms.divergence import DivergenceResult
+from datp_core.analysis.mechanisms.equity_pareto import EquityUtilityParetoView
 from datp_core.analysis.mechanisms.equity_utility import ConfirmatoryEquityUtilityBundle
 from datp_core.analysis.mechanisms.family_recall import FamilyRecallPolicyCampaignSummary, FamilyRecallPolicyComparison
 from datp_core.analysis.mechanisms.movement import (
@@ -666,6 +667,7 @@ _MECHANISM_TITLES: dict[type[object], ReportLine] = {
     ClientImpactSeedSummary: ReportLine("natural_device_client_impact"),
     ClientImpactCampaignSummary: ReportLine("natural_device_client_impact_campaign_summary"),
     ConfirmatoryEquityUtilityBundle: ReportLine("confirmatory_equity_utility_bundle"),
+    EquityUtilityParetoView: ReportLine("equity_utility_pareto"),
     FamilyRecallPolicyComparison: ReportLine("nbaiot_malware_family_sensitivity"),
     FamilyRecallPolicyCampaignSummary: ReportLine("nbaiot_malware_family_sensitivity_campaign_summary"),
     CampaignFixedSupportStrata: ReportLine("campaign_fixed_calibration_support_strata"),
@@ -775,6 +777,18 @@ def _mechanism_tables(mechanisms: tuple[MechanismEvidence, ...]) -> tuple[Public
 @singledispatch
 def _render_one_mechanism(_mechanism: MechanismEvidence) -> list[ReportLine]:
     return [ReportLine("Unhandled mechanism evidence kind")]
+
+
+@_render_one_mechanism.register
+def _render_equity_utility_pareto(mechanism: EquityUtilityParetoView) -> list[ReportLine]:
+    return [
+        ReportLine(
+            f"{point.threshold_method.value}: mean CV(FPR)={_format_publication_metric(point.mean_x.value)} "
+            f"mean {mechanism.utility_metric.value}={_format_publication_metric(point.mean_y.value)} "
+            f"nondominated={point.nondominated}"
+        )
+        for point in mechanism.points
+    ]
 
 
 @_render_one_mechanism.register
