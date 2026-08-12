@@ -52,6 +52,13 @@ from datp_core.analysis.mechanisms.divergence import (
     blocked_jensen_shannon_divergence,
     jensen_shannon_divergence,
 )
+from datp_core.analysis.mechanisms.equity_utility import (
+    ConfirmatoryEquityUtilityBundle,
+    ConfirmatoryEquityUtilityMeasure,
+    EquityUtilityMeasureSummary,
+    EquityUtilitySeedObservation,
+    confirmatory_equity_utility_bundle,
+)
 from datp_core.analysis.mechanisms.model_alignment import (
     AlignmentActivationLabel,
     AlignmentActivationSummary,
@@ -95,6 +102,7 @@ type MechanismEvidence = (
     | ClientImpactCampaignSummary
     | ClientImpactSeedSummary
     | DivergenceResult
+    | ConfirmatoryEquityUtilityBundle
     | GroupedDispersionResult
     | ModelAlignmentResult
     | ScientificDecisionResult
@@ -127,8 +135,12 @@ __all__ = (
     "ClusterContingencyMatrix",
     "ClusterContingencyRow",
     "ClusterStabilityResult",
+    "ConfirmatoryEquityUtilityBundle",
+    "ConfirmatoryEquityUtilityMeasure",
     "DivergenceBlocker",
     "DivergenceResult",
+    "EquityUtilityMeasureSummary",
+    "EquityUtilitySeedObservation",
     "LeaveOneOutAssociationDiagnostics",
     "PairwiseJensenShannonDistance",
     "ParetoClientImpact",
@@ -157,6 +169,7 @@ __all__ = (
     "alignment_reductions",
     "cluster_evidence_from_grouped_result",
     "cluster_stability",
+    "confirmatory_equity_utility_bundle",
     "decide_absorption_cohort",
     "decide_model_absorption",
     "empty_cluster_evidence_record",

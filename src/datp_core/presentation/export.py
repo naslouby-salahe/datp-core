@@ -24,6 +24,7 @@ from datp_core.analysis.mechanisms.client_impact import (
 from datp_core.analysis.mechanisms.clustering import ClusterEvidenceRecord, ClusterStabilityResult
 from datp_core.analysis.mechanisms.dispersion import GroupedDispersionResult
 from datp_core.analysis.mechanisms.divergence import DivergenceResult
+from datp_core.analysis.mechanisms.equity_utility import ConfirmatoryEquityUtilityBundle
 from datp_core.analysis.mechanisms.movement import (
     ThresholdMovement,
     ThresholdMovementCohort,
@@ -651,6 +652,7 @@ _MECHANISM_TITLES: dict[type[object], ReportLine] = {
     ThresholdMovementMultiSeedUncertainty: ReportLine("threshold_movement_across_seed_uncertainty"),
     ClientImpactSeedSummary: ReportLine("natural_device_client_impact"),
     ClientImpactCampaignSummary: ReportLine("natural_device_client_impact_campaign_summary"),
+    ConfirmatoryEquityUtilityBundle: ReportLine("confirmatory_equity_utility_bundle"),
     AbsorptionCohortResult: ReportLine("model_personalization_absorption"),
     ScientificDecisionResult: ReportLine("scientific_decision"),
 }
@@ -979,6 +981,26 @@ def _render_client_impact_campaign_summary(mechanism: ClientImpactCampaignSummar
         for frequency in mechanism.device_frequencies
     )
     return lines
+
+
+@_render_one_mechanism.register
+def _render_confirmatory_equity_utility_bundle(mechanism: ConfirmatoryEquityUtilityBundle) -> list[ReportLine]:
+    lines = [
+        "| Measure | Shared mean | Local mean | Local − shared | Paired seeds |",
+        "|---|---:|---:|---:|---:|",
+    ]
+    for summary in mechanism.measures:
+        shared = "unavailable" if summary.shared_mean is None else _format_publication_metric(summary.shared_mean.value)
+        local = "unavailable" if summary.local_mean is None else _format_publication_metric(summary.local_mean.value)
+        difference = (
+            "unavailable"
+            if summary.paired_difference_mean is None
+            else _format_publication_metric(summary.paired_difference_mean.value)
+        )
+        lines.append(
+            f"| {summary.measure.value} | {shared} | {local} | {difference} | {summary.paired_seed_count.value} |"
+        )
+    return [ReportLine(line) for line in lines]
 
 
 def _render_client_impact_fraction(fraction: ClientImpactFraction) -> str:

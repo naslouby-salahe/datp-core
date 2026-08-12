@@ -22,6 +22,7 @@ from datp_core.analysis.mechanisms import (
     GroupedDispersionResult,
     MechanismEvidence,
     ThresholdMovementCohort,
+    confirmatory_equity_utility_bundle,
     grouped_dispersion,
     heterogeneity_benefit_association,
     jensen_shannon_from_client_scores,
@@ -212,11 +213,13 @@ def analyze_confirmatory_campaign() -> Path:
 
 def _confirmatory_mechanisms() -> tuple[MechanismEvidence, ...]:
     movement_cohorts: list[ThresholdMovementCohort] = []
+    policy_pairs: list[tuple[FederatedEvaluationDocument, FederatedEvaluationDocument]] = []
     association_observations: list[AssociationObservation] = []
     mechanisms: list[MechanismEvidence] = []
     for seed in CONFIRMATORY_SEED_COHORT.values:
         shared = load_evaluation_document(_evaluation_path(seed, FederatedThresholdMethod.SHARED_THRESHOLD))
         local = load_evaluation_document(_evaluation_path(seed, FederatedThresholdMethod.LOCAL_THRESHOLD))
+        policy_pairs.append((shared, local))
         movement = threshold_movements_from_evaluations(
             shared=shared,
             local=local,
@@ -249,6 +252,7 @@ def _confirmatory_mechanisms() -> tuple[MechanismEvidence, ...]:
         )
     )
     mechanisms.append(summarize_client_impact_campaign(tuple(movement_cohorts)))
+    mechanisms.append(confirmatory_equity_utility_bundle(tuple(policy_pairs)))
     if association_observations:
         mechanisms.append(heterogeneity_benefit_association(tuple(association_observations)))
     return tuple(mechanisms)
