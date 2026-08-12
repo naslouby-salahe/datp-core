@@ -151,10 +151,29 @@ wheels = [
 ]
 
 [[package]]
+name = "datasketches"
+version = "5.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/34/cd/659ae9fc53f34d6deafbe12162977654be5bb0a584e6afa6656337e13952/datasketches-5.2.0.tar.gz", hash = "sha256:c00d61da4695e00036e63f590999f584cc39246cbb147b171f375f792604a612", size = 53213, upload-time = "2025-03-01T07:49:24.567Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fe/88/ac2dc472e9d054e3edbce9a5d1288bab447fc080d5a0d85984455cf66808/datasketches-5.2.0-cp312-cp312-macosx_10_14_x86_64.whl", hash = "sha256:65b3e2bb6b2083dfdd6a611e4b07d058ca6625f838088b5cb0897335c4580e6d", size = 643447, upload-time = "2025-03-01T07:48:32.844Z" },
+    { url = "https://files.pythonhosted.org/packages/00/0c/faca927b0575482d567eda4fa65ffe5ebe1ac04b6c5f0321faeb490d5b8e/datasketches-5.2.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:bfc80979ccb2e11bf5e93996db7f1f486c9d3ef4a15c18f1f1bc37aaa4b2a038", size = 578736, upload-time = "2025-03-01T07:48:35.427Z" },
+    { url = "https://files.pythonhosted.org/packages/ce/6f/9201d36b6775ec8dc3f7d4cc10e32b35b2012683b520d0cf83b0cb674866/datasketches-5.2.0-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:a76731c0d876cff25cc2896ef9d80c54167f5aff7170f12b89db6a9b898fc714", size = 675679, upload-time = "2025-03-01T07:48:38.157Z" },
+    { url = "https://files.pythonhosted.org/packages/af/87/56bbb0be6d6c49c9b1705f56bad3f4319f8cdbc546f79e811ac88bdfe2cc/datasketches-5.2.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:d9aa0c1dad8d00c242718c5dbb9f8cf1876ea099ee55c1c0634a8beecb589164", size = 748356, upload-time = "2025-03-01T07:48:40.344Z" },
+    { url = "https://files.pythonhosted.org/packages/c9/37/0c25e113ae8a148201d60050f26efeada54f46e8417bd35082b40355eac3/datasketches-5.2.0-cp312-cp312-musllinux_1_2_aarch64.whl", hash = "sha256:40e6cecb8656b6694e845d9319c5c3aaa083f754e992db6065f18806474685c1", size = 1070320, upload-time = "2025-03-01T07:48:43.218Z" },
+    { url = "https://files.pythonhosted.org/packages/0f/43/5ea198ff05ba3c1f904a1118b23f1b36b0c60f16b15af791a3ab4ccee752/datasketches-5.2.0-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:a673180dc5226bf3c84baeeadf36d9a4f1ee82e679dcd92776651f8ffcc09287", size = 1146824, upload-time = "2025-03-01T07:48:46.841Z" },
+    { url = "https://files.pythonhosted.org/packages/8d/fc/1ca195f0fe524e3ffc12ac81c07f3cc3ce144499b4e3ec5e73a52167253f/datasketches-5.2.0-cp312-cp312-win_amd64.whl", hash = "sha256:72cc339cb7775f82516c36fe8e9a70e9f504214a8d0ed06246332f53203b89f3", size = 509067, upload-time = "2025-03-01T07:48:48.784Z" },
+]
+
+[[package]]
 name = "datp-core"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "datasketches" },
     { name = "duckdb" },
     { name = "filelock" },
     { name = "matplotlib" },
@@ -200,6 +219,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "datasketches", specifier = "==5.2.0" },
     { name = "duckdb", specifier = ">=0.10" },
     { name = "filelock", specifier = ">=3.0" },
     { name = "matplotlib", specifier = ">=3.10" },

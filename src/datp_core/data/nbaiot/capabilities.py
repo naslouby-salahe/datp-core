@@ -159,6 +159,16 @@ NBAIOT_CAPABILITIES = DatasetCapabilities(
         ThresholdMethodCapability(
             status=CapabilityStatus.SUPPORTED,
             evidence=ValidationReasonText(
+                "Eligible clients retain benign calibration scores for deterministic-order float64 KLL sketches.",
+            ),
+            reason=ValidationReasonText(
+                "KLL is the declared mergeable pooled-quantile comparator for the natural-device population.",
+            ),
+            method=FederatedThresholdMethod.FEDERATED_KLL_SHARED_THRESHOLD,
+        ),
+        ThresholdMethodCapability(
+            status=CapabilityStatus.SUPPORTED,
+            evidence=ValidationReasonText(
                 "Eligible clients supply the exact benign calibration support used for local quantiles.",
             ),
             reason=ValidationReasonText(

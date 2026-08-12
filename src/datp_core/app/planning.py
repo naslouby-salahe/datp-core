@@ -14,7 +14,7 @@ from datp_core.core.identifiers import (
     TemporalState,
     TrainingModelId,
 )
-from datp_core.core.numeric import DirichletConcentration, ModelCoefficientValue, Quantile, Seed
+from datp_core.core.numeric import DirichletConcentration, KllSketchSize, ModelCoefficientValue, Quantile, Seed
 from datp_core.data.populations.contracts import ControlledPartitionKind
 from datp_core.data.populations.declarations import DIRICHLET_CONCENTRATIONS, split_protocol_for_population
 from datp_core.data.registry import population_capabilities, population_declaration
@@ -27,7 +27,7 @@ from datp_core.experiments.common.seeds import (
     SeedCohort,
 )
 from datp_core.experiments.registry import ExperimentDeclaration, require_experiment_declaration
-from datp_core.thresholds.protocols import QUANTILE_GRID
+from datp_core.thresholds.protocols import FEDERATED_KLL_PROTOCOL, QUANTILE_GRID
 
 
 class PlanReason(NonEmptyString):
@@ -125,6 +125,7 @@ class _SweptCell:
     threshold_quantile: Quantile | None
     controlled_partition_kind: ControlledPartitionKind | None
     dirichlet_concentration: DirichletConcentration | None
+    kll_sketch_size: KllSketchSize | None
 
 
 def _declared_model_coefficients(training_model: TrainingModelId) -> tuple[ModelCoefficientValue | None, ...]:
@@ -148,6 +149,7 @@ def _swept_cells(declaration: ExperimentDeclaration, seed_cohort: SeedCohort) ->
             threshold_quantile=threshold_quantile,
             controlled_partition_kind=partition_kind,
             dirichlet_concentration=concentration,
+            kll_sketch_size=kll_sketch_size,
         )
         for seed in seed_cohort.values
         for threshold_method in declaration.federated_thresholds
@@ -156,6 +158,7 @@ def _swept_cells(declaration: ExperimentDeclaration, seed_cohort: SeedCohort) ->
         for model_coefficient in _declared_model_coefficients(declaration.training_model)
         for threshold_quantile in _threshold_quantiles(declaration.id)
         for partition_kind, concentration in _controlled_partition_cells(declaration)
+        for kll_sketch_size in _kll_sketch_sizes(declaration.id, threshold_method)
     )
 
 
@@ -163,6 +166,14 @@ def _threshold_quantiles(experiment: ExperimentId) -> tuple[Quantile | None, ...
     if experiment is ExperimentId.QUANTILE_SENSITIVITY:
         return QUANTILE_GRID
     return (None,)
+
+
+def _kll_sketch_sizes(experiment: ExperimentId, method: FederatedThresholdMethod) -> tuple[KllSketchSize | None, ...]:
+    if method is not FederatedThresholdMethod.FEDERATED_KLL_SHARED_THRESHOLD:
+        return (None,)
+    if experiment is ExperimentId.FEDERATED_QUANTILE_ESTIMATION:
+        return FEDERATED_KLL_PROTOCOL.sensitivity_k
+    return (FEDERATED_KLL_PROTOCOL.primary_k,)
 
 
 def _controlled_partition_cells(
@@ -206,6 +217,7 @@ def _planned_entry(
             threshold_quantile=cell.threshold_quantile,
             controlled_partition_kind=cell.controlled_partition_kind,
             dirichlet_concentration=cell.dirichlet_concentration,
+            kll_sketch_size=cell.kll_sketch_size,
         ),
         disposition=disposition,
         reason=reason,

@@ -79,6 +79,7 @@ from datp_core.thresholds.policies.shared import (
 from datp_core.thresholds.quantiles import unweighted_mean
 from datp_core.thresholds.variants.conformal import ConformalThresholdResult
 from datp_core.thresholds.variants.federated_statistics import FederatedStatisticsThresholdResult
+from datp_core.thresholds.variants.kll import FederatedKllSharedThresholdResult
 from datp_core.thresholds.variants.shrinkage import FixedShrinkageCurveResult, SizeAwareShrinkageThresholdResult
 
 
@@ -397,6 +398,7 @@ def _assignments(result: ThresholdConstructionResult) -> tuple[ThresholdAssignme
             | FamilyThresholdResult()
             | GroupedThresholdResult()
             | FederatedStatisticsThresholdResult()
+            | FederatedKllSharedThresholdResult()
         ):
             return result.assignments
         case SizeAwareShrinkageThresholdResult():
@@ -418,6 +420,8 @@ def _deployment_fallback_threshold(
             return result.shared_threshold
         case FederatedStatisticsThresholdResult():
             return result.matched_threshold
+        case FederatedKllSharedThresholdResult():
+            return result.threshold
         case (
             LocalThresholdResult()
             | FamilyThresholdResult()

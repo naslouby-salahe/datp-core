@@ -216,6 +216,14 @@ class GroupCount(PositiveIntegerValue):
         return self.value < count.value
 
 
+class KllSketchSize(PositiveIntegerValue):
+    validation_name: ClassVar[str] = "KLL sketch size"
+
+
+class KllReconstructionReplicateCount(PositiveIntegerValue):
+    validation_name: ClassVar[str] = "KLL reconstruction replicate count"
+
+
 class ReplicateIndex(NonNegativeIntegerValue):
     validation_name: ClassVar[str] = "replicate index"
 

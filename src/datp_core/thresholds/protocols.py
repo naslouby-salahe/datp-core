@@ -9,6 +9,8 @@ from datp_core.core.numeric import (
     CalibrationSize,
     CoverageTarget,
     GroupCount,
+    KllReconstructionReplicateCount,
+    KllSketchSize,
     KMeansInitializationCount,
     KMeansMaximumIterationCount,
     Quantile,
@@ -137,6 +139,23 @@ class FederatedStatisticsProtocol(StrictModel):
     coefficients: tuple[SummaryCoefficient, ...]
 
 
+class FederatedKllProtocol(StrictModel):
+    method: Literal[FederatedThresholdMethod.FEDERATED_KLL_SHARED_THRESHOLD]
+    primary_k: KllSketchSize
+    sensitivity_k: tuple[KllSketchSize, ...]
+    reconstruction_replicate_count: KllReconstructionReplicateCount
+
+    @model_validator(mode="after")
+    def validate_grid(self) -> "FederatedKllProtocol":
+        if self.sensitivity_k != (KllSketchSize(200), KllSketchSize(400), KllSketchSize(800)):
+            raise ValueError("KLL sensitivity grid must be 200, 400, 800")
+        if self.primary_k != KllSketchSize(400):
+            raise ValueError("KLL primary sketch size must be 400")
+        if self.reconstruction_replicate_count != KllReconstructionReplicateCount(10):
+            raise ValueError("KLL reconstruction replicate count must be 10")
+        return self
+
+
 class ClusterThresholdProtocol(StrictModel):
     method: Literal[FederatedThresholdMethod.CLUSTER_THRESHOLD]
     quantile: Quantile
@@ -234,6 +253,12 @@ CONFORMAL_PROTOCOL = ConformalProtocol(
 FEDERATED_STATISTICS_PROTOCOL = FederatedStatisticsProtocol(
     method=FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS,
     coefficients=SUMMARY_COEFFICIENTS,
+)
+FEDERATED_KLL_PROTOCOL = FederatedKllProtocol(
+    method=FederatedThresholdMethod.FEDERATED_KLL_SHARED_THRESHOLD,
+    primary_k=KllSketchSize(400),
+    sensitivity_k=(KllSketchSize(200), KllSketchSize(400), KllSketchSize(800)),
+    reconstruction_replicate_count=KllReconstructionReplicateCount(10),
 )
 CLUSTER_THRESHOLD_PROTOCOL = ClusterThresholdProtocol(
     method=FederatedThresholdMethod.CLUSTER_THRESHOLD,

@@ -271,6 +271,7 @@ class ExperimentWorkspace:
                     family_by_client=self.context.family_by_client,
                     support_rule=CalibrationSupportRule.CANONICAL_MINIMUM_SUPPORT,
                     cluster_threshold_aggregation=self._cluster_aggregation(),
+                    kll_sketch_size=self.coordinate.kll_sketch_size,
                 ),
                 output_directory=self.run_directory() / EvaluationRunAssetDirectory.THRESHOLD,
                 overwrite=False,

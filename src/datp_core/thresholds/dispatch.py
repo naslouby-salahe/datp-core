@@ -13,7 +13,7 @@ from datp_core.core.identifiers import (
     ContractSubject,
     FederatedThresholdMethod,
 )
-from datp_core.core.numeric import Quantile, RowCount
+from datp_core.core.numeric import KllSketchSize, Quantile, RowCount
 from datp_core.data.populations.contracts import FamilyAssignment, PopulationCapabilities
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 from datp_core.thresholds.contracts import ThresholdInfeasibilityReason, ThresholdUnavailableResult
@@ -31,6 +31,7 @@ from datp_core.thresholds.policies.shared import (
 from datp_core.thresholds.protocols import (
     CLUSTER_MEDIAN_THRESHOLD_PROTOCOL,
     CLUSTER_THRESHOLD_PROTOCOL,
+    FEDERATED_KLL_PROTOCOL,
     FEDERATED_STATISTICS_PROTOCOL,
     FIXED_SHRINKAGE_PROTOCOL,
     MINIMUM_BENIGN_SUPPORT,
@@ -44,6 +45,10 @@ from datp_core.thresholds.variants.conformal import ConformalThresholdResult, co
 from datp_core.thresholds.variants.federated_statistics import (
     FederatedStatisticsThresholdResult,
     construct_federated_benign_statistics,
+)
+from datp_core.thresholds.variants.kll import (
+    FederatedKllSharedThresholdResult,
+    construct_federated_kll_shared_threshold,
 )
 from datp_core.thresholds.variants.shrinkage import (
     FixedShrinkageCurveResult,
@@ -63,6 +68,7 @@ type ThresholdConstructionResult = (
     | SizeAwareShrinkageThresholdResult
     | ConformalThresholdResult
     | FederatedStatisticsThresholdResult
+    | FederatedKllSharedThresholdResult
     | ThresholdUnavailableResult
 )
 
@@ -93,6 +99,7 @@ class ThresholdConstructionRequest:
     family_by_client: tuple[FamilyAssignment, ...]
     support_rule: CalibrationSupportRule
     cluster_threshold_aggregation: ClusterThresholdAggregation | None
+    kll_sketch_size: KllSketchSize | None = None
 
     def __post_init__(self) -> None:
         if not self.eligible:
@@ -174,6 +181,13 @@ def dispatch_federated_threshold(request: ThresholdConstructionRequest) -> Thres
                 request.eligible,
                 FEDERATED_STATISTICS_PROTOCOL,
                 request.quantile,
+            )
+        case FederatedThresholdMethod.FEDERATED_KLL_SHARED_THRESHOLD:
+            return construct_federated_kll_shared_threshold(
+                request.eligible,
+                FEDERATED_KLL_PROTOCOL,
+                request.quantile,
+                request.kll_sketch_size,
             )
         case _:
             assert_never(request.method)

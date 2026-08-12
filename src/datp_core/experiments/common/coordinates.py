@@ -21,7 +21,7 @@ from datp_core.core.identifiers import (
     TemporalState,
     TrainingModelId,
 )
-from datp_core.core.numeric import DirichletConcentration, ModelCoefficientValue, Quantile, Seed
+from datp_core.core.numeric import DirichletConcentration, KllSketchSize, ModelCoefficientValue, Quantile, Seed
 from datp_core.data.populations.contracts import ControlledPartitionKind
 
 _MODEL_COEFFICIENT_TRAINING_MODELS = frozenset(
@@ -157,6 +157,7 @@ class ExperimentCoordinate:
     threshold_quantile: Quantile | None = None
     controlled_partition_kind: ControlledPartitionKind | None = None
     dirichlet_concentration: DirichletConcentration | None = None
+    kll_sketch_size: KllSketchSize | None = None
 
     def __post_init__(self) -> None:
         requires_coefficient = self.training_model in _MODEL_COEFFICIENT_TRAINING_MODELS
@@ -197,6 +198,7 @@ class ExperimentCoordinate:
             if self.threshold_quantile is not None
             else CoordinateIdentitySegment.CANONICAL_QUANTILE.value
         )
+        kll_sketch_size = f"k{self.kll_sketch_size.value}" if self.kll_sketch_size is not None else "no_kll"
         if self.controlled_partition_kind is None:
             partition = CoordinateIdentitySegment.NO_CONTROLLED_PARTITION.value
         elif self.controlled_partition_kind is ControlledPartitionKind.IID:
@@ -223,6 +225,7 @@ class ExperimentCoordinate:
                     temporal,
                     quantile,
                     partition,
+                    kll_sketch_size,
                 )
             )
         )

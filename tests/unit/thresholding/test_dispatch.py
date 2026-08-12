@@ -36,6 +36,7 @@ from datp_core.thresholds.protocols import (
 from datp_core.thresholds.quantiles import ClientBenignCalibrationScores
 from datp_core.thresholds.variants.conformal import ConformalThresholdResult
 from datp_core.thresholds.variants.federated_statistics import FederatedStatisticsThresholdResult
+from datp_core.thresholds.variants.kll import FederatedKllSharedThresholdResult
 from datp_core.thresholds.variants.shrinkage import (
     FixedShrinkageCurveResult,
     ShrinkageThresholdResult,
@@ -117,6 +118,7 @@ def _request(
         (FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE, SizeAwareShrinkageThresholdResult),
         (FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD, ConformalThresholdResult),
         (FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS, FederatedStatisticsThresholdResult),
+        (FederatedThresholdMethod.FEDERATED_KLL_SHARED_THRESHOLD, FederatedKllSharedThresholdResult),
     ],
 )
 def test_dispatch_returns_the_correct_result_type_for_every_method(method, expected_type) -> None:
@@ -130,6 +132,19 @@ def test_dispatch_returns_the_complete_declared_shrinkage_curve() -> None:
     assert result.points
     assert all(isinstance(item, ShrinkageThresholdResult) for item in result.points)
     assert tuple(item.weight for item in result.points) == FIXED_SHRINKAGE_PROTOCOL.weights
+
+
+def test_kll_dispatch_persists_all_locked_reconstructions_and_client_sketches() -> None:
+    result = dispatch_federated_threshold(_request(FederatedThresholdMethod.FEDERATED_KLL_SHARED_THRESHOLD))
+
+    assert isinstance(result, FederatedKllSharedThresholdResult)
+    assert result.sketch_size.value == 400
+    assert len(result.reconstructions) == 10
+    assert all(len(reconstruction.client_sketches) == len(ELIGIBLE) for reconstruction in result.reconstructions)
+    assert all(
+        sketch.payload_hex for reconstruction in result.reconstructions for sketch in reconstruction.client_sketches
+    )
+    assert result.uploaded_bytes.value > 0
 
 
 def test_dispatch_family_threshold_without_taxonomy_is_unavailable() -> None:

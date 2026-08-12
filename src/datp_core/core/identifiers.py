@@ -123,6 +123,7 @@ class FederatedThresholdMethod(StrEnum):
     SIZE_AWARE_SHRINKAGE = "size_aware_shrinkage"
     LOCAL_CONFORMAL_THRESHOLD = "local_conformal_threshold"
     FEDERATED_BENIGN_STATISTICS = "federated_benign_statistics"
+    FEDERATED_KLL_SHARED_THRESHOLD = "federated_kll_shared_threshold"
 
 
 class IntervalMethod(StrEnum):

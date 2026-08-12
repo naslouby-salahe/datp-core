@@ -149,5 +149,15 @@ EDGE_IIOTSET_CAPABILITIES = DatasetCapabilities(
             reason=ValidationReasonText("The method does not imply formal privacy or attack-sensitive validation."),
             method=FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS,
         ),
+        ThresholdMethodCapability(
+            status=CapabilityStatus.SUPPORTED,
+            evidence=ValidationReasonText(
+                "Eligible benign sensor groups retain scores for deterministic-order float64 KLL sketches.",
+            ),
+            reason=ValidationReasonText(
+                "KLL is the declared mergeable pooled-quantile external-validation comparator.",
+            ),
+            method=FederatedThresholdMethod.FEDERATED_KLL_SHARED_THRESHOLD,
+        ),
     ),
 )
