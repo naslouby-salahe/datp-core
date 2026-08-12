@@ -114,3 +114,24 @@ def test_planning_cannot_override_population_threshold_capabilities() -> None:
     assert len(plan.entries) == 1
     assert plan.entries[0].disposition is PlanDisposition.INFEASIBLE
     assert "threshold_method_unsupported" in plan.entries[0].reason
+
+
+def test_plan_expands_each_declared_preprocessing_protocol() -> None:
+    declaration = ExperimentDeclaration(
+        id=ExperimentId.PREPROCESSING_GEOMETRY_SENSITIVITY,
+        role=EvidenceRole.SUPPORTIVE,
+        population=PopulationId.NBAIOT_NATURAL_DEVICES,
+        training_model=TrainingModelId.FEDAVG_AUTOENCODER,
+        preprocessing_protocol=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
+        supplementary_preprocessing_protocols=(PreprocessingProtocolId.FEDERATED_POOLED_MIN_MAX,),
+        federated_thresholds=(FederatedThresholdMethod.SHARED_THRESHOLD,),
+        metrics=(MetricId.FPR_COEFFICIENT_OF_VARIATION,),
+        readiness=ExperimentReadiness.DECLARED,
+    )
+
+    plan = expand_experiment_plan(declarations=(declaration,), seed_cohort=SeedCohort(values=(Seed(0),)))
+
+    assert tuple(entry.coordinate.preprocessing_protocol for entry in plan.entries) == (
+        PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
+        PreprocessingProtocolId.FEDERATED_POOLED_MIN_MAX,
+    )

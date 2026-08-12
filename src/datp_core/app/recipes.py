@@ -101,10 +101,12 @@ from datp_core.experiments.threshold_robustness import (
     calibration_size_ablation_analysis_marker_present,
     fixed_shrinkage_curve_analysis_marker_present,
     local_conformal_coverage_analysis_marker_present,
+    preprocessing_geometry_sensitivity_analysis_marker_present,
     quantile_sensitivity_analysis_marker_present,
     report_calibration_size_ablation,
     report_fixed_shrinkage_curve,
     report_local_conformal_coverage,
+    report_preprocessing_geometry_sensitivity,
     report_quantile_sensitivity,
     report_shared_construction_sensitivity,
     report_size_aware_shrinkage,
@@ -112,6 +114,7 @@ from datp_core.experiments.threshold_robustness import (
     run_calibration_size_ablation_seed,
     run_fixed_shrinkage_curve_seed,
     run_local_conformal_coverage_seed,
+    run_preprocessing_geometry_sensitivity_seed,
     run_quantile_sensitivity_seed,
     run_shared_construction_sensitivity_seed,
     run_size_aware_shrinkage_seed,
@@ -852,6 +855,8 @@ def _report_robustness(experiment_id: ExperimentId) -> ReportResult:
         result = report_size_aware_shrinkage(experiment_id, True)
     elif experiment_id is ExperimentId.LOCAL_CONFORMAL_COVERAGE:
         result = report_local_conformal_coverage(experiment_id, True)
+    elif experiment_id is ExperimentId.PREPROCESSING_GEOMETRY_SENSITIVITY:
+        result = report_preprocessing_geometry_sensitivity(experiment_id, True)
     else:
         raise ReportEvidenceError(ErrorMessage(f"unsupported threshold robustness report: {experiment_id.value}"))
     return ReportResult(experiment=experiment_id, paths=result.directories, detail=DetailText(result.detail))
@@ -1041,6 +1046,8 @@ def _robustness_marker(experiment_id: ExperimentId) -> bool:
         return size_aware_shrinkage_analysis_marker_present(experiment_id)
     if experiment_id is ExperimentId.LOCAL_CONFORMAL_COVERAGE:
         return local_conformal_coverage_analysis_marker_present(experiment_id)
+    if experiment_id is ExperimentId.PREPROCESSING_GEOMETRY_SENSITIVITY:
+        return preprocessing_geometry_sensitivity_analysis_marker_present(experiment_id)
     raise ScientificContractError(ErrorMessage(f"unknown threshold-robustness experiment: {experiment_id.value}"))
 
 
@@ -1277,6 +1284,17 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
         anchor_requirement=AnchorRequirement.REQUIRED,
         campaign_role=CampaignRole.MANDATORY,
         dispatch=_robustness_recipe(ExperimentId.LOCAL_CONFORMAL_COVERAGE, run_local_conformal_coverage_seed),
+        report=_report_robustness,
+        analysis_marker=_robustness_marker,
+    ),
+    ExperimentRecipe(
+        experiment=ExperimentId.PREPROCESSING_GEOMETRY_SENSITIVITY,
+        anchor_requirement=AnchorRequirement.REQUIRED,
+        campaign_role=CampaignRole.MANDATORY,
+        dispatch=_robustness_recipe(
+            ExperimentId.PREPROCESSING_GEOMETRY_SENSITIVITY,
+            run_preprocessing_geometry_sensitivity_seed,
+        ),
         report=_report_robustness,
         analysis_marker=_robustness_marker,
     ),

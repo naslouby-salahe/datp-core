@@ -11,6 +11,7 @@ from datp_core.core.identifiers import (
     MetricId,
     NonEmptyString,
     PopulationId,
+    PreprocessingProtocolId,
     SplitProtocolId,
     TemporalState,
     ThresholdEstimator,
@@ -158,6 +159,7 @@ class _SweptCell:
     dirichlet_concentration: DirichletConcentration | None
     kll_sketch_size: KllSketchSize | None
     threshold_estimator: ThresholdEstimator
+    preprocessing_protocol: PreprocessingProtocolId
 
 
 def _declared_model_coefficients(training_model: TrainingModelId) -> tuple[ModelCoefficientValue | None, ...]:
@@ -183,6 +185,7 @@ def _swept_cells(declaration: ExperimentDeclaration, seed_cohort: SeedCohort) ->
             dirichlet_concentration=concentration,
             kll_sketch_size=kll_sketch_size,
             threshold_estimator=threshold_estimator,
+            preprocessing_protocol=preprocessing_protocol,
         )
         for seed in seed_cohort.values
         for threshold_method in declaration.federated_thresholds
@@ -193,6 +196,7 @@ def _swept_cells(declaration: ExperimentDeclaration, seed_cohort: SeedCohort) ->
         for partition_kind, concentration in _controlled_partition_cells(declaration)
         for kll_sketch_size in _kll_sketch_sizes(declaration.id, threshold_method)
         for threshold_estimator in _threshold_estimators(declaration.id)
+        for preprocessing_protocol in declaration.preprocessing_protocols
     )
 
 
@@ -252,7 +256,7 @@ def _planned_entry(
             training_model=declaration.training_model,
             training_seed=cell.seed,
             split_protocol=_coordinate_split_protocol(declaration.population, cell.temporal_state),
-            preprocessing_protocol=declaration.preprocessing_protocol,
+            preprocessing_protocol=cell.preprocessing_protocol,
             model_coefficient=cell.model_coefficient,
             threshold_method=cell.threshold_method,
             metric=cell.metric,

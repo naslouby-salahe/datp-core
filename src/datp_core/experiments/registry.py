@@ -25,6 +25,7 @@ class ExperimentDeclaration(StrictModel):
     population: PopulationId
     training_model: TrainingModelId
     preprocessing_protocol: PreprocessingProtocolId
+    supplementary_preprocessing_protocols: tuple[PreprocessingProtocolId, ...] = ()
     federated_thresholds: tuple[FederatedThresholdMethod, ...]
     metrics: tuple[MetricId, ...]
     readiness: ExperimentReadiness
@@ -37,9 +38,17 @@ class ExperimentDeclaration(StrictModel):
             raise ValueError("experiment threshold methods must be unique")
         if len(set(self.metrics)) != len(self.metrics):
             raise ValueError("experiment metrics must be unique")
+        if self.preprocessing_protocol in self.supplementary_preprocessing_protocols:
+            raise ValueError("supplementary preprocessing protocols must exclude the primary protocol")
+        if len(set(self.supplementary_preprocessing_protocols)) != len(self.supplementary_preprocessing_protocols):
+            raise ValueError("supplementary preprocessing protocols must be unique")
         if self.readiness is ExperimentReadiness.EXECUTABLE and self.role is EvidenceRole.OPERATIONAL_TRANSLATION:
             raise ValueError("operational translation experiments cannot be marked executable without rate evidence")
         return self
+
+    @property
+    def preprocessing_protocols(self) -> tuple[PreprocessingProtocolId, ...]:
+        return (self.preprocessing_protocol, *self.supplementary_preprocessing_protocols)
 
 
 _SHARED_AND_LOCAL_METHODS = (
@@ -98,6 +107,7 @@ def _declare(
     preprocessing_protocol: PreprocessingProtocolId,
     thresholds: tuple[FederatedThresholdMethod, ...],
     metrics: tuple[MetricId, ...],
+    supplementary_preprocessing_protocols: tuple[PreprocessingProtocolId, ...] = (),
 ) -> ExperimentDeclaration:
     return ExperimentDeclaration(
         id=experiment_id,
@@ -105,6 +115,7 @@ def _declare(
         population=population,
         training_model=training_model,
         preprocessing_protocol=preprocessing_protocol,
+        supplementary_preprocessing_protocols=supplementary_preprocessing_protocols,
         federated_thresholds=thresholds,
         metrics=metrics,
         readiness=_declared_readiness(experiment_id, role),
@@ -228,6 +239,16 @@ EXPERIMENTS = (
         PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
         _SHARED_AND_LOCAL_METHODS + (FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE,),
         CONFIRMATORY_METRICS,
+    ),
+    _declare(
+        ExperimentId.PREPROCESSING_GEOMETRY_SENSITIVITY,
+        EvidenceRole.SUPPORTIVE,
+        PopulationId.NBAIOT_NATURAL_DEVICES,
+        TrainingModelId.FEDAVG_AUTOENCODER,
+        PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
+        _SHARED_AND_LOCAL_METHODS,
+        CONFIRMATORY_METRICS + (MetricId.AVERAGE_PRECISION,),
+        supplementary_preprocessing_protocols=(PreprocessingProtocolId.FEDERATED_POOLED_MIN_MAX,),
     ),
     _declare(
         ExperimentId.LOCAL_CONFORMAL_COVERAGE,

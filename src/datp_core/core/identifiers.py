@@ -84,6 +84,7 @@ class ExperimentId(StrEnum):
     CALIBRATION_SIZE_ABLATION = "calibration_size_ablation"
     FIXED_SHRINKAGE_CURVE = "fixed_shrinkage_curve"
     SIZE_AWARE_SHRINKAGE = "size_aware_shrinkage"
+    PREPROCESSING_GEOMETRY_SENSITIVITY = "preprocessing_geometry_sensitivity"
     LOCAL_CONFORMAL_COVERAGE = "local_conformal_coverage"
     FEDERATED_BENIGN_STATISTICS_COMPARISON = "federated_benign_statistics_comparison"
     FEDERATED_QUANTILE_ESTIMATION = "federated_quantile_estimation"

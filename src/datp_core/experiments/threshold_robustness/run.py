@@ -5,7 +5,10 @@ from math import sqrt
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import polars as pl
+
 from datp_core.analysis.descriptive import summarize_cross_seed_metric_values
+from datp_core.analysis.mechanisms import ClientScoreVector, jensen_shannon_from_client_scores
 from datp_core.analysis.metrics.models import metric_by_id
 from datp_core.analysis.metrics.population import calculate_population_metrics
 from datp_core.analysis.metrics.semantics import metric_value
@@ -24,6 +27,8 @@ from datp_core.core.identifiers import (
     FederatedThresholdMethod,
     MetricId,
     PopulationId,
+    PreprocessingProtocolId,
+    ScoreFrameColumn,
     ThresholdEstimator,
 )
 from datp_core.core.numeric import (
@@ -42,6 +47,7 @@ from datp_core.core.numeric import (
     ThresholdVariance,
 )
 from datp_core.data.populations.contracts import ClientIdentity
+from datp_core.detector.scoring.models import FederatedScoreAssetName
 from datp_core.experiments.common.coordinates import ExperimentCoordinate
 from datp_core.experiments.common.reports import (
     AnalysisReportFinalizationInput,
@@ -51,7 +57,11 @@ from datp_core.experiments.common.reports import (
 from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.experiments.execution import execute_declared_experiment_seed
 from datp_core.experiments.execution.evidence import load_evaluation_document, population_metric
-from datp_core.experiments.execution.layout import EvaluationRunAssetDirectory
+from datp_core.experiments.execution.layout import (
+    EvaluationRunAssetDirectory,
+    ExecutionArtifactDirectory,
+    federated_training_directory,
+)
 from datp_core.experiments.execution.models import ProgressHook
 from datp_core.experiments.registry import require_experiment_declaration
 from datp_core.experiments.threshold_robustness.cohorts import (
@@ -86,6 +96,7 @@ class ThresholdRobustnessAnalysisMarker(StrEnum):
     SIZE_AWARE_SHRINKAGE = "size_aware_shrinkage_analysis_complete"
     LOCAL_CONFORMAL_COVERAGE = "local_conformal_coverage_analysis_complete"
     THRESHOLD_ESTIMATOR_SCOPE_SENSITIVITY = "threshold_estimator_scope_sensitivity_analysis_complete"
+    PREPROCESSING_GEOMETRY_SENSITIVITY = "preprocessing_geometry_sensitivity_analysis_complete"
 
 
 class ThresholdRobustnessSeedResult(StrictModel):
@@ -219,6 +230,38 @@ class ConformalCoverageReport(StrictModel):
     rows: tuple[ConformalCoverageRow, ...]
 
 
+class PreprocessingGeometryRow(StrictModel):
+    seed: Seed
+    preprocessing_protocol: PreprocessingProtocolId
+    method: FederatedThresholdMethod
+    cv_fpr: MetricValue
+    fpr_iqr: MetricValue
+    fpr_range: MetricValue
+    worst_client_fpr: MetricValue
+    mean_absolute_target_error: MetricValue | None
+    auroc: MetricValue
+    average_precision: MetricValue
+    mean_pairwise_benign_score_jsd: MetricValue | None
+
+
+class PreprocessingAbsorptionReason(StrEnum):
+    UNAVAILABLE_NO_POSITIVE_LOCAL_STANDARD_GAP = "unavailable_no_positive_local_standard_gap"
+
+
+class PreprocessingAbsorptionRow(StrictModel):
+    seed: Seed
+    local_standard_scope_gain: MetricDelta
+    pooled_min_max_scope_gain: MetricDelta
+    absorption: MetricDelta | None
+    unavailable_reason: PreprocessingAbsorptionReason | None
+
+
+class PreprocessingGeometrySensitivityReport(StrictModel):
+    experiment: ExperimentId
+    rows: tuple[PreprocessingGeometryRow, ...]
+    absorption_rows: tuple[PreprocessingAbsorptionRow, ...]
+
+
 class SizeAwareShrinkageReport(StrictModel):
     experiment: ExperimentId
     methods: tuple[MethodCvSummary, ...]
@@ -274,6 +317,7 @@ def _evaluation_document_for_seed(
     *,
     quantile: Quantile | None = None,
     estimator: ThresholdEstimator | None = None,
+    preprocessing_protocol: PreprocessingProtocolId | None = None,
 ) -> FederatedEvaluationDocument:
     declaration = require_experiment_declaration(experiment_id)
     plan = expand_experiment_plan(declarations=(declaration,), seed_cohort=SeedCohort(values=(seed,)))
@@ -284,13 +328,18 @@ def _evaluation_document_for_seed(
         and entry.coordinate.metric is MetricId.FPR_COEFFICIENT_OF_VARIATION
         and (quantile is None or entry.coordinate.threshold_quantile == quantile)
         and (estimator is None or entry.coordinate.threshold_estimator is estimator)
+        and (preprocessing_protocol is None or entry.coordinate.preprocessing_protocol is preprocessing_protocol)
     )
     if len(matches) != 1:
         quantile_suffix = f" q={quantile.value}" if quantile is not None else ""
         estimator_suffix = f" estimator={estimator.value}" if estimator is not None else ""
+        preprocessing_suffix = (
+            f" preprocessing={preprocessing_protocol.value}" if preprocessing_protocol is not None else ""
+        )
         raise ScientificContractError(
             ErrorMessage(
-                f"evaluation coordinate for {method.value}{quantile_suffix}{estimator_suffix} must resolve exactly once"
+                "evaluation coordinate for "
+                f"{method.value}{quantile_suffix}{estimator_suffix}{preprocessing_suffix} must resolve exactly once"
             )
         )
     path = _evaluation_document_path(output_root, matches[0])
@@ -1016,4 +1065,161 @@ def report_local_conformal_coverage(
 
 
 def local_conformal_coverage_analysis_marker_present(experiment_id: ExperimentId) -> bool:
+    return _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES).is_file()
+
+
+def run_preprocessing_geometry_sensitivity_seed(
+    training_seed: Seed,
+    *,
+    output_root: Path,
+    overwrite: bool,
+    progress: ProgressHook | None = None,
+) -> ThresholdRobustnessSeedResult:
+    return _run_robustness_seed(
+        ExperimentId.PREPROCESSING_GEOMETRY_SENSITIVITY,
+        training_seed,
+        output_root,
+        overwrite,
+        progress,
+    )
+
+
+def _mean_pairwise_benign_score_jsd(document: FederatedEvaluationDocument) -> MetricValue | None:
+    score_root = (
+        federated_training_directory(document.score_coordinate, OUTPUTS_ROOT) / ExecutionArtifactDirectory.SCORES
+    )
+    vectors: list[ClientScoreVector] = []
+    for client_result in sorted(document.clients, key=lambda item: item.client):
+        path = score_root / client_result.client.client_id.value / FederatedScoreAssetName.CALIBRATION
+        if not path.is_file():
+            raise ScientificContractError(ErrorMessage(f"missing persisted benign calibration scores: {path}"))
+        values = pl.read_parquet(path)[ScoreFrameColumn.RECONSTRUCTION_ERROR.value].to_list()
+        if not values:
+            raise ScientificContractError(ErrorMessage(f"empty benign calibration scores: {path}"))
+        vectors.append(
+            ClientScoreVector(
+                client=client_result.client,
+                scores=tuple(MetricValue(float(value)) for value in values),
+            )
+        )
+    return jensen_shannon_from_client_scores(tuple(vectors)).aggregate
+
+
+def _preprocessing_geometry_row(
+    seed: Seed,
+    preprocessing_protocol: PreprocessingProtocolId,
+    method: FederatedThresholdMethod,
+    document: FederatedEvaluationDocument,
+) -> PreprocessingGeometryRow:
+    operating = document.diagnostics.held_out_operating_point_summary
+    return PreprocessingGeometryRow(
+        seed=seed,
+        preprocessing_protocol=preprocessing_protocol,
+        method=method,
+        cv_fpr=population_metric(document, MetricId.FPR_COEFFICIENT_OF_VARIATION),
+        fpr_iqr=population_metric(document, MetricId.FPR_IQR),
+        fpr_range=population_metric(document, MetricId.FPR_RANGE),
+        worst_client_fpr=population_metric(document, MetricId.WORST_CLIENT_FPR),
+        mean_absolute_target_error=None if operating is None else operating.mean_absolute_target_error,
+        auroc=population_metric(document, MetricId.AUROC),
+        average_precision=population_metric(document, MetricId.AVERAGE_PRECISION),
+        mean_pairwise_benign_score_jsd=_mean_pairwise_benign_score_jsd(document),
+    )
+
+
+def report_preprocessing_geometry_sensitivity(
+    experiment_id: ExperimentId,
+    overwrite: bool,
+) -> AnalysisReportPublication:
+    del overwrite
+    declaration = require_experiment_declaration(experiment_id)
+    expected_protocols = (
+        PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
+        PreprocessingProtocolId.FEDERATED_POOLED_MIN_MAX,
+    )
+    if declaration.preprocessing_protocols != expected_protocols:
+        raise ScientificContractError(
+            ErrorMessage("preprocessing geometry sensitivity requires the two locked protocols")
+        )
+    directory = _analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
+    directory.mkdir(parents=True, exist_ok=True)
+    rows: list[PreprocessingGeometryRow] = []
+    absorption_rows: list[PreprocessingAbsorptionRow] = []
+    missing = 0
+    for seed in CONFIRMATORY_SEED_COHORT.values:
+        documents: dict[tuple[PreprocessingProtocolId, FederatedThresholdMethod], FederatedEvaluationDocument] = {}
+        for protocol in expected_protocols:
+            for method in declaration.federated_thresholds:
+                try:
+                    document = _evaluation_document_for_seed(
+                        seed, method, experiment_id, OUTPUTS_ROOT, preprocessing_protocol=protocol
+                    )
+                except ScientificContractError:
+                    missing += 1
+                    continue
+                documents[(protocol, method)] = document
+                rows.append(_preprocessing_geometry_row(seed, protocol, method, document))
+        local_standard_shared = documents.get(
+            (PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD, FederatedThresholdMethod.SHARED_THRESHOLD)
+        )
+        local_standard_local = documents.get(
+            (PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD, FederatedThresholdMethod.LOCAL_THRESHOLD)
+        )
+        pooled_shared = documents.get(
+            (PreprocessingProtocolId.FEDERATED_POOLED_MIN_MAX, FederatedThresholdMethod.SHARED_THRESHOLD)
+        )
+        pooled_local = documents.get(
+            (PreprocessingProtocolId.FEDERATED_POOLED_MIN_MAX, FederatedThresholdMethod.LOCAL_THRESHOLD)
+        )
+        if (
+            local_standard_shared is None
+            or local_standard_local is None
+            or pooled_shared is None
+            or pooled_local is None
+        ):
+            continue
+        local_standard_gain = MetricDelta(
+            population_metric(local_standard_shared, MetricId.FPR_COEFFICIENT_OF_VARIATION).value
+            - population_metric(local_standard_local, MetricId.FPR_COEFFICIENT_OF_VARIATION).value
+        )
+        pooled_gain = MetricDelta(
+            population_metric(pooled_shared, MetricId.FPR_COEFFICIENT_OF_VARIATION).value
+            - population_metric(pooled_local, MetricId.FPR_COEFFICIENT_OF_VARIATION).value
+        )
+        absorption_rows.append(
+            PreprocessingAbsorptionRow(
+                seed=seed,
+                local_standard_scope_gain=local_standard_gain,
+                pooled_min_max_scope_gain=pooled_gain,
+                absorption=(
+                    None
+                    if local_standard_gain.value <= 1e-12
+                    else MetricDelta(1.0 - (pooled_gain.value / local_standard_gain.value))
+                ),
+                unavailable_reason=(
+                    PreprocessingAbsorptionReason.UNAVAILABLE_NO_POSITIVE_LOCAL_STANDARD_GAP
+                    if local_standard_gain.value <= 1e-12
+                    else None
+                ),
+            )
+        )
+    serialize_json_model(
+        PreprocessingGeometrySensitivityReport(
+            experiment=experiment_id,
+            rows=tuple(rows),
+            absorption_rows=tuple(absorption_rows),
+        ),
+        _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
+    )
+    return finalize_analysis_report(
+        AnalysisReportFinalizationInput(
+            directory=directory,
+            marker=_complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
+            missing_count=SeedObservationCount(missing),
+            marker_text=AnalysisMarkerText(ThresholdRobustnessAnalysisMarker.PREPROCESSING_GEOMETRY_SENSITIVITY),
+        )
+    )
+
+
+def preprocessing_geometry_sensitivity_analysis_marker_present(experiment_id: ExperimentId) -> bool:
     return _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES).is_file()
