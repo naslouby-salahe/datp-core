@@ -42,6 +42,8 @@ def _summary(seed_value: int, cv_fpr: float | None) -> ExternalBenignStatisticsS
             ),
         ),
         cv_fpr=None if cv_fpr is None else MetricValue(cv_fpr),
+        fpr_iqr=None if cv_fpr is None else MetricValue(cv_fpr / 2),
+        fpr_range=None if cv_fpr is None else MetricValue(cv_fpr * 3),
         worst_client_fpr=None if cv_fpr is None else MetricValue(cv_fpr * 2),
     )
 
@@ -64,6 +66,8 @@ def test_external_benign_statistics_markdown_publishes_estimator_variance_and_co
     assert "Estimated communication bytes" in markdown
     assert "Achieved benign exceedance" in markdown
     assert "Absolute threshold error" in markdown
+    assert "FPR IQR" in markdown
+    assert "FPR range" in markdown
     assert "Seed 0" in markdown
     assert "Seed 1" in markdown
     assert "Disclosed per-client benign summary" in markdown
@@ -88,6 +92,8 @@ def test_external_benign_statistics_report_round_trips_typed_summary() -> None:
     assert loaded.experiment is ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION
     assert loaded.population is PopulationId.EDGE_SENSOR_GROUPS
     assert loaded.rows[0].cv_fpr == MetricValue(0.25)
+    assert loaded.rows[0].fpr_iqr == MetricValue(0.125)
+    assert loaded.rows[0].fpr_range == MetricValue(0.75)
     assert loaded.rows[1].cv_fpr is None
     assert loaded.rows[1].worst_client_fpr is None
     assert loaded.rows[0].between_ratio == Ratio(0.2)

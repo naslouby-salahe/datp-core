@@ -242,6 +242,8 @@ class ExternalBenignStatisticsSummary(StrictModel):
     estimated_communication_bytes: ByteCount
     clients: tuple[ExternalBenignStatisticsClient, ...]
     cv_fpr: MetricValue | None
+    fpr_iqr: MetricValue | None = None
+    fpr_range: MetricValue | None = None
     worst_client_fpr: MetricValue | None
 
 
@@ -318,6 +320,8 @@ def _benign_statistics_summary(
         estimated_communication_bytes=threshold_result.estimated_communication_bytes,
         clients=tuple(_benign_statistics_client(summary) for summary in threshold_result.client_summaries),
         cv_fpr=_optional_metric(evaluation, MetricId.FPR_COEFFICIENT_OF_VARIATION),
+        fpr_iqr=_optional_metric(evaluation, MetricId.FPR_IQR),
+        fpr_range=_optional_metric(evaluation, MetricId.FPR_RANGE),
         worst_client_fpr=_optional_metric(evaluation, MetricId.WORST_CLIENT_FPR),
     )
 
@@ -386,6 +390,12 @@ def _external_benign_statistics_markdown(manifest: ExternalBenignStatisticsRepor
                 ),
                 "| CV(FPR) | "
                 + (format_publication_metric(row.cv_fpr.value) if row.cv_fpr is not None else "unavailable")
+                + " |",
+                "| FPR IQR | "
+                + (format_publication_metric(row.fpr_iqr.value) if row.fpr_iqr is not None else "unavailable")
+                + " |",
+                "| FPR range | "
+                + (format_publication_metric(row.fpr_range.value) if row.fpr_range is not None else "unavailable")
                 + " |",
                 "| Worst-client FPR | "
                 + (
