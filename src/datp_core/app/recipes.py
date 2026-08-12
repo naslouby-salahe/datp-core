@@ -19,6 +19,7 @@ from datp_core.app.planning import (
 )
 from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
+from datp_core.artifacts.serializers.json import canonical_json_text
 from datp_core.core.errors import (
     ErrorMessage,
     ReportEvidenceError,
@@ -124,6 +125,7 @@ from datp_core.experiments.training_stress import (
     ditto_analysis_directory,
     fedprox_analysis_directory,
     load_ditto_stress_test_evidence,
+    load_fedprox_alignment_evidence,
     load_fine_tuning_stress_test_evidence,
     run_ditto_stress_test_seed,
     run_fedavg_local_fine_tuning_stress_test_seed,
@@ -593,6 +595,13 @@ def _report_fedprox(experiment_id: ExperimentId) -> ReportResult:
             if output.exists():
                 rmtree(output)
             analyze_fedprox_absorption(observations, output_directory=output)
+            alignment = tuple(
+                load_fedprox_alignment_evidence(seed, coefficient) for seed in CONFIRMATORY_SEED_COHORT.values
+            )
+            write_text_atomically(
+                output / ResearchArtifact.EVIDENCE_REPORT,
+                FileContentText(canonical_json_text(alignment)),
+            )
             paths.append(output)
     except ScientificContractError as error:
         raise ReportEvidenceError(

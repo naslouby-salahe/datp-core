@@ -327,6 +327,15 @@ class FedProxStressTestResult:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class FedProxAlignmentEvidence:
+    training_seed: Seed
+    coefficient: ProximalCoefficient
+    reference_alignment: ModelAlignmentResult
+    alignment: ModelAlignmentResult
+    alignment_reductions: tuple[AlignmentReductionOutcome, ...]
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class FedProxCvFprCornerEvidence:
     seed: Seed
     coefficient: ProximalCoefficient
@@ -989,6 +998,58 @@ def load_fedprox_cv_fpr_corners(
         experiment=experiment,
     )
     return FedProxCvFprCornerEvidence(seed=training_seed, coefficient=coefficient, shared=shared, local=local)
+
+
+def load_fedprox_alignment_evidence(
+    training_seed: Seed,
+    coefficient: ProximalCoefficient,
+) -> FedProxAlignmentEvidence:
+    shared_document = load_evaluation_document(
+        _fedprox_evaluation_path(training_seed, coefficient, FederatedThresholdMethod.SHARED_THRESHOLD)
+    )
+    if not shared_document.clients:
+        raise ScientificContractError(ErrorMessage("FedProx alignment requires at least one evaluated client"))
+    shared_threshold = shared_document.clients[0].threshold
+    if any(item.threshold != shared_threshold for item in shared_document.clients[1:]):
+        raise ScientificContractError(ErrorMessage("FedProx shared evaluation must use one threshold across clients"))
+    clients = tuple(item.client for item in shared_document.clients)
+    condition_coordinate = shared_document.score_coordinate
+    condition_clients = _alignment_clients_from_scores(
+        score_directory=federated_training_directory(condition_coordinate, OUTPUTS_ROOT)
+        / ExecutionArtifactDirectory.SCORES,
+        clients=clients,
+    )
+    source_coordinate = FederatedTrainingCoordinate(
+        population=condition_coordinate.population,
+        training_seed=training_seed,
+        split_protocol=condition_coordinate.split_protocol,
+        preprocessing_identity=condition_coordinate.preprocessing_identity,
+        model=TrainingModelId.FEDAVG_AUTOENCODER,
+        model_coefficient=None,
+        controlled_partition_kind=condition_coordinate.controlled_partition_kind,
+        dirichlet_concentration=condition_coordinate.dirichlet_concentration,
+    )
+    source_clients = _alignment_clients_from_scores(
+        score_directory=federated_training_directory(source_coordinate, OUTPUTS_ROOT)
+        / ExecutionArtifactDirectory.SCORES,
+        clients=clients,
+    )
+    grid = fedavg_alignment_grid_for_scores(source_clients)
+    reference_alignment = model_alignment(
+        ModelAlignmentCondition(client_scores=source_clients, shared_threshold=_shared_type7_threshold(source_clients)),
+        grid=grid,
+    )
+    alignment = model_alignment(
+        ModelAlignmentCondition(client_scores=condition_clients, shared_threshold=shared_threshold),
+        grid=grid,
+    )
+    return FedProxAlignmentEvidence(
+        training_seed=training_seed,
+        coefficient=coefficient,
+        reference_alignment=reference_alignment,
+        alignment=alignment,
+        alignment_reductions=alignment_reductions(reference_alignment, alignment),
+    )
 
 
 def build_fedprox_absorption_observation(
