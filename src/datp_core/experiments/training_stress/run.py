@@ -16,6 +16,13 @@ from datp_core.analysis.mechanisms import (
     AbsorptionSeedObservation,
     decide_absorption_cohort,
 )
+from datp_core.analysis.mechanisms.model_alignment import (
+    ModelAlignmentClientScores,
+    ModelAlignmentCondition,
+    ModelAlignmentResult,
+    fedavg_alignment_grid_for_scores,
+    model_alignment,
+)
 from datp_core.analysis.metrics.cohort_construction import assert_cohort_invariant_to_threshold_methods
 from datp_core.analysis.metrics.cohort_evidence import client_partition_counts_from_scores
 from datp_core.analysis.metrics.cohorts import EvaluationCohortManifest
@@ -64,6 +71,7 @@ from datp_core.core.numeric import (
     ScoreValue,
     Seed,
     SeedObservationCount,
+    ThresholdValue,
 )
 from datp_core.data.populations.contracts import ClientIdentity, FamilyAssignment
 from datp_core.data.populations.declarations import split_protocol_for_population
@@ -186,6 +194,7 @@ class DittoStressTestEvidence:
 class FineTuningStressTestResult:
     personalized_coordinate: FederatedTrainingCoordinate
     model_evidence: tuple[FineTuningClientModelEvidence, ...]
+    alignment: ModelAlignmentResult
     shared_threshold: SharedThresholdResult
     local_threshold: LocalThresholdResult
     shared_threshold_metrics: tuple[ClientMetricResult, ...]
@@ -197,6 +206,7 @@ class FineTuningStressTestResult:
 class FineTuningStressTestEvidence:
     personalized_coordinate: FederatedTrainingCoordinate
     model_evidence: tuple[FineTuningClientModelEvidence, ...]
+    alignment: ModelAlignmentResult
     shared_threshold_metrics: tuple[ClientMetricResult, ...]
     local_threshold_metrics: tuple[ClientMetricResult, ...]
     evaluation_cohort: EvaluationCohortManifest
@@ -674,6 +684,22 @@ def run_fedavg_local_fine_tuning_stress_test_seed(
         client_counts=client_partition_counts_from_scores(reference_manifest),
         methods=(FederatedThresholdMethod.SHARED_THRESHOLD, FederatedThresholdMethod.LOCAL_THRESHOLD),
     )
+    fine_alignment_condition = _alignment_condition_from_scores(
+        score_directory=root / FineTuningArtifactBranch.SCORES,
+        clients=context.clients,
+        shared_threshold=shared.assignments[0].threshold,
+    )
+    source_score_directory = (
+        federated_training_directory(source_coordinate, output_root) / ExecutionArtifactDirectory.SCORES
+    )
+    source_alignment_clients = _alignment_clients_from_scores(
+        score_directory=source_score_directory,
+        clients=context.clients,
+    )
+    alignment = model_alignment(
+        fine_alignment_condition,
+        grid=fedavg_alignment_grid_for_scores(source_alignment_clients),
+    )
     result = FineTuningStressTestResult(
         personalized_coordinate=personalized_coordinate,
         model_evidence=tuple(
@@ -684,6 +710,7 @@ def run_fedavg_local_fine_tuning_stress_test_seed(
             )
             for owned in models.items
         ),
+        alignment=alignment,
         shared_threshold=shared,
         local_threshold=local,
         shared_threshold_metrics=tuple(
@@ -712,6 +739,7 @@ def run_fedavg_local_fine_tuning_stress_test_seed(
         FineTuningStressTestEvidence(
             personalized_coordinate=result.personalized_coordinate,
             model_evidence=result.model_evidence,
+            alignment=result.alignment,
             shared_threshold_metrics=result.shared_threshold_metrics,
             local_threshold_metrics=result.local_threshold_metrics,
             evaluation_cohort=result.evaluation_cohort,
@@ -1163,6 +1191,44 @@ def _fine_tuned_scores(
         eligible_calibration=tuple(eligible),
         manifests=ClientCollection(items=tuple(manifests)),
     )
+
+
+def _alignment_condition_from_scores(
+    *,
+    score_directory: Path,
+    clients: tuple[ClientIdentity, ...],
+    shared_threshold: ThresholdValue,
+) -> ModelAlignmentCondition:
+    return ModelAlignmentCondition(
+        client_scores=_alignment_clients_from_scores(score_directory=score_directory, clients=clients),
+        shared_threshold=shared_threshold,
+    )
+
+
+def _alignment_clients_from_scores(
+    *,
+    score_directory: Path,
+    clients: tuple[ClientIdentity, ...],
+) -> tuple[ModelAlignmentClientScores, ...]:
+    observations: list[ModelAlignmentClientScores] = []
+    for client in sorted(clients):
+        path = score_directory / client.client_id.value / "calibration.parquet"
+        if not path.is_file():
+            raise ScientificContractError(
+                ErrorMessage(f"missing immutable calibration score artifact for alignment: {path}"),
+                subject=ContractSubject.ARTIFACT_PATH,
+            )
+        frame = pl.read_parquet(path)
+        observations.append(
+            ModelAlignmentClientScores(
+                client=client,
+                calibration_scores=tuple(
+                    ScoreValue(float(value))
+                    for value in frame[ScoreFrameColumn.RECONSTRUCTION_ERROR.value].to_list()
+                ),
+            )
+        )
+    return tuple(observations)
 
 
 def ditto_directory(

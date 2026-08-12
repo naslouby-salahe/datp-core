@@ -40,6 +40,17 @@ from datp_core.analysis.mechanisms.divergence import (
     blocked_jensen_shannon_divergence,
     jensen_shannon_divergence,
 )
+from datp_core.analysis.mechanisms.model_alignment import (
+    FedAvgAlignmentGrid,
+    ModelAlignmentClientScores,
+    ModelAlignmentCondition,
+    ModelAlignmentMetric,
+    ModelAlignmentMetricOutcome,
+    ModelAlignmentResult,
+    ModelAlignmentUnavailableReason,
+    fedavg_alignment_grid,
+    model_alignment,
+)
 from datp_core.analysis.mechanisms.movement import (
     ThresholdMethodComparison,
     ThresholdMovement,
@@ -64,6 +75,7 @@ type MechanismEvidence = (
     | ClusterStabilityResult
     | DivergenceResult
     | GroupedDispersionResult
+    | ModelAlignmentResult
     | ScientificDecisionResult
     | ThresholdMovement
     | ThresholdMovementCohort
@@ -94,6 +106,13 @@ __all__ = (
     "GroupDispersionSummary",
     "GroupedDispersionResult",
     "MechanismEvidence",
+    "FedAvgAlignmentGrid",
+    "ModelAlignmentClientScores",
+    "ModelAlignmentCondition",
+    "ModelAlignmentMetric",
+    "ModelAlignmentMetricOutcome",
+    "ModelAlignmentResult",
+    "ModelAlignmentUnavailableReason",
     "ThresholdMovement",
     "ThresholdMovementCohort",
     "ThresholdMovementMultiSeedUncertainty",
@@ -106,11 +125,13 @@ __all__ = (
     "decide_absorption_cohort",
     "decide_model_absorption",
     "empty_cluster_evidence_record",
+    "fedavg_alignment_grid",
     "grouped_dispersion",
     "heterogeneity_benefit_association",
     "jensen_shannon_divergence",
     "jensen_shannon_from_client_scores",
     "local_threshold_dispersion",
+    "model_alignment",
     "summarize_threshold_movements",
     "summarize_threshold_movements_across_seeds",
     "threshold_movement",
