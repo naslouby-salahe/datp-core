@@ -12,6 +12,7 @@ from datp_core.thresholds.quantiles import ClientBenignCalibrationScores
 class HeldOutOperatingPointDiagnostic(StrictModel):
     client: ClientIdentity
     calibration_exceedance: Ratio
+    signed_calibration_target_error: MetricValue
     held_out_false_positive_rate: Ratio
     signed_target_error: MetricValue
     absolute_target_error: MetricValue
@@ -48,12 +49,14 @@ def evaluate_held_out_operating_points(
         calibration_exceedance = sum(score.exceeds(client.threshold) for score in calibration.scores) / len(
             calibration.scores
         )
+        calibration_target_error = calibration_exceedance - target
         signed_target_error = fpr.value.value - target
         generalization_gap = fpr.value.value - calibration_exceedance
         diagnostics.append(
             HeldOutOperatingPointDiagnostic(
                 client=client.client,
                 calibration_exceedance=Ratio(calibration_exceedance),
+                signed_calibration_target_error=MetricValue(calibration_target_error),
                 held_out_false_positive_rate=Ratio(fpr.value.value),
                 signed_target_error=MetricValue(signed_target_error),
                 absolute_target_error=MetricValue(abs(signed_target_error)),

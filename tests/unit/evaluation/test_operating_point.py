@@ -28,6 +28,7 @@ def test_held_out_operating_point_uses_strict_calibration_exceedance() -> None:
     )
 
     assert diagnostics[0].calibration_exceedance.value == 1.0 / 3.0
+    assert diagnostics[0].signed_calibration_target_error.value == pytest.approx(1.0 / 3.0 - 0.05)
     assert diagnostics[0].held_out_false_positive_rate.value == 0.5
     assert diagnostics[0].signed_target_error.value == pytest.approx(0.45)
     assert diagnostics[0].signed_calibration_generalization_gap.value == pytest.approx(1.0 / 6.0)
