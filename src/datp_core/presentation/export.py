@@ -9,6 +9,7 @@ from datp_core.analysis.contrasts import PairedContrasts
 from datp_core.analysis.descriptive import DescriptiveSummary, PairedDifferenceCounts
 from datp_core.analysis.inference.bootstrap.contracts import BcaOutcome, BootstrapInterval
 from datp_core.analysis.inference.multiplicity import MultiplicityResult
+from datp_core.analysis.inference.precision import ConfirmatoryPrecisionDiagnostics
 from datp_core.analysis.inference.sign_test import ExactPairedSignTestResult
 from datp_core.analysis.inference.wilcoxon import RankBiserialResult, WilcoxonResult
 from datp_core.analysis.mechanisms import MechanismEvidence
@@ -192,6 +193,7 @@ def export_confirmatory_publication(
         _interval_table(document.interval),
         _wilcoxon_table(document.wilcoxon, document.rank_biserial),
         _paired_values_table(document),
+        _precision_diagnostics_table(document.precision_diagnostics),
         *_mechanism_tables(document.mechanisms),
     )
     bundle = PublicationBundle(
@@ -441,6 +443,8 @@ def _render_analysis_sections(
     sections.extend(_render_sign_consistency(document.sign_consistency))
     sections.extend(_render_exact_sign_test(document.exact_sign_test))
     sections.extend(_render_paired_contrasts(document.contrasts))
+    if document.precision_diagnostics is not None:
+        sections.extend(_render_precision_diagnostics(document.precision_diagnostics))
     if document.multiplicity_result is not None:
         sections.extend(_render_multiplicity(document.multiplicity_result))
     if document.mechanisms:
@@ -627,6 +631,33 @@ def _render_paired_contrasts(contrasts: PairedContrasts) -> list[ReportLine]:
             f"{_format_publication_metric(contrast.right_value.value)} | "
             f"{_format_publication_metric(contrast.delta.value)} |"
         )
+    return [ReportLine(line) for line in [*lines, ""]]
+
+
+def _render_precision_diagnostics(diagnostics: ConfirmatoryPrecisionDiagnostics) -> list[ReportLine]:
+    bca_width = (
+        "unavailable"
+        if diagnostics.bca_width is None
+        else _format_publication_metric(diagnostics.bca_width.value)
+    )
+    lines = [
+        "## Locked Ten-Seed Precision Diagnostics",
+        "",
+        f"Sample SD of paired deltas: {_format_publication_metric(diagnostics.sample_standard_deviation.value)}",
+        f"SE proxy: {_format_publication_metric(diagnostics.standard_error_proxy.value)}",
+        f"Normal-reference half-width: {_format_publication_metric(diagnostics.normal_reference_half_width.value)}",
+        f"BCa width: {bca_width}",
+        f"Minimum LOSO mean: {_format_publication_metric(diagnostics.minimum_leave_one_seed_out_mean.value)}",
+        f"Maximum LOSO mean: {_format_publication_metric(diagnostics.maximum_leave_one_seed_out_mean.value)}",
+        f"Maximum LOSO shift: {_format_publication_metric(diagnostics.maximum_leave_one_seed_out_shift.value)}",
+        "",
+        "| Omitted seed | LOSO mean delta |",
+        "|---:|---:|",
+    ]
+    lines.extend(
+        f"| {item.omitted_seed.value} | {_format_publication_metric(item.mean_delta.value)} |"
+        for item in diagnostics.leave_one_seed_out_means
+    )
     return [ReportLine(line) for line in [*lines, ""]]
 
 
@@ -1439,6 +1470,45 @@ def _paired_values_table(document: AnalysisDocument) -> PublicationTable:
     )
 
 
+def _precision_diagnostics_table(
+    diagnostics: ConfirmatoryPrecisionDiagnostics | None,
+) -> PublicationTable:
+    if diagnostics is None:
+        return PublicationTable(
+            title=TableTitle("Locked ten-seed precision diagnostics"),
+            cells=(
+                TableCell(
+                    metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
+                    availability=AvailabilityStatus.UNAVAILABLE,
+                    rendered_value=TableCellRenderedValue(""),
+                    evidence=EvidenceText("precision diagnostics require available confirmatory paired deltas"),
+                ),
+            ),
+        )
+    return PublicationTable(
+        title=TableTitle("Locked ten-seed precision diagnostics"),
+        cells=(
+            TableCell(
+                metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
+                availability=AvailabilityStatus.AVAILABLE,
+                rendered_value=TableCellRenderedValue(
+                    _format_publication_metric(diagnostics.maximum_leave_one_seed_out_shift.value)
+                ),
+                evidence=EvidenceText(
+                    "SE proxy="
+                    + _format_publication_metric(diagnostics.standard_error_proxy.value)
+                    + "; normal half-width="
+                    + _format_publication_metric(diagnostics.normal_reference_half_width.value)
+                    + "; BCa width="
+                    + (
+                        "unavailable"
+                        if diagnostics.bca_width is None
+                        else _format_publication_metric(diagnostics.bca_width.value)
+                    )
+                ),
+            ),
+        ),
+    )
 def _optional_metric(
     value: MetricValue | None,
 ) -> ReportLine:
