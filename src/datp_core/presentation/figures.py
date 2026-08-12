@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from datp_core.analysis.contrasts import PairedContrasts
 from datp_core.analysis.descriptive import ScoreGeometryResult, ScoreRole
+from datp_core.analysis.inference.bootstrap.contracts import BootstrapInterval
 from datp_core.analysis.mechanisms.equity_pareto import EquityUtilityParetoView
 from datp_core.core.identifiers import (
     AnalysisReasonText,
@@ -152,6 +154,57 @@ def equity_utility_pareto_figure(
         for point in view.points
     )
     return FigureSpec(title=title, paired_metric_series=(mean_series, *seed_series))
+
+
+def confirmatory_paired_effect_figure(
+    contrasts: PairedContrasts,
+    interval: BootstrapInterval,
+) -> FigureSpec:
+    seed_values = tuple(MetricValue(contrast.seed.value) for contrast in contrasts.ordered_by_seed().values)
+    deltas = tuple(contrast.delta for contrast in contrasts.ordered_by_seed().values)
+    labels = tuple(FigureLabel(f"seed {contrast.seed.value}") for contrast in contrasts.ordered_by_seed().values)
+    if interval.point_estimate is None:
+        raise ValueError("confirmatory paired-effect figure requires a point estimate")
+    mean = interval.point_estimate
+    mean_series = PairedMetricFigureSeries(
+        label=FigureLabel("arithmetic mean paired effect"),
+        x_label=FigureLabel("training seed"),
+        y_label=FigureLabel("mean Delta = CV(FPR) shared minus local"),
+        availability=AvailabilityStatus.AVAILABLE,
+        x_values=seed_values,
+        y_values=tuple(mean for _ in seed_values),
+    )
+    interval_series = (
+        (
+            PairedMetricFigureSeries(
+                label=FigureLabel("locked 95% BCa interval"),
+                x_label=FigureLabel("lower / upper bound"),
+                y_label=FigureLabel("Delta"),
+                availability=AvailabilityStatus.AVAILABLE,
+                x_values=(MetricValue(0.0), MetricValue(1.0)),
+                y_values=(interval.lower_bound, interval.upper_bound),
+                point_labels=(FigureLabel("lower"), FigureLabel("upper")),
+            ),
+        )
+        if interval.lower_bound is not None and interval.upper_bound is not None
+        else ()
+    )
+    return FigureSpec(
+        title=FigureTitle("FIGURE-002 — Confirmatory paired seed-level CV(FPR) effect"),
+        paired_metric_series=(
+            PairedMetricFigureSeries(
+                label=FigureLabel("seed-level paired deltas; zero reference=0"),
+                x_label=FigureLabel("training seed"),
+                y_label=FigureLabel("Delta = CV(FPR) shared minus local"),
+                availability=AvailabilityStatus.AVAILABLE,
+                x_values=seed_values,
+                y_values=deltas,
+                point_labels=labels,
+            ),
+            mean_series,
+            *interval_series,
+        ),
+    )
 
 
 def _pareto_policy_label(method: str, shrinkage_weight: float) -> str:
