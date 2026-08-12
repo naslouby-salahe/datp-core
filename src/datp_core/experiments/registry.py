@@ -238,6 +238,15 @@ EXPERIMENTS = (
         CONFIRMATORY_METRICS + (MetricId.AVERAGE_PRECISION,),
     ),
     _declare(
+        ExperimentId.SHARED_CALIBRATION_CONTRIBUTOR_AVAILABILITY,
+        EvidenceRole.SUPPORTIVE,
+        PopulationId.NBAIOT_NATURAL_DEVICES,
+        TrainingModelId.FEDAVG_AUTOENCODER,
+        PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
+        _SHARED_AND_LOCAL_METHODS,
+        CONFIRMATORY_METRICS,
+    ),
+    _declare(
         ExperimentId.FIXED_SHRINKAGE_CURVE,
         EvidenceRole.SUPPORTIVE,
         PopulationId.NBAIOT_NATURAL_DEVICES,

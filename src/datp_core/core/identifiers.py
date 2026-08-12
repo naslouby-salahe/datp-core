@@ -83,6 +83,7 @@ class ExperimentId(StrEnum):
     THRESHOLD_MOVEMENT_TRADEOFF = "threshold_movement_tradeoff"
     CALIBRATION_SIZE_ABLATION = "calibration_size_ablation"
     CALIBRATION_COLD_START_ONBOARDING = "calibration_cold_start_onboarding"
+    SHARED_CALIBRATION_CONTRIBUTOR_AVAILABILITY = "shared_calibration_contributor_availability"
     FIXED_SHRINKAGE_CURVE = "fixed_shrinkage_curve"
     SIZE_AWARE_SHRINKAGE = "size_aware_shrinkage"
     PREPROCESSING_GEOMETRY_SENSITIVITY = "preprocessing_geometry_sensitivity"
