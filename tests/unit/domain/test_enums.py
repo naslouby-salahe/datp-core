@@ -199,6 +199,7 @@ EXPECTED_MEMBERS = (
                 "BALANCED_ACCURACY",
                 "BINARY_MACRO_F1",
                 "AUROC",
+                "AVERAGE_PRECISION",
                 "MEAN_FPR",
                 "FPR_SAMPLE_STANDARD_DEVIATION",
                 "FPR_COEFFICIENT_OF_VARIATION",
@@ -283,7 +284,7 @@ EXPECTED_MEMBERS = (
     ),
     (TrainingHistoryColumn, frozenset(("EPOCH", "MEAN_TRAINING_LOSS"))),
     (PublicationStatus, frozenset(("PUBLISHED",))),
-    (ScoreFrameColumn, frozenset(("STABLE_ROW_ID", "OUTCOME_LABEL", "RECONSTRUCTION_ERROR"))),
+    (ScoreFrameColumn, frozenset(("STABLE_ROW_ID", "OUTCOME_LABEL", "ATTACK_FAMILY", "RECONSTRUCTION_ERROR"))),
 )
 
 
