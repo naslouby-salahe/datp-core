@@ -186,6 +186,10 @@ class ShrinkageCurveRow(StrictModel):
     lambda_weight: ShrinkageWeight
     cv_fpr: MetricValue | None
     worst_client_fpr: MetricValue | None
+    fpr_iqr: MetricValue | None
+    fpr_range: MetricValue | None
+    true_positive_rate: MetricValue | None
+    p10_macro_f1: MetricValue | None
 
 
 class ShrinkageCurveReport(StrictModel):
@@ -752,6 +756,14 @@ def report_fixed_shrinkage_curve(
                     ),
                     worst_client_fpr=metric_value(
                         metric_by_id(evaluation.population.metrics, MetricId.WORST_CLIENT_FPR)
+                    ),
+                    fpr_iqr=metric_value(metric_by_id(evaluation.population.metrics, MetricId.FPR_IQR)),
+                    fpr_range=metric_value(metric_by_id(evaluation.population.metrics, MetricId.FPR_RANGE)),
+                    true_positive_rate=metric_value(
+                        metric_by_id(evaluation.population.metrics, MetricId.TRUE_POSITIVE_RATE)
+                    ),
+                    p10_macro_f1=metric_value(
+                        metric_by_id(evaluation.population.metrics, MetricId.P10_BINARY_MACRO_F1)
                     ),
                 )
             )
