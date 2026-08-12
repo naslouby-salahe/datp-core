@@ -14,6 +14,13 @@ from datp_core.analysis.mechanisms.association import (
     RegressionSlopeConfidenceInterval,
     heterogeneity_benefit_association,
 )
+from datp_core.analysis.mechanisms.client_impact import (
+    ClientImpactFraction,
+    ClientImpactSeedSummary,
+    ParetoClientImpact,
+    ParetoClientImpactFractions,
+    summarize_client_impact,
+)
 from datp_core.analysis.mechanisms.clustering import (
     ClusterContingencyMatrix,
     ClusterContingencyRow,
@@ -80,6 +87,7 @@ type MechanismEvidence = (
     | AssociationResult
     | ClusterEvidenceRecord
     | ClusterStabilityResult
+    | ClientImpactSeedSummary
     | DivergenceResult
     | GroupedDispersionResult
     | ModelAlignmentResult
@@ -102,6 +110,8 @@ __all__ = (
     "AlignmentActivationLabel",
     "AlignmentActivationSummary",
     "ClientScoreVector",
+    "ClientImpactFraction",
+    "ClientImpactSeedSummary",
     "ClusterEvidenceAvailability",
     "ClusterEvidenceRecord",
     "ClusterContingencyMatrix",
@@ -111,6 +121,8 @@ __all__ = (
     "DivergenceResult",
     "LeaveOneOutAssociationDiagnostics",
     "PairwiseJensenShannonDistance",
+    "ParetoClientImpact",
+    "ParetoClientImpactFractions",
     "RegressionSlopeConfidenceInterval",
     "RecoveryAssessment",
     "GroupDispersionObservation",
@@ -146,6 +158,7 @@ __all__ = (
     "local_threshold_dispersion",
     "model_alignment",
     "summarize_alignment_activation",
+    "summarize_client_impact",
     "summarize_threshold_movements",
     "summarize_threshold_movements_across_seeds",
     "threshold_movement",
@@ -181,6 +194,10 @@ def threshold_movements_from_evaluations(
             )
         shared_tpr = metric_by_id(shared_client.metrics, MetricId.TRUE_POSITIVE_RATE)
         local_tpr = metric_by_id(local_client.metrics, MetricId.TRUE_POSITIVE_RATE)
+        shared_balanced_accuracy = metric_by_id(shared_client.metrics, MetricId.BALANCED_ACCURACY)
+        local_balanced_accuracy = metric_by_id(local_client.metrics, MetricId.BALANCED_ACCURACY)
+        shared_macro_f1 = metric_by_id(shared_client.metrics, MetricId.BINARY_MACRO_F1)
+        local_macro_f1 = metric_by_id(local_client.metrics, MetricId.BINARY_MACRO_F1)
         tpr_shared = (
             Ratio(shared_tpr.value.value)
             if shared_tpr.status is MetricStatus.AVAILABLE and shared_tpr.value is not None
@@ -194,6 +211,32 @@ def threshold_movements_from_evaluations(
         if (tpr_shared is None) != (tpr_local is None):
             tpr_shared = None
             tpr_local = None
+        balanced_accuracy_shared = (
+            Ratio(shared_balanced_accuracy.value.value)
+            if shared_balanced_accuracy.status is MetricStatus.AVAILABLE and shared_balanced_accuracy.value is not None
+            else None
+        )
+        balanced_accuracy_local = (
+            Ratio(local_balanced_accuracy.value.value)
+            if local_balanced_accuracy.status is MetricStatus.AVAILABLE and local_balanced_accuracy.value is not None
+            else None
+        )
+        if (balanced_accuracy_shared is None) != (balanced_accuracy_local is None):
+            balanced_accuracy_shared = None
+            balanced_accuracy_local = None
+        macro_f1_shared = (
+            Ratio(shared_macro_f1.value.value)
+            if shared_macro_f1.status is MetricStatus.AVAILABLE and shared_macro_f1.value is not None
+            else None
+        )
+        macro_f1_local = (
+            Ratio(local_macro_f1.value.value)
+            if local_macro_f1.status is MetricStatus.AVAILABLE and local_macro_f1.value is not None
+            else None
+        )
+        if (macro_f1_shared is None) != (macro_f1_local is None):
+            macro_f1_shared = None
+            macro_f1_local = None
         movements.append(
             threshold_movement(
                 client=shared_client.client,
@@ -201,11 +244,15 @@ def threshold_movements_from_evaluations(
                     threshold=shared_client.threshold,
                     fpr=Ratio(shared_fpr.value.value),
                     tpr=tpr_shared,
+                    balanced_accuracy=balanced_accuracy_shared,
+                    macro_f1=macro_f1_shared,
                 ),
                 local=ThresholdOperatingPoint(
                     threshold=local_client.threshold,
                     fpr=Ratio(local_fpr.value.value),
                     tpr=tpr_local,
+                    balanced_accuracy=balanced_accuracy_local,
+                    macro_f1=macro_f1_local,
                 ),
                 experiment=experiment,
                 coordinate=shared.score_coordinate,

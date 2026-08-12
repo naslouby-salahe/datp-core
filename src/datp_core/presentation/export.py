@@ -14,6 +14,7 @@ from datp_core.analysis.inference.wilcoxon import RankBiserialResult, WilcoxonRe
 from datp_core.analysis.mechanisms import MechanismEvidence
 from datp_core.analysis.mechanisms.absorption import AbsorptionCohortResult
 from datp_core.analysis.mechanisms.association import AssociationResult
+from datp_core.analysis.mechanisms.client_impact import ClientImpactFraction, ClientImpactSeedSummary
 from datp_core.analysis.mechanisms.clustering import ClusterEvidenceRecord, ClusterStabilityResult
 from datp_core.analysis.mechanisms.dispersion import GroupedDispersionResult
 from datp_core.analysis.mechanisms.divergence import DivergenceResult
@@ -642,6 +643,7 @@ _MECHANISM_TITLES: dict[type[object], ReportLine] = {
     ThresholdMovement: ReportLine("threshold_movement"),
     ThresholdMovementCohort: ReportLine("threshold_movement_cohort"),
     ThresholdMovementMultiSeedUncertainty: ReportLine("threshold_movement_across_seed_uncertainty"),
+    ClientImpactSeedSummary: ReportLine("natural_device_client_impact"),
     AbsorptionCohortResult: ReportLine("model_personalization_absorption"),
     ScientificDecisionResult: ReportLine("scientific_decision"),
 }
@@ -910,6 +912,38 @@ def _render_threshold_movement_cohort(mechanism: ThresholdMovementCohort) -> lis
             f"Client dispersion of Δ FPR: {dispersion}",
         ]
     ]
+
+
+@_render_one_mechanism.register
+def _render_client_impact_seed_summary(mechanism: ClientImpactSeedSummary) -> list[ReportLine]:
+    return [
+        ReportLine(line)
+        for line in [
+            f"Seed: {mechanism.seed.value}",
+            f"Availability: `{mechanism.availability.value}`",
+            f"FPR helped: {_render_client_impact_fraction(mechanism.fpr_helped)}",
+            f"FPR harmed: {_render_client_impact_fraction(mechanism.fpr_harmed)}",
+            f"FPR unchanged: {_render_client_impact_fraction(mechanism.fpr_unchanged)}",
+            f"TPR loss: {_render_client_impact_fraction(mechanism.tpr_loss)}",
+            f"Macro-F1 loss: {_render_client_impact_fraction(mechanism.macro_f1_loss)}",
+            f"Balanced-accuracy loss: {_render_client_impact_fraction(mechanism.balanced_accuracy_loss)}",
+            f"Pareto improved: {_render_client_impact_fraction(mechanism.pareto.pareto_improved)}",
+            f"Pareto harmed: {_render_client_impact_fraction(mechanism.pareto.pareto_harmed)}",
+            "Trade-off FPR better / TPR worse: "
+            + _render_client_impact_fraction(mechanism.pareto.tradeoff_fpr_better_tpr_worse),
+            "Trade-off FPR worse / TPR better: "
+            + _render_client_impact_fraction(mechanism.pareto.tradeoff_fpr_worse_tpr_better),
+            f"No FPR change: {_render_client_impact_fraction(mechanism.pareto.no_fpr_change)}",
+        ]
+    ]
+
+
+def _render_client_impact_fraction(fraction: ClientImpactFraction) -> str:
+    if fraction.value is None or fraction.numerator is None or fraction.denominator is None:
+        return f"unavailable ({fraction.reason})"
+    return (
+        f"{_format_publication_metric(fraction.value.value)} ({fraction.numerator.value}/{fraction.denominator.value})"
+    )
 
 
 @_render_one_mechanism.register

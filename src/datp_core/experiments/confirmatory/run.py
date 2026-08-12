@@ -25,6 +25,7 @@ from datp_core.analysis.mechanisms import (
     grouped_dispersion,
     heterogeneity_benefit_association,
     jensen_shannon_from_client_scores,
+    summarize_client_impact,
     summarize_threshold_movements_across_seeds,
     threshold_movements_from_evaluations,
 )
@@ -222,6 +223,7 @@ def _confirmatory_mechanisms() -> tuple[MechanismEvidence, ...]:
         )
         movement_cohorts.append(movement)
         mechanisms.append(movement)
+        mechanisms.append(summarize_client_impact(movement))
         shared_cv = population_metric(shared, MetricId.FPR_COEFFICIENT_OF_VARIATION)
         local_cv = population_metric(local, MetricId.FPR_COEFFICIENT_OF_VARIATION)
         benefit = MetricValue(shared_cv.value - local_cv.value)
