@@ -39,7 +39,10 @@ from datp_core.core.identifiers import (
     ThresholdMethodExecutionStatus,
 )
 from datp_core.core.numeric import MetricValue, Seed
-from datp_core.detector.training.protocols import DITTO_PRIMARY_REGULARIZATION, FEDPROX_COEFFICIENTS
+from datp_core.detector.training.protocols import (
+    DITTO_REGULARIZATION_GRID,
+    FEDPROX_COEFFICIENTS,
+)
 from datp_core.experiments.centralized_reference import (
     CIC_CENTRALIZED_REFERENCE,
     NBAIOT_CENTRALIZED_REFERENCE,
@@ -358,15 +361,18 @@ def _dispatch_ditto(
     results = tuple(
         run_ditto_stress_test_seed(
             training_seed=seed,
-            regularization=DITTO_PRIMARY_REGULARIZATION,
+            regularization=regularization,
             output_root=output_root,
             overwrite=overwrite.requested,
             progress=progress,
         )
         for seed in seeds
+        for regularization in DITTO_REGULARIZATION_GRID
     )
     return DispatchOutcome(
-        detail=DetailText(f"ditto seeds={len(seeds)} regularization={DITTO_PRIMARY_REGULARIZATION.value}"),
+        detail=DetailText(
+            f"ditto seeds={len(seeds)} regularizations={len(DITTO_REGULARIZATION_GRID)} executions={len(results)}"
+        ),
         method_outcomes=_method_outcomes(
             ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
             tuple((item.shared_threshold.method, item.local_threshold.method) for item in results),
@@ -649,44 +655,47 @@ def _report_fedprox(experiment_id: ExperimentId) -> ReportResult:
 
 
 def _report_ditto(experiment_id: ExperimentId) -> ReportResult:
-    output = ditto_analysis_directory(DITTO_PRIMARY_REGULARIZATION, output_root=OUTPUTS_ROOT)
-    if output.exists():
-        rmtree(output)
-    results = tuple(
-        load_ditto_stress_test_evidence(
-            training_seed=seed,
-            regularization=DITTO_PRIMARY_REGULARIZATION,
-            output_root=OUTPUTS_ROOT,
-        )
-        for seed in CONFIRMATORY_SEED_COHORT.values
-    )
-    references = tuple(
-        load_fedavg_cv_fpr_effect(
-            item.personalized_coordinate.training_seed,
-            experiment=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
-        )
-        for item in results
-    )
-    analyze_ditto_absorption(results, reference_evidence=references, output_directory=output)
-    write_text_atomically(
-        output / ResearchArtifact.EVIDENCE_REPORT,
-        FileContentText(
-            _alignment_report(
-                title="Ditto alignment evidence",
-                condition_name="Ditto",
-                observations=tuple(
-                    (
-                        item.personalized_coordinate.training_seed,
-                        item.reference_alignment,
-                        item.alignment,
-                        item.alignment_reductions,
-                    )
-                    for item in results
-                ),
+    outputs: list[Path] = []
+    for regularization in DITTO_REGULARIZATION_GRID:
+        output = ditto_analysis_directory(regularization, output_root=OUTPUTS_ROOT)
+        if output.exists():
+            rmtree(output)
+        results = tuple(
+            load_ditto_stress_test_evidence(
+                training_seed=seed,
+                regularization=regularization,
+                output_root=OUTPUTS_ROOT,
             )
-        ),
-    )
-    return ReportResult(experiment=experiment_id, paths=(output,), detail=DetailText(f"analysis={output}"))
+            for seed in CONFIRMATORY_SEED_COHORT.values
+        )
+        references = tuple(
+            load_fedavg_cv_fpr_effect(
+                item.personalized_coordinate.training_seed,
+                experiment=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
+            )
+            for item in results
+        )
+        analyze_ditto_absorption(results, reference_evidence=references, output_directory=output)
+        write_text_atomically(
+            output / ResearchArtifact.EVIDENCE_REPORT,
+            FileContentText(
+                _alignment_report(
+                    title=f"Ditto alignment evidence (regularization={regularization.value:.12g})",
+                    condition_name="Ditto",
+                    observations=tuple(
+                        (
+                            item.personalized_coordinate.training_seed,
+                            item.reference_alignment,
+                            item.alignment,
+                            item.alignment_reductions,
+                        )
+                        for item in results
+                    ),
+                )
+            ),
+        )
+        outputs.append(output)
+    return ReportResult(experiment=experiment_id, paths=tuple(outputs), detail=DetailText(f"analyses={len(outputs)}"))
 
 
 def _fine_tuning_analysis_path() -> Path:
@@ -998,8 +1007,10 @@ def _fedprox_marker(experiment_id: ExperimentId) -> bool:
 
 def _ditto_marker(experiment_id: ExperimentId) -> bool:
     del experiment_id
-    output = ditto_analysis_directory(DITTO_PRIMARY_REGULARIZATION, output_root=OUTPUTS_ROOT)
-    return (output / PUBLICATION_FILENAME).is_file() and (output / MECHANISM_REPORT_FILENAME).is_file()
+    return all(
+        (output / PUBLICATION_FILENAME).is_file() and (output / MECHANISM_REPORT_FILENAME).is_file()
+        for output in (ditto_analysis_directory(item, output_root=OUTPUTS_ROOT) for item in DITTO_REGULARIZATION_GRID)
+    )
 
 
 def _fine_tuning_marker(experiment_id: ExperimentId) -> bool:

@@ -56,8 +56,8 @@ def test_training_grids_are_locked() -> None:
     assert LEARNING_RATE.value == 0.001
     assert ANCHOR_BATCH_SIZE.value == 256
     assert BATCH_SIZE.value == 8192
-    assert tuple(value.value for value in DITTO_REGULARIZATION_GRID) == (0.05, 0.1, 0.2)
-    assert DITTO_PRIMARY_REGULARIZATION.value == 0.1
+    assert tuple(value.value for value in DITTO_REGULARIZATION_GRID) == (0.1, 1.0, 2.0)
+    assert DITTO_PRIMARY_REGULARIZATION.value == 1.0
     assert CENTRALIZED_TRAINING_PROTOCOL.optimizer == OPTIMIZER
     assert FEDAVG_TRAINING_PROTOCOL.local_epochs == FEDAVG_LOCAL_EPOCHS
     assert FEDAVG_LOCAL_FINE_TUNING_PROTOCOL.local_epochs == FEDAVG_LOCAL_FINE_TUNING_EPOCHS

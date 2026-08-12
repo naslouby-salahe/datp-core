@@ -63,8 +63,8 @@ LEARNING_RATE = LearningRate(0.001)
 ANCHOR_BATCH_SIZE = BatchSize(256)
 BATCH_SIZE = BatchSize(8192)
 CENTRALIZED_DATALOADER_WORKER_COUNT = DataLoaderWorkerCount(0)
-DITTO_REGULARIZATION_GRID = tuple(DittoRegularization(value) for value in (0.05, 0.1, 0.2))
-DITTO_PRIMARY_REGULARIZATION = DittoRegularization(0.1)
+DITTO_REGULARIZATION_GRID = tuple(DittoRegularization(value) for value in (0.1, 1.0, 2.0))
+DITTO_PRIMARY_REGULARIZATION = DittoRegularization(1.0)
 CENTRALIZED_TRAINING_PROTOCOL = training_contracts.CentralizedTrainingProtocol(
     kind=CentralizedModelId.CENTRALIZED_AUTOENCODER,
     optimizer=OPTIMIZER,
@@ -151,6 +151,11 @@ def resolve_single_model_federated_training_protocol(
                     subject=model,
                 )
             return resolve_fedprox_protocol(coefficient)
+        case TrainingModelId.FEDAVG_LOCAL_FINE_TUNING:
+            raise ScientificContractError(
+                ErrorMessage("local fine-tuning requires its dedicated post-training execution route"),
+                subject=model,
+            )
         case TrainingModelId.DITTO_GLOBAL_AUTOENCODER | TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER:
             raise ScientificContractError(
                 ErrorMessage("Ditto requires its related global and personalized execution route"),
