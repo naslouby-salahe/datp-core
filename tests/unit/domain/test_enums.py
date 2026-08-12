@@ -124,6 +124,7 @@ EXPECTED_MEMBERS = (
                 "SHARED_VS_LOCAL_CONFIRMATION",
                 "SHARED_CONSTRUCTION_SENSITIVITY",
                 "QUANTILE_SENSITIVITY",
+                "THRESHOLD_ESTIMATOR_SCOPE_SENSITIVITY",
                 "CONTROLLED_HETEROGENEITY_SWEEP",
                 "FAMILY_AND_GROUPED_GRANULARITY",
                 "PER_CLIENT_SCORE_GEOMETRY",
@@ -139,6 +140,7 @@ EXPECTED_MEMBERS = (
                 "EDGE_BENIGN_EQUITY_VALIDATION",
                 "CICIOT_FILE_CLIENT_BOUNDARY",
                 "FEDPROX_ABSORPTION_STRESS_TEST",
+                "FEDAVG_LOCAL_FINE_TUNING",
                 "DITTO_ABSORPTION_STRESS_TEST",
                 "EDGE_ONE_SHOT_RECALIBRATION",
                 "ALERT_BURDEN_TRANSLATION",
@@ -152,6 +154,7 @@ EXPECTED_MEMBERS = (
         frozenset(
             (
                 "FEDAVG_AUTOENCODER",
+                "FEDAVG_LOCAL_FINE_TUNING",
                 "FEDPROX_AUTOENCODER",
                 "DITTO_GLOBAL_AUTOENCODER",
                 "DITTO_PERSONALIZED_AUTOENCODER",
@@ -174,6 +177,7 @@ EXPECTED_MEMBERS = (
                 "SIZE_AWARE_SHRINKAGE",
                 "LOCAL_CONFORMAL_THRESHOLD",
                 "FEDERATED_BENIGN_STATISTICS",
+                "FEDERATED_KLL_SHARED_THRESHOLD",
             )
         ),
     ),

@@ -18,6 +18,7 @@ from datp_core.core.identifiers import (
     CommunicationEstimationMethod,
     ContractSubject,
     CudaDeviceName,
+    DatasetId,
     OutcomeLabel,
     OutcomeLabelSequence,
 )
@@ -341,13 +342,22 @@ def derive_client_stream_seed(
     return derive_worker_seed(client_seed, SeedDerivationComponent(stream.value))
 
 
-def derive_fedavg_local_fine_tuning_seed(training_seed: Seed, client: ClientIdentity) -> Seed:
-    return derive_client_stream_seed(
-        training_seed,
-        RoundNumber(200),
-        client,
-        TrainingStream.FEDAVG_LOCAL_FINE_TUNING,
-    )
+def derive_fedavg_local_fine_tuning_seed(
+    dataset: DatasetId,
+    training_seed: Seed,
+    client: ClientIdentity,
+) -> Seed:
+    """Derive the locked post-FedAvg fine-tuning seed identity."""
+
+    dataset_seed = derive_worker_seed(training_seed, _text_seed_component(dataset.value))
+    population_seed = derive_worker_seed(dataset_seed, _text_seed_component(client.population.value))
+    client_seed = derive_worker_seed(population_seed, _client_seed_component(client))
+    return derive_worker_seed(client_seed, SeedDerivationComponent(TrainingStream.FEDAVG_LOCAL_FINE_TUNING.value))
+
+
+def _text_seed_component(value: str) -> SeedDerivationComponent:
+    value_sum = sum((index + 1) * ord(character) for index, character in enumerate(value))
+    return SeedDerivationComponent(value_sum & 0x7FFF_FFFF)
 
 
 def proximal_penalty(

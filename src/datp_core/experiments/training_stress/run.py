@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from enum import StrEnum
 from pathlib import Path
+from shutil import rmtree
 
 import polars as pl
 from pydantic import TypeAdapter, ValidationError
@@ -28,6 +29,7 @@ from datp_core.artifacts.repositories.thresholds import (
     construct_and_publish_federated_thresholds,
 )
 from datp_core.artifacts.serializers.json import canonical_json_text
+from datp_core.artifacts.serializers.safetensors import save_state_dict_tensors
 from datp_core.core.contracts import ClientCollection, ClientOwned
 from datp_core.core.errors import (
     ErrorMessage,
@@ -54,6 +56,7 @@ from datp_core.core.numeric import (
     CampaignOrdinal,
     ClientCount,
     DittoRegularization,
+    ElapsedSeconds,
     MetricValue,
     ModelCoefficientValue,
     ProximalCoefficient,
@@ -70,7 +73,11 @@ from datp_core.data.preprocessing.service import preprocess_federated
 from datp_core.data.registry import population_capabilities
 from datp_core.detector.checkpoints.protocols import DIAGNOSTIC_SNAPSHOT_PROTOCOL
 from datp_core.detector.scoring.federated import publish_federated_scores
-from datp_core.detector.scoring.models import FederatedScoreArtifactManifest, GenerateFederatedScoresRequest
+from datp_core.detector.scoring.models import (
+    FederatedScoreArtifactManifest,
+    GenerateFederatedScoresRequest,
+    TerminalFederatedScoringModel,
+)
 from datp_core.detector.training.contracts import (
     ModelAbsorptionDecisionProtocol as DetectorModelAbsorptionDecisionProtocol,
 )
@@ -80,6 +87,12 @@ from datp_core.detector.training.ditto_publication import (
     TrainDittoDetectorResult,
     train_ditto_detector,
 )
+from datp_core.detector.training.engine import SerializedStateEvidence
+from datp_core.detector.training.fine_tuning import (
+    FineTunedTerminalModel,
+    PersistedFedAvgFineTuningRequest,
+    fine_tune_from_persisted_fedavg,
+)
 from datp_core.detector.training.models import (
     DittoTrainingCoordinates,
     FederatedTrainingCoordinate,
@@ -87,6 +100,7 @@ from datp_core.detector.training.models import (
 from datp_core.detector.training.protocols import (
     BATCH_SIZE,
     DITTO_ALTERNATIVE_ROUTE_DIFFERENCE,
+    FEDAVG_LOCAL_FINE_TUNING_PROTOCOL,
     LEARNING_RATE,
     MODEL_ABSORPTION_DECISION_PROTOCOL,
     NBAIOT_AUTOENCODER,
@@ -105,6 +119,7 @@ from datp_core.experiments.execution.layout import (
     EvaluationRunAssetDirectory,
     ExecutionArtifactDirectory,
     ExecutionRootDirectory,
+    federated_training_directory,
 )
 from datp_core.experiments.execution.models import (
     CampaignEntry,
@@ -141,6 +156,14 @@ class FedProxArtifactDirectory(StrEnum):
     ANALYSIS = "analysis"
 
 
+class FineTuningArtifactBranch(StrEnum):
+    TERMINAL_MODELS = "terminal_models"
+    SCORES = "scores"
+    THRESHOLDS = "thresholds"
+    EVIDENCE = "evidence"
+    ANALYSIS = "analysis"
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class DittoStressTestResult:
     personalized_coordinate: FederatedTrainingCoordinate
@@ -157,6 +180,33 @@ class DittoStressTestEvidence:
     shared_threshold_metrics: tuple[ClientMetricResult, ...]
     local_threshold_metrics: tuple[ClientMetricResult, ...]
     evaluation_cohort: EvaluationCohortManifest
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class FineTuningStressTestResult:
+    personalized_coordinate: FederatedTrainingCoordinate
+    model_evidence: tuple[FineTuningClientModelEvidence, ...]
+    shared_threshold: SharedThresholdResult
+    local_threshold: LocalThresholdResult
+    shared_threshold_metrics: tuple[ClientMetricResult, ...]
+    local_threshold_metrics: tuple[ClientMetricResult, ...]
+    evaluation_cohort: EvaluationCohortManifest
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class FineTuningStressTestEvidence:
+    personalized_coordinate: FederatedTrainingCoordinate
+    model_evidence: tuple[FineTuningClientModelEvidence, ...]
+    shared_threshold_metrics: tuple[ClientMetricResult, ...]
+    local_threshold_metrics: tuple[ClientMetricResult, ...]
+    evaluation_cohort: EvaluationCohortManifest
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class FineTuningClientModelEvidence:
+    client: ClientIdentity
+    serialized_state_evidence: SerializedStateEvidence
+    wall_time: ElapsedSeconds
 
 
 def _persist_ditto_evidence(
@@ -199,6 +249,38 @@ def load_ditto_stress_test_evidence(
             subject=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
         ) from error
     return evidence
+
+
+def _persist_fine_tuning_evidence(
+    evidence: FineTuningStressTestEvidence,
+    *,
+    training_seed: Seed,
+    output_root: Path,
+) -> None:
+    directory = fine_tuning_root(training_seed, output_root=output_root) / FineTuningArtifactBranch.EVIDENCE
+    directory.mkdir(parents=True, exist_ok=True)
+    write_text_atomically(directory / SeedEvidenceAssetName.DOCUMENT, FileContentText(canonical_json_text(evidence)))
+
+
+def load_fine_tuning_stress_test_evidence(*, training_seed: Seed, output_root: Path) -> FineTuningStressTestEvidence:
+    document = (
+        fine_tuning_root(training_seed, output_root=output_root)
+        / FineTuningArtifactBranch.EVIDENCE
+        / SeedEvidenceAssetName.DOCUMENT
+    )
+    if not document.is_file():
+        raise ScientificContractError(
+            ErrorMessage(f"missing fine-tuning stress-test evidence: {document}"),
+            subject=ExperimentId.FEDAVG_LOCAL_FINE_TUNING,
+        )
+    adapter: TypeAdapter[FineTuningStressTestEvidence] = TypeAdapter(FineTuningStressTestEvidence)
+    try:
+        return adapter.validate_json(document.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValidationError) as error:
+        raise ScientificContractError(
+            ErrorMessage(f"fine-tuning stress-test evidence is unreadable or invalid: {document}"),
+            subject=ExperimentId.FEDAVG_LOCAL_FINE_TUNING,
+        ) from error
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -474,6 +556,167 @@ def run_ditto_stress_test_seed(
         ),
         training_seed=training_seed,
         regularization=regularization,
+        output_root=output_root,
+    )
+    return result
+
+
+def run_fedavg_local_fine_tuning_stress_test_seed(
+    *,
+    training_seed: Seed,
+    output_root: Path,
+    overwrite: bool,
+) -> FineTuningStressTestResult:
+    population = PopulationId.NBAIOT_NATURAL_DEVICES
+    split_protocol = split_protocol_for_population(population)
+    preprocessing_identity = PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD
+    context = _population_context(
+        training_seed=training_seed,
+        population=population,
+        split_protocol=split_protocol,
+        preprocessing_identity=preprocessing_identity,
+    )
+    source_coordinate = FederatedTrainingCoordinate(
+        population=population,
+        training_seed=training_seed,
+        split_protocol=split_protocol,
+        preprocessing_identity=preprocessing_identity,
+        model=TrainingModelId.FEDAVG_AUTOENCODER,
+        model_coefficient=None,
+    )
+    personalized_coordinate = FederatedTrainingCoordinate(
+        population=population,
+        training_seed=training_seed,
+        split_protocol=split_protocol,
+        preprocessing_identity=preprocessing_identity,
+        model=TrainingModelId.FEDAVG_LOCAL_FINE_TUNING,
+        model_coefficient=None,
+    )
+    feature_names = training_feature_names(DatasetId.NBAIOT)
+    clients = client_training_inputs(context.preprocessing.client_publications, context.clients, feature_names)
+    root = fine_tuning_root(training_seed, output_root=output_root)
+    model_directory = root / FineTuningArtifactBranch.TERMINAL_MODELS
+    if model_directory.exists():
+        if not overwrite:
+            raise FileExistsError(f"fine-tuning output already exists: {model_directory}")
+        rmtree(model_directory)
+    models = fine_tune_from_persisted_fedavg(
+        PersistedFedAvgFineTuningRequest(
+            dataset=DatasetId.NBAIOT,
+            source_coordinate=source_coordinate,
+            source_directory=federated_training_directory(source_coordinate, output_root),
+            clients=clients,
+            autoencoder=NBAIOT_AUTOENCODER,
+            diagnostic_snapshot_protocol=DIAGNOSTIC_SNAPSHOT_PROTOCOL,
+            protocol=FEDAVG_LOCAL_FINE_TUNING_PROTOCOL,
+            batch_size=BATCH_SIZE,
+            learning_rate=LEARNING_RATE,
+            training_seed=training_seed,
+        )
+    )
+    model_directory.mkdir(parents=True, exist_ok=True)
+    for owned in models.items:
+        save_state_dict_tensors(
+            owned.value.terminal_model_state.to_torch_state_dict(),
+            model_directory / f"terminal_model_{owned.client.client_id.value}.safetensors",
+        )
+    scores = _fine_tuned_scores(
+        models=models,
+        personalized_coordinate=personalized_coordinate,
+        context=context,
+        feature_names=feature_names,
+        output_directory=root / FineTuningArtifactBranch.SCORES,
+        overwrite=overwrite,
+    )
+    capabilities = population_capabilities(population)
+    threshold_directory = root / FineTuningArtifactBranch.THRESHOLDS
+    shared = construct_and_publish_federated_thresholds(
+        FederatedThresholdConstructionRequest(
+            request=ThresholdConstructionRequest(
+                method=FederatedThresholdMethod.SHARED_THRESHOLD,
+                coordinate=personalized_coordinate,
+                quantile=CANONICAL_QUANTILE,
+                capabilities=capabilities,
+                eligible=scores.eligible_calibration,
+                family_by_client=context.family_by_client,
+                support_rule=CalibrationSupportRule.CANONICAL_MINIMUM_SUPPORT,
+                cluster_threshold_aggregation=None,
+            ),
+            output_directory=threshold_directory / FederatedThresholdMethod.SHARED_THRESHOLD.value,
+            overwrite=overwrite,
+        )
+    ).result
+    local = construct_and_publish_federated_thresholds(
+        FederatedThresholdConstructionRequest(
+            request=ThresholdConstructionRequest(
+                method=FederatedThresholdMethod.LOCAL_THRESHOLD,
+                coordinate=personalized_coordinate,
+                quantile=CANONICAL_QUANTILE,
+                capabilities=capabilities,
+                eligible=scores.eligible_calibration,
+                family_by_client=context.family_by_client,
+                support_rule=CalibrationSupportRule.CANONICAL_MINIMUM_SUPPORT,
+                cluster_threshold_aggregation=None,
+            ),
+            output_directory=threshold_directory / FederatedThresholdMethod.LOCAL_THRESHOLD.value,
+            overwrite=overwrite,
+        )
+    ).result
+    if not isinstance(shared, SharedThresholdResult) or not isinstance(local, LocalThresholdResult):
+        raise ScientificContractError(
+            ErrorMessage("fine-tuning stress test must produce shared and local threshold results"),
+            subject=personalized_coordinate.model,
+        )
+    reference_manifest = scores.manifests.require(shared.assignments[0].client)
+    evaluation_cohort = assert_cohort_invariant_to_threshold_methods(
+        population=population,
+        partition_seed=training_seed,
+        client_counts=client_partition_counts_from_scores(reference_manifest),
+        methods=(FederatedThresholdMethod.SHARED_THRESHOLD, FederatedThresholdMethod.LOCAL_THRESHOLD),
+    )
+    result = FineTuningStressTestResult(
+        personalized_coordinate=personalized_coordinate,
+        model_evidence=tuple(
+            FineTuningClientModelEvidence(
+                client=owned.client,
+                serialized_state_evidence=owned.value.serialized_state_evidence,
+                wall_time=owned.value.wall_time,
+            )
+            for owned in models.items
+        ),
+        shared_threshold=shared,
+        local_threshold=local,
+        shared_threshold_metrics=tuple(
+            client_metric(
+                personalized_coordinate,
+                FederatedThresholdMethod.SHARED_THRESHOLD,
+                scores.manifests.require(assignment.client),
+                assignment,
+                evaluation_cohort,
+            )
+            for assignment in shared.assignments
+        ),
+        local_threshold_metrics=tuple(
+            client_metric(
+                personalized_coordinate,
+                FederatedThresholdMethod.LOCAL_THRESHOLD,
+                scores.manifests.require(assignment.client),
+                assignment,
+                evaluation_cohort,
+            )
+            for assignment in local.assignments
+        ),
+        evaluation_cohort=evaluation_cohort,
+    )
+    _persist_fine_tuning_evidence(
+        FineTuningStressTestEvidence(
+            personalized_coordinate=result.personalized_coordinate,
+            model_evidence=result.model_evidence,
+            shared_threshold_metrics=result.shared_threshold_metrics,
+            local_threshold_metrics=result.local_threshold_metrics,
+            evaluation_cohort=result.evaluation_cohort,
+        ),
+        training_seed=training_seed,
         output_root=output_root,
     )
     return result
@@ -820,6 +1063,53 @@ def _personalized_scores(
     )
 
 
+def _fine_tuned_scores(
+    *,
+    models: ClientCollection[ClientIdentity, FineTunedTerminalModel],
+    personalized_coordinate: FederatedTrainingCoordinate,
+    context: DittoPopulationContext,
+    feature_names: FeatureNameSequence,
+    output_directory: Path,
+    overwrite: bool,
+) -> PersonalizedScoreCollection:
+    eligible: list[ClientBenignCalibrationScores] = []
+    manifests: list[ClientOwned[ClientIdentity, FederatedScoreArtifactManifest]] = []
+    for owned in models.items:
+        manifest = publish_federated_scores(
+            GenerateFederatedScoresRequest(
+                training=TerminalFederatedScoringModel(
+                    coordinate=personalized_coordinate,
+                    terminal_model_state=owned.value.terminal_model_state,
+                    batch_size_used=BATCH_SIZE,
+                ),
+                scored_split_protocol=personalized_coordinate.split_protocol,
+                autoencoder=NBAIOT_AUTOENCODER,
+                feature_names=feature_names,
+                clients=(client_scoring_input(context.preprocessing.client_publications, owned.client),),
+                batch_size=BATCH_SIZE,
+                output_directory=output_directory / owned.client.client_id.value,
+                overwrite=overwrite,
+            )
+        ).manifest
+        manifests.append(ClientOwned(client=owned.client, value=manifest))
+        record = score_record_for_client(manifest.calibration_records, owned.client, PartitionRole.CALIBRATION)
+        scores = tuple(
+            ScoreValue(float(value))
+            for value in pl.read_parquet(record.path)[ScoreFrameColumn.RECONSTRUCTION_ERROR.value].to_list()
+        )
+        if MINIMUM_BENIGN_SUPPORT.fits_within(RowCount(len(scores))):
+            eligible.append(ClientBenignCalibrationScores(owned.client, personalized_coordinate, scores))
+    if not eligible:
+        raise ScientificContractError(
+            ErrorMessage("no client meets the minimum benign calibration support for threshold construction"),
+            subject=ContractSubject.CALIBRATION,
+        )
+    return PersonalizedScoreCollection(
+        eligible_calibration=tuple(eligible),
+        manifests=ClientCollection(items=tuple(manifests)),
+    )
+
+
 def ditto_directory(
     training_seed: Seed,
     regularization: DittoRegularization,
@@ -833,6 +1123,15 @@ def ditto_directory(
         / str(training_seed.value)
         / str(regularization.value)
         / branch.value
+    )
+
+
+def fine_tuning_root(training_seed: Seed, *, output_root: Path) -> Path:
+    return (
+        output_root
+        / ExecutionRootDirectory.FEDAVG_LOCAL_FINE_TUNING
+        / PopulationId.NBAIOT_NATURAL_DEVICES.value
+        / str(training_seed.value)
     )
 
 

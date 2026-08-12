@@ -4,7 +4,7 @@ from time import monotonic
 
 from datp_core.core.contracts import ClientCollection, ClientOwned
 from datp_core.core.errors import ErrorMessage, ScientificContractError
-from datp_core.core.identifiers import TrainingModelId
+from datp_core.core.identifiers import DatasetId, TrainingModelId
 from datp_core.core.numeric import BatchSize, ElapsedSeconds, LearningRate, RoundNumber, Seed
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.autoencoder import AutoencoderModelState
@@ -33,6 +33,7 @@ class FineTunedTerminalModel:
 
 @dataclass(frozen=True, slots=True)
 class FineTuneFedAvgClientsRequest:
+    dataset: DatasetId
     source_fedavg_state: AutoencoderModelState
     clients: tuple[ClientTrainingInput, ...]
     autoencoder: AutoencoderProtocol
@@ -44,6 +45,7 @@ class FineTuneFedAvgClientsRequest:
 
 @dataclass(frozen=True, slots=True)
 class PersistedFedAvgFineTuningRequest:
+    dataset: DatasetId
     source_coordinate: FederatedTrainingCoordinate
     source_directory: Path
     clients: tuple[ClientTrainingInput, ...]
@@ -96,6 +98,7 @@ def fine_tune_from_persisted_fedavg(
         )
     return fine_tune_fedavg_clients(
         FineTuneFedAvgClientsRequest(
+            dataset=request.dataset,
             source_fedavg_state=source.terminal_model_state,
             clients=request.clients,
             autoencoder=request.autoencoder,
@@ -121,7 +124,7 @@ def _fine_tune_client(
         learning_rate=request.learning_rate,
         batch_size=request.batch_size,
         local_epochs=request.protocol.local_epochs,
-        seed=derive_fedavg_local_fine_tuning_seed(request.training_seed, client.client),
+        seed=derive_fedavg_local_fine_tuning_seed(request.dataset, request.training_seed, client.client),
         device=device,
     )
     return FineTunedTerminalModel(

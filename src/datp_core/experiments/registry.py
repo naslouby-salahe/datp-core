@@ -293,6 +293,15 @@ EXPERIMENTS = (
         CONFIRMATORY_METRICS,
     ),
     _declare(
+        ExperimentId.FEDAVG_LOCAL_FINE_TUNING,
+        EvidenceRole.TRAINING_STRESS_TEST,
+        PopulationId.NBAIOT_NATURAL_DEVICES,
+        TrainingModelId.FEDAVG_LOCAL_FINE_TUNING,
+        PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
+        _SHARED_AND_LOCAL_METHODS,
+        CONFIRMATORY_METRICS,
+    ),
+    _declare(
         ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
         EvidenceRole.TRAINING_STRESS_TEST,
         PopulationId.NBAIOT_NATURAL_DEVICES,

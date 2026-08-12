@@ -1,12 +1,16 @@
 from .run import (
+    FineTuningArtifactBranch,
     analyze_ditto_absorption,
     analyze_fedprox_absorption,
     build_fedprox_absorption_observation,
     ditto_analysis_directory,
     fedprox_analysis_directory,
     fedprox_stress_test_root,
+    fine_tuning_root,
     load_ditto_stress_test_evidence,
+    load_fine_tuning_stress_test_evidence,
     run_ditto_stress_test_seed,
+    run_fedavg_local_fine_tuning_stress_test_seed,
     run_fedprox_stress_test_seed,
 )
 
@@ -17,7 +21,11 @@ __all__ = (
     "ditto_analysis_directory",
     "fedprox_analysis_directory",
     "fedprox_stress_test_root",
+    "FineTuningArtifactBranch",
+    "fine_tuning_root",
     "load_ditto_stress_test_evidence",
+    "load_fine_tuning_stress_test_evidence",
     "run_ditto_stress_test_seed",
+    "run_fedavg_local_fine_tuning_stress_test_seed",
     "run_fedprox_stress_test_seed",
 )

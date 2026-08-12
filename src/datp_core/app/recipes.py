@@ -116,13 +116,16 @@ from datp_core.experiments.threshold_robustness import (
     threshold_estimator_scope_sensitivity_analysis_marker_present,
 )
 from datp_core.experiments.training_stress import (
+    FineTuningArtifactBranch,
     analyze_ditto_absorption,
     analyze_fedprox_absorption,
     build_fedprox_absorption_observation,
     ditto_analysis_directory,
     fedprox_analysis_directory,
     load_ditto_stress_test_evidence,
+    load_fine_tuning_stress_test_evidence,
     run_ditto_stress_test_seed,
+    run_fedavg_local_fine_tuning_stress_test_seed,
     run_fedprox_stress_test_seed,
 )
 from datp_core.presentation.export import MECHANISM_REPORT_FILENAME, PUBLICATION_FILENAME
@@ -341,6 +344,31 @@ def _dispatch_ditto(
         detail=DetailText(f"ditto seeds={len(seeds)} regularization={DITTO_PRIMARY_REGULARIZATION.value}"),
         method_outcomes=_method_outcomes(
             ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
+            tuple((item.shared_threshold.method, item.local_threshold.method) for item in results),
+        ),
+    )
+
+
+def _dispatch_fine_tuning(
+    seeds: tuple[Seed, ...],
+    output_root: Path,
+    overwrite: OverwriteMode,
+    *,
+    progress: ProgressHook | None = None,
+) -> DispatchOutcome:
+    del progress
+    results = tuple(
+        run_fedavg_local_fine_tuning_stress_test_seed(
+            training_seed=seed,
+            output_root=output_root,
+            overwrite=overwrite.requested,
+        )
+        for seed in seeds
+    )
+    return DispatchOutcome(
+        detail=DetailText(f"fedavg_local_fine_tuning seeds={len(seeds)}"),
+        method_outcomes=_method_outcomes(
+            ExperimentId.FEDAVG_LOCAL_FINE_TUNING,
             tuple((item.shared_threshold.method, item.local_threshold.method) for item in results),
         ),
     )
@@ -599,6 +627,38 @@ def _report_ditto(experiment_id: ExperimentId) -> ReportResult:
     return ReportResult(experiment=experiment_id, paths=(output,), detail=DetailText(f"analysis={output}"))
 
 
+def _fine_tuning_analysis_path() -> Path:
+    return (
+        OUTPUTS_ROOT
+        / ExecutionRootDirectory.FEDAVG_LOCAL_FINE_TUNING
+        / PopulationId.NBAIOT_NATURAL_DEVICES.value
+        / FineTuningArtifactBranch.ANALYSIS
+        / ResearchArtifact.EVIDENCE_REPORT
+    )
+
+
+def _report_fine_tuning(experiment_id: ExperimentId) -> ReportResult:
+    rows = [
+        "# FedAvg local fine-tuning execution evidence",
+        "",
+        "This is a bounded model-personalization stress condition, not confirmatory evidence.",
+        "",
+        "| Seed | Client | Serialized bytes | Fine-tuning wall time (s) |",
+        "|---:|---|---:|---:|",
+    ]
+    for seed in CONFIRMATORY_SEED_COHORT.values:
+        evidence = load_fine_tuning_stress_test_evidence(training_seed=seed, output_root=OUTPUTS_ROOT)
+        for model in evidence.model_evidence:
+            rows.append(
+                f"| {seed.value} | {model.client.client_id.value} | "
+                f"{model.serialized_state_evidence.byte_count.value} | {model.wall_time.value:.12g} |"
+            )
+    output = _fine_tuning_analysis_path()
+    output.parent.mkdir(parents=True, exist_ok=True)
+    write_text_atomically(output, FileContentText("\n".join(rows) + "\n"))
+    return ReportResult(experiment=experiment_id, paths=(output,), detail=DetailText(f"evidence={output}"))
+
+
 def _report_temporal(experiment_id: ExperimentId) -> ReportResult:
     seeds = tuple(
         load_temporal_seed_result(seed, output_root=OUTPUTS_ROOT) for seed in BOUNDED_EVIDENCE_SEED_COHORT.values
@@ -759,6 +819,11 @@ def _ditto_marker(experiment_id: ExperimentId) -> bool:
     return (output / PUBLICATION_FILENAME).is_file() and (output / MECHANISM_REPORT_FILENAME).is_file()
 
 
+def _fine_tuning_marker(experiment_id: ExperimentId) -> bool:
+    del experiment_id
+    return _fine_tuning_analysis_path().is_file()
+
+
 def _temporal_marker(experiment_id: ExperimentId) -> bool:
     declaration = _declaration(experiment_id)
     return all(
@@ -916,6 +981,14 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
         dispatch=_dispatch_fedprox,
         report=_report_fedprox,
         analysis_marker=_fedprox_marker,
+    ),
+    ExperimentRecipe(
+        experiment=ExperimentId.FEDAVG_LOCAL_FINE_TUNING,
+        anchor_requirement=AnchorRequirement.REQUIRED,
+        campaign_role=CampaignRole.MANDATORY,
+        dispatch=_dispatch_fine_tuning,
+        report=_report_fine_tuning,
+        analysis_marker=_fine_tuning_marker,
     ),
     ExperimentRecipe(
         experiment=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
