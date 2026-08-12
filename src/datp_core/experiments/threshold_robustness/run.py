@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
+from math import sqrt
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -151,10 +152,21 @@ class CalibrationSizeFixedCohortRow(StrictModel):
     p10_macro_f1: MetricValue | None
 
 
+class CalibrationThresholdStabilityRow(StrictModel):
+    seed: Seed
+    method: FederatedThresholdMethod
+    calibration_size: CalibrationSize
+    client: ClientIdentity
+    full_calibration_local_threshold: MetricValue
+    bias_threshold: MetricValue
+    rmse_threshold: MetricValue
+
+
 class CalibrationSizeAblationReport(StrictModel):
     experiment: ExperimentId
     rows: tuple[CalibrationSizeAblationRow, ...]
     fixed_cohort_rows: tuple[CalibrationSizeFixedCohortRow, ...] = ()
+    threshold_stability_rows: tuple[CalibrationThresholdStabilityRow, ...] = ()
 
 
 class ShrinkageCurveRow(StrictModel):
@@ -507,6 +519,7 @@ def report_calibration_size_ablation(
     directory.mkdir(parents=True, exist_ok=True)
     rows: list[CalibrationSizeAblationRow] = []
     fixed_cohort_rows: list[CalibrationSizeFixedCohortRow] = []
+    threshold_stability_rows: list[CalibrationThresholdStabilityRow] = []
     missing = 0
     for method in declaration.federated_thresholds:
         for seed in CONFIRMATORY_SEED_COHORT.values:
@@ -543,11 +556,18 @@ def report_calibration_size_ablation(
                     )
                 )
             fixed_cohort_rows.extend(_fixed_cohort_rows_for_seed(seed, method, cells))
+            local_reference = _evaluation_document_for_seed(
+                seed, FederatedThresholdMethod.LOCAL_THRESHOLD, experiment_id, OUTPUTS_ROOT
+            )
+            threshold_stability_rows.extend(
+                _threshold_stability_rows_for_seed(seed, method, cells, local_reference)
+            )
     serialize_json_model(
         CalibrationSizeAblationReport(
             experiment=experiment_id,
             rows=tuple(rows),
             fixed_cohort_rows=tuple(fixed_cohort_rows),
+            threshold_stability_rows=tuple(threshold_stability_rows),
         ),
         _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
     )
@@ -601,6 +621,37 @@ def _fixed_cohort_rows_for_seed(
                 )
 
     return tuple(_generate())
+
+
+def _threshold_stability_rows_for_seed(
+    seed: Seed,
+    method: FederatedThresholdMethod,
+    cells: tuple[CalibrationSizeAblationCell, ...],
+    local_reference: FederatedEvaluationDocument,
+) -> tuple[CalibrationThresholdStabilityRow, ...]:
+    reference = {item.client: item.threshold for item in local_reference.clients}
+    grouped: dict[tuple[CalibrationSize, ClientIdentity], list[MetricValue]] = {}
+    for cell in cells:
+        for client in cell.clients:
+            if client.client not in reference:
+                raise ScientificContractError(ErrorMessage("full-calibration local reference omits an ablation client"))
+            grouped.setdefault((cell.calibration_size, client.client), []).append(MetricValue(client.threshold.value))
+    rows: list[CalibrationThresholdStabilityRow] = []
+    for (size, client), thresholds in sorted(grouped.items()):
+        full = MetricValue(reference[client].value)
+        differences = tuple(value.value - full.value for value in thresholds)
+        rows.append(
+            CalibrationThresholdStabilityRow(
+                seed=seed,
+                method=method,
+                calibration_size=size,
+                client=client,
+                full_calibration_local_threshold=full,
+                bias_threshold=MetricValue(sum(differences) / len(differences)),
+                rmse_threshold=MetricValue(sqrt(sum(value**2 for value in differences) / len(differences))),
+            )
+        )
+    return tuple(rows)
 
 
 def calibration_size_ablation_analysis_marker_present(experiment_id: ExperimentId) -> bool:
