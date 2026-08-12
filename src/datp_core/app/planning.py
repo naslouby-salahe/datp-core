@@ -12,6 +12,7 @@ from datp_core.core.identifiers import (
     PopulationId,
     SplitProtocolId,
     TemporalState,
+    ThresholdEstimator,
     TrainingModelId,
 )
 from datp_core.core.numeric import DirichletConcentration, KllSketchSize, ModelCoefficientValue, Quantile, Seed
@@ -126,6 +127,7 @@ class _SweptCell:
     controlled_partition_kind: ControlledPartitionKind | None
     dirichlet_concentration: DirichletConcentration | None
     kll_sketch_size: KllSketchSize | None
+    threshold_estimator: ThresholdEstimator
 
 
 def _declared_model_coefficients(training_model: TrainingModelId) -> tuple[ModelCoefficientValue | None, ...]:
@@ -150,6 +152,7 @@ def _swept_cells(declaration: ExperimentDeclaration, seed_cohort: SeedCohort) ->
             controlled_partition_kind=partition_kind,
             dirichlet_concentration=concentration,
             kll_sketch_size=kll_sketch_size,
+            threshold_estimator=threshold_estimator,
         )
         for seed in seed_cohort.values
         for threshold_method in declaration.federated_thresholds
@@ -159,6 +162,7 @@ def _swept_cells(declaration: ExperimentDeclaration, seed_cohort: SeedCohort) ->
         for threshold_quantile in _threshold_quantiles(declaration.id)
         for partition_kind, concentration in _controlled_partition_cells(declaration)
         for kll_sketch_size in _kll_sketch_sizes(declaration.id, threshold_method)
+        for threshold_estimator in _threshold_estimators(declaration.id)
     )
 
 
@@ -174,6 +178,15 @@ def _kll_sketch_sizes(experiment: ExperimentId, method: FederatedThresholdMethod
     if experiment is ExperimentId.FEDERATED_QUANTILE_ESTIMATION:
         return FEDERATED_KLL_PROTOCOL.sensitivity_k
     return (FEDERATED_KLL_PROTOCOL.primary_k,)
+
+
+def _threshold_estimators(experiment: ExperimentId) -> tuple[ThresholdEstimator, ...]:
+    if experiment is ExperimentId.THRESHOLD_ESTIMATOR_SCOPE_SENSITIVITY:
+        return (
+            ThresholdEstimator.TYPE7_Q95,
+            ThresholdEstimator.MEAN_PLUS_STANDARD_DEVIATION_ESTIMATOR,
+        )
+    return (ThresholdEstimator.TYPE7_Q95,)
 
 
 def _controlled_partition_cells(
@@ -218,6 +231,7 @@ def _planned_entry(
             controlled_partition_kind=cell.controlled_partition_kind,
             dirichlet_concentration=cell.dirichlet_concentration,
             kll_sketch_size=cell.kll_sketch_size,
+            threshold_estimator=cell.threshold_estimator,
         ),
         disposition=disposition,
         reason=reason,

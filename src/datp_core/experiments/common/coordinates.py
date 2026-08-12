@@ -19,6 +19,7 @@ from datp_core.core.identifiers import (
     PreprocessingProtocolId,
     SplitProtocolId,
     TemporalState,
+    ThresholdEstimator,
     TrainingModelId,
 )
 from datp_core.core.numeric import DirichletConcentration, KllSketchSize, ModelCoefficientValue, Quantile, Seed
@@ -158,6 +159,7 @@ class ExperimentCoordinate:
     controlled_partition_kind: ControlledPartitionKind | None = None
     dirichlet_concentration: DirichletConcentration | None = None
     kll_sketch_size: KllSketchSize | None = None
+    threshold_estimator: ThresholdEstimator = ThresholdEstimator.TYPE7_Q95
 
     def __post_init__(self) -> None:
         requires_coefficient = self.training_model in _MODEL_COEFFICIENT_TRAINING_MODELS
@@ -226,6 +228,7 @@ class ExperimentCoordinate:
                     quantile,
                     partition,
                     kll_sketch_size,
+                    self.threshold_estimator.value,
                 )
             )
         )

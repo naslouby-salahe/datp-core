@@ -12,6 +12,7 @@ from datp_core.core.identifiers import (
     CentralizedThresholdMethod,
     ContractSubject,
     FederatedThresholdMethod,
+    ThresholdEstimator,
 )
 from datp_core.core.numeric import KllSketchSize, Quantile, RowCount
 from datp_core.data.populations.contracts import FamilyAssignment, PopulationCapabilities
@@ -50,6 +51,12 @@ from datp_core.thresholds.variants.kll import (
     FederatedKllSharedThresholdResult,
     construct_federated_kll_shared_threshold,
 )
+from datp_core.thresholds.variants.moment import (
+    MomentLocalThresholdResult,
+    MomentSharedThresholdResult,
+    construct_moment_local_threshold,
+    construct_moment_shared_threshold,
+)
 from datp_core.thresholds.variants.shrinkage import (
     FixedShrinkageCurveResult,
     SizeAwareShrinkageThresholdResult,
@@ -69,6 +76,8 @@ type ThresholdConstructionResult = (
     | ConformalThresholdResult
     | FederatedStatisticsThresholdResult
     | FederatedKllSharedThresholdResult
+    | MomentSharedThresholdResult
+    | MomentLocalThresholdResult
     | ThresholdUnavailableResult
 )
 
@@ -100,6 +109,7 @@ class ThresholdConstructionRequest:
     support_rule: CalibrationSupportRule
     cluster_threshold_aggregation: ClusterThresholdAggregation | None
     kll_sketch_size: KllSketchSize | None = None
+    estimator: ThresholdEstimator = ThresholdEstimator.TYPE7_Q95
 
     def __post_init__(self) -> None:
         if not self.eligible:
@@ -142,6 +152,17 @@ def dispatch_federated_threshold(request: ThresholdConstructionRequest) -> Thres
     reject_centralized_threshold_method(request.method)
     validate_population_capability(request.capabilities, request.method)
     _validate_support(request)
+    if request.estimator is ThresholdEstimator.MEAN_PLUS_STANDARD_DEVIATION_ESTIMATOR:
+        match request.method:
+            case FederatedThresholdMethod.SHARED_THRESHOLD:
+                return construct_moment_shared_threshold(request.eligible)
+            case FederatedThresholdMethod.LOCAL_THRESHOLD:
+                return construct_moment_local_threshold(request.eligible)
+            case _:
+                raise ScientificContractError(
+                    ErrorMessage("the moment estimator supports only shared and local threshold scope"),
+                    subject=request.method,
+                )
     match request.method:
         case FederatedThresholdMethod.SHARED_THRESHOLD:
             return construct_shared_threshold(

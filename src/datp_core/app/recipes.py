@@ -103,14 +103,17 @@ from datp_core.experiments.threshold_robustness import (
     report_quantile_sensitivity,
     report_shared_construction_sensitivity,
     report_size_aware_shrinkage,
+    report_threshold_estimator_scope_sensitivity,
     run_calibration_size_ablation_seed,
     run_fixed_shrinkage_curve_seed,
     run_local_conformal_coverage_seed,
     run_quantile_sensitivity_seed,
     run_shared_construction_sensitivity_seed,
     run_size_aware_shrinkage_seed,
+    run_threshold_estimator_scope_sensitivity_seed,
     shared_construction_sensitivity_analysis_marker_present,
     size_aware_shrinkage_analysis_marker_present,
+    threshold_estimator_scope_sensitivity_analysis_marker_present,
 )
 from datp_core.experiments.training_stress import (
     analyze_ditto_absorption,
@@ -615,6 +618,8 @@ def _report_robustness(experiment_id: ExperimentId) -> ReportResult:
         result = report_shared_construction_sensitivity(experiment_id, True)
     elif experiment_id is ExperimentId.QUANTILE_SENSITIVITY:
         result = report_quantile_sensitivity(experiment_id, True)
+    elif experiment_id is ExperimentId.THRESHOLD_ESTIMATOR_SCOPE_SENSITIVITY:
+        result = report_threshold_estimator_scope_sensitivity(experiment_id, True)
     elif experiment_id is ExperimentId.CALIBRATION_SIZE_ABLATION:
         result = report_calibration_size_ablation(experiment_id, True)
     elif experiment_id is ExperimentId.FIXED_SHRINKAGE_CURVE:
@@ -792,6 +797,8 @@ def _robustness_marker(experiment_id: ExperimentId) -> bool:
         return shared_construction_sensitivity_analysis_marker_present(experiment_id)
     if experiment_id is ExperimentId.QUANTILE_SENSITIVITY:
         return quantile_sensitivity_analysis_marker_present(experiment_id)
+    if experiment_id is ExperimentId.THRESHOLD_ESTIMATOR_SCOPE_SENSITIVITY:
+        return threshold_estimator_scope_sensitivity_analysis_marker_present(experiment_id)
     if experiment_id is ExperimentId.CALIBRATION_SIZE_ABLATION:
         return calibration_size_ablation_analysis_marker_present(experiment_id)
     if experiment_id is ExperimentId.FIXED_SHRINKAGE_CURVE:
@@ -985,6 +992,17 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
         anchor_requirement=AnchorRequirement.REQUIRED,
         campaign_role=CampaignRole.MANDATORY,
         dispatch=_robustness_recipe(ExperimentId.QUANTILE_SENSITIVITY, run_quantile_sensitivity_seed),
+        report=_report_robustness,
+        analysis_marker=_robustness_marker,
+    ),
+    ExperimentRecipe(
+        experiment=ExperimentId.THRESHOLD_ESTIMATOR_SCOPE_SENSITIVITY,
+        anchor_requirement=AnchorRequirement.REQUIRED,
+        campaign_role=CampaignRole.MANDATORY,
+        dispatch=_robustness_recipe(
+            ExperimentId.THRESHOLD_ESTIMATOR_SCOPE_SENSITIVITY,
+            run_threshold_estimator_scope_sensitivity_seed,
+        ),
         report=_report_robustness,
         analysis_marker=_robustness_marker,
     ),

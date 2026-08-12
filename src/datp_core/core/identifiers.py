@@ -75,6 +75,7 @@ class ExperimentId(StrEnum):
     SHARED_VS_LOCAL_CONFIRMATION = "shared_vs_local_confirmation"
     SHARED_CONSTRUCTION_SENSITIVITY = "shared_construction_sensitivity"
     QUANTILE_SENSITIVITY = "quantile_sensitivity"
+    THRESHOLD_ESTIMATOR_SCOPE_SENSITIVITY = "threshold_estimator_scope_sensitivity"
     CONTROLLED_HETEROGENEITY_SWEEP = "controlled_heterogeneity_sweep"
     FAMILY_AND_GROUPED_GRANULARITY = "family_and_grouped_granularity"
     PER_CLIENT_SCORE_GEOMETRY = "per_client_score_geometry"
@@ -124,6 +125,11 @@ class FederatedThresholdMethod(StrEnum):
     LOCAL_CONFORMAL_THRESHOLD = "local_conformal_threshold"
     FEDERATED_BENIGN_STATISTICS = "federated_benign_statistics"
     FEDERATED_KLL_SHARED_THRESHOLD = "federated_kll_shared_threshold"
+
+
+class ThresholdEstimator(StrEnum):
+    TYPE7_Q95 = "type7_q95"
+    MEAN_PLUS_STANDARD_DEVIATION_ESTIMATOR = "mean_plus_standard_deviation_estimator"
 
 
 class IntervalMethod(StrEnum):

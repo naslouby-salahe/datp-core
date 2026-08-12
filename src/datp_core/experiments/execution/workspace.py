@@ -272,6 +272,7 @@ class ExperimentWorkspace:
                     support_rule=CalibrationSupportRule.CANONICAL_MINIMUM_SUPPORT,
                     cluster_threshold_aggregation=self._cluster_aggregation(),
                     kll_sketch_size=self.coordinate.kll_sketch_size,
+                    estimator=self.coordinate.threshold_estimator,
                 ),
                 output_directory=self.run_directory() / EvaluationRunAssetDirectory.THRESHOLD,
                 overwrite=False,

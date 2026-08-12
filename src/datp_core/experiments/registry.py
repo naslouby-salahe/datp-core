@@ -149,6 +149,15 @@ EXPERIMENTS = (
         CONFIRMATORY_METRICS,
     ),
     _declare(
+        ExperimentId.THRESHOLD_ESTIMATOR_SCOPE_SENSITIVITY,
+        EvidenceRole.SUPPORTIVE,
+        PopulationId.NBAIOT_NATURAL_DEVICES,
+        TrainingModelId.FEDAVG_AUTOENCODER,
+        PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
+        _SHARED_AND_LOCAL_METHODS,
+        OPERATING_POINT_METRICS,
+    ),
+    _declare(
         ExperimentId.CONTROLLED_HETEROGENEITY_SWEEP,
         EvidenceRole.MECHANISM,
         PopulationId.NBAIOT_DIRICHLET_CLIENTS,

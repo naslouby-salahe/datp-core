@@ -23,6 +23,7 @@ from datp_core.core.identifiers import (
     FederatedThresholdMethod,
     MetricId,
     PopulationId,
+    ThresholdEstimator,
 )
 from datp_core.core.numeric import (
     CalibrationSize,
@@ -81,6 +82,7 @@ class ThresholdRobustnessAnalysisMarker(StrEnum):
     FIXED_SHRINKAGE_CURVE = "fixed_shrinkage_curve_analysis_complete"
     SIZE_AWARE_SHRINKAGE = "size_aware_shrinkage_analysis_complete"
     LOCAL_CONFORMAL_COVERAGE = "local_conformal_coverage_analysis_complete"
+    THRESHOLD_ESTIMATOR_SCOPE_SENSITIVITY = "threshold_estimator_scope_sensitivity_analysis_complete"
 
 
 class ThresholdRobustnessSeedResult(StrictModel):
@@ -110,6 +112,17 @@ class QuantileSummary(StrictModel):
 class QuantileSummaryReport(StrictModel):
     experiment: ExperimentId
     rows: tuple[QuantileSummary, ...]
+
+
+class EstimatorScopeSummary(StrictModel):
+    estimator: ThresholdEstimator
+    method: FederatedThresholdMethod
+    summary: MethodCvSummary
+
+
+class EstimatorScopeSummaryReport(StrictModel):
+    experiment: ExperimentId
+    rows: tuple[EstimatorScopeSummary, ...]
 
 
 class CalibrationSizeAblationRow(StrictModel):
@@ -222,6 +235,7 @@ def _evaluation_document_for_seed(
     output_root: Path,
     *,
     quantile: Quantile | None = None,
+    estimator: ThresholdEstimator | None = None,
 ) -> FederatedEvaluationDocument:
     declaration = require_experiment_declaration(experiment_id)
     plan = expand_experiment_plan(declarations=(declaration,), seed_cohort=SeedCohort(values=(seed,)))
@@ -231,11 +245,15 @@ def _evaluation_document_for_seed(
         if entry.coordinate.threshold_method is method
         and entry.coordinate.metric is MetricId.FPR_COEFFICIENT_OF_VARIATION
         and (quantile is None or entry.coordinate.threshold_quantile == quantile)
+        and (estimator is None or entry.coordinate.threshold_estimator is estimator)
     )
     if len(matches) != 1:
         quantile_suffix = f" q={quantile.value}" if quantile is not None else ""
+        estimator_suffix = f" estimator={estimator.value}" if estimator is not None else ""
         raise ScientificContractError(
-            ErrorMessage(f"evaluation coordinate for {method.value}{quantile_suffix} must resolve exactly once")
+            ErrorMessage(
+                f"evaluation coordinate for {method.value}{quantile_suffix}{estimator_suffix} must resolve exactly once"
+            )
         )
     path = _evaluation_document_path(output_root, matches[0])
     if not path.is_file():
@@ -393,6 +411,74 @@ def report_quantile_sensitivity(
 
 
 def quantile_sensitivity_analysis_marker_present(experiment_id: ExperimentId) -> bool:
+    return _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES).is_file()
+
+
+def run_threshold_estimator_scope_sensitivity_seed(
+    training_seed: Seed,
+    *,
+    output_root: Path,
+    overwrite: bool,
+    progress: ProgressHook | None = None,
+) -> ThresholdRobustnessSeedResult:
+    return _run_robustness_seed(
+        ExperimentId.THRESHOLD_ESTIMATOR_SCOPE_SENSITIVITY,
+        training_seed,
+        output_root,
+        overwrite,
+        progress,
+    )
+
+
+def report_threshold_estimator_scope_sensitivity(
+    experiment_id: ExperimentId,
+    overwrite: bool,
+) -> AnalysisReportPublication:
+    del overwrite
+    declaration = require_experiment_declaration(experiment_id)
+    directory = _analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
+    directory.mkdir(parents=True, exist_ok=True)
+    rows: list[EstimatorScopeSummary] = []
+    missing = 0
+    for estimator in ThresholdEstimator:
+        for method in declaration.federated_thresholds:
+            documents: list[FederatedEvaluationDocument] = []
+            for seed in CONFIRMATORY_SEED_COHORT.values:
+                try:
+                    documents.append(
+                        _evaluation_document_for_seed(
+                            seed,
+                            method,
+                            experiment_id,
+                            OUTPUTS_ROOT,
+                            estimator=estimator,
+                        )
+                    )
+                except ScientificContractError:
+                    missing += 1
+            if documents:
+                rows.append(
+                    EstimatorScopeSummary(
+                        estimator=estimator,
+                        method=method,
+                        summary=_method_summary(method, tuple(documents)),
+                    )
+                )
+    serialize_json_model(
+        EstimatorScopeSummaryReport(experiment=experiment_id, rows=tuple(rows)),
+        _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
+    )
+    return finalize_analysis_report(
+        AnalysisReportFinalizationInput(
+            directory=directory,
+            marker=_complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
+            missing_count=SeedObservationCount(missing),
+            marker_text=AnalysisMarkerText(ThresholdRobustnessAnalysisMarker.THRESHOLD_ESTIMATOR_SCOPE_SENSITIVITY),
+        )
+    )
+
+
+def threshold_estimator_scope_sensitivity_analysis_marker_present(experiment_id: ExperimentId) -> bool:
     return _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES).is_file()
 
 

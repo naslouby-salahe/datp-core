@@ -10,6 +10,7 @@ from datp_core.core.identifiers import (
     FederatedThresholdMethod,
     PopulationId,
     PopulationIdentityKind,
+    ThresholdEstimator,
 )
 from datp_core.core.numeric import ClientCount, Quantile
 from datp_core.data.populations.contracts import CapabilityStatus, FamilyAssignment, PopulationCapabilities
@@ -37,6 +38,7 @@ from datp_core.thresholds.quantiles import ClientBenignCalibrationScores
 from datp_core.thresholds.variants.conformal import ConformalThresholdResult
 from datp_core.thresholds.variants.federated_statistics import FederatedStatisticsThresholdResult
 from datp_core.thresholds.variants.kll import FederatedKllSharedThresholdResult
+from datp_core.thresholds.variants.moment import MomentLocalThresholdResult, MomentSharedThresholdResult
 from datp_core.thresholds.variants.shrinkage import (
     FixedShrinkageCurveResult,
     ShrinkageThresholdResult,
@@ -92,6 +94,7 @@ def _request(
     eligible: tuple[ClientBenignCalibrationScores, ...] = ELIGIBLE,
     family_by_client: tuple[FamilyAssignment, ...] = FAMILY_BY_CLIENT,
     support_rule: CalibrationSupportRule = CalibrationSupportRule.CANONICAL_MINIMUM_SUPPORT,
+    estimator: ThresholdEstimator = ThresholdEstimator.TYPE7_Q95,
 ) -> ThresholdConstructionRequest:
     return ThresholdConstructionRequest(
         method=method,
@@ -102,6 +105,7 @@ def _request(
         family_by_client=family_by_client,
         support_rule=support_rule,
         cluster_threshold_aggregation=_cluster_aggregation(method),
+        estimator=estimator,
     )
 
 
@@ -145,6 +149,26 @@ def test_kll_dispatch_persists_all_locked_reconstructions_and_client_sketches() 
         sketch.payload_hex for reconstruction in result.reconstructions for sketch in reconstruction.client_sketches
     )
     assert result.uploaded_bytes.value > 0
+
+
+def test_moment_estimator_uses_sample_standard_deviation_for_both_scope_conditions() -> None:
+    shared = dispatch_federated_threshold(
+        _request(
+            FederatedThresholdMethod.SHARED_THRESHOLD,
+            estimator=ThresholdEstimator.MEAN_PLUS_STANDARD_DEVIATION_ESTIMATOR,
+        )
+    )
+    local = dispatch_federated_threshold(
+        _request(
+            FederatedThresholdMethod.LOCAL_THRESHOLD,
+            estimator=ThresholdEstimator.MEAN_PLUS_STANDARD_DEVIATION_ESTIMATOR,
+        )
+    )
+
+    assert isinstance(shared, MomentSharedThresholdResult)
+    assert isinstance(local, MomentLocalThresholdResult)
+    assert shared.local_thresholds[0].threshold.value == pytest.approx(49.5 + 29.011491975882016)
+    assert local.assignments[0].threshold == local.local_thresholds[0].threshold
 
 
 def test_dispatch_family_threshold_without_taxonomy_is_unavailable() -> None:
