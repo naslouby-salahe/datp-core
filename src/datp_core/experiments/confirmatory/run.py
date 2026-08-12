@@ -19,6 +19,7 @@ from datp_core.analysis.mechanisms import (
     AssociationObservation,
     CalibrationSupportBurdenSeedEvidence,
     ClientScoreVector,
+    FamilyRecallPolicyComparison,
     GroupDispersionObservation,
     GroupedDispersionResult,
     MechanismEvidence,
@@ -34,6 +35,7 @@ from datp_core.analysis.mechanisms import (
     summarize_calibration_support_burden_devices,
     summarize_client_impact,
     summarize_client_impact_campaign,
+    summarize_family_recall_campaign,
     summarize_support_stratum_campaign,
     summarize_threshold_movements_across_seeds,
     support_stratum_seed_outcomes,
@@ -61,7 +63,7 @@ from datp_core.core.identifiers import (
     ScoreFrameColumn,
     TrainingModelId,
 )
-from datp_core.core.numeric import MetricValue, ModelCoefficientValue, Ratio, Seed
+from datp_core.core.numeric import MetricValue, ModelCoefficientValue, Ratio, Seed, SeedObservationCount
 from datp_core.data.nbaiot.schema import NBaIoTDevice
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.scoring.models import FederatedScoreAssetName
@@ -225,6 +227,7 @@ def _confirmatory_mechanisms() -> tuple[MechanismEvidence, ...]:
     support_burden_evidence: list[CalibrationSupportBurdenSeedEvidence] = []
     association_observations: list[AssociationObservation] = []
     mechanisms: list[MechanismEvidence] = []
+    family_comparisons: list[FamilyRecallPolicyComparison] = []
     for seed in CONFIRMATORY_SEED_COHORT.values:
         shared = load_evaluation_document(_evaluation_path(seed, FederatedThresholdMethod.SHARED_THRESHOLD))
         local = load_evaluation_document(_evaluation_path(seed, FederatedThresholdMethod.LOCAL_THRESHOLD))
@@ -242,7 +245,9 @@ def _confirmatory_mechanisms() -> tuple[MechanismEvidence, ...]:
         mechanisms.append(burden)
         support_burden_evidence.append(burden)
         mechanisms.append(summarize_client_impact(movement))
-        mechanisms.append(compare_family_recall_policies((shared, local, family, cluster)))
+        family_comparison = compare_family_recall_policies((shared, local, family, cluster))
+        mechanisms.append(family_comparison)
+        family_comparisons.append(family_comparison)
         shared_cv = population_metric(shared, MetricId.FPR_COEFFICIENT_OF_VARIATION)
         local_cv = population_metric(local, MetricId.FPR_COEFFICIENT_OF_VARIATION)
         benefit = MetricValue(shared_cv.value - local_cv.value)
@@ -267,6 +272,12 @@ def _confirmatory_mechanisms() -> tuple[MechanismEvidence, ...]:
         )
     )
     mechanisms.append(summarize_client_impact_campaign(tuple(movement_cohorts)))
+    mechanisms.append(
+        summarize_family_recall_campaign(
+            tuple(family_comparisons),
+            required_seed_count=SeedObservationCount(CONFIRMATORY_SEED_COHORT.member_count.value),
+        )
+    )
     mechanisms.append(summarize_calibration_support_burden(tuple(support_burden_evidence)))
     mechanisms.append(summarize_calibration_support_burden_devices(tuple(support_burden_evidence)))
     mechanisms.append(confirmatory_equity_utility_bundle(tuple(policy_pairs)))

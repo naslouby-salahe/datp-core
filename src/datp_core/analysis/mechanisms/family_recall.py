@@ -1,3 +1,5 @@
+import numpy as np
+
 from datp_core.analysis.metrics.family_recall import (
     FamilyRecallApplicability,
     FamilyRecallRecord,
@@ -8,7 +10,7 @@ from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
 from datp_core.core.contracts import StrictModel
 from datp_core.core.errors import ErrorMessage, ScientificContractError
 from datp_core.core.identifiers import FederatedThresholdMethod, PopulationId
-from datp_core.core.numeric import MetricValue, Seed
+from datp_core.core.numeric import MetricValue, Seed, SeedObservationCount
 from datp_core.data.nbaiot.schema import NBaIoTAttackFamily
 from datp_core.data.populations.contracts import ClientIdentity
 
@@ -31,6 +33,22 @@ class FamilyRecallPolicyComparison(StrictModel):
     seed: Seed
     policies: tuple[FamilyRecallPolicyEvidence, ...]
     shared_differences: tuple[FamilyRecallDifference, ...]
+
+
+class FamilyRecallMacroCampaignSummary(StrictModel):
+    threshold_method: FederatedThresholdMethod
+    family: NBaIoTAttackFamily
+    seed_values: tuple[MetricValue, ...]
+    arithmetic_mean: MetricValue
+    median: MetricValue
+    minimum: MetricValue
+    maximum: MetricValue
+
+
+class FamilyRecallPolicyCampaignSummary(StrictModel):
+    comparisons: tuple[FamilyRecallPolicyComparison, ...]
+    observed_seed_count: SeedObservationCount
+    macro_summaries: tuple[FamilyRecallMacroCampaignSummary, ...]
 
 
 def compare_family_recall_policies(
@@ -85,6 +103,53 @@ def compare_family_recall_policies(
         seed=first.score_coordinate.training_seed,
         policies=policies,
         shared_differences=tuple(differences),
+    )
+
+
+def summarize_family_recall_campaign(
+    comparisons: tuple[FamilyRecallPolicyComparison, ...], *, required_seed_count: SeedObservationCount
+) -> FamilyRecallPolicyCampaignSummary:
+    if len(comparisons) != required_seed_count.value:
+        raise ScientificContractError(ErrorMessage("family recall campaign must contain every declared seed"))
+    seeds = tuple(item.seed for item in comparisons)
+    if len(seeds) != len(frozenset(seeds)):
+        raise ScientificContractError(ErrorMessage("family recall campaign cannot repeat a seed"))
+    summaries: list[FamilyRecallMacroCampaignSummary] = []
+    for method in FederatedThresholdMethod:
+        matching_policies = tuple(
+            next((policy for policy in comparison.policies if policy.threshold_method is method), None)
+            for comparison in comparisons
+        )
+        if any(policy is None for policy in matching_policies):
+            continue
+        for family in NBaIoTAttackFamily:
+            values = tuple(
+                summary.macro_family_true_positive_rate.value
+                for policy in matching_policies
+                if policy is not None
+                for summary in policy.summaries
+                if summary.family is family
+            )
+            if len(values) != len(comparisons):
+                raise ScientificContractError(
+                    ErrorMessage("family macro recall must be available for every campaign seed")
+                )
+            array = np.asarray(values, dtype=np.float64)
+            summaries.append(
+                FamilyRecallMacroCampaignSummary(
+                    threshold_method=method,
+                    family=family,
+                    seed_values=tuple(MetricValue(value) for value in values),
+                    arithmetic_mean=MetricValue(float(np.mean(array))),
+                    median=MetricValue(float(np.median(array))),
+                    minimum=MetricValue(float(np.min(array))),
+                    maximum=MetricValue(float(np.max(array))),
+                )
+            )
+    return FamilyRecallPolicyCampaignSummary(
+        comparisons=comparisons,
+        observed_seed_count=SeedObservationCount(len(comparisons)),
+        macro_summaries=tuple(summaries),
     )
 
 

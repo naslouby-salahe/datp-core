@@ -25,7 +25,7 @@ from datp_core.analysis.mechanisms.clustering import ClusterEvidenceRecord, Clus
 from datp_core.analysis.mechanisms.dispersion import GroupedDispersionResult
 from datp_core.analysis.mechanisms.divergence import DivergenceResult
 from datp_core.analysis.mechanisms.equity_utility import ConfirmatoryEquityUtilityBundle
-from datp_core.analysis.mechanisms.family_recall import FamilyRecallPolicyComparison
+from datp_core.analysis.mechanisms.family_recall import FamilyRecallPolicyCampaignSummary, FamilyRecallPolicyComparison
 from datp_core.analysis.mechanisms.movement import (
     ThresholdMovement,
     ThresholdMovementCohort,
@@ -667,6 +667,7 @@ _MECHANISM_TITLES: dict[type[object], ReportLine] = {
     ClientImpactCampaignSummary: ReportLine("natural_device_client_impact_campaign_summary"),
     ConfirmatoryEquityUtilityBundle: ReportLine("confirmatory_equity_utility_bundle"),
     FamilyRecallPolicyComparison: ReportLine("nbaiot_malware_family_sensitivity"),
+    FamilyRecallPolicyCampaignSummary: ReportLine("nbaiot_malware_family_sensitivity_campaign_summary"),
     CampaignFixedSupportStrata: ReportLine("campaign_fixed_calibration_support_strata"),
     SupportStratumOutcomeReport: ReportLine("support_stratum_seed_outcomes"),
     SupportStratumCampaignSummary: ReportLine("support_stratum_cross_seed_summary"),
@@ -804,6 +805,21 @@ def _render_family_recall_policy_comparison(mechanism: FamilyRecallPolicyCompari
             f"Shared difference: client={difference.client.client_id.value} family={difference.family.name} "
             f"policy={difference.compared_method.value} ΔTPR={difference_value}"
         )
+    return [ReportLine(line) for line in lines]
+
+
+@_render_one_mechanism.register
+def _render_family_recall_campaign_summary(mechanism: FamilyRecallPolicyCampaignSummary) -> list[ReportLine]:
+    lines = [f"Observed seeds: {mechanism.observed_seed_count.value}"]
+    lines.extend(
+        f"{summary.threshold_method.value}/{summary.family.name}: "
+        f"mean={_format_publication_metric(summary.arithmetic_mean.value)} "
+        f"median={_format_publication_metric(summary.median.value)} "
+        f"min={_format_publication_metric(summary.minimum.value)} "
+        f"max={_format_publication_metric(summary.maximum.value)}; "
+        f"seed_values={','.join(_format_publication_metric(value.value) for value in summary.seed_values)}"
+        for summary in mechanism.macro_summaries
+    )
     return [ReportLine(line) for line in lines]
 
 
