@@ -117,6 +117,19 @@ class OnboardingTargetCalibration:
             references=samples[0].references,
         )
 
+    def scores_for_cell(
+        self,
+        size: OnboardingCalibrationSize,
+        replicate_index: ReplicateIndex,
+    ) -> tuple[ClientBenignCalibrationScores, ...]:
+        """Return full non-target calibration pools plus the target's sole cell sample."""
+        target_scores = self.subsample(size, replicate_index)
+        if target_scores is None:
+            return self.other_full_scores
+        return tuple(
+            sorted((*self.other_full_scores, target_scores), key=lambda item: item.client)
+        )
+
 
 def build_calibration(request: BuildCalibrationRequest) -> BuildCalibrationResult:
     result = calibrate(
