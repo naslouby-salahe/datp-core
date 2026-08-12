@@ -207,6 +207,29 @@ def confirmatory_paired_effect_figure(
     )
 
 
+def causal_intervention_map_figure() -> FigureSpec:
+    return FigureSpec(
+        title=FigureTitle("FIGURE-001 — Causal intervention map and fixed-score boundary"),
+        causal_map_lines=tuple(
+            FigureLabel(line)
+            for line in (
+                "raw records -> population / split identity -> fitted preprocessing state -> federated training",
+                "-> terminal detector -> canonical calibration + evaluation score artifacts",
+                "-> [FIXED-SCORE BOUNDARY] -> threshold estimator -> threshold-calibration scope",
+                "-> deployed threshold(s) -> held-out predictions -> per-client metrics",
+                "-> cross-client operating-point metrics",
+                "preprocessing sensitivity -> fitted preprocessing / detector geometry",
+                "FedProx + local fine-tuning + Ditto -> training / detector geometry",
+                "Komadina-style estimator axis + q95-vs-moment sensitivity -> threshold estimator",
+                "DATP core ladder -> threshold-calibration scope ONLY",
+                "one-shot recalibration -> calibration evidence at a later genuine-time window",
+                "No arrow from held-out labels or metrics feeds back into estimation, q selection, preprocessing,",
+                "training, cluster count, shrinkage, or eligibility.",
+            )
+        ),
+    )
+
+
 def _pareto_policy_label(method: str, shrinkage_weight: float) -> str:
     return f"{method}(lambda={shrinkage_weight:g})"
 
@@ -247,11 +270,14 @@ class FigureSpec:
     series: tuple[FigureSeries, ...] = ()
     empirical_cdf_series: tuple[EmpiricalCdfFigureSeries, ...] = ()
     paired_metric_series: tuple[PairedMetricFigureSeries, ...] = ()
+    causal_map_lines: tuple[FigureLabel, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.title, FigureTitle):
             object.__setattr__(self, "title", FigureTitle(self.title))
-        if not self.series and not self.empirical_cdf_series and not self.paired_metric_series:
+        if not (
+            self.series or self.empirical_cdf_series or self.paired_metric_series or self.causal_map_lines
+        ):
             raise ValueError("figure specifications require at least one series")
 
 
@@ -371,6 +397,8 @@ def render_markdown_figure(figure: FigureSpec) -> ReportLine:
             ]
         )
         rows.extend(_render_series(series) for series in figure.series)
+    if figure.causal_map_lines:
+        rows.extend(("", "```text", *figure.causal_map_lines, "```"))
     if figure.paired_metric_series:
         rows.extend(
             [

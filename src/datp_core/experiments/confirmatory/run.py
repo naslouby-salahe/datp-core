@@ -86,6 +86,7 @@ from datp_core.experiments.registry import EXPERIMENTS, ExperimentDeclaration
 from datp_core.presentation.export import export_confirmatory_publication, export_mechanism_publication
 from datp_core.presentation.figures import (
     FigureSpec,
+    causal_intervention_map_figure,
     confirmatory_paired_effect_figure,
     equity_utility_pareto_figure,
     score_geometry_figure,
@@ -225,7 +226,11 @@ def analyze_confirmatory_campaign() -> Path:
         )
     )
     geometries, figures = build_confirmatory_score_geometry()
-    figures = (*figures, confirmatory_paired_effect_figure(result.document.contrasts, result.document.interval))
+    figures = (
+        causal_intervention_map_figure(),
+        *figures,
+        confirmatory_paired_effect_figure(result.document.contrasts, result.document.interval),
+    )
     persist_score_geometry(geometries, output / ConfirmatoryAssetDirectory.SCORE_GEOMETRY)
     export_confirmatory_publication(
         result.document,
