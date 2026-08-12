@@ -1,11 +1,18 @@
 from pathlib import Path
+from typing import cast
 
 import polars as pl
+import pytest
 from pydantic import TypeAdapter
 from tests.unit.learning.federated.helpers import client_identity, fedavg_coordinate
 
+from datp_core.analysis.metrics.cohorts import EvaluationCohortManifest
 from datp_core.analysis.metrics.fixed_score_construction import build_federated_evaluation_inputs
-from datp_core.analysis.metrics.fixed_score_validation import validate_fixed_score_controls
+from datp_core.analysis.metrics.fixed_score_validation import (
+    validate_evaluation_evidence,
+    validate_fixed_score_controls,
+)
+from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import (
     FederatedThresholdMethod,
     PartitionRole,
@@ -103,3 +110,24 @@ def test_fixed_score_controls_survive_serialization_reload(tmp_path: Path) -> No
 
     assert restored_local.score_manifest is not shared.score_manifest
     validate_fixed_score_controls(shared, restored_local)
+
+
+def test_fixed_score_evidence_rejects_mutated_persisted_score_artifacts(tmp_path: Path) -> None:
+    manifest = _score_manifest(tmp_path)
+    evidence = build_federated_evaluation_inputs(
+        manifest, FederatedThresholdMethod.SHARED_THRESHOLD
+    ).fixed_score_evidence
+    evaluation = manifest.evaluation_records[0]
+    pl.DataFrame(
+        {
+            ScoreFrameColumn.STABLE_ROW_ID.value: ["evaluation-0", "evaluation-1"],
+            ScoreFrameColumn.OUTCOME_LABEL.value: [
+                PopulationOutcomeLabel.BENIGN.value,
+                PopulationOutcomeLabel.ATTACK.value,
+            ],
+            ScoreFrameColumn.RECONSTRUCTION_ERROR.value: [0.3, 0.9],
+        }
+    ).write_parquet(evaluation.path)
+
+    with pytest.raises(ScientificContractError, match="persisted score-artifact content"):
+        validate_evaluation_evidence(evidence, manifest, cast(EvaluationCohortManifest, None), ())

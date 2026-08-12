@@ -4,7 +4,7 @@ from datp_core.analysis.metrics.fixed_score import FederatedEvaluationInputs, Fi
 from datp_core.core.errors import ErrorMessage, ScientificContractError
 from datp_core.core.identifiers import FederatedThresholdMethod, PartitionRole
 from datp_core.data.populations.contracts import ClientIdentity
-from datp_core.detector.scoring.contracts import ScoreArtifactManifest
+from datp_core.detector.scoring.contracts import ScoreArtifactManifest, score_artifact_content_identity
 from datp_core.detector.training.models import FederatedTrainingCoordinate
 
 type FederatedScoreArtifactManifest = ScoreArtifactManifest[FederatedTrainingCoordinate, ClientIdentity]
@@ -32,5 +32,6 @@ def build_federated_evaluation_inputs(
             threshold_method=threshold_method,
             calibration_role=calibration_role,
             score_manifest=score_manifest,
+            content_identity=score_artifact_content_identity(score_manifest),
         ),
     )

@@ -3,6 +3,7 @@ from datp_core.analysis.metrics.fixed_score import FixedScoreEvidence
 from datp_core.analysis.metrics.models import ClientMetricResult
 from datp_core.core.errors import ErrorMessage, ScientificContractError
 from datp_core.core.identifiers import ContractSubject
+from datp_core.detector.scoring.contracts import score_artifact_content_identity
 from datp_core.detector.scoring.models import FederatedScoreArtifactManifest
 
 
@@ -18,6 +19,11 @@ def validate_evaluation_evidence(
             ErrorMessage("evaluation must consume the score evidence created for this execution"),
             subject=ContractSubject.SCORES,
         )
+    if evidence.content_identity != score_artifact_content_identity(manifest):
+        raise ScientificContractError(
+            ErrorMessage("fixed-score evidence does not match the persisted score-artifact content"),
+            subject=ContractSubject.SCORES,
+        )
 
 
 def validate_fixed_score_controls(first: FixedScoreEvidence, second: FixedScoreEvidence) -> None:
@@ -27,3 +33,5 @@ def validate_fixed_score_controls(first: FixedScoreEvidence, second: FixedScoreE
         raise ScientificContractError(ErrorMessage("fixed-score control failed: calibration partition role differs"))
     if first.score_manifest != second.score_manifest:
         raise ScientificContractError(ErrorMessage("fixed-score comparison requires the same score evidence"))
+    if first.content_identity != second.content_identity:
+        raise ScientificContractError(ErrorMessage("fixed-score comparison requires identical persisted score content"))

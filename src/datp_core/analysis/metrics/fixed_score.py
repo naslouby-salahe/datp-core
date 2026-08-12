@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from datp_core.analysis.metrics.cohorts import EvaluationCohortManifest
-from datp_core.core.identifiers import FederatedThresholdMethod, PartitionRole, StableRowId
+from datp_core.core.identifiers import FederatedThresholdMethod, PartitionRole, Sha256Digest, StableRowId
 from datp_core.core.numeric import ScoreValue
 from datp_core.data.populations.contracts import ClientIdentity, PopulationOutcomeLabel
 from datp_core.detector.scoring.contracts import ScoreArtifactManifest
@@ -34,6 +34,7 @@ class FixedScoreEvidence:
     threshold_method: FederatedThresholdMethod
     calibration_role: PartitionRole
     score_manifest: FederatedScoreArtifactManifest
+    content_identity: Sha256Digest
 
 
 @dataclass(frozen=True, slots=True)

@@ -561,6 +561,16 @@ class ScoreArtifactPathText(NonEmptyString):
     validation_name: ClassVar[str] = "score artifact path text"
 
 
+class Sha256Digest(NonEmptyString):
+    validation_name: ClassVar[str] = "SHA-256 digest"
+
+    def __new__(cls, value: str) -> "Sha256Digest":
+        instance = super().__new__(cls, value)
+        if len(instance) != 64 or any(character not in "0123456789abcdef" for character in instance):
+            raise ValueError("SHA-256 digest must be 64 lowercase hexadecimal characters")
+        return instance
+
+
 @dataclass(frozen=True, slots=True)
 class ClientPathToken:
     value: str

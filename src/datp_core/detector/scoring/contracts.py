@@ -1,6 +1,7 @@
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
+from hashlib import sha256
 from pathlib import Path
 from typing import Protocol, cast
 
@@ -13,6 +14,7 @@ from datp_core.core.identifiers import (
     PartitionRole,
     PopulationId,
     SerializationFormat,
+    Sha256Digest,
     SplitProtocolId,
 )
 from datp_core.core.numeric import FeatureCount, RowCount
@@ -157,6 +159,27 @@ class ScoreArtifactManifest[CoordinateT, ClientT]:
                 return self.evaluation_records
             case _:
                 raise ScientificContractError(ErrorMessage("training rows are not score artifacts"), subject=role)
+
+
+def score_artifact_content_identity[CoordinateT, ClientT](
+    manifest: ScoreArtifactManifest[CoordinateT, ClientT],
+) -> Sha256Digest:
+    """Return an ordered, byte-level identity for immutable score artifacts."""
+    digest = sha256()
+    for role in (PartitionRole.CALIBRATION, PartitionRole.FUTURE_RECALIBRATION, PartitionRole.EVALUATION):
+        for record in manifest.records_for(role):
+            if not record.path.is_file():
+                raise ScientificContractError(
+                    ErrorMessage("score artifact is unavailable for content-identity validation"),
+                    subject=ContractSubject.ARTIFACT_PATH,
+                )
+            digest.update(role.value.encode("utf-8"))
+            digest.update(b"\0")
+            client = cast(ClientIdentityContract, record.scored_client)
+            digest.update(client.client_id.value.encode("utf-8"))
+            digest.update(b"\0")
+            digest.update(record.path.read_bytes())
+    return Sha256Digest(digest.hexdigest())
 
 
 @dataclass(frozen=True, slots=True)
