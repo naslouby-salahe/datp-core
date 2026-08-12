@@ -107,6 +107,7 @@ def prepare_federated_evaluation(request: FederatedEvaluationRequest) -> Federat
     )
     document = FederatedEvaluationDocument(
         stage=StageOperationId.EVALUATE_FEDERATED,
+        execution_key=request.execution_key,
         score_coordinate=request.score_manifest.coordinate,
         threshold_method=_threshold_method(request.threshold_result),
         evidence_role=request.evidence_role,

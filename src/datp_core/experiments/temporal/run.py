@@ -532,6 +532,7 @@ def _execute_temporal_states(
         started = time.monotonic()
         result = _evaluate_state(
             context=context,
+            execution_coordinate=coordinate,
             identity=identity,
             scores=scores,
             calibration_role=calibration_role,
@@ -630,6 +631,7 @@ def _cluster_aggregation(method: FederatedThresholdMethod) -> ClusterThresholdAg
 def _evaluate_state(
     *,
     context: FederatedExecutionContext,
+    execution_coordinate: ExperimentCoordinate,
     identity: ExternalTemporalExecutionIdentity,
     scores: FederatedScoreArtifactManifest,
     calibration_role: PartitionRole,
@@ -677,6 +679,7 @@ def _evaluate_state(
         evaluation_inputs = build_federated_evaluation_inputs(scores, method, calibration_role=calibration_role)
         evaluation = evaluate_federated_detector(
             EvaluateFederatedDetectorRequest(
+                execution_coordinate=execution_coordinate,
                 score_manifest=scores,
                 threshold_result=threshold,
                 cohort=evaluation_inputs.cohort,

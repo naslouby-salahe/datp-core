@@ -12,7 +12,7 @@ from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
 )
-from datp_core.core.identifiers import EvaluationCohort, EvidenceRole, FederatedThresholdMethod
+from datp_core.core.identifiers import CoordinateStableKey, EvaluationCohort, EvidenceRole, FederatedThresholdMethod
 from datp_core.core.numeric import CalibrationSize, Quantile, ReplicateIndex, SubsampleReplicateCount
 from datp_core.data.populations.contracts import ClientIdentity, EligibleCohort, FamilyAssignment
 from datp_core.data.registry import population_capabilities
@@ -70,6 +70,7 @@ class BuildCalibrationResult:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ConstructCalibrationSizeAblationRequest:
+    execution_key: CoordinateStableKey
     score_manifest: FederatedScoreArtifactManifest
     method: FederatedThresholdMethod
     quantile: Quantile
@@ -148,6 +149,7 @@ def construct_calibration_size_ablation(
                 continue
             publication = prepare_federated_evaluation(
                 FederatedEvaluationRequest(
+                    execution_key=request.execution_key,
                     score_manifest=request.score_manifest,
                     threshold_result=threshold,
                     cohort=_cell_cohort(request.cohort, tuple(item.client for item in eligible)),

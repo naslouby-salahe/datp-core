@@ -294,6 +294,7 @@ class ExperimentWorkspace:
         inputs = build_federated_evaluation_inputs(self.scores, self.coordinate.threshold_method)
         return construct_calibration_size_ablation(
             ConstructCalibrationSizeAblationRequest(
+                execution_key=self.coordinate.execution_key,
                 score_manifest=self.scores,
                 method=self.coordinate.threshold_method,
                 quantile=self.threshold_quantile,
@@ -424,6 +425,7 @@ class ExperimentWorkspace:
         inputs = build_federated_evaluation_inputs(self.scores, self.coordinate.threshold_method)
         return evaluate_federated_detector(
             EvaluateFederatedDetectorRequest(
+                execution_coordinate=self.coordinate,
                 score_manifest=self.scores,
                 threshold_result=self.threshold,
                 cohort=inputs.cohort,

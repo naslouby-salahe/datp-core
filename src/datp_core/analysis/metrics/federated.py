@@ -21,7 +21,7 @@ from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
 )
-from datp_core.core.identifiers import EvidenceRole, FederatedThresholdMethod, StageOperationId
+from datp_core.core.identifiers import CoordinateStableKey, EvidenceRole, FederatedThresholdMethod, StageOperationId
 from datp_core.core.numeric import (
     CalibrationSize,
     CoverageTarget,
@@ -103,6 +103,7 @@ class EvaluationDiagnostics:
 
 @dataclass(frozen=True, slots=True)
 class FederatedEvaluationRequest:
+    execution_key: CoordinateStableKey
     score_manifest: FederatedScoreArtifactManifest
     threshold_result: ThresholdConstructionResult
     cohort: EvaluationCohortManifest
@@ -121,6 +122,7 @@ class FederatedEvaluationRequest:
 class FederatedEvaluationDocument(StrictModel):
     model_config = ConfigDict(revalidate_instances="never")
     stage: StageOperationId
+    execution_key: CoordinateStableKey
     score_coordinate: FederatedTrainingCoordinate
     threshold_method: FederatedThresholdMethod
     evidence_role: EvidenceRole

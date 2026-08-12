@@ -18,12 +18,13 @@ from datp_core.analysis.temporal import TemporalDeploymentProvenance
 from datp_core.artifacts.repositories.evaluations import write_federated_evaluation
 from datp_core.core.identifiers import EvidenceRole
 from datp_core.detector.scoring.models import FederatedScoreArtifactManifest
-from datp_core.experiments.common.coordinates import ExternalTemporalExecutionIdentity
+from datp_core.experiments.common.coordinates import ExperimentCoordinate, ExternalTemporalExecutionIdentity
 from datp_core.thresholds.dispatch import ThresholdConstructionResult
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class EvaluateFederatedDetectorRequest:
+    execution_coordinate: ExperimentCoordinate
     score_manifest: FederatedScoreArtifactManifest
     threshold_result: ThresholdConstructionResult
     cohort: EvaluationCohortManifest
@@ -53,6 +54,7 @@ def evaluate_federated_detector(request: EvaluateFederatedDetectorRequest) -> Ev
         raise FileExistsError(f"evaluation output already exists: {request.output_directory}")
     prepared = prepare_federated_evaluation(
         FederatedEvaluationRequest(
+            execution_key=request.execution_coordinate.execution_key,
             score_manifest=request.score_manifest,
             threshold_result=request.threshold_result,
             cohort=request.cohort,
