@@ -526,7 +526,12 @@ def report_federated_quantile_estimation(
         loaded = _estimation_summary(
             experiment_id=experiment_id,
             method=method,
-            families=frozenset((EstimationDiagnosticFamily.EXCEEDANCE_AND_VARIANCE,)),
+            families=frozenset(
+                (
+                    EstimationDiagnosticFamily.THRESHOLD_ERROR,
+                    EstimationDiagnosticFamily.EXCEEDANCE_AND_VARIANCE,
+                )
+            ),
         )
         missing += loaded.missing_count.value
         if loaded.summary is not None:
