@@ -343,6 +343,7 @@ class TrainingHistoryColumn(StrEnum):
 class ScoreFrameColumn(StrEnum):
     STABLE_ROW_ID = "stable_row_id"
     OUTCOME_LABEL = "outcome_label"
+    ATTACK_FAMILY = "attack_family"
     RECONSTRUCTION_ERROR = "reconstruction_error"
 
 

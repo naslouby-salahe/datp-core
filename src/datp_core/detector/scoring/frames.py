@@ -40,9 +40,10 @@ from datp_core.detector.training.contracts import AutoencoderProtocol
 SCORE_FRAME_COLUMNS = (
     ScoreFrameColumn.STABLE_ROW_ID.value,
     ScoreFrameColumn.OUTCOME_LABEL.value,
+    ScoreFrameColumn.ATTACK_FAMILY.value,
     ScoreFrameColumn.RECONSTRUCTION_ERROR.value,
 )
-SCORE_FRAME_DTYPES = (pl.Utf8, pl.Utf8, pl.Float64)
+SCORE_FRAME_DTYPES = (pl.Utf8, pl.Utf8, pl.Utf8, pl.Float64)
 CALIBRATION_PARTITIONS = frozenset(
     {
         PartitionRole.CALIBRATION,
@@ -93,9 +94,10 @@ def extract_score_arrays(
 def score_frame(
     row_ids: StableRowIdSequence,
     labels: OutcomeLabelSequence,
+    attack_families: tuple[str | None, ...],
     scores: npt.NDArray[np.float64],
 ) -> pl.DataFrame:
-    if len(row_ids) != len(labels) or len(row_ids) != scores.shape[0]:
+    if len(row_ids) != len(labels) or len(labels) != len(attack_families) or len(row_ids) != scores.shape[0]:
         raise ScientificContractError(
             ErrorMessage("score output columns must preserve one-to-one row alignment"),
             subject=ContractSubject.SCORES,
@@ -106,6 +108,11 @@ def score_frame(
             pl.Series(SCORE_FRAME_COLUMNS[1], tuple(str(lbl) for lbl in labels.labels), dtype=pl.Utf8),
             pl.Series(
                 SCORE_FRAME_COLUMNS[2],
+                attack_families,
+                dtype=pl.Utf8,
+            ),
+            pl.Series(
+                SCORE_FRAME_COLUMNS[3],
                 scores.tolist(),
                 dtype=pl.Float64,
             ),
@@ -165,7 +172,15 @@ def score_and_persist_autoencoder_frame(
             ErrorMessage(f"generated scores must be finite in {partition_role.value} partition"),
             subject=ContractSubject.SCORES,
         )
-    output = score_frame(arrays.row_ids, arrays.labels, scores)
+    attack_families = (
+        tuple(
+            str(value) if value is not None else None
+            for value in frame.get_column(ScoreFrameColumn.ATTACK_FAMILY.value)
+        )
+        if ScoreFrameColumn.ATTACK_FAMILY.value in frame.columns
+        else (None,) * frame.height
+    )
+    output = score_frame(arrays.row_ids, arrays.labels, attack_families, scores)
     destination.parent.mkdir(parents=True, exist_ok=True)
     output.write_parquet(destination)
     written_row_count = pq.ParquetFile(destination).metadata.num_rows
