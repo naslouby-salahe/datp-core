@@ -11,6 +11,7 @@ from datp_core.core.errors import (
 from datp_core.core.identifiers import FeatureNameSequence, PartitionRole, SplitProtocolId
 from datp_core.core.numeric import BatchSize, FeatureCount, RowCount
 from datp_core.data.populations.contracts import ClientIdentity
+from datp_core.detector.autoencoder import AutoencoderModelState
 from datp_core.detector.scoring.contracts import (
     ScoreArtifact,
     ScoreArtifactManifest,
@@ -24,6 +25,18 @@ from datp_core.detector.training.models import FederatedTrainingCoordinate, Fede
 type FederatedScoreRecord = ScoreRecord[FederatedTrainingCoordinate, ClientIdentity]
 type FederatedScoreArtifactManifest = ScoreArtifactManifest[FederatedTrainingCoordinate, ClientIdentity]
 type FederatedScoreGenerationResult = ScoreGenerationResult[FederatedTrainingCoordinate, ClientIdentity]
+
+
+@dataclass(frozen=True, slots=True)
+class TerminalFederatedScoringModel:
+    """Frozen terminal model state and provenance for federated score generation."""
+
+    coordinate: FederatedTrainingCoordinate
+    terminal_model_state: AutoencoderModelState
+    batch_size_used: BatchSize
+
+
+type FederatedScoringModel = FederatedTrainingResult | TerminalFederatedScoringModel
 
 
 class FederatedScoreAssetName(StrEnum):
@@ -76,7 +89,7 @@ class ClientScoringInput:
 
 @dataclass(frozen=True, slots=True)
 class ScoreGenerationRequest:
-    training: FederatedTrainingResult
+    training: FederatedScoringModel
     scored_split_protocol: SplitProtocolId
     autoencoder: AutoencoderProtocol
     feature_names: FeatureNameSequence
@@ -87,7 +100,7 @@ class ScoreGenerationRequest:
 
 @dataclass(slots=True, eq=False, kw_only=True)
 class GenerateFederatedScoresRequest:
-    training: FederatedTrainingResult
+    training: FederatedScoringModel
     scored_split_protocol: SplitProtocolId
     autoencoder: AutoencoderProtocol
     feature_names: FeatureNameSequence
