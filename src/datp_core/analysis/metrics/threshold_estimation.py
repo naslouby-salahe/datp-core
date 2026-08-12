@@ -241,7 +241,7 @@ def sample_efficiency_curve(
                 calibration_size=key[3],
                 replicate_count=SubsampleReplicateCount(len(replicate_group)),
                 mean_threshold=ThresholdValue(float(np.mean(values))),
-                threshold_variance_across_nested_replicates=ThresholdVariance(float(np.var(values, ddof=0))),
+                threshold_variance_across_nested_replicates=ThresholdVariance(float(np.var(values, ddof=1))),
             )
         )
 
