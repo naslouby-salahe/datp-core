@@ -9,8 +9,9 @@ from datp_core.analysis.mechanisms.equity_pareto import equity_utility_pareto
 from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
 from datp_core.analysis.metrics.models import AvailableMetric
 from datp_core.core.errors import ScientificContractError
-from datp_core.core.identifiers import FederatedThresholdMethod, MetricId
+from datp_core.core.identifiers import FederatedThresholdMethod, FigureTitle, MetricId
 from datp_core.core.numeric import MetricValue, Seed
+from datp_core.presentation.figures import equity_utility_pareto_figure
 
 
 def test_equity_pareto_uses_mean_coordinates_and_does_not_scalarize() -> None:
@@ -63,6 +64,10 @@ def test_equity_pareto_exposes_descriptive_bca_intervals_for_full_seed_cohort() 
 
     assert result.points[0].x_interval.outcome is BcaOutcome.AVAILABLE
     assert result.points[0].y_interval.outcome is BcaOutcome.AVAILABLE
+    figure = equity_utility_pareto_figure(result, title=FigureTitle("Equity utility"))
+    assert len(figure.paired_metric_series) == 2
+    assert figure.paired_metric_series[0].x_values == (result.points[0].mean_x,)
+    assert figure.paired_metric_series[1].x_values == result.points[0].seed_values_x
 
 
 def _document(

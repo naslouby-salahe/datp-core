@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from datp_core.analysis.descriptive import ScoreGeometryResult, ScoreRole
+from datp_core.analysis.mechanisms.equity_pareto import EquityUtilityParetoView
 from datp_core.core.identifiers import (
     AnalysisReasonText,
     AvailabilityStatus,
@@ -109,6 +110,38 @@ def _validate_unavailable_paired_metric_series(series: PairedMetricFigureSeries)
         raise ValueError("unavailable paired-metric series cannot contain values or point labels")
     if series.unavailable_reason is None:
         raise ValueError("unavailable paired-metric series require an explicit reason")
+
+
+def equity_utility_pareto_figure(
+    view: EquityUtilityParetoView,
+    *,
+    title: FigureTitle,
+) -> FigureSpec:
+    """Preserve Pareto means and every seed-level point in a publication figure source."""
+
+    mean_series = PairedMetricFigureSeries(
+        label=FigureLabel("method arithmetic means; Pareto membership uses these coordinates"),
+        x_label=FigureLabel("mean seed-level CV(FPR), lower is better"),
+        y_label=FigureLabel(f"mean seed-level {view.utility_metric.value}, higher is better"),
+        availability=AvailabilityStatus.AVAILABLE,
+        x_values=tuple(point.mean_x for point in view.points),
+        y_values=tuple(point.mean_y for point in view.points),
+        point_labels=tuple(
+            FigureLabel(f"{point.threshold_method.value}; nondominated={point.nondominated}") for point in view.points
+        ),
+    )
+    seed_series = tuple(
+        PairedMetricFigureSeries(
+            label=FigureLabel(f"{point.threshold_method.value} seed-level points"),
+            x_label=FigureLabel("CV(FPR), lower is better"),
+            y_label=FigureLabel(f"{view.utility_metric.value}, higher is better"),
+            availability=AvailabilityStatus.AVAILABLE,
+            x_values=point.seed_values_x,
+            y_values=point.seed_values_y,
+        )
+        for point in view.points
+    )
+    return FigureSpec(title=title, paired_metric_series=(mean_series, *seed_series))
 
 
 def _validate_empirical_cdf_axes(series: EmpiricalCdfFigureSeries) -> None:

@@ -19,6 +19,7 @@ from datp_core.analysis.mechanisms import (
     AssociationObservation,
     CalibrationSupportBurdenSeedEvidence,
     ClientScoreVector,
+    EquityUtilityParetoView,
     FamilyRecallPolicyComparison,
     GroupDispersionObservation,
     GroupedDispersionResult,
@@ -82,7 +83,7 @@ from datp_core.experiments.execution.layout import (
 from datp_core.experiments.execution.models import ProgressHook
 from datp_core.experiments.registry import EXPERIMENTS, ExperimentDeclaration
 from datp_core.presentation.export import export_confirmatory_publication, export_mechanism_publication
-from datp_core.presentation.figures import FigureSpec, score_geometry_figure
+from datp_core.presentation.figures import FigureSpec, equity_utility_pareto_figure, score_geometry_figure
 from datp_core.runtime.configuration import OUTPUTS_ROOT
 from datp_core.thresholds.policies.cluster import GroupedThresholdResult
 
@@ -353,7 +354,31 @@ def build_confirmatory_score_geometry() -> tuple[tuple[ScoreGeometryResult, ...]
                 client_id=ClientIdentityToken(NBaIoTDevice.ENNIO_DOORBELL.value),
             )
         )
+    for view in _confirmatory_pareto_views():
+        figures.append(
+            equity_utility_pareto_figure(
+                view,
+                title=FigureTitle(f"N-BaIoT equity–utility Pareto: CV(FPR) versus {view.utility_metric.value}"),
+            )
+        )
     return tuple(geometries), tuple(figures)
+
+
+def _confirmatory_pareto_views() -> tuple[EquityUtilityParetoView, ...]:
+    documents = tuple(
+        load_evaluation_document(_evaluation_path(seed, method))
+        for seed in CONFIRMATORY_SEED_COHORT.values
+        for method in (
+            FederatedThresholdMethod.SHARED_THRESHOLD,
+            FederatedThresholdMethod.FAMILY_THRESHOLD,
+            FederatedThresholdMethod.CLUSTER_THRESHOLD,
+            FederatedThresholdMethod.LOCAL_THRESHOLD,
+        )
+    )
+    return (
+        equity_utility_pareto(documents, utility_metric=MetricId.P10_BINARY_MACRO_F1),
+        equity_utility_pareto(documents, utility_metric=MetricId.WORST_CLIENT_BALANCED_ACCURACY),
+    )
 
 
 def persist_score_geometry(geometries: tuple[ScoreGeometryResult, ...], output_directory: Path) -> None:
