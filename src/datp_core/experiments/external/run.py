@@ -3,6 +3,7 @@ from enum import StrEnum
 from pathlib import Path
 from shutil import rmtree
 
+import polars as pl
 from pydantic import TypeAdapter
 
 from datp_core.analysis.contrasts import (
@@ -13,6 +14,7 @@ from datp_core.analysis.contrasts import (
 )
 from datp_core.analysis.evidence import AnalyzeExternalEvidenceRequest, analyze_external_evidence
 from datp_core.analysis.inference.contracts import PairedInferenceProtocol
+from datp_core.analysis.mechanisms import ClientScoreVector, jensen_shannon_from_client_scores
 from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
 from datp_core.analysis.metrics.models import metric_by_id
 from datp_core.analysis.metrics.semantics import metric_value
@@ -35,6 +37,7 @@ from datp_core.core.identifiers import (
     MarkdownText,
     MetricId,
     PopulationId,
+    ScoreFrameColumn,
 )
 from datp_core.core.numeric import (
     AbsoluteThresholdError,
@@ -47,12 +50,13 @@ from datp_core.core.numeric import (
     Seed,
     ThresholdValue,
 )
+from datp_core.detector.scoring.models import FederatedScoreAssetName
 from datp_core.experiments.common.coordinates import ExperimentCoordinate, ExternalTemporalExecutionIdentity
 from datp_core.experiments.common.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_ANALYSIS_SEED, SeedCohort
 from datp_core.experiments.confirmatory.spec import CONFIRMATORY_INFERENCE_PROTOCOL
 from datp_core.experiments.execution import execute_declared_experiment_seed
 from datp_core.experiments.execution.evidence import load_evaluation_document, population_metric
-from datp_core.experiments.execution.layout import EvaluationRunAssetDirectory
+from datp_core.experiments.execution.layout import EvaluationRunAssetDirectory, federated_training_directory
 from datp_core.experiments.execution.models import ProgressHook
 from datp_core.experiments.registry import EXPERIMENTS, ExperimentDeclaration
 from datp_core.presentation.export import export_external_publication, format_publication_metric
@@ -158,6 +162,56 @@ def analyze_ciciot_boundary_campaign(*, output_root: Path, overwrite: bool) -> B
     return _analyze(ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY, output_root, overwrite)
 
 
+def analyze_ciciot_boundary_evidence(*, output_root: Path, overwrite: bool) -> Path:
+    declaration = _declaration(ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY)
+    output = (
+        output_root
+        / BoundedExternalAssetDirectory.ANALYSIS.value
+        / declaration.id.value
+        / declaration.population.value
+    )
+    output.mkdir(parents=True, exist_ok=True)
+    rows: list[CiciotBoundaryRow] = []
+    for seed in BOUNDED_EVIDENCE_SEED_COHORT.values:
+        for method in declaration.federated_thresholds:
+            document = load_evaluation_document(_evaluation_path(declaration, seed, method, output_root))
+            rows.append(
+                CiciotBoundaryRow(
+                    seed=seed,
+                    method=method,
+                    mean_pairwise_benign_score_jsd=_mean_pairwise_benign_score_jsd(document, output_root),
+                    cv_fpr=_optional_metric(document, MetricId.FPR_COEFFICIENT_OF_VARIATION),
+                    fpr_iqr=_optional_metric(document, MetricId.FPR_IQR),
+                    fpr_range=_optional_metric(document, MetricId.FPR_RANGE),
+                    worst_client_fpr=_optional_metric(document, MetricId.WORST_CLIENT_FPR),
+                )
+            )
+    serialize_json_model(
+        CiciotBoundaryReport(experiment=declaration.id, population=declaration.population, rows=tuple(rows)),
+        output / "ciciot_boundary_summary.json",
+    )
+    return output
+
+
+def _mean_pairwise_benign_score_jsd(document: FederatedEvaluationDocument, output_root: Path) -> MetricValue | None:
+    score_root = federated_training_directory(document.score_coordinate, output_root) / "scores"
+    vectors: list[ClientScoreVector] = []
+    for client in sorted(document.clients, key=lambda item: item.client):
+        path = score_root / client.client.client_id.value / FederatedScoreAssetName.CALIBRATION
+        if not path.is_file():
+            raise ScientificContractError(ErrorMessage(f"missing persisted benign calibration scores: {path}"))
+        values = pl.read_parquet(path)[ScoreFrameColumn.RECONSTRUCTION_ERROR.value].to_list()
+        if not values:
+            raise ScientificContractError(ErrorMessage(f"empty benign calibration scores: {path}"))
+        vectors.append(
+            ClientScoreVector(
+                client=client.client,
+                scores=tuple(MetricValue(float(value)) for value in values),
+            )
+        )
+    return jensen_shannon_from_client_scores(tuple(vectors)).aggregate
+
+
 def _analyze(experiment: ExperimentId, output_root: Path, overwrite: bool) -> BoundedExternalCampaignAnalysisResult:
     declaration = _declaration(experiment)
     base = CONFIRMATORY_INFERENCE_PROTOCOL
@@ -257,6 +311,22 @@ class ExternalBenignStatisticsReport(StrictModel):
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ExternalBenignStatisticsReportResult:
     output_directory: Path
+
+
+class CiciotBoundaryRow(StrictModel):
+    seed: Seed
+    method: FederatedThresholdMethod
+    mean_pairwise_benign_score_jsd: MetricValue | None
+    cv_fpr: MetricValue | None
+    fpr_iqr: MetricValue | None
+    fpr_range: MetricValue | None
+    worst_client_fpr: MetricValue | None
+
+
+class CiciotBoundaryReport(StrictModel):
+    experiment: ExperimentId
+    population: PopulationId
+    rows: tuple[CiciotBoundaryRow, ...]
 
 
 def analyze_external_benign_statistics(*, output_root: Path, overwrite: bool) -> ExternalBenignStatisticsReportResult:

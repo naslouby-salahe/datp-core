@@ -61,6 +61,7 @@ from datp_core.experiments.execution.models import ProgressHook
 from datp_core.experiments.external import (
     BoundedExternalAssetDirectory,
     analyze_ciciot_boundary_campaign,
+    analyze_ciciot_boundary_evidence,
     analyze_external_benign_statistics,
     analyze_external_validation_campaign,
     run_ciciot_boundary_seed,
@@ -571,11 +572,14 @@ def _report_external(experiment_id: ExperimentId) -> ReportResult:
         )
     if experiment_id is ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY:
         result = analyze_ciciot_boundary_campaign(output_root=OUTPUTS_ROOT, overwrite=True)
+        boundary = analyze_ciciot_boundary_evidence(output_root=OUTPUTS_ROOT, overwrite=True)
         centralized = report_centralized_reference(CIC_CENTRALIZED_REFERENCE, output_root=OUTPUTS_ROOT, overwrite=True)
         return ReportResult(
             experiment=experiment_id,
-            paths=(result.output_directory, centralized),
-            detail=DetailText(f"boundary={result.output_directory} centralized_reference={centralized}"),
+            paths=(result.output_directory, boundary, centralized),
+            detail=DetailText(
+                f"boundary={boundary} paired={result.output_directory} centralized_reference={centralized}"
+            ),
         )
     raise ReportEvidenceError(ErrorMessage(f"unsupported external report: {experiment_id.value}"))
 
