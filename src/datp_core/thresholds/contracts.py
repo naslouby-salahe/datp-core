@@ -36,6 +36,7 @@ class ThresholdInfeasibilityReason(StrEnum):
     UNAVAILABLE_NO_LOCAL_CALIBRATION = "unavailable_no_local_calibration"
     UNAVAILABLE_NO_FINGERPRINT = "unavailable_no_fingerprint"
     UNAVAILABLE_NONFINITE_FINGERPRINT = "unavailable_nonfinite_fingerprint"
+    UNAVAILABLE_TOO_FEW_REMAINING_CONTRIBUTORS = "unavailable_too_few_remaining_contributors"
 
 
 @dataclass(frozen=True, slots=True)

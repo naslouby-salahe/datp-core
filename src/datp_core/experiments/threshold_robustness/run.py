@@ -70,6 +70,7 @@ from datp_core.experiments.threshold_robustness.cohorts import (
     extract_feasible_clients_by_size,
 )
 from datp_core.runtime.configuration import OUTPUTS_ROOT
+from datp_core.thresholds.contracts import ThresholdInfeasibilityReason
 from datp_core.thresholds.protocols import (
     CALIBRATION_SIZES,
     MINIMUM_BENIGN_SUPPORT,
@@ -252,11 +253,18 @@ class ContributorAvailabilityCampaignSummary(StrictModel):
     maximum_median_delta_cv: MetricDelta
 
 
+class ContributorAvailabilityUnavailableRow(StrictModel):
+    seed: Seed
+    omitted_count: NonNegativeIntegerValue
+    unavailable_reason: ThresholdInfeasibilityReason
+
+
 class ContributorAvailabilityReport(StrictModel):
     experiment: ExperimentId
     rows: tuple[ContributorAvailabilityRow, ...]
     seed_summaries: tuple[ContributorAvailabilitySeedSummary, ...]
     campaign_summaries: tuple[ContributorAvailabilityCampaignSummary, ...]
+    unavailable_rows: tuple[ContributorAvailabilityUnavailableRow, ...]
 
 
 class ShrinkageCurveRow(StrictModel):
@@ -764,6 +772,7 @@ def report_shared_calibration_contributor_availability(
     directory.mkdir(parents=True, exist_ok=True)
     rows: list[ContributorAvailabilityRow] = []
     seed_summaries: list[ContributorAvailabilitySeedSummary] = []
+    unavailable_rows: list[ContributorAvailabilityUnavailableRow] = []
     missing = 0
     for seed in CONFIRMATORY_SEED_COHORT.values:
         try:
@@ -777,6 +786,16 @@ def report_shared_calibration_contributor_availability(
             missing += 1
             continue
         local_cv = population_metric(local, MetricId.FPR_COEFFICIENT_OF_VARIATION)
+        eligible_count = len(local.clients)
+        unavailable_rows.extend(
+            ContributorAvailabilityUnavailableRow(
+                seed=seed,
+                omitted_count=NonNegativeIntegerValue(omitted_count),
+                unavailable_reason=ThresholdInfeasibilityReason.UNAVAILABLE_TOO_FEW_REMAINING_CONTRIBUTORS,
+            )
+            for omitted_count in range(5)
+            if eligible_count - omitted_count < 5
+        )
         cells = shared.diagnostics.contributor_omission
         baseline = next((cell for cell in cells if not cell.omitted_clients), None)
         if baseline is None:
@@ -845,6 +864,7 @@ def report_shared_calibration_contributor_availability(
             rows=tuple(rows),
             seed_summaries=tuple(seed_summaries),
             campaign_summaries=tuple(campaign_summaries),
+            unavailable_rows=tuple(unavailable_rows),
         ),
         _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
     )
