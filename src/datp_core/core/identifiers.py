@@ -91,6 +91,7 @@ class ExperimentId(StrEnum):
     EDGE_BENIGN_EQUITY_VALIDATION = "edge_benign_equity_validation"
     CICIOT_FILE_CLIENT_BOUNDARY = "ciciot_file_client_boundary"
     FEDPROX_ABSORPTION_STRESS_TEST = "fedprox_absorption_stress_test"
+    FEDAVG_LOCAL_FINE_TUNING = "fedavg_local_fine_tuning"
     DITTO_ABSORPTION_STRESS_TEST = "ditto_absorption_stress_test"
     EDGE_ONE_SHOT_RECALIBRATION = "edge_one_shot_recalibration"
     ALERT_BURDEN_TRANSLATION = "alert_burden_translation"
@@ -100,6 +101,7 @@ class ExperimentId(StrEnum):
 
 class TrainingModelId(StrEnum):
     FEDAVG_AUTOENCODER = "fedavg_autoencoder"
+    FEDAVG_LOCAL_FINE_TUNING = "fedavg_local_fine_tuning"
     FEDPROX_AUTOENCODER = "fedprox_autoencoder"
     DITTO_GLOBAL_AUTOENCODER = "ditto_global_autoencoder"
     DITTO_PERSONALIZED_AUTOENCODER = "ditto_personalized_autoencoder"

@@ -150,7 +150,7 @@ def _require_model_coefficient(
     coefficient: ProximalCoefficient | DittoRegularization | None,
 ) -> None:
     match model:
-        case TrainingModelId.FEDAVG_AUTOENCODER:
+        case TrainingModelId.FEDAVG_AUTOENCODER | TrainingModelId.FEDAVG_LOCAL_FINE_TUNING:
             if coefficient is not None:
                 raise ScientificContractError(
                     ErrorMessage("FedAvg coordinates carry no model coefficient"), subject=ContractSubject.TRAINING
