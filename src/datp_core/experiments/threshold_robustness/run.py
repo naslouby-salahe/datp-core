@@ -39,6 +39,7 @@ from datp_core.core.numeric import (
     SeedCount,
     SeedObservationCount,
     ShrinkageWeight,
+    ThresholdVariance,
 )
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.experiments.common.coordinates import ExperimentCoordinate
@@ -190,6 +191,7 @@ class ShrinkageCurveRow(StrictModel):
     fpr_range: MetricValue | None
     true_positive_rate: MetricValue | None
     p10_macro_f1: MetricValue | None
+    threshold_variance_across_clients: ThresholdVariance | None
 
 
 class ShrinkageCurveReport(StrictModel):
@@ -747,6 +749,15 @@ def report_fixed_shrinkage_curve(
             missing += 1
             continue
         for evaluation in document.diagnostics.shrinkage_curve:
+            thresholds = tuple(client.threshold.value for client in evaluation.clients)
+            threshold_variance = (
+                None
+                if len(thresholds) < 2
+                else ThresholdVariance(
+                    sum((value - sum(thresholds) / len(thresholds)) ** 2 for value in thresholds)
+                    / (len(thresholds) - 1)
+                )
+            )
             rows.append(
                 ShrinkageCurveRow(
                     seed=seed,
@@ -765,6 +776,7 @@ def report_fixed_shrinkage_curve(
                     p10_macro_f1=metric_value(
                         metric_by_id(evaluation.population.metrics, MetricId.P10_BINARY_MACRO_F1)
                     ),
+                    threshold_variance_across_clients=threshold_variance,
                 )
             )
     serialize_json_model(
