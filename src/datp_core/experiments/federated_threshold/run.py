@@ -39,6 +39,7 @@ from datp_core.core.numeric import (
     MetricValue,
     NonNegativeFiniteFloatValue,
     Ratio,
+    RelativeThresholdError,
     Seed,
     SeedCount,
     SeedObservationCount,
@@ -93,6 +94,7 @@ class EstimationSummary(StrictModel):
     mean_worst_client_fpr: MetricValue | None
     cv_fpr_across_seeds: MetricValue | None
     mean_absolute_threshold_error: AbsoluteThresholdError | None
+    mean_relative_threshold_error: RelativeThresholdError | None
     mean_absolute_attainment_error: MetricValue | None
     mean_achieved_exceedance: Ratio | None
     mean_threshold_variance: ThresholdVariance | None
@@ -234,6 +236,10 @@ def _mean_absolute_threshold_error(values: list[AbsoluteThresholdError]) -> Abso
     return AbsoluteThresholdError(sum(item.value for item in values) / len(values)) if values else None
 
 
+def _mean_relative_threshold_error(values: list[RelativeThresholdError]) -> RelativeThresholdError | None:
+    return RelativeThresholdError(sum(item.value for item in values) / len(values)) if values else None
+
+
 def _mean_ratio(values: list[Ratio]) -> Ratio | None:
     return Ratio(sum(value.value for value in values) / len(values)) if values else None
 
@@ -276,6 +282,7 @@ class EstimationDiagnosticFamily(StrEnum):
 @dataclass(frozen=True, slots=True, kw_only=True)
 class _EstimationDiagnostics:
     threshold_errors: list[AbsoluteThresholdError]
+    relative_threshold_errors: list[RelativeThresholdError]
     attainment_errors: list[MetricValue]
     exceedances: list[Ratio]
     variances: list[ThresholdVariance]
@@ -284,14 +291,17 @@ class _EstimationDiagnostics:
 
 def _collect_threshold_error_diagnostics(
     documents: tuple[FederatedEvaluationDocument, ...],
-) -> tuple[list[AbsoluteThresholdError], list[MetricValue]]:
+) -> tuple[list[AbsoluteThresholdError], list[RelativeThresholdError], list[MetricValue]]:
     threshold_errors: list[AbsoluteThresholdError] = []
+    relative_threshold_errors: list[RelativeThresholdError] = []
     attainment_errors: list[MetricValue] = []
     for document in documents:
         for diagnostic in document.diagnostics.threshold_estimation:
             threshold_errors.append(diagnostic.absolute_threshold_error)
+            if diagnostic.relative_threshold_error is not None:
+                relative_threshold_errors.append(diagnostic.relative_threshold_error)
             attainment_errors.append(diagnostic.absolute_attainment_error)
-    return threshold_errors, attainment_errors
+    return threshold_errors, relative_threshold_errors, attainment_errors
 
 
 def _collect_exceedance_and_variance_diagnostics(
@@ -323,15 +333,17 @@ def _collect_estimation_diagnostics(
     families: frozenset[EstimationDiagnosticFamily],
 ) -> _EstimationDiagnostics:
     threshold_errors: list[AbsoluteThresholdError] = []
+    relative_threshold_errors: list[RelativeThresholdError] = []
     attainment_errors: list[MetricValue] = []
     exceedances: list[Ratio] = []
     variances: list[ThresholdVariance] = []
     if EstimationDiagnosticFamily.THRESHOLD_ERROR in families:
-        threshold_errors, attainment_errors = _collect_threshold_error_diagnostics(documents)
+        threshold_errors, relative_threshold_errors, attainment_errors = _collect_threshold_error_diagnostics(documents)
     if EstimationDiagnosticFamily.EXCEEDANCE_AND_VARIANCE in families:
         exceedances, variances = _collect_exceedance_and_variance_diagnostics(documents)
     return _EstimationDiagnostics(
         threshold_errors=threshold_errors,
+        relative_threshold_errors=relative_threshold_errors,
         attainment_errors=attainment_errors,
         exceedances=exceedances,
         variances=variances,
@@ -381,6 +393,7 @@ def _estimation_summary(
             mean_worst_client_fpr=worst_summary.mean,
             cv_fpr_across_seeds=cv_summary.coefficient_of_variation,
             mean_absolute_threshold_error=_mean_absolute_threshold_error(diagnostics.threshold_errors),
+            mean_relative_threshold_error=_mean_relative_threshold_error(diagnostics.relative_threshold_errors),
             mean_absolute_attainment_error=(
                 MetricValue(
                     sum(item.value for item in diagnostics.attainment_errors) / len(diagnostics.attainment_errors)
