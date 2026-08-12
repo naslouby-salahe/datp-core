@@ -17,6 +17,7 @@ from datp_core.analysis.evidence import AnalyzeConfirmatoryEvidenceRequest, anal
 from datp_core.analysis.mechanisms import (
     AbsorptionCornerEvidence,
     AssociationObservation,
+    CalibrationSupportBurdenSeedEvidence,
     ClientScoreVector,
     GroupDispersionObservation,
     GroupedDispersionResult,
@@ -28,6 +29,7 @@ from datp_core.analysis.mechanisms import (
     grouped_dispersion,
     heterogeneity_benefit_association,
     jensen_shannon_from_client_scores,
+    summarize_calibration_support_burden,
     summarize_client_impact,
     summarize_client_impact_campaign,
     summarize_support_stratum_campaign,
@@ -218,6 +220,7 @@ def analyze_confirmatory_campaign() -> Path:
 def _confirmatory_mechanisms() -> tuple[MechanismEvidence, ...]:
     movement_cohorts: list[ThresholdMovementCohort] = []
     policy_pairs: list[tuple[FederatedEvaluationDocument, FederatedEvaluationDocument]] = []
+    support_burden_evidence: list[CalibrationSupportBurdenSeedEvidence] = []
     association_observations: list[AssociationObservation] = []
     mechanisms: list[MechanismEvidence] = []
     for seed in CONFIRMATORY_SEED_COHORT.values:
@@ -231,7 +234,9 @@ def _confirmatory_mechanisms() -> tuple[MechanismEvidence, ...]:
         )
         movement_cohorts.append(movement)
         mechanisms.append(movement)
-        mechanisms.append(calibration_support_burden_evidence(shared, local, movement))
+        burden = calibration_support_burden_evidence(shared, local, movement)
+        mechanisms.append(burden)
+        support_burden_evidence.append(burden)
         mechanisms.append(summarize_client_impact(movement))
         shared_cv = population_metric(shared, MetricId.FPR_COEFFICIENT_OF_VARIATION)
         local_cv = population_metric(local, MetricId.FPR_COEFFICIENT_OF_VARIATION)
@@ -257,6 +262,7 @@ def _confirmatory_mechanisms() -> tuple[MechanismEvidence, ...]:
         )
     )
     mechanisms.append(summarize_client_impact_campaign(tuple(movement_cohorts)))
+    mechanisms.append(summarize_calibration_support_burden(tuple(support_burden_evidence)))
     mechanisms.append(confirmatory_equity_utility_bundle(tuple(policy_pairs)))
     strata = campaign_fixed_support_strata(tuple(shared for shared, _ in policy_pairs))
     mechanisms.append(strata)

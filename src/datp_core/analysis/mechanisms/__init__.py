@@ -89,10 +89,13 @@ from datp_core.analysis.mechanisms.movement import (
     threshold_movement,
 )
 from datp_core.analysis.mechanisms.support_burden import (
+    CalibrationSupportBurdenCampaignSummary,
     CalibrationSupportBurdenClient,
     CalibrationSupportBurdenSeedEvidence,
     SupportAssociationAvailability,
+    SupportCorrelationDirectionSummary,
     calibration_support_burden_evidence,
+    summarize_calibration_support_burden,
 )
 from datp_core.analysis.mechanisms.support_strata import (
     CalibrationSupportStratum,
@@ -132,6 +135,7 @@ type MechanismEvidence = (
     | SupportStratumOutcomeReport
     | SupportStratumCampaignSummary
     | CalibrationSupportBurdenSeedEvidence
+    | CalibrationSupportBurdenCampaignSummary
 )
 
 __all__ = (
@@ -161,6 +165,7 @@ __all__ = (
     "CalibrationSupportStratum",
     "CalibrationSupportBurdenClient",
     "CalibrationSupportBurdenSeedEvidence",
+    "CalibrationSupportBurdenCampaignSummary",
     "CampaignFixedSupportStrata",
     "CampaignFixedSupportStratum",
     "SupportStratumOutcomeReport",
@@ -169,6 +174,7 @@ __all__ = (
     "SupportStratumCrossSeedSummary",
     "SupportStratumSeedOutcome",
     "SupportAssociationAvailability",
+    "SupportCorrelationDirectionSummary",
     "ConfirmatoryEquityUtilityBundle",
     "ConfirmatoryEquityUtilityMeasure",
     "DivergenceBlocker",
@@ -222,6 +228,7 @@ __all__ = (
     "summarize_threshold_movements",
     "summarize_threshold_movements_across_seeds",
     "summarize_support_stratum_campaign",
+    "summarize_calibration_support_burden",
     "support_stratum_seed_outcomes",
     "threshold_movement",
     "threshold_movements_from_evaluations",

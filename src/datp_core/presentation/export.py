@@ -30,7 +30,11 @@ from datp_core.analysis.mechanisms.movement import (
     ThresholdMovementCohort,
     ThresholdMovementMultiSeedUncertainty,
 )
-from datp_core.analysis.mechanisms.support_burden import CalibrationSupportBurdenSeedEvidence
+from datp_core.analysis.mechanisms.support_burden import (
+    CalibrationSupportBurdenCampaignSummary,
+    CalibrationSupportBurdenSeedEvidence,
+    SupportCorrelationDirectionSummary,
+)
 from datp_core.analysis.mechanisms.support_strata import (
     CampaignFixedSupportStrata,
     SupportStratumCampaignSummary,
@@ -664,6 +668,7 @@ _MECHANISM_TITLES: dict[type[object], ReportLine] = {
     SupportStratumOutcomeReport: ReportLine("support_stratum_seed_outcomes"),
     SupportStratumCampaignSummary: ReportLine("support_stratum_cross_seed_summary"),
     CalibrationSupportBurdenSeedEvidence: ReportLine("calibration_support_burden"),
+    CalibrationSupportBurdenCampaignSummary: ReportLine("calibration_support_burden_campaign_summary"),
     AbsorptionCohortResult: ReportLine("model_personalization_absorption"),
     ScientificDecisionResult: ReportLine("scientific_decision"),
 }
@@ -1078,6 +1083,32 @@ def _render_calibration_support_burden(mechanism: CalibrationSupportBurdenSeedEv
             f"clients={len(mechanism.clients)}"
         )
     ]
+
+
+@_render_one_mechanism.register
+def _render_calibration_support_burden_campaign(
+    mechanism: CalibrationSupportBurdenCampaignSummary,
+) -> list[ReportLine]:
+    return [
+        ReportLine(f"Support→FPR: {_render_correlation_summary(mechanism.support_fpr)}"),
+        ReportLine(f"Support→relief: {_render_correlation_summary(mechanism.support_relief)}"),
+    ]
+
+
+def _render_correlation_summary(summary: SupportCorrelationDirectionSummary) -> str:
+    if summary.median is None or summary.minimum is None or summary.maximum is None:
+        return (
+            f"unavailable; valid={summary.valid_seed_count.value}, "
+            f"unavailable={summary.unavailable_seed_count.value}"
+        )
+    return (
+        f"median={_format_publication_metric(summary.median.value)}, "
+        f"min={_format_publication_metric(summary.minimum.value)}, "
+        f"max={_format_publication_metric(summary.maximum.value)}; "
+        f"negative/zero/positive={summary.negative_count.value}/"
+        f"{summary.zero_count.value}/{summary.positive_count.value}; "
+        f"valid={summary.valid_seed_count.value}, unavailable={summary.unavailable_seed_count.value}"
+    )
 
 
 def _render_cross_seed_metric(summary: SupportStratumCrossSeedMetricSummary) -> str:

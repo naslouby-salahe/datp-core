@@ -5,7 +5,7 @@ from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
 from datp_core.analysis.metrics.models import MetricStatus, metric_by_id
 from datp_core.core.contracts import StrictModel
 from datp_core.core.identifiers import AnalysisReasonText, MetricId
-from datp_core.core.numeric import MetricValue, RowCount, Seed
+from datp_core.core.numeric import MetricValue, PairedObservationCount, RowCount, Seed, SeedObservationCount
 from datp_core.data.populations.contracts import ClientIdentity
 
 
@@ -29,6 +29,23 @@ class CalibrationSupportBurdenSeedEvidence(StrictModel):
     support_relief_spearman: MetricValue | None
     availability: SupportAssociationAvailability
     reason: AnalysisReasonText | None
+
+
+class SupportCorrelationDirectionSummary(StrictModel):
+    valid_seed_count: SeedObservationCount
+    unavailable_seed_count: SeedObservationCount
+    median: MetricValue | None
+    minimum: MetricValue | None
+    maximum: MetricValue | None
+    negative_count: PairedObservationCount
+    zero_count: PairedObservationCount
+    positive_count: PairedObservationCount
+
+
+class CalibrationSupportBurdenCampaignSummary(StrictModel):
+    seed_evidence: tuple[CalibrationSupportBurdenSeedEvidence, ...]
+    support_fpr: SupportCorrelationDirectionSummary
+    support_relief: SupportCorrelationDirectionSummary
 
 
 def calibration_support_burden_evidence(
@@ -81,6 +98,21 @@ def calibration_support_burden_evidence(
     )
 
 
+def summarize_calibration_support_burden(
+    evidence: tuple[CalibrationSupportBurdenSeedEvidence, ...],
+) -> CalibrationSupportBurdenCampaignSummary:
+    if not evidence:
+        raise ValueError("calibration-support burden summary requires seed evidence")
+    seeds = tuple(item.seed for item in evidence)
+    if len(seeds) != len(frozenset(seeds)):
+        raise ValueError("calibration-support burden seed evidence must be unique")
+    return CalibrationSupportBurdenCampaignSummary(
+        seed_evidence=evidence,
+        support_fpr=_summarize_correlation(tuple(item.support_fpr_spearman for item in evidence)),
+        support_relief=_summarize_correlation(tuple(item.support_relief_spearman for item in evidence)),
+    )
+
+
 def _unavailable(
     seed: Seed,
     clients: tuple[CalibrationSupportBurdenClient, ...],
@@ -120,3 +152,32 @@ def _average_ranks(values: tuple[float, ...]) -> tuple[float, ...]:
             ranks[index] = rank
         start = end
     return tuple(ranks)
+
+
+def _summarize_correlation(values: tuple[MetricValue | None, ...]) -> SupportCorrelationDirectionSummary:
+    available = tuple(item.value for item in values if item is not None)
+    unavailable = len(values) - len(available)
+    if not available:
+        return SupportCorrelationDirectionSummary(
+            valid_seed_count=SeedObservationCount(0),
+            unavailable_seed_count=SeedObservationCount(unavailable),
+            median=None,
+            minimum=None,
+            maximum=None,
+            negative_count=PairedObservationCount(0),
+            zero_count=PairedObservationCount(0),
+            positive_count=PairedObservationCount(0),
+        )
+    ordered = tuple(sorted(available))
+    middle = len(ordered) // 2
+    median = ordered[middle] if len(ordered) % 2 else (ordered[middle - 1] + ordered[middle]) / 2.0
+    return SupportCorrelationDirectionSummary(
+        valid_seed_count=SeedObservationCount(len(available)),
+        unavailable_seed_count=SeedObservationCount(unavailable),
+        median=MetricValue(median),
+        minimum=MetricValue(ordered[0]),
+        maximum=MetricValue(ordered[-1]),
+        negative_count=PairedObservationCount(sum(value < 0.0 for value in available)),
+        zero_count=PairedObservationCount(sum(value == 0.0 for value in available)),
+        positive_count=PairedObservationCount(sum(value > 0.0 for value in available)),
+    )
