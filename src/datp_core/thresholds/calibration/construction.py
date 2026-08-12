@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import cast
 
 from datp_core.analysis.metrics.cohorts import (
     ClientExclusionReason,
@@ -20,15 +21,31 @@ from datp_core.core.numeric import (
     ReplicateIndex,
     SubsampleReplicateCount,
 )
-from datp_core.data.populations.contracts import ClientIdentity, EligibleCohort, FamilyAssignment
+from datp_core.data.populations.contracts import (
+    ClientIdentity,
+    EligibleCohort,
+    FamilyAssignment,
+    PopulationCapabilities,
+)
 from datp_core.data.registry import population_capabilities
 from datp_core.detector.scoring.models import FederatedScoreArtifactManifest
 from datp_core.experiments.common.coordinates import ExternalTemporalExecutionIdentity
 from datp_core.thresholds.calibration.eligibility import EligibilityDecision, load_benign_calibration_references
 from datp_core.thresholds.calibration.sampling import CalibrationReplicateManifest, build_calibration_replicate
 from datp_core.thresholds.calibration.service import CalibrationRequest, calibrate, eligible_calibration_scores
-from datp_core.thresholds.contracts import ThresholdUnavailableResult
-from datp_core.thresholds.dispatch import ThresholdConstructionRequest, dispatch_federated_threshold
+from datp_core.thresholds.contracts import (
+    OnboardingThresholdResult,
+    ThresholdAssignment,
+    ThresholdInfeasibilityReason,
+    ThresholdUnavailableResult,
+)
+from datp_core.thresholds.dispatch import (
+    ThresholdConstructionRequest,
+    ThresholdConstructionResult,
+    dispatch_federated_threshold,
+)
+from datp_core.thresholds.policies.family import FamilyThresholdResult
+from datp_core.thresholds.policies.shared import SharedThresholdResult
 from datp_core.thresholds.protocols import (
     CALIBRATION_ELIGIBILITY_PROTOCOL,
     CALIBRATION_SIZE_PROTOCOL,
@@ -126,9 +143,123 @@ class OnboardingTargetCalibration:
         target_scores = self.subsample(size, replicate_index)
         if target_scores is None:
             return self.other_full_scores
-        return tuple(
-            sorted((*self.other_full_scores, target_scores), key=lambda item: item.client)
+        return tuple(sorted((*self.other_full_scores, target_scores), key=lambda item: item.client))
+
+
+@dataclass(frozen=True, slots=True)
+class OnboardingThresholdConstruction:
+    result: ThresholdConstructionResult | None
+    unavailable_reason: ThresholdInfeasibilityReason | None
+    family_fallback: bool
+
+
+def construct_onboarding_threshold(
+    target_calibration: OnboardingTargetCalibration,
+    size: OnboardingCalibrationSize,
+    replicate_index: ReplicateIndex,
+    method: FederatedThresholdMethod,
+    quantile: Quantile,
+    capabilities: PopulationCapabilities,
+    family_by_client: tuple[FamilyAssignment, ...],
+) -> OnboardingThresholdConstruction:
+    eligible = target_calibration.scores_for_cell(size, replicate_index)
+    if size.value > 0:
+        result = dispatch_federated_threshold(
+            ThresholdConstructionRequest(
+                method=method,
+                coordinate=target_calibration.full_target_scores.coordinate,
+                quantile=quantile,
+                capabilities=capabilities,
+                eligible=eligible,
+                family_by_client=family_by_client,
+                support_rule=CalibrationSupportRule.DECLARED_SIZE_ABLATION,
+                cluster_threshold_aggregation=(
+                    ClusterThresholdAggregation.ARITHMETIC_MEAN_OF_ELIGIBLE_LOCAL_THRESHOLDS
+                    if method is FederatedThresholdMethod.CLUSTER_THRESHOLD
+                    else None
+                ),
+            )
         )
+        return OnboardingThresholdConstruction(
+            result=None if isinstance(result, ThresholdUnavailableResult) else result,
+            unavailable_reason=None if not isinstance(result, ThresholdUnavailableResult) else result.reason,
+            family_fallback=False,
+        )
+    if method is FederatedThresholdMethod.LOCAL_THRESHOLD:
+        return OnboardingThresholdConstruction(
+            None,
+            ThresholdInfeasibilityReason.UNAVAILABLE_NO_LOCAL_CALIBRATION,
+            False,
+        )
+    if method is FederatedThresholdMethod.CLUSTER_THRESHOLD:
+        return OnboardingThresholdConstruction(None, ThresholdInfeasibilityReason.UNAVAILABLE_NO_FINGERPRINT, False)
+    result = dispatch_federated_threshold(
+        ThresholdConstructionRequest(
+            method=method,
+            coordinate=target_calibration.full_target_scores.coordinate,
+            quantile=quantile,
+            capabilities=capabilities,
+            eligible=eligible,
+            family_by_client=family_by_client,
+            support_rule=CalibrationSupportRule.DECLARED_SIZE_ABLATION,
+            cluster_threshold_aggregation=None,
+        )
+    )
+    if isinstance(result, ThresholdUnavailableResult):
+        return OnboardingThresholdConstruction(None, result.reason, False)
+    if method is FederatedThresholdMethod.FAMILY_THRESHOLD:
+        if not isinstance(result, FamilyThresholdResult):
+            raise ScientificContractError(ErrorMessage("onboarding family construction returned an invalid result"))
+        assignments = result.assignments
+    elif method is FederatedThresholdMethod.SHARED_THRESHOLD:
+        if not isinstance(result, SharedThresholdResult):
+            raise ScientificContractError(ErrorMessage("onboarding shared construction returned an invalid result"))
+        assignments = result.assignments
+    else:
+        raise ScientificContractError(ErrorMessage("onboarding m=0 supports only shared and family fallbacks"))
+    fallback = False
+    if method is FederatedThresholdMethod.FAMILY_THRESHOLD:
+        family_result = cast(FamilyThresholdResult, result)
+        target_family = next(item.family for item in family_by_client if item.client == target_calibration.target)
+        family_threshold = next(
+            (
+                item.family_threshold
+                for item in family_result.families
+                if item.family_id == target_family and item.family_threshold is not None
+            ),
+            None,
+        )
+        if family_threshold is None:
+            shared = dispatch_federated_threshold(
+                ThresholdConstructionRequest(
+                    method=FederatedThresholdMethod.SHARED_THRESHOLD,
+                    coordinate=target_calibration.full_target_scores.coordinate,
+                    quantile=quantile,
+                    capabilities=capabilities,
+                    eligible=eligible,
+                    family_by_client=family_by_client,
+                    support_rule=CalibrationSupportRule.DECLARED_SIZE_ABLATION,
+                    cluster_threshold_aggregation=None,
+                )
+            )
+            if not isinstance(shared, SharedThresholdResult):
+                raise ScientificContractError(
+                    ErrorMessage("onboarding family fallback must construct a shared threshold")
+                )
+            family_threshold = shared.shared_threshold
+            fallback = True
+        target_threshold = family_threshold
+    else:
+        target_threshold = cast(SharedThresholdResult, result).shared_threshold
+    return OnboardingThresholdConstruction(
+        OnboardingThresholdResult(
+            coordinate=target_calibration.full_target_scores.coordinate,
+            threshold_method=method,
+            assignments=(*assignments, ThresholdAssignment(target_calibration.target, target_threshold)),
+        ),
+        None,
+        fallback,
+    )
 
 
 def build_calibration(request: BuildCalibrationRequest) -> BuildCalibrationResult:
