@@ -1,5 +1,6 @@
 from dataclasses import dataclass
-from typing import Any, ClassVar, Protocol, cast
+from time import monotonic
+from typing import ClassVar, Protocol, cast
 
 import datasketches  # type: ignore[import-untyped]
 import numpy as np
@@ -9,6 +10,7 @@ from datp_core.core.identifiers import ContractSubject, FederatedThresholdMethod
 from datp_core.core.numeric import (
     AbsoluteThresholdError,
     ByteCount,
+    ElapsedSeconds,
     KllSketchSize,
     Quantile,
     Ratio,
@@ -35,11 +37,12 @@ class _KllDoublesSketch(Protocol):
     def normalized_rank_error(self, as_pmf: bool) -> float: ...
 
 
-_datasketches: Any = datasketches
-
-
 def _new_kll_sketch(sketch_size: KllSketchSize) -> _KllDoublesSketch:
-    return cast(_KllDoublesSketch, _datasketches.kll_doubles_sketch(sketch_size.value))
+    return cast(_KllDoublesSketch, datasketches.kll_doubles_sketch(sketch_size.value))
+
+
+def _deserialize_kll_sketch(payload: bytes) -> _KllDoublesSketch:
+    return cast(_KllDoublesSketch, datasketches.kll_doubles_sketch.deserialize(payload))
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,6 +50,7 @@ class SerializedKllSketch:
     client: ClientIdentity
     payload_hex: str
     byte_count: ByteCount
+    build_serialization_elapsed: ElapsedSeconds
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,6 +63,7 @@ class KllReconstruction:
     absolute_threshold_error: AbsoluteThresholdError
     relative_threshold_error: RelativeThresholdError | None
     uploaded_bytes: ByteCount
+    server_deserialize_merge_query_elapsed: ElapsedSeconds
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,17 +129,26 @@ def _construct_reconstruction(
     exact_threshold: ThresholdValue,
     replicate_index: ReplicateIndex,
 ) -> KllReconstruction:
-    merged = _new_kll_sketch(sketch_size)
     client_sketches: list[SerializedKllSketch] = []
     for scores in ordered:
+        client_started = monotonic()
         sketch = _new_kll_sketch(sketch_size)
         sketch.update(scores.as_array)
         payload = sketch.serialize()
         client_sketches.append(
-            SerializedKllSketch(client=scores.client, payload_hex=payload.hex(), byte_count=ByteCount(len(payload)))
+            SerializedKllSketch(
+                client=scores.client,
+                payload_hex=payload.hex(),
+                byte_count=ByteCount(len(payload)),
+                build_serialization_elapsed=ElapsedSeconds(monotonic() - client_started),
+            )
         )
-        merged.merge(sketch)
+    server_started = monotonic()
+    merged = _new_kll_sketch(sketch_size)
+    for serialized in client_sketches:
+        merged.merge(_deserialize_kll_sketch(bytes.fromhex(serialized.payload_hex)))
     threshold = ThresholdValue(float(merged.get_quantile(quantile.value)))
+    server_elapsed = ElapsedSeconds(monotonic() - server_started)
     pooled = np.concatenate(tuple(item.as_array for item in ordered))
     empirical_cdf = float(np.count_nonzero(pooled <= threshold.value) / pooled.size)
     absolute_error = AbsoluteThresholdError(abs(threshold.value - exact_threshold.value))
@@ -152,4 +166,5 @@ def _construct_reconstruction(
         absolute_threshold_error=absolute_error,
         relative_threshold_error=relative_error,
         uploaded_bytes=ByteCount(sum(item.byte_count.value for item in client_sketches)),
+        server_deserialize_merge_query_elapsed=server_elapsed,
     )
