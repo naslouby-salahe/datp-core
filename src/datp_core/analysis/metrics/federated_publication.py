@@ -8,6 +8,7 @@ from datp_core.analysis.metrics.federated import (
     EvaluationDiagnostics,
     FederatedEvaluationRequest,
     OnboardingCalibrationCell,
+    SharedContributorOmissionCell,
     ThresholdEstimationStageInput,
 )
 from datp_core.analysis.metrics.federated_execution import prepare_federated_evaluation
@@ -46,6 +47,7 @@ class EvaluateFederatedDetectorRequest:
     execution_identity: ExternalTemporalExecutionIdentity | None = None
     calibration_size_ablation: tuple[CalibrationSizeAblationCell, ...] = ()
     onboarding_calibration: tuple[OnboardingCalibrationCell, ...] = ()
+    contributor_omission: tuple[SharedContributorOmissionCell, ...] = ()
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -77,6 +79,7 @@ def evaluate_federated_detector(request: EvaluateFederatedDetectorRequest) -> Ev
             execution_identity=request.execution_identity,
             calibration_size_ablation=request.calibration_size_ablation,
             onboarding_calibration=request.onboarding_calibration,
+            contributor_omission=request.contributor_omission,
         )
     )
     artifacts = write_federated_evaluation(prepared, request.output_directory)

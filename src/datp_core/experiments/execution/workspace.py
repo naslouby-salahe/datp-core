@@ -9,6 +9,7 @@ from datp_core.analysis.metrics.federated import (
     CalibrationSizeAblationCell,
     ConformalCoverageStageInput,
     OnboardingCalibrationCell,
+    SharedContributorOmissionCell,
     ThresholdEstimationStageInput,
 )
 from datp_core.analysis.metrics.federated_publication import (
@@ -89,6 +90,7 @@ from datp_core.thresholds.calibration.construction import (
     build_onboarding_target_calibration,
     construct_calibration_size_ablation,
     construct_onboarding_calibration_cell,
+    construct_shared_contributor_omission_cells,
 )
 from datp_core.thresholds.calibration.service import eligible_calibration_scores
 from datp_core.thresholds.contracts import ThresholdUnavailableResult
@@ -363,6 +365,27 @@ class ExperimentWorkspace:
                     )
         return tuple(cells)
 
+    @cached_property
+    def contributor_omission(self) -> tuple[SharedContributorOmissionCell, ...]:
+        if self.coordinate.experiment is not ExperimentId.SHARED_CALIBRATION_CONTRIBUTOR_AVAILABILITY:
+            return ()
+        inputs = build_federated_evaluation_inputs(self.scores, self.coordinate.threshold_method)
+        return construct_shared_contributor_omission_cells(
+            ConstructCalibrationSizeAblationRequest(
+                execution_key=self.coordinate.execution_key,
+                score_manifest=self.scores,
+                method=self.coordinate.threshold_method,
+                quantile=self.threshold_quantile,
+                cohort=inputs.cohort,
+                fixed_score_evidence=inputs.fixed_score_evidence,
+                evidence_role=self.coordinate.evidence_role,
+                family_by_client=self.context.family_by_client,
+                calibration=build_declared_calibration(self.scores),
+                execution_identity=self.context.execution_identity,
+            ),
+            self.eligible_calibration_scores(),
+        )
+
     def _conformal_coverage_inputs(self) -> tuple[ConformalCoverageStageInput, ...]:
         if not isinstance(self.threshold, ConformalThresholdResult):
             return ()
@@ -498,5 +521,6 @@ class ExperimentWorkspace:
                 overwrite=False,
                 calibration_size_ablation=self.calibration_size_ablation,
                 onboarding_calibration=self.onboarding_calibration,
+                contributor_omission=self.contributor_omission,
             )
         )

@@ -2,6 +2,7 @@ import pytest
 from tests.unit.thresholding.helpers import client_scores
 
 from datp_core.core.numeric import CalibrationSize, Quantile, ShrinkageWeight
+from datp_core.thresholds.calibration.construction import exhaustive_shared_contributor_omissions
 from datp_core.thresholds.protocols import (
     FIXED_SHRINKAGE_PROTOCOL,
     ONBOARDING_CALIBRATION_PROTOCOL,
@@ -22,6 +23,16 @@ def test_onboarding_protocol_preserves_the_zero_support_boundary() -> None:
     assert tuple(size.value for size in ONBOARDING_CALIBRATION_PROTOCOL.sizes) == (0, 10, 25, 50, 100)
     assert tuple(size.value for size in ONBOARDING_CALIBRATION_PROTOCOL.replicated_sizes) == (10, 25, 50, 100)
     assert ONBOARDING_CALIBRATION_PROTOCOL.replicate_count.value == 10
+
+
+def test_shared_contributor_omissions_exhaust_the_locked_nine_client_grid() -> None:
+    clients = tuple(client_scores(f"client_{index}", (1.0,)).client for index in range(9))
+
+    omissions = exhaustive_shared_contributor_omissions(clients)
+
+    assert len(omissions) == 256
+    assert {len(item) for item in omissions} == {0, 1, 2, 3, 4}
+    assert all(len(clients) - len(item) >= 5 for item in omissions)
 
 
 def test_fixed_shrinkage_lambda_zero_reproduces_the_shared_threshold_exactly() -> None:

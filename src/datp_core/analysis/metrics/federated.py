@@ -109,6 +109,21 @@ class OnboardingCalibrationCell:
 
 
 @dataclass(frozen=True, slots=True)
+class SharedContributorOmissionCell:
+    omitted_clients: tuple[ClientIdentity, ...]
+    shared_threshold: ThresholdValue
+    clients: tuple[ClientMetricResult, ...]
+    population: PopulationMetricResult
+    held_out_operating_point_summary: HeldOutOperatingPointSummary | None
+
+    def __post_init__(self) -> None:
+        if tuple(sorted(self.omitted_clients)) != self.omitted_clients:
+            raise ScientificContractError(ErrorMessage("omitted contributor identities must be sorted"))
+        if len(frozenset(self.omitted_clients)) != len(self.omitted_clients):
+            raise ScientificContractError(ErrorMessage("omitted contributor identities must be unique"))
+
+
+@dataclass(frozen=True, slots=True)
 class ConformalCoverageStageInput:
     assignment: ConformalAssignment
     target_coverage: CoverageTarget
@@ -144,6 +159,7 @@ class EvaluationDiagnostics:
     shrinkage_curve: tuple[ShrinkageLambdaEvaluation, ...] = field(default_factory=tuple)
     calibration_size_ablation: tuple[CalibrationSizeAblationCell, ...] = field(default_factory=tuple)
     onboarding_calibration: tuple[OnboardingCalibrationCell, ...] = field(default_factory=tuple)
+    contributor_omission: tuple[SharedContributorOmissionCell, ...] = field(default_factory=tuple)
     sample_efficiency: tuple[SampleEfficiencyPoint, ...] = field(default_factory=tuple)
 
 
@@ -166,6 +182,7 @@ class FederatedEvaluationRequest:
     execution_identity: ExternalTemporalExecutionIdentity | None
     calibration_size_ablation: tuple[CalibrationSizeAblationCell, ...] = ()
     onboarding_calibration: tuple[OnboardingCalibrationCell, ...] = ()
+    contributor_omission: tuple[SharedContributorOmissionCell, ...] = ()
 
 
 class FederatedEvaluationDocument(StrictModel):

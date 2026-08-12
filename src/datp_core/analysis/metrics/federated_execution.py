@@ -316,6 +316,7 @@ def _evaluate_diagnostics(
         shrinkage_curve=shrinkage_curve,
         calibration_size_ablation=request.calibration_size_ablation,
         onboarding_calibration=request.onboarding_calibration,
+        contributor_omission=request.contributor_omission,
         sample_efficiency=sample_efficiency_curve(threshold_estimation) if threshold_estimation else (),
     )
 

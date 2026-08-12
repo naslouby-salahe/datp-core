@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from itertools import combinations
 from typing import cast
 
 from datp_core.analysis.metrics.cohorts import (
@@ -10,6 +11,7 @@ from datp_core.analysis.metrics.federated import (
     CalibrationSizeAblationCell,
     FederatedEvaluationRequest,
     OnboardingCalibrationCell,
+    SharedContributorOmissionCell,
 )
 from datp_core.analysis.metrics.federated_execution import prepare_federated_evaluation
 from datp_core.analysis.metrics.fixed_score import FixedScoreEvidence
@@ -159,6 +161,85 @@ class OnboardingThresholdConstruction:
     result: ThresholdConstructionResult | None
     unavailable_reason: ThresholdInfeasibilityReason | None
     family_fallback: bool
+
+
+MINIMUM_REMAINING_SHARED_CONTRIBUTORS = 5
+
+
+def exhaustive_shared_contributor_omissions(
+    clients: tuple[ClientIdentity, ...],
+) -> tuple[tuple[ClientIdentity, ...], ...]:
+    ordered = tuple(sorted(clients))
+    if len(frozenset(ordered)) != len(ordered):
+        raise ScientificContractError(ErrorMessage("shared contributor candidates must be unique"))
+    return tuple(
+        omission
+        for omitted_count in range(5)
+        if len(ordered) - omitted_count >= MINIMUM_REMAINING_SHARED_CONTRIBUTORS
+        for omission in combinations(ordered, omitted_count)
+    )
+
+
+def construct_shared_contributor_omission_cells(
+    request: ConstructCalibrationSizeAblationRequest,
+    calibration_scores: tuple[ClientBenignCalibrationScores, ...],
+) -> tuple[SharedContributorOmissionCell, ...]:
+    if request.method is not FederatedThresholdMethod.SHARED_THRESHOLD:
+        return ()
+    by_client = {item.client: item for item in calibration_scores}
+    cells: list[SharedContributorOmissionCell] = []
+    capabilities = population_capabilities(request.score_manifest.coordinate.population)
+    for omitted in exhaustive_shared_contributor_omissions(tuple(by_client)):
+        contributors = tuple(item for client, item in sorted(by_client.items()) if client not in frozenset(omitted))
+        result = dispatch_federated_threshold(
+            ThresholdConstructionRequest(
+                method=FederatedThresholdMethod.SHARED_THRESHOLD,
+                coordinate=request.score_manifest.coordinate,
+                quantile=request.quantile,
+                capabilities=capabilities,
+                eligible=contributors,
+                family_by_client=request.family_by_client,
+                support_rule=CalibrationSupportRule.DECLARED_SIZE_ABLATION,
+                cluster_threshold_aggregation=None,
+            )
+        )
+        if not isinstance(result, SharedThresholdResult):
+            raise ScientificContractError(ErrorMessage("contributor omission must construct a shared threshold"))
+        all_assignments = tuple(ThresholdAssignment(client, result.shared_threshold) for client in sorted(by_client))
+        evaluation_result = OnboardingThresholdResult(
+            coordinate=request.score_manifest.coordinate,
+            threshold_method=FederatedThresholdMethod.SHARED_THRESHOLD,
+            assignments=all_assignments,
+        )
+        publication = prepare_federated_evaluation(
+            FederatedEvaluationRequest(
+                execution_key=request.execution_key,
+                score_manifest=request.score_manifest,
+                threshold_result=evaluation_result,
+                cohort=request.cohort,
+                fixed_score_evidence=request.fixed_score_evidence,
+                evidence_role=request.evidence_role,
+                calibration_scores=calibration_scores,
+                target_quantile=request.quantile,
+                conformal_coverage_inputs=(),
+                threshold_estimation_inputs=(),
+                communication_messages=(),
+                traffic_rate_evidence=None,
+                temporal_provenance=None,
+                temporal_threshold_provenance=None,
+                execution_identity=request.execution_identity,
+            )
+        )
+        cells.append(
+            SharedContributorOmissionCell(
+                omitted_clients=omitted,
+                shared_threshold=result.shared_threshold,
+                clients=publication.artifacts.clients,
+                population=publication.artifacts.population,
+                held_out_operating_point_summary=publication.artifacts.diagnostics.held_out_operating_point_summary,
+            )
+        )
+    return tuple(cells)
 
 
 def construct_onboarding_calibration_cell(

@@ -3,6 +3,7 @@ from __future__ import annotations
 from enum import StrEnum
 from math import sqrt
 from pathlib import Path
+from statistics import fmean, median
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -97,6 +98,7 @@ class ThresholdRobustnessAnalysisMarker(StrEnum):
     LOCAL_CONFORMAL_COVERAGE = "local_conformal_coverage_analysis_complete"
     THRESHOLD_ESTIMATOR_SCOPE_SENSITIVITY = "threshold_estimator_scope_sensitivity_analysis_complete"
     PREPROCESSING_GEOMETRY_SENSITIVITY = "preprocessing_geometry_sensitivity_analysis_complete"
+    SHARED_CALIBRATION_CONTRIBUTOR_AVAILABILITY = "shared_calibration_contributor_availability_analysis_complete"
 
 
 class ThresholdRobustnessSeedResult(StrictModel):
@@ -211,6 +213,50 @@ class OnboardingCalibrationRow(StrictModel):
 class OnboardingCalibrationReport(StrictModel):
     experiment: ExperimentId
     rows: tuple[OnboardingCalibrationRow, ...]
+
+
+class ContributorAvailabilitySeedSummary(StrictModel):
+    seed: Seed
+    omitted_count: NonNegativeIntegerValue
+    median_delta_cv: MetricDelta
+    worst_shared_cv: MetricValue
+    max_absolute_threshold_shift: MetricValue
+    positive_scope_gain_retention: Ratio
+    worst_shared_cv_omission: tuple[ClientIdentity, ...]
+    max_threshold_shift_omission: tuple[ClientIdentity, ...]
+
+
+class ContributorAvailabilityRow(StrictModel):
+    seed: Seed
+    omitted_clients: tuple[ClientIdentity, ...]
+    shared_threshold: MetricValue
+    shared_cv_fpr: MetricValue
+    local_cv_fpr: MetricValue
+    delta_cv_fpr: MetricDelta
+    shared_threshold_shift: MetricDelta
+    mean_fpr: MetricValue | None
+    fpr_iqr: MetricValue | None
+    fpr_range: MetricValue | None
+    worst_client_fpr: MetricValue | None
+    mean_absolute_target_error: MetricValue | None
+    worst_absolute_target_error: MetricValue | None
+    p10_macro_f1: MetricValue | None
+    worst_client_balanced_accuracy: MetricValue | None
+
+
+class ContributorAvailabilityCampaignSummary(StrictModel):
+    omitted_count: NonNegativeIntegerValue
+    mean_median_delta_cv: MetricDelta
+    median_median_delta_cv: MetricDelta
+    minimum_median_delta_cv: MetricDelta
+    maximum_median_delta_cv: MetricDelta
+
+
+class ContributorAvailabilityReport(StrictModel):
+    experiment: ExperimentId
+    rows: tuple[ContributorAvailabilityRow, ...]
+    seed_summaries: tuple[ContributorAvailabilitySeedSummary, ...]
+    campaign_summaries: tuple[ContributorAvailabilityCampaignSummary, ...]
 
 
 class ShrinkageCurveRow(StrictModel):
@@ -684,6 +730,135 @@ def report_calibration_cold_start_onboarding(
 
 
 def calibration_cold_start_onboarding_analysis_marker_present(experiment_id: ExperimentId) -> bool:
+    return _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES).is_file()
+
+
+def run_shared_calibration_contributor_availability_seed(
+    training_seed: Seed,
+    *,
+    output_root: Path,
+    overwrite: bool,
+    progress: ProgressHook | None = None,
+) -> ThresholdRobustnessSeedResult:
+    return _run_robustness_seed(
+        ExperimentId.SHARED_CALIBRATION_CONTRIBUTOR_AVAILABILITY,
+        training_seed,
+        output_root,
+        overwrite,
+        progress,
+    )
+
+
+def report_shared_calibration_contributor_availability(
+    experiment_id: ExperimentId,
+    overwrite: bool,
+) -> AnalysisReportPublication:
+    del overwrite
+    declaration = require_experiment_declaration(experiment_id)
+    if declaration.federated_thresholds != (
+        FederatedThresholdMethod.LOCAL_THRESHOLD,
+        FederatedThresholdMethod.SHARED_THRESHOLD,
+    ):
+        raise ScientificContractError(ErrorMessage("contributor availability requires locked local/shared methods"))
+    directory = _analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
+    directory.mkdir(parents=True, exist_ok=True)
+    rows: list[ContributorAvailabilityRow] = []
+    seed_summaries: list[ContributorAvailabilitySeedSummary] = []
+    missing = 0
+    for seed in CONFIRMATORY_SEED_COHORT.values:
+        try:
+            local = _evaluation_document_for_seed(
+                seed, FederatedThresholdMethod.LOCAL_THRESHOLD, experiment_id, OUTPUTS_ROOT
+            )
+            shared = _evaluation_document_for_seed(
+                seed, FederatedThresholdMethod.SHARED_THRESHOLD, experiment_id, OUTPUTS_ROOT
+            )
+        except ScientificContractError:
+            missing += 1
+            continue
+        local_cv = population_metric(local, MetricId.FPR_COEFFICIENT_OF_VARIATION)
+        cells = shared.diagnostics.contributor_omission
+        baseline = next((cell for cell in cells if not cell.omitted_clients), None)
+        if baseline is None:
+            raise ScientificContractError(ErrorMessage("contributor availability lacks its m=0 shared baseline"))
+        by_omitted_count: dict[int, list[tuple[ContributorAvailabilityRow, tuple[ClientIdentity, ...]]]] = {}
+        for cell in cells:
+            population = cell.population.metrics
+            shared_cv = metric_value(metric_by_id(population, MetricId.FPR_COEFFICIENT_OF_VARIATION))
+            if shared_cv is None:
+                raise ScientificContractError(ErrorMessage("contributor omission cell lacks FPR CV"))
+            operating = cell.held_out_operating_point_summary
+            row = ContributorAvailabilityRow(
+                seed=seed,
+                omitted_clients=cell.omitted_clients,
+                shared_threshold=MetricValue(cell.shared_threshold.value),
+                shared_cv_fpr=shared_cv,
+                local_cv_fpr=local_cv,
+                delta_cv_fpr=MetricDelta(shared_cv.value - local_cv.value),
+                shared_threshold_shift=MetricDelta(cell.shared_threshold.value - baseline.shared_threshold.value),
+                mean_fpr=metric_value(metric_by_id(population, MetricId.MEAN_FPR)),
+                fpr_iqr=metric_value(metric_by_id(population, MetricId.FPR_IQR)),
+                fpr_range=metric_value(metric_by_id(population, MetricId.FPR_RANGE)),
+                worst_client_fpr=metric_value(metric_by_id(population, MetricId.WORST_CLIENT_FPR)),
+                mean_absolute_target_error=None if operating is None else operating.mean_absolute_target_error,
+                worst_absolute_target_error=None if operating is None else operating.worst_absolute_target_error,
+                p10_macro_f1=metric_value(metric_by_id(population, MetricId.P10_BINARY_MACRO_F1)),
+                worst_client_balanced_accuracy=metric_value(
+                    metric_by_id(population, MetricId.WORST_CLIENT_BALANCED_ACCURACY)
+                ),
+            )
+            rows.append(row)
+            by_omitted_count.setdefault(len(cell.omitted_clients), []).append((row, cell.omitted_clients))
+        for omitted_count, group in sorted(by_omitted_count.items()):
+            worst = max(group, key=lambda item: item[0].shared_cv_fpr.value)
+            largest_shift = max(group, key=lambda item: abs(item[0].shared_threshold_shift.value))
+            deltas = [item[0].delta_cv_fpr.value for item in group]
+            seed_summaries.append(
+                ContributorAvailabilitySeedSummary(
+                    seed=seed,
+                    omitted_count=NonNegativeIntegerValue(omitted_count),
+                    median_delta_cv=MetricDelta(median(deltas)),
+                    worst_shared_cv=worst[0].shared_cv_fpr,
+                    max_absolute_threshold_shift=MetricValue(abs(largest_shift[0].shared_threshold_shift.value)),
+                    positive_scope_gain_retention=Ratio(
+                        sum(item[0].delta_cv_fpr.value > 0.0 for item in group) / len(group)
+                    ),
+                    worst_shared_cv_omission=worst[1],
+                    max_threshold_shift_omission=largest_shift[1],
+                )
+            )
+    campaign_summaries: list[ContributorAvailabilityCampaignSummary] = []
+    for omitted_count in sorted({item.omitted_count.value for item in seed_summaries}):
+        values = [item.median_delta_cv.value for item in seed_summaries if item.omitted_count.value == omitted_count]
+        campaign_summaries.append(
+            ContributorAvailabilityCampaignSummary(
+                omitted_count=NonNegativeIntegerValue(omitted_count),
+                mean_median_delta_cv=MetricDelta(fmean(values)),
+                median_median_delta_cv=MetricDelta(median(values)),
+                minimum_median_delta_cv=MetricDelta(min(values)),
+                maximum_median_delta_cv=MetricDelta(max(values)),
+            )
+        )
+    serialize_json_model(
+        ContributorAvailabilityReport(
+            experiment=experiment_id,
+            rows=tuple(rows),
+            seed_summaries=tuple(seed_summaries),
+            campaign_summaries=tuple(campaign_summaries),
+        ),
+        _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
+    )
+    return finalize_analysis_report(
+        AnalysisReportFinalizationInput(
+            directory=directory,
+            marker=_complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
+            missing_count=SeedObservationCount(missing),
+            marker_text=AnalysisMarkerText(ThresholdRobustnessAnalysisMarker.SHARED_CALIBRATION_CONTRIBUTOR_AVAILABILITY),
+        )
+    )
+
+
+def shared_calibration_contributor_availability_analysis_marker_present(experiment_id: ExperimentId) -> bool:
     return _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES).is_file()
 
 
