@@ -38,6 +38,7 @@ from datp_core.core.numeric import (
     ElapsedSeconds,
     MetricValue,
     NonNegativeFiniteFloatValue,
+    NonNegativeIntegerValue,
     Ratio,
     RelativeThresholdError,
     Seed,
@@ -100,6 +101,7 @@ class EstimationSummary(StrictModel):
     mean_achieved_exceedance: Ratio | None
     mean_threshold_variance: ThresholdVariance | None
     mean_estimated_communication_bytes: AverageByteCount | None
+    mean_threshold_stage_logical_elements: NonNegativeIntegerValue | None
     kll_client_build_serialization_timing: RuntimeTimingSummary | None
     kll_server_deserialize_merge_query_timing: RuntimeTimingSummary | None
 
@@ -253,6 +255,18 @@ def _mean_bytes(values: list[ByteCount]) -> AverageByteCount | None:
     return AverageByteCount(sum(value.value for value in values) / len(values)) if values else None
 
 
+def _constant_logical_element_count(
+    values: list[NonNegativeIntegerValue],
+) -> NonNegativeIntegerValue | None:
+    if not values:
+        return None
+    if any(item != values[0] for item in values[1:]):
+        raise ScientificContractError(
+            ErrorMessage("threshold-stage logical field count must remain fixed across seeds")
+        )
+    return values[0]
+
+
 def _run_estimation_seed(
     experiment_id: ExperimentId,
     training_seed: Seed,
@@ -288,6 +302,7 @@ class _EstimationDiagnostics:
     exceedances: list[Ratio]
     variances: list[ThresholdVariance]
     communication: list[ByteCount]
+    logical_elements: list[NonNegativeIntegerValue]
 
 
 def _collect_threshold_error_diagnostics(
@@ -320,12 +335,14 @@ def _collect_exceedance_and_variance_diagnostics(
 
 def _collect_communication_diagnostics(
     documents: tuple[FederatedEvaluationDocument, ...],
-) -> list[ByteCount]:
+) -> tuple[list[ByteCount], list[NonNegativeIntegerValue]]:
     communication: list[ByteCount] = []
+    logical_elements: list[NonNegativeIntegerValue] = []
     for document in documents:
         if document.diagnostics.threshold_stage_communication is not None:
             communication.append(document.diagnostics.threshold_stage_communication.total_serialized_bytes)
-    return communication
+            logical_elements.append(document.diagnostics.threshold_stage_communication.total_logical_element_count)
+    return communication, logical_elements
 
 
 def _collect_estimation_diagnostics(
@@ -342,13 +359,15 @@ def _collect_estimation_diagnostics(
         threshold_errors, relative_threshold_errors, attainment_errors = _collect_threshold_error_diagnostics(documents)
     if EstimationDiagnosticFamily.EXCEEDANCE_AND_VARIANCE in families:
         exceedances, variances = _collect_exceedance_and_variance_diagnostics(documents)
+    communication, logical_elements = _collect_communication_diagnostics(documents)
     return _EstimationDiagnostics(
         threshold_errors=threshold_errors,
         relative_threshold_errors=relative_threshold_errors,
         attainment_errors=attainment_errors,
         exceedances=exceedances,
         variances=variances,
-        communication=_collect_communication_diagnostics(documents),
+        communication=communication,
+        logical_elements=logical_elements,
     )
 
 
@@ -408,6 +427,7 @@ def _estimation_summary(
             mean_achieved_exceedance=_mean_ratio(diagnostics.exceedances),
             mean_threshold_variance=_mean_threshold_variance(diagnostics.variances),
             mean_estimated_communication_bytes=_mean_bytes(diagnostics.communication),
+            mean_threshold_stage_logical_elements=_constant_logical_element_count(diagnostics.logical_elements),
             kll_client_build_serialization_timing=_runtime_timing_summary(client_timings),
             kll_server_deserialize_merge_query_timing=_runtime_timing_summary(server_timings),
         ),
