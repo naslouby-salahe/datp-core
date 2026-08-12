@@ -134,6 +134,9 @@ class CalibrationSizeAblationRow(StrictModel):
     cv_fpr: MetricValue | None
     worst_client_fpr: MetricValue | None
     p10_macro_f1: MetricValue | None
+    mean_absolute_target_error: MetricValue | None
+    worst_absolute_target_error: MetricValue | None
+    mean_absolute_calibration_generalization_gap: MetricValue | None
 
 
 class CalibrationSizeFixedCohortRow(StrictModel):
@@ -515,6 +518,7 @@ def report_calibration_size_ablation(
             cells = document.diagnostics.calibration_size_ablation
             for cell in cells:
                 metrics = cell.population.metrics
+                operating_summary = cell.held_out_operating_point_summary
                 rows.append(
                     CalibrationSizeAblationRow(
                         seed=seed,
@@ -525,6 +529,17 @@ def report_calibration_size_ablation(
                         cv_fpr=metric_value(metric_by_id(metrics, MetricId.FPR_COEFFICIENT_OF_VARIATION)),
                         worst_client_fpr=metric_value(metric_by_id(metrics, MetricId.WORST_CLIENT_FPR)),
                         p10_macro_f1=metric_value(metric_by_id(metrics, MetricId.P10_BINARY_MACRO_F1)),
+                        mean_absolute_target_error=(
+                            None if operating_summary is None else operating_summary.mean_absolute_target_error
+                        ),
+                        worst_absolute_target_error=(
+                            None if operating_summary is None else operating_summary.worst_absolute_target_error
+                        ),
+                        mean_absolute_calibration_generalization_gap=(
+                            None
+                            if operating_summary is None
+                            else operating_summary.mean_absolute_calibration_generalization_gap
+                        ),
                     )
                 )
             fixed_cohort_rows.extend(_fixed_cohort_rows_for_seed(seed, method, cells))
