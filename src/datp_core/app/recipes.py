@@ -193,6 +193,14 @@ class ExperimentRecipe:
 
 _METHOD_NOT_COMPLETED_DETAIL = "declared but not completed in this execution"
 
+_ANALYSIS_ONLY_EXPERIMENTS = frozenset(
+    (
+        ExperimentId.PER_CLIENT_SCORE_GEOMETRY,
+        ExperimentId.HETEROGENEITY_BENEFIT_ASSOCIATION,
+        ExperimentId.THRESHOLD_MOVEMENT_TRADEOFF,
+    )
+)
+
 
 def _declaration(experiment_id: ExperimentId) -> ExperimentDeclaration:
     return require_experiment_declaration(experiment_id)
@@ -1325,6 +1333,12 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
 
 def registered_experiment_ids() -> tuple[ExperimentId, ...]:
     return tuple(recipe.experiment for recipe in EXPERIMENT_RECIPES)
+
+
+def evaluation_document_experiment_ids() -> tuple[ExperimentId, ...]:
+    return tuple(
+        recipe.experiment for recipe in EXPERIMENT_RECIPES if recipe.experiment not in _ANALYSIS_ONLY_EXPERIMENTS
+    )
 
 
 def mandatory_experiment_ids() -> tuple[ExperimentId, ...]:

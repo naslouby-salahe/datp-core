@@ -87,6 +87,13 @@ class ExperimentPlan:
         return tuple(entry for entry in self.entries if entry.disposition is PlanDisposition.EXECUTABLE)
 
 
+def restrict_plan_to_experiments(
+    plan: ExperimentPlan,
+    experiments: frozenset[ExperimentId],
+) -> ExperimentPlan:
+    return ExperimentPlan(entries=tuple(entry for entry in plan.entries if entry.coordinate.experiment in experiments))
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CoordinateCompleteness:
     missing_execution_keys: tuple[CoordinateStableKey, ...]

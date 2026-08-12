@@ -34,11 +34,12 @@ from datp_core.app.models import (
     ProgrammeStatusReport,
     ReportResult,
 )
-from datp_core.app.planning import seed_cohort_for
+from datp_core.app.planning import restrict_plan_to_experiments, seed_cohort_for
 from datp_core.app.progress import progress_hook
 from datp_core.app.recipes import (
     EXPERIMENT_RECIPES,
     anchor_gated_experiment_ids,
+    evaluation_document_experiment_ids,
     mandatory_experiment_ids,
     recipe_for,
     registered_experiment_ids,
@@ -74,6 +75,7 @@ from datp_core.experiments.centralized_reference import (
     centralized_reference_directory,
     run_centralized_reference_seed,
 )
+from datp_core.experiments.execution.evidence import require_materialized_execution_completeness
 from datp_core.experiments.graph import CANONICAL_PROTOCOL_GRAPH, validate_protocol_graph
 from datp_core.runtime.configuration import DATA_ROOT, OUTPUTS_ROOT
 from datp_core.runtime.filesystem import write_text_atomically
@@ -250,6 +252,13 @@ def run_campaign(*, overwrite: OverwriteMode) -> CampaignRunResult:
         )
         for recipe in EXPERIMENT_RECIPES
     )
+    from datp_core.app.campaign import build_programme_plan
+
+    completeness_plan = restrict_plan_to_experiments(
+        build_programme_plan(None).plan,
+        frozenset(evaluation_document_experiment_ids()).intersection(result.experiment for result in results),
+    )
+    require_materialized_execution_completeness(completeness_plan, OUTPUTS_ROOT)
     execution_marker_lines = "\n".join(item.experiment.value for item in results) + "\n"
     CAMPAIGN_EXECUTION_MARKER.parent.mkdir(parents=True, exist_ok=True)
     write_text_atomically(CAMPAIGN_EXECUTION_MARKER, FileContentText(execution_marker_lines))

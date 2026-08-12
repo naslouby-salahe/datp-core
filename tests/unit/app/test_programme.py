@@ -7,6 +7,7 @@ from datp_core.app.campaign import build_programme_plan
 from datp_core.app.contracts import AnchorRequirement, OverwriteMode
 from datp_core.app.models import DetailText, ReportResult
 from datp_core.app.planning import PlanDisposition, seed_cohort_for
+from datp_core.app.recipes import evaluation_document_experiment_ids
 from datp_core.app.research import generate_report, registered_experiment_ids, run_campaign, run_smoke
 from datp_core.app.validation import require_experiment_execution_ready, validate_programme
 from datp_core.artifacts.serializers.json import canonical_json_text
@@ -136,6 +137,15 @@ def test_scientific_mechanism_analyses_remain_registered() -> None:
     assert ExperimentId.THRESHOLD_MOVEMENT_TRADEOFF in registered
 
 
+def test_evaluation_document_completeness_excludes_analysis_only_recipes() -> None:
+    evaluation_experiments = frozenset(evaluation_document_experiment_ids())
+
+    assert ExperimentId.SHARED_VS_LOCAL_CONFIRMATION in evaluation_experiments
+    assert ExperimentId.PER_CLIENT_SCORE_GEOMETRY not in evaluation_experiments
+    assert ExperimentId.HETEROGENEITY_BENEFIT_ASSOCIATION not in evaluation_experiments
+    assert ExperimentId.THRESHOLD_MOVEMENT_TRADEOFF not in evaluation_experiments
+
+
 def test_report_never_executes_and_consumes_existing_evidence_only(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -184,6 +194,7 @@ def test_campaign_execution_and_publication_do_not_depend_on_anchor(
     experiment = ExperimentId.OPTIONAL_EQUITY_INDICES
     recipe = SimpleNamespace(experiment=experiment)
     observed_anchor_requirements: list[bool] = []
+    observed_completeness_plans: list[object] = []
     result = SimpleNamespace(experiment=experiment)
     report = ReportResult(experiment=None, paths=(), detail=DetailText("published"))
 
@@ -200,6 +211,10 @@ def test_campaign_execution_and_publication_do_not_depend_on_anchor(
         )[1],
     )
     monkeypatch.setattr("datp_core.app.research._generate_campaign_report", lambda *, require_anchor: report)
+    monkeypatch.setattr(
+        "datp_core.app.research.require_materialized_execution_completeness",
+        lambda plan, _root: observed_completeness_plans.append(plan),
+    )
     monkeypatch.setattr("datp_core.app.research.CAMPAIGN_EXECUTION_MARKER", tmp_path / "execution.txt")
     monkeypatch.setattr("datp_core.app.research.CAMPAIGN_PUBLICATION_MARKER", tmp_path / "publication.txt")
     monkeypatch.setattr(
@@ -212,6 +227,7 @@ def test_campaign_execution_and_publication_do_not_depend_on_anchor(
     assert campaign.experiments == (result,)
     assert campaign.anchor_failure is None
     assert observed_anchor_requirements == [False]
+    assert len(observed_completeness_plans) == 1
 
 
 def test_status_recognizes_dataset_manifest(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
