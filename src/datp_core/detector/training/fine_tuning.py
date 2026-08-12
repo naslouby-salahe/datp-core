@@ -1,18 +1,21 @@
 from dataclasses import dataclass
 from pathlib import Path
+from time import monotonic
 
 from datp_core.core.contracts import ClientCollection, ClientOwned
 from datp_core.core.errors import ErrorMessage, ScientificContractError
 from datp_core.core.identifiers import TrainingModelId
-from datp_core.core.numeric import BatchSize, LearningRate, Seed
+from datp_core.core.numeric import BatchSize, ElapsedSeconds, LearningRate, RoundNumber, Seed
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.autoencoder import AutoencoderModelState
 from datp_core.detector.checkpoints.contracts import DiagnosticSnapshotProtocol
 from datp_core.detector.checkpoints.publication import load_federated_training
 from datp_core.detector.training.contracts import AutoencoderProtocol, FedAvgLocalFineTuningProtocol
 from datp_core.detector.training.engine import (
+    SerializedStateEvidence,
     derive_fedavg_local_fine_tuning_seed,
     prepare_federated_client_data,
+    serialize_model_state,
     train_client_update,
 )
 from datp_core.detector.training.models import ClientTrainingInput, FederatedTrainingCoordinate
@@ -24,6 +27,8 @@ class FineTunedTerminalModel:
     client: ClientIdentity
     source_fedavg_state: AutoencoderModelState
     terminal_model_state: AutoencoderModelState
+    serialized_state_evidence: SerializedStateEvidence
+    wall_time: ElapsedSeconds
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,6 +73,10 @@ def fine_tune_from_persisted_fedavg(
         raise ScientificContractError(
             ErrorMessage("fine-tuning source coordinate must be the FedAvg terminal detector")
         )
+    if request.source_coordinate.training_seed != request.training_seed:
+        raise ScientificContractError(
+            ErrorMessage("fine-tuning source coordinate must use the requested training seed")
+        )
     source = load_federated_training(
         request.source_coordinate,
         request.source_directory,
@@ -79,6 +88,11 @@ def fine_tune_from_persisted_fedavg(
     if source is None:
         raise ScientificContractError(
             ErrorMessage("FedAvg terminal scientific detector is unavailable for fine-tuning")
+        )
+    terminal_round = source.history.rounds[-1].round_number
+    if terminal_round != RoundNumber(200):
+        raise ScientificContractError(
+            ErrorMessage("fine-tuning source must be the exact FedAvg terminal detector at round 200")
         )
     return fine_tune_fedavg_clients(
         FineTuneFedAvgClientsRequest(
@@ -98,6 +112,7 @@ def _fine_tune_client(
     client: ClientTrainingInput,
 ) -> FineTunedTerminalModel:
     device = resolve_cuda_device()
+    started = monotonic()
     update = train_client_update(
         client_data=prepare_federated_client_data(client, request.autoencoder),
         initial_model_state=request.source_fedavg_state,
@@ -113,4 +128,6 @@ def _fine_tune_client(
         client=client.client,
         source_fedavg_state=request.source_fedavg_state,
         terminal_model_state=update.model_state,
+        serialized_state_evidence=serialize_model_state(update.model_state),
+        wall_time=ElapsedSeconds(monotonic() - started),
     )
