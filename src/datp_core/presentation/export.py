@@ -14,7 +14,12 @@ from datp_core.analysis.inference.wilcoxon import RankBiserialResult, WilcoxonRe
 from datp_core.analysis.mechanisms import MechanismEvidence
 from datp_core.analysis.mechanisms.absorption import AbsorptionCohortResult
 from datp_core.analysis.mechanisms.association import AssociationResult
-from datp_core.analysis.mechanisms.client_impact import ClientImpactFraction, ClientImpactSeedSummary
+from datp_core.analysis.mechanisms.client_impact import (
+    ClientImpactCampaignSummary,
+    ClientImpactFraction,
+    ClientImpactFractionSummary,
+    ClientImpactSeedSummary,
+)
 from datp_core.analysis.mechanisms.clustering import ClusterEvidenceRecord, ClusterStabilityResult
 from datp_core.analysis.mechanisms.dispersion import GroupedDispersionResult
 from datp_core.analysis.mechanisms.divergence import DivergenceResult
@@ -644,6 +649,7 @@ _MECHANISM_TITLES: dict[type[object], ReportLine] = {
     ThresholdMovementCohort: ReportLine("threshold_movement_cohort"),
     ThresholdMovementMultiSeedUncertainty: ReportLine("threshold_movement_across_seed_uncertainty"),
     ClientImpactSeedSummary: ReportLine("natural_device_client_impact"),
+    ClientImpactCampaignSummary: ReportLine("natural_device_client_impact_campaign_summary"),
     AbsorptionCohortResult: ReportLine("model_personalization_absorption"),
     ScientificDecisionResult: ReportLine("scientific_decision"),
 }
@@ -938,11 +944,46 @@ def _render_client_impact_seed_summary(mechanism: ClientImpactSeedSummary) -> li
     ]
 
 
+@_render_one_mechanism.register
+def _render_client_impact_campaign_summary(mechanism: ClientImpactCampaignSummary) -> list[ReportLine]:
+    return [
+        ReportLine(line)
+        for line in [
+            f"Seed summaries: {len(mechanism.seed_summaries)}",
+            f"FPR helped: {_render_client_impact_summary(mechanism.fpr_helped)}",
+            f"FPR harmed: {_render_client_impact_summary(mechanism.fpr_harmed)}",
+            f"FPR unchanged: {_render_client_impact_summary(mechanism.fpr_unchanged)}",
+            f"TPR loss: {_render_client_impact_summary(mechanism.tpr_loss)}",
+            f"Macro-F1 loss: {_render_client_impact_summary(mechanism.macro_f1_loss)}",
+            f"Balanced-accuracy loss: {_render_client_impact_summary(mechanism.balanced_accuracy_loss)}",
+            f"Pareto improved: {_render_client_impact_summary(mechanism.pareto_improved)}",
+            f"Pareto harmed: {_render_client_impact_summary(mechanism.pareto_harmed)}",
+            "Trade-off FPR better / TPR worse: "
+            + _render_client_impact_summary(mechanism.tradeoff_fpr_better_tpr_worse),
+            "Trade-off FPR worse / TPR better: "
+            + _render_client_impact_summary(mechanism.tradeoff_fpr_worse_tpr_better),
+            f"No FPR change: {_render_client_impact_summary(mechanism.no_fpr_change)}",
+        ]
+    ]
+
+
 def _render_client_impact_fraction(fraction: ClientImpactFraction) -> str:
     if fraction.value is None or fraction.numerator is None or fraction.denominator is None:
         return f"unavailable ({fraction.reason})"
     return (
         f"{_format_publication_metric(fraction.value.value)} ({fraction.numerator.value}/{fraction.denominator.value})"
+    )
+
+
+def _render_client_impact_summary(summary: ClientImpactFractionSummary) -> str:
+    if summary.arithmetic_mean is None:
+        return f"unavailable ({summary.unavailable_seed_count.value} unavailable seeds)"
+    return (
+        f"mean={_format_publication_metric(summary.arithmetic_mean.value)}, "
+        f"median={_format_publication_metric(summary.median.value) if summary.median is not None else 'unavailable'}, "
+        f"min={_format_publication_metric(summary.minimum.value) if summary.minimum is not None else 'unavailable'}, "
+        f"max={_format_publication_metric(summary.maximum.value) if summary.maximum is not None else 'unavailable'}; "
+        f"valid={summary.valid_seed_count.value}, unavailable={summary.unavailable_seed_count.value}"
     )
 
 

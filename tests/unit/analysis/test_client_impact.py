@@ -1,7 +1,11 @@
 from types import SimpleNamespace
 from typing import cast
 
-from datp_core.analysis.mechanisms import ThresholdMovementCohort, summarize_client_impact
+from datp_core.analysis.mechanisms import (
+    ThresholdMovementCohort,
+    summarize_client_impact,
+    summarize_client_impact_campaign,
+)
 from datp_core.core.identifiers import AvailabilityStatus, ExperimentId
 from datp_core.core.numeric import MetricValue, Seed
 
@@ -54,6 +58,40 @@ def test_client_impact_marks_attack_fractions_unavailable_without_common_tpr() -
     assert summary.tpr_loss.value is None
     assert summary.tpr_loss.reason is not None
     assert summary.pareto.pareto_improved.value is None
+
+
+def test_client_impact_campaign_retains_each_seed_and_uses_seed_as_the_summary_unit() -> None:
+    first = _cohort(seed=1, delta_fpr=-0.5)
+    second = _cohort(seed=2, delta_fpr=0.0)
+
+    summary = summarize_client_impact_campaign((first, second))
+
+    assert len(summary.seed_summaries) == 2
+    assert summary.fpr_helped.valid_seed_count.value == 2
+    assert summary.fpr_helped.arithmetic_mean is not None
+    assert summary.fpr_helped.arithmetic_mean.value == 0.5
+    assert summary.fpr_helped.median is not None
+    assert summary.fpr_helped.median.value == 0.5
+
+
+def _cohort(*, seed: int, delta_fpr: float) -> ThresholdMovementCohort:
+    return cast(
+        ThresholdMovementCohort,
+        SimpleNamespace(
+            availability=AvailabilityStatus.AVAILABLE,
+            reason=None,
+            movements=(
+                SimpleNamespace(
+                    seed=Seed(seed),
+                    experiment=ExperimentId.SHARED_VS_LOCAL_CONFIRMATION,
+                    delta_fpr=MetricValue(delta_fpr),
+                    delta_tpr=MetricValue(0.0),
+                    delta_macro_f1=MetricValue(0.0),
+                    delta_balanced_accuracy=MetricValue(0.0),
+                ),
+            ),
+        ),
+    )
 
 
 def _movement(*, delta_fpr: float, delta_tpr: float | None) -> SimpleNamespace:

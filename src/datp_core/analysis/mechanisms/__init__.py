@@ -15,11 +15,14 @@ from datp_core.analysis.mechanisms.association import (
     heterogeneity_benefit_association,
 )
 from datp_core.analysis.mechanisms.client_impact import (
+    ClientImpactCampaignSummary,
     ClientImpactFraction,
+    ClientImpactFractionSummary,
     ClientImpactSeedSummary,
     ParetoClientImpact,
     ParetoClientImpactFractions,
     summarize_client_impact,
+    summarize_client_impact_campaign,
 )
 from datp_core.analysis.mechanisms.clustering import (
     ClusterContingencyMatrix,
@@ -87,6 +90,7 @@ type MechanismEvidence = (
     | AssociationResult
     | ClusterEvidenceRecord
     | ClusterStabilityResult
+    | ClientImpactCampaignSummary
     | ClientImpactSeedSummary
     | DivergenceResult
     | GroupedDispersionResult
@@ -110,7 +114,9 @@ __all__ = (
     "AlignmentActivationLabel",
     "AlignmentActivationSummary",
     "ClientScoreVector",
+    "ClientImpactCampaignSummary",
     "ClientImpactFraction",
+    "ClientImpactFractionSummary",
     "ClientImpactSeedSummary",
     "ClusterEvidenceAvailability",
     "ClusterEvidenceRecord",
@@ -159,6 +165,7 @@ __all__ = (
     "model_alignment",
     "summarize_alignment_activation",
     "summarize_client_impact",
+    "summarize_client_impact_campaign",
     "summarize_threshold_movements",
     "summarize_threshold_movements_across_seeds",
     "threshold_movement",

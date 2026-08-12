@@ -26,6 +26,7 @@ from datp_core.analysis.mechanisms import (
     heterogeneity_benefit_association,
     jensen_shannon_from_client_scores,
     summarize_client_impact,
+    summarize_client_impact_campaign,
     summarize_threshold_movements_across_seeds,
     threshold_movements_from_evaluations,
 )
@@ -247,6 +248,7 @@ def _confirmatory_mechanisms() -> tuple[MechanismEvidence, ...]:
             required_seed_count=CONFIRMATORY_SEED_COHORT.member_count,
         )
     )
+    mechanisms.append(summarize_client_impact_campaign(tuple(movement_cohorts)))
     if association_observations:
         mechanisms.append(heterogeneity_benefit_association(tuple(association_observations)))
     return tuple(mechanisms)

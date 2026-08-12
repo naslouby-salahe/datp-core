@@ -5,7 +5,7 @@ from pydantic import model_validator
 from datp_core.analysis.mechanisms.movement import ThresholdMovementCohort
 from datp_core.core.contracts import StrictModel
 from datp_core.core.identifiers import AnalysisReasonText, AvailabilityStatus, ExperimentId
-from datp_core.core.numeric import ClientCount, PairedObservationCount, Ratio, Seed
+from datp_core.core.numeric import ClientCount, MetricValue, PairedObservationCount, Ratio, Seed, SeedObservationCount
 
 
 class ParetoClientImpact(StrEnum):
@@ -87,6 +87,52 @@ class ClientImpactSeedSummary(StrictModel):
                 raise ValueError("available client-impact summary requires FPR fractions and no reason")
         elif self.reason is None:
             raise ValueError("unavailable client-impact summary requires a reason")
+        return self
+
+
+class ClientImpactFractionSummary(StrictModel):
+    seed_values: tuple[ClientImpactFraction, ...]
+    valid_seed_count: SeedObservationCount
+    unavailable_seed_count: SeedObservationCount
+    arithmetic_mean: MetricValue | None
+    median: MetricValue | None
+    minimum: MetricValue | None
+    maximum: MetricValue | None
+
+    @model_validator(mode="after")
+    def validate_summary(self) -> "ClientImpactFractionSummary":
+        if self.valid_seed_count.value + self.unavailable_seed_count.value != len(self.seed_values):
+            raise ValueError("client-impact summary counts must partition its seed values")
+        statistics = (self.arithmetic_mean, self.median, self.minimum, self.maximum)
+        if self.valid_seed_count.value == 0:
+            if any(value is not None for value in statistics):
+                raise ValueError("unavailable client-impact summaries cannot fabricate statistics")
+        elif any(value is None for value in statistics):
+            raise ValueError("available client-impact summaries require all locked descriptive statistics")
+        return self
+
+
+class ClientImpactCampaignSummary(StrictModel):
+    seed_summaries: tuple[ClientImpactSeedSummary, ...]
+    fpr_helped: ClientImpactFractionSummary
+    fpr_harmed: ClientImpactFractionSummary
+    fpr_unchanged: ClientImpactFractionSummary
+    tpr_loss: ClientImpactFractionSummary
+    macro_f1_loss: ClientImpactFractionSummary
+    balanced_accuracy_loss: ClientImpactFractionSummary
+    pareto_improved: ClientImpactFractionSummary
+    pareto_harmed: ClientImpactFractionSummary
+    tradeoff_fpr_better_tpr_worse: ClientImpactFractionSummary
+    tradeoff_fpr_worse_tpr_better: ClientImpactFractionSummary
+    no_fpr_change: ClientImpactFractionSummary
+
+    @model_validator(mode="after")
+    def validate_campaign(self) -> "ClientImpactCampaignSummary":
+        seeds = tuple(item.seed for item in self.seed_summaries)
+        if not seeds:
+            raise ValueError("client-impact campaign summary requires seed evidence")
+        if len(seeds) != len(frozenset(seeds)):
+            raise ValueError("client-impact campaign seed evidence must be unique")
         return self
 
 
@@ -179,6 +225,32 @@ def summarize_client_impact(cohort: ThresholdMovementCohort) -> ClientImpactSeed
     )
 
 
+def summarize_client_impact_campaign(
+    cohorts: tuple[ThresholdMovementCohort, ...],
+) -> ClientImpactCampaignSummary:
+    summaries = tuple(summarize_client_impact(cohort) for cohort in cohorts)
+    if not summaries:
+        raise ValueError("client-impact campaign requires at least one seed cohort")
+    return ClientImpactCampaignSummary(
+        seed_summaries=summaries,
+        fpr_helped=_summarize_fractions(tuple(item.fpr_helped for item in summaries)),
+        fpr_harmed=_summarize_fractions(tuple(item.fpr_harmed for item in summaries)),
+        fpr_unchanged=_summarize_fractions(tuple(item.fpr_unchanged for item in summaries)),
+        tpr_loss=_summarize_fractions(tuple(item.tpr_loss for item in summaries)),
+        macro_f1_loss=_summarize_fractions(tuple(item.macro_f1_loss for item in summaries)),
+        balanced_accuracy_loss=_summarize_fractions(tuple(item.balanced_accuracy_loss for item in summaries)),
+        pareto_improved=_summarize_fractions(tuple(item.pareto.pareto_improved for item in summaries)),
+        pareto_harmed=_summarize_fractions(tuple(item.pareto.pareto_harmed for item in summaries)),
+        tradeoff_fpr_better_tpr_worse=_summarize_fractions(
+            tuple(item.pareto.tradeoff_fpr_better_tpr_worse for item in summaries)
+        ),
+        tradeoff_fpr_worse_tpr_better=_summarize_fractions(
+            tuple(item.pareto.tradeoff_fpr_worse_tpr_better for item in summaries)
+        ),
+        no_fpr_change=_summarize_fractions(tuple(item.pareto.no_fpr_change for item in summaries)),
+    )
+
+
 def _pareto_category(fpr_relief: float, tpr_change: float) -> ParetoClientImpact:
     if fpr_relief == 0.0:
         return ParetoClientImpact.NO_FPR_CHANGE
@@ -212,3 +284,30 @@ def _loss_fraction(values: tuple[float, ...], reason: str) -> ClientImpactFracti
 
 def _unavailable_fraction(reason: AnalysisReasonText) -> ClientImpactFraction:
     return ClientImpactFraction(numerator=None, denominator=None, value=None, reason=reason)
+
+
+def _summarize_fractions(values: tuple[ClientImpactFraction, ...]) -> ClientImpactFractionSummary:
+    available = tuple(item.value.value for item in values if item.value is not None)
+    unavailable = len(values) - len(available)
+    if not available:
+        return ClientImpactFractionSummary(
+            seed_values=values,
+            valid_seed_count=SeedObservationCount(0),
+            unavailable_seed_count=SeedObservationCount(unavailable),
+            arithmetic_mean=None,
+            median=None,
+            minimum=None,
+            maximum=None,
+        )
+    ordered = tuple(sorted(available))
+    middle = len(ordered) // 2
+    median = ordered[middle] if len(ordered) % 2 else (ordered[middle - 1] + ordered[middle]) / 2.0
+    return ClientImpactFractionSummary(
+        seed_values=values,
+        valid_seed_count=SeedObservationCount(len(available)),
+        unavailable_seed_count=SeedObservationCount(unavailable),
+        arithmetic_mean=MetricValue(sum(available) / len(available)),
+        median=MetricValue(median),
+        minimum=MetricValue(ordered[0]),
+        maximum=MetricValue(ordered[-1]),
+    )
