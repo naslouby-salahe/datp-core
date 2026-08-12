@@ -946,7 +946,7 @@ def _render_client_impact_seed_summary(mechanism: ClientImpactSeedSummary) -> li
 
 @_render_one_mechanism.register
 def _render_client_impact_campaign_summary(mechanism: ClientImpactCampaignSummary) -> list[ReportLine]:
-    return [
+    lines = [
         ReportLine(line)
         for line in [
             f"Seed summaries: {len(mechanism.seed_summaries)}",
@@ -965,6 +965,17 @@ def _render_client_impact_campaign_summary(mechanism: ClientImpactCampaignSummar
             f"No FPR change: {_render_client_impact_summary(mechanism.no_fpr_change)}",
         ]
     ]
+    lines.extend((ReportLine("Per-device repeated-seed frequencies:"),))
+    lines.extend(
+        ReportLine(
+            f"- `{frequency.client.client_id.value}`: "
+            f"FPR helped={_render_client_impact_fraction(frequency.fpr_help_frequency)}, "
+            f"FPR harmed={_render_client_impact_fraction(frequency.fpr_harm_frequency)}, "
+            f"TPR loss={_render_client_impact_fraction(frequency.tpr_loss_frequency)}"
+        )
+        for frequency in mechanism.device_frequencies
+    )
+    return lines
 
 
 def _render_client_impact_fraction(fraction: ClientImpactFraction) -> str:

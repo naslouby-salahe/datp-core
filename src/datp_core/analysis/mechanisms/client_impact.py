@@ -1,11 +1,14 @@
+from __future__ import annotations
+
 from enum import StrEnum
 
 from pydantic import model_validator
 
-from datp_core.analysis.mechanisms.movement import ThresholdMovementCohort
+from datp_core.analysis.mechanisms.movement import ThresholdMovement, ThresholdMovementCohort
 from datp_core.core.contracts import StrictModel
 from datp_core.core.identifiers import AnalysisReasonText, AvailabilityStatus, ExperimentId
 from datp_core.core.numeric import ClientCount, MetricValue, PairedObservationCount, Ratio, Seed, SeedObservationCount
+from datp_core.data.populations.contracts import ClientIdentity
 
 
 class ParetoClientImpact(StrEnum):
@@ -23,7 +26,7 @@ class ClientImpactFraction(StrictModel):
     reason: AnalysisReasonText | None
 
     @model_validator(mode="after")
-    def validate_availability(self) -> "ClientImpactFraction":
+    def validate_availability(self) -> ClientImpactFraction:
         available = self.numerator is not None or self.denominator is not None or self.value is not None
         if available:
             if self.numerator is None or self.denominator is None or self.value is None or self.reason is not None:
@@ -45,7 +48,7 @@ class ParetoClientImpactFractions(StrictModel):
     no_fpr_change: ClientImpactFraction
 
     @model_validator(mode="after")
-    def validate_common_attack_cohort(self) -> "ParetoClientImpactFractions":
+    def validate_common_attack_cohort(self) -> ParetoClientImpactFractions:
         fractions = (
             self.pareto_improved,
             self.pareto_harmed,
@@ -81,7 +84,7 @@ class ClientImpactSeedSummary(StrictModel):
     reason: AnalysisReasonText | None
 
     @model_validator(mode="after")
-    def validate_seed_summary(self) -> "ClientImpactSeedSummary":
+    def validate_seed_summary(self) -> ClientImpactSeedSummary:
         if self.availability is AvailabilityStatus.AVAILABLE:
             if self.reason is not None or self.fpr_helped.value is None:
                 raise ValueError("available client-impact summary requires FPR fractions and no reason")
@@ -100,7 +103,7 @@ class ClientImpactFractionSummary(StrictModel):
     maximum: MetricValue | None
 
     @model_validator(mode="after")
-    def validate_summary(self) -> "ClientImpactFractionSummary":
+    def validate_summary(self) -> ClientImpactFractionSummary:
         if self.valid_seed_count.value + self.unavailable_seed_count.value != len(self.seed_values):
             raise ValueError("client-impact summary counts must partition its seed values")
         statistics = (self.arithmetic_mean, self.median, self.minimum, self.maximum)
@@ -114,6 +117,7 @@ class ClientImpactFractionSummary(StrictModel):
 
 class ClientImpactCampaignSummary(StrictModel):
     seed_summaries: tuple[ClientImpactSeedSummary, ...]
+    device_frequencies: tuple[ClientImpactDeviceFrequency, ...]
     fpr_helped: ClientImpactFractionSummary
     fpr_harmed: ClientImpactFractionSummary
     fpr_unchanged: ClientImpactFractionSummary
@@ -127,12 +131,29 @@ class ClientImpactCampaignSummary(StrictModel):
     no_fpr_change: ClientImpactFractionSummary
 
     @model_validator(mode="after")
-    def validate_campaign(self) -> "ClientImpactCampaignSummary":
+    def validate_campaign(self) -> ClientImpactCampaignSummary:
         seeds = tuple(item.seed for item in self.seed_summaries)
         if not seeds:
             raise ValueError("client-impact campaign summary requires seed evidence")
         if len(seeds) != len(frozenset(seeds)):
             raise ValueError("client-impact campaign seed evidence must be unique")
+        return self
+
+
+class ClientImpactDeviceFrequency(StrictModel):
+    client: ClientIdentity
+    observed_seed_count: SeedObservationCount
+    fpr_help_frequency: ClientImpactFraction
+    fpr_harm_frequency: ClientImpactFraction
+    tpr_loss_frequency: ClientImpactFraction
+
+    @model_validator(mode="after")
+    def validate_device_frequency(self) -> ClientImpactDeviceFrequency:
+        if self.observed_seed_count.value == 0:
+            raise ValueError("client-impact device frequency requires observed seed evidence")
+        for fraction in (self.fpr_help_frequency, self.fpr_harm_frequency):
+            if fraction.denominator is None or fraction.denominator.value != self.observed_seed_count.value:
+                raise ValueError("FPR device frequencies must use every observed seed")
         return self
 
 
@@ -233,6 +254,7 @@ def summarize_client_impact_campaign(
         raise ValueError("client-impact campaign requires at least one seed cohort")
     return ClientImpactCampaignSummary(
         seed_summaries=summaries,
+        device_frequencies=_device_frequencies(cohorts),
         fpr_helped=_summarize_fractions(tuple(item.fpr_helped for item in summaries)),
         fpr_harmed=_summarize_fractions(tuple(item.fpr_harmed for item in summaries)),
         fpr_unchanged=_summarize_fractions(tuple(item.fpr_unchanged for item in summaries)),
@@ -311,3 +333,37 @@ def _summarize_fractions(values: tuple[ClientImpactFraction, ...]) -> ClientImpa
         minimum=MetricValue(ordered[0]),
         maximum=MetricValue(ordered[-1]),
     )
+
+
+def _device_frequencies(cohorts: tuple[ThresholdMovementCohort, ...]) -> tuple[ClientImpactDeviceFrequency, ...]:
+    movements_by_client: dict[ClientIdentity, list[ThresholdMovement]] = {}
+    for cohort in cohorts:
+        if cohort.availability is not AvailabilityStatus.AVAILABLE:
+            continue
+        for movement in cohort.movements:
+            movements_by_client.setdefault(movement.client, []).append(movement)
+    frequencies: list[ClientImpactDeviceFrequency] = []
+    for client, movements in sorted(movements_by_client.items()):
+        seeds = tuple(movement.seed for movement in movements)
+        if len(seeds) != len(frozenset(seeds)):
+            raise ValueError("client-impact device frequency cannot repeat a client seed")
+        fpr_relief = tuple(-movement.delta_fpr.value for movement in movements)
+        attack_movements = tuple(movement for movement in movements if movement.delta_tpr is not None)
+        tpr_loss = (
+            _unavailable_fraction(AnalysisReasonText("no valid TPR seeds for client"))
+            if not attack_movements
+            else _fraction(
+                sum(movement.delta_tpr.value < 0.0 for movement in attack_movements if movement.delta_tpr is not None),
+                len(attack_movements),
+            )
+        )
+        frequencies.append(
+            ClientImpactDeviceFrequency(
+                client=client,
+                observed_seed_count=SeedObservationCount(len(movements)),
+                fpr_help_frequency=_fraction(sum(value > 0.0 for value in fpr_relief), len(movements)),
+                fpr_harm_frequency=_fraction(sum(value < 0.0 for value in fpr_relief), len(movements)),
+                tpr_loss_frequency=tpr_loss,
+            )
+        )
+    return tuple(frequencies)

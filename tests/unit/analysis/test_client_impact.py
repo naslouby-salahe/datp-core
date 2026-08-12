@@ -1,6 +1,8 @@
 from types import SimpleNamespace
 from typing import cast
 
+from tests.unit.learning.federated.helpers import client_identity
+
 from datp_core.analysis.mechanisms import (
     ThresholdMovementCohort,
     summarize_client_impact,
@@ -72,6 +74,9 @@ def test_client_impact_campaign_retains_each_seed_and_uses_seed_as_the_summary_u
     assert summary.fpr_helped.arithmetic_mean.value == 0.5
     assert summary.fpr_helped.median is not None
     assert summary.fpr_helped.median.value == 0.5
+    assert len(summary.device_frequencies) == 1
+    assert summary.device_frequencies[0].fpr_help_frequency.value is not None
+    assert summary.device_frequencies[0].fpr_help_frequency.value.value == 0.5
 
 
 def _cohort(*, seed: int, delta_fpr: float) -> ThresholdMovementCohort:
@@ -82,6 +87,7 @@ def _cohort(*, seed: int, delta_fpr: float) -> ThresholdMovementCohort:
             reason=None,
             movements=(
                 SimpleNamespace(
+                    client=client_identity("client_a"),
                     seed=Seed(seed),
                     experiment=ExperimentId.SHARED_VS_LOCAL_CONFIRMATION,
                     delta_fpr=MetricValue(delta_fpr),
@@ -96,6 +102,7 @@ def _cohort(*, seed: int, delta_fpr: float) -> ThresholdMovementCohort:
 
 def _movement(*, delta_fpr: float, delta_tpr: float | None) -> SimpleNamespace:
     return SimpleNamespace(
+        client=client_identity("client_a"),
         seed=Seed(1),
         experiment=ExperimentId.SHARED_VS_LOCAL_CONFIRMATION,
         delta_fpr=MetricValue(delta_fpr),

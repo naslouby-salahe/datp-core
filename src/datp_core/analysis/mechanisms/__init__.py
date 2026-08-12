@@ -16,6 +16,7 @@ from datp_core.analysis.mechanisms.association import (
 )
 from datp_core.analysis.mechanisms.client_impact import (
     ClientImpactCampaignSummary,
+    ClientImpactDeviceFrequency,
     ClientImpactFraction,
     ClientImpactFractionSummary,
     ClientImpactSeedSummary,
@@ -115,6 +116,7 @@ __all__ = (
     "AlignmentActivationSummary",
     "ClientScoreVector",
     "ClientImpactCampaignSummary",
+    "ClientImpactDeviceFrequency",
     "ClientImpactFraction",
     "ClientImpactFractionSummary",
     "ClientImpactSeedSummary",
