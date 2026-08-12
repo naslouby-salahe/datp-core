@@ -37,6 +37,7 @@ def _width_values(protocol) -> tuple[int, ...]:
 
 def test_training_grids_are_locked() -> None:
     assert DIAGNOSTIC_SNAPSHOT_PROTOCOL.maximum_round.value == 200
+    assert DIAGNOSTIC_SNAPSHOT_PROTOCOL.convergence is None
     assert FEDAVG_LOCAL_EPOCHS.value == 1
     assert tuple(value.value for value in FEDPROX_COEFFICIENTS) == (0.001, 0.01, 0.1, 1)
     assert DITTO_RETAINED_EFFECT_MINIMUM.value == 0.75
