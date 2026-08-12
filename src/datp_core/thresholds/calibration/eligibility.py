@@ -81,9 +81,11 @@ class CalibrationSampleReference:
 
 
 def reject_evaluation_partition_in_eligibility(partition_role: PartitionRole) -> None:
-    if partition_role is not PartitionRole.CALIBRATION:
+    if partition_role not in {PartitionRole.CALIBRATION, PartitionRole.FUTURE_RECALIBRATION}:
         raise LeakageError(
-            ErrorMessage("calibration eligibility must be decided from calibration-partition scores only"),
+            ErrorMessage(
+                "calibration eligibility must be decided from a declared calibration-partition score artifact"
+            ),
             subject=partition_role,
         )
 

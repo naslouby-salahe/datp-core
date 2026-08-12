@@ -3,8 +3,9 @@ from dataclasses import dataclass
 import polars as pl
 
 from datp_core.core.contracts import ClientCollection, ClientOwned
-from datp_core.core.identifiers import ScoreFrameColumn, StableRowId
-from datp_core.core.numeric import CalibrationSize, ReplicateIndex, SubsampleReplicateCount
+from datp_core.core.errors import ErrorMessage, ScientificContractError
+from datp_core.core.identifiers import ContractSubject, PartitionRole, ScoreFrameColumn, StableRowId
+from datp_core.core.numeric import CalibrationSize, ReplicateIndex, RowCount, SubsampleReplicateCount
 from datp_core.data.populations.contracts import ClientIdentity, EligibleCohort
 from datp_core.detector.scoring.models import FederatedScoreArtifactManifest, FederatedScoreRecord
 from datp_core.thresholds.calibration.eligibility import (
@@ -18,7 +19,8 @@ from datp_core.thresholds.calibration.eligibility import (
     reject_score_coordinate_mismatch,
 )
 from datp_core.thresholds.calibration.sampling import CalibrationReplicateManifest, build_calibration_replicate
-from datp_core.thresholds.protocols import CalibrationEligibilityProtocol
+from datp_core.thresholds.protocols import MINIMUM_BENIGN_SUPPORT, CalibrationEligibilityProtocol
+from datp_core.thresholds.quantiles import ClientBenignCalibrationScores, calibration_scores_from_references
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -34,6 +36,42 @@ class CalibrationResult:
     eligibility: tuple[EligibilityDecision, ...]
     eligible_clients: EligibleCohort
     replicate_manifests: tuple[CalibrationReplicateManifest, ...]
+
+
+def eligible_calibration_scores(
+    score_manifest: FederatedScoreArtifactManifest,
+    role: PartitionRole = PartitionRole.CALIBRATION,
+) -> tuple[ClientBenignCalibrationScores, ...]:
+    """Load the one benign, disjoint calibration input set used by threshold construction."""
+    records = score_manifest.records_for(role)
+    reject_score_coordinate_mismatch(records)
+    evaluation_row_ids_by_client = ClientCollection(
+        items=tuple(
+            ClientOwned(client=record.scored_client, value=_evaluation_stable_row_ids(record))
+            for record in score_manifest.evaluation_records
+        )
+    )
+    eligible: list[ClientBenignCalibrationScores] = []
+    for record in sorted(records, key=lambda item: item.scored_client):
+        references = load_benign_calibration_references(record)
+        reject_calibration_evaluation_overlap(
+            frozenset(reference.stable_row_id for reference in references),
+            evaluation_row_ids_by_client.require(record.scored_client),
+        )
+        if MINIMUM_BENIGN_SUPPORT.fits_within(RowCount(len(references))):
+            eligible.append(
+                calibration_scores_from_references(
+                    client=record.scored_client,
+                    coordinate=record.coordinate,
+                    references=references,
+                )
+            )
+    if not eligible:
+        raise ScientificContractError(
+            ErrorMessage("no client meets the minimum benign calibration support for threshold construction"),
+            subject=ContractSubject.CALIBRATION,
+        )
+    return tuple(eligible)
 
 
 def calibrate(request: CalibrationRequest) -> CalibrationResult:

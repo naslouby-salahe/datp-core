@@ -1,7 +1,23 @@
+import polars as pl
 import pytest
 
-from datp_core.core.identifiers import FederatedThresholdMethod
-from datp_core.core.numeric import CoverageTarget
+from datp_core.core.errors import LeakageError
+from datp_core.core.identifiers import (
+    ClientIdentityToken,
+    FederatedThresholdMethod,
+    PartitionRole,
+    PopulationId,
+    PopulationIdentityKind,
+    PreprocessingProtocolId,
+    SerializationFormat,
+    SplitProtocolId,
+    TrainingModelId,
+)
+from datp_core.core.numeric import CoverageTarget, FeatureCount, RowCount, Seed
+from datp_core.data.populations.contracts import ClientIdentity
+from datp_core.detector.scoring.contracts import ScoreArtifactManifest, ScoreRecord
+from datp_core.detector.training.contracts import FederatedTrainingCoordinate
+from datp_core.thresholds.calibration.service import eligible_calibration_scores
 from datp_core.thresholds.protocols import (
     CALIBRATION_SIZE_PROTOCOL,
     CALIBRATION_SIZES,
@@ -77,3 +93,64 @@ def test_grouped_threshold_assignment_matches_the_locked_fingerprint_protocol() 
         CLUSTER_THRESHOLD_PROTOCOL.threshold_aggregation
         is ClusterThresholdAggregation.ARITHMETIC_MEAN_OF_ELIGIBLE_LOCAL_THRESHOLDS
     )
+
+
+def test_normal_threshold_construction_rejects_attack_labelled_calibration_scores(tmp_path) -> None:
+    coordinate = FederatedTrainingCoordinate(
+        population=PopulationId.NBAIOT_NATURAL_DEVICES,
+        training_seed=Seed(0),
+        split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
+        preprocessing_identity=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
+        model=TrainingModelId.FEDAVG_AUTOENCODER,
+        model_coefficient=None,
+    )
+    client = ClientIdentity(
+        population=coordinate.population,
+        client_id=ClientIdentityToken("device"),
+        identity_kind=PopulationIdentityKind.PHYSICAL_DEVICES,
+    )
+    calibration_path = tmp_path / "calibration.parquet"
+    evaluation_path = tmp_path / "evaluation.parquet"
+    pl.DataFrame(
+        {
+            "stable_row_id": [f"calibration:{index}" for index in range(100)],
+            "outcome_label": ["attack", *("benign" for _ in range(99))],
+            "reconstruction_error": [float(index) for index in range(100)],
+        }
+    ).write_parquet(calibration_path)
+    pl.DataFrame(
+        {
+            "stable_row_id": ["evaluation:0"],
+            "outcome_label": ["benign"],
+            "reconstruction_error": [0.0],
+        }
+    ).write_parquet(evaluation_path)
+    manifest = ScoreArtifactManifest(
+        coordinate=coordinate,
+        scored_split_protocol=coordinate.split_protocol,
+        calibration_records=(
+            ScoreRecord(
+                coordinate=coordinate,
+                partition_role=PartitionRole.CALIBRATION,
+                path=calibration_path,
+                row_count=RowCount(100),
+                feature_count=FeatureCount(1),
+                serialization_format=SerializationFormat.PARQUET,
+                scored_client=client,
+            ),
+        ),
+        evaluation_records=(
+            ScoreRecord(
+                coordinate=coordinate,
+                partition_role=PartitionRole.EVALUATION,
+                path=evaluation_path,
+                row_count=RowCount(1),
+                feature_count=FeatureCount(1),
+                serialization_format=SerializationFormat.PARQUET,
+                scored_client=client,
+            ),
+        ),
+    )
+
+    with pytest.raises(LeakageError, match="attack-labelled rows"):
+        eligible_calibration_scores(manifest)

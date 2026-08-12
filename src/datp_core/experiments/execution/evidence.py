@@ -1,6 +1,5 @@
 from pathlib import Path
 
-import polars as pl
 from pydantic import ValidationError
 
 from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
@@ -9,41 +8,8 @@ from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
 )
-from datp_core.core.identifiers import ContractSubject, MetricId, PartitionRole, ScoreFrameColumn
-from datp_core.core.numeric import MetricValue, RowCount, ScoreValue
-from datp_core.detector.scoring.models import FederatedScoreArtifactManifest
-from datp_core.thresholds.protocols import MINIMUM_BENIGN_SUPPORT
-from datp_core.thresholds.quantiles import ClientBenignCalibrationScores
-
-
-def eligible_calibration_scores(
-    score_manifest: FederatedScoreArtifactManifest,
-    role: PartitionRole = PartitionRole.CALIBRATION,
-) -> tuple[ClientBenignCalibrationScores, ...]:
-
-    if role not in {PartitionRole.CALIBRATION, PartitionRole.FUTURE_RECALIBRATION}:
-        raise ScientificContractError(
-            ErrorMessage("threshold calibration scores require a calibration partition role"),
-            subject=role,
-        )
-    candidates = tuple(
-        ClientBenignCalibrationScores(
-            record.scored_client,
-            score_manifest.coordinate,
-            tuple(
-                ScoreValue(float(value))
-                for value in pl.read_parquet(record.path)[ScoreFrameColumn.RECONSTRUCTION_ERROR.value].to_list()
-            ),
-        )
-        for record in sorted(score_manifest.records_for(role), key=lambda item: item.scored_client)
-    )
-    eligible = tuple(item for item in candidates if MINIMUM_BENIGN_SUPPORT.fits_within(RowCount(len(item.scores))))
-    if not eligible:
-        raise ScientificContractError(
-            ErrorMessage("no client meets the minimum benign calibration support for threshold construction"),
-            subject=ContractSubject.CALIBRATION,
-        )
-    return eligible
+from datp_core.core.identifiers import ContractSubject, MetricId
+from datp_core.core.numeric import MetricValue
 
 
 def load_evaluation_document(path: Path) -> FederatedEvaluationDocument:

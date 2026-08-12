@@ -63,7 +63,7 @@ from datp_core.experiments.execution.context import (
     training_autoencoder,
     training_feature_names,
 )
-from datp_core.experiments.execution.evidence import eligible_calibration_scores, load_evaluation_document
+from datp_core.experiments.execution.evidence import load_evaluation_document
 from datp_core.experiments.execution.layout import (
     ExecutionArtifactDirectory,
     ExecutionRootDirectory,
@@ -79,6 +79,7 @@ from datp_core.experiments.execution.models import (
 from datp_core.experiments.execution.score_generation import score_terminal_model
 from datp_core.experiments.registry import EXPERIMENTS, ExperimentDeclaration
 from datp_core.presentation.export import export_temporal_publication
+from datp_core.thresholds.calibration.service import eligible_calibration_scores
 from datp_core.thresholds.contracts import ThresholdInfeasibilityReason, ThresholdUnavailableResult
 from datp_core.thresholds.dispatch import ThresholdConstructionRequest
 from datp_core.thresholds.protocols import (

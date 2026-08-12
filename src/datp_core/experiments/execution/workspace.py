@@ -77,7 +77,6 @@ from datp_core.experiments.execution.context import (
     training_feature_names,
     training_protocol_for,
 )
-from datp_core.experiments.execution.evidence import eligible_calibration_scores
 from datp_core.experiments.execution.layout import EvaluationRunAssetDirectory, ExecutionArtifactDirectory
 from datp_core.experiments.execution.models import ProgressEvent, ProgressEventKind, ProgressHook
 from datp_core.experiments.execution.score_generation import score_terminal_model
@@ -87,6 +86,7 @@ from datp_core.thresholds.calibration.construction import (
     build_declared_calibration,
     construct_calibration_size_ablation,
 )
+from datp_core.thresholds.calibration.service import eligible_calibration_scores
 from datp_core.thresholds.contracts import ThresholdUnavailableResult
 from datp_core.thresholds.dispatch import ThresholdConstructionRequest, ThresholdConstructionResult
 from datp_core.thresholds.protocols import (
