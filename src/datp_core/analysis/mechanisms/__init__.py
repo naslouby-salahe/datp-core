@@ -88,6 +88,12 @@ from datp_core.analysis.mechanisms.movement import (
     summarize_threshold_movements_across_seeds,
     threshold_movement,
 )
+from datp_core.analysis.mechanisms.support_strata import (
+    CalibrationSupportStratum,
+    CampaignFixedSupportStrata,
+    CampaignFixedSupportStratum,
+    campaign_fixed_support_strata,
+)
 from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
 from datp_core.analysis.metrics.models import MetricStatus, metric_by_id
 from datp_core.analysis.scientific_decision import ScientificDecisionResult
@@ -109,6 +115,7 @@ type MechanismEvidence = (
     | ThresholdMovement
     | ThresholdMovementCohort
     | ThresholdMovementMultiSeedUncertainty
+    | CampaignFixedSupportStrata
 )
 
 __all__ = (
@@ -135,6 +142,9 @@ __all__ = (
     "ClusterContingencyMatrix",
     "ClusterContingencyRow",
     "ClusterStabilityResult",
+    "CalibrationSupportStratum",
+    "CampaignFixedSupportStrata",
+    "CampaignFixedSupportStratum",
     "ConfirmatoryEquityUtilityBundle",
     "ConfirmatoryEquityUtilityMeasure",
     "DivergenceBlocker",
@@ -166,6 +176,7 @@ __all__ = (
     "ThresholdMethodComparison",
     "ThresholdOperatingPoint",
     "blocked_jensen_shannon_divergence",
+    "campaign_fixed_support_strata",
     "alignment_reductions",
     "cluster_evidence_from_grouped_result",
     "cluster_stability",

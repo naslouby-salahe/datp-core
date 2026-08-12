@@ -22,6 +22,7 @@ from datp_core.analysis.mechanisms import (
     GroupedDispersionResult,
     MechanismEvidence,
     ThresholdMovementCohort,
+    campaign_fixed_support_strata,
     confirmatory_equity_utility_bundle,
     grouped_dispersion,
     heterogeneity_benefit_association,
@@ -253,6 +254,7 @@ def _confirmatory_mechanisms() -> tuple[MechanismEvidence, ...]:
     )
     mechanisms.append(summarize_client_impact_campaign(tuple(movement_cohorts)))
     mechanisms.append(confirmatory_equity_utility_bundle(tuple(policy_pairs)))
+    mechanisms.append(campaign_fixed_support_strata(tuple(shared for shared, _ in policy_pairs)))
     if association_observations:
         mechanisms.append(heterogeneity_benefit_association(tuple(association_observations)))
     return tuple(mechanisms)
