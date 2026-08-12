@@ -334,7 +334,10 @@ def export_temporal_publication(document: TemporalAnalysisDocument, output_direc
                 f"  - client `{trajectory.client_id.value}` eligible={trajectory.eligible} "
                 f"fpr_static={_optional_metric(trajectory.fpr_static)} "
                 f"fpr_frozen={_optional_metric(trajectory.fpr_frozen)} "
-                f"fpr_recal={_optional_metric(trajectory.fpr_recalibrated)}"
+                f"fpr_recal={_optional_metric(trajectory.fpr_recalibrated)} "
+                f"threshold_drift={_optional_metric(trajectory.threshold_movement_recalibrated)} "
+                f"frozen_fpr_deterioration={_optional_metric(trajectory.fpr_movement_frozen)} "
+                f"fpr_recovery={_optional_metric(trajectory.fpr_recovery)}"
             )
     lines.append("")
     lines.extend(

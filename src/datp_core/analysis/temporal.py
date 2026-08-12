@@ -132,6 +132,12 @@ class TemporalClientTrajectory(StrictModel):
             return None
         return MetricValue(self.fpr_recalibrated.value - self.fpr_frozen.value)
 
+    @property
+    def fpr_recovery(self) -> MetricValue | None:
+        if self.fpr_frozen is None or self.fpr_recalibrated is None:
+            return None
+        return MetricValue(self.fpr_frozen.value - self.fpr_recalibrated.value)
+
 
 class TemporalRecoveryResult(StrictModel):
     seed: Seed
