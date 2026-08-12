@@ -109,6 +109,8 @@ from datp_core.thresholds.protocols import (
 )
 from datp_core.thresholds.quantiles import ClientBenignCalibrationScores, exact_empirical_quantile
 from datp_core.thresholds.variants.conformal import ConformalThresholdResult
+from datp_core.thresholds.variants.federated_statistics import FederatedStatisticsThresholdResult
+from datp_core.thresholds.variants.kll import FederatedKllSharedThresholdResult
 from datp_core.thresholds.variants.shrinkage import FixedShrinkageCurveResult
 
 
@@ -504,11 +506,6 @@ class ExperimentWorkspace:
 
     def _threshold_stage_communication(self) -> ThresholdStageCommunicationDiagnostic | None:
         coordinate = self.scores.coordinate
-        if self.coordinate.threshold_method in (
-            FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS,
-            FederatedThresholdMethod.FEDERATED_KLL_SHARED_THRESHOLD,
-        ):
-            return None
         if self.coordinate.threshold_method is FederatedThresholdMethod.LOCAL_THRESHOLD:
             return ThresholdStageCommunicationDiagnostic(
                 training_seed=coordinate.training_seed,
@@ -518,11 +515,64 @@ class ExperimentWorkspace:
                 total_serialized_bytes=ByteCount(0),
             )
         messages: list[CommunicationMessageDiagnostic] = []
-        for calibration in self.eligible_calibration_scores():
-            client = calibration.client
-            scalar = SerializedPayloadEvidence(ByteCount(len(pack("<d", 0.0))), LogicalElementCount(1))
-            messages.extend(
-                (
+        scalar_bytes = ByteCount(len(pack("<d", 0.0)))
+
+        def receive_shared_threshold(client: ClientIdentity) -> None:
+            messages.append(
+                CommunicationMessageDiagnostic(
+                    training_seed=coordinate.training_seed,
+                    coordinate=coordinate,
+                    sender=MessageEndpoint("coordinator"),
+                    receiver=MessageEndpoint(f"client:{client.client_id.value}"),
+                    direction=MessageDirection.COORDINATOR_TO_CLIENT,
+                    payload_kind=ThresholdPayloadKind.THRESHOLD_TRANSMISSION,
+                    payload=SerializedPayloadEvidence(scalar_bytes, LogicalElementCount(1)),
+                    client=client,
+                    group_identity=None,
+                    estimation_basis=CommunicationEstimationMethod.SERIALIZED_MESSAGE_SIZE_ESTIMATE,
+                )
+            )
+
+        threshold = self.threshold
+        if isinstance(threshold, FederatedStatisticsThresholdResult):
+            for summary in threshold.client_summaries:
+                messages.append(
+                    CommunicationMessageDiagnostic(
+                        training_seed=coordinate.training_seed,
+                        coordinate=coordinate,
+                        sender=MessageEndpoint(f"client:{summary.client.client_id.value}"),
+                        receiver=MessageEndpoint("coordinator"),
+                        direction=MessageDirection.CLIENT_TO_COORDINATOR,
+                        payload_kind=ThresholdPayloadKind.BENIGN_SUMMARY_STATISTICS,
+                        payload=SerializedPayloadEvidence(summary.disclosed_bytes, LogicalElementCount(4)),
+                        client=summary.client,
+                        group_identity=None,
+                        estimation_basis=CommunicationEstimationMethod.SERIALIZED_MESSAGE_SIZE_ESTIMATE,
+                    )
+                )
+                receive_shared_threshold(summary.client)
+        elif isinstance(threshold, FederatedKllSharedThresholdResult):
+            for sketch in threshold.reconstructions[0].client_sketches:
+                messages.append(
+                    CommunicationMessageDiagnostic(
+                        training_seed=coordinate.training_seed,
+                        coordinate=coordinate,
+                        sender=MessageEndpoint(f"client:{sketch.client.client_id.value}"),
+                        receiver=MessageEndpoint("coordinator"),
+                        direction=MessageDirection.CLIENT_TO_COORDINATOR,
+                        payload_kind=ThresholdPayloadKind.KLL_SKETCH_TRANSMISSION,
+                        payload=SerializedPayloadEvidence(sketch.byte_count, LogicalElementCount(1)),
+                        client=sketch.client,
+                        group_identity=None,
+                        estimation_basis=CommunicationEstimationMethod.SERIALIZED_MESSAGE_SIZE_ESTIMATE,
+                    )
+                )
+                receive_shared_threshold(sketch.client)
+        else:
+            for calibration in self.eligible_calibration_scores():
+                client = calibration.client
+                scalar = SerializedPayloadEvidence(scalar_bytes, LogicalElementCount(1))
+                messages.append(
                     CommunicationMessageDiagnostic(
                         training_seed=coordinate.training_seed,
                         coordinate=coordinate,
@@ -534,27 +584,17 @@ class ExperimentWorkspace:
                         client=client,
                         group_identity=None,
                         estimation_basis=CommunicationEstimationMethod.SERIALIZED_MESSAGE_SIZE_ESTIMATE,
-                    ),
-                    CommunicationMessageDiagnostic(
-                        training_seed=coordinate.training_seed,
-                        coordinate=coordinate,
-                        sender=MessageEndpoint("coordinator"),
-                        receiver=MessageEndpoint(f"client:{client.client_id.value}"),
-                        direction=MessageDirection.COORDINATOR_TO_CLIENT,
-                        payload_kind=ThresholdPayloadKind.THRESHOLD_TRANSMISSION,
-                        payload=scalar,
-                        client=client,
-                        group_identity=None,
-                        estimation_basis=CommunicationEstimationMethod.SERIALIZED_MESSAGE_SIZE_ESTIMATE,
-                    ),
+                    )
                 )
-            )
+                receive_shared_threshold(client)
         return ThresholdStageCommunicationDiagnostic(
             training_seed=coordinate.training_seed,
             coordinate=coordinate,
             messages=tuple(messages),
-            total_logical_element_count=NonNegativeIntegerValue(len(messages)),
-            total_serialized_bytes=ByteCount(len(pack("<d", 0.0)) * len(messages)),
+            total_logical_element_count=NonNegativeIntegerValue(
+                sum(message.payload.logical_element_count.value for message in messages)
+            ),
+            total_serialized_bytes=ByteCount(sum(message.estimated_serialized_bytes.value for message in messages)),
         )
 
     @cached_property
