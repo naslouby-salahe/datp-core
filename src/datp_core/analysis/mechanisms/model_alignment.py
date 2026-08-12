@@ -26,6 +26,11 @@ class ModelAlignmentUnavailableReason(StrEnum):
     INSUFFICIENT_CLIENTS = "unavailable_insufficient_clients"
 
 
+class AlignmentReductionUnavailableReason(StrEnum):
+    NO_POSITIVE_FEDAVG_REFERENCE = "unavailable_no_positive_fedavg_reference"
+    CONDITION_METRIC_UNAVAILABLE = "unavailable_condition_metric"
+
+
 class ModelAlignmentMetricOutcome(StrictModel):
     metric: ModelAlignmentMetric
     value: MetricValue | None
@@ -84,6 +89,18 @@ class ModelAlignmentResult(StrictModel):
         return self
 
 
+class AlignmentReductionOutcome(StrictModel):
+    metric: ModelAlignmentMetric
+    value: MetricValue | None
+    unavailable_reason: AlignmentReductionUnavailableReason | None
+
+    @model_validator(mode="after")
+    def validate_availability(self) -> "AlignmentReductionOutcome":
+        if (self.value is None) == (self.unavailable_reason is None):
+            raise ValueError("alignment reduction must have exactly one value or unavailable reason")
+        return self
+
+
 def fedavg_alignment_grid(condition: ModelAlignmentCondition) -> FedAvgAlignmentGrid:
     return fedavg_alignment_grid_for_scores(condition.client_scores)
 
@@ -129,6 +146,46 @@ def model_alignment(
         _normalized_distance_outcome(mean_distance, local_thresholds),
     )
     return ModelAlignmentResult(grid=grid, metrics=outcomes)
+
+
+def alignment_reductions(
+    reference: ModelAlignmentResult,
+    condition: ModelAlignmentResult,
+) -> tuple[AlignmentReductionOutcome, ...]:
+    reference_by_metric = {outcome.metric: outcome for outcome in reference.metrics}
+    condition_by_metric = {outcome.metric: outcome for outcome in condition.metrics}
+    return tuple(
+        _alignment_reduction(
+            metric,
+            reference_by_metric[metric],
+            condition_by_metric[metric],
+        )
+        for metric in ModelAlignmentMetric
+    )
+
+
+def _alignment_reduction(
+    metric: ModelAlignmentMetric,
+    reference: ModelAlignmentMetricOutcome,
+    condition: ModelAlignmentMetricOutcome,
+) -> AlignmentReductionOutcome:
+    if reference.value is None or reference.value.value <= _DENOMINATOR_MINIMUM:
+        return AlignmentReductionOutcome(
+            metric=metric,
+            value=None,
+            unavailable_reason=AlignmentReductionUnavailableReason.NO_POSITIVE_FEDAVG_REFERENCE,
+        )
+    if condition.value is None:
+        return AlignmentReductionOutcome(
+            metric=metric,
+            value=None,
+            unavailable_reason=AlignmentReductionUnavailableReason.CONDITION_METRIC_UNAVAILABLE,
+        )
+    return AlignmentReductionOutcome(
+        metric=metric,
+        value=MetricValue(1.0 - condition.value.value / reference.value.value),
+        unavailable_reason=None,
+    )
 
 
 def _heterogeneity_outcome(

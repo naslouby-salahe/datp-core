@@ -5,6 +5,7 @@ from enum import StrEnum
 from pathlib import Path
 from shutil import rmtree
 
+import numpy as np
 import polars as pl
 from pydantic import TypeAdapter, ValidationError
 
@@ -17,9 +18,11 @@ from datp_core.analysis.mechanisms import (
     decide_absorption_cohort,
 )
 from datp_core.analysis.mechanisms.model_alignment import (
+    AlignmentReductionOutcome,
     ModelAlignmentClientScores,
     ModelAlignmentCondition,
     ModelAlignmentResult,
+    alignment_reductions,
     fedavg_alignment_grid_for_scores,
     model_alignment,
 )
@@ -195,6 +198,8 @@ class FineTuningStressTestResult:
     personalized_coordinate: FederatedTrainingCoordinate
     model_evidence: tuple[FineTuningClientModelEvidence, ...]
     alignment: ModelAlignmentResult
+    reference_alignment: ModelAlignmentResult
+    alignment_reductions: tuple[AlignmentReductionOutcome, ...]
     shared_threshold: SharedThresholdResult
     local_threshold: LocalThresholdResult
     shared_threshold_metrics: tuple[ClientMetricResult, ...]
@@ -207,6 +212,8 @@ class FineTuningStressTestEvidence:
     personalized_coordinate: FederatedTrainingCoordinate
     model_evidence: tuple[FineTuningClientModelEvidence, ...]
     alignment: ModelAlignmentResult
+    reference_alignment: ModelAlignmentResult
+    alignment_reductions: tuple[AlignmentReductionOutcome, ...]
     shared_threshold_metrics: tuple[ClientMetricResult, ...]
     local_threshold_metrics: tuple[ClientMetricResult, ...]
     evaluation_cohort: EvaluationCohortManifest
@@ -696,9 +703,17 @@ def run_fedavg_local_fine_tuning_stress_test_seed(
         score_directory=source_score_directory,
         clients=context.clients,
     )
+    grid = fedavg_alignment_grid_for_scores(source_alignment_clients)
+    reference_alignment = model_alignment(
+        ModelAlignmentCondition(
+            client_scores=source_alignment_clients,
+            shared_threshold=_shared_type7_threshold(source_alignment_clients),
+        ),
+        grid=grid,
+    )
     alignment = model_alignment(
         fine_alignment_condition,
-        grid=fedavg_alignment_grid_for_scores(source_alignment_clients),
+        grid=grid,
     )
     result = FineTuningStressTestResult(
         personalized_coordinate=personalized_coordinate,
@@ -711,6 +726,8 @@ def run_fedavg_local_fine_tuning_stress_test_seed(
             for owned in models.items
         ),
         alignment=alignment,
+        reference_alignment=reference_alignment,
+        alignment_reductions=alignment_reductions(reference_alignment, alignment),
         shared_threshold=shared,
         local_threshold=local,
         shared_threshold_metrics=tuple(
@@ -740,6 +757,8 @@ def run_fedavg_local_fine_tuning_stress_test_seed(
             personalized_coordinate=result.personalized_coordinate,
             model_evidence=result.model_evidence,
             alignment=result.alignment,
+            reference_alignment=result.reference_alignment,
+            alignment_reductions=result.alignment_reductions,
             shared_threshold_metrics=result.shared_threshold_metrics,
             local_threshold_metrics=result.local_threshold_metrics,
             evaluation_cohort=result.evaluation_cohort,
@@ -1229,6 +1248,16 @@ def _alignment_clients_from_scores(
             )
         )
     return tuple(observations)
+
+
+def _shared_type7_threshold(client_scores: tuple[ModelAlignmentClientScores, ...]) -> ThresholdValue:
+    pooled = np.concatenate(
+        tuple(
+            np.asarray([value.value for value in client.calibration_scores], dtype=np.float64)
+            for client in client_scores
+        )
+    )
+    return ThresholdValue(float(np.quantile(pooled, CANONICAL_QUANTILE.value, method="linear")))
 
 
 def ditto_directory(

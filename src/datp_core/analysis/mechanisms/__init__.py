@@ -41,6 +41,8 @@ from datp_core.analysis.mechanisms.divergence import (
     jensen_shannon_divergence,
 )
 from datp_core.analysis.mechanisms.model_alignment import (
+    AlignmentReductionOutcome,
+    AlignmentReductionUnavailableReason,
     FedAvgAlignmentGrid,
     ModelAlignmentClientScores,
     ModelAlignmentCondition,
@@ -48,6 +50,7 @@ from datp_core.analysis.mechanisms.model_alignment import (
     ModelAlignmentMetricOutcome,
     ModelAlignmentResult,
     ModelAlignmentUnavailableReason,
+    alignment_reductions,
     fedavg_alignment_grid,
     model_alignment,
 )
@@ -90,6 +93,8 @@ __all__ = (
     "AssociationObservation",
     "AssociationResult",
     "AssociationStatistics",
+    "AlignmentReductionOutcome",
+    "AlignmentReductionUnavailableReason",
     "ClientScoreVector",
     "ClusterEvidenceAvailability",
     "ClusterEvidenceRecord",
@@ -120,6 +125,7 @@ __all__ = (
     "ThresholdMethodComparison",
     "ThresholdOperatingPoint",
     "blocked_jensen_shannon_divergence",
+    "alignment_reductions",
     "cluster_evidence_from_grouped_result",
     "cluster_stability",
     "decide_absorption_cohort",
