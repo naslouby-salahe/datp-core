@@ -31,7 +31,7 @@ from datp_core.analysis.metrics.models import (
     PopulationMetricResult,
     metric_by_id,
 )
-from datp_core.analysis.metrics.operating_point import evaluate_held_out_operating_points
+from datp_core.analysis.metrics.operating_point import calibration_support_evidence, evaluate_held_out_operating_points
 from datp_core.analysis.metrics.population import calculate_population_metrics
 from datp_core.analysis.metrics.threshold_estimation import (
     ThresholdEstimationDiagnostic,
@@ -310,6 +310,7 @@ def _evaluate_diagnostics(
         alert_burden=_evaluate_alert_burden(request.traffic_rate_evidence, clients, coordinate),
         held_out_operating_points=held_out_operating_points,
         held_out_operating_point_summary=held_out_operating_point_summary,
+        calibration_support=calibration_support_evidence(request.calibration_scores),
         shrinkage_curve=shrinkage_curve,
         calibration_size_ablation=request.calibration_size_ablation,
         sample_efficiency=sample_efficiency_curve(threshold_estimation) if threshold_estimation else (),

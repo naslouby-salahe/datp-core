@@ -4,7 +4,7 @@ from datp_core.analysis.metrics.models import AvailableMetric, ClientMetricResul
 from datp_core.core.contracts import StrictModel
 from datp_core.core.errors import ErrorMessage, ScientificContractError
 from datp_core.core.identifiers import MetricId
-from datp_core.core.numeric import MetricValue, Quantile, Ratio
+from datp_core.core.numeric import MetricValue, Quantile, Ratio, RowCount
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.thresholds.quantiles import ClientBenignCalibrationScores
 
@@ -18,6 +18,11 @@ class HeldOutOperatingPointDiagnostic(StrictModel):
     absolute_target_error: MetricValue
     signed_calibration_generalization_gap: MetricValue
     absolute_calibration_generalization_gap: MetricValue
+
+
+class CalibrationSupportEvidence(StrictModel):
+    client: ClientIdentity
+    source_benign_calibration_count: RowCount
 
 
 class HeldOutOperatingPointSummary(StrictModel):
@@ -66,9 +71,7 @@ def evaluate_held_out_operating_points(
         )
     if not diagnostics:
         return (), None
-    target_errors = np.asarray(
-        tuple(item.absolute_target_error.value for item in diagnostics), dtype=np.float64
-    )
+    target_errors = np.asarray(tuple(item.absolute_target_error.value for item in diagnostics), dtype=np.float64)
     gaps = np.asarray(
         tuple(item.absolute_calibration_generalization_gap.value for item in diagnostics), dtype=np.float64
     )
@@ -79,4 +82,16 @@ def evaluate_held_out_operating_points(
         mean_absolute_calibration_generalization_gap=MetricValue(float(np.mean(gaps))),
         median_absolute_calibration_generalization_gap=MetricValue(float(np.median(gaps))),
         worst_absolute_calibration_generalization_gap=MetricValue(float(np.max(gaps))),
+    )
+
+
+def calibration_support_evidence(
+    calibration_scores: tuple[ClientBenignCalibrationScores, ...],
+) -> tuple[CalibrationSupportEvidence, ...]:
+    clients = tuple(item.client for item in calibration_scores)
+    if len(clients) != len(frozenset(clients)):
+        raise ScientificContractError(ErrorMessage("calibration support evidence requires unique clients"))
+    return tuple(
+        CalibrationSupportEvidence(client=item.client, source_benign_calibration_count=RowCount(len(item.scores)))
+        for item in sorted(calibration_scores, key=lambda item: item.client)
     )
