@@ -22,6 +22,7 @@ from datp_core.analysis.inference.bootstrap.validation import (
 )
 from datp_core.analysis.inference.contracts import PairedInferenceProtocol
 from datp_core.analysis.inference.multiplicity import MultiplicityPlan, MultiplicityResult, holm_adjust
+from datp_core.analysis.inference.sign_test import ExactPairedSignTestResult, exact_paired_sign_test
 from datp_core.analysis.inference.wilcoxon import (
     RankBiserialResult,
     WilcoxonResult,
@@ -78,6 +79,7 @@ class AnalysisDocument(StrictModel):
     decision: ScientificDecisionResult
     descriptive: DescriptiveSummary
     sign_consistency: PairedDifferenceCounts
+    exact_sign_test: ExactPairedSignTestResult | None
     wilcoxon: WilcoxonResult
     rank_biserial: RankBiserialResult
     multiplicity_plan: MultiplicityPlan | None
@@ -213,6 +215,7 @@ def prepare_confirmatory_analysis(request: ConfirmatoryAnalysisRequest) -> Analy
                 quantiles=_quantile_range(protocol),
             ),
             sign_consistency=count_paired_differences(deltas),
+            exact_sign_test=exact_paired_sign_test(contrasts),
             wilcoxon=blocked_wilcoxon(AnalysisReasonText(f"dependent Wilcoxon blocked: {reason_text}")),
             rank_biserial=blocked_rank_biserial(AnalysisReasonText(f"dependent rank-biserial blocked: {reason_text}")),
             multiplicity_plan=None,
@@ -235,6 +238,7 @@ def prepare_confirmatory_analysis(request: ConfirmatoryAnalysisRequest) -> Analy
             quantiles=_quantile_range(protocol),
         ),
         sign_consistency=count_paired_differences(deltas),
+        exact_sign_test=exact_paired_sign_test(contrasts),
         wilcoxon=paired_wilcoxon(contrasts, protocol),
         rank_biserial=matched_pairs_rank_biserial(contrasts, protocol),
         multiplicity_plan=request.multiplicity_plan,
@@ -401,6 +405,7 @@ def _blocked_confirmatory_document(
             quantiles=_quantile_range(protocol),
         ),
         sign_consistency=count_paired_differences(()),
+        exact_sign_test=None,
         wilcoxon=blocked_wilcoxon(AnalysisReasonText(f"dependent Wilcoxon blocked: {unavailable_reason}")),
         rank_biserial=blocked_rank_biserial(
             AnalysisReasonText(f"dependent rank-biserial blocked: {unavailable_reason}")

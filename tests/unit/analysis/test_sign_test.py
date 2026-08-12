@@ -1,0 +1,22 @@
+from types import SimpleNamespace
+from typing import cast
+
+import pytest
+
+from datp_core.analysis.contrasts import PairedContrasts
+from datp_core.analysis.inference.sign_test import exact_paired_sign_test
+from datp_core.core.numeric import MetricValue
+
+
+def test_exact_paired_sign_test_excludes_zeros_from_the_binomial_null() -> None:
+    contrasts = cast(
+        PairedContrasts,
+        SimpleNamespace(deltas=(MetricValue(1.0), MetricValue(0.0), MetricValue(-1.0), MetricValue(2.0))),
+    )
+
+    result = exact_paired_sign_test(contrasts)
+
+    assert result.positive_pair_count.value == 2
+    assert result.nonzero_pair_count.value == 3
+    assert result.two_sided_p_value is not None
+    assert result.two_sided_p_value.value == pytest.approx(1.0)
