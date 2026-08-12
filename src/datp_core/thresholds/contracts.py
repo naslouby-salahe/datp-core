@@ -33,6 +33,9 @@ from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 class ThresholdInfeasibilityReason(StrEnum):
     FAMILY_TAXONOMY_UNAVAILABLE = "family_taxonomy_unavailable"
     GROUP_COUNT_EXCEEDS_ELIGIBLE_POPULATION = "group_count_exceeds_eligible_population"
+    UNAVAILABLE_NO_LOCAL_CALIBRATION = "unavailable_no_local_calibration"
+    UNAVAILABLE_NO_FINGERPRINT = "unavailable_no_fingerprint"
+    UNAVAILABLE_NONFINITE_FINGERPRINT = "unavailable_nonfinite_fingerprint"
 
 
 @dataclass(frozen=True, slots=True)
