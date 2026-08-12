@@ -230,13 +230,11 @@ def _confirmatory_mechanisms() -> tuple[MechanismEvidence, ...]:
     association_observations: list[AssociationObservation] = []
     mechanisms: list[MechanismEvidence] = []
     family_comparisons: list[FamilyRecallPolicyComparison] = []
-    pareto_documents: list[FederatedEvaluationDocument] = []
     for seed in CONFIRMATORY_SEED_COHORT.values:
         shared = load_evaluation_document(_evaluation_path(seed, FederatedThresholdMethod.SHARED_THRESHOLD))
         local = load_evaluation_document(_evaluation_path(seed, FederatedThresholdMethod.LOCAL_THRESHOLD))
         family = load_evaluation_document(_evaluation_path(seed, FederatedThresholdMethod.FAMILY_THRESHOLD))
         cluster = load_evaluation_document(_evaluation_path(seed, FederatedThresholdMethod.CLUSTER_THRESHOLD))
-        pareto_documents.extend((shared, local, family, cluster))
         policy_pairs.append((shared, local))
         movement = threshold_movements_from_evaluations(
             shared=shared,
@@ -285,18 +283,7 @@ def _confirmatory_mechanisms() -> tuple[MechanismEvidence, ...]:
     mechanisms.append(summarize_calibration_support_burden(tuple(support_burden_evidence)))
     mechanisms.append(summarize_calibration_support_burden_devices(tuple(support_burden_evidence)))
     mechanisms.append(confirmatory_equity_utility_bundle(tuple(policy_pairs)))
-    mechanisms.append(
-        equity_utility_pareto(
-            tuple(pareto_documents),
-            utility_metric=MetricId.P10_BINARY_MACRO_F1,
-        )
-    )
-    mechanisms.append(
-        equity_utility_pareto(
-            tuple(pareto_documents),
-            utility_metric=MetricId.WORST_CLIENT_BALANCED_ACCURACY,
-        )
-    )
+    mechanisms.extend(_confirmatory_pareto_views())
     strata = campaign_fixed_support_strata(tuple(shared for shared, _ in policy_pairs))
     mechanisms.append(strata)
     stratum_outcomes = support_stratum_seed_outcomes(strata, tuple(policy_pairs), tuple(movement_cohorts))
@@ -370,6 +357,10 @@ def _confirmatory_pareto_views() -> tuple[EquityUtilityParetoView, ...]:
         for seed in CONFIRMATORY_SEED_COHORT.values
         for method in (
             FederatedThresholdMethod.SHARED_THRESHOLD,
+            FederatedThresholdMethod.POOLED_SHARED_QUANTILE,
+            FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD,
+            FederatedThresholdMethod.FEDERATED_KLL_SHARED_THRESHOLD,
+            FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS,
             FederatedThresholdMethod.FAMILY_THRESHOLD,
             FederatedThresholdMethod.CLUSTER_THRESHOLD,
             FederatedThresholdMethod.LOCAL_THRESHOLD,
@@ -665,16 +656,28 @@ def _confirmatory_declaration() -> ExperimentDeclaration:
 def _declaration_for_threshold_method(method: FederatedThresholdMethod) -> ExperimentDeclaration:
     if method in {FederatedThresholdMethod.SHARED_THRESHOLD, FederatedThresholdMethod.LOCAL_THRESHOLD}:
         return _confirmatory_declaration()
+    if method in {
+        FederatedThresholdMethod.POOLED_SHARED_QUANTILE,
+        FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD,
+    }:
+        return _declaration_by_id(ExperimentId.SHARED_CONSTRUCTION_SENSITIVITY)
+    if method in {
+        FederatedThresholdMethod.FEDERATED_KLL_SHARED_THRESHOLD,
+        FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS,
+    }:
+        return _declaration_by_id(ExperimentId.FEDERATED_QUANTILE_ESTIMATION)
     if method in {FederatedThresholdMethod.FAMILY_THRESHOLD, FederatedThresholdMethod.CLUSTER_THRESHOLD}:
-        matches = tuple(item for item in EXPERIMENTS if item.id is ExperimentId.FAMILY_AND_GROUPED_GRANULARITY)
-        if len(matches) != 1:
-            raise ScientificContractError(
-                ErrorMessage("family/grouped mechanism experiment must be declared exactly once")
-            )
-        return matches[0]
+        return _declaration_by_id(ExperimentId.FAMILY_AND_GROUPED_GRANULARITY)
     raise ScientificContractError(
         ErrorMessage(f"confirmatory experiment cannot resolve a publication coordinate for {method.value}")
     )
+
+
+def _declaration_by_id(experiment_id: ExperimentId) -> ExperimentDeclaration:
+    matches = tuple(item for item in EXPERIMENTS if item.id is experiment_id)
+    if len(matches) != 1:
+        raise ScientificContractError(ErrorMessage(f"{experiment_id.value} must be declared exactly once"))
+    return matches[0]
 
 
 def _confirmatory_coordinate(training_seed: Seed, method: FederatedThresholdMethod) -> ExperimentCoordinate:

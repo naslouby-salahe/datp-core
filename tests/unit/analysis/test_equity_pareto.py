@@ -9,8 +9,9 @@ from datp_core.analysis.mechanisms.equity_pareto import equity_utility_pareto
 from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
 from datp_core.analysis.metrics.models import AvailableMetric
 from datp_core.core.errors import ScientificContractError
-from datp_core.core.identifiers import FederatedThresholdMethod, FigureTitle, MetricId
+from datp_core.core.identifiers import ExperimentId, FederatedThresholdMethod, FigureTitle, MetricId
 from datp_core.core.numeric import MetricValue, Seed
+from datp_core.experiments.confirmatory.run import _declaration_for_threshold_method
 from datp_core.presentation.figures import equity_utility_pareto_figure
 
 
@@ -68,6 +69,21 @@ def test_equity_pareto_exposes_descriptive_bca_intervals_for_full_seed_cohort() 
     assert len(figure.paired_metric_series) == 2
     assert figure.paired_metric_series[0].x_values == (result.points[0].mean_x,)
     assert figure.paired_metric_series[1].x_values == result.points[0].seed_values_x
+
+
+@pytest.mark.parametrize(
+    ("method", "experiment"),
+    (
+        (FederatedThresholdMethod.POOLED_SHARED_QUANTILE, ExperimentId.SHARED_CONSTRUCTION_SENSITIVITY),
+        (FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD, ExperimentId.SHARED_CONSTRUCTION_SENSITIVITY),
+        (FederatedThresholdMethod.FEDERATED_KLL_SHARED_THRESHOLD, ExperimentId.FEDERATED_QUANTILE_ESTIMATION),
+        (FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS, ExperimentId.FEDERATED_QUANTILE_ESTIMATION),
+    ),
+)
+def test_pareto_policy_coordinates_use_their_declared_canonical_experiment(
+    method: FederatedThresholdMethod, experiment: ExperimentId
+) -> None:
+    assert _declaration_for_threshold_method(method).id is experiment
 
 
 def _document(
