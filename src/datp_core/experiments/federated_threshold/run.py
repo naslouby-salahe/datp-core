@@ -30,6 +30,7 @@ from datp_core.core.identifiers import (
 from datp_core.core.numeric import (
     AbsoluteThresholdError,
     ByteCount,
+    ElapsedSeconds,
     MetricValue,
     NonNegativeFiniteFloatValue,
     Ratio,
@@ -91,6 +92,8 @@ class EstimationSummary(StrictModel):
     mean_achieved_exceedance: Ratio | None
     mean_threshold_variance: ThresholdVariance | None
     mean_estimated_communication_bytes: AverageByteCount | None
+    mean_kll_client_build_serialization_seconds: MetricValue | None
+    mean_kll_server_deserialize_merge_query_seconds: MetricValue | None
 
 
 class EstimationSummaryReport(StrictModel):
@@ -345,6 +348,7 @@ def _estimation_summary(
         families=families,
     )
 
+    client_timings, server_timings = _kll_endpoint_timings(experiment_id, method, tuple(documents))
     return EstimationSummaryLoad(
         summary=EstimationSummary(
             method=method,
@@ -363,9 +367,37 @@ def _estimation_summary(
             mean_achieved_exceedance=_mean_ratio(diagnostics.exceedances),
             mean_threshold_variance=_mean_threshold_variance(diagnostics.variances),
             mean_estimated_communication_bytes=_mean_bytes(diagnostics.communication),
+            mean_kll_client_build_serialization_seconds=_mean_elapsed(client_timings),
+            mean_kll_server_deserialize_merge_query_seconds=_mean_elapsed(server_timings),
         ),
         missing_count=SeedObservationCount(missing),
     )
+
+
+def _kll_endpoint_timings(
+    experiment_id: ExperimentId,
+    method: FederatedThresholdMethod,
+    documents: tuple[FederatedEvaluationDocument, ...],
+) -> tuple[tuple[ElapsedSeconds, ...], tuple[ElapsedSeconds, ...]]:
+    if method is not FederatedThresholdMethod.FEDERATED_KLL_SHARED_THRESHOLD:
+        return (), ()
+    from datp_core.thresholds.variants.kll import FederatedKllSharedThresholdResult
+
+    client: list[ElapsedSeconds] = []
+    server: list[ElapsedSeconds] = []
+    for document in documents:
+        coordinate = _threshold_coordinate_for_seed(document.score_coordinate.training_seed, method, experiment_id)
+        threshold_result = _load_threshold_result(_threshold_result_path(OUTPUTS_ROOT, coordinate))
+        if not isinstance(threshold_result, FederatedKllSharedThresholdResult):
+            raise ScientificContractError(ErrorMessage("KLL evaluation has a non-KLL threshold result"))
+        for reconstruction in threshold_result.reconstructions:
+            client.extend(item.build_serialization_elapsed for item in reconstruction.client_sketches)
+            server.append(reconstruction.server_deserialize_merge_query_elapsed)
+    return tuple(client), tuple(server)
+
+
+def _mean_elapsed(values: tuple[ElapsedSeconds, ...]) -> MetricValue | None:
+    return MetricValue(sum(item.value for item in values) / len(values)) if values else None
 
 
 def run_federated_benign_statistics_comparison_seed(
