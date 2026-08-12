@@ -69,6 +69,8 @@ class CalibrationSizeAblationCell:
     method: FederatedThresholdMethod
     clients: tuple[ClientMetricResult, ...]
     population: PopulationMetricResult
+    held_out_operating_points: tuple[HeldOutOperatingPointDiagnostic, ...]
+    held_out_operating_point_summary: HeldOutOperatingPointSummary | None
 
     def __post_init__(self) -> None:
         if not self.clients:

@@ -174,6 +174,8 @@ def construct_calibration_size_ablation(
                     method=request.method,
                     clients=publication.artifacts.clients,
                     population=publication.artifacts.population,
+                    held_out_operating_points=publication.artifacts.diagnostics.held_out_operating_points,
+                    held_out_operating_point_summary=publication.artifacts.diagnostics.held_out_operating_point_summary,
                 )
             )
     if not cells:
