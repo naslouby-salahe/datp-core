@@ -52,6 +52,7 @@ from datp_core.analysis.mechanisms.support_strata import (
 )
 from datp_core.analysis.preparation import AnalysisDocument, ExternalAnalysisDocument, TemporalAnalysisDocument
 from datp_core.analysis.scientific_decision import ScientificDecision, ScientificDecisionResult
+from datp_core.artifacts.serializers.json import canonical_json_text
 from datp_core.core.identifiers import (
     AvailabilityStatus,
     ClaimWording,
@@ -87,6 +88,7 @@ from datp_core.runtime.filesystem import write_text_atomically
 
 PUBLICATION_FILENAME = "publication.md"
 MECHANISM_REPORT_FILENAME = "mechanism_report.md"
+PUBLICATION_SOURCE_MANIFEST_FILENAME = "publication_source_manifest.json"
 PUBLICATION_DECIMAL_PLACES = 3
 PUBLICATION_P_VALUE_SIGNIFICANT_DIGITS = 3
 PUBLICATION_P_VALUE_DISPLAY_THRESHOLD = 0.001
@@ -163,7 +165,23 @@ def export_markdown(bundle: PublicationBundle, destination: Path) -> Path:
     )
     sections = header + permitted + blocked_section + table_section + figure_section
     payload = "\n".join(sections).rstrip() + "\n"
-    return write_text_atomically(destination, FileContentText(payload))
+    publication = write_text_atomically(destination, FileContentText(payload))
+    write_text_atomically(
+        destination.parent / PUBLICATION_SOURCE_MANIFEST_FILENAME,
+        FileContentText(
+            canonical_json_text(
+                {
+                    "publication": publication.name,
+                    "experiment": provenance.experiment.value,
+                    "population": provenance.population.value,
+                    "evidence_role": provenance.evidence_role.value,
+                    "table_count": len(bundle.tables),
+                    "figure_count": len(bundle.figures),
+                }
+            )
+        ),
+    )
+    return publication
 
 
 def export_analysis_report(document: AnalysisDocument, destination: Path) -> Path:
