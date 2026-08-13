@@ -111,6 +111,7 @@ from datp_core.presentation.figures import (
     equity_utility_pareto_figure,
     score_geometry_figure,
 )
+from datp_core.presentation.operational_accounting import export_threshold_stage_accounting
 from datp_core.presentation.population_capabilities import export_population_capability_table
 from datp_core.presentation.prior_art import export_prior_art_collision_table, export_prior_art_distinction_table
 from datp_core.presentation.target_attainment import (
@@ -273,6 +274,9 @@ def analyze_confirmatory_campaign() -> Path:
         _confirmatory_operating_point_documents(),
         CONFIRMATORY_SEED_COHORT.values,
         output / "confirmatory_operating_point_record.md",
+    )
+    export_threshold_stage_accounting(
+        _confirmatory_threshold_stage_documents(), output / "threshold_stage_accounting.md"
     )
     _export_client_impact_synthesis_tables(all_mechanisms, output)
     if all_mechanisms:
@@ -525,6 +529,26 @@ def _confirmatory_operating_point_documents() -> tuple[FederatedEvaluationDocume
             FederatedThresholdMethod.SHARED_THRESHOLD,
             FederatedThresholdMethod.LOCAL_THRESHOLD,
         )
+    )
+
+
+def _confirmatory_threshold_stage_documents() -> tuple[FederatedEvaluationDocument, ...]:
+    methods = (
+        FederatedThresholdMethod.SHARED_THRESHOLD,
+        FederatedThresholdMethod.POOLED_SHARED_QUANTILE,
+        FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD,
+        FederatedThresholdMethod.FEDERATED_KLL_SHARED_THRESHOLD,
+        FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS,
+        FederatedThresholdMethod.FAMILY_THRESHOLD,
+        FederatedThresholdMethod.CLUSTER_THRESHOLD,
+        FederatedThresholdMethod.LOCAL_THRESHOLD,
+        FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE,
+        FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE,
+    )
+    return tuple(
+        load_evaluation_document(_evaluation_path(seed, method))
+        for seed in CONFIRMATORY_SEED_COHORT.values
+        for method in methods
     )
 
 
