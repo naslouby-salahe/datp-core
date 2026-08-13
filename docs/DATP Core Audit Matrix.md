@@ -6153,8 +6153,8 @@ The implementation must distinguish at least these roadmap-defined scientific st
 | `GATE-L-003` | 6157 | Per-client metrics are computed before cross-client aggregation where valid client identity exists. | `IMPLEMENTED` | `PASS` | Evaluation constructs each client result before population aggregation. |
 | `GATE-L-004` | 6158 | `CV(FPR)` uses only the eligible FPR-evaluable client population defined in Part III. | `IMPLEMENTED` | `PASS` | Population aggregation collects FPR values only from the typed FPR-evaluable cohort. |
 | `GATE-L-005` | 6159 | Absolute dispersion metrics accompany CV where low mean FPR could make CV unstable or misleading. | `NOT_AUDITED` | — | — |
-| `GATE-L-006` | 6160 | Attack-sensitive metrics are marked unavailable when valid per-client attack assignment is absent. | `NOT_AUDITED` | — | — |
-| `GATE-L-007` | 6161 | Undefined denominators remain undefined; they are never converted to zero. | `NOT_AUDITED` | — | — |
+| `GATE-L-006` | 6160 | Attack-sensitive metrics are marked unavailable when valid per-client attack assignment is absent. | `IMPLEMENTED` | `PASS` | Attack-rate and attack-derived metric paths return typed unavailability for invalid assignment. |
+| `GATE-L-007` | 6161 | Undefined denominators remain undefined; they are never converted to zero. | `IMPLEMENTED` | `PASS` | Zero-mean and undefined-class cases retain typed undefined status and reason. |
 | `GATE-L-008` | 6162 | AUROC/AP are detector-quality controls and do not become threshold-scope verdicts. | `NOT_AUDITED` | — | — |
 | `GATE-L-009` | 6163 | Held-out target-attainment error is computed from held-out benign rows and is never replaced by calibration-set exceedance. | `NOT_AUDITED` | — | — |
 | `GATE-L-010` | 6164 | Calibration-to-held-out benign generalization gap uses the exact calibration scores that constructed each scalar threshold, the strict `score > threshold` exceedance rule, and the unchanged held-out benign evaluation rows. | `NOT_AUDITED` | — | — |
