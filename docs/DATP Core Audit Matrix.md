@@ -6511,20 +6511,20 @@ README_REPRODUCIBILITY.md
 | `METRIC-011` | I | 1140 | 8.1 Sole confirmatory evidence | `CV(FPR)`; | `PASS` | Confirmatory endpoint metric is FPR coefficient of variation. |
 | `GLOBAL-027` | I | 1141 | 8.1 Sole confirmatory evidence | ten paired seeds; | `PASS` | Seed declaration locks ten paired training seeds. |
 | `STAT-001` | I | 1142 | 8.1 Sole confirmatory evidence | locked BCa decision rule. | `PASS` | Confirmatory statistical declaration locks the BCa decision protocol. |
-| `CALIBRATION-042` | I | 1150 | 8.2 Supporting evidence families | supportive robustness; | `NOT_AUDITED` | — |
-| `CALIBRATION-043` | I | 1151 | 8.2 Supporting evidence families | mechanism analysis; | `NOT_AUDITED` | — |
-| `CALIBRATION-044` | I | 1152 | 8.2 Supporting evidence families | threshold variant; | `NOT_AUDITED` | — |
-| `CALIBRATION-045` | I | 1153 | 8.2 Supporting evidence families | shared-estimator control; | `NOT_AUDITED` | — |
-| `CALIBRATION-046` | I | 1154 | 8.2 Supporting evidence families | calibration-support/heterogeneity interaction; | `NOT_AUDITED` | — |
-| `CALIBRATION-047` | I | 1155 | 8.2 Supporting evidence families | calibration cold-start boundary; | `NOT_AUDITED` | — |
-| `PREPROCESS-028` | I | 1156 | 8.2 Supporting evidence families | preprocessing sensitivity; | `NOT_AUDITED` | — |
-| `CALIBRATION-048` | I | 1157 | 8.2 Supporting evidence families | external validation; | `NOT_AUDITED` | — |
-| `CALIBRATION-049` | I | 1158 | 8.2 Supporting evidence families | aggregation-side stress test; | `NOT_AUDITED` | — |
-| `CALIBRATION-050` | I | 1159 | 8.2 Supporting evidence families | simple post-FedAvg fine-tuning stress test; | `NOT_AUDITED` | — |
-| `CALIBRATION-051` | I | 1160 | 8.2 Supporting evidence families | model-personalization stress test; | `NOT_AUDITED` | — |
-| `CALIBRATION-052` | I | 1161 | 8.2 Supporting evidence families | applicability boundary; | `NOT_AUDITED` | — |
-| `CALIBRATION-053` | I | 1162 | 8.2 Supporting evidence families | temporal boundary; | `NOT_AUDITED` | — |
-| `CALIBRATION-054` | I | 1163 | 8.2 Supporting evidence families | exploratory supplement; | `NOT_AUDITED` | — |
+| `CALIBRATION-042` | I | 1150 | 8.2 Supporting evidence families | supportive robustness; | `PASS` | Declared supportive sensitivity families are non-confirmatory. |
+| `CALIBRATION-043` | I | 1151 | 8.2 Supporting evidence families | mechanism analysis; | `PASS` | Mechanism families have the locked `mechanism` evidence role. |
+| `CALIBRATION-044` | I | 1152 | 8.2 Supporting evidence families | threshold variant; | `PASS` | Federated-statistics and quantile comparisons have the locked threshold-variant role. |
+| `CALIBRATION-045` | I | 1153 | 8.2 Supporting evidence families | shared-estimator control; | `PASS` | Shared construction and estimator-scope controls are declared supportive. |
+| `CALIBRATION-046` | I | 1154 | 8.2 Supporting evidence families | calibration-support/heterogeneity interaction; | `PASS` | The interaction is a declared mechanism experiment. |
+| `CALIBRATION-047` | I | 1155 | 8.2 Supporting evidence families | calibration cold-start boundary; | `PASS` | Cold-start onboarding is a declared supportive experiment. |
+| `PREPROCESS-028` | I | 1156 | 8.2 Supporting evidence families | preprocessing sensitivity; | `PASS` | Geometry sensitivity is a declared supportive experiment. |
+| `CALIBRATION-048` | I | 1157 | 8.2 Supporting evidence families | external validation; | `PASS` | Edge validation has the locked external-validation role. |
+| `CALIBRATION-049` | I | 1158 | 8.2 Supporting evidence families | aggregation-side stress test; | `PASS` | FedProx is a declared training-stress experiment. |
+| `CALIBRATION-050` | I | 1159 | 8.2 Supporting evidence families | simple post-FedAvg fine-tuning stress test; | `PASS` | Post-FedAvg fine-tuning is a declared training-stress experiment. |
+| `CALIBRATION-051` | I | 1160 | 8.2 Supporting evidence families | model-personalization stress test; | `PASS` | Ditto personalization is a declared training-stress experiment. |
+| `CALIBRATION-052` | I | 1161 | 8.2 Supporting evidence families | applicability boundary; | `PASS` | CIC file-client evidence has the locked applicability-boundary role. |
+| `CALIBRATION-053` | I | 1162 | 8.2 Supporting evidence families | temporal boundary; | `PASS` | One-shot Edge recalibration has the locked temporal-boundary role. |
+| `CALIBRATION-054` | I | 1163 | 8.2 Supporting evidence families | exploratory supplement; | `PASS` | Group-median supplement has the locked exploratory role. |
 | `DATASET-005` | I | 1189 | 9.1 N-BaIoT physical-device anchor | the nine physical devices are the natural clients; | `NOT_AUDITED` | — |
 | `DATASET-006` | I | 1190 | 9.1 N-BaIoT physical-device anchor | this is the only confirmatory client population; | `NOT_AUDITED` | — |
 | `CALIBRATION-055` | I | 1191 | 9.1 N-BaIoT physical-device anchor | the device-family taxonomy may support FAMILY_THRESHOLD; | `NOT_AUDITED` | — |
