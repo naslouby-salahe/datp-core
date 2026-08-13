@@ -5998,12 +5998,12 @@ The implementation must distinguish at least these roadmap-defined scientific st
 | `GATE-B-001` | 6011 | The physical source and canonical dataset identity are recorded. | `NOT_AUDITED` | — | — |
 | `GATE-B-002` | 6012 | Declared model-input features match the dataset-specific protocol. | `NOT_AUDITED` | — | — |
 | `GATE-B-003` | 6013 | Label normalization is deterministic and auditable. | `NOT_AUDITED` | — | — |
-| `GATE-B-004` | 6014 | Missing, non-finite, and ineligible rows follow Part I §2.2.1 exactly; no silent imputation, zero-fill, clipping, capping, infinity replacement, or label inference occurs. | `NOT_AUDITED` | — | — |
-| `GATE-B-005` | 6015 | Stable row identity and source provenance survive preprocessing and splitting. | `NOT_AUDITED` | — | — |
-| `GATE-B-006` | 6016 | Dataset-specific exclusions are counted and reported. | `NOT_AUDITED` | — | — |
-| `GATE-B-007` | 6017 | N-BaIoT preserves the nine natural physical devices for the confirmatory population. | `NOT_AUDITED` | — | — |
-| `GATE-B-008` | 6018 | CICIoT2023 does not invent physical-device identities from unavailable provenance. | `NOT_AUDITED` | — | — |
-| `GATE-B-009` | 6019 | Edge-IIoTset uses only the client definition and temporal information justified by Part I §9 and Part II §4. | `NOT_AUDITED` | — | — |
+| `GATE-B-004` | 6014 | Missing, non-finite, and ineligible rows follow Part I §2.2.1 exactly; no silent imputation, zero-fill, clipping, capping, infinity replacement, or label inference occurs. | `IMPLEMENTED` | `PASS` | Model-input admission excludes null/non-finite rows without transformation and records exact exclusion evidence; preprocessing and N-BaIoT reader tests cover both behaviors. |
+| `GATE-B-005` | 6015 | Stable row identity and source provenance survive preprocessing and splitting. | `IMPLEMENTED` | `PASS` | Readers emit stable row and relative source identities, while preprocessing exclusion evidence persists affected stable row IDs. |
+| `GATE-B-006` | 6016 | Dataset-specific exclusions are counted and reported. | `IMPLEMENTED` | `PASS` | Typed validation/exclusion contracts require positive affected counts and exact aggregate totals; preprocessing tests verify persisted evidence. |
+| `GATE-B-007` | 6017 | N-BaIoT preserves the nine natural physical devices for the confirmatory population. | `IMPLEMENTED` | `PASS` | Population declarations lock nine N-BaIoT physical devices and capabilities identify the population as confirmatory; registry tests assert the count. |
+| `GATE-B-008` | 6018 | CICIoT2023 does not invent physical-device identities from unavailable provenance. | `IMPLEMENTED` | `PASS` | CICIoT is typed as file-defined pseudo-clients with physical-device provenance unavailable; population declarations reject a physical-device interpretation. |
+| `GATE-B-009` | 6019 | Edge-IIoTset uses only the client definition and temporal information justified by Part I §9 and Part II §4. | `IMPLEMENTED` | `PASS` | Edge uses separate source-defined and verified-temporal populations; temporal construction requires the locked chronological protocol. |
 
 ### Gate C
 
@@ -7314,12 +7314,12 @@ README_REPRODUCIBILITY.md
 | `DATASET-084` | IV | 6011 | 4. Gate B — Dataset integrity | The physical source and canonical dataset identity are recorded. | `NOT_AUDITED` | — |
 | `DATASET-085` | IV | 6012 | 4. Gate B — Dataset integrity | Declared model-input features match the dataset-specific protocol. | `NOT_AUDITED` | — |
 | `PREPROCESS-043` | IV | 6013 | 4. Gate B — Dataset integrity | Label normalization is deterministic and auditable. | `NOT_AUDITED` | — |
-| `DATASET-086` | IV | 6014 | 4. Gate B — Dataset integrity | Missing, non-finite, and ineligible rows follow Part I §2.2.1 exactly; no silent imputation, zero-fill, clipping, capping, infinity replacement, or label inference occurs. | `NOT_AUDITED` | — |
-| `PREPROCESS-044` | IV | 6015 | 4. Gate B — Dataset integrity | Stable row identity and source provenance survive preprocessing and splitting. | `NOT_AUDITED` | — |
-| `DATASET-087` | IV | 6016 | 4. Gate B — Dataset integrity | Dataset-specific exclusions are counted and reported. | `NOT_AUDITED` | — |
-| `DATASET-088` | IV | 6017 | 4. Gate B — Dataset integrity | N-BaIoT preserves the nine natural physical devices for the confirmatory population. | `NOT_AUDITED` | — |
-| `DATASET-089` | IV | 6018 | 4. Gate B — Dataset integrity | CICIoT2023 does not invent physical-device identities from unavailable provenance. | `NOT_AUDITED` | — |
-| `DATASET-090` | IV | 6019 | 4. Gate B — Dataset integrity | Edge-IIoTset uses only the client definition and temporal information justified by Part I §9 and Part II §4. | `NOT_AUDITED` | — |
+| `DATASET-086` | IV | 6014 | 4. Gate B — Dataset integrity | Missing, non-finite, and ineligible rows follow Part I §2.2.1 exactly; no silent imputation, zero-fill, clipping, capping, infinity replacement, or label inference occurs. | `PASS` | Admission excludes invalid rows without fabrication and retains typed evidence. |
+| `PREPROCESS-044` | IV | 6015 | 4. Gate B — Dataset integrity | Stable row identity and source provenance survive preprocessing and splitting. | `PASS` | Readers and persisted exclusion evidence retain stable/source identities. |
+| `DATASET-087` | IV | 6016 | 4. Gate B — Dataset integrity | Dataset-specific exclusions are counted and reported. | `PASS` | Typed exclusion contracts validate totals and persisted evidence. |
+| `DATASET-088` | IV | 6017 | 4. Gate B — Dataset integrity | N-BaIoT preserves the nine natural physical devices for the confirmatory population. | `PASS` | Typed declaration locks nine physical confirmatory devices. |
+| `DATASET-089` | IV | 6018 | 4. Gate B — Dataset integrity | CICIoT2023 does not invent physical-device identities from unavailable provenance. | `PASS` | File-defined pseudo-client capability forbids physical-device interpretation. |
+| `DATASET-090` | IV | 6019 | 4. Gate B — Dataset integrity | Edge-IIoTset uses only the client definition and temporal information justified by Part I §9 and Part II §4. | `PASS` | Separate typed static and chronology-verified Edge populations enforce the boundary. |
 | `DATASET-091` | IV | 6023 | 5. Gate C — Population and client integrity | Each result references an immutable population identity. | `NOT_AUDITED` | — |
 | `DATASET-092` | IV | 6024 | 5. Gate C — Population and client integrity | Client membership is deterministic for a fixed population coordinate. | `NOT_AUDITED` | — |
 | `DATASET-093` | IV | 6025 | 5. Gate C — Population and client integrity | Natural-device, file-defined, synthetic/Dirichlet, external, and temporal populations cannot be silently mixed. | `NOT_AUDITED` | — |
