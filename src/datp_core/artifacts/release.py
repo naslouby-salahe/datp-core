@@ -5,7 +5,10 @@ from dataclasses import dataclass
 from datetime import date
 from enum import StrEnum
 from hashlib import sha256
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as package_version
 from pathlib import Path
+from platform import platform, processor
 from re import fullmatch
 from shutil import copy2
 from sys import version
@@ -169,11 +172,29 @@ def _write_release_metadata(request: ReleaseBuildRequest) -> None:
         + "".join(
             f"{seed},confirmatory_training,declared_confirmatory_seed_cohort\n"
             for seed in request.confirmatory_seeds
-        ),
+        )
+        + "31,confirmatory_bootstrap,locked_analysis_seed\n"
+        + "29,anchor_analysis,locked_analysis_seed\n"
+        + "42,cluster_initialization,locked_cluster_random_state\n"
+        + "NA,calibration_subsample_replicate,sha256-derived training_seed|population|client|replicate\n"
+        + "NA,federated_client_round_stream,derive_worker_seed(training_seed;round;client;stream)\n"
+        + "NA,fedavg_local_fine_tuning,derive_worker_seed(training_seed;dataset;population;client;purpose)\n",
         encoding="utf-8",
     )
     (request.root / "ENVIRONMENT" / "runtime.txt").write_text(
-        f"python={version.replace(chr(10), ' ')}\n",
+        "\n".join(
+            (
+                f"python={version.replace(chr(10), ' ')}",
+                f"os={platform()}",
+                f"cpu={processor() or 'NA'}",
+                f"numpy={_installed_version('numpy')}",
+                f"scipy={_installed_version('scipy')}",
+                f"scikit-learn={_installed_version('scikit-learn')}",
+                f"torch={_installed_version('torch')}",
+                f"datasketches={_installed_version('datasketches')}",
+            )
+        )
+        + "\n",
         encoding="utf-8",
     )
     (request.root / "README_REPRODUCIBILITY.md").write_text(
@@ -187,6 +208,13 @@ def _copy_release_artifact(root: Path, artifact: ReleaseArtifact) -> None:
     destination = root / artifact.relative_path
     destination.parent.mkdir(parents=True, exist_ok=True)
     copy2(artifact.source, destination)
+
+
+def _installed_version(distribution: str) -> str:
+    try:
+        return package_version(distribution)
+    except PackageNotFoundError:
+        return "NA"
 
 
 def _write_manifest(root: Path, artifacts: tuple[ReleaseArtifact, ...]) -> None:
