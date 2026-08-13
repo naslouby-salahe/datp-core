@@ -5,10 +5,23 @@ import polars as pl
 import pytest
 
 from datp_core.analysis.scientific_decision import ScientificDecision
-from datp_core.analysis.temporal import _TemporalInterpretationCounts, _campaign_decision_from_counts, temporal_drift_js
+from datp_core.analysis.temporal import (
+    TemporalClientTrajectory,
+    _TemporalInterpretationCounts,
+    _campaign_decision_from_counts,
+    temporal_drift_js,
+)
 from datp_core.core.errors import ScientificContractError
-from datp_core.core.identifiers import ScoreFrameColumn, TemporalState
-from datp_core.core.numeric import SeedCount, SeedObservationCount
+from datp_core.core.identifiers import (
+    ClientIdentityToken,
+    FederatedThresholdMethod,
+    PopulationId,
+    PopulationIdentityKind,
+    ScoreFrameColumn,
+    TemporalState,
+)
+from datp_core.core.numeric import MetricValue, Seed, SeedCount, SeedObservationCount
+from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.scoring.models import FederatedScoreRecord
 
 
@@ -86,3 +99,30 @@ def test_negative_temporal_outcomes_cannot_be_classified_as_supported(
 
     assert decision is expected
     assert decision is not ScientificDecision.SUPPORTED
+
+
+def test_temporal_client_trajectory_uses_locked_historical_and_future_formulae() -> None:
+    trajectory = TemporalClientTrajectory(
+        seed=Seed(0),
+        client=ClientIdentity(
+            population=PopulationId.EDGE_TEMPORAL_GROUPS,
+            client_id=ClientIdentityToken("sensor_a"),
+            identity_kind=PopulationIdentityKind.VERIFIED_TEMPORAL_GROUPS,
+        ),
+        threshold_method=FederatedThresholdMethod.LOCAL_THRESHOLD,
+        eligible=True,
+        exclusion_reason=None,
+        threshold_static=MetricValue(0.20),
+        threshold_frozen=MetricValue(0.35),
+        threshold_recalibrated=MetricValue(0.25),
+        fpr_static=MetricValue(0.10),
+        fpr_frozen=MetricValue(0.30),
+        fpr_recalibrated=MetricValue(0.15),
+    )
+
+    assert trajectory.threshold_movement_recalibrated is not None
+    assert trajectory.threshold_movement_recalibrated.value == pytest.approx(0.05)
+    assert trajectory.fpr_movement_frozen is not None
+    assert trajectory.fpr_movement_frozen.value == pytest.approx(0.20)
+    assert trajectory.fpr_recovery is not None
+    assert trajectory.fpr_recovery.value == pytest.approx(0.15)

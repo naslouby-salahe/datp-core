@@ -133,9 +133,9 @@ class TemporalClientTrajectory(StrictModel):
 
     @property
     def threshold_movement_recalibrated(self) -> MetricValue | None:
-        if self.threshold_frozen is None or self.threshold_recalibrated is None:
+        if self.threshold_static is None or self.threshold_recalibrated is None:
             return None
-        return MetricValue(self.threshold_recalibrated.value - self.threshold_frozen.value)
+        return MetricValue(self.threshold_recalibrated.value - self.threshold_static.value)
 
     @property
     def fpr_movement_frozen(self) -> MetricValue | None:

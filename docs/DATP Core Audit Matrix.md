@@ -1868,7 +1868,7 @@ recovery\_ratio
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `TemporalRecoveryResult.recovery_ratio` | `PASS` | Defined only when drift excess exceeds the locked positive materiality threshold; otherwise unavailable. | `test_temporal_claim_scope.py` |
 
 ### FORMULA-122 — II / source lines 4580–4582
 
@@ -1880,7 +1880,7 @@ recovery\_ratio
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `TemporalClientTrajectory.threshold_movement_recalibrated` | `PASS` | Recalibrated threshold minus historical static threshold. | `test_temporal_claim_scope.py` |
 
 ### FORMULA-123 — II / source lines 4586–4589
 
@@ -1893,7 +1893,7 @@ FrozenFPRDeterioration_k
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `TemporalClientTrajectory.fpr_movement_frozen` | `PASS` | Frozen-future FPR minus static-reference FPR. | `test_temporal_claim_scope.py` |
 
 ### FORMULA-124 — II / source lines 4591–4594
 
@@ -1906,7 +1906,7 @@ RecoveryFPR_k
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `TemporalClientTrajectory.fpr_recovery` | `PASS` | Frozen-future FPR minus recalibrated-future FPR. | `test_temporal_claim_scope.py` |
 
 ### FORMULA-125 — II / source lines 4600–4603
 
@@ -1919,7 +1919,7 @@ HarmedFraction=\frac{|\{k:RecoveryFPR_k<0\}|}{K_e}.
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `TemporalRecoveryResult.helped_fraction` / `harmed_fraction` | `PASS` | Strict positive/negative FPR recovery counts divided by eligible-client count; unavailable without eligible clients. | `TemporalRecoveryResult` contract |
 
 ### FORMULA-126 — II / source lines 4607–4611
 
@@ -1933,7 +1933,7 @@ WorstClientFPRRecovery
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `TemporalRecoveryResult.worst_client_fpr_recovery` | `PASS` | Maximum frozen-future FPR minus maximum recalibrated-future FPR over eligible clients. | `TemporalRecoveryResult` contract |
 
 ### FORMULA-127 — II / source lines 4671–4677
 
