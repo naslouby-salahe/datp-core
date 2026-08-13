@@ -36,6 +36,7 @@ def test_confirmatory_precision_diagnostics_use_sample_sd_and_all_loso_means() -
 
     diagnostics = confirmatory_precision_diagnostics(contrasts, interval)
 
+    assert diagnostics.full_mean_delta == MetricValue(5.5)
     assert diagnostics.sample_standard_deviation.value == pytest.approx(math.sqrt(55.0 / 6.0))
     assert diagnostics.standard_error_proxy.value == pytest.approx(math.sqrt(11.0 / 12.0))
     assert diagnostics.normal_reference_half_width.value == pytest.approx(1.96 * math.sqrt(11.0 / 12.0))

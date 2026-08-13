@@ -17,6 +17,7 @@ class LeaveOneSeedOutMean(StrictModel):
 
 
 class ConfirmatoryPrecisionDiagnostics(StrictModel):
+    full_mean_delta: MetricValue
     sample_standard_deviation: MetricValue
     standard_error_proxy: MetricValue
     normal_reference_half_width: MetricValue
@@ -36,6 +37,9 @@ class ConfirmatoryPrecisionDiagnostics(StrictModel):
             raise ValueError("minimum leave-one-seed-out mean must match the retained values")
         if self.maximum_leave_one_seed_out_mean.value != max(values):
             raise ValueError("maximum leave-one-seed-out mean must match the retained values")
+        expected_shift = max(abs(value - self.full_mean_delta.value) for value in values)
+        if self.maximum_leave_one_seed_out_shift.value != expected_shift:
+            raise ValueError("maximum leave-one-seed-out shift must match the retained means and full mean")
         return self
 
 
@@ -62,6 +66,7 @@ def confirmatory_precision_diagnostics(
     standard_error_proxy = MetricValue(sample_standard_deviation.value / math.sqrt(len(deltas)))
     leave_one_out_values = tuple(item.mean_delta.value for item in leave_one_out)
     return ConfirmatoryPrecisionDiagnostics(
+        full_mean_delta=MetricValue(full_mean),
         sample_standard_deviation=sample_standard_deviation,
         standard_error_proxy=standard_error_proxy,
         normal_reference_half_width=MetricValue(NORMAL_REFERENCE_MULTIPLIER * standard_error_proxy.value),

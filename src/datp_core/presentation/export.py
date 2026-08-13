@@ -894,6 +894,7 @@ def _render_precision_diagnostics(diagnostics: ConfirmatoryPrecisionDiagnostics)
     lines = [
         "## Locked Ten-Seed Precision Diagnostics",
         "",
+        f"Full paired mean delta: {_format_publication_metric(diagnostics.full_mean_delta.value)}",
         f"Sample SD of paired deltas: {_format_publication_metric(diagnostics.sample_standard_deviation.value)}",
         f"SE proxy: {_format_publication_metric(diagnostics.standard_error_proxy.value)}",
         f"Normal-reference half-width: {_format_publication_metric(diagnostics.normal_reference_half_width.value)}",
