@@ -6414,10 +6414,10 @@ README_REPRODUCIBILITY.md
 | `CALIBRATION-013` | I | 260 | 3.1 Benign-only calibration | cluster count; | `PASS` | Cluster contract requires the declared group count. |
 | `CALIBRATION-014` | I | 261 | 3.1 Benign-only calibration | cluster-feature selection; | `PASS` | Cluster contract fixes the four declared score-fingerprint features. |
 | `CALIBRATION-015` | I | 262 | 3.1 Benign-only calibration | external-dataset client construction. | `PASS` | External populations have typed, fixed client-construction declarations. |
-| `CALIBRATION-016` | I | 272 | 3.2 Separation of calibration and evaluation | historical calibration must precede future recalibration; | `NOT_AUDITED` | — |
-| `CALIBRATION-017` | I | 273 | 3.2 Separation of calibration and evaluation | future recalibration must precede future evaluation; | `NOT_AUDITED` | — |
-| `CALIBRATION-018` | I | 274 | 3.2 Separation of calibration and evaluation | future evaluation cannot influence any earlier stage; | `NOT_AUDITED` | — |
-| `CALIBRATION-019` | I | 275 | 3.2 Separation of calibration and evaluation | data ordering or generated pseudo-time cannot replace real chronology. | `NOT_AUDITED` | — |
+| `CALIBRATION-016` | I | 272 | 3.2 Separation of calibration and evaluation | historical calibration must precede future recalibration; | `PASS` | Temporal split declarations and leakage validation enforce chronological roles. |
+| `CALIBRATION-017` | I | 273 | 3.2 Separation of calibration and evaluation | future recalibration must precede future evaluation; | `PASS` | Future recalibration/evaluation ordering is validated per client. |
+| `CALIBRATION-018` | I | 274 | 3.2 Separation of calibration and evaluation | future evaluation cannot influence any earlier stage; | `PASS` | No-future-history leakage validation rejects reverse influence. |
+| `CALIBRATION-019` | I | 275 | 3.2 Separation of calibration and evaluation | data ordering or generated pseudo-time cannot replace real chronology. | `PASS` | Temporal eligibility requires validated PCAP-backed chronology. |
 | `CALIBRATION-020` | I | 283 | 3.2A Honest-calibration participant and message-integrity assumption | benign calibration row identities and labels; | `NOT_AUDITED` | — |
 | `PREPROCESS-026` | I | 284 | 3.2A Honest-calibration participant and message-integrity assumption | reconstruction scores computed by the locked detector/preprocessing state; | `NOT_AUDITED` | — |
 | `CALIBRATION-021` | I | 285 | 3.2A Honest-calibration participant and message-integrity assumption | local empirical thresholds and calibration support counts; | `NOT_AUDITED` | — |
