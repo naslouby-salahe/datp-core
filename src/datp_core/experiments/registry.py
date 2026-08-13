@@ -213,6 +213,15 @@ EXPERIMENTS = (
         CONFIRMATORY_METRICS,
     ),
     _declare(
+        ExperimentId.MALWARE_FAMILY_SENSITIVITY,
+        EvidenceRole.SUPPORTIVE,
+        PopulationId.NBAIOT_NATURAL_DEVICES,
+        TrainingModelId.FEDAVG_AUTOENCODER,
+        PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
+        _FULL_THRESHOLD_LADDER,
+        CONFIRMATORY_METRICS,
+    ),
+    _declare(
         ExperimentId.HETEROGENEITY_CALIBRATION_SUPPORT_INTERACTION,
         EvidenceRole.MECHANISM,
         PopulationId.NBAIOT_DIRICHLET_CLIENTS,

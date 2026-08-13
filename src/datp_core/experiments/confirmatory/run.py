@@ -133,6 +133,15 @@ class ConfirmatoryAssetDirectory(StrEnum):
     PHYSICAL_FAMILY_ADEQUACY = "physical_family_adequacy"
     CALIBRATION_SUPPORT_BURDEN = "calibration_support_burden"
     NATURAL_DEVICE_CLIENT_IMPACT = "natural_device_client_impact"
+    MALWARE_FAMILY_SENSITIVITY = "malware_family_sensitivity"
+
+
+_FAMILY_RECALL_METHODS = (
+    FederatedThresholdMethod.SHARED_THRESHOLD,
+    FederatedThresholdMethod.FAMILY_THRESHOLD,
+    FederatedThresholdMethod.CLUSTER_THRESHOLD,
+    FederatedThresholdMethod.LOCAL_THRESHOLD,
+)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -435,6 +444,43 @@ def analyze_natural_device_client_impact(*, overwrite: bool) -> Path:
         population=PopulationId.NBAIOT_NATURAL_DEVICES,
         output_directory=output,
         evidence_role=EvidenceRole.MECHANISM,
+    )
+    return output
+
+
+def analyze_malware_family_sensitivity(*, overwrite: bool) -> Path:
+    """Publish the §7.6 supportive family-recall analysis from fixed evidence."""
+
+    output = (
+        OUTPUTS_ROOT
+        / ConfirmatoryAssetDirectory.ROOT
+        / PopulationId.NBAIOT_NATURAL_DEVICES.value
+        / ConfirmatoryAssetDirectory.ANALYSIS
+        / ConfirmatoryAssetDirectory.MALWARE_FAMILY_SENSITIVITY
+    )
+    if overwrite and output.exists():
+        from shutil import rmtree
+
+        rmtree(output)
+    comparisons: list[FamilyRecallPolicyComparison] = []
+    for seed in CONFIRMATORY_SEED_COHORT.values:
+        comparisons.append(
+            compare_family_recall_policies(
+                tuple(load_evaluation_document(_evaluation_path(seed, method)) for method in _FAMILY_RECALL_METHODS)
+            )
+        )
+    records: tuple[MechanismEvidence, ...] = (
+        *comparisons,
+        summarize_family_recall_campaign(
+            tuple(comparisons), required_seed_count=SeedObservationCount(CONFIRMATORY_SEED_COHORT.member_count.value)
+        ),
+    )
+    export_mechanism_publication(
+        records,
+        experiment=ExperimentId.MALWARE_FAMILY_SENSITIVITY,
+        population=PopulationId.NBAIOT_NATURAL_DEVICES,
+        output_directory=output,
+        evidence_role=EvidenceRole.SUPPORTIVE,
     )
     return output
 
