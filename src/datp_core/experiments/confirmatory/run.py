@@ -92,6 +92,7 @@ from datp_core.presentation.figures import (
     score_geometry_figure,
 )
 from datp_core.presentation.population_capabilities import export_population_capability_table
+from datp_core.presentation.prior_art import export_prior_art_distinction_table
 from datp_core.runtime.configuration import OUTPUTS_ROOT
 from datp_core.thresholds.policies.cluster import GroupedThresholdResult
 
@@ -240,6 +241,7 @@ def analyze_confirmatory_campaign() -> Path:
         figures=figures,
     )
     export_population_capability_table(output / "population_capability_claim_boundary.md")
+    export_prior_art_distinction_table(output / "prior_art_distinction_table.md")
     if all_mechanisms:
         export_mechanism_publication(
             all_mechanisms,
