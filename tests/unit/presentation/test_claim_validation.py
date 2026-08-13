@@ -118,18 +118,21 @@ def test_claims_cannot_overstate_novelty_or_adversarial_calibration_scope(wordin
     assert reason in decision.reason
 
 
-@pytest.mark.parametrize("wording", (
-    "This is a new federated-learning optimizer",
-    "This is a complete FL-IDS framework benchmark",
-    "This is a privacy-preserving security system",
-    "This is a robust federated-learning defense",
-    "This is a drift-adaptive production IDS",
-    "This is a fleet-scale deployment",
-    "This is a universal thresholding method",
-    "The method improves every client",
-    "The method improves global Macro-F1",
-    "This is a solution to non-IID federated learning",
-))
+@pytest.mark.parametrize(
+    "wording",
+    (
+        "This is a new federated-learning optimizer",
+        "This is a complete FL-IDS framework benchmark",
+        "This is a privacy-preserving security system",
+        "This is a robust federated-learning defense",
+        "This is a drift-adaptive production IDS",
+        "This is a fleet-scale deployment",
+        "This is a universal thresholding method",
+        "The method improves every client",
+        "The method improves global Macro-F1",
+        "This is a solution to non-IID federated learning",
+    ),
+)
 def test_claims_cannot_use_prohibited_central_framing(wording: str) -> None:
     decision = validate_claim(
         claim_request(
@@ -156,9 +159,7 @@ def test_claims_cannot_use_prohibited_central_framing(wording: str) -> None:
         ("This is a novel federated conformal method", "established thresholding primitives"),
     ],
 )
-def test_claims_cannot_bypass_explicit_score_tradeoff_scope_and_novelty_boundaries(
-    wording: str, reason: str
-) -> None:
+def test_claims_cannot_bypass_explicit_score_tradeoff_scope_and_novelty_boundaries(wording: str, reason: str) -> None:
     decision = validate_claim(
         claim_request(
             kind=ClaimKind.SUPPORTIVE,
@@ -228,13 +229,16 @@ def test_edge_average_precision_claim_is_blocked_without_attack_assignment() -> 
     assert not decision.wording
 
 
-@pytest.mark.parametrize("wording", (
-    "The method provides continuous adaptation under concept drift",
-    "The method performs online learning after deployment",
-    "The method supplies streaming drift detection",
-    "The method uses drift-triggered recalibration",
-    "The method establishes production stability over repeated cycles",
-))
+@pytest.mark.parametrize(
+    "wording",
+    (
+        "The method provides continuous adaptation under concept drift",
+        "The method performs online learning after deployment",
+        "The method supplies streaming drift detection",
+        "The method uses drift-triggered recalibration",
+        "The method establishes production stability over repeated cycles",
+    ),
+)
 def test_one_shot_recalibration_cannot_be_called_general_drift_handling(wording: str) -> None:
     decision = validate_claim(
         claim_request(

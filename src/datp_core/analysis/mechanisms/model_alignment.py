@@ -169,8 +169,7 @@ def model_alignment(
     medians = np.asarray([np.quantile(_scores(item), 0.5, method="linear") for item in ordered], dtype=np.float64)
     interquartile_ranges = np.asarray(
         [
-            np.quantile(_scores(item), 0.75, method="linear")
-            - np.quantile(_scores(item), 0.25, method="linear")
+            np.quantile(_scores(item), 0.75, method="linear") - np.quantile(_scores(item), 0.25, method="linear")
             for item in ordered
         ],
         dtype=np.float64,
@@ -213,10 +212,7 @@ def summarize_alignment_activation(
     for reductions in reductions_by_seed:
         if tuple(item.metric for item in reductions) != tuple(ModelAlignmentMetric):
             raise ValueError("each seed must report every alignment reduction in canonical order")
-    reductions = tuple(
-        _mean_alignment_reduction(metric, reductions_by_seed)
-        for metric in ModelAlignmentMetric
-    )
+    reductions = tuple(_mean_alignment_reduction(metric, reductions_by_seed) for metric in ModelAlignmentMetric)
     available = tuple(item.value for item in reductions if item.value is not None)
     label = (
         AlignmentActivationLabel.ALIGNMENT_ACTIVATION_UNAVAILABLE

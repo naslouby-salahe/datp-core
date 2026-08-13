@@ -43,15 +43,21 @@ def test_threshold_stage_accounting_rejects_mixed_detector_cohorts_and_duplicate
 
     with pytest.raises(ScientificContractError, match="one population, split, preprocessing, and detector cohort"):
         _require_one_threshold_accounting_cohort(
-            cast(tuple[FederatedEvaluationDocument, ...], (
-                document(FederatedThresholdMethod.SHARED_THRESHOLD, 0),
-                document(FederatedThresholdMethod.LOCAL_THRESHOLD, 0, model="fedprox"),
-            ))
+            cast(
+                tuple[FederatedEvaluationDocument, ...],
+                (
+                    document(FederatedThresholdMethod.SHARED_THRESHOLD, 0),
+                    document(FederatedThresholdMethod.LOCAL_THRESHOLD, 0, model="fedprox"),
+                ),
+            )
         )
     with pytest.raises(ScientificContractError, match="cannot repeat a policy/seed cell"):
         _require_one_threshold_accounting_cohort(
-            cast(tuple[FederatedEvaluationDocument, ...], (
-                document(FederatedThresholdMethod.SHARED_THRESHOLD, 0),
-                document(FederatedThresholdMethod.SHARED_THRESHOLD, 0),
-            ))
+            cast(
+                tuple[FederatedEvaluationDocument, ...],
+                (
+                    document(FederatedThresholdMethod.SHARED_THRESHOLD, 0),
+                    document(FederatedThresholdMethod.SHARED_THRESHOLD, 0),
+                ),
+            )
         )

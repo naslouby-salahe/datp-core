@@ -671,22 +671,26 @@ def _report_fedprox(experiment_id: ExperimentId) -> ReportResult:
             )
             write_text_atomically(
                 output / ResearchArtifact.EVIDENCE_REPORT,
-            FileContentText(
-                _alignment_report(
-                    title=f"FedProx alignment evidence (coefficient={coefficient.value:.12g})",
-                    condition_name="FedProx",
-                    observations=tuple(
-                        (
-                            item.training_seed,
-                            item.reference_alignment,
-                            item.alignment,
-                            item.alignment_reductions,
-                            next(observation for observation in observations if observation.seed == item.training_seed),
-                        )
-                        for item in alignment
-                    ),
-                )
-            ),
+                FileContentText(
+                    _alignment_report(
+                        title=f"FedProx alignment evidence (coefficient={coefficient.value:.12g})",
+                        condition_name="FedProx",
+                        observations=tuple(
+                            (
+                                item.training_seed,
+                                item.reference_alignment,
+                                item.alignment,
+                                item.alignment_reductions,
+                                next(
+                                    observation
+                                    for observation in observations
+                                    if observation.seed == item.training_seed
+                                ),
+                            )
+                            for item in alignment
+                        ),
+                    )
+                ),
             )
             paths.append(output)
             activation_evidence.append((coefficient, alignment, observations))
@@ -964,9 +968,7 @@ def _common_alignment_tuple_rows(
             else None
         )
         scope_absorption_text = (
-            _alignment_value(scope_absorption)
-            if scope_absorption is not None
-            else "UNAVAILABLE_NO_POSITIVE_FEDAVG_GAP"
+            _alignment_value(scope_absorption) if scope_absorption is not None else "UNAVAILABLE_NO_POSITIVE_FEDAVG_GAP"
         )
         rendered.append(
             f"| {seed.value} | "

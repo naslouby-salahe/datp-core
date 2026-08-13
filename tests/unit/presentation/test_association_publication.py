@@ -22,8 +22,7 @@ def test_association_report_binds_each_influence_diagnostic_to_its_observation()
     first_observation = next(line for line in rendered if line.startswith("Observation 1:"))
     assert "seed=0; experiment=controlled_heterogeneity_sweep; " in first_observation
     assert (
-        "population=nbaiot_dirichlet_clients; regime=alpha_0; heterogeneity=0.100; benefit=0.010; "
-        in first_observation
+        "population=nbaiot_dirichlet_clients; regime=alpha_0; heterogeneity=0.100; benefit=0.010; " in first_observation
     )
     assert "leverage=" in first_observation
     assert "leave-one-out slope=" in first_observation

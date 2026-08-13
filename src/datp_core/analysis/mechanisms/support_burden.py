@@ -167,9 +167,7 @@ def summarize_calibration_support_burden_devices(
         for client in seed.clients:
             clients.setdefault(client.client, []).append(client)
     return CalibrationSupportBurdenDeviceReport(
-        devices=tuple(
-            _device_summary(client, values) for client, values in sorted(clients.items())
-        )
+        devices=tuple(_device_summary(client, values) for client, values in sorted(clients.items()))
     )
 
 

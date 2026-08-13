@@ -420,9 +420,7 @@ def _estimation_summary(
             cv_fpr_across_seeds=cv_summary.coefficient_of_variation,
             mean_absolute_threshold_error=_mean_absolute_threshold_error(diagnostics.threshold_errors),
             mean_relative_threshold_error=_mean_relative_threshold_error(diagnostics.relative_threshold_errors),
-            mean_kll_empirical_rank_error=_kll_mean_empirical_rank_error(
-                experiment_id, method, tuple(documents)
-            ),
+            mean_kll_empirical_rank_error=_kll_mean_empirical_rank_error(experiment_id, method, tuple(documents)),
             mean_absolute_attainment_error=(
                 MetricValue(
                     sum(item.value for item in diagnostics.attainment_errors) / len(diagnostics.attainment_errors)

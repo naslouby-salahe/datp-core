@@ -90,9 +90,7 @@ def _measure_summary(
     measure: ConfirmatoryEquityUtilityMeasure,
     pairs: tuple[tuple[FederatedEvaluationDocument, FederatedEvaluationDocument], ...],
 ) -> EquityUtilityMeasureSummary:
-    observations = tuple(
-        _seed_observation(measure, shared, local) for shared, local in pairs
-    )
+    observations = tuple(_seed_observation(measure, shared, local) for shared, local in pairs)
     shared_values = tuple(item.shared.value for item in observations if item.shared is not None)
     local_values = tuple(item.local.value for item in observations if item.local is not None)
     differences = tuple(item.local_minus_shared.value for item in observations if item.local_minus_shared is not None)

@@ -8,9 +8,7 @@ from datp_core.core.numeric import MetricValue, Seed
 
 
 def test_association_below_five_observations_retains_no_coefficients() -> None:
-    result = heterogeneity_benefit_association(
-        tuple(AssociationObservation.model_construct() for _ in range(4))
-    )
+    result = heterogeneity_benefit_association(tuple(AssociationObservation.model_construct() for _ in range(4)))
 
     assert result.issue is AssociationIssue.INSUFFICIENT_EVIDENCE
     assert result.statistics is None

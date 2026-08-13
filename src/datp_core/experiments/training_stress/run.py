@@ -1140,9 +1140,7 @@ def terminal50_drift_summary(
     columns = FederatedHistoryColumn
     terminal_rounds = tuple(
         sorted(
-            int(value)
-            for value in frame.get_column(columns.ROUND_NUMBER.value).unique().to_list()
-            if int(value) >= 151
+            int(value) for value in frame.get_column(columns.ROUND_NUMBER.value).unique().to_list() if int(value) >= 151
         )
     )
     if terminal_rounds != tuple(range(151, 201)):
@@ -1152,9 +1150,7 @@ def terminal50_drift_summary(
         )
     terminal = frame.filter(pl.col(columns.ROUND_NUMBER.value) >= 151)
     values = tuple(
-        float(value)
-        for value in terminal.get_column(columns.RMS_DRIFT.value).to_list()
-        if value is not None
+        float(value) for value in terminal.get_column(columns.RMS_DRIFT.value).to_list() if value is not None
     )
     if len(values) != terminal.height:
         raise ScientificContractError(
@@ -1169,9 +1165,9 @@ def terminal50_drift_summary(
         for client_id, client_values in sorted(
             (
                 (str(client_id), tuple(float(value) for value in values if value is not None))
-                for client_id, values in terminal.group_by(columns.CLIENT_ID.value, maintain_order=True).agg(
-                    pl.col(columns.RMS_DRIFT.value)
-                ).iter_rows()
+                for client_id, values in terminal.group_by(columns.CLIENT_ID.value, maintain_order=True)
+                .agg(pl.col(columns.RMS_DRIFT.value))
+                .iter_rows()
             ),
             key=lambda item: item[0],
         )
@@ -1316,7 +1312,13 @@ def fedprox_activation_report(
             if seed not in fedavg_written:
                 lines.append(
                     _activation_row(
-                        "FedAvg", seed, fedavg_drift, None, None, reference_h, reference_h,
+                        "FedAvg",
+                        seed,
+                        fedavg_drift,
+                        None,
+                        None,
+                        reference_h,
+                        reference_h,
                         _alignment_metric_value(
                             alignment_evidence.reference_alignment, ModelAlignmentMetric.LOCAL_THRESHOLD_DISPERSION
                         ),
@@ -1324,7 +1326,8 @@ def fedprox_activation_report(
                             alignment_evidence.reference_alignment,
                             ModelAlignmentMetric.NORMALIZED_SHARED_LOCAL_THRESHOLD_DISTANCE,
                         ),
-                        observation.reference_effect, None,
+                        observation.reference_effect,
+                        None,
                     )
                 )
                 fedavg_written.add(seed)
@@ -1333,9 +1336,7 @@ def fedprox_activation_report(
                     for item in fedavg_summary.client_rms_drifts
                 )
             suppression = (
-                MetricValue(1.0 - condition_drift.value / fedavg_drift.value)
-                if fedavg_drift.value > 1e-12
-                else None
+                MetricValue(1.0 - condition_drift.value / fedavg_drift.value) if fedavg_drift.value > 1e-12 else None
             )
             delta_h = (
                 MetricValue(condition_h.value - reference_h.value)
@@ -1349,9 +1350,17 @@ def fedprox_activation_report(
             )
             lines.append(
                 _activation_row(
-                    f"FedProx(mu={coefficient.value:.12g})", seed, condition_drift, suppression, delta_h,
-                    condition_h, model_alignment_h, local_dispersion, normalized_distance,
-                    observation.personalized_effect, scope_absorption,
+                    f"FedProx(mu={coefficient.value:.12g})",
+                    seed,
+                    condition_drift,
+                    suppression,
+                    delta_h,
+                    condition_h,
+                    model_alignment_h,
+                    local_dispersion,
+                    normalized_distance,
+                    observation.personalized_effect,
+                    scope_absorption,
                 )
             )
             client_drift_lines.extend(
@@ -1639,8 +1648,7 @@ def _alignment_clients_from_scores(
             ModelAlignmentClientScores(
                 client=client,
                 calibration_scores=tuple(
-                    ScoreValue(float(value))
-                    for value in frame[ScoreFrameColumn.RECONSTRUCTION_ERROR.value].to_list()
+                    ScoreValue(float(value)) for value in frame[ScoreFrameColumn.RECONSTRUCTION_ERROR.value].to_list()
                 ),
             )
         )

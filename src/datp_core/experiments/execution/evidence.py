@@ -37,13 +37,9 @@ def materialized_execution_keys(output_root: Path) -> tuple[CoordinateStableKey,
     paths_by_key: dict[CoordinateStableKey, list[Path]] = {}
     for path, key in keys_by_document:
         paths_by_key.setdefault(key, []).append(path)
-    duplicates = tuple(
-        (key, tuple(paths)) for key, paths in paths_by_key.items() if len(paths) != 1
-    )
+    duplicates = tuple((key, tuple(paths)) for key, paths in paths_by_key.items() if len(paths) != 1)
     if duplicates:
-        details = "; ".join(
-            f"{key}: {', '.join(str(path) for path in paths)}" for key, paths in sorted(duplicates)
-        )
+        details = "; ".join(f"{key}: {', '.join(str(path) for path in paths)}" for key, paths in sorted(duplicates))
         raise ScientificContractError(
             ErrorMessage(f"execution coordinate has multiple materialized evaluation documents: {details}"),
             subject=ContractSubject.ARTIFACT_PATH,

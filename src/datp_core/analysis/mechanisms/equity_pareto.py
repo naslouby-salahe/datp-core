@@ -84,11 +84,7 @@ def equity_utility_pareto(
         y = tuple(_metric(item.population, utility_metric) for item in ordered)
         preliminary.append((method, shrinkage_weight, x, y))
     seed_cohorts = {
-        tuple(
-            record.seed
-            for record in sorted(records, key=lambda item: item.seed)
-        )
-        for records in by_method.values()
+        tuple(record.seed for record in sorted(records, key=lambda item: item.seed)) for records in by_method.values()
     }
     if len(seed_cohorts) != 1:
         raise ScientificContractError(ErrorMessage("equity Pareto methods must use one common seed cohort"))
@@ -185,9 +181,7 @@ def _target_attainment_row(
     available_summaries = tuple(summary for summary in summaries if summary is not None)
     target_errors = tuple(summary.mean_absolute_target_error for summary in available_summaries)
     worst_target_errors = tuple(summary.worst_absolute_target_error for summary in available_summaries)
-    generalization_gaps = tuple(
-        summary.mean_absolute_calibration_generalization_gap for summary in available_summaries
-    )
+    generalization_gaps = tuple(summary.mean_absolute_calibration_generalization_gap for summary in available_summaries)
     return EquityTargetAttainmentRow(
         threshold_method=method,
         shrinkage_weight=shrinkage_weight,

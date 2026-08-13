@@ -33,8 +33,8 @@ def test_fine_tuning_builds_fresh_client_models_from_weights_only(monkeypatch, t
     source = build_reconstruction_autoencoder(AUTOENCODER, initialization_seed=Seed(3))
     source_state = AutoencoderModelState.from_model(source)
     protocol = FedAvgLocalFineTuningProtocol(
-            source_model=TrainingModelId.FEDAVG_AUTOENCODER,
-            local_epochs=LocalEpochCount(10),
+        source_model=TrainingModelId.FEDAVG_AUTOENCODER,
+        local_epochs=LocalEpochCount(10),
         optimizer=OPTIMIZER,
     )
 

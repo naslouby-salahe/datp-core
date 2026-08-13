@@ -62,9 +62,9 @@ def summarize_support_interaction(
     """Summarize the locked interaction grid without treating nested replicates as seeds."""
 
     _validate_observations(observations)
-    grouped: dict[
-        tuple[Seed, RegimeLabel, CalibrationSupportLevel], list[SupportInteractionObservation]
-    ] = defaultdict(list)
+    grouped: dict[tuple[Seed, RegimeLabel, CalibrationSupportLevel], list[SupportInteractionObservation]] = defaultdict(
+        list
+    )
     for observation in observations:
         grouped[(observation.seed, observation.alpha_label, observation.support)].append(observation)
 

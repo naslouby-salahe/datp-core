@@ -38,10 +38,7 @@ def test_confirmatory_equity_utility_bundle_keeps_policy_means_and_paired_differ
     assert cv.paired_difference_mean is not None and cv.paired_difference_mean.value == -1.5
     assert cv.paired_seed_count.value == 2
     assert target_error.paired_seed_count.value == 2
-    assert (
-        confirmatory_equity_utility_metric(target_error.measure)
-        is MetricId.MEAN_ABSOLUTE_TEST_FPR_TARGET_ERROR
-    )
+    assert confirmatory_equity_utility_metric(target_error.measure) is MetricId.MEAN_ABSOLUTE_TEST_FPR_TARGET_ERROR
 
 
 def _document(*, seed: int, method: FederatedThresholdMethod, offset: float) -> FederatedEvaluationDocument:

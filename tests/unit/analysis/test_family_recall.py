@@ -124,9 +124,7 @@ def _diagnostics(client: ClientIdentity, rate: float) -> FamilyRecallDiagnostics
     )
 
 
-def _manifest(
-    tmp_path: Path, *, missing_attack_family: bool = False
-) -> tuple[ScoreArtifactManifest, ClientIdentity]:
+def _manifest(tmp_path: Path, *, missing_attack_family: bool = False) -> tuple[ScoreArtifactManifest, ClientIdentity]:
     coordinate = fedavg_coordinate(Seed(0))
     client = client_identity("client_a")
     calibration_path = tmp_path / "calibration.parquet"

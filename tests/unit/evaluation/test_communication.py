@@ -60,21 +60,36 @@ def test_threshold_stage_accounting_explicitly_represents_local_zero_payload() -
 def test_threshold_stage_communication_separates_uploads_from_responses() -> None:
     coordinate = fedavg_coordinate(Seed(6))
     upload = CommunicationMessageDiagnostic(
-        Seed(6), coordinate, MessageEndpoint("client_a"), MessageEndpoint("coordinator"),
-        MessageDirection.CLIENT_TO_COORDINATOR, ThresholdPayloadKind.LOCAL_QUANTILE_TRANSMISSION,
-        SerializedPayloadEvidence(ByteCount(13), LogicalElementCount(1)), client_identity("client_a"), None,
+        Seed(6),
+        coordinate,
+        MessageEndpoint("client_a"),
+        MessageEndpoint("coordinator"),
+        MessageDirection.CLIENT_TO_COORDINATOR,
+        ThresholdPayloadKind.LOCAL_QUANTILE_TRANSMISSION,
+        SerializedPayloadEvidence(ByteCount(13), LogicalElementCount(1)),
+        client_identity("client_a"),
+        None,
         CommunicationEstimationMethod.SERIALIZED_MESSAGE_SIZE_ESTIMATE,
     )
     response = CommunicationMessageDiagnostic(
-        Seed(6), coordinate, MessageEndpoint("coordinator"), MessageEndpoint("client_a"),
-        MessageDirection.COORDINATOR_TO_CLIENT, ThresholdPayloadKind.THRESHOLD_TRANSMISSION,
-        SerializedPayloadEvidence(ByteCount(17), LogicalElementCount(1)), client_identity("client_a"), None,
+        Seed(6),
+        coordinate,
+        MessageEndpoint("coordinator"),
+        MessageEndpoint("client_a"),
+        MessageDirection.COORDINATOR_TO_CLIENT,
+        ThresholdPayloadKind.THRESHOLD_TRANSMISSION,
+        SerializedPayloadEvidence(ByteCount(17), LogicalElementCount(1)),
+        client_identity("client_a"),
+        None,
         CommunicationEstimationMethod.SERIALIZED_MESSAGE_SIZE_ESTIMATE,
     )
 
     result = ThresholdStageCommunicationDiagnostic(
-        training_seed=Seed(6), coordinate=coordinate, messages=(upload, response),
-        total_logical_element_count=NonNegativeIntegerValue(2), total_serialized_bytes=ByteCount(30),
+        training_seed=Seed(6),
+        coordinate=coordinate,
+        messages=(upload, response),
+        total_logical_element_count=NonNegativeIntegerValue(2),
+        total_serialized_bytes=ByteCount(30),
         broadcast_accounting=ThresholdBroadcastAccounting.ONCE_PER_LOGICAL_RECIPIENT,
         communication_round_count=NonNegativeIntegerValue(1),
     )
@@ -87,8 +102,11 @@ def test_threshold_stage_rejects_rounds_without_messages() -> None:
     coordinate = fedavg_coordinate(Seed(6))
     with pytest.raises(ScientificContractError, match="without messages"):
         ThresholdStageCommunicationDiagnostic(
-            training_seed=Seed(6), coordinate=coordinate, messages=(),
-            total_logical_element_count=NonNegativeIntegerValue(0), total_serialized_bytes=ByteCount(0),
+            training_seed=Seed(6),
+            coordinate=coordinate,
+            messages=(),
+            total_logical_element_count=NonNegativeIntegerValue(0),
+            total_serialized_bytes=ByteCount(0),
             broadcast_accounting=ThresholdBroadcastAccounting.ONCE_ON_WIRE,
             communication_round_count=NonNegativeIntegerValue(1),
         )

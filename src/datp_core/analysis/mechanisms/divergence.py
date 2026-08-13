@@ -190,10 +190,7 @@ def jensen_shannon_divergence(
     )
     if edges.size < 3:
         return blocked_jensen_shannon_divergence(clients, DivergenceBlocker.BINNING_UNRESOLVED, protocol=protocol)
-    histograms = tuple(
-        _quantile_histogram(array, edges)
-        for array in arrays
-    )
+    histograms = tuple(_quantile_histogram(array, edges) for array in arrays)
     pairwise: list[PairwiseJensenShannonDistance] = []
     for left_index, left in enumerate(histograms):
         for right_index, right in enumerate(histograms[left_index + 1 :], start=left_index + 1):

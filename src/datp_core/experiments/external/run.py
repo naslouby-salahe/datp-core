@@ -165,10 +165,7 @@ def analyze_ciciot_boundary_campaign(*, output_root: Path, overwrite: bool) -> B
 def analyze_ciciot_boundary_evidence(*, output_root: Path, overwrite: bool) -> Path:
     declaration = _declaration(ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY)
     output = (
-        output_root
-        / BoundedExternalAssetDirectory.ANALYSIS.value
-        / declaration.id.value
-        / declaration.population.value
+        output_root / BoundedExternalAssetDirectory.ANALYSIS.value / declaration.id.value / declaration.population.value
     )
     output.mkdir(parents=True, exist_ok=True)
     rows: list[CiciotBoundaryRow] = []

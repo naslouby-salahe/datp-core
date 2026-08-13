@@ -234,9 +234,7 @@ def test_campaign_publication_requires_materialized_report_artifacts(tmp_path: P
     empty = tmp_path / "empty"
     empty.mkdir()
     with pytest.raises(ReportEvidenceError, match="references empty publication artifacts"):
-        _require_report_publication(
-            ReportResult(experiment=None, paths=(empty,), detail=DetailText("empty"))
-        )
+        _require_report_publication(ReportResult(experiment=None, paths=(empty,), detail=DetailText("empty")))
 
 
 def test_campaign_execution_and_publication_do_not_depend_on_anchor(

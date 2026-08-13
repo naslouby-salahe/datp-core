@@ -311,8 +311,8 @@ def render_prior_art_collision_table() -> str:
     lines.extend(
         (
             "",
-        "Submission-time novelty gate: `NOT_EXECUTED`; update this table from the required "
-        "14-day literature search before submission.",
+            "Submission-time novelty gate: `NOT_EXECUTED`; update this table from the required "
+            "14-day literature search before submission.",
         )
     )
     return "\n".join(lines) + "\n"

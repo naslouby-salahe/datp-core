@@ -68,8 +68,7 @@ def test_heterogeneity_support_interaction_enumerates_every_locked_cell() -> Non
     )
 
     support_cells = frozenset(
-        (entry.coordinate.calibration_support, entry.coordinate.calibration_replicate)
-        for entry in plan.entries
+        (entry.coordinate.calibration_support, entry.coordinate.calibration_replicate) for entry in plan.entries
     )
     assert (CalibrationSupportLevel.FULL, None) in support_cells
     for support in (CalibrationSupportLevel.M50, CalibrationSupportLevel.M100, CalibrationSupportLevel.M500):

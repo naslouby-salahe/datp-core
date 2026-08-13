@@ -60,9 +60,7 @@ def test_plan_expansion_is_deterministic_and_records_complete_coordinates() -> N
     assert len(first.entries) == 4
     assert all(entry.disposition is PlanDisposition.EXECUTABLE for entry in first.entries)
     assert all(entry.applicability.status is CoordinateApplicabilityStatus.REQUIRED for entry in first.entries)
-    assert all(
-        entry.applicability.reason is CoordinateApplicabilityReason.DECLARED_PROTOCOL for entry in first.entries
-    )
+    assert all(entry.applicability.reason is CoordinateApplicabilityReason.DECLARED_PROTOCOL for entry in first.entries)
     assert all(entry.coordinate.evidence_role is EvidenceRole.CONFIRMATORY for entry in first.entries)
     assert all(entry.coordinate.dataset is DatasetId.NBAIOT for entry in first.entries)
     assert all(entry.coordinate.split_protocol is SplitProtocolId.HISTORICAL_TEMPORAL_GAP for entry in first.entries)

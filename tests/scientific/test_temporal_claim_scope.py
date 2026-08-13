@@ -66,25 +66,34 @@ def test_temporal_drift_js_blocks_a_collapsed_pooled_quantile_grid(tmp_path) -> 
     (
         (
             _TemporalInterpretationCounts(
-                material_recovery=SeedObservationCount(0), partial_or_weak_recovery=SeedObservationCount(0),
-                without_recovery=SeedObservationCount(0), opposite=SeedObservationCount(0),
-                no_degradation=SeedObservationCount(10), blocked=SeedObservationCount(0),
+                material_recovery=SeedObservationCount(0),
+                partial_or_weak_recovery=SeedObservationCount(0),
+                without_recovery=SeedObservationCount(0),
+                opposite=SeedObservationCount(0),
+                no_degradation=SeedObservationCount(10),
+                blocked=SeedObservationCount(0),
             ),
             ScientificDecision.BOUNDARY_RESULT,
         ),
         (
             _TemporalInterpretationCounts(
-                material_recovery=SeedObservationCount(0), partial_or_weak_recovery=SeedObservationCount(0),
-                without_recovery=SeedObservationCount(10), opposite=SeedObservationCount(0),
-                no_degradation=SeedObservationCount(0), blocked=SeedObservationCount(0),
+                material_recovery=SeedObservationCount(0),
+                partial_or_weak_recovery=SeedObservationCount(0),
+                without_recovery=SeedObservationCount(10),
+                opposite=SeedObservationCount(0),
+                no_degradation=SeedObservationCount(0),
+                blocked=SeedObservationCount(0),
             ),
             ScientificDecision.BOUNDARY_RESULT,
         ),
         (
             _TemporalInterpretationCounts(
-                material_recovery=SeedObservationCount(0), partial_or_weak_recovery=SeedObservationCount(0),
-                without_recovery=SeedObservationCount(0), opposite=SeedObservationCount(10),
-                no_degradation=SeedObservationCount(0), blocked=SeedObservationCount(0),
+                material_recovery=SeedObservationCount(0),
+                partial_or_weak_recovery=SeedObservationCount(0),
+                without_recovery=SeedObservationCount(0),
+                opposite=SeedObservationCount(10),
+                no_degradation=SeedObservationCount(0),
+                blocked=SeedObservationCount(0),
             ),
             ScientificDecision.OPPOSITE_DIRECTION,
         ),

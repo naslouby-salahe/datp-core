@@ -288,9 +288,7 @@ class FigureSpec:
     def __post_init__(self) -> None:
         if not isinstance(self.title, FigureTitle):
             object.__setattr__(self, "title", FigureTitle(self.title))
-        if not (
-            self.series or self.empirical_cdf_series or self.paired_metric_series or self.causal_map_lines
-        ):
+        if not (self.series or self.empirical_cdf_series or self.paired_metric_series or self.causal_map_lines):
             raise ValueError("figure specifications require at least one series")
 
 
@@ -440,9 +438,7 @@ def _render_empirical_series(series: EmpiricalCdfFigureSeries) -> ReportLine:
     x_values = ", ".join(format(value.value, ".17g") for value in series.x_values) if series.x_values else "—"
     y_values = ", ".join(format(value.value, ".17g") for value in series.y_values) if series.y_values else "—"
     overlays = (
-        ", ".join(
-            _render_threshold_overlay(overlay) for overlay in series.threshold_overlays
-        )
+        ", ".join(_render_threshold_overlay(overlay) for overlay in series.threshold_overlays)
         if series.threshold_overlays
         else "—"
     )

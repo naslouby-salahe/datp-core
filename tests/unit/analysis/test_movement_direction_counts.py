@@ -10,12 +10,8 @@ from datp_core.core.numeric import MetricValue, Seed
 
 
 def test_direction_counts_use_exact_zero_and_campaign_medians() -> None:
-    first = threshold_movement_direction_counts(
-        _movements(Seed(2), ((-0.1, -0.2), (0.0, 0.0), (0.1, 0.3)))
-    )
-    second = threshold_movement_direction_counts(
-        _movements(Seed(3), ((-0.1, -0.2), (-0.1, 0.0), (0.1, 0.3)))
-    )
+    first = threshold_movement_direction_counts(_movements(Seed(2), ((-0.1, -0.2), (0.0, 0.0), (0.1, 0.3))))
+    second = threshold_movement_direction_counts(_movements(Seed(3), ((-0.1, -0.2), (-0.1, 0.0), (0.1, 0.3))))
 
     campaign = summarize_threshold_movement_direction_counts((second, first))
 
@@ -31,9 +27,7 @@ def test_direction_counts_use_exact_zero_and_campaign_medians() -> None:
 
 
 def test_direction_counts_mark_tpr_unavailable_if_any_device_lacks_attack_evidence() -> None:
-    counts = threshold_movement_direction_counts(
-        _movements(Seed(2), ((-0.1, None), (0.0, 0.0)))
-    )
+    counts = threshold_movement_direction_counts(_movements(Seed(2), ((-0.1, None), (0.0, 0.0))))
 
     assert counts.tpr_down is None
     assert counts.tpr_unavailable_reason is not None

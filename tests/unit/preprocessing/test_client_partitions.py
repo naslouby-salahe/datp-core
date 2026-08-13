@@ -155,6 +155,8 @@ def test_exclusion_evidence_is_persisted_with_stable_row_identities(tmp_path: Pa
     payload = destination.read_text(encoding="utf-8")
     assert "row_b" in payload
     assert "nonfinite_or_null_numeric_model_input_feature" in payload
+
+
 def test_ciciot_client_group_key_normalizes_polars_single_column_keys() -> None:
     assert _client_group_key(("Merged01",)) == "Merged01"
     assert _client_group_key("Merged01") == "Merged01"

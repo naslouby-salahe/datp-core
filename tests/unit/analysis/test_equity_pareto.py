@@ -88,12 +88,8 @@ def test_pareto_policy_coordinates_use_their_declared_canonical_experiment(
 
 
 def test_equity_pareto_keeps_each_fixed_shrinkage_lambda_as_a_distinct_policy() -> None:
-    shared = tuple(
-        _document(FederatedThresholdMethod.SHARED_THRESHOLD, Seed(seed), 0.3, 0.6) for seed in range(10)
-    )
-    shrinkage = tuple(
-        _fixed_shrinkage_document(Seed(seed)) for seed in range(10)
-    )
+    shared = tuple(_document(FederatedThresholdMethod.SHARED_THRESHOLD, Seed(seed), 0.3, 0.6) for seed in range(10))
+    shrinkage = tuple(_fixed_shrinkage_document(Seed(seed)) for seed in range(10))
 
     result = equity_utility_pareto(
         shared,
@@ -110,6 +106,7 @@ def test_equity_pareto_keeps_each_fixed_shrinkage_lambda_as_a_distinct_policy() 
 
 def _fixed_shrinkage_document(seed: Seed) -> FederatedEvaluationDocument:
     coordinate = fedavg_coordinate(seed)
+
     def evaluation(weight: float, cv_fpr: float, utility: float) -> SimpleNamespace:
         return SimpleNamespace(
             lambda_weight=ShrinkageWeight(weight),
@@ -125,14 +122,13 @@ def _fixed_shrinkage_document(seed: Seed) -> FederatedEvaluationDocument:
                 mean_absolute_calibration_generalization_gap=MetricValue(0.05),
             ),
         )
+
     return cast(
         FederatedEvaluationDocument,
         SimpleNamespace(
             threshold_method=FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE,
             score_coordinate=coordinate,
-            diagnostics=SimpleNamespace(
-                shrinkage_curve=(evaluation(0.0, 0.2, 0.7), evaluation(1.0, 0.1, 0.8))
-            ),
+            diagnostics=SimpleNamespace(shrinkage_curve=(evaluation(0.0, 0.2, 0.7), evaluation(1.0, 0.1, 0.8))),
         ),
     )
 

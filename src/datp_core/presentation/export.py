@@ -313,10 +313,7 @@ def _validate_publication_source_files(sources: tuple[Path, ...], output_directo
     if len(sources) != len(frozenset(sources)):
         raise ValueError("publication source files must not repeat")
     if any(
-        source.parent != output_directory
-        or not source.is_file()
-        or source.is_symlink()
-        or source.stat().st_size == 0
+        source.parent != output_directory or not source.is_file() or source.is_symlink() or source.stat().st_size == 0
         for source in sources
     ):
         raise ValueError("publication source files must be non-empty regular files in the publication directory")
@@ -374,9 +371,7 @@ def _publication_source_rows(bundle: PublicationBundle) -> list[PublicationSourc
                     score_role=str(series.score_role.value) if series.score_role is not None else "",
                 )
             )
-            rows.extend(
-                _threshold_overlay_source_rows(str(figure.title), series)
-            )
+            rows.extend(_threshold_overlay_source_rows(str(figure.title), series))
         for series in figure.paired_metric_series:
             rows.extend(
                 _paired_source_rows(
