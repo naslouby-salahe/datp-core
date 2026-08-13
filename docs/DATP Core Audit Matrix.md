@@ -6445,15 +6445,15 @@ README_REPRODUCIBILITY.md
 | `METRIC-005` | I | 374 | 3.4 Meaning of “fairness” | cross-client FPR dispersion; | `PASS` | Cross-client FPR dispersion is computed by typed population metrics. |
 | `GLOBAL-021` | I | 375 | 3.4 Meaning of “fairness” | service-level operating-point equity; | `PASS` | Claim guard and publication terminology retain the operational scope. |
 | `GLOBAL-022` | I | 376 | 3.4 Meaning of “fairness” | distribution of false-alarm burden. | `PASS` | Client-disaggregated FPR metrics retain burden distribution. |
-| `SCORE-003` | I | 396 | 3.6 Model-quality controls | AUROC; | `NOT_AUDITED` | — |
-| `REPORT-001` | I | 397 | 3.6 Model-quality controls | average precision (`AP`, reported as the PR-curve summary / AUPRC control); | `NOT_AUDITED` | — |
-| `METRIC-006` | I | 398 | 3.6 Model-quality controls | Macro-F1; | `NOT_AUDITED` | — |
-| `METRIC-007` | I | 399 | 3.6 Model-quality controls | balanced accuracy; | `NOT_AUDITED` | — |
-| `METRIC-008` | I | 400 | 3.6 Model-quality controls | TPR or recall; | `NOT_AUDITED` | — |
-| `METRIC-009` | I | 401 | 3.6 Model-quality controls | P10 Macro-F1; | `NOT_AUDITED` | — |
-| `METRIC-010` | I | 402 | 3.6 Model-quality controls | worst-client balanced accuracy. | `NOT_AUDITED` | — |
-| `SCORE-004` | I | 408 | 3.6 Model-quality controls | unchanged AUROC does not invalidate a threshold-scope effect; | `NOT_AUDITED` | — |
-| `SCORE-005` | I | 409 | 3.6 Model-quality controls | improved AUROC does not establish a threshold-scope effect; | `NOT_AUDITED` | — |
+| `SCORE-003` | I | 396 | 3.6 Model-quality controls | AUROC; | `PASS` | AUROC is a fixed-score quality control. |
+| `REPORT-001` | I | 397 | 3.6 Model-quality controls | average precision (`AP`, reported as the PR-curve summary / AUPRC control); | `PASS` | Tie-invariant AP is a fixed-score quality control. |
+| `METRIC-006` | I | 398 | 3.6 Model-quality controls | Macro-F1; | `PASS` | Macro-F1 is a typed operating-point quality metric. |
+| `METRIC-007` | I | 399 | 3.6 Model-quality controls | balanced accuracy; | `PASS` | Balanced accuracy is a typed operating-point quality metric. |
+| `METRIC-008` | I | 400 | 3.6 Model-quality controls | TPR or recall; | `PASS` | TPR is a typed operating-point quality metric. |
+| `METRIC-009` | I | 401 | 3.6 Model-quality controls | P10 Macro-F1; | `PASS` | P10 Macro-F1 is a declared equity–utility control. |
+| `METRIC-010` | I | 402 | 3.6 Model-quality controls | worst-client balanced accuracy. | `PASS` | Worst-client balanced accuracy is retained in policy surfaces. |
+| `SCORE-004` | I | 408 | 3.6 Model-quality controls | unchanged AUROC does not invalidate a threshold-scope effect; | `PASS` | AUROC invariance is a score-integrity control, not an endpoint override. |
+| `SCORE-005` | I | 409 | 3.6 Model-quality controls | improved AUROC does not establish a threshold-scope effect; | `PASS` | Threshold-scope claims remain bound to FPR-CV, not AUROC. |
 | `THRESHOLD-007` | I | 410 | 3.6 Model-quality controls | lower P10 Macro-F1 under LOCAL_THRESHOLD is an important negative trade-off and must remain visible; | `NOT_AUDITED` | — |
 | `GLOBAL-023` | I | 411 | 3.6 Model-quality controls | global average performance cannot hide severe client-level false-alarm disparity. | `NOT_AUDITED` | — |
 | `TRAIN-006` | I | 423 | 4.1 Centralized reference: CENTRALIZED_REFERENCE | a centralized autoencoder trained on pooled benign training data; | `NOT_AUDITED` | — |
