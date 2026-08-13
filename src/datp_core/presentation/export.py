@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import csv
 from dataclasses import dataclass
 from functools import singledispatch
+from io import StringIO
 from itertools import chain
 from pathlib import Path
+from typing import Any, TypedDict, cast
 
 from datp_core.analysis.contrasts import PairedContrasts
 from datp_core.analysis.descriptive import DescriptiveSummary, PairedDifferenceCounts
@@ -89,9 +92,24 @@ from datp_core.runtime.filesystem import write_text_atomically
 PUBLICATION_FILENAME = "publication.md"
 MECHANISM_REPORT_FILENAME = "mechanism_report.md"
 PUBLICATION_SOURCE_MANIFEST_FILENAME = "publication_source_manifest.json"
+PUBLICATION_SOURCE_DATA_FILENAME = "publication_source_data.csv"
 PUBLICATION_DECIMAL_PLACES = 3
 PUBLICATION_P_VALUE_SIGNIFICANT_DIGITS = 3
 PUBLICATION_P_VALUE_DISPLAY_THRESHOLD = 0.001
+
+
+class PublicationSourceRow(TypedDict):
+    output_kind: str
+    output_title: str
+    series_label: str
+    metric: str
+    availability: str
+    value_index: str
+    x_value: str
+    y_value: str
+    point_label: str
+    evidence: str
+    unavailable_reason: str
 
 
 def format_publication_metric(value: float) -> str:
@@ -130,7 +148,12 @@ class PublicationBundle:
 _PUBLISHABLE_CLAIM_STATUSES = frozenset({ClaimStatus.PERMITTED, ClaimStatus.NARROWED})
 
 
-def export_markdown(bundle: PublicationBundle, destination: Path) -> Path:
+def export_markdown(
+    bundle: PublicationBundle,
+    destination: Path,
+    *,
+    additional_source_files: tuple[Path, ...] = (),
+) -> Path:
     blocked = tuple(decision for decision in bundle.claims if decision.status not in _PUBLISHABLE_CLAIM_STATUSES)
     permitted = tuple(
         decision.wording
@@ -166,6 +189,9 @@ def export_markdown(bundle: PublicationBundle, destination: Path) -> Path:
     sections = header + permitted + blocked_section + table_section + figure_section
     payload = "\n".join(sections).rstrip() + "\n"
     publication = write_text_atomically(destination, FileContentText(payload))
+    source_data = _export_publication_source_data(bundle, destination.parent)
+    source_files = (source_data, *additional_source_files)
+    _validate_publication_source_files(source_files, destination.parent)
     write_text_atomically(
         destination.parent / PUBLICATION_SOURCE_MANIFEST_FILENAME,
         FileContentText(
@@ -177,11 +203,198 @@ def export_markdown(bundle: PublicationBundle, destination: Path) -> Path:
                     "evidence_role": provenance.evidence_role.value,
                     "table_count": len(bundle.tables),
                     "figure_count": len(bundle.figures),
+                    "sources": tuple(
+                        {
+                            "filename": source.name,
+                            "kind": (
+                                "table_figure_source_data"
+                                if source == source_data
+                                else "additional_figure_table_source"
+                            ),
+                            "row_count": _source_file_row_count(source),
+                        }
+                        for source in source_files
+                    ),
                 }
             )
         ),
     )
     return publication
+
+
+def _export_publication_source_data(bundle: PublicationBundle, output_directory: Path) -> Path:
+    """Emit every rendered table/figure value in a manifest-addressable tidy source table."""
+
+    rows = _publication_source_rows(bundle)
+    buffer = StringIO(newline="")
+    columns = (
+        "output_kind",
+        "output_title",
+        "series_label",
+        "metric",
+        "availability",
+        "value_index",
+        "x_value",
+        "y_value",
+        "point_label",
+        "evidence",
+        "unavailable_reason",
+    )
+    writer = csv.DictWriter(buffer, fieldnames=columns, lineterminator="\n", extrasaction="raise")
+    writer.writeheader()
+    writer.writerows(cast(Any, rows))
+    return write_text_atomically(
+        output_directory / PUBLICATION_SOURCE_DATA_FILENAME, FileContentText(buffer.getvalue())
+    )
+
+
+def _validate_publication_source_files(sources: tuple[Path, ...], output_directory: Path) -> None:
+    if len(sources) != len(frozenset(sources)):
+        raise ValueError("publication source files must not repeat")
+    if any(source.parent != output_directory or not source.is_file() for source in sources):
+        raise ValueError("publication source files must be direct files in the publication directory")
+
+
+def _source_file_row_count(source: Path) -> int:
+    if source.suffix != ".csv":
+        return 1
+    with source.open(encoding="utf-8", newline="") as stream:
+        return sum(1 for _ in csv.DictReader(stream))
+
+
+def _publication_source_rows(bundle: PublicationBundle) -> list[PublicationSourceRow]:
+    rows: list[PublicationSourceRow] = []
+    for table in bundle.tables:
+        for cell in table.cells:
+            rows.append(
+                _publication_source_row(
+                    output_kind="table",
+                    output_title=str(table.title),
+                    metric=cell.metric.value,
+                    availability=cell.availability.value,
+                    y_value=str(cell.rendered_value),
+                    evidence=str(cell.evidence),
+                )
+            )
+    for figure in bundle.figures:
+        for series in figure.series:
+            rows.extend(
+                _single_axis_source_rows(
+                    str(figure.title), series.label, series.metric.value, series.availability.value, series.values
+                )
+            )
+        for series in figure.empirical_cdf_series:
+            rows.extend(
+                _paired_source_rows(
+                    str(figure.title),
+                    series.label,
+                    f"{series.x_metric.value}:{series.y_metric.value}",
+                    series.availability.value,
+                    series.x_values,
+                    series.y_values,
+                    (),
+                    str(series.unavailable_reason or ""),
+                )
+            )
+        for series in figure.paired_metric_series:
+            rows.extend(
+                _paired_source_rows(
+                    str(figure.title),
+                    series.label,
+                    f"{series.x_label}:{series.y_label}",
+                    series.availability.value,
+                    series.x_values,
+                    series.y_values,
+                    series.point_labels,
+                    str(series.unavailable_reason or ""),
+                )
+            )
+        for index, line in enumerate(figure.causal_map_lines):
+            rows.append(
+                _publication_source_row(
+                    output_kind="figure_causal_map",
+                    output_title=str(figure.title),
+                    value_index=str(index),
+                    evidence=str(line),
+                )
+            )
+    return rows
+
+
+def _single_axis_source_rows(
+    title: str, label: str, metric: str, availability: str, values: tuple[MetricValue, ...]
+) -> list[PublicationSourceRow]:
+    return [
+        _publication_source_row(
+            output_kind="figure_series",
+            output_title=title,
+            series_label=str(label),
+            metric=metric,
+            availability=availability,
+            value_index=str(index),
+            y_value=format(value.value, ".17g"),
+        )
+        for index, value in enumerate(values)
+    ] or [_publication_source_row("figure_series", title, str(label), metric, availability)]
+
+
+def _paired_source_rows(
+    title: str,
+    label: str,
+    metric: str,
+    availability: str,
+    x_values: tuple[MetricValue, ...],
+    y_values: tuple[MetricValue, ...],
+    point_labels: tuple[object, ...],
+    unavailable_reason: str,
+) -> list[PublicationSourceRow]:
+    return [
+        _publication_source_row(
+            output_kind="figure_paired_series",
+            output_title=title,
+            series_label=str(label),
+            metric=metric,
+            availability=availability,
+            value_index=str(index),
+            x_value=format(x_value.value, ".17g"),
+            y_value=format(y_value.value, ".17g"),
+            point_label=str(point_labels[index]) if point_labels else "",
+            unavailable_reason=unavailable_reason,
+        )
+        for index, (x_value, y_value) in enumerate(zip(x_values, y_values, strict=True))
+    ] or [
+        _publication_source_row(
+            "figure_paired_series", title, str(label), metric, availability, unavailable_reason=unavailable_reason
+        )
+    ]
+
+
+def _publication_source_row(
+    output_kind: str,
+    output_title: str,
+    series_label: str = "",
+    metric: str = "",
+    availability: str = "",
+    value_index: str = "",
+    x_value: str = "",
+    y_value: str = "",
+    point_label: str = "",
+    evidence: str = "",
+    unavailable_reason: str = "",
+) -> PublicationSourceRow:
+    return {
+        "output_kind": output_kind,
+        "output_title": output_title,
+        "series_label": series_label,
+        "metric": metric,
+        "availability": availability,
+        "value_index": value_index,
+        "x_value": x_value,
+        "y_value": y_value,
+        "point_label": point_label,
+        "evidence": evidence,
+        "unavailable_reason": unavailable_reason,
+    }
 
 
 def export_analysis_report(document: AnalysisDocument, destination: Path) -> Path:
@@ -413,6 +626,11 @@ def export_temporal_publication(document: TemporalAnalysisDocument, output_direc
             figures=figures,
         ),
         output_directory / PUBLICATION_FILENAME,
+        additional_source_files=(
+            figure_sources.fpr_trajectory_source,
+            figure_sources.threshold_movement_source,
+            figure_sources.manifest,
+        ),
     )
 
 
@@ -670,9 +888,7 @@ def _render_paired_contrasts(contrasts: PairedContrasts) -> list[ReportLine]:
 
 def _render_precision_diagnostics(diagnostics: ConfirmatoryPrecisionDiagnostics) -> list[ReportLine]:
     bca_width = (
-        "unavailable"
-        if diagnostics.bca_width is None
-        else _format_publication_metric(diagnostics.bca_width.value)
+        "unavailable" if diagnostics.bca_width is None else _format_publication_metric(diagnostics.bca_width.value)
     )
     lines = [
         "## Locked Ten-Seed Precision Diagnostics",
@@ -709,8 +925,7 @@ def _render_leave_one_device_out(diagnostics: LeaveOneDeviceOutDiagnostics) -> l
         f"Maximum LODO mean: {_format_publication_metric(diagnostics.maximum_lodo_mean.value)}",
         f"Maximum LODO shift: {_format_publication_metric(diagnostics.maximum_lodo_shift.value)}",
         f"Relative maximum LODO shift: {relative_shift}",
-        "Positive-direction retention: "
-        + _format_publication_metric(diagnostics.positive_direction_retention.value),
+        "Positive-direction retention: " + _format_publication_metric(diagnostics.positive_direction_retention.value),
         f"Nonpositive omissions: {nonpositive}",
         f"LODO_HIGH_INFLUENCE: {'yes' if diagnostics.high_influence else 'no'}",
         "",
@@ -1638,9 +1853,7 @@ def _leave_one_device_out_table(
             TableCell(
                 metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
                 availability=AvailabilityStatus.AVAILABLE,
-                rendered_value=TableCellRenderedValue(
-                    _format_publication_metric(diagnostics.maximum_lodo_shift.value)
-                ),
+                rendered_value=TableCellRenderedValue(_format_publication_metric(diagnostics.maximum_lodo_shift.value)),
                 evidence=EvidenceText(
                     "positive-direction retention="
                     + _format_publication_metric(diagnostics.positive_direction_retention.value)
@@ -1650,6 +1863,8 @@ def _leave_one_device_out_table(
             ),
         ),
     )
+
+
 def _optional_metric(
     value: MetricValue | None,
 ) -> ReportLine:

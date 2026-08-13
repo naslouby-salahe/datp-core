@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import json
 from dataclasses import dataclass
 from datetime import date
 from enum import StrEnum
@@ -132,15 +133,13 @@ def campaign_evaluation_release_artifacts(output_root: Path) -> tuple[ReleaseArt
 
 
 def campaign_publication_release_artifacts(output_root: Path) -> tuple[ReleaseArtifact, ...]:
-    """Retain every publication manifest and its rendered publication as figure/table release evidence."""
+    """Retain publications and every manifest-declared table/figure source file."""
 
     manifests = tuple(sorted(output_root.rglob(_PUBLICATION_MANIFEST_FILENAME)))
     artifacts: list[ReleaseArtifact] = []
     for manifest in manifests:
         relative = manifest.relative_to(output_root)
-        artifacts.append(
-            ReleaseArtifact(manifest, Path("FIGURE_TABLE_DATA") / relative, "publication_source_manifest")
-        )
+        artifacts.append(ReleaseArtifact(manifest, Path("FIGURE_TABLE_DATA") / relative, "publication_source_manifest"))
         publication = manifest.parent / "publication.md"
         if not publication.is_file():
             raise ArtifactIntegrityError(ErrorMessage(f"publication source manifest has no publication: {manifest}"))
@@ -151,7 +150,38 @@ def campaign_publication_release_artifacts(output_root: Path) -> tuple[ReleaseAr
                 "publication",
             )
         )
+        for source in _publication_source_paths(manifest):
+            artifacts.append(
+                ReleaseArtifact(
+                    source,
+                    Path("FIGURE_TABLE_DATA") / relative.parent / source.name,
+                    "table_figure_source_data",
+                )
+            )
     return tuple(artifacts)
+
+
+def _publication_source_paths(manifest: Path) -> tuple[Path, ...]:
+    try:
+        payload = json.loads(manifest.read_text(encoding="utf-8"))
+        sources = payload["sources"]
+    except (OSError, ValueError, KeyError) as error:
+        raise ArtifactIntegrityError(ErrorMessage(f"publication source manifest is unreadable: {manifest}")) from error
+    if not isinstance(sources, list) or not sources:
+        raise ArtifactIntegrityError(ErrorMessage(f"publication source manifest has no declared sources: {manifest}"))
+    paths: list[Path] = []
+    for source in sources:
+        if not isinstance(source, dict) or not isinstance(filename := source.get("filename"), str):
+            raise ArtifactIntegrityError(ErrorMessage(f"publication source manifest has an invalid source: {manifest}"))
+        path = Path(filename)
+        if path.is_absolute() or ".." in path.parts or len(path.parts) != 1 or not (manifest.parent / path).is_file():
+            raise ArtifactIntegrityError(
+                ErrorMessage(f"publication source is missing or invalid: {manifest} / {filename}")
+            )
+        paths.append(manifest.parent / path)
+    if len(paths) != len(set(paths)):
+        raise ArtifactIntegrityError(ErrorMessage(f"publication source manifest repeats a source: {manifest}"))
+    return tuple(paths)
 
 
 def _release_artifact_from_document(
@@ -234,15 +264,13 @@ def _write_release_metadata(request: ReleaseBuildRequest) -> None:
         f"- Code revision: `{request.code_revision}`\n"
         f"- Literature search date: `{request.literature_search_date.isoformat()}`\n"
         f"- Release state: `{request.state.value}`\n\n"
-        "## Exact roadmap snapshot\n\n"
-        + request.roadmap.read_text(encoding="utf-8"),
+        "## Exact roadmap snapshot\n\n" + request.roadmap.read_text(encoding="utf-8"),
         encoding="utf-8",
     )
     (request.root / "SEEDS.csv").write_text(
         "training_seed,purpose,derivation\n"
         + "".join(
-            f"{seed},confirmatory_training,declared_confirmatory_seed_cohort\n"
-            for seed in request.confirmatory_seeds
+            f"{seed},confirmatory_training,declared_confirmatory_seed_cohort\n" for seed in request.confirmatory_seeds
         )
         + "31,confirmatory_bootstrap,locked_analysis_seed\n"
         + "29,anchor_analysis,locked_analysis_seed\n"
@@ -398,10 +426,15 @@ def _manifest_entry(row: dict[str, str | None]) -> ReleaseManifestEntry:
 
 
 def _require_relative_artifact_path(relative_path: Path) -> None:
-    if relative_path.is_absolute() or ".." in relative_path.parts or relative_path.name in {
-        _MANIFEST_FILENAME,
-        _SIDECAR_FILENAME,
-    }:
+    if (
+        relative_path.is_absolute()
+        or ".." in relative_path.parts
+        or relative_path.name
+        in {
+            _MANIFEST_FILENAME,
+            _SIDECAR_FILENAME,
+        }
+    ):
         raise ArtifactIntegrityError(ErrorMessage("release manifest contains an invalid artifact path"))
 
 

@@ -178,15 +178,28 @@ def test_campaign_release_discovery_rejects_output_roots_without_evaluation_evid
 def test_campaign_publication_release_discovery_requires_the_rendered_publication(tmp_path: Path) -> None:
     manifest = tmp_path / "analysis" / "publication_source_manifest.json"
     manifest.parent.mkdir()
-    manifest.write_text("{}", encoding="utf-8")
+    manifest.write_text('{"sources": [{"filename": "publication_source_data.csv"}]}', encoding="utf-8")
 
     with pytest.raises(ArtifactIntegrityError, match="has no publication"):
         campaign_publication_release_artifacts(tmp_path)
 
     publication = manifest.parent / "publication.md"
     publication.write_text("# results\n", encoding="utf-8")
+    source_data = manifest.parent / "publication_source_data.csv"
+    source_data.write_text("metric,value\nfpr,0.05\n", encoding="utf-8")
     artifacts = campaign_publication_release_artifacts(tmp_path)
     assert tuple(item.relative_path for item in artifacts) == (
         Path("FIGURE_TABLE_DATA/analysis/publication_source_manifest.json"),
         Path("FIGURE_TABLE_DATA/analysis/publication.md"),
+        Path("FIGURE_TABLE_DATA/analysis/publication_source_data.csv"),
     )
+
+
+def test_campaign_publication_release_discovery_rejects_missing_declared_source(tmp_path: Path) -> None:
+    manifest = tmp_path / "analysis" / "publication_source_manifest.json"
+    manifest.parent.mkdir()
+    manifest.write_text('{"sources": [{"filename": "missing.csv"}]}', encoding="utf-8")
+    (manifest.parent / "publication.md").write_text("# results\n", encoding="utf-8")
+
+    with pytest.raises(ArtifactIntegrityError, match="source is missing or invalid"):
+        campaign_publication_release_artifacts(tmp_path)
