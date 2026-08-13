@@ -47,6 +47,7 @@ from datp_core.core.errors import (
     ScientificContractError,
 )
 from datp_core.core.identifiers import (
+    ClientIdentityToken,
     ContractSubject,
     DatasetId,
     EvidenceRole,
@@ -338,6 +339,28 @@ class FedProxAlignmentEvidence:
     alignment: ModelAlignmentResult
     native_alignment: ModelAlignmentResult
     alignment_reductions: tuple[AlignmentReductionOutcome, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class Terminal50ClientDrift:
+    client_id: ClientIdentityToken
+    rms_drift: MetricValue
+
+
+@dataclass(frozen=True, slots=True)
+class Terminal50DriftSummary:
+    seed: Seed
+    coefficient: ProximalCoefficient | None
+    federation_rms_drift: MetricValue
+    client_rms_drifts: tuple[Terminal50ClientDrift, ...]
+
+    def __post_init__(self) -> None:
+        if not self.client_rms_drifts:
+            raise ValueError("terminal-50 drift requires one or more clients")
+        if tuple(item.client_id for item in self.client_rms_drifts) != tuple(
+            sorted((item.client_id for item in self.client_rms_drifts), key=lambda identity: identity.value)
+        ):
+            raise ValueError("terminal-50 client drifts must be ordered by client identity")
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -1068,17 +1091,62 @@ def fedprox_terminal50_rms_drift(
 ) -> MetricValue:
     """Return the prospectively fixed median RMS drift over rounds 151..200."""
 
+    return terminal50_drift_summary(training_seed, coefficient).federation_rms_drift
+
+
+def terminal50_drift_summary(
+    training_seed: Seed,
+    coefficient: ProximalCoefficient | None,
+) -> Terminal50DriftSummary:
+    """Load the fixed final-50-round client and federation RMS drift diagnostics."""
+
     coordinate = _fedprox_training_coordinate(training_seed, coefficient)
     frame = history_frames(federated_training_directory(coordinate, OUTPUTS_ROOT)).client_rounds
     columns = FederatedHistoryColumn
-    terminal = frame.filter(pl.col(columns.ROUND_NUMBER.value) >= 151).get_column(columns.RMS_DRIFT.value)
-    values = tuple(float(value) for value in terminal.to_list() if value is not None)
-    if not values:
+    terminal_rounds = tuple(
+        sorted(
+            int(value)
+            for value in frame.get_column(columns.ROUND_NUMBER.value).unique().to_list()
+            if int(value) >= 151
+        )
+    )
+    if terminal_rounds != tuple(range(151, 201)):
+        raise ScientificContractError(
+            ErrorMessage("FedProx activation evidence requires the locked complete rounds 151 through 200"),
+            subject=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST,
+        )
+    terminal = frame.filter(pl.col(columns.ROUND_NUMBER.value) >= 151)
+    values = tuple(
+        float(value)
+        for value in terminal.get_column(columns.RMS_DRIFT.value).to_list()
+        if value is not None
+    )
+    if len(values) != terminal.height:
         raise ScientificContractError(
             ErrorMessage("FedProx activation evidence requires persisted terminal-50 RMS drift values"),
             subject=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST,
         )
-    return MetricValue(float(np.median(np.asarray(values, dtype=np.float64))))
+    clients = tuple(
+        Terminal50ClientDrift(
+            client_id=ClientIdentityToken(str(client_id)),
+            rms_drift=MetricValue(float(np.median(np.asarray(client_values, dtype=np.float64)))),
+        )
+        for client_id, client_values in sorted(
+            (
+                (str(client_id), tuple(float(value) for value in values if value is not None))
+                for client_id, values in terminal.group_by(columns.CLIENT_ID.value, maintain_order=True).agg(
+                    pl.col(columns.RMS_DRIFT.value)
+                ).iter_rows()
+            ),
+            key=lambda item: item[0],
+        )
+    )
+    return Terminal50DriftSummary(
+        seed=training_seed,
+        coefficient=coefficient,
+        federation_rms_drift=MetricValue(float(np.median(np.asarray(values, dtype=np.float64)))),
+        client_rms_drifts=clients,
+    )
 
 
 def _fedprox_training_coordinate(
@@ -1174,6 +1242,13 @@ def fedprox_activation_report(
         "LocalThresholdDispersion | NormalizedSharedLocalThresholdDistance | DeltaScope | ScopeAbsorption |",
         "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
+    client_drift_lines = [
+        "",
+        "## Per-client terminal-50 RMS drift",
+        "",
+        "| condition | seed | client | terminal-50 RMS drift |",
+        "| --- | ---: | --- | ---: |",
+    ]
     fedavg_written: set[Seed] = set()
     for coefficient, alignments, observations in evidence_by_coefficient:
         alignment_by_seed = {item.training_seed: item for item in alignments}
@@ -1183,8 +1258,10 @@ def fedprox_activation_report(
         for seed in sorted(alignment_by_seed):
             alignment_evidence = alignment_by_seed[seed]
             observation = observation_by_seed[seed]
-            fedavg_drift = fedprox_terminal50_rms_drift(seed, None)
-            condition_drift = fedprox_terminal50_rms_drift(seed, coefficient)
+            fedavg_summary = terminal50_drift_summary(seed, None)
+            condition_summary = terminal50_drift_summary(seed, coefficient)
+            fedavg_drift = fedavg_summary.federation_rms_drift
+            condition_drift = condition_summary.federation_rms_drift
             reference_h = _alignment_metric_value(
                 alignment_evidence.reference_alignment, ModelAlignmentMetric.MODEL_ALIGNMENT_HETEROGENEITY
             )
@@ -1216,6 +1293,10 @@ def fedprox_activation_report(
                     )
                 )
                 fedavg_written.add(seed)
+                client_drift_lines.extend(
+                    f"| FedAvg | {seed.value} | `{item.client_id.value}` | {item.rms_drift.value:.12g} |"
+                    for item in fedavg_summary.client_rms_drifts
+                )
             suppression = (
                 MetricValue(1.0 - condition_drift.value / fedavg_drift.value)
                 if fedavg_drift.value > 1e-12
@@ -1238,7 +1319,12 @@ def fedprox_activation_report(
                     observation.personalized_effect, scope_absorption,
                 )
             )
-    return "\n".join(lines) + "\n"
+            client_drift_lines.extend(
+                f"| FedProx(mu={coefficient.value:.12g}) | {seed.value} | `{item.client_id.value}` | "
+                f"{item.rms_drift.value:.12g} |"
+                for item in condition_summary.client_rms_drifts
+            )
+    return "\n".join([*lines, *client_drift_lines]) + "\n"
 
 
 def _alignment_metric_value(result: ModelAlignmentResult, metric: ModelAlignmentMetric) -> MetricValue | None:
