@@ -25,7 +25,7 @@ from datp_core.analysis.mechanisms import (
 )
 from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
 from datp_core.analysis.metrics.models import MetricStatus, PopulationMetricResult, metric_by_id
-from datp_core.analysis.metrics.protocols import FIXED_SCORE_AUROC_INVARIANCE_TOLERANCE
+from datp_core.analysis.metrics.protocols import FIXED_SCORE_QUALITY_CONTROL_INVARIANCE_TOLERANCE
 from datp_core.app.planning import PlanReason, expand_experiment_plan
 from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
@@ -720,7 +720,7 @@ def analyze_threshold_movement_tradeoff(*, overwrite: bool) -> Path:
         )
         movement_cohorts.append(movement)
         mechanisms.append(movement)
-        _verify_auroc_invariance(shared, local)
+        _verify_fixed_score_quality_control_invariance(shared, local)
     mechanisms.append(
         summarize_threshold_movements_across_seeds(
             tuple(movement_cohorts),
@@ -738,21 +738,22 @@ def analyze_threshold_movement_tradeoff(*, overwrite: bool) -> Path:
     return output
 
 
-def _verify_auroc_invariance(
+def _verify_fixed_score_quality_control_invariance(
     shared: FederatedEvaluationDocument,
     local: FederatedEvaluationDocument,
 ) -> None:
-    shared_auroc = population_metric(shared, MetricId.AUROC)
-    local_auroc = population_metric(local, MetricId.AUROC)
-    difference = abs(shared_auroc.value - local_auroc.value)
-    if difference > FIXED_SCORE_AUROC_INVARIANCE_TOLERANCE.value:
-        raise ScientificContractError(
-            ErrorMessage(
-                "AUROC must be invariant across threshold-only policies; "
-                f"shared={shared_auroc.value} local={local_auroc.value} difference={difference}"
-            ),
-            subject=ExperimentId.THRESHOLD_MOVEMENT_TRADEOFF,
-        )
+    for metric in (MetricId.AUROC, MetricId.AVERAGE_PRECISION):
+        shared_value = population_metric(shared, metric)
+        local_value = population_metric(local, metric)
+        difference = abs(shared_value.value - local_value.value)
+        if difference > FIXED_SCORE_QUALITY_CONTROL_INVARIANCE_TOLERANCE.value:
+            raise ScientificContractError(
+                ErrorMessage(
+                    f"{metric.value} must be invariant across threshold-only policies; "
+                    f"shared={shared_value.value} local={local_value.value} difference={difference}"
+                ),
+                subject=ExperimentId.THRESHOLD_MOVEMENT_TRADEOFF,
+            )
 
 
 def _require_declaration(experiment_id: ExperimentId) -> ExperimentDeclaration:
