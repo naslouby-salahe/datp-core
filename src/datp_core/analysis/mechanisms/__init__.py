@@ -102,6 +102,12 @@ from datp_core.analysis.mechanisms.movement import (
     summarize_threshold_movements_across_seeds,
     threshold_movement,
 )
+from datp_core.analysis.mechanisms.policy_surface import (
+    PolicySurfaceCell,
+    PolicySurfacePolicyMetric,
+    PolicySurfaceState,
+    policy_surface_cell,
+)
 from datp_core.analysis.mechanisms.support_burden import (
     CalibrationSupportBurdenCampaignSummary,
     CalibrationSupportBurdenClient,
@@ -215,6 +221,9 @@ __all__ = (
     "PairwiseJensenShannonDistance",
     "ParetoClientImpact",
     "ParetoClientImpactFractions",
+    "PolicySurfaceCell",
+    "PolicySurfacePolicyMetric",
+    "PolicySurfaceState",
     "RegressionSlopeConfidenceInterval",
     "RecoveryAssessment",
     "GroupDispersionObservation",
@@ -254,6 +263,7 @@ __all__ = (
     "jensen_shannon_from_client_scores",
     "local_threshold_dispersion",
     "model_alignment",
+    "policy_surface_cell",
     "summarize_alignment_activation",
     "summarize_client_impact",
     "summarize_family_recall_campaign",
