@@ -32,6 +32,21 @@ _MANIFEST_FILENAME = "MANIFEST_SHA256.csv"
 _SIDECAR_FILENAME = "MANIFEST_SHA256.sha256"
 _ROADMAP_LOCK_FILENAME = "ROADMAP_LOCK.md"
 _PUBLICATION_MANIFEST_FILENAME = "publication_source_manifest.json"
+_CANONICAL_PROVENANCE_FILENAMES = frozenset({"dataset_manifest.json", "schema.json"})
+_PREPROCESSING_FILENAMES = frozenset({"preprocessing_manifest.json", "state.skops", "validation_report.json"})
+_SPLIT_IDENTITY_FILENAMES = frozenset(
+    {
+        "population_manifest.json",
+        "membership.parquet",
+        "split_manifest.json",
+        "split_assignments.parquet",
+        "matched_static_reference_manifest.json",
+        "matched_static_reference_membership.parquet",
+        "matched_static_reference_split_manifest.json",
+        "matched_static_reference_split_assignments.parquet",
+        "split_manifest.parquet",
+    }
+)
 _REQUIRED_DIRECTORIES = (
     "DATA_PROVENANCE",
     "SPLIT_IDENTITY",
@@ -207,6 +222,40 @@ def campaign_bounded_training_release_artifacts(output_root: Path) -> tuple[Rele
             source, Path("METRICS") / source.relative_to(output_root), document
         )
         artifacts.extend(_standard_training_release_artifacts(output_root, directory, document, coordinate_artifact))
+    return tuple(artifacts)
+
+
+def preparation_release_artifacts(data_root: Path) -> tuple[ReleaseArtifact, ...]:
+    """Retain preparation metadata while leaving raw and bulk processed rows subject to license policy."""
+
+    canonical = data_root / "canonical"
+    processed = data_root / "processed"
+    if not canonical.is_dir() or not processed.is_dir():
+        raise ArtifactIntegrityError(
+            ErrorMessage("release preparation evidence requires canonical and processed data roots")
+        )
+    artifacts: list[ReleaseArtifact] = []
+    for source in sorted(
+        path for path in canonical.rglob("*") if path.is_file() and path.name in _CANONICAL_PROVENANCE_FILENAMES
+    ):
+        artifacts.append(
+            ReleaseArtifact(
+                source, Path("DATA_PROVENANCE") / source.relative_to(data_root), "canonical_data_provenance"
+            )
+        )
+    for source in sorted(path for path in processed.rglob("*") if path.is_file()):
+        if source.name in _PREPROCESSING_FILENAMES:
+            artifacts.append(
+                ReleaseArtifact(source, Path("PREPROCESSING") / source.relative_to(processed), "preprocessing_state")
+            )
+        elif source.name in _SPLIT_IDENTITY_FILENAMES:
+            artifacts.append(
+                ReleaseArtifact(source, Path("SPLIT_IDENTITY") / source.relative_to(processed), "split_identity")
+            )
+    if not artifacts:
+        raise ArtifactIntegrityError(
+            ErrorMessage("release preparation evidence contains no declared metadata artifacts")
+        )
     return tuple(artifacts)
 
 

@@ -17,6 +17,7 @@ from tools.reproducibility.release import (
     campaign_publication_release_artifacts,
     campaign_standard_training_release_artifacts,
     campaign_threshold_release_artifacts,
+    preparation_release_artifacts,
     validate_release_bundle,
 )
 
@@ -163,10 +164,10 @@ def test_release_evaluation_metadata_is_derived_from_the_persisted_coordinate(tm
                 population=PopulationId.NBAIOT_NATURAL_DEVICES,
                 model=TrainingModelId.FEDAVG_AUTOENCODER,
                 training_seed=Seed(4),
-                ),
-                threshold_method=FederatedThresholdMethod.LOCAL_THRESHOLD,
-                execution_key=CoordinateStableKey("shared_vs_local_confirmation/coordinate"),
-                execution_coordinate=SimpleNamespace(experiment=ExperimentId.SHARED_VS_LOCAL_CONFIRMATION),
+            ),
+            threshold_method=FederatedThresholdMethod.LOCAL_THRESHOLD,
+            execution_key=CoordinateStableKey("shared_vs_local_confirmation/coordinate"),
+            execution_coordinate=SimpleNamespace(experiment=ExperimentId.SHARED_VS_LOCAL_CONFIRMATION),
         ),
     )
 
@@ -335,6 +336,29 @@ def test_bounded_training_release_discovery_uses_persisted_execution_coordinate(
 
     assert len(artifacts) == 6
     assert all(item.training_seed == "4" for item in artifacts)
+
+
+def test_preparation_release_discovery_retains_only_declared_metadata(tmp_path: Path) -> None:
+    data_root = tmp_path / "data"
+    canonical = data_root / "canonical" / "nbaiot"
+    processed = data_root / "processed" / "nbaiot" / "coordinate"
+    canonical.mkdir(parents=True)
+    processed.mkdir(parents=True)
+    (canonical / "dataset_manifest.json").write_text("{}", encoding="utf-8")
+    (canonical / "part-00000.parquet").write_text("raw-like rows", encoding="utf-8")
+    (processed / "preprocessing_manifest.json").write_text("{}", encoding="utf-8")
+    (processed / "state.skops").write_text("state", encoding="utf-8")
+    (processed / "split_manifest.parquet").write_text("split", encoding="utf-8")
+    (processed / "train.parquet").write_text("processed rows", encoding="utf-8")
+
+    artifacts = preparation_release_artifacts(data_root)
+
+    assert tuple(item.relative_path for item in artifacts) == (
+        Path("DATA_PROVENANCE/canonical/nbaiot/dataset_manifest.json"),
+        Path("PREPROCESSING/nbaiot/coordinate/preprocessing_manifest.json"),
+        Path("SPLIT_IDENTITY/nbaiot/coordinate/split_manifest.parquet"),
+        Path("PREPROCESSING/nbaiot/coordinate/state.skops"),
+    )
 
 
 def test_campaign_publication_release_discovery_requires_the_rendered_publication(tmp_path: Path) -> None:
