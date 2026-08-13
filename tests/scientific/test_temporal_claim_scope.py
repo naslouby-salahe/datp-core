@@ -4,9 +4,11 @@ from typing import cast
 import polars as pl
 import pytest
 
-from datp_core.analysis.temporal import temporal_drift_js
+from datp_core.analysis.scientific_decision import ScientificDecision
+from datp_core.analysis.temporal import _TemporalInterpretationCounts, _campaign_decision_from_counts, temporal_drift_js
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import ScoreFrameColumn, TemporalState
+from datp_core.core.numeric import SeedCount, SeedObservationCount
 from datp_core.detector.scoring.models import FederatedScoreRecord
 
 
@@ -41,3 +43,46 @@ def test_temporal_drift_js_blocks_a_collapsed_pooled_quantile_grid(tmp_path) -> 
             cast(FederatedScoreRecord, SimpleNamespace(scored_client=client, path=historical)),
             cast(FederatedScoreRecord, SimpleNamespace(scored_client=client, path=future)),
         )
+
+
+@pytest.mark.parametrize(
+    ("counts", "expected"),
+    (
+        (
+            _TemporalInterpretationCounts(
+                material_recovery=SeedObservationCount(0), partial_or_weak_recovery=SeedObservationCount(0),
+                without_recovery=SeedObservationCount(0), opposite=SeedObservationCount(0),
+                no_degradation=SeedObservationCount(10), blocked=SeedObservationCount(0),
+            ),
+            ScientificDecision.BOUNDARY_RESULT,
+        ),
+        (
+            _TemporalInterpretationCounts(
+                material_recovery=SeedObservationCount(0), partial_or_weak_recovery=SeedObservationCount(0),
+                without_recovery=SeedObservationCount(10), opposite=SeedObservationCount(0),
+                no_degradation=SeedObservationCount(0), blocked=SeedObservationCount(0),
+            ),
+            ScientificDecision.BOUNDARY_RESULT,
+        ),
+        (
+            _TemporalInterpretationCounts(
+                material_recovery=SeedObservationCount(0), partial_or_weak_recovery=SeedObservationCount(0),
+                without_recovery=SeedObservationCount(0), opposite=SeedObservationCount(10),
+                no_degradation=SeedObservationCount(0), blocked=SeedObservationCount(0),
+            ),
+            ScientificDecision.OPPOSITE_DIRECTION,
+        ),
+    ),
+)
+def test_negative_temporal_outcomes_cannot_be_classified_as_supported(
+    counts: _TemporalInterpretationCounts, expected: ScientificDecision
+) -> None:
+    decision, _ = _campaign_decision_from_counts(
+        counts,
+        total=SeedObservationCount(10),
+        defined_recovery_count=SeedObservationCount(10),
+        cohort_size=SeedCount(10),
+    )
+
+    assert decision is expected
+    assert decision is not ScientificDecision.SUPPORTED

@@ -6639,7 +6639,7 @@ README_REPRODUCIBILITY.md
 | `TRAIN-027` | I | 1917 | 10.D.11 Negative evidence that must remain publishable | FedProx conditions whose downstream result is null while the measured local-update drift is barely changed or moves in the opposite direction; | `NOT_AUDITED` | — |
 | `TRAIN-028` | I | 1918 | 10.D.11 Negative evidence that must remain publishable | every `FEDAVG_LOCAL_FINE_TUNING` or Ditto condition that largely absorbs or reverses the shared-to-local scope effect under the locked §7.2B bands; | `NOT_AUDITED` | — |
 | `THRESHOLD-055` | I | 1919 | 10.D.11 Negative evidence that must remain publishable | any model-side stress condition that changes detector parameters but fails to reduce `ModelAlignmentH`, score-location/scale dispersion, local-q95 dispersion, or normalized shared-local threshold distance; | `NOT_AUDITED` | — |
-| `TEMPORAL-001` | I | 1920 | 10.D.11 Negative evidence that must remain publishable | temporal windows with no drift or no recovery; | `NOT_AUDITED` | — |
+| `TEMPORAL-001` | I | 1920 | 10.D.11 Negative evidence that must remain publishable | temporal windows with no drift or no recovery; | `PASS` | Temporal campaign decisions retain no-degradation, no-recovery, and opposite-direction outcomes as non-supported boundary evidence. |
 | `CALIBRATION-075` | I | 1921 | 10.D.11 Negative evidence that must remain publishable | LOCAL_CONFORMAL_THRESHOLD undercoverage, overcoverage, or coarse finite-sample behavior. | `NOT_AUDITED` | — |
 | `GLOBAL-038` | II | 2119 | 1.2 Experiment specification format | **Scientific role** | `NOT_AUDITED` | — |
 | `GLOBAL-039` | II | 2120 | 1.2 Experiment specification format | **Question** | `NOT_AUDITED` | — |
