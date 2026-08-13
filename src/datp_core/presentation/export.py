@@ -18,7 +18,7 @@ from datp_core.analysis.inference.wilcoxon import RankBiserialResult, WilcoxonRe
 from datp_core.analysis.influence import LeaveOneDeviceOutDiagnostics
 from datp_core.analysis.mechanisms import MechanismEvidence
 from datp_core.analysis.mechanisms.absorption import AbsorptionCohortResult
-from datp_core.analysis.mechanisms.association import AssociationResult
+from datp_core.analysis.mechanisms.association import AssociationObservation, AssociationResult
 from datp_core.analysis.mechanisms.client_impact import (
     ClientImpactCampaignSummary,
     ClientImpactFraction,
@@ -60,6 +60,7 @@ from datp_core.analysis.preparation import AnalysisDocument, ExternalAnalysisDoc
 from datp_core.analysis.scientific_decision import ScientificDecision, ScientificDecisionResult
 from datp_core.artifacts.serializers.json import canonical_json_text
 from datp_core.core.identifiers import (
+    AnalysisReasonText,
     AvailabilityStatus,
     ClaimWording,
     EvidenceRole,
@@ -1333,20 +1334,48 @@ def _render_association_result(mechanism: AssociationResult) -> list[ReportLine]
         )
         diagnostics = stats.leave_one_out_diagnostics
         lines.extend(
-            "Observation "
-            f"{index + 1}: seed={observation.seed.value}; experiment={observation.experiment.value}; "
-            f"population={observation.population.value}; regime={observation.regime_label}; "
-            f"heterogeneity={_format_publication_metric(observation.heterogeneity.value)}; "
-            f"benefit={_format_publication_metric(observation.benefit.value)}; "
-            f"leverage={_format_publication_metric(stats.leverage[index].value)}; "
-            f"leave-one-out slope={_format_publication_metric(diagnostics.slopes[index].value)}; "
-            f"leave-one-out R²={_format_publication_metric(diagnostics.r_squared[index].value)}; "
-            f"slope influence={_format_publication_metric(diagnostics.influences[index].value)}"
+            _render_association_observation(
+                index=index,
+                observation=observation,
+                leverage=stats.leverage[index],
+                slope=diagnostics.slopes[index],
+                r_squared=diagnostics.r_squared[index],
+                influence=diagnostics.influences[index],
+                reason=diagnostics.unavailable_reasons[index],
+            )
             for index, observation in enumerate(mechanism.observations)
         )
     if mechanism.reason:
         lines.append(f"Reason: {mechanism.reason}")
     return [ReportLine(line) for line in lines]
+
+
+def _render_association_diagnostic(value: MetricValue | Ratio | None, reason: AnalysisReasonText | None) -> str:
+    if value is not None:
+        return _format_publication_metric(value.value)
+    return f"unavailable ({reason or 'unspecified reason'})"
+
+
+def _render_association_observation(
+    *,
+    index: int,
+    observation: AssociationObservation,
+    leverage: Ratio,
+    slope: MetricValue | None,
+    r_squared: Ratio | None,
+    influence: MetricValue | None,
+    reason: AnalysisReasonText | None,
+) -> str:
+    return (
+        f"Observation {index + 1}: seed={observation.seed.value}; experiment={observation.experiment.value}; "
+        f"population={observation.population.value}; regime={observation.regime_label}; "
+        f"heterogeneity={_format_publication_metric(observation.heterogeneity.value)}; "
+        f"benefit={_format_publication_metric(observation.benefit.value)}; "
+        f"leverage={_format_publication_metric(leverage.value)}; "
+        f"leave-one-out slope={_render_association_diagnostic(slope, reason)}; "
+        f"leave-one-out R²={_render_association_diagnostic(r_squared, reason)}; "
+        f"slope influence={_render_association_diagnostic(influence, reason)}"
+    )
 
 
 @_render_one_mechanism.register

@@ -69,9 +69,10 @@ class RegressionSlopeConfidenceInterval(StrictModel):
 
 
 class LeaveOneOutAssociationDiagnostics(StrictModel):
-    slopes: tuple[MetricValue, ...]
-    r_squared: tuple[Ratio, ...]
-    influences: tuple[MetricValue, ...]
+    slopes: tuple[MetricValue | None, ...]
+    r_squared: tuple[Ratio | None, ...]
+    influences: tuple[MetricValue | None, ...]
+    unavailable_reasons: tuple[AnalysisReasonText | None, ...]
 
 
 class AssociationStatistics(StrictModel):
@@ -109,6 +110,8 @@ class AssociationResult(StrictModel):
                 raise ValueError("association leave-one-out R² must cover every observation")
             if len(self.statistics.leave_one_out_diagnostics.influences) != count:
                 raise ValueError("association influence must cover every observation")
+            if len(self.statistics.leave_one_out_diagnostics.unavailable_reasons) != count:
+                raise ValueError("association leave-one-out reasons must cover every observation")
         return self
 
     @property
@@ -213,18 +216,22 @@ def _leave_one_out(
     y_values: np.ndarray,
     full_slope: MetricValue,
 ) -> LeaveOneOutAssociationDiagnostics:
-    slopes: list[MetricValue] = []
-    r_squared_values: list[Ratio] = []
-    influences: list[MetricValue] = []
+    slopes: list[MetricValue | None] = []
+    r_squared_values: list[Ratio | None] = []
+    influences: list[MetricValue | None] = []
+    unavailable_reasons: list[AnalysisReasonText | None] = []
     for index in range(x_values.size):
         mask = np.ones(x_values.size, dtype=bool)
         mask[index] = False
         x_loo = x_values[mask]
         y_loo = y_values[mask]
         if is_numeric_zero(float(np.ptp(x_loo))) or is_numeric_zero(float(np.ptp(y_loo))):
-            slopes.append(MetricValue(full_slope.value))
-            r_squared_values.append(Ratio(0.0))
-            influences.append(MetricValue(0.0))
+            slopes.append(None)
+            r_squared_values.append(None)
+            influences.append(None)
+            unavailable_reasons.append(
+                AnalysisReasonText("leave-one-out regression is undefined because an omitted sample removes variation")
+            )
             continue
         fit = cast(
             LinearRegressionResult,
@@ -232,18 +239,21 @@ def _leave_one_out(
         )
         extracted = linear_regression_values(fit)
         if extracted is None:
-            slopes.append(MetricValue(full_slope.value))
-            r_squared_values.append(Ratio(0.0))
-            influences.append(MetricValue(0.0))
+            slopes.append(None)
+            r_squared_values.append(None)
+            influences.append(None)
+            unavailable_reasons.append(AnalysisReasonText("leave-one-out regression returned invalid statistics"))
             continue
         loo_slope = extracted.slope.value
         slopes.append(extracted.slope)
         r_squared_values.append(Ratio(extracted.rvalue.value**2))
         influences.append(MetricValue(full_slope.value - loo_slope))
+        unavailable_reasons.append(None)
     return LeaveOneOutAssociationDiagnostics(
         slopes=tuple(slopes),
         r_squared=tuple(r_squared_values),
         influences=tuple(influences),
+        unavailable_reasons=tuple(unavailable_reasons),
     )
 
 
