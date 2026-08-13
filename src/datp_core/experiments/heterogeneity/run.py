@@ -554,12 +554,74 @@ def analyze_heterogeneity_support_interaction(*, overwrite: bool) -> Path:
                 f"{policy.policy.value} | {_metric_text(policy.cv_fpr)} | {_metric_text(policy.p10_macro_f1)} | "
                 f"{_metric_text(policy.worst_client_balanced_accuracy)} | {cell.state.value} |"
             )
+    lines.extend(
+        (
+            "",
+            "## Fixed-shrinkage raw lambda points",
+            "",
+            "| Seed | Alpha | m | Replicate | Lambda | CV(FPR) | P10 Macro-F1 | Worst balanced accuracy |",
+            "|---:|---|---|---:|---:|---:|---:|---:|",
+        )
+    )
+    lines.extend(_fixed_shrinkage_raw_rows())
     write_text_atomically(output / "support_interaction_surface.md", FileContentText("\n".join(lines) + "\n"))
     return output
 
 
 def _metric_text(value: MetricValue | None) -> str:
     return "unavailable" if value is None else f"{value.value:.12g}"
+
+
+def _fixed_shrinkage_raw_rows() -> tuple[str, ...]:
+    rows: list[str] = []
+    for seed in CONFIRMATORY_SEED_COHORT.values:
+        for partition_kind, concentration, alpha in _interaction_conditions():
+            for support, replicate in _interaction_support_coordinates():
+                document = _load_interaction_evaluation(
+                    seed,
+                    FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE,
+                    partition_kind,
+                    concentration,
+                    support,
+                    replicate,
+                )
+                curve = document.diagnostics.shrinkage_curve
+                if support is not CalibrationSupportLevel.FULL:
+                    if replicate is None:
+                        raise ValueError("finite support requires a replicate")
+                    matches = tuple(
+                        cell
+                        for cell in document.diagnostics.calibration_size_ablation
+                        if cell.replicate_index == replicate
+                        and cell.calibration_size.value == int(support.value.removeprefix("m"))
+                    )
+                    if len(matches) != 1:
+                        raise ScientificContractError(
+                            ErrorMessage("fixed-shrinkage support cell must resolve exactly once")
+                        )
+                    curve = matches[0].shrinkage_curve
+                if not curve:
+                    raise ScientificContractError(ErrorMessage("fixed-shrinkage raw table requires every lambda point"))
+                support_text = "full" if support is CalibrationSupportLevel.FULL else support.value.removeprefix("m")
+                replicate_text = "—" if replicate is None else str(replicate.value)
+                for point in curve:
+                    cv_fpr = _optional_population_metric(point.population, MetricId.FPR_COEFFICIENT_OF_VARIATION)
+                    p10_macro_f1 = _optional_population_metric(point.population, MetricId.P10_BINARY_MACRO_F1)
+                    worst_balanced_accuracy = _optional_population_metric(
+                        point.population, MetricId.WORST_CLIENT_BALANCED_ACCURACY
+                    )
+                    values = (
+                        str(seed.value),
+                        str(alpha),
+                        support_text,
+                        replicate_text,
+                        f"{point.lambda_weight.value:.12g}",
+                        _metric_text(cv_fpr),
+                        _metric_text(p10_macro_f1),
+                        _metric_text(worst_balanced_accuracy),
+                    )
+                    rows.append("| " + " | ".join(values) + " |")
+    return tuple(rows)
 
 
 def analyze_per_client_score_geometry(*, overwrite: bool) -> Path:
@@ -840,8 +902,7 @@ def _interaction_policy_metric(
         cells = tuple(
             cell
             for cell in document.diagnostics.calibration_size_ablation
-            if cell.replicate_index == replicate
-            and cell.calibration_size.value == int(support.value.removeprefix("m"))
+            if cell.replicate_index == replicate and cell.calibration_size.value == int(support.value.removeprefix("m"))
         )
         if len(cells) != 1:
             raise ScientificContractError(ErrorMessage("interaction support diagnostic must resolve exactly once"))
