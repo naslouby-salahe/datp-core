@@ -6463,11 +6463,11 @@ README_REPRODUCIBILITY.md
 | `THRESHOLD-009` | I | 472 | 4.4 Family threshold: FAMILY_THRESHOLD | the taxonomy is defined independently of test outcomes; | `NOT_AUDITED` | — |
 | `THRESHOLD-010` | I | 473 | 4.4 Family threshold: FAMILY_THRESHOLD | family membership is stable and auditable; | `NOT_AUDITED` | — |
 | `THRESHOLD-011` | I | 474 | 4.4 Family threshold: FAMILY_THRESHOLD | the taxonomy represents device identity rather than attack labels. | `NOT_AUDITED` | — |
-| `THRESHOLD-012` | I | 505 | 4.5 Cluster threshold: CLUSTER_THRESHOLD | model clustering; | `NOT_AUDITED` | — |
-| `THRESHOLD-013` | I | 506 | 4.5 Cluster threshold: CLUSTER_THRESHOLD | clustered federated training; | `NOT_AUDITED` | — |
-| `THRESHOLD-014` | I | 507 | 4.5 Cluster threshold: CLUSTER_THRESHOLD | a privacy mechanism; | `NOT_AUDITED` | — |
-| `THRESHOLD-015` | I | 508 | 4.5 Cluster threshold: CLUSTER_THRESHOLD | a new clustering algorithm; | `NOT_AUDITED` | — |
-| `THRESHOLD-016` | I | 509 | 4.5 Cluster threshold: CLUSTER_THRESHOLD | a confirmatory endpoint. | `NOT_AUDITED` | — |
+| `THRESHOLD-012` | I | 505 | 4.5 Cluster threshold: CLUSTER_THRESHOLD | model clustering; | `PASS` | Clustering operates only on threshold-stage score fingerprints. |
+| `THRESHOLD-013` | I | 506 | 4.5 Cluster threshold: CLUSTER_THRESHOLD | clustered federated training; | `PASS` | Cluster construction reuses the fixed trained detector. |
+| `THRESHOLD-014` | I | 507 | 4.5 Cluster threshold: CLUSTER_THRESHOLD | a privacy mechanism; | `PASS` | Privacy-guarantee claims are suppressed. |
+| `THRESHOLD-015` | I | 508 | 4.5 Cluster threshold: CLUSTER_THRESHOLD | a new clustering algorithm; | `PASS` | The cluster contract fixes standard k-means rather than introducing an algorithm claim. |
+| `THRESHOLD-016` | I | 509 | 4.5 Cluster threshold: CLUSTER_THRESHOLD | a confirmatory endpoint. | `PASS` | Protocol graph permits one shared-versus-local confirmatory endpoint only. |
 | `CALIBRATION-030` | I | 614 | 5.2 Local–global shrinkage | full-calibration scope-mismatch proxy: | `NOT_AUDITED` | — |
 | `CALIBRATION-031` | I | 621 | 5.2 Local–global shrinkage | finite-calibration local estimation variance across the `R=10` nested subsamples, defined in Part III §8.4; | `NOT_AUDITED` | — |
 | `CALIBRATION-032` | I | 622 | 5.2 Local–global shrinkage | `Bias_tau` and `RMSE_tau` versus each client's full-calibration local threshold, defined in Part II §8.1; | `NOT_AUDITED` | — |
