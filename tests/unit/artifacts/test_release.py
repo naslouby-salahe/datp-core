@@ -67,7 +67,7 @@ def _release(root: Path) -> Path:
     for directory in _DIRECTORIES:
         (root / directory).mkdir(parents=True)
     artifacts = {
-        "ROADMAP_LOCK.md": b"roadmap snapshot\n",
+        "ROADMAP_LOCK.md": b"roadmap snapshot\n\n- Release state: `PUBLIC`\n",
         "SEEDS.csv": b"seed,purpose\n0,training\n",
         "README_REPRODUCIBILITY.md": b"reproduce\n",
         "METRICS/metrics.csv": b"metric,value\nfpr,0.05\n",
@@ -207,6 +207,10 @@ def test_license_restricted_release_requires_and_records_withheld_artifacts(tmp_
     assert "licensed_scores.parquet" in record
     assert sha256(b"restricted").hexdigest() in record
     assert not (release.root / "SCORES" / "nbaiot" / "licensed_scores.parquet").exists()
+    (release.root / "DATA_PROVENANCE" / "withheld_artifacts.csv").write_text("invalid\n", encoding="utf-8")
+
+    with pytest.raises(ArtifactIntegrityError, match="withheld artifact record columns"):
+        validate_release_bundle(release.root)
 
 
 def test_release_evaluation_metadata_is_derived_from_the_persisted_coordinate(tmp_path: Path) -> None:

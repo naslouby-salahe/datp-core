@@ -527,11 +527,66 @@ def validate_release_bundle(root: Path) -> ReleaseValidation:
     """Validate the complete released-byte inventory required for reconstruction."""
 
     _require_payload_layout(root)
+    _validate_release_state_and_withheld_records(root)
     manifest_path = root / _MANIFEST_FILENAME
     _validate_manifest_sidecar(manifest_path, root / _SIDECAR_FILENAME)
     entries = _read_manifest(manifest_path)
     _validate_manifest_files(root, entries)
     return ReleaseValidation(root=root, entries=entries)
+
+
+def _validate_release_state_and_withheld_records(root: Path) -> None:
+    roadmap_lock = (root / _ROADMAP_LOCK_FILENAME).read_text(encoding="utf-8")
+    states = tuple(state for state in ReleaseState if f"- Release state: `{state.value}`" in roadmap_lock)
+    if len(states) != 1:
+        raise ArtifactIntegrityError(ErrorMessage("release roadmap lock must contain exactly one valid release state"))
+    record = root / "DATA_PROVENANCE" / _WITHHELD_RECORD_FILENAME
+    if states[0] is ReleaseState.WITHHELD_LICENSE_RESTRICTED:
+        if not record.is_file():
+            raise ArtifactIntegrityError(
+                ErrorMessage("license-restricted release is missing withheld artifact records")
+            )
+        _validate_withheld_artifact_records(record)
+    elif record.exists():
+        raise ArtifactIntegrityError(ErrorMessage("non-restricted release must not contain withheld artifact records"))
+
+
+def _validate_withheld_artifact_records(path: Path) -> None:
+    with path.open(encoding="utf-8", newline="") as stream:
+        reader = csv.DictReader(stream)
+        expected_columns = (
+            "original_relative_path",
+            "sha256",
+            "bytes",
+            "license_reason",
+            "reconstruction_instructions",
+        )
+        if tuple(reader.fieldnames or ()) != expected_columns:
+            raise ArtifactIntegrityError(
+                ErrorMessage("withheld artifact record columns do not match the locked schema")
+            )
+        rows = tuple(reader)
+    if not rows:
+        raise ArtifactIntegrityError(ErrorMessage("withheld artifact record must list at least one artifact"))
+    paths: list[Path] = []
+    for row in rows:
+        values = tuple(row.get(column) for column in expected_columns)
+        if any(value is None or value == "" for value in values):
+            raise ArtifactIntegrityError(ErrorMessage("withheld artifact record fields must be explicit"))
+        original = Path(_required_value(row, "original_relative_path"))
+        _require_relative_artifact_path(original)
+        if fullmatch(r"[0-9a-f]{64}", _required_value(row, "sha256")) is None:
+            raise ArtifactIntegrityError(ErrorMessage("withheld artifact record requires lowercase SHA-256 digests"))
+        try:
+            if int(_required_value(row, "bytes")) < 0:
+                raise ValueError
+        except ValueError as error:
+            raise ArtifactIntegrityError(
+                ErrorMessage("withheld artifact record byte count must be non-negative")
+            ) from error
+        paths.append(original)
+    if len(paths) != len(frozenset(paths)):
+        raise ArtifactIntegrityError(ErrorMessage("withheld artifact record repeats an original path"))
 
 
 def build_release_bundle(request: ReleaseBuildRequest) -> ReleaseValidation:
