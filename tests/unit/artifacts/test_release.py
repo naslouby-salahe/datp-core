@@ -14,6 +14,7 @@ from tools.reproducibility.release import (
     build_release_bundle,
     campaign_evaluation_release_artifacts,
     campaign_publication_release_artifacts,
+    campaign_threshold_release_artifacts,
     validate_release_bundle,
 )
 
@@ -173,6 +174,47 @@ def test_release_evaluation_metadata_is_derived_from_the_persisted_coordinate(tm
 def test_campaign_release_discovery_rejects_output_roots_without_evaluation_evidence(tmp_path: Path) -> None:
     with pytest.raises(ArtifactIntegrityError, match="requires persisted evaluation documents"):
         campaign_evaluation_release_artifacts(tmp_path)
+
+
+def test_campaign_threshold_release_discovery_requires_same_coordinate_evaluation(tmp_path: Path) -> None:
+    result = tmp_path / "coordinate" / "threshold" / "threshold_result.json"
+    result.parent.mkdir(parents=True)
+    result.write_text("{}", encoding="utf-8")
+
+    with pytest.raises(ArtifactIntegrityError, match="no sibling evaluation evidence"):
+        campaign_threshold_release_artifacts(tmp_path)
+
+
+def test_campaign_threshold_release_discovery_inherits_evaluation_coordinate_metadata(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = tmp_path / "coordinate"
+    result = root / "threshold" / "threshold_result.json"
+    temporal = result.parent / "temporal_threshold_provenance.json"
+    evaluation = root / "evaluation" / "federated_evaluation.json"
+    result.parent.mkdir(parents=True)
+    evaluation.parent.mkdir()
+    result.write_text("{}", encoding="utf-8")
+    temporal.write_text("{}", encoding="utf-8")
+    evaluation.write_text("{}", encoding="utf-8")
+    coordinate_artifact = ReleaseArtifact(
+        source=evaluation,
+        relative_path=Path("METRICS/coordinate/evaluation/federated_evaluation.json"),
+        artifact_type="federated_evaluation_document",
+        dataset_id="nbaiot",
+        population_id="nbaiot_natural_devices",
+        training_method="fedavg_autoencoder",
+        training_seed="4",
+        threshold_policy="local_threshold",
+        experiment_id="shared_vs_local_confirmation",
+    )
+    monkeypatch.setattr(release, "release_artifact_from_evaluation", lambda *_: coordinate_artifact)
+
+    artifacts = campaign_threshold_release_artifacts(tmp_path)
+
+    assert tuple(item.artifact_type for item in artifacts) == ("threshold_result", "temporal_threshold_provenance")
+    assert all(item.training_seed == "4" for item in artifacts)
+    assert all(item.experiment_id == "shared_vs_local_confirmation" for item in artifacts)
 
 
 def test_campaign_publication_release_discovery_requires_the_rendered_publication(tmp_path: Path) -> None:

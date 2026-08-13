@@ -16,6 +16,7 @@ from sys import argv, version
 
 from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
 from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
+from datp_core.artifacts.repositories.thresholds import FederatedThresholdAssetName
 from datp_core.core.errors import ArtifactIntegrityError, ErrorMessage
 from datp_core.data.registry import population_declaration
 
@@ -129,6 +130,66 @@ def campaign_evaluation_release_artifacts(output_root: Path) -> tuple[ReleaseArt
             Path("METRICS") / document.relative_to(output_root),
         )
         for document in documents
+    )
+
+
+def campaign_threshold_release_artifacts(output_root: Path) -> tuple[ReleaseArtifact, ...]:
+    """Discover threshold outputs and inherit provenance from their same-coordinate evaluation document."""
+
+    results = tuple(sorted(output_root.rglob(FederatedThresholdAssetName.RESULT.value)))
+    if not results:
+        raise ArtifactIntegrityError(ErrorMessage("campaign release requires persisted threshold results"))
+    artifacts: list[ReleaseArtifact] = []
+    for result in results:
+        artifacts.extend(_threshold_release_artifacts_for_result(output_root, result))
+    return tuple(artifacts)
+
+
+def _threshold_release_artifacts_for_result(output_root: Path, result: Path) -> tuple[ReleaseArtifact, ...]:
+    evaluation = result.parent.parent / "evaluation" / FederatedEvaluationAssetName.DOCUMENT.value
+    if not evaluation.is_file():
+        raise ArtifactIntegrityError(ErrorMessage(f"threshold result has no sibling evaluation evidence: {result}"))
+    coordinate_artifact = release_artifact_from_evaluation(
+        evaluation, Path("METRICS") / evaluation.relative_to(output_root)
+    )
+    relative = result.relative_to(output_root)
+    artifacts = [
+        _artifact_with_coordinate_metadata(
+            result,
+            Path("THRESHOLDS") / relative,
+            "threshold_result",
+            coordinate_artifact,
+        )
+    ]
+    temporal_provenance = result.parent / FederatedThresholdAssetName.TEMPORAL_PROVENANCE.value
+    if temporal_provenance.is_file():
+        artifacts.append(
+            _artifact_with_coordinate_metadata(
+                temporal_provenance,
+                Path("THRESHOLDS") / temporal_provenance.relative_to(output_root),
+                "temporal_threshold_provenance",
+                coordinate_artifact,
+            )
+        )
+    return tuple(artifacts)
+
+
+def _artifact_with_coordinate_metadata(
+    source: Path,
+    relative_path: Path,
+    artifact_type: str,
+    coordinate_artifact: ReleaseArtifact,
+) -> ReleaseArtifact:
+    return ReleaseArtifact(
+        source=source,
+        relative_path=relative_path,
+        artifact_type=artifact_type,
+        dataset_id=coordinate_artifact.dataset_id,
+        population_id=coordinate_artifact.population_id,
+        training_method=coordinate_artifact.training_method,
+        training_seed=coordinate_artifact.training_seed,
+        threshold_policy=coordinate_artifact.threshold_policy,
+        experiment_id=coordinate_artifact.experiment_id,
     )
 
 
