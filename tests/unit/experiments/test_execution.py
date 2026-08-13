@@ -236,6 +236,14 @@ def test_campaign_parallelizes_threshold_evaluations_after_shared_evidence(
     tmp_path: Path,
 ) -> None:
     declaration = _declaration(ExperimentId.SHARED_CONSTRUCTION_SENSITIVITY)
+    assert declaration.federated_thresholds == (
+        FederatedThresholdMethod.SHARED_THRESHOLD,
+        FederatedThresholdMethod.POOLED_SHARED_QUANTILE,
+        FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD,
+        FederatedThresholdMethod.FEDERATED_KLL_SHARED_THRESHOLD,
+        FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS,
+        FederatedThresholdMethod.LOCAL_THRESHOLD,
+    )
     plan = expand_experiment_plan(
         declarations=(declaration,),
         seed_cohort=SeedCohort(values=(Seed(0),)),

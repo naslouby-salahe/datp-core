@@ -698,13 +698,10 @@ def _declaration_for_threshold_method(method: FederatedThresholdMethod) -> Exper
     if method in {
         FederatedThresholdMethod.POOLED_SHARED_QUANTILE,
         FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD,
-    }:
-        return _declaration_by_id(ExperimentId.SHARED_CONSTRUCTION_SENSITIVITY)
-    if method in {
         FederatedThresholdMethod.FEDERATED_KLL_SHARED_THRESHOLD,
         FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS,
     }:
-        return _declaration_by_id(ExperimentId.FEDERATED_QUANTILE_ESTIMATION)
+        return _declaration_by_id(ExperimentId.SHARED_CONSTRUCTION_SENSITIVITY)
     if method is FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE:
         return _declaration_by_id(ExperimentId.FIXED_SHRINKAGE_CURVE)
     if method is FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE:

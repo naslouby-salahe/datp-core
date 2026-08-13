@@ -76,8 +76,8 @@ def test_equity_pareto_exposes_descriptive_bca_intervals_for_full_seed_cohort() 
     (
         (FederatedThresholdMethod.POOLED_SHARED_QUANTILE, ExperimentId.SHARED_CONSTRUCTION_SENSITIVITY),
         (FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD, ExperimentId.SHARED_CONSTRUCTION_SENSITIVITY),
-        (FederatedThresholdMethod.FEDERATED_KLL_SHARED_THRESHOLD, ExperimentId.FEDERATED_QUANTILE_ESTIMATION),
-        (FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS, ExperimentId.FEDERATED_QUANTILE_ESTIMATION),
+        (FederatedThresholdMethod.FEDERATED_KLL_SHARED_THRESHOLD, ExperimentId.SHARED_CONSTRUCTION_SENSITIVITY),
+        (FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS, ExperimentId.SHARED_CONSTRUCTION_SENSITIVITY),
         (FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE, ExperimentId.SIZE_AWARE_SHRINKAGE),
     ),
 )
