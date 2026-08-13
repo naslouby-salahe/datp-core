@@ -6379,15 +6379,15 @@ README_REPRODUCIBILITY.md
 | `PREPROCESS-008` | I | 139 | 2.2.1 Preprocessing and normalization lock | out-of-range transformed values after fit: retained unclipped; | `PASS` | No clipping is applied after transform. |
 | `PREPROCESS-009` | I | 140 | 2.2.1 Preprocessing and normalization lock | fitted-state persistence: skops with trusted estimator classes only; | `PASS` | skops round-trip rejects untrusted types. |
 | `PREPROCESS-010` | I | 141 | 2.2.1 Preprocessing and normalization lock | transform serialization equivalence absolute tolerance: `1e-12` (engineering research amendment reusing the fixed-score absolute-tolerance magnitude; skops defines no scientific tolerance). | `PASS` | State equivalence uses the locked absolute tolerance. |
-| `PREPROCESS-011` | I | 147 | 2.2.1 Preprocessing and normalization lock | transformer family: feature-wise min–max (`MinMaxScaler`); | `NOT_AUDITED` | — |
-| `PREPROCESS-012` | I | 148 | 2.2.1 Preprocessing and normalization lock | fit scope: pooled benign training rows of the federated population; | `NOT_AUDITED` | — |
-| `PREPROCESS-013` | I | 149 | 2.2.1 Preprocessing and normalization lock | same train-only, skops, unclipped, and tolerance rules. | `NOT_AUDITED` | — |
-| `PREPROCESS-014` | I | 155 | 2.2.1 Preprocessing and normalization lock | independent of federated fitted states (never reuse federated client-local or pooled federated states); | `NOT_AUDITED` | — |
-| `PREPROCESS-015` | I | 156 | 2.2.1 Preprocessing and normalization lock | transformer family: min–max (`MinMaxScaler`); | `NOT_AUDITED` | — |
-| `PREPROCESS-016` | I | 157 | 2.2.1 Preprocessing and normalization lock | fit scope: pooled benign training rows of the centralized reference population; | `NOT_AUDITED` | — |
-| `PREPROCESS-017` | I | 158 | 2.2.1 Preprocessing and normalization lock | fit partition: train only; | `NOT_AUDITED` | — |
-| `PREPROCESS-018` | I | 159 | 2.2.1 Preprocessing and normalization lock | constant-feature rule: zero training range maps to zero; | `NOT_AUDITED` | — |
-| `PREPROCESS-019` | I | 160 | 2.2.1 Preprocessing and normalization lock | unclipped, skops, and tolerance rules as above. | `NOT_AUDITED` | — |
+| `PREPROCESS-011` | I | 147 | 2.2.1 Preprocessing and normalization lock | transformer family: feature-wise min–max (`MinMaxScaler`); | `PASS` | Supportive pooled MinMax protocol is typed and tested. |
+| `PREPROCESS-012` | I | 148 | 2.2.1 Preprocessing and normalization lock | fit scope: pooled benign training rows of the federated population; | `PASS` | Pooled federated training scope is explicit. |
+| `PREPROCESS-013` | I | 149 | 2.2.1 Preprocessing and normalization lock | same train-only, skops, unclipped, and tolerance rules. | `PASS` | Shared preprocessing invariants are reused by protocol. |
+| `PREPROCESS-014` | I | 155 | 2.2.1 Preprocessing and normalization lock | independent of federated fitted states (never reuse federated client-local or pooled federated states); | `PASS` | Centralized and federated artifact branches are distinct. |
+| `PREPROCESS-015` | I | 156 | 2.2.1 Preprocessing and normalization lock | transformer family: min–max (`MinMaxScaler`); | `PASS` | Centralized MinMax protocol is typed and tested. |
+| `PREPROCESS-016` | I | 157 | 2.2.1 Preprocessing and normalization lock | fit scope: pooled benign training rows of the centralized reference population; | `PASS` | Centralized pooled-training scope is explicit. |
+| `PREPROCESS-017` | I | 158 | 2.2.1 Preprocessing and normalization lock | fit partition: train only; | `PASS` | Protocol fit partition is TRAIN. |
+| `PREPROCESS-018` | I | 159 | 2.2.1 Preprocessing and normalization lock | constant-feature rule: zero training range maps to zero; | `PASS` | MinMaxScaler preserves the locked constant-range behavior. |
+| `PREPROCESS-019` | I | 160 | 2.2.1 Preprocessing and normalization lock | unclipped, skops, and tolerance rules as above. | `PASS` | Shared persistence and transform invariants apply. |
 | `PREPROCESS-020` | I | 164 | 2.2.1 Preprocessing and normalization lock | no imputation, zero-fill, clipping, capping, infinity replacement, or label inference in the fitted pipeline; | `NOT_AUDITED` | — |
 | `PREPROCESS-021` | I | 165 | 2.2.1 Preprocessing and normalization lock | N-BaIoT non-finite declared features fail validation rather than being filled; | `NOT_AUDITED` | — |
 | `PREPROCESS-022` | I | 166 | 2.2.1 Preprocessing and normalization lock | CICIoT2023 model-input eligibility remains the outcome-blind finite-feature and recognized-label gate (canonical rows stay lossless; ineligible rows never enter client construction, split, fit, calibration, or evaluation); | `NOT_AUDITED` | — |
