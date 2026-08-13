@@ -67,6 +67,7 @@ def evaluate_federated_detector(request: EvaluateFederatedDetectorRequest) -> Ev
     prepared = prepare_federated_evaluation(
         FederatedEvaluationRequest(
             execution_key=request.execution_coordinate.execution_key,
+            execution_coordinate=request.execution_coordinate,
             score_manifest=request.score_manifest,
             threshold_result=request.threshold_result,
             cohort=request.cohort,

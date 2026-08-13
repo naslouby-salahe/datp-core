@@ -45,7 +45,7 @@ from datp_core.core.numeric import (
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.scoring.contracts import ScoreArtifactManifest
 from datp_core.detector.training.models import FederatedTrainingCoordinate
-from datp_core.experiments.common.coordinates import ExternalTemporalExecutionIdentity
+from datp_core.experiments.common.coordinates import ExperimentCoordinate, ExternalTemporalExecutionIdentity
 from datp_core.thresholds.contracts import ThresholdInfeasibilityReason
 from datp_core.thresholds.dispatch import ThresholdConstructionResult
 from datp_core.thresholds.quantiles import ClientBenignCalibrationScores
@@ -203,6 +203,7 @@ class FederatedEvaluationRequest:
     temporal_provenance: TemporalDeploymentProvenance | None
     temporal_threshold_provenance: TemporalDeploymentProvenance | None
     execution_identity: ExternalTemporalExecutionIdentity | None
+    execution_coordinate: ExperimentCoordinate | None = None
     calibration_size_ablation: tuple[CalibrationSizeAblationCell, ...] = ()
     onboarding_calibration: tuple[OnboardingCalibrationCell, ...] = ()
     contributor_omission: tuple[SharedContributorOmissionCell, ...] = ()
@@ -213,6 +214,7 @@ class FederatedEvaluationDocument(StrictModel):
     model_config = ConfigDict(revalidate_instances="never")
     stage: StageOperationId
     execution_key: CoordinateStableKey
+    execution_coordinate: ExperimentCoordinate | None
     score_coordinate: FederatedTrainingCoordinate
     threshold_method: FederatedThresholdMethod
     evidence_role: EvidenceRole
