@@ -1,4 +1,5 @@
 from enum import StrEnum
+from itertools import permutations
 from typing import ClassVar
 
 from pydantic import model_validator
@@ -13,6 +14,7 @@ from datp_core.core.numeric import (
     MatrixRowIndex,
     MetricValue,
     PairedObservationCount,
+    Ratio,
     RowCount,
     Seed,
     ThresholdValue,
@@ -178,6 +180,49 @@ class ClusterStabilityResult(StrictModel):
             raise ValueError("cluster contingency column totals must match the right partition")
         if sum(row_totals) != len(self.compared_clients):
             raise ValueError("cluster contingency must account for every client")
+        return self
+
+
+class ClusterAssignmentSwitchFrequency(StrictModel):
+    client: ClientIdentity
+    switched_seed_count: PairedObservationCount
+    comparison_seed_count: PairedObservationCount
+    frequency: Ratio
+
+    @model_validator(mode="after")
+    def validate_frequency(self) -> "ClusterAssignmentSwitchFrequency":
+        if self.comparison_seed_count.value <= 0:
+            raise ValueError("cluster switch frequency requires at least one comparison seed")
+        if self.switched_seed_count.value > self.comparison_seed_count.value:
+            raise ValueError("cluster switch count cannot exceed comparison seed count")
+        expected = self.switched_seed_count.value / self.comparison_seed_count.value
+        if abs(self.frequency.value - expected) > 1e-12:
+            raise ValueError("cluster switch frequency must equal switched seeds divided by comparison seeds")
+        return self
+
+
+class ClusterAssignmentSwitchSummary(StrictModel):
+    reference_seed: Seed
+    compared_seeds: tuple[Seed, ...]
+    client_frequencies: tuple[ClusterAssignmentSwitchFrequency, ...]
+
+    evidence_role: ClassVar[EvidenceRole] = EvidenceRole.MECHANISM
+
+    @model_validator(mode="after")
+    def validate_summary(self) -> "ClusterAssignmentSwitchSummary":
+        if not self.compared_seeds:
+            raise ValueError("cluster switch reporting requires at least two seeds")
+        if self.reference_seed in self.compared_seeds:
+            raise ValueError("cluster switch comparisons cannot include the reference seed")
+        if tuple(sorted(self.compared_seeds, key=lambda seed: seed.value)) != self.compared_seeds:
+            raise ValueError("cluster switch comparison seeds must be ordered")
+        if not self.client_frequencies:
+            raise ValueError("cluster switch reporting requires at least one client")
+        if len({item.client for item in self.client_frequencies}) != len(self.client_frequencies):
+            raise ValueError("cluster switch reporting requires unique clients")
+        comparisons = PairedObservationCount(len(self.compared_seeds))
+        if any(item.comparison_seed_count != comparisons for item in self.client_frequencies):
+            raise ValueError("cluster switch frequencies must use every comparison seed")
         return self
 
 
@@ -353,6 +398,63 @@ def cluster_stability(
             right_labels,
             GroupCount(len(left_partition.group_sizes)),
             GroupCount(len(right_partition.group_sizes)),
+        ),
+    )
+
+
+def cluster_assignment_switch_frequencies(
+    records: tuple[ClusterEvidenceRecord, ...],
+) -> ClusterAssignmentSwitchSummary:
+    ordered = tuple(sorted(records, key=lambda record: record.seed.value))
+    if len(ordered) < 2:
+        raise ValueError("cluster switch reporting requires at least two seed records")
+    if len({record.seed for record in ordered}) != len(ordered):
+        raise ValueError("cluster switch reporting requires unique seeds")
+    reference = ordered[0]
+    reference_assignments = _assignment_by_client(reference.memberships)
+    reference_clients = tuple(sorted(reference_assignments, key=lambda client: client.client_id.value))
+    group_count = len(reference.partition.group_sizes)
+    switches = {client: 0 for client in reference_clients}
+    for record in ordered[1:]:
+        target_assignments = _assignment_by_client(record.memberships)
+        if tuple(sorted(target_assignments, key=lambda client: client.client_id.value)) != reference_clients:
+            raise ValueError("cluster switch reporting requires identical client memberships across seeds")
+        if len(record.partition.group_sizes) != group_count:
+            raise ValueError("cluster switch reporting requires identical declared cluster counts across seeds")
+        label_mapping = _align_cluster_labels(reference_assignments, target_assignments, group_count)
+        for client in reference_clients:
+            if label_mapping[target_assignments[client].value] != reference_assignments[client].value:
+                switches[client] += 1
+    comparisons = PairedObservationCount(len(ordered) - 1)
+    return ClusterAssignmentSwitchSummary(
+        reference_seed=reference.seed,
+        compared_seeds=tuple(record.seed for record in ordered[1:]),
+        client_frequencies=tuple(
+            ClusterAssignmentSwitchFrequency(
+                client=client,
+                switched_seed_count=PairedObservationCount(switches[client]),
+                comparison_seed_count=comparisons,
+                frequency=Ratio(switches[client] / comparisons.value),
+            )
+            for client in reference_clients
+        ),
+    )
+
+
+def _assignment_by_client(memberships: tuple[ClusterMembership, ...]) -> dict[ClientIdentity, ClusterIndex]:
+    return {item.client: item.value for item in _cluster_assignments(memberships)}
+
+
+def _align_cluster_labels(
+    reference: dict[ClientIdentity, ClusterIndex],
+    target: dict[ClientIdentity, ClusterIndex],
+    group_count: int,
+) -> tuple[int, ...]:
+    return max(
+        permutations(range(group_count)),
+        key=lambda mapping: (
+            sum(mapping[target[client].value] == reference[client].value for client in reference),
+            tuple(-value for value in mapping),
         ),
     )
 

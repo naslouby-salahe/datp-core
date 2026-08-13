@@ -623,6 +623,8 @@ def _client_evaluation_scores(
 
 def _confirmatory_cluster_mechanisms() -> tuple[MechanismEvidence, ...]:
     from datp_core.analysis.mechanisms import (
+        ClusterEvidenceRecord,
+        cluster_assignment_switch_frequencies,
         cluster_evidence_from_grouped_result,
         cluster_stability,
         local_threshold_dispersion,
@@ -652,6 +654,7 @@ def _confirmatory_cluster_mechanisms() -> tuple[MechanismEvidence, ...]:
         )
 
     mechanisms: list[MechanismEvidence] = []
+    cluster_records: list[ClusterEvidenceRecord] = []
     for seed, result in available:
         shared_cv = population_metric(
             load_evaluation_document(_evaluation_path(seed, FederatedThresholdMethod.SHARED_THRESHOLD)),
@@ -663,15 +666,15 @@ def _confirmatory_cluster_mechanisms() -> tuple[MechanismEvidence, ...]:
         cluster_cv = population_metric(cluster_document, MetricId.FPR_COEFFICIENT_OF_VARIATION)
         local_thresholds = tuple(item.threshold for item in local_document.clients)
         local_dispersion = local_threshold_dispersion(local_thresholds) if local_thresholds else None
-        mechanisms.append(
-            cluster_evidence_from_grouped_result(
-                result,
-                local_dispersion=local_dispersion,
-                shared_cv_fpr=shared_cv,
-                local_cv_fpr=local_cv,
-                cluster_cv_fpr=cluster_cv,
-            )
+        cluster_record = cluster_evidence_from_grouped_result(
+            result,
+            local_dispersion=local_dispersion,
+            shared_cv_fpr=shared_cv,
+            local_cv_fpr=local_cv,
+            cluster_cv_fpr=cluster_cv,
         )
+        mechanisms.append(cluster_record)
+        cluster_records.append(cluster_record)
         mechanisms.append(_grouped_dispersion_evidence(result, cluster_document))
     for left, right in zip(available, available[1:], strict=False):
         mechanisms.append(
@@ -682,6 +685,7 @@ def _confirmatory_cluster_mechanisms() -> tuple[MechanismEvidence, ...]:
                 right_declared_group_count=right[1].group_count,
             )
         )
+    mechanisms.append(cluster_assignment_switch_frequencies(tuple(cluster_records)))
     return tuple(mechanisms)
 
 

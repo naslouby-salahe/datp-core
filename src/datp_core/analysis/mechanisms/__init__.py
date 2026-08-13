@@ -27,12 +27,15 @@ from datp_core.analysis.mechanisms.client_impact import (
     summarize_client_impact_campaign,
 )
 from datp_core.analysis.mechanisms.clustering import (
+    ClusterAssignmentSwitchFrequency,
+    ClusterAssignmentSwitchSummary,
     ClusterContingencyMatrix,
     ClusterContingencyRow,
     ClusterEvidenceAvailability,
     ClusterEvidenceRecord,
     ClusterStabilityResult,
     RecoveryAssessment,
+    cluster_assignment_switch_frequencies,
     cluster_evidence_from_grouped_result,
     cluster_stability,
     empty_cluster_evidence_record,
@@ -149,6 +152,7 @@ type MechanismEvidence = (
     AbsorptionCohortResult
     | AssociationResult
     | ClusterEvidenceRecord
+    | ClusterAssignmentSwitchSummary
     | ClusterStabilityResult
     | ClientImpactCampaignSummary
     | ClientImpactSeedSummary
@@ -192,6 +196,8 @@ __all__ = (
     "ClientImpactSeedSummary",
     "ClusterEvidenceAvailability",
     "ClusterEvidenceRecord",
+    "ClusterAssignmentSwitchFrequency",
+    "ClusterAssignmentSwitchSummary",
     "ClusterContingencyMatrix",
     "ClusterContingencyRow",
     "ClusterStabilityResult",
@@ -258,6 +264,7 @@ __all__ = (
     "campaign_fixed_support_strata",
     "alignment_reductions",
     "cluster_evidence_from_grouped_result",
+    "cluster_assignment_switch_frequencies",
     "cluster_stability",
     "confirmatory_equity_utility_bundle",
     "equity_utility_pareto",

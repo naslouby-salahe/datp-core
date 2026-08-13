@@ -1,9 +1,14 @@
 from tests.unit.thresholding.helpers import COORDINATE, identity
 
-from datp_core.analysis.mechanisms.clustering import cluster_stability
+from datp_core.analysis.mechanisms.clustering import (
+    ClusterEvidenceRecord,
+    ClusterPartitionSummary,
+    cluster_assignment_switch_frequencies,
+    cluster_stability,
+)
 from datp_core.core.identifiers import AvailabilityStatus
-from datp_core.core.numeric import ClusterIndex, GroupCount, Quantile, RowCount, ThresholdValue
-from datp_core.presentation.export import _render_cluster_stability_result
+from datp_core.core.numeric import ClusterIndex, GroupCount, Quantile, RowCount, Seed, ThresholdValue
+from datp_core.presentation.export import _render_cluster_assignment_switch_summary, _render_cluster_stability_result
 from datp_core.thresholds.contracts import LocalQuantile, ThresholdDiagnostic
 from datp_core.thresholds.policies.cluster import ClusterMembership
 
@@ -54,4 +59,35 @@ def test_cluster_stability_retains_and_renders_complete_partition_evidence() -> 
         "Right singleton groups: 0, 1",
         "Left memberships: 0:client_a; 1:client_b",
         "Right memberships: 0:client_b; 1:client_a",
+    )
+
+
+def test_cluster_switch_frequency_aligns_labels_to_the_smallest_seed() -> None:
+    reference = (_membership(0, "client_a", 0.1), _membership(1, "client_b", 0.2))
+    relabeled_same_partition = (_membership(0, "client_b", 0.2), _membership(1, "client_a", 0.1))
+    changed_partition = (_membership(0, "client_a", 0.1), _membership(0, "client_b", 0.2))
+
+    records = tuple(
+        ClusterEvidenceRecord.model_construct(
+            seed=Seed(seed),
+            memberships=memberships,
+            partition=ClusterPartitionSummary.from_memberships(
+                memberships,
+                declared_group_count=GroupCount(3),
+            ),
+        )
+        for seed, memberships in ((7, relabeled_same_partition), (2, reference), (9, changed_partition))
+    )
+
+    summary = cluster_assignment_switch_frequencies(records)
+
+    assert summary.reference_seed == Seed(2)
+    assert summary.compared_seeds == (Seed(7), Seed(9))
+    assert tuple(item.switched_seed_count.value for item in summary.client_frequencies) == (0, 1)
+    assert tuple(item.frequency.value for item in summary.client_frequencies) == (0.0, 0.5)
+    assert tuple(str(line) for line in _render_cluster_assignment_switch_summary(summary)) == (
+        "Reference seed: 2",
+        "Compared seeds: 7, 9",
+        "Client client_a: switches=0/2; frequency=0.000",
+        "Client client_b: switches=1/2; frequency=0.500",
     )

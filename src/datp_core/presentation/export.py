@@ -26,7 +26,11 @@ from datp_core.analysis.mechanisms.client_impact import (
     ClientImpactMagnitudeSummary,
     ClientImpactSeedSummary,
 )
-from datp_core.analysis.mechanisms.clustering import ClusterEvidenceRecord, ClusterStabilityResult
+from datp_core.analysis.mechanisms.clustering import (
+    ClusterAssignmentSwitchSummary,
+    ClusterEvidenceRecord,
+    ClusterStabilityResult,
+)
 from datp_core.analysis.mechanisms.dispersion import GroupedDispersionResult
 from datp_core.analysis.mechanisms.divergence import DivergenceResult
 from datp_core.analysis.mechanisms.equity_pareto import (
@@ -1049,6 +1053,7 @@ _MECHANISM_TITLES: dict[type[object], ReportLine] = {
     AssociationResult: ReportLine("heterogeneity_benefit_association"),
     DivergenceResult: ReportLine("jensen_shannon_score_divergence"),
     ClusterStabilityResult: ReportLine("cluster_stability"),
+    ClusterAssignmentSwitchSummary: ReportLine("cluster_assignment_switch_frequency"),
     ClusterEvidenceRecord: ReportLine("cluster_evidence"),
     GroupedDispersionResult: ReportLine("grouped_dispersion"),
     ThresholdMovement: ReportLine("threshold_movement"),
@@ -1422,6 +1427,22 @@ def _render_cluster_stability_result(mechanism: ClusterStabilityResult) -> list[
             f"Right singleton groups: {_render_cluster_indexes(mechanism.right_partition.singleton_groups)}",
             f"Left memberships: {left_memberships}",
             f"Right memberships: {right_memberships}",
+        ]
+    ]
+
+
+@_render_one_mechanism.register
+def _render_cluster_assignment_switch_summary(mechanism: ClusterAssignmentSwitchSummary) -> list[ReportLine]:
+    return [
+        ReportLine(line)
+        for line in [
+            f"Reference seed: {mechanism.reference_seed.value}",
+            f"Compared seeds: {', '.join(str(seed.value) for seed in mechanism.compared_seeds)}",
+            *(
+                f"Client {item.client.client_id.value}: switches={item.switched_seed_count.value}/"
+                f"{item.comparison_seed_count.value}; frequency={_format_publication_metric(item.frequency.value)}"
+                for item in mechanism.client_frequencies
+            ),
         ]
     ]
 
