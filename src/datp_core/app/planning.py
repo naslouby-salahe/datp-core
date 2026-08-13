@@ -57,6 +57,27 @@ class PlanDisposition(StrEnum):
     BLOCKED = "blocked"
 
 
+class CoordinateApplicabilityStatus(StrEnum):
+    REQUIRED = "required"
+    NOT_APPLICABLE = "not_applicable"
+    UNAVAILABLE_AS_SPECIFIED = "unavailable_as_specified"
+
+
+class CoordinateApplicabilityReason(StrEnum):
+    DECLARED_PROTOCOL = "declared_protocol"
+    UNRESOLVED_PREREQUISITE = "unresolved_prerequisite"
+    POPULATION_CAPABILITY = "population_capability"
+    EXPLICIT_SUPPRESSION = "explicit_suppression"
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class CoordinateApplicability:
+    requirement: ExperimentId
+    status: CoordinateApplicabilityStatus
+    reason: CoordinateApplicabilityReason
+    detail: PlanReason
+
+
 def seed_cohort_for(experiment_id: ExperimentId) -> SeedCohort:
 
     declaration = require_experiment_declaration(experiment_id)
@@ -83,6 +104,40 @@ class PlannedExperiment:
     coordinate: ExperimentCoordinate
     disposition: PlanDisposition
     reason: PlanReason
+
+    @property
+    def applicability(self) -> CoordinateApplicability:
+        """Expose the roadmap applicability record without conflating it with execution readiness."""
+
+        match self.disposition:
+            case PlanDisposition.EXECUTABLE:
+                return CoordinateApplicability(
+                    requirement=self.coordinate.experiment,
+                    status=CoordinateApplicabilityStatus.REQUIRED,
+                    reason=CoordinateApplicabilityReason.DECLARED_PROTOCOL,
+                    detail=self.reason,
+                )
+            case PlanDisposition.BLOCKED:
+                return CoordinateApplicability(
+                    requirement=self.coordinate.experiment,
+                    status=CoordinateApplicabilityStatus.REQUIRED,
+                    reason=CoordinateApplicabilityReason.UNRESOLVED_PREREQUISITE,
+                    detail=self.reason,
+                )
+            case PlanDisposition.INFEASIBLE:
+                return CoordinateApplicability(
+                    requirement=self.coordinate.experiment,
+                    status=CoordinateApplicabilityStatus.NOT_APPLICABLE,
+                    reason=CoordinateApplicabilityReason.POPULATION_CAPABILITY,
+                    detail=self.reason,
+                )
+            case PlanDisposition.SUPPRESSED:
+                return CoordinateApplicability(
+                    requirement=self.coordinate.experiment,
+                    status=CoordinateApplicabilityStatus.UNAVAILABLE_AS_SPECIFIED,
+                    reason=CoordinateApplicabilityReason.EXPLICIT_SUPPRESSION,
+                    detail=self.reason,
+                )
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

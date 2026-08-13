@@ -1,4 +1,11 @@
-from datp_core.app.planning import PlanDisposition, PlanningEvidence, PlanReason, expand_experiment_plan
+from datp_core.app.planning import (
+    CoordinateApplicabilityReason,
+    CoordinateApplicabilityStatus,
+    PlanDisposition,
+    PlanningEvidence,
+    PlanReason,
+    expand_experiment_plan,
+)
 from datp_core.core.identifiers import (
     DatasetId,
     EvidenceRole,
@@ -51,6 +58,10 @@ def test_plan_expansion_is_deterministic_and_records_complete_coordinates() -> N
     assert first == second
     assert len(first.entries) == 4
     assert all(entry.disposition is PlanDisposition.EXECUTABLE for entry in first.entries)
+    assert all(entry.applicability.status is CoordinateApplicabilityStatus.REQUIRED for entry in first.entries)
+    assert all(
+        entry.applicability.reason is CoordinateApplicabilityReason.DECLARED_PROTOCOL for entry in first.entries
+    )
     assert all(entry.coordinate.evidence_role is EvidenceRole.CONFIRMATORY for entry in first.entries)
     assert all(entry.coordinate.dataset is DatasetId.NBAIOT for entry in first.entries)
     assert all(entry.coordinate.split_protocol is SplitProtocolId.HISTORICAL_TEMPORAL_GAP for entry in first.entries)
@@ -113,6 +124,9 @@ def test_planning_cannot_override_population_threshold_capabilities() -> None:
 
     assert len(plan.entries) == 1
     assert plan.entries[0].disposition is PlanDisposition.INFEASIBLE
+    assert plan.entries[0].applicability.status is CoordinateApplicabilityStatus.NOT_APPLICABLE
+    assert plan.entries[0].applicability.reason is CoordinateApplicabilityReason.POPULATION_CAPABILITY
+    assert plan.entries[0].applicability.requirement is ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY
     assert "threshold_method_unsupported" in plan.entries[0].reason
 
 

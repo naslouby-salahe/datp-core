@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datp_core.app.contracts import OverwriteMode
 from datp_core.app.models import DetailText
 from datp_core.app.planning import (
+    CoordinateApplicabilityStatus,
     ExperimentPlan,
     PlanDisposition,
     PlanningEvidence,
@@ -154,4 +155,8 @@ def format_plan(
         count = sum(1 for entry in presentation.plan.entries if entry.disposition is disposition)
         if count:
             lines.append(f"disposition[{disposition.value}]={count}")
+    for status in CoordinateApplicabilityStatus:
+        count = sum(1 for entry in presentation.plan.entries if entry.applicability.status is status)
+        if count:
+            lines.append(f"applicability[{status.value}]={count}")
     return DetailText("\n".join(lines))
