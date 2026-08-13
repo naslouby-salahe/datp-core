@@ -1949,7 +1949,7 @@ benign\_traffic\_rate_{k,\mathrm{day}}
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `calculate_alert_burden` | `PASS` | Multiplies FPR by validated per-client benign traffic rate and suppresses the metric without applicable evidence. | `test_operational.py` |
 
 ### FORMULA-128 — III / source lines 4810–4817
 
