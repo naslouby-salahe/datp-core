@@ -100,6 +100,8 @@ def test_operational_equity_cannot_be_called_demographic_fairness() -> None:
         ("State-of-the-art operating-point equity", "absolute novelty"),
         ("Byzantine-robust calibration", "protocol-compliant"),
         ("Secure aggregation makes this calibrated threshold trustworthy", "protocol-compliant"),
+        ("Intermittent cross-device clients receive the same personalization benefit", "persistent identifiable"),
+        ("An unseen client receives a personalized threshold", "persistent identifiable"),
     ],
 )
 def test_claims_cannot_overstate_novelty_or_adversarial_calibration_scope(wording: str, reason: str) -> None:

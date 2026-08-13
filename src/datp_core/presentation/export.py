@@ -161,6 +161,15 @@ class PublicationBundle:
 
 
 _PUBLISHABLE_CLAIM_STATUSES = frozenset({ClaimStatus.PERMITTED, ClaimStatus.NARROWED})
+_CALIBRATION_SCOPE_BOUNDARY = (
+    "## Calibration terminology",
+    "",
+    "Probability calibration concerns predicted probabilities and may use ECE, Brier score, or NLL. "
+    "DATP-Core performs anomaly operating-point calibration: benign score quantiles set decision thresholds, "
+    "not probabilities; ECE, Brier score, and NLL therefore are not required endpoint metrics. "
+    "Conformal calibration is a separate finite-sample coverage construction and is reported only for its "
+    "declared supportive diagnostic.",
+)
 
 
 def export_markdown(
@@ -201,7 +210,7 @@ def export_markdown(
         if evidence_publishable and bundle.figures
         else ()
     )
-    sections = header + permitted + blocked_section + table_section + figure_section
+    sections = header + _CALIBRATION_SCOPE_BOUNDARY + permitted + blocked_section + table_section + figure_section
     payload = "\n".join(sections).rstrip() + "\n"
     publication = write_text_atomically(destination, FileContentText(payload))
     source_data = _export_publication_source_data(bundle, destination.parent)

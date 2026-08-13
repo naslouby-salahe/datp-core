@@ -51,6 +51,9 @@ def test_publication_export_writes_traceable_source_manifest(tmp_path: Path) -> 
         {"filename": PUBLICATION_SOURCE_DATA_FILENAME, "kind": "table_figure_source_data", "row_count": 1},
         {"filename": "temporal_source.csv", "kind": "additional_figure_table_source", "row_count": 1},
     ]
+    rendered = publication.read_text(encoding="utf-8")
+    assert "## Calibration terminology" in rendered
+    assert "ECE, Brier score, and NLL" in rendered
     with (tmp_path / PUBLICATION_SOURCE_DATA_FILENAME).open(encoding="utf-8", newline="") as stream:
         rows = tuple(DictReader(stream))
     assert rows == (

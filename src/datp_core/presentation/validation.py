@@ -69,6 +69,8 @@ class ClaimGuardPhrase(StrEnum):
     SECURE_AGGREGATION = "secure aggregation"
     AUTHENTICATED_MESSAGES = "authenticated-message"
     ADVERSARIAL_CALIBRATION = "adversarial calibration"
+    INTERMITTENT_CROSS_DEVICE = "intermittent cross-device"
+    UNSEEN_CLIENT = "unseen client"
     CONTINUOUS_ADAPTATION = "continuous adaptation"
     ONLINE_ADAPTATION = "online adaptation"
     CONCEPT_DRIFT_SOLUTION = "concept drift solution"
@@ -115,6 +117,12 @@ _ADVERSARIAL_CALIBRATION_GUARD_PHRASES = frozenset(
         ClaimGuardPhrase.SECURE_AGGREGATION,
         ClaimGuardPhrase.AUTHENTICATED_MESSAGES,
         ClaimGuardPhrase.ADVERSARIAL_CALIBRATION,
+    }
+)
+_PERSISTENCE_GUARD_PHRASES = frozenset(
+    {
+        ClaimGuardPhrase.INTERMITTENT_CROSS_DEVICE,
+        ClaimGuardPhrase.UNSEEN_CLIENT,
     }
 )
 
@@ -181,6 +189,7 @@ def _claim_failures(
     yield _equity_guard_suppression(normalized_wording)
     yield _novelty_guard_suppression(normalized_wording)
     yield _adversarial_calibration_guard_suppression(normalized_wording)
+    yield _persistence_guard_suppression(normalized_wording)
     yield _applicability_boundary_failure(request, normalized_wording)
 
 
@@ -289,6 +298,14 @@ def _novelty_guard_suppression(normalized_wording: NormalizedClaimWording) -> Cl
 def _adversarial_calibration_guard_suppression(normalized_wording: NormalizedClaimWording) -> ClaimDecision | None:
     if any(phrase.value in normalized_wording for phrase in _ADVERSARIAL_CALIBRATION_GUARD_PHRASES):
         return _suppressed(ClaimReason("DATP-Core assumes protocol-compliant calibration, not adversarial robustness"))
+    return None
+
+
+def _persistence_guard_suppression(normalized_wording: NormalizedClaimWording) -> ClaimDecision | None:
+    if any(phrase.value in normalized_wording for phrase in _PERSISTENCE_GUARD_PHRASES):
+        return _suppressed(
+            ClaimReason("DATP-Core applies only to persistent identifiable clients, not intermittent or unseen clients")
+        )
     return None
 
 
