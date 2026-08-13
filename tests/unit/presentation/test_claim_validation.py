@@ -223,3 +223,33 @@ def test_applicability_boundary_claim_permitted_for_non_pseudo_client_population
         )
     )
     assert decision.status is ClaimStatus.PERMITTED
+
+
+def test_fleet_scale_claim_is_blocked_for_file_defined_clients() -> None:
+    decision = validate_claim(
+        claim_request(
+            kind=ClaimKind.EXTERNAL,
+            evidence_role=EvidenceRole.APPLICABILITY_BOUNDARY,
+            metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
+            wording="CIC evidence establishes fleet-scale operating-point behavior",
+            population=PopulationId.CICIOT_FILE_CLIENTS,
+        )
+    )
+
+    assert decision.status is ClaimStatus.BLOCKED
+    assert "fleet-scale" in decision.reason
+
+
+def test_fleet_scale_claim_is_blocked_for_synthetic_clients() -> None:
+    decision = validate_claim(
+        claim_request(
+            kind=ClaimKind.SUPPORTIVE,
+            evidence_role=EvidenceRole.SUPPORTIVE,
+            metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
+            wording="Synthetic partitions establish fleet-scale behavior",
+            population=PopulationId.NBAIOT_DIRICHLET_CLIENTS,
+        )
+    )
+
+    assert decision.status is ClaimStatus.BLOCKED
+    assert "fleet-scale" in decision.reason

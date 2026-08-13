@@ -58,6 +58,7 @@ class ClaimGuardPhrase(StrEnum):
     DEPLOYMENT_MEASUREMENT = "deployment measurement"
     MEASURED_DEPLOYMENT = "measured deployment"
     PHYSICAL_DEVICE = "physical device"
+    FLEET_SCALE = "fleet-scale"
     CONTINUOUS_ADAPTATION = "continuous adaptation"
     ONLINE_ADAPTATION = "online adaptation"
     CONCEPT_DRIFT_SOLUTION = "concept drift solution"
@@ -241,6 +242,12 @@ def _deployment_guard_suppression(normalized_wording: NormalizedClaimWording) ->
 def _applicability_boundary_failure(
     request: ClaimRequest, normalized_wording: NormalizedClaimWording
 ) -> ClaimDecision | None:
+    if (
+        request.population is not None
+        and _is_nonphysical_population(request.population)
+        and ClaimGuardPhrase.FLEET_SCALE.value in normalized_wording
+    ):
+        return _blocked(ClaimReason("synthetic or file-defined clients cannot support fleet-scale claims"))
     if request.evidence_role is EvidenceRole.APPLICABILITY_BOUNDARY and (
         _cites_file_defined_pseudo_clients(request.population)
         or ClaimGuardPhrase.PHYSICAL_DEVICE.value in normalized_wording
@@ -347,3 +354,10 @@ def _cites_file_defined_pseudo_clients(population: PopulationId | None) -> bool:
     if population is None:
         return False
     return _POPULATION_IDENTITY_KINDS[population] is PopulationIdentityKind.FILE_DEFINED_PSEUDO_CLIENTS
+
+
+def _is_nonphysical_population(population: PopulationId) -> bool:
+    return _POPULATION_IDENTITY_KINDS[population] in {
+        PopulationIdentityKind.FILE_DEFINED_PSEUDO_CLIENTS,
+        PopulationIdentityKind.SYNTHETIC_DIRICHLET_CLIENTS,
+    }
