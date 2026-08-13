@@ -6155,9 +6155,9 @@ The implementation must distinguish at least these roadmap-defined scientific st
 | `GATE-L-005` | 6159 | Absolute dispersion metrics accompany CV where low mean FPR could make CV unstable or misleading. | `NOT_AUDITED` | — | — |
 | `GATE-L-006` | 6160 | Attack-sensitive metrics are marked unavailable when valid per-client attack assignment is absent. | `IMPLEMENTED` | `PASS` | Attack-rate and attack-derived metric paths return typed unavailability for invalid assignment. |
 | `GATE-L-007` | 6161 | Undefined denominators remain undefined; they are never converted to zero. | `IMPLEMENTED` | `PASS` | Zero-mean and undefined-class cases retain typed undefined status and reason. |
-| `GATE-L-008` | 6162 | AUROC/AP are detector-quality controls and do not become threshold-scope verdicts. | `NOT_AUDITED` | — | — |
-| `GATE-L-009` | 6163 | Held-out target-attainment error is computed from held-out benign rows and is never replaced by calibration-set exceedance. | `NOT_AUDITED` | — | — |
-| `GATE-L-010` | 6164 | Calibration-to-held-out benign generalization gap uses the exact calibration scores that constructed each scalar threshold, the strict `score > threshold` exceedance rule, and the unchanged held-out benign evaluation rows. | `NOT_AUDITED` | — | — |
+| `GATE-L-008` | 6162 | AUROC/AP are detector-quality controls and do not become threshold-scope verdicts. | `IMPLEMENTED` | `PASS` | Fixed-score comparisons reject a policy-specific AUROC or AP difference. |
+| `GATE-L-009` | 6163 | Held-out target-attainment error is computed from held-out benign rows and is never replaced by calibration-set exceedance. | `IMPLEMENTED` | `PASS` | Operating-point diagnostics use the held-out client FPR for target error. |
+| `GATE-L-010` | 6164 | Calibration-to-held-out benign generalization gap uses the exact calibration scores that constructed each scalar threshold, the strict `score > threshold` exceedance rule, and the unchanged held-out benign evaluation rows. | `IMPLEMENTED` | `PASS` | The diagnostic pairs retained calibration scores with held-out FPR under strict exceedance semantics. |
 | `GATE-L-011` | 6165 | Calibration-generalization-gap diagnostics never feed threshold fitting, policy selection, model selection, or claim-tier promotion. | `NOT_AUDITED` | — | — |
 | `GATE-L-012` | 6166 | P10 Macro-F1 and worst-client balanced accuracy remain visible when available, including unfavorable trade-offs. | `NOT_AUDITED` | — | — |
 
