@@ -6545,19 +6545,19 @@ README_REPRODUCIBILITY.md
 | `CALIBRATION-056` | I | 1253 | 9.5 Temporal external population | drift-triggered recalibration; | `PASS` | Temporal claim validation blocks drift-triggered-recalibration language. |
 | `DATASET-020` | I | 1254 | 9.5 Temporal external population | concept-drift resolution; | `PASS` | Temporal claim validation blocks general concept-drift-solution language. |
 | `DATASET-021` | I | 1255 | 9.5 Temporal external population | production stability over repeated cycles. | `PASS` | Temporal claim validation blocks production-stability and repeated-cycle language. |
-| `TRAIN-019` | I | 1318 | 10.A.3 Training-side robustness | heterogeneity-aware federated optimization through FedProx; | `NOT_AUDITED` | — |
-| `TRAIN-020` | I | 1319 | 10.A.3 Training-side robustness | simple post-FedAvg client-local fine-tuning through `FEDAVG_LOCAL_FINE_TUNING`; | `NOT_AUDITED` | — |
-| `TRAIN-021` | I | 1320 | 10.A.3 Training-side robustness | persistent proximal client model personalization through Ditto. | `NOT_AUDITED` | — |
-| `THRESHOLD-029` | I | 1328 | 10.A.4 Threshold-estimation depth | quantile-level sensitivity; | `NOT_AUDITED` | — |
-| `SCORE-007` | I | 1329 | 10.A.4 Threshold-estimation depth | one fixed-score historical `mean + sample-standard-deviation` estimator-by-scope sensitivity; | `NOT_AUDITED` | — |
-| `THRESHOLD-030` | I | 1330 | 10.A.4 Threshold-estimation depth | local–global shrinkage; | `NOT_AUDITED` | — |
-| `CALIBRATION-057` | I | 1331 | 10.A.4 Threshold-estimation depth | calibration-size-aware shrinkage; | `NOT_AUDITED` | — |
-| `CALIBRATION-058` | I | 1332 | 10.A.4 Threshold-estimation depth | a bounded split-conformal local-threshold diagnostic. | `NOT_AUDITED` | — |
-| `GLOBAL-028` | I | 1342 | 10.A.6 Mechanism analysis | family and cluster granularity; | `NOT_AUDITED` | — |
-| `GLOBAL-029` | I | 1343 | 10.A.6 Mechanism analysis | cluster stability; | `NOT_AUDITED` | — |
-| `GLOBAL-030` | I | 1345 | 10.A.6 Mechanism analysis | per-client benign and attack score geometry; | `NOT_AUDITED` | — |
-| `GLOBAL-031` | I | 1346 | 10.A.6 Mechanism analysis | heterogeneity–benefit association; | `NOT_AUDITED` | — |
-| `THRESHOLD-031` | I | 1347 | 10.A.6 Mechanism analysis | threshold movement versus FPR/TPR trade-off. | `NOT_AUDITED` | — |
+| `TRAIN-019` | I | 1318 | 10.A.3 Training-side robustness | heterogeneity-aware federated optimization through FedProx; | `PASS` | FedProx stress runner and coefficient protocol are implemented and role-bounded. |
+| `TRAIN-020` | I | 1319 | 10.A.3 Training-side robustness | simple post-FedAvg client-local fine-tuning through `FEDAVG_LOCAL_FINE_TUNING`; | `PASS` | Fine-tuning runner uses fresh client models initialized from persisted FedAvg weights. |
+| `TRAIN-021` | I | 1320 | 10.A.3 Training-side robustness | persistent proximal client model personalization through Ditto. | `PASS` | Ditto runner persists global and personalized-model evidence under the stress role. |
+| `THRESHOLD-029` | I | 1328 | 10.A.4 Threshold-estimation depth | quantile-level sensitivity; | `PASS` | Quantile-sensitivity runner is implemented as declared supportive evidence. |
+| `SCORE-007` | I | 1329 | 10.A.4 Threshold-estimation depth | one fixed-score historical `mean + sample-standard-deviation` estimator-by-scope sensitivity; | `PASS` | Estimator-scope runner locks the historical sample-standard-deviation control. |
+| `THRESHOLD-030` | I | 1330 | 10.A.4 Threshold-estimation depth | local–global shrinkage; | `PASS` | Fixed shrinkage protocol and runner are implemented. |
+| `CALIBRATION-057` | I | 1331 | 10.A.4 Threshold-estimation depth | calibration-size-aware shrinkage; | `PASS` | Size-aware shrinkage protocol and runner are implemented. |
+| `CALIBRATION-058` | I | 1332 | 10.A.4 Threshold-estimation depth | a bounded split-conformal local-threshold diagnostic. | `PASS` | Local conformal threshold is declared and executed only as a supportive diagnostic. |
+| `GLOBAL-028` | I | 1342 | 10.A.6 Mechanism analysis | family and cluster granularity; | `PASS` | Confirmatory mechanism runner emits declared family and cluster evidence. |
+| `GLOBAL-029` | I | 1343 | 10.A.6 Mechanism analysis | cluster stability; | `PASS` | Cluster-stability analysis preserves and renders complete partition evidence. |
+| `GLOBAL-030` | I | 1345 | 10.A.6 Mechanism analysis | per-client benign and attack score geometry; | `PASS` | Score-geometry runner requires complete per-client evaluation overlays. |
+| `GLOBAL-031` | I | 1346 | 10.A.6 Mechanism analysis | heterogeneity–benefit association; | `PASS` | Association analysis and publication renderer are implemented. |
+| `THRESHOLD-031` | I | 1347 | 10.A.6 Mechanism analysis | threshold movement versus FPR/TPR trade-off. | `PASS` | Mechanism runner produces threshold-movement trade-off evidence. |
 | `DATASET-022` | I | 1355 | 10.A.7 Hard scope limits | one new IoT dataset; | `NOT_AUDITED` | — |
 | `GLOBAL-032` | I | 1356 | 10.A.7 Hard scope limits | four bounded external comparator/stress identities: | `NOT_AUDITED` | — |
 | `TRAIN-022` | I | 1357 | 10.A.7 Hard scope limits | FedProx; | `NOT_AUDITED` | — |
