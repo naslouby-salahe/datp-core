@@ -128,6 +128,25 @@ def test_release_validation_rejects_an_invalid_manifest_sidecar(tmp_path: Path) 
         validate_release_bundle(root)
 
 
+def test_release_validation_rejects_retired_opaque_manifest_metadata(tmp_path: Path) -> None:
+    root = _release(tmp_path)
+    manifest = root / "MANIFEST_SHA256.csv"
+    with manifest.open(encoding="utf-8", newline="") as stream:
+        rows = tuple(csv.DictReader(stream))
+    rows[-1]["threshold_policy"] = "b1"
+    with manifest.open("w", encoding="utf-8", newline="") as stream:
+        writer = csv.writer(stream)
+        writer.writerow(_COLUMNS)
+        writer.writerows(tuple(tuple(row[column] for column in _COLUMNS) for row in rows))
+    (root / "MANIFEST_SHA256.sha256").write_text(
+        f"{sha256(manifest.read_bytes()).hexdigest()}  MANIFEST_SHA256.csv\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ArtifactIntegrityError, match="retired opaque identity"):
+        validate_release_bundle(root)
+
+
 def test_release_validation_rejects_an_audit_record_with_missing_evidence(tmp_path: Path) -> None:
     root = _release(tmp_path)
     report = root / "AUDIT_REPORTS" / AUDIT_REPORT_FILENAME

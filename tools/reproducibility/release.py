@@ -84,6 +84,7 @@ _MANIFEST_COLUMNS = (
     "threshold_policy",
     "experiment_id",
 )
+_SCIENTIFIC_METADATA_COLUMNS = _MANIFEST_COLUMNS[3:]
 _DIRECT_DEPENDENCIES = (
     "pydantic",
     "filelock",
@@ -645,6 +646,17 @@ def _require_unique_release_artifacts(artifacts: tuple[ReleaseArtifact, ...]) ->
         if not artifact.source.is_file():
             raise ArtifactIntegrityError(ErrorMessage(f"release source artifact is missing: {artifact.source}"))
         _require_relative_artifact_path(artifact.relative_path)
+        _require_descriptive_scientific_metadata(
+            (
+                artifact.artifact_type,
+                artifact.dataset_id,
+                artifact.population_id,
+                artifact.training_method,
+                artifact.training_seed,
+                artifact.threshold_policy,
+                artifact.experiment_id,
+            )
+        )
 
 
 def _validate_withheld_artifacts(request: ReleaseBuildRequest) -> None:
@@ -893,7 +905,7 @@ def _manifest_entry(row: dict[str, str | None]) -> ReleaseManifestEntry:
         raise ArtifactIntegrityError(ErrorMessage("release manifest byte count must be an integer")) from error
     if byte_count < 0:
         raise ArtifactIntegrityError(ErrorMessage("release manifest byte count must be non-negative"))
-    return ReleaseManifestEntry(
+    entry = ReleaseManifestEntry(
         relative_path=relative_path,
         digest=digest,
         byte_count=byte_count,
@@ -905,6 +917,27 @@ def _manifest_entry(row: dict[str, str | None]) -> ReleaseManifestEntry:
         threshold_policy=_required_value(row, "threshold_policy"),
         experiment_id=_required_value(row, "experiment_id"),
     )
+    _require_descriptive_scientific_metadata(
+        (
+            entry.artifact_type,
+            entry.dataset_id,
+            entry.population_id,
+            entry.training_method,
+            entry.training_seed,
+            entry.threshold_policy,
+            entry.experiment_id,
+        )
+    )
+    return entry
+
+
+def _require_descriptive_scientific_metadata(values: tuple[str, ...]) -> None:
+    for column, value in zip(_SCIENTIFIC_METADATA_COLUMNS, values, strict=True):
+        normalized = value.casefold()
+        if fullmatch(r"b\d+", normalized) or fullmatch(r"population[-_ ]?[a-z]", normalized):
+            raise ArtifactIntegrityError(
+                ErrorMessage(f"release manifest contains a retired opaque identity in {column}")
+            )
 
 
 def _require_relative_artifact_path(relative_path: Path) -> None:
