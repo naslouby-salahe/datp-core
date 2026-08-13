@@ -91,6 +91,7 @@ from datp_core.presentation.figures import (
     equity_utility_pareto_figure,
     score_geometry_figure,
 )
+from datp_core.presentation.population_capabilities import export_population_capability_table
 from datp_core.runtime.configuration import OUTPUTS_ROOT
 from datp_core.thresholds.policies.cluster import GroupedThresholdResult
 
@@ -238,6 +239,7 @@ def analyze_confirmatory_campaign() -> Path:
         verified_anchor_gate=None,
         figures=figures,
     )
+    export_population_capability_table(output / "population_capability_claim_boundary.md")
     if all_mechanisms:
         export_mechanism_publication(
             all_mechanisms,
