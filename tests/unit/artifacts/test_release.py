@@ -14,6 +14,7 @@ from datp_core.artifacts.release import (
     ReleaseBuildRequest,
     ReleaseState,
     build_release_bundle,
+    campaign_evaluation_release_artifacts,
     validate_release_bundle,
 )
 from datp_core.core.errors import ArtifactIntegrityError
@@ -166,3 +167,8 @@ def test_release_evaluation_metadata_is_derived_from_the_persisted_coordinate(tm
     assert artifact.training_seed == "4"
     assert artifact.threshold_policy == "local_threshold"
     assert artifact.experiment_id == "shared_vs_local_confirmation"
+
+
+def test_campaign_release_discovery_rejects_output_roots_without_evaluation_evidence(tmp_path: Path) -> None:
+    with pytest.raises(ArtifactIntegrityError, match="requires persisted evaluation documents"):
+        campaign_evaluation_release_artifacts(tmp_path)
