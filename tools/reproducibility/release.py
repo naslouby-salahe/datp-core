@@ -327,7 +327,11 @@ def campaign_analysis_release_artifacts(output_root: Path) -> tuple[ReleaseArtif
         relative = source.relative_to(output_root)
         if "analysis" in relative.parts:
             artifacts.append(ReleaseArtifact(source, Path("STATISTICS") / relative, "analysis_result"))
-        elif "diagnostics" in relative.parts or source.name.endswith(("_report.md", "_summary.txt")):
+        elif (
+            source.name == AUDIT_REPORT_FILENAME
+            or "diagnostics" in relative.parts
+            or source.name.endswith(("_report.md", "_summary.txt"))
+        ):
             artifacts.append(ReleaseArtifact(source, Path("AUDIT_REPORTS") / relative, "audit_report"))
     if not artifacts:
         raise ArtifactIntegrityError(

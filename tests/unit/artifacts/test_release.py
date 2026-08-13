@@ -565,8 +565,9 @@ def test_campaign_analysis_release_discovery_retains_only_declared_derived_evide
     analysis = tmp_path / "experiment" / "analysis" / "summary.json"
     diagnostic = tmp_path / "anchor" / "diagnostics" / "gate.json"
     report = tmp_path / "experiment" / "analysis_report.md"
+    audit = tmp_path / "experiment" / AUDIT_REPORT_FILENAME
     ignored = tmp_path / "experiment" / "scores" / "calibration.parquet"
-    for path in (analysis, diagnostic, report, ignored):
+    for path in (analysis, diagnostic, report, audit, ignored):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(path.name, encoding="utf-8")
 
@@ -576,6 +577,7 @@ def test_campaign_analysis_release_discovery_retains_only_declared_derived_evide
         Path("AUDIT_REPORTS/anchor/diagnostics/gate.json"),
         Path("STATISTICS/experiment/analysis/summary.json"),
         Path("AUDIT_REPORTS/experiment/analysis_report.md"),
+        Path(f"AUDIT_REPORTS/experiment/{AUDIT_REPORT_FILENAME}"),
     )
 
 
