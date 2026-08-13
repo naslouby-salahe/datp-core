@@ -153,8 +153,8 @@ Every numbered Part I subsection below is independently auditable. The title is 
 |---|---|---|---|---|---|---|---|
 | `GLOBAL-CONTRACT-001` | `GLOBAL` | Part I `1.1 Working title` (lines 63–66) | 1.1 Working title | domain/protocols/pipeline validation | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
 | `GLOBAL-CONTRACT-002` | `GLOBAL` | Part I `1.2 DATP-Core in one paragraph` (lines 67–86) | 1.2 DATP-Core in one paragraph | domain/protocols/pipeline validation | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `GLOBAL-CONTRACT-003` | `GLOBAL` | Part I `2.1 Unit of causal comparison` (lines 89–107) | 2.1 Unit of causal comparison | domain/protocols/pipeline validation | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `GLOBAL-CONTRACT-004` | `GLOBAL` | Part I `2.2 Fixed elements` (lines 108–128) | 2.2 Fixed elements | domain/protocols/pipeline validation | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
+| `GLOBAL-CONTRACT-003` | `GLOBAL` | Part I `2.1 Unit of causal comparison` (lines 89–107) | 2.1 Unit of causal comparison | domain/protocols/pipeline validation | `IMPLEMENTED` | `PASS` | Immutable score/evaluation coordinates bind model, preprocessing, population, partitions, calibration evidence, and labels across policy comparisons. | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
+| `GLOBAL-CONTRACT-004` | `GLOBAL` | Part I `2.2 Fixed elements` (lines 108–128) | 2.2 Fixed elements | domain/protocols/pipeline validation | `IMPLEMENTED` | `PASS` | Typed protocol and execution coordinates lock model, training, split, seed, scoring, eligibility, and metric semantics. | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
 | `THRESHOLD-CONTRACT-001` | `THRESHOLD` | Part I `2.2.3 Empirical-quantile definition lock` (lines 185–210) | 2.2.3 Empirical-quantile definition lock | thresholding | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
 | `GLOBAL-CONTRACT-005` | `GLOBAL` | Part I `2.3 Sole manipulated variable` (lines 211–229) | 2.3 Sole manipulated variable | domain/protocols/pipeline validation | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
 | `BOUNDARY-CONTRACT-001` | `BOUNDARY` | Part I `2.4 Prohibited causal contamination` (lines 230–244) | 2.4 Prohibited causal contamination | validation/reporting | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
@@ -6348,25 +6348,25 @@ README_REPRODUCIBILITY.md
 | `PREPROCESS-001` | PREAMBLE | 10 | Purpose and structure | **Exact protocol** — the numerical, mathematical, preprocessing, training, thresholding, and dataset rules that determine scientific behavior. | `NOT_AUDITED` | — |
 | `GLOBAL-001` | PREAMBLE | 11 | Purpose and structure | **Experiment programme and evaluation** — what is executed, what changes, what is measured, and how inference is performed. | `NOT_AUDITED` | — |
 | `PROVENANCE-001` | PREAMBLE | 12 | Purpose and structure | **Development and audit contract** — the provenance, identity, completeness, and publication gates used to verify that the implementation actually realizes the scientific programme. | `NOT_AUDITED` | — |
-| `GLOBAL-002` | I | 95 | 2.1 Unit of causal comparison | the same selected autoencoder state; | `NOT_AUDITED` | — |
+| `GLOBAL-002` | I | 95 | 2.1 Unit of causal comparison | the same selected autoencoder state; | `PASS` | Fixed-score coordinate reuse binds every comparator to the persisted detector state. |
 | `PREPROCESS-002` | I | 96 | 2.1 Unit of causal comparison | the same preprocessing state; | `NOT_AUDITED` | — |
-| `GLOBAL-003` | I | 97 | 2.1 Unit of causal comparison | the same client identities; | `NOT_AUDITED` | — |
-| `GLOBAL-004` | I | 98 | 2.1 Unit of causal comparison | the same predefined data partitions; | `NOT_AUDITED` | — |
+| `GLOBAL-003` | I | 97 | 2.1 Unit of causal comparison | the same client identities; | `PASS` | Immutable population and stable client identities are coordinate-bound. |
+| `GLOBAL-004` | I | 98 | 2.1 Unit of causal comparison | the same predefined data partitions; | `PASS` | Persisted split identity is reused and validated. |
 | `CALIBRATION-001` | I | 99 | 2.1 Unit of causal comparison | the same benign calibration records; | `NOT_AUDITED` | — |
-| `GLOBAL-005` | I | 100 | 2.1 Unit of causal comparison | the same held-out test scores; | `NOT_AUDITED` | — |
-| `GLOBAL-006` | I | 101 | 2.1 Unit of causal comparison | the same held-out test labels; | `NOT_AUDITED` | — |
+| `GLOBAL-005` | I | 100 | 2.1 Unit of causal comparison | the same held-out test scores; | `PASS` | Comparator policies consume one immutable fixed-score artifact. |
+| `GLOBAL-006` | I | 101 | 2.1 Unit of causal comparison | the same held-out test labels; | `PASS` | Evaluation labels are persisted with and identity-checked against fixed-score evidence. |
 | `CALIBRATION-002` | I | 102 | 2.1 Unit of causal comparison | the same eligibility rule; | `NOT_AUDITED` | — |
 | `THRESHOLD-001` | I | 103 | 2.1 Unit of causal comparison | the same quantile target unless a declared quantile-sensitivity experiment changes it; | `NOT_AUDITED` | — |
 | `METRIC-001` | I | 104 | 2.1 Unit of causal comparison | the same metric implementation. | `NOT_AUDITED` | — |
-| `GLOBAL-007` | I | 112 | 2.2 Fixed elements | model family; | `NOT_AUDITED` | — |
+| `GLOBAL-007` | I | 112 | 2.2 Fixed elements | model family; | `PASS` | Training model identity is typed in each execution coordinate. |
 | `DATASET-002` | I | 113 | 2.2 Fixed elements | autoencoder architecture, apart from the input dimension required by the dataset feature schema; | `NOT_AUDITED` | — |
 | `TRAIN-001` | I | 114 | 2.2 Fixed elements | FedAvg as the training algorithm; | `NOT_AUDITED` | — |
-| `GLOBAL-008` | I | 115 | 2.2 Fixed elements | one local epoch per round; | `NOT_AUDITED` | — |
-| `GLOBAL-009` | I | 116 | 2.2 Fixed elements | full client participation; | `NOT_AUDITED` | — |
+| `GLOBAL-008` | I | 115 | 2.2 Fixed elements | one local epoch per round; | `PASS` | The FedAvg protocol locks one local epoch. |
+| `GLOBAL-009` | I | 116 | 2.2 Fixed elements | full client participation; | `PASS` | The federated protocol enforces full participation every round. |
 | `TRAIN-002` | I | 117 | 2.2 Fixed elements | optimizer and training hyperparameters; | `NOT_AUDITED` | — |
 | `PREPROCESS-003` | I | 118 | 2.2 Fixed elements | preprocessing and normalization semantics; | `NOT_AUDITED` | — |
-| `GLOBAL-010` | I | 119 | 2.2 Fixed elements | split semantics; | `NOT_AUDITED` | — |
-| `GLOBAL-011` | I | 120 | 2.2 Fixed elements | round budget and terminal scientific-model rule; | `NOT_AUDITED` | — |
+| `GLOBAL-010` | I | 119 | 2.2 Fixed elements | split semantics; | `PASS` | Split protocol identity is persisted and validated before scoring. |
+| `GLOBAL-011` | I | 120 | 2.2 Fixed elements | round budget and terminal scientific-model rule; | `PASS` | Active scientific training requires the terminal round-200 artifact. |
 | `GLOBAL-012` | I | 121 | 2.2 Fixed elements | seed cohort; | `NOT_AUDITED` | — |
 | `SCORE-001` | I | 122 | 2.2 Fixed elements | scoring procedure; | `NOT_AUDITED` | — |
 | `CALIBRATION-003` | I | 123 | 2.2 Fixed elements | client eligibility; | `NOT_AUDITED` | — |
