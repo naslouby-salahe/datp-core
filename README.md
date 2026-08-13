@@ -1,81 +1,82 @@
 # DATP-Core
 
-DATP-Core is the research implementation of the Device-Aware Threshold Personalization journal extension for federated IoT anomaly detection.
+DATP-Core is the research implementation of the *Device-Aware Threshold Personalization* journal extension: a controlled study of **threshold-calibration scope** in federated IoT anomaly detection. On a frozen federated autoencoder, only the scope at which benign anomaly thresholds are calibrated varies — one shared threshold, one per physical-device family, one per data-driven cluster, or one per client — and the resulting distribution of false-positive burden across heterogeneous clients is measured.
 
-## Scientific execution
+## Repository purpose
 
-Each scientific execution computes a fresh coherent result from declared prepared data:
+- implements the full scientific pipeline: data materialization, population/split construction, preprocessing, federated training, fixed-score generation, threshold calibration, evaluation, statistical analysis, and reporting;
+- reproduces the historical N-BaIoT five-seed anchor and extends it to the ten-seed confirmatory campaign;
+- provides the CLI, artifact repositories, provenance validation, and the reproducibility-release builder required by the roadmap;
+- the authoritative scientific contract is `docs/Journal_Extension_Master_Roadmap.md`.
+
+## Setup
+
+Requires Python 3.12 and [uv](https://docs.astral.sh/uv/).
+
+```bash
+uv sync --all-groups --all-extras
+```
+
+Audited raw datasets live under `data/raw`. End-to-end training additionally requires a CUDA-capable PyTorch runtime.
+
+## Principal CLI usage
 
 ```text
-data -> population and split -> preprocessing -> training -> terminal model -> scores -> thresholds -> evaluation -> analysis -> publication
+datp-core validate [EXPERIMENT_ID]      validate programme declarations
+datp-core plan [EXPERIMENT_ID]          show the execution plan
+datp-core preprocess DATASET_ID         materialize canonical dataset artifacts
+datp-core smoke [EXPERIMENT_ID]         bounded smoke validation
+datp-core run experiment EXPERIMENT_ID  run one experiment
+datp-core run campaign                  run the complete campaign
+datp-core report [EXPERIMENT_ID]        generate experiment reports
+datp-core status [EXPERIMENT_ID]        show programme status
+datp-core anchor reproduce|verify|status
 ```
 
-Canonicalized data, population/split artifacts, fitted preprocessing state, and transformed data are persistent prepared inputs. `preprocess --overwrite` explicitly replaces them. Experiment execution consumes existing prepared data and never silently rebuilds it.
+`--overwrite` is available on `preprocess`, `smoke`, `run`, `report`, and `anchor reproduce`; existing artifacts are kept by default.
 
-Training produces one terminal model. Every compared threshold policy receives that same terminal model and the same in-memory score evidence, rows, labels, client identities, partitions, calibration eligibility rule, and metric definitions. Only threshold construction differs. Calibration is benign-only and held-out evaluation labels never influence training, calibration, or threshold construction.
-
-Recovery checkpoints exist only to continue interrupted training. Predetermined diagnostic snapshots are observational training outputs. Neither is a model-choice mechanism or an input to scoring.
-
-The scientific source of truth is [the master roadmap](docs/Journal_Extension_Master_Roadmap.md).
-
-## Runtime requirements
-
-- Python 3.12
-- CUDA-capable PyTorch runtime
-- Audited raw datasets under `data/raw`
-
-## Installation
+The reproducibility-release validator runs outside the runtime CLI:
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -e '.[dev]'
+uv run python -m tools.reproducibility.release <release-root>
 ```
 
-## CLI
+## Development and validation
+
+```bash
+make format            # apply Ruff formatting
+make lint              # Ruff + Pylint + import-linter contracts
+make typecheck         # Pyright
+make test              # full suite in parallel (pytest -n auto)
+make test-target TEST_TARGET=tests/unit/thresholding
+make validate          # CLI programme validation
+make clean             # remove caches and build artifacts
+```
+
+The equivalent nox sessions are `tests`, `unit`, `integration`, `property`, `scientific`, `e2e`, `format`, `lint`, `types`, and `imports`; `nox` runs the default set (`tests`, `format`, `lint`, `types`, `imports`).
+
+## Repository structure
 
 ```text
-datp-core
-├── validate [EXPERIMENT_ID]
-├── plan [EXPERIMENT_ID]
-├── preprocess [DATASET_ID] [--overwrite]
-├── smoke [EXPERIMENT_ID] [--overwrite]
-├── anchor
-│   ├── reproduce [--overwrite]
-│   ├── verify
-│   └── status
-├── run
-│   ├── experiment <EXPERIMENT_ID> [--overwrite]
-│   └── campaign [--overwrite]
-├── report [EXPERIMENT_ID] [--overwrite]
-└── status [EXPERIMENT_ID]
+src/datp_core/          package source
+├── data/               dataset materialization, populations, splits, preprocessing
+├── detector/           autoencoder, federated training, scoring
+├── thresholds/         calibration, threshold policies and variants
+├── analysis/           metrics, statistics, mechanism analyses
+├── experiments/        experiment registry, planning, execution
+├── presentation/       figures, tables, claim validation
+├── artifacts/          artifact repositories and serializers
+├── app/                CLI and programme orchestration
+└── core/               domain identities, contracts, errors
+tests/                  unit, integration, property, scientific, e2e tests
+tools/reproducibility/  release-bundle builder and validator
+docs/                   roadmap, audit matrix, progress archive
 ```
-
-Reproducibility-release construction and validation are research tooling, intentionally
-separate from the detector runtime. Run its validator explicitly with:
-
-```bash
-python -m tools.reproducibility.release <release-root>
-```
-
-An execution writes its current results. Existing destinations are replaced only through the CLI's explicit overwrite contract. Interrupted-training recovery is isolated from normal execution.
-
-## Validation
-
-```bash
-pytest
-ruff check .
-pyright
-python -m importlinter
-```
-
-End-to-end training requires CUDA and the audited raw datasets.
 
 ## Engineering rules
 
-- no backward compatibility, aliases, redirects, shims, or parallel APIs;
-- typed immutable scientific and application contracts;
-- no downstream persisted-result reuse;
-- no attack-label leakage into calibration or threshold construction;
-- delete obsolete code and tests instead of retaining stale callers.
+- no backwards compatibility: obsolete APIs are replaced at their callers and deleted;
+- typed, immutable domain identities and contracts; no `Any` or dictionary-shaped application plumbing;
+- one semantic owner per scientific contract, verified by runtime-reachability audit;
+- benign-only calibration, disjoint calibration/evaluation evidence, and no test-outcome feedback;
+- the roadmap is the scientific authority; the audit matrix tracks implementation state.
