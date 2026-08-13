@@ -6148,10 +6148,10 @@ The implementation must distinguish at least these roadmap-defined scientific st
 
 | ID | Source line | Audit requirement | Implementation disposition | Audit outcome | Evidence / remediation |
 |---|---:|---|---|---|---|
-| `GATE-L-001` | 6155 | Prediction semantics are exactly `attack iff score > threshold`. | `NOT_AUDITED` | — | — |
-| `GATE-L-002` | 6156 | Confusion counts are computed from held-out evaluation rows only. | `NOT_AUDITED` | — | — |
-| `GATE-L-003` | 6157 | Per-client metrics are computed before cross-client aggregation where valid client identity exists. | `NOT_AUDITED` | — | — |
-| `GATE-L-004` | 6158 | `CV(FPR)` uses only the eligible FPR-evaluable client population defined in Part III. | `NOT_AUDITED` | — | — |
+| `GATE-L-001` | 6155 | Prediction semantics are exactly `attack iff score > threshold`. | `IMPLEMENTED` | `PASS` | The sole decision helper delegates to strict score exceedance. |
+| `GATE-L-002` | 6156 | Confusion counts are computed from held-out evaluation rows only. | `IMPLEMENTED` | `PASS` | Confusion construction rejects calibration and duplicate source rows. |
+| `GATE-L-003` | 6157 | Per-client metrics are computed before cross-client aggregation where valid client identity exists. | `IMPLEMENTED` | `PASS` | Evaluation constructs each client result before population aggregation. |
+| `GATE-L-004` | 6158 | `CV(FPR)` uses only the eligible FPR-evaluable client population defined in Part III. | `IMPLEMENTED` | `PASS` | Population aggregation collects FPR values only from the typed FPR-evaluable cohort. |
 | `GATE-L-005` | 6159 | Absolute dispersion metrics accompany CV where low mean FPR could make CV unstable or misleading. | `NOT_AUDITED` | — | — |
 | `GATE-L-006` | 6160 | Attack-sensitive metrics are marked unavailable when valid per-client attack assignment is absent. | `NOT_AUDITED` | — | — |
 | `GATE-L-007` | 6161 | Undefined denominators remain undefined; they are never converted to zero. | `NOT_AUDITED` | — | — |
@@ -7414,10 +7414,10 @@ README_REPRODUCIBILITY.md
 | `GLOBAL-121` | IV | 6149 | 13. Gate K — Experiment completeness | No experiment was dropped because it weakened the narrative. | `NOT_AUDITED` | — |
 | `GLOBAL-122` | IV | 6150 | 13. Gate K — Experiment completeness | Optional experiments are visually and semantically separated from mandatory evidence. | `NOT_AUDITED` | — |
 | `GLOBAL-123` | IV | 6151 | 13. Gate K — Experiment completeness | Part II §8.6 produces every feasible `m in {0,1,2,3,4}` omission subset, exact seed-level subset summaries, and the identities of worst-case omission sets. | `PASS` | The contributor report retains each omission cell, m-level seed summaries, unavailable cells, and worst-case omission identities. |
-| `THRESHOLD-333` | IV | 6155 | 14. Gate L — Evaluation and metric integrity | Prediction semantics are exactly `attack iff score > threshold`. | `NOT_AUDITED` | — |
-| `METRIC-031` | IV | 6156 | 14. Gate L — Evaluation and metric integrity | Confusion counts are computed from held-out evaluation rows only. | `NOT_AUDITED` | — |
-| `METRIC-032` | IV | 6157 | 14. Gate L — Evaluation and metric integrity | Per-client metrics are computed before cross-client aggregation where valid client identity exists. | `NOT_AUDITED` | — |
-| `DATASET-097` | IV | 6158 | 14. Gate L — Evaluation and metric integrity | `CV(FPR)` uses only the eligible FPR-evaluable client population defined in Part III. | `NOT_AUDITED` | — |
+| `THRESHOLD-333` | IV | 6155 | 14. Gate L — Evaluation and metric integrity | Prediction semantics are exactly `attack iff score > threshold`. | `PASS` | The sole decision helper delegates to strict score exceedance. |
+| `METRIC-031` | IV | 6156 | 14. Gate L — Evaluation and metric integrity | Confusion counts are computed from held-out evaluation rows only. | `PASS` | Confusion construction rejects calibration and duplicate source rows. |
+| `METRIC-032` | IV | 6157 | 14. Gate L — Evaluation and metric integrity | Per-client metrics are computed before cross-client aggregation where valid client identity exists. | `PASS` | Evaluation constructs each client result before population aggregation. |
+| `DATASET-097` | IV | 6158 | 14. Gate L — Evaluation and metric integrity | `CV(FPR)` uses only the eligible FPR-evaluable client population defined in Part III. | `PASS` | Population aggregation collects FPR values only from the typed FPR-evaluable cohort. |
 | `METRIC-033` | IV | 6159 | 14. Gate L — Evaluation and metric integrity | Absolute dispersion metrics accompany CV where low mean FPR could make CV unstable or misleading. | `NOT_AUDITED` | — |
 | `METRIC-034` | IV | 6160 | 14. Gate L — Evaluation and metric integrity | Attack-sensitive metrics are marked unavailable when valid per-client attack assignment is absent. | `NOT_AUDITED` | — |
 | `METRIC-035` | IV | 6161 | 14. Gate L — Evaluation and metric integrity | Undefined denominators remain undefined; they are never converted to zero. | `NOT_AUDITED` | — |
