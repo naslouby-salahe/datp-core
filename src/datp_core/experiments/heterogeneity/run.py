@@ -12,14 +12,19 @@ from datp_core.analysis.mechanisms import (
     AssociationResult,
     ClientScoreVector,
     MechanismEvidence,
+    PolicySurfacePolicyMetric,
+    SupportInteractionAnalysis,
+    SupportInteractionObservation,
     ThresholdMovement,
     ThresholdMovementCohort,
     heterogeneity_benefit_association,
     jensen_shannon_from_client_scores,
+    summarize_support_interaction,
     summarize_threshold_movements_across_seeds,
     threshold_movements_from_evaluations,
 )
 from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
+from datp_core.analysis.metrics.models import MetricStatus, PopulationMetricResult, metric_by_id
 from datp_core.analysis.metrics.protocols import FIXED_SCORE_AUROC_INVARIANCE_TOLERANCE
 from datp_core.app.planning import PlanReason, expand_experiment_plan
 from datp_core.artifacts.layout import evaluation_run_directory
@@ -31,6 +36,7 @@ from datp_core.core.errors import (
 from datp_core.core.identifiers import (
     AnalysisReasonText,
     AvailabilityStatus,
+    CalibrationSupportLevel,
     EvidenceRole,
     ExperimentId,
     FederatedThresholdMethod,
@@ -41,7 +47,7 @@ from datp_core.core.identifiers import (
     RegimeLabel,
     ScoreFrameColumn,
 )
-from datp_core.core.numeric import DirichletConcentration, MetricValue, Seed
+from datp_core.core.numeric import DirichletConcentration, MetricValue, ReplicateIndex, Seed
 from datp_core.data.nbaiot.schema import NBaIoTDevice
 from datp_core.data.populations.contracts import ControlledPartitionKind
 from datp_core.data.populations.declarations import DIRICHLET_CONCENTRATIONS
@@ -464,6 +470,45 @@ def analyze_controlled_heterogeneity_sweep(*, overwrite: bool) -> Path:
     return output
 
 
+def collect_heterogeneity_support_interaction() -> SupportInteractionAnalysis:
+    """Load only the declared interaction artifacts into the locked descriptive analysis."""
+
+    observations: list[SupportInteractionObservation] = []
+    for seed in CONFIRMATORY_SEED_COHORT.values:
+        for partition_kind, concentration, alpha in _interaction_conditions():
+            reference = _load_interaction_evaluation(
+                seed,
+                FederatedThresholdMethod.SHARED_THRESHOLD,
+                partition_kind,
+                concentration,
+                CalibrationSupportLevel.FULL,
+                None,
+            )
+            heterogeneity = jensen_shannon_from_client_scores(_client_score_vectors(reference)).aggregate
+            if heterogeneity is None:
+                raise ScientificContractError(ErrorMessage("interaction cell requires available heterogeneity"))
+            for support, replicate in _interaction_support_coordinates():
+                policy_metrics = tuple(
+                    _interaction_policy_metric(
+                        _load_interaction_evaluation(seed, method, partition_kind, concentration, support, replicate),
+                        support,
+                        replicate,
+                    )
+                    for method in _interaction_methods()
+                )
+                observations.append(
+                    SupportInteractionObservation(
+                        seed=seed,
+                        alpha_label=alpha,
+                        support=support,
+                        replicate=replicate,
+                        heterogeneity=heterogeneity,
+                        policy_metrics=policy_metrics,
+                    )
+                )
+    return summarize_support_interaction(tuple(observations))
+
+
 def analyze_per_client_score_geometry(*, overwrite: bool) -> Path:
     output = (
         OUTPUTS_ROOT
@@ -671,6 +716,94 @@ def _load_heterogeneity_evaluation(
         / FederatedEvaluationAssetName.DOCUMENT
     )
     return load_evaluation_document(eval_path)
+
+
+def _interaction_conditions() -> tuple[tuple[ControlledPartitionKind, DirichletConcentration | None, RegimeLabel], ...]:
+    return (
+        (ControlledPartitionKind.DIRICHLET, DirichletConcentration(0.1), RegimeLabel("alpha_0.1")),
+        (ControlledPartitionKind.DIRICHLET, DirichletConcentration(1.0), RegimeLabel("alpha_1.0")),
+        (ControlledPartitionKind.IID, None, RegimeLabel("iid")),
+    )
+
+
+def _interaction_support_coordinates() -> tuple[tuple[CalibrationSupportLevel, ReplicateIndex | None], ...]:
+    finite = tuple(
+        (support, ReplicateIndex(index))
+        for support in (CalibrationSupportLevel.M50, CalibrationSupportLevel.M100, CalibrationSupportLevel.M500)
+        for index in range(10)
+    )
+    return (*finite, (CalibrationSupportLevel.FULL, None))
+
+
+def _interaction_methods() -> tuple[FederatedThresholdMethod, ...]:
+    return (
+        FederatedThresholdMethod.SHARED_THRESHOLD,
+        FederatedThresholdMethod.LOCAL_THRESHOLD,
+        FederatedThresholdMethod.CLUSTER_THRESHOLD,
+        FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE,
+        FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE,
+    )
+
+
+def _load_interaction_evaluation(
+    training_seed: Seed,
+    method: FederatedThresholdMethod,
+    partition_kind: ControlledPartitionKind,
+    concentration: DirichletConcentration | None,
+    support: CalibrationSupportLevel,
+    replicate: ReplicateIndex | None,
+) -> FederatedEvaluationDocument:
+    declaration = _require_declaration(ExperimentId.HETEROGENEITY_CALIBRATION_SUPPORT_INTERACTION)
+    plan = expand_experiment_plan(declarations=(declaration,), seed_cohort=SeedCohort(values=(training_seed,)))
+    matches = tuple(
+        entry.coordinate
+        for entry in plan.entries
+        if entry.coordinate.threshold_method is method
+        and entry.coordinate.metric is MetricId.FPR_COEFFICIENT_OF_VARIATION
+        and entry.coordinate.controlled_partition_kind is partition_kind
+        and entry.coordinate.dirichlet_concentration == concentration
+        and entry.coordinate.calibration_support is support
+        and entry.coordinate.calibration_replicate == replicate
+    )
+    if len(matches) != 1:
+        raise ScientificContractError(ErrorMessage("interaction evaluation coordinate must resolve exactly once"))
+    path = (
+        evaluation_run_directory(OUTPUTS_ROOT, matches[0])
+        / EvaluationRunAssetDirectory.EVALUATION
+        / FederatedEvaluationAssetName.DOCUMENT
+    )
+    return load_evaluation_document(path)
+
+
+def _interaction_policy_metric(
+    document: FederatedEvaluationDocument,
+    support: CalibrationSupportLevel,
+    replicate: ReplicateIndex | None,
+) -> PolicySurfacePolicyMetric:
+    population = document.population
+    if support is not CalibrationSupportLevel.FULL:
+        if replicate is None:
+            raise ValueError("finite interaction support requires a replicate")
+        cells = tuple(
+            cell
+            for cell in document.diagnostics.calibration_size_ablation
+            if cell.replicate_index == replicate
+            and cell.calibration_size.value == int(support.value.removeprefix("m"))
+        )
+        if len(cells) != 1:
+            raise ScientificContractError(ErrorMessage("interaction support diagnostic must resolve exactly once"))
+        population = cells[0].population
+    return PolicySurfacePolicyMetric(
+        policy=document.threshold_method,
+        cv_fpr=_optional_population_metric(population, MetricId.FPR_COEFFICIENT_OF_VARIATION),
+        p10_macro_f1=_optional_population_metric(population, MetricId.P10_BINARY_MACRO_F1),
+        worst_client_balanced_accuracy=_optional_population_metric(population, MetricId.WORST_CLIENT_BALANCED_ACCURACY),
+    )
+
+
+def _optional_population_metric(population: PopulationMetricResult, metric: MetricId) -> MetricValue | None:
+    result = metric_by_id(population.metrics, metric)
+    return result.value if result.status is MetricStatus.AVAILABLE else None
 
 
 def _client_score_vectors(
