@@ -190,14 +190,9 @@ def join_published_handoff(
         dataset=handoff.population_manifest.document.dataset,
         population=handoff.population_manifest.document.population,
     )
-    if eligibility.exclusion_evidence.excluded_row_count.value:
-        raise ScientificContractError(
-            ErrorMessage("published Edge population contains rows excluded by model-input eligibility"),
-            subject=handoff.population_manifest.document.population,
-        )
     return PublishedHandoffJoin(
-        joined_rows=joined,
-        exclusion_evidence=None,
+        joined_rows=eligibility.eligible_rows,
+        exclusion_evidence=eligibility.exclusion_evidence,
     )
 
 

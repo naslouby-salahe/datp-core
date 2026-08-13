@@ -743,10 +743,13 @@ def _physical_validity(declaration: PopulationDeclaration, capabilities: Dataset
     match declaration.identity_kind:
         case PopulationIdentityKind.PHYSICAL_DEVICES:
             return capabilities.physical_clients.status
-        case PopulationIdentityKind.FILE_DEFINED_PSEUDO_CLIENTS | PopulationIdentityKind.SYNTHETIC_DIRICHLET_CLIENTS:
+        case (
+            PopulationIdentityKind.FILE_DEFINED_PSEUDO_CLIENTS
+            | PopulationIdentityKind.SYNTHETIC_DIRICHLET_CLIENTS
+            | PopulationIdentityKind.SOURCE_DEFINED_SENSOR_GROUPS
+            | PopulationIdentityKind.VERIFIED_TEMPORAL_GROUPS
+        ):
             return CapabilityStatus.NOT_APPLICABLE
-        case PopulationIdentityKind.SOURCE_DEFINED_SENSOR_GROUPS | PopulationIdentityKind.VERIFIED_TEMPORAL_GROUPS:
-            return capabilities.physical_clients.status
 
 
 def _family_status(declaration: PopulationDeclaration, capabilities: DatasetCapabilities) -> CapabilityStatus:

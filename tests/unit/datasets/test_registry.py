@@ -104,10 +104,12 @@ def test_population_capabilities_derive_from_protocol_and_dataset() -> None:
     assert cic.evidentiary_role is EvidenceRole.APPLICABILITY_BOUNDARY
 
     edge = population_capabilities(PopulationId.EDGE_SENSOR_CLIENTS)
+    assert edge.physical_client_validity is CapabilityStatus.NOT_APPLICABLE
     assert edge.attack_sensitive_evaluation is CapabilityStatus.UNAVAILABLE
     assert edge.evidentiary_role is EvidenceRole.EXTERNAL_VALIDATION
 
     temporal = population_capabilities(PopulationId.EDGE_TEMPORAL_CLIENTS)
+    assert temporal.physical_client_validity is CapabilityStatus.NOT_APPLICABLE
     assert temporal.chronology is CapabilityStatus.CONDITIONAL
     assert temporal.temporal_support is CapabilityStatus.SUPPORTED
     assert temporal.evidentiary_role is EvidenceRole.TEMPORAL_BOUNDARY
