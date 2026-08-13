@@ -6506,11 +6506,11 @@ README_REPRODUCIBILITY.md
 | `THRESHOLD-028` | I | 1126 | 7.4 Separation from the core ladder | the common score-alignment/threshold-absorption diagnostics in §7.2B are mandatory whenever their inputs are available; | `PASS` | Stress reports render the common model-side tuple for available inputs. |
 | `CALIBRATION-041` | I | 1127 | 7.4 Separation from the core ladder | the result may support retention, partial absorption, or full absorption; | `PASS` | Typed absorption decisions represent retention, partial, and full absorption. |
 | `GLOBAL-025` | I | 1128 | 7.4 Separation from the core ladder | the result cannot alter the identity of the FedAvg core ladder. | `PASS` | Experiment graph locks the FedAvg shared-versus-local endpoint independently. |
-| `DATASET-004` | I | 1138 | 8.1 Sole confirmatory evidence | N-BaIoT physical-device population; | `NOT_AUDITED` | — |
-| `GLOBAL-026` | I | 1139 | 8.1 Sole confirmatory evidence | shared versus local; | `NOT_AUDITED` | — |
-| `METRIC-011` | I | 1140 | 8.1 Sole confirmatory evidence | `CV(FPR)`; | `NOT_AUDITED` | — |
-| `GLOBAL-027` | I | 1141 | 8.1 Sole confirmatory evidence | ten paired seeds; | `NOT_AUDITED` | — |
-| `STAT-001` | I | 1142 | 8.1 Sole confirmatory evidence | locked BCa decision rule. | `NOT_AUDITED` | — |
+| `DATASET-004` | I | 1138 | 8.1 Sole confirmatory evidence | N-BaIoT physical-device population; | `PASS` | Protocol graph locks N-BaIoT natural devices as the endpoint population. |
+| `GLOBAL-026` | I | 1139 | 8.1 Sole confirmatory evidence | shared versus local; | `PASS` | Confirmatory endpoint is structurally the shared-versus-local pair. |
+| `METRIC-011` | I | 1140 | 8.1 Sole confirmatory evidence | `CV(FPR)`; | `PASS` | Confirmatory endpoint metric is FPR coefficient of variation. |
+| `GLOBAL-027` | I | 1141 | 8.1 Sole confirmatory evidence | ten paired seeds; | `PASS` | Seed declaration locks ten paired training seeds. |
+| `STAT-001` | I | 1142 | 8.1 Sole confirmatory evidence | locked BCa decision rule. | `PASS` | Confirmatory statistical declaration locks the BCa decision protocol. |
 | `CALIBRATION-042` | I | 1150 | 8.2 Supporting evidence families | supportive robustness; | `NOT_AUDITED` | — |
 | `CALIBRATION-043` | I | 1151 | 8.2 Supporting evidence families | mechanism analysis; | `NOT_AUDITED` | — |
 | `CALIBRATION-044` | I | 1152 | 8.2 Supporting evidence families | threshold variant; | `NOT_AUDITED` | — |
