@@ -14,6 +14,7 @@ from shutil import copy2
 from sys import version
 
 from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
+from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
 from datp_core.core.errors import ArtifactIntegrityError, ErrorMessage
 from datp_core.data.registry import population_declaration
 
@@ -112,6 +113,21 @@ def release_artifact_from_evaluation(source: Path, relative_path: Path) -> Relea
     except (OSError, ValueError) as error:
         raise ArtifactIntegrityError(ErrorMessage(f"released evaluation document is unreadable: {source}")) from error
     return _release_artifact_from_document(source, relative_path, document)
+
+
+def campaign_evaluation_release_artifacts(output_root: Path) -> tuple[ReleaseArtifact, ...]:
+    """Discover only persisted evaluation documents and bind each release entry to its stored coordinate."""
+
+    documents = tuple(sorted(output_root.rglob(FederatedEvaluationAssetName.DOCUMENT.value)))
+    if not documents:
+        raise ArtifactIntegrityError(ErrorMessage("campaign release requires persisted evaluation documents"))
+    return tuple(
+        release_artifact_from_evaluation(
+            document,
+            Path("METRICS") / document.relative_to(output_root),
+        )
+        for document in documents
+    )
 
 
 def _release_artifact_from_document(
