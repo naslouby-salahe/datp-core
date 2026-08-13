@@ -34,7 +34,10 @@ from datp_core.analysis.mechanisms.equity_pareto import (
     EquityTargetAttainmentRow,
     EquityUtilityParetoView,
 )
-from datp_core.analysis.mechanisms.equity_utility import ConfirmatoryEquityUtilityBundle
+from datp_core.analysis.mechanisms.equity_utility import (
+    ConfirmatoryEquityUtilityBundle,
+    confirmatory_equity_utility_metric,
+)
 from datp_core.analysis.mechanisms.family_recall import FamilyRecallPolicyCampaignSummary, FamilyRecallPolicyComparison
 from datp_core.analysis.mechanisms.movement import (
     ThresholdMovement,
@@ -1099,7 +1102,7 @@ def _mechanism_tables(mechanisms: tuple[MechanismEvidence, ...]) -> tuple[Public
                         title=TableTitle("Confirmatory equity–utility companion table"),
                         cells=tuple(
                             TableCell(
-                                metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
+                                metric=confirmatory_equity_utility_metric(summary.measure),
                                 availability=(
                                     AvailabilityStatus.AVAILABLE
                                     if summary.paired_difference_mean is not None

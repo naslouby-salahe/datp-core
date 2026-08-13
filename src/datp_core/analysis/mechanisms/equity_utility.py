@@ -53,7 +53,15 @@ _POPULATION_METRICS: dict[ConfirmatoryEquityUtilityMeasure, MetricId] = {
     ConfirmatoryEquityUtilityMeasure.MACRO_F1: MetricId.BINARY_MACRO_F1,
     ConfirmatoryEquityUtilityMeasure.P10_MACRO_F1: MetricId.P10_BINARY_MACRO_F1,
     ConfirmatoryEquityUtilityMeasure.WORST_CLIENT_BALANCED_ACCURACY: MetricId.WORST_CLIENT_BALANCED_ACCURACY,
+    ConfirmatoryEquityUtilityMeasure.MEAN_ABSOLUTE_TEST_FPR_TARGET_ERROR: MetricId.MEAN_ABSOLUTE_TEST_FPR_TARGET_ERROR,
+    ConfirmatoryEquityUtilityMeasure.MEAN_ABSOLUTE_CALIBRATION_GENERALIZATION_GAP: (
+        MetricId.MEAN_ABSOLUTE_CALIBRATION_GENERALIZATION_GAP
+    ),
 }
+
+
+def confirmatory_equity_utility_metric(measure: ConfirmatoryEquityUtilityMeasure) -> MetricId:
+    return _POPULATION_METRICS[measure]
 
 
 def confirmatory_equity_utility_bundle(
@@ -118,8 +126,11 @@ def _seed_observation(
 def _measure_value(
     measure: ConfirmatoryEquityUtilityMeasure, document: FederatedEvaluationDocument
 ) -> MetricValue | None:
-    metric = _POPULATION_METRICS.get(measure)
-    if metric is not None:
+    if measure in _POPULATION_METRICS and measure not in {
+        ConfirmatoryEquityUtilityMeasure.MEAN_ABSOLUTE_TEST_FPR_TARGET_ERROR,
+        ConfirmatoryEquityUtilityMeasure.MEAN_ABSOLUTE_CALIBRATION_GENERALIZATION_GAP,
+    }:
+        metric = _POPULATION_METRICS[measure]
         result = metric_by_id(document.population.metrics, metric)
         return result.value if result.status is MetricStatus.AVAILABLE else None
     summary = document.diagnostics.held_out_operating_point_summary

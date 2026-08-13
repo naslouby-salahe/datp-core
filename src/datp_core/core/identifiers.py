@@ -196,6 +196,8 @@ class MetricId(StrEnum):
     THRESHOLD_VALUE = "threshold_value"
     SIGNED_ATTAINMENT_ERROR = "signed_attainment_error"
     ABSOLUTE_ATTAINMENT_ERROR = "absolute_attainment_error"
+    MEAN_ABSOLUTE_TEST_FPR_TARGET_ERROR = "mean_absolute_test_fpr_target_error"
+    MEAN_ABSOLUTE_CALIBRATION_GENERALIZATION_GAP = "mean_absolute_calibration_generalization_gap"
     TARGET_COVERAGE = "target_coverage"
     ACHIEVED_COVERAGE = "achieved_coverage"
     SIGNED_COVERAGE_ERROR = "signed_coverage_error"
