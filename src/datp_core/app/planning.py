@@ -42,6 +42,7 @@ from datp_core.thresholds.protocols import (
     FEDERATED_KLL_PROTOCOL,
     INTERACTION_CALIBRATION_SUPPORT_LEVELS,
     QUANTILE_GRID,
+    ClusterFingerprintFeature,
     require_calibration_subsample_replicate_count,
 )
 
@@ -230,6 +231,7 @@ class _SweptCell:
     calibration_replicate: ReplicateIndex | None
     threshold_estimator: ThresholdEstimator
     preprocessing_protocol: PreprocessingProtocolId
+    cluster_fingerprint_omission: ClusterFingerprintFeature | None
 
 
 def _declared_model_coefficients(training_model: TrainingModelId) -> tuple[ModelCoefficientValue | None, ...]:
@@ -258,6 +260,7 @@ def _swept_cells(declaration: ExperimentDeclaration, seed_cohort: SeedCohort) ->
             calibration_replicate=calibration_replicate,
             threshold_estimator=threshold_estimator,
             preprocessing_protocol=preprocessing_protocol,
+            cluster_fingerprint_omission=cluster_fingerprint_omission,
         )
         for seed in seed_cohort.values
         for threshold_method in declaration.federated_thresholds
@@ -270,6 +273,7 @@ def _swept_cells(declaration: ExperimentDeclaration, seed_cohort: SeedCohort) ->
         for calibration_support, calibration_replicate in _calibration_support_cells(declaration.id)
         for threshold_estimator in _threshold_estimators(declaration.id)
         for preprocessing_protocol in declaration.preprocessing_protocols
+        for cluster_fingerprint_omission in _cluster_fingerprint_omissions(declaration.id, threshold_method)
     )
 
 
@@ -294,6 +298,18 @@ def _threshold_estimators(experiment: ExperimentId) -> tuple[ThresholdEstimator,
             ThresholdEstimator.MEAN_PLUS_STANDARD_DEVIATION_ESTIMATOR,
         )
     return (ThresholdEstimator.TYPE7_Q95,)
+
+
+def _cluster_fingerprint_omissions(
+    experiment: ExperimentId,
+    method: FederatedThresholdMethod,
+) -> tuple[ClusterFingerprintFeature | None, ...]:
+    if (
+        experiment is ExperimentId.FAMILY_AND_GROUPED_GRANULARITY
+        and method is FederatedThresholdMethod.CLUSTER_THRESHOLD
+    ):
+        return (None, *tuple(ClusterFingerprintFeature))
+    return (None,)
 
 
 def _calibration_support_cells(
@@ -356,6 +372,7 @@ def _planned_entry(
             calibration_support=cell.calibration_support,
             calibration_replicate=cell.calibration_replicate,
             threshold_estimator=cell.threshold_estimator,
+            cluster_fingerprint_omission=cell.cluster_fingerprint_omission,
         ),
         disposition=disposition,
         reason=reason,

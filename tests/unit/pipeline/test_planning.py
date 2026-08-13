@@ -22,6 +22,7 @@ from datp_core.core.identifiers import (
 from datp_core.core.numeric import Seed
 from datp_core.experiments.common.seeds import SeedCohort
 from datp_core.experiments.registry import ExperimentDeclaration
+from datp_core.thresholds.protocols import ClusterFingerprintFeature
 
 
 def test_plan_expansion_is_deterministic_and_records_complete_coordinates() -> None:
@@ -149,3 +150,23 @@ def test_plan_expands_each_declared_preprocessing_protocol() -> None:
         PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
         PreprocessingProtocolId.FEDERATED_POOLED_MIN_MAX,
     )
+
+
+def test_grouped_granularity_plan_emits_the_four_cluster_feature_ablations() -> None:
+    declaration = ExperimentDeclaration(
+        id=ExperimentId.FAMILY_AND_GROUPED_GRANULARITY,
+        role=EvidenceRole.MECHANISM,
+        population=PopulationId.NBAIOT_NATURAL_DEVICES,
+        training_model=TrainingModelId.FEDAVG_AUTOENCODER,
+        preprocessing_protocol=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
+        federated_thresholds=(FederatedThresholdMethod.CLUSTER_THRESHOLD,),
+        metrics=(MetricId.FPR_COEFFICIENT_OF_VARIATION,),
+        readiness=ExperimentReadiness.DECLARED,
+    )
+
+    plan = expand_experiment_plan(declarations=(declaration,), seed_cohort=SeedCohort(values=(Seed(0),)))
+
+    assert {entry.coordinate.cluster_fingerprint_omission for entry in plan.entries} == {
+        None,
+        *ClusterFingerprintFeature,
+    }
