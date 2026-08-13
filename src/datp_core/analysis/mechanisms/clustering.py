@@ -143,6 +143,8 @@ class ClusterContingencyMatrix(StrictModel):
 class ClusterStabilityResult(StrictModel):
     adjusted_rand_index: CorrelationCoefficient
     compared_clients: tuple[ClientIdentity, ...]
+    left_memberships: tuple[ClusterMembership, ...]
+    right_memberships: tuple[ClusterMembership, ...]
     left_partition: ClusterPartitionSummary
     right_partition: ClusterPartitionSummary
     contingency: ClusterContingencyMatrix
@@ -155,6 +157,10 @@ class ClusterStabilityResult(StrictModel):
             raise ValueError("cluster stability requires at least two clients")
         if len(set(self.compared_clients)) != len(self.compared_clients):
             raise ValueError("cluster stability requires unique compared clients")
+        if tuple(item.client for item in _cluster_assignments(self.left_memberships)) != self.compared_clients:
+            raise ValueError("left cluster memberships must cover the compared clients in order")
+        if tuple(item.client for item in _cluster_assignments(self.right_memberships)) != self.compared_clients:
+            raise ValueError("right cluster memberships must cover the compared clients in order")
         if self.contingency.row_count().value != len(self.left_partition.group_sizes):
             raise ValueError("cluster contingency row count must match the left partition")
         if any(
@@ -338,6 +344,8 @@ def cluster_stability(
             )
         ),
         compared_clients=left_clients,
+        left_memberships=left,
+        right_memberships=right,
         left_partition=left_partition,
         right_partition=right_partition,
         contingency=_contingency(

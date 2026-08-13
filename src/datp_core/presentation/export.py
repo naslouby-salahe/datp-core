@@ -69,7 +69,7 @@ from datp_core.core.identifiers import (
     PopulationId,
     ReportLine,
 )
-from datp_core.core.numeric import MetricValue, Ratio
+from datp_core.core.numeric import ClusterIndex, MetricValue, PairedObservationCount, Ratio
 from datp_core.experiments.anchor.contracts import VerifiedAnchorGateArtifact
 from datp_core.presentation.figures import FigureSpec, render_markdown_figure
 from datp_core.presentation.tables import (
@@ -91,6 +91,7 @@ from datp_core.presentation.validation import (
     validate_claim,
 )
 from datp_core.runtime.filesystem import write_text_atomically
+from datp_core.thresholds.policies.cluster import ClusterMembership
 
 PUBLICATION_FILENAME = "publication.md"
 MECHANISM_REPORT_FILENAME = "mechanism_report.md"
@@ -1369,15 +1370,39 @@ def _render_divergence_result(mechanism: DivergenceResult) -> list[ReportLine]:
 
 @_render_one_mechanism.register
 def _render_cluster_stability_result(mechanism: ClusterStabilityResult) -> list[ReportLine]:
+    left_memberships = _render_cluster_memberships(mechanism.left_memberships)
+    right_memberships = _render_cluster_memberships(mechanism.right_memberships)
     return [
         ReportLine(line)
         for line in [
             f"ARI: {_format_publication_metric(mechanism.adjusted_rand_index.value)}",
             f"Clients: {len(mechanism.compared_clients)}",
-            f"Left singletons: {len(mechanism.left_partition.singleton_groups)}",
-            f"Right empty groups: {len(mechanism.right_partition.empty_groups)}",
+            f"Left cluster sizes: {_render_cluster_sizes(mechanism.left_partition.group_sizes)}",
+            f"Right cluster sizes: {_render_cluster_sizes(mechanism.right_partition.group_sizes)}",
+            f"Left empty groups: {_render_cluster_indexes(mechanism.left_partition.empty_groups)}",
+            f"Right empty groups: {_render_cluster_indexes(mechanism.right_partition.empty_groups)}",
+            f"Left singleton groups: {_render_cluster_indexes(mechanism.left_partition.singleton_groups)}",
+            f"Right singleton groups: {_render_cluster_indexes(mechanism.right_partition.singleton_groups)}",
+            f"Left memberships: {left_memberships}",
+            f"Right memberships: {right_memberships}",
         ]
     ]
+
+
+def _render_cluster_sizes(sizes: tuple[PairedObservationCount, ...]) -> str:
+    return ", ".join(str(size.value) for size in sizes) or "none"
+
+
+def _render_cluster_indexes(indexes: tuple[ClusterIndex, ...]) -> str:
+    return ", ".join(str(index.value) for index in indexes) or "none"
+
+
+def _render_cluster_memberships(memberships: tuple[ClusterMembership, ...]) -> str:
+    return "; ".join(
+        f"{membership.cluster_index.value}:"
+        + ",".join(client.client_id.value for client in membership.members)
+        for membership in memberships
+    ) or "none"
 
 
 @_render_one_mechanism.register
