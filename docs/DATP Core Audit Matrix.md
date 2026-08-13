@@ -6070,14 +6070,14 @@ The implementation must distinguish at least these roadmap-defined scientific st
 
 | ID | Source line | Audit requirement | Implementation disposition | Audit outcome | Evidence / remediation |
 |---|---:|---|---|---|---|
-| `GATE-G-001` | 6078 | Exactly one canonical evaluation-score artifact exists per fixed detector / preprocessing / population / seed coordinate. | `NOT_AUDITED` | — | — |
-| `GATE-G-002` | 6079 | SHARED_THRESHOLD/LOCAL_THRESHOLD/FAMILY_THRESHOLD/CLUSTER_THRESHOLD reference that same score artifact identity within a ladder. | `NOT_AUDITED` | — | — |
-| `GATE-G-003` | 6080 | Threshold methods do not independently regenerate detector scores. | `NOT_AUDITED` | — | — |
-| `GATE-G-004` | 6081 | Ordered row identities are preserved across score, label, and evaluation artifacts. | `NOT_AUDITED` | — | — |
-| `GATE-G-005` | 6082 | Calibration-score identity is likewise shared where the experiment requires fixed calibration evidence. | `NOT_AUDITED` | — | — |
-| `GATE-G-006` | 6083 | A higher reconstruction error always denotes greater anomaly evidence. | `NOT_AUDITED` | — | — |
-| `GATE-G-007` | 6084 | AUROC is computed from the canonical continuous score/label artifact, not from thresholded predictions. | `NOT_AUDITED` | — | — |
-| `GATE-G-008` | 6085 | Any policy-specific AUROC difference within a fixed-score ladder is treated as an identity/provenance failure. | `NOT_AUDITED` | — | — |
+| `GATE-G-001` | 6078 | Exactly one canonical evaluation-score artifact exists per fixed detector / preprocessing / population / seed coordinate. | `IMPLEMENTED` | `PASS` | Fixed workspace reuse and persisted score-manifest/content identity bind one score artifact to the training coordinate. |
+| `GATE-G-002` | 6079 | SHARED_THRESHOLD/LOCAL_THRESHOLD/FAMILY_THRESHOLD/CLUSTER_THRESHOLD reference that same score artifact identity within a ladder. | `IMPLEMENTED` | `PASS` | Fixed-score comparison validation requires identical score manifest and persisted content across distinct threshold methods. |
+| `GATE-G-003` | 6080 | Threshold methods do not independently regenerate detector scores. | `IMPLEMENTED` | `PASS` | Stage execution injects one fixed score workspace into threshold-method variants rather than rescoring per policy. |
+| `GATE-G-004` | 6081 | Ordered row identities are preserved across score, label, and evaluation artifacts. | `IMPLEMENTED` | `PASS` | Federated evaluation score arrays require score, label, and stable-row sequences to align exactly. |
+| `GATE-G-005` | 6082 | Calibration-score identity is likewise shared where the experiment requires fixed calibration evidence. | `IMPLEMENTED` | `PASS` | Fixed-score controls require one calibration partition role plus identical score manifest/content identity. |
+| `GATE-G-006` | 6083 | A higher reconstruction error always denotes greater anomaly evidence. | `IMPLEMENTED` | `PASS` | Evaluation predicts attack exactly when continuous reconstruction error strictly exceeds the threshold. |
+| `GATE-G-007` | 6084 | AUROC is computed from the canonical continuous score/label artifact, not from thresholded predictions. | `IMPLEMENTED` | `PASS` | Client metrics calculate AUROC directly from continuous score values and labels, independently of confusion predictions. |
+| `GATE-G-008` | 6085 | Any policy-specific AUROC difference within a fixed-score ladder is treated as an identity/provenance failure. | `IMPLEMENTED` | `PASS` | Fixed-score quality-control invariance rejects policy-specific AUROC or AP differences. |
 
 ### Gate H
 
@@ -7361,14 +7361,14 @@ README_REPRODUCIBILITY.md
 | `CALIBRATION-222` | IV | 6072 | 8. Gate F — Training and terminal-detector integrity | `FEDAVG_LOCAL_FINE_TUNING` initializes every client from the exact seed-matched FedAvg round-200 model, uses a fresh optimizer state, exactly 10 benign-training epochs, no early stopping, and no calibration/evaluation/attack-label access. | `PASS` | Fine-tuning source and protocol enforce round-200/ten-epoch requirements and client training input is role-scoped. |
 | `SCORE-023` | IV | 6073 | 8. Gate F — Training and terminal-detector integrity | Fine-tuned client models are frozen before scoring and are never re-fine-tuned per threshold policy. | `NOT_AUDITED` | — |
 | `TRAIN-090` | IV | 6074 | 8. Gate F — Training and terminal-detector integrity | The deterministic fine-tuning seed identity includes `(dataset_id,population_id,training_seed,client_id)` with purpose `FEDAVG_LOCAL_FINE_TUNING`. | `NOT_AUDITED` | — |
-| `PREPROCESS-054` | IV | 6078 | 9. Gate G — Fixed-score and scoring integrity | Exactly one canonical evaluation-score artifact exists per fixed detector / preprocessing / population / seed coordinate. | `NOT_AUDITED` | — |
-| `SCORE-024` | IV | 6079 | 9. Gate G — Fixed-score and scoring integrity | SHARED_THRESHOLD/LOCAL_THRESHOLD/FAMILY_THRESHOLD/CLUSTER_THRESHOLD reference that same score artifact identity within a ladder. | `NOT_AUDITED` | — |
-| `SCORE-025` | IV | 6080 | 9. Gate G — Fixed-score and scoring integrity | Threshold methods do not independently regenerate detector scores. | `NOT_AUDITED` | — |
-| `SCORE-026` | IV | 6081 | 9. Gate G — Fixed-score and scoring integrity | Ordered row identities are preserved across score, label, and evaluation artifacts. | `NOT_AUDITED` | — |
-| `SCORE-027` | IV | 6082 | 9. Gate G — Fixed-score and scoring integrity | Calibration-score identity is likewise shared where the experiment requires fixed calibration evidence. | `NOT_AUDITED` | — |
-| `SCORE-028` | IV | 6083 | 9. Gate G — Fixed-score and scoring integrity | A higher reconstruction error always denotes greater anomaly evidence. | `NOT_AUDITED` | — |
-| `SCORE-029` | IV | 6084 | 9. Gate G — Fixed-score and scoring integrity | AUROC is computed from the canonical continuous score/label artifact, not from thresholded predictions. | `NOT_AUDITED` | — |
-| `SCORE-030` | IV | 6085 | 9. Gate G — Fixed-score and scoring integrity | Any policy-specific AUROC difference within a fixed-score ladder is treated as an identity/provenance failure. | `NOT_AUDITED` | — |
+| `PREPROCESS-054` | IV | 6078 | 9. Gate G — Fixed-score and scoring integrity | Exactly one canonical evaluation-score artifact exists per fixed detector / preprocessing / population / seed coordinate. | `PASS` | Fixed workspace and persisted score-manifest identity bind one artifact. |
+| `SCORE-024` | IV | 6079 | 9. Gate G — Fixed-score and scoring integrity | SHARED_THRESHOLD/LOCAL_THRESHOLD/FAMILY_THRESHOLD/CLUSTER_THRESHOLD reference that same score artifact identity within a ladder. | `PASS` | Fixed-score control requires identical manifest/content evidence. |
+| `SCORE-025` | IV | 6080 | 9. Gate G — Fixed-score and scoring integrity | Threshold methods do not independently regenerate detector scores. | `PASS` | Threshold variants receive the fixed score workspace. |
+| `SCORE-026` | IV | 6081 | 9. Gate G — Fixed-score and scoring integrity | Ordered row identities are preserved across score, label, and evaluation artifacts. | `PASS` | Evaluation score arrays require exact aligned sequences. |
+| `SCORE-027` | IV | 6082 | 9. Gate G — Fixed-score and scoring integrity | Calibration-score identity is likewise shared where the experiment requires fixed calibration evidence. | `PASS` | Fixed-score controls bind common calibration role/identity. |
+| `SCORE-028` | IV | 6083 | 9. Gate G — Fixed-score and scoring integrity | A higher reconstruction error always denotes greater anomaly evidence. | `PASS` | Strict score-greater-than-threshold prediction semantics. |
+| `SCORE-029` | IV | 6084 | 9. Gate G — Fixed-score and scoring integrity | AUROC is computed from the canonical continuous score/label artifact, not from thresholded predictions. | `PASS` | AUROC consumes continuous score values/labels directly. |
+| `SCORE-030` | IV | 6085 | 9. Gate G — Fixed-score and scoring integrity | Any policy-specific AUROC difference within a fixed-score ladder is treated as an identity/provenance failure. | `PASS` | Quality-control invariance rejects policy differences. |
 | `CALIBRATION-223` | IV | 6089 | 10. Gate H — Calibration integrity | Every DATP-compatible threshold method uses benign calibration data only. | `NOT_AUDITED` | — |
 | `CALIBRATION-224` | IV | 6090 | 10. Gate H — Calibration integrity | Attack-labelled rows never affect threshold values, q selection, eligibility, cluster count, comparator tuning, shrinkage, or conformal significance level. | `NOT_AUDITED` | — |
 | `CALIBRATION-225` | IV | 6091 | 10. Gate H — Calibration integrity | Calibration and evaluation rows are disjoint. | `NOT_AUDITED` | — |
