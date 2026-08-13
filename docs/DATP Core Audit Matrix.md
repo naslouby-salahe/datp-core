@@ -6480,12 +6480,12 @@ README_REPRODUCIBILITY.md
 | `CALIBRATION-036` | I | 689 | 5.4 Split-conformal local threshold: LOCAL_CONFORMAL_THRESHOLD | robustness to Byzantine calibration (explicitly outside scope in light of Rob-FCP/PRISM-FCP[^robfcp2024][^prismfcp2026]); | `PASS` | Adversarial-calibration wording is centrally suppressed. |
 | `CALIBRATION-037` | I | 690 | 5.4 Split-conformal local threshold: LOCAL_CONFORMAL_THRESHOLD | a full conformal DATP contribution; | `PASS` | Publication terminology identifies conformal calibration as a separate supportive diagnostic. |
 | `CALIBRATION-038` | I | 691 | 5.4 Split-conformal local threshold: LOCAL_CONFORMAL_THRESHOLD | a replacement confirmatory endpoint. | `PASS` | The experiment graph locks the sole confirmatory endpoint. |
-| `CALIBRATION-039` | I | 707 | 6.1 `FEDERATED_BENIGN_SUMMARY_THRESHOLD` | use benign calibration information only; | `NOT_AUDITED` | — |
-| `THRESHOLD-020` | I | 708 | 6.1 `FEDERATED_BENIGN_SUMMARY_THRESHOLD` | use the full pooled variance decomposition, including between-client mean-shift; | `NOT_AUDITED` | — |
-| `THRESHOLD-021` | I | 709 | 6.1 `FEDERATED_BENIGN_SUMMARY_THRESHOLD` | target the same benign exceedance as the DATP quantile; | `NOT_AUDITED` | — |
-| `THRESHOLD-022` | I | 710 | 6.1 `FEDERATED_BENIGN_SUMMARY_THRESHOLD` | lock its protocol before result inspection; | `NOT_AUDITED` | — |
-| `THRESHOLD-023` | I | 711 | 6.1 `FEDERATED_BENIGN_SUMMARY_THRESHOLD` | disclose every statistic communicated by a client; | `NOT_AUDITED` | — |
-| `THRESHOLD-024` | I | 712 | 6.1 `FEDERATED_BENIGN_SUMMARY_THRESHOLD` | remain a shared-threshold comparator. | `NOT_AUDITED` | — |
+| `CALIBRATION-039` | I | 707 | 6.1 `FEDERATED_BENIGN_SUMMARY_THRESHOLD` | use benign calibration information only; | `PASS` | Construction accepts only validated benign calibration scores. |
+| `THRESHOLD-020` | I | 708 | 6.1 `FEDERATED_BENIGN_SUMMARY_THRESHOLD` | use the full pooled variance decomposition, including between-client mean-shift; | `PASS` | Contract validates within-plus-between variance decomposition. |
+| `THRESHOLD-021` | I | 709 | 6.1 `FEDERATED_BENIGN_SUMMARY_THRESHOLD` | target the same benign exceedance as the DATP quantile; | `PASS` | Summary construction receives the declared quantile target. |
+| `THRESHOLD-022` | I | 710 | 6.1 `FEDERATED_BENIGN_SUMMARY_THRESHOLD` | lock its protocol before result inspection; | `PASS` | Method identity and protocol are declared coordinates. |
+| `THRESHOLD-023` | I | 711 | 6.1 `FEDERATED_BENIGN_SUMMARY_THRESHOLD` | disclose every statistic communicated by a client; | `PASS` | Threshold message diagnostics retain client summary fields. |
+| `THRESHOLD-024` | I | 712 | 6.1 `FEDERATED_BENIGN_SUMMARY_THRESHOLD` | remain a shared-threshold comparator. | `PASS` | Dispatch classifies it as a federated shared construction control. |
 | `THRESHOLD-025` | I | 766 | 6.2 Relationship to Laridi et al. | `FEDERATED_BENIGN_SUMMARY_THRESHOLD` is not a faithful Laridi reproduction; | `NOT_AUDITED` | — |
 | `GLOBAL-024` | I | 767 | 6.2 Relationship to Laridi et al. | it must not be called `LARIDI_ANOMALY_INFORMED_REFERENCE`; | `NOT_AUDITED` | — |
 | `REPORT-002` | I | 768 | 6.2 Relationship to Laridi et al. | its results cannot be used to claim reproduction of Laridi et al.; | `NOT_AUDITED` | — |
